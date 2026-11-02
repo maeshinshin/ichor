@@ -1,0 +1,126 @@
+{{- if .Values.admission.enabled }}
+# Mirrors config/admission/controller-jobs-policy.yaml (ADR 0108): the apiserver limits what the
+# controller's ServiceAccount may create as a Job to the installer and the Cilium Helm Job. Two
+# policies: the structural one, and the image one tied to IchorInstallation.spec (inactive while
+# there is no IchorInstallation, as in a chart-only install). For that install,
+# admission.jobImageRepository pins the repository instead (empty turns that rule off).
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: ichor-controller-jobs
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["jobs"]
+  matchConditions:
+    - name: from-controller
+      expression: request.userInfo.username == 'system:serviceaccount:{{ .Release.Namespace }}:{{ include "ichor.serviceAccountName" . }}'
+  variables:
+    - name: pod
+      expression: object.spec.template.spec
+    - name: sa
+      expression: >-
+        has(variables.pod.serviceAccountName) ? variables.pod.serviceAccountName : ''
+    - name: ctr
+      expression: variables.pod.containers[0]
+  validations:
+    - expression: >-
+        (variables.sa == 'ichor-installer' && object.metadata.namespace == '{{ .Release.Namespace }}') ||
+        (variables.sa == 'ichor-cni' && object.metadata.namespace == 'kube-system')
+      message: the controller may only create Jobs under the ServiceAccount ichor-installer in ichor-system or ichor-cni in kube-system
+      reason: Forbidden
+    - expression: >-
+        size(variables.pod.containers) == 1 && !has(variables.pod.initContainers) &&
+        !has(variables.pod.ephemeralContainers)
+      message: the Job must run exactly one container, with no init or ephemeral containers
+      reason: Forbidden
+    - expression: >-
+        !has(variables.ctr.command) && !has(variables.ctr.envFrom) && has(variables.ctr.args) &&
+        size(variables.ctr.args) >= 2 &&
+        ((variables.sa == 'ichor-installer' && variables.ctr.args[0] == 'installer' && variables.ctr.args[1] == 'run') ||
+         (variables.sa == 'ichor-cni' && size(variables.ctr.args) >= 3 &&
+          variables.ctr.args[0] == 'cni' && variables.ctr.args[1] == 'helm' && variables.ctr.args[2] == 'apply'))
+      message: the container must run the installer image's own subcommand (installer run, or cni helm apply) with no command override
+      reason: Forbidden
+    - expression: >-
+        !has(variables.ctr.env) ||
+        variables.ctr.env.all(e, e.name in ['KUBERNETES_SERVICE_HOST', 'KUBERNETES_SERVICE_PORT', 'HOME'] && !has(e.valueFrom))
+      message: the container may set only KUBERNETES_SERVICE_HOST, KUBERNETES_SERVICE_PORT and HOME
+      reason: Forbidden
+    - expression: >-
+        has(variables.ctr.securityContext) &&
+        has(variables.ctr.securityContext.allowPrivilegeEscalation) && variables.ctr.securityContext.allowPrivilegeEscalation == false &&
+        (!has(variables.ctr.securityContext.privileged) || variables.ctr.securityContext.privileged == false) &&
+        has(variables.ctr.securityContext.capabilities) && has(variables.ctr.securityContext.capabilities.drop) &&
+        variables.ctr.securityContext.capabilities.drop == ['ALL'] && !has(variables.ctr.securityContext.capabilities.add)
+      message: the container must drop all capabilities and run unprivileged without privilege escalation
+      reason: Forbidden
+    - expression: >-
+        (!has(variables.pod.volumes) || variables.pod.volumes.all(v, has(v.emptyDir))) &&
+        (!has(variables.pod.hostPID) || variables.pod.hostPID == false) &&
+        (!has(variables.pod.hostIPC) || variables.pod.hostIPC == false)
+      message: the Job may mount only emptyDir volumes (no hostPath) and may not share the host's PID or IPC namespace
+      reason: Forbidden
+    - expression: >-
+        !has(variables.pod.hostNetwork) || variables.pod.hostNetwork == false || variables.sa == 'ichor-cni'
+      message: only the Cilium Job runs on the host network
+      reason: Forbidden
+    - expression: >-
+        has(object.spec.activeDeadlineSeconds) && object.spec.activeDeadlineSeconds <= 3600
+      message: the Job must set spec.activeDeadlineSeconds, at most an hour
+      reason: Forbidden
+{{- with .Values.admission.jobImageRepository }}
+    - expression: >-
+        variables.pod.containers.all(c, c.image.startsWith({{ printf "%s:" . | toJson }}))
+      message: the Job image must come from the repository set in admission.jobImageRepository
+      reason: Forbidden
+{{- end }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: ichor-controller-jobs-binding
+spec:
+  policyName: ichor-controller-jobs
+  validationActions: ["Deny"]
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: ichor-controller-job-image
+spec:
+  failurePolicy: Fail
+  paramKind:
+    apiVersion: ichor.maesh.dev/v1alpha1
+    kind: IchorInstallation
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["batch"]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["jobs"]
+  matchConditions:
+    - name: from-controller
+      expression: request.userInfo.username == 'system:serviceaccount:{{ .Release.Namespace }}:{{ include "ichor.serviceAccountName" . }}'
+  validations:
+    - expression: >-
+        object.spec.template.spec.containers.all(c,
+          c.image == params.spec.installerRepository + ':' + params.spec.version)
+      message: the Job image must be IchorInstallation spec.installerRepository:spec.version
+      reason: Forbidden
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: ichor-controller-job-image-binding
+spec:
+  policyName: ichor-controller-job-image
+  paramRef:
+    name: ichor
+    parameterNotFoundAction: Allow
+  validationActions: ["Deny"]
+{{- end }}

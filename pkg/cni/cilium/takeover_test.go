@@ -209,8 +209,8 @@ func TestCheckVersion(t *testing.T) { //nolint:funlen // one table
 		t.Error("an unreadable version must be refused")
 	}
 
-	if v, err := VersionFromImage("quay.io/cilium/cilium:v1.17.5@sha256:abc"); err != nil || v != "v1.17.5" {
-		t.Errorf("VersionFromImage = %q, %v", v, err)
+	if v, err := parseVersion("quay.io/cilium/cilium:v1.17.5@sha256:abc"); err != nil || v != "v1.17.5" {
+		t.Errorf("parseVersion = %q, %v", v, err)
 	}
 }
 

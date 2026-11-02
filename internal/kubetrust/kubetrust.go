@@ -145,12 +145,29 @@ func (p *Pool) Publish(cert []byte, path string) error {
 
 	p.mu.RUnlock()
 
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, out, 0o644); err != nil {
+	// A unique temp file in the same directory, so two writers never share a name and the rename is atomic.
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp-*")
+	if err != nil {
 		return err
 	}
 
-	return os.Rename(tmp, path)
+	defer func() { _ = os.Remove(f.Name()) }() // no-op once the rename succeeded
+
+	if _, err := f.Write(out); err != nil {
+		_ = f.Close()
+
+		return err
+	}
+
+	if err := f.Close(); err != nil {
+		return err
+	}
+
+	if err := os.Chmod(f.Name(), 0o644); err != nil { // public CAs only; CreateTemp makes 0600
+		return err
+	}
+
+	return os.Rename(f.Name(), path)
 }
 
 // Clear drops every extra certificate and removes the trust file at path, so only the base ca.crt is

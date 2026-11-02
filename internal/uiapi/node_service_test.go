@@ -26,7 +26,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"google.golang.org/protobuf/proto"
 	corev1 "k8s.io/api/core/v1"
 
@@ -146,7 +145,7 @@ func (f *fakeNodeTalosClient) StreamLogs(ctx context.Context, service string, si
 }
 
 func newTestNodeServer(fake *fakeNodeTalosClient, draining <-chan struct{}) (ichorv1alpha1connect.NodeServiceClient, func()) {
-	return newTestNodeServerFn(func(*secrets.Bundle) (NodeTalosClient, error) {
+	return newTestNodeServerFn(func(*TalosIdentity) (NodeTalosClient, error) {
 		if fake == nil {
 			return nil, errNoTalosClient
 		}
@@ -158,11 +157,11 @@ func newTestNodeServer(fake *fakeNodeTalosClient, draining <-chan struct{}) (ich
 // newTestNodeServerFn is newTestNodeServer with a factory that sees the
 // bundle, so a test can tell the authenticated dial (bundle set) from the
 // maintenance one (nil).
-func newTestNodeServerFn(dial func(*secrets.Bundle) (NodeTalosClient, error), draining <-chan struct{}) (ichorv1alpha1connect.NodeServiceClient, func()) {
+func newTestNodeServerFn(dial func(*TalosIdentity) (NodeTalosClient, error), draining <-chan struct{}) (ichorv1alpha1connect.NodeServiceClient, func()) {
 	s := &Server{
 		Client:              k8sClient,
 		ControllerNamespace: testNamespace,
-		NodeTalosClient: func(_ context.Context, _ *ichorv1alpha1.TalosCluster, _ *ichorv1alpha1.TalosMachine, b *secrets.Bundle) (NodeTalosClient, error) {
+		NodeTalosClient: func(_ context.Context, _ *ichorv1alpha1.TalosCluster, _ *ichorv1alpha1.TalosMachine, b *TalosIdentity) (NodeTalosClient, error) {
 			return dial(b)
 		},
 		Draining: draining,

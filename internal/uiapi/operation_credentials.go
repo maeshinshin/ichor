@@ -32,6 +32,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -112,31 +113,47 @@ func (s *Server) emitCredentialsEvent(ctx context.Context, cluster *ichorv1alpha
 	return s.Client.Create(ctx, ev)
 }
 
-// buildCredentials makes the kubeconfig and talosconfig of cluster from its secrets bundle and, during
-// a rotation, rotation.yaml, with the backend's own client: the keys never pass through the caller's
-// identity. The Kubernetes server is the cluster's declared endpoint. Errors carry no key material.
-func (s *Server) buildCredentials(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) (kubeconfig, talosconfig []byte, err error) {
-	if s.ControllerNamespace == "" {
-		return nil, nil, errors.New("loading the secrets bundle: the controller namespace is empty")
-	}
-
-	src, endpoints, err := credentials.Load(ctx, s.Client, s.ControllerNamespace, cluster)
+// buildCredentials makes the kubeconfig and talosconfig of cluster. The keys are made here and the controller,
+// which alone holds the CA keys, signs their public halves as the signed-in user: during a
+// rotation with the new CAs, trusting the old and the new. ttl zero means a year; readOnly makes the
+// talosconfig os:reader. The Kubernetes server is the cluster's declared endpoint. Errors carry no key
+// material.
+func (s *Server) buildCredentials(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, ttl time.Duration, readOnly bool,
+) (kubeconfig, talosconfig []byte, err error) {
+	kube, err := s.issueAsCaller(ctx, cluster, ichorv1alpha1.CredentialPurposeCredentialsKubernetes, "", ttl, "")
 	if err != nil {
 		return nil, nil, err
 	}
 
+	talosRole := ""
+	if readOnly {
+		talosRole = "reader"
+	}
+
+	talos, err := s.issueAsCaller(ctx, cluster, ichorv1alpha1.CredentialPurposeCredentialsTalos, "", ttl, talosRole)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var machines ichorv1alpha1.TalosMachineList
+	if err := s.Client.List(ctx, &machines, client.InNamespace(cluster.Namespace)); err != nil {
+		return nil, nil, fmt.Errorf("listing the cluster's machines: %w", err)
+	}
+
+	endpoints := credentials.Endpoints(machines.Items, cluster.Name)
 	if len(endpoints) == 0 {
 		endpoints = []string{cluster.Spec.Endpoint.Address}
 	}
 
 	server := "https://" + net.JoinHostPort(cluster.Spec.Endpoint.Address, strconv.Itoa(constants.DefaultControlPlanePort))
 
-	kubeconfig, err = src.Kubeconfig(credentials.ServerConfig(cluster.Name, server))
+	kubeconfig, err = credentials.BuildKubeconfig(credentials.ServerConfig(cluster.Name, server), kube.CA, kube.Crt, kube.Key)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	talosconfig, err = src.Talosconfig(cluster.Name, endpoints)
+	talosconfig, err = credentials.BuildTalosconfig(cluster.Name, endpoints, talos.CA, talos.Crt, talos.Key)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -175,7 +192,7 @@ func (s *Server) DownloadCARotationCredentials(
 			fmt.Errorf("the download was refused because its audit Event could not be recorded: %w", err))
 	}
 
-	kube, talos, err := s.buildCredentials(ctx, &cluster)
+	kube, talos, err := s.buildCredentials(ctx, &cluster, time.Duration(req.Msg.GetLifetimeSeconds())*time.Second, req.Msg.GetReadOnly())
 	if err != nil {
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("building the credentials: %s", truncateText(err.Error(), 300)))
 	}
@@ -220,6 +237,19 @@ func (s *Server) DownloadCARotationCredentials(
 	return w.finish()
 }
 
+// verificationKubeconfig is a kubeconfig valid for minutes, made only to check that the new Kubernetes CA is
+// accepted before the rotation continues.
+func (s *Server) verificationKubeconfig(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) ([]byte, error) {
+	kube, err := s.issueAsCaller(ctx, cluster, ichorv1alpha1.CredentialPurposeCredentialsKubernetes, "", credentials.DialLifetime, "")
+	if err != nil {
+		return nil, err
+	}
+
+	server := "https://" + net.JoinHostPort(cluster.Spec.Endpoint.Address, strconv.Itoa(constants.DefaultControlPlanePort))
+
+	return credentials.BuildKubeconfig(credentials.ServerConfig(cluster.Name, server), kube.CA, kube.Crt, kube.Key)
+}
+
 // AcknowledgeCARotationCredentials verifies that the credentials work, then sets the hand-off
 // annotation, as the caller, like SetOperationPaused writes spec.paused.
 func (s *Server) AcknowledgeCARotationCredentials(
@@ -242,7 +272,15 @@ func (s *Server) AcknowledgeCARotationCredentials(
 		return nil, mapGetError(fmt.Sprintf("cluster %q", op.Spec.ClusterRef.Name), err)
 	}
 
-	kube, _, err := s.buildCredentials(ctx, &cluster)
+	// Refuse early a caller who could not set the token anyway, before any certificate is asked for.
+	if allowed, err := s.may(ctx, "update", op.Namespace, "talosoperations", "", op.Name); err != nil {
+		return nil, err
+	} else if !allowed {
+		return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("you may not update operation %q", op.Name))
+	}
+
+	// A short-lived certificate, asked for as the caller, only to prove the new CA is accepted.
+	kube, err := s.verificationKubeconfig(ctx, &cluster)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("building the credentials: %s", truncateText(err.Error(), 300)))
 	}

@@ -34,7 +34,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
-	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -152,7 +151,7 @@ func newDiagnosticsServer(fake *fakeDownloadClient, c client.Client, dials *atom
 	s := &Server{
 		Client: c, ControllerNamespace: testNamespace,
 		Impersonate: NewImpersonator(cfg, client.Options{Scheme: scheme.Scheme}),
-		DownloadTalosClient: func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle, DownloadScope) (DownloadTalosClient, error) {
+		DownloadTalosClient: func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *TalosIdentity, DownloadScope) (DownloadTalosClient, error) {
 			if dials != nil {
 				dials.Add(1)
 			}
@@ -244,8 +243,12 @@ var _ = Describe("DiagnosticsService", func() {
 			Verbs:     []string{DownloadVerb},
 		}
 
+		mint := rbacv1.PolicyRule{
+			APIGroups: []string{ichorv1alpha1.GroupVersion.Group}, Resources: []string{"taloscredentialrequests"}, Verbs: []string{"create"},
+		}
+
 		// The admin user may read and download; the nobody user may only read.
-		for user, rules := range map[string][]rbacv1.PolicyRule{diagAdminUser: {read, download}, diagNobodyUser: {read}} {
+		for user, rules := range map[string][]rbacv1.PolicyRule{diagAdminUser: {read, download, mint}, diagNobodyUser: {read}} {
 			name := "diag-test-" + user
 			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRole{Name: name, Rules: rules}))).To(Succeed())
 			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRoleBinding{

@@ -460,7 +460,7 @@ func (s *Server) GetMyKubeconfig(ctx context.Context, req *connect.Request[pb.Ge
 
 	cluster := &clusters.Items[0]
 
-	bundle, err := loadBundle(ctx, s.Client, s.ControllerNamespace, cluster)
+	facts, err := s.publicFacts(ctx, cluster)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, errors.New("reading the cluster CA failed"))
 	}
@@ -468,7 +468,7 @@ func (s *Server) GetMyKubeconfig(ctx context.Context, req *connect.Request[pb.Ge
 	server, tlsName := s.Users.kubeServer(cluster.Spec.Endpoint.Address)
 
 	raw, err := buildKubeconfig(cluster.Name, server, tlsName,
-		bundle.Certs.K8s.Crt, name, s.Users.IssuerURL, req.Msg.GetCaFile())
+		[]byte(facts.KubernetesCA), name, s.Users.IssuerURL, req.Msg.GetCaFile())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, errors.New("building the kubeconfig failed"))
 	}

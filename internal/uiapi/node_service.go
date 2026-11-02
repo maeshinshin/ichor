@@ -24,7 +24,6 @@ import (
 	"sync"
 
 	"connectrpc.com/connect"
-	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"golang.org/x/sync/errgroup"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
@@ -109,7 +108,7 @@ func (s *Server) GetEffectiveConfig(
 			fmt.Errorf("machine %q has no role yet; approve it before requesting its effective configuration", namespacedName(ref)))
 	}
 
-	bundle, err := loadBundle(ctx, s.Client, s.ControllerNamespace, cluster)
+	bundle, err := s.renderBundle(ctx, cluster)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -121,7 +120,7 @@ func (s *Server) GetEffectiveConfig(
 
 	// Server.ControllerNamespace, not the TalosCluster's: same fixed namespace as loadBundle
 	// above and as the controller's own resolution.
-	sys, err := render.ResolveSystemInputs(ctx, s.Client, s.ControllerNamespace, cluster)
+	sys, err := render.ResolveSystemInputs(ctx, maskedSecrets{s.Client}, s.ControllerNamespace, cluster)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -276,23 +275,23 @@ func (s *Server) dialMachine(
 func (s *Server) dialNode(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) (NodeTalosClient, func(), bool, error) {
-	var bundle *secrets.Bundle
+	var id *TalosIdentity
 
 	if m.Spec.IsApproved() {
-		b, err := loadBundle(ctx, s.Client, s.ControllerNamespace, cluster)
+		i, err := s.nodeReader(ctx, cluster)
 		if err != nil {
 			return nil, nil, false, connect.NewError(connect.CodeInternal, err)
 		}
 
-		bundle = b
+		id = i
 	}
 
-	tc, closeFn, err := s.openNodeClient(ctx, cluster, m, bundle)
+	tc, closeFn, err := s.openNodeClient(ctx, cluster, m, id)
 	if err != nil {
 		return nil, nil, false, err
 	}
 
-	if bundle == nil {
+	if id == nil {
 		return tc, closeFn, true, nil
 	}
 
@@ -317,9 +316,9 @@ func (s *Server) dialNode(
 }
 
 func (s *Server) openNodeClient(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, id *TalosIdentity,
 ) (NodeTalosClient, func(), error) {
-	tc, err := s.NodeTalosClient(ctx, cluster, m, bundle)
+	tc, err := s.NodeTalosClient(ctx, cluster, m, id)
 	if err != nil {
 		return nil, nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("connecting to machine's Talos API: %w", err))
 	}

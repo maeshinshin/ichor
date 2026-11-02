@@ -29,15 +29,14 @@ import (
 	"github.com/cosi-project/runtime/pkg/resource"
 	"github.com/cosi-project/runtime/pkg/safe"
 	"github.com/cosi-project/runtime/pkg/state"
+	"github.com/siderolabs/crypto/x509"
 	"github.com/siderolabs/talos/pkg/machinery/api/common"
 	"github.com/siderolabs/talos/pkg/machinery/client"
 	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
-	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 	"github.com/siderolabs/talos/pkg/machinery/resources/block"
 	"github.com/siderolabs/talos/pkg/machinery/resources/hardware"
 	"github.com/siderolabs/talos/pkg/machinery/resources/perf"
-	"github.com/siderolabs/talos/pkg/machinery/role"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -57,9 +56,9 @@ import (
 // (pkg/machinery/role's own doc comment) -- never role.Admin, matching
 // "Trust": "the UI backend holds a read-only [Talos] identity."
 func NewMachineryNodeTalosClient(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, id *TalosIdentity,
 ) (NodeTalosClient, error) {
-	if bundle == nil {
+	if id == nil {
 		c, err := client.New(ctx, client.WithMaintenanceMode(m.DialEndpoint(), nil))
 		if err != nil {
 			return nil, fmt.Errorf("dialing maintenance Talos API: %w", err)
@@ -68,12 +67,7 @@ func NewMachineryNodeTalosClient(
 		return &machineryNodeTalosClient{c: c}, nil
 	}
 
-	cert, err := bundle.GenerateTalosAPIClientCertificate(role.MakeSet(role.Reader))
-	if err != nil {
-		return nil, fmt.Errorf("generating reader client certificate: %w", err)
-	}
-
-	cfg := clientconfig.NewConfig(cluster.Name, []string{m.DialEndpoint()}, bundle.Certs.OS.Crt, cert)
+	cfg := clientconfig.NewConfig(cluster.Name, []string{m.DialEndpoint()}, id.CA, &x509.PEMEncodedCertificateAndKey{Crt: id.Crt, Key: id.Key})
 
 	c, err := client.New(ctx, client.WithConfig(cfg))
 	if err != nil {

@@ -14,8 +14,8 @@ import (
 )
 
 // loginFrom posts a login as if from remote (and with an X-Forwarded-For when xff is set).
-func (e *env) loginFrom(remote, xff, ticket, user, password string) *httptest.ResponseRecorder {
-	b, _ := json.Marshal(map[string]string{pTicket: ticket, "username": user, pPassword: password})
+func (e *env) loginFrom(remote, xff, ticket, password string) *httptest.ResponseRecorder {
+	b, _ := json.Marshal(map[string]string{pTicket: ticket, pUsername: userAlice, pPassword: password})
 	req := httptest.NewRequest(http.MethodPost, "/oidc/login", strings.NewReader(string(b)))
 	req.Header.Set("Content-Type", "application/json")
 	req.RemoteAddr = remote
@@ -32,12 +32,12 @@ func TestFailuresOfOneSourceDoNotLockTheUserOutForOthers(t *testing.T) {
 	ticket := e.ticket(e.authorize(clientUI, uiRedirect, "", newPKCE()))
 
 	for range 6 {
-		e.loginFrom("198.51.100.7:1111", "", ticket, userAlice, "wrong")
+		e.loginFrom("198.51.100.7:1111", "", ticket, "wrong")
 	}
-	if rec := e.loginFrom("198.51.100.7:1112", "", ticket, userAlice, "correct horse"); rec.Code != http.StatusTooManyRequests {
+	if rec := e.loginFrom("198.51.100.7:1112", "", ticket, "correct horse"); rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("the attacking source is not slowed: %d", rec.Code)
 	}
-	if rec := e.loginFrom("203.0.113.9:2222", "", ticket, userAlice, "correct horse"); rec.Code != http.StatusOK {
+	if rec := e.loginFrom("203.0.113.9:2222", "", ticket, "correct horse"); rec.Code != http.StatusOK {
 		t.Fatalf("the real user from another source is locked out: %d %s", rec.Code, rec.Body.String())
 	}
 }
@@ -48,11 +48,11 @@ func TestUserCeilingSlowsButNeverRefuses(t *testing.T) {
 
 	// Failures from many sources, each below its own per-source limit.
 	for n := range 31 {
-		e.loginFrom("198.51.100."+strconv.Itoa(n+1)+":1", "", ticket, userAlice, "wrong")
+		e.loginFrom("198.51.100."+strconv.Itoa(n+1)+":1", "", ticket, "wrong")
 	}
 
 	start := time.Now()
-	rec := e.loginFrom("203.0.113.9:2222", "", ticket, userAlice, "correct horse")
+	rec := e.loginFrom("203.0.113.9:2222", "", ticket, "correct horse")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("the real user is refused under a distributed guessing attack: %d", rec.Code)
 	}
@@ -109,12 +109,12 @@ func TestForwardedForOnlyCountsFromATrustedProxy(t *testing.T) {
 
 	// An attacker behind the proxy fails six times; a user behind the same proxy is not affected.
 	for range 6 {
-		e.loginFrom("10.0.0.5:1", "198.51.100.7", ticket, userAlice, "wrong")
+		e.loginFrom("10.0.0.5:1", "198.51.100.7", ticket, "wrong")
 	}
-	if rec := e.loginFrom("10.0.0.5:2", "198.51.100.7", ticket, userAlice, "correct horse"); rec.Code != http.StatusTooManyRequests {
+	if rec := e.loginFrom("10.0.0.5:2", "198.51.100.7", ticket, "correct horse"); rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("attacker not slowed: %d", rec.Code)
 	}
-	if rec := e.loginFrom("10.0.0.5:3", "203.0.113.9", ticket, userAlice, "correct horse"); rec.Code != http.StatusOK {
+	if rec := e.loginFrom("10.0.0.5:3", "203.0.113.9", ticket, "correct horse"); rec.Code != http.StatusOK {
 		t.Fatalf("another client behind the proxy is slowed: %d", rec.Code)
 	}
 
@@ -122,9 +122,9 @@ func TestForwardedForOnlyCountsFromATrustedProxy(t *testing.T) {
 	e2 := newEnvWith(t, externalURL, "", func(c *oidcissuer.Config) { c.TrustedProxies = []netip.Prefix{proxy} })
 	t2 := e2.ticket(e2.authorize(clientUI, uiRedirect, "", newPKCE()))
 	for n := range 6 {
-		e2.loginFrom("192.0.2.50:1", "198.51.100."+strconv.Itoa(n+1), t2, userAlice, "wrong")
+		e2.loginFrom("192.0.2.50:1", "198.51.100."+strconv.Itoa(n+1), t2, "wrong")
 	}
-	if rec := e2.loginFrom("192.0.2.50:1", "198.51.100.99", t2, userAlice, "correct horse"); rec.Code != http.StatusTooManyRequests {
+	if rec := e2.loginFrom("192.0.2.50:1", "198.51.100.99", t2, "correct horse"); rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("a spoofed X-Forwarded-For from an untrusted peer reset the counter: %d", rec.Code)
 	}
 }

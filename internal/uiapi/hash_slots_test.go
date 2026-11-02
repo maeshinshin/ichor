@@ -50,6 +50,8 @@ func TestLoginsCannotStarvePasswordChangesAndQueueIsBounded(t *testing.T) {
 	hold()
 
 	for range maxLoginWaiters {
-		<-queued
+		if err := <-queued; err != nil && !errors.Is(err, context.Canceled) {
+			t.Errorf("queued login: %v", err)
+		}
 	}
 }

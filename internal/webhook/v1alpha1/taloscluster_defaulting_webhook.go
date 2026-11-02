@@ -10,7 +10,7 @@ import (
 	"github.com/maeshinshin/ichor/internal/settings"
 )
 
-// +kubebuilder:webhook:path=/mutate-ichor-maesh-dev-v1alpha1-taloscluster,mutating=true,failurePolicy=ignore,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=create,versions=v1alpha1,name=mtaloscluster-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/mutate-ichor-maesh-dev-v1alpha1-taloscluster,mutating=true,failurePolicy=ignore,timeoutSeconds=5,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=create,versions=v1alpha1,name=mtaloscluster-v1alpha1.kb.io,admissionReviewVersions=v1
 
 // TalosClusterDefaulter fills spec.driftPolicy of a new TalosCluster from the installation's
 // spec.defaults.driftPolicy. It acts on create only: an existing cluster is never touched, so

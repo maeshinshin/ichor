@@ -23,6 +23,7 @@ webhooks:
     resources:
     - talosclusters
   sideEffects: None
+  timeoutSeconds: 5
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
@@ -49,6 +50,7 @@ webhooks:
     resources:
     - talosclusters
   sideEffects: None
+  timeoutSeconds: 5
 - admissionReviewVersions:
   - v1
   clientConfig:
@@ -69,6 +71,7 @@ webhooks:
     - talosmachines
     - talosconfigpatches
   sideEffects: None
+  timeoutSeconds: 5
 - admissionReviewVersions:
   - v1
   clientConfig:
@@ -85,9 +88,11 @@ webhooks:
     - v1alpha1
     operations:
     - CREATE
+    - UPDATE
     resources:
     - talosoperations
   sideEffects: None
+  timeoutSeconds: 5
 - admissionReviewVersions:
   - v1
   clientConfig:
@@ -105,9 +110,11 @@ webhooks:
     operations:
     - CREATE
     - UPDATE
+    - DELETE
     resources:
     - ichorinstallations
   sideEffects: NoneOnDryRun
+  timeoutSeconds: 5
 - admissionReviewVersions:
   - v1
   clientConfig:
@@ -128,6 +135,7 @@ webhooks:
     resources:
     - machinereclaims
   sideEffects: None
+  timeoutSeconds: 5
 - admissionReviewVersions:
   - v1
   clientConfig:
@@ -148,6 +156,7 @@ webhooks:
     resources:
     - talosetcdbackups
   sideEffects: None
+  timeoutSeconds: 5
 - admissionReviewVersions:
   - v1
   clientConfig:
@@ -169,6 +178,7 @@ webhooks:
     resources:
     - talosclusters
   sideEffects: None
+  timeoutSeconds: 5
 - admissionReviewVersions:
   - v1
   clientConfig:
@@ -189,6 +199,7 @@ webhooks:
     resources:
     - talosconfigpatches
   sideEffects: None
+  timeoutSeconds: 5
 - admissionReviewVersions:
   - v1
   clientConfig:
@@ -210,3 +221,4 @@ webhooks:
     resources:
     - talosmachines
   sideEffects: None
+  timeoutSeconds: 5

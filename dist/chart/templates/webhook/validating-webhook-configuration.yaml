@@ -2,14 +2,14 @@
 {{- /* name (without -v1alpha1.kb.io), handler path suffix, operations, resources */}}
 {{- $hooks := list
   (dict "name" "vbreakglass" "path" "breakglass" "ops" (list "UPDATE") "res" (list "talosmachines" "talosconfigpatches"))
-  (dict "name" "vbreakglassop" "path" "breakglass" "ops" (list "CREATE") "res" (list "talosoperations"))
+  (dict "name" "vbreakglassop" "path" "breakglass" "ops" (list "CREATE" "UPDATE") "res" (list "talosoperations"))
   (dict "name" "vsecretrefs" "path" "breakglass" "ops" (list "CREATE" "UPDATE") "res" (list "talosetcdbackups"))
   (dict "name" "vauthentication" "path" "breakglass" "ops" (list "CREATE" "UPDATE") "res" (list "talosclusters"))
   (dict "name" "vtaloscluster" "path" "taloscluster" "ops" (list "CREATE" "UPDATE" "DELETE") "res" (list "talosclusters"))
   (dict "name" "vtalosconfigpatch" "path" "talosconfigpatch" "ops" (list "CREATE" "UPDATE") "res" (list "talosconfigpatches"))
   (dict "name" "vtalosmachine" "path" "talosmachine" "ops" (list "CREATE" "UPDATE" "DELETE") "res" (list "talosmachines"))
   (dict "name" "vmachinereclaim" "path" "machinereclaim" "ops" (list "CREATE" "UPDATE") "res" (list "machinereclaims"))
-  (dict "name" "vichorinstallation" "path" "ichorinstallation" "ops" (list "CREATE" "UPDATE") "res" (list "ichorinstallations") "sideEffects" "NoneOnDryRun") }}
+  (dict "name" "vichorinstallation" "path" "ichorinstallation" "ops" (list "CREATE" "UPDATE" "DELETE") "res" (list "ichorinstallations") "sideEffects" "NoneOnDryRun") }}
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
@@ -43,5 +43,7 @@ webhooks:
     - {{ . }}
     {{- end }}
   sideEffects: {{ $h.sideEffects | default "None" }}
+  # An unavailable manager refuses writes within seconds, not after the 10 s default.
+  timeoutSeconds: 5
 {{- end }}
 {{- end }}

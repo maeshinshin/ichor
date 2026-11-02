@@ -119,6 +119,12 @@ type env struct {
 // admin) and one signing key.
 func newEnv(t *testing.T, issuer, internalJWKS string) *env {
 	t.Helper()
+	return newEnvWith(t, issuer, internalJWKS, nil)
+}
+
+// newEnvWith is newEnv with a last look at the issuer's Config.
+func newEnvWith(t *testing.T, issuer, internalJWKS string, mutate func(*oidcissuer.Config)) *env {
+	t.Helper()
 	clk := &clock{}
 	keys := oidcissuer.NewKeyStore(clk.now)
 	recs := []oidctrust.Key{keyRecord(t, "k1", time.Now().Add(-time.Hour))}
@@ -127,10 +133,14 @@ func newEnv(t *testing.T, issuer, internalJWKS string) *env {
 	}
 	d := newDir()
 	d.set(oidcissuer.User{Name: userAlice, Roles: []string{roleAdmin}}, "correct horse")
-	iss, err := oidcissuer.New(oidcissuer.Config{
+	cfg := oidcissuer.Config{
 		Issuer: issuer, InternalJWKSURI: internalJWKS, UIRedirectURI: uiRedirect,
 		Keys: keys, Users: d, Passwords: d, Now: clk.now,
-	})
+	}
+	if mutate != nil {
+		mutate(&cfg)
+	}
+	iss, err := oidcissuer.New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}

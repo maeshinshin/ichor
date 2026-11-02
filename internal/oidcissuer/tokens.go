@@ -28,6 +28,8 @@ type refreshClaims struct {
 	ClientID      string `json:"client_id"`
 	Scope         string `json:"scope"`
 	TokenAudience string `json:"token_aud"`
+	// Family ties a token to its rotation chain; empty on a token issued before rotation existed.
+	Family string `json:"fam,omitempty"`
 }
 
 type idClaims struct {

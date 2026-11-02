@@ -340,24 +340,24 @@ func storedSnapshots(ctx context.Context, store etcdbackup.Store, prefix string)
 func loadBackupStore(
 	ctx context.Context, c client.Reader, controllerNamespace string, cluster *ichorv1alpha1.TalosCluster,
 	dst ichorv1alpha1.TalosEtcdBackupS3, newStore func(etcdbackup.S3Config) (etcdbackup.Store, error), scrub *scrubber,
-) (*secrets.Bundle, string, etcdbackup.Store, error) {
+) (*secrets.Bundle, etcdbackup.Key, etcdbackup.Store, error) {
 	bundle, err := loadBundle(ctx, c, controllerNamespace, cluster)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, etcdbackup.Key{}, nil, err
 	}
 
 	scrub.add(bundleSecretMaterial(bundle)...)
 
-	passphrase, err := etcdbackup.Passphrase(bundle)
+	passphrase, err := etcdbackup.DeriveKey(bundle)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, etcdbackup.Key{}, nil, err
 	}
 
-	scrub.add(passphrase)
+	scrub.add(passphrase.Secrets()...)
 
 	s3cfg, err := loadS3ConfigFrom(ctx, c, controllerNamespace, dst, scrub)
 	if err != nil {
-		return nil, "", nil, err
+		return nil, etcdbackup.Key{}, nil, err
 	}
 
 	store, err := openStore(newStore, s3cfg)
@@ -479,7 +479,7 @@ func (r *TalosEtcdBackupReconciler) etcdStatus(
 // passed. Plaintext is never written to disk.
 func (r *TalosEtcdBackupReconciler) snapshotAndUpload(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
-	bundle *secrets.Bundle, passphrase string, store etcdbackup.Store, key string,
+	bundle *secrets.Bundle, passphrase etcdbackup.Key, store etcdbackup.Store, key string,
 ) (int64, error) {
 	c, err := r.SnapshotClient(ctx, cluster, m, bundle)
 	if err != nil {

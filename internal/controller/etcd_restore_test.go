@@ -84,7 +84,7 @@ func newRestoreFixture(nodeName string) *restoreFixture {
 func (f *restoreFixture) putSnapshot(t time.Time, body string) (name string, plain []byte) {
 	plain = validTestSnapshot(body)
 
-	pass, err := etcdbackup.Passphrase(f.backup.bundle)
+	pass, err := etcdbackup.DeriveKey(f.backup.bundle)
 	Expect(err).NotTo(HaveOccurred())
 
 	var buf bytes.Buffer
@@ -589,7 +589,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			f := newRestoreFixture("")
 			name, _ := f.putSnapshot(time.Date(2026, 6, 1, 11, 0, 0, 0, time.UTC), "good")
 
-			pass, err := etcdbackup.Passphrase(f.backup.bundle)
+			pass, err := etcdbackup.DeriveKey(f.backup.bundle)
 			Expect(err).NotTo(HaveOccurred())
 
 			bad := validTestSnapshot("corrupt")
@@ -612,7 +612,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 
 			var buf bytes.Buffer
 
-			w, err := etcdbackup.Encrypt(&buf, "some-other-passphrase")
+			w, err := etcdbackup.Encrypt(&buf, etcdbackup.Key{Current: "some-other-passphrase"})
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = w.Write(validTestSnapshot("foreign"))
 			Expect(w.Close()).To(Succeed())

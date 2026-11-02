@@ -96,7 +96,7 @@ func runRecoverCluster(ctx context.Context, opts restoreOptions, deps restoreDep
 		return fmt.Errorf("restore: %w", err)
 	}
 
-	passphrase, err := etcdbackup.Passphrase(bundle)
+	passphrase, err := etcdbackup.DeriveKey(bundle)
 	if err != nil {
 		return fmt.Errorf("restore: %w", err)
 	}
@@ -117,7 +117,7 @@ func runRecoverCluster(ctx context.Context, opts restoreOptions, deps restoreDep
 	}
 
 	// Errors whose text comes from S3, TLS or gRPC are scrubbed of every secret held here.
-	scrub := newScrubber(passphrase, s3.AccessKeyID, s3.SecretAccessKey, s3.SessionToken)
+	scrub := newScrubber(append(passphrase.Secrets(), s3.AccessKeyID, s3.SecretAccessKey, s3.SessionToken)...)
 
 	store, err := deps.NewStore(s3)
 	if err != nil {
@@ -173,7 +173,7 @@ type verifiedSnapshot struct {
 // pickSnapshot downloads, decrypts and verifies snapshots newest first and
 // returns the first good one. A named snapshot is the only candidate; a
 // broken one is an error, never replaced by another.
-func pickSnapshot(ctx context.Context, store etcdbackup.Store, opts restoreOptions, passphrase string, stderr io.Writer, scrub func(error) error) (*verifiedSnapshot, error) {
+func pickSnapshot(ctx context.Context, store etcdbackup.Store, opts restoreOptions, passphrase etcdbackup.Key, stderr io.Writer, scrub func(error) error) (*verifiedSnapshot, error) {
 	objs, err := store.List(ctx, opts.S3Prefix)
 	if err != nil {
 		return nil, fmt.Errorf("restore: listing snapshots under %q: %w", opts.S3Prefix, scrub(err))

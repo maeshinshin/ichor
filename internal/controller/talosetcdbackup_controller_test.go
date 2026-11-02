@@ -320,7 +320,7 @@ var _ = Describe("TalosEtcdBackupReconciler", func() {
 		Expect(got.Status.LastSnapshot.Size).To(Equal(int64(len(f.store.objects[key]))))
 
 		// "Bundle + snapshot is sufficient": only the bundle is used to open it.
-		pass, err := etcdbackup.Passphrase(f.bundle)
+		pass, err := etcdbackup.DeriveKey(f.bundle)
 		Expect(err).NotTo(HaveOccurred())
 		plain, err := etcdbackup.Decrypt(bytes.NewReader(f.store.objects[key]), pass)
 		Expect(err).NotTo(HaveOccurred())
@@ -357,7 +357,7 @@ var _ = Describe("TalosEtcdBackupReconciler", func() {
 		Expect(bad.snapshots).To(BeNumerically("<=", 1))
 		Expect(f.store.objects).To(HaveLen(1))
 
-		pass, err := etcdbackup.Passphrase(f.bundle)
+		pass, err := etcdbackup.DeriveKey(f.bundle)
 		Expect(err).NotTo(HaveOccurred())
 		plain, err := etcdbackup.Decrypt(bytes.NewReader(f.store.objects[got.Status.LastSnapshot.Key]), pass)
 		Expect(err).NotTo(HaveOccurred())
@@ -551,10 +551,10 @@ var _ = Describe("TalosEtcdBackupReconciler", func() {
 	Describe("leak discipline", func() {
 		// Whatever S3 or Talos echo back must not reach status, whatever it contains.
 		assertClean := func(f *backupFixture, got *ichorv1alpha1.TalosEtcdBackup) {
-			pass, err := etcdbackup.Passphrase(f.bundle)
+			pass, err := etcdbackup.DeriveKey(f.bundle)
 			Expect(err).NotTo(HaveOccurred())
 
-			material := append(bundleSecretMaterial(f.bundle), pass, "AKIATESTACCESSKEY", "test-secret-access-key-value")
+			material := append(append(bundleSecretMaterial(f.bundle), pass.Secrets()...), "AKIATESTACCESSKEY", "test-secret-access-key-value")
 			cond := readyOf(got)
 			Expect(cond).NotTo(BeNil())
 			Expect(cond.Status).To(Equal(metav1.ConditionFalse))
@@ -570,10 +570,10 @@ var _ = Describe("TalosEtcdBackupReconciler", func() {
 			f := newBackupFixture()
 			f.addControlPlane("91", 2)
 
-			pass, err := etcdbackup.Passphrase(f.bundle)
+			pass, err := etcdbackup.DeriveKey(f.bundle)
 			Expect(err).NotTo(HaveOccurred())
 
-			f.store.putErr = errors.New("PUT denied for AKIATESTACCESSKEY signed with test-secret-access-key-value key " + pass +
+			f.store.putErr = errors.New("PUT denied for AKIATESTACCESSKEY signed with test-secret-access-key-value key " + pass.Current +
 				" " + f.bundle.Cluster.Secret)
 
 			_, got := f.reconcile(f.newBackup(nil))

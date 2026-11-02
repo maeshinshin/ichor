@@ -94,7 +94,7 @@ func TestMemoryBackupAndRestoreOfLargeObject(t *testing.T) {
 	var sealed bytes.Buffer
 
 	grew := peakHeapGrowth(t, func() {
-		enc, err := Encrypt(&sealed, "pw")
+		enc, err := Encrypt(&sealed, Key{Current: "pw"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -117,11 +117,11 @@ func TestMemoryBackupAndRestoreOfLargeObject(t *testing.T) {
 
 	grew = peakHeapGrowth(t, func() {
 		// The live restore does exactly this: verify once, then open a reader and stream it to the node.
-		if n, err := VerifyObject(ctx, st, "k", "pw"); err != nil || n != size {
+		if n, err := VerifyObject(ctx, st, "k", Key{Current: "pw"}); err != nil || n != size {
 			t.Fatalf("verify: %d, %v", n, err)
 		}
 
-		rd, err := Reader(ctx, st, "k", "pw")
+		rd, err := Reader(ctx, st, "k", Key{Current: "pw"})
 		if err != nil {
 			t.Fatal(err)
 		}

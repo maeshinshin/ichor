@@ -67,7 +67,7 @@ type restoreJob struct {
 	backup     types.NamespacedName
 	store      etcdbackup.Store
 	prefix     string
-	passphrase string
+	passphrase etcdbackup.Key
 	scrub      scrubber
 
 	// order is the control planes to wipe: all of them, except the one the controller itself runs on

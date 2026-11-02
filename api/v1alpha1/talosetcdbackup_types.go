@@ -104,6 +104,13 @@ type TalosEtcdBackupS3 struct {
 	// +required
 	Endpoint string `json:"endpoint"`
 
+	// insecure permits a plain http:// endpoint. The access key id, the signed headers
+	// and the session token then cross the network in clear, so the admission webhook refuses
+	// http:// unless this is true. Changing it needs update on talosetcdbackups/secret-references,
+	// like the endpoint. Unset (false) means https only.
+	// +optional
+	Insecure bool `json:"insecure,omitempty"`
+
 	// region is the bucket's region; empty lets the client detect it.
 	// +optional
 	Region string `json:"region,omitempty"`

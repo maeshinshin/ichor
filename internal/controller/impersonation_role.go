@@ -18,11 +18,11 @@ package controller
 
 import (
 	"context"
-	"reflect"
 	"slices"
 	"time"
 
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -110,7 +110,7 @@ func (r *ImpersonationRoleReconciler) Reconcile(ctx context.Context, _ ctrl.Requ
 	}
 
 	want := desiredImpersonationRules(users.Items)
-	if !reflect.DeepEqual(emptyIfNil(role.Rules), emptyIfNil(want)) {
+	if !equality.Semantic.DeepEqual(role.Rules, want) {
 		role.Rules = want
 		if err := r.Update(ctx, &role); err != nil {
 			return ctrl.Result{}, err
@@ -120,14 +120,6 @@ func (r *ImpersonationRoleReconciler) Reconcile(ctx context.Context, _ ctrl.Requ
 	}
 
 	return ctrl.Result{RequeueAfter: impersonateEvery}, nil
-}
-
-func emptyIfNil(r []rbacv1.PolicyRule) []rbacv1.PolicyRule {
-	if r == nil {
-		return []rbacv1.PolicyRule{}
-	}
-
-	return r
 }
 
 // SetupWithManager runs the reconciler on every change to an IchorUser and every two minutes (the role

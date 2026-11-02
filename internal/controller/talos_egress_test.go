@@ -124,11 +124,11 @@ var _ = Describe("TalosEgress", Ordered, func() {
 	BeforeAll(func() {
 		crd := &unstructured.Unstructured{Object: map[string]any{
 			"apiVersion": "apiextensions.k8s.io/v1", "kind": "CustomResourceDefinition",
-			"metadata": map[string]any{"name": "ciliumnetworkpolicies.cilium.io"},
+			"metadata": map[string]any{labelName: "ciliumnetworkpolicies.cilium.io"},
 			"spec": map[string]any{
 				"group": "cilium.io", "scope": "Namespaced",
 				"names": map[string]any{"kind": "CiliumNetworkPolicy", "listKind": "CiliumNetworkPolicyList", "plural": "ciliumnetworkpolicies", "singular": "ciliumnetworkpolicy"},
-				"versions": []any{map[string]any{"name": "v2", "served": true, "storage": true, "schema": map[string]any{
+				"versions": []any{map[string]any{labelName: "v2", "served": true, "storage": true, "schema": map[string]any{
 					"openAPIV3Schema": map[string]any{"type": "object", "x-kubernetes-preserve-unknown-fields": true},
 				}}},
 			},

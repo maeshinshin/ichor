@@ -44,12 +44,15 @@ func TestAuthConfigProviders(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := authConfig(tc.oidc, "client", tc.users)
+			got := authConfig(tc.oidc, "client", tc.users, false)
 			if _, ok := got["issuer"]; ok {
 				t.Fatalf("top-level issuer still sent: %v", got["issuer"])
 			}
 			if _, ok := got["clientId"]; ok {
 				t.Fatalf("top-level clientId still sent: %v", got["clientId"])
+			}
+			if _, has := got["anonymous"]; has == tc.enabled {
+				t.Fatalf("anonymous = %v with enabled=%v", got["anonymous"], tc.enabled)
 			}
 			if got["enabled"] != tc.enabled {
 				t.Fatalf("enabled=%v", got["enabled"])

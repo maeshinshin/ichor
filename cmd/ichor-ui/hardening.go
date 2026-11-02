@@ -42,11 +42,11 @@ const (
 )
 
 // mountRPC registers every Connect service on mux behind the metrics, access-log and auth interceptors.
-func mountRPC(mux *http.ServeMux, s *uiapi.Server, authn *uiapi.Authenticator) {
+func mountRPC(mux *http.ServeMux, s *uiapi.Server, authn *uiapi.Authenticator, allowAnonymous bool) {
 	opts := func(max int) connect.HandlerOption {
 		return connect.WithHandlerOptions(
 			connect.WithReadMaxBytes(max),
-			connect.WithInterceptors(uiapi.SanitizeErrors(log.Default()), uiapi.MetricsInterceptor(), uiapi.AccessLogInterceptor(log.Default(), false), uiapi.AuthInterceptor(authn)),
+			connect.WithInterceptors(uiapi.SanitizeErrors(log.Default()), uiapi.MetricsInterceptor(), uiapi.AccessLogInterceptor(log.Default(), false), uiapi.AuthInterceptor(authn, allowAnonymous)),
 		)
 	}
 	small, big := opts(rpcMaxBytes), opts(rpcMaxBytesUpload)
@@ -63,18 +63,27 @@ func mountRPC(mux *http.ServeMux, s *uiapi.Server, authn *uiapi.Authenticator) {
 	mux.Handle(ichorv1alpha1connect.NewSettingsServiceHandler(s, small))
 }
 
-// csp allows exactly what the Vite build needs: scripts and connections from
+// contentSecurityPolicy allows exactly what the Vite build needs: scripts and connections from
 // the page's own origin, and no inline script (the theme snippet is a file,
 // ui/public/theme-init.js). style-src keeps 'unsafe-inline' because two stock
 // pieces inject a <style> element at runtime (ui/src/lib/radix/select.tsx and
 // the sonner shim); inline CSS cannot run script, so the risk is accepted
-// rather than editing stock components.
-const csp = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; " +
-	"img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+// rather than editing stock components. With an external OIDC provider the SPA itself
+// fetches the provider's discovery document and token endpoint, whose origins are not
+// known here, so connect-src widens to any https origin; scripts stay 'self' only.
+func contentSecurityPolicy(externalOIDC bool) string {
+	connect := "'self'"
+	if externalOIDC {
+		connect = "'self' https:"
+	}
+
+	return "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src " + connect + "; " +
+		"img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
+}
 
 // securityHeaders sets the browser-facing protections on every response of the
 // listener, the issuer's login pages included.
-func securityHeaders(next http.Handler) http.Handler {
+func securityHeaders(next http.Handler, csp string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("Content-Security-Policy", csp)
@@ -108,7 +117,7 @@ func tlsConfig(get getCert) *tls.Config {
 // JWKS documents, so every deadline is short.
 func newInternalHTTPServer(addr string, h http.Handler, get getCert) *http.Server {
 	return &http.Server{
-		Addr: addr, Handler: securityHeaders(http.MaxBytesHandler(h, 4<<10)), TLSConfig: tlsConfig(get),
+		Addr: addr, Handler: securityHeaders(http.MaxBytesHandler(h, 4<<10), contentSecurityPolicy(false)), TLSConfig: tlsConfig(get),
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second,
 		IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10,
 	}

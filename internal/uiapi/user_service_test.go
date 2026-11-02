@@ -518,7 +518,7 @@ func TestMustChangeUserOnlyReachesWhoAmIAndChangeOwnPassword(t *testing.T) {
 
 	a := (*Authenticator)(nil).WithLocal("https://i", fakeLocal{"t": userAlice}, s.Users.Cache)
 	tok := "Bearer e30." + b64(`{"iss":"https://i"}`) + ".t"
-	i := authInterceptor{a}
+	i := authInterceptor{a: a}
 
 	for proc, ok := range map[string]bool{
 		ichorv1alpha1connect.UserServiceWhoAmIProcedure:            true,

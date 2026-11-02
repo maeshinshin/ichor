@@ -63,6 +63,8 @@ manager:
   ##
   podSecurityContext:
     runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
     seccompProfile:
       type: RuntimeDefault
 
@@ -116,9 +118,10 @@ manager:
   #     maxSurge: 25%
   #     maxUnavailable: 25%
 
-  ## Priority class name
+  ## Priority class name. ichor-critical is created by priorityClass below, so the controller (the only
+  ## Talos writer) is not evicted before ordinary workloads under node pressure. Set "" to use none.
   ##
-  # priorityClassName: ""
+  priorityClassName: ichor-critical
 
   ## Topology spread constraints: placement across nodes by default (design
   ## 2.4). topologySpreadConstraints over podAntiAffinity because
@@ -302,6 +305,8 @@ ichorUI:
   ##
   podSecurityContext:
     runAsNonRoot: true
+    runAsUser: 65532
+    runAsGroup: 65532
     seccompProfile:
       type: RuntimeDefault
 
@@ -324,6 +329,10 @@ ichorUI:
     requests:
       cpu: 10m
       memory: 64Mi
+
+  ## Priority class name (created by priorityClass below). Set "" to use none.
+  ##
+  priorityClassName: ichor-critical
 
   ## Pod's affinity
   ##
@@ -513,6 +522,15 @@ grafana:
   dashboards:
     enabled: false
 
+## The PriorityClass both pods run under (ADR 0108). Cluster-scoped, value 1000000: above ordinary
+## workloads, far below the system-* classes, which a user namespace cannot use. Turn create off to
+## bring your own class and set manager.priorityClassName and ichorUI.priorityClassName to it.
+##
+priorityClass:
+  create: true
+  name: ichor-critical
+  value: 1000000
+
 ## Network policies for controlling traffic flow.
 ## Enable to restrict ingress to the controller manager.
 ##
@@ -535,6 +553,17 @@ networkPolicy:
     ## another port, or inside the cluster, needs a policy of your own: policies add up.
     externalPorts:
       - 443
+    ## Narrow the `world` egress and ingress (ADR 0108). Empty (the default) keeps today's behaviour. Each
+    ## list is CIDRs; when set, the rule names them instead of the `world` entity. Only these chart-rendered
+    ## policies honour them (the installer's copy in config/cilium-network-policy stays on `world`), so set
+    ## networkPolicy.cilium.enabled: true to use them.
+    ##   externalCIDRs: where externalPorts may go (the S3 endpoint, the OIDC issuer).
+    ##   talosCIDRs: the Talos nodes' addresses for apid (50000) and the API server (6443). Nodes that
+    ##     have not joined yet are "world", so include their subnet.
+    ##   uiIngressCIDRs: who may reach ichor-ui from outside the cluster (in-cluster callers stay allowed).
+    externalCIDRs: []
+    talosCIDRs: []
+    uiIngressCIDRs: []
 
 
 ## Install-time checks (ADR 0104 4.4)

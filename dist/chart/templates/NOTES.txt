@@ -4,6 +4,12 @@ Your release is named {{ .Release.Name }}.
 
 The controller and CRDs have been installed in namespace {{ .Release.Namespace }}.
 
+Pod Security Admission: the chart does not own the namespace. Every Ichor pod meets the "restricted"
+profile, so enforce it (ADR 0108):
+
+  kubectl label namespace {{ .Release.Namespace }} pod-security.kubernetes.io/enforce=restricted \
+    pod-security.kubernetes.io/audit=restricted pod-security.kubernetes.io/warn=restricted
+
 To verify the installation:
 
   kubectl get pods -n {{ .Release.Namespace }}

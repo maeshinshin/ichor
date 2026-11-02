@@ -30,13 +30,21 @@ namespace: {{ .ctx.Release.Namespace }}
     - port: "53"
       protocol: TCP
 {{- end }}
-{{- /* Egress to the outside world on the given TCP ports (the dot is the list). */}}
+{{- /* Egress outside the cluster on the given TCP ports. The dot is a dict: ports, and cidrs. With cidrs the
+rule names them, without the whole world is allowed (ADR 0108). */}}
 {{- define "ichor.cnp.world" -}}
+{{- if .cidrs }}
+- toCIDR:
+  {{- range .cidrs }}
+  - {{ . | quote }}
+  {{- end }}
+{{- else }}
 - toEntities:
   - world
+{{- end }}
   toPorts:
   - ports:
-    {{- range . }}
+    {{- range .ports }}
     - port: {{ . | quote }}
       protocol: TCP
     {{- end }}
@@ -44,6 +52,8 @@ namespace: {{ .ctx.Release.Namespace }}
 {{- if .Values.networkPolicy.cilium.enabled }}
 {{- $name := include "ichor.name" . }}
 {{- $ports := .Values.networkPolicy.cilium.externalPorts }}
+{{- $external := dict "ports" $ports "cidrs" .Values.networkPolicy.cilium.externalCIDRs }}
+{{- $talosCIDRs := .Values.networkPolicy.cilium.talosCIDRs }}
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -102,16 +112,30 @@ spec:
   - toEntities:
     - host
     - remote-node
+    {{- if not $talosCIDRs }}
     - world
+    {{- end }}
     toPorts:
     - ports:
       - port: "50000"
         protocol: TCP
       - port: "6443"
         protocol: TCP
+  {{- if $talosCIDRs }}
+  - toCIDR:
+    {{- range $talosCIDRs }}
+    - {{ . | quote }}
+    {{- end }}
+    toPorts:
+    - ports:
+      - port: "50000"
+        protocol: TCP
+      - port: "6443"
+        protocol: TCP
+  {{- end }}
   {{- include "ichor.cnp.dns" . | nindent 2 }}
   # TalosEtcdBackup's S3 endpoint.
-  {{- include "ichor.cnp.world" $ports | nindent 2 }}
+  {{- include "ichor.cnp.world" $external | nindent 2 }}
 {{- end }}
 {{- if .Values.ichorUI.enabled }}
 ---
@@ -127,8 +151,18 @@ spec:
       app.kubernetes.io/name: {{ $name }}
   ingress:
   # Users, in-cluster ingress and gateways, the kubelet's probes, port-forwards.
-  - fromEntities:
+  - {{ if .Values.networkPolicy.cilium.uiIngressCIDRs }}fromCIDR:
+    {{- range .Values.networkPolicy.cilium.uiIngressCIDRs }}
+    - {{ . | quote }}
+    {{- end }}
+    toPorts:
+    - ports:
+      - port: {{ .Values.ichorUI.port | quote }}
+        protocol: TCP
+  - {{ end }}fromEntities:
+    {{- if not .Values.networkPolicy.cilium.uiIngressCIDRs }}
     - world
+    {{- end }}
     - cluster
     toPorts:
     - ports:
@@ -151,14 +185,26 @@ spec:
   - toEntities:
     - host
     - remote-node
+    {{- if not $talosCIDRs }}
     - world
+    {{- end }}
     toPorts:
     - ports:
       - port: "50000"
         protocol: TCP
+  {{- if $talosCIDRs }}
+  - toCIDR:
+    {{- range $talosCIDRs }}
+    - {{ . | quote }}
+    {{- end }}
+    toPorts:
+    - ports:
+      - port: "50000"
+        protocol: TCP
+  {{- end }}
   {{- include "ichor.cnp.dns" . | nindent 2 }}
   # The external OIDC issuer.
-  {{- include "ichor.cnp.world" $ports | nindent 2 }}
+  {{- include "ichor.cnp.world" $external | nindent 2 }}
 {{- end }}
 {{- if .Values.installer.enabled }}
 ---

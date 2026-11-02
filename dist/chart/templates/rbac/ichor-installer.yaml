@@ -88,6 +88,15 @@ rules:
   - bind
   - escalate
 - apiGroups:
+  - scheduling.k8s.io
+  resources:
+  - priorityclasses
+  verbs:
+  - create
+  - get
+  - patch
+  - update
+- apiGroups:
   - admissionregistration.k8s.io
   resources:
   - validatingadmissionpolicies

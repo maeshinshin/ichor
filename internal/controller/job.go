@@ -21,6 +21,7 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/utils/ptr"
 )
 
@@ -53,6 +54,9 @@ func jobOutcome(job *batchv1.Job) (done bool, failed *batchv1.JobCondition) {
 	return false, nil
 }
 
+// jobUID is the user and group of the nonroot distroless image the Jobs run (the images' USER 65532).
+const jobUID int64 = 65532
+
 // newJob builds the Job of one container that runs once (no retry: a failed run is looked at,
 // not blindly repeated) under serviceAccount. app is the name label the network policies select
 // the pod by (ADR 0100); deadline 0 sets no active deadline.
@@ -63,6 +67,19 @@ func newJob(
 		AllowPrivilegeEscalation: ptr.To(false),
 		ReadOnlyRootFilesystem:   ptr.To(true),
 		Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+	}
+	// A runaway Job must not starve the node it lands on (ADR 0108); a caller's own resources win.
+	if ctr.Resources.Limits == nil && ctr.Resources.Requests == nil {
+		ctr.Resources = corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("50m"),
+				corev1.ResourceMemory: resource.MustParse("64Mi"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("1"),
+				corev1.ResourceMemory: resource.MustParse("512Mi"),
+			},
+		}
 	}
 
 	job := &batchv1.Job{
@@ -78,6 +95,8 @@ func newJob(
 					ServiceAccountName: serviceAccount,
 					SecurityContext: &corev1.PodSecurityContext{
 						RunAsNonRoot:   ptr.To(true),
+						RunAsUser:      ptr.To(jobUID),
+						RunAsGroup:     ptr.To(jobUID),
 						SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
 					},
 					Containers: []corev1.Container{ctr},

@@ -21,10 +21,14 @@ import (
 	"slices"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -55,6 +59,43 @@ type ImpersonationRoleReconciler struct {
 	// APIReader reads the ClusterRole without a cluster-wide informer.
 	APIReader           client.Reader
 	ControllerNamespace string
+	// Recorder is optional; with it a missing role also raises a Warning Event on the IchorInstallation.
+	Recorder record.EventRecorder
+}
+
+// ConditionImpersonationRole is the IchorInstallation condition that says whether ClusterRole
+// ImpersonationRoleName exists. When it is False nobody can sign in to ichor-ui.
+const ConditionImpersonationRole = "ImpersonationRoleReady"
+
+// report sets ConditionImpersonationRole on the IchorInstallation (and, when the role is missing, raises
+// an Event once per change). A missing singleton is not an error: there is nothing to report on yet.
+func (r *ImpersonationRoleReconciler) report(ctx context.Context, ok bool, msg string) {
+	var inst ichorv1alpha1.IchorInstallation
+	if err := r.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
+		return
+	}
+
+	cond := metav1.Condition{Type: ConditionImpersonationRole, Status: metav1.ConditionTrue, Reason: "Present", Message: msg, ObservedGeneration: inst.Generation}
+	if !ok {
+		cond.Status, cond.Reason = metav1.ConditionFalse, "RoleMissing"
+	}
+
+	prev := meta.FindStatusCondition(inst.Status.Conditions, ConditionImpersonationRole)
+	if prev != nil && prev.Status == cond.Status && prev.Message == cond.Message {
+		return
+	}
+
+	meta.SetStatusCondition(&inst.Status.Conditions, cond)
+
+	if err := r.Status().Update(ctx, &inst); err != nil {
+		logf.FromContext(ctx).Error(err, "could not record the impersonation role condition")
+
+		return
+	}
+
+	if !ok && r.Recorder != nil {
+		r.Recorder.Event(&inst, corev1.EventTypeWarning, cond.Reason, msg)
+	}
 }
 
 // +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,resourceNames=ichor-ui-impersonate,verbs=get;update;escalate
@@ -102,12 +143,15 @@ func (r *ImpersonationRoleReconciler) Reconcile(ctx context.Context, _ ctrl.Requ
 		if apierrors.IsNotFound(err) {
 			// The chart or installer creates it; without it ichor-ui can impersonate no Ichor user.
 			logf.FromContext(ctx).Info("the impersonation ClusterRole does not exist; nothing to keep", "name", ImpersonationRoleName)
+			r.report(ctx, false, "ClusterRole "+ImpersonationRoleName+" does not exist, so no user can sign in to ichor-ui; reinstall or upgrade Ichor to create it")
 
 			return ctrl.Result{RequeueAfter: impersonateEvery}, nil
 		}
 
 		return ctrl.Result{}, err
 	}
+
+	r.report(ctx, true, "ClusterRole "+ImpersonationRoleName+" exists")
 
 	want := desiredImpersonationRules(users.Items)
 	if !equality.Semantic.DeepEqual(role.Rules, want) {

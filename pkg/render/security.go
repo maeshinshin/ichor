@@ -66,7 +66,7 @@ func ValidateSecurity(c *ichorv1alpha1.TalosCluster) error {
 
 	if d := s.DiskEncryption; d != nil {
 		if !contract.VolumeConfigEncryptionSupported() {
-			errs = append(errs, errors.New("spec.security.diskEncryption needs a versionContract with VolumeConfig encryption (v1.10 or later)"))
+			errs = append(errs, errors.New("spec.security.diskEncryption needs a versionContract that supports VolumeConfig encryption (v1.11 or later)"))
 		}
 
 		if d.Type == ichorv1alpha1.DiskEncryptionKMS {

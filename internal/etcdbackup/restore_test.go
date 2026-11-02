@@ -27,6 +27,8 @@ import (
 	"time"
 )
 
+const wipingStep = "Wiping"
+
 // TestRestoreObjectsAgainstFakeS3 runs the marker and the pinned copy of an etcd restore
 // through the real S3 client: a missing marker is "none", not an error, and neither object is ever
 // taken for a snapshot by List or Prune.
@@ -54,7 +56,7 @@ func TestRestoreObjectsAgainstFakeS3(t *testing.T) {
 	want := &RestoreMarker{
 		Namespace: "ns", Operation: "etcd-restore-x", Cluster: "c", Backup: "nightly", Snapshot: ObjectName(time.Unix(0, 0)),
 		Reason: "bad change", SnapshotTime: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), Target: "cp-1",
-		Step: "Wiping", StartedAt: time.Date(2026, 6, 2, 0, 0, 0, 0, time.UTC),
+		Step: wipingStep, StartedAt: time.Date(2026, 6, 2, 0, 0, 0, 0, time.UTC),
 		Nodes: map[string]string{"cp-2": "node-2"}, Own: "cp-2",
 	}
 
@@ -205,7 +207,7 @@ func TestFetchVerifiedVerifyObjectAndReader(t *testing.T) {
 func TestMarkerSignature(t *testing.T) {
 	ctx := context.Background()
 	st := memStore{}
-	m := &RestoreMarker{Namespace: "ns", Step: "Wiping"}
+	m := &RestoreMarker{Namespace: "ns", Step: wipingStep}
 
 	if err := PutMarker(ctx, st, "p", "pw", m); err != nil {
 		t.Fatal(err)
@@ -215,7 +217,7 @@ func TestMarkerSignature(t *testing.T) {
 		t.Fatal("a marker read with another key must be refused")
 	}
 
-	forged := bytes.Replace(st["p/"+MarkerName], []byte("Wiping"), []byte("Rejoin"), 1)
+	forged := bytes.Replace(st["p/"+MarkerName], []byte(wipingStep), []byte("Rejoin"), 1)
 	st["p/"+MarkerName] = forged
 
 	if _, err := GetMarker(ctx, st, "p", "pw"); err == nil {
@@ -227,7 +229,7 @@ func TestMarkerSignature(t *testing.T) {
 	st["p/"+MarkerName] = legacy
 
 	got, err := GetMarker(ctx, st, "p", "pw")
-	if err != nil || got == nil || got.Step != "Wiping" {
+	if err != nil || got == nil || got.Step != wipingStep {
 		t.Fatalf("legacy marker: %+v, %v", got, err)
 	}
 }

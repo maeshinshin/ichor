@@ -681,6 +681,13 @@ export const en = {
   'creds.downloadDescription':
     'The zip holds a kubeconfig and a talosconfig with cluster-admin private keys. Store it like a password. The download is recorded as a Warning Event on the cluster, with your name.',
   'creds.downloadConfirm': 'Download',
+  'creds.lifetime': 'Valid for',
+  'creds.lifetime.year': '1 year',
+  'creds.lifetime.month': '30 days',
+  'creds.lifetime.day': '1 day',
+  'creds.lifetimeHint':
+    'The certificates in the files expire after this time and cannot be revoked before. Ask for less when the files leave your machine; you can download new ones later.',
+  'creds.readOnly': 'Read-only talosconfig (os:reader instead of os:admin)',
   'creds.downloaded': 'Saved {file}',
   'creds.downloadFailed': 'The credentials download failed',
   'creds.continue': 'Continue rotation',

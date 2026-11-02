@@ -29,12 +29,7 @@ import (
 func TestBuiltinRolesRunTheDocumentedFlows(t *testing.T) {
 	chartDocs := renderChartWithValues(t, "ichor", usersOn, usersURL)
 
-	table := loadYAMLDocs(t, "testdata/user_flows.yaml")
-	if len(table) != 1 {
-		t.Fatalf("testdata/user_flows.yaml holds %d documents, want 1", len(table))
-	}
-
-	flows, _ := table[0]["flows"].([]any)
+	flows, _ := loadYAMLDocs(t, "testdata/user_flows.yaml")[0]["flows"].([]any)
 	if len(flows) == 0 {
 		t.Fatal("testdata/user_flows.yaml lists no flows")
 	}

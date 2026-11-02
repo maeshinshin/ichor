@@ -429,6 +429,12 @@ func (r *DiscoveryReconciler) knownHosts(
 	}
 
 	for i := range nodes.Items {
+		// A Node left behind by an Ichor reset that is not Ready again is not a member: the wiped
+		// machine behind its address has to be found.
+		if _, reset := nodes.Items[i].Annotations[nodeResetByIchorAnnotation]; reset && !nodeIsReady(&nodes.Items[i]) {
+			continue
+		}
+
 		known[internalIP(&nodes.Items[i])] = true
 	}
 

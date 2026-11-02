@@ -22,7 +22,6 @@ import (
 
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -58,12 +57,7 @@ func TestAddDiscoveryAddressAppendsOnlyThatAddress(t *testing.T) {
 		t.Fatalf("audit action %q", resp.Msg.GetAudit().GetAction())
 	}
 
-	var got ichorv1alpha1.TalosCluster
-	if err := k8s.Get(context.Background(), types.NamespacedName{Namespace: testNS, Name: "c"}, &got); err != nil {
-		t.Fatal(err)
-	}
-
-	d := got.Spec.Discovery
+	d := storedDiscovery(t, k8s)
 	if d == nil || len(d.Addresses) != 2 || d.Addresses[1] != addrB || len(d.CIDRs) != 1 {
 		t.Fatalf("want one address appended and the CIDRs kept, got %+v", d)
 	}
@@ -80,13 +74,8 @@ func TestAddDiscoveryAddressCreatesTheDiscoveryBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var got ichorv1alpha1.TalosCluster
-	if err := k8s.Get(context.Background(), types.NamespacedName{Namespace: testNS, Name: "c"}, &got); err != nil {
-		t.Fatal(err)
-	}
-
-	if got.Spec.Discovery == nil || len(got.Spec.Discovery.Addresses) != 1 {
-		t.Fatalf("got %+v", got.Spec.Discovery)
+	if d := storedDiscovery(t, k8s); d == nil || len(d.Addresses) != 1 {
+		t.Fatalf("got %+v", d)
 	}
 }
 

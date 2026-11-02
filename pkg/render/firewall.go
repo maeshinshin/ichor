@@ -154,7 +154,8 @@ func firewallPlan(c *ichorv1alpha1.TalosCluster, machineType machine.Type) ([]fw
 	fw := c.Spec.Security.Firewall
 
 	if len(fw.ControllerCIDRs) == 0 || len(fw.NodeCIDRs) == 0 {
-		return nil, errors.New("render: firewall is enabled but controllerCIDRs or nodeCIDRs is empty: Ichor or the nodes would lose access")
+		return nil, errors.New("render: firewall is enabled but controllerCIDRs or nodeCIDRs is empty: " +
+			"Ichor or the nodes would lose access")
 	}
 
 	var (

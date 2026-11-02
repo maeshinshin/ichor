@@ -27,8 +27,8 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/machine"
 	"github.com/siderolabs/talos/pkg/machinery/config/types/block"
 	"github.com/siderolabs/talos/pkg/machinery/config/types/k8s"
-	resblock "github.com/siderolabs/talos/pkg/machinery/resources/block"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
+	resblock "github.com/siderolabs/talos/pkg/machinery/resources/block"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -66,7 +66,8 @@ func ValidateSecurity(c *ichorv1alpha1.TalosCluster) error {
 
 	if d := s.DiskEncryption; d != nil {
 		if !contract.VolumeConfigEncryptionSupported() {
-			errs = append(errs, errors.New("spec.security.diskEncryption needs a versionContract that supports VolumeConfig encryption (v1.11 or later)"))
+			errs = append(errs, errors.New("spec.security.diskEncryption needs a versionContract "+
+				"that supports VolumeConfig encryption (v1.11 or later)"))
 		}
 
 		if d.Type == ichorv1alpha1.DiskEncryptionKMS {
@@ -133,31 +134,46 @@ func securityOf(c *ichorv1alpha1.TalosCluster) *ichorv1alpha1.TalosClusterSecuri
 	return c.Spec.Security
 }
 
+// auditRule is one rule of an audit policy.
+func auditRule(level string, verbs []any, resources ...any) map[string]any {
+	r := map[string]any{"level": level}
+	if verbs != nil {
+		r["verbs"] = verbs
+	}
+
+	if resources != nil {
+		r["resources"] = resources
+	}
+
+	return r
+}
+
+// auditGroup selects resources of an API group; no names selects the whole group.
+func auditGroup(group string, names ...any) map[string]any {
+	g := map[string]any{"group": group}
+	if names != nil {
+		g["resources"] = names
+	}
+
+	return g
+}
+
 // auditRules are the rules of each audit preset. The first matching rule wins, so the
 // never-above-Metadata rule for credentials-bearing resources comes first.
 func auditRules(policy string) ([]any, error) {
-	quiet := map[string]any{
-		"level": "Metadata",
-		"resources": []any{
-			map[string]any{"group": "", "resources": []any{"secrets", "configmaps", "serviceaccounts/token"}},
-			map[string]any{"group": "authentication.k8s.io", "resources": []any{"tokenreviews"}},
-		},
-	}
-	catchAll := map[string]any{"level": "Metadata"}
+	quiet := auditRule("Metadata", nil,
+		auditGroup("", "secrets", "configmaps", "serviceaccounts/token"),
+		auditGroup("authentication.k8s.io", "tokenreviews"))
+	catchAll := auditRule("Metadata", nil)
 	writes := []any{"create", "update", "patch", "delete", "deletecollection"}
 
 	switch policy {
 	case ichorv1alpha1.AuditPolicyMetadata:
 		return []any{catchAll}, nil
 	case ichorv1alpha1.AuditPolicyRBACChange:
-		return []any{quiet,
-			map[string]any{
-				"level": "RequestResponse", "verbs": writes,
-				"resources": []any{map[string]any{"group": "rbac.authorization.k8s.io"}},
-			},
-			catchAll}, nil
+		return []any{quiet, auditRule("RequestResponse", writes, auditGroup("rbac.authorization.k8s.io")), catchAll}, nil
 	case ichorv1alpha1.AuditPolicyWrites:
-		return []any{quiet, map[string]any{"level": "Request", "verbs": writes}, catchAll}, nil
+		return []any{quiet, auditRule("Request", writes), catchAll}, nil
 	default:
 		return nil, fmt.Errorf("render: unknown audit policy %q", policy)
 	}
@@ -230,4 +246,30 @@ func injectDiskEncryption(
 	}
 
 	return mergeDocument(cfg, "disk encryption", docs...)
+}
+
+// injectSecurity runs the opt-in hardening steps of ADR 0108 in order; each returns cfg
+// untouched when its option is unset.
+func injectSecurity(
+	cfg coreconfig.Provider, cluster *ichorv1alpha1.TalosCluster, machineType machine.Type,
+) (coreconfig.Provider, error) {
+	if err := ValidateSecurity(cluster); err != nil {
+		return nil, fmt.Errorf("render: spec.security: %w", err)
+	}
+
+	var err error
+
+	if cfg, err = injectFirewall(cfg, cluster, machineType); err != nil {
+		return nil, err
+	}
+
+	if cfg, err = injectPodSecurity(cfg, cluster, machineType); err != nil {
+		return nil, err
+	}
+
+	if cfg, err = injectAudit(cfg, cluster, machineType); err != nil {
+		return nil, err
+	}
+
+	return injectDiskEncryption(cfg, cluster)
 }

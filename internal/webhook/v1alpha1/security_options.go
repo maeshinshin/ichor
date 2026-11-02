@@ -49,7 +49,7 @@ func routeSource(ctx context.Context, host string) (netip.Addr, error) {
 	if err != nil {
 		return netip.Addr{}, err
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	ua, ok := conn.LocalAddr().(*net.UDPAddr)
 	if !ok {

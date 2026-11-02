@@ -234,7 +234,7 @@ const (
 
 // TalosClusterDiskEncryption is spec.security.diskEncryption. It renders VolumeConfig documents
 // for STATE and EPHEMERAL, below every TalosConfigPatch.
-// +kubebuilder:validation:XValidation:rule="self.type == 'kms' ? has(self.kmsEndpoint) && self.kmsEndpoint != '' : !has(self.kmsEndpoint)",message="kmsEndpoint is required for type kms and not allowed otherwise"
+// +kubebuilder:validation:XValidation:rule="self.type == 'kms' ? has(self.kmsEndpoint) && self.kmsEndpoint != ” : !has(self.kmsEndpoint)",message="kmsEndpoint is required for type kms and not allowed otherwise"
 // +kubebuilder:validation:XValidation:rule="self.type == 'tpm' || !has(self.requireSecureBoot)",message="requireSecureBoot applies to type tpm only"
 type TalosClusterDiskEncryption struct {
 	// type is where the key comes from. tpm seals it in the machine's TPM 2.0 (bound to PCR 7);

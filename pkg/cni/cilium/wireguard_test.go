@@ -39,7 +39,9 @@ func TestWireGuardValues(t *testing.T) {
 
 	t.Run("unset and disabled change nothing", func(t *testing.T) {
 		c := plain.DeepCopy()
-		c.Spec.Security = &ichorv1alpha1.TalosClusterSecurity{WireGuard: &ichorv1alpha1.TalosClusterWireGuard{NodeEncryption: true}}
+		c.Spec.Security = &ichorv1alpha1.TalosClusterSecurity{
+			WireGuard: &ichorv1alpha1.TalosClusterWireGuard{NodeEncryption: true},
+		}
 
 		got, err := EffectiveValuesForMode(c, cni.KubeProxyReplaced)
 		if err != nil {
@@ -60,14 +62,20 @@ func TestWireGuardValues(t *testing.T) {
 		c.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{
 			Values: &apiextensionsv1.JSON{Raw: []byte(`{"encryption":{"enabled":false,"type":"ipsec"}}`)},
 		}
-		c.Spec.Security = &ichorv1alpha1.TalosClusterSecurity{WireGuard: &ichorv1alpha1.TalosClusterWireGuard{Enabled: true, NodeEncryption: true}}
+		c.Spec.Security = &ichorv1alpha1.TalosClusterSecurity{
+			WireGuard: &ichorv1alpha1.TalosClusterWireGuard{Enabled: true, NodeEncryption: true},
+		}
 
 		got, err := EffectiveValuesForMode(c, cni.KubeProxyReplaced)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		for path, want := range map[string]any{"encryption.enabled": true, "encryption.type": "wireguard", "encryption.nodeEncryption": true} {
+		wants := map[string]any{
+			"encryption.enabled": true, "encryption.type": "wireguard", "encryption.nodeEncryption": true,
+		}
+
+		for path, want := range wants {
 			if v, _ := values.Get(got, path); v != want {
 				t.Errorf("%s = %v, want %v", path, v, want)
 			}

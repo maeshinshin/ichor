@@ -2935,6 +2935,269 @@ spec:
                 x-kubernetes-validations:
                 - message: secretsRef.name is required
                   rule: self.name != ''
+              security:
+                description: |-
+                  security holds opt-in hardening of this cluster: an ingress firewall, Cilium
+                  WireGuard encryption, Pod Security levels, an audit policy preset and disk encryption.
+                  Unset (the default) changes nothing.
+                properties:
+                  audit:
+                    description: |-
+                      audit selects a kube-apiserver audit policy preset. Restarts the kube-apiserver on every
+                      control plane, no node reboot. Needs versionContract v1.14 or later.
+                    properties:
+                      policy:
+                        description: |-
+                          policy is the preset. metadata records who did what, without bodies, for every request
+                          (Talos's own default). rbacChanges is metadata plus the full request and response of
+                          changes to roles and bindings. writes is metadata plus the request body of every change.
+                          Secrets, configmaps, service account tokens and token reviews are never logged above
+                          metadata in any preset.
+                        enum:
+                        - metadata
+                        - rbacChanges
+                        - writes
+                        type: string
+                    required:
+                    - policy
+                    type: object
+                  diskEncryption:
+                    description: |-
+                      diskEncryption encrypts the STATE and EPHEMERAL volumes with LUKS2. Talos encrypts a
+                      volume only when it creates it, so on a cluster that already has machines it needs the
+                      wipe-and-rejoin path (see docs/guides/hardening.md) and the confirm annotation.
+                    properties:
+                      kmsEndpoint:
+                        description: |-
+                          kmsEndpoint is the KMS server, as a URL with a scheme (https://kms.example.com:4443). A
+                          scheme other than https is refused.
+                        maxLength: 253
+                        type: string
+                      requireSecureBoot:
+                        description: |-
+                          requireSecureBoot makes enrolling a TPM key fail unless SecureBoot is enabled in the
+                          firmware. Without SecureBoot a TPM key gives no boot-chain protection.
+                        type: boolean
+                      type:
+                        description: |-
+                          type is where the key comes from. tpm seals it in the machine's TPM 2.0 (bound to PCR 7);
+                          nodeID derives it from the node UUID, which protects only against a removed disk; kms has
+                          a KMS server seal and unseal it.
+                        enum:
+                        - tpm
+                        - nodeID
+                        - kms
+                        type: string
+                    required:
+                    - type
+                    type: object
+                    x-kubernetes-validations:
+                    - message: kmsEndpoint is required for type kms and not allowed
+                        otherwise
+                      rule: 'self.type == ''kms'' ? has(self.kmsEndpoint) && self.kmsEndpoint
+                        != '''' : !has(self.kmsEndpoint)'
+                    - message: requireSecureBoot applies to type tpm only
+                      rule: self.type == 'tpm' || !has(self.requireSecureBoot)
+                  firewall:
+                    description: |-
+                      firewall turns on Talos's ingress firewall in block mode with the rules a Talos cluster
+                      needs, plus the sources you list. No reboot.
+                    properties:
+                      allow:
+                        description: |-
+                          allow opens further host ports, for services running with host networking (an ingress
+                          controller on 80 and 443, a node exporter). Everything not listed is blocked.
+                        items:
+                          description: TalosClusterFirewallRule is one extra firewall
+                            rule of spec.security.firewall.allow.
+                          properties:
+                            cidrs:
+                              description: cidrs are the sources allowed to reach
+                                the ports.
+                              items:
+                                maxLength: 43
+                                type: string
+                              maxItems: 16
+                              minItems: 1
+                              type: array
+                              x-kubernetes-list-type: atomic
+                              x-kubernetes-validations:
+                              - message: cidrs must be valid CIDRs
+                                rule: self.all(c, isCIDR(c))
+                            name:
+                              description: name identifies the rule; it becomes ichor-fw-allow-<name>
+                                in the machine config.
+                              pattern: ^[a-z0-9]([-a-z0-9]{0,40}[a-z0-9])?$
+                              type: string
+                            ports:
+                              description: ports are single ports ("443") or inclusive
+                                ranges ("8000-8100").
+                              items:
+                                pattern: ^[0-9]{1,5}(-[0-9]{1,5})?$
+                                type: string
+                              maxItems: 16
+                              minItems: 1
+                              type: array
+                              x-kubernetes-list-type: atomic
+                            protocol:
+                              description: protocol is tcp or udp.
+                              enum:
+                              - tcp
+                              - udp
+                              type: string
+                          required:
+                          - cidrs
+                          - name
+                          - ports
+                          - protocol
+                          type: object
+                        maxItems: 32
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
+                      apiServerCIDRs:
+                        description: |-
+                          apiServerCIDRs are further sources allowed to reach the Kubernetes API (6443), for users and
+                          load balancers.
+                        items:
+                          maxLength: 43
+                          type: string
+                        maxItems: 16
+                        type: array
+                        x-kubernetes-list-type: atomic
+                        x-kubernetes-validations:
+                        - message: apiServerCIDRs must be valid CIDRs
+                          rule: self.all(c, isCIDR(c))
+                      controlPlaneCIDRs:
+                        description: |-
+                          controlPlaneCIDRs are the addresses of the control planes only; etcd and the control planes'
+                          own reach to apid and the kubelet are limited to them. Unset means nodeCIDRs.
+                        items:
+                          maxLength: 43
+                          type: string
+                        maxItems: 16
+                        type: array
+                        x-kubernetes-list-type: atomic
+                        x-kubernetes-validations:
+                        - message: controlPlaneCIDRs must be valid CIDRs with a prefix
+                            length above 0
+                          rule: self.all(c, isCIDR(c) && cidr(c).prefixLength() >
+                            0)
+                      controllerCIDRs:
+                        description: |-
+                          controllerCIDRs are the addresses Ichor's controller connects from. They are always allowed
+                          to reach apid and the Kubernetes API. The admission webhook refuses a value that does not
+                          contain the address the controller reaches the cluster endpoint from.
+                        items:
+                          maxLength: 43
+                          type: string
+                        maxItems: 16
+                        type: array
+                        x-kubernetes-list-type: atomic
+                        x-kubernetes-validations:
+                        - message: controllerCIDRs must be valid CIDRs with a prefix
+                            length above 0
+                          rule: self.all(c, isCIDR(c) && cidr(c).prefixLength() >
+                            0)
+                      enabled:
+                        default: false
+                        description: enabled turns the firewall on.
+                        type: boolean
+                      kubeSpan:
+                        description: |-
+                          kubeSpan allows KubeSpan's WireGuard port (UDP 51820) from anywhere; set it when the
+                          cluster uses KubeSpan.
+                        type: boolean
+                      nodeCIDRs:
+                        description: nodeCIDRs are the addresses of all the cluster's
+                          machines, control planes and workers.
+                        items:
+                          maxLength: 43
+                          type: string
+                        maxItems: 16
+                        type: array
+                        x-kubernetes-list-type: atomic
+                        x-kubernetes-validations:
+                        - message: nodeCIDRs must be valid CIDRs with a prefix length
+                            above 0
+                          rule: self.all(c, isCIDR(c) && cidr(c).prefixLength() >
+                            0)
+                      talosAPICIDRs:
+                        description: talosAPICIDRs are further sources allowed to
+                          reach apid (50000), for operators using talosctl.
+                        items:
+                          maxLength: 43
+                          type: string
+                        maxItems: 16
+                        type: array
+                        x-kubernetes-list-type: atomic
+                        x-kubernetes-validations:
+                        - message: talosAPICIDRs must be valid CIDRs
+                          rule: self.all(c, isCIDR(c))
+                    type: object
+                    x-kubernetes-validations:
+                    - message: 'controllerCIDRs and nodeCIDRs need at least one CIDR
+                        when enabled: without them Ichor or the nodes would lose access'
+                      rule: '!self.enabled || (has(self.controllerCIDRs) && self.controllerCIDRs.size()
+                        > 0 && has(self.nodeCIDRs) && self.nodeCIDRs.size() > 0)'
+                  podSecurity:
+                    description: |-
+                      podSecurity sets the Pod Security admission levels of the kube-apiserver. Restarts the
+                      kube-apiserver on every control plane, no node reboot. Needs versionContract v1.14 or later.
+                    properties:
+                      audit:
+                        description: audit is the level above which violations are
+                          recorded in the audit log.
+                        enum:
+                        - privileged
+                        - baseline
+                        - restricted
+                        type: string
+                      enforce:
+                        description: enforce is the level a pod must meet to be admitted.
+                        enum:
+                        - privileged
+                        - baseline
+                        - restricted
+                        type: string
+                      exemptNamespaces:
+                        description: exemptNamespaces are added to the exempt namespaces
+                          (kube-system stays exempt).
+                        items:
+                          maxLength: 63
+                          type: string
+                        maxItems: 32
+                        type: array
+                        x-kubernetes-list-type: set
+                      warn:
+                        description: warn is the level above which violations produce
+                          a warning to the client.
+                        enum:
+                        - privileged
+                        - baseline
+                        - restricted
+                        type: string
+                    type: object
+                  wireGuard:
+                    description: |-
+                      wireGuard turns on Cilium's transparent WireGuard encryption of pod traffic between nodes.
+                      A rolling restart of the Cilium agents, no node reboot.
+                    properties:
+                      enabled:
+                        default: false
+                        description: |-
+                          enabled sets encryption.enabled=true and encryption.type=wireguard in the managed Cilium
+                          values. It wins over any encryption.* the user values set. When the firewall is on, UDP
+                          51871 is opened between nodes.
+                        type: boolean
+                      nodeEncryption:
+                        description: |-
+                          nodeEncryption also encrypts node-to-node traffic that is not pod traffic
+                          (encryption.nodeEncryption).
+                        type: boolean
+                    type: object
+                type: object
               talosVersion:
                 description: talosVersion is the Talos release this cluster renders
                   configuration for.

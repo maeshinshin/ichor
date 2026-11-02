@@ -67,8 +67,17 @@ relay peers on 4244) needs an `allow` entry.
 webhook refuses a firewall whose `controllerCIDRs` does not contain the address
 the controller connects to the cluster endpoint from (it asks the routing table
 of the webhook's own pod). If the controller runs in a pod, list the pod network
-and its node's address. If the endpoint does not resolve yet, the check is
-skipped. Ichor does not yet apply the firewall in Talos's `try` mode with an
+and its node's address: with Cilium the controller reaches apid on its own node
+from its pod IP, but on any other node from its node's address (masqueraded),
+measured on hardware. Also list your own workstation in `talosAPICIDRs`: the
+webhook does not check `controlPlaneCIDRs` or `nodeCIDRs`, and if they exclude
+the control plane's address the controller loses the other nodes (reported as
+`NodeUnreachable`) and cannot deliver a corrected spec; the way back is
+`talosctl patch machineconfig` from an allowed source with a
+`NetworkRuleConfig` that opens 50000 to the control plane, then fix the spec. If
+the endpoint does not resolve yet, the check is skipped. A pod's traffic to
+another node's host ports is also seen as its own node's address, so rules keyed
+to node CIDRs cannot tell pods on the same node apart. Ichor does not yet apply the firewall in Talos's `try` mode with an
 automatic revert (follow-up, needs hardware to verify). The firewall applies
 without a reboot; if you do lock yourself out, the way back is the node's console
 or a reset.
@@ -85,7 +94,9 @@ Sets `encryption.enabled=true`, `encryption.type=wireguard` and
 `encryption.nodeEncryption` in the managed Cilium Helm values (Cilium 1.18,
 "Transparent Encryption with WireGuard"). The typed option wins over a
 conflicting `encryption.*` in `spec.cni.cilium.values`. The Cilium Helm Job runs
-again and the agents restart one after another; nodes do not reboot. Pod traffic
+again (about a minute) but the agents do not restart on their own: run
+`kubectl -n kube-system rollout restart ds/cilium` (14 seconds on two nodes) and
+check `cilium-dbg encrypt status` before relying on it; nodes do not reboot. Pod traffic
 between nodes is encrypted once both ends have switched, with short resets of
 connections as each agent flips. The tunnel MTU shrinks. With the firewall on,
 UDP 51871 is opened between nodes. Strict mode (`encryption.strictMode`) is not
@@ -104,8 +115,11 @@ spec:
 Both need `versionContract` v1.14 or later (they are Talos's multi-document
 `KubeAdmissionControlConfig` and `KubeAuditPolicyConfig`); on an older contract
 Ichor refuses the option instead of raising the contract. Both restart the
-kube-apiserver on each control plane, one after another by Talos; nodes do not
-reboot.
+kube-apiserver on each control plane; nodes do not reboot. The restart is not
+applied on its own: the control plane shows `APIServerRestartRequired` until you
+start a rollout (`ichor config apply`, or the cluster page), which goes one
+control plane at a time. With one control plane the API is down for about a
+minute (measured: 109 to 171 seconds for the whole operation).
 
 `podSecurity` changes only the levels you set (`enforce`, `audit`, `warn`; Talos
 defaults are baseline, restricted, restricted) and adds `exemptNamespaces` to
@@ -146,9 +160,11 @@ Renders `VolumeConfig` documents for STATE and EPHEMERAL with a LUKS2 key slot 0
 Static passphrases are not available (they would sit in the machine config).
 
 Ichor does not check that a node has a TPM: it records no hardware inventory.
-Talos refuses to enrol a TPM key on a machine without one, so the node would
-fail at provisioning (this needs a hardware run to confirm what the failure
-looks like).
+Talos refuses to enrol a TPM key on a machine without one: on a KubeVirt VM
+without a TPM the node installs, reboots and stays in stage `booting` with the
+STATE volume `failed` (`stat /dev/tpm0: no such file or directory` in
+`talosctl dmesg`). Ichor only shows `NodeStarting ... stage "booting"`, so look
+at the node's dmesg.
 
 **Existing machines.** Talos encrypts a volume only when it creates it, so
 setting this on a cluster that already has approved machines changes nothing on
@@ -156,9 +172,16 @@ them until each one is wiped and rejoined. The webhook therefore refuses the
 change unless the `TalosCluster` carries the annotation
 `ichor.maesh.dev/confirm-disk-encryption-wipe: "true"`. Ichor never wipes a node
 for this. The path, one node at a time: set the option and the annotation, then
-use "Reset and add" (ADR 0107) on a worker, wait for it to rejoin and come up
-encrypted, then do each control plane in turn, leaving etcd quorum intact. Back
-up etcd first.
+reset a worker, wait for it to rejoin and come up encrypted, then do each
+control plane in turn, leaving etcd quorum intact. Back up etcd first. "Reset
+and add" (ADR 0107) is for machines of another cluster and refuses one already
+in Ichor; for your own node use `ichor node reset NODE --break-glass REASON`
+(confirm with the machine's UUID), delete the stale Kubernetes Node
+(`kubectl delete node`, otherwise its address is never rediscovered), and
+approve the pending machine again. Pods that no controller manages block the
+drain. Measured: about 45 seconds to reset and 2 minutes from approval to
+Ready; the volumes show `encryptionProvider: luks2` in `talosctl get
+volumestatus`.
 
 ## Talos API access from Kubernetes pods
 

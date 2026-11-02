@@ -64,8 +64,8 @@ func TestLocalVerifierChecksIssuerAudienceAndSignature(t *testing.T) {
 
 	future := time.Now().Add(time.Minute)
 
-	if sub, _, err := v.Verify(context.Background(), mint(key, testIssuer, "ichor-ui", future)); err != nil || sub != "alice" {
-		t.Fatalf("valid token: %q %v", sub, err)
+	if tok, err := v.Verify(context.Background(), mint(key, testIssuer, "ichor-ui", future)); err != nil || tok.Subject != "alice" {
+		t.Fatalf("valid token: %q %v", tok.Subject, err)
 	}
 
 	for name, tok := range map[string]string{
@@ -74,7 +74,7 @@ func TestLocalVerifierChecksIssuerAudienceAndSignature(t *testing.T) {
 		"other key":     mint(other, testIssuer, "ichor-ui", future),
 		"expired":       mint(key, testIssuer, "ichor-ui", time.Now().Add(-time.Hour)),
 	} {
-		if _, _, err := v.Verify(context.Background(), tok); err == nil {
+		if _, err := v.Verify(context.Background(), tok); err == nil {
 			t.Errorf("%s accepted", name)
 		}
 	}

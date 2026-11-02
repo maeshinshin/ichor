@@ -212,6 +212,8 @@ func TestUpgradeKeepsInitsCustomizationsOverALiveUIDeployment(t *testing.T) {
 			if migrated.TLSSecretName != "" {
 				migrated.ListenAddr = plainAddr
 			}
+			// An install with no sign-in keeps writing, now by an explicit flag.
+			migrated.AllowUnauthenticated = !migrated.UsersOn()
 
 			want := renderedUI(t, f.ns, migrated)
 			if got, exp := shape(c, ui.Spec.Template.Spec.Volumes), shape(want.Spec.Template.Spec.Containers[0], want.Spec.Template.Spec.Volumes); got != exp {

@@ -17,11 +17,12 @@ limitations under the License.
 package uiapi
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
-	"sort"
+	"slices"
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -61,7 +62,7 @@ func (b *IssuerBackend) Start(ctx context.Context, user, family, jti string, exp
 				ids = append(ids, id)
 			}
 
-			sort.Slice(ids, func(i, j int) bool { return c.Families[ids[i]].Exp < c.Families[ids[j]].Exp })
+			slices.SortFunc(ids, func(a, b string) int { return cmp.Compare(c.Families[a].Exp, c.Families[b].Exp) })
 
 			for _, id := range ids[:len(c.Families)-ichorauth.MaxRefreshFamilies] {
 				delete(c.Families, id)

@@ -23,12 +23,14 @@ func TestAllowUnauthenticated(t *testing.T) {
 		t.Error("ichorUI.allowUnauthenticated=true does not reach ichor-ui")
 	}
 
-	if strings.Contains(ui("ichorUI.allowUnauthenticated=true", "ichorUI.users.enabled=true", "ichorUI.users.externalURL=https://x"), flag) {
+	users := []string{usersOn, "ichorUI.users.externalURL=https://x"}
+
+	if strings.Contains(ui(append(users, "ichorUI.allowUnauthenticated=true")...), flag) {
 		t.Error("the open flag renders next to Ichor users")
 	}
 
-	if !strings.Contains(ui("ichorUI.users.enabled=true", "ichorUI.users.externalURL=https://x", "ichorUI.users.trustedProxyCIDRs={10.0.0.0/8,192.168.0.0/16}"),
-		"--trusted-proxy-cidrs=10.0.0.0/8,192.168.0.0/16") {
+	proxies := ui(append(users, "ichorUI.users.trustedProxyCIDRs={10.0.0.0/8,192.168.0.0/16}")...)
+	if !strings.Contains(proxies, "--trusted-proxy-cidrs=10.0.0.0/8,192.168.0.0/16") {
 		t.Error("trustedProxyCIDRs does not reach ichor-ui")
 	}
 }

@@ -1,8 +1,9 @@
 package oidcissuer
 
 import (
+	"cmp"
 	"net/http"
-	"sort"
+	"slices"
 	"sync"
 	"time"
 )
@@ -40,9 +41,9 @@ type failTable struct {
 	m  map[string]failState
 }
 
-// bump counts one failure of key at now and returns the new state. window > 0 restarts the
+// bump counts one failure of key at now. window > 0 restarts the
 // count when the last failure is older than window.
-func (t *failTable) bump(key string, now time.Time, window time.Duration) failState {
+func (t *failTable) bump(key string, now time.Time, window time.Duration) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.m == nil {
@@ -58,7 +59,6 @@ func (t *failTable) bump(key string, now time.Time, window time.Duration) failSt
 	s.n++
 	s.last = now
 	t.m[key] = s
-	return s
 }
 
 func (t *failTable) get(key string) (failState, bool) {
@@ -92,11 +92,8 @@ func (t *failTable) evict(now time.Time) {
 	for k, s := range t.m {
 		all = append(all, entry{k, s})
 	}
-	sort.Slice(all, func(i, j int) bool {
-		if all[i].s.n != all[j].s.n {
-			return all[i].s.n < all[j].s.n
-		}
-		return all[i].s.last.Before(all[j].s.last)
+	slices.SortFunc(all, func(a, b entry) int {
+		return cmp.Or(cmp.Compare(a.s.n, b.s.n), a.s.last.Compare(b.s.last))
 	})
 	for _, e := range all[:len(all)/10+1] {
 		delete(t.m, e.k)

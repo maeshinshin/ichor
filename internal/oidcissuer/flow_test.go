@@ -219,7 +219,7 @@ func TestCodeGrantNegatives(t *testing.T) {
 		}
 	})
 	t.Run("grants and clients", func(t *testing.T) {
-		if s, _ := e.token(url.Values{pGrant: {pPassword}, pClientID: {clientCLI}, "username": {userAlice}, pPassword: {"correct horse"}}); s != http.StatusBadRequest {
+		if s, _ := e.token(url.Values{pGrant: {pPassword}, pClientID: {clientCLI}, pUsername: {userAlice}, pPassword: {"correct horse"}}); s != http.StatusBadRequest {
 			t.Fatalf("password grant: %d", s)
 		}
 		if s, _ := e.token(url.Values{pGrant: {"client_credentials"}, pClientID: {clientCLI}}); s != http.StatusBadRequest {

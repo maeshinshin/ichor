@@ -417,7 +417,8 @@ func clusterSecretRefChanges(old, updated *ichorv1alpha1.TalosCluster) []string 
 	return changed
 }
 
-// handleEtcdBackup gates spec.destination.s3.credentialsSecretRef the same way.
+// handleEtcdBackup gates spec.destination.s3.credentialsSecretRef the same way, and the rest of the
+// destination (where the credentials and the snapshots go), and refuses plain http without insecure.
 func (h *BreakGlassHandler) handleEtcdBackup(ctx context.Context, req admission.Request) admission.Response {
 	if (req.Operation != opCreate && req.Operation != opUpdate) || slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
 		return admission.Allowed("")
@@ -438,6 +439,19 @@ func (h *BreakGlassHandler) handleEtcdBackup(ctx context.Context, req admission.
 
 	if updated.Spec.Destination.S3.CredentialsSecretRef != old.Spec.Destination.S3.CredentialsSecretRef {
 		changed = append(changed, "spec.destination.s3.credentialsSecretRef")
+	}
+
+	// Where the credentials and snapshots go is as sensitive as which credentials (ADR 0108).
+	n, o := updated.Spec.Destination.S3, old.Spec.Destination.S3
+	if n.Endpoint != o.Endpoint || n.Bucket != o.Bucket || n.Prefix != o.Prefix || n.Region != o.Region || n.Insecure != o.Insecure {
+		changed = append(changed, "spec.destination.s3 (endpoint, bucket, prefix, region, insecure)")
+	}
+
+	// Plain http sends the access key id and the session token in clear: only with insecure: true.
+	// Judged when the endpoint or the flag changes, so a backup that predates this keeps working.
+	if (n.Endpoint != o.Endpoint || n.Insecure != o.Insecure) && strings.HasPrefix(strings.ToLower(n.Endpoint), "http://") && !n.Insecure {
+		return admission.Denied("spec.destination.s3.endpoint is a plain http:// URL, which sends the credentials in clear; " +
+			"use https:// or set spec.destination.s3.insecure to true")
 	}
 
 	if resp := h.gateSecretReferences(ctx, req, "talosetcdbackups", changed); resp != nil {

@@ -61,7 +61,7 @@ rules:
   - ichor-ichor-break-glass-role
   - ichor-ichor-credentials-role
   - ichor-ichor-diagnostics-role
-  - ichor-ichor-ui-impersonate
+  - ichor-ui-impersonate
   - ichor-ichor-ui-role
   - ichor-ichorinstallation-admin-role
   - ichor-ichorinstallation-editor-role
@@ -169,6 +169,14 @@ rules:
   - get
   - patch
   - update
+# The paramKind of the controller-job-image policy: the apiserver refuses to create a
+# ValidatingAdmissionPolicy unless the creator may get every object of its paramKind.
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - ichorinstallations
+  verbs:
+  - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

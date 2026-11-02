@@ -1,0 +1,83 @@
+# The documented flows (docs/guides, ADR 0094, ADR 0108) and what each makes as the signed-in user. The
+# ichor-ui backend, the CLI and kubectl all act under the user's own rights, so the role meant to run a
+# flow must hold every "<resource> <verb>" of its needs, in config/rbac and in the chart
+# (user_flows_test.go). Resources are in the ichor.maesh.dev group. Every download first asks the controller
+# for a short-lived certificate with a TalosCredentialRequest (ADR 0108): the webhook checks the download
+# verb, RBAC checks the create.
+flows:
+- name: list and read every Ichor resource (ichor machine list, cluster pages)
+  role: viewer
+  needs: [talosclusters get, talosclusters list, talosmachines watch, talosoperations list, talosetcdbackups list,
+    talosstorages list, ichorinstallations get, talosconfigpatches list]
+- name: start an operation (ichor config apply, upgrade, reboot)
+  role: operator
+  needs: [talosoperations create, talosoperations update]
+- name: pause, resume and delete an operation
+  role: operator
+  needs: [talosoperations patch, talosoperations delete]
+- name: create, edit and delete a config patch (ichor patch)
+  role: operator
+  needs: [talosconfigpatches create, talosconfigpatches update, talosconfigpatches delete]
+- name: approve a machine (ichor machine approve)
+  role: operator
+  needs: [talosmachines/approval approve, talosmachines update]
+- name: reject a machine and change its settings
+  role: operator
+  needs: [talosmachines patch]
+- name: add and remove discovery ranges (ichor cluster discovery)
+  role: operator
+  needs: [talosclusters update]
+- name: back up etcd now (ichor etcd backup now sets an annotation)
+  role: operator
+  needs: [talosetcdbackups patch, talosetcdbackups update]
+- name: define and delete a TalosEtcdBackup
+  role: admin
+  needs: [talosetcdbackups create, talosetcdbackups update, talosetcdbackups delete]
+- name: set the credentials of a backup destination
+  role: admin
+  needs: [talosetcdbackups/secret-references update]
+- name: delete a machine or a cluster
+  role: admin
+  needs: [talosmachines delete, talosclusters delete]
+- name: set a machine's endpoint outside discovery
+  role: admin
+  needs: [talosmachines/endpoint update]
+- name: change ichor settings (ichor settings set)
+  role: admin
+  needs: [ichorinstallations/settings update]
+- name: upgrade ichor (ichor upgrade ichor)
+  role: admin
+  needs: [ichorinstallations/version update, talosoperations create]
+- name: manage users (ichor user)
+  role: admin
+  needs: [ichorusers create, ichorusers update, ichorusers delete, ichorusers/password update]
+- name: change the authentication configuration
+  role: admin
+  needs: [talosclusters/authentication update, talosclusters/secret-references update]
+- name: rotate the CA (ichor cluster rotate-ca)
+  role: admin
+  needs: [talosoperations create, talosoperations/ca-rotation start]
+- name: restore etcd (ichor restore)
+  role: admin
+  needs: [talosoperations create, talosoperations/etcd-restore start]
+- name: shut a cluster down
+  role: admin
+  needs: [talosoperations create, talosoperations/shutdown start]
+- name: reset or shut down a node (ichor node reset)
+  role: admin
+  needs: [talosoperations/node-reset start, talosoperations/node-shutdown start, talosmachines break-glass]
+- name: reclaim a machine (ichor machine reclaim)
+  role: admin
+  needs: [machinereclaims create, machinereclaims reclaim, machinereclaims get, machinereclaims update]
+- name: download a support bundle
+  role: admin
+  needs: [talosmachines/support-bundle download, taloscredentialrequests create]
+- name: download an etcd snapshot
+  role: admin
+  needs: [talosmachines/etcd-snapshot download, taloscredentialrequests create]
+- name: capture packets
+  role: admin
+  needs: [talosmachines/packet-capture download, taloscredentialrequests create]
+- name: download the credentials after a CA rotation
+  role: admin
+  needs: [talosclusters/credentials download, taloscredentialrequests create]

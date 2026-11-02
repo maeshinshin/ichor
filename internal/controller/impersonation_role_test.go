@@ -39,7 +39,9 @@ var _ = Describe("impersonation role", func() {
 
 		role := &rbacv1.ClusterRole{Name: ImpersonationRoleName}
 		Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, role))).To(Succeed())
-		DeferCleanup(func() { Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRole{Name: ImpersonationRoleName}))).To(Succeed()) })
+		DeferCleanup(func() {
+			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRole{Name: ImpersonationRoleName}))).To(Succeed())
+		})
 
 		createInstallation("v0.1.0")
 

@@ -57,7 +57,10 @@ func fakeAPI(t *testing.T, authenticated, allow bool) *httptest.Server {
 func scrape(t *testing.T, srv *httptest.Server, token string) (code int, reached bool) {
 	t.Helper()
 
-	filter, err := WithAuthenticationAndAuthorization(&rest.Config{Host: srv.URL, TLSClientConfig: rest.TLSClientConfig{Insecure: true}}, srv.Client())
+	cfg := &rest.Config{Host: srv.URL}
+	cfg.Insecure = true
+
+	filter, err := WithAuthenticationAndAuthorization(cfg, srv.Client())
 	if err != nil {
 		t.Fatal(err)
 	}

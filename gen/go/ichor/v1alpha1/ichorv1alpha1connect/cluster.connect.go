@@ -49,6 +49,15 @@ const (
 	// ClusterServiceDismissCARotationAdviceProcedure is the fully-qualified name of the
 	// ClusterService's DismissCARotationAdvice RPC.
 	ClusterServiceDismissCARotationAdviceProcedure = "/ichor.v1alpha1.ClusterService/DismissCARotationAdvice"
+	// ClusterServiceAddDiscoveryCidrProcedure is the fully-qualified name of the ClusterService's
+	// AddDiscoveryCidr RPC.
+	ClusterServiceAddDiscoveryCidrProcedure = "/ichor.v1alpha1.ClusterService/AddDiscoveryCidr"
+	// ClusterServiceRemoveDiscoveryAddressProcedure is the fully-qualified name of the ClusterService's
+	// RemoveDiscoveryAddress RPC.
+	ClusterServiceRemoveDiscoveryAddressProcedure = "/ichor.v1alpha1.ClusterService/RemoveDiscoveryAddress"
+	// ClusterServiceRemoveDiscoveryCidrProcedure is the fully-qualified name of the ClusterService's
+	// RemoveDiscoveryCidr RPC.
+	ClusterServiceRemoveDiscoveryCidrProcedure = "/ichor.v1alpha1.ClusterService/RemoveDiscoveryCidr"
 )
 
 // ClusterServiceClient is a client for the ichor.v1alpha1.ClusterService service.
@@ -64,6 +73,15 @@ type ClusterServiceClient interface {
 	// TalosCluster, which the controller reads to clear the CARotationAdvised condition (ADR 0103,
 	// section 1.4). It writes that annotation and nothing else.
 	DismissCARotationAdvice(context.Context, *connect.Request[v1alpha1.DismissCARotationAdviceRequest]) (*connect.Response[v1alpha1.DismissCARotationAdviceResponse], error)
+	// AddDiscoveryCidr appends one IPv4 range (/24 or smaller) to TalosCluster.spec.discovery.cidrs
+	// (ADR 0011). The controller scans it address by address; the write itself wakes the cluster's
+	// reconcile, so the first pass starts now and not at the next 5 minute interval.
+	AddDiscoveryCidr(context.Context, *connect.Request[v1alpha1.AddDiscoveryCidrRequest]) (*connect.Response[v1alpha1.AddDiscoveryCidrResponse], error)
+	// RemoveDiscoveryAddress removes one address from spec.discovery.addresses. Machines already found
+	// stay; only the scan target goes.
+	RemoveDiscoveryAddress(context.Context, *connect.Request[v1alpha1.RemoveDiscoveryAddressRequest]) (*connect.Response[v1alpha1.RemoveDiscoveryAddressResponse], error)
+	// RemoveDiscoveryCidr removes one range from spec.discovery.cidrs.
+	RemoveDiscoveryCidr(context.Context, *connect.Request[v1alpha1.RemoveDiscoveryCidrRequest]) (*connect.Response[v1alpha1.RemoveDiscoveryCidrResponse], error)
 }
 
 // NewClusterServiceClient constructs a client for the ichor.v1alpha1.ClusterService service. By
@@ -101,6 +119,24 @@ func NewClusterServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(clusterServiceMethods.ByName("DismissCARotationAdvice")),
 			connect.WithClientOptions(opts...),
 		),
+		addDiscoveryCidr: connect.NewClient[v1alpha1.AddDiscoveryCidrRequest, v1alpha1.AddDiscoveryCidrResponse](
+			httpClient,
+			baseURL+ClusterServiceAddDiscoveryCidrProcedure,
+			connect.WithSchema(clusterServiceMethods.ByName("AddDiscoveryCidr")),
+			connect.WithClientOptions(opts...),
+		),
+		removeDiscoveryAddress: connect.NewClient[v1alpha1.RemoveDiscoveryAddressRequest, v1alpha1.RemoveDiscoveryAddressResponse](
+			httpClient,
+			baseURL+ClusterServiceRemoveDiscoveryAddressProcedure,
+			connect.WithSchema(clusterServiceMethods.ByName("RemoveDiscoveryAddress")),
+			connect.WithClientOptions(opts...),
+		),
+		removeDiscoveryCidr: connect.NewClient[v1alpha1.RemoveDiscoveryCidrRequest, v1alpha1.RemoveDiscoveryCidrResponse](
+			httpClient,
+			baseURL+ClusterServiceRemoveDiscoveryCidrProcedure,
+			connect.WithSchema(clusterServiceMethods.ByName("RemoveDiscoveryCidr")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -110,6 +146,9 @@ type clusterServiceClient struct {
 	getCluster              *connect.Client[v1alpha1.GetClusterRequest, v1alpha1.GetClusterResponse]
 	addDiscoveryAddress     *connect.Client[v1alpha1.AddDiscoveryAddressRequest, v1alpha1.AddDiscoveryAddressResponse]
 	dismissCARotationAdvice *connect.Client[v1alpha1.DismissCARotationAdviceRequest, v1alpha1.DismissCARotationAdviceResponse]
+	addDiscoveryCidr        *connect.Client[v1alpha1.AddDiscoveryCidrRequest, v1alpha1.AddDiscoveryCidrResponse]
+	removeDiscoveryAddress  *connect.Client[v1alpha1.RemoveDiscoveryAddressRequest, v1alpha1.RemoveDiscoveryAddressResponse]
+	removeDiscoveryCidr     *connect.Client[v1alpha1.RemoveDiscoveryCidrRequest, v1alpha1.RemoveDiscoveryCidrResponse]
 }
 
 // ListClusters calls ichor.v1alpha1.ClusterService.ListClusters.
@@ -132,6 +171,21 @@ func (c *clusterServiceClient) DismissCARotationAdvice(ctx context.Context, req 
 	return c.dismissCARotationAdvice.CallUnary(ctx, req)
 }
 
+// AddDiscoveryCidr calls ichor.v1alpha1.ClusterService.AddDiscoveryCidr.
+func (c *clusterServiceClient) AddDiscoveryCidr(ctx context.Context, req *connect.Request[v1alpha1.AddDiscoveryCidrRequest]) (*connect.Response[v1alpha1.AddDiscoveryCidrResponse], error) {
+	return c.addDiscoveryCidr.CallUnary(ctx, req)
+}
+
+// RemoveDiscoveryAddress calls ichor.v1alpha1.ClusterService.RemoveDiscoveryAddress.
+func (c *clusterServiceClient) RemoveDiscoveryAddress(ctx context.Context, req *connect.Request[v1alpha1.RemoveDiscoveryAddressRequest]) (*connect.Response[v1alpha1.RemoveDiscoveryAddressResponse], error) {
+	return c.removeDiscoveryAddress.CallUnary(ctx, req)
+}
+
+// RemoveDiscoveryCidr calls ichor.v1alpha1.ClusterService.RemoveDiscoveryCidr.
+func (c *clusterServiceClient) RemoveDiscoveryCidr(ctx context.Context, req *connect.Request[v1alpha1.RemoveDiscoveryCidrRequest]) (*connect.Response[v1alpha1.RemoveDiscoveryCidrResponse], error) {
+	return c.removeDiscoveryCidr.CallUnary(ctx, req)
+}
+
 // ClusterServiceHandler is an implementation of the ichor.v1alpha1.ClusterService service.
 type ClusterServiceHandler interface {
 	ListClusters(context.Context, *connect.Request[v1alpha1.ListClustersRequest]) (*connect.Response[v1alpha1.ListClustersResponse], error)
@@ -145,6 +199,15 @@ type ClusterServiceHandler interface {
 	// TalosCluster, which the controller reads to clear the CARotationAdvised condition (ADR 0103,
 	// section 1.4). It writes that annotation and nothing else.
 	DismissCARotationAdvice(context.Context, *connect.Request[v1alpha1.DismissCARotationAdviceRequest]) (*connect.Response[v1alpha1.DismissCARotationAdviceResponse], error)
+	// AddDiscoveryCidr appends one IPv4 range (/24 or smaller) to TalosCluster.spec.discovery.cidrs
+	// (ADR 0011). The controller scans it address by address; the write itself wakes the cluster's
+	// reconcile, so the first pass starts now and not at the next 5 minute interval.
+	AddDiscoveryCidr(context.Context, *connect.Request[v1alpha1.AddDiscoveryCidrRequest]) (*connect.Response[v1alpha1.AddDiscoveryCidrResponse], error)
+	// RemoveDiscoveryAddress removes one address from spec.discovery.addresses. Machines already found
+	// stay; only the scan target goes.
+	RemoveDiscoveryAddress(context.Context, *connect.Request[v1alpha1.RemoveDiscoveryAddressRequest]) (*connect.Response[v1alpha1.RemoveDiscoveryAddressResponse], error)
+	// RemoveDiscoveryCidr removes one range from spec.discovery.cidrs.
+	RemoveDiscoveryCidr(context.Context, *connect.Request[v1alpha1.RemoveDiscoveryCidrRequest]) (*connect.Response[v1alpha1.RemoveDiscoveryCidrResponse], error)
 }
 
 // NewClusterServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -178,6 +241,24 @@ func NewClusterServiceHandler(svc ClusterServiceHandler, opts ...connect.Handler
 		connect.WithSchema(clusterServiceMethods.ByName("DismissCARotationAdvice")),
 		connect.WithHandlerOptions(opts...),
 	)
+	clusterServiceAddDiscoveryCidrHandler := connect.NewUnaryHandler(
+		ClusterServiceAddDiscoveryCidrProcedure,
+		svc.AddDiscoveryCidr,
+		connect.WithSchema(clusterServiceMethods.ByName("AddDiscoveryCidr")),
+		connect.WithHandlerOptions(opts...),
+	)
+	clusterServiceRemoveDiscoveryAddressHandler := connect.NewUnaryHandler(
+		ClusterServiceRemoveDiscoveryAddressProcedure,
+		svc.RemoveDiscoveryAddress,
+		connect.WithSchema(clusterServiceMethods.ByName("RemoveDiscoveryAddress")),
+		connect.WithHandlerOptions(opts...),
+	)
+	clusterServiceRemoveDiscoveryCidrHandler := connect.NewUnaryHandler(
+		ClusterServiceRemoveDiscoveryCidrProcedure,
+		svc.RemoveDiscoveryCidr,
+		connect.WithSchema(clusterServiceMethods.ByName("RemoveDiscoveryCidr")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/ichor.v1alpha1.ClusterService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ClusterServiceListClustersProcedure:
@@ -188,6 +269,12 @@ func NewClusterServiceHandler(svc ClusterServiceHandler, opts ...connect.Handler
 			clusterServiceAddDiscoveryAddressHandler.ServeHTTP(w, r)
 		case ClusterServiceDismissCARotationAdviceProcedure:
 			clusterServiceDismissCARotationAdviceHandler.ServeHTTP(w, r)
+		case ClusterServiceAddDiscoveryCidrProcedure:
+			clusterServiceAddDiscoveryCidrHandler.ServeHTTP(w, r)
+		case ClusterServiceRemoveDiscoveryAddressProcedure:
+			clusterServiceRemoveDiscoveryAddressHandler.ServeHTTP(w, r)
+		case ClusterServiceRemoveDiscoveryCidrProcedure:
+			clusterServiceRemoveDiscoveryCidrHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -211,4 +298,16 @@ func (UnimplementedClusterServiceHandler) AddDiscoveryAddress(context.Context, *
 
 func (UnimplementedClusterServiceHandler) DismissCARotationAdvice(context.Context, *connect.Request[v1alpha1.DismissCARotationAdviceRequest]) (*connect.Response[v1alpha1.DismissCARotationAdviceResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.ClusterService.DismissCARotationAdvice is not implemented"))
+}
+
+func (UnimplementedClusterServiceHandler) AddDiscoveryCidr(context.Context, *connect.Request[v1alpha1.AddDiscoveryCidrRequest]) (*connect.Response[v1alpha1.AddDiscoveryCidrResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.ClusterService.AddDiscoveryCidr is not implemented"))
+}
+
+func (UnimplementedClusterServiceHandler) RemoveDiscoveryAddress(context.Context, *connect.Request[v1alpha1.RemoveDiscoveryAddressRequest]) (*connect.Response[v1alpha1.RemoveDiscoveryAddressResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.ClusterService.RemoveDiscoveryAddress is not implemented"))
+}
+
+func (UnimplementedClusterServiceHandler) RemoveDiscoveryCidr(context.Context, *connect.Request[v1alpha1.RemoveDiscoveryCidrRequest]) (*connect.Response[v1alpha1.RemoveDiscoveryCidrResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.ClusterService.RemoveDiscoveryCidr is not implemented"))
 }

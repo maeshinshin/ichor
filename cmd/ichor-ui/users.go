@@ -24,9 +24,11 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -62,6 +64,29 @@ type usersFlags struct {
 	tokenTTL, refreshTTL time.Duration
 	// kubeAPIServerURL and kubeAPITLSServerName shape the kubeconfig GetMyKubeconfig returns.
 	kubeAPIServerURL, kubeAPITLSServerName string
+	// trustedProxies is a comma-separated list of CIDRs whose X-Forwarded-For the login's
+	// per-source limits believe; empty means the TCP peer is the client.
+	trustedProxies string
+}
+
+// proxyPrefixes parses --trusted-proxy-cidrs.
+func (f usersFlags) proxyPrefixes() ([]netip.Prefix, error) {
+	var out []netip.Prefix
+
+	for _, c := range strings.Split(f.trustedProxies, ",") {
+		if c = strings.TrimSpace(c); c == "" {
+			continue
+		}
+
+		p, err := netip.ParsePrefix(c)
+		if err != nil {
+			return nil, fmt.Errorf("--trusted-proxy-cidrs: %w", err)
+		}
+
+		out = append(out, p)
+	}
+
+	return out, nil
 }
 
 func (f usersFlags) validate() error {
@@ -81,6 +106,10 @@ func (f usersFlags) validate() error {
 
 	if f.kubeAPIServerURL != "" && !isHTTPS(f.kubeAPIServerURL) {
 		return fmt.Errorf("--kube-api-server-url must be an https URL, got %q", f.kubeAPIServerURL)
+	}
+
+	if _, err := f.proxyPrefixes(); err != nil {
+		return err
 	}
 
 	if f.tokenTTL < ichorauth.MinTokenTTL || f.tokenTTL > ichorauth.MaxTokenTTL {
@@ -168,7 +197,10 @@ func newIssuer(ctx context.Context, f usersFlags, live *settings.Reader, backend
 	keys := oidcissuer.NewKeyStore(nil)
 	watchKeys(ctx, keys, f.signingKeysDir)
 
+	proxies, _ := f.proxyPrefixes() // validated at startup
+
 	iss, err := oidcissuer.New(oidcissuer.Config{
+		TrustedProxies: proxies,
 		Issuer: f.externalURL, InternalJWKSURI: f.internalJWKSURI, InternalJWKSFromHost: true, UIRedirectURI: f.externalURL + "/auth/callback",
 		TokenTTL: f.tokenTTL, RefreshLifetime: f.refreshTTL,
 		Lifetimes: func(ctx context.Context) (time.Duration, time.Duration) {

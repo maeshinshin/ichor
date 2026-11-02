@@ -88,7 +88,7 @@ func (b *IssuerBackend) LookupUser(ctx context.Context, name string) (oidcissuer
 // disabled user, or one with no password, costs the same as a wrong password:
 // it is checked against a dummy hash and answers false.
 func (b *IssuerBackend) VerifyPassword(ctx context.Context, name, password string) (bool, error) {
-	release, err := b.Settings.acquire(ctx)
+	release, err := b.Settings.acquireLogin(ctx)
 	if err != nil {
 		return false, err
 	}

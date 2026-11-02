@@ -125,6 +125,26 @@ var _ = Describe("TalosMachineReconciler provisioning a node in maintenance mode
 		Expect(got.Status.Stage).To(Equal(stageRebooting))
 	})
 
+	It("pins the maintenance certificate it first sees and sends nothing to a node that presents another", func() {
+		setup(roleWorker)
+		installDiskPatch(roleWorker)
+
+		// A node that was never discovered through the controller is pinned at its first probe.
+		maint.fingerprint = "OJ+e3lINvDPSrrxIkkatieIh0ewV9pPDSMWLCCGTZ6o="
+		maint.applyErr = errors.New("refused")
+		got := reconcileOnce()
+		Expect(got.Status.MaintenanceFingerprint).To(Equal("OJ+e3lINvDPSrrxIkkatieIh0ewV9pPDSMWLCCGTZ6o="))
+		Expect(maint.applyCalls).To(HaveLen(1))
+
+		// Another node (or the same one after a reboot) answers with a different certificate.
+		maint.applyErr = nil
+		maint.err = errors.New("rpc error: code = Unavailable desc = " + maintenancePinMismatch + ": the node presented X, pinned that")
+		got = reconcileOnce()
+		Expect(maint.applyCalls).To(HaveLen(1), "the configuration must not be sent to a node whose certificate changed")
+		Expect(readyCondition(got).Reason).To(Equal(reasonMaintenanceChanged))
+		Expect(readyCondition(got).Message).To(ContainSubstring(ichorv1alpha1.TalosMachineTrustMaintenanceFingerprintAnnotation))
+	})
+
 	It("follows the node through installing and rebooting to running, then records the join", func() {
 		setup(roleWorker)
 		installDiskPatch(roleWorker)

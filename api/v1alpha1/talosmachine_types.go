@@ -394,6 +394,17 @@ type TalosMachineStatus struct {
 	// +optional
 	ObservedEndpointFor string `json:"observedEndpointFor,omitempty"`
 
+	// maintenanceFingerprint is the SPKI fingerprint (SHA-256, base64) of the
+	// certificate the node's maintenance-mode Talos API presented when it was discovered. The
+	// controller pushes the first machine configuration, which carries the CA keys, only to a node
+	// that presents this certificate again. A node that was never discovered through
+	// this controller (added by IP, reclaimed) is pinned at its first provisioning probe instead.
+	// It is refreshed while the machine is not approved. Talos issues a new certificate when the
+	// node reboots or changes address; an operator who has checked the new one accepts it with
+	// the TalosMachineTrustMaintenanceFingerprintAnnotation.
+	// +optional
+	MaintenanceFingerprint string `json:"maintenanceFingerprint,omitempty"`
+
 	// rebootPaths lists the configuration field paths whose pending change needs a reboot, while
 	// Ready is False with reason RebootRequired; empty otherwise. A config-rollout
 	// TalosOperation applies them; the plan shown before starting one reads this.
@@ -467,3 +478,8 @@ const TalosMachineRemovalFinalizer = "ichor.maesh.dev/machine-removal"
 // report drift but never apply anything to the node. `ichor adopt` creates adopted
 // machines with it and removes it once the live zero-drift check has passed.
 const TalosMachineHoldApplyAnnotation = "ichor.maesh.dev/hold-apply"
+
+// TalosMachineTrustMaintenanceFingerprintAnnotation holds the maintenance-mode certificate fingerprint
+// an operator has checked and accepts for an approved machine that has not been provisioned yet. It
+// takes the place of status.maintenanceFingerprint.
+const TalosMachineTrustMaintenanceFingerprintAnnotation = "ichor.maesh.dev/trust-maintenance-fingerprint"

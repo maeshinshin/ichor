@@ -47,7 +47,12 @@ type fakeMaintenanceClient struct {
 	// applyErr and applyCalls serve talosmachine_provision_test.go.
 	applyErr   error
 	applyCalls [][]byte
+
+	// fingerprint is the maintenance certificate the fake claims to have seen (PeerFingerprinter).
+	fingerprint string
 }
+
+func (f *fakeMaintenanceClient) PeerFingerprint() string { return f.fingerprint }
 
 func (f *fakeMaintenanceClient) Identity(context.Context) (HardwareIdentity, error) {
 	return f.identity, f.err
@@ -179,7 +184,7 @@ var _ = Describe("DiscoveryReconciler.Discover", func() {
 		cluster := newTestCluster("does-not-exist", "v1.14")
 		fake := &fakeMaintenanceClient{identity: HardwareIdentity{
 			UUID: uuidCreate, Serial: "S1", MACAddresses: []string{testMAC}, Manufacturer: "QEMU",
-		}}
+		}, fingerprint: "OJ+e3lINvDPSrrxIkkatieIh0ewV9pPDSMWLCCGTZ6o="}
 
 		r := &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: maintenanceFactory(fake)}
 
@@ -198,6 +203,8 @@ var _ = Describe("DiscoveryReconciler.Discover", func() {
 		got := getMachine(cluster.Namespace, uuidCreate)
 		Expect(got).NotTo(BeNil())
 		Expect(got.Status.Conditions).To(BeEmpty())
+		// The certificate the node presented is pinned for the first configuration.
+		Expect(got.Status.MaintenanceFingerprint).To(Equal("OJ+e3lINvDPSrrxIkkatieIh0ewV9pPDSMWLCCGTZ6o="))
 	})
 
 	It("links to the existing TalosMachine, and creates nothing new, when the same machine is discovered again", func() {

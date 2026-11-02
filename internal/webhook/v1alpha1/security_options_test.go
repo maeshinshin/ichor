@@ -267,7 +267,7 @@ func TestTalosAPIAccessInPatch(t *testing.T) {
 	on := true
 
 	patch := func(roles ...string) *ichorv1alpha1.TalosConfigPatch {
-		return configPatch("access", &typedconfig.Config{
+		p := configPatch("access", &typedconfig.Config{
 			ConfigVersion: dryRenderVersion,
 			MachineConfig: &typedconfig.MachineConfig{MachineFeatures: &typedconfig.FeaturesConfig{
 				KubernetesTalosAPIAccessConfig: &typedconfig.KubernetesTalosAPIAccessConfig{
@@ -275,7 +275,26 @@ func TestTalosAPIAccessInPatch(t *testing.T) {
 				},
 			}},
 		})
+		p.Spec.Layer = "role"
+		p.Spec.Target = &ichorv1alpha1.TalosConfigPatchTarget{Role: roleControlPlane}
+
+		return p
 	}
+
+	t.Run("a patch that reaches workers is refused", func(t *testing.T) {
+		for name, mut := range map[string]func(*ichorv1alpha1.TalosConfigPatch){
+			"cluster layer": func(p *ichorv1alpha1.TalosConfigPatch) { p.Spec.Layer, p.Spec.Target = "cluster", nil },
+			"worker role":   func(p *ichorv1alpha1.TalosConfigPatch) { p.Spec.Target.Role = "worker" },
+		} {
+			p := patch("os:reader")
+			mut(p)
+
+			_, err := dryRenderValidator(t).ValidateCreate(ctx, p)
+			if err == nil || !strings.Contains(err.Error(), "control plane") {
+				t.Errorf("%s: want a refusal naming control planes, got %v", name, err)
+			}
+		}
+	})
 
 	holder := func(allowed bool, err error) BreakGlassCheck {
 		return func(context.Context, string, string, string) (bool, error) { return allowed, err }

@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	sigsyaml "sigs.k8s.io/yaml"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -393,7 +394,24 @@ func TestEffectiveConfigFallbackMasksSecrets(t *testing.T) {
 		Data: map[string][]byte{secretsbundle.SecretKey: raw},
 	}
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster, newTestMachine(cluster.Name), secret).Build()
+	// The controller answers the backend's request for the cluster's public facts (ADR 0108); the fake
+	// client has none, so the answer is put on the request as it is created.
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster, newTestMachine(cluster.Name), secret).
+		WithInterceptorFuncs(interceptor.Funcs{
+			Create: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+				if req, ok := obj.(*ichorv1alpha1.TalosCredentialRequest); ok {
+					req.Status = ichorv1alpha1.TalosCredentialRequestStatus{
+						Phase: ichorv1alpha1.CredentialPhaseIssued,
+						Public: &ichorv1alpha1.TalosCredentialPublic{
+							ClusterID: bundle.Cluster.ID, TalosCA: string(bundle.Certs.OS.Crt), KubernetesCA: string(bundle.Certs.K8s.Crt),
+							EtcdCA: string(bundle.Certs.Etcd.Crt), KubernetesAggregatorCA: string(bundle.Certs.K8sAggregator.Crt),
+						},
+					}
+				}
+
+				return cl.Create(ctx, obj, opts...)
+			},
+		}).Build()
 	c := localClients(apiOpts, apiDeps{K8s: k8s})
 
 	var out bytes.Buffer

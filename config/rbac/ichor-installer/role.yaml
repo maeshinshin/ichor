@@ -51,6 +51,44 @@ rules:
   - update
 - apiGroups:
   - rbac.authorization.k8s.io
+  resourceNames:
+  - ichor-admin
+  - ichor-cni-role
+  - ichor-ichor-break-glass-role
+  - ichor-ichor-credentials-role
+  - ichor-ichor-diagnostics-role
+  - ichor-ichor-ui-role
+  - ichor-ichorinstallation-admin-role
+  - ichor-ichorinstallation-editor-role
+  - ichor-ichorinstallation-viewer-role
+  - ichor-ichoruser-admin-role
+  - ichor-ichoruser-editor-role
+  - ichor-ichoruser-viewer-role
+  - ichor-installer-role
+  - ichor-machine-reclaimer
+  - ichor-manager-role
+  - ichor-metrics-auth-role
+  - ichor-metrics-reader
+  - ichor-operator
+  - ichor-taloscluster-admin-role
+  - ichor-taloscluster-editor-role
+  - ichor-taloscluster-viewer-role
+  - ichor-talosconfigpatch-admin-role
+  - ichor-talosconfigpatch-editor-role
+  - ichor-talosconfigpatch-viewer-role
+  - ichor-talosetcdbackup-admin-role
+  - ichor-talosetcdbackup-editor-role
+  - ichor-talosetcdbackup-viewer-role
+  - ichor-talosmachine-admin-role
+  - ichor-talosmachine-editor-role
+  - ichor-talosmachine-viewer-role
+  - ichor-talosoperation-admin-role
+  - ichor-talosoperation-editor-role
+  - ichor-talosoperation-viewer-role
+  - ichor-talosstorage-admin-role
+  - ichor-talosstorage-editor-role
+  - ichor-talosstorage-viewer-role
+  - ichor-viewer
   resources:
   - clusterroles
   verbs:
@@ -86,6 +124,15 @@ rules:
   - update
 - apiGroups:
   - rbac.authorization.k8s.io
+  resourceNames:
+  - ichor-cni-job-role
+  - ichor-cni-records-role
+  - ichor-cni-role
+  - ichor-ichor-ui-role
+  - ichor-installer-role
+  - ichor-leader-election-role
+  - ichor-manager-role
+  - ichor-user-access
   resources:
   - roles
   verbs:
@@ -188,6 +235,13 @@ rules:
   - update
 - apiGroups:
   - rbac.authorization.k8s.io
+  resourceNames:
+  - ichor-cni-role
+  - ichor-ichor-ui-role
+  - ichor-installer-role
+  - ichor-leader-election-role
+  - ichor-manager-role
+  - ichor-user-access
   resources:
   - roles
   verbs:

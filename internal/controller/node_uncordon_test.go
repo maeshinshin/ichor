@@ -24,6 +24,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
+const resetStamp = "2026-11-03T00:00:00Z"
+
 var _ = Describe("uncordonRejoinedNode", func() {
 	newNode := func(name string, ready, cordoned bool, annotations map[string]string) *corev1.Node {
 		node := &corev1.Node{Name: name}
@@ -53,7 +55,7 @@ var _ = Describe("uncordonRejoinedNode", func() {
 	It("uncordons a Ready Node Ichor reset or cordoned, and drops the markers", func() {
 		r := &TalosMachineReconciler{Client: k8sClient}
 
-		newNode("rejoin-reset", true, true, map[string]string{nodeResetByIchorAnnotation: "2026-11-02T00:00:00Z"})
+		newNode("rejoin-reset", true, true, map[string]string{nodeResetByIchorAnnotation: resetStamp})
 		newNode("rejoin-marker", true, true, map[string]string{cordonedByIchorAnnotation: "removal"})
 
 		for _, name := range []string{"rejoin-reset", "rejoin-marker"} {
@@ -70,7 +72,7 @@ var _ = Describe("uncordonRejoinedNode", func() {
 		r := &TalosMachineReconciler{Client: k8sClient}
 
 		newNode("rejoin-human", true, true, nil)
-		newNode("rejoin-notready", false, true, map[string]string{nodeResetByIchorAnnotation: "2026-11-02T00:00:00Z"})
+		newNode("rejoin-notready", false, true, map[string]string{nodeResetByIchorAnnotation: resetStamp})
 
 		Expect(r.uncordonRejoinedNode(ctx, "rejoin-human")).To(Succeed())
 		Expect(r.uncordonRejoinedNode(ctx, "rejoin-notready")).To(Succeed())

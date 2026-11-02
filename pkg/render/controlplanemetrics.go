@@ -104,18 +104,7 @@ func metricsSubnets(cidrs []string) ([]netip.Prefix, error) {
 		return nil, fmt.Errorf("render: controlPlaneMetrics is enabled but allowedCIDRs is empty")
 	}
 
-	out := make([]netip.Prefix, 0, len(cidrs))
-
-	for _, s := range cidrs {
-		p, err := netip.ParsePrefix(s)
-		if err != nil {
-			return nil, fmt.Errorf("render: controlPlaneMetrics.allowedCIDRs %q: %w", s, err)
-		}
-
-		out = append(out, p.Masked())
-	}
-
-	return out, nil
+	return parsePrefixes("render: controlPlaneMetrics.allowedCIDRs", cidrs)
 }
 
 // metricsRule is the one firewall document: TCP to the three metrics ports is accepted only from

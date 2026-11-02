@@ -18,6 +18,7 @@ package uiapi
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -31,7 +32,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -176,7 +176,7 @@ func (s *Server) CreateReclaim(
 	// carries its owner reference from the start. The backend holds only `create` on Secrets: no patch, no
 	// read, no delete. A failed Secret create leaves a request without a credential, which the controller
 	// reports and expires.
-	name := "reclaim-" + utilrand.String(8)
+	name := "reclaim-" + strings.ToLower(rand.Text()[:16])
 
 	user, err := s.reclaimUser(ctx)
 	if err != nil {

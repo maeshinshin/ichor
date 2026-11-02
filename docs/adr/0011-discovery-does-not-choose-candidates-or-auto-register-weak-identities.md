@@ -347,3 +347,4 @@ reason the original endpoint question was deferred: it is its own design
 decision, not implied by anything settled here.
 
 - Addendum (ADR 0086): the same identity answering in maintenance mode at a new address is recorded in `status.observedEndpoint`, never in `spec.endpoint`.
+- Addendum (ADR 0108): a `TalosMachine`'s `spec.endpoint` must be an address of `spec.discovery` (or the user needs `update` on `talosmachines/endpoint`), and approving needs `approve` on `talosmachines/approval`. Discovery-created machines are unaffected.

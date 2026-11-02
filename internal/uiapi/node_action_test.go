@@ -301,3 +301,32 @@ func TestRemoveMachineRefusesTheLastControlPlane(t *testing.T) {
 		t.Fatalf("last control plane: %v", err)
 	}
 }
+
+// A reset asked for by the node's hostname and confirmed with it is stored with the machine's own
+// name as confirm: the TalosOperation webhook compares it with machineRef.name (hardware run, ADR 0108).
+func TestNodeResetByHostnameStoresTheMachineNameAsConfirm(t *testing.T) {
+	objs := opObjects()
+
+	for _, o := range objs {
+		if m, ok := o.(*ichorv1alpha1.TalosMachine); ok && m.Name == "w1" {
+			m.Spec.Hostname = "node-w1"
+		}
+	}
+
+	s, k8s := opServer(t, objs...)
+	s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, true, new([]authv1.ResourceAttributes)), nil }
+	user := context.WithValue(context.Background(), identityKey{}, Identity{User: bgUser})
+
+	req := nodeCreateReq(&pb.NodeActionRequest{
+		Machine: objectRef(opNS, "node-w1"), Action: pb.NodeAction_NODE_ACTION_RESET, Confirm: "node-w1",
+		BreakGlass: &pb.BreakGlass{Reason: bgReason},
+	})
+	if _, err := s.CreateOperation(user, req); err != nil {
+		t.Fatal(err)
+	}
+
+	ops := listOps(t, k8s)
+	if len(ops) != 1 || ops[0].Spec.Node.MachineRef.Name != "w1" || ops[0].Spec.Node.Confirm != "w1" {
+		t.Fatalf("operations = %+v", ops)
+	}
+}

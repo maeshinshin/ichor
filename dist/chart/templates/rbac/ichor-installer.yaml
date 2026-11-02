@@ -128,6 +128,7 @@ rules:
   - ichor-installer-role
   - ichor-leader-election-role
   - ichor-manager-role
+  - ichor-pod-restart-role
   - ichor-user-access
   resources:
   - roles

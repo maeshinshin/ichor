@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -64,7 +65,7 @@ const (
 // LocalVerifier verifies an ID token minted by Ichor's own issuer, in process,
 // against its own keys: signature, issuer, audience "ichor-ui" and expiry.
 type LocalVerifier interface {
-	Verify(ctx context.Context, raw string) (subject string, err error)
+	Verify(ctx context.Context, raw string) (subject string, issuedAt time.Time, err error)
 }
 
 type identityKey struct{}
@@ -189,7 +190,7 @@ func (a *Authenticator) Authenticate(ctx context.Context, header string) (Identi
 // and the roles come from the CR, not from the token, so a role change or a
 // disable takes effect here within seconds.
 func (a *Authenticator) authenticateLocal(ctx context.Context, raw string) (Identity, error) {
-	sub, err := a.local.Verify(ctx, raw)
+	sub, iat, err := a.local.Verify(ctx, raw)
 	if err != nil || sub == "" || a.users == nil {
 		return Identity{}, errors.New("invalid ID token")
 	}
@@ -199,8 +200,14 @@ func (a *Authenticator) authenticateLocal(ctx context.Context, raw string) (Iden
 		return Identity{}, errors.New("invalid ID token")
 	}
 
-	mc, err := a.users.MustChange(ctx, u.Name)
+	mc, notBefore, err := a.users.Session(ctx, u.Name)
 	if err != nil {
+		return Identity{}, errors.New("invalid ID token")
+	}
+
+	// RevokeSessions and a password change move notBefore: a token issued before it is dead here
+	// too, not only at the issuer's refresh. Whole seconds, like the token's iat.
+	if iat.Unix() < notBefore.Unix() {
 		return Identity{}, errors.New("invalid ID token")
 	}
 

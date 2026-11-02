@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"net"
@@ -24,7 +25,6 @@ import (
 	"net/url"
 	"regexp"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -60,7 +60,13 @@ var talosEgressPorts = []int{constants.ApidPort, constants.DefaultControlPlanePo
 
 var ciliumPolicyGVK = schema.GroupVersionKind{Group: "cilium.io", Version: "v2", Kind: "CiliumNetworkPolicy"}
 
-const talosEgressRecheck = time.Minute
+const (
+	talosEgressRecheck = time.Minute
+	keyPorts           = "ports"
+	keyNamespace       = "namespace"
+	keySpec            = "spec"
+	keyToPorts         = "toPorts"
+)
 
 // EgressSyncer is what the TalosCluster reconciler calls before it probes a discovery range.
 type EgressSyncer interface {
@@ -145,7 +151,8 @@ func (s *targetSet) cidr(c string) {
 	}
 }
 
-// collectTargets lists the Ichor kinds in every namespace.
+// collectTargets lists the Ichor kinds in every namespace. It lists every TalosMachine to read its
+// endpoint and counts nothing (countplanes_guard_test.go allows it for that reason).
 func collectTargets(ctx context.Context, c client.Reader) (egressTargets, error) {
 	set := &targetSet{cidrs: map[string]bool{}, names: map[string]bool{}}
 
@@ -205,8 +212,8 @@ func collectTargets(ctx context.Context, c client.Reader) (egressTargets, error)
 		}
 	}
 
-	sort.Slice(t.s3, func(i, j int) bool {
-		return t.s3[i].host < t.s3[j].host || (t.s3[i].host == t.s3[j].host && t.s3[i].port < t.s3[j].port)
+	slices.SortFunc(t.s3, func(a, b s3Target) int {
+		return cmp.Or(cmp.Compare(a.host, b.host), cmp.Compare(a.port, b.port))
 	})
 
 	return t, nil
@@ -218,7 +225,7 @@ func keys(m map[string]bool) []string {
 		out = append(out, k)
 	}
 
-	sort.Strings(out)
+	slices.Sort(out)
 
 	return out
 }
@@ -261,15 +268,6 @@ func portList(ports ...int) []any {
 	return out
 }
 
-func strSlice(in []string) []any {
-	out := make([]any, 0, len(in))
-	for _, s := range in {
-		out = append(out, s)
-	}
-
-	return out
-}
-
 // clusterLocalService returns (name, namespace) for "svc.ns.svc[.cluster.local]" and "svc.ns.svc".
 func clusterLocalService(host string) (string, string, bool) {
 	host = strings.TrimSuffix(host, ".cluster.local")
@@ -294,7 +292,7 @@ func buildEgress(t egressTargets) []any {
 
 		rules = append(rules, map[string]any{
 			"toCIDRSet": set,
-			"toPorts":   []any{map[string]any{"ports": portList(talosEgressPorts...)}},
+			keyToPorts:  []any{map[string]any{keyPorts: portList(talosEgressPorts...)}},
 		})
 	}
 
@@ -305,30 +303,30 @@ func buildEgress(t egressTargets) []any {
 		}
 
 		rules = append(rules, map[string]any{
-			"toFQDNs": fq,
-			"toPorts": []any{map[string]any{"ports": portList(talosEgressPorts...)}},
+			"toFQDNs":  fq,
+			keyToPorts: []any{map[string]any{keyPorts: portList(talosEgressPorts...)}},
 		})
 	}
 
 	for _, s := range t.s3 {
-		ports := []any{map[string]any{"ports": portList(s.port)}}
+		ports := []any{map[string]any{keyPorts: portList(s.port)}}
 
 		switch name, ns, local := clusterLocalService(s.host); {
 		case local:
 			rules = append(rules, map[string]any{
-				"toServices": []any{map[string]any{"k8sService": map[string]any{"serviceName": name, "namespace": ns}}},
-				"toPorts":    ports,
+				"toServices": []any{map[string]any{"k8sService": map[string]any{"serviceName": name, keyNamespace: ns}}},
+				keyToPorts:   ports,
 			})
 		case func() bool { _, err := netip.ParseAddr(s.host); return err == nil }():
 			a, _ := netip.ParseAddr(s.host)
 			rules = append(rules, map[string]any{
 				"toCIDRSet": []any{map[string]any{"cidr": netip.PrefixFrom(a, a.BitLen()).String()}},
-				"toPorts":   ports,
+				keyToPorts:  ports,
 			})
 		default:
 			rules = append(rules, map[string]any{
-				"toFQDNs": []any{map[string]any{"matchName": s.host}},
-				"toPorts": ports,
+				"toFQDNs":  []any{map[string]any{"matchName": s.host}},
+				keyToPorts: ports,
 			})
 		}
 	}
@@ -362,7 +360,7 @@ func (e *TalosEgress) staticPolicy(ctx context.Context) (string, error) {
 			continue
 		}
 
-		labels, _, _ := unstructured.NestedStringMap(o.Object, "spec", "endpointSelector", "matchLabels")
+		labels, _, _ := unstructured.NestedStringMap(o.Object, keySpec, "endpointSelector", "matchLabels")
 		if labels["control-plane"] == "controller-manager" && labels["app.kubernetes.io/name"] != "" {
 			return labels["app.kubernetes.io/name"], nil
 		}
@@ -407,7 +405,7 @@ func (e *TalosEgress) Sync(ctx context.Context) (bool, error) {
 
 	switch {
 	case apierrors.IsNotFound(err):
-		cur.Object = map[string]any{"spec": spec}
+		cur.Object = map[string]any{keySpec: spec}
 		cur.SetGroupVersionKind(ciliumPolicyGVK)
 		cur.SetNamespace(e.Namespace)
 		cur.SetName(e.name())
@@ -422,12 +420,12 @@ func (e *TalosEgress) Sync(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("reading %s: %w", e.name(), err)
 	}
 
-	have, _, _ := unstructured.NestedMap(cur.Object, "spec")
+	have, _, _ := unstructured.NestedMap(cur.Object, keySpec)
 	if equality.Semantic.DeepEqual(normalize(have), normalize(spec)) {
 		return false, nil
 	}
 
-	if err := unstructured.SetNestedField(cur.Object, spec, "spec"); err != nil {
+	if err := unstructured.SetNestedField(cur.Object, spec, keySpec); err != nil {
 		return false, err
 	}
 
@@ -440,9 +438,9 @@ func (e *TalosEgress) Sync(ctx context.Context) (bool, error) {
 
 // normalize round-trips through JSON-ish types so int64 vs string and []string vs []any compare equal.
 func normalize(m map[string]any) map[string]any {
-	u := &unstructured.Unstructured{Object: map[string]any{"spec": m}}
+	u := &unstructured.Unstructured{Object: map[string]any{keySpec: m}}
 
-	return u.DeepCopy().Object["spec"].(map[string]any) //nolint:forcetypeassert // built just above
+	return u.DeepCopy().Object[keySpec].(map[string]any) //nolint:forcetypeassert // built just above
 }
 
 // +kubebuilder:rbac:groups=cilium.io,namespace=ichor-system,resources=ciliumnetworkpolicies,verbs=get;list;create;update
@@ -477,7 +475,9 @@ func (e *TalosEgress) SettleAfter(ctx context.Context, changed bool) {
 
 // SetupWithManager watches the kinds the policy is built from.
 func (e *TalosEgress) SetupWithManager(mgr ctrl.Manager) error {
-	key := reconcile.Request{NamespacedName: types.NamespacedName{Namespace: e.Namespace, Name: e.name()}}
+	var key reconcile.Request
+
+	key.Namespace, key.Name = e.Namespace, e.name()
 	one := handler.EnqueueRequestsFromMapFunc(func(context.Context, client.Object) []reconcile.Request {
 		return []reconcile.Request{key}
 	})

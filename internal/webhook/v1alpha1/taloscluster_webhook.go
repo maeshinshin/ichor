@@ -65,6 +65,9 @@ type TalosClusterCustomValidator struct {
 	// BreakGlass lets a user holding the break-glass verb on the cluster override the
 	// last-worker guard. nil means no override.
 	BreakGlass BreakGlassCheck
+	// ControllerSource finds the address the controller reaches a cluster endpoint from, for the
+	// firewall preflight. nil asks the routing table.
+	ControllerSource SourceResolver
 }
 
 // isUnschedulable reports spec.controlPlane.schedulable == "false".
@@ -73,10 +76,14 @@ func isUnschedulable(c *ichorv1alpha1.TalosCluster) bool {
 }
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type TalosCluster.
-func (v *TalosClusterCustomValidator) ValidateCreate(_ context.Context, obj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
+func (v *TalosClusterCustomValidator) ValidateCreate(ctx context.Context, obj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
 	talosclusterlog.Info("Validation for TalosCluster upon creation", "name", obj.GetName())
 
 	if err := validateCNICreate(obj); err != nil {
+		return nil, err
+	}
+
+	if err := v.validateSecurityCreate(ctx, obj); err != nil {
 		return nil, err
 	}
 
@@ -141,6 +148,10 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 	// A version is checked when this update changes it, so a stored object that predates the
 	// check can still be edited for something else.
 	if err := validateChangedVersions(oldObj, newObj); err != nil {
+		return nil, err
+	}
+
+	if err := v.validateSecurityUpdate(ctx, oldObj, newObj); err != nil {
 		return nil, err
 	}
 

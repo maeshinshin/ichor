@@ -64,6 +64,13 @@ func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest [
 		return fmt.Errorf("init: decoding Ichor's own install manifest: %w", err)
 	}
 
+	// ichor-ui starts with no sign-in here, which serves read-only calls only; init and
+	// adopt keep their old behaviour by saying so explicitly. initUsers (--ui-url) turns users on
+	// afterwards and CustomizeUI then drops the flag.
+	if objs, err = installer.CustomizeObjects(objs, installer.UISettings{AllowUnauthenticated: true}); err != nil {
+		return fmt.Errorf("init: preparing Ichor's own install manifest: %w", err)
+	}
+
 	for _, obj := range objs {
 		if err := createWithRetry(ctx, k8sClient, obj, warn); err != nil {
 			return fmt.Errorf("init: applying Ichor's own %s %q: %w", obj.GetKind(), obj.GetName(), err)

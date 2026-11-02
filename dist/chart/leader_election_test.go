@@ -19,8 +19,12 @@ package chart
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 )
 
 // TestLeaderElectionRoleIsLeasesOnly guards ADR 0108: the manager locks with a Lease, so the
@@ -119,6 +123,171 @@ func TestKubeProxyPolicyGuardsAbsentFields(t *testing.T) {
 
 		if strings.Contains(string(b), "== oldObject.spec.cni.kubeProxy") {
 			t.Errorf("%s still reads oldObject.spec.cni.kubeProxy unguarded", path)
+		}
+	}
+}
+
+func namespaceOf(doc map[string]any) string {
+	md, _ := doc["metadata"].(map[string]any)
+	n, _ := md["namespace"].(string)
+
+	return n
+}
+
+// escalationNames returns, per resource ("clusterroles", "roles"), the resourceNames of every rule
+// of the role docs that grants bind or escalate on it, and reports a rule that grants either without
+// naming roles.
+func escalationNames(t *testing.T, label string, roles ...map[string]any) map[string]map[string]bool {
+	t.Helper()
+
+	out := map[string]map[string]bool{}
+
+	for _, role := range roles {
+		if role == nil {
+			t.Fatalf("%s: role missing", label)
+		}
+
+		for _, r := range allRules(role) {
+			rm, _ := r.(map[string]any)
+			verbs := stringsOf(rm["verbs"])
+
+			if !slices.Contains(verbs, "bind") && !slices.Contains(verbs, "escalate") {
+				continue
+			}
+
+			names := stringsOf(rm["resourceNames"])
+			for _, res := range stringsOf(rm["resources"]) {
+				if len(names) == 0 {
+					t.Errorf("%s: %s %s grants %v on %s without resourceNames (ADR 0108)", label, kindOf(role), nameOf(role), verbs, res)
+				}
+
+				if out[res] == nil {
+					out[res] = map[string]bool{}
+				}
+
+				for _, n := range names {
+					out[res][n] = true
+				}
+			}
+		}
+	}
+
+	return out
+}
+
+func setOf(names []string) map[string]bool {
+	m := map[string]bool{}
+	for _, n := range names {
+		m[n] = true
+	}
+
+	return m
+}
+
+func sameSet(a, b map[string]bool) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	for k := range a {
+		if !b[k] {
+			return false
+		}
+	}
+
+	return true
+}
+
+// TestInstallerEscalationNamesEveryRoleOfTheInstallManifest guards ADR 0108: the installer's bind
+// and escalate rights are limited to the ClusterRoles and Roles its own install manifest contains
+// (so it cannot bind cluster-admin to anything), in config/rbac and in the chart, and the lists do
+// not drift from dist/install.yaml. It needs `make build-installer`.
+func TestInstallerEscalationNamesEveryRoleOfTheInstallManifest(t *testing.T) {
+	var clusterRoles, allRoles, nsRoles []string
+
+	for _, d := range loadYAMLDocs(t, "../install.yaml") {
+		switch kindOf(d) {
+		case kindClusterRole:
+			clusterRoles = append(clusterRoles, nameOf(d))
+		case kindRole:
+			allRoles = append(allRoles, nameOf(d))
+			if namespaceOf(d) == "ichor-system" {
+				nsRoles = append(nsRoles, nameOf(d))
+			}
+		}
+	}
+
+	cfgDocs := loadYAMLDocs(t, installerConfigRolePath)
+	chartDocs := renderChartWithValues(t, "ichor", "installer.enabled=true")
+
+	for label, docs := range map[string][]map[string]any{"config/rbac": cfgDocs, "chart": chartDocs} {
+		cr, rl := "installer-role", "installer-role"
+		if label == "chart" {
+			cr, rl = "ichor-installer-role", "ichor-installer-role"
+		}
+
+		clusterLevel := escalationNames(t, label, find(docs, kindClusterRole, cr))
+		if !sameSet(clusterLevel["clusterroles"], setOf(clusterRoles)) {
+			t.Errorf("%s: installer ClusterRole bind/escalate on clusterroles names %v, install.yaml has %v", label, clusterLevel["clusterroles"], clusterRoles)
+		}
+
+		if !sameSet(clusterLevel["roles"], setOf(allRoles)) {
+			t.Errorf("%s: installer ClusterRole bind/escalate on roles names %v, install.yaml has %v", label, clusterLevel["roles"], allRoles)
+		}
+
+		nsLevel := escalationNames(t, label, find(docs, kindRole, rl))
+		if !sameSet(nsLevel["roles"], setOf(nsRoles)) {
+			t.Errorf("%s: installer Role bind/escalate on roles names %v, install.yaml has %v in ichor-system", label, nsLevel["roles"], nsRoles)
+		}
+	}
+}
+
+// TestCNIEscalationNamesOnlyCiliumsRoles guards ADR 0108: the Cilium Job may bind and escalate only
+// the roles the pinned Cilium chart creates, in config/rbac and in the chart. Every role the chart
+// renders under Ichor's values must be named, so a chart bump that adds one fails here, not in a cluster.
+func TestCNIEscalationNamesOnlyCiliumsRoles(t *testing.T) {
+	rendered := map[string]map[string]bool{"clusterroles": {}, "roles": {}}
+
+	for _, mode := range []cni.KubeProxyMode{cni.KubeProxyEnabled, cni.KubeProxyReplaced} {
+		for _, tunnel := range []string{"", "geneve", "vxlan"} {
+			p := cilium.New()
+			if tunnel != "" {
+				var err error
+				if p, err = p.WithTunnel(tunnel); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			manifest, err := p.BootstrapManifest(mode)
+			if err != nil {
+				t.Fatalf("rendering cilium (%s, %q): %v", mode, tunnel, err)
+			}
+
+			for _, d := range decodeYAMLDocs(t, manifest, "cilium bootstrap") {
+				switch kindOf(d) {
+				case kindClusterRole:
+					rendered["clusterroles"][nameOf(d)] = true
+				case kindRole:
+					rendered["roles"][nameOf(d)] = true
+				}
+			}
+		}
+	}
+
+	cfgDocs := loadYAMLDocs(t, "../../config/rbac/ichor-cni/role.yaml")
+	chartDocs := renderChartWithValues(t, "ichor", "cniHelm.enabled=true")
+
+	for label, role := range map[string]map[string]any{
+		"config/rbac": find(cfgDocs, kindClusterRole, "cni-role"),
+		"chart":       find(chartDocs, kindClusterRole, "ichor-cni-role"),
+	} {
+		got := escalationNames(t, label, role)
+		for res, names := range rendered {
+			for n := range names {
+				if !got[res][n] {
+					t.Errorf("%s: the Cilium chart renders %s %q, which the CNI role cannot bind or escalate", label, res, n)
+				}
+			}
 		}
 	}
 }

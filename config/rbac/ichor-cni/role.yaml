@@ -103,6 +103,22 @@ rules:
   - update
 - apiGroups:
   - rbac.authorization.k8s.io
+  resourceNames:
+  - cilium
+  - cilium-bgp-control-plane-secrets
+  - cilium-config-agent
+  - cilium-envoy-config-secrets
+  - cilium-gateway-secrets
+  - cilium-ingress-secrets
+  - cilium-operator
+  - cilium-operator-gateway-secrets
+  - cilium-operator-ingress-secrets
+  - cilium-operator-tlsinterception-secrets
+  - cilium-tlsinterception-secrets
+  - clustermesh-apiserver
+  - clustermesh-apiserver-generate-certs
+  - hubble-generate-certs
+  - hubble-ui
   resources:
   - clusterroles
   - roles

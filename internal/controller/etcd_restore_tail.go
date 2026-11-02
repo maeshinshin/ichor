@@ -107,7 +107,7 @@ func (j *restoreJob) update(ctx context.Context, change func(*etcdbackup.Restore
 	next := j.marker
 	change(&next)
 
-	if err := etcdbackup.PutMarker(ctx, j.store, j.prefix, &next); err != nil {
+	if err := etcdbackup.PutMarker(ctx, j.store, j.prefix, j.passphrase, &next); err != nil {
 		return err
 	}
 

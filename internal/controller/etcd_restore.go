@@ -276,7 +276,7 @@ func (r *TalosOperationReconciler) beginEtcdRestore(
 	spec := op.Spec.EtcdRestore
 
 	// A marker that is already ours means the status write after it failed: carry on from the marker.
-	marker, err := etcdbackup.GetMarker(ctx, run.store, run.prefix)
+	marker, err := etcdbackup.GetMarker(ctx, run.store, run.prefix, run.passphrase)
 	if err != nil {
 		return r.restoreRefused(ctx, op, run, err)
 	}
@@ -371,7 +371,7 @@ func (r *TalosOperationReconciler) beginEtcdRestore(
 	}
 
 	// The marker is what makes the destructive part resumable. Nothing is wiped before it is stored.
-	if err := etcdbackup.PutMarker(ctx, run.store, run.prefix, &next); err != nil {
+	if err := etcdbackup.PutMarker(ctx, run.store, run.prefix, run.passphrase, &next); err != nil {
 		_ = run.store.Delete(ctx, etcdbackup.PinnedKey(run.prefix))
 
 		return r.restoreRefused(ctx, op, run, fmt.Errorf("writing the restore marker: %w", err))
@@ -548,7 +548,7 @@ func (r *TalosOperationReconciler) advanceEtcdRestore(
 		return r.restoreWait(ctx, op, fmt.Sprintf("cannot read the restore configuration yet: %v", err)), nil
 	}
 
-	marker, err := etcdbackup.GetMarker(ctx, run.store, run.prefix)
+	marker, err := etcdbackup.GetMarker(ctx, run.store, run.prefix, run.passphrase)
 	if err != nil {
 		return r.restoreWait(ctx, op, "waiting for the backup storage: "+run.clean(err)), nil
 	}
@@ -572,7 +572,7 @@ func (r *TalosOperationReconciler) advanceEtcdRestore(
 	// Rejoining): the marker only moves forward.
 	if etcdRestoreStepRank(st.Step) > etcdRestoreStepRank(marker.Step) {
 		marker.Step = ichorv1alpha1.EtcdRestoreStepRejoining
-		if err := etcdbackup.PutMarker(ctx, run.store, run.prefix, marker); err != nil {
+		if err := etcdbackup.PutMarker(ctx, run.store, run.prefix, run.passphrase, marker); err != nil {
 			return r.restoreWait(ctx, op, "waiting for the backup storage: "+run.clean(err)), nil
 		}
 	}
@@ -659,7 +659,7 @@ func (run *restoreRun) failed(ctx context.Context, m *etcdbackup.RestoreMarker, 
 	if m != nil && m.Failure == "" {
 		next := *m
 		next.Failure = msg
-		_ = etcdbackup.PutMarker(ctx, run.store, run.prefix, &next)
+		_ = etcdbackup.PutMarker(ctx, run.store, run.prefix, run.passphrase, &next)
 	}
 
 	return ctrl.Result{}, run.r.setPhase(ctx, run.op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationStepFailed, msg)
@@ -1106,17 +1106,17 @@ func (r *TalosOperationReconciler) resumeBackup(ctx context.Context, backup type
 
 	var scrub scrubber
 
-	s3cfg, err := loadS3ConfigFrom(ctx, r.Client, r.ControllerNamespace, bk.Spec.Destination.S3, &scrub)
+	var cluster ichorv1alpha1.TalosCluster
+	if err := reader.Get(ctx, types.NamespacedName{Namespace: bk.Namespace, Name: bk.Spec.ClusterRef.Name}, &cluster); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+
+	_, passphrase, store, err := loadBackupStore(ctx, r.Client, r.ControllerNamespace, &cluster, bk.Spec.Destination.S3, r.NewStore, &scrub)
 	if err != nil {
 		return fmt.Errorf("%w: %s", errBackupUnusable, scrub.clean(err.Error()))
 	}
 
-	store, err := openStore(r.NewStore, s3cfg)
-	if err != nil {
-		return err
-	}
-
-	m, err := etcdbackup.GetMarker(ctx, store, bk.Spec.Destination.S3.Prefix)
+	m, err := etcdbackup.GetMarker(ctx, store, bk.Spec.Destination.S3.Prefix, passphrase)
 	if err != nil {
 		return errors.New(scrub.clean(err.Error()))
 	}
@@ -1137,7 +1137,7 @@ func (r *TalosOperationReconciler) resumeBackup(ctx context.Context, backup type
 	// The operation is gone while its marker is not: the API was rolled back to the snapshot.
 	if etcdRestoreStepRank(m.Step) < etcdRestoreStepRank(ichorv1alpha1.EtcdRestoreStepRejoining) {
 		m.Step = ichorv1alpha1.EtcdRestoreStepRejoining
-		if err := etcdbackup.PutMarker(ctx, store, bk.Spec.Destination.S3.Prefix, m); err != nil {
+		if err := etcdbackup.PutMarker(ctx, store, bk.Spec.Destination.S3.Prefix, passphrase, m); err != nil {
 			return errors.New(scrub.clean(err.Error()))
 		}
 	}
@@ -1177,7 +1177,7 @@ func (r *TalosOperationReconciler) etcdRestoreFinalizerStep(ctx context.Context,
 
 	// Only the operation's own marker is cleared; with no readable backup there is nothing to clear.
 	if run, err := r.newRestoreRun(ctx, op, r.clusterOf(ctx, op)); err == nil {
-		m, err := etcdbackup.GetMarker(ctx, run.store, run.prefix)
+		m, err := etcdbackup.GetMarker(ctx, run.store, run.prefix, run.passphrase)
 		if err != nil {
 			return true, err
 		}
@@ -1272,7 +1272,7 @@ func (run *restoreRun) refreshAgents(ctx context.Context, m *etcdbackup.RestoreM
 	if m.AgentsSince.IsZero() {
 		// Recorded before the restart, so that a restart of this process does not restart the kubelets again.
 		m.AgentsSince = time.Now().UTC()
-		if err := etcdbackup.PutMarker(ctx, run.store, run.prefix, m); err != nil {
+		if err := etcdbackup.PutMarker(ctx, run.store, run.prefix, run.passphrase, m); err != nil {
 			m.AgentsSince = time.Time{}
 
 			return "waiting for the backup storage: " + run.clean(err), nil
@@ -1300,7 +1300,7 @@ func (run *restoreRun) refreshAgents(ctx context.Context, m *etcdbackup.RestoreM
 		m.AgentWarning = fmt.Sprintf("after %s these nodes had not converged on the restored cluster: %s; check their kubelet and delete their kube-proxy pod by hand",
 			agentsBound, strings.Join(waiting, "; "))
 
-		if err := etcdbackup.PutMarker(ctx, run.store, run.prefix, m); err != nil {
+		if err := etcdbackup.PutMarker(ctx, run.store, run.prefix, run.passphrase, m); err != nil {
 			m.AgentWarning = ""
 
 			return "waiting for the backup storage: " + run.clean(err), nil

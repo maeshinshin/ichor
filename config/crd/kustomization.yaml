@@ -11,6 +11,7 @@ resources:
 - bases/ichor.maesh.dev_ichorinstallations.yaml
 - bases/ichor.maesh.dev_ichorusers.yaml
 - bases/ichor.maesh.dev_machinereclaims.yaml
+- bases/ichor.maesh.dev_taloscredentialrequests.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

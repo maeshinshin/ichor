@@ -194,3 +194,22 @@ func TestManagerPrefersAControlPlane(t *testing.T) {
 		}
 	}
 }
+
+// TestUIServiceExternalTrafficPolicy: the failed-login counters need the client's address, which a
+// LoadBalancer Service keeps only with externalTrafficPolicy Local (docs/guides/users-and-login.md).
+func TestUIServiceExternalTrafficPolicy(t *testing.T) {
+	policy := func(sets ...string) any {
+		svc := find(renderChartWithValues(t, "ichor", sets...), kindService, "ichor-ui-service")
+		spec, _ := svc["spec"].(map[string]any)
+
+		return spec["externalTrafficPolicy"]
+	}
+
+	if got := policy(); got != nil {
+		t.Errorf("default externalTrafficPolicy = %v, want unset", got)
+	}
+
+	if got := policy("ichorUI.service.type=LoadBalancer", "ichorUI.service.externalTrafficPolicy=Local"); got != "Local" {
+		t.Errorf("externalTrafficPolicy = %v, want Local", got)
+	}
+}

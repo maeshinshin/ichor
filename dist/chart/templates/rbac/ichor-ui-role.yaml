@@ -128,19 +128,27 @@ rules:
   verbs:
   - list
 {{- if or .Values.ichorUI.oidc.enabled .Values.ichorUI.users.enabled }}
-# Only with OIDC login or Ichor's own users: act as the
-# signed-in user. Optionally narrowed to named users/groups; never serviceaccounts or
-# userextras.
-{{- with .Values.ichorUI.oidc.impersonate.users }}
+# Only with OIDC login or Ichor's own users: act as the signed-in user.
+# Never a name that has not been given: the groups are the three built-in roles plus the
+# configured ones, and never a system: group; the users are the listed ones, and the Ichor users are listed
+# by the controller in the ClusterRole ichor-ui-impersonate.
+{{- $imp := .Values.ichorUI.oidc.impersonate }}
+{{- if and .Values.ichorUI.oidc.enabled (not $imp.groups) }}
+{{- fail "ichorUI.oidc.impersonate.groups must list the groups ichor-ui may impersonate when ichorUI.oidc.enabled is set (an empty list used to mean any group, including system:masters)" }}
+{{- end }}
+{{- if and .Values.ichorUI.oidc.enabled (not $imp.users) (not $imp.anyUser) }}
+{{- fail "ichorUI.oidc.impersonate.users must list the users ichor-ui may impersonate when ichorUI.oidc.enabled is set; set ichorUI.oidc.impersonate.anyUser=true to allow any user name and accept that a compromised ichor-ui can then act as any of them" }}
+{{- end }}
+{{- if and .Values.ichorUI.oidc.enabled $imp.users }}
 - apiGroups:
   - ""
   resourceNames:
-  {{- toYaml . | nindent 2 }}
+  {{- toYaml $imp.users | nindent 2 }}
   resources:
   - users
   verbs:
   - impersonate
-{{- else }}
+{{- else if and .Values.ichorUI.oidc.enabled $imp.anyUser }}
 - apiGroups:
   - ""
   resources:
@@ -148,39 +156,18 @@ rules:
   verbs:
   - impersonate
 {{- end }}
-{{- if and .Values.ichorUI.users.enabled (not .Values.ichorUI.oidc.enabled) }}
-# Only Ichor's users are on: the groups are the three built-in roles plus any configured ones.
 - apiGroups:
   - ""
   resourceNames:
   - ichor:viewer
   - ichor:operator
   - ichor:admin
-  {{- with .Values.ichorUI.oidc.impersonate.groups }}
-  {{- toYaml . | nindent 2 }}
+  {{- if .Values.ichorUI.oidc.enabled }}
+  {{- toYaml $imp.groups | nindent 2 }}
   {{- end }}
   resources:
   - groups
   verbs:
   - impersonate
-{{- else }}
-{{- with .Values.ichorUI.oidc.impersonate.groups }}
-- apiGroups:
-  - ""
-  resourceNames:
-  {{- toYaml . | nindent 2 }}
-  resources:
-  - groups
-  verbs:
-  - impersonate
-{{- else }}
-- apiGroups:
-  - ""
-  resources:
-  - groups
-  verbs:
-  - impersonate
-{{- end }}
-{{- end }}
 {{- end }}
 {{- end }}

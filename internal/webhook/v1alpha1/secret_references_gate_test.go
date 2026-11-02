@@ -181,6 +181,60 @@ var _ = Describe("Secret-references gate", func() {
 			Expect(change(operator, "s3-c")).To(Succeed())
 		})
 
+		// The endpoint receives the credentials, so it is gated like the Secret name.
+		mutateS3 := map[string]func(*ichorv1alpha1.TalosEtcdBackupS3){
+			"endpoint": func(s *ichorv1alpha1.TalosEtcdBackupS3) { s.Endpoint = "https://evil.example.org" },
+			"bucket":   func(s *ichorv1alpha1.TalosEtcdBackupS3) { s.Bucket = "other-bucket" },
+		}
+
+		for name, mutate := range mutateS3 {
+			It("refuses an operator who changes s3."+name+", and admits an admin", func() {
+				for user, ok := range map[string]bool{operator: false, admin: true, testControllerUser: true} {
+					b := &ichorv1alpha1.TalosEtcdBackup{}
+					Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(backup), b)).To(Succeed())
+					mutate(&b.Spec.Destination.S3)
+
+					err := asUser(user).Update(ctx, b)
+					if ok {
+						Expect(err).NotTo(HaveOccurred(), user)
+					} else {
+						Expect(err).To(HaveOccurred(), user)
+						Expect(err.Error()).To(ContainSubstring("talosetcdbackups/secret-references"))
+					}
+				}
+			})
+		}
+
+		It("refuses a plain http endpoint unless insecure is set, even for an admin", func() {
+			b := newBackup("s3-x")
+			b.Spec.Destination.S3.Endpoint = "http://minio.minio.svc:9000"
+
+			err := asUser(admin).Create(ctx, b)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("insecure"))
+
+			b = newBackup("s3-x")
+			b.Spec.Destination.S3.Endpoint = "http://minio.minio.svc:9000"
+			b.Spec.Destination.S3.Insecure = true
+			Expect(asUser(admin).Create(ctx, b)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, b)).To(Succeed())
+		})
+
+		It("refuses switching an existing backup to http without insecure, and leaves an untouched http backup editable", func() {
+			b := &ichorv1alpha1.TalosEtcdBackup{}
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(backup), b)).To(Succeed())
+			b.Spec.Destination.S3.Endpoint = "http://s3.example.org"
+			Expect(asUser(admin).Update(ctx, b)).NotTo(Succeed())
+
+			b.Spec.Destination.S3.Insecure = true
+			Expect(asUser(admin).Update(ctx, b)).To(Succeed())
+
+			// Only the keep-last style edit: nothing to gate, nothing to refuse.
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(backup), b)).To(Succeed())
+			b.Spec.Destination.S3.Insecure = true
+			Expect(asUser(operator).Update(ctx, b)).To(Succeed())
+		})
+
 		It("refuses an operator who creates a backup, and admits an admin", func() {
 			err := asUser(operator).Create(ctx, newBackup("s3-x"))
 			Expect(err).To(HaveOccurred())

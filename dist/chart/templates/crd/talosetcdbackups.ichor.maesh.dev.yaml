@@ -107,6 +107,13 @@ spec:
                           http://minio.minio.svc:9000. The scheme selects TLS.
                         pattern: ^https?://[^/\s]+$
                         type: string
+                      insecure:
+                        description: |-
+                          insecure permits a plain http:// endpoint. The access key id, the signed headers
+                          and the session token then cross the network in clear, so the admission webhook refuses
+                          http:// unless this is true. Changing it needs update on talosetcdbackups/secret-references,
+                          like the endpoint. Unset (false) means https only.
+                        type: boolean
                       prefix:
                         description: |-
                           prefix is the key prefix snapshots are written under, with no leading

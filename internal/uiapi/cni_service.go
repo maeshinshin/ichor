@@ -56,11 +56,11 @@ type ciliumView struct {
 }
 
 func (s *Server) getCiliumView(ctx context.Context, ref *pb.ObjectRef) (*ciliumView, error) {
-	var cluster ichorv1alpha1.TalosCluster
-
 	key := namespacedName(ref)
-	if err := s.Get(ctx, key, &cluster); err != nil {
-		return nil, mapGetError(fmt.Sprintf("cluster %q", key), err)
+
+	cluster, err := s.loadCluster(ctx, key)
+	if err != nil {
+		return nil, err
 	}
 
 	if cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
@@ -68,7 +68,7 @@ func (s *Server) getCiliumView(ctx context.Context, ref *pb.ObjectRef) (*ciliumV
 	}
 
 	v := &ciliumView{
-		cluster: &cluster, kubeProxy: cni.KubeProxyMode(cluster.Spec.CNI.KubeProxy), tunnel: cluster.Spec.CNI.Tunnel,
+		cluster: cluster, kubeProxy: cni.KubeProxyMode(cluster.Spec.CNI.KubeProxy), tunnel: cluster.Spec.CNI.Tunnel,
 	}
 	if v.kubeProxy == "" {
 		v.kubeProxy = cni.KubeProxyEnabled

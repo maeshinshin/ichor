@@ -30,11 +30,11 @@ import (
 func (s *Server) DismissCARotationAdvice(
 	ctx context.Context, req *connect.Request[pb.DismissCARotationAdviceRequest],
 ) (*connect.Response[pb.DismissCARotationAdviceResponse], error) {
-	var c ichorv1alpha1.TalosCluster
-
 	key := namespacedName(req.Msg.GetCluster())
-	if err := s.Get(ctx, key, &c); err != nil {
-		return nil, mapGetError("cluster "+key.String(), err)
+
+	c, err := s.loadCluster(ctx, key)
+	if err != nil {
+		return nil, err
 	}
 
 	if c.Annotations == nil {
@@ -43,7 +43,7 @@ func (s *Server) DismissCARotationAdvice(
 
 	c.Annotations[ichorv1alpha1.TalosClusterCARotationAdviceDismissedAnnotation] = "true"
 
-	if err := s.Update(ctx, &c, strictFieldValidation); err != nil {
+	if err := s.Update(ctx, c, strictFieldValidation); err != nil {
 		return nil, mapOperationWriteError("dismissing the CA rotation advice of", key, err)
 	}
 

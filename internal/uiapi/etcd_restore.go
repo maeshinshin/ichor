@@ -57,11 +57,9 @@ func (s *Server) planEtcdRestore(ctx context.Context, clusterRef *pb.ObjectRef, 
 		return nil, invalid("an etcd restore needs the cluster")
 	}
 
-	var cluster ichorv1alpha1.TalosCluster
-
-	ckey := namespacedName(clusterRef)
-	if err := s.Get(ctx, ckey, &cluster); err != nil {
-		return nil, mapGetError(fmt.Sprintf("cluster %q", ckey), err)
+	cluster, err := s.loadCluster(ctx, namespacedName(clusterRef))
+	if err != nil {
+		return nil, err
 	}
 
 	var bk ichorv1alpha1.TalosEtcdBackup
@@ -72,7 +70,7 @@ func (s *Server) planEtcdRestore(ctx context.Context, clusterRef *pb.ObjectRef, 
 	}
 
 	p := &opPlan{
-		kind: ichorv1alpha1.TalosOperationKindEtcdRestore, cluster: &cluster,
+		kind: ichorv1alpha1.TalosOperationKindEtcdRestore, cluster: cluster,
 		restore: &etcdRestorePlan{backup: &bk, snapshot: req.GetSnapshot(), confirm: req.GetConfirm(), bg: req.GetBreakGlass()},
 		resp: &pb.PlanOperationResponse{
 			MaxUnavailable: 1, Effect: pb.OperationEffect_OPERATION_EFFECT_REBOOT, KubernetesApiUnavailable: true,
@@ -127,10 +125,10 @@ func (s *Server) planEtcdRestore(ctx context.Context, clusterRef *pb.ObjectRef, 
 		"control plane it stops with it and `ichor restore --recover-cluster` finishes the restore. That command is also the way out "+
 		"if the restore stops with an error.", whenText(taken))
 
-	p.resp.Blocked, _ = s.etcdRestoreBlocked(ctx, p, &cluster, &bk, taken, len(cps))
+	p.resp.Blocked, _ = s.etcdRestoreBlocked(ctx, p, cluster, &bk, taken, len(cps))
 
 	if p.resp.Blocked == "" {
-		blocked, err := s.unfinishedOperation(ctx, &cluster)
+		blocked, err := s.unfinishedOperation(ctx, cluster)
 		if err != nil {
 			return nil, err
 		}

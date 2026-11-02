@@ -20,7 +20,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -152,9 +151,10 @@ func hasPort(ports []corev1.ContainerPort, name string, n int32) bool {
 	return false
 }
 
-// The installer manifest's controller Deployment tolerates the control-plane taint, ichor-ui does not
-// (the controller drives drains and must be able to reschedule onto a control plane).
-func TestRealBundle_ControllerToleratesTheControlPlane(t *testing.T) {
+// Both Deployments of the installer manifest tolerate the control-plane taint: the controller drives drains and
+// must be able to reschedule onto a control plane, and ichor-ui must run before any worker is approved (a
+// tainted-preset init waits for it).
+func TestRealBundle_ControllerAndUIToleratetheControlPlane(t *testing.T) {
 	manifest, _ := realBundle(t)
 
 	for _, o := range manifest {
@@ -166,8 +166,8 @@ func TestRealBundle_ControllerToleratesTheControlPlane(t *testing.T) {
 		has := len(tols) == 1 && tols[0].(map[string]any)["key"] == "node-role.kubernetes.io/control-plane" &&
 			tols[0].(map[string]any)["effect"] == "NoSchedule"
 
-		if isController := strings.HasSuffix(o.GetName(), "controller-manager"); has != isController {
-			t.Errorf("%s: control-plane toleration = %t, want %t", o.GetName(), has, isController)
+		if !has {
+			t.Errorf("%s: no control-plane toleration", o.GetName())
 		}
 	}
 }

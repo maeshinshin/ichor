@@ -110,6 +110,7 @@ func main() {
 	flag.DurationVar(&users.tokenTTL, "token-ttl", 5*time.Minute, "lifetime of an ID token (1m to 1h); spec.users.tokenTTL of the IchorInstallation wins when set")
 	flag.DurationVar(&users.refreshTTL, "refresh-lifetime", 12*time.Hour, "absolute lifetime of a refresh token (1h to 30d)")
 
+	flag.StringVar(&users.trustedProxies, "trusted-proxy-cidrs", os.Getenv("ICHOR_TRUSTED_PROXY_CIDRS"), "comma-separated CIDRs of proxies whose X-Forwarded-For the login rate limits trust; empty: the TCP peer is the client (docs/adr/0108)")
 	flag.StringVar(&users.kubeAPIServerURL, "kube-api-server-url", "", "Kubernetes API URL put in users' kubeconfigs (default: the cluster's spec.endpoint)")
 	flag.StringVar(&users.kubeAPITLSServerName, "kube-api-tls-server-name", "", "tls-server-name in users' kubeconfigs, for a --kube-api-server-url host outside the apiserver certificate's SANs")
 

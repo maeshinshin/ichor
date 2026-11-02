@@ -195,26 +195,34 @@ func (i *Issuer) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var ar authRequest
-	if _, err := i.verify(req.Ticket, ichorauth.TypTicket, &ar); err != nil {
+	ticket, err := i.verify(req.Ticket, ichorauth.TypTicket, &ar)
+	if err != nil {
 		oauthError(w, http.StatusBadRequest, errInvalidRequest, "invalid or expired ticket")
 		return
 	}
 	state := ar.State
 	ar.State = ""
 	now := i.cfg.Now()
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		ip = r.RemoteAddr
-	}
-	userKey, ipKey := "u:"+req.Username[:min(len(req.Username), maxUserNameLen+1)], "ip:"+ip
-	if d := max(i.failures.Wait(userKey, now), i.failures.Wait(ipKey, now)); d > 0 {
+	src, name := i.clientIP(r), req.Username[:min(len(req.Username), maxUserNameLen+1)]
+	pairKey, srcKey := "p:"+src+"|"+name, "ip:"+src
+	if d := max(i.failures.Wait(pairKey, now), i.srcFailures.Wait(srcKey, now)); d > 0 {
 		w.Header().Set("Retry-After", strconv.Itoa(int(d/time.Second)+1))
 		oauthError(w, http.StatusTooManyRequests, "rate_limited", "too many failed logins")
 		return
 	}
+	// Past the per-user ceiling every login of this user is slowed, never refused: an attacker
+	// can cap the guess rate but cannot lock the account out.
+	if d := i.ceiling.delay(name, now); d > 0 {
+		select {
+		case <-time.After(d):
+		case <-r.Context().Done():
+			return
+		}
+	}
 	denied := func() {
-		i.failures.Fail(userKey, now)
-		i.failures.Fail(ipKey, now)
+		i.failures.Fail(pairKey, now)
+		i.srcFailures.Fail(srcKey, now)
+		i.ceiling.fail(name, now)
 		oauthError(w, http.StatusUnauthorized, errAccessDenied, "invalid credentials")
 	}
 	if len(req.Username) == 0 || len(req.Username) > maxUserNameLen {
@@ -222,6 +230,11 @@ func (i *Issuer) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ok, err := i.cfg.Passwords.VerifyPassword(r.Context(), req.Username, req.Password)
+	if errors.Is(err, ErrBusy) {
+		w.Header().Set("Retry-After", "2")
+		oauthError(w, http.StatusServiceUnavailable, "temporarily_unavailable", "too many sign-ins in progress")
+		return
+	}
 	if err != nil {
 		oauthError(w, http.StatusInternalServerError, "server_error", "")
 		return
@@ -239,7 +252,13 @@ func (i *Issuer) login(w http.ResponseWriter, r *http.Request) {
 		denied()
 		return
 	}
-	i.failures.Reset(userKey)
+	i.failures.Reset(pairKey)
+	// A ticket buys one successful login (failed attempts may retry with it): a replayed ticket
+	// cannot be turned into a second code.
+	if !i.usedTickets.use(ticket.ID, ticket.Expiry.Time(), now) {
+		oauthError(w, http.StatusBadRequest, errInvalidRequest, "invalid or expired ticket")
+		return
+	}
 	code, err := i.sign(ichorauth.TypCode, jwt.Claims{
 		Issuer: i.cfg.Issuer, Subject: user.Name, Audience: jwt.Audience{internalAudience}, ID: rand.Text(),
 		IssuedAt: jwt.NewNumericDate(now), Expiry: jwt.NewNumericDate(now.Add(ichorauth.DefaultCodeTTL)),

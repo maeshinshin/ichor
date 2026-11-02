@@ -19,12 +19,14 @@ package uiapi
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/maeshinshin/ichor/internal/oidcissuer"
 	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
@@ -32,9 +34,16 @@ import (
 // credentials Secret's layout (docs/adr/0094). The Secret is written by the
 // ServiceAccount (s.Client) only after the caller's own RBAC allowed it.
 
-// maxConcurrentHashes: each argon2id hash takes 64 MiB, so at most two run at
-// once and the rest wait (docs/adr/0094).
-const maxConcurrentHashes = 2
+// Each argon2id hash takes 64 MiB, so at most two run at once (docs/adr/0094). Since ADR 0108
+// they are split by who can ask: one slot for the unauthenticated login, with a short queue
+// that answers "busy" beyond it, and one for the operations of a signed-in user, so a flood of
+// logins cannot starve a password change.
+const (
+	hashSlotsLogin = 1
+	hashSlotsAuthn = 1
+	// maxLoginWaiters is how many logins may queue for the login slot before the next one is refused.
+	maxLoginWaiters = 8
+)
 
 // UserSettings turns Ichor's own users on for a Server.
 type UserSettings struct {
@@ -47,12 +56,36 @@ type UserSettings struct {
 	// set, becomes its tls-server-name.
 	KubeAPIServerURL, KubeAPITLSServerName string
 
-	sem chan struct{}
+	sem      chan struct{}
+	loginSem chan struct{}
+	waiting  atomic.Int32
 }
 
 // NewUserSettings builds the settings with the hash semaphore ready.
 func NewUserSettings(cache *UserCache, issuerURL string) *UserSettings {
-	return &UserSettings{Cache: cache, IssuerURL: issuerURL, sem: make(chan struct{}, maxConcurrentHashes)}
+	return &UserSettings{
+		Cache: cache, IssuerURL: issuerURL,
+		sem: make(chan struct{}, hashSlotsAuthn), loginSem: make(chan struct{}, hashSlotsLogin),
+	}
+}
+
+// acquireLogin is acquire for the unauthenticated login: at most maxLoginWaiters queue, the
+// rest get oidcissuer.ErrBusy at once.
+func (u *UserSettings) acquireLogin(ctx context.Context) (release func(), err error) {
+	if u.waiting.Add(1) > maxLoginWaiters+hashSlotsLogin {
+		u.waiting.Add(-1)
+
+		return nil, oidcissuer.ErrBusy
+	}
+
+	select {
+	case u.loginSem <- struct{}{}:
+		return func() { <-u.loginSem; u.waiting.Add(-1) }, nil
+	case <-ctx.Done():
+		u.waiting.Add(-1)
+
+		return nil, ctx.Err()
+	}
 }
 
 func (u *UserSettings) acquire(ctx context.Context) (release func(), err error) {

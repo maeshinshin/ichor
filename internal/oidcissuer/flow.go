@@ -337,7 +337,8 @@ func (i *Issuer) codeGrant(w http.ResponseWriter, r *http.Request, client string
 		oauthError(w, http.StatusBadRequest, errInvalidGrant, "user not allowed")
 		return
 	}
-	i.respond(r.Context(), w, user, client, ar.TokenAudience, ar.Scope, ar.Nonce, hasScope(ar.Scope, scopeOffline), i.cfg.Now())
+	i.respond(r.Context(), w, user, client, ar.TokenAudience, ar.Scope, ar.Nonce,
+		refreshPlan{issue: hasScope(ar.Scope, scopeOffline), start: i.cfg.Now()})
 }
 
 func (i *Issuer) refreshGrant(w http.ResponseWriter, r *http.Request, client string) {
@@ -366,13 +367,28 @@ func (i *Issuer) refreshGrant(w http.ResponseWriter, r *http.Request, client str
 		oauthError(w, http.StatusBadRequest, errInvalidGrant, "user not allowed")
 		return
 	}
-	i.respond(r.Context(), w, user, client, aud, rc.Scope, "", false, time.Time{})
+	plan := refreshPlan{}
+	if i.cfg.Refresh != nil {
+		plan = refreshPlan{issue: true, start: std.IssuedAt.Time(), expiry: std.Expiry.Time(), family: rc.Family, oldJTI: std.ID}
+	}
+	i.respond(r.Context(), w, user, client, aud, rc.Scope, "", plan)
 }
 
-// respond signs the ID token and, for a new login (sessionStart non-zero and
-// withRefresh), a refresh token. A refresh grant returns no new refresh token:
-// they are not rotated, the client keeps its own.
-func (i *Issuer) respond(ctx context.Context, w http.ResponseWriter, u User, client, aud, scope, nonce string, withRefresh bool, sessionStart time.Time) {
+// refreshPlan says what refresh token a response carries. issue false means
+// none. A login starts a session at start; a rotation (family set) keeps the
+// session's start and expiry and replaces oldJTI; a refresh of a token from
+// before rotation existed (issue, no family) starts a family.
+type refreshPlan struct {
+	issue         bool
+	start, expiry time.Time
+	family        string
+	oldJTI        string
+}
+
+// respond signs the ID token and, per plan, a refresh token. With a
+// RefreshStore every refresh grant returns a new refresh token and retires the
+// presented one; without one the client keeps its own.
+func (i *Issuer) respond(ctx context.Context, w http.ResponseWriter, u User, client, aud, scope, nonce string, plan refreshPlan) {
 	if u.MustChange && aud == ichorauth.AudienceKube {
 		oauthError(w, http.StatusForbidden, errAccessDenied, "change your password first (sign in to the Ichor UI); no Kubernetes token is issued until then")
 		return
@@ -388,11 +404,14 @@ func (i *Issuer) respond(ctx context.Context, w http.ResponseWriter, u User, cli
 		AccessToken: idTok, // no userinfo endpoint: the ID token doubles as the bearer
 		TokenType:   "Bearer", ExpiresIn: int(tokenTTL / time.Second), IDToken: idTok, Scope: scope,
 	}
-	if err == nil && withRefresh {
-		resp.RefreshToken, err = i.sign(ichorauth.TypRefresh, jwt.Claims{
-			Issuer: i.cfg.Issuer, Subject: u.Name, Audience: jwt.Audience{internalAudience}, ID: rand.Text(),
-			IssuedAt: jwt.NewNumericDate(sessionStart), Expiry: jwt.NewNumericDate(sessionStart.Add(refreshLifetime)),
-		}, refreshClaims{ClientID: client, Scope: scope, TokenAudience: aud})
+	if err == nil && plan.issue {
+		var rt string
+		rt, err = i.refreshToken(ctx, u.Name, client, aud, scope, plan, refreshLifetime)
+		if errors.Is(err, ErrRefreshReused) {
+			oauthError(w, http.StatusBadRequest, errInvalidGrant, "invalid refresh token")
+			return
+		}
+		resp.RefreshToken = rt
 	}
 	if err != nil {
 		oauthError(w, http.StatusInternalServerError, "server_error", "")
@@ -401,4 +420,29 @@ func (i *Issuer) respond(ctx context.Context, w http.ResponseWriter, u User, cli
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// refreshToken signs the refresh token for plan and records it in the store.
+func (i *Issuer) refreshToken(ctx context.Context, user, client, aud, scope string, plan refreshPlan, lifetime time.Duration) (string, error) {
+	exp, jti := plan.expiry, rand.Text()
+	if exp.IsZero() {
+		exp = plan.start.Add(lifetime)
+	}
+	family := plan.family
+	if st := i.cfg.Refresh; st != nil {
+		var err error
+		if plan.family == "" {
+			family = rand.Text()
+			err = st.Start(ctx, user, family, jti, exp)
+		} else {
+			err = st.Rotate(ctx, user, family, plan.oldJTI, jti)
+		}
+		if err != nil {
+			return "", err
+		}
+	}
+	return i.sign(ichorauth.TypRefresh, jwt.Claims{
+		Issuer: i.cfg.Issuer, Subject: user, Audience: jwt.Audience{internalAudience}, ID: jti,
+		IssuedAt: jwt.NewNumericDate(plan.start), Expiry: jwt.NewNumericDate(exp),
+	}, refreshClaims{ClientID: client, Scope: scope, TokenAudience: aud, Family: family})
 }

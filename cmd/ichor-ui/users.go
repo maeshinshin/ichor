@@ -176,7 +176,7 @@ func newIssuer(ctx context.Context, f usersFlags, live *settings.Reader, backend
 
 			return e.TokenTTL.V, e.RefreshLifetime.V
 		},
-		Keys: keys, Users: backend, Passwords: backend,
+		Keys: keys, Users: backend, Passwords: backend, Refresh: backend,
 	})
 
 	return iss, localVerifier{keys: keys, issuer: f.externalURL}, err

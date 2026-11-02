@@ -160,7 +160,19 @@ type Credential struct {
 	Hash       string    `json:"hash"`
 	NotBefore  time.Time `json:"notBefore"`
 	MustChange bool      `json:"mustChange"`
+	// Families are the user's live refresh-token families by id (docs/adr/0108): the id of the
+	// family's current token and when the family dies. A retired token's reuse deletes the family.
+	Families map[string]RefreshFamily `json:"families,omitempty"`
 }
+
+// RefreshFamily is the state of one rotating chain of refresh tokens.
+type RefreshFamily struct {
+	JTI string `json:"jti"`
+	Exp int64  `json:"exp"`
+}
+
+// MaxRefreshFamilies caps the live families of one user; the oldest-expiring is dropped first.
+const MaxRefreshFamilies = 16
 
 // NewCredential hashes the password (policy applied) into an entry whose NotBefore is now, which
 // invalidates every refresh token issued earlier. NotBefore is truncated to whole seconds because

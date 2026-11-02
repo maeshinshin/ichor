@@ -13,9 +13,12 @@ rules:
   - list
 - apiGroups:
   - ""
+  resourceNames:
+  - ichor:admin
+  - ichor:operator
+  - ichor:viewer
   resources:
   - groups
-  - users
   verbs:
   - impersonate
 - apiGroups:

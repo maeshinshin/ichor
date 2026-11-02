@@ -569,6 +569,9 @@ func main() {
 		ControllerNamespace: ns,
 		Recorder:            mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "machinereclaim")
+	must((&controller.ImpersonationRoleReconciler{
+		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(), ControllerNamespace: ns,
+	}).SetupWithManager(mgr), "Failed to create controller", "controller", "impersonationrole")
 	must((&controller.TalosCredentialRequestReconciler{
 		Client: mgr.GetClient(), Scheme: mgr.GetScheme(), ControllerNamespace: ns,
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "taloscredentialrequest")

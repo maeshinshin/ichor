@@ -224,12 +224,19 @@ ichorUI:
     ## system:masters. Bind your RBAC to e.g. "oidc:alice@example.com" / "oidc:platform".
     usernamePrefix: "oidc:"
     groupsPrefix: "oidc:"
-    ## The ServiceAccount is granted `impersonate` on users and groups. Empty lists allow any
-    ## name (the backend still refuses system: users); list names to narrow it. A user outside
-    ## the lists, or in a group outside them, gets a 403 from the API server.
+    ## The ServiceAccount is granted `impersonate` on exactly these names and no others (ADR 0108).
+    ## groups: required with OIDC (the groups your IdP's tokens can carry, with groupsPrefix applied,
+    ## for example ["oidc:platform"]); the built-in ichor:viewer, ichor:operator and ichor:admin are
+    ## always added, and a system: group can never be impersonated. users: required with OIDC too
+    ## (with usernamePrefix applied, for example ["oidc:alice@example.com"]), because Kubernetes cannot
+    ## match a user name by prefix; anyUser: true instead lets it impersonate any user name, so that
+    ## a compromised ichor-ui could act as any user your RBAC binds, such as an administrator. Ichor's
+    ## own users (users.enabled) need no entry: the controller lists them. Rendering fails when
+    ## OIDC is on and these are not given.
     impersonate:
       users: []
       groups: []
+      anyUser: false
 
   ## Ichor's own users and OIDC issuer (docs/adr/0094). Off by default: it needs an https URL
   ## that browsers and the CLI reach, a Talos v1.14 contract and a config rollout on the control

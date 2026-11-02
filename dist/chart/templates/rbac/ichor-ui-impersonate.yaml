@@ -1,0 +1,26 @@
+{{- if and .Values.ichorUI.enabled .Values.ichorUI.users.enabled }}
+# Mirrors config/rbac/ichor-ui/impersonate_role.yaml (ADR 0108). The controller keeps the rules equal to the
+# IchorUsers; they start empty, which grants nothing.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: ichor-ui-impersonate
+rules: []
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: ichor-ui-impersonate
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ichor-ui-impersonate
+subjects:
+- kind: ServiceAccount
+  name: ichor-ui
+  namespace: {{ .Release.Namespace }}
+{{- end }}

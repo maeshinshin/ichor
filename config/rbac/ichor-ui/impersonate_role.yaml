@@ -1,0 +1,27 @@
+# The users and Ichor role groups ichor-ui may impersonate (ADR 0108). The controller keeps the rules equal
+# to the IchorUsers that exist (internal/controller/impersonation_role.go); it starts with none, which
+# grants nothing. Never put a rule here without resourceNames: that would allow every name.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: ichor-ui-impersonate
+rules: []
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: ichor-ui-impersonate
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ichor-ui-impersonate
+subjects:
+- kind: ServiceAccount
+  name: ichor-ui
+  namespace: system

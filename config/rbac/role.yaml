@@ -219,6 +219,16 @@ rules:
   verbs:
   - get
   - list
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resourceNames:
+  - ichor-ui-impersonate
+  resources:
+  - clusterroles
+  verbs:
+  - escalate
+  - get
+  - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

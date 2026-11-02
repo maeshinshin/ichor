@@ -94,13 +94,13 @@ package uiapi
 // gatewayAPI.enabled: one metadata get of that one CRD, as the ServiceAccount.
 // +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,resourceNames=gateways.gateway.networking.k8s.io,verbs=get
 
-// OIDC login (docs/adr/0058): the backend calls the Kubernetes API as the
-// signed-in user. impersonate on users/groups is the strongest verb in this
-// file, so the chart only renders it when ichorUI.oidc.enabled and can
-// narrow it with resourceNames (ichorUI.oidc.impersonate.users/groups); the
-// backend itself refuses to impersonate a system: user. Never on
-// serviceaccounts or userextras.
-// +kubebuilder:rbac:groups="",resources=users;groups,verbs=impersonate
+// OIDC login (docs/adr/0058) and Ichor users (docs/adr/0094): the backend calls the Kubernetes API as the
+// signed-in user. impersonate is the strongest verb in this file, so (ADR 0108) it never covers a name it
+// has not been given: the built-in groups below are fixed here; the users, the Ichor role groups beyond
+// the built-in ones and anything an external IdP names are listed by name elsewhere (the ClusterRole
+// ichor-ui-impersonate that the controller keeps equal to the IchorUsers, and the chart values
+// ichorUI.oidc.impersonate.*). Never serviceaccounts, userextras, or a system: name.
+// +kubebuilder:rbac:groups="",resources=groups,resourceNames="ichor:viewer";"ichor:operator";"ichor:admin",verbs=impersonate
 
 // Break-glass (docs/adr/0065) records a Warning Event on the resource it
 // acted on. create only, on Events: no get/list/update/delete. The break-glass

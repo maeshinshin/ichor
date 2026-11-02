@@ -161,19 +161,13 @@ func EffectiveValuesForMode(cluster *ichorv1alpha1.TalosCluster, mode cni.KubePr
 	}
 
 	// spec.security.wireGuard (ADR 0108) is typed and wins over a conflicting user value.
-	if w := wireGuardOf(cluster); w != nil && w.Enabled {
+	if s := cluster.Spec.Security; s != nil && s.WireGuard != nil && s.WireGuard.Enabled {
+		w := s.WireGuard
+
 		values.Set(eff, "encryption.enabled", true)
 		values.Set(eff, "encryption.type", "wireguard")
 		values.Set(eff, "encryption.nodeEncryption", w.NodeEncryption)
 	}
 
 	return eff, nil
-}
-
-func wireGuardOf(c *ichorv1alpha1.TalosCluster) *ichorv1alpha1.TalosClusterWireGuard {
-	if c.Spec.Security == nil {
-		return nil
-	}
-
-	return c.Spec.Security.WireGuard
 }

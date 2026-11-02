@@ -36,6 +36,8 @@ import (
 // Ports the firewall opens besides Talos's own (constants.*Port): Cilium's tunnel and health
 // check (Cilium 1.18 defaults: vxlan 8472, geneve 6081, agent health 4240) and its WireGuard
 // listen port (encryption-wireguard docs: UDP 51871).
+const fwp = "spec.security.firewall."
+
 const (
 	portCiliumVXLAN     = 8472
 	portCiliumGeneve    = 6081
@@ -80,7 +82,7 @@ func ControllerSourceAllowed(c *ichorv1alpha1.TalosCluster, src netip.Addr) erro
 		return nil
 	}
 
-	prefixes, err := parsePrefixes("spec.security.firewall.controllerCIDRs", c.Spec.Security.Firewall.ControllerCIDRs)
+	prefixes, err := parsePrefixes(fwp+"controllerCIDRs", c.Spec.Security.Firewall.ControllerCIDRs)
 	if err != nil {
 		return err
 	}
@@ -159,27 +161,9 @@ func firewallPlan(c *ichorv1alpha1.TalosCluster, machineType machine.Type) ([]fw
 	}
 
 	var (
-		controller, nodes, cps, talosAPI, apiServer []netip.Prefix
-		err                                         error
+		controller, nodes, cps, talosAPI, apiServer, podNet, svcNet []netip.Prefix
+		err                                                         error
 	)
-
-	for _, f := range []struct {
-		dst   *[]netip.Prefix
-		name  string
-		cidrs []string
-	}{
-		{&controller, "controllerCIDRs", fw.ControllerCIDRs}, {&nodes, "nodeCIDRs", fw.NodeCIDRs},
-		{&cps, "controlPlaneCIDRs", fw.ControlPlaneCIDRs}, {&talosAPI, "talosAPICIDRs", fw.TalosAPICIDRs},
-		{&apiServer, "apiServerCIDRs", fw.APIServerCIDRs},
-	} {
-		if *f.dst, err = parsePrefixes("render: spec.security.firewall."+f.name, f.cidrs); err != nil {
-			return nil, err
-		}
-	}
-
-	if len(cps) == 0 {
-		cps = nodes
-	}
 
 	pods, services := []string{constants.DefaultIPv4PodCIDR}, []string{constants.DefaultIPv4ServiceCIDR}
 
@@ -193,14 +177,23 @@ func firewallPlan(c *ichorv1alpha1.TalosCluster, machineType machine.Type) ([]fw
 		}
 	}
 
-	podNet, err := parsePrefixes("render: spec.network.podSubnets", pods)
-	if err != nil {
-		return nil, err
+	for _, f := range []struct {
+		dst   *[]netip.Prefix
+		name  string
+		cidrs []string
+	}{
+		{&controller, fwp + "controllerCIDRs", fw.ControllerCIDRs}, {&nodes, fwp + "nodeCIDRs", fw.NodeCIDRs},
+		{&cps, fwp + "controlPlaneCIDRs", fw.ControlPlaneCIDRs}, {&talosAPI, fwp + "talosAPICIDRs", fw.TalosAPICIDRs},
+		{&apiServer, fwp + "apiServerCIDRs", fw.APIServerCIDRs},
+		{&podNet, "spec.network.podSubnets", pods}, {&svcNet, "spec.network.serviceSubnets", services},
+	} {
+		if *f.dst, err = parsePrefixes("render: "+f.name, f.cidrs); err != nil {
+			return nil, err
+		}
 	}
 
-	svcNet, err := parsePrefixes("render: spec.network.serviceSubnets", services)
-	if err != nil {
-		return nil, err
+	if len(cps) == 0 {
+		cps = nodes
 	}
 
 	tunnel := uint16(portCiliumVXLAN)

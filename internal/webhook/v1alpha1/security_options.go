@@ -1,0 +1,207 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package v1alpha1
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"net/netip"
+	"slices"
+	"time"
+
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
+	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
+	"github.com/maeshinshin/ichor/pkg/render"
+)
+
+// Admission rules for the opt-in hardening options of ADR 0108.
+
+// SourceResolver returns the local address the controller would connect from to reach host. It
+// is a seam for tests; the default asks the kernel's routing table (a UDP "connect" sends nothing).
+type SourceResolver func(ctx context.Context, host string) (netip.Addr, error)
+
+// routeSource is the default SourceResolver.
+func routeSource(ctx context.Context, host string) (netip.Addr, error) {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	var d net.Dialer
+
+	conn, err := d.DialContext(ctx, "udp", net.JoinHostPort(host, "6443"))
+	if err != nil {
+		return netip.Addr{}, err
+	}
+	defer conn.Close()
+
+	ua, ok := conn.LocalAddr().(*net.UDPAddr)
+	if !ok {
+		return netip.Addr{}, fmt.Errorf("unexpected local address %v", conn.LocalAddr())
+	}
+
+	a, _ := netip.AddrFromSlice(ua.IP)
+
+	return a.Unmap(), nil
+}
+
+// validateSecurityCreate checks spec.security of a new cluster.
+func (v *TalosClusterCustomValidator) validateSecurityCreate(ctx context.Context, c *ichorv1alpha1.TalosCluster) error {
+	if err := render.ValidateSecurity(c); err != nil {
+		return err
+	}
+
+	return v.checkControllerReach(ctx, c)
+}
+
+// validateSecurityUpdate checks spec.security of an updated cluster. Only what the update
+// changes is checked beyond the static rules, so an object stored before a rule existed can
+// still be edited for something else.
+func (v *TalosClusterCustomValidator) validateSecurityUpdate(ctx context.Context, oldC, newC *ichorv1alpha1.TalosCluster) error {
+	if apiequality.Semantic.DeepEqual(oldC.Spec.Security, newC.Spec.Security) {
+		return nil
+	}
+
+	if err := render.ValidateSecurity(newC); err != nil {
+		return err
+	}
+
+	if !apiequality.Semantic.DeepEqual(firewallOf(oldC), firewallOf(newC)) || oldC.Spec.Endpoint != newC.Spec.Endpoint {
+		if err := v.checkControllerReach(ctx, newC); err != nil {
+			return err
+		}
+	}
+
+	return v.checkDiskEncryptionConfirmed(ctx, oldC, newC)
+}
+
+func firewallOf(c *ichorv1alpha1.TalosCluster) *ichorv1alpha1.TalosClusterFirewall {
+	if c.Spec.Security == nil {
+		return nil
+	}
+
+	return c.Spec.Security.Firewall
+}
+
+// checkControllerReach refuses a firewall that would cut the controller off: the address it
+// reaches the cluster endpoint from must be inside firewall.controllerCIDRs. If the address
+// cannot be found (an endpoint that does not resolve yet), the rule is not guessed at.
+func (v *TalosClusterCustomValidator) checkControllerReach(ctx context.Context, c *ichorv1alpha1.TalosCluster) error {
+	if !render.FirewallEnabled(c) {
+		return nil
+	}
+
+	resolve := v.ControllerSource
+	if resolve == nil {
+		resolve = routeSource
+	}
+
+	src, err := resolve(ctx, c.Spec.Endpoint.Address)
+	if err != nil {
+		talosclusterlog.Info("not checking the firewall against the controller's address", "cluster", c.Name, "error", err.Error())
+
+		return nil
+	}
+
+	if err := render.ControllerSourceAllowed(c, src); err != nil {
+		return fmt.Errorf("%w; if the controller runs in a pod, list the pod network and its node's address", err)
+	}
+
+	return nil
+}
+
+// checkDiskEncryptionConfirmed refuses enabling or changing disk encryption on a cluster that
+// already has approved machines unless the object carries the confirm annotation. Talos encrypts
+// a volume only when it creates it, so existing nodes need the wipe-and-rejoin path
+// (docs/guides/hardening.md), which Ichor does not automate.
+func (v *TalosClusterCustomValidator) checkDiskEncryptionConfirmed(ctx context.Context, oldC, newC *ichorv1alpha1.TalosCluster) error {
+	next := newC.Spec.Security
+	if next == nil || next.DiskEncryption == nil {
+		return nil
+	}
+
+	if prev := oldC.Spec.Security; prev != nil && apiequality.Semantic.DeepEqual(prev.DiskEncryption, next.DiskEncryption) {
+		return nil
+	}
+
+	machines, err := deleteguard.ApprovedMachines(ctx, v.APIReader, newC.Namespace, newC.Name, deleteguard.MachineFilter{IncludeDeleting: true})
+	if err != nil {
+		return err
+	}
+
+	if len(machines) == 0 || newC.GetAnnotations()[ichorv1alpha1.TalosClusterDiskEncryptionConfirmAnnotation] == "true" {
+		return nil
+	}
+
+	return fmt.Errorf("spec.security.diskEncryption changes for a cluster with %d approved machine(s): Talos encrypts a volume "+
+		"only when it creates it, so each node must be wiped and rejoined (see docs/guides/hardening.md; Ichor does not wipe for you). "+
+		"Set the annotation %s=\"true\" to confirm you will do that",
+		len(machines), ichorv1alpha1.TalosClusterDiskEncryptionConfirmAnnotation)
+}
+
+// Talos API roles that must not be handed to pods (docs: Talos role-based access control).
+const roleOSAdmin = "os:admin"
+
+// talosAPIAccessWarnings checks every Config document of a TalosConfigPatch for
+// machine.features.kubernetesTalosAPIAccess (ADR 0108). os:admin in allowedRoles hands a Talos
+// administrator to every pod in the allowed namespaces, so it is refused unless the user holds the
+// break-glass verb on the patch; any enabled access is warned about.
+func (v *TalosConfigPatchCustomValidator) talosAPIAccessWarnings(ctx context.Context, p *ichorv1alpha1.TalosConfigPatch) (admission.Warnings, error) {
+	var warnings admission.Warnings
+
+	for i, d := range p.Spec.Documents {
+		if d.Config == nil || d.Config.MachineConfig == nil || d.Config.MachineConfig.MachineFeatures == nil {
+			continue
+		}
+
+		a := d.Config.MachineConfig.MachineFeatures.KubernetesTalosAPIAccessConfig
+		if a == nil || a.AccessEnabled == nil || !*a.AccessEnabled {
+			continue
+		}
+
+		where := fmt.Sprintf("spec.documents[%d].config.machine.features.kubernetesTalosAPIAccess", i)
+
+		if slices.Contains(a.AccessAllowedRoles, roleOSAdmin) {
+			allowed := false
+
+			if v.BreakGlass != nil {
+				ok, err := v.BreakGlass(ctx, "talosconfigpatches", p.Name, p.Namespace)
+				if err != nil {
+					return nil, fmt.Errorf("%s: %s in allowedRoles is refused, and the %s right could not be checked: %w",
+						where, roleOSAdmin, BreakGlassVerb, err)
+				}
+
+				allowed = ok
+			}
+
+			if !allowed {
+				return nil, fmt.Errorf("%s: allowedRoles contains %s, which gives every pod in %v a Talos administrator "+
+					"(use os:reader, or hold the %q verb on this patch to override)",
+					where, roleOSAdmin, a.AccessAllowedKubernetesNamespaces, BreakGlassVerb)
+			}
+
+			breakglasslog.Info("os:admin Talos API access admitted under break-glass", "patch", p.Name)
+		}
+
+		warnings = append(warnings, fmt.Sprintf("%s grants Talos API access (%v) to pods in namespaces %v: a pod there can act on the nodes",
+			where, a.AccessAllowedRoles, a.AccessAllowedKubernetesNamespaces))
+	}
+
+	return warnings, nil
+}

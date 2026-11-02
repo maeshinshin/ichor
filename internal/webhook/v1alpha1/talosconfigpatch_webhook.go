@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,7 +40,9 @@ var talosconfigpatchlog = logf.Log.WithName("talosconfigpatch-resource")
 // credentials live.
 func SetupTalosConfigPatchWebhookWithManager(mgr ctrl.Manager, secretNamespace string) error {
 	return ctrl.NewWebhookManagedBy(mgr, &ichorv1alpha1.TalosConfigPatch{}).
-		WithValidator(&TalosConfigPatchCustomValidator{Client: mgr.GetClient(), SecretNamespace: secretNamespace}).
+		WithValidator(&TalosConfigPatchCustomValidator{
+			Client: mgr.GetClient(), SecretNamespace: secretNamespace, BreakGlass: breakGlassCheckFor(mgr.GetClient()),
+		}).
 		Complete()
 }
 
@@ -55,20 +58,39 @@ func SetupTalosConfigPatchWebhookWithManager(mgr ctrl.Manager, secretNamespace s
 type TalosConfigPatchCustomValidator struct {
 	Client          client.Client
 	SecretNamespace string
+	// BreakGlass lets a user holding the break-glass verb on the patch grant os:admin to pods
+	// through kubernetesTalosAPIAccess (ADR 0108). nil means no override.
+	BreakGlass BreakGlassCheck
 }
 
 // ValidateCreate implements admission.Validator.
 func (v *TalosConfigPatchCustomValidator) ValidateCreate(ctx context.Context, obj *ichorv1alpha1.TalosConfigPatch) (admission.Warnings, error) {
-	return nil, v.dryRender(ctx, obj)
+	return v.validate(ctx, obj)
+}
+
+// validate runs the Talos API access rule, then the dry render.
+func (v *TalosConfigPatchCustomValidator) validate(ctx context.Context, p *ichorv1alpha1.TalosConfigPatch) (admission.Warnings, error) {
+	warnings, err := v.talosAPIAccessWarnings(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+
+	return warnings, v.dryRender(ctx, p)
 }
 
 // ValidateUpdate implements admission.Validator.
-func (v *TalosConfigPatchCustomValidator) ValidateUpdate(ctx context.Context, _, newObj *ichorv1alpha1.TalosConfigPatch) (admission.Warnings, error) {
+func (v *TalosConfigPatchCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosConfigPatch) (admission.Warnings, error) {
 	if !newObj.DeletionTimestamp.IsZero() {
 		return nil, nil // a finalizer removal must not be refused
 	}
 
-	return nil, v.dryRender(ctx, newObj)
+	// The Talos API access rule is for what the update writes: a patch stored before it existed
+	// can still be edited for something else.
+	if apiequality.Semantic.DeepEqual(oldObj.Spec.Documents, newObj.Spec.Documents) {
+		return nil, v.dryRender(ctx, newObj)
+	}
+
+	return v.validate(ctx, newObj)
 }
 
 // ValidateDelete implements admission.Validator; deleting a patch is always allowed.

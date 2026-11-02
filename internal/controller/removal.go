@@ -412,7 +412,16 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	}
 
 	if drainErr != nil {
-		return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonDrainFailed, drainErr.Error())
+		// The message names the blocking pod (kubectl's drain does). An error, not nil: Reconcile
+		// requeues only on error, with growing backoff, so a drain that a pod blocked is retried
+		// once the pod is gone instead of waiting for something to touch the machine.
+		if err := r.removalCondition(ctx, m, metav1.ConditionFalse, reasonDrainFailed, drainErr.Error()); err != nil {
+			return err
+		}
+
+		r.event(m, corev1.EventTypeWarning, reasonDrainFailed, drainErr.Error())
+
+		return drainErr
 	}
 
 	if isControlPlane {

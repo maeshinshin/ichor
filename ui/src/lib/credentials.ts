@@ -29,3 +29,18 @@ export function canContinue(panel: CredentialsPanel, acknowledged: boolean): boo
 export function canDownload(panel: CredentialsPanel, permitted: boolean | undefined): boolean {
   return panel !== 'none' && permitted === true
 }
+
+// How long the certificates in the downloaded files are valid. A year is the long-standing
+// default and the server's maximum; a rotation hand-off must outlive the rotation, so no choice is shorter
+// than a day.
+export const credentialLifetimes = [
+  { key: 'year', seconds: 365 * 24 * 3600 },
+  { key: 'month', seconds: 30 * 24 * 3600 },
+  { key: 'day', seconds: 24 * 3600 },
+] as const
+
+export type CredentialLifetime = (typeof credentialLifetimes)[number]['key']
+
+export function lifetimeSeconds(key: string): number {
+  return credentialLifetimes.find((l) => l.key === key)?.seconds ?? credentialLifetimes[0].seconds
+}

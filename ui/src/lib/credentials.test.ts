@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { canContinue, canDownload, credentialsPanel } from './credentials.ts'
+import { canContinue, canDownload, credentialLifetimes, credentialsPanel, lifetimeSeconds } from './credentials.ts'
 
 const ca = true
 
@@ -31,4 +31,11 @@ test('the download is offered only to a caller who holds the verb', () => {
   assert.equal(canDownload('gate', false), false)
   assert.equal(canDownload('gate', undefined), false)
   assert.equal(canDownload('none', true), false)
+})
+
+test('the lifetime choices default to a year, the server maximum, and none is shorter than a day', () => {
+  assert.equal(lifetimeSeconds('year'), 365 * 24 * 3600)
+  assert.equal(lifetimeSeconds('nonsense'), 365 * 24 * 3600)
+  assert.equal(credentialLifetimes[0].key, 'year')
+  assert.ok(credentialLifetimes.every((l) => l.seconds >= 24 * 3600 && l.seconds <= 365 * 24 * 3600))
 })

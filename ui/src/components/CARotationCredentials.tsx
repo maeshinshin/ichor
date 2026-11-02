@@ -5,9 +5,12 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { Operation } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
-import { canContinue, canDownload, type CredentialsPanel } from '@/lib/credentials'
+import { canContinue, canDownload, credentialLifetimes, lifetimeSeconds, type CredentialsPanel } from '@/lib/credentials'
 import { download } from '@/lib/download'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { notifyDone, notifyFailed } from '@/lib/notify'
@@ -34,6 +37,8 @@ export function CARotationCredentials({
   const [confirmDownload, setConfirmDownload] = useState(false)
   const [confirmContinue, setConfirmContinue] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [lifetime, setLifetime] = useState<string>(credentialLifetimes[0].key)
+  const [readOnly, setReadOnly] = useState(false)
   const [acknowledged, setAcknowledged] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
   const abort = useRef<AbortController | null>(null)
@@ -46,7 +51,7 @@ export function CARotationCredentials({
     const controller = new AbortController()
     abort.current = controller
     try {
-      const file = await download({ kind: 'ca-credentials', operation: ref }, controller.signal)
+      const file = await download({ kind: 'ca-credentials', operation: ref, lifetimeSeconds: lifetimeSeconds(lifetime), readOnly }, controller.signal)
       notifyDone(t('creds.downloaded', { file }))
     } catch (err) {
       if (controller.signal.aborted) return
@@ -92,7 +97,28 @@ export function CARotationCredentials({
             title={t('creds.downloadTitle')}
             description={t('creds.downloadDescription')}
             confirm={{ label: t('creds.downloadConfirm'), onClick: runDownload, destructive: false }}
-          />
+          >
+            <Field>
+              <FieldLabel htmlFor="creds-lifetime">{t('creds.lifetime')}</FieldLabel>
+              <Select value={lifetime} onValueChange={setLifetime}>
+                <SelectTrigger id="creds-lifetime" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {credentialLifetimes.map((l) => (
+                    <SelectItem key={l.key} value={l.key}>
+                      {t(`creds.lifetime.${l.key}`)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FieldDescription>{t('creds.lifetimeHint')}</FieldDescription>
+            </Field>
+            <Field orientation="horizontal">
+              <Checkbox id="creds-readonly" checked={readOnly} onCheckedChange={(on: boolean | 'indeterminate') => setReadOnly(on === true)} />
+              <FieldLabel htmlFor="creds-readonly">{t('creds.readOnly')}</FieldLabel>
+            </Field>
+          </ConfirmDialog>
         )}
         {showContinue && (
           <ConfirmDialog

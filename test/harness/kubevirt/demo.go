@@ -123,7 +123,7 @@ func demoVMManifest(name, group, memory string, iso isoSource) string {
 	m = strings.Replace(m, "guest: "+defaultDemoMemory, "guest: "+memory, 1)
 
 	if c, _ := demoScale(); c > 0 {
-		m = strings.Replace(m, "    spec:\n      domain:\n", "    spec:\n      affinity:\n        nodeAffinity:\n          requiredDuringSchedulingIgnoredDuringExecution:\n            nodeSelectorTerms:\n              - matchExpressions:\n                  - {key: kubernetes.io/hostname, operator: NotIn, values: [talos02]}\n      domain:\n", 1)
+		m = strings.Replace(m, "    spec:\n      domain:\n", "    spec:\n      affinity:\n        nodeAffinity:\n          requiredDuringSchedulingIgnoredDuringExecution:\n            nodeSelectorTerms:\n              - matchExpressions:\n                  - {key: kubernetes.io/hostname, operator: NotIn, values: [talos02]}\n      domain:\n", 1) //nolint:lll
 	}
 
 	return m
@@ -216,7 +216,7 @@ func upDemo() error {
 
 	if c, w := demoScale(); c > 0 && !demoExtra() {
 		for _, n := range append(numbered(cp, c), numbered(worker, w)...) {
-			fmt.Println(strings.ToUpper(strings.ReplaceAll(strings.TrimPrefix(n, cp[:len(cp)-len("-cp")]+"-"), "-", "_")) + "_IP=" + ips[n])
+			fmt.Println(strings.ToUpper(strings.ReplaceAll(strings.TrimPrefix(n, cp[:len(cp)-len("-cp")]+"-"), "-", "_")) + "_IP=" + ips[n]) //nolint:lll
 		}
 
 		return nil

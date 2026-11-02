@@ -43,7 +43,7 @@ var _ = Describe("a removal whose drain is blocked", func() {
 		cp2 := newTestControlPlane(cluster.Name, "d2")
 		cp3 := newTestControlPlane(cluster.Name, "d3")
 
-		node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: drainRetryNode}}
+		node := &corev1.Node{Name: drainRetryNode}
 		Expect(k8sClient.Create(ctx, node)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, node) })
 
@@ -89,7 +89,7 @@ var _ = Describe("a removal whose drain is blocked", func() {
 
 var _ = Describe("markNodeReset", func() {
 	It("annotates the Node of a reset machine once, and ignores a missing Node", func() {
-		node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "mark-reset-node"}}
+		node := &corev1.Node{Name: "mark-reset-node"}
 		Expect(k8sClient.Create(ctx, node)).To(Succeed())
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, node) })
 

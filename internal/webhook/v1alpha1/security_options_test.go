@@ -284,7 +284,7 @@ func TestTalosAPIAccessInPatch(t *testing.T) {
 	t.Run("a patch that reaches workers is refused", func(t *testing.T) {
 		for name, mut := range map[string]func(*ichorv1alpha1.TalosConfigPatch){
 			"cluster layer": func(p *ichorv1alpha1.TalosConfigPatch) { p.Spec.Layer, p.Spec.Target = "cluster", nil },
-			"worker role":   func(p *ichorv1alpha1.TalosConfigPatch) { p.Spec.Target.Role = "worker" },
+			"worker role":   func(p *ichorv1alpha1.TalosConfigPatch) { p.Spec.Target.Role = roleWorker },
 		} {
 			p := patch("os:reader")
 			mut(p)

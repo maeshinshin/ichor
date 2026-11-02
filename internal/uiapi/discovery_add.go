@@ -25,8 +25,8 @@ import (
 	"strings"
 
 	"connectrpc.com/connect"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -38,42 +38,28 @@ import (
 func (s *Server) AddDiscoveryAddress(
 	ctx context.Context, req *connect.Request[pb.AddDiscoveryAddressRequest],
 ) (*connect.Response[pb.AddDiscoveryAddressResponse], error) {
-	ref := req.Msg.GetCluster()
-
-	var c ichorv1alpha1.TalosCluster
-
-	key := namespacedName(ref)
-	if err := s.Get(ctx, key, &c); err != nil {
-		return nil, mapGetError("cluster "+key.String(), err)
-	}
-
 	addr, err := ipv4Address(req.Msg.GetAddress())
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	if c.Spec.Discovery != nil && slices.Contains(c.Spec.Discovery.Addresses, addr) {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("%s is already in the discovery list", addr))
+	ref := req.Msg.GetCluster()
+
+	out, audit, err := s.editDiscovery(ctx, ref, "add-discovery-address", req.Msg.GetReason(),
+		"adding a discovery address to", func(d *ichorv1alpha1.TalosClusterDiscovery) error {
+			if slices.Contains(d.Addresses, addr) {
+				return fmt.Errorf("%s is already in the discovery list", addr)
+			}
+
+			d.Addresses = append(d.Addresses, addr)
+
+			return nil
+		})
+	if err != nil {
+		return nil, err
 	}
 
-	now := s.now()
-
-	if c.Spec.Discovery == nil {
-		c.Spec.Discovery = &ichorv1alpha1.TalosClusterDiscovery{}
-	}
-
-	c.Spec.Discovery.Addresses = append(c.Spec.Discovery.Addresses, addr)
-
-	if err := s.Update(ctx, &c, strictFieldValidation); err != nil {
-		return nil, mapOperationWriteError("adding a discovery address to", key, err)
-	}
-
-	audit := &pb.AuditRecord{
-		Actor: s.actorName(ctx), At: timestamppb.New(now), Action: "add-discovery-address",
-		Target: objectRef(c.Namespace, c.Name), Reason: req.Msg.GetReason(),
-	}
-
-	out := clusterToPB(&c)
+	c := ichorv1alpha1.TalosCluster{ObjectMeta: metav1.ObjectMeta{Namespace: ref.GetNamespace(), Name: ref.GetName()}}
 	out.AlreadyConfiguredAddresses = s.alreadyConfiguredAddresses(ctx, &c)
 
 	return connect.NewResponse(&pb.AddDiscoveryAddressResponse{Cluster: out, Audit: audit}), nil

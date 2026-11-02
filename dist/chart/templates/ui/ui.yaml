@@ -76,6 +76,11 @@ spec:
         - --tls-cert-file=/etc/ichor/tls/tls.crt
         - --tls-key-file=/etc/ichor/tls/tls.key
         {{- end }}
+        {{- if and .Values.ichorUI.allowUnauthenticated (not .Values.ichorUI.users.enabled) (not .Values.ichorUI.oidc.enabled) }}
+        # No sign-in is configured and the operator said so (docs/adr/0108): every call is served with
+        # ichor-ui's ServiceAccount. Without this flag ichor-ui serves read-only calls in that case.
+        - --allow-unauthenticated=true
+        {{- end }}
         {{- if .Values.ichorUI.users.enabled }}
         # Ichor's own users and issuer (docs/adr/0094).
         - --users-enabled=true
@@ -85,6 +90,9 @@ spec:
         - --signing-keys-dir=/etc/ichor/oidc-signing
         - --token-ttl={{ .Values.ichorUI.users.tokenTTL }}
         - --refresh-lifetime={{ .Values.ichorUI.users.refreshLifetime }}
+        {{- with .Values.ichorUI.users.trustedProxyCIDRs }}
+        - --trusted-proxy-cidrs={{ join "," . }}
+        {{- end }}
         {{- with .Values.ichorUI.users.kubeAPIServerURL }}
         - --kube-api-server-url={{ . }}
         {{- end }}

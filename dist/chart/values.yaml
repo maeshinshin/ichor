@@ -199,9 +199,16 @@ ichorUI:
   ##
   port: 8443
 
-  ## OIDC login with Kubernetes impersonation (docs/adr/0058). Off by default: ichor-ui then
-  ## writes with its own ServiceAccount and anyone who can reach it can write, as before (it
-  ## logs a warning and the UI shows a banner). On: every request needs an ID token from this
+  ## With neither ichorUI.oidc nor ichorUI.users enabled there is no sign-in, and ichor-ui serves
+  ## read-only calls only (docs/adr/0108). Set this to true to restore the old open mode: every
+  ## call is served with ichor-ui's ServiceAccount permissions to anyone who can reach it. It does
+  ## nothing once oidc or users is on. An upgrade from before 0108 with no sign-in needs it to keep
+  ## writing.
+  ##
+  allowUnauthenticated: false
+
+  ## OIDC login with Kubernetes impersonation (docs/adr/0058). Off by default: see
+  ## allowUnauthenticated above for what ichor-ui does then. On: every request needs an ID token from this
   ## issuer, and ichor-ui calls the Kubernetes API as that user, so RBAC and audit apply per
   ## user. The client is public (authorization code + PKCE in the browser); register the UI's
   ## origin as a redirect URI. There is no client secret.
@@ -244,6 +251,10 @@ ichorUI:
     tokenTTL: 5m
     ## Absolute lifetime of a refresh token (1h to 30d).
     refreshLifetime: 12h
+    ## CIDRs of proxies in front of ichor-ui whose X-Forwarded-For the sign-in rate limits trust
+    ## (the client is the rightmost address outside them). Empty: the TCP peer is the client, so
+    ## behind a proxy or SNAT every user shares one limit (docs/adr/0108).
+    trustedProxyCIDRs: []
     ## The Kubernetes API URL users put in their kubeconfig (GetMyKubeconfig), e.g. a load
     ## balancer in front of the control planes. Empty uses the cluster's spec.endpoint.
     kubeAPIServerURL: ""

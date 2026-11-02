@@ -65,6 +65,8 @@ const (
 	argRefreshLifetime = "--oidc-refresh-lifetime="
 	argAddr            = "--addr="
 	argUIExternalURL   = "--ui-external-url="
+	argAllowAnonymous  = "--allow-unauthenticated=true"
+	envOIDCIssuer      = "ICHOR_OIDC_ISSUER"
 
 	// UIDefaultAddr is the HTTPS address a fresh install serves (ADR 0105).
 	UIDefaultAddr = ":8443"
@@ -93,6 +95,15 @@ type UISettings struct {
 
 	// RefreshLifetime is the controller's --oidc-refresh-lifetime; empty means the default.
 	RefreshLifetime string
+
+	// AllowUnauthenticated sets ichor-ui's --allow-unauthenticated (docs/adr/0108): without a
+	// sign-in ichor-ui serves read-only calls only, so an install that has no sign-in and wants
+	// to keep writing says so. It is ignored, and the flag removed, when users are on.
+	AllowUnauthenticated bool
+
+	// InferredAnonymous marks a live install that ran with no sign-in and no flag, so
+	// AllowUnauthenticated was set to keep its behaviour; it only drives the upgrade notice.
+	InferredAnonymous bool
 }
 
 // UsersOn reports whether users are enabled.
@@ -132,6 +143,13 @@ func ReadUISettings(ui, controller *appsv1.Deployment) UISettings {
 			s.ExternalURL = argValue(c.Args, argExternalURL)
 			s.KubeAPIServerURL = argValue(c.Args, argKubeAPIURL)
 			s.KubeAPITLSServerName = argValue(c.Args, argKubeAPIName)
+
+			// ADR 0108: an install without any sign-in used to be an open write proxy. It keeps
+			// that behaviour on upgrade, but now explicitly, with a notice.
+			s.AllowUnauthenticated = slices.Contains(c.Args, argAllowAnonymous)
+			if !s.AllowUnauthenticated && !s.UsersOn() && !hasOIDC(c) {
+				s.AllowUnauthenticated, s.InferredAnonymous = true, true
+			}
 
 			// ADR 0105 migration table. An address other than the new default is an install that
 			// predates it: with the operator's pair it is pinned, without it the install served
@@ -178,7 +196,7 @@ func CustomizeUI(dep *appsv1.Deployment, s UISettings) error {
 
 	// Drop any earlier setting of the same flags so a re-run replaces them.
 	c.Args = slices.DeleteFunc(c.Args, func(a string) bool {
-		return a == "--users-enabled=true" || strings.HasPrefix(a, argExternalURL) || strings.HasPrefix(a, "--internal-jwks-uri=") ||
+		return a == "--users-enabled=true" || a == argAllowAnonymous || strings.HasPrefix(a, argExternalURL) || strings.HasPrefix(a, "--internal-jwks-uri=") ||
 			strings.HasPrefix(a, argKubeAPIURL) || strings.HasPrefix(a, argKubeAPIName) || strings.HasPrefix(a, "--http-addr=") ||
 			(s.ListenAddr != "" && strings.HasPrefix(a, argAddr))
 	})
@@ -198,6 +216,10 @@ func CustomizeUI(dep *appsv1.Deployment, s UISettings) error {
 		usersVolumes(dep, c)
 	}
 
+	if s.AllowUnauthenticated && !s.UsersOn() && !hasOIDC(c) {
+		c.Args = append(c.Args, argAllowAnonymous)
+	}
+
 	if s.KubeAPIServerURL != "" {
 		c.Args = append(c.Args, argKubeAPIURL+s.KubeAPIServerURL)
 	}
@@ -211,6 +233,15 @@ func CustomizeUI(dep *appsv1.Deployment, s UISettings) error {
 	}
 
 	return tlsOnUI(dep, c, s.TLSSecretName)
+}
+
+// hasOIDC reports whether the container is set up for an external OIDC provider.
+func hasOIDC(c *corev1.Container) bool {
+	if argValue(c.Args, "--oidc-issuer=") != "" {
+		return true
+	}
+
+	return slices.ContainsFunc(c.Env, func(e corev1.EnvVar) bool { return e.Name == envOIDCIssuer && e.Value != "" })
 }
 
 func usersVolumes(dep *appsv1.Deployment, c *corev1.Container) {
@@ -489,6 +520,12 @@ func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructure
 	s := ReadUISettings(uiDep, ctrlDep)
 	if s.WasPlaintext != "" {
 		log.Printf("NOTICE: ichor-ui no longer serves plain HTTP (it did on %s); point your edge at https://<ichor-ui>:8443 (trust ichor-ui-ca) (docs/adr/0105)", s.WasPlaintext)
+	}
+
+	if s.InferredAnonymous {
+		log.Print("NOTICE: this ichor-ui has no sign-in (no Ichor users, no OIDC). Since ADR 0108 it serves read-only calls " +
+			"unless started with --allow-unauthenticated; that flag is now set for you, so it keeps working as before. " +
+			"Turn on Ichor users or OIDC and drop the flag (docs/guides/users-and-login.md)")
 	}
 
 	out, err := CustomizeObjects(objs, s)

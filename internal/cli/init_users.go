@@ -282,6 +282,10 @@ func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.W
 // generated password, once, to stderr.
 func initUsersEpilogue(errw io.Writer, opts initOptions, password string) {
 	if opts.UIURL == "" {
+		_, _ = fmt.Fprintln(errw, "init: WARNING: ichor-ui has no sign-in and runs with --allow-unauthenticated: anyone who can reach it "+
+			"can make changes with its ServiceAccount's permissions. Turn on Ichor users with --ui-url or OIDC "+
+			"(docs/guides/users-and-login.md), then drop the flag")
+
 		return
 	}
 

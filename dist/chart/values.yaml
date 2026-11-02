@@ -380,9 +380,13 @@ ichorUI:
   ##
   nodeSelector: {}
 
-  ## Pod's tolerations
+  ## Pod's tolerations. The default lets it run on control planes: a cluster whose control planes
+  ## are tainted has no worker until one is approved, and ichor-ui is needed before that.
   ##
-  tolerations: []
+  tolerations:
+    - key: node-role.kubernetes.io/control-plane
+      operator: Exists
+      effect: NoSchedule
 
   ## Topology spread constraints: placement across nodes by default (design 2.4), same
   ## reasoning as manager.topologySpreadConstraints above (topologySpreadConstraints over

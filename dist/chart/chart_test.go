@@ -965,7 +965,7 @@ func podTolerations(d map[string]any) []any {
 
 // The controller must be able to run on a control plane: draining the only worker evicts it, and
 // with the control plane tainted NoSchedule it could not come back to finish the upgrade it drives.
-// The chart and the kustomize base (the installer manifest) carry the same toleration; ichor-ui does not.
+// The chart and the kustomize base (the installer manifest) carry the same toleration, ichor-ui included.
 const keyOperator = "operator"
 
 func TestManagerToleratesTheControlPlaneTaint(t *testing.T) {
@@ -992,8 +992,9 @@ func TestManagerToleratesTheControlPlaneTaint(t *testing.T) {
 		t.Errorf("config/manager tolerations = %v, want %v", got, want)
 	}
 
-	if ui := podTolerations(findNameSuffix(renderChart(t, "ichor"), kindDeployment, "ichor-ui")); len(ui) != 0 {
-		t.Errorf("ichor-ui tolerations = %v, want none", ui)
+	// ichor-ui too: a tainted-preset init waits for it before any worker is approved.
+	if ui := podTolerations(findNameSuffix(renderChart(t, "ichor"), kindDeployment, "ichor-ui")); !reflect.DeepEqual(ui, want) {
+		t.Errorf("ichor-ui tolerations = %v, want %v", ui, want)
 	}
 }
 

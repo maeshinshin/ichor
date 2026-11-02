@@ -236,9 +236,9 @@ func TestInstallerEscalationNamesEveryRoleOfTheInstallManifest(t *testing.T) {
 		}
 
 		clusterLevel := escalationNames(t, label, find(docs, kindClusterRole, cr))
-		if !sameSet(clusterLevel["clusterroles"], setOf(clusterRoles)) {
+		if !sameSet(clusterLevel[resClusterRoles], setOf(clusterRoles)) {
 			t.Errorf("%s: installer ClusterRole bind/escalate on clusterroles names %v, install.yaml has %v",
-				label, clusterLevel["clusterroles"], clusterRoles)
+				label, clusterLevel[resClusterRoles], clusterRoles)
 		}
 
 		if !sameSet(clusterLevel["roles"], setOf(allRoles)) {
@@ -258,7 +258,7 @@ func TestInstallerEscalationNamesEveryRoleOfTheInstallManifest(t *testing.T) {
 // the roles the pinned Cilium chart creates, in config/rbac and in the chart. Every role the chart
 // renders under Ichor's values must be named, so a chart bump that adds one fails here, not in a cluster.
 func TestCNIEscalationNamesOnlyCiliumsRoles(t *testing.T) {
-	rendered := map[string]map[string]bool{"clusterroles": {}, "roles": {}}
+	rendered := map[string]map[string]bool{resClusterRoles: {}, "roles": {}}
 
 	for _, mode := range []cni.KubeProxyMode{cni.KubeProxyEnabled, cni.KubeProxyReplaced} {
 		for _, tunnel := range []string{"", "geneve", "vxlan"} {
@@ -278,7 +278,7 @@ func TestCNIEscalationNamesOnlyCiliumsRoles(t *testing.T) {
 			for _, d := range decodeYAMLDocs(t, manifest, "cilium bootstrap") {
 				switch kindOf(d) {
 				case kindClusterRole:
-					rendered["clusterroles"][nameOf(d)] = true
+					rendered[resClusterRoles][nameOf(d)] = true
 				case kindRole:
 					rendered["roles"][nameOf(d)] = true
 				}

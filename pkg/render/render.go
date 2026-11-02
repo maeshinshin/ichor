@@ -283,9 +283,7 @@ func BuildConfig(
 
 	// Talos allows kubernetesTalosAPIAccess on control planes only: a cluster-wide patch that
 	// enables it applies there and is left out of workers.
-	if m.Spec.Role != "controlplane" {
-		ordered = dropTalosAPIAccess(ordered)
-	}
+	ordered = dropTalosAPIAccess(ordered, m)
 
 	cfg, err = applyPatches(cfg, contract, ordered)
 	if err != nil {
@@ -522,9 +520,15 @@ func dropHandedOverInlineManifest(
 		})
 }
 
-// dropTalosAPIAccess returns ordered without machine.features.kubernetesTalosAPIAccess, deep-copying
-// only the patches that set it.
-func dropTalosAPIAccess(ordered []*ichorv1alpha1.TalosConfigPatch) []*ichorv1alpha1.TalosConfigPatch {
+// dropTalosAPIAccess, for a machine that is not a control plane, returns ordered without
+// machine.features.kubernetesTalosAPIAccess, deep-copying only the patches that set it.
+func dropTalosAPIAccess(
+	ordered []*ichorv1alpha1.TalosConfigPatch, m *ichorv1alpha1.TalosMachine,
+) []*ichorv1alpha1.TalosConfigPatch {
+	if m.Spec.Role == "controlplane" {
+		return ordered
+	}
+
 	out := make([]*ichorv1alpha1.TalosConfigPatch, len(ordered))
 
 	for i, p := range ordered {

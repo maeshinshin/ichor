@@ -65,6 +65,57 @@ Not done here: shared login counters across replicas (documented per replica), a
 
 ## Credentials and the ichor-ui identity
 
+Findings: S1 (ichor-ui holds every CA private key through `get secrets`), F1/F7 (ichor-ui may impersonate any user and group), F19, S2, S3, S4, S6.
+
+### 1. ichor-ui holds no CA key (S1)
+
+Decided: the controller is the only reader of the secrets bundle. ichor-ui asks it for a credential by creating a `TalosCredentialRequest` (new kind, namespaced next to the cluster, short-lived), and the controller answers in the request's `status`.
+
+- **Channel.** A CR, not a controller-local endpoint: it keeps "the UI changes the world by writing CRs", it is authorised and audited by the Kubernetes API server (the audit log shows who created the request, as the impersonated user, and which purpose), and it needs no new listener, certificate or NetworkPolicy. An endpoint would also have had to trust identity claims made by the caller, which is what the API server already checks.
+- **No private key crosses the channel.** The requester generates the key pair in memory (Ed25519) and sends a PKCS#10 CSR in `spec.csr`. The controller checks the CSR signature (proof of possession), discards its subject and SANs, builds the subject from the purpose, signs with the CA, and writes the certificate and the CA(s) to trust into `status`. A reader of the request sees only public data. Nothing is written to a Secret, so ichor-ui needs no `get secrets` for credentials. The controller deletes a request 2 minutes after it was created.
+- **Purposes** (`spec.purpose`) and the Kubernetes check the validating webhook makes with a SubjectAccessReview as the requester (new file `internal/webhook/v1alpha1/credentialrequest_webhook.go`; the other webhook files are untouched):
+
+  | purpose | certificate | default TTL, cap | SAR as the requester |
+  | --- | --- | --- | --- |
+  | `public` | none; returns the cluster ID and the CA certificates | n/a | `issue` on `talosclusters/public` (ichor-ui's ServiceAccount) |
+  | `node-reader` | Talos `os:reader`, signed by the current OS CA | 10 min, 15 min | `issue` on `talosclusters/node-reader` (ichor-ui's ServiceAccount) |
+  | `support-bundle` | Talos `os:reader` | 10 min, 15 min | `download` on `talosmachines/support-bundle` (the signed-in user) |
+  | `etcd-snapshot` | Talos `os:etcd:backup` | 10 min, 15 min | `download` on `talosmachines/etcd-snapshot` |
+  | `packet-capture` | Talos `os:operator` | 10 min, 15 min | `download` on `talosmachines/packet-capture` |
+  | `credentials-talos` | Talos `os:admin` or `os:reader`, signed by the rotation's new OS CA during a rotation, trust = old + new | 365 d, 365 d | `download` on `talosclusters/credentials` |
+  | `credentials-kubernetes` | `admin` in `system:masters`, same rotation rule | 365 d, 365 d | `download` on `talosclusters/credentials` |
+
+  The verbs on the download rows are the ones ADR 0084 and 0093 already use, so installed bindings keep working. The two `issue` rows are new and granted only to ichor-ui's ServiceAccount; they are for the UI's own reads (node pages, logs, effective configuration), which today already run as the ServiceAccount after the caller proved `get` on the machine. A request that fails the SAR is denied at admission and never reaches the controller; the controller re-checks purpose, TTL cap and CSR itself.
+- **Who creates it.** The three download purposes and `credentials-*` are created as the signed-in user (impersonation), so the SAR and the audit log name that user. That needs plain `create` on `taloscredentialrequests`: the shipped roles `ichor-viewer`, `ichor-operator` and `ichor-admin` carry it and the webhook is the gate. `public` and `node-reader` are created as ichor-ui's ServiceAccount. ichor-ui caches the `node-reader` credential (one per cluster, in memory, renewed after half its TTL) and the `public` data (1 minute).
+- **ichor-ui's Role** (namespace of the controller) loses `get` and `create` on all Secrets. What remains is by `resourceNames`: `ichor-user-credentials` (get, patch, update; Ichor users) and the issuer's own Secrets that it reads by name. The one `create` that stays is the MachineReclaim credential Secret, narrowed by the existing ValidatingAdmissionPolicy. The bundle Secret, S3 and registry Secrets are no longer readable by it. Where ichor-ui needs a rendering (effective configuration, CNI facts) it renders with a placeholder bundle whose keys are random and whose public parts (cluster ID, CA certificates) come from `public`; every secret field is masked in the output anyway.
+- **Residual risk, stated.** A compromised ichor-ui can no longer exfiltrate a CA key, mint certificates offline, outlive a CA rotation, or forge Talos identities beyond a 15 minute window. It can still ask the controller for what the identity it acts as may ask for. With users off that is the ServiceAccount (no download verbs by default); with users on, it can only impersonate Ichor users (section 2) and each purpose is checked against that user's RBAC.
+- CRD change: a new kind only; no existing field is touched.
+
+### 2. Impersonation (F1, F7)
+
+Decided: ichor-ui's ServiceAccount may impersonate only named groups and only named users, written by the chart or the controller; there is no "any name" mode unless the operator says so in a value.
+
+- **Groups.** `resourceNames` is always emitted: `ichor:viewer`, `ichor:operator`, `ichor:admin` plus `ichorUI.oidc.impersonate.groups`. With OIDC on, the chart fails to render when `impersonate.groups` is empty (before, empty meant any group). A `system:` group can therefore never be impersonated, structurally.
+- **Users.** Kubernetes cannot match a name by prefix, and a user such as `system:kube-controller-manager` is as dangerous as a group. With Ichor users (ADR 0094) the controller keeps the list: it maintains the ClusterRole `ichor-ui-impersonate-users` with one `resourceNames` entry `ichor:<name>` per IchorUser. It holds `escalate` and `update` on that one ClusterRole by `resourceNames`, nothing more, so it can grant an impersonation right it does not hold. The binding is installed by the chart. With OIDC on, `ichorUI.oidc.impersonate.users` must be listed, or the operator sets `ichorUI.oidc.impersonate.anyUser: true` to accept the residual risk knowingly; an empty list without the flag fails rendering. A new Ichor user can sign in a few seconds after creation (the controller's reconcile).
+- **Rejected.** A Kubernetes structured authorisation config with CEL: its CEL only filters which requests go to an authorisation webhook, it cannot deny by itself, and it needs a webhook service in the managed cluster. A ValidatingAdmissionPolicy cannot see the impersonator. Forwarding a minted token instead of impersonating would move the problem to the signing key ichor-ui already holds for the issuer.
+- **Residual risk, stated.** With OIDC and `anyUser: true`, a compromised ichor-ui can act as any user by name (not as a `system:` group), including users bound to powerful roles. Without the flag (the default after this change) it can act only as the listed users, which are the users Ichor is already trusted to represent.
+
+### 3. Lifetimes (S4)
+
+Decided: in-process dial certificates live 10 minutes (ichor-ui; minted per call by the controller on request, section 1). The controller's own dial certificate and the CLI's stay as they are: those processes hold the CA key anyway, so a shorter certificate gains nothing. Files handed to operators keep the default of one year (the user's decision: downloads are Ichor-side and a shorter default would break existing workflows) and gain a choice: `--ttl` on the CLI commands that write a kubeconfig or talosconfig (default 8760h, hard cap 8760h), a lifetime choice on the UI credentials download, and an `os:reader` talosconfig instead of `os:admin`.
+
+### 4. etcd backup key (S2)
+
+Decided: backups are sealed with a key derived (HKDF-SHA256, info `ichor.maesh.dev/etcd-backup/v2`, salt cluster ID) from the secretbox encryption secret of the bundle, which only control-plane machine configs carry and which Ichor never rotates (so a CA rotation keeps old backups readable, ADR 0063). The v1 key (from `Cluster.Secret`, present in every worker config) is derived too and tried second when reading, so existing backups restore; every new backup is v2. Rotating the secretbox key is therefore not part of the CA rotation (section 6). Built: `etcdbackup.DeriveKey`, `Key{Current, Legacy}`, `Decrypt` tries both.
+
+### 5. Maintenance pin (S3)
+
+Decided: the first apply goes through an unauthenticated TLS connection, so Ichor pins what it can. The SPKI fingerprint of the maintenance certificate seen when the machine is discovered (re-recorded while the machine is not approved) is stored in the new `status.maintenanceFingerprint`, and the controller refuses to send the initial configuration, which carries the CA keys, to a node that presents another one. A machine that never went through discovery (added by IP, reclaimed) is pinned at its first provisioning probe. Within one `ichor init` run the identity read and the apply share one pin. Talos issues a new maintenance certificate when a node reboots or changes address; an operator who has checked the new fingerprint (named in the machine's Ready condition) accepts it with the annotation `ichor.maesh.dev/trust-maintenance-fingerprint`. This narrows the window to the time between discovery and apply; it cannot authenticate the first sight, so the provisioning network still must be separate (design, Trust). Built: `internal/controller/maintenancepin.go`.
+
+### 6. CA rotation coverage (S6)
+
+Decided: documented as a follow-up. Ichor's rotation covers the Talos API CA and the Kubernetes API CA. The etcd CA, the aggregator CA, the service-account signing key and the secretbox key are not rotated. Kubernetes needs a dual-key period for the last two (the old key must keep verifying or decrypting until every token and Secret is re-written), which is a multi-stage operation with a re-encryption pass, not an extension of the current two-CA stages; the etcd CA rotation needs every member restarted with both CAs trusted in a defined order; and the backup key (section 4) derives from the secretbox secret, which would have to be versioned first. The limit is stated in the docs so that "rotate after compromise" is not read as complete.
+
 ## Secrets handling
 
 - **Restore marker (S7).** The marker in the backup bucket is stored as `{"marker": ..., "mac": ...}`. The MAC is

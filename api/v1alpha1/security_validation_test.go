@@ -24,6 +24,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+const (
+	secAnywhere = "0.0.0.0/0"
+	secNotACIDR = "nope"
+	secTCP      = "tcp"
+	secPrivate  = "10.0.0.0/8"
+)
+
 // Spec.security is opt-in; the CRD rejects the shapes that would lock a cluster out.
 var _ = Describe("TalosCluster spec.security", func() {
 	create := func(s *TalosClusterSecurity) error {
@@ -59,20 +66,20 @@ var _ = Describe("TalosCluster spec.security", func() {
 		Entry("disabled needs no sources", &TalosClusterSecurity{Firewall: &TalosClusterFirewall{}}, true),
 		Entry("enabled without controllerCIDRs is rejected", fw(func(f *TalosClusterFirewall) { f.ControllerCIDRs = nil }), false),
 		Entry("enabled without nodeCIDRs is rejected", fw(func(f *TalosClusterFirewall) { f.NodeCIDRs = nil }), false),
-		Entry("a /0 controller source is rejected", fw(func(f *TalosClusterFirewall) { f.ControllerCIDRs = []string{"0.0.0.0/0"} }), false),
-		Entry("a bad CIDR is rejected", fw(func(f *TalosClusterFirewall) { f.NodeCIDRs = []string{"nope"} }), false),
-		Entry("an extra apiserver source of /0 is accepted", fw(func(f *TalosClusterFirewall) { f.APIServerCIDRs = []string{"0.0.0.0/0"} }), true),
+		Entry("a /0 controller source is rejected", fw(func(f *TalosClusterFirewall) { f.ControllerCIDRs = []string{secAnywhere} }), false),
+		Entry("a bad CIDR is rejected", fw(func(f *TalosClusterFirewall) { f.NodeCIDRs = []string{secNotACIDR} }), false),
+		Entry("an extra apiserver source of /0 is accepted", fw(func(f *TalosClusterFirewall) { f.APIServerCIDRs = []string{secAnywhere} }), true),
 		Entry("an allow rule is accepted", fw(func(f *TalosClusterFirewall) {
-			f.Allow = []TalosClusterFirewallRule{{Name: "ingress", Protocol: "tcp", Ports: []string{"80", "8000-8100"}, CIDRs: []string{"0.0.0.0/0"}}}
+			f.Allow = []TalosClusterFirewallRule{{Name: "ingress", Protocol: secTCP, Ports: []string{"80", "8000-8100"}, CIDRs: []string{secAnywhere}}}
 		}), true),
 		Entry("an allow rule with a bad port is rejected", fw(func(f *TalosClusterFirewall) {
-			f.Allow = []TalosClusterFirewallRule{{Name: "x", Protocol: "tcp", Ports: []string{"http"}, CIDRs: []string{"10.0.0.0/8"}}}
+			f.Allow = []TalosClusterFirewallRule{{Name: "x", Protocol: secTCP, Ports: []string{"http"}, CIDRs: []string{secPrivate}}}
 		}), false),
 		Entry("an allow rule with protocol icmp is rejected", fw(func(f *TalosClusterFirewall) {
-			f.Allow = []TalosClusterFirewallRule{{Name: "x", Protocol: "icmp", Ports: []string{"1"}, CIDRs: []string{"10.0.0.0/8"}}}
+			f.Allow = []TalosClusterFirewallRule{{Name: "x", Protocol: "icmp", Ports: []string{"1"}, CIDRs: []string{secPrivate}}}
 		}), false),
 		Entry("a duplicate allow name is rejected", fw(func(f *TalosClusterFirewall) {
-			r := TalosClusterFirewallRule{Name: "x", Protocol: "tcp", Ports: []string{"1"}, CIDRs: []string{"10.0.0.0/8"}}
+			r := TalosClusterFirewallRule{Name: "x", Protocol: secTCP, Ports: []string{"1"}, CIDRs: []string{secPrivate}}
 			f.Allow = []TalosClusterFirewallRule{r, r}
 		}), false),
 	)
@@ -90,11 +97,11 @@ var _ = Describe("TalosCluster spec.security", func() {
 		Entry("audit rbacChanges", &TalosClusterSecurity{Audit: &TalosClusterAudit{Policy: "rbacChanges"}}, true),
 		Entry("audit without a policy is rejected", &TalosClusterSecurity{Audit: &TalosClusterAudit{}}, false),
 		Entry("audit with an unknown preset is rejected", &TalosClusterSecurity{Audit: &TalosClusterAudit{Policy: "all"}}, false),
-		Entry("tpm", &TalosClusterSecurity{DiskEncryption: &TalosClusterDiskEncryption{Type: "tpm"}}, true),
+		Entry("tpm", &TalosClusterSecurity{DiskEncryption: &TalosClusterDiskEncryption{Type: DiskEncryptionTPM}}, true),
 		Entry("nodeID", &TalosClusterSecurity{DiskEncryption: &TalosClusterDiskEncryption{Type: "nodeID"}}, true),
 		Entry("kms with an endpoint", &TalosClusterSecurity{DiskEncryption: &TalosClusterDiskEncryption{Type: "kms", KMSEndpoint: "https://kms:4443"}}, true),
 		Entry("kms without an endpoint is rejected", &TalosClusterSecurity{DiskEncryption: &TalosClusterDiskEncryption{Type: "kms"}}, false),
-		Entry("an endpoint on tpm is rejected", &TalosClusterSecurity{DiskEncryption: &TalosClusterDiskEncryption{Type: "tpm", KMSEndpoint: "https://kms:4443"}}, false),
+		Entry("an endpoint on tpm is rejected", &TalosClusterSecurity{DiskEncryption: &TalosClusterDiskEncryption{Type: DiskEncryptionTPM, KMSEndpoint: "https://kms:4443"}}, false),
 		Entry("static is not a type", &TalosClusterSecurity{DiskEncryption: &TalosClusterDiskEncryption{Type: "static"}}, false),
 	)
 
@@ -102,6 +109,6 @@ var _ = Describe("TalosCluster spec.security", func() {
 		yes := true
 
 		Expect(create(&TalosClusterSecurity{DiskEncryption: &TalosClusterDiskEncryption{Type: "nodeID", RequireSecureBoot: &yes}})).NotTo(Succeed())
-		Expect(create(&TalosClusterSecurity{DiskEncryption: &TalosClusterDiskEncryption{Type: "tpm", RequireSecureBoot: &yes}})).To(Succeed())
+		Expect(create(&TalosClusterSecurity{DiskEncryption: &TalosClusterDiskEncryption{Type: DiskEncryptionTPM, RequireSecureBoot: &yes}})).To(Succeed())
 	})
 })

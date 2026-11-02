@@ -58,6 +58,9 @@ var countplanesAllowedFuncs = map[string]bool{
 	// knownHosts (discovery.go) collects the addresses of every machine of the cluster so
 	// discovery does not probe them. It counts nothing and gates nothing.
 	"knownHosts": true,
+	// collectTargets (talos_egress.go) gathers every machine's endpoint for the egress policy. It
+	// counts nothing and gates nothing.
+	"collectTargets": true,
 }
 
 // TestTalosMachineListCountingStaysCentralized parses every non-test

@@ -36,7 +36,8 @@ const ciliumAPI = "cilium.io/v2/CiliumNetworkPolicy"
 func renderWithAPIs(t *testing.T, apis string, sets ...string) []map[string]any {
 	t.Helper()
 
-	args := []string{"template", "ichor", ".", "--api-versions", apis}
+	args := make([]string, 0, 5+2*len(sets))
+	args = append(args, "template", "ichor", ".", "--api-versions", apis)
 	for _, s := range sets {
 		args = append(args, "--set", s)
 	}
@@ -51,7 +52,7 @@ func renderWithAPIs(t *testing.T, apis string, sets ...string) []map[string]any 
 
 func TestChartCiliumPoliciesAreOnWhereCiliumsAPIIsServed(t *testing.T) {
 	if got := findAll(renderWithAPIs(t, ciliumAPI), kindCNP); len(got) != 3 {
-		t.Errorf("with the API served and enabled unset, got %d policies, want default-deny, controller and ui (the installer is off by default)", len(got))
+		t.Errorf("API served, enabled unset: %d policies, want default-deny, controller and ui (installer is off)", len(got))
 	}
 
 	if got := findAll(renderWithAPIs(t, "v1"), kindCNP); len(got) != 0 {
@@ -135,9 +136,11 @@ func asList(v any) []any {
 // Both copies, the chart's and the kustomize one, cover every port the code dials and name no more
 // `world` than the apid-free flows need.
 func TestCiliumEgressCoversEveryDialedPort(t *testing.T) {
+	const kustomizeCopy = "kustomize"
+
 	copies := map[string]map[string]map[string]any{
-		"kustomize": cnpSpecs(t, loadYAMLDocs(t, netpolConfigPath), ""),
-		"chart":     cnpSpecs(t, renderChartWithValues(t, "ichor", netpolAllOn...), "ichor-"),
+		kustomizeCopy: cnpSpecs(t, loadYAMLDocs(t, netpolConfigPath), ""),
+		"chart":       cnpSpecs(t, renderChartWithValues(t, "ichor", netpolAllOn...), "ichor-"),
 	}
 
 	// Derived from the code's own constants: the controller's dynamic policy ports must be allowed
@@ -200,7 +203,8 @@ func mustJSON(v any) string {
 }
 
 func TestChartDynamicTalosEgressFalseRestoresWorld(t *testing.T) {
-	specs := cnpSpecs(t, renderChartWithValues(t, "ichor", append([]string{"networkPolicy.cilium.dynamicTalosEgress=false"}, netpolAllOn...)...), "ichor-")
+	sets := append([]string{"networkPolicy.cilium.dynamicTalosEgress=false"}, netpolAllOn...)
+	specs := cnpSpecs(t, renderChartWithValues(t, "ichor", sets...), "ichor-")
 
 	ctrl := egressPorts(specs["controller-manager"])
 	for _, p := range []int{constants.ApidPort, constants.DefaultControlPlanePort} {
@@ -215,7 +219,8 @@ func TestChartDynamicTalosEgressFalseRestoresWorld(t *testing.T) {
 }
 
 func TestChartMetricsNamespacesNarrowTheScrapeRule(t *testing.T) {
-	specs := cnpSpecs(t, renderChartWithValues(t, "ichor", append([]string{"networkPolicy.cilium.metricsNamespaces={monitoring}"}, netpolAllOn...)...), "ichor-")
+	sets := append([]string{"networkPolicy.cilium.metricsNamespaces={monitoring}"}, netpolAllOn...)
+	specs := cnpSpecs(t, renderChartWithValues(t, "ichor", sets...), "ichor-")
 	text := mustJSON(specs["controller-manager"]["ingress"])
 
 	if !strings.Contains(text, `"k8s:io.kubernetes.pod.namespace":"monitoring"`) {

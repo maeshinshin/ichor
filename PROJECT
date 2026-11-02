@@ -96,4 +96,13 @@ resources:
   kind: MachineReclaim
   path: github.com/maeshinshin/ichor/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: maesh.dev
+  group: ichor
+  kind: TalosCredentialRequest
+  path: github.com/maeshinshin/ichor/api/v1alpha1
+  version: v1alpha1
 version: "3"

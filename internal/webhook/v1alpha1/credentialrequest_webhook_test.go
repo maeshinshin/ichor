@@ -25,7 +25,6 @@ import (
 	authnv1 "k8s.io/api/authentication/v1"
 	authzv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -51,8 +50,8 @@ func TestCredentialRequestWebhook(t *testing.T) {
 	}
 
 	machine := &ichorv1alpha1.TalosMachine{
-		ObjectMeta: metav1.ObjectMeta{Name: "m1", Namespace: "ns"},
-		Spec:       ichorv1alpha1.TalosMachineSpec{ClusterRef: corev1.LocalObjectReference{Name: "c1"}},
+		Name: "m1", Namespace: "ns",
+		Spec: ichorv1alpha1.TalosMachineSpec{ClusterRef: corev1.LocalObjectReference{Name: "c1"}},
 	}
 
 	// grants maps a requester to the "verb resource/subresource" strings it holds.
@@ -96,10 +95,10 @@ func TestCredentialRequestWebhook(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		req := admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{
+		req := admission.Request{
 			Operation: admissionv1.Create, Namespace: "ns", UserInfo: authnv1.UserInfo{Username: user},
 			Object: runtime.RawExtension{Raw: raw},
-		}}
+		}
 
 		return h.Handle(context.Background(), req)
 	}
@@ -131,7 +130,7 @@ func TestCredentialRequestWebhook(t *testing.T) {
 		}
 	}
 
-	if got := h.Handle(context.Background(), admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{Operation: admissionv1.Update}}); !got.Allowed {
+	if got := h.Handle(context.Background(), admission.Request{Operation: admissionv1.Update}); !got.Allowed {
 		t.Error("only a create is judged")
 	}
 }

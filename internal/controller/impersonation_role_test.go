@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,13 +32,13 @@ import (
 var _ = Describe("impersonation role", func() {
 	It("lists the IchorUsers and their role groups by name, and nothing when there are none", func() {
 		ns := "ichor-impersonation"
-		Expect(k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: ns}})).To(Succeed())
+		Expect(k8sClient.Create(ctx, &corev1.Namespace{Name: ns})).To(Succeed())
 
-		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: ImpersonationRoleName}}))).To(Succeed())
+		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRole{Name: ImpersonationRoleName}))).To(Succeed())
 
 		r := &ImpersonationRoleReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: ns}
 		reconcileOnce := func() []rbacv1.PolicyRule {
-			_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Name: ImpersonationRoleName}})
+			_, err := r.Reconcile(ctx, ctrl.Request{Name: ImpersonationRoleName})
 			Expect(err).NotTo(HaveOccurred())
 
 			var role rbacv1.ClusterRole
@@ -50,9 +49,9 @@ var _ = Describe("impersonation role", func() {
 
 		Expect(reconcileOnce()).To(BeEmpty(), "no users: the role grants nothing (a rule without resourceNames would grant every name)")
 
-		for name, roles := range map[string][]string{"alice": {"admin"}, "bob": {"viewer", "auditor"}} {
+		for name, roles := range map[string][]string{"user-a": {"admin"}, "user-b": {"viewer", "auditor"}} {
 			Expect(k8sClient.Create(ctx, &ichorv1alpha1.IchorUser{
-				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns}, Spec: ichorv1alpha1.IchorUserSpec{Roles: roles},
+				Name: name, Namespace: ns, Spec: ichorv1alpha1.IchorUserSpec{Roles: roles},
 			})).To(Succeed())
 		}
 
@@ -65,7 +64,7 @@ var _ = Describe("impersonation role", func() {
 
 			switch rule.Resources[0] {
 			case "users":
-				Expect(rule.ResourceNames).To(Equal([]string{"ichor:alice", "ichor:bob"}))
+				Expect(rule.ResourceNames).To(Equal([]string{"ichor:user-a", "ichor:user-b"}))
 			case "groups":
 				Expect(rule.ResourceNames).To(Equal([]string{"ichor:admin", "ichor:auditor", "ichor:viewer"}))
 			default:
@@ -74,12 +73,12 @@ var _ = Describe("impersonation role", func() {
 		}
 
 		var bob ichorv1alpha1.IchorUser
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "bob"}, &bob)).To(Succeed())
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: ns, Name: "user-b"}, &bob)).To(Succeed())
 		Expect(k8sClient.Delete(ctx, &bob)).To(Succeed())
 
 		for _, rule := range reconcileOnce() {
 			if rule.Resources[0] == "users" {
-				Expect(rule.ResourceNames).To(Equal([]string{"ichor:alice"}), "a deleted user can no longer be impersonated")
+				Expect(rule.ResourceNames).To(Equal([]string{"ichor:user-a"}), "a deleted user can no longer be impersonated")
 			}
 		}
 	})

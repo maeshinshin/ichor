@@ -134,7 +134,7 @@ func emptyIfNil(r []rbacv1.PolicyRule) []rbacv1.PolicyRule {
 // itself is not watched: that would need list and watch on every ClusterRole).
 func (r *ImpersonationRoleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	single := handler.EnqueueRequestsFromMapFunc(func(context.Context, client.Object) []reconcile.Request {
-		return []reconcile.Request{{NamespacedName: types.NamespacedName{Name: ImpersonationRoleName}}}
+		return []reconcile.Request{{Name: ImpersonationRoleName}}
 	})
 
 	return ctrl.NewControllerManagedBy(mgr).

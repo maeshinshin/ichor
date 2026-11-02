@@ -119,7 +119,7 @@ func TestChartInvariants(t *testing.T) {
 			checkCRDsMatchConfig(t, release, docs)
 			checkKubeProxySwitchPolicy(t, release, docs)
 			checkUIBackendRBACIsSeparate(t, release, docs)
-			checkUIBackendRBACMatchesConfig(t, release, docs, false, false)
+			checkUIBackendRBACMatchesConfig(t, release, docs, false)
 			checkControllerRBACMatchesConfig(t, release, docs)
 			checkMonitoringOptionsOffByDefault(t, release, docs)
 		})
@@ -602,19 +602,22 @@ func TestUIOIDC(t *testing.T) {
 	}
 
 	base := []string{"ichorUI.oidc.enabled=true", "ichorUI.oidc.issuer=https://idp.example", "ichorUI.oidc.clientId=ichor"}
-	named := append(slices.Clone(base), "ichorUI.oidc.impersonate.groups={oidc:platform}", "ichorUI.oidc.impersonate.users={oidc:alice}")
+	withGroups := "ichorUI.oidc.impersonate.groups={oidc:platform}"
+	withUsers := "ichorUI.oidc.impersonate.users={oidc:alice}"
+	named := append(slices.Clone(base), withGroups, withUsers)
 
 	on := renderChartWithValues(t, "ichor", named...)
 	onDep := find(on, kindDeployment, ichorUIDeploymentName)
 	if got, _ := containerEnvValue(onDep, "ICHOR_OIDC_ISSUER"); got != "https://idp.example" {
 		t.Errorf("ICHOR_OIDC_ISSUER = %q", got)
 	}
-	checkUIBackendRBACMatchesConfig(t, "ichor", on, true, false)
+	checkUIBackendRBACMatchesConfig(t, "ichor", on, false)
 
 	// Impersonation is by name only. The groups are the built-in ones plus the configured ones,
 	// the users the configured ones; neither rule is ever without resourceNames.
 	imp := impersonationRules(find(on, kindClusterRole, ichorUIRoleName))
-	if got := imp["groups"]; !slices.Equal(got, []string{"ichor:viewer", "ichor:operator", "ichor:admin", "oidc:platform"}) {
+	wantGroups := []string{"ichor:viewer", "ichor:operator", "ichor:admin", "oidc:platform"}
+	if got := imp["groups"]; !slices.Equal(got, wantGroups) {
 		t.Errorf("impersonated groups = %v", got)
 	}
 	if got := imp["users"]; !slices.Equal(got, []string{"oidc:alice"}) {
@@ -622,20 +625,22 @@ func TestUIOIDC(t *testing.T) {
 	}
 
 	// Without the names, rendering fails rather than allowing every name.
-	if out, err := renderChartWithValuesErr("ichor", append(slices.Clone(base), "ichorUI.oidc.impersonate.users={oidc:alice}")...); err == nil {
+	if out, err := renderChartWithValuesErr("ichor", append(slices.Clone(base), withUsers)...); err == nil {
 		t.Errorf("OIDC rendered without impersonate.groups: %s", out)
 	}
-	if out, err := renderChartWithValuesErr("ichor", append(slices.Clone(base), "ichorUI.oidc.impersonate.groups={oidc:platform}")...); err == nil {
+	if out, err := renderChartWithValuesErr("ichor", append(slices.Clone(base), withGroups)...); err == nil {
 		t.Errorf("OIDC rendered without impersonate.users or anyUser: %s", out)
 	}
 
 	// anyUser is the explicit opt-out for users only; groups stay named.
-	anyUser := renderChartWithValues(t, "ichor", append(slices.Clone(base), "ichorUI.oidc.impersonate.groups={oidc:platform}", "ichorUI.oidc.impersonate.anyUser=true")...)
+	open := append(slices.Clone(base), withGroups, "ichorUI.oidc.impersonate.anyUser=true")
+	anyUser := renderChartWithValues(t, "ichor", open...)
 	rules, _ := find(anyUser, kindClusterRole, ichorUIRoleName)["rules"].([]any)
 	sawOpenUsers := false
 	for _, r := range rules {
 		rm, _ := r.(map[string]any)
-		if containsStr(rm["resources"], "users") && slices.Contains(stringsOf(rm["verbs"]), "impersonate") && rm["resourceNames"] == nil {
+		isUsers := containsStr(rm["resources"], "users") && slices.Contains(stringsOf(rm["verbs"]), "impersonate")
+		if isUsers && rm["resourceNames"] == nil {
 			sawOpenUsers = true
 		}
 		if containsStr(rm["resources"], "groups") && rm["resourceNames"] == nil {
@@ -736,7 +741,7 @@ func TestUIUsers(t *testing.T) {
 		}
 	}
 
-	checkUIBackendRBACMatchesConfig(t, "ichor", on, false, true)
+	checkUIBackendRBACMatchesConfig(t, "ichor", on, true)
 
 	if _, err := renderChartWithValuesErr("ichor", "ichorUI.users.enabled=true"); err == nil {
 		t.Error("users.enabled rendered without an external URL")
@@ -745,7 +750,8 @@ func TestUIUsers(t *testing.T) {
 	both := renderChartWithValues(t, "ichor", "ichorUI.users.enabled=true", "ichorUI.users.externalURL=https://x",
 		"ichorUI.oidc.enabled=true", "ichorUI.oidc.issuer=https://idp", "ichorUI.oidc.clientId=c",
 		"ichorUI.oidc.impersonate.groups={oidc:platform}", "ichorUI.oidc.impersonate.users={oidc:alice}")
-	if got := impersonationRules(find(both, kindClusterRole, ichorUIRoleName))["groups"]; !slices.Contains(got, "oidc:platform") || !slices.Contains(got, "ichor:admin") {
+	got := impersonationRules(find(both, kindClusterRole, ichorUIRoleName))["groups"]
+	if !slices.Contains(got, "oidc:platform") || !slices.Contains(got, "ichor:admin") {
 		t.Errorf("with an external IdP too, the groups are the built-in ones plus the configured: %v", got)
 	}
 
@@ -828,7 +834,7 @@ func clusterRoleBindingRefs(binding map[string]any) (roleRef, subject string) {
 // YAML text or document order, so grouping resources/verbs into one apiGroups entry versus
 // several is not a difference. Also checks the namespaced secrets Role the same way; see
 // ichorUISecretsRoleName for why it can't be matched by name.
-func checkUIBackendRBACMatchesConfig(t *testing.T, release string, docs []map[string]any, oidc, users bool) {
+func checkUIBackendRBACMatchesConfig(t *testing.T, release string, docs []map[string]any, users bool) {
 	t.Helper()
 
 	configDocs := loadYAMLDocs(t, ichorUIConfigRolePath)
@@ -1529,8 +1535,9 @@ func TestControllerRBACHoldsNoEscalation(t *testing.T) {
 			// The one exception: the controller keeps the list of Ichor users that ichor-ui may
 			// impersonate in one named ClusterRole, and needs `escalate` on that role alone to grant the
 			// impersonate right it does not hold. Only the exact name qualifies.
-			if triple.group == "rbac.authorization.k8s.io" && triple.resource == "clusterroles" && triple.names == "ichor-ui-impersonate" &&
-				(triple.verb == "escalate" || triple.verb == verbGetController || triple.verb == "update") {
+			managed := triple.group == "rbac.authorization.k8s.io" && triple.resource == "clusterroles" &&
+				triple.names == "ichor-ui-impersonate"
+			if managed && (triple.verb == "escalate" || triple.verb == verbGetController || triple.verb == "update") {
 				continue
 			}
 

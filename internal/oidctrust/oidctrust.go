@@ -67,6 +67,9 @@ const (
 // InternalPort is the port of ichor-ui's HTTPS listener that serves discovery and the JWKS.
 const InternalPort = 8444
 
+// MinKeyBits is the smallest RSA signing key ParseKeys and Private accept (docs/adr/0108).
+const MinKeyBits = 2048
+
 // KeysVersion is the version of the keys.json document.
 const KeysVersion = 1
 
@@ -140,6 +143,10 @@ func (k Key) Private() (*rsa.PrivateKey, error) {
 	rk, ok := parsed.(*rsa.PrivateKey)
 	if !ok {
 		return nil, errors.New("not an RSA key")
+	}
+
+	if rk.N.BitLen() < MinKeyBits {
+		return nil, fmt.Errorf("RSA key is %d bits, the minimum is %d", rk.N.BitLen(), MinKeyBits)
 	}
 
 	return rk, nil

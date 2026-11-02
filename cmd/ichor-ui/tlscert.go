@@ -62,9 +62,12 @@ func fileExists(p string) bool {
 // httpsServer is an HTTPS-only server; start it with ListenAndServeTLS("", "").
 func httpsServer(addr string, h http.Handler, get getCert) *http.Server {
 	return &http.Server{
-		Addr: addr, Handler: h, ReadHeaderTimeout: 10 * time.Second,
-		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS12, GetCertificate: get},
-		ErrorLog:  log.New(probeLogFilter{log.Writer()}, log.Prefix(), log.Flags()),
+		Addr: addr, Handler: h, TLSConfig: tlsConfig(get),
+		// No WriteTimeout: StreamNodeLogs and the downloads run for minutes. Their request is one
+		// small message, so ReadTimeout bounds a slow-body client without touching the response.
+		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 60 * time.Second, IdleTimeout: 120 * time.Second,
+		MaxHeaderBytes: 64 << 10,
+		ErrorLog:       log.New(probeLogFilter{log.Writer()}, log.Prefix(), log.Flags()),
 	}
 }
 

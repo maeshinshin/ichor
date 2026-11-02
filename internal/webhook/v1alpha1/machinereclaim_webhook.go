@@ -32,7 +32,7 @@ import (
 
 const machineReclaimWebhookPath = "/validate-ichor-maesh-dev-v1alpha1-machinereclaim"
 
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-machinereclaim,mutating=false,failurePolicy=fail,sideEffects=None,groups=ichor.maesh.dev,resources=machinereclaims,verbs=create;update,versions=v1alpha1,name=vmachinereclaim-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-machinereclaim,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=None,groups=ichor.maesh.dev,resources=machinereclaims,verbs=create;update,versions=v1alpha1,name=vmachinereclaim-v1alpha1.kb.io,admissionReviewVersions=v1
 
 // MachineReclaimHandler guards "Reset and add" (MachineReclaim). Every create and
 // every write of spec.confirmUUID needs the custom verb `reclaim` on machinereclaims, asked as the

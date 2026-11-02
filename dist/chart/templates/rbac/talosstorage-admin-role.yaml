@@ -18,7 +18,14 @@ rules:
   resources:
   - talosstorages
   verbs:
-  - '*'
+  - create
+  - delete
+  - deletecollection
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - ichor.maesh.dev
   resources:

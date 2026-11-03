@@ -178,20 +178,20 @@ func TestRequireDeployed_RefusesFailedRelease(t *testing.T) {
 
 // Precondition 1: same minor, or exactly one lower.
 func TestCheckVersion(t *testing.T) { //nolint:funlen // one table
-	// ChartVersion is 1.18.0, so the accepted minors are 1.18 and 1.17.
+	// ChartVersion is 1.20.4, so the accepted minors are 1.20 and 1.19.
 	for _, tc := range []struct {
 		live    string
 		ok      bool
 		upgrade bool
 	}{
-		{"1.18.0", true, false},
-		{"v1.18.7", true, false},
-		{"1.17.5", true, true},
-		{"quay.io/cilium/cilium:v1.17.5@sha256:abcdef", true, true},
-		{"1.16.9", false, false},
-		{"1.19.0", false, false},
-		{"2.18.0", false, false},
-		{"0.18.0", false, false},
+		{"1.20.4", true, false},
+		{"v1.20.7", true, false},
+		{"1.19.5", true, true},
+		{"quay.io/cilium/cilium:v1.19.5@sha256:abcdef", true, true},
+		{"1.18.0", false, false},
+		{"1.21.0", false, false},
+		{"2.20.0", false, false},
+		{"0.20.0", false, false},
 	} {
 		got, err := CheckVersion(tc.live)
 		if (err == nil) != tc.ok {

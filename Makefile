@@ -59,8 +59,8 @@ manifests: controller-gen manifests-ichor-ui ## Generate WebhookConfiguration, C
 sync-crds: ## Sync config/crd/bases/ into dist/chart/templates/crd/ (CONTRIBUTING.md explains why, in place of kubebuilder edit --plugins=helm/v2-alpha).
 	go run ./internal/tools/synccrds
 
-CILIUM_CHART_VERSION ?= 1.18.0
-CILIUM_CHART_SHA256 ?= 7f9557f24b944ab06a0a661a1be236eedf0966341deb6ecd326209d6ab116a85
+CILIUM_CHART_VERSION ?= 1.20.4
+CILIUM_CHART_SHA256 ?= 505abff8385811df1a949776fc42e9f10697989a332acc86d6e8933efcb855ed
 
 .PHONY: cilium-chart
 cilium-chart: ## Fetch the pinned Cilium chart into pkg/cni/cilium/chart/ and verify its SHA-256.

@@ -18,6 +18,7 @@ package cilium
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 
 	"helm.sh/helm/v3/pkg/release"
@@ -31,6 +32,8 @@ type ReadBack struct {
 	KubeProxy cni.KubeProxyMode
 	// Tunnel is "vxlan", "geneve" or "" (the release sets none).
 	Tunnel string
+	// ControlPlanes is 1 when the record pins the operator to one replica (one control plane), else 0.
+	ControlPlanes int
 	// User are the values beyond Ichor's own layers (spec.cni.cilium.values); empty when none.
 	User map[string]any
 	// Pending is true when the record is pending-install/upgrade/rollback: an operation was killed.
@@ -55,7 +58,12 @@ func ReadBackRelease(rel *release.Release) (ReadBack, error) {
 
 	rb.Tunnel, _ = cfg["tunnelProtocol"].(string)
 
-	p, err := newPreset(rb.KubeProxy, rb.Tunnel)
+	// The record's operator replica count says whether it was made for one control plane (values.go).
+	if op, ok := cfg["operator"].(map[string]any); ok && fmt.Sprint(op["replicas"]) == "1" {
+		rb.ControlPlanes = 1
+	}
+
+	p, err := newPreset(rb.KubeProxy, rb.Tunnel, rb.ControlPlanes)
 	if err != nil {
 		return ReadBack{}, err
 	}

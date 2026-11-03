@@ -978,8 +978,6 @@ spec:
   template:
     metadata:
       annotations:
-        container.apparmor.security.beta.kubernetes.io/cilium-agent: unconfined
-        container.apparmor.security.beta.kubernetes.io/clean-cilium-state: unconfined
         kubectl.kubernetes.io/default-container: cilium-agent
       labels:
         app.kubernetes.io/name: cilium-agent
@@ -1159,6 +1157,7 @@ spec:
         - mountPath: /tmp
           name: tmp
       hostNetwork: true
+      hostUsers: true
       initContainers:
       - command:
         - cilium-dbg
@@ -1306,6 +1305,8 @@ spec:
       priorityClassName: system-node-critical
       restartPolicy: Always
       securityContext:
+        appArmorProfile:
+          type: Unconfined
         seccompProfile:
           type: Unconfined
       serviceAccountName: cilium
@@ -1430,8 +1431,7 @@ spec:
       k8s-app: cilium-envoy
   template:
     metadata:
-      annotations:
-        container.apparmor.security.beta.kubernetes.io/cilium-envoy: unconfined
+      annotations: null
       labels:
         app.kubernetes.io/name: cilium-envoy
         app.kubernetes.io/part-of: cilium
@@ -1546,10 +1546,14 @@ spec:
           mountPropagation: HostToContainer
           name: bpf-maps
       hostNetwork: true
+      hostUsers: true
       nodeSelector:
         kubernetes.io/os: linux
       priorityClassName: system-node-critical
       restartPolicy: Always
+      securityContext:
+        appArmorProfile:
+          type: Unconfined
       serviceAccountName: cilium-envoy
       terminationGracePeriodSeconds: 1
       tolerations:
@@ -1690,6 +1694,7 @@ spec:
           name: cilium-config-path
           readOnly: true
       hostNetwork: true
+      hostUsers: true
       nodeSelector:
         kubernetes.io/os: linux
       priorityClassName: system-cluster-critical

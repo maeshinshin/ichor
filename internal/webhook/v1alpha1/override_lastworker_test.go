@@ -137,12 +137,14 @@ func TestLastWorkerGuardNodeOperationOverride(t *testing.T) {
 		})
 	}
 
+	const teardown = "teardown"
+
 	asks := map[string]ichorv1alpha1.TalosOperationNodeSpec{
 		"no override":        {},
 		"override flag":      {Override: true},
-		"override with note": {Override: true, OverrideReason: "teardown"},
-		"reason alone":       {OverrideReason: "teardown"},
-		"deprecated alias":   {BreakGlassReason: "teardown"},
+		"override with note": {Override: true, OverrideReason: teardown},
+		"reason alone":       {OverrideReason: teardown},
+		"deprecated alias":   {BreakGlassReason: teardown},
 	}
 
 	if !handle(bgUnitPlain, asks["no override"]).Allowed {

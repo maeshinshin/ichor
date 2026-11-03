@@ -54,9 +54,13 @@ live config and what Ichor would render:
 
 It also prints the Talos version contract it chose (probed from the running
 version down to v1.12), the CNI it found and the kube-proxy setting. The cluster
-may run an older Talos or Kubernetes than this Ichor's release set: adopt says it
-is "behind" and `ichor upgrade cluster` rolls it there, one step at a time. A newer cluster is refused. `--version-contract` accepts only the
-release set's contract, and not for a cluster that is behind.
+may run an older or a newer Talos or Kubernetes than this Ichor's release set;
+adopt takes it as it runs. A version the compatibility table does not know at
+all is refused, since Ichor could not operate the cluster. An incompatible pair
+(a Kubernetes its Talos does not support, or one the installed Cilium does not
+run) is reported as a warning and adopted; the upgrade that would make it
+compatible is refused until it is. `--version-contract` is probed
+from the running Talos unless you name one.
 
 ### Step 2: the secrets bundle
 

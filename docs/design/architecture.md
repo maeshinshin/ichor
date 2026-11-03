@@ -392,7 +392,7 @@ annotation; disk roles that require reinstall are immutable after install;
 `ichor.maesh.dev/allow-delete: "true"` (so a prune by the user's own tooling can't cascade into
 node resets); removing an Ichor finalizer, resetting a node and restoring etcd
 need the override verb; Talos/Kubernetes version pairs and upgrade paths are checked, and a version the
-webhook admits is the release set's, never a downgrade.
+webhook admits is never a downgrade, and never a pair the compatibility table refuses.
 
 ## Design
 
@@ -427,8 +427,8 @@ special case of approving the first control plane.
 `ichor adopt` brings a running Talos cluster that Ichor did not create under
 management. It needs Talos v1.12 or later on every node it adopts
 and refuses an older or mixed cluster with "upgrade Talos first", writing
-nothing. Above that floor, a cluster older than this Ichor's release set is adopted as "behind"
-and rolled with `ichor upgrade cluster`; a newer one is refused. It works in four phases, and nothing is applied to a node until the
+nothing. Above that floor, a cluster is adopted as it runs, whatever its version against this Ichor's set: a version
+the compatibility table does not know at all is refused, and an incompatible pair is reported and adopted. It works in four phases, and nothing is applied to a node until the
 last one:
 
 1. Plan (`--plan` stops here and writes nothing). Read-only inspection with
@@ -901,20 +901,30 @@ until the Talos side is ready.
 
 ### Upgrades
 
-The release set. Each Ichor build embeds one supported set of versions, `pkg/release.Pinned`:
-the Talos release and its version contract, the Kubernetes release, and the Cilium chart. Init and adopt
-use it, the admission webhook refuses any version a TalosCluster or an operation would move to that is
-not the set's, and the API reports each component of a cluster against it (`Cluster.versions`: up to
-date, behind, or ahead). A cluster is never moved to a version the set does not name, and never down.
-Adopt admits an older cluster as "behind"; a newer one is refused.
+The release set and the upgrades (amending 0113). Each Ichor build embeds one set of versions,
+`pkg/release.Pinned`: the Talos release and its version contract, the Kubernetes release, and the Cilium
+chart. It decides the versions of a first install (`ichor init`, the CLI defaults and the UI's proposed
+values). It does not bound an upgrade: Talos, Kubernetes and Cilium each upgrade on their own, to any
+version the rules below accept, and the set is not a limit on them. The Versions card shows what each
+component runs; it carries no state against the set.
 
-A cluster that is behind is rolled to the set by one user action, `ichor upgrade cluster` or the Versions
-card's button, which starts one step at a time: Talos first (with the version contract, since Talos does not
-upgrade Kubernetes and Kubernetes must be a release the running Talos supports), then the configuration
-the new contract changes if a machine still has it pending, then Kubernetes, then Cilium (last, so the chart
-meets the Kubernetes the set was built for). Each step is its own operation with its own plan and
-confirmation, and the next one starts only when it has finished. Nothing starts on its own. An Ichor upgrade
-does not move the cluster; the new build's set does, through this rollout.
+An upgrade target is valid when it is a final semantic version newer than the running one, and:
+
+- Talos: `upgrade.TalosPath` accepts the step (machinery's compatibility rule: the target's minor sets a
+  minimum running version and denies listed versions; within those bounds Talos may skip minors, though its
+  docs recommend adjacent minors; Talos upgrades reboot each machine).
+- Kubernetes: at most one minor up within the same major (`upgrade.KubernetesSkew`, the version skew policy),
+  and the cluster's Talos supports the target (`upgrade.KubernetesPairing`).
+- Compatibility: the Talos and Kubernetes pair, and the Kubernetes and the installed Cilium, are checked
+  against the one table `pkg/release/compat.go`. An incompatible pair is refused, and the override verb is the only way past the refusal; the override is recorded as a Warning Event on the cluster.
+  Cilium moves only to the chart embedded in the running Ichor.
+
+The upgrade dialog offers the Talos and Kubernetes targets as a searchable list of the candidates the
+controller found: the patches of the current minor and the next minor, grouped "Recommended" (the set's
+version, when newer), "Patch" and "Next minor", newest first, with the newest patch of the current minor as
+the default. A version typed in and not in the list can still be chosen; the server validates it the same
+way. `ichor upgrade talos|kubernetes --list` prints the same groups. An Ichor upgrade does not move the
+cluster; each component is upgraded by its own operation.
 
 A step that fails pauses its operation with a `failureReason` and is never
 retried by itself; `ichor operation resume` (or Resume in the UI) on such an
@@ -948,10 +958,10 @@ mode ("system disk wipe on upgrade is not supported anymore, option
 ignored") — a plain upgrade reboots in place and never touches the etcd data
 directory, for one member or many. A node that falls back to the previous
 A/B slot counts as a failure. The version contract is never bumped by the
-controller on its own: it moves only with the rollout's Talos step, to the
-release set's contract.
+controller on its own: it changes only through the spec write of an operation the user starts.
 
-Kubernetes: change `spec.kubernetesVersion` to the release set's version, one minor at a time within the skew policy. Warn about removed APIs in use, pre-pull images, then in three
+Kubernetes: change `spec.kubernetesVersion` to a version one minor up at most, supported by the Talos
+the cluster runs and by the installed Cilium. Warn about removed APIs in use, pre-pull images, then in three
 stages, each finished on every machine before the next (no kubelet is ever
 newer than an API server): switch the control-plane components node by node
 through machine config; update kube-proxy and sync the bootstrap manifests

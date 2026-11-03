@@ -1,3 +1,4 @@
+//nolint:goconst // the release fixtures repeat the same version strings on purpose
 package controller
 
 import (

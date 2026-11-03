@@ -32,8 +32,8 @@ func TestPrintUpgradeTargetsMarksTheDefault(t *testing.T) {
 	var b bytes.Buffer
 
 	printUpgradeTargets(&b, pb.OperationKind_OPERATION_KIND_TALOS, &pb.ListUpgradeTargetsResponse{
-		Available: true, Recommended: []string{"v1.14.3"}, Patch: []string{"v1.12.4"}, NextMinor: []string{"v1.13.2"},
-		Default: "v1.14.3",
+		Available: true, Recommended: []string{ver1143}, Patch: []string{"v1.12.4"}, NextMinor: []string{"v1.13.2"},
+		Default: ver1143,
 	})
 
 	got := b.String()

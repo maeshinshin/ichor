@@ -1,3 +1,4 @@
+//nolint:goconst // version tables repeat the same release names on purpose
 package release
 
 import (

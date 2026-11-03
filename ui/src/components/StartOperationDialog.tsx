@@ -34,6 +34,7 @@ export function StartOperationDialog({
   current = '',
   disabled = false,
   label,
+  size = 'sm',
   open: controlledOpen,
   onOpenChange,
 }: {
@@ -44,6 +45,8 @@ export function StartOperationDialog({
   disabled?: boolean
   // label is the trigger's text; the dialog's own title always uses the full action name.
   label?: string
+  // size is the trigger's size; an AlertAction takes xs, as the stock Alert example does.
+  size?: 'xs' | 'sm'
   // open and onOpenChange make the dialog controlled and without its own button (it is opened from a menu).
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -116,7 +119,7 @@ export function StartOperationDialog({
       open={open}
       onOpenChange={reset}
       trigger={
-        controlledOpen !== undefined ? undefined : <Button size="sm" variant={kind === 'shutdown' ? 'destructive' : 'outline'} disabled={disabled} aria-label={label ? t(`ops.start.${kind}`) : undefined}>
+        controlledOpen !== undefined ? undefined : <Button size={size} variant={kind === 'shutdown' ? 'destructive' : 'outline'} disabled={disabled} aria-label={label ? t(`ops.start.${kind}`) : undefined}>
           {label ?? t(`ops.start.${kind}`)}
         </Button>
       }

@@ -80,7 +80,36 @@ spec:
           image: busybox:1.37
           command: ["sh", "-c", "mkdir -p /www; echo ok > /www/index.html; exec httpd -f -p 8080 -h /www"]
 `
-	trafficClient = `apiVersion: apps/v1
+	trafficClient = `apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: fa-client
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: fa-client
+  namespace: default
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    resourceNames: ["fa-srv"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: fa-client
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: fa-client
+subjects:
+  - {kind: ServiceAccount, name: fa-client, namespace: default}
+---
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: fa-client
@@ -105,22 +134,47 @@ spec:
                   - {key: kubernetes.io/hostname, operator: In, values: ["%s"]}
       tolerations:
         - {key: node-role.kubernetes.io/control-plane, operator: Exists, effect: NoSchedule}
+      serviceAccountName: fa-client
       containers:
         - name: client
           image: busybox:1.37
           env:
             - {name: SVC_IP, value: "%s"}
-            - {name: POD_IP, value: "%s"}
           command:
             - sh
             - -c
             - |
-              ok=0; fail=0; n=0
+              ok=0; fail=0; pok=0; pfail=0; pskip=0; rt=0; n=0; cur=""
+              tok=/var/run/secrets/kubernetes.io/serviceaccount/token
+              api="https://$KUBERNETES_SERVICE_HOST:$KUBERNETES_SERVICE_PORT/api/v1/namespaces/default/endpoints/fa-srv"
+              # The server's Ready address from its Endpoints (notReadyAddresses is cut off first), or nothing.
+              ready() {
+                wget -q -O - --no-check-certificate --header "Authorization: Bearer $(cat $tok)" "$api" 2>/dev/null |
+                  sed 's/"notReadyAddresses".*//' | grep -o '"ip":"[^"]*"' | head -n 1 | cut -d'"' -f4
+              }
               while true; do
-                for u in "http://$SVC_IP" "http://$POD_IP:8080"; do
-                  if out=$(wget -q -T 2 -O /dev/null "$u" 2>&1); then ok=$((ok+1)); else fail=$((fail+1)); echo "FAIL $(date +%%T) $u: $out"; fi
-                done
-                n=$((n+1)); [ $((n %% 25)) -eq 0 ] && echo "COUNT $(date +%%T) ok=$ok fail=$fail"
+                if out=$(wget -q -T 2 -O /dev/null "http://$SVC_IP" 2>&1); then
+                  ok=$((ok+1))
+                else
+                  fail=$((fail+1)); echo "FAIL $(date +%%T) http://$SVC_IP: $out"
+                fi
+                ip=$(ready)
+                if [ -z "$ip" ]; then
+                  pskip=$((pskip+1))
+                else
+                  if [ "$ip" != "$cur" ]; then
+                    rt=$((rt+1)); echo "RETARGET $(date +%%T) ${cur:-none} -> $ip"; cur=$ip
+                  fi
+                  if out=$(wget -q -T 2 -O /dev/null "http://$ip:8080" 2>&1); then
+                    pok=$((pok+1))
+                  else
+                    pfail=$((pfail+1)); echo "FAIL $(date +%%T) http://$ip:8080: $out"
+                  fi
+                fi
+                n=$((n+1))
+                if [ $((n %% 25)) -eq 0 ]; then
+                  echo "COUNT $(date +%%T) ok=$ok fail=$fail pok=$pok pfail=$pfail pskip=$pskip retarget=$rt"
+                fi
                 sleep 0.2
               done
 `
@@ -151,25 +205,19 @@ func trafficPodNames(c *foreign.Cluster, app string) []string {
 	return strings.Fields(out)
 }
 
-// trafficPodIP returns the pod IP of an A4 app's pod, selected by label.
-func trafficPodIP(c *foreign.Cluster, app string) string {
-	out, _ := inner(c, "get", "pod", "-l", "app="+app, "-o", "jsonpath={.items[0].status.podIP}")
-	return strings.TrimSpace(out)
-}
-
 // trafficStart (A4) runs a server Deployment on the control plane and a client Deployment on the worker, so the
-// traffic crosses nodes: every 0.2 s the client fetches the Service and the server's pod IP.
+// traffic crosses nodes: every 0.2 s the client fetches the Service and, before each pod-IP probe, the server's Ready
+// address from its Endpoints (a drain moves the server, so a fixed IP would go stale; ADR 0103 amendment 6).
 func trafficStart(t *testing.T, c *foreign.Cluster) {
 	t.Helper()
 	cp, w := c.Opts.Prefix+"-cp0", c.Opts.Prefix+"-w0"
 	writeApply(t, c, "traffic-srv.yaml", fmt.Sprintf(trafficPods, cp))
 	waitDeploy(t, c, "fa-srv")
-	podIP := trafficPodIP(c, "fa-srv")
 	svcIP, _ := inner(c, "get", "svc", "fa-srv", "-o", "jsonpath={.spec.clusterIP}")
-	writeApply(t, c, "traffic-client.yaml", fmt.Sprintf(trafficClient, w, strings.TrimSpace(svcIP), podIP))
+	writeApply(t, c, "traffic-client.yaml", fmt.Sprintf(trafficClient, w, strings.TrimSpace(svcIP)))
 	waitDeploy(t, c, "fa-client")
 	time.Sleep(10 * time.Second)
-	t.Logf("traffic started (service %s, pod %s)", strings.TrimSpace(svcIP), podIP)
+	t.Logf("traffic started (service %s)", strings.TrimSpace(svcIP))
 }
 
 var countRe = regexp.MustCompile(`COUNT (\S+) ok=(\d+) fail=(\d+)`)
@@ -180,38 +228,51 @@ func podLegFail(l string) bool {
 	return len(f) > 2 && strings.HasSuffix(f[2], ":8080:")
 }
 
-// trafficReport logs the client's tally and every failure line (A4: the pass criterion is set after the first run).
-// The tally lives in the client pod's log, and a drain that replaces the client pod starts a new log at zero, and the
-// old log is gone with the old pod. So the report takes the last tally of each client pod that exists now and says so;
-// it does not sum across pods, because the replaced pods' tallies are lost.
-func trafficReport(t *testing.T, c *foreign.Cluster, label string) {
+// trafficReport logs the client tallies, retargets and failure lines (A4), and returns the pod-IP leg's tally summed
+// over the client pods present now. The tally lives in the client pod's log, and a drain that replaces the client pod
+// starts a new log at zero, and the old log is gone with the old pod. So the report takes the last tally of each client
+// pod that exists now and says so; it does not sum across pods over time, because the replaced pods' tallies are lost.
+func trafficReport(t *testing.T, c *foreign.Cluster, label string) foreign.PodLeg {
 	t.Helper()
 	pods := trafficPodNames(c, "fa-client")
 	if len(pods) == 0 {
 		t.Errorf("A4 traffic %s: no fa-client pod", label)
 	}
-	var fails []string
-	svcFails, podFails := 0, 0
+	var fails, retargets []string
+	var leg foreign.PodLeg
 	for _, p := range pods {
 		out, _ := inner(c, "logs", p)
 		last := ""
 		for _, l := range strings.Split(out, "\n") {
 			if strings.HasPrefix(l, "FAIL") {
 				fails = append(fails, l)
-				if podLegFail(l) {
-					podFails++
-				} else {
-					svcFails++
-				}
+			}
+			if strings.HasPrefix(l, "RETARGET") {
+				retargets = append(retargets, l)
 			}
 			if countRe.MatchString(l) {
 				last = l
 			}
 		}
+		pl, ok := foreign.ParsePodLeg(out)
+		if !ok {
+			t.Logf("A4 traffic %s: client pod %s has no pod-IP tally", label, p)
+		}
+		leg = leg.Add(pl)
 		t.Logf("A4 traffic %s: client pod %s last tally %q", label, p, last)
 	}
-	t.Logf("A4 traffic %s: %d failure lines (service leg %d, pod-IP leg %d) across %d client pod(s) present now",
-		label, len(fails), svcFails, podFails, len(pods))
+	svcFails := 0
+	for _, f := range fails {
+		if !podLegFail(f) {
+			svcFails++
+		}
+	}
+	t.Logf("A4 traffic %s: service leg %d failure lines; pod-IP leg ok=%d failed=%d skipped=%d retargets=%d",
+		label, svcFails, leg.OK, leg.Fails, leg.Skipped, leg.Retargets)
+	t.Logf("A4 traffic %s: tallies from the %d client pod(s) present now", label, len(pods))
+	for _, r := range retargets {
+		t.Logf("A4 %s", r)
+	}
 	for i, f := range fails {
 		if i >= 60 {
 			t.Logf("... %d more", len(fails)-i)
@@ -219,6 +280,7 @@ func trafficReport(t *testing.T, c *foreign.Cluster, label string) {
 		}
 		t.Logf("A4 %s", f)
 	}
+	return leg
 }
 
 // probeDiag logs, on one line, where the A4 probe targets are now: the probe pods (UID, node, pod IP, restarts,
@@ -447,7 +509,12 @@ func TestA1Upgrade(t *testing.T) {
 	t.Logf("cilium drop counters, before the upgrade:\n%s", dropsBefore)
 	t.Logf("cilium drop counters, after the upgrade:\n%s", ciliumDrops(c))
 	t.Logf("events (default, kube-system):\n%s", eventsTail(c))
-	trafficReport(t, c, "across A1 takeover and the Kubernetes upgrade")
+	// ADR 0103 amendment 6: the pod-IP leg follows the server's Ready address, so its failures are only those where a
+	// Ready server pod did not answer. The window since trafficStart includes the takeover and the upgrade.
+	leg := trafficReport(t, c, "across A1 takeover and the Kubernetes upgrade")
+	if err := leg.Check(foreign.PodLegBound); err != nil {
+		t.Errorf("A4 pod-IP leg across the takeover and the upgrade: %v", err)
+	}
 }
 
 // secretData returns the base64 values of a Secret's keys as the API serves them.

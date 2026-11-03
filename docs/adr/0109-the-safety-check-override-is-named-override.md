@@ -1,6 +1,6 @@
 # 0109. The safety-check override (formerly ADR 0065's mechanism) is named override
 
-Status: Accepted · Date: 2026-11-03 · Design section: Trust, Validation · Touches: 0065, 0085, 0089, 0094, 0101, 0107, 0108, 0110
+Status: Accepted · Date: 2026-11-03 · Design section: Trust, Validation · Touches: 0065, 0085, 0089, 0094, 0101, 0107, 0108, 0110, 0111
 
 Decided: the permission-gated override of a safety check with a recorded reason (ADR 0065, amended by 0101, 0107 and 0108) is called "override" everywhere, and the earlier name is removed from code, manifests, the UI, the CLI and the docs. The mechanism is unchanged: the user writes a reason, Ichor asks Kubernetes with a SubjectAccessReview made as that user whether they hold the verb, and the reason goes into the audit record and an Event. The CLI flag is `--override` (the reason is `--override-reason` and is optional, ADR 0110), the RBAC custom verb is `override`, and the old verb is no longer accepted.
 
@@ -23,7 +23,7 @@ Renames, all in one change:
 ## Compatibility
 
 - CRD fields are append-only (installed builds, including the demo, have the reason field on `TalosOperation.spec.node`). `spec.node.overrideReason` is added. The earlier field, `spec.node.breakGlassReason`, stays in the schema only as a deprecated alias: its doc comment says "Deprecated: use overrideReason", the controller and the operation webhook read it when `overrideReason` is empty (the webhook gates it with the same verb), and Ichor's own CLI and UI never set it. This is the one place the earlier name remains.
-- Installed bindings that grant the earlier verb stop working. Ichor's own roles are re-applied by the installer or `helm upgrade`, so they move to `override` by themselves. For roles people wrote, `ichor upgrade ichor` prints a NOTICE that lists every ClusterRole and Role (not labelled `app.kubernetes.io/name=ichor`) that grants the earlier verb on `ichor.maesh.dev`, and tells the user to change it to `override`. The notice is advice; the upgrade goes on. The CLI therefore carries that one literal verb string for the check.
+- Installed bindings that grant the earlier verb stop working. Ichor's own roles are re-applied by the installer or `helm upgrade`, so they move to `override` by themselves. The old ClusterRole `ichor-ichor-break-glass-role` is removed too: the installer prunes it by name, as an object of an earlier build that carries Ichor's app label (ADR 0111), and `helm upgrade` removes it because the release record names it. For roles people wrote, `ichor upgrade ichor` prints a NOTICE that lists every ClusterRole and Role (not labelled `app.kubernetes.io/name=ichor`) that grants the earlier verb on `ichor.maesh.dev`, and tells the user to change it to `override`. The notice is advice; the upgrade goes on. The CLI therefore carries that one literal verb string for the check.
 - The CLI's scheme gains `rbac.authorization.k8s.io/v1` so it can list the roles.
 
 ## Consequences

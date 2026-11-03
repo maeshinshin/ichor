@@ -258,6 +258,12 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		return err
 	}
 
+	return st.finishAdopt(ctx, deps, clusterName, namespace, held, blocked)
+}
+
+// finishAdopt is the last part of adopt: the Cilium takeover (Phase 3), then the release of the
+// hold, machine by machine (Phase 4).
+func (st *adoptState) finishAdopt(ctx context.Context, deps adoptDeps, clusterName, namespace string, held []*adoptNode, blocked []string) error {
 	// Phase 3: takeover (never in unmanaged mode, nothing to take over from Ichor's own Cilium).
 	// Cilium that adopt installed itself has nothing to take over: the controller only sees the
 	// release at its hash and sets CNIHandover, with no Job.

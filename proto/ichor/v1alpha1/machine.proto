@@ -117,6 +117,9 @@ message ApproveMachineResponse {
   string pull_request_url = 3 [deprecated = true];
   // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
   string notice = 4 [deprecated = true];
+  // warnings are the admission warnings the approval raised but did not refuse: an install
+  // disk, disk role or NIC that discovery did not record on the node. Empty when every pick was seen.
+  repeated string warnings = 5;
 }
 
 message RejectMachineRequest {
@@ -231,6 +234,35 @@ message Machine {
   // node_name is the Kubernetes node name the node reports (TalosMachine.status.nodeName);
   // empty until the controller has read the node. Views name a machine hostname, else node_name.
   string node_name = 18;
+  // discovered_disks are the installable disks the node reported in maintenance mode when it was
+  // discovered (TalosMachine.status.discoveredDisks); approval picks the install disk and
+  // disk roles from them. Empty until a probe has recorded some.
+  repeated DiscoveredDisk discovered_disks = 19;
+  // discovered_links are the physical NICs with a permanent MAC the node reported in maintenance mode
+  // (TalosMachine.status.discoveredLinks); approval picks the primary NIC from them.
+  repeated DiscoveredLink discovered_links = 20;
+}
+
+// DiscoveredDisk is one installable disk as discovery recorded it. The identifiers are
+// the ones a MachineDisk selector names.
+message DiscoveredDisk {
+  string wwid = 1;
+  string serial = 2;
+  string by_id_path = 3;
+  string bus_path = 4;
+  string dev_path = 5;
+  int64 size_bytes = 6;
+  string model = 7;
+  string transport = 8;
+}
+
+// DiscoveredLink is one physical NIC with a permanent MAC as discovery recorded it.
+message DiscoveredLink {
+  string name = 1;
+  string permanent_mac = 2;
+  bool link_up = 3;
+  int32 speed_mbit = 4;
+  string driver = 5;
 }
 
 message RemoveMachineRequest {

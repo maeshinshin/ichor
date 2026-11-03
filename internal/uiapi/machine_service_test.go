@@ -151,6 +151,30 @@ var _ = Describe("MachineService", func() {
 			Expect(got.Spec.Install.Image).To(Equal("factory.talos.dev/x:v1"))
 		})
 
+		It("warns, and still approves, a disk and a NIC that discovery did not record", func() {
+			cluster := newTestCluster("does-not-exist")
+			m := newTestMachine(cluster.Name, strongTestIdentity("uuid-warn"), "", ichorv1alpha1.MachineApprovalStatePending)
+			m.Status.DiscoveredDisks = []ichorv1alpha1.TalosMachineDiscoveredDisk{{Serial: "D1", DevPath: "/dev/sda", SizeBytes: 1 << 30}}
+			m.Status.DiscoveredLinks = []ichorv1alpha1.TalosMachineDiscoveredLink{{Name: "eno1", PermanentMAC: "aa:bb:cc:00:00:01"}}
+			Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
+
+			s := &Server{Client: k8sClient}
+
+			listed, err := s.GetMachine(ctx, connect.NewRequest(&pb.GetMachineRequest{Machine: objectRef(m.Namespace, m.Name)}))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(listed.Msg.GetMachine().GetDiscoveredDisks()).To(HaveLen(1))
+			Expect(listed.Msg.GetMachine().GetDiscoveredLinks()[0].GetPermanentMac()).To(Equal("aa:bb:cc:00:00:01"))
+
+			resp, err := s.ApproveMachine(ctx, connect.NewRequest(&pb.ApproveMachineRequest{
+				Machine: objectRef(m.Namespace, m.Name), Role: pb.MachineRole_MACHINE_ROLE_WORKER,
+				Install: &pb.MachineInstall{Disk: &pb.MachineDisk{DevPath: "/dev/vdz"}},
+				Network: &pb.MachineNetwork{Mac: testMAC},
+			}))
+			Expect(err).NotTo(HaveOccurred(), "a pick the node did not report is a warning, not a refusal")
+			Expect(resp.Msg.GetWarnings()).To(HaveLen(2))
+			Expect(fetchTestMachine(m).Spec.IsApproved()).To(BeTrue())
+		})
+
 		It("records the network and disk roles and refuses a MAC the machine does not have", func() {
 			cluster := newTestCluster("does-not-exist")
 			m := newTestMachine(cluster.Name, strongTestIdentity("uuid-net"), "", ichorv1alpha1.MachineApprovalStatePending)

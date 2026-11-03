@@ -484,6 +484,14 @@ const (
 	overridableValue = "true"
 )
 
+// overridableRefusal is a FailedPrecondition the override verb lifts, marked so the UI offers its override option.
+func overridableRefusal(err error) *connect.Error {
+	ce := connect.NewError(connect.CodeFailedPrecondition, err)
+	ce.Meta().Set(overridableKey, overridableValue)
+
+	return ce
+}
+
 // ciliumCompatOverride handles a patch the server does not offer. With no overridable incompatibility (compat nil) it
 // returns "" and the caller refuses as before. With one, and without an override, it refuses with overridableKey set;
 // with an override it checks the caller holds the verb on the cluster and returns the text for the Event.
@@ -495,11 +503,7 @@ func (s *Server) ciliumCompatOverride(
 	}
 
 	if bg == nil {
-		err := connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("the Cilium patch %s is incompatible: %w; the override verb can lift this", version, compat))
-		err.Meta().Set(overridableKey, overridableValue)
-
-		return "", err
+		return "", overridableRefusal(fmt.Errorf("the Cilium patch %s is incompatible: %w; the override verb can lift this", version, compat))
 	}
 
 	if err := s.authorizeOverride(ctx, cluster); err != nil {

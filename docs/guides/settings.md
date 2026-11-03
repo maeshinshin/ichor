@@ -10,6 +10,7 @@ on the next call, with no rollout.
 | `users.tokenTTL` | `spec.users.tokenTTL` | Lifetime of tokens ichor-ui issues, 1m to 1h. |
 | `users.refreshLifetime` | `spec.users.refreshLifetime` | Refresh lifetime, 1h to 720h; must not be shorter than the token lifetime. |
 | `defaults.driftPolicy` | `spec.defaults.driftPolicy` | `warnOnly` or `autoCorrect`: the drift policy a new `TalosCluster` gets. |
+| `updateCheck.enabled` | `spec.updateCheck.enabled` | Whether Ichor looks for a newer release and shows it on the dashboard. On by default; see [Updates](#updates). |
 
 A field that is set wins. A field that is not set falls back to the flag or
 chart value (the ichor-ui token flags) or to `warnOnly`. There
@@ -47,6 +48,7 @@ ichor settings set users.tokenTTL=15m defaults.driftPolicy=autoCorrect
   users.tokenTTL=15m           token lifetime, 1m to 1h
   users.refreshLifetime=168h  refresh lifetime, 1h to 720h
   defaults.driftPolicy=warnOnly|autoCorrect   default for a new TalosCluster
+  updateCheck.enabled=true|false              look for a newer Ichor release
 ```
 
 There is no switch for "Reset and add" (MachineReclaim) any more: `reclaim.enabled`
@@ -65,7 +67,7 @@ the subresource for each part of the change:
 | Changing | Needs `update` on |
 |---|---|
 | `spec.version`, `spec.deployment` | `ichorinstallations/version` |
-| `spec.users`, `spec.defaults` | `ichorinstallations/settings` |
+| `spec.users`, `spec.defaults`, `spec.updateCheck` | `ichorinstallations/settings` |
 
 `ichor-admin` holds both on separate rule lines, so a custom role can hold
 fewer. The ichor-ui ServiceAccount holds `update` on `settings` for the users it
@@ -78,6 +80,19 @@ Set the controller flag `--settings-read-only` (chart value
 then denies writes to the settings fields, every consumer ignores whatever the
 `IchorInstallation` holds, and the Settings page is read-only with a "managed by
 the deployment" notice. The values come from the flags and chart values only.
+
+## Updates
+
+The controller lists the tags of the chart repository (`ghcr.io/maeshinshin/charts/ichor`) on start and every
+six hours, and keeps the newest final release in `status.latestRelease` (ADR 0114). Prereleases and versions that
+are not semver are ignored. The dashboard then shows "v<X> available" next to Upgrade on the Ichor row, and the
+attention list names it. Nothing is installed by the check: Upgrade is still how Ichor moves, and a Helm install is
+upgraded with `helm upgrade`. A dev build is never told about a release.
+
+The request is one anonymous tag listing; it carries nothing about the cluster. Turning the check off (`ichor settings
+set updateCheck.enabled=false`, or the chart's `updateCheck.enabled: false`, which passes the flag) stops the requests and
+removes the controller's egress rule for them (`ichor-controller-release-check`). `status.latestRelease` keeps the
+last result and its error: a failed check shows nothing on the dashboard, and Settings says why.
 
 ## A Helm install
 

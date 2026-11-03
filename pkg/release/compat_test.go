@@ -61,9 +61,11 @@ func TestTalosKubernetesUsesMachineryAndRefusesUnknownMinors(t *testing.T) {
 		name, talos, kubernetes string
 		ok                      bool
 	}{
-		// Machinery v1.14.3 covers Talos 1.14 with 1.32.0 to 1.37.99.
+		// The Talos 1.14 support matrix lists 1.33 to 1.37; the table wins over machinery's 1.32.0 to 1.37.99.
 		{"Talos 1.14 with 1.37.1", "v1.14.3", "v1.37.1", true},
-		{"Talos 1.14 with 1.32.0", "v1.14.3", "v1.32.0", true},
+		{"Talos 1.14 with 1.33.0", "v1.14.3", "v1.33.0", true},
+		{"Talos 1.14 with 1.36.6", "v1.14.5", "v1.36.6", true},
+		{"Talos 1.14 with 1.32.0", "v1.14.3", "v1.32.0", false},
 		{"Talos 1.14 with 1.31.9", "v1.14.3", "v1.31.9", false},
 		{"Talos 1.14 with 1.38.0", "v1.14.3", "v1.38.0", false},
 		{"Talos 1.12 with 1.35.0", "v1.12.0", "v1.35.0", true},

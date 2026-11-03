@@ -4,14 +4,10 @@
 // diagnostics.ts because it needs the DOM.
 import { diagnosticsClient, operationClient, userClient } from '@/lib/connect'
 import { downloadName } from '@/lib/users'
-import { collect, fileNameOf, type Chunk } from '@/lib/diagnostics'
+import { collect, fileNameOf } from '@/lib/diagnostics'
 import type { CapturePacketsRequest } from '@/gen/ichor/v1alpha1/diagnostics_pb'
 
 type Ref = { namespace: string; name: string }
-
-async function* chunksOf(stream: AsyncIterable<{ filename: string; contentType: string; data: Uint8Array }>): AsyncGenerator<Chunk> {
-  for await (const c of stream) yield { filename: c.filename, contentType: c.contentType, data: c.data }
-}
 
 export type DiagnosticsDownloadRequest =
   | { kind: 'support-bundle'; machine: Ref }
@@ -37,12 +33,9 @@ function open(req: DownloadRequest, signal: AbortSignal): AsyncIterable<{ filena
   }
 }
 
-// download runs the call to its end, saves the file and returns its name. Nothing is saved if the
-// stream breaks or is too large for the browser.
-export async function download(req: DownloadRequest, signal: AbortSignal): Promise<string> {
-  const got = await collect(chunksOf(open(req, signal)))
-  const name = fileNameOf(got, req.kind)
-  const url = URL.createObjectURL(new Blob(got.parts, { type: got.contentType }))
+// saveFile hands the bytes to the browser as a download, through a temporary object URL.
+function saveFile(parts: BlobPart[], type: string, name: string): void {
+  const url = URL.createObjectURL(new Blob(parts, { type }))
   const a = document.createElement('a')
   a.href = url
   a.download = name
@@ -50,6 +43,14 @@ export async function download(req: DownloadRequest, signal: AbortSignal): Promi
   a.click()
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
+// download runs the call to its end, saves the file and returns its name. Nothing is saved if the
+// stream breaks or is too large for the browser.
+export async function download(req: DownloadRequest, signal: AbortSignal): Promise<string> {
+  const got = await collect(open(req, signal))
+  const name = fileNameOf(got, req.kind)
+  saveFile(got.parts, got.contentType, name)
   return name
 }
 
@@ -57,13 +58,6 @@ export async function download(req: DownloadRequest, signal: AbortSignal): Promi
 export async function downloadKubeconfig(): Promise<string> {
   const res = await userClient.getMyKubeconfig({})
   const name = downloadName(res.filename, 'kubeconfig.yaml')
-  const url = URL.createObjectURL(new Blob([res.kubeconfig], { type: 'application/yaml' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = name
-  document.body.append(a)
-  a.click()
-  a.remove()
-  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  saveFile([res.kubeconfig], 'application/yaml', name)
   return name
 }

@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"sort"
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -65,13 +64,16 @@ func rolesGrantingEarlierVerb(ctx context.Context, c client.Reader) ([]string, e
 		}
 	}
 
-	sort.Strings(names)
+	slices.Sort(names)
 
 	return names, nil
 }
 
+// ownLabelValue is the app.kubernetes.io/name the installer and the chart put on Ichor's own objects.
+const ownLabelValue = string(provenanceIchor)
+
 // ownRole reports whether labels mark a role as one Ichor ships.
-func ownRole(labels map[string]string) bool { return labels["app.kubernetes.io/name"] == "ichor" }
+func ownRole(labels map[string]string) bool { return labels["app.kubernetes.io/name"] == ownLabelValue }
 
 // noticeEarlierOverrideVerb prints a NOTICE naming the roles that still grant the earlier verb.
 // It is advice: a cluster that cannot be read (no permission, no kubeconfig) prints nothing.
@@ -81,9 +83,9 @@ func noticeEarlierOverrideVerb(ctx context.Context, c client.Reader, w io.Writer
 		return
 	}
 
-	fmt.Fprintf(w, "NOTICE: these roles grant the %q verb on ichor.maesh.dev, which Ichor no longer accepts. Change it to %q:\n", earlierOverrideVerb, "override")
+	_, _ = fmt.Fprintf(w, "NOTICE: these roles grant the %q verb on ichor.maesh.dev, which Ichor no longer accepts. Change it to %q:\n", earlierOverrideVerb, "override")
 
 	for _, n := range names {
-		fmt.Fprintf(w, "  %s\n", n)
+		_, _ = fmt.Fprintf(w, "  %s\n", n)
 	}
 }

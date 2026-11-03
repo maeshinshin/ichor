@@ -48,9 +48,9 @@ const (
 )
 
 const (
-	overrideWebhookPath = "/validate-ichor-maesh-dev-v1alpha1-override"
-	ichorFinalizerPrefix  = "ichor.maesh.dev/"
-	ichorGroup            = "ichor.maesh.dev"
+	overrideWebhookPath  = "/validate-ichor-maesh-dev-v1alpha1-override"
+	ichorFinalizerPrefix = "ichor.maesh.dev/"
+	ichorGroup           = "ichor.maesh.dev"
 )
 
 var overridelog = logf.Log.WithName("override-webhook")

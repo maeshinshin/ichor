@@ -232,7 +232,7 @@ func TestCheckLastWorker(t *testing.T) {
 	for _, tc := range []struct {
 		unschedulable bool
 		after         int
-		override    bool
+		override      bool
 		wantErr       bool
 	}{
 		{true, 0, false, true}, {true, 1, false, false}, {false, 0, false, false},

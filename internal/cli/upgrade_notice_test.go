@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	rbacv1 "k8s.io/api/rbac/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
@@ -37,11 +36,11 @@ func TestUpgradeNoticeListsRolesGrantingTheEarlierVerb(t *testing.T) {
 	}
 
 	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
-		&rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "mine"}, Rules: rule(earlierOverrideVerb, "ichor.maesh.dev")},
-		&rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "ichors", Labels: map[string]string{"app.kubernetes.io/name": "ichor"}}, Rules: rule(earlierOverrideVerb, "ichor.maesh.dev")},
-		&rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "other-group"}, Rules: rule(earlierOverrideVerb, "example.test")},
-		&rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "new-verb"}, Rules: rule("override", "ichor.maesh.dev")},
-		&rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Namespace: "team", Name: "ops"}, Rules: rule(earlierOverrideVerb, "ichor.maesh.dev")},
+		&rbacv1.ClusterRole{Name: "mine", Rules: rule(earlierOverrideVerb, "ichor.maesh.dev")},
+		&rbacv1.ClusterRole{Name: "ichors", Labels: map[string]string{"app.kubernetes.io/name": ownLabelValue}, Rules: rule(earlierOverrideVerb, "ichor.maesh.dev")},
+		&rbacv1.ClusterRole{Name: "other-group", Rules: rule(earlierOverrideVerb, "example.test")},
+		&rbacv1.ClusterRole{Name: "new-verb", Rules: rule("override", "ichor.maesh.dev")},
+		&rbacv1.Role{Namespace: "team", Name: "ops", Rules: rule(earlierOverrideVerb, "ichor.maesh.dev")},
 	).Build()
 
 	var out bytes.Buffer

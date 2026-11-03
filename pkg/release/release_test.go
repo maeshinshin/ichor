@@ -28,13 +28,6 @@ import (
 	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
-// Versions older than the pinned set, which the tests start from.
-const (
-	olderTalos    = "v1.12.4"
-	olderContract = "v1.13"
-	olderK8s      = "v1.36.0"
-)
-
 // The pinned Kubernetes is the one pkg/machinery defaults to, and it is one the pinned Talos supports.
 func TestPinnedIsConsistentWithMachinery(t *testing.T) {
 	t.Parallel()

@@ -22,9 +22,9 @@ func TestLatestPicksTheHighestFinalRelease(t *testing.T) {
 }
 
 func TestFinalsAreNewestFirstAndOncePerVersion(t *testing.T) {
-	got := Finals([]string{"0.2.0", "v0.10.0", "0.2.0", "0.3.0-rc.1", "v0.9.1", "junk", "v0.2.0+b.1"})
+	got := Finals([]string{"0.4.0", "v0.10.0", "0.4.0", "0.3.0-rc.1", "v0.9.1", "junk", "v0.4.0+b.1"})
 
-	if want := []string{"v0.10.0", "v0.9.1", "v0.2.0"}; !slices.Equal(got, want) {
+	if want := []string{"v0.10.0", "v0.9.1", "v0.4.0"}; !slices.Equal(got, want) {
 		t.Fatalf("Finals = %v, want %v", got, want)
 	}
 }

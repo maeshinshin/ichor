@@ -39,6 +39,7 @@ import (
 	ichorversion "github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
+	"github.com/maeshinshin/ichor/pkg/release"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
@@ -715,7 +716,29 @@ func (st *adoptState) chooseContract(deps adoptDeps) error {
 		return nil
 	}
 
+	// The versions the cluster runs are judged against this build's release set before anything is
+	// written: newer is refused, older is adopted and reported as behind.
+	behind, err := release.Adoptable(st.cluster.Spec.TalosVersion, st.cluster.Spec.KubernetesVersion)
+	if err != nil {
+		return fmt.Errorf("adopt: %w", err)
+	}
+
+	if len(behind) > 0 {
+		_, _ = fmt.Fprintf(deps.Stderr, "adopt: the cluster is behind the release set of this Ichor (%s): "+
+			"`ichor upgrade cluster` brings it there, one step at a time\n", strings.Join(behind, ", "))
+	}
+
 	if deps.ContractOverride != "" {
+		if err := checkPinnedFlags("", "", deps.ContractOverride); err != nil {
+			return fmt.Errorf("adopt: %w", err)
+		}
+
+		if len(behind) > 0 {
+			return fmt.Errorf("adopt: --version-contract %s is refused: the contract follows the running Talos "+
+				"(%s), which is behind; the contract moves with the Talos step of `ichor upgrade cluster`",
+				deps.ContractOverride, st.cluster.Spec.TalosVersion)
+		}
+
 		st.cluster.Spec.VersionContract = deps.ContractOverride
 
 		return nil

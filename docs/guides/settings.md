@@ -12,6 +12,10 @@ on the next call, with no rollout.
 | `defaults.driftPolicy` | `spec.defaults.driftPolicy` | `warnOnly` or `autoCorrect`: the drift policy a new `TalosCluster` gets. |
 | `updateCheck.enabled` | `spec.updateCheck.enabled` | Whether Ichor looks for a newer release and shows it on the dashboard. On by default; see [Updates](#updates). |
 
+| `autoPatch.enabled` | `spec.autoPatch.enabled` | Apply patch releases of the running minor automatically. Off by default; see [Automatic patching](#automatic-patching). |
+| `autoPatch.components` | `spec.autoPatch.components` | Which of `talos`, `cilium`, `kubernetes`; empty means all three. |
+| `autoPatch.window` | `spec.autoPatch.window` | A daily UTC window `HH:MM-HH:MM` an upgrade may start in; empty means any time. |
+
 A field that is set wins. A field that is not set falls back to the flag or
 chart value (the ichor-ui token flags) or to `warnOnly`. There
 is no way to unset a field from the UI or the CLI. `status.effective` on the
@@ -49,6 +53,10 @@ ichor settings set users.tokenTTL=15m defaults.driftPolicy=autoCorrect
   users.refreshLifetime=168h  refresh lifetime, 1h to 720h
   defaults.driftPolicy=warnOnly|autoCorrect   default for a new TalosCluster
   updateCheck.enabled=true|false              look for a newer Ichor release
+  autoPatch.enabled=true|false                apply patch releases automatically
+  autoPatch.components=talos,cilium           which components (empty: all)
+  autoPatch.window=02:00-05:00                daily UTC window (empty: any time)
+  autoPatch.acknowledgeHalt=NAMESPACE/NAME    clear a halt (below)
 ```
 
 There is no switch for "Reset and add" (MachineReclaim) any more: `reclaim.enabled`
@@ -67,7 +75,7 @@ the subresource for each part of the change:
 | Changing | Needs `update` on |
 |---|---|
 | `spec.version`, `spec.deployment` | `ichorinstallations/version` |
-| `spec.users`, `spec.defaults`, `spec.updateCheck` | `ichorinstallations/settings` |
+| `spec.users`, `spec.defaults`, `spec.updateCheck`, `spec.autoPatch` | `ichorinstallations/settings` |
 
 `ichor-admin` holds both on separate rule lines, so a custom role can hold
 fewer. The ichor-ui ServiceAccount holds `update` on `settings` for the users it
@@ -98,6 +106,30 @@ The CLI shows the same result. After a command that reaches a cluster, `ichor` p
 newer release is known, or when the `ichor` binary itself is older than it. It does this on a terminal only, at most
 once a day per cluster, and not with `-o`. Set `ICHOR_NO_UPDATE_NOTICE=1` to turn the line off. The CLI makes no
 request of its own: the line comes from the `IchorInstallation` the command already reads (ADR 0114).
+
+## Automatic patching
+
+Off by default (ADR 0116). When you turn it on (the Settings page's "Automatic patching" card, `ichor settings set
+autoPatch.enabled=true`, or the chart's `autoPatch.enabled`), the controller starts upgrades to **patch releases of
+the running minor** by itself: Talos, then Cilium, then Kubernetes, one component at a time and at most one
+operation per cluster. It never moves to a new minor and never starts anything that would need `--override`.
+
+It only offers what the release check listed (so the update check must be on), what the compatibility table accepts
+for the cluster, and for Cilium only images whose signatures verified. It starts one only when all of this holds: it
+is inside the window (UTC, `HH:MM-HH:MM`, may wrap midnight; no window means any time), every approved machine is
+Ready, no operation of the cluster is unfinished, and the cluster lock is free. The operation is an ordinary
+`TalosOperation` that the normal executor runs; it carries the annotation `ichor.maesh.dev/auto-patch: "true"`, shows
+"Started by: Automatic patching" on its page, and each start leaves an `AutoPatchStarted` Event on the cluster.
+
+For a Talos or Kubernetes patch the controller writes the new version into the `TalosCluster` spec before it creates
+the operation; this is the only write the controller makes to a spec, and the webhook refuses any other write by it
+to a `TalosCluster`. If your clusters are kept in Git by a tool that reverts edits, leave automatic patching off.
+
+If an automatic operation fails or pauses, automatic patching stops everywhere (condition `AutoPatchHalted`, a
+warning Event, an item in the Overview's attention list) and never retries. Look at the operation, resume it with
+`ichor operation resume` or delete it, then clear the halt: the Settings page's "Clear the halt" button, or `ichor
+settings set autoPatch.acknowledgeHalt=NAMESPACE/NAME`. It also ends by itself when the operation completes or is
+deleted, or when a later manual upgrade of that cluster completes. Clearing the halt is allowed under read-only mode.
 
 ## A Helm install
 

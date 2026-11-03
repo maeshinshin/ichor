@@ -267,7 +267,9 @@ the document, so Ichor validates it before rendering.
 4. The Talos version contract is pinned in the CR, so a library bump cannot
    silently change what gets applied.
 5. The controller never writes `spec`, so it never fights whatever tool the user
-   keeps the CRs in.
+   keeps the CRs in. (One opt-in exception, off by default: automatic patch
+   upgrades write a newer patch of the running minor into a cluster's two
+   version fields, ADR 0116.)
 6. Disruptive operations (upgrades, reboots, CA rotation, topology changes)
    take a per-cluster Lease. One at a time.
 7. Progress lives in status and resumes idempotently. (A live etcd restore

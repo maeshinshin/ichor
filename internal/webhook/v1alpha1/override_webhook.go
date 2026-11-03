@@ -237,10 +237,10 @@ func (h *OverrideHandler) handleOperation(ctx context.Context, req admission.Req
 		return admission.Allowed("")
 	}
 
-	// A reset wipes the node; an overrideReason on any other action overrides the last-worker guard.
-	// Either needs the verb on the machine.
+	// A reset wipes the node; an override on any other action overrides the last-worker guard. Either
+	// needs the verb on the machine, whether or not a reason is given (ADR 0110).
 	reset := op.Spec.Node.Action == ichorv1alpha1.NodeActionReset
-	if !reset && op.Spec.Node.EffectiveOverrideReason() == "" {
+	if !reset && !op.Spec.Node.Overrides() {
 		return admission.Allowed("")
 	}
 
@@ -248,7 +248,7 @@ func (h *OverrideHandler) handleOperation(ctx context.Context, req admission.Req
 
 	what := "a reset wipes the node"
 	if !reset {
-		what = "spec.node.overrideReason overrides the last-worker guard"
+		what = "spec.node.override overrides the last-worker guard"
 	}
 
 	if r := h.require(ctx, req, OverrideVerb, "talosmachines", "", machine,

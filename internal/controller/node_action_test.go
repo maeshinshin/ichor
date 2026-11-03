@@ -198,7 +198,7 @@ var _ = Describe("TalosOperation node actions", func() {
 			}
 		})
 
-		It("names override in the refusal, and lets spec.node.overrideReason override it", func() {
+		It("names override in the refusal, and lets spec.node.override waive it with no reason", func() {
 			for _, action := range []string{ichorv1alpha1.NodeActionReboot, ichorv1alpha1.NodeActionShutdown} {
 				f := newNodeFixture(map[string]string{hostW1: roleWorker})
 				Expect(f.kube.CoreV1().Nodes().Delete(context.Background(), nodeSpareWorker, metav1.DeleteOptions{})).To(Succeed())
@@ -211,7 +211,7 @@ var _ = Describe("TalosOperation node actions", func() {
 				Expect(f.kube.CoreV1().Nodes().Delete(context.Background(), nodeSpareWorker, metav1.DeleteOptions{})).To(Succeed())
 
 				spec := nodeSpec(action)
-				spec.OverrideReason = "tearing the cluster down"
+				spec.Override = true // the reason is optional (ADR 0110)
 				got = f.reconcile(f.newOp(hostW1, spec))
 				Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
 

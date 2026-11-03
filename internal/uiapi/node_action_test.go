@@ -220,7 +220,7 @@ func TestNodeResetNeedsTheNameAndOverride(t *testing.T) {
 	}
 
 	if _, err := s.CreateOperation(bg, resetReq("w1", "")); connect.CodeOf(err) != connect.CodeInvalidArgument {
-		t.Fatalf("no reason: %v", err)
+		t.Fatalf("no override: %v", err)
 	}
 
 	// With no signed-in user nobody can be asked whether they may override.
@@ -261,6 +261,46 @@ func TestNodeResetNeedsTheNameAndOverride(t *testing.T) {
 	if len(ops) != 1 || ops[0].Spec.Node.Action != ichorv1alpha1.NodeActionReset || ops[0].Spec.Node.Confirm != "w1" {
 		t.Fatalf("operations = %+v", ops)
 	}
+}
+
+// An override with no reason is allowed: the verb gates it, and the audit record and the Event say no
+// reason was given (ADR 0110).
+func TestNodeResetOverrideWithoutAReason(t *testing.T) {
+	s, k8s := opServer(t, opObjects()...)
+	var asked []authv1.ResourceAttributes
+	s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, true, &asked), nil }
+	user := context.WithValue(context.Background(), identityKey{}, Identity{User: bgUser})
+
+	req := nodeCreateReq(&pb.NodeActionRequest{
+		Machine: objectRef(opNS, "w1"), Action: pb.NodeAction_NODE_ACTION_RESET, Confirm: "w1", Override: &pb.Override{},
+	})
+
+	res, err := s.CreateOperation(user, req)
+	if err != nil {
+		t.Fatalf("override without a reason: %v", err)
+	}
+
+	if a := res.Msg.GetAudit(); a.GetAction() != "create-override" || a.GetReason() != "no reason given" {
+		t.Fatalf("audit = %+v", a)
+	}
+
+	ops := listOps(t, k8s)
+	if len(ops) != 1 || !ops[0].Spec.Node.Override || ops[0].Spec.Node.OverrideReason != "" {
+		t.Fatalf("spec.node = %+v", ops)
+	}
+
+	var events corev1.EventList
+	if err := k8s.List(context.Background(), &events); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, e := range events.Items {
+		if e.Reason == "Override" && strings.Contains(e.Message, "under override: no reason given") {
+			return
+		}
+	}
+
+	t.Fatalf("no Override event that says no reason was given: %+v", events.Items)
 }
 
 func TestRemoveMachineDeletesAfterTheTypedName(t *testing.T) {

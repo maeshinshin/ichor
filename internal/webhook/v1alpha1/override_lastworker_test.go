@@ -106,22 +106,22 @@ func TestLastWorkerGuardMachineUnapprove(t *testing.T) {
 	}
 }
 
-// A node operation that carries overrideReason (the controller-side override of the last-worker
-// guard) is admitted only for a user holding the verb on the machine.
-func TestLastWorkerGuardNodeOperationReason(t *testing.T) {
+// A node operation that asks to override the controller's last-worker guard is admitted only for a user
+// holding the verb on the machine. The request may be the override flag, a reason alone (how operations
+// were written before the flag, ADR 0110), or the deprecated breakGlassReason; the gate is the same.
+func TestLastWorkerGuardNodeOperationOverride(t *testing.T) {
 	t.Parallel()
 
 	h := bgUnitHandler(t)
 
-	handle := func(user, reason string) admission.Response {
+	handle := func(user string, node ichorv1alpha1.TalosOperationNodeSpec) admission.Response {
+		node.MachineRef = corev1.LocalObjectReference{Name: "w1"}
+		node.Action = ichorv1alpha1.NodeActionReboot
 		op := ichorv1alpha1.TalosOperation{
 			Name: "op", Namespace: testNamespace,
 			Spec: ichorv1alpha1.TalosOperationSpec{
 				ClusterRef: corev1.LocalObjectReference{Name: lwCluster}, Kind: ichorv1alpha1.TalosOperationKindNode,
-				Node: &ichorv1alpha1.TalosOperationNodeSpec{
-					MachineRef: corev1.LocalObjectReference{Name: "w1"}, Action: ichorv1alpha1.NodeActionReboot,
-					OverrideReason: reason,
-				},
+				Node: &node,
 			},
 		}
 
@@ -137,16 +137,26 @@ func TestLastWorkerGuardNodeOperationReason(t *testing.T) {
 		})
 	}
 
-	if !handle(bgUnitPlain, "").Allowed {
+	asks := map[string]ichorv1alpha1.TalosOperationNodeSpec{
+		"no override":        {},
+		"override flag":      {Override: true},
+		"override with note": {Override: true, OverrideReason: "teardown"},
+		"reason alone":       {OverrideReason: "teardown"},
+		"deprecated alias":   {BreakGlassReason: "teardown"},
+	}
+
+	if !handle(bgUnitPlain, asks["no override"]).Allowed {
 		t.Error("a plain reboot needs no override")
 	}
 
-	if handle(bgUnitPlain, "teardown").Allowed {
-		t.Error("a plain user must not set overrideReason")
-	}
+	for _, name := range []string{"override flag", "override with note", "reason alone", "deprecated alias"} {
+		if handle(bgUnitPlain, asks[name]).Allowed {
+			t.Errorf("a plain user must not override with %s", name)
+		}
 
-	if !handle(bgUnitHolder, "teardown").Allowed {
-		t.Error("an override holder may set overrideReason")
+		if !handle(bgUnitHolder, asks[name]).Allowed {
+			t.Errorf("an override holder may override with %s", name)
+		}
 	}
 }
 

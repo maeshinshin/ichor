@@ -380,10 +380,6 @@ func CustomizeService(svc *corev1.Service, s UISettings) {
 	has := func(name string) int {
 		return slices.IndexFunc(svc.Spec.Ports, func(p corev1.ServicePort) bool { return p.Name == name })
 	}
-	add := func(name string, port int32) {
-		svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{Name: name, Port: port, TargetPort: intstr.FromInt32(port), Protocol: corev1.ProtocolTCP})
-	}
-
 	// Migration: the pinned port replaces the new default.
 	if p, err := addrPort(s.ListenAddr); err == nil {
 		if i := has(UIPortName); i >= 0 {
@@ -392,7 +388,7 @@ func CustomizeService(svc *corev1.Service, s UISettings) {
 	}
 
 	if s.UsersOn() && has(UIInternalPortName) < 0 {
-		add(UIInternalPortName, UIInternalPort)
+		svc.Spec.Ports = append(svc.Spec.Ports, corev1.ServicePort{Name: UIInternalPortName, Port: UIInternalPort, TargetPort: intstr.FromInt32(UIInternalPort), Protocol: corev1.ProtocolTCP})
 	}
 }
 
@@ -545,14 +541,15 @@ func isUIPolicy(o *unstructured.Unstructured) bool {
 // install. The policies list
 // 8443 only, which is all a fresh install needs.
 func CustomizePolicies(objs []*unstructured.Unstructured, s UISettings) {
-	var extra []any
-
-	if p, err := addrPort(s.ListenAddr); err == nil && p != 8443 {
-		extra = append(extra, map[string]any{"port": strconv.Itoa(int(p)), "protocol": "TCP"})
+	p, err := addrPort(s.ListenAddr)
+	if err != nil || p == 8443 {
+		return
 	}
 
+	extra := map[string]any{"port": strconv.Itoa(int(p)), "protocol": "TCP"}
+
 	for _, o := range objs {
-		if !isUIPolicy(o) || len(extra) == 0 {
+		if !isUIPolicy(o) {
 			continue
 		}
 
@@ -570,7 +567,7 @@ func CustomizePolicies(objs []*unstructured.Unstructured, s UISettings) {
 
 		tp, _ := toPorts[0].(map[string]any)
 		ports, _ := tp["ports"].([]any)
-		tp["ports"] = append(ports, extra...)
+		tp["ports"] = append(ports, extra)
 
 		_ = unstructured.SetNestedSlice(o.Object, ing, "spec", "ingress")
 	}

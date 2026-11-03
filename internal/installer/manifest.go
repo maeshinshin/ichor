@@ -24,6 +24,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"slices"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -113,9 +114,5 @@ func isInstallerRBAC(o *unstructured.Unstructured) bool {
 }
 
 func (p plan) nonRBAC() []*unstructured.Unstructured {
-	out := make([]*unstructured.Unstructured, 0, len(p.crds)+len(p.controller)+len(p.ui))
-	out = append(out, p.crds...)
-	out = append(out, p.controller...)
-
-	return append(out, p.ui...)
+	return slices.Concat(p.crds, p.controller, p.ui)
 }

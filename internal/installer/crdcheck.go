@@ -32,9 +32,9 @@ type retiredField struct {
 	path string // dotted property path from the object root, e.g. "spec.gitops"
 }
 
-// retiredFields is the whole list.
 const ichorInstallationsCRD = "ichorinstallations.ichor.maesh.dev"
 
+// retiredFields is the whole list.
 var retiredFields = []retiredField{
 	// GitOps is permanently out of scope; spec.gitops (and everything under it) is gone.
 	{crd: "talosclusters.ichor.maesh.dev", path: "spec.gitops"},

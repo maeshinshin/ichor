@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -261,10 +262,7 @@ func pruneSnapshots(ctx context.Context, c client.Client, ns, current string, ke
 		}
 	}
 
-	ids := make([]string, 0, len(parts))
-	for id := range parts {
-		ids = append(ids, id)
-	}
+	ids := slices.Collect(maps.Keys(parts))
 
 	// Newest first. A snapshot without a timestamp (made before this existed) sorts oldest.
 	slices.SortFunc(ids, func(a, b string) int {

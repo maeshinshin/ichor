@@ -36,6 +36,12 @@ import (
 	"time"
 )
 
+// The subjects the tests give the Ichor-made and the operator's certificates.
+const (
+	cnManaged  = "managed"
+	cnOperator = "operator"
+)
+
 func writePair(t *testing.T, dir, cn string, dnsNames ...string) {
 	t.Helper()
 
@@ -105,21 +111,21 @@ func servedCN(addr, sni string) (string, error) {
 
 func TestOperatorPairBeatsManaged(t *testing.T) {
 	managed, operator := t.TempDir(), t.TempDir()
-	writePair(t, managed, "managed")
-	writePair(t, operator, "operator")
+	writePair(t, managed, cnManaged)
+	writePair(t, operator, cnOperator)
 
 	addr := serve(t, servingCertificate(t.Context(), filepath.Join(operator, "tls.crt"), filepath.Join(operator, "tls.key"), managed))
-	if got, err := servedCN(addr, ""); err != nil || got != "operator" {
+	if got, err := servedCN(addr, ""); err != nil || got != cnOperator {
 		t.Fatalf("served %q, %v; want operator", got, err)
 	}
 }
 
 func TestManagedPairWhenNoOperatorFiles(t *testing.T) {
 	managed, empty := t.TempDir(), t.TempDir()
-	writePair(t, managed, "managed")
+	writePair(t, managed, cnManaged)
 
 	addr := serve(t, servingCertificate(t.Context(), filepath.Join(empty, "tls.crt"), filepath.Join(empty, "tls.key"), managed))
-	if got, err := servedCN(addr, ""); err != nil || got != "managed" {
+	if got, err := servedCN(addr, ""); err != nil || got != cnManaged {
 		t.Fatalf("served %q, %v; want managed", got, err)
 	}
 }
@@ -130,18 +136,18 @@ func TestServiceNameSNIGetsManagedWhenOperatorPairIsSet(t *testing.T) {
 	const svc = "ichor-ichor-ui-service.ichor-system.svc"
 
 	managed, operator := t.TempDir(), t.TempDir()
-	writePair(t, managed, "managed", "ichor-ichor-ui-service", svc, "ichor-ichor-ui-service.ichor-system.svc.cluster.local", "localhost")
-	writePair(t, operator, "operator", "ui.example.com")
+	writePair(t, managed, cnManaged, "ichor-ichor-ui-service", svc, "ichor-ichor-ui-service.ichor-system.svc.cluster.local", "localhost")
+	writePair(t, operator, cnOperator, "ui.example.com")
 
 	addr := serve(t, servingCertificate(t.Context(), filepath.Join(operator, "tls.crt"), filepath.Join(operator, "tls.key"), managed))
 
 	for _, tc := range []struct{ sni, want string }{
-		{svc, "managed"},
-		{"ichor-ichor-ui-service.ichor-system.svc.cluster.local", "managed"},
-		{"ichor-ichor-ui-service.ichor-system.svc.", "managed"},
-		{"other.ichor-system.svc", "operator"},
-		{"ui.example.com", "operator"},
-		{"", "operator"},
+		{svc, cnManaged},
+		{"ichor-ichor-ui-service.ichor-system.svc.cluster.local", cnManaged},
+		{"ichor-ichor-ui-service.ichor-system.svc.", cnManaged},
+		{"other.ichor-system.svc", cnOperator},
+		{"ui.example.com", cnOperator},
+		{"", cnOperator},
 	} {
 		if got, err := servedCN(addr, tc.sni); err != nil || got != tc.want {
 			t.Fatalf("sni %q: served %q, %v; want %s", tc.sni, got, err, tc.want)
@@ -152,10 +158,10 @@ func TestServiceNameSNIGetsManagedWhenOperatorPairIsSet(t *testing.T) {
 // Before the controller has made the Ichor-made pair, a Service name gets the operator's pair.
 func TestServiceNameFallsBackToOperatorWithoutManaged(t *testing.T) {
 	managed, operator := t.TempDir(), t.TempDir()
-	writePair(t, operator, "operator", "ui.example.com")
+	writePair(t, operator, cnOperator, "ui.example.com")
 
 	addr := serve(t, servingCertificate(t.Context(), filepath.Join(operator, "tls.crt"), filepath.Join(operator, "tls.key"), managed))
-	if got, err := servedCN(addr, "ichor-ichor-ui-service.ichor-system.svc"); err != nil || got != "operator" {
+	if got, err := servedCN(addr, "ichor-ichor-ui-service.ichor-system.svc"); err != nil || got != cnOperator {
 		t.Fatalf("served %q, %v; want operator", got, err)
 	}
 }

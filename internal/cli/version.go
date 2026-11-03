@@ -30,6 +30,7 @@ import (
 	sigsyaml "sigs.k8s.io/yaml"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/releasecheck"
 	"github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/release"
 )
@@ -81,6 +82,8 @@ type versionServer struct {
 	InstalledVersion string `json:"installedVersion,omitempty"`
 	// SpecVersion is set only when IchorInstallation.spec.version differs from what is installed.
 	SpecVersion string `json:"specVersion,omitempty"`
+	// LatestRelease is the newer Ichor release the cluster's controller found (docs/adr/0114); empty when none is newer.
+	LatestRelease string `json:"latestRelease,omitempty"`
 }
 
 // collectVersion reads the IchorInstallation through c (nil means --client). The returned note is
@@ -104,6 +107,10 @@ func collectVersion(ctx context.Context, c client.Reader, cliVersion string) (in
 	info.Server = &versionServer{InstalledVersion: inst.Status.InstalledVersion}
 	if inst.Spec.Version != inst.Status.InstalledVersion {
 		info.Server.SpecVersion = inst.Spec.Version
+	}
+
+	if rel := inst.Status.LatestRelease; rel != nil && releasecheck.Newer(inst.Status.InstalledVersion, rel.Version) {
+		info.Server.LatestRelease = rel.Version
 	}
 
 	return info, ""

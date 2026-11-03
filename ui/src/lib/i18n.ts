@@ -335,6 +335,7 @@ export const en = {
   'talos.services': 'Services',
   'talos.colService': 'Service',
   'talos.colHealth': 'Health',
+  'talos.noHealthCheck': 'No health check',
   'talos.extensions': 'Extensions',
   'talos.noExtensions': 'No extensions installed.',
   'talos.colVersion': 'Version',

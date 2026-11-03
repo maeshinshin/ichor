@@ -542,8 +542,12 @@ func (x *SetCiliumValuesResponse) GetEffectiveYaml() string {
 }
 
 type StartCniUpgradeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Cluster       *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Cluster *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	// version is a Cilium patch (vX.Y.Z, newer than the chart this Ichor embeds) the list of
+	// ListUpgradeTargets offers as a cni patch; empty upgrades the release to the embedded chart.
+	// The controller verifies the patch's images before it runs them.
+	Version       string `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -583,6 +587,13 @@ func (x *StartCniUpgradeRequest) GetCluster() *ObjectRef {
 		return x.Cluster
 	}
 	return nil
+}
+
+func (x *StartCniUpgradeRequest) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
 }
 
 type StartCniUpgradeResponse struct {
@@ -690,9 +701,10 @@ const file_ichor_v1alpha1_cni_proto_rawDesc = "" +
 	"\tuser_yaml\x18\x02 \x01(\tR\buserYaml\"s\n" +
 	"\x17SetCiliumValuesResponse\x121\n" +
 	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12%\n" +
-	"\x0eeffective_yaml\x18\x02 \x01(\tR\reffectiveYaml\"M\n" +
+	"\x0eeffective_yaml\x18\x02 \x01(\tR\reffectiveYaml\"g\n" +
 	"\x16StartCniUpgradeRequest\x123\n" +
-	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\xc7\x01\n" +
+	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12\x18\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\"\xc7\x01\n" +
 	"\x17StartCniUpgradeResponse\x127\n" +
 	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\toperation\x12!\n" +
 	"\ffrom_version\x18\x02 \x01(\tR\vfromVersion\x12\x1d\n" +

@@ -19,6 +19,14 @@ test('attentionItems lists only what applies', () => {
   assert.deepEqual(attentionItems({ conditions: [{ type: 'BundleBackupStale', status: 'False' }], pending: 0, configWaiting: 0, opState: 'paused' }), [{ kind: 'opPaused' }])
 })
 
+test('patch updates are one attention item naming the components, before the Ichor release notice', () => {
+  assert.deepEqual(attentionItems({ conditions: [], pending: 0, configWaiting: 0, opState: null, patches: ['Talos', 'Kubernetes'], release: 'v0.3.0' }), [
+    { kind: 'patch', components: ['Talos', 'Kubernetes'] },
+    { kind: 'release', version: 'v0.3.0' },
+  ])
+  assert.deepEqual(attentionItems({ conditions: [], pending: 0, configWaiting: 0, opState: null, patches: [] }), [])
+})
+
 import { attentionItems, backupsValue, tileTargets, timeAgo, versionLabel } from './overview.ts'
 
 test('timeAgo picks the coarsest unit', () => {

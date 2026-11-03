@@ -253,7 +253,7 @@ func TestNodeResetNeedsTheNameAndOverride(t *testing.T) {
 		t.Fatalf("allowed: %v", err)
 	}
 
-	if a := res.Msg.GetAudit(); a.GetAction() != "create-override" || a.GetReason() != bgReason {
+	if a := res.Msg.GetAudit(); a.GetAction() != createOverrideAction || a.GetReason() != bgReason {
 		t.Fatalf("audit = %+v", a)
 	}
 
@@ -262,6 +262,9 @@ func TestNodeResetNeedsTheNameAndOverride(t *testing.T) {
 		t.Fatalf("operations = %+v", ops)
 	}
 }
+
+// createOverrideAction is the audit action of an override create (the "-override" suffix is added to create).
+const createOverrideAction = "create-override"
 
 // An override with no reason is allowed: the verb gates it, and the audit record and the Event say no
 // reason was given.
@@ -280,7 +283,7 @@ func TestNodeResetOverrideWithoutAReason(t *testing.T) {
 		t.Fatalf("override without a reason: %v", err)
 	}
 
-	if a := res.Msg.GetAudit(); a.GetAction() != "create-override" || a.GetReason() != "no reason given" {
+	if a := res.Msg.GetAudit(); a.GetAction() != createOverrideAction || a.GetReason() != noReasonGiven {
 		t.Fatalf("audit = %+v", a)
 	}
 

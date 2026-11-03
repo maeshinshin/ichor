@@ -58,3 +58,10 @@ test('tile values and targets', () => {
   assert.deepEqual(tileTargets(null).backups, { kind: 'route', to: '/backups' })
   assert.deepEqual(tileTargets(null).versions, { kind: 'anchor', id: 'versions' })
 })
+
+test('attentionItems lists a halted automatic patcher with the operation that stopped it', () => {
+  assert.deepEqual(attentionItems({ conditions: [], pending: 0, configWaiting: 0, opState: null, autoPatchHalted: 'ichor-system/talos-x1' }), [
+    { kind: 'autoPatchHalted', operation: 'ichor-system/talos-x1' },
+  ])
+  assert.deepEqual(attentionItems({ conditions: [], pending: 0, configWaiting: 0, opState: null, autoPatchHalted: '' }), [])
+})

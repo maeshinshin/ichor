@@ -38,6 +38,15 @@ func (c Changes) Empty() bool {
 		c.AutoPatchEnabled == nil && c.AutoPatchComponents == nil && c.AutoPatchWindow == nil && c.AutoPatchAcknowledge == nil
 }
 
+// OnlyAcknowledge reports that the one change is clearing an automatic patch halt, which a read-only deployment
+// still allows: it is an action on a state Ichor wrote, not one of the deployment's settings.
+func (c Changes) OnlyAcknowledge() bool {
+	only := c
+	only.AutoPatchAcknowledge = nil
+
+	return c.AutoPatchAcknowledge != nil && only.Empty()
+}
+
 // Validate checks the bounds the CRD enforces, so the caller gets the message before the API server's.
 func (c Changes) Validate() error {
 	var errs []error

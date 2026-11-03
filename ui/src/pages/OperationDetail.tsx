@@ -156,7 +156,7 @@ export function OperationDetail({ name }: { name: string }) {
           <CardContent>
             <Fields>
               <Field label={t('ops.colKind')} value={enumLabel(OperationKind, op.kind)} />
-              <Field label={t('ops.startedBy')} value={op.startedBy} />
+              <Field label={t('ops.startedBy')} value={op.startedBy === 'ichor-auto-patch' ? t('ops.startedByAutoPatch') : op.startedBy} />
               <Field label={t('ops.startedAt')} value={formatTimestamp(op.createdAt)} />
               <Field label={t('ops.finishedAt')} value={formatTimestamp(op.finishedAt)} />
               <Field

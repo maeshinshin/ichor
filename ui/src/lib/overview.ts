@@ -14,6 +14,7 @@ export type Attention =
   | { kind: 'opPaused' }
   | { kind: 'patch'; components: string[] }
   | { kind: 'release'; version: string }
+  | { kind: 'autoPatchHalted'; operation: string }
 
 // attentionItems lists, in order, only what applies to the cluster now.
 export function attentionItems(i: {
@@ -25,10 +26,13 @@ export function attentionItems(i: {
   patches?: string[]
   // release is the newer Ichor release the cluster knows, or null.
   release?: string | null
+  // autoPatchHalted is the automatic operation (namespace/name) that stopped automatic patching, or empty.
+  autoPatchHalted?: string
 }): Attention[] {
   const out: Attention[] = []
   if (i.opState === 'failed') out.push({ kind: 'opFailed' })
   if (i.opState === 'paused') out.push({ kind: 'opPaused' })
+  if (i.autoPatchHalted) out.push({ kind: 'autoPatchHalted', operation: i.autoPatchHalted })
   const certs = activeCondition(i.conditions, 'CertificatesExpiring')
   if (certs !== null) out.push({ kind: 'certs', message: certs })
   const stale = activeCondition(i.conditions, 'BundleBackupStale')

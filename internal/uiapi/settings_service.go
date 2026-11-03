@@ -219,14 +219,15 @@ func (s *Server) UpdateSettings(
 ) (*connect.Response[pb.UpdateSettingsResponse], error) {
 	bad := func(err error) error { return connect.NewError(connect.CodeInvalidArgument, err) }
 
-	if s.settingsReadOnly() {
-		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			errors.New("the settings are managed by the deployment (--settings-read-only); change them there"))
-	}
-
 	changes, err := changesOf(req.Msg.GetChanges())
 	if err != nil {
 		return nil, bad(err)
+	}
+
+	// Clearing an automatic patch halt is an action, not a setting: a read-only deployment still allows it.
+	if s.settingsReadOnly() && !changes.OnlyAcknowledge() {
+		return nil, connect.NewError(connect.CodeFailedPrecondition,
+			errors.New("the settings are managed by the deployment (--settings-read-only); change them there"))
 	}
 
 	if changes.Empty() {

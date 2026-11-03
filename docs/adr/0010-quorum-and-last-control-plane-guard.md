@@ -734,3 +734,29 @@ reviewed or it isn't, where two independently-written copies can each
 look reviewed and still disagree. Test *scaffolding* has no equivalent
 property to protect; it is not itself a safety rule, so it is fair to
 judge purely on whether it makes the code smaller, and here it did not.
+
+## Amendment: a blocked drain is a wait, retried every 15 seconds
+
+Decided (2026-11-03, found on hardware in ADR 0108's friction item (b)): a
+removal whose drain fails returns a `drainBlockedError`, and `Reconcile`
+requeues the machine after `drainRetryInterval` (15s), with the `Removal`
+condition (`DrainFailed`, naming the blocking pod) and one Warning Event when
+the blocking state starts. It used to return the error. controller-runtime's
+default per-object rate limiter (5ms doubling, capped at 1000s) then made the
+gap between retries grow with every failure, and no event woke the machine
+when the pod went away: after a long blocked stretch the next attempt could be
+up to 1000s (about 17 minutes) away, so the removal resumed long after the pod
+was gone.
+
+- Interval: 15s. Shorter than the TalosOperation poll (30s, which watches the
+  removal), so an operation sees the resume at its next poll. A retry is one
+  Node read, one pod list and one cordon, so it can repeat for as long as a
+  person takes to act.
+- No Pod watch. A cluster-wide Pod watch would cache every pod in the cluster
+  to answer one question about one node, which ADR 0108 rules out. The
+  requeue is bounded and needs no extra RBAC or cache.
+- Scope: every drain error takes this path, including a failed cordon patch or
+  a Node read that is not NotFound. Those show their message in the condition
+  and retry every 15s, the same as a blocked pod.
+- Not changed: storage evacuation still waits with an error (its own backoff),
+  and `drainForReboot` (rollouts) is unaffected because it is not a removal.

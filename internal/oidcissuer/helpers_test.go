@@ -179,12 +179,17 @@ func (e *env) do(h http.Handler, method, path, ctype, body string) *httptest.Res
 	return rec
 }
 
-func (e *env) authorize(client, redirect, aud string, p pkce) *httptest.ResponseRecorder {
-	q := url.Values{
+// authQuery is a valid authorize query for client; tests mutate it to break one rule.
+func authQuery(client, redirect, scope string, p pkce) url.Values {
+	return url.Values{
 		pRespType: {pCode}, pClientID: {client}, pRedirect: {redirect},
-		pScope: {"openid offline_access"}, pState: {stateVal}, pNonce: {"n1"},
+		pScope: {scope}, pState: {stateVal}, pNonce: {"n1"},
 		pChallenge: {p.challenge}, pMethod: {pS256},
 	}
+}
+
+func (e *env) authorize(client, redirect, aud string, p pkce) *httptest.ResponseRecorder {
+	q := authQuery(client, redirect, "openid offline_access", p)
 	if aud != "" {
 		q.Set(pAudience, aud)
 	}
@@ -211,7 +216,13 @@ func (e *env) login(ticket, user, password string) *httptest.ResponseRecorder {
 // code runs authorize and login as alice and returns the authorization code.
 func (e *env) code(client, redirect, aud string, p pkce) string {
 	e.t.Helper()
-	rec := e.login(e.ticket(e.authorize(client, redirect, aud, p)), userAlice, "correct horse")
+	return e.codeFrom(e.authorize(client, redirect, aud, p))
+}
+
+// codeFrom logs alice in with the ticket of an authorize response and returns the code.
+func (e *env) codeFrom(authz *httptest.ResponseRecorder) string {
+	e.t.Helper()
+	rec := e.login(e.ticket(authz), userAlice, "correct horse")
 	if rec.Code != http.StatusOK {
 		e.t.Fatalf("login: status %d body %q", rec.Code, rec.Body.String())
 	}
@@ -292,8 +303,6 @@ func claimsOf(t *testing.T, jws string) map[string]any {
 	}
 	return m
 }
-
-func jsonUnmarshal(b []byte, v any) error { return json.Unmarshal(b, v) }
 
 const (
 	clientUI  = "ichor-ui"

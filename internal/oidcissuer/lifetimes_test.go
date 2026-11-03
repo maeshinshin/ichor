@@ -11,18 +11,10 @@ import (
 // TestLifetimesAreReadAtIssuance: spec.users lifetimes apply to the next token with no
 // restart; an answer outside the allowed range keeps the configured value.
 func TestLifetimesAreReadAtIssuance(t *testing.T) {
-	e := newEnv(t, externalURL, "")
 	ttl, refresh := 20*time.Minute, 48*time.Hour
-
-	iss, err := oidcissuer.New(oidcissuer.Config{
-		Issuer: externalURL, UIRedirectURI: uiRedirect, Keys: e.keys, Users: e.dir, Passwords: e.dir, Now: e.clk.now,
-		Lifetimes: func(context.Context) (time.Duration, time.Duration) { return ttl, refresh },
+	e := newEnvWith(t, externalURL, "", func(c *oidcissuer.Config) {
+		c.Lifetimes = func(context.Context) (time.Duration, time.Duration) { return ttl, refresh }
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	e.iss, e.h = iss, iss.Handler()
 
 	if tr := e.tokens(clientUI, uiRedirect, ""); tr.ExpiresIn != int((20 * time.Minute).Seconds()) {
 		t.Fatalf("expires_in = %d, want the live 20m", tr.ExpiresIn)

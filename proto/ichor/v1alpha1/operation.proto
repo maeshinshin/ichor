@@ -49,10 +49,17 @@ service OperationService {
   // ListOperationEvents returns the Kubernetes Events about an operation or one of its machines,
   // within the operation's lifetime, oldest first: the activity log on the operation's page.
   rpc ListOperationEvents(ListOperationEventsRequest) returns (ListOperationEventsResponse);
-  // PlanClusterUpgrade and StartClusterUpgrade are the one action that brings a cluster to the
-  // release set of its Ichor: each start creates the next step's operation only.
-  rpc PlanClusterUpgrade(PlanClusterUpgradeRequest) returns (PlanClusterUpgradeResponse);
-  rpc StartClusterUpgrade(StartClusterUpgradeRequest) returns (StartClusterUpgradeResponse);
+  // Deprecated and unused: the cluster-wide rollout is removed. The server answers
+  // CodeUnimplemented. Kept so the wire format does not break.
+  rpc PlanClusterUpgrade(PlanClusterUpgradeRequest) returns (PlanClusterUpgradeResponse) {
+    option deprecated = true;
+  }
+  rpc StartClusterUpgrade(StartClusterUpgradeRequest) returns (StartClusterUpgradeResponse) {
+    option deprecated = true;
+  }
+  // ListUpgradeTargets lists the versions a cluster's Talos or Kubernetes can be upgraded to, grouped
+  // as recommended, patch and next minor. It only reads.
+  rpc ListUpgradeTargets(ListUpgradeTargetsRequest) returns (ListUpgradeTargetsResponse);
 }
 
 message GetIchorInstallationRequest {}
@@ -345,6 +352,8 @@ message PlanOperationRequest {
   NodeActionRequest node = 5;
   // etcd_restore is required for kind ETCD_RESTORE.
   EtcdRestoreRequest etcd_restore = 6;
+  // override carries the override verb for the kinds that have a safety check it lifts.
+  Override override = 7;
 }
 
 message PlanOperationResponse {
@@ -401,6 +410,8 @@ message CreateOperationRequest {
   int32 max_unavailable = 4;
   NodeActionRequest node = 5;
   EtcdRestoreRequest etcd_restore = 6;
+  // override carries the override verb for the kinds that have a safety check it lifts.
+  Override override = 7;
 }
 
 message CreateOperationResponse {
@@ -456,13 +467,18 @@ message AcknowledgeCARotationCredentialsResponse {
   AuditRecord audit = 2;
 }
 
+// Deprecated and unused.
 // PlanClusterUpgradeRequest asks for the steps that bring a cluster to its Ichor's release set.
 message PlanClusterUpgradeRequest {
+  option deprecated = true;
+
   ObjectRef cluster = 1;
 }
 
-// ClusterUpgradeStep is one step of that rollout, in the order it runs.
+// Deprecated and unused. ClusterUpgradeStep is one step of that rollout, in the order it runs.
 message ClusterUpgradeStep {
+  option deprecated = true;
+
   // step is talos, config, kubernetes or cilium.
   string step = 1;
   // from is what the cluster runs now: the Talos release, the configuration's contract, the
@@ -474,7 +490,10 @@ message ClusterUpgradeStep {
   OperationKind kind = 4;
 }
 
+// Deprecated and unused.
 message PlanClusterUpgradeResponse {
+  option deprecated = true;
+
   // steps is empty when the cluster runs the release set. The first step is the one
   // StartClusterUpgrade creates.
   repeated ClusterUpgradeStep steps = 1;
@@ -484,14 +503,43 @@ message PlanClusterUpgradeResponse {
   ReleaseSet release_set = 3;
 }
 
+// Deprecated and unused.
 message StartClusterUpgradeRequest {
+  option deprecated = true;
+
   ObjectRef cluster = 1;
 }
 
+// Deprecated and unused.
 message StartClusterUpgradeResponse {
+  option deprecated = true;
+
   // step is the step whose operation was created.
   string step = 1;
   // operation is the operation that runs the step.
   ObjectRef operation = 2;
   AuditRecord audit = 3;
+}
+
+// ListUpgradeTargetsRequest asks which versions a cluster's Talos or Kubernetes can move to.
+message ListUpgradeTargetsRequest {
+  ObjectRef cluster = 1;
+  // kind is OPERATION_KIND_TALOS or OPERATION_KIND_KUBERNETES; any other kind is refused.
+  OperationKind kind = 2;
+}
+
+// ListUpgradeTargetsResponse groups the versions the cluster can move to. Every version in a group is a
+// valid upgrade of the cluster as it runs now, newest first within a group.
+message ListUpgradeTargetsResponse {
+  // recommended is the release set's version when it is a valid upgrade; at most one.
+  repeated string recommended = 1;
+  // patch are the newer releases of the running minor.
+  repeated string patch = 2;
+  // next_minor are the releases of the minor after the running one.
+  repeated string next_minor = 3;
+  // default is recommended when set, else the newest patch, else empty.
+  string default = 4;
+  // available is false when no list can be given; unavailable_reason then says why, in English.
+  bool available = 5;
+  string unavailable_reason = 6;
 }

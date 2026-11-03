@@ -35,6 +35,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { BackupNow } from '@/components/BackupNow'
 import { CARotationAdvice } from '@/components/CARotationAdvice'
 import { isCniUnmanaged } from '@/lib/cni'
+import { CiliumUpgradeDialog } from '@/components/CiliumUpgradeDialog'
 import { ConditionList } from '@/components/ConditionList'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { OperationControls } from '@/components/OperationControls'
@@ -431,10 +432,8 @@ function Home({
                         >
                           {cilium && cilium.state !== 'up-to-date' && <ToneBadge tone={stateTone(cilium.state)}>{t(stateKey(cilium.state))}</ToneBadge>}
                           {hasPatch(candidates.cilium) && <Badge variant="secondary">{t('versions.patchAvailable')}</Badge>}
-                          {cilium?.state === 'behind' && (
-                            <Button asChild variant="outline" size="sm">
-                              <Link to="/cilium">{t('versions.ciliumUpgrade')}</Link>
-                            </Button>
+                          {(cilium?.state === 'behind' || hasPatch(candidates.cilium)) && (
+                            <CiliumUpgradeDialog cluster={ref} chart={cilium?.state === 'behind' ? cilium.target : ''} list={candidates.cilium} size="sm" disabled={!!busy} />
                           )}
                         </VersionRow>
                       </>

@@ -177,8 +177,20 @@ func TestCniValuesEditSavesWhatTheEditorLeavesAndSkipsAnUnchangedFile(t *testing
 func TestCniUpgradeRefusedWhenNoUpgradeIsOffered(t *testing.T) {
 	c, _ := cniTestClient(t, true)
 
-	err := runCniUpgrade(context.Background(), c, &bytes.Buffer{}, "", "", false)
+	err := runCniUpgrade(context.Background(), c, &bytes.Buffer{}, "", "", false, nil)
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
 		t.Fatalf("want FailedPrecondition, got %v", err)
+	}
+}
+
+func TestCniUpgradeTakesTheOverrideFlags(t *testing.T) {
+	for _, name := range []string{"override", "override-reason"} {
+		if cniUpgradeCmd.InheritedFlags().Lookup(name) == nil {
+			t.Errorf("ichor cni upgrade has no --%s", name)
+		}
+	}
+
+	if got := overrideOf(apiOptions{Override: true, OverrideReason: "why"}); got.GetReason() != "why" {
+		t.Errorf("overrideOf = %v, want the reason carried", got)
 	}
 }

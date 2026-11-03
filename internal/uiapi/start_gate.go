@@ -31,7 +31,7 @@ import (
 // etcd restore, or the node actions reset and shutdown. `create` on talosoperations cannot say which
 // kind is being created, so this is a separate right. The validating webhook asks the same question
 // for a hand-written TalosOperation; asking here gives the caller the refusal before anything is
-// written, and before the break-glass questions.
+// written, and before the override questions.
 //
 // With nobody to ask (the backend on its own ServiceAccount, OIDC off) it asks nothing: the webhook
 // then judges the ServiceAccount, which the chart grants the verb.

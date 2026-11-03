@@ -17,7 +17,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file ichor/v1alpha1/common.proto.
  */
 export const file_ichor_v1alpha1_common: GenFile = /*@__PURE__*/
-  fileDesc("ChtpY2hvci92MWFscGhhMS9jb21tb24ucHJvdG8SDmljaG9yLnYxYWxwaGExIiwKCU9iamVjdFJlZhIRCgluYW1lc3BhY2UYASABKAkSDAoEbmFtZRgCIAEoCSKEAQoJQ29uZGl0aW9uEgwKBHR5cGUYASABKAkSDgoGc3RhdHVzGAIgASgJEg4KBnJlYXNvbhgDIAEoCRIPCgdtZXNzYWdlGAQgASgJEjgKFGxhc3RfdHJhbnNpdGlvbl90aW1lGAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIcCgpCcmVha0dsYXNzEg4KBnJlYXNvbhgBIAEoCSKPAQoLQXVkaXRSZWNvcmQSDQoFYWN0b3IYASABKAkSJgoCYXQYAiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wEg4KBmFjdGlvbhgDIAEoCRIpCgZ0YXJnZXQYBCABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSDgoGcmVhc29uGAUgASgJQrwBChJjb20uaWNob3IudjFhbHBoYTFCC0NvbW1vblByb3RvUAFaQGdpdGh1Yi5jb20vbWFlc2hpbnNoaW4vaWNob3IvZ2VuL2dvL2ljaG9yL3YxYWxwaGExO2ljaG9ydjFhbHBoYTGiAgNJWFiqAg5JY2hvci5WMWFscGhhMcoCDkljaG9yXFYxYWxwaGEx4gIaSWNob3JcVjFhbHBoYTFcR1BCTWV0YWRhdGHqAg9JY2hvcjo6VjFhbHBoYTFiBnByb3RvMw", [file_google_protobuf_timestamp]);
+  fileDesc("ChtpY2hvci92MWFscGhhMS9jb21tb24ucHJvdG8SDmljaG9yLnYxYWxwaGExIiwKCU9iamVjdFJlZhIRCgluYW1lc3BhY2UYASABKAkSDAoEbmFtZRgCIAEoCSKEAQoJQ29uZGl0aW9uEgwKBHR5cGUYASABKAkSDgoGc3RhdHVzGAIgASgJEg4KBnJlYXNvbhgDIAEoCRIPCgdtZXNzYWdlGAQgASgJEjgKFGxhc3RfdHJhbnNpdGlvbl90aW1lGAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIaCghPdmVycmlkZRIOCgZyZWFzb24YASABKAkijwEKC0F1ZGl0UmVjb3JkEg0KBWFjdG9yGAEgASgJEiYKAmF0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIOCgZhY3Rpb24YAyABKAkSKQoGdGFyZ2V0GAQgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEg4KBnJlYXNvbhgFIAEoCUK8AQoSY29tLmljaG9yLnYxYWxwaGExQgtDb21tb25Qcm90b1ABWkBnaXRodWIuY29tL21hZXNoaW5zaGluL2ljaG9yL2dlbi9nby9pY2hvci92MWFscGhhMTtpY2hvcnYxYWxwaGExogIDSVhYqgIOSWNob3IuVjFhbHBoYTHKAg5JY2hvclxWMWFscGhhMeICGkljaG9yXFYxYWxwaGExXEdQQk1ldGFkYXRh6gIPSWNob3I6OlYxYWxwaGExYgZwcm90bzM", [file_google_protobuf_timestamp]);
 
 /**
  * ObjectRef names a namespaced Kubernetes custom resource (TalosCluster,
@@ -86,15 +86,15 @@ export const ConditionSchema: GenMessage<Condition> = /*@__PURE__*/
   messageDesc(file_ichor_v1alpha1_common, 1);
 
 /**
- * BreakGlass asks for an emergency direct write. Setting it
+ * Override asks for an emergency direct write. Setting it
  * on a request means "if this change would be a pull request or is refused
  * because Argo CD tracks the resource, write it now and open the matching pull
  * request". The backend allows it only to a signed-in user whose Kubernetes RBAC
- * grants the break-glass verb on the resource, and refuses it otherwise.
+ * grants the override verb on the resource, and refuses it otherwise.
  *
- * @generated from message ichor.v1alpha1.BreakGlass
+ * @generated from message ichor.v1alpha1.Override
  */
-export type BreakGlass = Message<"ichor.v1alpha1.BreakGlass"> & {
+export type Override = Message<"ichor.v1alpha1.Override"> & {
   /**
    * reason is required: it is recorded in the audit record, the Kubernetes
    * Event and the pull request description.
@@ -105,10 +105,10 @@ export type BreakGlass = Message<"ichor.v1alpha1.BreakGlass"> & {
 };
 
 /**
- * Describes the message ichor.v1alpha1.BreakGlass.
- * Use `create(BreakGlassSchema)` to create a new message.
+ * Describes the message ichor.v1alpha1.Override.
+ * Use `create(OverrideSchema)` to create a new message.
  */
-export const BreakGlassSchema: GenMessage<BreakGlass> = /*@__PURE__*/
+export const OverrideSchema: GenMessage<Override> = /*@__PURE__*/
   messageDesc(file_ichor_v1alpha1_common, 2);
 
 /**

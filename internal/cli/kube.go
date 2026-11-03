@@ -20,6 +20,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -57,8 +58,13 @@ func cliScheme() (*runtime.Scheme, error) {
 	}
 
 	// authorization/v1: local mode runs the uiapi server in-process, and its
-	// break-glass and diagnostics checks create SelfSubjectAccessReviews.
+	// override and diagnostics checks create SelfSubjectAccessReviews.
 	if err := authv1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+
+	// rbac/v1: `ichor upgrade ichor` lists roles that still grant the earlier override verb.
+	if err := rbacv1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 

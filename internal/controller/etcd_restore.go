@@ -1069,7 +1069,7 @@ var (
 
 // ResumeEtcdRestoresUntilDone repeats ResumeEtcdRestores, with a growing pause, until a pass has
 // nothing left to do or ctx ends. It is what the manager runs. Creating the operation goes through the
-// break-glass admission webhook (fail-closed), which this same process serves and which is not in the
+// override admission webhook (fail-closed), which this same process serves and which is not in the
 // Service until the Pod is Ready: the first passes after a start are expected to be refused, so a
 // failure is retried, never given up on (the marker stays until the operation is back). It returns nil
 // when ctx ends, so that it never takes the manager down.

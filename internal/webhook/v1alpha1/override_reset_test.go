@@ -26,10 +26,10 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// A node reset needs break-glass on the machine, whichever way the
+// A node reset needs override on the machine, whichever way the
 // TalosOperation is written (the CLI and UI check it too, but a user with
 // `create` on talosoperations can write the CR by hand).
-var _ = Describe("Break-glass webhook on a node reset", func() {
+var _ = Describe("Override webhook on a node reset", func() {
 	const (
 		opUser    = "op-user"
 		opGlass   = "op-glass-user"
@@ -63,13 +63,13 @@ var _ = Describe("Break-glass webhook on a node reset", func() {
 		grantOps(testControllerUser, false)
 	})
 
-	It("refuses a hand-written reset from a user without break-glass on the machine", func() {
+	It("refuses a hand-written reset from a user without override on the machine", func() {
 		err := asUser(opUser).Create(ctx, nodeOp(ichorv1alpha1.NodeActionReset))
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("break-glass"))
+		Expect(err.Error()).To(ContainSubstring("override"))
 	})
 
-	It("admits the reset when the user holds break-glass on that machine", func() {
+	It("admits the reset when the user holds override on that machine", func() {
 		Expect(asUser(opGlass).Create(ctx, nodeOp(ichorv1alpha1.NodeActionReset))).To(Succeed())
 	})
 
@@ -77,11 +77,11 @@ var _ = Describe("Break-glass webhook on a node reset", func() {
 		Expect(asUser(testControllerUser).Create(ctx, nodeOp(ichorv1alpha1.NodeActionReset))).To(Succeed())
 	})
 
-	It("does not ask for break-glass on the other node actions", func() {
+	It("does not ask for override on the other node actions", func() {
 		Expect(asUser(opUser).Create(ctx, nodeOp("reboot"))).To(Succeed())
 	})
 
-	It("does not ask for break-glass on other kinds of operation", func() {
+	It("does not ask for override on other kinds of operation", func() {
 		op := &ichorv1alpha1.TalosOperation{
 			GenerateName: "talos-", Namespace: testNamespace,
 			Spec: ichorv1alpha1.TalosOperationSpec{
@@ -93,12 +93,12 @@ var _ = Describe("Break-glass webhook on a node reset", func() {
 })
 
 // grantOperationRights lets user create and get TalosOperations, and, when glassOn names a resource,
-// hold the break-glass verb on it. The webhook asks Kubernetes about the verb, so a real role is bound.
+// hold the override verb on it. The webhook asks Kubernetes about the verb, so a real role is bound.
 func grantOperationRights(user, glassOn string) {
 	rules := []rbacv1.PolicyRule{{
 		APIGroups: []string{ichorGroup}, Resources: []string{"talosoperations"}, Verbs: []string{"create", "get"},
 	}}
-	// These tests are about break-glass; the destructive-start right is granted so it is
+	// These tests are about override; the destructive-start right is granted so it is
 	// not what stops them. start_gate_test.go covers the right itself.
 	rules = append(rules, rbacv1.PolicyRule{
 		APIGroups: []string{ichorGroup}, Verbs: []string{ichorv1alpha1.OperationStartVerb},
@@ -107,7 +107,7 @@ func grantOperationRights(user, glassOn string) {
 
 	if glassOn != "" {
 		rules = append(rules, rbacv1.PolicyRule{
-			APIGroups: []string{ichorGroup}, Resources: []string{glassOn}, Verbs: []string{BreakGlassVerb},
+			APIGroups: []string{ichorGroup}, Resources: []string{glassOn}, Verbs: []string{OverrideVerb},
 		})
 	}
 

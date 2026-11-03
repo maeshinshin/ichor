@@ -133,7 +133,7 @@ finds nothing), and is a different agent's unit.
 
 - Not built here (explicitly out of scope): anything in `internal/cli` (this
   unit stops at `pkg/prmode`'s own package API, per instruction, to avoid
-  colliding with concurrent `internal/cli` work); strict mode; break-glass;
+  colliding with concurrent `internal/cli` work); strict mode; override;
   the UI following a PR through merge/sync/apply; computing an impact
   preview.
 - `pkg/prmode` now depends on the `git` binary being on `$PATH` at runtime

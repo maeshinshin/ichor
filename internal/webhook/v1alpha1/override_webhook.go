@@ -38,9 +38,9 @@ import (
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
-// BreakGlassVerb is the RBAC verb that lets a user remove an Ichor finalizer from a deleting
+// OverrideVerb is the RBAC verb that lets a user remove an Ichor finalizer from a deleting
 // CR, run a destructive operation or override a per-object guard.
-const BreakGlassVerb = "break-glass"
+const OverrideVerb = "override"
 
 const (
 	opCreate = "CREATE"
@@ -48,21 +48,21 @@ const (
 )
 
 const (
-	breakGlassWebhookPath = "/validate-ichor-maesh-dev-v1alpha1-breakglass"
+	overrideWebhookPath = "/validate-ichor-maesh-dev-v1alpha1-override"
 	ichorFinalizerPrefix  = "ichor.maesh.dev/"
 	ichorGroup            = "ichor.maesh.dev"
 )
 
-var breakglasslog = logf.Log.WithName("breakglass-webhook")
+var overridelog = logf.Log.WithName("override-webhook")
 
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=None,groups=ichor.maesh.dev,resources=talosmachines;talosconfigpatches,verbs=update,versions=v1alpha1,name=vbreakglass-v1alpha1.kb.io,admissionReviewVersions=v1
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=None,groups=ichor.maesh.dev,resources=talosoperations,verbs=create;update,versions=v1alpha1,name=vbreakglassop-v1alpha1.kb.io,admissionReviewVersions=v1
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=create;update,versions=v1alpha1,name=vauthentication-v1alpha1.kb.io,admissionReviewVersions=v1
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-breakglass,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=None,groups=ichor.maesh.dev,resources=talosetcdbackups,verbs=create;update,versions=v1alpha1,name=vsecretrefs-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-override,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=None,groups=ichor.maesh.dev,resources=talosmachines;talosconfigpatches,verbs=update,versions=v1alpha1,name=voverride-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-override,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=None,groups=ichor.maesh.dev,resources=talosoperations,verbs=create;update,versions=v1alpha1,name=voverrideop-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-override,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=None,groups=ichor.maesh.dev,resources=talosclusters,verbs=create;update,versions=v1alpha1,name=vauthentication-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-override,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=None,groups=ichor.maesh.dev,resources=talosetcdbackups,verbs=create;update,versions=v1alpha1,name=vsecretrefs-v1alpha1.kb.io,admissionReviewVersions=v1
 // +kubebuilder:rbac:groups=authorization.k8s.io,resources=subjectaccessreviews,verbs=create
 
-// BreakGlassOptions configures the break-glass admission check.
-type BreakGlassOptions struct {
+// OverrideOptions configures the override admission check.
+type OverrideOptions struct {
 	// ExemptUsers are the exact usernames never checked: Ichor's own
 	// controller and the Kubernetes controllers that cascade deletions
 	// (see DefaultExemptUsers).
@@ -87,30 +87,30 @@ func DefaultExemptUsers(controllerNamespace, controllerServiceAccount string) []
 	return users
 }
 
-// BreakGlassHandler rejects the removal of an ichor.maesh.dev finalizer from
-// a deleting CR unless the requesting user holds the break-glass verb on that
+// OverrideHandler rejects the removal of an ichor.maesh.dev finalizer from
+// a deleting CR unless the requesting user holds the override verb on that
 // object.
-type BreakGlassHandler struct {
+type OverrideHandler struct {
 	// Client is uncached: it creates SubjectAccessReviews.
 	Client      client.Client
 	ExemptUsers []string
 }
 
-// SetupBreakGlassWebhookWithManager registers the check on the manager's webhook server.
-func SetupBreakGlassWebhookWithManager(mgr ctrl.Manager, opts BreakGlassOptions) error {
+// SetupOverrideWebhookWithManager registers the check on the manager's webhook server.
+func SetupOverrideWebhookWithManager(mgr ctrl.Manager, opts OverrideOptions) error {
 	direct, err := client.New(mgr.GetConfig(), client.Options{Scheme: mgr.GetScheme()})
 	if err != nil {
 		return fmt.Errorf("creating the uncached client: %w", err)
 	}
 
-	h := &BreakGlassHandler{Client: direct, ExemptUsers: opts.ExemptUsers}
-	mgr.GetWebhookServer().Register(breakGlassWebhookPath, &admission.Webhook{Handler: h})
+	h := &OverrideHandler{Client: direct, ExemptUsers: opts.ExemptUsers}
+	mgr.GetWebhookServer().Register(overrideWebhookPath, &admission.Webhook{Handler: h})
 
 	return nil
 }
 
 // Handle implements admission.Handler.
-func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) admission.Response {
+func (h *OverrideHandler) Handle(ctx context.Context, req admission.Request) admission.Response {
 	switch req.Resource.Resource {
 	case "talosoperations":
 		return h.handleOperation(ctx, req)
@@ -124,9 +124,9 @@ func (h *BreakGlassHandler) Handle(ctx context.Context, req admission.Request) a
 }
 
 // checkFinalizerRemoval refuses removing an ichor.maesh.dev finalizer from a deleting object unless
-// the user holds break-glass on it. Finalizers are the controller's: machine-removal on a
+// the user holds override on it. Finalizers are the controller's: machine-removal on a
 // TalosMachine, etcd-restore and ca-rotation on a TalosOperation.
-func (h *BreakGlassHandler) checkFinalizerRemoval(ctx context.Context, req admission.Request) admission.Response {
+func (h *OverrideHandler) checkFinalizerRemoval(ctx context.Context, req admission.Request) admission.Response {
 	if req.Operation != opUpdate {
 		return admission.Allowed("")
 	}
@@ -148,23 +148,23 @@ func (h *BreakGlassHandler) checkFinalizerRemoval(ctx context.Context, req admis
 		return admission.Allowed("")
 	}
 
-	if r := h.require(ctx, req, BreakGlassVerb, req.Resource.Resource, "", req.Name,
+	if r := h.require(ctx, req, OverrideVerb, req.Resource.Resource, "", req.Name,
 		fmt.Sprintf("removing an %s* finalizer from a deleting %s is refused unless you hold the %q verb "+
-			"(the controller is still working on it: this orphans a node or an etcd member)", ichorFinalizerPrefix, req.Resource.Resource, BreakGlassVerb)); r != nil {
+			"(the controller is still working on it: this orphans a node or an etcd member)", ichorFinalizerPrefix, req.Resource.Resource, OverrideVerb)); r != nil {
 		return *r
 	}
 
-	breakglasslog.Info("write admitted under break-glass", "user", req.UserInfo.Username, "name", req.Name, "operation", req.Operation)
+	overridelog.Info("write admitted under override", "user", req.UserInfo.Username, "name", req.Name, "operation", req.Operation)
 
 	return admission.Allowed("")
 }
 
 // handleOperation guards the dangerous operations, an etcd restore and the node action reset, wherever
-// the TalosOperation comes from: the CLI and UI check break-glass too, but a user
+// the TalosOperation comes from: the CLI and UI check override too, but a user
 // with `create` on talosoperations can write the CR by hand. The
 // typed-name confirmation is a CRD rule (confirm == machineRef.name), so it
 // needs no copy here.
-func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.Request) admission.Response {
+func (h *OverrideHandler) handleOperation(ctx context.Context, req admission.Request) admission.Response {
 	if req.Operation == opUpdate {
 		return h.checkFinalizerRemoval(ctx, req)
 	}
@@ -211,7 +211,7 @@ func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.R
 	}
 
 	// A destructive start needs the verb start on its subresource, on top of
-	// the break-glass requirements below. `create` on talosoperations cannot say which kind it is.
+	// the override requirements below. `create` on talosoperations cannot say which kind it is.
 	if sub := op.Spec.StartSubresource(); sub != "" {
 		if r := h.require(ctx, req, ichorv1alpha1.OperationStartVerb, "talosoperations", sub, req.Name,
 			fmt.Sprintf("a %s operation needs the %q verb on talosoperations/%s", op.Spec.Kind, ichorv1alpha1.OperationStartVerb, sub)); r != nil {
@@ -223,12 +223,12 @@ func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.R
 	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindEtcdRestore {
 		cluster := op.Spec.ClusterRef.Name
 
-		if r := h.require(ctx, req, BreakGlassVerb, "talosclusters", "", cluster,
-			fmt.Sprintf("an etcd restore rewinds the whole cluster: it needs the %q verb on talosclusters/%s", BreakGlassVerb, cluster)); r != nil {
+		if r := h.require(ctx, req, OverrideVerb, "talosclusters", "", cluster,
+			fmt.Sprintf("an etcd restore rewinds the whole cluster: it needs the %q verb on talosclusters/%s", OverrideVerb, cluster)); r != nil {
 			return *r
 		}
 
-		breakglasslog.Info("etcd restore admitted under break-glass", "user", req.UserInfo.Username, "cluster", cluster)
+		overridelog.Info("etcd restore admitted under override", "user", req.UserInfo.Username, "cluster", cluster)
 
 		return admission.Allowed("")
 	}
@@ -237,10 +237,10 @@ func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.R
 		return admission.Allowed("")
 	}
 
-	// A reset wipes the node; a breakGlassReason on any other action overrides the last-worker guard.
+	// A reset wipes the node; an overrideReason on any other action overrides the last-worker guard.
 	// Either needs the verb on the machine.
 	reset := op.Spec.Node.Action == ichorv1alpha1.NodeActionReset
-	if !reset && op.Spec.Node.BreakGlassReason == "" {
+	if !reset && op.Spec.Node.EffectiveOverrideReason() == "" {
 		return admission.Allowed("")
 	}
 
@@ -248,15 +248,15 @@ func (h *BreakGlassHandler) handleOperation(ctx context.Context, req admission.R
 
 	what := "a reset wipes the node"
 	if !reset {
-		what = "spec.node.breakGlassReason overrides the last-worker guard"
+		what = "spec.node.overrideReason overrides the last-worker guard"
 	}
 
-	if r := h.require(ctx, req, BreakGlassVerb, "talosmachines", "", machine,
-		fmt.Sprintf("%s: it needs the %q verb on talosmachines/%s", what, BreakGlassVerb, machine)); r != nil {
+	if r := h.require(ctx, req, OverrideVerb, "talosmachines", "", machine,
+		fmt.Sprintf("%s: it needs the %q verb on talosmachines/%s", what, OverrideVerb, machine)); r != nil {
 		return *r
 	}
 
-	breakglasslog.Info("node action admitted under break-glass", "user", req.UserInfo.Username, "machine", machine, "action", op.Spec.Node.Action)
+	overridelog.Info("node action admitted under override", "user", req.UserInfo.Username, "machine", machine, "action", op.Spec.Node.Action)
 
 	return admission.Allowed("")
 }
@@ -279,7 +279,7 @@ func removesIchorFinalizer(old, updated *unstructured.Unstructured) bool {
 
 // require returns nil when the requesting user holds verb on resource (and subresource, when set),
 // else the 503 for a failed check or a denial with the given message.
-func (h *BreakGlassHandler) require(ctx context.Context, req admission.Request, verb, resource, subresource, name, denied string) *admission.Response {
+func (h *OverrideHandler) require(ctx context.Context, req admission.Request, verb, resource, subresource, name, denied string) *admission.Response {
 	allowed, err := h.mayDo(ctx, req.UserInfo, verb, resource, subresource, name, req.Namespace)
 
 	var r admission.Response
@@ -298,7 +298,7 @@ func (h *BreakGlassHandler) require(ctx context.Context, req admission.Request, 
 
 // mayDo asks Kubernetes, with a SubjectAccessReview on the requesting user, whether they hold
 // verb on resource (and subresource, when set).
-func (h *BreakGlassHandler) mayDo(ctx context.Context, user authnv1.UserInfo, verb, resource, subresource, name, namespace string) (bool, error) {
+func (h *OverrideHandler) mayDo(ctx context.Context, user authnv1.UserInfo, verb, resource, subresource, name, namespace string) (bool, error) {
 	sar := &authzv1.SubjectAccessReview{
 		Spec: authzv1.SubjectAccessReviewSpec{
 			User:   user.Username,
@@ -336,7 +336,7 @@ const (
 // kube-apiserver will accept: the contract is v1.14 or later and the configuration it renders passes
 // the apiserver's own validation. A write that leaves spec.authentication as it was is not checked,
 // and the controller (ExemptUsers) is never stopped.
-func (h *BreakGlassHandler) handleCluster(ctx context.Context, req admission.Request) admission.Response {
+func (h *OverrideHandler) handleCluster(ctx context.Context, req admission.Request) admission.Response {
 	if slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
 		return admission.Allowed("")
 	}
@@ -376,7 +376,7 @@ func (h *BreakGlassHandler) handleCluster(ctx context.Context, req admission.Req
 		return admission.Denied(err.Error())
 	}
 
-	breakglasslog.Info("spec.authentication changed", "user", req.UserInfo.Username, "cluster", req.Name)
+	overridelog.Info("spec.authentication changed", "user", req.UserInfo.Username, "cluster", req.Name)
 
 	return admission.Allowed("")
 }
@@ -434,7 +434,7 @@ func clusterSecretRefChanges(old, updated *ichorv1alpha1.TalosCluster) []string 
 
 // handleEtcdBackup gates spec.destination.s3.credentialsSecretRef the same way, and the rest of the
 // destination (where the credentials and the snapshots go), and refuses plain http without insecure.
-func (h *BreakGlassHandler) handleEtcdBackup(ctx context.Context, req admission.Request) admission.Response {
+func (h *OverrideHandler) handleEtcdBackup(ctx context.Context, req admission.Request) admission.Response {
 	if req.Operation == opCreate {
 		if err := refuseSystemNamespace("TalosEtcdBackup", req.Namespace); err != nil {
 			return admission.Denied(err.Error())
@@ -484,7 +484,7 @@ func (h *BreakGlassHandler) handleEtcdBackup(ctx context.Context, req admission.
 
 // gateSecretReferences returns a denial (or an error) unless changed is empty or the requesting
 // user holds update on <resource>/secret-references. nil means "carry on".
-func (h *BreakGlassHandler) gateSecretReferences(ctx context.Context, req admission.Request, resource string, changed []string) *admission.Response {
+func (h *OverrideHandler) gateSecretReferences(ctx context.Context, req admission.Request, resource string, changed []string) *admission.Response {
 	if len(changed) == 0 {
 		return nil
 	}
@@ -495,15 +495,15 @@ func (h *BreakGlassHandler) gateSecretReferences(ctx context.Context, req admiss
 		return r
 	}
 
-	breakglasslog.Info("secret reference changed", "user", req.UserInfo.Username, "resource", resource, "name", req.Name, "fields", changed)
+	overridelog.Info("secret reference changed", "user", req.UserInfo.Username, "resource", resource, "name", req.Name, "fields", changed)
 
 	return nil
 }
 
-// BreakGlassCheck tells whether the user behind the admission request in ctx holds the break-glass
+// OverrideCheck tells whether the user behind the admission request in ctx holds the override
 // verb on resource/name. The per-object guards (the last-worker guard) take one so
 // an operator with the verb can override them; nil means no override.
-type BreakGlassCheck func(ctx context.Context, resource, name, namespace string) (bool, error)
+type OverrideCheck func(ctx context.Context, resource, name, namespace string) (bool, error)
 
 // RightCheck tells whether the user behind the admission request in ctx holds verb on resource
 // (and subresource, when set). Outside an admission request there is no user, so the answer is no.
@@ -511,7 +511,7 @@ type RightCheck func(ctx context.Context, verb, resource, subresource, name, nam
 
 // rightCheckFor asks Kubernetes with a SubjectAccessReview on the requesting user.
 func rightCheckFor(c client.Client) RightCheck {
-	h := &BreakGlassHandler{Client: c}
+	h := &OverrideHandler{Client: c}
 
 	return func(ctx context.Context, verb, resource, subresource, name, namespace string) (bool, error) {
 		req, err := admission.RequestFromContext(ctx)
@@ -523,10 +523,10 @@ func rightCheckFor(c client.Client) RightCheck {
 	}
 }
 
-// breakGlassCheckFor asks Kubernetes with a SubjectAccessReview on the requesting user, like the
-// break-glass handler does. Outside an admission request there is no user, so the answer is no.
-func breakGlassCheckFor(c client.Client) BreakGlassCheck {
-	h := &BreakGlassHandler{Client: c}
+// overrideCheckFor asks Kubernetes with a SubjectAccessReview on the requesting user, like the
+// override handler does. Outside an admission request there is no user, so the answer is no.
+func overrideCheckFor(c client.Client) OverrideCheck {
+	h := &OverrideHandler{Client: c}
 
 	return func(ctx context.Context, resource, name, namespace string) (bool, error) {
 		req, err := admission.RequestFromContext(ctx)
@@ -534,14 +534,14 @@ func breakGlassCheckFor(c client.Client) BreakGlassCheck {
 			return false, nil //nolint:nilerr // no admission request, no user to hold the verb
 		}
 
-		return h.mayDo(ctx, req.UserInfo, BreakGlassVerb, resource, "", name, namespace)
+		return h.mayDo(ctx, req.UserInfo, OverrideVerb, resource, "", name, namespace)
 	}
 }
 
-// checkLastWorker is deleteguard.CheckLastWorker with the break-glass override: it asks the verb only
+// checkLastWorker is deleteguard.CheckLastWorker with the override override: it asks the verb only
 // when the guard would refuse, so ordinary requests cost no SubjectAccessReview. A failed check
 // refuses (fail closed).
-func (c BreakGlassCheck) checkLastWorker(ctx context.Context, workersAfter int, resource, name, namespace string) error {
+func (c OverrideCheck) checkLastWorker(ctx context.Context, workersAfter int, resource, name, namespace string) error {
 	err := deleteguard.CheckLastWorker(true, workersAfter, false)
 	if err == nil || c == nil {
 		return err
@@ -549,14 +549,14 @@ func (c BreakGlassCheck) checkLastWorker(ctx context.Context, workersAfter int, 
 
 	allowed, aerr := c(ctx, resource, name, namespace)
 	if aerr != nil {
-		return fmt.Errorf("%w (and the %s right could not be checked: %w)", err, BreakGlassVerb, aerr)
+		return fmt.Errorf("%w (and the %s right could not be checked: %w)", err, OverrideVerb, aerr)
 	}
 
 	if !allowed {
 		return err
 	}
 
-	breakglasslog.Info("last-worker guard overridden under break-glass", "resource", resource, "name", name)
+	overridelog.Info("last-worker guard overridden under override", "resource", resource, "name", name)
 
 	return deleteguard.CheckLastWorker(true, workersAfter, true)
 }

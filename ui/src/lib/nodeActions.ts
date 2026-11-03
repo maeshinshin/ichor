@@ -16,20 +16,20 @@ export type NodeActionDef = {
   destructive: boolean
   // typedName: the user types the node's name before the action can start.
   typedName: boolean
-  // breakGlass: the user also gives a reason and needs the break-glass permission (reset).
-  breakGlass: boolean
+  // override: the user also gives a reason and needs the override permission (reset).
+  override: boolean
   controlPlaneOnly: boolean
 }
 
 // In the order the menu shows them: harmless first, destructive last.
 export const nodeActions: readonly NodeActionDef[] = [
-  { id: 'restart-service', destructive: false, typedName: false, breakGlass: false, controlPlaneOnly: false },
-  { id: 'etcd-defrag', destructive: false, typedName: false, breakGlass: false, controlPlaneOnly: true },
-  { id: 'etcd-forfeit-leadership', destructive: false, typedName: false, breakGlass: false, controlPlaneOnly: true },
-  { id: 'reboot', destructive: true, typedName: false, breakGlass: false, controlPlaneOnly: false },
-  { id: 'shutdown', destructive: true, typedName: true, breakGlass: false, controlPlaneOnly: false },
-  { id: 'remove', destructive: true, typedName: true, breakGlass: false, controlPlaneOnly: false },
-  { id: 'reset', destructive: true, typedName: true, breakGlass: true, controlPlaneOnly: false },
+  { id: 'restart-service', destructive: false, typedName: false, override: false, controlPlaneOnly: false },
+  { id: 'etcd-defrag', destructive: false, typedName: false, override: false, controlPlaneOnly: true },
+  { id: 'etcd-forfeit-leadership', destructive: false, typedName: false, override: false, controlPlaneOnly: true },
+  { id: 'reboot', destructive: true, typedName: false, override: false, controlPlaneOnly: false },
+  { id: 'shutdown', destructive: true, typedName: true, override: false, controlPlaneOnly: false },
+  { id: 'remove', destructive: true, typedName: true, override: false, controlPlaneOnly: false },
+  { id: 'reset', destructive: true, typedName: true, override: true, controlPlaneOnly: false },
 ]
 
 // The services restart-service may restart: the same allowlist as the controller and the CRD.
@@ -62,6 +62,6 @@ export function canStart(opts: {
   if (!opts.planned || opts.blocked !== '' || opts.busy) return false
   if (opts.def.id === 'restart-service' && !(restartableServices as readonly string[]).includes(opts.service)) return false
   if (opts.confirmName !== '' && !nodeNameMatches(opts.typed, opts.nodeName)) return false
-  if (opts.def.breakGlass && opts.reason.trim() === '') return false
+  if (opts.def.override && opts.reason.trim() === '') return false
   return true
 }

@@ -25,9 +25,9 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// An etcd restore rewinds the whole cluster, so it needs break-glass on the TalosCluster
+// An etcd restore rewinds the whole cluster, so it needs override on the TalosCluster
 // whichever way the TalosOperation is written.
-var _ = Describe("Break-glass webhook on an etcd restore", func() {
+var _ = Describe("Override webhook on an etcd restore", func() {
 	const (
 		plainUser = "restore-user"
 		glassUser = "restore-glass-user"
@@ -61,13 +61,13 @@ var _ = Describe("Break-glass webhook on an etcd restore", func() {
 		grant(testControllerUser, false)
 	})
 
-	It("refuses a hand-written restore from a user without break-glass on the cluster", func() {
+	It("refuses a hand-written restore from a user without override on the cluster", func() {
 		err := asUser(plainUser).Create(ctx, restoreOp())
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("break-glass"))
+		Expect(err.Error()).To(ContainSubstring("override"))
 	})
 
-	It("admits the restore when the user holds break-glass on that cluster", func() {
+	It("admits the restore when the user holds override on that cluster", func() {
 		Expect(asUser(glassUser).Create(ctx, restoreOp())).To(Succeed())
 	})
 

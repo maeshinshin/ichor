@@ -65,7 +65,7 @@ message UpdatePatchRequest {
   // "no partial-field merge" simplicity CreatePatch has.
   Patch patch = 1;
   // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
-  BreakGlass break_glass = 2 [deprecated = true];
+  Override override = 2 [deprecated = true];
 }
 
 message UpdatePatchResponse {
@@ -82,7 +82,7 @@ message UpdatePatchResponse {
 message DeletePatchRequest {
   ObjectRef patch = 1;
   // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
-  BreakGlass break_glass = 2 [deprecated = true];
+  Override override = 2 [deprecated = true];
 }
 
 message DeletePatchResponse {

@@ -138,7 +138,7 @@ func (g *SettingsGate) check(ctx context.Context, oldObj, newObj *ichorv1alpha1.
 		}
 	}
 
-	bg := &BreakGlassHandler{Client: g.Client}
+	bg := &OverrideHandler{Client: g.Client}
 
 	var checked []string
 

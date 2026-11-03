@@ -97,7 +97,7 @@ var _ = Describe("Authentication gate on TalosCluster", func() {
 	It("lets an editor change other fields", func() {
 		c := &ichorv1alpha1.TalosCluster{}
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), c)).To(Succeed())
-		c.Spec.KubernetesVersion = "v1.36.1"
+		c.Spec.KubernetesVersion = "v1.37.1"
 		Expect(asUser(editor).Update(ctx, c)).To(Succeed())
 	})
 

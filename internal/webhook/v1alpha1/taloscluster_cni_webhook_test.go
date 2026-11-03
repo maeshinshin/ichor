@@ -53,7 +53,7 @@ var _ = Describe("TalosCluster Webhook: removed CNI presets (ADR 0099)", func() 
 		old := withPreset("flannel")
 
 		changed := old.DeepCopy()
-		changed.Spec.KubernetesVersion = "v1.36.2"
+		changed.Spec.KubernetesVersion = "v1.37.1"
 		_, err := v.ValidateUpdate(ctx, old, changed)
 		Expect(err).To(MatchError(ContainSubstring("ADR 0099")))
 
@@ -92,7 +92,7 @@ var _ = Describe("TalosCluster Webhook: unmanaged CNI preset (ADR 0103)", func()
 	It("does not treat unmanaged as a removed preset on update", func() {
 		old := unmanaged(adopted)
 		changed := old.DeepCopy()
-		changed.Spec.KubernetesVersion = "v1.36.2"
+		changed.Spec.KubernetesVersion = "v1.37.1"
 		_, err := v.ValidateUpdate(ctx, old, changed)
 		Expect(err).NotTo(HaveOccurred())
 	})

@@ -32,6 +32,7 @@ import (
 	"github.com/maeshinshin/ichor/internal/settings"
 	"github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
+	"github.com/maeshinshin/ichor/pkg/release"
 )
 
 // nolint:unused
@@ -92,11 +93,33 @@ func (v *TalosClusterCustomValidator) ValidateCreate(ctx context.Context, obj *i
 		return nil, err
 	}
 
-	if err := validateVersion("talosVersion", obj.Spec.TalosVersion); err != nil {
+	if err := validateCreateVersions(obj); err != nil {
 		return nil, err
 	}
 
-	return warns, validateVersion("kubernetesVersion", obj.Spec.KubernetesVersion)
+	return warns, nil
+}
+
+// validateCreateVersions checks the three versions of a new cluster against the release set this
+// Ichor supports (ADR 0113): a version may be older (an adopted cluster is behind), never newer.
+func validateCreateVersions(c *ichorv1alpha1.TalosCluster) error {
+	if err := validateVersion("talosVersion", c.Spec.TalosVersion); err != nil {
+		return err
+	}
+
+	if err := validateVersion("kubernetesVersion", c.Spec.KubernetesVersion); err != nil {
+		return err
+	}
+
+	if err := release.CheckCreate("talosVersion", c.Spec.TalosVersion, release.Pinned.Talos); err != nil {
+		return err
+	}
+
+	if err := release.CheckCreate("versionContract", c.Spec.VersionContract, release.Pinned.VersionContract); err != nil {
+		return err
+	}
+
+	return release.CheckCreate("kubernetesVersion", c.Spec.KubernetesVersion, release.Pinned.Kubernetes)
 }
 
 // validateVersion refuses a Talos or Kubernetes version that is not a semantic version. The CRD
@@ -176,7 +199,9 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 	return warns, nil
 }
 
-// validateChangedVersions checks only the version fields an update changes.
+// validateChangedVersions checks only the version fields an update changes. A changed version must
+// be the one this Ichor build supports and not a downgrade (ADR 0113): the release set moves a
+// cluster only as far as the pinned set.
 func validateChangedVersions(oldObj, newObj *ichorv1alpha1.TalosCluster) error {
 	if oldObj.Spec.TalosVersion != newObj.Spec.TalosVersion {
 		if err := validateVersion("talosVersion", newObj.Spec.TalosVersion); err != nil {
@@ -185,10 +210,20 @@ func validateChangedVersions(oldObj, newObj *ichorv1alpha1.TalosCluster) error {
 	}
 
 	if oldObj.Spec.KubernetesVersion != newObj.Spec.KubernetesVersion {
-		return validateVersion("kubernetesVersion", newObj.Spec.KubernetesVersion)
+		if err := validateVersion("kubernetesVersion", newObj.Spec.KubernetesVersion); err != nil {
+			return err
+		}
 	}
 
-	return nil
+	if err := release.CheckUpdate("talosVersion", oldObj.Spec.TalosVersion, newObj.Spec.TalosVersion, release.Pinned.Talos); err != nil {
+		return err
+	}
+
+	if err := release.CheckUpdate("kubernetesVersion", oldObj.Spec.KubernetesVersion, newObj.Spec.KubernetesVersion, release.Pinned.Kubernetes); err != nil {
+		return err
+	}
+
+	return release.CheckUpdate("versionContract", oldObj.Spec.VersionContract, newObj.Spec.VersionContract, release.Pinned.VersionContract)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type TalosCluster.

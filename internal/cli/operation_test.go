@@ -32,19 +32,27 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/release"
 )
 
 const (
 	opTestCluster = "adopt-cluster"
-	opNewVersion  = "v1.14.4"
-	opCP          = "cp1"
+	// opOldVersion is the Talos the test cluster starts behind.
+	opOldVersion = "v1.13.2"
+	opCP         = "cp1"
 )
+
+// opNewVersion is the release set's Talos: the only target an upgrade accepts.
+var opNewVersion = release.Pinned.Talos
 
 func opTestObjects() []client.Object {
 	cp := newTestMachine(opTestCluster)
 	cp.Name, cp.Spec.Role = opCP, roleControlPlane
 
-	return []client.Object{newTestCluster(), cp, newTestMachine(opTestCluster)}
+	cluster := newTestCluster()
+	cluster.Spec.TalosVersion, cluster.Spec.VersionContract = opOldVersion, "v1.13"
+
+	return []client.Object{cluster, cp, newTestMachine(opTestCluster)}
 }
 
 func opTestOps(t *testing.T, k8s client.Client) []ichorv1alpha1.TalosOperation {
@@ -83,13 +91,13 @@ func TestUpgradeTalosAsksWhichMachinesRebootInWhichOrderAndDeclineWritesNothing(
 		t.Fatalf("want aborted, got %v", err)
 	}
 
-	for _, want := range []string{"REBOOTS", "2 machine(s)", "1. " + opCP + " (controlplane)", "2. " + testMachineName + " (worker)", testTalosVersion, opNewVersion} {
+	for _, want := range []string{"REBOOTS", "2 machine(s)", "1. " + opCP + " (controlplane)", "2. " + testMachineName + " (worker)", opOldVersion, opNewVersion} {
 		if !strings.Contains(prompt.String(), want) {
 			t.Errorf("prompt lacks %q:\n%s", want, prompt.String())
 		}
 	}
 
-	if opTestVersion(t, k8s) != testTalosVersion || len(opTestOps(t, k8s)) != 0 {
+	if opTestVersion(t, k8s) != opOldVersion || len(opTestOps(t, k8s)) != 0 {
 		t.Fatal("a declined upgrade wrote something")
 	}
 }

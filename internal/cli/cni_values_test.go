@@ -177,7 +177,7 @@ func TestCniValuesEditSavesWhatTheEditorLeavesAndSkipsAnUnchangedFile(t *testing
 func TestCniUpgradeRefusedWhenNoUpgradeIsOffered(t *testing.T) {
 	c, _ := cniTestClient(t, true)
 
-	err := runCniUpgrade(context.Background(), c, &bytes.Buffer{}, "")
+	err := runCniUpgrade(context.Background(), c, &bytes.Buffer{}, "", "", false)
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
 		t.Fatalf("want FailedPrecondition, got %v", err)
 	}

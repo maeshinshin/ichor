@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"net"
 	"net/netip"
+	"slices"
 	"time"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -80,7 +81,7 @@ func forbiddenAddr(a netip.Addr, cluster *ichorv1alpha1.TalosCluster) error {
 	}
 
 	if n := cluster.Spec.Network; n != nil {
-		for _, c := range append(append([]string{}, n.PodSubnets...), n.ServiceSubnets...) {
+		for _, c := range slices.Concat(n.PodSubnets, n.ServiceSubnets) {
 			if p, err := netip.ParsePrefix(c); err == nil && p.Contains(a) {
 				return fmt.Errorf("the address %s is inside the cluster's own pod or service range %s", a, c)
 			}
@@ -132,17 +133,13 @@ func InDiscovery(endpoint string, cluster *ichorv1alpha1.TalosCluster) bool {
 		return false
 	}
 
-	for _, s := range d.Addresses {
-		if p, ok := parseHost(s); ok && p == a {
-			return true
-		}
-	}
+	return slices.ContainsFunc(d.Addresses, func(s string) bool {
+		p, ok := parseHost(s)
 
-	for _, c := range d.CIDRs {
-		if p, err := netip.ParsePrefix(c); err == nil && p.Contains(a) {
-			return true
-		}
-	}
+		return ok && p == a
+	}) || slices.ContainsFunc(d.CIDRs, func(c string) bool {
+		p, err := netip.ParsePrefix(c)
 
-	return false
+		return err == nil && p.Contains(a)
+	})
 }

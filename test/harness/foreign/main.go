@@ -39,7 +39,7 @@ func main() {
 	var keepRegistry bool
 	fs.StringVar(&o.Prefix, "prefix", foreign.PrefixRoot, "object name prefix (must start with "+foreign.PrefixRoot+")")
 	fs.StringVar(&o.TalosVersion, "talos", "", "Talos version, e.g. v1.14.3 (default: the cached ISO's)")
-	fs.StringVar(&o.K8sVersion, "k8s", "", "Kubernetes version (default: talosctl's)")
+	fs.StringVar(&o.K8sVersion, "k8s", "", "Kubernetes version (default: v1.36.5, one patch below the release set)")
 	fs.IntVar(&o.ControlPlanes, "cps", 1, "control planes (1..3)")
 	fs.IntVar(&o.Workers, "workers", 1, "workers (0..4)")
 	fs.StringVar(&o.CNI, "cni", foreign.CNIFlannel, "talos-flannel|none|cilium-inline|cilium-helm|cilium-cli|calico")

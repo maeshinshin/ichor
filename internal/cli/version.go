@@ -31,6 +31,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/version"
+	"github.com/maeshinshin/ichor/pkg/release"
 )
 
 // versionTimeout bounds the cluster read: an unreachable API server must not hang a version check.
@@ -52,12 +53,28 @@ func clientVersion() string {
 }
 
 type versionInfo struct {
-	Client versionClient  `json:"client"`
-	Server *versionServer `json:"server,omitempty"`
+	Client  versionClient   `json:"client"`
+	Release *versionRelease `json:"release,omitempty"`
+	Server  *versionServer  `json:"server,omitempty"`
 }
 
 type versionClient struct {
 	Version string `json:"version"`
+}
+
+// versionRelease is the release set this Ichor build supports and brings a cluster to.
+type versionRelease struct {
+	Talos           string `json:"talosVersion"`
+	VersionContract string `json:"versionContract"`
+	Kubernetes      string `json:"kubernetesVersion"`
+	Cilium          string `json:"ciliumChartVersion"`
+}
+
+// releaseOf is the release set of this build.
+func releaseOf() *versionRelease {
+	p := release.Pinned
+
+	return &versionRelease{Talos: p.Talos, VersionContract: p.VersionContract, Kubernetes: p.Kubernetes, Cilium: p.Cilium}
 }
 
 type versionServer struct {
@@ -70,6 +87,7 @@ type versionServer struct {
 // non-empty when the server half is missing; it is not an error.
 func collectVersion(ctx context.Context, c client.Reader, cliVersion string) (info versionInfo, note string) {
 	info.Client.Version = cliVersion
+	info.Release = releaseOf()
 
 	if c == nil {
 		return info, ""

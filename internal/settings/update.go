@@ -186,7 +186,7 @@ func ParseAssignments(args []string) (Changes, error) {
 		case KeyAutoPatchComponents:
 			c.AutoPatchComponents = []string{}
 
-			for _, comp := range strings.Split(v, ",") {
+			for comp := range strings.SplitSeq(v, ",") {
 				if comp = strings.TrimSpace(comp); comp != "" {
 					c.AutoPatchComponents = append(c.AutoPatchComponents, comp)
 				}

@@ -18,6 +18,7 @@ package uiapi
 
 import (
 	"context"
+	"strconv"
 
 	"connectrpc.com/connect"
 	"golang.org/x/mod/semver"
@@ -71,7 +72,7 @@ func (s *Server) GetIchorInstallation(
 	}
 
 	if e := inst.Status.Effective; e != nil && e.AutoPatch != nil {
-		resp.AutoPatchEnabled = e.AutoPatch.Value == "true"
+		resp.AutoPatchEnabled, _ = strconv.ParseBool(e.AutoPatch.Value)
 	}
 
 	if a := inst.Status.AutoPatch; a != nil {

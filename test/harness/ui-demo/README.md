@@ -119,9 +119,11 @@ kubectl -n ichor-system apply -f test/harness/ui-demo/inner-nodeport.yaml       
 certificate on 8080 and keeps that port through every upgrade (the installer pins it), so for such a
 demo apply the file with `8080` in both port fields instead; a demo created from this tree uses 8443 as is.
 
-`--local` on CLI calls from the tools pod: ichor-ui's certificate has no in-cluster service name, so
-the CLI cannot verify it through the Service. `--local` skips ichor-ui and computes from the Kubernetes API directly.
-Use it for every `ichor` command run from the tools pod (config apply, machine approve, ...).
+The CLI verifies ichor-ui through the Service name against `ichor-ui-ca`, and ichor-ui answers that name with
+Ichor's own certificate even though this demo serves its operator certificate for the load balancer address
+(2026-11-03). From a build with that amendment, commands run from the tools pod need no
+`--local`; a demo still on the earlier image (before its first upgrade) does, because the CLI then warns and
+computes from the Kubernetes API directly.
 
 ## Update to the current tree
 

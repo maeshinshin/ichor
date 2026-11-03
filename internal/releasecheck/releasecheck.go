@@ -17,9 +17,12 @@ import (
 const DefaultRepository = "ghcr.io/maeshinshin/charts/ichor"
 
 // The repositories whose tags are the Talos and Kubernetes releases an upgrade can list.
-// Their tags are the releases themselves: the installer image and the kubelet image.
+// Talos 1.14 stopped publishing ghcr.io/siderolabs/installer (its installers come from Image Factory),
+// so the Talos list is the installer-base image, which carries a tag per release (v1.14.3 is there,
+// the installer image's is a 404) and is on the registry host the check already allows. Image Factory
+// is not a ghcr.io host, and the controller does not pull installers, so it needs no egress for this.
 const (
-	DefaultTalosRepository      = "ghcr.io/siderolabs/installer"
+	DefaultTalosRepository      = "ghcr.io/siderolabs/installer-base"
 	DefaultKubernetesRepository = "ghcr.io/siderolabs/kubelet"
 )
 

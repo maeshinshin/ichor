@@ -144,7 +144,7 @@ func runLiveRestore(ctx context.Context, c *apiClients, in io.Reader, out, errw 
 
 	bg := overrideOf(apiOpts)
 	if bg == nil {
-		return errors.New("restore --live: it needs --override <reason> (and the override RBAC verb on the cluster); the reason goes into the audit record")
+		return errors.New("restore --live: it needs --override (and the override RBAC verb on the cluster); --override-reason records why in the audit record")
 	}
 
 	list, err := c.Operation.ListEtcdBackups(ctx, connect.NewRequest(&pb.ListEtcdBackupsRequest{Cluster: cluster}))

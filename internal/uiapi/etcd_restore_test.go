@@ -256,12 +256,12 @@ func TestEtcdRestoreOverrideWithoutAReason(t *testing.T) {
 		t.Fatalf("override without a reason: %v", err)
 	}
 
-	if a := res.Msg.GetAudit(); a.GetAction() != "create-override" || a.GetReason() != "no reason given" {
+	if a := res.Msg.GetAudit(); a.GetAction() != createOverrideAction || a.GetReason() != noReasonGiven {
 		t.Fatalf("audit = %+v", a)
 	}
 
 	ops := listOps(t, k8s)
-	if len(ops) != 1 || ops[0].Spec.EtcdRestore == nil || ops[0].Spec.EtcdRestore.Reason != "no reason given" {
+	if len(ops) != 1 || ops[0].Spec.EtcdRestore == nil || ops[0].Spec.EtcdRestore.Reason != noReasonGiven {
 		t.Fatalf("operations = %+v", ops)
 	}
 }
@@ -308,7 +308,7 @@ func TestEtcdRestoreNeedsTheClusterNameAndOverride(t *testing.T) {
 		t.Fatalf("allowed: %v", err)
 	}
 
-	if a := res.Msg.GetAudit(); a.GetAction() != "create-override" || a.GetReason() != bgReason {
+	if a := res.Msg.GetAudit(); a.GetAction() != createOverrideAction || a.GetReason() != bgReason {
 		t.Fatalf("audit = %+v", a)
 	}
 

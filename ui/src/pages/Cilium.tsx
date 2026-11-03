@@ -11,16 +11,19 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PageTitle } from '@/components/PageTitle'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
+import { VersionPicker } from '@/components/VersionPicker'
 import type { GetCiliumValuesResponse } from '@/gen/ichor/v1alpha1/cni_pb'
 import type { ObjectRef } from '@/gen/ichor/v1alpha1/common_pb'
-import { canApply, canEdit, canUpgrade, diffLines, type DiffKind } from '@/lib/cilium'
-import { cniClient } from '@/lib/connect'
+import { OperationKind } from '@/gen/ichor/v1alpha1/operation_pb'
+import { canApply, canEdit, diffLines, type DiffKind } from '@/lib/cilium'
+import { cniClient, operationClient } from '@/lib/connect'
 import { detectedCni, isCniUnmanaged } from '@/lib/cni'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { notifyDone } from '@/lib/notify'
 import { useCluster } from '@/lib/useCluster'
 import { useLoad } from '@/lib/useLoad'
 import { useMyPermissions } from '@/lib/useMyPermissions'
+import type { TargetList } from '@/lib/upgradeTargets'
 import { useT } from '@/lib/useT'
 
 type Reviewed = { text: string; valid: boolean; errors: string[]; diff: string }
@@ -98,7 +101,7 @@ export function Cilium() {
       </Card>
       <OwnedKeys owned={data.owned} />
       <UserValues key={version} cluster={ref} data={data} editable={editable} onApplied={() => setVersion(version + 1)} />
-      {canUpgrade(data.availableChartVersion, editable) && <Upgrade cluster={ref} version={data.availableChartVersion} />}
+      <CiliumUpgrade cluster={ref} chart={data.availableChartVersion} editable={editable} />
     </div>
   )
 }
@@ -295,21 +298,38 @@ function UserValues({
   )
 }
 
-// Upgrade starts the Cilium chart upgrade. The server can still answer Unimplemented (ADR 0099
-// unit 7), and then the error text is shown as received.
-function Upgrade({ cluster, version }: { cluster: ObjectRef; version: string }) {
+// CiliumUpgrade reads the Cilium patches the cluster can take, verified against Cilium's release signature
+// (docs/adr/0115, amendment 2026-11-03), and shows the upgrade when the embedded chart is newer or a patch is
+// on offer. Nothing is shown to a viewer who may not upgrade.
+function CiliumUpgrade({ cluster, chart, editable }: { cluster: ObjectRef; chart: string; editable: boolean }) {
+  const [list, setList] = useState<TargetList | null>(null)
+
+  useEffect(() => {
+    operationClient.listUpgradeTargets({ cluster, kind: OperationKind.CNI }).then(setList, () => setList(null))
+  }, [cluster.name, cluster.namespace])
+
+  const patches = list?.available ? list.patch : []
+  if (!editable || (chart === '' && patches.length === 0)) return null
+
+  return <Upgrade cluster={cluster} chart={chart} list={list} />
+}
+
+// Upgrade starts a Cilium upgrade: to the embedded chart when the picker is left empty, or to the verified patch
+// it names. The server can still answer Unimplemented (ADR 0099 unit 7), and then the error text is shown as received.
+function Upgrade({ cluster, chart, list }: { cluster: ObjectRef; chart: string; list: TargetList | null }) {
   const t = useT()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
+  const [target, setTarget] = useState('')
 
-  useEffect(() => setError(null), [version])
+  useEffect(() => setError(null), [target])
 
   async function start() {
     setBusy(true)
     setError(null)
     try {
-      await cniClient.startCniUpgrade({ cluster })
+      await cniClient.startCniUpgrade({ cluster, version: target })
       setOpen(false)
       notifyDone(t('cilium.upgradeStarted'))
     } catch (err) {
@@ -323,8 +343,11 @@ function Upgrade({ cluster, version }: { cluster: ObjectRef; version: string }) 
     <Card id="upgrade" className="scroll-mt-section">
       <CardHeader>
         <CardTitle>{t('cilium.upgradeTitle')}</CardTitle>
-        <CardDescription>{t('cilium.upgradeAvailable', { version })}</CardDescription>
+        <CardDescription>{chart !== '' ? t('cilium.upgradeAvailable', { version: chart }) : t('cilium.patchesAvailable')}</CardDescription>
       </CardHeader>
+      <CardContent>
+        <VersionPicker id="cilium-version" value={target} onValueChange={setTarget} list={list} />
+      </CardContent>
       <CardFooter>
       <ConfirmDialog
         open={open}
@@ -333,9 +356,14 @@ function Upgrade({ cluster, version }: { cluster: ObjectRef; version: string }) 
           if (!next) setError(null)
         }}
         trigger={<Button variant="outline">{t('cilium.upgradeStart')}</Button>}
-        title={t('cilium.upgradeConfirmTitle', { version })}
+        title={t('cilium.upgradeConfirmTitle', { version: target || chart })}
         description={t('cilium.upgradeConfirmBody')}
-        confirm={{ label: busy ? t('cilium.upgradeStarting') : t('cilium.upgrade'), disabled: busy, onClick: start, destructive: false }}
+        confirm={{
+          label: busy ? t('cilium.upgradeStarting') : t('cilium.upgrade'),
+          disabled: busy || (target === '' && chart === ''),
+          onClick: start,
+          destructive: false,
+        }}
       >
         {error && <ErrorAlert {...error} />}
       </ConfirmDialog>

@@ -1066,6 +1066,7 @@ export const en = {
   'cilium.upgradeConfirmTitle': 'Upgrade Cilium to {version}?',
   'cilium.upgradeConfirmBody': 'Ichor checks that your values still validate, then starts the upgrade operation.',
   'cilium.upgradeStarted': 'Cilium upgrade started',
+  'cilium.patchesAvailable': 'Verified Cilium patches of the embedded chart are available.',
   'backups.title': 'Backups',
   'backups.loading': 'Loading backups…',
   'backups.noCluster': 'There is no cluster yet, so there is nothing to back up.',

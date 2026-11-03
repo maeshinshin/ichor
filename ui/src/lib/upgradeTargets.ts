@@ -67,15 +67,15 @@ export function isNewerPatch(current: string, target: string): boolean {
 }
 
 // patchComponents names the components that have a patch, in the order Talos, Kubernetes, Cilium. The attention
-// list announces them as one item.
+// list announces them as one item. A Cilium patch is one whose images verified (docs/adr/0115, amendment 2026-11-03).
 export function patchComponents(i: {
   talos: TargetList | null
   kubernetes: TargetList | null
-  cilium: { current: string; target: string } | null
+  cilium: TargetList | null
 }): string[] {
   const out: string[] = []
   if (hasPatch(i.talos)) out.push('Talos')
   if (hasPatch(i.kubernetes)) out.push('Kubernetes')
-  if (i.cilium && isNewerPatch(i.cilium.current, i.cilium.target)) out.push('Cilium')
+  if (hasPatch(i.cilium)) out.push('Cilium')
   return out
 }

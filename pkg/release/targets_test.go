@@ -106,14 +106,14 @@ func TestTalosDefaultSelection(t *testing.T) {
 func TestKubernetesChoicesNeedCiliumAndTalosToSupportThem(t *testing.T) {
 	// Cilium 1.18 is tested with Kubernetes 1.30 to 1.33: from 1.36.0 nothing is offered, and the
 	// release set's 1.37.1 is not tested with it either.
-	c := KubernetesChoices("v1.36.0", "v1.14.3", "1.18.0", "v1.37.1", fakeKubernetesTags)
+	c := KubernetesChoices("v1.36.0", "v1.14.3", "1.18.0", "v1.37.1", true, fakeKubernetesTags)
 	if c.Default() != "" || len(c.Patch)+len(c.NextMinor)+len(c.Recommended) != 0 {
 		t.Errorf("Cilium 1.18 offers %+v from 1.36.0", c)
 	}
 
 	// Cilium 1.20 is tested with 1.33 to 1.36: 1.36.1 is offered as a patch, and the release set's
 	// 1.37.1 is not (not tested with Cilium 1.20, and one minor up from 1.36.0 is still allowed).
-	c = KubernetesChoices("v1.36.0", "v1.14.3", "1.20.0", "v1.37.1", fakeKubernetesTags)
+	c = KubernetesChoices("v1.36.0", "v1.14.3", "1.20.0", "v1.37.1", true, fakeKubernetesTags)
 
 	if !slices.Equal(c.Patch, []string{"v1.36.1"}) {
 		t.Errorf("Patch = %v", c.Patch)
@@ -131,7 +131,7 @@ func TestKubernetesChoicesNeedCiliumAndTalosToSupportThem(t *testing.T) {
 func TestKubernetesNextMinorBoundaryAndPairing(t *testing.T) {
 	// From 1.34.2 on Talos 1.14.3 with Cilium 1.20 (1.33 to 1.36): 1.35.0 is the next minor, 1.36.x
 	// skips one (refused by the skew), and 1.37.1 is refused by the skew and by Cilium.
-	c := KubernetesChoices("v1.34.2", "v1.14.3", "1.20.0", "v1.37.1", fakeKubernetesTags)
+	c := KubernetesChoices("v1.34.2", "v1.14.3", "1.20.0", "v1.37.1", true, fakeKubernetesTags)
 
 	if !slices.Equal(c.Patch, []string{"v1.34.3"}) {
 		t.Errorf("Patch = %v", c.Patch)
@@ -147,17 +147,27 @@ func TestKubernetesNextMinorBoundaryAndPairing(t *testing.T) {
 
 	// Talos 1.12 supports 1.30.0 to 1.35.99: from 1.35.0, 1.36.x is one minor up but the Talos
 	// pairing refuses it, so nothing is offered.
-	c = KubernetesChoices("v1.35.0", "v1.12.0", "1.20.0", "v1.37.1", fakeKubernetesTags)
+	c = KubernetesChoices("v1.35.0", "v1.12.0", "1.20.0", "v1.37.1", true, fakeKubernetesTags)
 	if len(c.Patch)+len(c.NextMinor)+len(c.Recommended) != 0 {
 		t.Errorf("the Talos pairing should refuse 1.36 from Talos 1.12: %+v", c)
 	}
 }
 
 func TestKubernetesUnknownCiliumOffersNothing(t *testing.T) {
-	c := KubernetesChoices("v1.34.2", "v1.14.3", "1.21.0", "v1.37.1", fakeKubernetesTags)
+	c := KubernetesChoices("v1.34.2", "v1.14.3", "1.21.0", "v1.37.1", true, fakeKubernetesTags)
 
 	if len(c.Patch)+len(c.NextMinor)+len(c.Recommended) != 0 {
 		t.Errorf("an unknown Cilium offers %+v", c)
+	}
+}
+
+func TestKubernetesChoicesSkipTheCiliumConstraintOfANonCiliumCNI(t *testing.T) {
+	// An observed non-Cilium CNI has no Cilium release to match (ADR 0115, amendment 3), so the Talos
+	// pairing alone decides: the same pair that offers nothing under an unknown Cilium offers releases here.
+	c := KubernetesChoices("v1.34.2", "v1.14.3", "", "v1.37.1", false, fakeKubernetesTags)
+
+	if len(c.Patch)+len(c.NextMinor)+len(c.Recommended) == 0 {
+		t.Errorf("a flannel cluster is offered no Kubernetes release: %+v", c)
 	}
 }
 

@@ -491,7 +491,7 @@ func installedCilium(cluster *ichorv1alpha1.TalosCluster) string {
 		return ""
 	}
 
-	return strings.TrimPrefix(cluster.Status.CNI.DetectedVersion, "v")
+	return release.CiliumRelease(cluster.Status.CNI.Detected, cluster.Status.CNI.DetectedVersion)
 }
 
 // notePendingSchematic records the first schematic change a Talos upgrade would make.

@@ -47,7 +47,7 @@ func releaseSetToPB() *pb.ReleaseSet {
 // (status.cni.availableChartVersion); it is Unknown until a Cilium release is observed.
 func ciliumVersion(c *ichorv1alpha1.TalosCluster) (string, release.State) {
 	cni := c.Status.CNI
-	if cni == nil {
+	if cni == nil || cni.Detected != "cilium" {
 		return "", release.Unknown
 	}
 
@@ -57,7 +57,7 @@ func ciliumVersion(c *ichorv1alpha1.TalosCluster) (string, release.State) {
 		return installed, release.Behind
 	}
 
-	if cni.Detected == "cilium" && installed != "" {
+	if installed != "" {
 		return installed, release.Compare("v"+installed, "v"+release.Pinned.Cilium)
 	}
 

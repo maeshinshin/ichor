@@ -125,7 +125,12 @@ func upgradeChoices(kind pb.OperationKind, cluster *ichorv1alpha1.TalosCluster, 
 
 	installed, _ := ciliumVersion(cluster)
 
-	return release.KubernetesChoices(cluster.Spec.KubernetesVersion, cluster.Spec.TalosVersion, installed, release.Pinned.Kubernetes, lists.Kubernetes)
+	// An observed non-Cilium CNI has no Cilium to match (ADR 0115, amendment 3); an unobserved one still
+	// offers nothing until Cilium is seen.
+	ciliumConstrains := cluster.Status.CNI == nil || cluster.Status.CNI.Detected == "" || cluster.Status.CNI.Detected == "cilium"
+
+	return release.KubernetesChoices(cluster.Spec.KubernetesVersion, cluster.Spec.TalosVersion, installed, release.Pinned.Kubernetes,
+		ciliumConstrains, lists.Kubernetes)
 }
 
 // ciliumPatchChoices is the Cilium patches the cluster can take now, and why the list cannot be used ("" when

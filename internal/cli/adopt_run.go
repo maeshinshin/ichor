@@ -152,11 +152,13 @@ func (st *adoptState) needsTakeover() bool {
 // (ADR 0115). A version the table does not know at all is refused: Ichor could not operate the
 // cluster. A pair the table marks incompatible is only reported, and the Cilium adopt installs (the
 // chart this Ichor embeds) is judged too.
-func checkAdoptCompat(w io.Writer, talos, kubernetes string) error {
-	for _, err := range []error{
-		release.TalosKubernetesError(talos, kubernetes),
-		release.CiliumKubernetesError(release.Pinned.Cilium, kubernetes),
-	} {
+func checkAdoptCompat(w io.Writer, talos, kubernetes string, ichorInstallsCilium bool) error {
+	errs := []error{release.TalosKubernetesError(talos, kubernetes)}
+	if ichorInstallsCilium {
+		errs = append(errs, release.CiliumKubernetesError(release.Pinned.Cilium, kubernetes))
+	}
+
+	for _, err := range errs {
 		switch {
 		case err == nil:
 		case errors.Is(err, release.ErrUnknownVersion):
@@ -182,7 +184,9 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		return err
 	}
 
-	if err := checkAdoptCompat(deps.Stderr, st.cluster.Spec.TalosVersion, st.cluster.Spec.KubernetesVersion); err != nil {
+	// An unmanaged adopt installs no Cilium, so there is none for the pairing to judge (ADR 0115, amendment 3).
+	unmanaged := deps.CNIUnmanaged || st.cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged
+	if err := checkAdoptCompat(deps.Stderr, st.cluster.Spec.TalosVersion, st.cluster.Spec.KubernetesVersion, !unmanaged); err != nil {
 		return err
 	}
 

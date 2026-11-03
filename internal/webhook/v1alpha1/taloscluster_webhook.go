@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"golang.org/x/mod/semver"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -258,7 +257,7 @@ func (v *TalosClusterCustomValidator) validateChangedVersions(ctx context.Contex
 	if talosChanged || k8sChanged {
 		var ciliumDetected string
 		if k8sChanged && newObj.Status.CNI != nil {
-			ciliumDetected = strings.TrimPrefix(newObj.Status.CNI.DetectedVersion, "v")
+			ciliumDetected = release.CiliumRelease(newObj.Status.CNI.Detected, newObj.Status.CNI.DetectedVersion)
 		}
 
 		var stepErr error

@@ -44,7 +44,7 @@ func TestCheckAdoptCompatWarnsOrRefuses(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	if err := checkAdoptCompat(&out, "v1.14.3", "v1.32.0"); err != nil {
+	if err := checkAdoptCompat(&out, "v1.14.3", "v1.32.0", true); err != nil {
 		t.Fatalf("an incompatible but known pair is refused: %v", err)
 	}
 
@@ -54,8 +54,23 @@ func TestCheckAdoptCompatWarnsOrRefuses(t *testing.T) {
 
 	out.Reset()
 
-	err := checkAdoptCompat(&out, "v1.15.0", release.Pinned.Kubernetes)
+	err := checkAdoptCompat(&out, "v1.15.0", release.Pinned.Kubernetes, true)
 	if !errors.Is(err, release.ErrUnknownVersion) {
 		t.Fatalf("a Talos the table does not know: err = %v, want ErrUnknownVersion", err)
+	}
+}
+
+// An unmanaged adopt installs no Cilium, so the Cilium the chart this Ichor embeds would install is not
+// judged: the pair is judged as the cluster runs it (ADR 0115, amendment 3).
+func TestCheckAdoptCompatJudgesNoCiliumOfAnUnmanagedAdopt(t *testing.T) {
+	t.Parallel()
+
+	var out bytes.Buffer
+	if err := checkAdoptCompat(&out, "v1.14.3", "v1.32.0", false); err != nil {
+		t.Fatalf("an unmanaged adopt is refused: %v", err)
+	}
+
+	if strings.Contains(strings.ToLower(out.String()), "cilium") {
+		t.Fatalf("an unmanaged adopt judged a Cilium Ichor does not install: %q", out.String())
 	}
 }

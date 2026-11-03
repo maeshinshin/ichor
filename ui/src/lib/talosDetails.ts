@@ -21,6 +21,13 @@ export function serviceTone(s: ServiceLike): Tone {
   return s.healthy ? 'good' : 'bad'
 }
 
+// The Health cell's text: a service Talos has no health check for says so,
+// rather than showing a dash that reads as broken.
+export function healthKey(s: ServiceLike): 'talos.noHealthCheck' | 'common.yes' | 'common.no' {
+  if (s.healthUnknown) return 'talos.noHealthCheck'
+  return s.healthy ? 'common.yes' : 'common.no'
+}
+
 export function sortServices<T extends ServiceLike & { id: string }>(services: readonly T[]): T[] {
   const rank = (s: T) => (serviceTone(s) === 'bad' ? 0 : 1)
   return [...services].sort((a, b) => rank(a) - rank(b) || a.id.localeCompare(b.id))

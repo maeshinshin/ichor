@@ -58,7 +58,7 @@ func (s *Server) authorizeOverride(ctx context.Context, obj client.Object) error
 		return connect.NewError(connect.CodeUnavailable, fmt.Errorf("override: acting as the user: %w", err))
 	}
 
-	_, resource := kindOf(obj)
+	resource := resourceOf(obj)
 	review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authv1.ResourceAttributes{
 		Namespace: obj.GetNamespace(), Verb: OverrideVerb, Group: ichorv1alpha1.GroupVersion.Group,
 		Resource: resource, Name: obj.GetName(),
@@ -77,23 +77,15 @@ func (s *Server) authorizeOverride(ctx context.Context, obj client.Object) error
 	return nil
 }
 
-func kindOf(obj client.Object) (kind, resource string) {
-	if _, ok := obj.(*ichorv1alpha1.TalosConfigPatch); ok {
-		return "TalosConfigPatch", "talosconfigpatches"
+func resourceOf(obj client.Object) string {
+	switch obj.(type) {
+	case *ichorv1alpha1.TalosConfigPatch:
+		return "talosconfigpatches"
+	case *ichorv1alpha1.TalosCluster:
+		return "talosclusters"
 	}
 
-	if _, ok := obj.(*ichorv1alpha1.TalosCluster); ok {
-		return kindTalosCluster, "talosclusters"
-	}
-
-	return kindTalosMachine, "talosmachines"
-}
-
-// emitOverrideEvent records a Warning Event on obj. It uses the backend's
-// own client (the ServiceAccount, or the CLI user), not the impersonated
-// user: users are not given rights to create Events.
-func (s *Server) emitOverrideEvent(ctx context.Context, obj client.Object, kind, message string) error {
-	return s.emitWarningEvent(ctx, obj, kind, "Override", message)
+	return "talosmachines"
 }
 
 // emitWarningEvent records a Warning Event with reason on obj, as the backend's own client.

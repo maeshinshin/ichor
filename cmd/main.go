@@ -40,8 +40,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -587,8 +589,14 @@ func main() {
 		Repository: updateCheckRepository, List: relists, Images: ciliumImages, Settle: 3 * time.Second,
 	}), "Failed to add the release check")
 	// Automatic patch upgrades: off unless spec.autoPatch or the chart turns them on.
+	// The controller never writes a TalosCluster spec: the version and the operation are written as the
+	// ServiceAccount ichor-auto-patch, which the controller may impersonate (and only that one).
+	actorCfg := rest.CopyConfig(mgr.GetConfig())
+	actorCfg.Impersonate = rest.ImpersonationConfig{UserName: "system:serviceaccount:" + ns + ":" + ichorv1alpha1.AutoPatchServiceAccount}
+	autoPatchActor, err := client.New(actorCfg, client.Options{Scheme: mgr.GetScheme()})
+	must(err, "Failed to create the automatic patcher's client")
 	must(mgr.Add(&controller.AutoPatcher{
-		Client: mgr.GetClient(), Reader: mgr.GetAPIReader(), Settings: settingsReader,
+		Client: mgr.GetClient(), Actor: autoPatchActor, Reader: mgr.GetAPIReader(), Settings: settingsReader,
 		Recorder: mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
 	}), "Failed to add the automatic patcher")
 	// Create the singleton once if it is absent. The admission webhook may

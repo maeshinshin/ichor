@@ -206,6 +206,9 @@ const (
 	OperationAutoPatchAnnotation = "ichor.maesh.dev/auto-patch"
 	// AutoPatchStarter is the started-by annotation of such an operation.
 	AutoPatchStarter = "ichor-auto-patch"
+	// AutoPatchServiceAccount is the ServiceAccount, in the controller's namespace, that the automatic
+	// patcher acts as: it writes the version and creates the operation, so the audit log names it.
+	AutoPatchServiceAccount = "ichor-auto-patch"
 )
 
 // IchorAutoPatchStatus is the state of the automatic patcher.

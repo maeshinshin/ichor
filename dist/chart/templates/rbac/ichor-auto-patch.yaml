@@ -1,0 +1,80 @@
+# Mirrors config/rbac/ichor-auto-patch/. Fixed names, because the controller impersonates the
+# username system:serviceaccount:<namespace>:ichor-auto-patch. The controller never writes a TalosCluster
+# spec; this identity does, for the newer patch of the running minor and the operation that goes with it.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: ichor-auto-patch
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: ichor-auto-patch-role
+rules:
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosclusters
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosoperations
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: ichor-auto-patch-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ichor-auto-patch-role
+subjects:
+- kind: ServiceAccount
+  name: ichor-auto-patch
+  namespace: {{ .Release.Namespace }}
+---
+# The controller may impersonate this ServiceAccount and no other.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: ichor-auto-patch-impersonate-role
+  namespace: {{ .Release.Namespace }}
+rules:
+- apiGroups:
+  - ""
+  resourceNames:
+  - ichor-auto-patch
+  resources:
+  - serviceaccounts
+  verbs:
+  - impersonate
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: ichor-auto-patch-impersonate-rolebinding
+  namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ichor-auto-patch-impersonate-role
+subjects:
+- kind: ServiceAccount
+  name: {{ include "ichor.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}

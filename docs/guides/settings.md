@@ -121,9 +121,11 @@ Ready, no operation of the cluster is unfinished, and the cluster lock is free. 
 `TalosOperation` that the normal executor runs; it carries the annotation `ichor.maesh.dev/auto-patch: "true"`, shows
 "Started by: Automatic patching" on its page, and each start leaves an `AutoPatchStarted` Event on the cluster.
 
-For a Talos or Kubernetes patch the controller writes the new version into the `TalosCluster` spec before it creates
-the operation; this is the only write the controller makes to a spec, and the webhook refuses any other write by it
-to a `TalosCluster`. If your clusters are kept in Git by a tool that reverts edits, leave automatic patching off.
+For a Talos or Kubernetes patch the new version goes into the `TalosCluster` spec before the operation is created. The
+controller never writes a spec: it impersonates the ServiceAccount `ichor-auto-patch`, which holds only `get` and
+`update` on `talosclusters` and `create` on `talosoperations`, and the webhook refuses anything it writes except a newer
+patch of the same minor in the two version fields. The audit log shows those writes as that user. If your clusters are
+kept in Git by a tool that reverts edits, leave automatic patching off.
 
 If an automatic operation fails or pauses, automatic patching stops everywhere (condition `AutoPatchHalted`, a
 warning Event, an item in the Overview's attention list) and never retries. Look at the operation, resume it with

@@ -56,6 +56,7 @@ Values worth knowing (see `dist/chart/values.yaml` for all of them):
 | `ichorUI.tls.secretName` | unset | Your own certificate for ichor-ui. Unset uses a leaf from the Ichor serving CA. |
 | `ichorUI.tls.caConfigMap`, `caSecret`, `caKey` | `ichor-ui-ca`, unset, `ca.crt` | The CA the ServiceMonitor (`prometheus.enabled`) verifies the HTTPS port against: the ConfigMap, or the Secret when `caSecret` is set. |
 | `settings.readOnly` | `false` | Hand the runtime settings to the chart: the `IchorInstallation` settings fields are ignored and the webhook denies writes. |
+| `updateCheck.enabled` | `true` | Look for a newer Ichor release in the chart repository and show it on the dashboard (see [Settings](settings.md#updates)). `false` stops the requests and removes their egress rule. |
 
 Adopt does not apply the network policies on a Helm install. When they apply,
 it tells you to run:

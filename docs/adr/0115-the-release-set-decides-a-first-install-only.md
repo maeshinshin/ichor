@@ -17,12 +17,12 @@ The compatibility question did not go away. Nothing said which Talos, Kubernetes
 - `pkg/release.Pinned` is the one set in Go. Init, the CLI defaults and the UI's proposed values read it. `ichor version` shows it as "versions a new install gets".
 - Cilium upgrades go to the chart embedded in the running Ichor (ADR 0098). The Versions card offers the upgrade when the cluster runs an older Cilium.
 - The Ichor row, self-upgrade (ADR 0059) and the Ichor release notice (ADR 0114) are unchanged.
-- `ichor init` keeps the set. `--talos-version`, `--kubernetes-version` and `--version-contract` default to the set, and any other value is refused (`checkPinnedFlags`). The reason is that a first install is the build's tested matrix; a deliberate choice of another version is an upgrade, which can be done after the install. A sensible choice is therefore not blocked by the install path, but the first install is still the set.
+- `ichor init` keeps the set. `--talos-version`, `--kubernetes-version` and `--version-contract` default to the set, and any other value is refused (`checkPinnedFlags`). A first install is the build's tested matrix; a different version is an upgrade, run after the install. Init also runs `checkInitCompat` on the set and refuses it when the compatibility table does not hold the Talos, Kubernetes and Cilium of the set together.
 
 ### What 0113 loses (superseded)
 
 - **0113 item 3 (adopt refuses newer, reports behind).** Superseded. Adopt takes the cluster as it runs, older or newer than the set. It refuses a cluster it cannot operate and warns about an incompatible one; see "adopt" below. There is no "behind" state. The version contract is probed from the running Talos, as it was before 0113.
-- **0113 item 4 (the webhook refuses versions other than the set).** Superseded. See "the webhook" below.
+- **0113 item 4 (the webhook refuses versions other than the set).** Superseded. See "the admission rule" below.
 - **0113 item 5 (no override for the set).** Superseded: the override verb now passes the compatibility refusal (ADR 0110), not the set.
 - **0113 item 6 (`ichor upgrade cluster`, the rollout steps talos, config, kubernetes, cilium, and the Versions card's one button).** Removed. Each component is upgraded with its own operation.
 - **0113 item 8 (the Versions card lost its per-row upgrade buttons, and showed Behind or Up to date against the set).** Superseded. The Talos and Kubernetes rows have an Upgrade button (StartOperationDialog) that offers the target as a combobox of the candidates (see "the version picker"). The Behind and Ahead badges against the set are removed; Talos, the contract and Kubernetes rows show the running version. The Cilium row keeps its state: it is offered when the embedded chart is newer.
@@ -40,51 +40,70 @@ The TalosCluster webhook checks the versions a write sets:
 
 A target for a Talos or Kubernetes upgrade is valid when it is a final `vX.Y.Z` (no pre-release, no build metadata, not the `vX.Y` shorthand), newer than the running version, and:
 
-- **Talos**: `upgrade.TalosPath(running, target)` accepts it. This defers to `pkg/machinery/compatibility`'s `TalosVersion.UpgradeableFrom`, the rule machinery encodes: the target's minor release sets a minimum running version (Talos 1.14: `MinimumHostUpgradeVersion` 1.12.0), a maximum (exclusive) version for a downgrade (1.16.0), and a list of denied versions. Within those bounds Talos may skip minor releases. A target minor that machinery does not know is refused ("upgrades to version ... are not supported").
-- **Kubernetes**: `upgrade.KubernetesSkew(running, target)` accepts it (at most one minor release up, within the same major, never backwards), and `upgrade.KubernetesPairing(target, spec.talosVersion)` accepts it (the cluster's Talos supports the target, machinery's `KubernetesVersion.SupportedWith`).
+- **Talos**: `upgrade.TalosPath(running, target)` accepts it. It defers to `pkg/machinery/compatibility`'s `TalosVersion.UpgradeableFrom`, the rule machinery encodes per target minor. For the target's minor machinery sets a minimum host version (Talos 1.14: 1.12.0), a maximum host version for a downgrade (exclusive: 1.16.0), and a list of denied host versions (empty for 1.14). Within those bounds Talos may skip minor releases. A target minor that machinery's switch does not list is refused ("upgrades to version ... are not supported"); this build's switch covers Talos 1.2 to 1.14, so 1.15 is refused.
+- **Kubernetes**: `upgrade.KubernetesSkew(running, target)` accepts it (at most one minor release up, within the same major, never backwards), and `upgrade.KubernetesPairing(target, spec.talosVersion)` accepts it (machinery's `KubernetesVersion.SupportedWith` for the cluster's Talos).
 
 Sources for the rules:
 
-- Talos, "Upgrading Talos Linux", Supported upgrade paths (docs.siderolabs.com/talos/v1.14/configure-your-talos-cluster/lifecycle-management/upgrading-talos): "this migration is only tested between adjacent minor releases. Thus the recommended upgrade path is to always upgrade to the latest patch release of all intermediate minor releases." The machinery bounds above are the code that enforces what Talos allows; the docs recommend adjacent minors.
-- Kubernetes, the version skew policy (kubernetes.io/releases/version-skew-policy): an upgrade moves at most one minor version at a time; `pkg/upgrade/kubernetes_skew.go` cites it.
+- Talos, "Upgrading Talos Linux", Supported upgrade paths (docs.siderolabs.com/talos/v1.14/configure-your-talos-cluster/lifecycle-management/upgrading-talos): "this migration is only tested between adjacent minor releases. Thus the recommended upgrade path is to always upgrade to the latest patch release of all intermediate minor releases." The code allows a skip within machinery's bounds, which is wider than the docs' recommendation. The picker offers only the adjacent minor (see "the version picker"); a typed skip still passes the rule.
+- Kubernetes, the version skew policy (kubernetes.io/releases/version-skew-policy), as cited by `pkg/upgrade/kubernetes_skew.go`: an upgrade moves at most one minor version at a time.
 
-Both rules are applied by the server's plan (`uiapi` planOperation, for a newer target only; a target that is the same or older keeps the pre-0113 no-op and downgrade rules) and by `ichor upgrade`. The executors (ADR 0043, 0057) check them again and check the Kubernetes pairing of the Talos target, as before. The candidate list is exactly these rules applied to the candidates (see "the version picker"), so a target the list offers passes them.
+Both rules are applied by the server's plan (`checkUpgradeTarget` in `uiapi` `planOperation`, for a newer target only; a target that is the same or older keeps the no-op and downgrade rules), and by the executors (ADR 0043, 0057), which check them again and check the Kubernetes pairing of the Talos target. The CLI checks only that a VERSION is a semantic version and leaves the rules to the server's plan. The candidate list is these rules applied to the candidates, so a target the list offers passes them.
 
-The Talos 1.14 documentation also says that from Talos 1.14 the `ghcr.io/siderolabs/installer` image is no longer published, and installers are served by the Image Factory as `factory.talos.dev/metal-installer/<schematic-id>:<version>`. The candidate source for Talos targets must therefore not assume that the tags of `ghcr.io/siderolabs/installer` list the Talos releases of 1.14 and later.
+### Talos candidate source
+
+The Talos 1.14 docs say that from Talos 1.14 the `ghcr.io/siderolabs/installer` image is no longer published, and that installers are served by the Image Factory as `factory.talos.dev/metal-installer/<schematic-id>:<version>`. The Talos candidate list therefore reads the tags of `ghcr.io/siderolabs/installer-base`, which carries a tag per release: v1.14.3 returns 200 there, and 404 on `ghcr.io/siderolabs/installer`. The host is ghcr.io, which the release check's egress policy already allows (ADR 0114), so no new host is added. Image Factory is not a ghcr.io host, and the controller does not pull installers, so it needs no egress for this. The Kubernetes list reads `ghcr.io/siderolabs/kubelet`.
 
 ### The compatibility table
 
-Compatibility is enforced by one typed table: `pkg/release/compat.go`, maintained with each Ichor release, with the source URL of each entry in a comment. It holds the Kubernetes range each Talos release runs and each Cilium chart runs. Two functions read it:
+Compatibility is enforced by one typed table: `pkg/release/compat.go`, maintained with each Ichor release. Each entry has its source URL in a comment.
 
-- `release.TalosKubernetesError(talos, kubernetes)`, nil when the pair is compatible; the error names the rule.
-- `release.CiliumKubernetesError(cilium, kubernetes)`, nil when the Cilium runs the Kubernetes.
+- **Cilium** (`ciliumKubernetes`): the Kubernetes minors each Cilium minor is e2e tested with. 1.18: 1.30 to 1.33 (docs.cilium.io/en/v1.18/network/kubernetes/requirements/). 1.19: 1.31 to 1.34 (docs.cilium.io/en/v1.19/network/kubernetes/requirements/). 1.20: 1.33 to 1.36 (docs.cilium.io/en/v1.20/network/kubernetes/requirements/). A Cilium minor not in the table is unknown, and nothing is compatible with it.
+- **Talos** (`talosKubernetesNewer`): Kubernetes ranges for Talos minors that the machinery in go.mod does not know, from the Talos support matrix. It is empty in this build. Machinery decides every Talos minor it knows, and the table is consulted only for the others; see the open point on the Talos 1.14 range.
 
-Where machinery's compatibility package knows the Talos release, the answer comes from machinery (the pairing rule above); the table covers what machinery does not. `release.ErrUnknownVersion` means neither machinery nor the table knows the version. The wording of each refusal names a step the user can take (`pkg/release/steps.go`):
+Two functions read the table:
+
+- `release.TalosKubernetesError(talos, kubernetes)`: machinery's pairing first, then the Talos table, else the pair is not known and not compatible. The error names the rule.
+- `release.CiliumKubernetesError(cilium, kubernetes)`: nil when the Cilium minor runs the Kubernetes.
+
+`release.ErrUnknownVersion` means neither machinery nor the table knows the version. The wording of each refusal names a step the user can take (`pkg/release/steps.go`):
 
 - A Kubernetes step whose installed Cilium cannot run the target: "upgrade Cilium to <embedded> first, the chart this Ichor embeds, which runs Kubernetes <k8s>", when the embedded Cilium runs it. Cilium moves only to the chart embedded in the running Ichor (ADR 0098), so when that chart does not run the target either, the refusal says "this Ichor ships Cilium <embedded>, which does not run Kubernetes <k8s>: a newer Ichor release is needed".
 - A Talos or Kubernetes pair the table marks incompatible: the error from the table, which names the supported range.
 
 Compatibility is enforced, and it is not a note. The override verb (ADR 0110) is the only way past a compatibility refusal:
 
-- The operation path (`PlanOperation`, `CreateOperation`) takes the override request field (`Override`, as node actions and etcd restores do). Without it the refusal stands. With it, the caller must hold the override verb on the cluster (`authorizeOverride`), and the override is recorded: the plan carries a warning and `CreateOperation` writes a Warning Event with the reason ("Override") on the TalosCluster.
+- The operation path (`PlanOperation`, `CreateOperation`) takes the `override` request field (field 7 on both requests; the same request shape node actions and etcd restores use). Without it the refusal stands. With it, the caller must hold the override verb on the cluster (`authorizeOverride`). The plan carries the override as a warning, and `CreateOperation` writes a Warning Event with the reason "Override" on the TalosCluster, with the reason the caller gave.
 - The webhook path passes a refused pair when the caller holds the override verb (the RightCheck), and logs the override.
 - A version that neither machinery nor the table knows is refused on every path, and no override passes it.
+- The CLI's operation start (`ichor upgrade`) does not send the override field; only node actions and restores do. See the open points.
 
-The UI shows an incompatible candidate only behind an override checkbox, and disables it with the reason otherwise.
+In the UI, the picker offers only compatible versions, so the override is used by the plan refusal path. A refused target shows its reason, with an override checkbox; otherwise the checkbox is disabled with the reason. The UI part is not built on this branch (see "the UI on this branch").
 
 ### The version picker
 
-The Talos and Kubernetes upgrade dialog offers the target as a searchable list of candidates. The controller builds the list, not the browser:
+The server builds the choices; the browser does not decide compatibility.
 
-- Candidates are the tags of `ghcr.io/siderolabs/installer` for Talos and of `ghcr.io/siderolabs/kubelet` for Kubernetes, read through the ADR 0114 egress policy and registry client. The Talos source is subject to the registry note above. The list is cached in `IchorInstallation.status.upgradeTargets`.
-- The UI receives the full filtered list once and filters it in the frontend (a stock preactcn combobox). There is no server-side search.
-- Offered: final releases newer than what runs and valid under the upgrade target rule. Talos: the patches of the current minor and the next minor (no skipping, though machinery would allow it; the picker offers only the adjacent step, and a typed version still passes the rule). Kubernetes: supported by the cluster's Talos (pairing) and at most one minor up (skew).
-- Groups, newest first: "Recommended" (the release set's version, only when newer than the running version), "Patch" (newer patches of the current minor), "Next minor".
-- The default is Recommended if present, else the newest patch of the current minor.
-- A compatibility refusal shows as described above, with the override checkbox.
-- A typed version not in the list can be chosen as "Use vX.Y.Z" (private mirrors, offline). The server plan still validates it (newer, path, pairing, compatibility).
-- If the list cannot be fetched (the check is off, the list is missing, or the fetch fails), the combobox still works with the typed entry and shows the fetch error as a muted note.
-- CLI: `ichor upgrade talos|kubernetes --list` prints the same groups. Without VERSION it uses the same default.
+- **Candidates.** The Talos and Kubernetes tags are read from the repositories in "Talos candidate source" through the ADR 0114 egress policy and registry client. The controller's release check (ADR 0114 switch) writes them to `IchorInstallation.status.upgradeTargets`: `checkedAt`, `talos[]`, `kubernetes[]` and `error`. The check covers the three repository hosts (the chart's, Talos's and Kubernetes's). A failed listing keeps its last good list and sets `error`.
+- **`ListUpgradeTargets`** (one cluster, one kind: talos or kubernetes) filters the recorded final releases against the cluster's Talos and Kubernetes from its spec:
+  - Talos (`release.TalosChoices`): newer, `upgrade.TalosPath` accepts it, and `TalosKubernetesError` accepts it with the cluster's Kubernetes. Cilium is not part of the Talos rule.
+  - Kubernetes (`release.KubernetesChoices`): newer, `upgrade.KubernetesSkew` accepts it, `TalosKubernetesError` accepts it with the cluster's Talos, and `CiliumKubernetesError` accepts it with the Cilium the status shows. An unknown Cilium offers nothing. The plan itself checks Cilium only when one is observed.
+- **Groups**, newest first:
+  - "Recommended": the release set's version, only when it is in the recorded list, newer than the running version, and valid.
+  - "Patch": the newer patches of the running minor.
+  - "Next minor": releases of the next minor only. Talos may skip a minor (the path rule allows it), but the offer is the adjacent minor; a typed skip still passes the plan's rule. Kubernetes is at most one minor up.
+- **Default.** "Recommended" if present, else the newest patch of the running minor, else none.
+- **Availability.** The response says whether the list can be used and why not: the check is off, no list has been recorded yet, or the last listing failed (the last good list is still used, and the reason says it may be stale).
+- **CLI.** `ichor upgrade talos|kubernetes --list` prints the same groups and the default and exits. Without VERSION the command uses the same default. A VERSION is validated by the server's plan.
+- **A typed version** that is not in the list is valid when the plan's rules accept it (newer, path, pairing, compatibility). The UI's "Use vX.Y.Z" entry for a typed version, and the typed fallback when the list cannot be fetched, are decided but not built on this branch.
+
+### The Cilium upgrade
+
+The Cilium upgrade is not in `ListUpgradeTargets`, which lists only talos and kubernetes. Cilium moves only to the chart embedded in the running Ichor (ADR 0098), with its own operation (`StartCniUpgrade`, ADR 0099). A Kubernetes plan refuses a target the installed Cilium cannot run, and names the order (`CheckKubernetesStep`).
+
+### The UI on this branch
+
+The Patch-available hint (a newer patch of the running minor is available) and one attention item for an upgrade are UI decisions the user approved. The `ui/` code on this branch does not call `ListUpgradeTargets` yet, so the picker, the override checkbox, the hint and the attention item are not built here. The `ui/` change that adds them builds them against the proto below.
 
 ### Adopt
 
@@ -96,15 +115,28 @@ Adopt judges the versions it takes over (`checkAdoptCompat`, after the cluster i
 
 `--version-contract` is accepted for any contract the Talos supports, as before 0113. The contract is probed from the running Talos.
 
+### CLI
+
+- `ichor upgrade talos [VERSION]` and `ichor upgrade kubernetes [VERSION]`: without VERSION they use the default (see the version picker); with VERSION they move to it. `--list` prints the groups and exits.
+- `ichor upgrade cluster` is removed.
+
+### Proto
+
+- `PlanClusterUpgrade` and `StartClusterUpgrade` stay in the proto, marked deprecated. They are unused and answer `CodeUnimplemented` (`internal/uiapi/operation_upgrade_cluster.go` delegates to the generated Unimplemented handler). Removing them fails `make proto-breaking`.
+- `ListUpgradeTargets` is added: the request names a cluster and a kind (talos or kubernetes), and the response carries `recommended`, `patch`, `next_minor`, `default`, `available` and `unavailable_reason`.
+- `override` (field 7, `Override`) is added to `PlanOperationRequest` and `CreateOperationRequest`.
+
 ### What is tested
 
 The table is data, and the rules are code. The tests run the rules, not the table alone:
 
 - Talos paths, through machinery's compatibility package (`pkg/release` tests): the running versions tested are v1.11.5 (refused, below the 1.12.0 minimum of Talos 1.14), v1.13.2 to v1.14.3 (adjacent minor, accepted), v1.12.4 to v1.14.3 (skips 1.13, accepted within the bounds), and v1.14.3 to v1.14.4 (patch, accepted). The target v1.15.0 is refused as a minor machinery does not know. Talos 1.12 and 1.13 as targets are not tested: their rules are machinery's, and no Ichor build has offered them as targets yet.
-- Kubernetes skew and pairing: v1.36.2 to v1.37.1 on Talos 1.14.3 (accepted), v1.35.0 to v1.37.1 (two minors, refused), v1.37.1 to v1.38.0 (not supported by Talos 1.14.3, refused).
-- The refusals name the step (`TestCheckKubernetesStepNamesTheOrder`), and the webhook and the operation service refuse an incompatible pair and accept it under the override verb.
+- Kubernetes skew and pairing, on the pinned Talos (`Pinned.Talos`): v1.36.2 to v1.37.1 (accepted), v1.35.0 to v1.37.1 (two minors, refused), v1.37.1 to v1.38.0 (not supported by the pinned Talos, refused).
+- The refusals name the step (`TestCheckKubernetesStepNamesTheOrder`).
 - Adopt warns for a known incompatible pair and refuses an unknown version (`TestCheckAdoptCompatWarnsOrRefuses`).
-- Init refuses an incompatible set (`TestCheckInitCompatRefusesAnIncompatibleSet`); the pinned set is checked to be compatible (`TestPinnedIsConsistentWithMachinery`).
+- Init refuses an incompatible set (`TestCheckInitCompatRefusesAnIncompatibleSet`); the pinned set is checked to be consistent with machinery (`TestPinnedIsConsistentWithMachinery`).
+- The candidate lists: `TestListUpgradeTargets*` in `internal/uiapi` cover the groups, the Cilium rule, the unavailable reasons and the last good list after a failed check.
+- The webhook refuses an incompatible pair and accepts it under the override verb (`TestTalosClusterRefusesAnIncompatiblePairUnlessOverridden`). **This test currently fails**: it expects Talos 1.14.3 with Kubernetes 1.32.0 to be refused, and machinery accepts that pair. See the open point on the Talos 1.14 range.
 
 ## Why this shape
 
@@ -115,14 +147,16 @@ The table is data, and the rules are code. The tests run the rules, not the tabl
 
 ## Consequences
 
-- `pkg/release` keeps `Pinned`, `Compare`, `CheckUpdate`, `CheckTalosTarget`, `CheckKubernetesTarget`, `CheckTalosStep`, `CheckKubernetesStep`, and the compatibility functions of `compat.go`. `CheckCreate`, `CheckTarget`, `Adoptable` and the rollout `Steps` are removed.
-- `ichor upgrade cluster` and `PlanClusterUpgrade`/`StartClusterUpgrade` are removed. The generated API that still declares them is removed with them (proto and gen, owned by the listing change).
-- The CRDs are unchanged (ADR 0026 kinds; append-only fields). The override request field for plan and create is added to the operation protos; the Versions card's proto state field is documented as no longer carrying the set comparison.
+- `pkg/release` keeps `Pinned`, `Compare`, `CheckUpdate`, `CheckTalosTarget`, `CheckKubernetesTarget`, `CheckTalosStep`, `CheckKubernetesStep`, the compatibility functions of `compat.go`, and the candidate functions of `targets.go` (`Choose`, `TalosChoices`, `KubernetesChoices`, `AtLeast`). `CheckCreate`, `CheckTarget`, `Adoptable` and the rollout `Steps` are removed.
+- `ichor upgrade cluster` is removed. `PlanClusterUpgrade` and `StartClusterUpgrade` remain in the proto as deprecated RPCs that answer `CodeUnimplemented`.
+- The CRDs gained one status field, `IchorInstallation.status.upgradeTargets`. No spec field changed, and the append-only rule holds (ADR 0026 kinds). The override request field is added to the operation protos. The Versions card's proto state field is documented as no longer carrying the set comparison.
 - The Versions card and its states change accordingly; see the UI change of the same release.
 - A cluster that runs an incompatible pair is reported as incompatible (the upgrade path names it) and is not blocked from other edits.
 
 ## Open points
 
+- **The Talos 1.14 Kubernetes range (decision needed: which source wins).** Machinery v1.14.5 (`pkg/machinery/compatibility/talos114`) accepts Kubernetes 1.32.0 to 1.37.99 with Talos 1.14. The Talos v1.14 support matrix (docs.siderolabs.com/talos/v1.14/getting-started/support-matrix) lists Kubernetes 1.33 to 1.37. The code follows machinery first: `KubernetesPairing` decides every minor machinery knows, and the typed Talos table (`talosKubernetesNewer`) is consulted only for minors machinery does not know. The typed Talos table is therefore empty, and Kubernetes 1.32 is accepted with Talos 1.14. Options: (a) keep machinery as the source (the code as it is now; the Talos table stays empty, and `TestTalosClusterRefusesAnIncompatiblePairUnlessOverridden` must be changed to expect acceptance); (b) let the documented range win (the lookup order must change so the Talos table is consulted for Talos 1.14 before machinery, and the table holds 1.33 to 1.37). The failing webhook test stays failing until one is chosen.
+- **The CLI cannot send an override.** `ichor upgrade` (the operation start, `runStartOperation`) sends no override field, so an incompatible upgrade cannot be forced from the CLI. Decide whether `ichor upgrade` takes `--override` and `--override-reason` as node actions and restores do.
+- **The UI on this branch.** The picker, the override checkbox, the "Use vX.Y.Z" entry, the Patch-available hint and the attention item are decided and not built on this branch (see "The UI on this branch").
 - **The embedded set.** The table must hold the pinned set together: `Pinned` (Talos, Kubernetes and the embedded Cilium) is checked by `TestPinnedIsConsistentWithMachinery`. When it is not, the first install is refused by `checkInitCompat`, so the set and the chart move together in one change.
-- **The Talos candidate source** (see the registry note above). The picker follows the Talos docs' installer location for 1.14 and later.
 - **Talos 1.15 and later** are not in machinery's table of this build, so they are refused as unknown until a build that knows them.

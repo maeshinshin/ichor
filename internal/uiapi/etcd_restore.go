@@ -270,11 +270,13 @@ func (s *Server) createEtcdRestore(ctx context.Context, p *opPlan) (*pb.CreateOp
 		return nil, invalid("type the cluster name %q to confirm the restore", cluster.Name)
 	}
 
-	reason := strings.TrimSpace(rp.bg.GetReason())
-	if reason == "" {
-		return nil, invalid("an etcd restore needs an override reason: it goes into the audit record and the Event")
+	// A restore is always an override; the reason is optional, and the spec's reason (required by the CRD)
+	// then says that none was given.
+	if rp.bg == nil {
+		return nil, invalid("an etcd restore needs the override: it is checked against the override permission on the cluster")
 	}
 
+	reason := overrideReason(rp.bg.GetReason())
 	if err := s.authorizeOverride(ctx, cluster); err != nil {
 		return nil, err
 	}

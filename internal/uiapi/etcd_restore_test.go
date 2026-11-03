@@ -240,6 +240,32 @@ func TestEtcdRestorePlanRefusals(t *testing.T) {
 	})
 }
 
+// An override with no reason is allowed: the CRD's reason, which the restore records, says no reason was
+// given.
+func TestEtcdRestoreOverrideWithoutAReason(t *testing.T) {
+	s, k8s := opServer(t, restoreObjects()...)
+	var asked []authv1.ResourceAttributes
+	s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, true, &asked), nil }
+	user := context.WithValue(context.Background(), identityKey{}, Identity{User: bgUser})
+
+	req := restoreReq(restoreSnap, opCluster, "")
+	req.Override = &pb.Override{}
+
+	res, err := s.CreateOperation(user, restoreCreateReq(req))
+	if err != nil {
+		t.Fatalf("override without a reason: %v", err)
+	}
+
+	if a := res.Msg.GetAudit(); a.GetAction() != "create-override" || a.GetReason() != "no reason given" {
+		t.Fatalf("audit = %+v", a)
+	}
+
+	ops := listOps(t, k8s)
+	if len(ops) != 1 || ops[0].Spec.EtcdRestore == nil || ops[0].Spec.EtcdRestore.Reason != "no reason given" {
+		t.Fatalf("operations = %+v", ops)
+	}
+}
+
 func TestEtcdRestoreNeedsTheClusterNameAndOverride(t *testing.T) {
 	s, k8s := opServer(t, restoreObjects()...)
 	bg := context.Background()
@@ -249,7 +275,7 @@ func TestEtcdRestoreNeedsTheClusterNameAndOverride(t *testing.T) {
 	}
 
 	if _, err := s.CreateOperation(bg, restoreCreateReq(restoreReq(restoreSnap, opCluster, ""))); connect.CodeOf(err) != connect.CodeInvalidArgument {
-		t.Fatalf("no reason: %v", err)
+		t.Fatalf("no override: %v", err)
 	}
 
 	// With no signed-in user nobody can be asked whether they may override.

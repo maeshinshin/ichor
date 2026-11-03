@@ -31,8 +31,3 @@ export function canEdit(perms: { clusterUpdate: boolean } | undefined): boolean 
 export function canApply(text: string, reviewed: { text: string; valid: boolean; diff: string } | null): boolean {
   return reviewed !== null && reviewed.text === text && reviewed.valid && reviewed.diff !== ''
 }
-
-// canUpgrade: offered only when the server reports a newer chart version.
-export function canUpgrade(availableChartVersion: string, editable: boolean): boolean {
-  return availableChartVersion !== '' && editable
-}

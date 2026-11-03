@@ -32,18 +32,16 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-func newCountTestScheme(t *testing.T) *runtime.Scheme {
+// newCountTestClient is a fake client (uncached by construction, like the real callers' APIReader) holding objs.
+func newCountTestClient(t *testing.T, objs ...client.Object) client.Client {
 	t.Helper()
 
 	s := runtime.NewScheme()
-	if err := corev1.AddToScheme(s); err != nil {
-		t.Fatalf("adding corev1 to scheme: %v", err)
-	}
 	if err := ichorv1alpha1.AddToScheme(s); err != nil {
 		t.Fatalf("adding ichorv1alpha1 to scheme: %v", err)
 	}
 
-	return s
+	return fake.NewClientBuilder().WithScheme(s).WithObjects(objs...).Build()
 }
 
 func newCountTestMachine(namespace, name, clusterName, role, approvalState string) *ichorv1alpha1.TalosMachine {
@@ -73,17 +71,11 @@ func TestCheckDelete(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			err := CheckDelete(tc.annotations)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatalf("CheckDelete(%v) = nil, want error", tc.annotations)
-				}
-				if !strings.Contains(err.Error(), AllowDeleteAnnotation) {
-					t.Fatalf("CheckDelete(%v) error %q does not name the annotation", tc.annotations, err.Error())
-				}
-				return
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("CheckDelete(%v) = %v, wantErr %v", tc.annotations, err, tc.wantErr)
 			}
-			if err != nil {
-				t.Fatalf("CheckDelete(%v) = %v, want nil", tc.annotations, err)
+			if err != nil && !strings.Contains(err.Error(), AllowDeleteAnnotation) {
+				t.Fatalf("CheckDelete(%v) error %q does not name the annotation", tc.annotations, err.Error())
 			}
 		})
 	}
@@ -104,20 +96,14 @@ func TestCheckControlPlaneQuorum(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(fmt.Sprintf("n=%d", tc.currentControlPlanes), func(t *testing.T) {
 			err := CheckControlPlaneQuorum(tc.currentControlPlanes)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatalf("CheckControlPlaneQuorum(%d) = nil, want error", tc.currentControlPlanes)
-				}
-				after := tc.currentControlPlanes - 1
-				msg := err.Error()
-				if !strings.Contains(msg, strconv.Itoa(tc.currentControlPlanes)) || !strings.Contains(msg, strconv.Itoa(after)) {
-					t.Fatalf("CheckControlPlaneQuorum(%d) error %q does not say %d and %d",
-						tc.currentControlPlanes, msg, tc.currentControlPlanes, after)
-				}
-				return
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("CheckControlPlaneQuorum(%d) = %v, wantErr %v", tc.currentControlPlanes, err, tc.wantErr)
 			}
-			if err != nil {
-				t.Fatalf("CheckControlPlaneQuorum(%d) = %v, want nil", tc.currentControlPlanes, err)
+			after := tc.currentControlPlanes - 1
+			if err != nil && (!strings.Contains(err.Error(), strconv.Itoa(tc.currentControlPlanes)) ||
+				!strings.Contains(err.Error(), strconv.Itoa(after))) {
+				t.Fatalf("CheckControlPlaneQuorum(%d) error %q does not say %d and %d",
+					tc.currentControlPlanes, err, tc.currentControlPlanes, after)
 			}
 		})
 	}
@@ -137,15 +123,8 @@ func TestCheckControlPlaneCount(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(fmt.Sprintf("current=%d,desired=%d", tc.current, tc.desired), func(t *testing.T) {
-			err := CheckControlPlaneCount(tc.current, tc.desired)
-			if tc.wantErr {
-				if err == nil {
-					t.Fatalf("CheckControlPlaneCount(%d, %d) = nil, want error", tc.current, tc.desired)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("CheckControlPlaneCount(%d, %d) = %v, want nil", tc.current, tc.desired, err)
+			if err := CheckControlPlaneCount(tc.current, tc.desired); (err != nil) != tc.wantErr {
+				t.Fatalf("CheckControlPlaneCount(%d, %d) = %v, wantErr %v", tc.current, tc.desired, err, tc.wantErr)
 			}
 		})
 	}
@@ -178,8 +157,6 @@ func TestAllowDeleteDoesNotOverrideQuorum(t *testing.T) {
 // rather than envtest, since this is pure List-and-filter logic with no
 // webhook or controller behavior to exercise.
 func TestCountApprovedControlPlanes(t *testing.T) {
-	scheme := newCountTestScheme(t)
-
 	const (
 		cp       = "controlplane"
 		worker   = "worker"
@@ -187,16 +164,14 @@ func TestCountApprovedControlPlanes(t *testing.T) {
 		pending  = ichorv1alpha1.MachineApprovalStatePending
 	)
 
-	objs := []client.Object{
+	fakeClient := newCountTestClient(t,
 		newCountTestMachine("default", "cp1", "west", cp, approved),
 		newCountTestMachine("default", "cp2", "west", cp, approved),
 		newCountTestMachine("default", "cp3", "west", cp, pending),
 		newCountTestMachine("default", "worker1", "west", worker, approved),
 		newCountTestMachine("default", "cp-other-cluster", "east", cp, approved),
 		newCountTestMachine("other-ns", "cp-other-ns", "west", cp, approved),
-	}
-
-	fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build()
+	)
 
 	got, err := CountApprovedControlPlanes(context.Background(), fakeClient, "default", "west")
 	if err != nil {
@@ -249,11 +224,11 @@ func TestCheckLastWorker(t *testing.T) {
 }
 
 func TestCountApprovedWorkers(t *testing.T) {
-	c := fake.NewClientBuilder().WithScheme(newCountTestScheme(t)).WithObjects(
+	c := newCountTestClient(t,
 		newCountTestMachine("default", "w1", "west", "worker", ichorv1alpha1.MachineApprovalStateApproved),
 		newCountTestMachine("default", "w2", "west", "worker", ichorv1alpha1.MachineApprovalStatePending),
 		newCountTestMachine("default", "cp1", "west", "controlplane", ichorv1alpha1.MachineApprovalStateApproved),
-	).Build()
+	)
 
 	got, err := CountApprovedWorkers(context.Background(), c, "default", "west")
 	if err != nil || got != 1 {
@@ -274,12 +249,12 @@ func TestApprovedMachinesDeleting(t *testing.T) {
 	leaving := newCountTestMachine("default", "cp1", "west", cp, approved)
 	leaving.DeletionTimestamp, leaving.Finalizers = &now, []string{"test/hold"}
 
-	c := fake.NewClientBuilder().WithScheme(newCountTestScheme(t)).WithObjects(
+	c := newCountTestClient(t,
 		leaving,
 		newCountTestMachine("default", "cp2", "west", cp, approved),
 		newCountTestMachine("default", "cp3", "west", cp, approved),
 		newCountTestMachine("default", "w1", "west", "worker", approved),
-	).Build()
+	)
 
 	for _, tc := range []struct {
 		name string

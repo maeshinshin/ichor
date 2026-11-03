@@ -30,9 +30,12 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/render"
 )
 
 // cniDetectInterval is how often the detected CNI is re-read; a CNI does not change often.
@@ -173,11 +176,45 @@ func detectedCNI(cluster *ichorv1alpha1.TalosCluster) string {
 	return cluster.Status.CNI.Detected
 }
 
-// SetupWithManager sets up the controller with the Manager. Status writes (including its own)
-// do not re-trigger it; the requeue does.
+// SetupWithManager sets up the controller with the Manager. Status writes (including its own) do not
+// re-trigger it, except a completed Cilium hand-over or cni operation (cniDetectTrigger); otherwise
+// the requeue does.
 func (r *CNIDetectReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&ichorv1alpha1.TalosCluster{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		For(&ichorv1alpha1.TalosCluster{}, builder.WithPredicates(predicate.Or(
+			predicate.GenerationChangedPredicate{}, cniDetectTriggerPredicate()))).
+		Watches(&ichorv1alpha1.TalosOperation{}, handler.EnqueueRequestsFromMapFunc(cniUpgradeOperationClusters),
+			builder.WithPredicates(cniDetectTriggerPredicate())).
 		Named("cnidetect").
 		Complete(r)
+}
+
+// cniDetectTriggerPredicate passes the updates cniDetectTrigger names and nothing else.
+func cniDetectTriggerPredicate() predicate.Predicate {
+	return predicate.Funcs{
+		CreateFunc:  func(event.CreateEvent) bool { return false },
+		DeleteFunc:  func(event.DeleteEvent) bool { return false },
+		GenericFunc: func(event.GenericEvent) bool { return false },
+		UpdateFunc:  func(e event.UpdateEvent) bool { return cniDetectTrigger(e.ObjectOld, e.ObjectNew) },
+	}
+}
+
+// cniDetectTrigger reports whether an update is one the detected CNI must not wait the interval
+// for: a Cilium hand-over that just completed (CNIHandover turned True), or a cni operation that
+// just completed (a Cilium upgrade or patch rolled out). Everything else waits for cniDetectInterval.
+func cniDetectTrigger(oldObj, newObj client.Object) bool {
+	switch n := newObj.(type) {
+	case *ichorv1alpha1.TalosOperation:
+		o, ok := oldObj.(*ichorv1alpha1.TalosOperation)
+
+		return ok && n.Spec.Kind == ichorv1alpha1.TalosOperationKindCNI &&
+			n.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted && o.Status.Phase != ichorv1alpha1.TalosOperationPhaseCompleted
+	case *ichorv1alpha1.TalosCluster:
+		o, ok := oldObj.(*ichorv1alpha1.TalosCluster)
+
+		return ok && apimeta.IsStatusConditionTrue(n.Status.Conditions, render.ConditionCNIHandover) &&
+			!apimeta.IsStatusConditionTrue(o.Status.Conditions, render.ConditionCNIHandover)
+	}
+
+	return false
 }

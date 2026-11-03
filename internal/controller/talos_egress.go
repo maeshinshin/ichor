@@ -52,12 +52,9 @@ import (
 // S3; this object is what adds exactly the addresses Ichor's CRs name.
 const DefaultTalosEgressPolicyName = "ichor-controller-talos-egress"
 
-// Ports the controller (and ichor-ui) dial on a managed machine or cluster endpoint: apid, the
-// API server (cluster endpoint, /readyz) and etcd's peer port (MachineReclaim's member health
+// talosEgressPorts are the TCP ports the dynamic policy opens to a machine or cluster endpoint: apid,
+// the API server (cluster endpoint, /readyz) and etcd's peer port (MachineReclaim's member health
 // probe, pkg/reclaim). Derived from Talos's constants where it has them.
-// TalosEgressPorts are the TCP ports the dynamic policy opens to a machine or cluster endpoint.
-func TalosEgressPorts() []int { return slices.Clone(talosEgressPorts) }
-
 var talosEgressPorts = []int{constants.ApidPort, constants.DefaultControlPlanePort, constants.EtcdPeerPort}
 
 var ciliumPolicyGVK = schema.GroupVersionKind{Group: "cilium.io", Version: "v2", Kind: "CiliumNetworkPolicy"}
@@ -117,11 +114,6 @@ type s3Target struct {
 	port int
 }
 
-// String is for test failure messages.
-func (t egressTargets) String() string {
-	return fmt.Sprintf("cidrs=%v names=%v s3=%v", t.cidrs, t.names, t.s3)
-}
-
 var fqdnRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9_-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9_-]*[a-z0-9])?)*$`)
 
 type targetSet struct {
@@ -141,7 +133,8 @@ func (s *targetSet) host(h string) {
 	h = strings.TrimSuffix(strings.Trim(h, "[]"), ".")
 
 	if a, err := netip.ParseAddr(h); err == nil {
-		s.cidrs[netip.PrefixFrom(a.Unmap(), a.Unmap().BitLen()).String()] = true
+		a = a.Unmap()
+		s.cidrs[netip.PrefixFrom(a, a.BitLen()).String()] = true
 
 		return
 	}
@@ -308,16 +301,17 @@ func buildEgress(t egressTargets) []any {
 	for _, s := range t.s3 {
 		ports := []any{map[string]any{keyPorts: portList(s.port)}}
 
+		addr, ipErr := netip.ParseAddr(s.host)
+
 		switch name, ns, local := clusterLocalService(s.host); {
 		case local:
 			rules = append(rules, map[string]any{
 				"toServices": []any{map[string]any{"k8sService": map[string]any{"serviceName": name, keyNamespace: ns}}},
 				keyToPorts:   ports,
 			})
-		case func() bool { _, err := netip.ParseAddr(s.host); return err == nil }():
-			a, _ := netip.ParseAddr(s.host)
+		case ipErr == nil:
 			rules = append(rules, map[string]any{
-				"toCIDRSet": []any{map[string]any{"cidr": netip.PrefixFrom(a, a.BitLen()).String()}},
+				"toCIDRSet": []any{map[string]any{"cidr": netip.PrefixFrom(addr, addr.BitLen()).String()}},
 				keyToPorts:  ports,
 			})
 		default:
@@ -441,7 +435,7 @@ func (e *TalosEgress) sync(ctx context.Context) (bool, error) {
 	}
 
 	have, _, _ := unstructured.NestedMap(cur.Object, keySpec)
-	if equality.Semantic.DeepEqual(normalize(have), normalize(spec)) {
+	if equality.Semantic.DeepEqual(have, spec) {
 		return false, nil
 	}
 
@@ -454,13 +448,6 @@ func (e *TalosEgress) sync(ctx context.Context) (bool, error) {
 	}
 
 	return true, nil
-}
-
-// normalize round-trips through JSON-ish types so int64 vs string and []string vs []any compare equal.
-func normalize(m map[string]any) map[string]any {
-	u := &unstructured.Unstructured{Object: map[string]any{keySpec: m}}
-
-	return u.DeepCopy().Object[keySpec].(map[string]any) //nolint:forcetypeassert // built just above
 }
 
 // +kubebuilder:rbac:groups=cilium.io,namespace=ichor-system,resources=ciliumnetworkpolicies,verbs=get;list;create;update

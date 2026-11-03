@@ -97,6 +97,8 @@ spec:
         # The runtime settings are owned by this deployment: spec.users/defaults are ignored and denied (ADR 0105).
         - --settings-read-only
         {{- end }}
+        # Whether the controller looks for a newer release in the chart repository (ADR 0114).
+        - --update-check={{ .Values.updateCheck.enabled }}
         {{- if eq (toString .Values.networkPolicy.cilium.enabled) "false" }}
         # Explicit opt-out: the installer Job skips Ichor's CiliumNetworkPolicies (ADR 0100).
         - --no-cilium-policies

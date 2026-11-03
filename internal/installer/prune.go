@@ -27,7 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -57,6 +56,15 @@ const (
 	appNameValue = "ichor"
 )
 
+const (
+	groupRBAC       = "rbac.authorization.k8s.io"
+	groupAdmission  = "admissionregistration.k8s.io"
+	kindClusterRole = "ClusterRole"
+	kindRole        = "Role"
+	breakGlassRole  = "ichor-ichor-break-glass-role"
+	overrideRole    = "ichor-ichor-override-role"
+)
+
 // renamedObject is an object an earlier build installed under a name this build does not use.
 // A build from before the inventory left no record of its objects, so these exact names are the
 // only way such an object goes. Only renames already shipped belong here; a later rename is
@@ -67,7 +75,7 @@ type renamedObject struct {
 
 var renamedObjects = []renamedObject{
 	// The safety-check override's ClusterRole.
-	{APIVersion: "rbac.authorization.k8s.io/v1", Kind: "ClusterRole", Name: "ichor-ichor-break-glass-role", To: "ichor-ichor-override-role"},
+	{APIVersion: "rbac.authorization.k8s.io/v1", Kind: kindClusterRole, Name: breakGlassRole, To: overrideRole},
 }
 
 // prunableKinds are the kinds a run may delete, each with the resource that
@@ -77,17 +85,17 @@ var renamedObjects = []renamedObject{
 // installer has no delete on them), and CiliumNetworkPolicies (whether the bundle includes them
 // depends on the detected CNI, not on the manifest, so their absence means nothing).
 var prunableKinds = map[schema.GroupKind]string{
-	{Group: "rbac.authorization.k8s.io", Kind: "ClusterRole"}:                         "clusterroles",
-	{Group: "rbac.authorization.k8s.io", Kind: "ClusterRoleBinding"}:                  "clusterrolebindings",
-	{Group: "rbac.authorization.k8s.io", Kind: "Role"}:                                "roles",
-	{Group: "rbac.authorization.k8s.io", Kind: "RoleBinding"}:                         "rolebindings",
-	{Group: "", Kind: "ServiceAccount"}:                                               "serviceaccounts",
-	{Group: "", Kind: "Service"}:                                                      "services",
-	{Group: "apps", Kind: "Deployment"}:                                               "deployments",
-	{Group: "admissionregistration.k8s.io", Kind: "MutatingWebhookConfiguration"}:     "mutatingwebhookconfigurations",
-	{Group: "admissionregistration.k8s.io", Kind: "ValidatingWebhookConfiguration"}:   "validatingwebhookconfigurations",
-	{Group: "admissionregistration.k8s.io", Kind: "ValidatingAdmissionPolicy"}:        "validatingadmissionpolicies",
-	{Group: "admissionregistration.k8s.io", Kind: "ValidatingAdmissionPolicyBinding"}: "validatingadmissionpolicybindings",
+	{Group: groupRBAC, Kind: kindClusterRole}:                         "clusterroles",
+	{Group: groupRBAC, Kind: "ClusterRoleBinding"}:                    "clusterrolebindings",
+	{Group: groupRBAC, Kind: kindRole}:                                "roles",
+	{Group: groupRBAC, Kind: "RoleBinding"}:                           "rolebindings",
+	{Group: "", Kind: "ServiceAccount"}:                               "serviceaccounts",
+	{Group: "", Kind: "Service"}:                                      "services",
+	{Group: "apps", Kind: "Deployment"}:                               "deployments",
+	{Group: groupAdmission, Kind: "MutatingWebhookConfiguration"}:     "mutatingwebhookconfigurations",
+	{Group: groupAdmission, Kind: "ValidatingWebhookConfiguration"}:   "validatingwebhookconfigurations",
+	{Group: groupAdmission, Kind: "ValidatingAdmissionPolicy"}:        "validatingadmissionpolicies",
+	{Group: groupAdmission, Kind: "ValidatingAdmissionPolicyBinding"}: "validatingadmissionpolicybindings",
 }
 
 // ref names one object the way Kubernetes does. The version is not part of the identity: a
@@ -115,6 +123,10 @@ func (r ref) id() string {
 type pruneCandidate struct {
 	ref
 	renamedTo string
+}
+
+func (r ref) candidate(renamedTo string) pruneCandidate {
+	return pruneCandidate{ref: r, renamedTo: renamedTo}
 }
 
 // pruneCandidates returns what a run in namespace ns may delete: the objects of the previous
@@ -217,10 +229,8 @@ func writeInventory(ctx context.Context, c client.Client, ns string, refs []ref)
 		return err
 	}
 
-	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: inventoryName},
-		Data:       map[string]string{inventoryKey: string(raw)},
-	}
+	cm := &corev1.ConfigMap{Data: map[string]string{inventoryKey: string(raw)}}
+	cm.Namespace, cm.Name = ns, inventoryName
 
 	if err := c.Delete(ctx, cm); err != nil && !apierrors.IsNotFound(err) {
 		return err
@@ -312,7 +322,7 @@ func PendingRenames(ctx context.Context, c client.Reader) ([]string, error) {
 			return nil, err
 		}
 
-		if owned(o, pruneCandidate{ref: ref{APIVersion: rn.APIVersion, Kind: rn.Kind, Name: rn.Name}, renamedTo: rn.To}) {
+		if owned(o, ref{APIVersion: rn.APIVersion, Kind: rn.Kind, Name: rn.Name}.candidate(rn.To)) {
 			out = append(out, fmt.Sprintf("%s %s (renamed to %s)", rn.Kind, rn.Name, rn.To))
 		}
 	}

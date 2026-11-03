@@ -105,7 +105,7 @@ func classify(objs []*unstructured.Unstructured) plan {
 // escalate and patch roles, so it grants itself the new rights before using them.
 func isInstallerRBAC(o *unstructured.Unstructured) bool {
 	switch o.GetKind() {
-	case "ClusterRole", "ClusterRoleBinding", "Role", "RoleBinding":
+	case kindClusterRole, "ClusterRoleBinding", "Role", "RoleBinding":
 		return strings.HasPrefix(o.GetName(), installerNamePrefix)
 	}
 

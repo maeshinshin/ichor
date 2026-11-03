@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
+	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 )
@@ -12,8 +15,25 @@ func (d *structDef) machExpr() string {
 	return machImportAlias(d.pkgPath) + "." + d.machName
 }
 
-// pinnedVersionContract is the Talos version contract the references point at; pkg/release does not exist yet to read it from.
-func pinnedVersionContract() string { return "v1.14" }
+var versionContractRE = regexp.MustCompile(`VersionContract:\s*"(v[0-9.]+)"`)
+
+// pinnedVersionContract reads release.Pinned.VersionContract from source: importing pkg/release would make
+// the generator depend on the package it generates.
+func pinnedVersionContract() string {
+	_, self, _, _ := runtime.Caller(0)
+
+	src, err := os.ReadFile(filepath.Join(filepath.Dir(self), "..", "..", "..", "pkg", "release", "release.go"))
+	if err != nil {
+		fatalf("reading the pinned version contract: %v", err)
+	}
+
+	m := versionContractRE.FindSubmatch(src)
+	if m == nil {
+		fatalf("no VersionContract literal in pkg/release/release.go")
+	}
+
+	return string(m[1])
+}
 
 // referencePage is the Talos configuration reference page of one root kind, for the pinned version contract.
 func referencePage(r rootKind) string {

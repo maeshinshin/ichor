@@ -52,7 +52,7 @@ func TestOperationSummaryPerKind(t *testing.T) {
 		st   ichorv1alpha1.TalosOperationStatus
 		want string
 	}{
-		{componentTalos, ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindTalos}, ichorv1alpha1.TalosOperationStatus{},
+		{"talos", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindTalos}, ichorv1alpha1.TalosOperationStatus{},
 			"Upgrade Talos to v1.14.5 (schematic abcdef012345…)"},
 		{"k8s", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindKubernetes}, ichorv1alpha1.TalosOperationStatus{},
 			"Upgrade Kubernetes to v1.36.6"},

@@ -279,6 +279,9 @@ type opPlan struct {
 	node *nodePlan
 	// restore is set for the etcd-restore kind.
 	restore *etcdRestorePlan
+	// override is set when an incompatible target goes through under the override verb:
+	// the plan's warning, and the Event CreateOperation records.
+	override string
 }
 
 // normalizeTarget validates target for kind and returns it in the form the spec stores.
@@ -313,7 +316,7 @@ func normalizeTarget(kind, target string) (string, error) {
 //nolint:gocyclo // one switch over the seven kinds, each a few lines
 func (s *Server) planOperation(
 	ctx context.Context, clusterRef *pb.ObjectRef, pbKind pb.OperationKind, rawTarget string, maxUnavailable int32,
-	node *pb.NodeActionRequest, restore *pb.EtcdRestoreRequest,
+	node *pb.NodeActionRequest, restore *pb.EtcdRestoreRequest, bg *pb.Override,
 ) (*opPlan, error) {
 	kind, err := kindToSpec(pbKind)
 	if err != nil {
@@ -344,11 +347,6 @@ func (s *Server) planOperation(
 
 	cluster, err := s.loadCluster(ctx, namespacedName(clusterRef))
 	if err != nil {
-		return nil, err
-	}
-
-	// A Talos or Kubernetes target is the release set's version and nothing else.
-	if err := checkReleaseTarget(kind, target); err != nil {
 		return nil, err
 	}
 
@@ -416,11 +414,21 @@ func (s *Server) planOperation(
 		specVersion = p.install.Spec.Version
 	}
 
+	// A newer Talos or Kubernetes release must be a valid step. A target that is not newer
+	// is left to the no-op and downgrade rules below.
+	if err := checkUpgradeTarget(kind, p.resp.GetCurrent(), target, cluster.Spec.TalosVersion); err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	override, err := s.checkCompatibility(ctx, cluster, kind, p.resp.GetCurrent(), target, bg)
+	if err != nil {
+		return nil, err
+	}
+
+	p.override = override
+
 	p.resp.Target = target
-	// A Talos step also moves the version contract to the release set's, so a change of
-	// contract alone is a spec change too.
-	p.resp.SpecChanges = target != "" && (target != specVersion ||
-		(kind == ichorv1alpha1.TalosOperationKindTalos && release.Compare(cluster.Spec.VersionContract, release.Pinned.VersionContract) == release.Behind))
+	p.resp.SpecChanges = target != "" && target != specVersion
 
 	if err := s.planMachines(ctx, p, cluster, maxUnavailable); err != nil {
 		return nil, err
@@ -431,7 +439,59 @@ func (s *Server) planOperation(
 		return nil, err
 	}
 
+	if p.override != "" {
+		p.resp.Warning = strings.TrimSpace(p.resp.GetWarning() + " " + p.override)
+	}
+
 	return p, nil
+}
+
+// checkCompatibility applies the compatibility table to a Talos or Kubernetes target
+// that moves the cluster. It returns "" when the step is compatible or does not move anything. An
+// incompatible step is refused, unless the caller holds the override verb: then the
+// reason is returned for the plan's warning and the Event that CreateOperation records.
+func (s *Server) checkCompatibility(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, kind, current, target string, bg *pb.Override,
+) (string, error) {
+	if target == "" || target == current {
+		return "", nil
+	}
+
+	var err error
+
+	switch kind {
+	case ichorv1alpha1.TalosOperationKindTalos:
+		err = release.CheckTalosStep(target, cluster.Spec.KubernetesVersion)
+	case ichorv1alpha1.TalosOperationKindKubernetes:
+		err = release.CheckKubernetesStep(cluster.Spec.TalosVersion, target, installedCilium(cluster))
+	default:
+		return "", nil
+	}
+
+	if err == nil {
+		return "", nil
+	}
+
+	// A version nothing knows cannot be operated, so no override makes it one.
+	if bg == nil || errors.Is(err, release.ErrUnknownVersion) {
+		return "", connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	if err := s.authorizeOverride(ctx, cluster); err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf("%s %s is incompatible (%v), overridden under override: %s", kind, target, err,
+		overrideReason(bg.GetReason())), nil
+}
+
+// installedCilium is the Cilium release the status shows, "" when it is not observed.
+func installedCilium(cluster *ichorv1alpha1.TalosCluster) string {
+	if cluster.Status.CNI == nil {
+		return ""
+	}
+
+	return strings.TrimPrefix(cluster.Status.CNI.DetectedVersion, "v")
 }
 
 // notePendingSchematic records the first schematic change a Talos upgrade would make.
@@ -672,7 +732,7 @@ func (s *Server) unfinishedOperation(ctx context.Context, cluster *ichorv1alpha1
 func (s *Server) PlanOperation(
 	ctx context.Context, req *connect.Request[pb.PlanOperationRequest],
 ) (*connect.Response[pb.PlanOperationResponse], error) {
-	p, err := s.planOperation(ctx, req.Msg.GetCluster(), req.Msg.GetKind(), req.Msg.GetTarget(), req.Msg.GetMaxUnavailable(), req.Msg.GetNode(), req.Msg.GetEtcdRestore())
+	p, err := s.planOperation(ctx, req.Msg.GetCluster(), req.Msg.GetKind(), req.Msg.GetTarget(), req.Msg.GetMaxUnavailable(), req.Msg.GetNode(), req.Msg.GetEtcdRestore(), req.Msg.GetOverride())
 	if err != nil {
 		return nil, err
 	}
@@ -693,7 +753,7 @@ func (s *Server) CreateOperation(
 ) (*connect.Response[pb.CreateOperationResponse], error) {
 	m := req.Msg
 
-	p, err := s.planOperation(ctx, m.GetCluster(), m.GetKind(), m.GetTarget(), m.GetMaxUnavailable(), m.GetNode(), m.GetEtcdRestore())
+	p, err := s.planOperation(ctx, m.GetCluster(), m.GetKind(), m.GetTarget(), m.GetMaxUnavailable(), m.GetNode(), m.GetEtcdRestore(), m.GetOverride())
 	if err != nil {
 		return nil, err
 	}
@@ -753,6 +813,14 @@ func (s *Server) CreateOperation(
 		return nil, mapOperationWriteError("creating operation for", clusterKey, err)
 	}
 
+	// An incompatible step that went through under the override verb is recorded in the cluster's
+	// Events.
+	if p.override != "" {
+		if err := s.emitWarningEvent(ctx, cluster, kindTalosCluster, "Override", p.override); err != nil {
+			return nil, connect.NewError(connect.CodeInternal, err)
+		}
+	}
+
 	if p.kind == ichorv1alpha1.TalosOperationKindCNI {
 		if err := s.clearKubeProxyConsent(ctx, cluster); err != nil {
 			return nil, connect.NewError(connect.CodeInternal, err)
@@ -773,12 +841,7 @@ func (s *Server) writeTarget(ctx context.Context, p *opPlan) error {
 
 	switch p.kind {
 	case ichorv1alpha1.TalosOperationKindTalos:
-		mutate = func(c *ichorv1alpha1.TalosCluster) {
-			c.Spec.TalosVersion = target
-			if release.Compare(c.Spec.VersionContract, release.Pinned.VersionContract) == release.Behind {
-				c.Spec.VersionContract = release.Pinned.VersionContract
-			}
-		}
+		mutate = func(c *ichorv1alpha1.TalosCluster) { c.Spec.TalosVersion = target }
 	case ichorv1alpha1.TalosOperationKindKubernetes:
 		mutate = func(c *ichorv1alpha1.TalosCluster) { c.Spec.KubernetesVersion = target }
 	case ichorv1alpha1.TalosOperationKindIchor:
@@ -853,6 +916,25 @@ func (s *Server) clearKubeProxyConsent(ctx context.Context, cluster *ichorv1alph
 	if err != nil {
 		return fmt.Errorf("the operation was created but the annotation %s could not be removed from cluster %q: %w",
 			ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation, cluster.Name, err)
+	}
+
+	return nil
+}
+
+// checkUpgradeTarget applies the upgrade target rule to a Talos or Kubernetes target that
+// is newer than what runs: the Talos path, or the Kubernetes skew and pairing. The rule is the
+// server's plan and the CLI's, and the executors enforce it again. Other kinds, empty targets and
+// targets that are not newer are not checked here.
+func checkUpgradeTarget(kind, current, target, talos string) error {
+	if target == "" || !semver.IsValid(current) || semver.Compare(target, current) <= 0 {
+		return nil
+	}
+
+	switch kind {
+	case ichorv1alpha1.TalosOperationKindTalos:
+		return release.CheckTalosTarget(current, target)
+	case ichorv1alpha1.TalosOperationKindKubernetes:
+		return release.CheckKubernetesTarget(current, target, talos)
 	}
 
 	return nil

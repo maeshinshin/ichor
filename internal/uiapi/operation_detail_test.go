@@ -34,7 +34,7 @@ const ichorV3 = "v0.3.0"
 
 func TestOperationSummaryPerKind(t *testing.T) {
 	cluster := &ichorv1alpha1.TalosCluster{Spec: ichorv1alpha1.TalosClusterSpec{
-		TalosVersion: opNewTalos, KubernetesVersion: "v1.37.1",
+		TalosVersion: opNewTalos, KubernetesVersion: "v1.36.6",
 		Schematic: &ichorv1alpha1.TalosClusterSchematic{ID: "abcdef0123456789abcdef"},
 	}}
 	install := &ichorv1alpha1.IchorInstallation{
@@ -55,11 +55,11 @@ func TestOperationSummaryPerKind(t *testing.T) {
 		{componentTalos, ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindTalos}, ichorv1alpha1.TalosOperationStatus{},
 			"Upgrade Talos to v1.14.5 (schematic abcdef012345…)"},
 		{"k8s", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindKubernetes}, ichorv1alpha1.TalosOperationStatus{},
-			"Upgrade Kubernetes to v1.37.1"},
+			"Upgrade Kubernetes to v1.36.6"},
 		{"talos from", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindTalos}, ichorv1alpha1.TalosOperationStatus{},
 			"Upgrade Talos v1.13.2 → v1.14.5 (schematic abcdef012345…)"},
 		{"k8s from", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindKubernetes}, ichorv1alpha1.TalosOperationStatus{},
-			"Upgrade Kubernetes v1.36.2 → v1.37.1"},
+			"Upgrade Kubernetes v1.36.2 → v1.36.6"},
 		{"ichor", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindIchor}, ichorv1alpha1.TalosOperationStatus{},
 			"Upgrade Ichor v0.2.0 → v0.3.0"},
 		{"ca", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindCARotation}, ichorv1alpha1.TalosOperationStatus{},

@@ -2,6 +2,7 @@ package oidcissuer
 
 import (
 	"cmp"
+	"maps"
 	"net/http"
 	"slices"
 	"sync"
@@ -76,11 +77,7 @@ func (t *failTable) forget(key string) {
 
 // evict makes room: idle entries first, then a tenth of the table, fewest failures and oldest first.
 func (t *failTable) evict(now time.Time) {
-	for k, s := range t.m {
-		if now.Sub(s.last) > trackedIdle {
-			delete(t.m, k)
-		}
-	}
+	maps.DeleteFunc(t.m, func(_ string, s failState) bool { return now.Sub(s.last) > trackedIdle })
 	if len(t.m) < maxTrackedKeys {
 		return
 	}
@@ -124,10 +121,7 @@ func (b *Backoff) Wait(key string, now time.Time) time.Duration {
 	}
 	shift := min(s.n-b.free, 20)
 	d := min(time.Second<<shift, b.max)
-	if left := s.last.Add(d).Sub(now); left > 0 {
-		return left
-	}
-	return 0
+	return max(0, s.last.Add(d).Sub(now))
 }
 
 // Fail records a failed attempt for key at now.
@@ -176,11 +170,9 @@ func (b *bucket) allow(key string, now time.Time) bool {
 		if len(b.m) >= maxBuckets {
 			// Drop sources that have refilled completely; they cost nothing to forget. A full table
 			// of active sources is an attack by that many addresses: refuse the new one.
-			for k, v := range b.m {
-				if v.tokens+now.Sub(v.at).Seconds()*b.rate >= b.burst {
-					delete(b.m, k)
-				}
-			}
+			maps.DeleteFunc(b.m, func(_ string, v bucketState) bool {
+				return v.tokens+now.Sub(v.at).Seconds()*b.rate >= b.burst
+			})
 			if len(b.m) >= maxBuckets {
 				return false
 			}
@@ -226,11 +218,7 @@ func (s *jtiSet) use(id string, exp, now time.Time) bool {
 	if _, ok := s.m[id]; ok {
 		return false
 	}
-	for k, e := range s.m {
-		if e.Before(now) {
-			delete(s.m, k)
-		}
-	}
+	maps.DeleteFunc(s.m, func(_ string, e time.Time) bool { return e.Before(now) })
 	s.m[id] = exp
 	return true
 }

@@ -34,23 +34,21 @@ func TestPlanAndCreateRefuseADowngrade(t *testing.T) {
 		kind   pb.OperationKind
 		target string
 	}{
-		componentTalos: {pb.OperationKind_OPERATION_KIND_TALOS, "v1.14.2"},
-		componentK8s:   {pb.OperationKind_OPERATION_KIND_KUBERNETES, "v1.35.9"},
+		"talos":      {pb.OperationKind_OPERATION_KIND_TALOS, "v1.14.2"},
+		"kubernetes": {pb.OperationKind_OPERATION_KIND_KUBERNETES, "v1.35.9"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			srv, base := opServer(t, opObjects()...)
 			before := getCluster(t, base).Spec
 
-			// Only the release set's version is a target (ADR 0113), so a lower one is refused as
-			// not supported, before the downgrade check is reached.
-			_, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
+			res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
 				Cluster: objectRef(opNS, opCluster), Kind: tc.kind, Target: tc.target,
 			}))
-			if connect.CodeOf(err) != connect.CodeInvalidArgument || !strings.Contains(err.Error(), "ADR 0113") {
-				t.Fatalf("plan err = %v, want the release set refusal", err)
+			if err != nil || !strings.Contains(res.Msg.GetBlocked(), "downgrade") {
+				t.Fatalf("err=%v plan=%v", err, res.Msg)
 			}
 
-			if _, err := srv.CreateOperation(context.Background(), opCreate(tc.kind, tc.target)); connect.CodeOf(err) != connect.CodeInvalidArgument {
+			if _, err := srv.CreateOperation(context.Background(), opCreate(tc.kind, tc.target)); connect.CodeOf(err) != connect.CodeFailedPrecondition {
 				t.Fatalf("create err = %v", err)
 			}
 

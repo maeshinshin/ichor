@@ -157,13 +157,9 @@ func isDryRun(opts []client.CreateOption) bool {
 }
 
 func TestCreateWithSameVersionDoesNotWriteTheSpec(t *testing.T) {
-	// The cluster already runs the release set's Talos, so asking for it changes nothing (ADR 0113).
-	objs := opObjects()
-	objs[0].(*ichorv1alpha1.TalosCluster).Spec.TalosVersion = opNewTalos
+	srv, k8s := opServer(t, opObjects()...)
 
-	srv, k8s := opServer(t, objs...)
-
-	res, err := srv.CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_TALOS, opNewTalos))
+	res, err := srv.CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_TALOS, opOldTalos))
 	if err != nil {
 		t.Fatal(err)
 	}

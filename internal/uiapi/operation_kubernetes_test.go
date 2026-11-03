@@ -25,13 +25,12 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/release"
 )
 
 // The kubernetes kind's plan (ADR 0057, 0087): its stages, and the warning for a minor upgrade of
 // a multi-control-plane cluster whose endpoint is one node.
 
-func planKubernetes(t *testing.T, endpointType string, controlPlanes int) *pb.PlanOperationResponse {
+func planKubernetes(t *testing.T, endpointType string, controlPlanes int, target string) *pb.PlanOperationResponse {
 	t.Helper()
 
 	objs := opObjects()
@@ -44,7 +43,7 @@ func planKubernetes(t *testing.T, endpointType string, controlPlanes int) *pb.Pl
 	srv, _ := opServer(t, objs...)
 
 	res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_KUBERNETES, Target: release.Pinned.Kubernetes,
+		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_KUBERNETES, Target: target,
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -54,7 +53,7 @@ func planKubernetes(t *testing.T, endpointType string, controlPlanes int) *pb.Pl
 }
 
 func TestPlanKubernetesNamesTheFourStages(t *testing.T) {
-	p := planKubernetes(t, "vip", 1)
+	p := planKubernetes(t, "vip", 1, "v1.37.0")
 
 	if got := strings.Join(p.GetStages(), "|"); !strings.Contains(got, "kube-apiserver") || !strings.Contains(got, "kube-controller-manager") ||
 		!strings.Contains(got, "kube-proxy") || !strings.Contains(got, "kubelet") || len(p.GetStages()) != 4 {
@@ -63,15 +62,16 @@ func TestPlanKubernetesNamesTheFourStages(t *testing.T) {
 }
 
 func TestPlanKubernetesWarnsAboutANodeEndpointOnAMinorUpgradeOfSeveralControlPlanes(t *testing.T) {
-	warned := planKubernetes(t, "node", 3)
+	warned := planKubernetes(t, "node", 3, "v1.37.0")
 	if !strings.Contains(warned.GetWarning(), "virtual IP") || !strings.Contains(warned.GetWarning(), "single") || warned.GetBlocked() != "" {
 		t.Fatalf("a minor upgrade through a node endpoint must warn, not refuse: %v", warned)
 	}
 
 	for name, p := range map[string]*pb.PlanOperationResponse{
-		"a virtual IP":             planKubernetes(t, "vip", 3),
-		"a single control plane":   planKubernetes(t, "node", 1),
-		"a load balancer endpoint": planKubernetes(t, "loadBalancer", 3),
+		"a patch upgrade":          planKubernetes(t, "node", 3, "v1.36.4"),
+		"a virtual IP":             planKubernetes(t, "vip", 3, "v1.37.0"),
+		"a single control plane":   planKubernetes(t, "node", 1, "v1.37.0"),
+		"a load balancer endpoint": planKubernetes(t, "loadBalancer", 3, "v1.37.0"),
 	} {
 		if p.GetWarning() != "" {
 			t.Errorf("%s: unexpected warning %q", name, p.GetWarning())

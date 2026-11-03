@@ -98,7 +98,7 @@ var _ = Describe("CA rotation credentials", func() {
 		o.Status.CARotation = &ichorv1alpha1.TalosOperationCARotationStatus{
 			Stage: stage,
 			Certificates: []ichorv1alpha1.CARotationCertificate{
-				{Name: componentK8s, Previous: "oldk", Next: "newk"}, {Name: certTalos, Previous: "oldt", Next: "newt"},
+				{Name: "kubernetes", Previous: "oldk", Next: "newk"}, {Name: certTalos, Previous: "oldt", Next: "newt"},
 			},
 		}
 		Expect(k8sClient.Status().Update(ctx, o)).To(Succeed())

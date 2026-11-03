@@ -160,15 +160,14 @@ func (x *Condition) GetLastTransitionTime() *timestamppb.Timestamp {
 	return nil
 }
 
-// Override asks for an emergency direct write (docs/adr/0065). Setting it
-// on a request means "if this change would be a pull request or is refused
-// because Argo CD tracks the resource, write it now and open the matching pull
-// request". The backend allows it only to a signed-in user whose Kubernetes RBAC
+// Override asks to override a safety check (docs/adr/0065, docs/adr/0110). Setting it
+// on a request means "override": the field's presence is the request, and the reason
+// is optional. The backend allows it only to a signed-in user whose Kubernetes RBAC
 // grants the override verb on the resource, and refuses it otherwise.
 type Override struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// reason is required: it is recorded in the audit record, the Kubernetes
-	// Event and the pull request description.
+	// reason is optional: when given it is recorded in the audit record and the
+	// Kubernetes Event. Without one the record says no reason given.
 	Reason        string `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

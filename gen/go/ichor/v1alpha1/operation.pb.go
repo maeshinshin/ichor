@@ -810,7 +810,7 @@ func (x *ListEtcdBackupsResponse) GetBackups() []*EtcdBackup {
 }
 
 // EtcdRestoreRequest names the snapshot of an etcd-restore plan or create (ADR 0089). Starting
-// it needs the cluster's name typed and an override reason: it rewinds the whole cluster.
+// it needs the cluster's name typed and an override: it rewinds the whole cluster.
 type EtcdRestoreRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// backup is the TalosEtcdBackup whose storage holds the snapshot.
@@ -819,8 +819,8 @@ type EtcdRestoreRequest struct {
 	Snapshot string `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
 	// confirm is the cluster's name, typed.
 	Confirm string `protobuf:"bytes,3,opt,name=confirm,proto3" json:"confirm,omitempty"`
-	// override is required: the reason goes to the audit record and the Event on the cluster
-	// (ADR 0065), and the caller must hold the override verb on the TalosCluster.
+	// override is required; its reason is optional and goes to the audit record and the Event on the
+	// cluster (ADR 0065, ADR 0110), and the caller must hold the override verb on the TalosCluster.
 	Override      *Override `protobuf:"bytes,4,opt,name=override,proto3" json:"override,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -895,8 +895,9 @@ type NodeActionRequest struct {
 	AllowLeader bool `protobuf:"varint,4,opt,name=allow_leader,json=allowLeader,proto3" json:"allow_leader,omitempty"`
 	// confirm is the machine's name, typed, for reset (and remove).
 	Confirm string `protobuf:"bytes,5,opt,name=confirm,proto3" json:"confirm,omitempty"`
-	// override is required for reset: the reason, checked against the override
-	// verb on the machine (ADR 0065).
+	// override is required for reset, and for reboot or shutdown it overrides the last-worker
+	// guard. Its reason is optional, and the caller must hold the override verb on the machine
+	// (ADR 0065, ADR 0110).
 	Override      *Override `protobuf:"bytes,6,opt,name=override,proto3" json:"override,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1916,7 +1917,7 @@ type PlanOperationResponse struct {
 	KubernetesApiUnavailable bool `protobuf:"varint,11,opt,name=kubernetes_api_unavailable,json=kubernetesApiUnavailable,proto3" json:"kubernetes_api_unavailable,omitempty"`
 	// steps, warning, confirm_name and override_required describe a node action in plain
 	// English: what happens in order, what the user should know first, the name they must type
-	// (empty when no typing is needed), and whether an override reason is needed.
+	// (empty when no typing is needed), and whether an override is needed.
 	Steps            []string `protobuf:"bytes,12,rep,name=steps,proto3" json:"steps,omitempty"`
 	Warning          string   `protobuf:"bytes,13,opt,name=warning,proto3" json:"warning,omitempty"`
 	ConfirmName      string   `protobuf:"bytes,14,opt,name=confirm_name,json=confirmName,proto3" json:"confirm_name,omitempty"`

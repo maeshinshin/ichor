@@ -313,7 +313,7 @@ export const ListEtcdBackupsResponseSchema: GenMessage<ListEtcdBackupsResponse> 
 
 /**
  * EtcdRestoreRequest names the snapshot of an etcd-restore plan or create (ADR 0089). Starting
- * it needs the cluster's name typed and an override reason: it rewinds the whole cluster.
+ * it needs the cluster's name typed and an override: it rewinds the whole cluster.
  *
  * @generated from message ichor.v1alpha1.EtcdRestoreRequest
  */
@@ -340,8 +340,8 @@ export type EtcdRestoreRequest = Message<"ichor.v1alpha1.EtcdRestoreRequest"> & 
   confirm: string;
 
   /**
-   * override is required: the reason goes to the audit record and the Event on the cluster
-   * (ADR 0065), and the caller must hold the override verb on the TalosCluster.
+   * override is required; its reason is optional and goes to the audit record and the Event on the
+   * cluster (ADR 0065, ADR 0110), and the caller must hold the override verb on the TalosCluster.
    *
    * @generated from field: ichor.v1alpha1.Override override = 4;
    */
@@ -393,8 +393,9 @@ export type NodeActionRequest = Message<"ichor.v1alpha1.NodeActionRequest"> & {
   confirm: string;
 
   /**
-   * override is required for reset: the reason, checked against the override
-   * verb on the machine (ADR 0065).
+   * override is required for reset, and for reboot or shutdown it overrides the last-worker
+   * guard. Its reason is optional, and the caller must hold the override verb on the machine
+   * (ADR 0065, ADR 0110).
    *
    * @generated from field: ichor.v1alpha1.Override override = 6;
    */
@@ -976,7 +977,7 @@ export type PlanOperationResponse = Message<"ichor.v1alpha1.PlanOperationRespons
   /**
    * steps, warning, confirm_name and override_required describe a node action in plain
    * English: what happens in order, what the user should know first, the name they must type
-   * (empty when no typing is needed), and whether an override reason is needed.
+   * (empty when no typing is needed), and whether an override is needed.
    *
    * @generated from field: repeated string steps = 12;
    */

@@ -389,23 +389,36 @@ type TalosOperationNodeSpec struct {
 	// +optional
 	Confirm string `json:"confirm,omitempty"`
 
-	// overrideReason overrides the last-worker guard for reboot and shutdown (ADR 0065, amended): the
-	// reason the operator gave for taking the last schedulable, Ready worker away. It is only honoured
-	// when the creator holds the override verb on the machine (the override webhook checks), and
-	// it goes into the audit record and an Event.
+	// override asks to override a safety check: the last-worker guard for reboot and shutdown, or the
+	// reset's own gate (ADR 0065, amended; ADR 0110). It is only honoured when the creator holds the
+	// override verb on the machine (the override webhook checks), with or without a reason, and it goes
+	// into the audit record and an Event.
+	// +optional
+	Override bool `json:"override,omitempty"`
+
+	// overrideReason is the optional reason the operator gives for the override (ADR 0110). It goes into
+	// the audit record and an Event; without one, the record says no reason was given.
 	// +kubebuilder:validation:MinLength=1
 	// +optional
 	OverrideReason string `json:"overrideReason,omitempty"`
 
 	// breakGlassReason is the earlier name of overrideReason, kept because CRD fields are append-only
-	// and operations written by older builds carry it. Deprecated: use overrideReason. Ichor's own
-	// CLI and UI never set it; it is read, and gated by the same verb, when overrideReason is empty.
+	// and operations written by older builds carry it. Deprecated: use override and overrideReason.
+	// Ichor's own CLI and UI never set it; it is read, and gated by the same verb, as an override.
 	// +kubebuilder:validation:MinLength=1
 	// +optional
 	BreakGlassReason string `json:"breakGlassReason,omitempty"`
 }
 
-// EffectiveOverrideReason is overrideReason, or the deprecated breakGlassReason when that is empty.
+// Overrides reports whether the spec asks to override a safety check: override is set, or a reason is
+// given in overrideReason or the deprecated breakGlassReason. A reason alone still counts, so operations
+// written before override was a flag keep their gate.
+func (n *TalosOperationNodeSpec) Overrides() bool {
+	return n.Override || n.OverrideReason != "" || n.BreakGlassReason != ""
+}
+
+// EffectiveOverrideReason is overrideReason, or the deprecated breakGlassReason when that is empty. It is
+// empty when no reason was given; that is not the same as not overriding (see Overrides).
 func (n *TalosOperationNodeSpec) EffectiveOverrideReason() string {
 	if n.OverrideReason != "" {
 		return n.OverrideReason

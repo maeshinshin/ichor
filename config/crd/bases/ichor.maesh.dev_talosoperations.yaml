@@ -202,8 +202,8 @@ spec:
                   breakGlassReason:
                     description: |-
                       breakGlassReason is the earlier name of overrideReason, kept because CRD fields are append-only
-                      and operations written by older builds carry it. Deprecated: use overrideReason. Ichor's own
-                      CLI and UI never set it; it is read, and gated by the same verb, when overrideReason is empty.
+                      and operations written by older builds carry it. Deprecated: use override and overrideReason.
+                      Ichor's own CLI and UI never set it; it is read, and gated by the same verb, as an override.
                     minLength: 1
                     type: string
                   confirm:
@@ -228,12 +228,17 @@ spec:
                     x-kubernetes-validations:
                     - message: machineRef.name is required
                       rule: self.name != ''
+                  override:
+                    description: |-
+                      override asks to override a safety check: the last-worker guard for reboot and shutdown, or the
+                      reset's own gate (ADR 0065, amended; ADR 0110). It is only honoured when the creator holds the
+                      override verb on the machine (the override webhook checks), with or without a reason, and it goes
+                      into the audit record and an Event.
+                    type: boolean
                   overrideReason:
                     description: |-
-                      overrideReason overrides the last-worker guard for reboot and shutdown (ADR 0065, amended): the
-                      reason the operator gave for taking the last schedulable, Ready worker away. It is only honoured
-                      when the creator holds the override verb on the machine (the override webhook checks), and
-                      it goes into the audit record and an Event.
+                      overrideReason is the optional reason the operator gives for the override (ADR 0110). It goes into
+                      the audit record and an Event; without one, the record says no reason was given.
                     minLength: 1
                     type: string
                   service:

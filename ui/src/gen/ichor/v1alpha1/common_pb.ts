@@ -86,18 +86,17 @@ export const ConditionSchema: GenMessage<Condition> = /*@__PURE__*/
   messageDesc(file_ichor_v1alpha1_common, 1);
 
 /**
- * Override asks for an emergency direct write (docs/adr/0065). Setting it
- * on a request means "if this change would be a pull request or is refused
- * because Argo CD tracks the resource, write it now and open the matching pull
- * request". The backend allows it only to a signed-in user whose Kubernetes RBAC
+ * Override asks to override a safety check (docs/adr/0065, docs/adr/0110). Setting it
+ * on a request means "override": the field's presence is the request, and the reason
+ * is optional. The backend allows it only to a signed-in user whose Kubernetes RBAC
  * grants the override verb on the resource, and refuses it otherwise.
  *
  * @generated from message ichor.v1alpha1.Override
  */
 export type Override = Message<"ichor.v1alpha1.Override"> & {
   /**
-   * reason is required: it is recorded in the audit record, the Kubernetes
-   * Event and the pull request description.
+   * reason is optional: when given it is recorded in the audit record and the
+   * Kubernetes Event. Without one the record says no reason given.
    *
    * @generated from field: string reason = 1;
    */

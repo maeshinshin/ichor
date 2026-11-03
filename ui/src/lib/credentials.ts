@@ -39,8 +39,6 @@ export const credentialLifetimes = [
   { key: 'day', seconds: 24 * 3600 },
 ] as const
 
-export type CredentialLifetime = (typeof credentialLifetimes)[number]['key']
-
 export function lifetimeSeconds(key: string): number {
   return credentialLifetimes.find((l) => l.key === key)?.seconds ?? credentialLifetimes[0].seconds
 }

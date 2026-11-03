@@ -19,14 +19,12 @@ package uiapi
 import (
 	"strings"
 
-	"connectrpc.com/connect"
-
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/release"
 )
 
-// The names of the components a cluster is compared on. They are the wire names too.
+// The names of the components a cluster reports its versions for. They are the wire names too.
 const (
 	componentTalos    = "talos"
 	componentContract = "version-contract"
@@ -34,7 +32,7 @@ const (
 	componentCilium   = "cilium"
 )
 
-// releaseSetToPB is the release set this Ichor build supports.
+// releaseSetToPB is the set of versions a new install gets from this Ichor build.
 func releaseSetToPB() *pb.ReleaseSet {
 	return &pb.ReleaseSet{
 		TalosVersion:       release.Pinned.Talos,
@@ -66,53 +64,17 @@ func ciliumVersion(c *ichorv1alpha1.TalosCluster) (string, release.State) {
 	return "", release.Unknown
 }
 
-// componentVersionsToPB compares each component of the cluster with the release set.
+// componentVersionsToPB reports what each component of the cluster runs. Talos, the
+// contract and Kubernetes have no state: an upgrade is not measured against the release set, so
+// they carry the running version and the set's version as the default target only. Cilium has a
+// state: behind when the embedded chart is newer than the installed release.
 func componentVersionsToPB(c *ichorv1alpha1.TalosCluster) []*pb.ComponentVersion {
 	cilium, ciliumState := ciliumVersion(c)
 
 	return []*pb.ComponentVersion{
-		{Name: componentTalos, Current: c.Spec.TalosVersion, Target: release.Pinned.Talos,
-			State: string(release.Compare(c.Spec.TalosVersion, release.Pinned.Talos))},
-		{Name: componentContract, Current: c.Spec.VersionContract, Target: release.Pinned.VersionContract,
-			State: string(release.Compare(c.Spec.VersionContract, release.Pinned.VersionContract))},
-		{Name: componentK8s, Current: c.Spec.KubernetesVersion, Target: release.Pinned.Kubernetes,
-			State: string(release.Compare(c.Spec.KubernetesVersion, release.Pinned.Kubernetes))},
+		{Name: componentTalos, Current: c.Spec.TalosVersion, Target: release.Pinned.Talos},
+		{Name: componentContract, Current: c.Spec.VersionContract, Target: release.Pinned.VersionContract},
+		{Name: componentK8s, Current: c.Spec.KubernetesVersion, Target: release.Pinned.Kubernetes},
 		{Name: componentCilium, Current: cilium, Target: release.Pinned.Cilium, State: string(ciliumState)},
-	}
-}
-
-// checkReleaseTarget refuses a Talos or Kubernetes target that is not the release set's version. An empty target is
-// what the spec already says, and is not checked here.
-func checkReleaseTarget(kind, target string) error {
-	if target == "" {
-		return nil
-	}
-
-	var err error
-
-	switch kind {
-	case ichorv1alpha1.TalosOperationKindTalos:
-		err = release.CheckTarget("Talos", target, release.Pinned.Talos)
-	case ichorv1alpha1.TalosOperationKindKubernetes:
-		err = release.CheckTarget("Kubernetes", target, release.Pinned.Kubernetes)
-	}
-
-	if err != nil {
-		return connect.NewError(connect.CodeInvalidArgument, err)
-	}
-
-	return nil
-}
-
-// runningOf is what a rollout needs to know about the cluster (release.Steps).
-func runningOf(c *ichorv1alpha1.TalosCluster, configPending bool) release.Running {
-	_, ciliumState := ciliumVersion(c)
-
-	return release.Running{
-		Talos:           c.Spec.TalosVersion,
-		VersionContract: c.Spec.VersionContract,
-		Kubernetes:      c.Spec.KubernetesVersion,
-		CiliumBehind:    ciliumState == release.Behind,
-		ConfigPending:   configPending,
 	}
 }

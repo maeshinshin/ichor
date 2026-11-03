@@ -1,0 +1,56 @@
+# The Secret rights the Cilium chart's own Role hubble-generate-certs grants (templates/hubble/tls-cronjob/role.yaml
+# of the embedded chart): Helm's escalation check refuses to create that Role unless the Cilium Job holds
+# every rule in it, so the Job's ServiceAccount holds them too, rule for rule, in kube-system only.
+# create cannot be name-scoped; the rest are named. Mirrored by dist/chart/templates/rbac/ichor-cni.yaml, and
+# dist/chart/admission_hardening_test.go checks that the rules cover every rule the chart's Roles grant.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cni-hubble-role
+  namespace: kube-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  resourceNames:
+  - hubble-server-certs
+  - hubble-relay-client-certs
+  - hubble-relay-server-certs
+  - hubble-metrics-server-certs
+  - hubble-ui-client-certs
+  verbs:
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  resourceNames:
+  - cilium-ca
+  verbs:
+  - get
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: cni-hubble-rolebinding
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cni-hubble-role
+# Written out for the same reason as in controller_role.yaml.
+subjects:
+- kind: ServiceAccount
+  name: ichor-cni
+  namespace: kube-system

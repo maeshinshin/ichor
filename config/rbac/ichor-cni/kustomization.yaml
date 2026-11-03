@@ -9,3 +9,4 @@ resources:
 - role_binding.yaml
 - controller_role.yaml
 - records_role.yaml
+- hubble_role.yaml

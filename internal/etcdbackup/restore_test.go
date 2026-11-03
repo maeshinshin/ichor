@@ -36,13 +36,7 @@ func TestRestoreObjectsAgainstFakeS3(t *testing.T) {
 	f := newFakeS3()
 	defer f.srv.Close()
 
-	st, err := NewS3Store(S3Config{
-		Endpoint: f.srv.URL, Region: "us-east-1", Bucket: "bkt", AccessKeyID: "AK", SecretAccessKey: "SK", CAPEM: f.caPEM(),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	st := f.store(t)
 	ctx := context.Background()
 
 	if m, err := GetMarker(ctx, st, "p/c", Key{Current: "pw"}); err != nil || m != nil {

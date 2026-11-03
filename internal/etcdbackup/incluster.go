@@ -21,6 +21,7 @@ import (
 	"net"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strings"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -62,9 +63,7 @@ func InClusterReason(endpoint string, cluster *ichorv1alpha1.TalosCluster) strin
 		}
 	}
 
-	cidrs := append(append([]string{}, pods...), services...)
-
-	for _, c := range cidrs {
+	for _, c := range slices.Concat(pods, services) {
 		if _, ipnet, err := net.ParseCIDR(c); err == nil && ipnet.Contains(ip.AsSlice()) {
 			return fmt.Sprintf("the endpoint address %s is inside the cluster's pod or service range %s", ip, c)
 		}

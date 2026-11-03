@@ -22,6 +22,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"time"
 
@@ -295,6 +297,15 @@ func newCNIHelmJob(
 	}
 	if takeover {
 		args = append(args, "--takeover")
+	}
+
+	// A Cilium patch's images: the Job applies them with the values.
+	if o := cilium.ImageOverrideActive(cluster); o != nil {
+		args = append(args, "--image-version="+o.Version)
+
+		for _, key := range slices.Sorted(maps.Keys(o.Images)) {
+			args = append(args, "--image-override="+key+"="+o.Images[key])
+		}
 	}
 
 	job := newJob(cniJobNamespace, name, cniHelmPodLabel, CNIServiceAccount, cniHelmDeadline,

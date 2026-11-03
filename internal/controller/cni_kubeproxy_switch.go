@@ -46,6 +46,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/imagesig"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
@@ -112,15 +113,19 @@ type cniKubeProxyAdvancer struct {
 	// ServiceProbe checks, after kube-proxy was removed, that the kubernetes Service still answers;
 	// nil means probeKubernetesService.
 	ServiceProbe func(ctx context.Context) error
+
+	// Images verifies the images of a Cilium patch before a Job runs them;
+	// nil refuses every patch.
+	Images imagesig.Verifier
 }
 
 // NewCNIKubeProxyAdvancer returns the cni-kind AdvanceMachineFunc.
 func NewCNIKubeProxyAdvancer(
 	c client.Client, reader client.Reader, controllerNamespace string,
 	talosClient func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle) (TalosClient, error),
-	admin KubeProxyAdmin,
+	admin KubeProxyAdmin, images imagesig.Verifier,
 ) AdvanceMachineFunc {
-	a := &cniKubeProxyAdvancer{Client: c, Reader: reader, ControllerNamespace: controllerNamespace, TalosClient: talosClient, Admin: admin}
+	a := &cniKubeProxyAdvancer{Client: c, Reader: reader, ControllerNamespace: controllerNamespace, TalosClient: talosClient, Admin: admin, Images: images}
 
 	return a.Advance
 }

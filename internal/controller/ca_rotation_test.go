@@ -206,7 +206,7 @@ func (c *rotClient) ApplyNoReboot(ctx context.Context, cfg []byte) error {
 }
 
 func (c *rotClient) Version(context.Context) (string, error) {
-	return "v1.14.3", c.w.versionErr[c.name]
+	return testTalosVersion, c.w.versionErr[c.name]
 }
 
 // caRotFixture is a cluster of three control planes and two workers running their rendered

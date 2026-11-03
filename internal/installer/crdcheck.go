@@ -33,9 +33,9 @@ type retiredField struct {
 	path string // dotted property path from the object root, e.g. "spec.gitops"
 }
 
-// retiredFields is the whole list. Add an entry only together with the ADR that removes the field.
 const ichorInstallationsCRD = "ichorinstallations.ichor.maesh.dev"
 
+// retiredFields is the whole list. Add an entry only together with the ADR that removes the field.
 var retiredFields = []retiredField{
 	// ADR 0101: GitOps is permanently out of scope; spec.gitops (and everything under it) is gone.
 	{crd: "talosclusters.ichor.maesh.dev", path: "spec.gitops"},

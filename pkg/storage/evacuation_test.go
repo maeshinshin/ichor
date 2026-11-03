@@ -43,23 +43,13 @@ func TestLonghornV1_BeginAndEndEvacuation(t *testing.T) {
 	// Longhorn's admission webhook rejects evictionRequested=true while
 	// allowScheduling is still true, so allowScheduling must be the one
 	// that goes false here, not true.
-	allowScheduling, evictionRequested := h.BeginEvacuation()
-	if allowScheduling {
-		t.Error("BeginEvacuation() allowScheduling = true, want false")
-	}
-
-	if !evictionRequested {
-		t.Error("BeginEvacuation() evictionRequested = false, want true")
+	if allow, evict := h.BeginEvacuation(); allow || !evict {
+		t.Errorf("BeginEvacuation() = (%v, %v), want (false, true)", allow, evict)
 	}
 
 	// EndEvacuation must be the exact inverse.
-	allowScheduling, evictionRequested = h.EndEvacuation()
-	if !allowScheduling {
-		t.Error("EndEvacuation() allowScheduling = false, want true")
-	}
-
-	if evictionRequested {
-		t.Error("EndEvacuation() evictionRequested = true, want false")
+	if allow, evict := h.EndEvacuation(); !allow || evict {
+		t.Errorf("EndEvacuation() = (%v, %v), want (true, false)", allow, evict)
 	}
 }
 

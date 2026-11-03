@@ -52,15 +52,28 @@ var rootCmd = &cobra.Command{
 	Long: `ichor is the CLI half of Ichor's CLI/UI parity (docs/design/architecture.md,
 "CLI and UI"): it changes the world by writing the same custom resources
 the UI and controller use, never by talking to a Talos node directly to
-mutate it.`,
+mutate it.
+
+After a command that reaches a cluster, ichor prints one line on stderr when the
+cluster knows of a newer Ichor release, or when this binary is older than that
+release. The check is made by the cluster's controller, not by ichor. The line is
+shown on a terminal only, at most once a day per cluster, and never with -o or for
+help and completion. Set ICHOR_NO_UPDATE_NOTICE=1 to turn it off.`,
 	SilenceUsage: true,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	if err := rootCmd.Execute(); err != nil {
+	// PersistentPostRun does not run after a failed command, and the notice should show then too.
+	cmd, err := rootCmd.ExecuteC()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
+	}
+
+	printUpdateNotice(cmd)
+
+	if err != nil {
 		os.Exit(1)
 	}
 }

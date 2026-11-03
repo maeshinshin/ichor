@@ -80,7 +80,7 @@ const testVersionContract = "v1.14"
 const (
 	testEndpointTypeVIP = "vip"
 	testEndpointAddr    = "10.0.0.5"
-	testTalosVersion    = "v1.14.3"
+	testTalosVersion    = "v1.14.5"
 	testSchedulableTrue = "true"
 	testInitMachineUUID = "uuid-node-a"
 	testInitClusterName = "my-cluster"

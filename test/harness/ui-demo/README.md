@@ -87,7 +87,7 @@ kubectl --context $C -n ichor-e2e cp bin/ui-demo.crt $P-tools:/tmp/ui.crt
 kubectl --context $C -n ichor-e2e cp bin/ui-demo.key $P-tools:/tmp/ui.key
 kubectl --context $C -n ichor-e2e exec $P-tools -- env HOME=/tmp/home /tmp/ichor init --yes \
   --cluster $P --preset single --cni cilium --cni-tunnel geneve --endpoint-type node --endpoint-address $CP_IP \
-  --node-endpoint $CP_IP:50000 --talos-version v1.14.3 --version-contract v1.14 --install-disk /dev/vda \
+  --node-endpoint $CP_IP:50000 --talos-version v1.14.5 --version-contract v1.14 --install-disk /dev/vda \
   --pod-subnets 10.248.0.0/16 --service-subnets 10.249.0.0/16 --registry-mirror ghcr.io=http://$REG:5000 \
   --discover-address $WORKER_IP \
   --ui-url https://$LB_IP --admin-user admin --ui-tls-cert /tmp/ui.crt --ui-tls-key /tmp/ui.key \

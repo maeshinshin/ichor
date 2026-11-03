@@ -124,6 +124,10 @@ package uiapi
 // +kubebuilder:rbac:groups=ichor.maesh.dev,namespace=ichor-system,resources=ichorusers,verbs=get
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,resourceNames=ichor-user-credentials,verbs=get;update;patch
 
+// GetEffectiveConfig renders the kube-apiserver's authentication layer, which reads the
+// trust ConfigMap the controller publishes: get on that one name in ichor-system, never list or watch.
+// +kubebuilder:rbac:groups="",namespace=ichor-system,resources=configmaps,resourceNames=ichor-oidc-trust,verbs=get
+
 // "Reset and add" (MachineReclaim), in ichor-system only. The backend creates the credential
 // Secret, with the owner reference set at creation (the MachineReclaim is written first); it can never read it back or patch it.
 // The MachineReclaim itself is written as the caller, so the ServiceAccount only reads and lists it

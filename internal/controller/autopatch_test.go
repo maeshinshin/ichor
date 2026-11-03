@@ -72,7 +72,7 @@ var _ = Describe("AutoPatcher", Ordered, func() {
 
 	BeforeEach(func() {
 		rec = record.NewFakeRecorder(50)
-		clock, enabled, window = time.Date(2026, 11, 4, 3, 0, 0, 0, time.UTC), true, ""
+		clock, enabled, window = time.Now().UTC(), true, ""
 
 		i := createInstallation("v0.1.0")
 		at := metav1.NewTime(clock.Add(-time.Hour))
@@ -83,7 +83,7 @@ var _ = Describe("AutoPatcher", Ordered, func() {
 		spec.KubernetesVersion = "v1.36.1"
 		cluster = &ichorv1alpha1.TalosCluster{GenerateName: "auto-", Namespace: autoPatchNS, Spec: spec}
 		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
-		cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{Detected: "cilium", DetectedVersion: "1.20.4"}
+		cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{Detected: ciliumName, DetectedVersion: "1.20.4"}
 		Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
 
 		m := &ichorv1alpha1.TalosMachine{
@@ -135,7 +135,7 @@ var _ = Describe("AutoPatcher", Ordered, func() {
 		pass()
 		Expect(operations()).To(BeEmpty())
 
-		enabled, window = true, "04:00-05:00"
+		enabled, window = true, clock.Add(2*time.Hour).Format("15:04")+"-"+clock.Add(3*time.Hour).Format("15:04")
 		pass()
 		Expect(operations()).To(BeEmpty())
 

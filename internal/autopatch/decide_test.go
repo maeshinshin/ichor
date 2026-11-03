@@ -1,3 +1,4 @@
+//nolint:goconst // the fixtures repeat the same version strings on purpose
 package autopatch
 
 import (

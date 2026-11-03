@@ -560,3 +560,24 @@ Verification (commits 88b0cefa and 9fcf8a4d): `go build ./...`, `go vet ./...`, 
 **Teardown.** The Cilium cluster and the flannel cluster were each torn down with the harness; the registry was removed by the final `down`. Every `ichor-e2e-fk3` VM, DataVolume, pod, Service and Deployment is gone, and both port-forwards are stopped. The `ichor-e2e-rs2-*` and `ichor-ui-demo5-*` objects were not touched.
 
 **Open for the user.** (1) The 15-minute webhook refusal from amendment 3 is not reproduced; the next time it appears, capture the controller's events, logs, and `CiliumNetworkPolicy` objects in `ichor-system` during the refusal window. (2) The golangci-lint baseline on `test/e2e/foreign` (92 issues) is pre-existing and would fail a lint run with the e2e tag.
+
+## Amendment 5 (2026-11-04): the 77 and 239 pod-IP failures of TestA1Upgrade are the probe's fixed target, not the datapath
+
+**Question.** Amendment 4's `TestA1Upgrade` run logged 77 pod-IP-leg failures and 0 Service-leg failures during the control-plane upgrade. Was it a datapath fault (Cilium on the control plane, drain or kube-proxy replacement), or the probe?
+
+**Probe.** The client on the worker (`fa-client`) loops over the Service IP and over `POD_IP:8080`, where `POD_IP` is the server pod's IP captured once at `trafficStart`. The server is a one-replica Deployment that prefers the control plane. Nothing refreshes `POD_IP`.
+
+**Hardware (prefix `ichor-e2e-fpip`, one control plane and one worker, Talos v1.14.5, Kubernetes v1.35.10 to v1.36.6, Cilium 1.19.10 inline, image `v0.0.1421-g04ef3f70`, registry on localhost:5084, relay on 5085).** `go test -run TestA1Upgrade` against the attached cluster, with per-snapshot logging added in `cilium_test.go` (`probeDiag`, `ciliumDrops`, `eventsTail`).
+
+- **Result: PASS** (1390 s, one run, no failing test name). The client tally was `ok=234 fail=216` at 16:13:06. Failure lines: 239, all on the pod-IP leg, 0 on the Service leg. Amendment 4's 77 came from a different run and is not comparable: this run's probe ran longer after the eviction.
+- **Timeline (UTC).** Worker `w0` was cordoned at 16:00:38 and its client moved to the control plane. The control plane `cp0` was cordoned at 16:01:52. At 16:01:51 the drain killed the server pod `fa-srv-…-qj5fm` (UID `3856440e…`, IP 10.248.0.197, on `cp0`). The Deployment created `fa-srv-…-qrnwq` (UID `931a819f…`) on `w0` with IP 10.248.1.188, and it was Ready at 16:02:17. The Service leg had an endpoint throughout. The pod-IP leg kept 10.248.0.197, which no longer existed, so its first failure was 16:02:21 and it failed until the end of the run.
+- **Cilium.** Both agents kept `restarts=0` for the whole window, and the DaemonSet UIDs were unchanged (the test asserts this and it passed). `w0`'s agent was briefly `ready=false` once during the worker's cordon. The drop counters after the upgrade increased on `cilium-4ggbh` (`cp0`): `Policy denied` egress by 210 and `Stale or unroutable IP` ingress by 468. The counters are aggregates and do not name the flow, so Hubble or a live drop monitor is needed to tie them to the probe IP.
+- **Drain.** `drainForReboot` uses `IgnoreAllDaemonSets: true`, so no Cilium pod was evicted, which matches the observed UIDs.
+
+**Conclusion: hypothesis (a).** The pod-IP leg fails because its fixed target pod was evicted by the normal kubelet-roll drain and recreated on another node. This is test accounting, not a product fault. Hypotheses (b) and (c) are not supported: no agent restarted, the DaemonSet did not change, and no Service-leg failure occurred.
+
+**Not changed in this amendment.** The test's pass criteria are the Cilium DaemonSet and Helm record assertions and the kubelet versions. None depends on the pod-IP failure count, so the test still passes. The count in the report is the misleading part. I did not add a per-probe liveness classifier. The follow-up is to make the pod-IP leg follow the server's current IP (or classify failures after the target pod's deletion timestamp) so the count means something. Placing the target on the worker does not avoid the problem, because the worker is drained too.
+
+**Harness deviations.** The brief's prefix `ichor-e2e-pip` is not valid: `foreign.PrefixRoot` must start with `ichor-e2e-f`, so `ichor-e2e-fpip` was used. The first attempt on registry port 5064 and relay 5065 collided with another lane's port-forwards (`ichor-e2e-fwh`), so that attempt was torn down and its images went into that lane's registry. Both have been reported to the user.
+
+**Teardown.** `foreign down --prefix ichor-e2e-fpip` removed the registry, relay, tools pod, both VMs and their DataVolumes. No `ichor-e2e-fpip` object remains in `ichor-e2e`. The `ichor-ui-demo5` VMs, `ichor-e2e-talos-v1-14-5-…-base` and the `fwh` port-forwards were not touched.

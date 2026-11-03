@@ -47,7 +47,7 @@ func SetupTalosClusterWebhookWithManager(mgr ctrl.Manager, s ...*settings.Reader
 
 	return ctrl.NewWebhookManagedBy(mgr, &ichorv1alpha1.TalosCluster{}).
 		WithDefaulter(d).
-		WithValidator(&TalosClusterCustomValidator{APIReader: mgr.GetAPIReader(), Override: overrideCheckFor(mgr.GetClient())}).
+		WithValidator(&TalosClusterCustomValidator{APIReader: mgr.GetAPIReader(), Can: rightCheckFor(mgr.GetClient())}).
 		Complete()
 }
 
@@ -62,9 +62,9 @@ type TalosClusterCustomValidator struct {
 	// APIReader counts approved workers for the schedulable check, uncached
 	// for the same reason as TalosMachineCustomValidator.APIReader.
 	APIReader client.Reader
-	// Override lets a user holding the override verb on the cluster override the
+	// Can lets a user holding the override verb on the cluster override the
 	// last-worker guard (ADR 0065, amended). nil means no override.
-	Override OverrideCheck
+	Can RightCheck
 	// ControllerSource finds the address the controller reaches a cluster endpoint from, for the
 	// firewall preflight (ADR 0108). nil asks the routing table.
 	ControllerSource SourceResolver
@@ -170,7 +170,7 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 			return nil, err
 		}
 
-		return warns, v.Override.checkLastWorker(ctx, workers, "talosclusters", newObj.Name, newObj.Namespace)
+		return warns, v.Can.checkLastWorker(ctx, workers, "talosclusters", newObj.Name, newObj.Namespace)
 	}
 
 	return warns, nil

@@ -500,11 +500,6 @@ func (h *OverrideHandler) gateSecretReferences(ctx context.Context, req admissio
 	return nil
 }
 
-// OverrideCheck tells whether the user behind the admission request in ctx holds the override
-// verb on resource/name. The per-object guards (the last-worker guard, ADR 0065 amended) take one so
-// an operator with the verb can override them; nil means no override.
-type OverrideCheck func(ctx context.Context, resource, name, namespace string) (bool, error)
-
 // RightCheck tells whether the user behind the admission request in ctx holds verb on resource
 // (and subresource, when set). Outside an admission request there is no user, so the answer is no.
 type RightCheck func(ctx context.Context, verb, resource, subresource, name, namespace string) (bool, error)
@@ -523,31 +518,16 @@ func rightCheckFor(c client.Client) RightCheck {
 	}
 }
 
-// overrideCheckFor asks Kubernetes with a SubjectAccessReview on the requesting user, like the
-// override handler does. Outside an admission request there is no user, so the answer is no.
-func overrideCheckFor(c client.Client) OverrideCheck {
-	h := &OverrideHandler{Client: c}
-
-	return func(ctx context.Context, resource, name, namespace string) (bool, error) {
-		req, err := admission.RequestFromContext(ctx)
-		if err != nil {
-			return false, nil //nolint:nilerr // no admission request, no user to hold the verb
-		}
-
-		return h.mayDo(ctx, req.UserInfo, OverrideVerb, resource, "", name, namespace)
-	}
-}
-
 // checkLastWorker is deleteguard.CheckLastWorker with the override override: it asks the verb only
 // when the guard would refuse, so ordinary requests cost no SubjectAccessReview. A failed check
 // refuses (fail closed).
-func (c OverrideCheck) checkLastWorker(ctx context.Context, workersAfter int, resource, name, namespace string) error {
+func (c RightCheck) checkLastWorker(ctx context.Context, workersAfter int, resource, name, namespace string) error {
 	err := deleteguard.CheckLastWorker(true, workersAfter, false)
 	if err == nil || c == nil {
 		return err
 	}
 
-	allowed, aerr := c(ctx, resource, name, namespace)
+	allowed, aerr := c(ctx, OverrideVerb, resource, "", name, namespace)
 	if aerr != nil {
 		return fmt.Errorf("%w (and the %s right could not be checked: %w)", err, OverrideVerb, aerr)
 	}

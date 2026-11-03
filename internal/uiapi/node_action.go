@@ -422,7 +422,7 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 		audit.Reason = reason
 		msg := fmt.Sprintf("%s of %s requested by %s under override: %s", np.action, np.machine.Name, audit.Actor, reason)
 
-		if err := s.emitOverrideEvent(ctx, np.machine, kindTalosMachine, msg); err != nil {
+		if err := s.emitWarningEvent(ctx, np.machine, kindTalosMachine, "Override", msg); err != nil {
 			audit.Reason += " (the Kubernetes Event could not be recorded)"
 		}
 	}

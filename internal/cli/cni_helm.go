@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -50,6 +51,10 @@ var cniHelmApplyOpts struct {
 	Takeover         bool
 	Exclusive        bool
 	Timeout          time.Duration
+	// ImageVersion and ImageOverrides are a Cilium patch's images, as the
+	// controller passes them: each override is key=reference.
+	ImageVersion   string
+	ImageOverrides []string
 }
 
 var cniHelmApplyCmd = &cobra.Command{
@@ -99,10 +104,44 @@ namespace, read back, and only then deleted (the record Secrets only, never helm
 			tk = &takeoverOptions{Kube: kube, IchorNamespace: cniHelmApplyOpts.StorageNamespace}
 		}
 
+		image, err := imageOverrideFromFlags(cniHelmApplyOpts.ImageVersion, cniHelmApplyOpts.ImageOverrides)
+		if err != nil {
+			return err
+		}
+
 		return runCNIHelmApply(cmd.Context(), c, cfg, types.NamespacedName{
 			Namespace: apiOpts.Namespace, Name: cniHelmApplyOpts.Cluster,
-		}, cniHelmApplyOpts.KubeProxy, cniHelmApplyOpts.Timeout, cniHelmApplyOpts.Exclusive, tk, cmd.OutOrStdout())
+		}, cniHelmApplyOpts.KubeProxy, cniHelmApplyOpts.Timeout, cniHelmApplyOpts.Exclusive, tk, image, cmd.OutOrStdout())
 	},
+}
+
+// imageOverrideFromFlags is the Cilium patch the flags name, or nil when they name none. A version and its images go
+// together, and each image is key=reference.
+func imageOverrideFromFlags(version string, overrides []string) (*ichorv1alpha1.TalosCiliumImageOverride, error) {
+	if version == "" && len(overrides) == 0 {
+		return nil, nil
+	}
+
+	if version == "" || len(overrides) == 0 {
+		return nil, errors.New("--image-version and --image-override go together")
+	}
+
+	images := make(map[string]string, len(overrides))
+
+	for _, o := range overrides {
+		key, ref, ok := strings.Cut(o, "=")
+		if !ok || key == "" || ref == "" {
+			return nil, fmt.Errorf("--image-override %q is not key=reference", o)
+		}
+
+		if _, dup := images[key]; dup {
+			return nil, fmt.Errorf("--image-override names the %s image twice", key)
+		}
+
+		images[key] = ref
+	}
+
+	return &ichorv1alpha1.TalosCiliumImageOverride{Version: version, Images: images}, nil
 }
 
 // takeoverOptions switch on the foreign release record's retirement after the rollout.
@@ -115,11 +154,21 @@ type takeoverOptions struct {
 // Helm configuration over the memory driver. takeover is nil unless --takeover.
 func runCNIHelmApply(
 	ctx context.Context, c client.Client, cfg *action.Configuration, key types.NamespacedName,
-	kubeProxy string, timeout time.Duration, exclusive bool, takeover *takeoverOptions, out io.Writer,
+	kubeProxy string, timeout time.Duration, exclusive bool, takeover *takeoverOptions,
+	image *ichorv1alpha1.TalosCiliumImageOverride, out io.Writer,
 ) error {
 	var cluster ichorv1alpha1.TalosCluster
 	if err := c.Get(ctx, key, &cluster); err != nil {
 		return fmt.Errorf("reading TalosCluster %s: %w", key, err)
+	}
+
+	// The patch the controller names runs for this Job; the values read the cluster's status for it.
+	if image != nil {
+		if cluster.Status.CNI == nil {
+			cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{}
+		}
+
+		cluster.Status.CNI.ImageOverride = image
 	}
 
 	// The controller names the mode the Job applies (the cluster's current one, or a switch's
@@ -190,5 +239,7 @@ func init() {
 	f.BoolVar(&cniHelmApplyOpts.Takeover, "takeover", false, "the Cilium being installed over was installed by someone else (an adopted cluster): retire its Helm release record after the rollout")
 	f.BoolVar(&cniHelmApplyOpts.Exclusive, "exclusive", false, "no other Helm operation on the release can be running (the controller runs one ichor-cni Job per cluster): repair a pending-* record at once instead of after the timeout")
 	f.DurationVar(&cniHelmApplyOpts.Timeout, "timeout", cilium.DefaultApplyTimeout, "how long to wait for Cilium's workloads to roll out")
+	f.StringVar(&cniHelmApplyOpts.ImageVersion, "image-version", "", "the Cilium patch (vX.Y.Z) whose images --image-override names; empty for the chart's own images")
+	f.StringArrayVar(&cniHelmApplyOpts.ImageOverrides, "image-override", nil, "an image of the Cilium patch as key=repository:tag@sha256:digest (keys: agent, operator, hubble-relay)")
 	_ = cniHelmApplyCmd.MarkFlagRequired("cluster")
 }

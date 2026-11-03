@@ -410,6 +410,8 @@ func clusterToPB(c *ichorv1alpha1.TalosCluster) *pb.Cluster {
 		Conditions:              conditions(c.Status.Conditions),
 		KubeProxyMode:           c.Spec.CNI.KubeProxy,
 		Certificates:            certificatesToPB(c.Status.Certificates),
+		Versions:                componentVersionsToPB(c),
+		ReleaseSet:              releaseSetToPB(),
 		// Rollout and Handovers stay unset: TalosClusterStatus carries
 		// neither a rollout nor a hand-over state yet (roadmap phases 6 and
 		// 4/8's controller-side work).

@@ -45,8 +45,8 @@ import (
 const (
 	opNS       = "default"
 	opCluster  = "c"
-	opOldTalos = "v1.14.3"
-	opNewTalos = "v1.14.4"
+	opOldTalos = "v1.13.2"
+	opNewTalos = "v1.14.3" // the release set's Talos
 
 	testControllerLabelKey = "control-plane"
 	testControllerPodName  = "ichor-controller"
@@ -157,9 +157,13 @@ func isDryRun(opts []client.CreateOption) bool {
 }
 
 func TestCreateWithSameVersionDoesNotWriteTheSpec(t *testing.T) {
-	srv, k8s := opServer(t, opObjects()...)
+	// The cluster already runs the release set's Talos, so asking for it changes nothing.
+	objs := opObjects()
+	objs[0].(*ichorv1alpha1.TalosCluster).Spec.TalosVersion = opNewTalos
 
-	res, err := srv.CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_TALOS, opOldTalos))
+	srv, k8s := opServer(t, objs...)
+
+	res, err := srv.CreateOperation(context.Background(), opCreate(pb.OperationKind_OPERATION_KIND_TALOS, opNewTalos))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +205,7 @@ func TestCreateRefusedWhenTheCallerMayNotUpdateTheCluster(t *testing.T) {
 	})
 	srv := &Server{Client: base, Impersonate: func(Identity) (client.Client, error) { return user, nil }}
 
-	_, err := srv.CreateOperation(asUser(context.Background()), opCreate(pb.OperationKind_OPERATION_KIND_KUBERNETES, "v1.36.1"))
+	_, err := srv.CreateOperation(asUser(context.Background()), opCreate(pb.OperationKind_OPERATION_KIND_KUBERNETES, "v1.37.1"))
 	if connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("want PermissionDenied, got %v", err)
 	}

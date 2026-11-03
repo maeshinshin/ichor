@@ -84,7 +84,7 @@ func TestOperationSummaryPerKind(t *testing.T) {
 				Name: "op", Namespace: opNS, Annotations: map[string]string{ichorv1alpha1.OperationStartedByAnnotation: userAlice},
 				Spec: tc.spec, Status: tc.st,
 			}
-			if from := map[string]string{"talos from": opOldTalos, "k8s from": "v1.36.2"}[tc.name]; from != "" {
+			if from := map[string]string{"talos from": opOldTalos, "k8s from": fixtureK8s}[tc.name]; from != "" {
 				op.Annotations[ichorv1alpha1.OperationFromVersionAnnotation] = from
 			}
 

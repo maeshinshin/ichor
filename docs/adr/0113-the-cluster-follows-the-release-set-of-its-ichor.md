@@ -87,3 +87,37 @@ The Decision above is unchanged in form; these values replace the numbers it nam
 **Open for the user.**
 - `upgradeCompatibility` (Cilium's value for the first install's version) is not set. Cilium recommends setting it to the version the cluster was first installed with; Ichor does not know that version for an adopted cluster, so it stays the chart default. Decide before an adopted cluster is upgraded.
 - `pkg/cni/cilium/chart/cilium-1.18.0.tgz` is still in the repository. The embedded chart is 1.20.4 only; the foreign-cluster hardware tests (ADR 0103 and 0104, `test/e2e/foreign`, `test/internal/foreign`, `test/harness/foreign`) still install Cilium 1.18.0 from that file, and adopt now refuses a live 1.18. Those tests need a 1.19 foreign chart or a rewrite; they were not run for this amendment.
+
+## Hardware verification (rs2, 2026-11-03)
+
+One throwaway cluster on the outer `ichor-e2e` namespace, prefix `ichor-e2e-rs2`: one control plane (3Gi) and one worker (1536Mi). The set is Talos v1.14.5, Kubernetes v1.36.6, Cilium 1.20.4. The result: the set installs and passes every check below. One stall on the first attempt was a product bug (the operator rollout), fixed before the passing run (ADR 0098 amendment).
+
+**Setup.** The Talos v1.14.5 ISO DataVolume `ichor-e2e-talos-v1-14-5-37656798-base` was created with the harness's cache manifest (the schematic and version are the only changes; the v1.14.3 DataVolume was not touched) and stays in place. Images `v0.0.2-g7f445d62` (the fixed tree) were built with `make demo-images-build` and pushed with `make demo-images-push REGISTRY=localhost:5102` through a port-forward to the registry Service. VMs: `ICHOR_UI_DEMO_PREFIX=ichor-e2e-rs2 ICHOR_UI_DEMO_CP_MEMORY=3Gi ICHOR_UI_DEMO_WORKER_MEMORY=1536Mi ./bin/kubevirt-harness up-demo`, control plane at 10.244.1.238 and worker at 10.244.1.99, both in maintenance mode. `ichor init` ran from a busybox tools pod with no version flags (the set's defaults), `--preset single --cni cilium --cni-tunnel geneve --endpoint-type node --discover-address 10.244.1.99 --registry-mirror ghcr.io=http://<registry>:5000`, and no UI users (init warned that ichor-ui runs with `--allow-unauthenticated`, which is expected without users).
+
+**Runs.**
+- Run 1 (image `v0.0.1-gf3282230`, before the fix): init reached the Cilium hand-over. The Helm job rolled the operator Deployment because the bootstrap and the hand-over rendered different pod templates (`hostUsers`, see ADR 0098). On one node the second operator replica could never schedule (the host ports 9234 and 9963 were held by the old pod, and the chart requires one operator per node), and the hand-over stalled. The cluster was torn down after diagnosis. This is the first of the two failures the run allows.
+- Run 2 (image `v0.0.2-g7f445d62`, the fix): init started 08:29:09Z, the control plane was Ready, and the Cilium hand-over completed at 08:33:17Z ("Cilium is now a Helm release owned by Ichor"), about 4 minutes after start. The Cilium image pull took about 54 seconds. Init exited after the hand-over with no error line. The worker was approved by hand with `ichor machine approve <name> --role worker --install-disk /dev/vda --hostname ichor-e2e-rs2-w --yes --local` after init had finished, and it joined at 14:05:25Z.
+
+**Checks (run 2, read directly).**
+
+| check | command | result |
+| --- | --- | --- |
+| node versions | `kubectl get nodes -o wide` | control plane and worker Ready; Talos v1.14.5, kubelet v1.36.6 |
+| TalosCluster versions | `kubectl get taloscluster ichor-e2e-rs2 -o jsonpath=...` | spec v1.14.5 / v1.36.6 / contract v1.14; status `cni.detectedVersion` v1.20.4; `CNIHandover` Complete; `CiliumUpgradeAvailable` False |
+| Cilium DaemonSet | `kubectl -n kube-system get ds cilium` | 2 of 2 ready, image `quay.io/cilium/cilium:v1.20.4@sha256:20fe92…` |
+| Cilium status | `cilium-dbg status --brief` in the agent on each node | `OK` on the control plane and on the worker |
+| operator | `kubectl -n kube-system get pods` | one replica, 1/1 Running, no Pending pod |
+| Hubble certgen Job | `hubble-generate-certs-732172e311` | Completed |
+| pod-to-pod across nodes | busybox `nc` from the control plane to a listener on the worker (10.248.1.133:8080) | `ok`, rc=0 |
+| pod-to-Service across nodes | same listener through a ClusterIP Service | `ok`, rc=0 |
+| Ichor CiliumNetworkPolicies | `kubectl -n ichor-system get ciliumnetworkpolicies` | 6 of 6 `Valid` (controller-manager, controller-release-check, controller-talos-egress, default-deny, installer, ui) |
+| ichor-ui in cluster | HTTPS `GET https://ichor-ichor-ui-service.ichor-system.svc:8443/` from a client pod | `HTTP/1.1 200 OK` |
+| dynamic egress | `ichor-controller-talos-egress` `toCIDRSet` | 10.244.1.238/32 and 10.244.1.99/32 on ports 50000, 6443 and 2380; the worker's address is present |
+| release-check policy | `ichor-controller-release-check` | `Valid` |
+
+**Not checked.** The egress policy's history (it was read after the worker joined, not before), a negative test that a non-allowed flow is dropped, and the full `cilium-dbg status` output.
+
+**Observations.**
+- A single-node cluster runs one Cilium operator replica (ADR 0098 amendment). The second replica would never have scheduled.
+- The chart's `hubble-generate-certs` Job is a one-shot pod; it is Completed, and the Pending state it showed while the node was NotReady was transient.
+- ichor-ui runs unauthenticated in this throwaway cluster, as init reported. Users were not enabled.

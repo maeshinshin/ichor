@@ -60,3 +60,44 @@ func TestUpgradeNoticeListsRolesGrantingTheEarlierVerb(t *testing.T) {
 		}
 	}
 }
+
+// The renamed break-glass role is named only while it is Ichor's: the app name label marks it,
+// a same-named object without the label does not (ADR 0111).
+func TestUpgradeNoticeNamesTheRenamedRoleOnlyWhenItIsIchors(t *testing.T) {
+	scheme, err := cliScheme()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const old = "ichor-ichor-break-glass-role"
+
+	withLabel := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+		namedClusterRole(old, map[string]string{"app.kubernetes.io/name": ownLabelValue}),
+	).Build()
+
+	var out bytes.Buffer
+
+	noticePendingRenames(t.Context(), withLabel, &out)
+
+	if got := out.String(); !strings.Contains(got, old) || !strings.Contains(got, "ichor-ichor-override-role") {
+		t.Errorf("notice = %q, want the renamed role named with its new name", got)
+	}
+
+	unlabelled := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
+		namedClusterRole(old, nil),
+	).Build()
+
+	out.Reset()
+	noticePendingRenames(t.Context(), unlabelled, &out)
+
+	if out.Len() != 0 {
+		t.Errorf("notice = %q, want none for an object Ichor did not install", out.String())
+	}
+}
+
+func namedClusterRole(name string, labels map[string]string) *rbacv1.ClusterRole {
+	cr := &rbacv1.ClusterRole{}
+	cr.Name, cr.Labels = name, labels
+
+	return cr
+}

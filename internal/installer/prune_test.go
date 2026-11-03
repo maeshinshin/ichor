@@ -27,7 +27,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -43,26 +42,26 @@ func TestPruneCandidatesSelectsOnlyWhatTheBundleDrops(t *testing.T) {
 	const ns = "ichor-system"
 
 	prev := []ref{
-		{APIVersion: rbacAPI, Kind: "ClusterRole", Name: "ichor-manager-role"},
-		{APIVersion: rbacAPI, Kind: "ClusterRole", Name: "ichor-kept"},
-		{APIVersion: rbacAPI, Kind: "Role", Namespace: ns, Name: "stale-role"},
-		{APIVersion: rbacAPI, Kind: "Role", Namespace: "kube-system", Name: "other-namespace"},
+		{APIVersion: rbacAPI, Kind: kindClusterRole, Name: "ichor-manager-role"},
+		{APIVersion: rbacAPI, Kind: kindClusterRole, Name: "ichor-kept"},
+		{APIVersion: rbacAPI, Kind: kindRole, Namespace: ns, Name: "stale-role"},
+		{APIVersion: rbacAPI, Kind: kindRole, Namespace: "kube-system", Name: "other-namespace"},
 		{APIVersion: "apiextensions.k8s.io/v1", Kind: "CustomResourceDefinition", Name: "talosclusters.ichor.maesh.dev"},
 		{APIVersion: "v1", Kind: "Namespace", Name: "old-namespace"},
-		{APIVersion: "v1", Kind: "Secret", Namespace: ns, Name: "cert"},
+		{APIVersion: "v1", Kind: "Secret", Namespace: ns, Name: "state-secret"},
 		{APIVersion: "scheduling.k8s.io/v1", Kind: "PriorityClass", Name: "ichor-high"},
 		{APIVersion: "cilium.io/v2", Kind: "CiliumNetworkPolicy", Namespace: ns, Name: "ichor-old-policy"},
-		{APIVersion: rbacAPI, Kind: "ClusterRole", Name: "ichor-installer-role"},
+		{APIVersion: rbacAPI, Kind: kindClusterRole, Name: "ichor-installer-helper"},
 	}
-	bundle := []ref{{APIVersion: rbacAPI, Kind: "ClusterRole", Name: "ichor-kept"}}
+	bundle := []ref{{APIVersion: rbacAPI, Kind: kindClusterRole, Name: "ichor-kept"}}
 
-	var got []string
+	got := make([]string, 0, 3)
 	var renamedTo string
 
 	for _, c := range pruneCandidates(prev, bundle, ns) {
 		got = append(got, c.Kind+"/"+c.Name)
 
-		if c.Name == "ichor-ichor-break-glass-role" {
+		if c.Name == breakGlassRole {
 			renamedTo = c.renamedTo
 		}
 	}
@@ -72,14 +71,14 @@ func TestPruneCandidatesSelectsOnlyWhatTheBundleDrops(t *testing.T) {
 		t.Errorf("candidates = %v, want %v", got, want)
 	}
 
-	if renamedTo != "ichor-ichor-override-role" {
+	if renamedTo != overrideRole {
 		t.Errorf("the renamed role says it became %q, want ichor-ichor-override-role", renamedTo)
 	}
 }
 
 // A renamed object is not a candidate while the bundle still ships its old name.
 func TestPruneCandidatesNeverPrunesAShippedRenamedName(t *testing.T) {
-	bundle := []ref{{APIVersion: rbacAPI, Kind: "ClusterRole", Name: "ichor-ichor-break-glass-role"}}
+	bundle := []ref{{APIVersion: rbacAPI, Kind: kindClusterRole, Name: breakGlassRole}}
 
 	if got := pruneCandidates(nil, bundle, "ichor-system"); len(got) != 0 {
 		t.Errorf("candidates = %v, want none: the bundle still ships the name", got)
@@ -89,8 +88,8 @@ func TestPruneCandidatesNeverPrunesAShippedRenamedName(t *testing.T) {
 // The mark: an object is the installer's when it carries the installed-by label; a renamed object
 // from before that label also counts with the app name label; nothing else does.
 func TestOwnedNeedsTheInstalledByLabelOrARenamesAppLabel(t *testing.T) {
-	plain := pruneCandidate{ref: ref{APIVersion: rbacAPI, Kind: "ClusterRole", Name: "ichor-manager-role"}}
-	renamed := pruneCandidate{ref: ref{APIVersion: rbacAPI, Kind: "ClusterRole", Name: "ichor-ichor-break-glass-role"}, renamedTo: "ichor-ichor-override-role"}
+	plain := ref{APIVersion: rbacAPI, Kind: kindClusterRole, Name: "ichor-manager-role"}.candidate("")
+	renamed := ref{APIVersion: rbacAPI, Kind: kindClusterRole, Name: breakGlassRole}.candidate(overrideRole)
 
 	withLabels := func(labels map[string]string) *unstructured.Unstructured {
 		o := &unstructured.Unstructured{}
@@ -140,7 +139,7 @@ func TestPrunableKindsHaveDeleteRight(t *testing.T) {
 	var deletable []rbacv1.PolicyRule
 
 	for _, o := range objs {
-		if o.GetKind() != "ClusterRole" && o.GetKind() != "Role" {
+		if o.GetKind() != kindClusterRole && o.GetKind() != kindRole {
 			continue
 		}
 
@@ -265,21 +264,25 @@ func TestRunPrunesWhatAnEarlierRunInstalledAndTheManifestDrops(t *testing.T) {
 	runInstaller(t, f, f.run+"-1", withObjects(f.manifest("ctrl:v1", ""),
 		roleDoc(f.ns, "stale-role"), roleDoc(f.ns, "unowned-role"), f.gadgetCRD()))
 
-	if err := k8sClient.Create(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: f.ns, Name: "state",
-		Labels: map[string]string{InstalledByLabel: InstalledByValue}}}); err != nil {
+	state := &corev1.Secret{}
+	state.Namespace, state.Name = f.ns, "state"
+	state.Labels = map[string]string{InstalledByLabel: InstalledByValue}
+
+	if err := k8sClient.Create(ctx, state); err != nil {
 		t.Fatal(err)
 	}
 
-	role := &rbacv1.Role{ObjectMeta: metav1.ObjectMeta{Namespace: f.ns, Name: "unowned-role"}}
+	role := &rbacv1.Role{}
+	role.Namespace, role.Name = f.ns, "unowned-role"
 	setLabel(t, role, InstalledByLabel, "")
 
 	runInstaller(t, f, f.run+"-2", f.manifest("ctrl:v2", ""))
 
-	if exists(t, rbacAPI, "Role", f.ns, "stale-role") {
+	if exists(t, rbacAPI, kindRole, f.ns, "stale-role") {
 		t.Error("stale-role was installed by the installer and is no longer shipped: it must be pruned")
 	}
 
-	if !exists(t, rbacAPI, "Role", f.ns, "unowned-role") {
+	if !exists(t, rbacAPI, kindRole, f.ns, "unowned-role") {
 		t.Error("unowned-role lost the installed-by label: it must be kept")
 	}
 
@@ -314,9 +317,10 @@ func TestRunRemovesTheRenamedOverrideRoleOnlyWhenItIsIchors(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 
-	const old = "ichor-ichor-break-glass-role"
+	const old = breakGlassRole
 
-	cr := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: old}}
+	cr := &rbacv1.ClusterRole{}
+	cr.Name = old
 	if err := k8sClient.Create(ctx, cr); err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +333,7 @@ func TestRunRemovesTheRenamedOverrideRoleOnlyWhenItIsIchors(t *testing.T) {
 
 	runInstaller(t, f, f.run+"-1", f.manifest("ctrl:v1", ""))
 
-	if !exists(t, rbacAPI, "ClusterRole", "", old) {
+	if !exists(t, rbacAPI, kindClusterRole, "", old) {
 		t.Error("a ClusterRole with the old name that Ichor did not install must be kept")
 	}
 
@@ -337,7 +341,7 @@ func TestRunRemovesTheRenamedOverrideRoleOnlyWhenItIsIchors(t *testing.T) {
 
 	runInstaller(t, f, f.run+"-2", f.manifest("ctrl:v2", ""))
 
-	if exists(t, rbacAPI, "ClusterRole", "", old) {
+	if exists(t, rbacAPI, kindClusterRole, "", old) {
 		t.Errorf("%s carries app.kubernetes.io/name=ichor and the new manifest renames it: it must be pruned", old)
 	}
 }

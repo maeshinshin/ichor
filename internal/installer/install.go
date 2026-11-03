@@ -554,7 +554,7 @@ func waitRBACEffective(ctx context.Context, c client.Client, rbac []*unstructure
 	var checks []authorizationv1.ResourceAttributes
 
 	for _, o := range rbac {
-		if o.GetKind() != "ClusterRole" && o.GetKind() != "Role" {
+		if o.GetKind() != kindClusterRole && o.GetKind() != "Role" {
 			continue
 		}
 

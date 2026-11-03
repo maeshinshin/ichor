@@ -101,7 +101,7 @@ func TestValues_TalosRequiredFive(t *testing.T) {
 // control plane, or the agents wait for its secrets and a preset with tainted control planes never
 // finishes its hand-over before a worker is approved. The chart's default (no tolerations) would not.
 func TestValues_HubbleCertgenToleratesControlPlane(t *testing.T) {
-	got, err := EffectiveValues(nil, cni.KubeProxyEnabled, "")
+	got, err := EffectiveValues(nil, cni.KubeProxyEnabled, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

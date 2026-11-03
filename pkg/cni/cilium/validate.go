@@ -54,7 +54,8 @@ type ValidationContext struct {
 // It checks the chart schema, owned keys, unknown keys, the size cap and the
 // three guards from the Talos guide, and joins every problem it finds.
 func ValidateValues(user map[string]any, c ValidationContext) error {
-	p, err := newPreset(c.KubeProxy, c.Tunnel)
+	// The control-plane count only sets a default (operator.replicas), which validation does not read.
+	p, err := newPreset(c.KubeProxy, c.Tunnel, 0)
 	if err != nil {
 		return err
 	}

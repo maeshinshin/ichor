@@ -52,7 +52,7 @@ func fakeConfig() *action.Configuration {
 func effective(t *testing.T, user map[string]any) map[string]any {
 	t.Helper()
 
-	v, err := EffectiveValues(user, cni.KubeProxyEnabled, "")
+	v, err := EffectiveValues(user, cni.KubeProxyEnabled, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

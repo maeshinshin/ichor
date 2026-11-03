@@ -39,6 +39,16 @@ type Preset struct {
 	tunnel string
 	// user is spec.cni.cilium.values (WithValues).
 	user map[string]any
+	// controlPlanes is the cluster's control-plane count; 0 means unknown (the chart's defaults).
+	controlPlanes int
+}
+
+// WithControlPlanes returns a copy of p for a cluster with n control planes. One control plane pins the
+// operator to one replica (values.go, operator); any other count, or 0, keeps the chart's default.
+func (p Preset) WithControlPlanes(n int) Preset {
+	p.controlPlanes = n
+
+	return p
 }
 
 // New returns a Cilium Preset.

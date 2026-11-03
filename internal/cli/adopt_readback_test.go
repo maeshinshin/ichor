@@ -40,7 +40,7 @@ func TestIchorCiliumReadBack_SpecReproducesTheDeployedValues(t *testing.T) {
 	for _, tunnel := range []string{ciliumTunnelVxlan, tunnelGeneve} {
 		for _, kp := range []cni.KubeProxyMode{cni.KubeProxyEnabled, cni.KubeProxyReplaced} {
 			for _, u := range []map[string]any{nil, user} {
-				deployed, err := cilium.EffectiveValues(u, kp, tunnel)
+				deployed, err := cilium.EffectiveValues(u, kp, tunnel, 0)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -102,7 +102,7 @@ func TestLiveTunnel(t *testing.T) {
 		}
 	}
 
-	vals, err := cilium.EffectiveValues(nil, cni.KubeProxyEnabled, liveTunnel(map[string]string{ciliumTunnelKey: tunnelGeneve}))
+	vals, err := cilium.EffectiveValues(nil, cni.KubeProxyEnabled, liveTunnel(map[string]string{ciliumTunnelKey: tunnelGeneve}), 0)
 	if err != nil || vals["tunnelProtocol"] != tunnelGeneve {
 		t.Fatalf("effective tunnelProtocol = %v, %v; want geneve", vals["tunnelProtocol"], err)
 	}
@@ -113,7 +113,7 @@ func TestLiveTunnel(t *testing.T) {
 const helmReleaseKey = "release"
 
 func TestReadBackIchorCilium_TunnelFlagOnARerun(t *testing.T) {
-	deployed, err := cilium.EffectiveValues(nil, cni.KubeProxyEnabled, tunnelGeneve)
+	deployed, err := cilium.EffectiveValues(nil, cni.KubeProxyEnabled, tunnelGeneve, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

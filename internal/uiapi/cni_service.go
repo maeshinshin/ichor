@@ -196,7 +196,7 @@ func (s *Server) talosFacts(ctx context.Context, cluster *ichorv1alpha1.TalosClu
 }
 
 func (v *ciliumView) effective(user map[string]any) (map[string]any, error) {
-	return cilium.EffectiveValues(user, v.kubeProxy, v.tunnel)
+	return cilium.EffectiveValues(user, v.kubeProxy, v.tunnel, int(v.cluster.Spec.ControlPlane.Count))
 }
 
 // GetCiliumValues returns the layers of a cluster's Cilium values separately.
@@ -208,7 +208,7 @@ func (s *Server) GetCiliumValues(
 		return nil, err
 	}
 
-	defaults, owned, err := cilium.Layers(v.kubeProxy, v.tunnel)
+	defaults, owned, err := cilium.Layers(v.kubeProxy, v.tunnel, int(v.cluster.Spec.ControlPlane.Count))
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

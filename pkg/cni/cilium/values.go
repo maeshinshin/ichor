@@ -119,7 +119,24 @@ type Values struct {
 	Hubble               hubble          `json:"hubble"`
 	TunnelProtocol       string          `json:"tunnelProtocol,omitempty"`
 	Certgen              certgen         `json:"certgen"`
+	// Operator is omitted for more than one control plane: the chart's default replica count applies.
+	Operator *operator `json:"operator,omitempty"`
 }
+
+// operator is cilium.operator: the Cilium operator's replica count. The chart defaults to two, with a
+// required pod anti-affinity per node, so on a one-node cluster the second replica never schedules and
+// the chart's rolling update, and with it the hand-over, cannot finish (ADR 0113 amendment). A single
+// control plane runs one; the operator's work is control-plane work (IPAM allocation, garbage
+// collection), and the datapath keeps running while it restarts.
+type operator struct {
+	Replicas int `json:"replicas"`
+}
+
+// RenderKubernetesVersion is the Kubernetes release the bootstrap render targets. The chart gates some
+// templates on the cluster's Kubernetes version (hostUsers from 1.33), and the hand-over renders on the
+// real cluster, so the bootstrap must render for the same version or the two differ. It is pkg/release's
+// Pinned.Kubernetes; release_test checks that the two agree.
+const RenderKubernetesVersion = "v1.36.6"
 
 // valuesFor builds the Helm values for kubeProxy. Both modes share the
 // capabilities and cgroup settings Talos needs regardless of kube-proxy;
@@ -152,6 +169,10 @@ func (p Preset) valuesFor(kubeProxy cni.KubeProxyMode) Values {
 		v.KubeProxyReplacement = true
 		v.K8sServiceHost = "localhost"
 		v.K8sServicePort = kubePrismPort
+	}
+
+	if p.controlPlanes == 1 {
+		v.Operator = &operator{Replicas: 1}
 	}
 
 	return v

@@ -32,7 +32,7 @@ import (
 func ichorRecordWithStatus(t *testing.T, status release.Status) *corev1.Secret {
 	t.Helper()
 
-	cfg, err := cilium.EffectiveValues(nil, cni.KubeProxyEnabled, tunnelGeneve)
+	cfg, err := cilium.EffectiveValues(nil, cni.KubeProxyEnabled, tunnelGeneve, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

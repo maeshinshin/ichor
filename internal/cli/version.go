@@ -55,7 +55,7 @@ func clientVersion() string {
 
 type versionInfo struct {
 	Client  versionClient   `json:"client"`
-	Release *versionRelease `json:"release,omitempty"`
+	Release *versionRelease `json:"newInstallVersions,omitempty"`
 	Server  *versionServer  `json:"server,omitempty"`
 }
 
@@ -63,7 +63,8 @@ type versionClient struct {
 	Version string `json:"version"`
 }
 
-// versionRelease is the release set this Ichor build supports and brings a cluster to.
+// versionRelease is the set of versions a new install gets from this Ichor build: the first install's defaults. An
+// upgrade is not limited to it.
 type versionRelease struct {
 	Talos           string `json:"talosVersion"`
 	VersionContract string `json:"versionContract"`

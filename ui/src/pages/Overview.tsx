@@ -41,6 +41,7 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import { OperationControls } from '@/components/OperationControls'
 import { Field, Fields } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
+import { ClusterUpgrade } from '@/components/ClusterUpgrade'
 import { StartOperationDialog } from '@/components/StartOperationDialog'
 import { HandoverPhase, RolloutKind, type Cluster, type ComponentVersion } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
@@ -398,11 +399,10 @@ function Home({
                     )}
                 </ItemGroup>
               </CardContent>
-              {busyReason && (
-                <CardFooter>
-                  <CardDescription>{busyReason}</CardDescription>
-                </CardFooter>
-              )}
+              <CardFooter className="flex-col items-stretch gap-2">
+                <ClusterUpgrade cluster={ref} version={ichorVersion} busy={!!busy} onStarted={reloadCluster} />
+                {busyReason && <CardDescription>{busyReason}</CardDescription>}
+              </CardFooter>
             </Card>
           </div>
         </div>

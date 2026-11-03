@@ -36,7 +36,7 @@ var _ = Describe("AutoPatcher", Ordered, func() {
 
 	patcher := func() *AutoPatcher {
 		return &AutoPatcher{
-			Client: k8sClient, Reader: k8sClient, Recorder: rec, Now: func() time.Time { return clock },
+			Client: k8sClient, Actor: k8sClient, Reader: k8sClient, Recorder: rec, Now: func() time.Time { return clock },
 			Settings: &settings.Reader{Client: k8sClient, Fallback: settings.Fallback{AutoPatch: settings.AutoPatch{Enabled: enabled, Window: window}}},
 		}
 	}

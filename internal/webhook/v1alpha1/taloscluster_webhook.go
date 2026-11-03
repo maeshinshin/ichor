@@ -51,7 +51,7 @@ func SetupTalosClusterWebhookWithManager(mgr ctrl.Manager, s ...*settings.Reader
 	return ctrl.NewWebhookManagedBy(mgr, &ichorv1alpha1.TalosCluster{}).
 		WithDefaulter(d).
 		WithValidator(&TalosClusterCustomValidator{
-			APIReader: mgr.GetAPIReader(), Can: rightCheckFor(mgr.GetClient()), ControllerUser: controllerUsername(),
+			APIReader: mgr.GetAPIReader(), Can: rightCheckFor(mgr.GetClient()), ControllerUser: controllerUsername(), AutoPatchUser: autoPatchUsername(),
 		}).
 		Complete()
 }
@@ -73,16 +73,15 @@ type TalosClusterCustomValidator struct {
 	// ControllerSource finds the address the controller reaches a cluster endpoint from, for the
 	// firewall preflight. nil asks the routing table.
 	ControllerSource SourceResolver
-	// ControllerUser is the controller's own username. Its one write to a TalosCluster is the automatic
-	// patch upgrade, which this validator limits to a newer patch of the running minor in
-	// spec.talosVersion or spec.kubernetesVersion. Empty means no user is limited (tests).
-	ControllerUser string
+	// ControllerUser is the controller's own username: it never writes a TalosCluster spec, and an update of one by
+	// it that changes the spec is refused. AutoPatchUser is the ServiceAccount the automatic patcher
+	// acts as; its one write is a newer patch of the running minor in spec.talosVersion or spec.kubernetesVersion,
+	// and anything else it writes is refused. Empty means no user is limited (tests).
+	ControllerUser, AutoPatchUser string
 }
 
-// controllerUsername is the username the controller's ServiceAccount authenticates as, from the downward
-// API values the Deployment sets; empty when they are not set.
-func controllerUsername() string {
-	ns, sa := os.Getenv("POD_NAMESPACE"), os.Getenv("POD_SERVICE_ACCOUNT")
+// serviceAccountUsername is the username a ServiceAccount authenticates as.
+func serviceAccountUsername(ns, sa string) string {
 	if ns == "" || sa == "" {
 		return ""
 	}
@@ -90,21 +89,36 @@ func controllerUsername() string {
 	return "system:serviceaccount:" + ns + ":" + sa
 }
 
-// limitController refuses any update by the controller that is not an automatic patch upgrade: the
-// controller never edits a spec otherwise, so what it may do is exactly one thing, in the two version
-// fields, to a newer patch of the same minor, and nothing else in the object may change.
-func (v *TalosClusterCustomValidator) limitController(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosCluster) error {
-	if v.ControllerUser == "" {
-		return nil
-	}
+// controllerUsername is the controller's username and autoPatchUsername the automatic patcher's, from the downward
+// API values the Deployment sets; empty when they are not set.
+func controllerUsername() string {
+	return serviceAccountUsername(os.Getenv("POD_NAMESPACE"), os.Getenv("POD_SERVICE_ACCOUNT"))
+}
 
+func autoPatchUsername() string {
+	return serviceAccountUsername(os.Getenv("POD_NAMESPACE"), ichorv1alpha1.AutoPatchServiceAccount)
+}
+
+// limitController refuses a spec change by the controller itself, and limits the automatic patcher's identity to
+// the one write it exists for: a newer patch of the same minor in the two version fields, and nothing
+// else in the object changes.
+func (v *TalosClusterCustomValidator) limitController(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosCluster) error {
 	req, err := admission.RequestFromContext(ctx)
-	if err != nil || req.UserInfo.Username != v.ControllerUser {
+	if err != nil {
 		return nil //nolint:nilerr // no request in context: not a webhook call we can attribute
 	}
 
+	if v.ControllerUser != "" && req.UserInfo.Username == v.ControllerUser &&
+		!apiequality.Semantic.DeepEqual(oldObj.Spec, newObj.Spec) {
+		return errors.New("the controller never writes a TalosCluster spec")
+	}
+
+	if v.AutoPatchUser == "" || req.UserInfo.Username != v.AutoPatchUser {
+		return nil
+	}
+
 	refuse := func(why string) error {
-		return fmt.Errorf("the controller may only write a newer patch of the running minor to spec.talosVersion or spec.kubernetesVersion: %s", why)
+		return fmt.Errorf("the automatic patcher may only write a newer patch of the running minor to spec.talosVersion or spec.kubernetesVersion: %s", why)
 	}
 
 	a, b := oldObj.Spec.DeepCopy(), newObj.Spec.DeepCopy()

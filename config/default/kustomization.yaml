@@ -31,6 +31,8 @@ resources:
 - ../rbac/ichor-installer
 # The Cilium Helm Job's own RBAC, separate for the same reason.
 - ../rbac/ichor-cni
+# The identity automatic patch upgrades act as, separate so the controller never holds its rights.
+- ../rbac/ichor-auto-patch
 # Ichor does not ship a cluster-wide certificate-issuing dependency: the
 # webhook serving certificate is generated at runtime by cert-controller, in-process
 # in the manager, so there is no certmanager/ directory here and no caBundle shipped

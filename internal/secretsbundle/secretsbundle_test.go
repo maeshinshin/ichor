@@ -29,7 +29,6 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/role"
 	yaml "go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -55,20 +54,30 @@ func newTestBundle(t *testing.T) *secrets.Bundle {
 	return bundle
 }
 
-func newFakeClient(t *testing.T, objs ...*corev1.Secret) client.Client {
+// newFakeClient builds a client over the default client-go scheme, which knows Secrets.
+func newFakeClient(objs ...*corev1.Secret) client.Client {
+	b := fake.NewClientBuilder()
+	for _, o := range objs {
+		b = b.WithObjects(o)
+	}
+
+	return b.Build()
+}
+
+// bundleSecret is the Secret that holds raw under key.
+func bundleSecret(key string, raw []byte) *corev1.Secret {
+	return &corev1.Secret{Namespace: testNamespace, Name: testName, Data: map[string][]byte{key: raw}}
+}
+
+func marshalBundle(t *testing.T, bundle *secrets.Bundle) []byte {
 	t.Helper()
 
-	scheme := runtime.NewScheme()
-	if err := corev1.AddToScheme(scheme); err != nil {
-		t.Fatalf("adding corev1 to scheme: %v", err)
+	raw, err := yaml.Marshal(bundle)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
 	}
 
-	builder := fake.NewClientBuilder().WithScheme(scheme)
-	for _, o := range objs {
-		builder = builder.WithObjects(o)
-	}
-
-	return builder.Build()
+	return raw
 }
 
 // bundleSecretMaterial lists every sensitive scalar in bundle, the same
@@ -108,17 +117,9 @@ func assertNoLeak(t *testing.T, err error, secretMaterial []string) {
 func TestLoadRoundTrip(t *testing.T) {
 	bundle := newTestBundle(t)
 
-	raw, err := yaml.Marshal(bundle)
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
+	secret := bundleSecret(SecretKey, marshalBundle(t, bundle))
 
-	secret := &corev1.Secret{
-		Namespace: testNamespace, Name: testName,
-		Data: map[string][]byte{SecretKey: raw},
-	}
-
-	got, err := Load(context.Background(), newFakeClient(t, secret), testNamespace, testName)
+	got, err := Load(context.Background(), newFakeClient(secret), testNamespace, testName)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -137,17 +138,9 @@ func TestLoadRoundTrip(t *testing.T) {
 func TestLoadFillsClock(t *testing.T) {
 	bundle := newTestBundle(t)
 
-	raw, err := yaml.Marshal(bundle)
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
+	secret := bundleSecret(SecretKey, marshalBundle(t, bundle))
 
-	secret := &corev1.Secret{
-		Namespace: testNamespace, Name: testName,
-		Data: map[string][]byte{SecretKey: raw},
-	}
-
-	got, err := Load(context.Background(), newFakeClient(t, secret), testNamespace, testName)
+	got, err := Load(context.Background(), newFakeClient(secret), testNamespace, testName)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -162,7 +155,7 @@ func TestLoadFillsClock(t *testing.T) {
 }
 
 func TestLoadSecretNotFound(t *testing.T) {
-	_, err := Load(context.Background(), newFakeClient(t), testNamespace, testName)
+	_, err := Load(context.Background(), newFakeClient(), testNamespace, testName)
 	if err == nil {
 		t.Fatal("expected an error, got nil")
 	}
@@ -171,12 +164,7 @@ func TestLoadSecretNotFound(t *testing.T) {
 func TestLoadMissingKeyDoesNotLeak(t *testing.T) {
 	bundle := newTestBundle(t)
 
-	secret := &corev1.Secret{
-		Namespace: testNamespace, Name: testName,
-		Data: map[string][]byte{"wrong-key": []byte("irrelevant")},
-	}
-
-	_, err := Load(context.Background(), newFakeClient(t, secret), testNamespace, testName)
+	_, err := Load(context.Background(), newFakeClient(bundleSecret("wrong-key", []byte("irrelevant"))), testNamespace, testName)
 	assertNoLeak(t, err, bundleSecretMaterial(bundle))
 }
 
@@ -187,33 +175,18 @@ func TestLoadMissingKeyDoesNotLeak(t *testing.T) {
 func TestLoadMalformedYAMLDoesNotLeak(t *testing.T) {
 	bundle := newTestBundle(t)
 
-	raw, err := yaml.Marshal(bundle)
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
-
 	// A leading tab is never valid YAML indentation, so this is
 	// guaranteed to fail decoding rather than parse as something else.
-	raw = append([]byte("\tnot valid yaml\n"), raw...)
+	raw := append([]byte("\tnot valid yaml\n"), marshalBundle(t, bundle)...)
 
-	secret := &corev1.Secret{
-		Namespace: testNamespace, Name: testName,
-		Data: map[string][]byte{SecretKey: raw},
-	}
-
-	_, err = Load(context.Background(), newFakeClient(t, secret), testNamespace, testName)
+	_, err := Load(context.Background(), newFakeClient(bundleSecret(SecretKey, raw)), testNamespace, testName)
 	assertNoLeak(t, err, bundleSecretMaterial(bundle))
 }
 
 // TestDecodedBundleClientCertificateIsBackdated: a node whose clock is a little behind the
 // controller's must still accept the os:admin certificate minted for a dial.
 func TestDecodedBundleClientCertificateIsBackdated(t *testing.T) {
-	raw, err := yaml.Marshal(newTestBundle(t))
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
-
-	got, err := Decode(raw)
+	got, err := Decode(marshalBundle(t, newTestBundle(t)))
 	if err != nil {
 		t.Fatalf("Decode: %v", err)
 	}

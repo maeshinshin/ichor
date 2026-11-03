@@ -93,7 +93,7 @@ var _ = Describe("NodeService.GetNodeTalosDetails", func() {
 		m := newMachine("uuid-td-ok", ichorv1alpha1.MachineApprovalStateApproved)
 		fake := &fakeNodeTalosClient{
 			talosSystem: &pb.TalosSystemSection{
-				Version: "v1.14.3", Stage: "running", Ready: true,
+				Version: fixtureTalos, Stage: "running", Ready: true,
 				KernelArgs: []string{argQuiet, "talos.config=https://x?token=" + fakeSecret},
 			},
 			talosNetwork:    &pb.TalosNetworkSection{DefaultGateways: []string{"10.0.0.1"}, TimeSynced: true},

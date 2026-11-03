@@ -51,6 +51,9 @@ const (
 	// this package renders against; nothing here exercises version-contract
 	// gating itself (pkg/fieldmeta and pkg/render's own tests already do).
 	testVersionContract = "v1.14"
+	// fixtureTalos and fixtureK8s are the running versions the fixtures' clusters and nodes report.
+	fixtureTalos = "v1.14.3"
+	fixtureK8s   = "v1.36.2"
 )
 
 // newTestBundle returns one shared, read-only bundle: generating one costs a 4096-bit RSA key.
@@ -93,7 +96,7 @@ func newTestCluster(secretName string) *ichorv1alpha1.TalosCluster {
 		GenerateName: "cluster-", Namespace: testNamespace,
 		Spec: ichorv1alpha1.TalosClusterSpec{
 			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: "vip", Address: "10.0.0.5"},
-			TalosVersion:      "v1.14.3",
+			TalosVersion:      fixtureTalos,
 			KubernetesVersion: "v" + constants.DefaultKubernetesVersion,
 			VersionContract:   testVersionContract,
 			SecretsRef:        corev1.LocalObjectReference{Name: secretName},

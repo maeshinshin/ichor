@@ -82,6 +82,9 @@ const (
 	// OperationServiceStartClusterUpgradeProcedure is the fully-qualified name of the
 	// OperationService's StartClusterUpgrade RPC.
 	OperationServiceStartClusterUpgradeProcedure = "/ichor.v1alpha1.OperationService/StartClusterUpgrade"
+	// OperationServiceListUpgradeTargetsProcedure is the fully-qualified name of the OperationService's
+	// ListUpgradeTargets RPC.
+	OperationServiceListUpgradeTargetsProcedure = "/ichor.v1alpha1.OperationService/ListUpgradeTargets"
 )
 
 // OperationServiceClient is a client for the ichor.v1alpha1.OperationService service.
@@ -120,10 +123,16 @@ type OperationServiceClient interface {
 	// ListOperationEvents returns the Kubernetes Events about an operation or one of its machines,
 	// within the operation's lifetime, oldest first: the activity log on the operation's page.
 	ListOperationEvents(context.Context, *connect.Request[v1alpha1.ListOperationEventsRequest]) (*connect.Response[v1alpha1.ListOperationEventsResponse], error)
-	// PlanClusterUpgrade and StartClusterUpgrade are the one action that brings a cluster to the
-	// release set of its Ichor (ADR 0113): each start creates the next step's operation only.
+	// Deprecated and unused (ADR 0115): the cluster-wide rollout is removed. The server answers
+	// CodeUnimplemented. Kept so the wire format does not break.
+	//
+	// Deprecated: do not use.
 	PlanClusterUpgrade(context.Context, *connect.Request[v1alpha1.PlanClusterUpgradeRequest]) (*connect.Response[v1alpha1.PlanClusterUpgradeResponse], error)
+	// Deprecated: do not use.
 	StartClusterUpgrade(context.Context, *connect.Request[v1alpha1.StartClusterUpgradeRequest]) (*connect.Response[v1alpha1.StartClusterUpgradeResponse], error)
+	// ListUpgradeTargets lists the versions a cluster's Talos or Kubernetes can be upgraded to, grouped
+	// as recommended, patch and next minor (ADR 0115). It only reads.
+	ListUpgradeTargets(context.Context, *connect.Request[v1alpha1.ListUpgradeTargetsRequest]) (*connect.Response[v1alpha1.ListUpgradeTargetsResponse], error)
 }
 
 // NewOperationServiceClient constructs a client for the ichor.v1alpha1.OperationService service. By
@@ -221,6 +230,12 @@ func NewOperationServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(operationServiceMethods.ByName("StartClusterUpgrade")),
 			connect.WithClientOptions(opts...),
 		),
+		listUpgradeTargets: connect.NewClient[v1alpha1.ListUpgradeTargetsRequest, v1alpha1.ListUpgradeTargetsResponse](
+			httpClient,
+			baseURL+OperationServiceListUpgradeTargetsProcedure,
+			connect.WithSchema(operationServiceMethods.ByName("ListUpgradeTargets")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -240,6 +255,7 @@ type operationServiceClient struct {
 	listOperationEvents              *connect.Client[v1alpha1.ListOperationEventsRequest, v1alpha1.ListOperationEventsResponse]
 	planClusterUpgrade               *connect.Client[v1alpha1.PlanClusterUpgradeRequest, v1alpha1.PlanClusterUpgradeResponse]
 	startClusterUpgrade              *connect.Client[v1alpha1.StartClusterUpgradeRequest, v1alpha1.StartClusterUpgradeResponse]
+	listUpgradeTargets               *connect.Client[v1alpha1.ListUpgradeTargetsRequest, v1alpha1.ListUpgradeTargetsResponse]
 }
 
 // ListOperations calls ichor.v1alpha1.OperationService.ListOperations.
@@ -305,13 +321,22 @@ func (c *operationServiceClient) ListOperationEvents(ctx context.Context, req *c
 }
 
 // PlanClusterUpgrade calls ichor.v1alpha1.OperationService.PlanClusterUpgrade.
+//
+// Deprecated: do not use.
 func (c *operationServiceClient) PlanClusterUpgrade(ctx context.Context, req *connect.Request[v1alpha1.PlanClusterUpgradeRequest]) (*connect.Response[v1alpha1.PlanClusterUpgradeResponse], error) {
 	return c.planClusterUpgrade.CallUnary(ctx, req)
 }
 
 // StartClusterUpgrade calls ichor.v1alpha1.OperationService.StartClusterUpgrade.
+//
+// Deprecated: do not use.
 func (c *operationServiceClient) StartClusterUpgrade(ctx context.Context, req *connect.Request[v1alpha1.StartClusterUpgradeRequest]) (*connect.Response[v1alpha1.StartClusterUpgradeResponse], error) {
 	return c.startClusterUpgrade.CallUnary(ctx, req)
+}
+
+// ListUpgradeTargets calls ichor.v1alpha1.OperationService.ListUpgradeTargets.
+func (c *operationServiceClient) ListUpgradeTargets(ctx context.Context, req *connect.Request[v1alpha1.ListUpgradeTargetsRequest]) (*connect.Response[v1alpha1.ListUpgradeTargetsResponse], error) {
+	return c.listUpgradeTargets.CallUnary(ctx, req)
 }
 
 // OperationServiceHandler is an implementation of the ichor.v1alpha1.OperationService service.
@@ -350,10 +375,16 @@ type OperationServiceHandler interface {
 	// ListOperationEvents returns the Kubernetes Events about an operation or one of its machines,
 	// within the operation's lifetime, oldest first: the activity log on the operation's page.
 	ListOperationEvents(context.Context, *connect.Request[v1alpha1.ListOperationEventsRequest]) (*connect.Response[v1alpha1.ListOperationEventsResponse], error)
-	// PlanClusterUpgrade and StartClusterUpgrade are the one action that brings a cluster to the
-	// release set of its Ichor (ADR 0113): each start creates the next step's operation only.
+	// Deprecated and unused (ADR 0115): the cluster-wide rollout is removed. The server answers
+	// CodeUnimplemented. Kept so the wire format does not break.
+	//
+	// Deprecated: do not use.
 	PlanClusterUpgrade(context.Context, *connect.Request[v1alpha1.PlanClusterUpgradeRequest]) (*connect.Response[v1alpha1.PlanClusterUpgradeResponse], error)
+	// Deprecated: do not use.
 	StartClusterUpgrade(context.Context, *connect.Request[v1alpha1.StartClusterUpgradeRequest]) (*connect.Response[v1alpha1.StartClusterUpgradeResponse], error)
+	// ListUpgradeTargets lists the versions a cluster's Talos or Kubernetes can be upgraded to, grouped
+	// as recommended, patch and next minor (ADR 0115). It only reads.
+	ListUpgradeTargets(context.Context, *connect.Request[v1alpha1.ListUpgradeTargetsRequest]) (*connect.Response[v1alpha1.ListUpgradeTargetsResponse], error)
 }
 
 // NewOperationServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -447,6 +478,12 @@ func NewOperationServiceHandler(svc OperationServiceHandler, opts ...connect.Han
 		connect.WithSchema(operationServiceMethods.ByName("StartClusterUpgrade")),
 		connect.WithHandlerOptions(opts...),
 	)
+	operationServiceListUpgradeTargetsHandler := connect.NewUnaryHandler(
+		OperationServiceListUpgradeTargetsProcedure,
+		svc.ListUpgradeTargets,
+		connect.WithSchema(operationServiceMethods.ByName("ListUpgradeTargets")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/ichor.v1alpha1.OperationService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case OperationServiceListOperationsProcedure:
@@ -477,6 +514,8 @@ func NewOperationServiceHandler(svc OperationServiceHandler, opts ...connect.Han
 			operationServicePlanClusterUpgradeHandler.ServeHTTP(w, r)
 		case OperationServiceStartClusterUpgradeProcedure:
 			operationServiceStartClusterUpgradeHandler.ServeHTTP(w, r)
+		case OperationServiceListUpgradeTargetsProcedure:
+			operationServiceListUpgradeTargetsHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -540,4 +579,8 @@ func (UnimplementedOperationServiceHandler) PlanClusterUpgrade(context.Context, 
 
 func (UnimplementedOperationServiceHandler) StartClusterUpgrade(context.Context, *connect.Request[v1alpha1.StartClusterUpgradeRequest]) (*connect.Response[v1alpha1.StartClusterUpgradeResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.OperationService.StartClusterUpgrade is not implemented"))
+}
+
+func (UnimplementedOperationServiceHandler) ListUpgradeTargets(context.Context, *connect.Request[v1alpha1.ListUpgradeTargetsRequest]) (*connect.Response[v1alpha1.ListUpgradeTargetsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.OperationService.ListUpgradeTargets is not implemented"))
 }

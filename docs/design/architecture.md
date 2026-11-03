@@ -391,7 +391,8 @@ annotation; disk roles that require reinstall are immutable after install;
 `TalosCluster` and `TalosMachine` can only be deleted with
 `ichor.maesh.dev/allow-delete: "true"` (so a prune by the user's own tooling can't cascade into
 node resets); removing an Ichor finalizer, resetting a node and restoring etcd
-need the override verb; Talos/Kubernetes version pairs and upgrade paths are checked.
+need the override verb; Talos/Kubernetes version pairs and upgrade paths are checked, and a version the
+webhook admits is the release set's, never a downgrade.
 
 ## Design
 
@@ -426,7 +427,8 @@ special case of approving the first control plane.
 `ichor adopt` brings a running Talos cluster that Ichor did not create under
 management. It needs Talos v1.12 or later on every node it adopts
 and refuses an older or mixed cluster with "upgrade Talos first", writing
-nothing. It works in four phases, and nothing is applied to a node until the
+nothing. Above that floor, a cluster older than this Ichor's release set is adopted as "behind"
+and rolled with `ichor upgrade cluster`; a newer one is refused. It works in four phases, and nothing is applied to a node until the
 last one:
 
 1. Plan (`--plan` stops here and writes nothing). Read-only inspection with
@@ -504,7 +506,7 @@ the Job.
 
 Upgrades. A new Ichor release carries new pinned charts. Cilium is upgraded
 only when the user starts a `cni` operation (`ichor cni upgrade`, or the UI),
-at most one minor at a time, rolled back by Helm on failure.
+at most one minor at a time, rolled back by Helm on failure. The cluster rollout runs that operation last, as its Cilium step.
 
 Takeover. `ichor adopt` can make a Cilium that someone else
 installed (a Helm release, the Cilium CLI, a Talos inline manifest or an
@@ -899,6 +901,21 @@ until the Talos side is ready.
 
 ### Upgrades
 
+The release set. Each Ichor build embeds one supported set of versions, `pkg/release.Pinned`:
+the Talos release and its version contract, the Kubernetes release, and the Cilium chart. Init and adopt
+use it, the admission webhook refuses any version a TalosCluster or an operation would move to that is
+not the set's, and the API reports each component of a cluster against it (`Cluster.versions`: up to
+date, behind, or ahead). A cluster is never moved to a version the set does not name, and never down.
+Adopt admits an older cluster as "behind"; a newer one is refused.
+
+A cluster that is behind is rolled to the set by one user action, `ichor upgrade cluster` or the Versions
+card's button, which starts one step at a time: Talos first (with the version contract, since Talos does not
+upgrade Kubernetes and Kubernetes must be a release the running Talos supports), then the configuration
+the new contract changes if a machine still has it pending, then Kubernetes, then Cilium (last, so the chart
+meets the Kubernetes the set was built for). Each step is its own operation with its own plan and
+confirmation, and the next one starts only when it has finished. Nothing starts on its own. An Ichor upgrade
+does not move the cluster; the new build's set does, through this rollout.
+
 A step that fails pauses its operation with a `failureReason` and is never
 retried by itself; `ichor operation resume` (or Resume in the UI) on such an
 operation re-runs the failed step through an annotation, not through `spec`.
@@ -930,11 +947,11 @@ path, to be removed in Talos 1.18"), and the installer ignores it in upgrade
 mode ("system disk wipe on upgrade is not supported anymore, option
 ignored") — a plain upgrade reboots in place and never touches the etcd data
 directory, for one member or many. A node that falls back to the previous
-A/B slot counts as a failure. The version contract is never bumped
-automatically.
+A/B slot counts as a failure. The version contract is never bumped by the
+controller on its own: it moves only with the rollout's Talos step, to the
+release set's contract.
 
-Kubernetes: change `spec.kubernetesVersion`, one minor at a time within the
-skew policy. Warn about removed APIs in use, pre-pull images, then in three
+Kubernetes: change `spec.kubernetesVersion` to the release set's version, one minor at a time within the skew policy. Warn about removed APIs in use, pre-pull images, then in three
 stages, each finished on every machine before the next (no kubelet is ever
 newer than an API server): switch the control-plane components node by node
 through machine config; update kube-proxy and sync the bootstrap manifests

@@ -25,11 +25,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/siderolabs/talos/pkg/machinery/constants"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/release"
 )
 
 // adoptNode is one machine adopt looks at: the (possibly not yet written) TalosMachine plus what
@@ -324,7 +324,7 @@ const (
 
 func kubernetesVersionOr(v string) string {
 	if v == "" {
-		return "v" + constants.DefaultKubernetesVersion
+		return release.Pinned.Kubernetes
 	}
 
 	if v[0] != 'v' {

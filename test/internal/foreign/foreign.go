@@ -22,6 +22,7 @@ limitations under the License.
 package foreign
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -52,10 +53,13 @@ const (
 	schematic = "376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba"
 	// cachedVersion is the Talos version whose ISO is already cached as a DataVolume.
 	cachedVersion = "v1.14.3"
-	maxWorkers    = 4
-	maxCPs        = 3
-	podSubnet     = "10.248.0.0/16"
-	serviceSubnet = "10.249.0.0/16"
+	// foreignK8sVersion is the Kubernetes a foreign cluster starts on when a test does not say: one patch
+	// below the release set (pkg/release), so the Kubernetes upgrade test has a step to take.
+	foreignK8sVersion = "v1.36.5"
+	maxWorkers        = 4
+	maxCPs            = 3
+	podSubnet         = "10.248.0.0/16"
+	serviceSubnet     = "10.249.0.0/16"
 
 	// CNI variants.
 	CNIFlannel      = "talos-flannel"
@@ -551,9 +555,10 @@ func (c *Cluster) generate(mirror string) error {
 		}
 		args = append(args, "--config-patch-worker", "@"+wFile)
 	}
-	if o.K8sVersion != "" {
-		args = append(args, "--kubernetes-version", strings.TrimPrefix(o.K8sVersion, "v"))
-	}
+	// Adopt refuses a Kubernetes newer than the release set, and talosctl's default for
+	// Talos v1.14.5 is newer, so the foreign cluster starts one patch below the set.
+	k8s := cmp.Or(o.K8sVersion, foreignK8sVersion)
+	args = append(args, "--kubernetes-version", strings.TrimPrefix(k8s, "v"))
 	if mirror != "" {
 		args = append(args, "--registry-mirror", "ghcr.io="+mirror)
 	}

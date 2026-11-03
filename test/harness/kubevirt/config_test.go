@@ -102,7 +102,7 @@ func TestBaseCacheEnabled(t *testing.T) {
 // TestBaseCacheName: DNS-safe, per Talos version and schematic.
 func TestBaseCacheName(t *testing.T) {
 	got := baseCacheName()
-	want := "ichor-e2e-talos-v1-14-3-" + talosFactorySchematic[:8] + "-base"
+	want := "ichor-e2e-talos-v1-14-5-" + talosFactorySchematic[:8] + "-base"
 	if got != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}

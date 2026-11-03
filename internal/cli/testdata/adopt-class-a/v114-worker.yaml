@@ -163,7 +163,7 @@ nodeIP: {}
 ---
 apiVersion: v1alpha1
 kind: KubeletConfig
-image: ghcr.io/siderolabs/kubelet:v1.37.1 # The container image used to run the kubelet component.
+image: ghcr.io/siderolabs/kubelet:v1.36.6 # The container image used to run the kubelet component.
 # Provide extra configuration for the kubelet.
 config: {}
 defaultRuntimeSeccompProfileEnabled: true # Enable container runtime default Seccomp profile.

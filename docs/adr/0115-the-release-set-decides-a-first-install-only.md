@@ -100,7 +100,7 @@ Adopt judges the versions it takes over (`checkAdoptCompat`, after the cluster i
 
 The table is data, and the rules are code. The tests run the rules, not the table alone:
 
-- Talos paths, with machinery's bounds: v1.13.2 to v1.14.3 (adjacent minor), v1.12.4 to v1.14.3 (a skipped minor within the bounds), v1.11.5 to v1.14.3 (refused, below the floor), v1.14.3 to v1.15.0 (refused, a minor machinery does not know), pre-release, build metadata, shorthand, and not newer. Talos 1.12, 1.13 and 1.14 are tested through machinery's compatibility package; the table is tested for the Talos 1.14 range.
+- Talos paths, through machinery's compatibility package (`pkg/release` tests): the running versions tested are v1.11.5 (refused, below the 1.12.0 minimum of Talos 1.14), v1.13.2 to v1.14.3 (adjacent minor, accepted), v1.12.4 to v1.14.3 (skips 1.13, accepted within the bounds), and v1.14.3 to v1.14.4 (patch, accepted). The target v1.15.0 is refused as a minor machinery does not know. Talos 1.12 and 1.13 as targets are not tested: their rules are machinery's, and no Ichor build has offered them as targets yet.
 - Kubernetes skew and pairing: v1.36.2 to v1.37.1 on Talos 1.14.3 (accepted), v1.35.0 to v1.37.1 (two minors, refused), v1.37.1 to v1.38.0 (not supported by Talos 1.14.3, refused).
 - The refusals name the step (`TestCheckKubernetesStepNamesTheOrder`), and the webhook and the operation service refuse an incompatible pair and accept it under the override verb.
 - Adopt warns for a known incompatible pair and refuses an unknown version (`TestCheckAdoptCompatWarnsOrRefuses`).

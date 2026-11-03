@@ -349,7 +349,7 @@ type TalosOperationEtcdRestoreSpec struct {
 	// +required
 	Confirm string `json:"confirm"`
 
-	// reason is the break-glass reason the restore was started under. It is part of the record that
+	// reason is the override reason the restore was started under. It is part of the record that
 	// survives the rollback.
 	// +kubebuilder:validation:MinLength=1
 	// +required
@@ -389,13 +389,28 @@ type TalosOperationNodeSpec struct {
 	// +optional
 	Confirm string `json:"confirm,omitempty"`
 
-	// breakGlassReason overrides the last-worker guard for reboot and shutdown: the
+	// overrideReason overrides the last-worker guard for reboot and shutdown: the
 	// reason the operator gave for taking the last schedulable, Ready worker away. It is only honoured
-	// when the creator holds the break-glass verb on the machine (the break-glass webhook checks), and
+	// when the creator holds the override verb on the machine (the override webhook checks), and
 	// it goes into the audit record and an Event.
 	// +kubebuilder:validation:MinLength=1
 	// +optional
+	OverrideReason string `json:"overrideReason,omitempty"`
+
+	// breakGlassReason is the earlier name of overrideReason, kept because CRD fields are append-only
+	// and operations written by older builds carry it. Deprecated: use overrideReason. Ichor's own
+	// CLI and UI never set it; it is read, and gated by the same verb, when overrideReason is empty.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
 	BreakGlassReason string `json:"breakGlassReason,omitempty"`
+}
+
+// EffectiveOverrideReason is overrideReason, or the deprecated breakGlassReason when that is empty.
+func (n *TalosOperationNodeSpec) EffectiveOverrideReason() string {
+	if n.OverrideReason != "" {
+		return n.OverrideReason
+	}
+	return n.BreakGlassReason
 }
 
 // TalosOperationNodeStatus is the state of a node-kind operation. The machine's own entry in

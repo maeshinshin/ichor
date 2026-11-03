@@ -117,4 +117,4 @@ error, the PR body, the response and the pushed file.
 - A merged strict PR relies on Argo CD applying over the existing pending `TalosMachine`; if the Application
   prunes or uses `Replace`, that is the Application's setting, not Ichor's.
 
-(Amended 2026-10-26, ADR 0065: a request may carry `BreakGlass{reason}` to write a tracked or strict-mode CR directly and still open this PR, if Kubernetes RBAC grants the `break-glass` verb.)
+(Amended 2026-10-26, ADR 0065: a request may carry `Override{reason}` to write a tracked or strict-mode CR directly and still open this PR, if Kubernetes RBAC grants the `override` verb.)

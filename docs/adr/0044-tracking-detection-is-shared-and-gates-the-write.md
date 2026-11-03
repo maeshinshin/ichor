@@ -154,7 +154,7 @@ already named.
   constants inside `pkg/gitopstracking` itself once its own test file
   repeated them three times -- a `pkg/gitopstracking`-local concern, not a
   cross-package one.
-- Not built here, same as ADR 0038/0037 left them: strict mode, break-glass,
+- Not built here, same as ADR 0038/0037 left them: strict mode, override,
   the UI GitOps page, computing an impact preview, and wiring "CR → owning
   Application" for the Flux case. `pkg/prmode.Decide` and
   `pkg/gitopstracking.IsTracked` are both now importable from

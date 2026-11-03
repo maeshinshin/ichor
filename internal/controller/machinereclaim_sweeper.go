@@ -27,8 +27,8 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// ReclaimCredentialSweeper deletes every break-glass credential Secret older than the maximum TTL. It does not look
-// at any MachineReclaim, so a lost or stuck request
+// ReclaimCredentialSweeper deletes every override credential Secret older than the maximum TTL. It does not look at
+// any MachineReclaim, so a lost or stuck request
 // cannot leave a foreign credential behind, and it runs whether or not reclaim is enabled.
 type ReclaimCredentialSweeper struct {
 	client.Client

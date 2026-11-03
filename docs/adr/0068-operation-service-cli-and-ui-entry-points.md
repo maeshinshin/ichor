@@ -134,7 +134,7 @@ start buttons are on the cluster page. All wording is in `en`/`ja` (the type for
 
 - Opening a pull request for the spec change of a tracked cluster (PR mode, ADR 0056) and creating the operation
   after the merge. Today the CLI/UI refuses and says to change Git first.
-- Break-glass for these writes (ADR 0064).
+- Override for these writes (ADR 0064).
 - A stream instead of polling; a per-machine log of what the executor is doing (the status has phase only).
 - Clearing a failed machine so the operation resumes (ADR 0026 left that open); the screens say to delete and
   start again.

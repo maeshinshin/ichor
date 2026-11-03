@@ -130,7 +130,7 @@ spec:
                     type: string
                   reason:
                     description: |-
-                      reason is the break-glass reason the restore was started under. It is part of the record that
+                      reason is the override reason the restore was started under. It is part of the record that
                       survives the rollback.
                     minLength: 1
                     type: string
@@ -204,10 +204,9 @@ spec:
                     type: boolean
                   breakGlassReason:
                     description: |-
-                      breakGlassReason overrides the last-worker guard for reboot and shutdown: the
-                      reason the operator gave for taking the last schedulable, Ready worker away. It is only honoured
-                      when the creator holds the break-glass verb on the machine (the break-glass webhook checks), and
-                      it goes into the audit record and an Event.
+                      breakGlassReason is the earlier name of overrideReason, kept because CRD fields are append-only
+                      and operations written by older builds carry it. Deprecated: use overrideReason. Ichor's own
+                      CLI and UI never set it; it is read, and gated by the same verb, when overrideReason is empty.
                     minLength: 1
                     type: string
                   confirm:
@@ -232,6 +231,14 @@ spec:
                     x-kubernetes-validations:
                     - message: machineRef.name is required
                       rule: self.name != ''
+                  overrideReason:
+                    description: |-
+                      overrideReason overrides the last-worker guard for reboot and shutdown: the
+                      reason the operator gave for taking the last schedulable, Ready worker away. It is only honoured
+                      when the creator holds the override verb on the machine (the override webhook checks), and
+                      it goes into the audit record and an Event.
+                    minLength: 1
+                    type: string
                   service:
                     description: |-
                       service is the Talos service restart-service restarts. Only kubelet, containerd and cri

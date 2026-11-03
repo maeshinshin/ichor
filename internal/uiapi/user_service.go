@@ -164,7 +164,7 @@ func isEnabledAdmin(u *ichorv1alpha1.IchorUser) bool {
 }
 
 // guardLastAdmin refuses a change that would leave no enabled admin. It is a
-// guard against a slip, not a security boundary: the break-glass certificate
+// guard against a slip, not a security boundary: the override certificate
 // exists.
 func (s *Server) guardLastAdmin(ctx context.Context, u *ichorv1alpha1.IchorUser) error {
 	if !isEnabledAdmin(u) {

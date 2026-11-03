@@ -28,8 +28,8 @@ test('reboot, shutdown, remove and reset are destructive, and the irreversible o
   for (const id of ['restart-service', 'etcd-defrag', 'etcd-forfeit-leadership']) assert.equal(by[id].destructive, false, id)
   for (const id of ['shutdown', 'remove', 'reset']) assert.equal(by[id].typedName, true, id)
   assert.equal(by.reboot.typedName, false)
-  assert.equal(by.reset.breakGlass, true)
-  assert.equal(by.remove.breakGlass, false)
+  assert.equal(by.reset.override, true)
+  assert.equal(by.remove.override, false)
 })
 
 test('the service list never offers etcd, apid, trustd or machined', () => {

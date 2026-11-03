@@ -135,12 +135,12 @@ func TestNodeRestartServiceAndEtcdRefusalsAreStatedBeforeAnyPrompt(t *testing.T)
 	}
 }
 
-func TestNodeResetNeedsABreakGlassReason(t *testing.T) {
+func TestNodeResetNeedsAnOverrideReason(t *testing.T) {
 	c, _ := nodeActionClients(t, true)
 
 	err := runNodeAction(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{},
 		nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_RESET, Confirm: testMachineName})
-	if err == nil || !strings.Contains(err.Error(), "--break-glass") {
+	if err == nil || !strings.Contains(err.Error(), "--override") {
 		t.Fatalf("reset without a reason = %v", err)
 	}
 }

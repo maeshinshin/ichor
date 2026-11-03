@@ -106,6 +106,8 @@ function Home({
   const [ichorVersion, setIchorVersion] = useState<string | null>(null)
   // The newer Ichor release the controller found, or null.
   const [release, setRelease] = useState<string | null>(null)
+  // Automatic patching: whether it is on, and the automatic operation that halted it.
+  const [autoPatch, setAutoPatch] = useState<{ enabled: boolean; halted: string }>({ enabled: false, halted: '' })
   // What Talos and Kubernetes can move to, for the patch hints; null when the list could not be read.
   const [candidates, setCandidates] = useState<{ talos: TargetList | null; kubernetes: TargetList | null; cilium: TargetList | null }>({
     talos: null,
@@ -147,9 +149,12 @@ function Home({
 
   async function loadRelease() {
     try {
-      setRelease(releaseNotice(await operationClient.getIchorInstallation({})))
+      const info = await operationClient.getIchorInstallation({})
+      setRelease(releaseNotice(info))
+      setAutoPatch({ enabled: info.autoPatchEnabled, halted: info.autoPatchHaltedOperation })
     } catch {
       setRelease(null)
+      setAutoPatch({ enabled: false, halted: '' })
     }
   }
 
@@ -191,7 +196,7 @@ function Home({
     kubernetes: candidates.kubernetes,
     cilium: candidates.cilium,
   })
-  const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, opState: currentState, patches, release })
+  const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, opState: currentState, patches, release, autoPatchHalted: autoPatch.halted })
   const recent = recentOperations(ops, 5)
   const targets = tileTargets(current?.op.ref?.name ?? null)
 
@@ -267,6 +272,17 @@ function Home({
                         </>
                       )}
                       {a.kind === 'patch' && <AlertTitle>{t('home.attnPatch', { components: a.components.join(', ') })}</AlertTitle>}
+                      {a.kind === 'autoPatchHalted' && (
+                        <>
+                          <AlertTitle>{t('home.attnAutoPatchHalted')}</AlertTitle>
+                          <AlertDescription>{t('home.attnAutoPatchHaltedHint', { operation: a.operation })}</AlertDescription>
+                          <AlertAction>
+                            <Button asChild variant="link" size="xs">
+                              <Link to="/settings">{t('nav.settings')}</Link>
+                            </Button>
+                          </AlertAction>
+                        </>
+                      )}
                       {a.kind === 'release' && (
                         <>
                           <AlertTitle>{t('home.attnRelease', { version: a.version })}</AlertTitle>
@@ -409,6 +425,11 @@ function Home({
             <Card id="versions">
               <CardHeader>
                 <CardTitle>{t('home.versions')}</CardTitle>
+                {autoPatch.enabled && (
+                  <CardAction>
+                    <Badge variant="secondary">{t('versions.autoPatchOn')}</Badge>
+                  </CardAction>
+                )}
               </CardHeader>
               <CardContent>
                 <ItemGroup>

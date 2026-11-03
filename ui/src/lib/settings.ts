@@ -47,8 +47,16 @@ export function durationInBounds(s: string, b: Bounds): boolean {
 }
 
 type Value = { value: string; source: string } | undefined
-export type Fields = { tokenTtl?: string; refreshLifetime?: string; driftPolicy?: string }
-type Effective = { tokenTtl?: Value; refreshLifetime?: Value; driftPolicy?: Value }
+export type Fields = {
+  tokenTtl?: string
+  refreshLifetime?: string
+  driftPolicy?: string
+  autoPatchEnabled?: boolean
+  autoPatchComponents?: string
+  autoPatchWindow?: string
+  autoPatchAcknowledgedHalt?: string
+}
+type Effective = { tokenTtl?: Value; refreshLifetime?: Value; driftPolicy?: Value; autoPatch?: Value; autoPatchComponents?: Value; autoPatchWindow?: Value }
 
 export type SettingsView = {
   readOnly: boolean
@@ -56,6 +64,7 @@ export type SettingsView = {
   spec?: Fields
   effective?: Effective
   uiEffective?: Effective
+  autoPatchHaltedOperation?: string
 }
 
 export type Form = { tokenTtl: string; refreshLifetime: string; driftPolicy: string }
@@ -76,7 +85,7 @@ export type Source = 'spec' | 'deployment'
 
 // sourceOf says where a setting's value comes from: the spec when it sets it, else what the controller reported
 // (or ichor-ui), else the deployment.
-export function sourceOf(s: SettingsView, key: keyof Fields): Source {
+export function sourceOf(s: SettingsView, key: 'tokenTtl' | 'refreshLifetime' | 'driftPolicy'): Source {
   if (s.spec?.[key] !== undefined) return 'spec'
   const v = s.effective?.[key]?.source ?? s.uiEffective?.[key]?.source
   return v === 'spec' ? 'spec' : 'deployment'
@@ -103,4 +112,52 @@ export function usersProblem(f: Pick<Form, 'tokenTtl' | 'refreshLifetime'>): 'se
 export function lockedReason(s: SettingsView): 'settings.readOnlyAlert' | 'settings.noPermissionAlert' | null {
   if (s.readOnly) return 'settings.readOnlyAlert'
   return s.canEditSettings ? null : 'settings.noPermissionAlert'
+}
+
+// The components automatic patching can apply, in the order it applies them.
+export const AUTO_PATCH_COMPONENTS = ['talos', 'cilium', 'kubernetes']
+
+export type AutoPatchForm = { enabled: boolean; components: string[]; window: string }
+
+// autoPatchFormOf is what the controls show: what the controller reports in force (status.effective), else what the
+// spec sets, else off with every component and no window.
+export function autoPatchFormOf(s: SettingsView): AutoPatchForm {
+  const eff = s.effective
+  const comps = eff?.autoPatchComponents?.value ?? s.spec?.autoPatchComponents ?? ''
+  return {
+    enabled: eff?.autoPatch ? eff.autoPatch.value === 'true' : (s.spec?.autoPatchEnabled ?? false),
+    components: comps === '' ? [...AUTO_PATCH_COMPONENTS] : AUTO_PATCH_COMPONENTS.filter((c) => comps.split(',').includes(c)),
+    window: eff?.autoPatchWindow?.value ?? s.spec?.autoPatchWindow ?? '',
+  }
+}
+
+// autoPatchSource says where the switch's value comes from.
+export function autoPatchSource(s: SettingsView): Source {
+  if (s.spec?.autoPatchEnabled !== undefined) return 'spec'
+  return s.effective?.autoPatch?.source === 'spec' ? 'spec' : 'deployment'
+}
+
+// toggleComponent adds or removes a component, keeping the canonical order.
+export function toggleComponent(components: string[], name: string, on: boolean): string[] {
+  return AUTO_PATCH_COMPONENTS.filter((c) => (c === name ? on : components.includes(c)))
+}
+
+const WINDOW = /^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/
+
+// autoPatchProblem is the i18n key of what is wrong with the form, or null. An empty window means any time; the
+// window may wrap midnight; at least one component must be selected (none would be read as all).
+export function autoPatchProblem(f: AutoPatchForm): 'settings.badWindow' | 'settings.noComponent' | null {
+  if (f.window !== '' && (!WINDOW.test(f.window) || f.window.slice(0, 5) === f.window.slice(6))) return 'settings.badWindow'
+  return f.components.length === 0 ? 'settings.noComponent' : null
+}
+
+// autoPatchChanges lists only what differs from the starting form; all components are sent as the empty list.
+export function autoPatchChanges(before: AutoPatchForm, after: AutoPatchForm): Fields {
+  const out: Fields = {}
+  if (before.enabled !== after.enabled) out.autoPatchEnabled = after.enabled
+  if (before.components.join(',') !== after.components.join(',')) {
+    out.autoPatchComponents = after.components.length === AUTO_PATCH_COMPONENTS.length ? '' : after.components.join(',')
+  }
+  if (before.window !== after.window) out.autoPatchWindow = after.window
+  return out
 }

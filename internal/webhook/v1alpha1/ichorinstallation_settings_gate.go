@@ -44,6 +44,18 @@ func orUnset(s string) string {
 	return s
 }
 
+// boolOf is the update check switch as "true", "false" or "" when unset.
+func boolOf(c *ichorv1alpha1.IchorUpdateCheckSettings) string {
+	switch {
+	case c == nil || c.Enabled == nil:
+		return ""
+	case *c.Enabled:
+		return "true"
+	default:
+		return "false"
+	}
+}
+
 func durOf(d *metav1.Duration) string {
 	if d == nil {
 		return ""
@@ -100,6 +112,7 @@ func settingChanges(oldSpec, newSpec *ichorv1alpha1.IchorInstallationSpec) []set
 		{"spec.users.tokenTTL", durOf(oU.TokenTTL), durOf(nU.TokenTTL), set},
 		{"spec.users.refreshLifetime", durOf(oU.RefreshLifetime), durOf(nU.RefreshLifetime), set},
 		{"spec.defaults.driftPolicy", oD.DriftPolicy, nD.DriftPolicy, set},
+		{"spec.updateCheck.enabled", boolOf(oldSpec.UpdateCheck), boolOf(newSpec.UpdateCheck), set},
 	}
 
 	return slices.DeleteFunc(all, func(c settingChange) bool { return c.old == c.new })

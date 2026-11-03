@@ -233,7 +233,7 @@ function Home({
                         <>
                           <AlertTitle>{t('home.attnPending', { n: a.count })}</AlertTitle>
                           <AlertAction>
-                            <Button asChild variant="link" size="sm">
+                            <Button asChild variant="link" size="xs">
                               <Link to="/nodes">{t('home.review')}</Link>
                             </Button>
                           </AlertAction>
@@ -243,7 +243,7 @@ function Home({
                         <>
                           <AlertTitle>{t('home.attnConfig', { n: a.count })}</AlertTitle>
                           <AlertAction>
-                            <StartOperationDialog kind="config" cluster={ref} label={t('ops.action.apply')} disabled={!!busy} />
+                            <StartOperationDialog kind="config" cluster={ref} label={t('ops.action.apply')} disabled={!!busy} size="xs" />
                           </AlertAction>
                         </>
                       )}

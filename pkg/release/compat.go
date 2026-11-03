@@ -36,15 +36,16 @@ type kubernetesRange struct {
 	min, max string
 }
 
-// talosKubernetesNewer maps the Talos minors newer than the machinery in go.mod to the Kubernetes
-// minors they support. upgrade.KubernetesPairing (machinery's compatibility table) decides every
-// minor it knows, so this table is consulted only for the others. It is empty until go.mod pins a
-// machinery that knows a newer Talos minor; then add its minor here from the Talos support matrix,
-// https://docs.siderolabs.com/talos/<minor>/getting-started/support-matrix.
-//
-// Machinery v1.14.3 covers Talos 1.14 with 1.32.0 to 1.37.99. The Talos 1.14 support matrix lists
-// 1.33 to 1.37 as the Kubernetes releases of that Talos. Machinery decides here, as the rule says.
-var talosKubernetesNewer = map[string]kubernetesRange{}
+// talosKubernetes maps a Talos minor to the Kubernetes minors its official support matrix lists
+// (https://docs.siderolabs.com/talos/<minor>/getting-started/support-matrix). When a Talos minor has
+// an entry here the entry decides the pair, and machinery only bounds it: a pair the table lists
+// must still pass upgrade.KubernetesPairing (ADR 0115 amendment 2026-11-03). Machinery decides the
+// Talos minors the table lacks.
+var talosKubernetes = map[string]kubernetesRange{
+	// https://docs.siderolabs.com/talos/v1.14/getting-started/support-matrix lists Kubernetes
+	// 1.33, 1.34, 1.35, 1.36 and 1.37. Machinery v1.14.5 accepts 1.32.0 to 1.37.99 for this minor.
+	"1.14": {min: "1.33", max: "1.37"},
+}
 
 // ciliumKubernetes maps a Cilium minor to the Kubernetes minors its release notes list as e2e tested
 // (the minors are all guaranteed compatible). Every Cilium minor is entered from its own page;
@@ -73,24 +74,30 @@ func inRange(k string, r kubernetesRange) bool {
 }
 
 // TalosKubernetesError is nil when the Talos release supports the Kubernetes release (ADR 0115).
-// Machinery's compatibility table decides every Talos minor it knows; the typed table decides the
-// newer ones; any other Talos is not known, and not compatible.
+// A Talos minor with an entry in the typed table is decided by the table, and machinery must still
+// accept the pair (it bounds the table). Machinery's compatibility table decides every other Talos
+// minor it knows; any other Talos is not known, and not compatible.
 func TalosKubernetesError(talos, kubernetes string) error {
 	if !semver.IsValid(talos) || !semver.IsValid(kubernetes) {
 		return fmt.Errorf("talos %q or kubernetes %q is not a version", talos, kubernetes)
 	}
 
 	pairErr := upgrade.KubernetesPairing(kubernetes, talos)
-	if pairErr == nil {
+
+	if r, ok := talosKubernetes[minorKey(talos)]; ok {
+		if !inRange(kubernetes, r) {
+			return fmt.Errorf("talos %s supports kubernetes %s to %s, not %s", talos, r.min, r.max, kubernetes)
+		}
+
+		if pairErr != nil {
+			return fmt.Errorf("talos %s with kubernetes %s is outside machinery's range: %w", talos, kubernetes, pairErr)
+		}
+
 		return nil
 	}
 
-	if r, ok := talosKubernetesNewer[minorKey(talos)]; ok {
-		if inRange(kubernetes, r) {
-			return nil
-		}
-
-		return fmt.Errorf("talos %s supports kubernetes %s to %s, not %s", talos, r.min, r.max, kubernetes)
+	if pairErr == nil {
+		return nil
 	}
 
 	if machineryKnows(talos) {

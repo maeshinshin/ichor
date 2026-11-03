@@ -53,7 +53,7 @@ The rule stays: the UI and CLI change the world only by writing CRs, and the con
 5. **etcd snapshot** (`EtcdSnapshot`): a backup operation writing to the cluster's configured backup target (needs the `os:etcd:backup` role the controller already has as admin). Risk low.
 6. **etcd forfeit leadership** (`EtcdForfeitLeadership`): hand leadership to another member before maintenance. Operation `kind: EtcdForfeitLeadership` on the leader. Risk low-medium.
 7. **etcd leave / remove member** (`EtcdLeaveCluster`, `EtcdRemoveMemberByID`): for retiring a control plane node or removing a dead member. Part of a node-removal operation, not a stand-alone button. Risk high: can break quorum; the operation re-checks member count and needs an explicit confirmation field in the CR.
-8. **Reset a node** (`Reset`, graceful, wipe system/ephemeral or all): the destructive path to re-provision. Operation `kind: Reset` with `wipe` scope and a `confirm` field equal to the machine name, break-glass gated (ADR 0064). Risk highest: loses data.
+8. **Reset a node** (`Reset`, graceful, wipe system/ephemeral or all): the destructive path to re-provision. Operation `kind: Reset` with `wipe` scope and a `confirm` field equal to the machine name, override gated (ADR 0064). Risk highest: loses data.
 9. **Packet capture** (`PacketCapture`, bounded by duration and size): a diagnostic that streams pcap bytes. Operation `kind: PacketCapture` with an interface and a BPF filter, result delivered as a download; the capture can contain secrets on the wire, so it is admin-gated and time-boxed. Risk medium for data exposure.
 10. **Rotate or refresh certificates, upgrade, bootstrap**: already covered by existing operations (ADR 0068, `carotation`).
 

@@ -2,7 +2,7 @@
 // @generated from file ichor/v1alpha1/reclaim.proto (package ichor.v1alpha1, syntax proto3)
 /* eslint-disable */
 
-// ReclaimService backs the break-glass "Reclaim a configured machine" dialog
+// ReclaimService backs the override "Reclaim a configured machine" dialog
 // (docs/adr/0103, 2.2). It creates a MachineReclaim and its short-lived
 // credential Secret as the caller and later writes spec.confirmUUID, nothing
 // else. The controller does the node work. Every call is refused when the

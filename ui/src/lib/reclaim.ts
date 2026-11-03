@@ -1,4 +1,4 @@
-// Pure helpers for the break-glass reclaim dialog (docs/adr/0103, 2.2).
+// Pure helpers for the override reclaim dialog (docs/adr/0103, 2.2).
 
 // uuidMatches is the typed consent: the text the person typed equals the node's UUID, ignoring case and
 // surrounding space. An empty UUID never matches, so a missing inspection cannot be confirmed.

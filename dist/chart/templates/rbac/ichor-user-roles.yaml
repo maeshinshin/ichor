@@ -249,7 +249,7 @@ rules:
   - talosconfigpatches
   - talosmachines
   verbs:
-  - break-glass
+  - override
 - apiGroups:
   - ichor.maesh.dev
   resources:

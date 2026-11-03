@@ -36,7 +36,7 @@ const (
 	MachineReclaimExpired               MachineReclaimPhase = "Expired"
 )
 
-// Names shared by the controller, the webhook and the UI API for the break-glass credential.
+// Names shared by the controller, the webhook and the UI API for the override credential.
 // ReclaimCredentialSecretType is the Secret type of the foreign talosconfig. Its only key is
 // ReclaimCredentialKey.
 const ReclaimCredentialSecretType corev1.SecretType = "ichor.maesh.dev/foreign-talosconfig"

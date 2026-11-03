@@ -442,7 +442,7 @@ Pick one of these:
    (it health-checks them), and it must itself keep the client address.
 3. If neither is possible, accept the shared counter and know its effect: it
    is a slowdown (up to 15 minutes for one user name), never a lock-out, and
-   an administrator can still be reached with `kubectl` and the break-glass
+   an administrator can still be reached with `kubectl` and the override
    credential below. Pods inside the cluster have their own addresses and are
    not affected.
 - A user may grant only roles they hold (admin: any); Kubernetes RBAC alone
@@ -464,16 +464,16 @@ To end every existing session of a user, revoke their sessions. Changing a
 user's password also ends their earlier sessions. A session lasts at most 12
 hours.
 
-## Break-glass
+## Override
 
-Ichor keeps a break-glass credential that does not depend on login. It is the
+Ichor keeps an override credential that does not depend on login. It is the
 `admin` client certificate in `~/.ichor/clusters/<name>/kubeconfig`, and the
 Talos `os:admin` identity in the same folder. If ichor-ui is down, the issuer is
 broken, or every user is locked out, use this credential.
 
 Once users are on, keep this folder offline and use it only in an incident.
-Do not confuse it with the break-glass write in
-[ADR 0065](../adr/0065-break-glass.md), which is an RBAC verb that guards destructive operations.
+Do not confuse it with the override write in
+[ADR 0065](../adr/0065-override.md), which is an RBAC verb that guards destructive operations.
 
 ## Control plane rollout
 

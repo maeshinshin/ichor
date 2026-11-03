@@ -128,7 +128,7 @@ func liveRestoreText(s liveRestoreSpec, snap *pb.EtcdSnapshot, p *pb.PlanOperati
 	return b.String()
 }
 
-// runLiveRestore lists the backups, plans, confirms with the typed cluster name and a break-glass
+// runLiveRestore lists the backups, plans, confirms with the typed cluster name and an override
 // reason, and starts the operation. --yes skips the y/N question only: the name is still needed.
 func runLiveRestore(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, s liveRestoreSpec) error {
 	cluster, err := resolveCluster(ctx, c, s.Cluster)
@@ -142,9 +142,9 @@ func runLiveRestore(ctx context.Context, c *apiClients, in io.Reader, out, errw 
 		enableFailover(ctx, c, errw, cluster) // read now, while the control planes still answer
 	}
 
-	bg := breakGlassOf(apiOpts)
+	bg := overrideOf(apiOpts)
 	if bg == nil {
-		return errors.New("restore --live: it needs --break-glass <reason> (and the break-glass RBAC verb on the cluster); the reason goes into the audit record")
+		return errors.New("restore --live: it needs --override <reason> (and the override RBAC verb on the cluster); the reason goes into the audit record")
 	}
 
 	list, err := c.Operation.ListEtcdBackups(ctx, connect.NewRequest(&pb.ListEtcdBackupsRequest{Cluster: cluster}))
@@ -157,7 +157,7 @@ func runLiveRestore(ctx context.Context, c *apiClients, in io.Reader, out, errw 
 		return err
 	}
 
-	req := &pb.EtcdRestoreRequest{Backup: backup.GetRef(), Snapshot: snap.GetName(), BreakGlass: bg}
+	req := &pb.EtcdRestoreRequest{Backup: backup.GetRef(), Snapshot: snap.GetName(), Override: bg}
 
 	plan, err := c.Operation.PlanOperation(ctx, connect.NewRequest(&pb.PlanOperationRequest{
 		Cluster: cluster, Kind: pb.OperationKind_OPERATION_KIND_ETCD_RESTORE, EtcdRestore: req,

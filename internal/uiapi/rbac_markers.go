@@ -102,8 +102,8 @@ package uiapi
 // ichorUI.oidc.impersonate.*). Never serviceaccounts, userextras, or a system: name.
 // +kubebuilder:rbac:groups="",resources=groups,resourceNames="ichor:viewer";"ichor:operator";"ichor:admin",verbs=impersonate
 
-// Break-glass (docs/adr/0065) records a Warning Event on the resource it
-// acted on. create only, on Events: no get/list/update/delete. The break-glass
+// Override (docs/adr/0065) records a Warning Event on the resource it
+// acted on. create only, on Events: no get/list/update/delete. The override
 // permission itself is not here: it is the user's, checked with a
 // SelfSubjectAccessReview made as the user (every authenticated user may ask
 // that), so the ServiceAccount gains nothing for it.

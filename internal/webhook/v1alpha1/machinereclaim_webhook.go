@@ -120,7 +120,7 @@ func (h *MachineReclaimHandler) confirm(ctx context.Context, req admission.Reque
 }
 
 func (h *MachineReclaimHandler) needVerb(ctx context.Context, req admission.Request) admission.Response {
-	if r := (&BreakGlassHandler{Client: h.Client}).require(ctx, req, ichorv1alpha1.ReclaimVerb, "machinereclaims", "", req.Name,
+	if r := (&OverrideHandler{Client: h.Client}).require(ctx, req, ichorv1alpha1.ReclaimVerb, "machinereclaims", "", req.Name,
 		fmt.Sprintf("reclaiming a machine needs the %q verb on machinereclaims "+
 			"(bind the ClusterRole ichor-machine-reclaimer with a RoleBinding)", ichorv1alpha1.ReclaimVerb)); r != nil {
 		return *r

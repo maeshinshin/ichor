@@ -160,12 +160,12 @@ func (x *Condition) GetLastTransitionTime() *timestamppb.Timestamp {
 	return nil
 }
 
-// BreakGlass asks for an emergency direct write (docs/adr/0065). Setting it
+// Override asks for an emergency direct write (docs/adr/0065). Setting it
 // on a request means "if this change would be a pull request or is refused
 // because Argo CD tracks the resource, write it now and open the matching pull
 // request". The backend allows it only to a signed-in user whose Kubernetes RBAC
-// grants the break-glass verb on the resource, and refuses it otherwise.
-type BreakGlass struct {
+// grants the override verb on the resource, and refuses it otherwise.
+type Override struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// reason is required: it is recorded in the audit record, the Kubernetes
 	// Event and the pull request description.
@@ -174,20 +174,20 @@ type BreakGlass struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *BreakGlass) Reset() {
-	*x = BreakGlass{}
+func (x *Override) Reset() {
+	*x = Override{}
 	mi := &file_ichor_v1alpha1_common_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *BreakGlass) String() string {
+func (x *Override) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*BreakGlass) ProtoMessage() {}
+func (*Override) ProtoMessage() {}
 
-func (x *BreakGlass) ProtoReflect() protoreflect.Message {
+func (x *Override) ProtoReflect() protoreflect.Message {
 	mi := &file_ichor_v1alpha1_common_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -199,12 +199,12 @@ func (x *BreakGlass) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use BreakGlass.ProtoReflect.Descriptor instead.
-func (*BreakGlass) Descriptor() ([]byte, []int) {
+// Deprecated: Use Override.ProtoReflect.Descriptor instead.
+func (*Override) Descriptor() ([]byte, []int) {
 	return file_ichor_v1alpha1_common_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *BreakGlass) GetReason() string {
+func (x *Override) GetReason() string {
 	if x != nil {
 		return x.Reason
 	}
@@ -309,9 +309,8 @@ const file_ichor_v1alpha1_common_proto_rawDesc = "" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x16\n" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x18\n" +
 	"\amessage\x18\x04 \x01(\tR\amessage\x12L\n" +
-	"\x14last_transition_time\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"$\n" +
-	"\n" +
-	"BreakGlass\x12\x16\n" +
+	"\x14last_transition_time\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"\"\n" +
+	"\bOverride\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\"\xb2\x01\n" +
 	"\vAuditRecord\x12\x14\n" +
 	"\x05actor\x18\x01 \x01(\tR\x05actor\x12*\n" +
@@ -337,7 +336,7 @@ var file_ichor_v1alpha1_common_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_ichor_v1alpha1_common_proto_goTypes = []any{
 	(*ObjectRef)(nil),             // 0: ichor.v1alpha1.ObjectRef
 	(*Condition)(nil),             // 1: ichor.v1alpha1.Condition
-	(*BreakGlass)(nil),            // 2: ichor.v1alpha1.BreakGlass
+	(*Override)(nil),              // 2: ichor.v1alpha1.Override
 	(*AuditRecord)(nil),           // 3: ichor.v1alpha1.AuditRecord
 	(*timestamppb.Timestamp)(nil), // 4: google.protobuf.Timestamp
 }

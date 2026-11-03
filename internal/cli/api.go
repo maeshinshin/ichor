@@ -75,10 +75,10 @@ type apiOptions struct {
 	IchorNamespace string
 	// Local skips ichor-ui and computes from the Kubernetes API.
 	Local bool
-	// BreakGlass is the reason of an emergency override (docs/adr/0065); empty
-	// means off. Setting it implies Local: break-glass is decided by the
+	// Override is the reason of an emergency override (docs/adr/0065); empty
+	// means off. Setting it implies Local: override is decided by the
 	// caller's own RBAC, never by the backend's ServiceAccount.
-	BreakGlass string
+	Override string
 	// CAFile is a PEM bundle trusted, besides the system roots, when ichor-ui
 	// serves TLS on its main port (chart ichorUI.tls.secretName).
 	CAFile string
@@ -87,13 +87,13 @@ type apiOptions struct {
 	TLSServerName string
 }
 
-// breakGlassOf is the request field the --break-glass flag fills; nil when off.
-func breakGlassOf(opts apiOptions) *pb.BreakGlass {
-	if opts.BreakGlass == "" {
+// overrideOf is the request field the --override flag fills; nil when off.
+func overrideOf(opts apiOptions) *pb.Override {
+	if opts.Override == "" {
 		return nil
 	}
 
-	return &pb.BreakGlass{Reason: opts.BreakGlass}
+	return &pb.Override{Reason: opts.Override}
 }
 
 // addAPIFlags registers the shared flags on a command group.
@@ -107,9 +107,9 @@ func addAPIFlags(cmd *cobra.Command) {
 		"PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env "+caFileEnv+")")
 	f.StringVar(&apiOpts.TLSServerName, "tls-server-name", "",
 		"name on ichor-ui's serving certificate, when it is not the Service's DNS name (<service>.<namespace>.svc)")
-	f.StringVar(&apiOpts.BreakGlass, "break-glass", "",
+	f.StringVar(&apiOpts.Override, "override", "",
 		"incident only: override a guard (reset a node, restore etcd); the value is the reason, "+
-			"recorded in the audit record and an Event. Needs the break-glass RBAC verb on the resource; implies --local")
+			"recorded in the audit record and an Event. Needs the override RBAC verb on the resource; implies --local")
 }
 
 // apiDeps is connectAPI's dependencies. Forward and FreePort are the seams
@@ -201,9 +201,9 @@ var errTLSVerify = errors.New("ichor-ui's TLS certificate cannot be verified")
 // requireBackend turns the fallback into errBackendRequired, for the
 // commands that need the backend's Talos identity.
 func connectAPI(ctx context.Context, opts apiOptions, deps apiDeps, requireBackend bool) (*apiClients, error) {
-	if opts.BreakGlass != "" {
+	if opts.Override != "" {
 		if requireBackend {
-			return nil, fmt.Errorf("--break-glass applies to writes, which never need the backend: %w", errBackendRequired)
+			return nil, fmt.Errorf("--override applies to writes, which never need the backend: %w", errBackendRequired)
 		}
 
 		opts.Local = true

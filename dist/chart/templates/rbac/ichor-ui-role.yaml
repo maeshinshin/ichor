@@ -3,7 +3,7 @@
 # internal/uiapi/rbac_markers.go (ADR 0018), minus its secrets rule -- see
 # ichor-ui-secrets-role.yaml's own comment for where that moved and why. Deliberately
 # narrower than manager-role otherwise: no watch (this backend is a stateless reader with
-# no informer cache), no events beyond create (break-glass, ADR 0065) and list (the operation page, ADR 0068), no finalizers, no status subresource. Kept in its own
+# no informer cache), no events beyond create (override, ADR 0065) and list (the operation page, ADR 0068), no finalizers, no status subresource. Kept in its own
 # file so it never merges with manager-role.yaml -- the controller's and the UI backend's
 # permissions must stay separate (architecture.md "Trust").
 apiVersion: rbac.authorization.k8s.io/v1

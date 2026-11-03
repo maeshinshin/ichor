@@ -26,12 +26,12 @@ message Condition {
   google.protobuf.Timestamp last_transition_time = 5;
 }
 
-// BreakGlass asks for an emergency direct write (docs/adr/0065). Setting it
+// Override asks for an emergency direct write (docs/adr/0065). Setting it
 // on a request means "if this change would be a pull request or is refused
 // because Argo CD tracks the resource, write it now and open the matching pull
 // request". The backend allows it only to a signed-in user whose Kubernetes RBAC
-// grants the break-glass verb on the resource, and refuses it otherwise.
-message BreakGlass {
+// grants the override verb on the resource, and refuses it otherwise.
+message Override {
   // reason is required: it is recorded in the audit record, the Kubernetes
   // Event and the pull request description.
   string reason = 1;

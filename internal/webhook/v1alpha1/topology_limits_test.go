@@ -59,7 +59,7 @@ func topologyMachine(cluster, role, approval string) *ichorv1alpha1.TalosMachine
 }
 
 // grantLastWorkerRights lets user read and write clusters and machines, and (if glass) hold the
-// break-glass verb on both.
+// override verb on both.
 func grantLastWorkerRights(user string, glass bool) {
 	bindRole("lw-test-"+user, user, rbacv1.PolicyRule{
 		APIGroups: []string{ichorGroup}, Resources: []string{resClusters, bgUnitMachines}, Verbs: writeVerbs(glass),
@@ -121,7 +121,7 @@ var _ = Describe("schedulable: false with zero workers", func() {
 	}
 	setSchedulable := func(cluster, value string) error { return setSchedulableAs(k8sClient, cluster, value) }
 
-	// The suite's own client is cluster-admin and so holds break-glass; the guard's refusals are
+	// The suite's own client is cluster-admin and so holds override; the guard's refusals are
 	// checked as a user who does not (ADR 0065, amended), and the override as one who does.
 	BeforeEach(func() {
 		grantLastWorkerRights(plainUser, false)
@@ -136,12 +136,12 @@ var _ = Describe("schedulable: false with zero workers", func() {
 		err := setSchedulableAs(asUser(plainUser), cluster, "false")
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("schedulable"))
-		Expect(err.Error()).To(ContainSubstring("break-glass"))
+		Expect(err.Error()).To(ContainSubstring("override"))
 
 		Expect(setSchedulableAs(asUser(glassUser), cluster, "false")).To(Succeed())
 	})
 
-	It("lets a break-glass holder remove the last worker and refuses a plain user", func() {
+	It("lets an override holder remove the last worker and refuses a plain user", func() {
 		cluster := topologyCluster(3, "false")
 		w := topologyMachine(cluster, roleWorker, "")
 		Expect(approve(w)).To(Succeed())
@@ -150,7 +150,7 @@ var _ = Describe("schedulable: false with zero workers", func() {
 
 		err := asUser(plainUser).Delete(ctx, w)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("break-glass"))
+		Expect(err.Error()).To(ContainSubstring("override"))
 
 		Expect(asUser(glassUser).Delete(ctx, w)).To(Succeed())
 	})

@@ -65,7 +65,7 @@ flows:
   needs: [talosoperations create, talosoperations/shutdown start]
 - name: reset or shut down a node (ichor node reset)
   role: admin
-  needs: [talosoperations/node-reset start, talosoperations/node-shutdown start, talosmachines break-glass]
+  needs: [talosoperations/node-reset start, talosoperations/node-shutdown start, talosmachines override]
 - name: reclaim a machine (ichor machine reclaim)
   role: admin
   needs: [machinereclaims create, machinereclaims reclaim, machinereclaims get, machinereclaims update]

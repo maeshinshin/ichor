@@ -74,7 +74,7 @@ func asUser(ctx context.Context) context.Context {
 
 // reviewing wraps c so a SelfSubjectAccessReview is answered with allowed
 // and recorded in asked; everything else goes through. It stands in for RBAC
-// in the break-glass tests (docs/adr/0065).
+// in the override tests (docs/adr/0065).
 func reviewing(c client.Client, allowed bool, asked *[]authv1.ResourceAttributes) client.Client {
 	return interceptor.NewClient(c.(client.WithWatch), interceptor.Funcs{
 		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {

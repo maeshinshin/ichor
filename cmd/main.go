@@ -364,10 +364,10 @@ func main() {
 			must(webhookv1alpha1.SetupTalosClusterWebhookWithManager(mgr, settingsReader), "Failed to create webhook", "webhook", "TalosCluster")
 			must(webhookv1alpha1.SetupTalosConfigPatchWebhookWithManager(mgr, ns), "Failed to create webhook", "webhook", "TalosConfigPatch")
 			must(webhookv1alpha1.SetupTalosMachineWebhookWithManager(mgr), "Failed to create webhook", "webhook", "TalosMachine")
-			// ICHOR_BREAK_GLASS_EXEMPT_USERS adds exact usernames (comma separated) to the
+			// ICHOR_OVERRIDE_EXEMPT_USERS adds exact usernames (comma separated) to the
 			// built-in list (ADR 0065).
 			exempt := webhookv1alpha1.DefaultExemptUsers(ns, os.Getenv("POD_SERVICE_ACCOUNT"))
-			for u := range strings.SplitSeq(os.Getenv("ICHOR_BREAK_GLASS_EXEMPT_USERS"), ",") {
+			for u := range strings.SplitSeq(os.Getenv("ICHOR_OVERRIDE_EXEMPT_USERS"), ",") {
 				if u = strings.TrimSpace(u); u != "" {
 					exempt = append(exempt, u)
 				}
@@ -376,9 +376,9 @@ func main() {
 				SettingsReadOnly: settingsReadOnly, ExemptUsers: exempt,
 				Recorder: mgr.GetEventRecorderFor("ichor-settings"), //nolint:staticcheck // typed against record.EventRecorder, as above
 			}), "Failed to create webhook", "webhook", "IchorInstallation")
-			must(webhookv1alpha1.SetupBreakGlassWebhookWithManager(mgr, webhookv1alpha1.BreakGlassOptions{
+			must(webhookv1alpha1.SetupOverrideWebhookWithManager(mgr, webhookv1alpha1.OverrideOptions{
 				ExemptUsers: exempt,
-			}), "Failed to create webhook", "webhook", "BreakGlass")
+			}), "Failed to create webhook", "webhook", "Override")
 			must(webhookv1alpha1.SetupMachineReclaimWebhookWithManager(mgr), "Failed to create webhook", "webhook", "MachineReclaim")
 			must(webhookv1alpha1.SetupCredentialRequestWebhookWithManager(mgr), "Failed to create webhook", "webhook", "TalosCredentialRequest")
 			mgr.GetWebhookServer() // idempotent; makes sure the server is a runnable even if no handler did

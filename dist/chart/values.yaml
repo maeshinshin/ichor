@@ -43,7 +43,7 @@ manager:
       valueFrom:
         fieldRef:
           fieldPath: spec.nodeName
-    # This pod's ServiceAccount: the break-glass webhook never blocks it (ADR 0065).
+    # This pod's ServiceAccount: the override webhook never blocks it (ADR 0065).
     - name: POD_SERVICE_ACCOUNT
       valueFrom:
         fieldRef:

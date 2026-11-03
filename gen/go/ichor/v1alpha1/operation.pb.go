@@ -810,7 +810,7 @@ func (x *ListEtcdBackupsResponse) GetBackups() []*EtcdBackup {
 }
 
 // EtcdRestoreRequest names the snapshot of an etcd-restore plan or create (ADR 0089). Starting
-// it needs the cluster's name typed and a break-glass reason: it rewinds the whole cluster.
+// it needs the cluster's name typed and an override reason: it rewinds the whole cluster.
 type EtcdRestoreRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// backup is the TalosEtcdBackup whose storage holds the snapshot.
@@ -819,9 +819,9 @@ type EtcdRestoreRequest struct {
 	Snapshot string `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
 	// confirm is the cluster's name, typed.
 	Confirm string `protobuf:"bytes,3,opt,name=confirm,proto3" json:"confirm,omitempty"`
-	// break_glass is required: the reason goes to the audit record and the Event on the cluster
-	// (ADR 0065), and the caller must hold the break-glass verb on the TalosCluster.
-	BreakGlass    *BreakGlass `protobuf:"bytes,4,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
+	// override is required: the reason goes to the audit record and the Event on the cluster
+	// (ADR 0065), and the caller must hold the override verb on the TalosCluster.
+	Override      *Override `protobuf:"bytes,4,opt,name=override,proto3" json:"override,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -877,9 +877,9 @@ func (x *EtcdRestoreRequest) GetConfirm() string {
 	return ""
 }
 
-func (x *EtcdRestoreRequest) GetBreakGlass() *BreakGlass {
+func (x *EtcdRestoreRequest) GetOverride() *Override {
 	if x != nil {
-		return x.BreakGlass
+		return x.Override
 	}
 	return nil
 }
@@ -895,9 +895,9 @@ type NodeActionRequest struct {
 	AllowLeader bool `protobuf:"varint,4,opt,name=allow_leader,json=allowLeader,proto3" json:"allow_leader,omitempty"`
 	// confirm is the machine's name, typed, for reset (and remove).
 	Confirm string `protobuf:"bytes,5,opt,name=confirm,proto3" json:"confirm,omitempty"`
-	// break_glass is required for reset: the reason, checked against the break-glass
+	// override is required for reset: the reason, checked against the override
 	// verb on the machine (ADR 0065).
-	BreakGlass    *BreakGlass `protobuf:"bytes,6,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
+	Override      *Override `protobuf:"bytes,6,opt,name=override,proto3" json:"override,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -967,9 +967,9 @@ func (x *NodeActionRequest) GetConfirm() string {
 	return ""
 }
 
-func (x *NodeActionRequest) GetBreakGlass() *BreakGlass {
+func (x *NodeActionRequest) GetOverride() *Override {
 	if x != nil {
-		return x.BreakGlass
+		return x.Override
 	}
 	return nil
 }
@@ -1914,13 +1914,13 @@ type PlanOperationResponse struct {
 	// cluster's only approved control plane, so the Kubernetes API is down for
 	// the length of the reboot.
 	KubernetesApiUnavailable bool `protobuf:"varint,11,opt,name=kubernetes_api_unavailable,json=kubernetesApiUnavailable,proto3" json:"kubernetes_api_unavailable,omitempty"`
-	// steps, warning, confirm_name and break_glass_required describe a node action in plain
+	// steps, warning, confirm_name and override_required describe a node action in plain
 	// English: what happens in order, what the user should know first, the name they must type
-	// (empty when no typing is needed), and whether a break-glass reason is needed.
-	Steps              []string `protobuf:"bytes,12,rep,name=steps,proto3" json:"steps,omitempty"`
-	Warning            string   `protobuf:"bytes,13,opt,name=warning,proto3" json:"warning,omitempty"`
-	ConfirmName        string   `protobuf:"bytes,14,opt,name=confirm_name,json=confirmName,proto3" json:"confirm_name,omitempty"`
-	BreakGlassRequired bool     `protobuf:"varint,15,opt,name=break_glass_required,json=breakGlassRequired,proto3" json:"break_glass_required,omitempty"`
+	// (empty when no typing is needed), and whether an override reason is needed.
+	Steps            []string `protobuf:"bytes,12,rep,name=steps,proto3" json:"steps,omitempty"`
+	Warning          string   `protobuf:"bytes,13,opt,name=warning,proto3" json:"warning,omitempty"`
+	ConfirmName      string   `protobuf:"bytes,14,opt,name=confirm_name,json=confirmName,proto3" json:"confirm_name,omitempty"`
+	OverrideRequired bool     `protobuf:"varint,15,opt,name=override_required,json=overrideRequired,proto3" json:"override_required,omitempty"`
 	// snapshot_time is when the snapshot an etcd restore would put back was taken; everything after it is lost.
 	SnapshotTime *timestamppb.Timestamp `protobuf:"bytes,16,opt,name=snapshot_time,json=snapshotTime,proto3" json:"snapshot_time,omitempty"`
 	// Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
@@ -2065,9 +2065,9 @@ func (x *PlanOperationResponse) GetConfirmName() string {
 	return ""
 }
 
-func (x *PlanOperationResponse) GetBreakGlassRequired() bool {
+func (x *PlanOperationResponse) GetOverrideRequired() bool {
 	if x != nil {
-		return x.BreakGlassRequired
+		return x.OverrideRequired
 	}
 	return false
 }
@@ -2717,21 +2717,19 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x06backup\x18\x01 \x01(\v2\x1a.ichor.v1alpha1.EtcdBackupR\x06backup\x121\n" +
 	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"O\n" +
 	"\x17ListEtcdBackupsResponse\x124\n" +
-	"\abackups\x18\x01 \x03(\v2\x1a.ichor.v1alpha1.EtcdBackupR\abackups\"\xba\x01\n" +
+	"\abackups\x18\x01 \x03(\v2\x1a.ichor.v1alpha1.EtcdBackupR\abackups\"\xb3\x01\n" +
 	"\x12EtcdRestoreRequest\x121\n" +
 	"\x06backup\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x06backup\x12\x1a\n" +
 	"\bsnapshot\x18\x02 \x01(\tR\bsnapshot\x12\x18\n" +
-	"\aconfirm\x18\x03 \x01(\tR\aconfirm\x12;\n" +
-	"\vbreak_glass\x18\x04 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassR\n" +
-	"breakGlass\"\x90\x02\n" +
+	"\aconfirm\x18\x03 \x01(\tR\aconfirm\x124\n" +
+	"\boverride\x18\x04 \x01(\v2\x18.ichor.v1alpha1.OverrideR\boverride\"\x89\x02\n" +
 	"\x11NodeActionRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x122\n" +
 	"\x06action\x18\x02 \x01(\x0e2\x1a.ichor.v1alpha1.NodeActionR\x06action\x12\x18\n" +
 	"\aservice\x18\x03 \x01(\tR\aservice\x12!\n" +
 	"\fallow_leader\x18\x04 \x01(\bR\vallowLeader\x12\x18\n" +
-	"\aconfirm\x18\x05 \x01(\tR\aconfirm\x12;\n" +
-	"\vbreak_glass\x18\x06 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassR\n" +
-	"breakGlass\"\x85\x02\n" +
+	"\aconfirm\x18\x05 \x01(\tR\aconfirm\x124\n" +
+	"\boverride\x18\x06 \x01(\v2\x18.ichor.v1alpha1.OverrideR\boverride\"\x85\x02\n" +
 	"\x10OperationMachine\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05phase\x18\x02 \x01(\tR\x05phase\x12\x12\n" +
@@ -2812,7 +2810,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x06target\x18\x03 \x01(\tR\x06target\x12'\n" +
 	"\x0fmax_unavailable\x18\x04 \x01(\x05R\x0emaxUnavailable\x125\n" +
 	"\x04node\x18\x05 \x01(\v2!.ichor.v1alpha1.NodeActionRequestR\x04node\x12E\n" +
-	"\fetcd_restore\x18\x06 \x01(\v2\".ichor.v1alpha1.EtcdRestoreRequestR\vetcdRestore\"\x96\x06\n" +
+	"\fetcd_restore\x18\x06 \x01(\v2\".ichor.v1alpha1.EtcdRestoreRequestR\vetcdRestore\"\x91\x06\n" +
 	"\x15PlanOperationResponse\x127\n" +
 	"\x06effect\x18\x01 \x01(\x0e2\x1f.ichor.v1alpha1.OperationEffectR\x06effect\x12:\n" +
 	"\bmachines\x18\x02 \x03(\v2\x1e.ichor.v1alpha1.PlannedMachineR\bmachines\x12\x12\n" +
@@ -2828,8 +2826,8 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x1akubernetes_api_unavailable\x18\v \x01(\bR\x18kubernetesApiUnavailable\x12\x14\n" +
 	"\x05steps\x18\f \x03(\tR\x05steps\x12\x18\n" +
 	"\awarning\x18\r \x01(\tR\awarning\x12!\n" +
-	"\fconfirm_name\x18\x0e \x01(\tR\vconfirmName\x120\n" +
-	"\x14break_glass_required\x18\x0f \x01(\bR\x12breakGlassRequired\x12?\n" +
+	"\fconfirm_name\x18\x0e \x01(\tR\vconfirmName\x12+\n" +
+	"\x11override_required\x18\x0f \x01(\bR\x10overrideRequired\x12?\n" +
 	"\rsnapshot_time\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\fsnapshotTime\x120\n" +
 	"\x12opens_pull_request\x18\x11 \x01(\bB\x02\x18\x01R\x10opensPullRequest\x12+\n" +
 	"\x11current_schematic\x18\x12 \x01(\tR\x10currentSchematic\x12)\n" +
@@ -2968,7 +2966,7 @@ var file_ichor_v1alpha1_operation_proto_goTypes = []any{
 	(*ObjectRef)(nil),                                // 37: ichor.v1alpha1.ObjectRef
 	(*timestamppb.Timestamp)(nil),                    // 38: google.protobuf.Timestamp
 	(*AuditRecord)(nil),                              // 39: ichor.v1alpha1.AuditRecord
-	(*BreakGlass)(nil),                               // 40: ichor.v1alpha1.BreakGlass
+	(*Override)(nil),                                 // 40: ichor.v1alpha1.Override
 	(*Condition)(nil),                                // 41: ichor.v1alpha1.Condition
 }
 var file_ichor_v1alpha1_operation_proto_depIdxs = []int32{
@@ -2984,10 +2982,10 @@ var file_ichor_v1alpha1_operation_proto_depIdxs = []int32{
 	39, // 9: ichor.v1alpha1.RequestEtcdBackupResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
 	7,  // 10: ichor.v1alpha1.ListEtcdBackupsResponse.backups:type_name -> ichor.v1alpha1.EtcdBackup
 	37, // 11: ichor.v1alpha1.EtcdRestoreRequest.backup:type_name -> ichor.v1alpha1.ObjectRef
-	40, // 12: ichor.v1alpha1.EtcdRestoreRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	40, // 12: ichor.v1alpha1.EtcdRestoreRequest.override:type_name -> ichor.v1alpha1.Override
 	37, // 13: ichor.v1alpha1.NodeActionRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
 	1,  // 14: ichor.v1alpha1.NodeActionRequest.action:type_name -> ichor.v1alpha1.NodeAction
-	40, // 15: ichor.v1alpha1.NodeActionRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	40, // 15: ichor.v1alpha1.NodeActionRequest.override:type_name -> ichor.v1alpha1.Override
 	38, // 16: ichor.v1alpha1.OperationMachine.started_at:type_name -> google.protobuf.Timestamp
 	38, // 17: ichor.v1alpha1.OperationMachine.finished_at:type_name -> google.protobuf.Timestamp
 	37, // 18: ichor.v1alpha1.Operation.ref:type_name -> ichor.v1alpha1.ObjectRef

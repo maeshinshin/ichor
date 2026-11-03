@@ -95,7 +95,7 @@ type nodePlan struct {
 	spec    ichorv1alpha1.TalosOperationNodeSpec
 	action  string
 	machine *ichorv1alpha1.TalosMachine
-	bg      *pb.BreakGlass
+	bg      *pb.Override
 	// asked is the name the caller used for the machine: its own, its hostname or its Node name.
 	asked string
 	// belowCount is set by nodeBlocked when the removal is allowed below the declared count because
@@ -144,7 +144,7 @@ func (s *Server) planNode(ctx context.Context, req *pb.NodeActionRequest) (*opPl
 	}
 
 	np := &nodePlan{
-		action: action, machine: m, bg: req.GetBreakGlass(), asked: req.GetMachine().GetName(),
+		action: action, machine: m, bg: req.GetOverride(), asked: req.GetMachine().GetName(),
 		spec: ichorv1alpha1.TalosOperationNodeSpec{
 			MachineRef: corev1.LocalObjectReference{Name: m.Name}, Action: action,
 			Service: req.GetService(), AllowLeader: req.GetAllowLeader(), Confirm: req.GetConfirm(),
@@ -276,7 +276,7 @@ func describeNode(resp *pb.PlanOperationResponse, m *ichorv1alpha1.TalosMachine,
 	case ichorv1alpha1.NodeActionReset:
 		resp.Steps = removalSteps(isCP, "Wipe the node's STATE and EPHEMERAL partitions and reboot it into maintenance mode.")
 		resp.Warning = "This cannot be undone. The node leaves the cluster and its data is wiped. Ichor deletes this machine; the node shows up as a new pending machine."
-		resp.ConfirmName, resp.BreakGlassRequired = name, true
+		resp.ConfirmName, resp.OverrideRequired = name, true
 	case nodeActionRemove:
 		resp.Steps = append(removalSteps(isCP, ""), nodeStaysStep)
 		resp.Warning = "The node leaves the cluster but is not wiped: it still holds the cluster's certificates until you reset it."
@@ -288,7 +288,7 @@ func describeNode(resp *pb.PlanOperationResponse, m *ichorv1alpha1.TalosMachine,
 // credentials and would re-register a deleted Node, so the Node object is the operator's to delete
 // once the machine is off.
 const nodeStaysStep = "The Kubernetes Node stays while the machine runs (its kubelet keeps the cluster's credentials). " +
-	"Power it off or reset it (`ichor node reset`, break-glass), then delete the Node: `kubectl delete node <name>`."
+	"Power it off or reset it (`ichor node reset`, override), then delete the Node: `kubectl delete node <name>`."
 
 func removalSteps(isCP bool, wipe string) []string {
 	steps := []string{stepEvacuate, "Cordon the node and drain it."}
@@ -368,7 +368,7 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 		return nil, invalid("removing a node is not an operation: use RemoveMachine")
 	}
 
-	// The right to start a reset or a shutdown, then break-glass on top for the reset (ADR 0094).
+	// The right to start a reset or a shutdown, then override on top for the reset (ADR 0094).
 	if err := s.authorizeStart(ctx, &ichorv1alpha1.TalosOperationSpec{Kind: p.kind, Node: &np.spec}, p.cluster.Namespace); err != nil {
 		return nil, err
 	}
@@ -385,22 +385,22 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 
 		reason = strings.TrimSpace(np.bg.GetReason())
 		if reason == "" {
-			return nil, invalid("a reset needs a break-glass reason: it goes into the audit record and the Event")
+			return nil, invalid("a reset needs an override reason: it goes into the audit record and the Event")
 		}
 
-		if err := s.authorizeBreakGlass(ctx, np.machine); err != nil {
+		if err := s.authorizeOverride(ctx, np.machine); err != nil {
 			return nil, err
 		}
 	}
 
-	// Break-glass on a reboot or shutdown overrides the controller's last-worker guard (ADR 0065,
+	// Override on a reboot or shutdown overrides the controller's last-worker guard (ADR 0065,
 	// amended): the same reason, verb check, audit and Event as a reset.
 	if r := strings.TrimSpace(np.bg.GetReason()); r != "" && (np.action == ichorv1alpha1.NodeActionReboot || np.action == ichorv1alpha1.NodeActionShutdown) {
-		if err := s.authorizeBreakGlass(ctx, np.machine); err != nil {
+		if err := s.authorizeOverride(ctx, np.machine); err != nil {
 			return nil, err
 		}
 
-		reason, np.spec.BreakGlassReason = r, r
+		reason, np.spec.OverrideReason = r, r
 	}
 
 	cluster := p.cluster
@@ -418,11 +418,11 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 	audit := s.opAudit(ctx, "create", objectRef(op.Namespace, op.Name))
 
 	if reason != "" {
-		audit.Action += "-break-glass"
+		audit.Action += "-override"
 		audit.Reason = reason
-		msg := fmt.Sprintf("%s of %s requested by %s under break-glass: %s", np.action, np.machine.Name, audit.Actor, reason)
+		msg := fmt.Sprintf("%s of %s requested by %s under override: %s", np.action, np.machine.Name, audit.Actor, reason)
 
-		if err := s.emitBreakGlassEvent(ctx, np.machine, kindTalosMachine, msg); err != nil {
+		if err := s.emitOverrideEvent(ctx, np.machine, kindTalosMachine, msg); err != nil {
 			audit.Reason += " (the Kubernetes Event could not be recorded)"
 		}
 	}

@@ -314,7 +314,7 @@ type UpdatePatchRequest struct {
 	// Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
 	//
 	// Deprecated: Marked as deprecated in ichor/v1alpha1/patch.proto.
-	BreakGlass    *BreakGlass `protobuf:"bytes,2,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
+	Override      *Override `protobuf:"bytes,2,opt,name=override,proto3" json:"override,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -357,9 +357,9 @@ func (x *UpdatePatchRequest) GetPatch() *Patch {
 }
 
 // Deprecated: Marked as deprecated in ichor/v1alpha1/patch.proto.
-func (x *UpdatePatchRequest) GetBreakGlass() *BreakGlass {
+func (x *UpdatePatchRequest) GetOverride() *Override {
 	if x != nil {
-		return x.BreakGlass
+		return x.Override
 	}
 	return nil
 }
@@ -448,7 +448,7 @@ type DeletePatchRequest struct {
 	// Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
 	//
 	// Deprecated: Marked as deprecated in ichor/v1alpha1/patch.proto.
-	BreakGlass    *BreakGlass `protobuf:"bytes,2,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
+	Override      *Override `protobuf:"bytes,2,opt,name=override,proto3" json:"override,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -491,9 +491,9 @@ func (x *DeletePatchRequest) GetPatch() *ObjectRef {
 }
 
 // Deprecated: Marked as deprecated in ichor/v1alpha1/patch.proto.
-func (x *DeletePatchRequest) GetBreakGlass() *BreakGlass {
+func (x *DeletePatchRequest) GetOverride() *Override {
 	if x != nil {
-		return x.BreakGlass
+		return x.Override
 	}
 	return nil
 }
@@ -1038,20 +1038,18 @@ const file_ichor_v1alpha1_patch_proto_rawDesc = "" +
 	"\x05patch\x18\x01 \x01(\v2\x15.ichor.v1alpha1.PatchR\x05patch\"u\n" +
 	"\x13CreatePatchResponse\x12+\n" +
 	"\x05patch\x18\x01 \x01(\v2\x15.ichor.v1alpha1.PatchR\x05patch\x121\n" +
-	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"\x82\x01\n" +
+	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"{\n" +
 	"\x12UpdatePatchRequest\x12+\n" +
-	"\x05patch\x18\x01 \x01(\v2\x15.ichor.v1alpha1.PatchR\x05patch\x12?\n" +
-	"\vbreak_glass\x18\x02 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassB\x02\x18\x01R\n" +
-	"breakGlass\"\xbf\x01\n" +
+	"\x05patch\x18\x01 \x01(\v2\x15.ichor.v1alpha1.PatchR\x05patch\x128\n" +
+	"\boverride\x18\x02 \x01(\v2\x18.ichor.v1alpha1.OverrideB\x02\x18\x01R\boverride\"\xbf\x01\n" +
 	"\x13UpdatePatchResponse\x12+\n" +
 	"\x05patch\x18\x01 \x01(\v2\x15.ichor.v1alpha1.PatchR\x05patch\x121\n" +
 	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12,\n" +
 	"\x10pull_request_url\x18\x03 \x01(\tB\x02\x18\x01R\x0epullRequestUrl\x12\x1a\n" +
-	"\x06notice\x18\x04 \x01(\tB\x02\x18\x01R\x06notice\"\x86\x01\n" +
+	"\x06notice\x18\x04 \x01(\tB\x02\x18\x01R\x06notice\"\x7f\n" +
 	"\x12DeletePatchRequest\x12/\n" +
-	"\x05patch\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x05patch\x12?\n" +
-	"\vbreak_glass\x18\x02 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassB\x02\x18\x01R\n" +
-	"breakGlass\"\x92\x01\n" +
+	"\x05patch\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x05patch\x128\n" +
+	"\boverride\x18\x02 \x01(\v2\x18.ichor.v1alpha1.OverrideB\x02\x18\x01R\boverride\"\x92\x01\n" +
 	"\x13DeletePatchResponse\x121\n" +
 	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12,\n" +
 	"\x10pull_request_url\x18\x02 \x01(\tB\x02\x18\x01R\x0epullRequestUrl\x12\x1a\n" +
@@ -1131,7 +1129,7 @@ var file_ichor_v1alpha1_patch_proto_goTypes = []any{
 	nil,                              // 17: ichor.v1alpha1.LabelSelector.MatchLabelsEntry
 	(*ObjectRef)(nil),                // 18: ichor.v1alpha1.ObjectRef
 	(*AuditRecord)(nil),              // 19: ichor.v1alpha1.AuditRecord
-	(*BreakGlass)(nil),               // 20: ichor.v1alpha1.BreakGlass
+	(*Override)(nil),                 // 20: ichor.v1alpha1.Override
 	(ConfigLayer)(0),                 // 21: ichor.v1alpha1.ConfigLayer
 }
 var file_ichor_v1alpha1_patch_proto_depIdxs = []int32{
@@ -1143,11 +1141,11 @@ var file_ichor_v1alpha1_patch_proto_depIdxs = []int32{
 	16, // 5: ichor.v1alpha1.CreatePatchResponse.patch:type_name -> ichor.v1alpha1.Patch
 	19, // 6: ichor.v1alpha1.CreatePatchResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
 	16, // 7: ichor.v1alpha1.UpdatePatchRequest.patch:type_name -> ichor.v1alpha1.Patch
-	20, // 8: ichor.v1alpha1.UpdatePatchRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	20, // 8: ichor.v1alpha1.UpdatePatchRequest.override:type_name -> ichor.v1alpha1.Override
 	16, // 9: ichor.v1alpha1.UpdatePatchResponse.patch:type_name -> ichor.v1alpha1.Patch
 	19, // 10: ichor.v1alpha1.UpdatePatchResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
 	18, // 11: ichor.v1alpha1.DeletePatchRequest.patch:type_name -> ichor.v1alpha1.ObjectRef
-	20, // 12: ichor.v1alpha1.DeletePatchRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	20, // 12: ichor.v1alpha1.DeletePatchRequest.override:type_name -> ichor.v1alpha1.Override
 	19, // 13: ichor.v1alpha1.DeletePatchResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
 	16, // 14: ichor.v1alpha1.PreviewImpactRequest.patch:type_name -> ichor.v1alpha1.Patch
 	17, // 15: ichor.v1alpha1.LabelSelector.match_labels:type_name -> ichor.v1alpha1.LabelSelector.MatchLabelsEntry

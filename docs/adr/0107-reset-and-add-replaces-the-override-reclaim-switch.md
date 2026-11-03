@@ -1,4 +1,4 @@
-# 0107. Reset and add replaces the break-glass reclaim switch
+# 0107. Reset and add replaces the override reclaim switch
 
 Status: Accepted; built · Date: 2026-10-30 · Design section: Trust, Nodes, Deployment · Amends: 0103 (section 2.2), 0105 · Touches: 0094
 
@@ -6,7 +6,7 @@ Decided: there is no installation-wide switch for resetting a machine that anoth
 
 ## Context
 
-ADR 0103 section 2.2 made machine reclaim a break-glass feature, off unless `reclaim.enabled` (chart value, then `IchorInstallation.spec.reclaim.enabled` with a confirmation annotation, ADR 0105). The user found the name "break-glass reclaim" wrong for what is an ordinary step of adding a machine that already runs Talos, and its on/off switch out of place on the Settings page; it belongs with adding nodes.
+ADR 0103 section 2.2 made machine reclaim an override feature, off unless `reclaim.enabled` (chart value, then `IchorInstallation.spec.reclaim.enabled` with a confirmation annotation, ADR 0105). The user found the name "override reclaim" wrong for what is an ordinary step of adding a machine that already runs Talos, and its on/off switch out of place on the Settings page; it belongs with adding nodes.
 
 ## Decisions
 
@@ -14,7 +14,7 @@ ADR 0103 section 2.2 made machine reclaim a break-glass feature, off unless `rec
 2. **Roles.** `ichor_admin_role` (config/rbac) and `ichor-admin` (chart `ichor-user-roles`) list `create`, `get`, `list`, `update` and `reclaim` on `machinereclaims`, as a plain rule like their other explicit verbs (these roles are not built by aggregation). `ichor-machine-reclaimer` has the same rules and is now installed whenever `rbac.helpers.enabled` is set (before: only with `reclaim.enabled`). `ichor-operator` and `ichor-viewer` do not get the verb.
 3. **Users off.** With Ichor's users off the UI API writes as its own ServiceAccount, like it does for its other writes (the talosoperations verbs, settings). That identity is judged by the same webhook and holds no `reclaim` verb by default, so the button is not offered until the operator binds `ichor-machine-reclaimer` to `ichor-system:ichor-ichor-ui`. This is the behaviour of ADR 0103 C8, unchanged; the ServiceAccount's own Role gains nothing.
 4. **Deprecation.** `spec.reclaim` is kept in the schema because CRD fields are append-only and installed objects may carry it; its doc comment says Deprecated. The `IchorInstallation` admission webhook adds a Warning when it is set. The chart value `reclaim.enabled` stays in `values.yaml` with a deprecation note; the manager no longer gets `--reclaim` and ichor-ui no longer gets `ICHOR_RECLAIM_ENABLED`. `status.effective.reclaimEnabled` and the proto fields `reclaim_enabled`, `can_edit_reclaim` and `confirm_reclaim` stay (wire compatibility) but are never filled or read. The annotation `ichor.maesh.dev/confirm-reclaim` has no meaning any more. The RBAC subresource `ichorinstallations/reclaim` is no longer checked; it is removed from the shipped roles (a role losing a verb that nothing asks for breaks no installed binding, since bindings refer to roles by name).
-5. **UI.** The Settings page has no reclaim card. On the Add node page an AlreadyConfigured address shows "Reset and add" when the user holds the verb; it opens the dialog prefilled with the address and the target cluster. Without the verb the CLI hint stays. The dialog keeps the stored-credential warning and the typed-UUID step; the "Break-glass" banner wording is gone. The Machines list button has the same name.
+5. **UI.** The Settings page has no reclaim card. On the Add node page an AlreadyConfigured address shows "Reset and add" when the user holds the verb; it opens the dialog prefilled with the address and the target cluster. Without the verb the CLI hint stays. The dialog keeps the stored-credential warning and the typed-UUID step; the "Override" banner wording is gone. The Machines list button has the same name.
 
 ## Consequences
 

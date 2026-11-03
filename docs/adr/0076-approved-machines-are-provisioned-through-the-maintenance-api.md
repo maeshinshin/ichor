@@ -52,7 +52,7 @@ os:admin identity, which a node in maintenance mode does not trust, so an approv
   A machine that has converged never falls back.
 - **Setting the install disk later.** A machine approved without `spec.install` sits at `InstallDiskUnknown`. The new
   `MachineService.SetMachineInstall` writes only `spec.install` (as the user, with the usual GitOps-tracked refusal,
-  pull request and break-glass handling) and is refused for a pending machine or one that already has an applied
+  pull request and override handling) and is refused for a pending machine or one that already has an applied
   configuration. The machine page offers it, with the approval form's disk picker, while that reason is set.
 - **Log level.** The failed authenticated read that hands a never-converged machine to the provisioning path is logged
   at V(1) without a stack; `ERROR` is kept for the case where nothing takes over.

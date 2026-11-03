@@ -30,7 +30,7 @@ import (
 const (
 	labelConfig    = "config/rbac"
 	labelChart     = "chart"
-	verbBreakGlass = "break-glass"
+	verbOverride = "override"
 )
 
 // TestLeaderElectionRoleIsLeasesOnly guards ADR 0108: the manager locks with a Lease, so the
@@ -59,7 +59,7 @@ func TestLeaderElectionRoleIsLeasesOnly(t *testing.T) {
 
 // TestWebhooksFailFastAndCoverFinalizersAndDeletes guards ADR 0108: every webhook (chart and
 // config/webhook) answers within 5 seconds, so an unavailable manager refuses writes quickly; the
-// break-glass finalizer check also sees TalosOperation updates; the IchorInstallation check sees
+// override finalizer check also sees TalosOperation updates; the IchorInstallation check sees
 // deletes.
 func TestWebhooksFailFastAndCoverFinalizersAndDeletes(t *testing.T) {
 	docs := renderChart(t, "ichor")
@@ -99,8 +99,8 @@ func TestWebhooksFailFastAndCoverFinalizersAndDeletes(t *testing.T) {
 			return strings.Join(ops, ",")
 		}
 
-		if !strings.Contains(opsOf("vbreakglassop-v1alpha1.kb.io"), "UPDATE") {
-			t.Errorf("%s: vbreakglassop does not see UPDATE, so a TalosOperation finalizer can be stripped unchecked", label)
+		if !strings.Contains(opsOf("voverrideop-v1alpha1.kb.io"), "UPDATE") {
+			t.Errorf("%s: voverrideop does not see UPDATE, so a TalosOperation finalizer can be stripped unchecked", label)
 		}
 
 		if !strings.Contains(opsOf("vichorinstallation-v1alpha1.kb.io"), "DELETE") {

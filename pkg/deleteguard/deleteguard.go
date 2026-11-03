@@ -259,13 +259,13 @@ func CheckControlPlaneApproval(currentControlPlanes int, desiredCount int) error
 // unschedulable (spec.controlPlane.schedulable is "false") with no approved
 // worker: nothing could run workloads. workersAfter is the approved-worker
 // count after the operation. Used when schedulable turns false and when a
-// worker leaves. breakGlass is true when the caller holds the break-glass verb
+// worker leaves. override is true when the caller holds the override verb
 // on the object (ADR 0065, amended): the refusal is then waived.
-func CheckLastWorker(unschedulable bool, workersAfter int, breakGlass bool) error {
-	if unschedulable && workersAfter < 1 && !breakGlass {
+func CheckLastWorker(unschedulable bool, workersAfter int, override bool) error {
+	if unschedulable && workersAfter < 1 && !override {
 		return errors.New("refused: spec.controlPlane.schedulable is \"false\" " +
 			"and the cluster would have no approved worker; approve a worker first, set schedulable to \"true\", " +
-			"or override under break-glass (needs the \"break-glass\" verb on the resource)")
+			"or override under override (needs the \"override\" verb on the resource)")
 	}
 	return nil
 }

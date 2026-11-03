@@ -54,13 +54,13 @@ func liveBackupObject(name, cluster string) *ichorv1alpha1.TalosEtcdBackup {
 	}
 }
 
-// liveClients is the in-process server over a fake cluster whose break-glass review answers allowed.
+// liveClients is the in-process server over a fake cluster whose override review answers allowed.
 func liveClients(t *testing.T, yes, allowed bool, extra ...client.Object) (*apiClients, client.Client) {
 	t.Helper()
 
 	setAPITestFlags(t, yes)
 
-	apiOpts.BreakGlass = liveReason
+	apiOpts.Override = liveReason
 
 	objs := append(opTestObjects(), liveBackupObject(liveBackup, opTestCluster))
 	base := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(objs, extra...)...).Build()
@@ -88,8 +88,8 @@ func TestRestoreLiveIsRegisteredBesideRecoverCluster(t *testing.T) {
 		}
 	}
 
-	if restoreCmd.PersistentFlags().Lookup("break-glass") == nil {
-		t.Error("ichor restore has no --break-glass")
+	if restoreCmd.PersistentFlags().Lookup("override") == nil {
+		t.Error("ichor restore has no --override")
 	}
 }
 
@@ -173,7 +173,7 @@ func TestRestoreLiveShowsThePlanAndAsksForTheClusterName(t *testing.T) {
 		t.Fatalf("spec.etcdRestore = %+v", e)
 	}
 
-	if !strings.Contains(out.String(), "create-break-glass") {
+	if !strings.Contains(out.String(), "create-override") {
 		t.Fatalf("the audit record is printed: %s", out.String())
 	}
 }
@@ -208,22 +208,22 @@ func TestRestoreLiveYesStillNeedsTheClusterName(t *testing.T) {
 	}
 }
 
-func TestRestoreLiveNeedsABreakGlassReasonAndTheRight(t *testing.T) {
+func TestRestoreLiveNeedsAnOverrideReasonAndTheRight(t *testing.T) {
 	c, k8s := liveClients(t, true, true)
-	apiOpts.BreakGlass = ""
+	apiOpts.Override = ""
 
 	s := liveSpec()
 	s.Confirm = opTestCluster
 
 	err := runLiveRestore(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, s)
-	if err == nil || !strings.Contains(err.Error(), "--break-glass") {
+	if err == nil || !strings.Contains(err.Error(), "--override") {
 		t.Fatalf("no reason = %v", err)
 	}
 
 	denied, k8sDenied := liveClients(t, true, false)
 
 	err = runLiveRestore(context.Background(), denied, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, s)
-	// The start right (ADR 0094) is asked before break-glass, and the same answer denies both.
+	// The start right (ADR 0094) is asked before override, and the same answer denies both.
 	if err == nil || !strings.Contains(err.Error(), "RBAC does not grant") {
 		t.Fatalf("RBAC says no = %v", err)
 	}
@@ -274,7 +274,7 @@ func TestRestoreLiveRefusesABackupStoreInsideTheCluster(t *testing.T) {
 		s := liveSpec()
 		s.Backup, s.Confirm = "inside", opTestCluster
 
-		// --break-glass is given (liveClients sets a reason) and does not lift it.
+		// --override is given (liveClients sets a reason) and does not lift it.
 		err := runLiveRestore(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, s)
 		if err == nil || !strings.Contains(err.Error(), "the backup store must live outside the cluster being restored") {
 			t.Fatalf("%s: %v", endpoint, err)
@@ -316,7 +316,7 @@ func TestProgressLineShowsTheRestoreStep(t *testing.T) {
 	}
 }
 
-// The in-process server (what --break-glass forces) names the controller's control plane in the plan, as
+// The in-process server (what --override forces) names the controller's control plane in the plan, as
 // ichor-ui does: it looks the pod up in --ichor-namespace.
 func TestRestoreLivePlanNamesTheControllersNodeInLocalMode(t *testing.T) {
 	const ownNode = "node-cp2"

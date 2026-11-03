@@ -30,48 +30,48 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// BreakGlassVerb is the Kubernetes RBAC verb that lets a user run a destructive
+// OverrideVerb is the Kubernetes RBAC verb that lets a user run a destructive
 // operation or override a guard in an incident (docs/adr/0065). It is checked per resource with a SelfSubjectAccessReview
 // made as the user, so Kubernetes decides; Ichor has no list of who may.
-const BreakGlassVerb = "break-glass"
+const OverrideVerb = "override"
 
 const (
 	kindTalosMachine = "TalosMachine"
 	kindTalosCluster = "TalosCluster"
 )
 
-// authorizeBreakGlass asks Kubernetes whether the caller holds the
-// break-glass verb on obj. The caller is the OIDC user the backend
+// authorizeOverride asks Kubernetes whether the caller holds the
+// override verb on obj. The caller is the OIDC user the backend
 // impersonates, or, in the CLI's in-process fallback, whoever the kubeconfig
 // is. With neither (the backend on its own ServiceAccount, OIDC off) there is
 // nobody to ask, and "cannot tell who" is a refusal.
-func (s *Server) authorizeBreakGlass(ctx context.Context, obj client.Object) error {
+func (s *Server) authorizeOverride(ctx context.Context, obj client.Object) error {
 	_, signedIn := IdentityFrom(ctx)
 	if (!signedIn || s.Impersonate == nil) && !s.CallerCredentials {
 		return connect.NewError(connect.CodePermissionDenied,
-			errors.New("break-glass is refused: it needs a signed-in user whose own Kubernetes RBAC grants the "+BreakGlassVerb+
-				" verb, and this backend has no user (enable OIDC with ichorUI.oidc, or use `ichor ... --break-glass` with your kubeconfig)"))
+			errors.New("override is refused: it needs a signed-in user whose own Kubernetes RBAC grants the "+OverrideVerb+
+				" verb, and this backend has no user (enable OIDC with ichorUI.oidc, or use `ichor ... --override` with your kubeconfig)"))
 	}
 
 	c, err := s.cl(ctx)
 	if err != nil {
-		return connect.NewError(connect.CodeUnavailable, fmt.Errorf("break-glass: acting as the user: %w", err))
+		return connect.NewError(connect.CodeUnavailable, fmt.Errorf("override: acting as the user: %w", err))
 	}
 
 	_, resource := kindOf(obj)
 	review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authv1.ResourceAttributes{
-		Namespace: obj.GetNamespace(), Verb: BreakGlassVerb, Group: ichorv1alpha1.GroupVersion.Group,
+		Namespace: obj.GetNamespace(), Verb: OverrideVerb, Group: ichorv1alpha1.GroupVersion.Group,
 		Resource: resource, Name: obj.GetName(),
 	}}}
 
 	if err := c.Create(ctx, review); err != nil {
-		return connect.NewError(connect.CodeUnavailable, fmt.Errorf("break-glass: asking Kubernetes whether you may: %w", err))
+		return connect.NewError(connect.CodeUnavailable, fmt.Errorf("override: asking Kubernetes whether you may: %w", err))
 	}
 
 	if !review.Status.Allowed {
 		return connect.NewError(connect.CodePermissionDenied,
-			fmt.Errorf("you may not break glass on %s %q: Kubernetes RBAC does not grant you the %q verb on it",
-				resource, obj.GetName(), BreakGlassVerb))
+			fmt.Errorf("you may not override on %s %q: Kubernetes RBAC does not grant you the %q verb on it",
+				resource, obj.GetName(), OverrideVerb))
 	}
 
 	return nil
@@ -89,11 +89,11 @@ func kindOf(obj client.Object) (kind, resource string) {
 	return kindTalosMachine, "talosmachines"
 }
 
-// emitBreakGlassEvent records a Warning Event on obj. It uses the backend's
+// emitOverrideEvent records a Warning Event on obj. It uses the backend's
 // own client (the ServiceAccount, or the CLI user), not the impersonated
 // user: users are not given rights to create Events.
-func (s *Server) emitBreakGlassEvent(ctx context.Context, obj client.Object, kind, message string) error {
-	return s.emitWarningEvent(ctx, obj, kind, "BreakGlass", message)
+func (s *Server) emitOverrideEvent(ctx context.Context, obj client.Object, kind, message string) error {
+	return s.emitWarningEvent(ctx, obj, kind, "Override", message)
 }
 
 // emitWarningEvent records a Warning Event with reason on obj, as the backend's own client.

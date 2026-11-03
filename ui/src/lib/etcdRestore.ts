@@ -42,7 +42,7 @@ export function canReview(o: { choice: SnapshotChoice | undefined; busy: boolean
 }
 
 // canRestore folds everything the plan step needs before its button is enabled: the plan came back
-// without a blocker, the cluster's name was typed, and a reason was given (the break-glass reason).
+// without a blocker, the cluster's name was typed, and a reason was given (the override reason).
 export function canRestore(o: {
   planned: boolean
   blocked: string

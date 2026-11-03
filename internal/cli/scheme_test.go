@@ -36,8 +36,8 @@ func TestCLISchemeKnowsEveryLocalModeType(t *testing.T) {
 	}
 
 	for _, obj := range []client.Object{
-		&authv1.SelfSubjectAccessReview{}, // break-glass and diagnostics checks
-		&corev1.Event{},                   // break-glass and diagnostics audit events
+		&authv1.SelfSubjectAccessReview{}, // override and diagnostics checks
+		&corev1.Event{},                   // override and diagnostics audit events
 		&corev1.Secret{},
 		&corev1.Namespace{},
 		&corev1.Node{},

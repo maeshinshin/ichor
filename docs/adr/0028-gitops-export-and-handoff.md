@@ -171,7 +171,7 @@ objects. Not built here.
   --argocd` already leaves it out for a custom preset.
 - Amended: `TalosEtcdBackup` (ADR 0047) joined the allow-list, listed by
   `exportEtcdBackups` the same way `exportStorages` lists `TalosStorage`.
-- Not built here: PR mode (design phase 8), strict mode, break-glass, and
+- Not built here: PR mode (design phase 8), strict mode, override, and
   `ichor ui` port-forwarding -- none of which this unit's two commands touch.
 - `docs/adr/README.md`'s index briefly shows a gap at 0026/0027: those
   numbers are reserved for other agents' concurrent work in sibling

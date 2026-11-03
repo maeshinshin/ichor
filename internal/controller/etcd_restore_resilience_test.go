@@ -51,7 +51,7 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 		resumeBackoffStart, resumeBackoffMax = time.Millisecond, 5*time.Millisecond
 	})
 
-	It("keeps retrying the recreation while the break-glass webhook, served by this process, refuses connections", func() {
+	It("keeps retrying the recreation while the override webhook, served by this process, refuses connections", func() {
 		f := newRestoreFixture("")
 		f.wipeHooks()
 		op := f.newOp(nil)
@@ -67,7 +67,7 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 		restarted.Client = interceptor.NewClient(watchClient(), interceptor.Funcs{
 			Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 				if _, ok := obj.(*ichorv1alpha1.TalosOperation); ok && creates.Add(1) <= 3 {
-					return errors.New(`Internal error occurred: failed calling webhook "vbreakglassop-v1alpha1.kb.io": dial tcp 10.0.0.1:443: connect: connection refused`)
+					return errors.New(`Internal error occurred: failed calling webhook "voverrideop-v1alpha1.kb.io": dial tcp 10.0.0.1:443: connect: connection refused`)
 				}
 
 				return c.Create(ctx, obj, opts...)

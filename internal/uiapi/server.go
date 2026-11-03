@@ -78,7 +78,7 @@ type Server struct {
 
 	// CallerCredentials is true when Client carries the caller's own
 	// Kubernetes credentials (the CLI's in-process fallback, docs/adr/0049)
-	// rather than the backend's ServiceAccount. Break-glass is allowed to ask
+	// rather than the backend's ServiceAccount. Override is allowed to ask
 	// Client "may I?" only then, or through Impersonate (docs/adr/0065).
 	CallerCredentials bool
 

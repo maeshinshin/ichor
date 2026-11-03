@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -60,7 +61,7 @@ It shows which machines restart and in which order, and asks for confirmation un
 			}
 
 			if kind == pb.OperationKind_OPERATION_KIND_ICHOR {
-				if err := refuseHelmManagedInstall(cmd.Context()); err != nil {
+				if err := refuseHelmManagedInstall(cmd.Context(), cmd.ErrOrStderr()); err != nil {
 					return err
 				}
 			}
@@ -106,12 +107,19 @@ func init() {
 
 // refuseHelmManagedInstall stops a command that would run the installer Job when Helm owns the
 // install (ADR 0104 4.6). Without a usable kubeconfig it cannot judge, and the command goes on
-// to report its own connection problems.
-func refuseHelmManagedInstall(ctx context.Context) error {
+// to report its own connection problems. It also prints the NOTICE about roles that still grant
+// the earlier override verb (ADR 0109).
+func refuseHelmManagedInstall(ctx context.Context, errOut io.Writer) error {
 	c, err := newKubeClient(kubeconfigPath)
 	if err != nil {
 		return nil //nolint:nilerr // see the doc comment
 	}
 
-	return refuseHelmManaged(ctx, c)
+	if err := refuseHelmManaged(ctx, c); err != nil {
+		return err
+	}
+
+	noticeEarlierOverrideVerb(ctx, c, errOut)
+
+	return nil
 }

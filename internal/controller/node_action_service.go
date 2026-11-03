@@ -88,15 +88,15 @@ func (n *nodeRun) lastWorkerGuard(ctx context.Context, node, doing string) error
 		return nil
 	}
 
-	// Break-glass (ADR 0065, amended): the creator held the verb on the machine when the webhook
-	// admitted spec.node.breakGlassReason, so the guard is waived and the reason recorded.
-	if reason := n.spec.BreakGlassReason; reason != "" {
-		n.r.operationEvent(n.op, corev1.EventTypeWarning, "BreakGlass",
-			fmt.Sprintf("%s of %q goes ahead though it is the last schedulable Ready worker, under break-glass: %s", doing, n.m.Name, reason))
+	// Override (ADR 0065, amended): the creator held the verb on the machine when the webhook
+	// admitted spec.node.overrideReason, so the guard is waived and the reason recorded.
+	if reason := n.spec.EffectiveOverrideReason(); reason != "" {
+		n.r.operationEvent(n.op, corev1.EventTypeWarning, "Override",
+			fmt.Sprintf("%s of %q goes ahead though it is the last schedulable Ready worker, under override: %s", doing, n.m.Name, reason))
 
 		return nil
 	}
 
 	return fmt.Errorf("refusing to %s %q: it is the last schedulable Ready worker, and no workload could run without it; "+
-		"override with --break-glass <reason> (needs the break-glass verb on the machine)", doing, n.m.Name)
+		"override with --override <reason> (needs the override verb on the machine)", doing, n.m.Name)
 }

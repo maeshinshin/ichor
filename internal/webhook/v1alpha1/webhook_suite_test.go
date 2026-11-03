@@ -118,7 +118,7 @@ var _ = BeforeSuite(func() {
 	err = SetupTalosMachineWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
-	err = SetupBreakGlassWebhookWithManager(mgr, BreakGlassOptions{
+	err = SetupOverrideWebhookWithManager(mgr, OverrideOptions{
 		ExemptUsers: []string{testControllerUser},
 	})
 	Expect(err).NotTo(HaveOccurred())

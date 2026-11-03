@@ -51,8 +51,8 @@ func TestIchorOperationIsRefusedWhenInstalledByHelm(t *testing.T) {
 		}
 	}
 
-	handler := func(objs ...client.Object) *BreakGlassHandler {
-		return &BreakGlassHandler{
+	handler := func(objs ...client.Object) *OverrideHandler {
+		return &OverrideHandler{
 			Client:      fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).Build(),
 			ExemptUsers: DefaultExemptUsers("ichor-system", "ichor-controller"),
 		}
@@ -88,7 +88,7 @@ func TestIchorOperationIsRefusedWhenInstalledByHelm(t *testing.T) {
 		}
 	}
 
-	for name, h := range map[string]*BreakGlassHandler{
+	for name, h := range map[string]*OverrideHandler{
 		"manager installer": handler(installation(ichorv1alpha1.IchorManagerInstaller)),
 		"no installation":   handler(),
 	} {

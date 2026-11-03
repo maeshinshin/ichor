@@ -574,7 +574,7 @@ type AddDiscoveryAddressRequest struct {
 	// Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
 	//
 	// Deprecated: Marked as deprecated in ichor/v1alpha1/cluster.proto.
-	BreakGlass    *BreakGlass `protobuf:"bytes,4,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
+	Override      *Override `protobuf:"bytes,4,opt,name=override,proto3" json:"override,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -631,9 +631,9 @@ func (x *AddDiscoveryAddressRequest) GetReason() string {
 }
 
 // Deprecated: Marked as deprecated in ichor/v1alpha1/cluster.proto.
-func (x *AddDiscoveryAddressRequest) GetBreakGlass() *BreakGlass {
+func (x *AddDiscoveryAddressRequest) GetOverride() *Override {
 	if x != nil {
-		return x.BreakGlass
+		return x.Override
 	}
 	return nil
 }
@@ -1300,13 +1300,12 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\x1eDismissCARotationAdviceRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"T\n" +
 	"\x1fDismissCARotationAdviceResponse\x121\n" +
-	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"\xc4\x01\n" +
+	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"\xbd\x01\n" +
 	"\x1aAddDiscoveryAddressRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\x12?\n" +
-	"\vbreak_glass\x18\x04 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassB\x02\x18\x01R\n" +
-	"breakGlass\"\xcd\x01\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x128\n" +
+	"\boverride\x18\x04 \x01(\v2\x18.ichor.v1alpha1.OverrideB\x02\x18\x01R\boverride\"\xcd\x01\n" +
 	"\x1bAddDiscoveryAddressResponse\x121\n" +
 	"\acluster\x18\x01 \x01(\v2\x17.ichor.v1alpha1.ClusterR\acluster\x121\n" +
 	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12,\n" +
@@ -1416,7 +1415,7 @@ var file_ichor_v1alpha1_cluster_proto_goTypes = []any{
 	(*CertificateExpiry)(nil),               // 19: ichor.v1alpha1.CertificateExpiry
 	(*ObjectRef)(nil),                       // 20: ichor.v1alpha1.ObjectRef
 	(*AuditRecord)(nil),                     // 21: ichor.v1alpha1.AuditRecord
-	(*BreakGlass)(nil),                      // 22: ichor.v1alpha1.BreakGlass
+	(*Override)(nil),                        // 22: ichor.v1alpha1.Override
 	(*timestamppb.Timestamp)(nil),           // 23: google.protobuf.Timestamp
 	(*Condition)(nil),                       // 24: ichor.v1alpha1.Condition
 }
@@ -1433,7 +1432,7 @@ var file_ichor_v1alpha1_cluster_proto_depIdxs = []int32{
 	20, // 9: ichor.v1alpha1.DismissCARotationAdviceRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
 	21, // 10: ichor.v1alpha1.DismissCARotationAdviceResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
 	20, // 11: ichor.v1alpha1.AddDiscoveryAddressRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	22, // 12: ichor.v1alpha1.AddDiscoveryAddressRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	22, // 12: ichor.v1alpha1.AddDiscoveryAddressRequest.override:type_name -> ichor.v1alpha1.Override
 	18, // 13: ichor.v1alpha1.AddDiscoveryAddressResponse.cluster:type_name -> ichor.v1alpha1.Cluster
 	21, // 14: ichor.v1alpha1.AddDiscoveryAddressResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
 	18, // 15: ichor.v1alpha1.ListClustersResponse.clusters:type_name -> ichor.v1alpha1.Cluster

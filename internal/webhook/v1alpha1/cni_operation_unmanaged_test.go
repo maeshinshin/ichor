@@ -51,7 +51,7 @@ func TestCNIOperationIsRefusedForAnUnmanagedCluster(t *testing.T) {
 		return c
 	}
 
-	h := &BreakGlassHandler{
+	h := &OverrideHandler{
 		Client:      fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster("adopted", "unmanaged"), cluster("own", "cilium")).Build(),
 		ExemptUsers: DefaultExemptUsers("ichor-system", "ichor-controller"),
 	}

@@ -355,7 +355,7 @@ function NodeActionDialog({
     service: def.id === 'restart-service' ? service : '',
     allowLeader: def.id === 'etcd-defrag' && allowLeader,
     confirm,
-    breakGlass: def.breakGlass && reason.trim() !== '' ? { reason: reason.trim() } : undefined,
+    override: def.override && reason.trim() !== '' ? { reason: reason.trim() } : undefined,
   })
 
   // The plan is asked for as soon as the dialog opens, and again when an option that changes it
@@ -485,7 +485,7 @@ function NodeActionDialog({
                 />
               </div>
             )}
-            {plan.breakGlassRequired && (
+            {plan.overrideRequired && (
               <div class="space-y-2">
                 <Label htmlFor="node-action-reason">{t('node.action.reason')}</Label>
                 <Textarea id="node-action-reason" value={reason} onInput={(e) => setReason((e.currentTarget as HTMLTextAreaElement).value)} />

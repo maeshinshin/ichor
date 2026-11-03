@@ -42,7 +42,7 @@ var restoreCmd = &cobra.Command{
 data corruption or a bad change). It creates an etcd-restore operation; the controller wipes
 etcd on every control plane, recovers the snapshot on one, lets the others rejoin and reconciles
 every machine again. The Kubernetes API is unavailable meanwhile and EVERYTHING WRITTEN SINCE THE
-SNAPSHOT IS LOST. It needs --break-glass <reason> (and the break-glass verb on the TalosCluster) and
+SNAPSHOT IS LOST. It needs --override <reason> (and the override verb on the TalosCluster) and
 the cluster's name typed (or --confirm NAME); --yes does not replace the name. Without --snapshot
 the newest snapshot of the cluster's backup is used; --backup picks the backup when there are
 several. Follow it with --follow.

@@ -2,7 +2,7 @@
 
 Status: Accepted · Date: 2026-10-27 · Design section: Backup, recovery, certificates; Upgrades (status-held state machine), Trust
 
-Decided: restoring a stored etcd snapshot into a running cluster is a new `TalosOperation` kind `etcd-restore` with `spec.etcdRestore {backupRef, snapshot, confirm, reason}` (`confirm` must equal the cluster name, `reason` is the break-glass reason; CEL and the break-glass webhook enforce both, and the verb is checked on the `TalosCluster`); the controller takes the cluster lock, decrypts and checksums the snapshot and keeps a pinned ciphertext copy of it in the bucket, writes a marker object next to the backups, wipes etcd on every control plane at once (Talos's own disaster-recovery procedure: non-graceful reset with reboot of EPHEMERAL), uploads the snapshot to one control plane and bootstraps it with `RecoverEtcd`, waits for the others to rejoin and the API to answer, asks every `TalosMachine` to reconcile again and waits until each is Ready; because the rollback deletes the operation itself, the progress that must survive lives in the marker, the wipe-and-recover runs as a job independent of the manager, and the operation is recreated from the marker; `ichor restore --live` and the cluster page's "Restore from backup…" create the CR
+Decided: restoring a stored etcd snapshot into a running cluster is a new `TalosOperation` kind `etcd-restore` with `spec.etcdRestore {backupRef, snapshot, confirm, reason}` (`confirm` must equal the cluster name, `reason` is the override reason; CEL and the override webhook enforce both, and the verb is checked on the `TalosCluster`); the controller takes the cluster lock, decrypts and checksums the snapshot and keeps a pinned ciphertext copy of it in the bucket, writes a marker object next to the backups, wipes etcd on every control plane at once (Talos's own disaster-recovery procedure: non-graceful reset with reboot of EPHEMERAL), uploads the snapshot to one control plane and bootstraps it with `RecoverEtcd`, waits for the others to rejoin and the API to answer, asks every `TalosMachine` to reconcile again and waits until each is Ready; because the rollback deletes the operation itself, the progress that must survive lives in the marker, the wipe-and-recover runs as a job independent of the manager, and the operation is recreated from the marker; `ichor restore --live` and the cluster page's "Restore from backup…" create the CR
 
 ## Context
 
@@ -62,10 +62,10 @@ filled after each backup and its prune, so the UI and CLI can offer snapshots wi
 `TalosMachine.status.observedReconcileRequest` echoes the `ichor.maesh.dev/reconcile-requested` annotation at the
 end of every reconcile.
 
-**Authorization.** The break-glass verb on the `TalosCluster` (ADR 0064, 0065), checked by `CreateOperation` as the
-caller with a `SelfSubjectAccessReview` and, for a hand-written CR, by the break-glass admission webhook on CREATE of
+**Authorization.** The override verb on the `TalosCluster` (ADR 0064, 0065), checked by `CreateOperation` as the
+caller with a `SelfSubjectAccessReview` and, for a hand-written CR, by the override admission webhook on CREATE of
 `talosoperations` (the controller's own identity is exempt, because it recreates the operation after the rollback).
-`CreateOperation` also needs the cluster name typed and a reason; the audit record (`create-break-glass`) and a
+`CreateOperation` also needs the cluster name typed and a reason; the audit record (`create-override`) and a
 Warning Event on the cluster carry the reason; the reason is kept in the spec so the record survives the rollback.
 Nothing else is new for the UI backend: it reads `talosetcdbackups` (`get;list`) and creates operations as before.
 
@@ -145,14 +145,14 @@ and is never retried by itself, as everywhere (ADR 0026).
   is held back.
 
 **Plan, CLI, UI.** `PlanOperation` and `CreateOperation` take `EtcdRestoreRequest {backup, snapshot, confirm,
-break_glass}`; the plan has plain-English `steps`, the `snapshot_time`, a warning that says what is lost (everything
+override}`; the plan has plain-English `steps`, the `snapshot_time`, a warning that says what is lost (everything
 since the snapshot, Ichor's own resources and Secrets among it), that the API is unavailable and that machines
-reconcile against the restored state, and `confirm_name` and `break_glass_required`. It is blocked when the backup is
+reconcile against the restored state, and `confirm_name` and `override_required`. It is blocked when the backup is
 of another cluster, the snapshot is not listed, a CA rotation is newer than the snapshot, there is no control plane,
 or another operation is unfinished. `OperationService.ListEtcdBackups(cluster)` returns the backups' `status.snapshots`.
 A started restore cannot be paused (`SetOperationPaused` refuses, the UI does not offer it). `ichor restore --live
-[--cluster C] [--backup B] [--snapshot S] --break-glass REASON [--confirm C] [--follow]` shows the plan and asks for the
-cluster name; `--yes` skips the y/N question but not the name, and without `--break-glass` it is refused. The UI adds
+[--cluster C] [--backup B] [--snapshot S] --override REASON [--confirm C] [--follow]` shows the plan and asks for the
+cluster name; `--yes` skips the y/N question but not the name, and without `--override` it is refused. The UI adds
 "Restore from backup…" to the cluster page's Danger zone: a preactcn `alert-dialog` with the snapshot list, a
 review step that shows the plan, the typed cluster name and the reason; the operation page shows the step,
 the snapshot and its time.
@@ -162,8 +162,8 @@ the snapshot and its time.
 Three things went wrong; each is now handled and tested.
 
 1. **The operation was never recreated after a restart.** `ResumeEtcdRestores` ran once, as soon as the manager
-   started, and creating the `TalosOperation` goes through the fail-closed break-glass webhook
-   (`vbreakglassop-v1alpha1.kb.io`), which this same process serves and which is not behind the Service until the
+   started, and creating the `TalosOperation` goes through the fail-closed override webhook
+   (`voverrideop-v1alpha1.kb.io`), which this same process serves and which is not behind the Service until the
    Pod is Ready: `connect: connection refused`, one log line, marker left, nothing ever retried (seen twice). The
    controller's own identity is exempt in that webhook (`DefaultExemptUsers`, from `POD_NAMESPACE` and
    `POD_SERVICE_ACCOUNT`, set in `config/manager` and the chart; tested by "admits Ichor's own controller, which
@@ -249,7 +249,7 @@ exited.
    transiently failing, each retry moves the in-process clients to the next entry, prints `trying API server <url>`, and
    prints `API server <url> answered` when one does. The certificate is verified against the original server's name
    (`tls-server-name` of the copied config, unless the kubeconfig set one), so the node IPs must be in the apiserver
-   certificate's SANs, which Talos does by default for its nodes. It applies to the in-process clients (`--break-glass`
+   certificate's SANs, which Talos does by default for its nodes. It applies to the in-process clients (`--override`
    implies them, and a live restore requires it); the ichor-ui tunnel keeps its own reconnect. The hook is a field of the
    shared clients and `retryTransient` uses it when set, so other follows could opt in; none does.
 3. **The plan names the node.** The wipe step now reads "Wipe etcd data on cp-a, cp-c, then cp-b (where this controller

@@ -245,9 +245,9 @@ Without the reset, letting the `TalosMachine` disappear would be a lie:
 the physical node would still be configured and still an etcd member.
 So `reconcileRemoval` never clears the finalizer on the safe path either
 -- it drains and reports `RemovalApproved`, and stops. Only two things can
-end the `Terminating` state today: a human break-glass removal of the
+end the `Terminating` state today: a human override removal of the
 finalizer (already how the design treats this general problem --
-"Refusing finalizer removal except through break-glass belongs with the
+"Refusing finalizer removal except through override belongs with the
 other dangerous-operation checks" -- unchanged by this work), or a future
 change that adds the etcd-removal and reset steps on top of this
 foundation and then clears the finalizer once they succeed.

@@ -51,10 +51,10 @@ type nodeActionSpec struct {
 	Follow  bool
 }
 
-func (s nodeActionSpec) request(bg *pb.BreakGlass) *pb.NodeActionRequest {
+func (s nodeActionSpec) request(bg *pb.Override) *pb.NodeActionRequest {
 	return &pb.NodeActionRequest{
 		Machine: objectRef(apiOpts.Namespace, s.Machine), Action: s.Action, Service: s.Service,
-		AllowLeader: s.AllowLeader, Confirm: s.Confirm, BreakGlass: bg,
+		AllowLeader: s.AllowLeader, Confirm: s.Confirm, Override: bg,
 	}
 }
 
@@ -109,7 +109,7 @@ func needsTypedName(a pb.NodeAction) bool {
 // runNodeAction plans, confirms and starts one node action. --yes skips the y/N question; reset
 // and remove still need the node's name, typed here or given with --confirm.
 func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, s nodeActionSpec) error {
-	bg := breakGlassOf(apiOpts)
+	bg := overrideOf(apiOpts)
 
 	plan, err := c.Operation.PlanOperation(ctx, connect.NewRequest(&pb.PlanOperationRequest{
 		Kind: pb.OperationKind_OPERATION_KIND_NODE, Node: s.request(bg),
@@ -125,7 +125,7 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 	}
 
 	if s.Action == pb.NodeAction_NODE_ACTION_RESET && bg == nil {
-		return errors.New("node reset: it needs --break-glass <reason> (and the break-glass RBAC verb on the machine); the reason goes into the audit record")
+		return errors.New("node reset: it needs --override <reason> (and the override RBAC verb on the machine); the reason goes into the audit record")
 	}
 
 	text := nodePlanText(s, plan.Msg)
@@ -164,7 +164,7 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 		}
 
 		_, _ = fmt.Fprintf(errw, "Next: the Kubernetes Node stays while the machine runs (its kubelet keeps the cluster's credentials).\n"+
-			"Power it off or reset it (`ichor node reset`, break-glass), then delete the Node: `kubectl delete node %s`.\n", s.Machine)
+			"Power it off or reset it (`ichor node reset`, override), then delete the Node: `kubectl delete node %s`.\n", s.Machine)
 
 		return nil
 	}
@@ -229,7 +229,7 @@ var (
 	nodeShutdownCmd = newNodeActionCmd("shutdown NODE", "Shut a node down; it stays off until you power it on",
 		pb.NodeAction_NODE_ACTION_SHUTDOWN, cobra.ExactArgs(1), machineArg)
 	nodeResetCmd = newNodeActionCmd("reset NODE",
-		"Remove a node from the cluster and wipe it (its STATE and EPHEMERAL partitions); needs the break-glass permission",
+		"Remove a node from the cluster and wipe it (its STATE and EPHEMERAL partitions); needs the override permission",
 		pb.NodeAction_NODE_ACTION_RESET, cobra.ExactArgs(1), machineArg)
 	nodeRemoveCmd = newNodeActionCmd("remove NODE", "Remove a node from the cluster: drain it and, for a control plane, remove its etcd member",
 		pb.NodeAction_NODE_ACTION_REMOVE, cobra.ExactArgs(1), machineArg)

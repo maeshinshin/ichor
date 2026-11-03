@@ -18,7 +18,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -40,13 +39,21 @@ type startFlags struct {
 
 var upgradeFlags startFlags
 
+// upgradeList is --list on `upgrade talos` and `upgrade kubernetes`: print the versions the cluster
+// can move to and exit.
+var upgradeList bool
+
 var upgradeCmd = &cobra.Command{
 	Use:   "upgrade",
-	Short: "Upgrade the cluster to the release set of this Ichor, or Talos, Kubernetes or Ichor itself",
-	Long: `The cluster's Talos, Kubernetes and Cilium versions are the release set of the
-Ichor that runs them. ` + "`ichor upgrade cluster`" + ` brings a cluster there, one step at a
-time. ` + "`ichor upgrade talos`" + ` and ` + "`ichor upgrade kubernetes`" + ` run one of those steps on its own; their
-version is the release set's, and any other is refused. ` + "`ichor upgrade ichor`" + ` moves Ichor itself.
+	Short: "Upgrade the cluster's Talos or Kubernetes, or Ichor itself",
+	Long: `Upgrade one component of the cluster, or Ichor itself. Talos, Kubernetes and Cilium move
+independently: the release set of the Ichor that runs the cluster is the version of a
+first install, and any valid target is allowed after that.
+
+` + "`ichor upgrade talos`" + ` and ` + "`ichor upgrade kubernetes`" + ` offer the versions the cluster can
+move to (` + "`--list`" + `). Without a VERSION they use the recommended one, the release set's version
+when it is a valid upgrade, else the newest patch of the running minor. With a VERSION they move to it.
+` + "`ichor upgrade ichor`" + ` moves Ichor itself.
 
 Each upgrade changes the version in the spec that names it and then starts the
 operation that rolls it out machine by machine: control planes one at a time,
@@ -56,11 +63,13 @@ running) nothing was changed. Run the command again to retry: a spec that
 already names the version is not written twice.`,
 }
 
-// newUpgradeCmd is `ichor upgrade <kind> [VERSION]`. A kind whose version the release set pins
-// (pinned non-empty) takes the pinned version by default and refuses any other.
-func newUpgradeCmd(use, short string, kind pb.OperationKind, pinned string) *cobra.Command {
+// newUpgradeCmd is `ichor upgrade <kind> [VERSION]`. Talos and Kubernetes take the version from the
+// server's list when none is named; Ichor itself needs one.
+func newUpgradeCmd(use, short string, kind pb.OperationKind) *cobra.Command {
+	optional := kind == pb.OperationKind_OPERATION_KIND_TALOS || kind == pb.OperationKind_OPERATION_KIND_KUBERNETES
+
 	usage, args := use+" VERSION", cobra.ExactArgs(1)
-	if pinned != "" {
+	if optional {
 		usage, args = use+" [VERSION]", cobra.MaximumNArgs(1)
 	}
 
@@ -69,20 +78,19 @@ func newUpgradeCmd(use, short string, kind pb.OperationKind, pinned string) *cob
 		Short: short,
 		Long: short + `.
 
-It shows which machines restart and in which order, and asks for confirmation unless --yes.`,
+Without VERSION it uses the recommended version (see ` + "`--list`" + `). It shows which machines restart
+and in which order, and asks for confirmation unless --yes.`,
 		Args: args,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			target := pinned
+			var target string
 			if len(args) == 1 {
 				target = args[0]
 			}
 
-			if pinned != "" {
-				if err := checkPinnedTarget(kind, target); err != nil {
+			if target != "" {
+				if err := checkUpgradeTarget(target); err != nil {
 					return err
 				}
-			} else if err := checkUpgradeTarget(target); err != nil {
-				return err
 			}
 
 			if kind == pb.OperationKind_OPERATION_KIND_ICHOR {
@@ -91,23 +99,114 @@ It shows which machines restart and in which order, and asks for confirmation un
 				}
 			}
 
+			listOnly := optional && upgradeList
+
 			return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+				if listOnly {
+					m, err := upgradeTargets(ctx, c, upgradeFlags.Cluster, kind)
+					if err != nil {
+						return err
+					}
+
+					printUpgradeTargets(cmd.OutOrStdout(), kind, m)
+
+					return nil
+				}
+
+				if optional && target == "" {
+					t, err := chooseUpgradeTarget(ctx, c, cmd.ErrOrStderr(), kind, upgradeFlags.Cluster)
+					if err != nil {
+						return err
+					}
+
+					target = t
+				}
+
 				return runStartOperation(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), startSpec{Kind: kind, Cluster: upgradeFlags.Cluster, Target: target, MaxUnavailable: upgradeFlags.MaxUnavailable, Follow: upgradeFlags.Follow})
 			})
 		},
 	}
 }
 
-// checkPinnedTarget refuses a Talos or Kubernetes target that is not the release set's version; the server refuses
-// it too, before anything is written.
-func checkPinnedTarget(kind pb.OperationKind, target string) error {
+// upgradeTargets asks the server which versions the cluster's Talos or Kubernetes can move to.
+func upgradeTargets(ctx context.Context, c *apiClients, cluster string, kind pb.OperationKind) (*pb.ListUpgradeTargetsResponse, error) {
+	ref, err := resolveCluster(ctx, c, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.Operation.ListUpgradeTargets(ctx, connect.NewRequest(&pb.ListUpgradeTargetsRequest{Cluster: ref, Kind: kind}))
+	if err != nil {
+		return nil, err
+	}
+
+	return resp.Msg, nil
+}
+
+// chooseUpgradeTarget is the version of an upgrade the user did not name: the server's default, and
+// the choices with an error when there is none.
+func chooseUpgradeTarget(ctx context.Context, c *apiClients, errw io.Writer, kind pb.OperationKind, cluster string) (string, error) {
+	m, err := upgradeTargets(ctx, c, cluster, kind)
+	if err != nil {
+		return "", err
+	}
+
+	if d := m.GetDefault(); d != "" {
+		how := "the newest listed"
+		if d == pinnedOf(kind) {
+			how = "the release set's version"
+		}
+
+		_, _ = fmt.Fprintf(errw, "using %s (%s)\n", d, how)
+
+		return d, nil
+	}
+
+	printUpgradeTargets(errw, kind, m)
+
+	return "", fmt.Errorf("no %s version to upgrade to by default: name one, as `ichor upgrade %s VERSION` (see --list)",
+		kindName(kind), kindName(kind))
+}
+
+// printUpgradeTargets writes the groups of versions, newest first, and marks the default. A list that
+// cannot be given says why.
+func printUpgradeTargets(w io.Writer, kind pb.OperationKind, m *pb.ListUpgradeTargetsResponse) {
+	if !m.GetAvailable() {
+		_, _ = fmt.Fprintf(w, "no list of %s versions: %s\n", kindName(kind), m.GetUnavailableReason())
+	}
+
+	n := 0
+
+	group := func(label string, versions []string) {
+		for _, v := range versions {
+			mark := ""
+			if v == m.GetDefault() {
+				mark = "  (default)"
+			}
+
+			_, _ = fmt.Fprintf(w, "  %-12s %s%s\n", label, v, mark)
+			n++
+		}
+	}
+
+	group("recommended", m.GetRecommended())
+	group("patch", m.GetPatch())
+	group("next minor", m.GetNextMinor())
+
+	if n == 0 {
+		_, _ = fmt.Fprintln(w, "  no version to move to")
+	}
+}
+
+// pinnedOf is the release set's version of a kind that has one ("" for the others).
+func pinnedOf(kind pb.OperationKind) string {
 	switch kind {
 	case pb.OperationKind_OPERATION_KIND_TALOS:
-		return release.CheckTarget("Talos", "v"+strings.TrimPrefix(target, "v"), release.Pinned.Talos)
+		return release.Pinned.Talos
 	case pb.OperationKind_OPERATION_KIND_KUBERNETES:
-		return release.CheckTarget("Kubernetes", "v"+strings.TrimPrefix(target, "v"), release.Pinned.Kubernetes)
+		return release.Pinned.Kubernetes
 	default:
-		return nil
+		return ""
 	}
 }
 
@@ -119,136 +218,10 @@ func checkUpgradeTarget(target string) error {
 }
 
 var (
-	upgradeTalosCmd      = newUpgradeCmd("talos", "Upgrade Talos on every machine of a cluster (each machine reboots)", pb.OperationKind_OPERATION_KIND_TALOS, release.Pinned.Talos)
-	upgradeKubernetesCmd = newUpgradeCmd("kubernetes", "Upgrade Kubernetes on a cluster (no reboot)", pb.OperationKind_OPERATION_KIND_KUBERNETES, release.Pinned.Kubernetes)
-	upgradeIchorCmd      = newUpgradeCmd("ichor", "Upgrade Ichor itself (IchorInstallation.spec.version)", pb.OperationKind_OPERATION_KIND_ICHOR, "")
+	upgradeTalosCmd      = newUpgradeCmd("talos", "Upgrade Talos on every machine of a cluster (each machine reboots)", pb.OperationKind_OPERATION_KIND_TALOS)
+	upgradeKubernetesCmd = newUpgradeCmd("kubernetes", "Upgrade Kubernetes on a cluster (no reboot)", pb.OperationKind_OPERATION_KIND_KUBERNETES)
+	upgradeIchorCmd      = newUpgradeCmd("ichor", "Upgrade Ichor itself (IchorInstallation.spec.version)", pb.OperationKind_OPERATION_KIND_ICHOR)
 )
-
-// upgradeClusterFollow is `ichor upgrade cluster --follow`: keep going through the steps.
-var upgradeClusterFollow bool
-
-// upgradeClusterCmd brings a cluster to the release set of this Ichor, one step per operation. It is one user
-// action, not automatic: each step is planned, shown and confirmed.
-var upgradeClusterCmd = &cobra.Command{
-	Use:   "cluster",
-	Short: "Bring the cluster to the versions of this Ichor: Talos, then Kubernetes, then Cilium",
-	Long: `Bring the cluster to the release set of this Ichor (Talos ` + release.Pinned.Talos + `, version contract ` +
-		release.Pinned.VersionContract + `, Kubernetes ` + release.Pinned.Kubernetes + `, Cilium chart ` +
-		release.Pinned.Cilium + `).
-
-The steps run in this order, each one finished before the next starts:
-
-  1. talos       Talos on every machine (each reboots, one at a time). The version contract
-                 moves with it. Talos goes first: Kubernetes must be a release the running Talos
-                 supports, and Talos does not upgrade Kubernetes by itself.
-  2. config      only when a machine has a configuration change the new contract needs; the
-                 Kubernetes step refuses while a machine has a change it does not apply.
-  3. kubernetes  the control planes, kube-proxy, then the kubelets (no reboot).
-  4. cilium      the Cilium release, last, so the new chart meets the Kubernetes it was tested with.
-
-Each run creates the next step's operation only. Without --follow it stops there; with --follow it
-keeps going until the cluster runs the release set or a step fails. Downgrades are refused, and
-nothing is started while another operation runs on the cluster.`,
-	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, _ []string) error {
-		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
-			return runClusterUpgrade(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), upgradeFlags.Cluster, upgradeClusterFollow)
-		})
-	},
-}
-
-// runClusterUpgrade plans, confirms and starts the next step of the cluster's rollout, and with
-// follow waits for it and goes on. A step that starts a second time in one run means the
-// cluster did not move, and the run stops rather than loop.
-func runClusterUpgrade(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, cluster string, follow bool) error {
-	ref, err := resolveCluster(ctx, c, cluster)
-	if err != nil {
-		return err
-	}
-
-	started := map[string]bool{}
-
-	for {
-		plan, err := c.Operation.PlanClusterUpgrade(ctx, connect.NewRequest(&pb.PlanClusterUpgradeRequest{Cluster: ref}))
-		if err != nil {
-			return err
-		}
-
-		if len(plan.Msg.GetSteps()) == 0 {
-			_, _ = fmt.Fprintf(errw, "ichor: cluster %s already runs the release set of Ichor %s: nothing to upgrade\n",
-				ref.GetName(), version.Version)
-
-			return nil
-		}
-
-		if b := plan.Msg.GetBlocked(); b != "" {
-			return errors.New(b)
-		}
-
-		if err := confirmPlan(in, errw, "upgrade cluster", clusterPlanText(ref.GetName(), plan.Msg)); err != nil {
-			return err
-		}
-
-		resp, err := c.Operation.StartClusterUpgrade(ctx, connect.NewRequest(&pb.StartClusterUpgradeRequest{Cluster: ref}))
-		if err != nil {
-			return err
-		}
-
-		step := resp.Msg.GetStep()
-		if started[step] {
-			return fmt.Errorf("upgrade cluster: step %s started again but the cluster did not move on: see its operation", step)
-		}
-
-		started[step] = true
-
-		if !follow {
-			return writeMessage(out, outputFormat, resp.Msg)
-		}
-
-		_, _ = fmt.Fprintf(errw, "created operation %s (step %s)\n", resp.Msg.GetOperation().GetName(), step)
-
-		if err := watchOperation(ctx, c, resp.Msg.GetOperation(), out, errw); err != nil {
-			return err
-		}
-	}
-}
-
-// clusterPlanText is what `upgrade cluster` shows before it starts the next step: the whole rollout's
-// steps, and which one starts now.
-func clusterPlanText(cluster string, p *pb.PlanClusterUpgradeResponse) string {
-	var b strings.Builder
-
-	rs := p.GetReleaseSet()
-	fmt.Fprintf(&b, "Bring cluster %q to the release set of Ichor %s: Talos %s, version contract %s, Kubernetes %s, Cilium %s.\n",
-		cluster, version.Version, rs.GetTalosVersion(), rs.GetVersionContract(), rs.GetKubernetesVersion(), rs.GetCiliumChartVersion())
-
-	for i, s := range p.GetSteps() {
-		line := ""
-
-		switch s.GetStep() {
-		case "talos":
-			line = fmt.Sprintf("Talos %s -> %s: each machine is upgraded and REBOOTS, one at a time; the version contract moves to %s.",
-				s.GetFrom(), s.GetTo(), rs.GetVersionContract())
-		case "config":
-			line = "Configuration: the pending change the new contract needs is applied; a machine that needs a reboot REBOOTS."
-		case "kubernetes":
-			line = fmt.Sprintf("Kubernetes %s -> %s: restarts the control plane components and kubelets, no reboot.", s.GetFrom(), s.GetTo())
-		case string(detectedCilium):
-			line = fmt.Sprintf("Cilium %s -> %s: the Cilium Helm release is upgraded.", s.GetFrom(), s.GetTo())
-		}
-
-		fmt.Fprintf(&b, "  %d. %s\n", i+1, line)
-	}
-
-	fmt.Fprintf(&b, "This starts step 1 only (%s). ", p.GetSteps()[0].GetStep())
-	if upgradeClusterFollow {
-		b.WriteString("With --follow the next steps follow when each one finishes.\n")
-	} else {
-		b.WriteString("Run the command again for the next step, or use --follow to go through all of them.\n")
-	}
-
-	return b.String()
-}
 
 func addStartFlags(cmd *cobra.Command, f *startFlags) {
 	fl := cmd.Flags()
@@ -260,16 +233,17 @@ func addStartFlags(cmd *cobra.Command, f *startFlags) {
 func init() {
 	rootCmd.AddCommand(upgradeCmd)
 	addAPIFlags(upgradeCmd)
-	upgradeCmd.AddCommand(upgradeClusterCmd, upgradeTalosCmd, upgradeKubernetesCmd, upgradeIchorCmd)
+	upgradeCmd.AddCommand(upgradeTalosCmd, upgradeKubernetesCmd, upgradeIchorCmd)
 
 	for _, c := range []*cobra.Command{upgradeTalosCmd, upgradeKubernetesCmd, upgradeIchorCmd} {
 		addStartFlags(c, &upgradeFlags)
 	}
 
-	upgradeClusterCmd.Flags().StringVar(&upgradeFlags.Cluster, "cluster", "", "the cluster (default: the only one in the namespace)")
-	upgradeClusterCmd.Flags().BoolVar(&upgradeClusterFollow, "follow", false, "keep going through the steps until the cluster runs the release set")
+	for _, c := range []*cobra.Command{upgradeTalosCmd, upgradeKubernetesCmd} {
+		c.Flags().BoolVar(&upgradeList, "list", false, "print the versions the cluster can move to, the recommended one first, and exit")
+	}
 
-	markWrites(upgradeClusterCmd, upgradeTalosCmd, upgradeKubernetesCmd, upgradeIchorCmd)
+	markWrites(upgradeTalosCmd, upgradeKubernetesCmd, upgradeIchorCmd)
 }
 
 // refuseHelmManagedInstall stops a command that would run the installer Job when Helm owns the

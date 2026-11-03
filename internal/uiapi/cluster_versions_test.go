@@ -31,7 +31,7 @@ func TestComponentVersionsReportTheRunningVersions(t *testing.T) {
 
 	c := &ichorv1alpha1.TalosCluster{
 		Spec: ichorv1alpha1.TalosClusterSpec{
-			TalosVersion: "v1.13.2", VersionContract: "v1.13", KubernetesVersion: "v1.36.2",
+			TalosVersion: opOldTalos, VersionContract: "v1.13", KubernetesVersion: fixtureK8s,
 		},
 		Status: ichorv1alpha1.TalosClusterStatus{CNI: &ichorv1alpha1.TalosClusterCNIStatus{
 			Detected: "cilium", DetectedVersion: "v1.17.0", AvailableChartVersion: release.Pinned.Cilium,
@@ -44,9 +44,9 @@ func TestComponentVersionsReportTheRunningVersions(t *testing.T) {
 	}
 
 	for name, want := range map[string]pbComponent{
-		componentTalos:    {current: "v1.13.2", target: release.Pinned.Talos},
+		componentTalos:    {current: opOldTalos, target: release.Pinned.Talos},
 		componentContract: {current: "v1.13", target: release.Pinned.VersionContract},
-		componentK8s:      {current: "v1.36.2", target: release.Pinned.Kubernetes},
+		componentK8s:      {current: fixtureK8s, target: release.Pinned.Kubernetes},
 		componentCilium:   {current: "1.17.0", target: release.Pinned.Cilium, state: string(release.Behind)},
 	} {
 		g := got[name]

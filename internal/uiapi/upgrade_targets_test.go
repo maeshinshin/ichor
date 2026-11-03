@@ -55,7 +55,7 @@ func TestListUpgradeTargetsGroupsTheTalosReleasesTheClusterCanTake(t *testing.T)
 	// minor and is not offered, 1.15 is unknown to this machinery.
 	srv, _ := opServer(t,
 		upgradeCluster("v1.12.0", "1.20.0"),
-		recordedLists([]string{"v1.15.0", "v1.14.5", "v1.14.3", "v1.13.2", "v1.12.4", "v1.12.0"}, nil, ""),
+		recordedLists([]string{"v1.15.0", "v1.14.5", fixtureTalos, opOldTalos, "v1.12.4", "v1.12.0"}, nil, ""),
 	)
 
 	m := listUpgradeTargets(t, srv, pb.OperationKind_OPERATION_KIND_TALOS)
@@ -65,7 +65,7 @@ func TestListUpgradeTargetsGroupsTheTalosReleasesTheClusterCanTake(t *testing.T)
 	}
 
 	if !slices.Equal(m.GetRecommended(), []string{"v1.14.5"}) || !slices.Equal(m.GetPatch(), []string{"v1.12.4"}) ||
-		!slices.Equal(m.GetNextMinor(), []string{"v1.13.2"}) {
+		!slices.Equal(m.GetNextMinor(), []string{opOldTalos}) {
 		t.Fatalf("recommended %v, patch %v, next minor %v", m.GetRecommended(), m.GetPatch(), m.GetNextMinor())
 	}
 
@@ -78,7 +78,7 @@ func TestListUpgradeTargetsGroupsTheKubernetesReleasesOfTheClusterTalosAndCilium
 	// Kubernetes 1.34.2 on Talos 1.14.3 with Cilium 1.20: 1.34.3 is a patch, 1.35.0 the next minor,
 	// 1.36.0 and 1.37.1 are more than one minor up, and 1.37.1 is also not tested with Cilium 1.20.
 	srv, _ := opServer(t,
-		upgradeCluster("v1.14.3", "1.20.0"),
+		upgradeCluster(fixtureTalos, "1.20.0"),
 		recordedLists(nil, []string{"v1.37.1", "v1.36.0", "v1.35.0", "v1.34.3"}, ""),
 	)
 
@@ -96,7 +96,7 @@ func TestListUpgradeTargetsGroupsTheKubernetesReleasesOfTheClusterTalosAndCilium
 
 func TestListUpgradeTargetsOffersNothingWhenCiliumIsUnknown(t *testing.T) {
 	srv, _ := opServer(t,
-		upgradeCluster("v1.14.3", ""),
+		upgradeCluster(fixtureTalos, ""),
 		recordedLists(nil, []string{"v1.34.3", "v1.35.0"}, ""),
 	)
 
@@ -135,7 +135,7 @@ func TestListUpgradeTargetsSaysWhyTheListIsNotThere(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			srv, _ := opServer(t, append([]client.Object{upgradeCluster("v1.14.3", "1.20.0")}, tc.objs...)...)
+			srv, _ := opServer(t, append([]client.Object{upgradeCluster(fixtureTalos, "1.20.0")}, tc.objs...)...)
 
 			m := listUpgradeTargets(t, srv, pb.OperationKind_OPERATION_KIND_TALOS)
 
@@ -164,7 +164,7 @@ func TestListUpgradeTargetsKeepsTheLastListWhenTheCheckFailed(t *testing.T) {
 }
 
 func TestListUpgradeTargetsRefusesAnotherKind(t *testing.T) {
-	srv, _ := opServer(t, upgradeCluster("v1.14.3", "1.20.0"))
+	srv, _ := opServer(t, upgradeCluster(fixtureTalos, "1.20.0"))
 
 	_, err := srv.ListUpgradeTargets(context.Background(), connect.NewRequest(&pb.ListUpgradeTargetsRequest{
 		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CNI,
@@ -175,7 +175,7 @@ func TestListUpgradeTargetsRefusesAnotherKind(t *testing.T) {
 }
 
 func TestClusterRolloutRPCsAreUnimplemented(t *testing.T) {
-	srv, _ := opServer(t, upgradeCluster("v1.14.3", "1.20.0"))
+	srv, _ := opServer(t, upgradeCluster(fixtureTalos, "1.20.0"))
 
 	_, err := srv.PlanClusterUpgrade(context.Background(), connect.NewRequest(&pb.PlanClusterUpgradeRequest{ //nolint:staticcheck // deprecated RPC, ADR 0115
 		Cluster: objectRef(opNS, opCluster),

@@ -585,6 +585,8 @@ export const en = {
 
   'ops.row.talos': 'Talos',
   'ops.row.kubernetes': 'Kubernetes',
+  'ops.row.contract': 'Version contract',
+  'ops.row.cilium': 'Cilium',
   'ops.row.ichor': 'Ichor',
   'ops.row.cni': 'kube-proxy',
   'ops.action.upgrade': 'Upgrade',
@@ -1112,6 +1114,21 @@ export const en = {
   'overview.nodeReady': 'Ready',
   'overview.nodeNotReady': 'Not ready',
   'overview.nodeUnknown': 'Unknown',
+  'versions.state.up-to-date': 'Up to date',
+  'versions.state.behind': 'Behind',
+  'versions.state.ahead': 'Ahead',
+  'versions.state.unknown': 'Unknown',
+  'versions.bring': 'Bring the cluster to the versions of Ichor {version}',
+  'versions.bringUnknown': 'Bring the cluster to the versions of this Ichor',
+  'versions.checking': 'Checking the steps.',
+  'versions.upgradeIntro':
+    'Ichor runs these steps in order. Only the first one starts now. Each following step needs another click on this button, after the one before it has finished.',
+  'versions.upgradeStart': 'Start the first step',
+  'versions.upgradeStarted': 'Cluster upgrade started',
+  'versions.step.talos': 'Talos {from} → {to}: each machine is upgraded and reboots, one at a time; the version contract moves to {contract}.',
+  'versions.step.config': 'Configuration: the pending change the new contract needs is applied; a machine that needs a reboot reboots.',
+  'versions.step.kubernetes': 'Kubernetes {from} → {to}: control plane components and kubelets restart, no reboot.',
+  'versions.step.cilium': 'Cilium {from} → {to}: the Cilium Helm release is upgraded.',
 } as const
 
 export type Key = keyof typeof en

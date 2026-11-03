@@ -373,7 +373,10 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 		return nil, err
 	}
 
-	var reason string
+	// An override (a non-nil request field) is honoured for a reset, and for a reboot or shutdown, where
+	// it overrides the controller's last-worker guard. The reason is optional.
+	override := np.bg != nil && (np.action == ichorv1alpha1.NodeActionReset ||
+		np.action == ichorv1alpha1.NodeActionReboot || np.action == ichorv1alpha1.NodeActionShutdown)
 
 	if np.action == ichorv1alpha1.NodeActionReset {
 		if np.spec.Confirm != np.machine.Name && np.spec.Confirm != np.asked {
@@ -383,24 +386,20 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 		// The user may have named the node by its hostname; the CRD compares confirm with machineRef.name.
 		np.spec.Confirm = np.machine.Name
 
-		reason = strings.TrimSpace(np.bg.GetReason())
-		if reason == "" {
-			return nil, invalid("a reset needs an override reason: it goes into the audit record and the Event")
-		}
-
-		if err := s.authorizeOverride(ctx, np.machine); err != nil {
-			return nil, err
+		if !override {
+			return nil, invalid("a reset needs the override: it is checked against the override permission on the machine")
 		}
 	}
 
-	// Override on a reboot or shutdown overrides the controller's last-worker guard: the same reason, verb check, audit
-	// and Event as a reset.
-	if r := strings.TrimSpace(np.bg.GetReason()); r != "" && (np.action == ichorv1alpha1.NodeActionReboot || np.action == ichorv1alpha1.NodeActionShutdown) {
+	var reason string
+
+	if override {
 		if err := s.authorizeOverride(ctx, np.machine); err != nil {
 			return nil, err
 		}
 
-		reason, np.spec.OverrideReason = r, r
+		reason = strings.TrimSpace(np.bg.GetReason())
+		np.spec.Override, np.spec.OverrideReason = true, reason
 	}
 
 	cluster := p.cluster
@@ -417,10 +416,11 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 
 	audit := s.opAudit(ctx, "create", objectRef(op.Namespace, op.Name))
 
-	if reason != "" {
+	if override {
+		why := overrideReason(reason)
 		audit.Action += "-override"
-		audit.Reason = reason
-		msg := fmt.Sprintf("%s of %s requested by %s under override: %s", np.action, np.machine.Name, audit.Actor, reason)
+		audit.Reason = why
+		msg := fmt.Sprintf("%s of %s requested by %s under override: %s", np.action, np.machine.Name, audit.Actor, why)
 
 		if err := s.emitWarningEvent(ctx, np.machine, kindTalosMachine, "Override", msg); err != nil {
 			audit.Reason += " (the Kubernetes Event could not be recorded)"

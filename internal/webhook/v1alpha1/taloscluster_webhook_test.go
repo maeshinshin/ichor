@@ -25,7 +25,6 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
-	"github.com/maeshinshin/ichor/pkg/release"
 )
 
 func newTestCluster() *ichorv1alpha1.TalosCluster {
@@ -68,7 +67,7 @@ var _ = Describe("TalosCluster Webhook", func() {
 	})
 
 	It("admits update", func() {
-		obj.Spec.KubernetesVersion = release.Pinned.Kubernetes
+		obj.Spec.KubernetesVersion = "v1.36.1"
 		Expect(k8sClient.Update(ctx, obj)).To(Succeed())
 	})
 

@@ -24,7 +24,7 @@ func planKubernetesTarget(t *testing.T, cluster *ichorv1alpha1.TalosCluster, tar
 
 func TestPlanKubernetesMarksACompatibilityRefusalOverridable(t *testing.T) {
 	cluster := upgradeCluster(fixtureTalos, "1.20.4")
-	cluster.Spec.KubernetesVersion = "v1.36.0"
+	cluster.Spec.KubernetesVersion = "v1.36.1"
 	err := planKubernetesTarget(t, cluster, "v1.37.0", nil)
 
 	var ce *connect.Error
@@ -35,7 +35,7 @@ func TestPlanKubernetesMarksACompatibilityRefusalOverridable(t *testing.T) {
 
 func TestPlanKubernetesDoesNotMarkAnUnknownVersionOverridable(t *testing.T) {
 	cluster := upgradeCluster(fixtureTalos, "1.99.0")
-	cluster.Spec.KubernetesVersion = "v1.36.0"
+	cluster.Spec.KubernetesVersion = "v1.36.1"
 	err := planKubernetesTarget(t, cluster, "v1.37.0", &pb.Override{})
 
 	var ce *connect.Error

@@ -148,6 +148,28 @@ func (st *adoptState) needsTakeover() bool {
 // runAdopt implements `ichor adopt` (docs/design/architecture.md, "Bootstrap") in the four phases: plan (reads
 // only), write, Cilium takeover, release of the hold. Nothing is
 // written before the operator consented to the plan, and nothing is applied to a node by adopt.
+// checkAdoptCompat judges the versions adopt is about to take over against the compatibility table. A version the
+// table does not know at all is refused: Ichor could not operate the
+// cluster. A pair the table marks incompatible is only reported, and the Cilium adopt installs (the
+// chart this Ichor embeds) is judged too.
+func checkAdoptCompat(w io.Writer, talos, kubernetes string) error {
+	for _, err := range []error{
+		release.TalosKubernetesError(talos, kubernetes),
+		release.CiliumKubernetesError(release.Pinned.Cilium, kubernetes),
+	} {
+		switch {
+		case err == nil:
+		case errors.Is(err, release.ErrUnknownVersion):
+			return fmt.Errorf("adopt: %w: Ichor cannot operate this cluster", err)
+		default:
+			_, _ = fmt.Fprintf(w, "adopt: warning: %v; the cluster is adopted as it runs, and an upgrade that would make it "+
+				"compatible is refused until the pair is compatible\n", err)
+		}
+	}
+
+	return nil
+}
+
 func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps) error {
 	if deps.Ichor != nil || deps.RequireIchor {
 		if err := checkIchorPresence(ctx, deps.K8s, deps.Stderr, ichorversion.Version, deps.RequireIchor); err != nil {
@@ -157,6 +179,10 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 
 	st, err := loadAdoption(ctx, clusterName, namespace, deps)
 	if err != nil {
+		return err
+	}
+
+	if err := checkAdoptCompat(deps.Stderr, st.cluster.Spec.TalosVersion, st.cluster.Spec.KubernetesVersion); err != nil {
 		return err
 	}
 
@@ -716,29 +742,7 @@ func (st *adoptState) chooseContract(deps adoptDeps) error {
 		return nil
 	}
 
-	// The versions the cluster runs are judged against this build's release set before anything is
-	// written: newer is refused, older is adopted and reported as behind.
-	behind, err := release.Adoptable(st.cluster.Spec.TalosVersion, st.cluster.Spec.KubernetesVersion)
-	if err != nil {
-		return fmt.Errorf("adopt: %w", err)
-	}
-
-	if len(behind) > 0 {
-		_, _ = fmt.Fprintf(deps.Stderr, "adopt: the cluster is behind the release set of this Ichor (%s): "+
-			"`ichor upgrade cluster` brings it there, one step at a time\n", strings.Join(behind, ", "))
-	}
-
 	if deps.ContractOverride != "" {
-		if err := checkPinnedFlags("", "", deps.ContractOverride); err != nil {
-			return fmt.Errorf("adopt: %w", err)
-		}
-
-		if len(behind) > 0 {
-			return fmt.Errorf("adopt: --version-contract %s is refused: the contract follows the running Talos "+
-				"(%s), which is behind; the contract moves with the Talos step of `ichor upgrade cluster`",
-				deps.ContractOverride, st.cluster.Spec.TalosVersion)
-		}
-
 		st.cluster.Spec.VersionContract = deps.ContractOverride
 
 		return nil

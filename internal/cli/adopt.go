@@ -226,7 +226,7 @@ func init() {
 	adoptCmd.Flags().StringVar(&adoptSeed, "node", "",
 		"address of one control plane; adopt discovers the cluster's machines from its membership when the TalosCluster does not exist yet")
 	adoptCmd.Flags().StringVar(&adoptContract, "version-contract", "",
-		"use this Talos version contract instead of the probed one; only the release set's contract is accepted, and not for a cluster behind it")
+		"use this Talos version contract (v1.12 to the running minor) instead of the probed one")
 
 	adoptCmd.Flags().BoolVar(&adoptAcceptChanges, "accept-cilium-changes", false,
 		"accept the Ichor-owned Cilium settings the takeover will change on the running data plane (never IPAM or the tunnel protocol)")

@@ -142,6 +142,79 @@ var _ = Describe("ReleaseCheck", Ordered, func() {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "the rule goes with the switch")
 	})
 
+	// byRepo lists the given repositories; any other one fails, as an unreachable registry would.
+	byRepo := func(tags map[string][]string) releasecheck.Lister {
+		return func(repo string) ([]string, error) {
+			if t, ok := tags[repo]; ok {
+				return t, nil
+			}
+
+			return nil, errors.New("registry unreachable for " + repo)
+		}
+	}
+
+	targets := func() *ichorv1alpha1.IchorUpgradeTargets {
+		var inst ichorv1alpha1.IchorInstallation
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
+
+		return inst.Status.UpgradeTargets
+	}
+
+	It("lists the Talos and Kubernetes releases at or above the floors, newest first", func() {
+		createInstallation("v0.1.0")
+
+		Expect(newCheck(byRepo(map[string][]string{
+			releasecheck.DefaultRepository:           {"0.2.0"},
+			releasecheck.DefaultTalosRepository:      {"v1.11.0", "v1.12.0", "v1.14.3", "v1.15.0-rc.1"},
+			releasecheck.DefaultKubernetesRepository: {"v1.29.0", "v1.30.0", "v1.37.1", "v1.37.1-rc.1"},
+		}), true).check(ctx)).To(BeTrue())
+
+		ut := targets()
+		Expect(ut).NotTo(BeNil())
+		Expect(ut.Talos).To(Equal([]string{"v1.14.3", "v1.12.0"}))
+		Expect(ut.Kubernetes).To(Equal([]string{"v1.37.1", "v1.30.0"}))
+		Expect(ut.Error).To(BeEmpty())
+		Expect(ut.CheckedAt).NotTo(BeNil())
+	})
+
+	It("keeps the last good list of a repository that fails, and says why", func() {
+		createInstallation("v0.1.0")
+
+		Expect(newCheck(byRepo(map[string][]string{
+			releasecheck.DefaultRepository:           {"0.2.0"},
+			releasecheck.DefaultTalosRepository:      {"v1.14.3"},
+			releasecheck.DefaultKubernetesRepository: {"v1.37.1"},
+		}), true).check(ctx)).To(BeTrue())
+
+		Expect(newCheck(byRepo(map[string][]string{
+			releasecheck.DefaultRepository:      {"0.2.0"},
+			releasecheck.DefaultTalosRepository: {"v1.14.4"},
+		}), true).check(ctx)).To(BeTrue())
+
+		ut := targets()
+		Expect(ut.Talos).To(Equal([]string{"v1.14.4"}))
+		Expect(ut.Kubernetes).To(Equal([]string{"v1.37.1"}), "the failed listing keeps its last good list")
+		Expect(ut.Error).To(ContainSubstring("listing the Kubernetes releases"))
+	})
+
+	It("clears the upgrade lists while the switch is off", func() {
+		createInstallation("v0.1.0")
+		Expect(newCheck(byRepo(map[string][]string{
+			releasecheck.DefaultRepository:           {"0.2.0"},
+			releasecheck.DefaultTalosRepository:      {"v1.14.3"},
+			releasecheck.DefaultKubernetesRepository: {"v1.37.1"},
+		}), true).check(ctx)).To(BeTrue())
+		Expect(targets()).NotTo(BeNil())
+
+		var inst ichorv1alpha1.IchorInstallation
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
+		inst.Spec.UpdateCheck = &ichorv1alpha1.IchorUpdateCheckSettings{Enabled: new(false)}
+		Expect(k8sClient.Update(ctx, &inst)).To(Succeed())
+
+		Expect(newCheck(listing("0.9.0"), true).check(ctx)).To(BeTrue())
+		Expect(targets()).To(BeNil())
+	})
+
 	It("waits for the singleton instead of losing the result", func() {
 		Expect(newCheck(listing("0.2.0"), true).check(ctx)).To(BeFalse())
 	})

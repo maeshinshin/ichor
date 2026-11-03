@@ -59,7 +59,7 @@ The Talos 1.14 docs say that from Talos 1.14 the `ghcr.io/siderolabs/installer` 
 Compatibility is enforced by one typed table: `pkg/release/compat.go`, maintained with each Ichor release. Each entry has its source URL in a comment.
 
 - **Cilium** (`ciliumKubernetes`): the Kubernetes minors each Cilium minor is e2e tested with. 1.18: 1.30 to 1.33 (docs.cilium.io/en/v1.18/network/kubernetes/requirements/). 1.19: 1.31 to 1.34 (docs.cilium.io/en/v1.19/network/kubernetes/requirements/). 1.20: 1.33 to 1.36 (docs.cilium.io/en/v1.20/network/kubernetes/requirements/). A Cilium minor not in the table is unknown, and nothing is compatible with it.
-- **Talos** (`talosKubernetesNewer`): Kubernetes ranges for Talos minors that the machinery in go.mod does not know, from the Talos support matrix. It is empty in this build. Machinery decides every Talos minor it knows, and the table is consulted only for the others; see the open point on the Talos 1.14 range.
+- **Talos** (`talosKubernetes`): Kubernetes ranges for Talos minors, from the Talos support matrix. Talos 1.14: 1.33 to 1.37 (docs.siderolabs.com/talos/v1.14/getting-started/support-matrix). Where the table has a Talos minor, it decides the pair, and machinery must still accept the pair (it bounds the table). Machinery decides the Talos minors the table lacks (amendment 2026-11-03, below).
 
 Two functions read the table:
 
@@ -136,7 +136,7 @@ The table is data, and the rules are code. The tests run the rules, not the tabl
 - Adopt warns for a known incompatible pair and refuses an unknown version (`TestCheckAdoptCompatWarnsOrRefuses`).
 - Init refuses an incompatible set (`TestCheckInitCompatRefusesAnIncompatibleSet`); the pinned set is checked to be consistent with machinery (`TestPinnedIsConsistentWithMachinery`).
 - The candidate lists: `TestListUpgradeTargets*` in `internal/uiapi` cover the groups, the Cilium rule, the unavailable reasons and the last good list after a failed check.
-- The webhook refuses an incompatible pair and accepts it under the override verb (`TestTalosClusterRefusesAnIncompatiblePairUnlessOverridden`). **This test currently fails**: it now uses Kubernetes 1.31.9, below machinery's Talos 1.14 range, so the refusal is still exercised. Machinery accepts 1.32.0 with Talos 1.14 (see the open point on the Talos 1.14 range).
+- The webhook refuses an incompatible pair and accepts it under the override verb (`TestTalosClusterRefusesAnIncompatiblePairUnlessOverridden`). The test uses Kubernetes 1.31.9, below the table's Talos 1.14 range of 1.33 to 1.37, so the refusal is exercised. Kubernetes 1.32.0 is refused with Talos 1.14 too (amendment 2026-11-03).
 
 ## Why this shape
 
@@ -155,7 +155,57 @@ The table is data, and the rules are code. The tests run the rules, not the tabl
 
 ## Open points
 
-- **The Talos 1.14 Kubernetes range (decision needed: which source wins).** Machinery v1.14.5 (`pkg/machinery/compatibility/talos114`) accepts Kubernetes 1.32.0 to 1.37.99 with Talos 1.14. The Talos v1.14 support matrix (docs.siderolabs.com/talos/v1.14/getting-started/support-matrix) lists Kubernetes 1.33 to 1.37. The code follows machinery first: `KubernetesPairing` decides every minor machinery knows, and the typed Talos table (`talosKubernetesNewer`) is consulted only for minors machinery does not know. The typed Talos table is therefore empty, and Kubernetes 1.32 is accepted with Talos 1.14. Options: (a) keep machinery as the source (the code as it is now; the Talos table stays empty, and the refusal test uses a Kubernetes version below machinery's range); (b) let the documented range win (the lookup order must change so the Talos table is consulted for Talos 1.14 before machinery, and the table holds 1.33 to 1.37). The user chooses; the code follows machinery until then.
-- **The Talos 1.14 range is decided by machinery for now.** The test that exercised the refusal uses Kubernetes 1.31.9; the documented 1.33 to 1.37 range is still to be chosen as the source (see the first open point).
+- **The Talos 1.14 Kubernetes range (decided 2026-11-03: the support matrix wins).** The typed table holds Talos 1.14 with Kubernetes 1.33 to 1.37, and the table decides that minor; machinery bounds it. See the amendment below.
+- **Cilium patches (open after the 2026-11-03 amendment).** Hardware run, Envoy and certgen images, and trusted-root refresh are open; see the amendment.
 - **The embedded set.** The table must hold the pinned set together: `Pinned` (Talos, Kubernetes and the embedded Cilium) is checked by `TestPinnedIsConsistentWithMachinery`. When it is not, the first install is refused by `checkInitCompat`, so the set and the chart move together in one change.
 - **Talos 1.15 and later** are not in machinery's table of this build, so they are refused as unknown until a build that knows them.
+
+## Amendment 2026-11-03: the Talos 1.14 range follows the support matrix, and Cilium patches are verified
+
+The user decided two points on 2026-11-03.
+
+### 1. The Talos 1.14 Kubernetes range
+
+The Kubernetes range of a Talos minor follows the official Talos support matrix, not machinery's wider table. Talos 1.14 supports Kubernetes 1.33 to 1.37 (docs.siderolabs.com/talos/v1.14/getting-started/support-matrix). Machinery v1.14.5 accepts 1.32.0 to 1.37.99.
+
+- `pkg/release/compat.go` holds `talosKubernetes`, keyed by Talos minor, with `"1.14": {min: "1.33", max: "1.37"}`.
+- `TalosKubernetesError`: when the table has the Talos minor, the table decides. A Kubernetes outside the range is refused. A Kubernetes inside it must still pass `upgrade.KubernetesPairing`, which bounds the table. A Talos minor the table lacks is decided by machinery as before.
+- Tests: `TestTalosKubernetesUsesMachineryAndRefusesUnknownMinors` (1.32.0 is refused with Talos 1.14; 1.33.0 and 1.36.6 are accepted). The webhook refusal test uses Kubernetes 1.31.9 and passes. `TestPinnedIsConsistentWithMachinery` and the Kubernetes 1.36.6 pinned set still hold.
+
+### 2. Cilium security patches before an Ichor release (option A)
+
+A Cilium patch of the embedded chart's minor is offered and run before an Ichor release carries it. The release keeps the embedded chart and runs the patch's agent, operator and hubble-relay images, pinned by digest, after each image's cosign signature verifies.
+
+**Candidates.** The controller lists `quay.io/cilium/cilium` tags (`releasecheck.DefaultCiliumRepository`). It keeps the final releases of the embedded chart's minor that are newer than the chart, at most five per check (newest first). Each candidate's three images must resolve and verify, then the patch is listed in `IchorUpgradeTargets.cilium` (new status field, append-only). A patch whose signature does not verify is not listed.
+
+**Verification (`internal/imagesig`).** Cilium signs its images with cosign keyless since 1.13 (docs.cilium.io/en/latest/configuration/verify-image-signatures/). The signatures are OCI referrers of the image digest, stored as Sigstore bundles (v0.3). The check uses the OIDC issuer `https://token.actions.githubusercontent.com` and an anchored SAN regular expression for `https://github.com/cilium/cilium/.github/workflows/build-images-releases.yaml@refs/tags/<tag>`, the identity the docs name for that tag. Every referrer with the cosign sign predicate is checked with sigstore-go against the embedded trusted root (`internal/imagesig/trusted_root.json`, fetched from the Sigstore TUF repository). The check is offline: the bundles carry their transparency-log inclusion proofs. The live check passed for `cilium:v1.20.4`, `operator-generic` and `hubble-relay` (`TestVerifyCiliumAgentLive`, run with `ICHOR_LIVE_IMAGE_SIGNATURES=1`).
+
+**Dependency.** `github.com/sigstore/sigstore-go` v1.3.0 (released 2026-07-30). It is the official Sigstore verifier and the smallest one that verifies bundles offline; the cosign library pulls in the whole CLI, and the cosign binary is not run. `github.com/google/go-containerregistry` was already in the module graph and is now a direct requirement, for the referrers and digests.
+
+**Egress.** The release check's controller policy (ADR 0114) gets one host: `quay.io` on 443/TCP, written only while the check is on and only when the Cilium candidates are checked. The Sigstore checks need no other host: the trusted root is embedded, and the bundles carry their proofs.
+
+**Applying (a cni operation with `spec.cni.imageVersion`).** `StartCniUpgrade` takes an optional `version`. It must be one the server offers as a Cilium patch (in `IchorUpgradeTargets.cilium`, newer than the running Cilium, not reached by the chart, and compatible with the cluster's Kubernetes through `release.CiliumKubernetesError`). The operation then runs in `upgradeChart`:
+
+1. the controller resolves each image's tag to its digest and verifies its signature again (the controller holds the quay egress; ichor-ui and the CLI do not, so the verification happens at apply, not in the plan);
+2. the Helm Job runs with the chart's `image.override`, `operator.image.override` and `hubble.relay.image.override` set to `repository:tag@sha256:digest`, passed as the job's `--image-version` and `--image-override key=reference` flags;
+3. after the rollout, the override is written to `status.cni.imageOverride` (new status field, controller-written; the spec is not touched).
+
+Every later Job keeps the override: `EffectiveValuesForMode` reads it, and `CNIValuesHash` includes it, so an unrelated values change does not drop the patch. A deployed release counts as done for a patch only when its values hash matches the patch's.
+
+**Dropping.** `cilium.ImageOverrideActive` is nil once the embedded chart reaches or passes the patch. The reconciler clears `status.cni.imageOverride` then, and `CiliumChoices` offers nothing at or below the chart. A newer Ichor's chart therefore replaces the patch without an operation.
+
+**UI and CLI.** The Cilium row shows "Patch available" from the same list as Talos and Kubernetes, and the attention list names Cilium. The Cilium page's upgrade card holds the stock combobox (`VersionPicker`) over the verified patches; an empty choice is the embedded chart upgrade, as before. `ichor cni upgrade [VERSION] [--list]` is the existing command with the optional version and `--list`; there is no new `ichor upgrade cilium` verb. `ListUpgradeTargets` accepts the `cni` kind (the patch group only).
+
+**Proto.** `StartCniUpgradeRequest.version` (field 2). `ListUpgradeTargets` documents the `cni` kind. Both are additive.
+
+**Tests.** `pkg/release` (`cilium_targets_test.go`: the patch group, a running release already at the patch, the chart reaching it, a Kubernetes the Cilium does not run); `internal/controller` (`release_cilium_test.go`: tag filtering, an unsigned operator image keeps a patch out, the verified cache, the cap; `cni_patch_test.go`: the verified override, the refusals, the Job's flags); `internal/imagesig` (the identity matches only its tag, a registry with no signature and a signature that does not parse are refused, the live check); `pkg/cni/cilium` (`imageoverride_test.go`: the chart paths, a tag without digest refused, the render runs the digests, the drop); `internal/uiapi` (`TestListUpgradeTargetsOffersTheVerifiedCiliumPatchesOfTheRunningMinor`); `internal/cli` (`cni_patch_flags_test.go`); `ui/src/lib/upgradeTargets.test.ts`.
+
+**Open points.**
+
+- Hardware: no hardware run of a Cilium patch upgrade. The user did not ask for one in this change.
+- No patch to offer yet: `quay.io/cilium/cilium:v1.20.5` returned 404 on 2026-11-03, so the list is empty until Cilium publishes a patch.
+- Envoy and certgen are not overridden. The 1.20.4 chart pins `cilium-envoy` (v1.39.5-…) and `certgen` by digest, and a patch that bumps Envoy would not get it. The Envoy tag of a patch cannot be read from the Cilium tag. Decide whether the patch's chart is read (a further host, helm.cilium.io) or Envoy stays at the chart's digest.
+- The trusted root is a snapshot of the public-good Sigstore root, embedded. It must be refreshed when Sigstore rotates its keys; `trusted_root.json` and the `sigstore-go` version in go.mod are refreshed together.
+- Cost: each candidate's agent signature is an 8.5 MB referrer. The verified images are remembered in memory only, so a controller restart verifies again. Five candidates at most per check.
+- The candidates follow the embedded chart's minor. A cluster on Cilium 1.19 takes the chart upgrade first (one minor at a time, ADR 0099).
+- A Cilium release that changes its signing workflow's file name stops verifying: its patches are refused and not offered, which is the intended failure.

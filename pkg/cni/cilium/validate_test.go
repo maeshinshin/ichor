@@ -151,7 +151,7 @@ func TestEffectiveValues_MergePrecedence(t *testing.T) {
 		keyDebug: map[string]any{keyEnabled: true},
 	}
 
-	got, err := EffectiveValues(user, cni.KubeProxyReplaced, tunnelGeneve)
+	got, err := EffectiveValues(user, cni.KubeProxyReplaced, tunnelGeneve, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestEffectiveValues_MergePrecedence(t *testing.T) {
 		}
 	}
 
-	if _, err := EffectiveValues(map[string]any{"tunnelProtocol": "vxlan"}, cni.KubeProxyEnabled, ""); err == nil ||
+	if _, err := EffectiveValues(map[string]any{"tunnelProtocol": "vxlan"}, cni.KubeProxyEnabled, "", 0); err == nil ||
 		!strings.Contains(err.Error(), "tunnelProtocol") {
 		t.Errorf("owned key error = %v, want one naming tunnelProtocol", err)
 	}

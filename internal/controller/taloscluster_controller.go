@@ -141,7 +141,7 @@ func (r *TalosClusterReconciler) freshAddress(cluster *ichorv1alpha1.TalosCluste
 	current := map[string]bool{}
 	fresh := false
 
-	for _, e := range append(slices.Clone(cluster.Spec.Discovery.Addresses), cluster.Spec.Discovery.CIDRs...) {
+	for _, e := range slices.Concat(cluster.Spec.Discovery.Addresses, cluster.Spec.Discovery.CIDRs) {
 		k := prefix + e
 		current[k] = true
 

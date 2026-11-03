@@ -30,16 +30,16 @@ test('review needs a chosen snapshot and nothing in flight', () => {
   assert.equal(canReview({ choice, busy: true }), false)
 })
 
-const ready = { planned: true, blocked: '', clusterName: 'prod', typed: 'prod', reason: 'namespace deleted by mistake', busy: false }
+const ready = { planned: true, blocked: '', clusterName: 'prod', typed: 'prod', overridden: true, busy: false }
 
-test('restore needs the plan, the typed cluster name and a reason, and never goes on a blocked plan', () => {
+test('restore needs the plan, the typed cluster name and the override tick, and never goes on a blocked plan', () => {
   assert.equal(canRestore(ready), true)
   assert.equal(canRestore({ ...ready, planned: false }), false)
   assert.equal(canRestore({ ...ready, blocked: 'another operation is running' }), false)
   assert.equal(canRestore({ ...ready, typed: 'pro' }), false)
   assert.equal(canRestore({ ...ready, typed: ' prod ' }), true)
   assert.equal(canRestore({ ...ready, typed: 'Prod' }), false)
-  assert.equal(canRestore({ ...ready, reason: '   ' }), false)
+  assert.equal(canRestore({ ...ready, overridden: false }), false)
   assert.equal(canRestore({ ...ready, busy: true }), false)
   assert.equal(canRestore({ ...ready, clusterName: '', typed: '' }), false)
 })

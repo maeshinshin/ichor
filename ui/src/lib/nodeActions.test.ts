@@ -48,23 +48,27 @@ const base = {
   confirmName: 'node-1',
   typed: 'node-1',
   nodeName: 'node-1',
-  reason: 'node is dead',
+  overridden: true,
   service: '',
   busy: false,
 }
 
-test('Start waits for the plan, the typed name and the reason, and never starts a blocked plan', () => {
+test('Start waits for the plan, the typed name and the override tick, and never starts a blocked plan', () => {
   assert.equal(canStart(base), true)
   assert.equal(canStart({ ...base, planned: false }), false)
   assert.equal(canStart({ ...base, blocked: 'another operation is running' }), false)
   assert.equal(canStart({ ...base, typed: 'node-' }), false)
-  assert.equal(canStart({ ...base, reason: '  ' }), false)
+  assert.equal(canStart({ ...base, overridden: false }), false)
   assert.equal(canStart({ ...base, busy: true }), false)
+})
+
+test('a reset needs the override ticked, and no reason is required', () => {
+  assert.equal(canStart({ ...base, overridden: true }), true)
 })
 
 test('a service restart needs a service from the allowlist', () => {
   const def = nodeActions.find((a) => a.id === 'restart-service')!
-  const o = { ...base, def, confirmName: '', typed: '', reason: '' }
+  const o = { ...base, def, confirmName: '', typed: '', overridden: false }
   assert.equal(canStart({ ...o, service: '' }), false)
   assert.equal(canStart({ ...o, service: 'etcd' }), false)
   assert.equal(canStart({ ...o, service: 'kubelet' }), true)

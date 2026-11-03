@@ -58,10 +58,10 @@ func lastWorkerFixture(t *testing.T) (*TalosClusterCustomValidator, *TalosMachin
 	}
 
 	reader := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, worker).Build()
-	check := overrideCheckFor(bgUnitHandler(t).Client)
+	check := rightCheckFor(bgUnitHandler(t).Client)
 
-	return &TalosClusterCustomValidator{APIReader: reader, Override: check},
-		&TalosMachineCustomValidator{APIReader: reader, Override: check}, worker
+	return &TalosClusterCustomValidator{APIReader: reader, Can: check},
+		&TalosMachineCustomValidator{APIReader: reader, Can: check}, worker
 }
 
 func admissionCtxAs(user string) context.Context {

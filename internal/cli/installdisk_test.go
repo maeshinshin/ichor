@@ -89,3 +89,29 @@ func TestApproveWritesTheInstallDisk(t *testing.T) {
 		t.Fatalf("want spec.install {wwid naa.1, image}, got %+v", got.Spec.Install)
 	}
 }
+
+// TestApproveWarnsAboutAnUndiscoveredDisk: an install disk discovery did not record is printed as a
+// warning on stderr and the approval still goes through.
+func TestApproveWarnsAboutAnUndiscoveredDisk(t *testing.T) {
+	setAPITestFlags(t, true)
+
+	m := strongMachine()
+	m.Status.DiscoveredDisks = []ichorv1alpha1.TalosMachineDiscoveredDisk{{WWID: "naa.2"}}
+
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(m).Build()
+	c := localClients(apiOpts, apiDeps{K8s: k8s})
+
+	var errw bytes.Buffer
+	if err := runMachineApprove(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &errw, "strong",
+		machineApproveOptions{Role: testRoleWorker, InstallDisk: "wwid:naa.1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(errw.String(), "warning: install disk") {
+		t.Fatalf("want an install disk warning on stderr, got %q", errw.String())
+	}
+
+	if !getMachine(t, k8s, "strong").Spec.IsApproved() {
+		t.Fatal("a warning must not stop the approval")
+	}
+}

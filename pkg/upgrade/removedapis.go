@@ -18,6 +18,7 @@ package upgrade
 
 import (
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"strconv"
@@ -82,14 +83,7 @@ func RemovedAPIsInUse(metrics, targetMinor string) ([]string, error) {
 		found[fmt.Sprintf("%s (removed in %s)", name, labels["removed_release"])] = struct{}{}
 	}
 
-	out := make([]string, 0, len(found))
-	for k := range found {
-		out = append(out, k)
-	}
-
-	slices.Sort(out)
-
-	return out, nil
+	return slices.Sorted(maps.Keys(found)), nil
 }
 
 func splitMinor(v string) (major, minor int, err error) {

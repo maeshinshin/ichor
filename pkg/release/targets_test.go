@@ -17,30 +17,21 @@ var fakeKubernetesTags = []string{
 	"v1.38.0", "v1.37.2-rc.1", "v1.37.2", "sha-1234",
 }
 
-// versionsOf is the versions of a group, for comparing a grouping with the expected list.
-func versionsOf(cs []Candidate) []string {
-	var out []string
-	for _, c := range cs {
-		out = append(out, c.Version)
-	}
-
-	return out
-}
-
 func TestTalosChoicesGroupPatchesOfTheMinorAndTheNextMinorOnly(t *testing.T) {
-	// From 1.12.0: 1.15.0 is unknown to this machinery, 1.14.x skips a minor and is not offered.
-	c := TalosChoices("v1.12.0", "v1.14.3", fakeTalosTags)
+	// From 1.12.0 on Kubernetes 1.33.0: 1.15.0 is unknown to this machinery, and 1.14.x skips a minor
+	// and is not offered, except the recommended 1.14.3, which the release set names.
+	c := TalosChoices("v1.12.0", "v1.33.0", "v1.14.3", fakeTalosTags)
 
-	if got := versionsOf(c.Recommended); !slices.Equal(got, []string{"v1.14.3"}) {
-		t.Errorf("Recommended = %v", got)
+	if !slices.Equal(c.Recommended, []string{"v1.14.3"}) {
+		t.Errorf("Recommended = %v", c.Recommended)
 	}
 
-	if got := versionsOf(c.Patch); !slices.Equal(got, []string{"v1.12.4"}) {
-		t.Errorf("Patch = %v", got)
+	if !slices.Equal(c.Patch, []string{"v1.12.4"}) {
+		t.Errorf("Patch = %v", c.Patch)
 	}
 
-	if got := versionsOf(c.NextMinor); !slices.Equal(got, []string{"v1.13.2"}) {
-		t.Errorf("NextMinor = %v", got)
+	if !slices.Equal(c.NextMinor, []string{"v1.13.2"}) {
+		t.Errorf("NextMinor = %v", c.NextMinor)
 	}
 
 	if got := c.Default(); got != "v1.14.3" {
@@ -48,117 +39,124 @@ func TestTalosChoicesGroupPatchesOfTheMinorAndTheNextMinorOnly(t *testing.T) {
 	}
 }
 
-func TestTalosNextMinorBoundaryAndNoRepeatOfTheRecommended(t *testing.T) {
-	// From 1.13.2 the next minor is 1.14: its newest patches are listed newest first, and the
-	// recommended 1.14.3 is not repeated among them.
-	c := TalosChoices("v1.13.2", "v1.14.3", fakeTalosTags)
-
-	if got := versionsOf(c.Recommended); !slices.Equal(got, []string{"v1.14.3"}) {
-		t.Errorf("Recommended = %v", got)
-	}
-
-	if got := versionsOf(c.NextMinor); !slices.Equal(got, []string{"v1.14.5", "v1.14.4"}) {
-		t.Errorf("NextMinor = %v", got)
-	}
+func TestTalosChoicesRequireTheRunningKubernetesToBeSupported(t *testing.T) {
+	// Kubernetes 1.36.0 is outside Talos 1.12's range (1.30.0 to 1.35.99), so the 1.12 patch is not
+	// offered; Talos 1.13 and 1.14 support it.
+	c := TalosChoices("v1.12.0", "v1.36.0", "v1.14.3", fakeTalosTags)
 
 	if len(c.Patch) != 0 {
-		t.Errorf("Patch = %v, want none: 1.13.2 is the newest 1.13", versionsOf(c.Patch))
+		t.Errorf("Patch = %v, want none", c.Patch)
+	}
+
+	if !slices.Equal(c.NextMinor, []string{"v1.13.2"}) {
+		t.Errorf("NextMinor = %v", c.NextMinor)
 	}
 }
 
-func TestTalosDefaultWithoutTheRecommended(t *testing.T) {
+func TestTalosNextMinorBoundaryAndNoRepeatOfTheRecommended(t *testing.T) {
+	// From 1.13.2 the next minor is 1.14: its newest patches are listed newest first, and the
+	// recommended 1.14.3 is not repeated among them.
+	c := TalosChoices("v1.13.2", "v1.33.0", "v1.14.3", fakeTalosTags)
+
+	if !slices.Equal(c.Recommended, []string{"v1.14.3"}) {
+		t.Errorf("Recommended = %v", c.Recommended)
+	}
+
+	if !slices.Equal(c.NextMinor, []string{"v1.14.5", "v1.14.4"}) {
+		t.Errorf("NextMinor = %v", c.NextMinor)
+	}
+
+	if len(c.Patch) != 0 {
+		t.Errorf("Patch = %v, want none: 1.13.2 is the newest 1.13", c.Patch)
+	}
+}
+
+func TestTalosDefaultSelection(t *testing.T) {
 	// The release set's version is not newer than running: the default is the newest patch.
-	c := TalosChoices("v1.14.3", "v1.14.3", fakeTalosTags)
+	c := TalosChoices("v1.14.3", "v1.33.0", "v1.14.3", fakeTalosTags)
 
 	if len(c.Recommended) != 0 {
-		t.Errorf("Recommended = %v, want none", versionsOf(c.Recommended))
+		t.Errorf("Recommended = %v, want none", c.Recommended)
 	}
 
 	if got := c.Default(); got != "v1.14.5" {
 		t.Errorf("Default = %q, want v1.14.5", got)
 	}
 
-	// The pinned version is not in the tag list: nothing is recommended, and with no patch the
-	// default is empty.
-	c = TalosChoices("v1.13.2", "v1.14.9", fakeTalosTags)
+	// The release set's version is a patch: it is recommended, and not repeated in the patch group.
+	c = TalosChoices("v1.14.3", "v1.33.0", "v1.14.4", fakeTalosTags)
+
+	if !slices.Equal(c.Recommended, []string{"v1.14.4"}) || !slices.Equal(c.Patch, []string{"v1.14.5"}) {
+		t.Errorf("Recommended = %v, Patch = %v", c.Recommended, c.Patch)
+	}
+
+	if got := c.Default(); got != "v1.14.4" {
+		t.Errorf("Default = %q, want the recommended v1.14.4", got)
+	}
+
+	// The release set's version is not in the tag list: nothing is recommended, and with no patch
+	// the default is empty.
+	c = TalosChoices("v1.13.2", "v1.33.0", "v1.14.9", fakeTalosTags)
 	if c.Default() != "" {
 		t.Errorf("Default = %q, want empty", c.Default())
 	}
 }
 
-func TestKubernetesChoicesPairWithTalosAndStepOneMinor(t *testing.T) {
-	// Talos 1.14.3 supports 1.32.0 to 1.37.99. 1.38.0 skips a minor.
-	c := KubernetesChoices("v1.36.0", "v1.14.3", "v1.37.1", fakeKubernetesTags)
-
-	if got := versionsOf(c.Recommended); !slices.Equal(got, []string{"v1.37.1"}) {
-		t.Errorf("Recommended = %v", got)
+func TestKubernetesChoicesNeedCiliumAndTalosToSupportThem(t *testing.T) {
+	// Cilium 1.18 is tested with Kubernetes 1.30 to 1.33: from 1.36.0 nothing is offered, and the
+	// release set's 1.37.1 is not tested with it either.
+	c := KubernetesChoices("v1.36.0", "v1.14.3", "1.18.0", "v1.37.1", fakeKubernetesTags)
+	if c.Default() != "" || len(c.Patch)+len(c.NextMinor)+len(c.Recommended) != 0 {
+		t.Errorf("Cilium 1.18 offers %+v from 1.36.0", c)
 	}
 
-	if got := versionsOf(c.Patch); !slices.Equal(got, []string{"v1.36.1"}) {
-		t.Errorf("Patch = %v", got)
+	// Cilium 1.20 is tested with 1.33 to 1.36: 1.36.1 is offered as a patch, and the release set's
+	// 1.37.1 is not (not tested with Cilium 1.20, and one minor up from 1.36.0 is still allowed).
+	c = KubernetesChoices("v1.36.0", "v1.14.3", "1.20.0", "v1.37.1", fakeKubernetesTags)
+
+	if !slices.Equal(c.Patch, []string{"v1.36.1"}) {
+		t.Errorf("Patch = %v", c.Patch)
 	}
 
-	if got := versionsOf(c.NextMinor); !slices.Equal(got, []string{"v1.37.2", "v1.37.0"}) {
-		t.Errorf("NextMinor = %v", got)
+	if len(c.Recommended) != 0 || len(c.NextMinor) != 0 {
+		t.Errorf("Recommended = %v, NextMinor = %v, want none", c.Recommended, c.NextMinor)
 	}
 
-	if got := c.Default(); got != "v1.37.1" {
+	if got := c.Default(); got != "v1.36.1" {
 		t.Errorf("Default = %q", got)
 	}
 }
 
-func TestKubernetesPairingFiltersTheNextMinor(t *testing.T) {
-	// Talos 1.12 supports 1.30.0 to 1.35.99: 1.36 is one minor up but the pairing refuses it, and
-	// the recommended 1.37.1 is neither a valid skew nor paired.
-	c := KubernetesChoices("v1.34.2", "v1.12.0", "v1.37.1", fakeKubernetesTags)
+func TestKubernetesNextMinorBoundaryAndPairing(t *testing.T) {
+	// From 1.34.2 on Talos 1.14.3 with Cilium 1.20 (1.33 to 1.36): 1.35.0 is the next minor, 1.36.x
+	// skips one (refused by the skew), and 1.37.1 is refused by the skew and by Cilium.
+	c := KubernetesChoices("v1.34.2", "v1.14.3", "1.20.0", "v1.37.1", fakeKubernetesTags)
 
-	if len(c.Recommended) != 0 {
-		t.Errorf("Recommended = %v, want none", versionsOf(c.Recommended))
+	if !slices.Equal(c.Patch, []string{"v1.34.3"}) {
+		t.Errorf("Patch = %v", c.Patch)
 	}
 
-	if got := versionsOf(c.Patch); !slices.Equal(got, []string{"v1.34.3"}) {
-		t.Errorf("Patch = %v", got)
+	if !slices.Equal(c.NextMinor, []string{"v1.35.0"}) {
+		t.Errorf("NextMinor = %v", c.NextMinor)
 	}
 
-	if got := versionsOf(c.NextMinor); !slices.Equal(got, []string{"v1.35.0"}) {
-		t.Errorf("NextMinor = %v", got)
+	if got := c.Default(); got != "v1.34.3" {
+		t.Errorf("Default = %q", got)
 	}
 
-	c = KubernetesChoices("v1.35.0", "v1.12.0", "v1.37.1", fakeKubernetesTags)
+	// Talos 1.12 supports 1.30.0 to 1.35.99: from 1.35.0, 1.36.x is one minor up but the Talos
+	// pairing refuses it, so nothing is offered.
+	c = KubernetesChoices("v1.35.0", "v1.12.0", "1.20.0", "v1.37.1", fakeKubernetesTags)
 	if len(c.Patch)+len(c.NextMinor)+len(c.Recommended) != 0 {
-		t.Errorf("the pairing refuses 1.36 from Talos 1.12: got %+v", c)
+		t.Errorf("the Talos pairing should refuse 1.36 from Talos 1.12: %+v", c)
 	}
 }
 
-func TestKubernetesCompatibilityNote(t *testing.T) {
-	cases := []struct {
-		name, kubernetes, chart, want string
-	}{
-		{"within the tested range", "v1.33.5", "1.18.0", ""},
-		{"one minor above the tested range", "v1.34.0", "1.18.0", "Cilium 1.18 is tested with Kubernetes up to 1.33"},
-		{"no entry for the Cilium minor", "v1.37.1", "1.19.0", ""},
-		{"not semver", "latest", "1.18.0", ""},
-	}
+func TestKubernetesUnknownCiliumOffersNothing(t *testing.T) {
+	c := KubernetesChoices("v1.34.2", "v1.14.3", "1.21.0", "v1.37.1", fakeKubernetesTags)
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := ciliumNote(tc.kubernetes, tc.chart); got != tc.want {
-				t.Fatalf("ciliumNote(%q, %q) = %q, want %q", tc.kubernetes, tc.chart, got, tc.want)
-			}
-		})
-	}
-
-	// The embedded chart is the one the table is written for: a Kubernetes release above 1.33 is
-	// noted in the list, and the note never removes the candidate.
-	c := KubernetesChoices("v1.36.0", "v1.14.3", "v1.37.1", fakeKubernetesTags)
-	if c.Recommended[0].Note == "" || c.NextMinor[0].Note == "" {
-		t.Errorf("the candidates above 1.33 carry no note: %+v", c)
-	}
-}
-
-func TestDefaultIsEmptyWithoutAnyOffer(t *testing.T) {
-	if got := (Choices{}).Default(); got != "" {
-		t.Fatalf("Default = %q", got)
+	if len(c.Patch)+len(c.NextMinor)+len(c.Recommended) != 0 {
+		t.Errorf("an unknown Cilium offers %+v", c)
 	}
 }
 
@@ -166,5 +164,11 @@ func TestAtLeastKeepsTheFloorAndTheOrder(t *testing.T) {
 	got := AtLeast([]string{"v1.37.1", "v1.29.9", "v1.30.0", "junk"}, KubernetesFloor)
 	if want := []string{"v1.37.1", "v1.30.0"}; !slices.Equal(got, want) {
 		t.Fatalf("AtLeast = %v, want %v", got, want)
+	}
+}
+
+func TestDefaultIsEmptyWithoutAnyOffer(t *testing.T) {
+	if got := (Choices{}).Default(); got != "" {
+		t.Fatalf("Default = %q", got)
 	}
 }

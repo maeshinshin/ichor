@@ -31,6 +31,9 @@ import (
 // second).
 var ErrUnknownVersion = errors.New("version not known")
 
+// kubernetes133 is the lowest Kubernetes minor of the Talos 1.14 and Cilium 1.20 ranges below.
+const kubernetes133 = "1.33"
+
 // kubernetesRange is an inclusive range of Kubernetes minors, "1.33" to "1.37".
 type kubernetesRange struct {
 	min, max string
@@ -44,7 +47,7 @@ type kubernetesRange struct {
 var talosKubernetes = map[string]kubernetesRange{
 	// https://docs.siderolabs.com/talos/v1.14/getting-started/support-matrix lists Kubernetes
 	// 1.33, 1.34, 1.35, 1.36 and 1.37. Machinery v1.14.5 accepts 1.32.0 to 1.37.99 for this minor.
-	"1.14": {min: "1.33", max: "1.37"},
+	"1.14": {min: kubernetes133, max: "1.37"},
 }
 
 // ciliumKubernetes maps a Cilium minor to the Kubernetes minors its release notes list as e2e tested
@@ -52,11 +55,11 @@ var talosKubernetes = map[string]kubernetesRange{
 // a Cilium minor not here is unknown, and nothing is compatible with it.
 var ciliumKubernetes = map[string]kubernetesRange{
 	// https://docs.cilium.io/en/v1.18/network/kubernetes/requirements/ lists 1.30, 1.31, 1.32, 1.33.
-	"1.18": {min: "1.30", max: "1.33"},
+	"1.18": {min: "1.30", max: kubernetes133},
 	// https://docs.cilium.io/en/v1.19/network/kubernetes/requirements/ lists 1.31, 1.32, 1.33, 1.34.
 	"1.19": {min: "1.31", max: "1.34"},
 	// https://docs.cilium.io/en/v1.20/network/kubernetes/requirements/ lists 1.33, 1.34, 1.35, 1.36.
-	"1.20": {min: "1.33", max: "1.36"},
+	"1.20": {min: kubernetes133, max: "1.36"},
 }
 
 // minorKey is the "X.Y" of a version written as "X.Y.Z" or "vX.Y.Z", or "" when it is not semver.

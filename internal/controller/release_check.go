@@ -164,7 +164,7 @@ func (r *ReleaseCheck) check(ctx context.Context) bool {
 		log.Info("Listing the Kubernetes image repository failed", "repository", r.kubernetesRepository(), "error", kubeErr.Error())
 	}
 
-	var cilium listing
+	var ciliumList listing
 
 	if r.Images != nil {
 		ciliumTags, err := r.List(r.ciliumRepository())
@@ -172,13 +172,13 @@ func (r *ReleaseCheck) check(ctx context.Context) bool {
 			log.Info("Listing the Cilium image repository failed", "repository", r.ciliumRepository(), "error", err.Error())
 		}
 
-		cilium = listing{tags: r.verifiedPatches(ctx, ciliumTags), err: err}
+		ciliumList = listing{tags: r.verifiedPatches(ctx, ciliumTags), err: err}
 	}
 
 	return r.record(ctx, func(inst *ichorv1alpha1.IchorInstallation, now metav1.Time) {
 		inst.Status.LatestRelease = latestReleaseOf(inst.Status.LatestRelease, releasecheck.Latest(tags), latestErr, now)
 		inst.Status.UpgradeTargets = upgradeTargetsOf(inst.Status.UpgradeTargets, now,
-			listing{tags: talosTags, err: talosErr}, listing{tags: kubeTags, err: kubeErr}, cilium)
+			listing{tags: talosTags, err: talosErr}, listing{tags: kubeTags, err: kubeErr}, ciliumList)
 	})
 }
 

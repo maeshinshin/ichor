@@ -158,6 +158,8 @@ func main() {
 	var talosEgressManage bool
 	var updateCheck bool
 	var updateCheckRepository string
+	var autoPatch settings.AutoPatch
+	var autoPatchComponents string
 	var refreshLifetime time.Duration
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
@@ -191,6 +193,12 @@ func main() {
 		"Keep the CiliumNetworkPolicy of egress to managed machines and S3 current. Off when the chart sets networkPolicy.cilium.dynamicTalosEgress=false (ADR 0100).")
 	flag.BoolVar(&updateCheck, "update-check", true,
 		"Look for newer Ichor releases in the chart repository and record the newest one in the IchorInstallation status (ADR 0114; the chart's updateCheck.enabled). spec.updateCheck.enabled overrides it.")
+	flag.BoolVar(&autoPatch.Enabled, "auto-patch", false,
+		"Start upgrades to patch releases of the running minor by itself, one component at a time, only while the cluster is healthy (ADR 0116; the chart's autoPatch.enabled). spec.autoPatch in the IchorInstallation overrides it.")
+	flag.StringVar(&autoPatchComponents, "auto-patch-components", "",
+		"Comma-separated components automatic patching applies: talos, kubernetes, cilium; empty means all (ADR 0116).")
+	flag.StringVar(&autoPatch.Window, "auto-patch-window", "",
+		"Daily UTC window \"HH:MM-HH:MM\" an automatic upgrade may start in; empty means any time (ADR 0116).")
 	flag.StringVar(&updateCheckRepository, "update-check-repository", releasecheck.DefaultRepository,
 		"The chart repository whose tags the release check lists (ADR 0114).")
 	flag.BoolVar(&userIssuer, "user-issuer", false,
@@ -316,7 +324,17 @@ func main() {
 	evac := &controller.LonghornEvacuator{Client: mgr.GetClient()}
 	// One live reader of the IchorInstallation settings for the controllers and webhooks (ADR 0105).
 	// It reads uncached with a short TTL, so a change applies within seconds and nothing needs an informer.
-	settingsFallback := settings.Fallback{RefreshLifetime: refreshLifetime, UpdateCheck: updateCheck}
+	if autoPatchComponents != "" {
+		autoPatch.Components = strings.Split(autoPatchComponents, ",")
+	}
+
+	if autoPatch.Window != "" {
+		if _, _, err := settings.ParseWindow(autoPatch.Window); err != nil {
+			must(err, "Invalid --auto-patch-window")
+		}
+	}
+
+	settingsFallback := settings.Fallback{RefreshLifetime: refreshLifetime, UpdateCheck: updateCheck, AutoPatch: autoPatch}
 	settingsReader := &settings.Reader{
 		Client: mgr.GetAPIReader(), Fallback: settingsFallback, ReadOnly: settingsReadOnly, TTL: 2 * time.Second,
 	}

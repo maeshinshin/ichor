@@ -70,6 +70,14 @@ func (s *Server) GetIchorInstallation(
 			semver.Compare(inst.Spec.Version, installed) > 0,
 	}
 
+	if e := inst.Status.Effective; e != nil && e.AutoPatch != nil {
+		resp.AutoPatchEnabled = e.AutoPatch.Value == "true"
+	}
+
+	if a := inst.Status.AutoPatch; a != nil {
+		resp.AutoPatchHaltedOperation = a.HaltedOperation
+	}
+
 	// What the controller's release check last found (ADR 0114); the Upgrade flow does not use it.
 	if rel := inst.Status.LatestRelease; rel != nil {
 		resp.LatestVersion = rel.Version

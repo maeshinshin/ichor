@@ -85,6 +85,12 @@ func TestSettingsGate(t *testing.T) {
 	ttl := func(s *ichorv1alpha1.IchorInstallationSpec) {
 		s.Users = &ichorv1alpha1.IchorUserSettings{TokenTTL: &metav1.Duration{Duration: 10 * time.Minute}}
 	}
+	autoOn := func(s *ichorv1alpha1.IchorInstallationSpec) {
+		s.AutoPatch = &ichorv1alpha1.IchorAutoPatchSettings{Enabled: &yes, Window: "02:00-05:00"}
+	}
+	autoAck := func(s *ichorv1alpha1.IchorInstallationSpec) {
+		s.AutoPatch = &ichorv1alpha1.IchorAutoPatchSettings{AcknowledgedHalt: "ns/op"}
+	}
 	bump := func(s *ichorv1alpha1.IchorInstallationSpec) { s.Version = "v0.2.0" }
 	table := map[string][]string{
 		gateAdmin:     {"version", gateSettings},
@@ -110,6 +116,11 @@ func TestSettingsGate(t *testing.T) {
 		{name: "the deprecated reclaim field is ignored: no check, no Event", user: bgUnitPlain, old: inst(nil), new: inst(enableReclaim)},
 		{name: "read-only denies users", user: gateAdmin, old: inst(nil), new: inst(ttl), readOnly: true, wantErr: "managed by the deployment"},
 		{name: "read-only still allows a version bump", user: gateVersioner, old: inst(nil), new: inst(bump), readOnly: true, wantEv: "spec.version"},
+		{name: "auto-patch needs /settings", user: gateVersioner, old: inst(nil), new: inst(autoOn), wantErr: "ichorinstallations/settings"},
+		{name: "auto-patch by holder", user: gateSettings, old: inst(nil), new: inst(autoOn), wantEv: "spec.autoPatch.enabled: <unset> -> true"},
+		{name: "read-only denies auto-patch", user: gateAdmin, old: inst(nil), new: inst(autoOn), readOnly: true, wantErr: "managed by the deployment"},
+		{name: "read-only still allows clearing a halt", user: gateSettings, old: inst(nil), new: inst(autoAck), readOnly: true, wantEv: "spec.autoPatch.acknowledgedHalt"},
+		{name: "clearing a halt still needs /settings", user: gateVersioner, old: inst(nil), new: inst(autoAck), readOnly: true, wantErr: "ichorinstallations/settings"},
 		{name: "the controller is exempt", user: testControllerUser, old: nil, new: inst(bump)},
 		{name: "dry run emits no Event", user: gateVersioner, old: inst(nil), new: inst(bump), dryRun: true},
 		{name: "create is checked as a change from empty", user: bgUnitPlain, old: nil, new: inst(nil), wantErr: "ichorinstallations/version"},

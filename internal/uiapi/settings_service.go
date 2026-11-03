@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -75,6 +76,7 @@ func statusEffectivePB(e *ichorv1alpha1.IchorEffectiveSettings) *pb.SettingsEffe
 	return &pb.SettingsEffective{
 		TokenTtl: v(e.TokenTTL), RefreshLifetime: v(e.RefreshLifetime), DriftPolicy: v(e.DriftPolicy),
 		UpdateCheck: v(e.UpdateCheck),
+		AutoPatch:   v(e.AutoPatch), AutoPatchComponents: v(e.AutoPatchComponents), AutoPatchWindow: v(e.AutoPatchWindow),
 	}
 }
 
@@ -101,6 +103,19 @@ func specFieldsPB(spec *ichorv1alpha1.IchorInstallationSpec) *pb.SettingsFields 
 		out.UpdateCheckEnabled = c.Enabled
 	}
 
+	if a := spec.AutoPatch; a != nil {
+		out.AutoPatchEnabled = a.Enabled
+
+		if len(a.Components) > 0 {
+			v := strings.Join(a.Components, ",")
+			out.AutoPatchComponents = &v
+		}
+
+		if a.Window != "" {
+			out.AutoPatchWindow = &a.Window
+		}
+	}
+
 	return out
 }
 
@@ -114,6 +129,10 @@ func (s *Server) settingsResponse(ctx context.Context, inst *ichorv1alpha1.Ichor
 		Version: inst.Spec.Version, InstalledVersion: inst.Status.InstalledVersion, Manager: manager,
 		ReadOnly: s.settingsReadOnly(), Spec: specFieldsPB(&inst.Spec),
 		Effective: statusEffectivePB(inst.Status.Effective),
+	}
+
+	if a := inst.Status.AutoPatch; a != nil {
+		resp.AutoPatchHaltedOperation = a.HaltedOperation
 	}
 
 	// ichor-ui's own view of the values it applies; the CLI's in-process server has none.
@@ -162,6 +181,19 @@ func changesOf(f *pb.SettingsFields) (settings.Changes, error) {
 
 	c.DriftPolicy = f.DriftPolicy
 	c.UpdateCheck = f.UpdateCheckEnabled
+	c.AutoPatchEnabled = f.AutoPatchEnabled
+	c.AutoPatchWindow = f.AutoPatchWindow
+	c.AutoPatchAcknowledge = f.AutoPatchAcknowledgedHalt
+
+	if f.AutoPatchComponents != nil {
+		c.AutoPatchComponents = []string{}
+
+		for _, comp := range strings.Split(*f.AutoPatchComponents, ",") {
+			if comp = strings.TrimSpace(comp); comp != "" {
+				c.AutoPatchComponents = append(c.AutoPatchComponents, comp)
+			}
+		}
+	}
 
 	for _, d := range []struct {
 		in  *string

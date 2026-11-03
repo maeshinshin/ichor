@@ -65,6 +65,45 @@ type IchorInstallationSpec struct {
 	// updateCheck holds the switch for the check of newer Ichor releases (ADR 0114).
 	// +optional
 	UpdateCheck *IchorUpdateCheckSettings `json:"updateCheck,omitempty"`
+
+	// autoPatch lets the controller apply patch releases of the running minor by itself (ADR 0116).
+	// Off unless enabled here or by the chart.
+	// +optional
+	AutoPatch *IchorAutoPatchSettings `json:"autoPatch,omitempty"`
+}
+
+// Values of IchorAutoPatchSettings.Components.
+const (
+	AutoPatchTalos      = "talos"
+	AutoPatchKubernetes = "kubernetes"
+	AutoPatchCilium     = "cilium"
+)
+
+// IchorAutoPatchSettings is the switch for automatic patch upgrades (ADR 0116).
+type IchorAutoPatchSettings struct {
+	// enabled turns automatic patching on or off. Unset falls back to the controller flag, which the chart
+	// sets from autoPatch.enabled (default false).
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// components are the components whose patches are applied automatically: talos, kubernetes, cilium.
+	// Unset or empty means all three.
+	// +kubebuilder:validation:items:Enum=talos;kubernetes;cilium
+	// +listType=set
+	// +optional
+	Components []string `json:"components,omitempty"`
+
+	// window is a daily UTC window "HH:MM-HH:MM" in which an automatic upgrade may start; it may wrap
+	// midnight (22:00-02:00). Unset means any time.
+	// +kubebuilder:validation:Pattern=`^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$`
+	// +optional
+	Window string `json:"window,omitempty"`
+
+	// acknowledgedHalt is how a person clears a halt: the name of the operation (namespace/name) that halted
+	// automatic patching, as status.autoPatch.haltedOperation shows it. The controller never edits spec, so it
+	// reads this and resumes when it equals the halted operation; a later halt names another operation.
+	// +optional
+	AcknowledgedHalt string `json:"acknowledgedHalt,omitempty"`
 }
 
 // IchorUpdateCheckSettings is the switch for the check of newer Ichor releases (ADR 0114).
@@ -149,6 +188,38 @@ type IchorInstallationStatus struct {
 	// repositories (ADR 0115). Unset until the first check, and cleared while the check is off.
 	// +optional
 	UpgradeTargets *IchorUpgradeTargets `json:"upgradeTargets,omitempty"`
+
+	// autoPatch is what the automatic patcher last did and why it stopped (ADR 0116).
+	// +optional
+	AutoPatch *IchorAutoPatchStatus `json:"autoPatch,omitempty"`
+}
+
+// ConditionAutoPatchHalted is True while automatic patching is stopped by an automatic operation that failed
+// or paused (ADR 0116). A person clears it with spec.autoPatch.acknowledgedHalt, or a later manual operation
+// of the same cluster that completes does.
+const ConditionAutoPatchHalted = "AutoPatchHalted"
+
+// Annotations the automatic patcher puts on the TalosOperation it creates (ADR 0116). The operation
+// then runs through the normal executor.
+const (
+	// OperationAutoPatchAnnotation is "true" on an operation the automatic patcher created.
+	OperationAutoPatchAnnotation = "ichor.maesh.dev/auto-patch"
+	// AutoPatchStarter is the started-by annotation of such an operation.
+	AutoPatchStarter = "ichor-auto-patch"
+)
+
+// IchorAutoPatchStatus is the state of the automatic patcher.
+type IchorAutoPatchStatus struct {
+	// lastOperation is the operation (namespace/name) the patcher started last.
+	// +optional
+	LastOperation string `json:"lastOperation,omitempty"`
+	// lastStartedAt is when it started.
+	// +optional
+	LastStartedAt *metav1.Time `json:"lastStartedAt,omitempty"`
+	// haltedOperation is the automatic operation (namespace/name) that failed or paused and stopped
+	// automatic patching; empty when it is not halted.
+	// +optional
+	HaltedOperation string `json:"haltedOperation,omitempty"`
 }
 
 // IchorUpgradeTargets is the result of the controller's listing of the Talos and Kubernetes
@@ -230,6 +301,15 @@ type IchorEffectiveSettings struct {
 	DriftPolicy *IchorEffectiveValue `json:"driftPolicy,omitempty"`
 	// +optional
 	UpdateCheck *IchorEffectiveValue `json:"updateCheck,omitempty"`
+	// autoPatch is "true" or "false" (ADR 0116).
+	// +optional
+	AutoPatch *IchorEffectiveValue `json:"autoPatch,omitempty"`
+	// autoPatchComponents is the comma-separated list of components in force.
+	// +optional
+	AutoPatchComponents *IchorEffectiveValue `json:"autoPatchComponents,omitempty"`
+	// autoPatchWindow is the daily UTC window in force; empty means any time.
+	// +optional
+	AutoPatchWindow *IchorEffectiveValue `json:"autoPatchWindow,omitempty"`
 }
 
 // +kubebuilder:object:root=true

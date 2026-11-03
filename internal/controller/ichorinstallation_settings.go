@@ -2,6 +2,7 @@ package controller
 
 import (
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,6 +25,17 @@ func (r *IchorInstallationReconciler) applySettings(inst *ichorv1alpha1.IchorIns
 		DriftPolicy: val(e.DriftPolicy.V, e.DriftPolicy.Source),
 		UpdateCheck: val(fmt.Sprint(e.UpdateCheck.V), e.UpdateCheck.Source),
 	}
+
+	ap := e.AutoPatch
+	comps := ap.V.Components
+
+	if len(comps) == 0 {
+		comps = settings.AllAutoPatchComponents
+	}
+
+	eff.AutoPatch = val(fmt.Sprint(ap.V.Enabled), ap.Source)
+	eff.AutoPatchComponents = val(strings.Join(comps, ","), ap.Source)
+	eff.AutoPatchWindow = val(ap.V.Window, ap.Source)
 
 	manager, source := ichorv1alpha1.IchorManagerInstaller, ichorv1alpha1.IchorSourceDeployment
 	if d := inst.Spec.Deployment; d != nil && d.Manager != "" {

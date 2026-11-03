@@ -522,6 +522,19 @@ settings:
 updateCheck:
   enabled: true
 
+## Automatic patch upgrades (ADR 0116). Off by default. When on, the controller starts an upgrade of a
+## patch release of the running minor by itself, one component at a time (Talos, then Cilium, then
+## Kubernetes), only a release the release check listed and the compatibility table accepts, only while
+## the cluster is healthy and nothing else runs on it. It needs updateCheck.enabled. A failed or paused
+## automatic operation stops it until a person clears it.
+## spec.autoPatch in the IchorInstallation overrides this unless settings.readOnly is set.
+autoPatch:
+  enabled: false
+  ## Any of talos, kubernetes, cilium. Empty means all three.
+  components: []
+  ## A daily UTC window "HH:MM-HH:MM" an upgrade may start in, for example "02:00-05:00". Empty means any time.
+  window: ""
+
 ## ValidatingAdmissionPolicy guarding TalosCluster.spec.cni.kubeProxy
 ## switches (ADR 0013). Independent of webhook.enabled above: it is
 ## enforced by the apiserver itself (stable since Kubernetes 1.30, this

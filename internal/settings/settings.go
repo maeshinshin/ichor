@@ -5,6 +5,7 @@ package settings
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"time"
 
@@ -30,6 +31,25 @@ type Fallback struct {
 	DriftPolicy string
 	// UpdateCheck is the --update-check flag: whether the controller looks for newer releases (ADR 0114).
 	UpdateCheck bool
+	// AutoPatch is the --auto-patch* flags, the chart's autoPatch values (ADR 0116).
+	AutoPatch AutoPatch
+}
+
+// AutoPatch is the setting for automatic patch upgrades (ADR 0116).
+type AutoPatch struct {
+	Enabled bool
+	// Components is a subset of talos, kubernetes, cilium; empty means all three.
+	Components []string
+	// Window is a daily UTC window "HH:MM-HH:MM"; empty means any time.
+	Window string
+}
+
+// AllAutoPatchComponents are the components automatic patching can apply, in the order it applies them.
+var AllAutoPatchComponents = []string{ichorv1alpha1.AutoPatchTalos, ichorv1alpha1.AutoPatchCilium, ichorv1alpha1.AutoPatchKubernetes}
+
+// Has reports whether the component is selected.
+func (a AutoPatch) Has(component string) bool {
+	return len(a.Components) == 0 || slices.Contains(a.Components, component)
 }
 
 // Value is a setting and the place it came from (ichorv1alpha1.IchorSourceSpec or IchorSourceDeployment).
@@ -44,6 +64,7 @@ type Effective struct {
 	RefreshLifetime Value[time.Duration]
 	DriftPolicy     Value[string]
 	UpdateCheck     Value[bool]
+	AutoPatch       Value[AutoPatch]
 }
 
 func pick[T any](spec *T, fb T, readOnly bool) Value[T] {
@@ -68,6 +89,7 @@ func Resolve(inst *ichorv1alpha1.IchorInstallation, fb Fallback, readOnly bool) 
 		ttl, refr   *time.Duration
 		driftPolicy *string
 		updateCheck *bool
+		autoPatch   *AutoPatch
 	)
 
 	if inst != nil {
@@ -82,6 +104,23 @@ func Resolve(inst *ichorv1alpha1.IchorInstallation, fb Fallback, readOnly bool) 
 		if c := inst.Spec.UpdateCheck; c != nil {
 			updateCheck = c.Enabled
 		}
+
+		if a := inst.Spec.AutoPatch; a != nil {
+			v := fb.AutoPatch
+			if a.Enabled != nil {
+				v.Enabled = *a.Enabled
+			}
+
+			if len(a.Components) > 0 {
+				v.Components = a.Components
+			}
+
+			if a.Window != "" {
+				v.Window = a.Window
+			}
+
+			autoPatch = &v
+		}
 	}
 
 	if fb.DriftPolicy == "" {
@@ -93,6 +132,7 @@ func Resolve(inst *ichorv1alpha1.IchorInstallation, fb Fallback, readOnly bool) 
 		RefreshLifetime: pick(refr, fb.RefreshLifetime, readOnly),
 		DriftPolicy:     pick(driftPolicy, fb.DriftPolicy, readOnly),
 		UpdateCheck:     pick(updateCheck, fb.UpdateCheck, readOnly),
+		AutoPatch:       pick(autoPatch, fb.AutoPatch, readOnly),
 	}
 }
 

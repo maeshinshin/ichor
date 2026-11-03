@@ -48,6 +48,41 @@ spec:
           spec:
             description: spec defines the desired state of IchorInstallation
             properties:
+              autoPatch:
+                description: |-
+                  autoPatch lets the controller apply patch releases of the running minor by itself (ADR 0116).
+                  Off unless enabled here or by the chart.
+                properties:
+                  acknowledgedHalt:
+                    description: |-
+                      acknowledgedHalt is how a person clears a halt: the name of the operation (namespace/name) that halted
+                      automatic patching, as status.autoPatch.haltedOperation shows it. The controller never edits spec, so it
+                      reads this and resumes when it equals the halted operation; a later halt names another operation.
+                    type: string
+                  components:
+                    description: |-
+                      components are the components whose patches are applied automatically: talos, kubernetes, cilium.
+                      Unset or empty means all three.
+                    items:
+                      enum:
+                      - talos
+                      - kubernetes
+                      - cilium
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: set
+                  enabled:
+                    description: |-
+                      enabled turns automatic patching on or off. Unset falls back to the controller flag, which the chart
+                      sets from autoPatch.enabled (default false).
+                    type: boolean
+                  window:
+                    description: |-
+                      window is a daily UTC window "HH:MM-HH:MM" in which an automatic upgrade may start; it may wrap
+                      midnight (22:00-02:00). Unset means any time.
+                    pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]-([01][0-9]|2[0-3]):[0-5][0-9]$
+                    type: string
+                type: object
               defaults:
                 description: defaults holds defaults for objects created later; an
                   existing object is never touched.
@@ -137,6 +172,24 @@ spec:
           status:
             description: status defines the observed state of IchorInstallation
             properties:
+              autoPatch:
+                description: autoPatch is what the automatic patcher last did and
+                  why it stopped (ADR 0116).
+                properties:
+                  haltedOperation:
+                    description: |-
+                      haltedOperation is the automatic operation (namespace/name) that failed or paused and stopped
+                      automatic patching; empty when it is not halted.
+                    type: string
+                  lastOperation:
+                    description: lastOperation is the operation (namespace/name) the
+                      patcher started last.
+                    type: string
+                  lastStartedAt:
+                    description: lastStartedAt is when it started.
+                    format: date-time
+                    type: string
+                type: object
               conditions:
                 description: |-
                   conditions represent the current state of the IchorInstallation resource. UpToDate is
@@ -205,6 +258,59 @@ spec:
                   effective shows each runtime setting with the value in force and where it came from.
                   Written by the controller.
                 properties:
+                  autoPatch:
+                    description: autoPatch is "true" or "false" (ADR 0116).
+                    properties:
+                      source:
+                        description: source is spec when the field is set, deployment
+                          when the flag or chart value applies.
+                        enum:
+                        - spec
+                        - deployment
+                        type: string
+                      value:
+                        description: value is the setting as a string.
+                        type: string
+                    required:
+                    - source
+                    - value
+                    type: object
+                  autoPatchComponents:
+                    description: autoPatchComponents is the comma-separated list of
+                      components in force.
+                    properties:
+                      source:
+                        description: source is spec when the field is set, deployment
+                          when the flag or chart value applies.
+                        enum:
+                        - spec
+                        - deployment
+                        type: string
+                      value:
+                        description: value is the setting as a string.
+                        type: string
+                    required:
+                    - source
+                    - value
+                    type: object
+                  autoPatchWindow:
+                    description: autoPatchWindow is the daily UTC window in force;
+                      empty means any time.
+                    properties:
+                      source:
+                        description: source is spec when the field is set, deployment
+                          when the flag or chart value applies.
+                        enum:
+                        - spec
+                        - deployment
+                        type: string
+                      value:
+                        description: value is the setting as a string.
+                        type: string
+                    required:
+                    - source
+                    - value
+                    type: object
                   driftPolicy:
                     description: IchorEffectiveValue is one setting in force.
                     properties:

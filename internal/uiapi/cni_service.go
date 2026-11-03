@@ -479,7 +479,10 @@ func (s *Server) StartCniUpgrade(
 
 // overridableKey is the response header of a refusal the override verb lifts: the UI shows its override option
 // for such a refusal only.
-const overridableKey = "Ichor-Overridable"
+const (
+	overridableKey   = "Ichor-Overridable"
+	overridableValue = "true"
+)
 
 // ciliumCompatOverride handles a patch the server does not offer. With no overridable incompatibility (compat nil) it
 // returns "" and the caller refuses as before. With one, and without an override, it refuses with overridableKey set;
@@ -494,7 +497,7 @@ func (s *Server) ciliumCompatOverride(
 	if bg == nil {
 		err := connect.NewError(connect.CodeFailedPrecondition,
 			fmt.Errorf("the Cilium patch %s is incompatible: %w; the override verb can lift this", version, compat))
-		err.Meta().Set(overridableKey, "true")
+		err.Meta().Set(overridableKey, overridableValue)
 
 		return "", err
 	}

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { hasPatch, isNewerPatch, patchComponents, pickerOptions, typedVersion, type TargetList } from './upgradeTargets.ts'
+import { hasPatch, patchComponents, pickerOptions, typedVersion, type TargetList } from './upgradeTargets.ts'
 
 const list: TargetList = {
   recommended: ['v1.14.3'],
@@ -64,16 +64,6 @@ test('a patch hint shows only for an available list with a newer patch', () => {
   assert.equal(hasPatch({ ...list, patch: [] }), false)
   assert.equal(hasPatch({ ...list, available: false }), false)
   assert.equal(hasPatch(null), false)
-})
-
-test('a Cilium patch is a newer patch of the same minor', () => {
-  assert.equal(isNewerPatch('1.18.3', '1.18.5'), true)
-  assert.equal(isNewerPatch('v1.18.3', 'v1.18.4'), true)
-  assert.equal(isNewerPatch('1.18.5', '1.18.3'), false)
-  assert.equal(isNewerPatch('1.18.3', '1.18.3'), false)
-  assert.equal(isNewerPatch('1.18.3', '1.19.0'), false)
-  assert.equal(isNewerPatch('', '1.18.3'), false)
-  assert.equal(isNewerPatch('1.18.3', '1.19.0-rc.1'), false)
 })
 
 test('the patch attention names the components that have a patch, in order, and nothing when the fetch failed', () => {

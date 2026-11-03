@@ -156,9 +156,9 @@ func TestTalosClusterRefusesAnIncompatiblePairUnlessOverridden(t *testing.T) {
 	}}
 
 	bad := newTestCluster()
-	bad.Spec.TalosVersion, bad.Spec.KubernetesVersion = testTalosVersion, "v1.32.0"
+	bad.Spec.TalosVersion, bad.Spec.KubernetesVersion = testTalosVersion, "v1.31.9"
 
-	if _, err := noOverride.ValidateCreate(ctx, bad); err == nil || !strings.Contains(err.Error(), "v1.32.0") {
+	if _, err := noOverride.ValidateCreate(ctx, bad); err == nil || !strings.Contains(err.Error(), "v1.31.9") {
 		t.Fatalf("create with an incompatible pair: err = %v", err)
 	}
 

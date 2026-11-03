@@ -16,7 +16,10 @@ limitations under the License.
 
 package release
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // CheckTalosStep is the compatibility rule for a Talos version written to a cluster that runs
 // kubernetes: the pair must be in the compatibility table (TalosKubernetesError). The
@@ -50,4 +53,15 @@ func CheckKubernetesStep(talos, kubernetes, installedCilium string) error {
 
 	return fmt.Errorf("%w; this Ichor ships Cilium %s, which does not run Kubernetes %s: a newer Ichor release is needed",
 		err, Pinned.Cilium, kubernetes)
+}
+
+// CiliumRelease is the Cilium release an observed CNI runs, without its v, for the Cilium rule: "" unless the
+// observed CNI is Cilium. A cluster whose CNI is something else has
+// no Cilium release to match, so CheckKubernetesStep leaves the Cilium half unchecked.
+func CiliumRelease(detected, detectedVersion string) string {
+	if detected != "cilium" {
+		return ""
+	}
+
+	return strings.TrimPrefix(detectedVersion, "v")
 }

@@ -209,3 +209,12 @@ Every later Job keeps the override: `EffectiveValuesForMode` reads it, and `CNIV
 - Cost: each candidate's agent signature is an 8.5 MB referrer. The verified images are remembered in memory only, so a controller restart verifies again. Five candidates at most per check.
 - The candidates follow the embedded chart's minor. A cluster on Cilium 1.19 takes the chart upgrade first (one minor at a time, ADR 0099).
 - A Cilium release that changes its signing workflow's file name stops verifying: its patches are refused and not offered, which is the intended failure.
+
+## Amendment 2026-11-03 (3): the Cilium rule applies to a Cilium CNI only
+
+A Kubernetes step is checked against Cilium's table only when the cluster's CNI is Cilium: managed (`spec.cni.preset: cilium`) and observed as `status.cni.detected: cilium`. A cluster observed on another CNI (flannel, calico, ...) has no Cilium release to match, so the Cilium half is skipped for it. The hardware run (ADR 0103, amendment 3) found the uiapi refusing a flannel cluster's Kubernetes plan as "cilium 0.28.9 is not known": the detected version was read whatever the kind.
+
+- `release.CiliumRelease(detected, detectedVersion)` returns the Cilium release only when `detected` is `cilium`. The webhook (`ValidateUpdate`), the uiapi plan (`installedCilium`) and the Cilium status (`ciliumVersion`) use it, so no consumer reads `status.cni.detectedVersion` of another CNI.
+- An observed non-Cilium CNI leaves the Kubernetes target list bounded by the Talos pairing alone (`release.KubernetesChoices(..., ciliumConstrains)`). An unobserved CNI still offers nothing until Cilium is seen (`TestKubernetesUnknownCiliumOffersNothing`), as before.
+- `ichor adopt` in unmanaged mode (`--cni-unmanaged` or `spec.cni.preset: unmanaged`) installs no Cilium, so `checkAdoptCompat` judges only the Talos pair. A managed adopt and `ichor init` still judge the chart this Ichor embeds.
+- Tests: `TestPlanKubernetesSkipsTheCiliumConstraintOfAnUnmanagedFlannel` (uiapi), `TestTalosClusterDoesNotCheckCiliumOfAnUnmanagedFlannel` (webhook), `TestKubernetesChoicesSkipTheCiliumConstraintOfANonCiliumCNI` (pkg/release), `TestCheckAdoptCompatJudgesNoCiliumOfAnUnmanagedAdopt` (cli). The uiapi and webhook tests failed before the change with the refusal above; the release and adopt tests were compile-red against the old signatures.

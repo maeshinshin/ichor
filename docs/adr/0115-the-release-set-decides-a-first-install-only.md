@@ -156,7 +156,7 @@ The table is data, and the rules are code. The tests run the rules, not the tabl
 ## Open points
 
 - **The Talos 1.14 Kubernetes range (decided 2026-11-03: the support matrix wins).** The typed table holds Talos 1.14 with Kubernetes 1.33 to 1.37, and the table decides that minor; machinery bounds it. See the amendment below.
-- **Cilium patches (open after the 2026-11-03 amendment).** Hardware run, Envoy and certgen images, and trusted-root refresh are open; see the amendment.
+- **Cilium patches (open after the 2026-11-03 amendment).** Hardware run and trusted-root refresh are open; Envoy and certgen stay at the chart's digest; see the amendment.
 - **The embedded set.** The table must hold the pinned set together: `Pinned` (Talos, Kubernetes and the embedded Cilium) is checked by `TestPinnedIsConsistentWithMachinery`. When it is not, the first install is refused by `checkInitCompat`, so the set and the chart move together in one change.
 - **Talos 1.15 and later** are not in machinery's table of this build, so they are refused as unknown until a build that knows them.
 
@@ -204,7 +204,7 @@ Every later Job keeps the override: `EffectiveValuesForMode` reads it, and `CNIV
 
 - Hardware: no hardware run of a Cilium patch upgrade. The user did not ask for one in this change.
 - No patch to offer yet: `quay.io/cilium/cilium:v1.20.5` returned 404 on 2026-11-03, so the list is empty until Cilium publishes a patch.
-- Envoy and certgen are not overridden. The 1.20.4 chart pins `cilium-envoy` (v1.39.5-…) and `certgen` by digest, and a patch that bumps Envoy would not get it. The Envoy tag of a patch cannot be read from the Cilium tag. Decide whether the patch's chart is read (a further host, helm.cilium.io) or Envoy stays at the chart's digest.
+- Envoy and certgen are not overridden. The 1.20.4 chart pins `cilium-envoy` (v1.39.5-…) and `certgen` by digest, and a patch that bumps Envoy would not get it. The Envoy tag of a patch cannot be read from the Cilium tag. Decided 2026-11-03 (user): Envoy and certgen stay at the chart's digest; an Envoy fix reaches a cluster through an Ichor patch release, because reading a patch's unsigned chart from a further host costs more than Envoy's exposure in Ichor's default configuration (on the data path only for L7 policy, Ingress or Gateway API).
 - The trusted root is a snapshot of the public-good Sigstore root, embedded. It must be refreshed when Sigstore rotates its keys; `trusted_root.json` and the `sigstore-go` version in go.mod are refreshed together.
 - Cost: each candidate's agent signature is an 8.5 MB referrer. The verified images are remembered in memory only, so a controller restart verifies again. Five candidates at most per check.
 - The candidates follow the embedded chart's minor. A cluster on Cilium 1.19 takes the chart upgrade first (one minor at a time, ADR 0099).

@@ -28,7 +28,8 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/siderolabs/talos/pkg/machinery/config/machine"
-	"github.com/siderolabs/talos/pkg/machinery/constants"
+
+	"github.com/maeshinshin/ichor/pkg/release"
 )
 
 // podSubnet and serviceSubnet are the inner cluster's Kubernetes networks. They must not
@@ -81,7 +82,7 @@ func generateControlPlaneConfig(
 	endpoint := fmt.Sprintf("https://%s:6443", nodeIPs[0])
 	installImage := fmt.Sprintf("factory.talos.dev/metal-installer/%s:%s", talosFactorySchematic, talosVersion)
 
-	k8sVersion := constants.DefaultKubernetesVersion
+	k8sVersion := strings.TrimPrefix(release.Pinned.Kubernetes, "v")
 	if v := os.Getenv(k8sVersionEnv); v != "" {
 		k8sVersion = strings.TrimPrefix(v, "v")
 	}

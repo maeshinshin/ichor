@@ -49,7 +49,7 @@ type Set struct {
 var Pinned = Set{
 	Talos:           "v1.14.5",
 	VersionContract: "v1.14",
-	Kubernetes:      "v1.37.1",
+	Kubernetes:      "v1.36.6",
 	Cilium:          cilium.ChartVersion,
 }
 

@@ -205,7 +205,7 @@ func TestCreateRefusedWhenTheCallerMayNotUpdateTheCluster(t *testing.T) {
 	})
 	srv := &Server{Client: base, Impersonate: func(Identity) (client.Client, error) { return user, nil }}
 
-	_, err := srv.CreateOperation(asUser(context.Background()), opCreate(pb.OperationKind_OPERATION_KIND_KUBERNETES, "v1.37.1"))
+	_, err := srv.CreateOperation(asUser(context.Background()), opCreate(pb.OperationKind_OPERATION_KIND_KUBERNETES, "v1.36.6"))
 	if connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("want PermissionDenied, got %v", err)
 	}
@@ -459,7 +459,7 @@ func TestPlanSaysWhyCreateWouldBeRefused(t *testing.T) {
 	}
 }
 
-const opOldK8s = "v1.36.0"
+const opOldK8s = "v1.35.4" // a minor below the release set (1.36.6), so the upgrade is a minor one
 
 func rebootPending(m *ichorv1alpha1.TalosMachine, paths ...string) *ichorv1alpha1.TalosMachine {
 	m.Status.RebootPaths = paths

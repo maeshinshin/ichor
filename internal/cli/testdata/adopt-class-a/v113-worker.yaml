@@ -14,7 +14,7 @@ machine:
         - 10.5.0.2
         - cp.example.test
     kubelet:
-        image: ghcr.io/siderolabs/kubelet:v1.37.1
+        image: ghcr.io/siderolabs/kubelet:v1.36.6
         defaultRuntimeSeccompProfileEnabled: true
         disableManifestsDirectory: true
     install:

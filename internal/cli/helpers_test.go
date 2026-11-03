@@ -26,7 +26,6 @@ import (
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
-	"github.com/siderolabs/talos/pkg/machinery/constants"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -34,6 +33,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
+	"github.com/maeshinshin/ichor/pkg/release"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
@@ -140,7 +140,7 @@ func newTestCluster() *ichorv1alpha1.TalosCluster {
 		Spec: ichorv1alpha1.TalosClusterSpec{
 			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointTypeVIP, Address: testEndpointAddr},
 			TalosVersion:      testTalosVersion,
-			KubernetesVersion: "v" + constants.DefaultKubernetesVersion,
+			KubernetesVersion: release.Pinned.Kubernetes,
 			VersionContract:   testVersionContract,
 			SecretsRef:        corev1.LocalObjectReference{Name: "unused"},
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulableTrue},

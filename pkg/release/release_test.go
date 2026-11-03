@@ -18,8 +18,9 @@ package release
 
 import (
 	"slices"
-	"strings"
 	"testing"
+
+	"golang.org/x/mod/semver"
 
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 
@@ -33,12 +34,15 @@ const (
 	olderK8s      = "v1.36.0"
 )
 
-// The pinned Kubernetes is the one pkg/machinery defaults to, and it is one the pinned Talos supports.
+// The pinned Kubernetes is one the pinned Talos supports, and it is not newer than the Kubernetes
+// machinery's default names (the set may be older than the default: Cilium's tested range, not the
+// Talos default, decides it, ADR 0113).
 func TestPinnedIsConsistentWithMachinery(t *testing.T) {
 	t.Parallel()
 
-	if got := strings.TrimPrefix(Pinned.Kubernetes, "v"); got != constants.DefaultKubernetesVersion {
-		t.Errorf("Pinned.Kubernetes = %s, machinery's default is %s", Pinned.Kubernetes, constants.DefaultKubernetesVersion)
+	if semver.Compare(Pinned.Kubernetes, "v"+constants.DefaultKubernetesVersion) > 0 {
+		t.Errorf("Pinned.Kubernetes = %s is newer than machinery's default %s",
+			Pinned.Kubernetes, constants.DefaultKubernetesVersion)
 	}
 
 	if err := upgrade.KubernetesPairing(Pinned.Kubernetes, Pinned.Talos); err != nil {

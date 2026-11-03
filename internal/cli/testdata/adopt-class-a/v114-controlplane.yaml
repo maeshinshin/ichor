@@ -169,7 +169,7 @@ taints:
 ---
 apiVersion: v1alpha1
 kind: KubeletConfig
-image: ghcr.io/siderolabs/kubelet:v1.37.1 # The container image used to run the kubelet component.
+image: ghcr.io/siderolabs/kubelet:v1.36.6 # The container image used to run the kubelet component.
 # Provide extra configuration for the kubelet.
 config: {}
 defaultRuntimeSeccompProfileEnabled: true # Enable container runtime default Seccomp profile.
@@ -357,7 +357,7 @@ issuer:
 ---
 apiVersion: v1alpha1
 kind: KubeAPIServerConfig
-image: registry.k8s.io/kube-apiserver:v1.37.1 # The container image used to run the kube-apiserver component.
+image: registry.k8s.io/kube-apiserver:v1.36.6 # The container image used to run the kube-apiserver component.
 # Provide extra certificate SANs (hostnames, IPs) to add to the kube-apiserver serving certificate.
 certExtraSANs:
     - 10.5.0.2
@@ -365,17 +365,17 @@ certExtraSANs:
 ---
 apiVersion: v1alpha1
 kind: KubeControllerManagerConfig
-image: registry.k8s.io/kube-controller-manager:v1.37.1 # The container image used to run the kube-controller-manager component.
+image: registry.k8s.io/kube-controller-manager:v1.36.6 # The container image used to run the kube-controller-manager component.
 ---
 apiVersion: v1alpha1
 kind: KubeSchedulerConfig
-image: registry.k8s.io/kube-scheduler:v1.37.1 # The container image used to run the kube-scheduler component.
+image: registry.k8s.io/kube-scheduler:v1.36.6 # The container image used to run the kube-scheduler component.
 # Provide configuration for the kube-scheduler static pod.
 config: {}
 ---
 apiVersion: v1alpha1
 kind: KubeProxyConfig
-image: registry.k8s.io/kube-proxy:v1.37.1 # The container image used in the kube-proxy manifest.
+image: registry.k8s.io/kube-proxy:v1.36.6 # The container image used in the kube-proxy manifest.
 # Provide configuration for the kube-proxy.
 config: {}
 ---

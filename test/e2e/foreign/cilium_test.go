@@ -352,7 +352,7 @@ func TestA1Upgrade(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumInline})
 	before, recBefore := ciliumDS(c), helmRecords(c)
 	logState(t, c, "before upgrade")
-	target := env("ICHOR_E2E_F_K8S_TARGET", "v1.37.1")
+	target := env("ICHOR_E2E_F_K8S_TARGET", "v1.36.6")
 	out, err := ichorCLI(t, c, "upgrade", "kubernetes", target, "--yes")
 	if err != nil {
 		t.Fatalf("upgrade kubernetes: %v\n%s", err, out)
@@ -368,8 +368,8 @@ func TestA1Upgrade(t *testing.T) {
 	}
 	vers, _ := inner(c, "get", "nodes", "-o", "jsonpath={.items[*].status.nodeInfo.kubeletVersion}")
 	t.Logf("kubelet versions: %s", vers)
-	if strings.Contains(vers, "v1.37.0") {
-		t.Errorf("a node is still on v1.37.0: %s", vers)
+	if strings.Contains(vers, "v1.36.5") {
+		t.Errorf("a node is still on v1.36.5: %s", vers)
 	}
 	if p, _ := hasName(inlineNames(t, c), "cilium"); p != 0 {
 		t.Errorf("the cilium inline entry is back on %d node(s)", p)

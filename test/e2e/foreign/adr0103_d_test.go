@@ -19,7 +19,7 @@ limitations under the License.
 
 package foreign
 
-// ADR 0103 D4 and D6 on a D1 cluster: `foreign up --k8s v1.37.0` (flannel), then TestD1FlannelAdoptedUnmanaged,
+// ADR 0103 D4 and D6 on a D1 cluster: `foreign up --k8s v1.36.5` (flannel), then TestD1FlannelAdoptedUnmanaged,
 // then these, each against the kept cluster (ICHOR_E2E_F_ATTACH=1, ICHOR_E2E_F_KEEP=1).
 
 import (
@@ -116,10 +116,10 @@ func TestD4Talos(t *testing.T) {
 	flannelRunning(t, c, c.LocalKube)
 }
 
-// TestD4K8s (ADR 0103 D4): a Kubernetes patch upgrade (ICHOR_E2E_F_K8S_TARGET, default v1.37.1; bring the cluster up with --k8s v1.37.0).
+// TestD4K8s (ADR 0103 D4): a Kubernetes patch upgrade (ICHOR_E2E_F_K8S_TARGET, default v1.36.6; bring the cluster up with --k8s v1.36.5).
 func TestD4K8s(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1})
-	target := env("ICHOR_E2E_F_K8S_TARGET", "v1.37.1")
+	target := env("ICHOR_E2E_F_K8S_TARGET", "v1.36.6")
 	start := time.Now()
 	if out, err := ichorCLI(t, c, "upgrade", "kubernetes", target, "--yes"); err != nil {
 		t.Fatalf("upgrade kubernetes: %v\n%s", err, out)

@@ -28,6 +28,22 @@ import (
 	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
+// Versions and case names the table tests repeat.
+const (
+	talos1132     = "v1.13.2"
+	k8s1371       = "v1.37.1"
+	talos1124     = "v1.12.4"
+	talos1143     = "v1.14.3"
+	talos1144     = "v1.14.4"
+	talos1500     = "v1.15.0"
+	contract113   = "v1.13"
+	contract114   = "v1.14"
+	k8s1350       = "v1.35.0"
+	k8s1362       = "v1.36.2"
+	k8s1380       = "v1.38.0"
+	caseDowngrade = "downgrade"
+)
+
 // The pinned Kubernetes is the one pkg/machinery defaults to, and it is one the pinned Talos supports.
 func TestPinnedIsConsistentWithMachinery(t *testing.T) {
 	t.Parallel()
@@ -76,13 +92,13 @@ func TestCheckKubernetesStepNamesTheOrder(t *testing.T) {
 
 	// The installed Cilium 1.0.0 runs no Kubernetes in the table, so the message names the embedded
 	// chart when it runs the target, and a newer Ichor when it does not.
-	err = CheckKubernetesStep(Pinned.Talos, "v1.36.2", "1.0.0")
+	err = CheckKubernetesStep(Pinned.Talos, k8s1362, "1.0.0")
 	if err == nil {
 		t.Fatal("an installed Cilium the table does not run was accepted")
 	}
 
 	want := "a newer Ichor release is needed"
-	if CiliumKubernetesError(Pinned.Cilium, "v1.36.2") == nil {
+	if CiliumKubernetesError(Pinned.Cilium, k8s1362) == nil {
 		want = "upgrade Cilium to " + Pinned.Cilium + " first"
 	}
 
@@ -98,10 +114,10 @@ func TestCompare(t *testing.T) {
 		current, pinned string
 		want            State
 	}{
-		{"v1.12.4", Pinned.Talos, Behind},
+		{talos1124, Pinned.Talos, Behind},
 		{Pinned.Talos, Pinned.Talos, UpToDate},
-		{"v1.15.0", Pinned.Talos, Ahead},
-		{"v1.13", Pinned.VersionContract, Behind},
+		{talos1500, Pinned.Talos, Ahead},
+		{contract113, Pinned.VersionContract, Behind},
 		{Pinned.VersionContract, Pinned.VersionContract, UpToDate},
 		{"", Pinned.Talos, Unknown},
 		{"1.14.3", Pinned.Talos, Unknown},
@@ -123,14 +139,14 @@ func TestCheckUpdate(t *testing.T) {
 		name, old, new string
 		ok             bool
 	}{
-		{"unchanged older", "v1.12.4", "v1.12.4", true},
-		{"upgrade to the pinned", "v1.12.4", Pinned.Talos, true},
-		{"upgrade past the pinned", Pinned.Talos, "v1.15.0", true},
-		{"downgrade", Pinned.Talos, "v1.13.2", false},
+		{"unchanged older", talos1124, talos1124, true},
+		{"upgrade to the pinned", talos1124, Pinned.Talos, true},
+		{"upgrade past the pinned", Pinned.Talos, talos1500, true},
+		{caseDowngrade, Pinned.Talos, talos1132, false},
 		{"downgrade by a patch", Pinned.Talos, "v1.14.2", false},
 		{"unchanged pinned", Pinned.Talos, Pinned.Talos, true},
-		{"contract move", "v1.13", "v1.14", true},
-		{"contract downgrade", "v1.14", "v1.13", false},
+		{"contract move", contract113, contract114, true},
+		{"contract downgrade", contract114, contract113, false},
 	}
 
 	for _, c := range cases {
@@ -150,16 +166,16 @@ func TestCheckTalosTarget(t *testing.T) {
 		name, running, target string
 		ok                    bool
 	}{
-		{"adjacent minor", "v1.13.2", "v1.14.3", true},
-		{"skips a minor within the bounds", "v1.12.4", "v1.14.3", true},
-		{"patch", "v1.14.3", "v1.14.4", true},
-		{"below the minimum host version", "v1.11.5", "v1.14.3", false},
-		{"not newer", "v1.14.3", "v1.14.3", false},
-		{"downgrade", "v1.14.3", "v1.13.9", false},
-		{"pre-release", "v1.14.3", "v1.14.4-rc.1", false},
-		{"build metadata", "v1.14.3", "v1.14.4+build", false},
-		{"shorthand", "v1.14.3", "v1.14", false},
-		{"minor machinery does not know", "v1.14.3", "v1.15.0", false},
+		{"adjacent minor", talos1132, talos1143, true},
+		{"skips a minor within the bounds", talos1124, talos1143, true},
+		{"patch", talos1143, talos1144, true},
+		{"below the minimum host version", "v1.11.5", talos1143, false},
+		{"not newer", talos1143, talos1143, false},
+		{caseDowngrade, talos1143, "v1.13.9", false},
+		{"pre-release", talos1143, "v1.14.4-rc.1", false},
+		{"build metadata", talos1143, "v1.14.4+build", false},
+		{"shorthand", talos1143, contract114, false},
+		{"minor machinery does not know", talos1143, talos1500, false},
 	}
 
 	for _, c := range cases {
@@ -180,13 +196,13 @@ func TestCheckKubernetesTarget(t *testing.T) {
 		name, running, target, talos string
 		ok                           bool
 	}{
-		{"one minor up", "v1.36.2", "v1.37.1", Pinned.Talos, true},
-		{"patch", "v1.37.1", "v1.37.2", Pinned.Talos, true},
-		{"two minors up", "v1.35.0", "v1.37.1", Pinned.Talos, false},
-		{"not supported by the Talos", "v1.37.1", "v1.38.0", Pinned.Talos, false},
-		{"not newer", "v1.37.1", "v1.37.1", Pinned.Talos, false},
-		{"downgrade", "v1.37.1", "v1.36.2", Pinned.Talos, false},
-		{"pre-release", "v1.36.2", "v1.37.1-rc.1", Pinned.Talos, false},
+		{"one minor up", k8s1362, k8s1371, Pinned.Talos, true},
+		{"patch", k8s1371, "v1.37.2", Pinned.Talos, true},
+		{"two minors up", k8s1350, k8s1371, Pinned.Talos, false},
+		{"not supported by the Talos", k8s1371, k8s1380, Pinned.Talos, false},
+		{"not newer", k8s1371, k8s1371, Pinned.Talos, false},
+		{caseDowngrade, k8s1371, k8s1362, Pinned.Talos, false},
+		{"pre-release", k8s1362, "v1.37.1-rc.1", Pinned.Talos, false},
 	}
 
 	for _, c := range cases {

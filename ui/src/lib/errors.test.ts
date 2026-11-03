@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { Code, ConnectError } from '@connectrpc/connect'
-import { describeError } from './errors.ts'
+import { describeError, isOverridable } from './errors.ts'
+
+test('a refusal the server marks overridable is told apart from other refusals', () => {
+  const marked = new ConnectError('incompatible', Code.FailedPrecondition, { 'Ichor-Overridable': 'true' })
+  assert.equal(isOverridable(marked), true)
+  assert.equal(isOverridable(new ConnectError('not offered', Code.FailedPrecondition)), false)
+  assert.equal(isOverridable(new Error('boom')), false)
+})
 
 
 test('an apiserver validation message (InvalidArgument) is shown verbatim under a headline', () => {

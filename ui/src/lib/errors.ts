@@ -11,6 +11,12 @@ import { t } from './i18n.ts'
 // language (ADR 0064); the server's message is never translated.
 export type ErrorShape = { title: string; detail: string }
 
+// isOverridable is true when the server marked a refusal as one the override verb lifts (ADR 0110): the
+// Ichor-Overridable response header. The dialog then offers its override option.
+export function isOverridable(err: unknown): boolean {
+  return err instanceof ConnectError && err.metadata.get('Ichor-Overridable') === 'true'
+}
+
 export function describeError(err: unknown): ErrorShape {
   if (err instanceof ConnectError) {
     switch (err.code) {

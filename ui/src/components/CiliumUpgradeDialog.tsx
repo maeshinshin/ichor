@@ -1,11 +1,14 @@
 import { useState } from 'preact/hooks'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { VersionPicker } from '@/components/VersionPicker'
 import type { ObjectRef } from '@/gen/ichor/v1alpha1/common_pb'
 import { cniClient } from '@/lib/connect'
-import { describeError, type ErrorShape } from '@/lib/errors'
+import { describeError, isOverridable, type ErrorShape } from '@/lib/errors'
 import { notifyDone } from '@/lib/notify'
 import type { TargetList } from '@/lib/upgradeTargets'
 import { useT } from '@/lib/useT'
@@ -33,15 +36,22 @@ export function CiliumUpgradeDialog({
   const [error, setError] = useState<ErrorShape | null>(null)
   const [target, setTarget] = useState('')
 
+  // The override (ADR 0110) is offered only after the server refused a patch for compatibility and marked the
+  // refusal overridable; the reason is optional.
+  const [overridable, setOverridable] = useState(false)
+  const [overridden, setOverridden] = useState(false)
+  const [reason, setReason] = useState('')
+
   async function start() {
     setBusy(true)
     setError(null)
     try {
-      await cniClient.startCniUpgrade({ cluster, version: target })
+      await cniClient.startCniUpgrade({ cluster, version: target, override: overridden ? { reason: reason.trim() } : undefined })
       setOpen(false)
       notifyDone(t('cilium.upgradeStarted'))
     } catch (err) {
       setError(describeError(err))
+      setOverridable(overridden || isOverridable(err))
     } finally {
       setBusy(false)
     }
@@ -52,7 +62,12 @@ export function CiliumUpgradeDialog({
       open={open}
       onOpenChange={(next) => {
         setOpen(next)
-        if (!next) setError(null)
+        if (!next) {
+          setError(null)
+          setOverridable(false)
+          setOverridden(false)
+          setReason('')
+        }
       }}
       trigger={
         <Button variant="outline" size={size} disabled={disabled}>
@@ -63,7 +78,7 @@ export function CiliumUpgradeDialog({
       description={`${chart !== '' ? t('cilium.upgradeAvailable', { version: chart }) : t('cilium.patchesAvailable')} ${t('cilium.upgradeConfirmBody')}`}
       confirm={{
         label: busy ? t('cilium.upgradeStarting') : t('cilium.upgrade'),
-        disabled: busy || (target === '' && chart === ''),
+        disabled: busy || (target === '' && chart === '') || (overridable && !overridden),
         onClick: start,
         destructive: false,
       }}
@@ -74,10 +89,29 @@ export function CiliumUpgradeDialog({
         onValueChange={(v) => {
           setTarget(v)
           setError(null)
+          setOverridable(false)
+          setOverridden(false)
         }}
         list={list}
       />
       {error && <ErrorAlert {...error} />}
+      {overridable && (
+        <div class="space-y-3">
+          <div class="flex items-center gap-2 text-sm">
+            <Checkbox id="cilium-override" checked={overridden} onCheckedChange={(on: boolean | 'indeterminate') => setOverridden(on === true)} />
+            <Label htmlFor="cilium-override">{t('ops.dialog.override')}</Label>
+          </div>
+          <div class="space-y-2">
+            <Label htmlFor="cilium-override-reason">{t('ops.dialog.reason')}</Label>
+            <Textarea
+              id="cilium-override-reason"
+              value={reason}
+              onInput={(e) => setReason((e.currentTarget as HTMLTextAreaElement).value)}
+            />
+            <p class="text-xs text-muted-foreground">{t('ops.dialog.overrideHint')}</p>
+          </div>
+        </div>
+      )}
     </ConfirmDialog>
   )
 }

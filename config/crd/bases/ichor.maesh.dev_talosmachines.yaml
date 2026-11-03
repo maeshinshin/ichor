@@ -468,6 +468,96 @@ spec:
                   follows the node to running. Empty for a node that has not been provisioned by Ichor.
                 format: date-time
                 type: string
+              discoveredDisks:
+                description: |-
+                  discoveredDisks lists the installable disks (no CD-ROM, no read-only one) the node reported
+                  through its maintenance-mode API when discovery last probed it. Approval picks the
+                  install disk and disk roles from this list, and DiscoveryWarnings checks a choice against it.
+                  Empty until a probe has recorded one.
+                items:
+                  description: |-
+                    TalosMachineDiscoveredDisk is one installable disk the node reported in maintenance mode.
+                    The identifiers are the ones a TalosMachineDisk selector can name; the size, model and transport tell
+                    the disks apart for a person. No pattern is set on them: the values are what Talos reported, and a
+                    status write must not fail on a device name the CRD would not have written.
+                  properties:
+                    busPath:
+                      description: busPath is the disk's bus path, as reported.
+                      maxLength: 256
+                      type: string
+                    byIDPath:
+                      description: byIDPath is the disk's /dev/disk/by-id/ symlink,
+                        as reported.
+                      maxLength: 256
+                      type: string
+                    devPath:
+                      description: devPath is the kernel device path, as reported.
+                        Not stable across boots.
+                      maxLength: 256
+                      type: string
+                    model:
+                      description: model is the disk's model name, as reported.
+                      maxLength: 256
+                      type: string
+                    serial:
+                      description: serial is the disk's serial number, as reported.
+                      maxLength: 256
+                      type: string
+                    sizeBytes:
+                      description: sizeBytes is the disk size in bytes.
+                      format: int64
+                      type: integer
+                    transport:
+                      description: transport is the bus the disk is attached over
+                        (sata, nvme, scsi, virtio, ...), as reported.
+                      maxLength: 64
+                      type: string
+                    wwid:
+                      description: wwid is the disk's World Wide Identifier, as reported.
+                      maxLength: 256
+                      type: string
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
+              discoveredLinks:
+                description: |-
+                  discoveredLinks lists the physical links with a permanent MAC address the node reported
+                  through its maintenance-mode API when discovery last probed it. Approval picks the
+                  primary NIC from this list. Empty until a probe has recorded one.
+                items:
+                  description: |-
+                    TalosMachineDiscoveredLink is one physical link with a permanent MAC address the node reported in
+                    maintenance mode. Its PermanentMAC is the value TalosMachineNetwork.MAC matches.
+                  properties:
+                    driver:
+                      description: driver is the kernel driver that owns the NIC,
+                        as reported.
+                      maxLength: 256
+                      type: string
+                    linkUp:
+                      description: linkUp is true when the link reports carrier.
+                      type: boolean
+                    name:
+                      description: name is the kernel link name (eno1, enp3s0, ...),
+                        as reported; it can change between boots.
+                      maxLength: 256
+                      type: string
+                    permanentMAC:
+                      description: permanentMAC is the hardware address burned into
+                        the NIC.
+                      maxLength: 17
+                      type: string
+                    speedMbit:
+                      description: speedMbit is the negotiated speed in Mbit/s, or
+                        0 when the link does not report one.
+                      format: int32
+                      type: integer
+                  required:
+                  - name
+                  - permanentMAC
+                  type: object
+                type: array
+                x-kubernetes-list-type: atomic
               maintenanceFingerprint:
                 description: |-
                   maintenanceFingerprint is the SPKI fingerprint (SHA-256, base64) of the

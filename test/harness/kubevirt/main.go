@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -266,13 +267,7 @@ func bootToMaintenance() (string, error) {
 		return "", err
 	}
 
-	if _, err := kube.Poll("waiting for MachineStatus stage to reach maintenance", 5*time.Minute, func() (string, bool) {
-		out, err := talosctl.Get(namespace, ip, "machinestatus")
-		if err != nil {
-			return "", false
-		}
-		return ip, machineInMaintenance(out)
-	}); err != nil {
+	if err := waitForMaintenance("waiting for MachineStatus stage to reach maintenance", ip, 5*time.Minute); err != nil {
 		return "", err
 	}
 
@@ -290,11 +285,28 @@ func bootToMaintenance() (string, error) {
 // waitVMIIP waits for the VMI called name to report its pod IP.
 func waitVMIIP(name string, timeout time.Duration) (string, error) {
 	return kube.Poll("waiting for "+name+"'s VMI to report a pod IP", timeout, func() (string, bool) {
-		out, err := utils.Run(kube.Command("-n", namespace, "get", "vmi", name,
-			"-o", "jsonpath={.status.interfaces[0].ipAddress}"))
-		ip := strings.TrimSpace(out)
+		ip, err := getJSONPath("vmi", name, ".status.interfaces[0].ipAddress")
 		return ip, err == nil && ip != ""
 	})
+}
+
+// getJSONPath returns the trimmed value of expr (a JSONPath without its braces) on the named
+// resource in ichor-e2e on the outer cluster.
+func getJSONPath(resource, name, expr string) (string, error) {
+	out, err := utils.Run(kube.Command("-n", namespace, "get", resource, name, "-o", "jsonpath={"+expr+"}"))
+	return strings.TrimSpace(out), err
+}
+
+// waitForMaintenance polls ip's machinestatus until the node reports the maintenance stage.
+func waitForMaintenance(step, ip string, timeout time.Duration) error {
+	_, err := kube.Poll(step, timeout, func() (string, bool) {
+		out, err := talosctl.Get(namespace, ip, "machinestatus")
+		if err != nil {
+			return "", false
+		}
+		return "", machineInMaintenance(out)
+	})
+	return err
 }
 
 // installAndBootstrap applies a control-plane config to the node at ip (which installs and
@@ -502,8 +514,8 @@ func startRelay(nodeIP string) error {
 }
 
 func killPortForward(pid string) {
-	var p int
-	if _, err := fmt.Sscanf(pid, "%d", &p); err != nil || p <= 0 {
+	p, err := strconv.Atoi(pid)
+	if err != nil || p <= 0 {
 		return
 	}
 	_ = syscall.Kill(p, syscall.SIGTERM)

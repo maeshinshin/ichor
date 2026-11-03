@@ -121,13 +121,7 @@ func bootHAToMaintenance() ([]string, error) {
 
 	for i, ip := range ips {
 		step := "waiting for " + haVMName(i) + " (" + ip + ") to reach maintenance"
-		if _, err := kube.Poll(step, 5*time.Minute, func() (string, bool) {
-			out, err := talosctl.Get(namespace, ip, "machinestatus")
-			if err != nil {
-				return "", false
-			}
-			return "", machineInMaintenance(out)
-		}); err != nil {
+		if err := waitForMaintenance(step, ip, 5*time.Minute); err != nil {
 			return nil, err
 		}
 	}

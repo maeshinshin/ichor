@@ -1,0 +1,2 @@
+# A bare `go build` in the harness directory writes the binary there.
+/harness/kubevirt/kubevirt

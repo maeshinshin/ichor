@@ -126,7 +126,9 @@ func runMachineApprove(
 
 	// A pick discovery did not record is advice, not a refusal (ADR 0111): say so, then approve as asked.
 	for _, w := range resp.Msg.GetWarnings() {
-		fmt.Fprintf(errw, "warning: %s\n", w)
+		if _, err := fmt.Fprintf(errw, "warning: %s\n", w); err != nil {
+			return err
+		}
 	}
 
 	return writeMessage(out, outputFormat, resp.Msg)

@@ -193,7 +193,7 @@ func disksFromPB(in []*pb.MachineDiskRole) ([]ichorv1alpha1.TalosMachineDiskRole
 
 // discoveredDisksToPB mirrors TalosMachine.status.discoveredDisks (ADR 0111); nil when none was recorded.
 func discoveredDisksToPB(in []ichorv1alpha1.TalosMachineDiscoveredDisk) []*pb.DiscoveredDisk {
-	var out []*pb.DiscoveredDisk
+	out := make([]*pb.DiscoveredDisk, 0, len(in))
 
 	for _, d := range in {
 		out = append(out, &pb.DiscoveredDisk{
@@ -207,7 +207,7 @@ func discoveredDisksToPB(in []ichorv1alpha1.TalosMachineDiscoveredDisk) []*pb.Di
 
 // discoveredLinksToPB mirrors TalosMachine.status.discoveredLinks (ADR 0111); nil when none was recorded.
 func discoveredLinksToPB(in []ichorv1alpha1.TalosMachineDiscoveredLink) []*pb.DiscoveredLink {
-	var out []*pb.DiscoveredLink
+	out := make([]*pb.DiscoveredLink, 0, len(in))
 
 	for _, l := range in {
 		out = append(out, &pb.DiscoveredLink{

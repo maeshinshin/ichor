@@ -246,7 +246,7 @@ func (s *Server) ApproveMachine(
 	}
 
 	// The webhook raises the same warnings on the write; the response carries them too, since the
-	// client does not see admission warnings (ADR 0111).
+	// client does not see admission warnings (ADR 0112).
 	return connect.NewResponse(&pb.ApproveMachineResponse{
 		Machine: machineToPB(m), Audit: audit, Warnings: m.DiscoveryWarnings(),
 	}), nil

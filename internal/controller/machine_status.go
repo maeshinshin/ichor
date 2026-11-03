@@ -86,7 +86,7 @@ func recordMaintenanceFingerprint(
 }
 
 // recordDiscoveredHardware stores the disks and NICs a maintenance-mode probe reported on m's status
-// (ADR 0111). An unchanged inventory writes nothing.
+// (ADR 0112). An unchanged inventory writes nothing.
 func recordDiscoveredHardware(
 	ctx context.Context, rd client.Reader, c client.Client, m *ichorv1alpha1.TalosMachine, inv Inventory,
 ) error {

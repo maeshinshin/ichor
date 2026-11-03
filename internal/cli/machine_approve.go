@@ -124,7 +124,7 @@ func runMachineApprove(
 		return err
 	}
 
-	// A pick discovery did not record is advice, not a refusal (ADR 0111): say so, then approve as asked.
+	// A pick discovery did not record is advice, not a refusal (ADR 0112): say so, then approve as asked.
 	for _, w := range resp.Msg.GetWarnings() {
 		if _, err := fmt.Fprintf(errw, "warning: %s\n", w); err != nil {
 			return err

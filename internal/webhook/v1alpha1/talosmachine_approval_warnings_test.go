@@ -22,7 +22,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// TestApprovalWarnings pins when an admission warning is raised (ADR 0111): on an approval that writes
+// TestApprovalWarnings pins when an admission warning is raised (ADR 0112): on an approval that writes
 // its picks, never on a change that leaves them alone, and never as a refusal.
 func TestApprovalWarnings(t *testing.T) {
 	const notDiscovered = "/dev/vdz"

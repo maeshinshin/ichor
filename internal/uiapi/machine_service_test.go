@@ -151,7 +151,7 @@ var _ = Describe("MachineService", func() {
 			Expect(got.Spec.Install.Image).To(Equal("factory.talos.dev/x:v1"))
 		})
 
-		It("warns, and still approves, a disk and a NIC that discovery did not record (ADR 0111)", func() {
+		It("warns, and still approves, a disk and a NIC that discovery did not record (ADR 0112)", func() {
 			cluster := newTestCluster("does-not-exist")
 			m := newTestMachine(cluster.Name, strongTestIdentity("uuid-warn"), "", ichorv1alpha1.MachineApprovalStatePending)
 			m.Status.DiscoveredDisks = []ichorv1alpha1.TalosMachineDiscoveredDisk{{Serial: "D1", DevPath: "/dev/sda", SizeBytes: 1 << 30}}

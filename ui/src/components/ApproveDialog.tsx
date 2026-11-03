@@ -79,7 +79,7 @@ export function ApproveDialog({
 
   const strong = isStrongIdentity(machine.identity)
   const hostnameOk = isValidHostname(hostname)
-  // The disks and NICs discovery recorded are the list to choose from (ADR 0111); the node's own
+  // The disks and NICs discovery recorded are the list to choose from (ADR 0112); the node's own
   // reads fill in for a machine discovered before they were recorded.
   const disks: DiskOption[] = (
     machine.discoveredDisks.length > 0 ? machine.discoveredDisks : (node?.disks ?? [])
@@ -140,7 +140,7 @@ export function ApproveDialog({
       })
       if (res.machine) onApproved(res.machine)
       notifyWrite('toast.approved', { name: hostname || machine.ref.name })
-      // Approved anyway: a pick discovery did not see is only worth a note (ADR 0111).
+      // Approved anyway: a pick discovery did not see is only worth a note (ADR 0112).
       for (const w of res.warnings) notifyWarning(w)
       setOpen(false)
     } catch (err) {

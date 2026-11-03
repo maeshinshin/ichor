@@ -45,7 +45,7 @@ type MaintenanceClient interface {
 	ApplyConfiguration(ctx context.Context, cfg []byte) error
 
 	// Inventory reads the node's installable disks and its physical NICs with permanent addresses,
-	// the lists approval picks from (ADR 0111). Discovery records them on the TalosMachine's status.
+	// the lists approval picks from (ADR 0112). Discovery records them on the TalosMachine's status.
 	Inventory(ctx context.Context) (Inventory, error)
 }
 

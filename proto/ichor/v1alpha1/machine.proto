@@ -118,7 +118,7 @@ message ApproveMachineResponse {
   string pull_request_url = 3 [deprecated = true];
   // Deprecated: GitOps is no longer part of Ichor (docs/adr/0101). Never set; kept so the wire format is unchanged.
   string notice = 4 [deprecated = true];
-  // warnings are the admission warnings the approval raised but did not refuse (ADR 0111): an install
+  // warnings are the admission warnings the approval raised but did not refuse (ADR 0112): an install
   // disk, disk role or NIC that discovery did not record on the node. Empty when every pick was seen.
   repeated string warnings = 5;
 }
@@ -236,15 +236,15 @@ message Machine {
   // empty until the controller has read the node. Views name a machine hostname, else node_name.
   string node_name = 18;
   // discovered_disks are the installable disks the node reported in maintenance mode when it was
-  // discovered (TalosMachine.status.discoveredDisks, ADR 0111); approval picks the install disk and
+  // discovered (TalosMachine.status.discoveredDisks, ADR 0112); approval picks the install disk and
   // disk roles from them. Empty until a probe has recorded some.
   repeated DiscoveredDisk discovered_disks = 19;
   // discovered_links are the physical NICs with a permanent MAC the node reported in maintenance mode
-  // (TalosMachine.status.discoveredLinks, ADR 0111); approval picks the primary NIC from them.
+  // (TalosMachine.status.discoveredLinks, ADR 0112); approval picks the primary NIC from them.
   repeated DiscoveredLink discovered_links = 20;
 }
 
-// DiscoveredDisk is one installable disk as discovery recorded it (ADR 0111). The identifiers are
+// DiscoveredDisk is one installable disk as discovery recorded it (ADR 0112). The identifiers are
 // the ones a MachineDisk selector names.
 message DiscoveredDisk {
   string wwid = 1;
@@ -257,7 +257,7 @@ message DiscoveredDisk {
   string transport = 8;
 }
 
-// DiscoveredLink is one physical NIC with a permanent MAC as discovery recorded it (ADR 0111).
+// DiscoveredLink is one physical NIC with a permanent MAC as discovery recorded it (ADR 0112).
 message DiscoveredLink {
   string name = 1;
   string permanent_mac = 2;

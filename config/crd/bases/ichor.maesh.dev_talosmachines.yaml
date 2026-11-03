@@ -473,12 +473,12 @@ spec:
               discoveredDisks:
                 description: |-
                   discoveredDisks lists the installable disks (no CD-ROM, no read-only one) the node reported
-                  through its maintenance-mode API when discovery last probed it (ADR 0111). Approval picks the
+                  through its maintenance-mode API when discovery last probed it (ADR 0112). Approval picks the
                   install disk and disk roles from this list, and DiscoveryWarnings checks a choice against it.
                   Empty until a probe has recorded one.
                 items:
                   description: |-
-                    TalosMachineDiscoveredDisk is one installable disk the node reported in maintenance mode (ADR 0111).
+                    TalosMachineDiscoveredDisk is one installable disk the node reported in maintenance mode (ADR 0112).
                     The identifiers are the ones a TalosMachineDisk selector can name; the size, model and transport tell
                     the disks apart for a person. No pattern is set on them: the values are what Talos reported, and a
                     status write must not fail on a device name the CRD would not have written.
@@ -524,12 +524,12 @@ spec:
               discoveredLinks:
                 description: |-
                   discoveredLinks lists the physical links with a permanent MAC address the node reported
-                  through its maintenance-mode API when discovery last probed it (ADR 0111). Approval picks the
+                  through its maintenance-mode API when discovery last probed it (ADR 0112). Approval picks the
                   primary NIC from this list. Empty until a probe has recorded one.
                 items:
                   description: |-
                     TalosMachineDiscoveredLink is one physical link with a permanent MAC address the node reported in
-                    maintenance mode (ADR 0111). Its PermanentMAC is the value TalosMachineNetwork.MAC matches.
+                    maintenance mode (ADR 0112). Its PermanentMAC is the value TalosMachineNetwork.MAC matches.
                   properties:
                     driver:
                       description: driver is the kernel driver that owns the NIC,

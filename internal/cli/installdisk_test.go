@@ -91,7 +91,7 @@ func TestApproveWritesTheInstallDisk(t *testing.T) {
 }
 
 // TestApproveWarnsAboutAnUndiscoveredDisk: an install disk discovery did not record is printed as a
-// warning on stderr and the approval still goes through (ADR 0111).
+// warning on stderr and the approval still goes through (ADR 0112).
 func TestApproveWarnsAboutAnUndiscoveredDisk(t *testing.T) {
 	setAPITestFlags(t, true)
 

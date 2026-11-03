@@ -84,7 +84,7 @@ func putLink(t *testing.T, st state.State, name string, mutate func(*network.Lin
 	}
 }
 
-// TestReadInventory pins what discovery records (ADR 0111): installable disks only, with the by-id
+// TestReadInventory pins what discovery records (ADR 0112): installable disks only, with the by-id
 // symlink taken from the symlinks, sorted by device path; physical links with a permanent address only,
 // sorted by name.
 func TestReadInventory(t *testing.T) {

@@ -87,7 +87,7 @@ func (v *TalosMachineCustomValidator) ValidateCreate(ctx context.Context, obj *i
 }
 
 // approvalWarnings are the DiscoveryWarnings of an approval whose picks are being written: a machine
-// created approved, or an update that moves its install disk, NIC or disk roles (ADR 0111). Nothing else
+// created approved, or an update that moves its install disk, NIC or disk roles (ADR 0112). Nothing else
 // is judged, so an unrelated edit to an approved machine gets no repeated warning.
 func approvalWarnings(oldObj, newObj *ichorv1alpha1.TalosMachine) admission.Warnings {
 	if !newObj.Spec.IsApproved() {

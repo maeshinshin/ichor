@@ -166,7 +166,7 @@ func (m *machineryMaintenanceClient) Inventory(ctx context.Context) (Inventory, 
 
 // ReadInventory lists the disks an install or a disk role can take (block.Disk, minus the CD-ROM drives
 // and read-only disks the approval pickers leave out) and the physical links with a permanent address
-// (network.LinkStatus), the same links ReadHardwareIdentity takes MACs from (ADR 0111). Both lists come
+// (network.LinkStatus), the same links ReadHardwareIdentity takes MACs from (ADR 0112). Both lists come
 // back sorted, so an unchanged node writes an unchanged status.
 func ReadInventory(ctx context.Context, cosi state.State) (Inventory, error) {
 	var inv Inventory

@@ -27,7 +27,7 @@ const (
 	nicName   = "eno1"
 )
 
-// TestDiscoveryWarnings is ADR 0111's check on an approval: the install disk, the disk roles and the
+// TestDiscoveryWarnings is ADR 0112's check on an approval: the install disk, the disk roles and the
 // NIC are compared with what discovery recorded, and nothing is judged until something was recorded.
 func TestDiscoveryWarnings(t *testing.T) {
 	const (

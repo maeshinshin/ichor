@@ -21,7 +21,7 @@ import (
 	"strings"
 )
 
-// TalosMachineDiscoveredDisk is one installable disk the node reported in maintenance mode (ADR 0111).
+// TalosMachineDiscoveredDisk is one installable disk the node reported in maintenance mode (ADR 0112).
 // The identifiers are the ones a TalosMachineDisk selector can name; the size, model and transport tell
 // the disks apart for a person. No pattern is set on them: the values are what Talos reported, and a
 // status write must not fail on a device name the CRD would not have written.
@@ -67,7 +67,7 @@ type TalosMachineDiscoveredDisk struct {
 }
 
 // TalosMachineDiscoveredLink is one physical link with a permanent MAC address the node reported in
-// maintenance mode (ADR 0111). Its PermanentMAC is the value TalosMachineNetwork.MAC matches.
+// maintenance mode (ADR 0112). Its PermanentMAC is the value TalosMachineNetwork.MAC matches.
 type TalosMachineDiscoveredLink struct {
 	// name is the kernel link name (eno1, enp3s0, ...), as reported; it can change between boots.
 	// +kubebuilder:validation:MaxLength=256
@@ -119,7 +119,7 @@ func describeDiskSelector(sel TalosMachineDisk) string {
 	}
 }
 
-// DiscoveryWarnings names what the spec picks that discovery did not see on the node (ADR 0111): an
+// DiscoveryWarnings names what the spec picks that discovery did not see on the node (ADR 0112): an
 // install disk or disk role that matches none of status.discoveredDisks, or a NIC whose MAC is none of
 // status.discoveredLinks. Each list is only checked once it has been recorded, so a machine discovered
 // before the lists existed gets no warning. A warning is advice: the disk or NIC may be attached after

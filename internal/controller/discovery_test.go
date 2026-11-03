@@ -51,7 +51,7 @@ type fakeMaintenanceClient struct {
 	// fingerprint is the maintenance certificate the fake claims to have seen (PeerFingerprinter).
 	fingerprint string
 
-	// inventory and inventoryErr are what the disk and NIC read returns (ADR 0111).
+	// inventory and inventoryErr are what the disk and NIC read returns (ADR 0112).
 	inventory    Inventory
 	inventoryErr error
 }
@@ -218,7 +218,7 @@ var _ = Describe("DiscoveryReconciler.Discover", func() {
 		Expect(got.Status.Conditions).To(BeEmpty())
 		// The certificate the node presented is pinned for the first configuration (ADR 0108).
 		Expect(got.Status.MaintenanceFingerprint).To(Equal("OJ+e3lINvDPSrrxIkkatieIh0ewV9pPDSMWLCCGTZ6o="))
-		// The disks and NICs the probe read are recorded for approval to choose from (ADR 0111).
+		// The disks and NICs the probe read are recorded for approval to choose from (ADR 0112).
 		Expect(got.Status.DiscoveredDisks).To(Equal(fake.inventory.Disks))
 		Expect(got.Status.DiscoveredLinks).To(Equal(fake.inventory.Links))
 	})

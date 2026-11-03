@@ -745,7 +745,7 @@ type ApproveMachineResponse struct {
 	//
 	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 	Notice string `protobuf:"bytes,4,opt,name=notice,proto3" json:"notice,omitempty"`
-	// warnings are the admission warnings the approval raised but did not refuse (ADR 0111): an install
+	// warnings are the admission warnings the approval raised but did not refuse (ADR 0112): an install
 	// disk, disk role or NIC that discovery did not record on the node. Empty when every pick was seen.
 	Warnings      []string `protobuf:"bytes,5,rep,name=warnings,proto3" json:"warnings,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1266,11 +1266,11 @@ type Machine struct {
 	// empty until the controller has read the node. Views name a machine hostname, else node_name.
 	NodeName string `protobuf:"bytes,18,opt,name=node_name,json=nodeName,proto3" json:"node_name,omitempty"`
 	// discovered_disks are the installable disks the node reported in maintenance mode when it was
-	// discovered (TalosMachine.status.discoveredDisks, ADR 0111); approval picks the install disk and
+	// discovered (TalosMachine.status.discoveredDisks, ADR 0112); approval picks the install disk and
 	// disk roles from them. Empty until a probe has recorded some.
 	DiscoveredDisks []*DiscoveredDisk `protobuf:"bytes,19,rep,name=discovered_disks,json=discoveredDisks,proto3" json:"discovered_disks,omitempty"`
 	// discovered_links are the physical NICs with a permanent MAC the node reported in maintenance mode
-	// (TalosMachine.status.discoveredLinks, ADR 0111); approval picks the primary NIC from them.
+	// (TalosMachine.status.discoveredLinks, ADR 0112); approval picks the primary NIC from them.
 	DiscoveredLinks []*DiscoveredLink `protobuf:"bytes,20,rep,name=discovered_links,json=discoveredLinks,proto3" json:"discovered_links,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
@@ -1439,7 +1439,7 @@ func (x *Machine) GetDiscoveredLinks() []*DiscoveredLink {
 	return nil
 }
 
-// DiscoveredDisk is one installable disk as discovery recorded it (ADR 0111). The identifiers are
+// DiscoveredDisk is one installable disk as discovery recorded it (ADR 0112). The identifiers are
 // the ones a MachineDisk selector names.
 type DiscoveredDisk struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1541,7 +1541,7 @@ func (x *DiscoveredDisk) GetTransport() string {
 	return ""
 }
 
-// DiscoveredLink is one physical NIC with a permanent MAC as discovery recorded it (ADR 0111).
+// DiscoveredLink is one physical NIC with a permanent MAC as discovery recorded it (ADR 0112).
 type DiscoveredLink struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`

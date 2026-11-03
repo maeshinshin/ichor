@@ -423,7 +423,7 @@ type TalosMachineStatus struct {
 	APIServerRestartPaths []string `json:"apiServerRestartPaths,omitempty"`
 
 	// discoveredDisks lists the installable disks (no CD-ROM, no read-only one) the node reported
-	// through its maintenance-mode API when discovery last probed it (ADR 0111). Approval picks the
+	// through its maintenance-mode API when discovery last probed it (ADR 0112). Approval picks the
 	// install disk and disk roles from this list, and DiscoveryWarnings checks a choice against it.
 	// Empty until a probe has recorded one.
 	// +listType=atomic
@@ -431,7 +431,7 @@ type TalosMachineStatus struct {
 	DiscoveredDisks []TalosMachineDiscoveredDisk `json:"discoveredDisks,omitempty"`
 
 	// discoveredLinks lists the physical links with a permanent MAC address the node reported
-	// through its maintenance-mode API when discovery last probed it (ADR 0111). Approval picks the
+	// through its maintenance-mode API when discovery last probed it (ADR 0112). Approval picks the
 	// primary NIC from this list. Empty until a probe has recorded one.
 	// +listType=atomic
 	// +optional

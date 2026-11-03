@@ -223,7 +223,7 @@ func (r *DiscoveryReconciler) Discover(
 	}
 }
 
-// readInventory reads the node's disks and NICs for m's status (ADR 0111). A failed read is not a
+// readInventory reads the node's disks and NICs for m's status (ADR 0112). A failed read is not a
 // failed discovery: the approval form reads the node itself while the lists are missing, and the next
 // probe records them.
 func (r *DiscoveryReconciler) readInventory(

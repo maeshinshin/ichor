@@ -53,7 +53,7 @@ func planKubernetes(t *testing.T, endpointType string, controlPlanes int, target
 }
 
 func TestPlanKubernetesNamesTheFourStages(t *testing.T) {
-	p := planKubernetes(t, "vip", 1, "v1.37.0")
+	p := planKubernetes(t, "vip", 1, "v1.37.1")
 
 	if got := strings.Join(p.GetStages(), "|"); !strings.Contains(got, "kube-apiserver") || !strings.Contains(got, "kube-controller-manager") ||
 		!strings.Contains(got, "kube-proxy") || !strings.Contains(got, "kubelet") || len(p.GetStages()) != 4 {
@@ -62,16 +62,15 @@ func TestPlanKubernetesNamesTheFourStages(t *testing.T) {
 }
 
 func TestPlanKubernetesWarnsAboutANodeEndpointOnAMinorUpgradeOfSeveralControlPlanes(t *testing.T) {
-	warned := planKubernetes(t, "node", 3, "v1.37.0")
+	warned := planKubernetes(t, "node", 3, "v1.37.1")
 	if !strings.Contains(warned.GetWarning(), "virtual IP") || !strings.Contains(warned.GetWarning(), "single") || warned.GetBlocked() != "" {
 		t.Fatalf("a minor upgrade through a node endpoint must warn, not refuse: %v", warned)
 	}
 
 	for name, p := range map[string]*pb.PlanOperationResponse{
-		"a patch upgrade":          planKubernetes(t, "node", 3, "v1.36.4"),
-		"a virtual IP":             planKubernetes(t, "vip", 3, "v1.37.0"),
-		"a single control plane":   planKubernetes(t, "node", 1, "v1.37.0"),
-		"a load balancer endpoint": planKubernetes(t, "loadBalancer", 3, "v1.37.0"),
+		"a virtual IP":             planKubernetes(t, "vip", 3, "v1.37.1"),
+		"a single control plane":   planKubernetes(t, "node", 1, "v1.37.1"),
+		"a load balancer endpoint": planKubernetes(t, "loadBalancer", 3, "v1.37.1"),
 	} {
 		if p.GetWarning() != "" {
 			t.Errorf("%s: unexpected warning %q", name, p.GetWarning())

@@ -41,14 +41,16 @@ func TestPlanAndCreateRefuseADowngrade(t *testing.T) {
 			srv, base := opServer(t, opObjects()...)
 			before := getCluster(t, base).Spec
 
-			res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
+			// Only the release set's version is a target, so a lower one is refused as
+			// not supported, before the downgrade check is reached.
+			_, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
 				Cluster: objectRef(opNS, opCluster), Kind: tc.kind, Target: tc.target,
 			}))
-			if err != nil || !strings.Contains(res.Msg.GetBlocked(), "downgrade") {
-				t.Fatalf("err=%v plan=%v", err, res.Msg)
+			if connect.CodeOf(err) != connect.CodeInvalidArgument || !strings.Contains(err.Error(), "release set") {
+				t.Fatalf("plan err = %v, want the release set refusal", err)
 			}
 
-			if _, err := srv.CreateOperation(context.Background(), opCreate(tc.kind, tc.target)); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+			if _, err := srv.CreateOperation(context.Background(), opCreate(tc.kind, tc.target)); connect.CodeOf(err) != connect.CodeInvalidArgument {
 				t.Fatalf("create err = %v", err)
 			}
 

@@ -17,7 +17,6 @@ limitations under the License.
 package release
 
 import (
-	"slices"
 	"strings"
 	"testing"
 

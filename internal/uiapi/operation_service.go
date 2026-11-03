@@ -473,8 +473,12 @@ func (s *Server) checkCompatibility(
 	}
 
 	// A version nothing knows cannot be operated, so no override makes it one.
-	if bg == nil || errors.Is(err, release.ErrUnknownVersion) {
+	if errors.Is(err, release.ErrUnknownVersion) {
 		return "", connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	if bg == nil {
+		return "", overridableRefusal(fmt.Errorf("%w; the override verb can lift this", err))
 	}
 
 	if err := s.authorizeOverride(ctx, cluster); err != nil {

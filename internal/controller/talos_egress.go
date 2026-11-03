@@ -55,6 +55,9 @@ const DefaultTalosEgressPolicyName = "ichor-controller-talos-egress"
 // talosEgressPorts are the TCP ports the dynamic policy opens to a machine or cluster endpoint: apid,
 // the API server (cluster endpoint, /readyz) and etcd's peer port (MachineReclaim's member health
 // probe, pkg/reclaim). Derived from Talos's constants where it has them.
+// TalosEgressPorts returns talosEgressPorts for the chart's policy test (dist/chart).
+func TalosEgressPorts() []int { return slices.Clone(talosEgressPorts) }
+
 var talosEgressPorts = []int{constants.ApidPort, constants.DefaultControlPlanePort, constants.EtcdPeerPort}
 
 var ciliumPolicyGVK = schema.GroupVersionKind{Group: "cilium.io", Version: "v2", Kind: "CiliumNetworkPolicy"}

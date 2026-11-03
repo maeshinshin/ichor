@@ -245,7 +245,11 @@ func (s *Server) ApproveMachine(
 		Actor: s.actorName(ctx), At: timestamppb.New(now), Action: "approve", Target: objectRef(m.Namespace, m.Name), Reason: req.Msg.GetReason(),
 	}
 
-	return connect.NewResponse(&pb.ApproveMachineResponse{Machine: machineToPB(m), Audit: audit}), nil
+	// The webhook raises the same warnings on the write; the response carries them too, since the
+	// client does not see admission warnings.
+	return connect.NewResponse(&pb.ApproveMachineResponse{
+		Machine: machineToPB(m), Audit: audit, Warnings: m.DiscoveryWarnings(),
+	}), nil
 }
 
 // installFromPB converts the wire install target to the spec field; nil means "none". Exactly

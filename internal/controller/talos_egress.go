@@ -336,11 +336,17 @@ func buildEgress(t egressTargets) []any {
 // staticPolicy finds the installed controller policy (any name) and returns the app name label
 // its pods carry; "" when Ichor's policies are not installed (Cilium absent, opt-out, or another CNI).
 func (e *TalosEgress) staticPolicy(ctx context.Context) (string, error) {
+	return controllerPolicyApp(ctx, e.Client, e.Namespace, e.name())
+}
+
+// controllerPolicyApp is the app.kubernetes.io/name label the installed controller policy carries
+// (any policy in ns except skip); "" when Ichor's policies are not installed.
+func controllerPolicyApp(ctx context.Context, c client.Client, ns, skip string) (string, error) {
 	var list unstructured.UnstructuredList
 
 	list.SetGroupVersionKind(schema.GroupVersionKind{Group: ciliumPolicyGVK.Group, Version: ciliumPolicyGVK.Version, Kind: "CiliumNetworkPolicyList"})
 
-	if err := e.Client.List(ctx, &list, client.InNamespace(e.Namespace)); err != nil {
+	if err := c.List(ctx, &list, client.InNamespace(ns)); err != nil {
 		if meta.IsNoMatchError(err) || apierrors.IsNotFound(err) {
 			return "", nil
 		}
@@ -350,7 +356,7 @@ func (e *TalosEgress) staticPolicy(ctx context.Context) (string, error) {
 
 	for i := range list.Items {
 		o := &list.Items[i]
-		if o.GetName() == e.name() {
+		if o.GetName() == skip {
 			continue
 		}
 
@@ -361,6 +367,66 @@ func (e *TalosEgress) staticPolicy(ctx context.Context) (string, error) {
 	}
 
 	return "", nil
+}
+
+// writePolicy creates or updates the CiliumNetworkPolicy name in ns with spec, labelled for the
+// controller's app. It reports whether it wrote.
+func writePolicy(ctx context.Context, c client.Client, ns, name, app string, spec map[string]any) (bool, error) {
+	cur := &unstructured.Unstructured{}
+	cur.SetGroupVersionKind(ciliumPolicyGVK)
+
+	err := c.Get(ctx, types.NamespacedName{Namespace: ns, Name: name}, cur)
+
+	switch {
+	case apierrors.IsNotFound(err):
+		cur.Object = map[string]any{keySpec: spec}
+		cur.SetGroupVersionKind(ciliumPolicyGVK)
+		cur.SetNamespace(ns)
+		cur.SetName(name)
+		cur.SetLabels(map[string]string{"app.kubernetes.io/name": app, "app.kubernetes.io/managed-by": "ichor-controller"})
+
+		if err := c.Create(ctx, cur); err != nil {
+			return false, fmt.Errorf("creating %s: %w", name, err)
+		}
+
+		return true, nil
+	case err != nil:
+		return false, fmt.Errorf("reading %s: %w", name, err)
+	}
+
+	have, _, _ := unstructured.NestedMap(cur.Object, keySpec)
+	if equality.Semantic.DeepEqual(have, spec) {
+		return false, nil
+	}
+
+	if err := unstructured.SetNestedField(cur.Object, spec, keySpec); err != nil {
+		return false, err
+	}
+
+	if err := c.Update(ctx, cur); err != nil {
+		return false, fmt.Errorf("updating %s: %w", name, err)
+	}
+
+	return true, nil
+}
+
+// removePolicy deletes the CiliumNetworkPolicy name in ns when it exists, and reports whether it did.
+func removePolicy(ctx context.Context, c client.Client, ns, name string) (bool, error) {
+	cur := &unstructured.Unstructured{}
+	cur.SetGroupVersionKind(ciliumPolicyGVK)
+	cur.SetNamespace(ns)
+	cur.SetName(name)
+
+	err := c.Delete(ctx, cur)
+
+	switch {
+	case apierrors.IsNotFound(err), meta.IsNoMatchError(err):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("deleting %s: %w", name, err)
+	}
+
+	return true, nil
 }
 
 // Sync is the whole job: gate, collect, build, create or update. It returns changed when it wrote.
@@ -415,45 +481,10 @@ func (e *TalosEgress) sync(ctx context.Context) (bool, error) {
 		"egress": buildEgress(t),
 	}
 
-	cur := &unstructured.Unstructured{}
-	cur.SetGroupVersionKind(ciliumPolicyGVK)
-
-	err = e.Client.Get(ctx, types.NamespacedName{Namespace: e.Namespace, Name: e.name()}, cur)
-
-	switch {
-	case apierrors.IsNotFound(err):
-		cur.Object = map[string]any{keySpec: spec}
-		cur.SetGroupVersionKind(ciliumPolicyGVK)
-		cur.SetNamespace(e.Namespace)
-		cur.SetName(e.name())
-		cur.SetLabels(map[string]string{"app.kubernetes.io/name": app, "app.kubernetes.io/managed-by": "ichor-controller"})
-
-		if err := e.Client.Create(ctx, cur); err != nil {
-			return false, fmt.Errorf("creating %s: %w", e.name(), err)
-		}
-
-		return true, nil
-	case err != nil:
-		return false, fmt.Errorf("reading %s: %w", e.name(), err)
-	}
-
-	have, _, _ := unstructured.NestedMap(cur.Object, keySpec)
-	if equality.Semantic.DeepEqual(have, spec) {
-		return false, nil
-	}
-
-	if err := unstructured.SetNestedField(cur.Object, spec, keySpec); err != nil {
-		return false, err
-	}
-
-	if err := e.Client.Update(ctx, cur); err != nil {
-		return false, fmt.Errorf("updating %s: %w", e.name(), err)
-	}
-
-	return true, nil
+	return writePolicy(ctx, e.Client, e.Namespace, e.name(), app, spec)
 }
 
-// +kubebuilder:rbac:groups=cilium.io,namespace=ichor-system,resources=ciliumnetworkpolicies,verbs=get;list;create;update
+// +kubebuilder:rbac:groups=cilium.io,namespace=ichor-system,resources=ciliumnetworkpolicies,verbs=get;list;create;update;delete
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters;talosmachines;talosetcdbackups;machinereclaims,verbs=get;list;watch
 
 // Reconcile keeps the policy current. Every watched change maps to the same key.

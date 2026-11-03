@@ -95,30 +95,25 @@ func argValueFromMachinery(v mmeta.ArgValue) ([]string, error) {
 // shape every upstream schema here (Kubernetes, OCI, kubelet) already
 // commits to.
 func mirrorToMachineryUnstructured[T any](v T) (mmeta.Unstructured, error) {
-	data, err := json.Marshal(v)
-	if err != nil {
-		return mmeta.Unstructured{}, fmt.Errorf("encoding %T: %w", v, err)
-	}
+	obj, err := jsonConvert[map[string]any](v)
 
-	var obj map[string]any
-	if err := json.Unmarshal(data, &obj); err != nil {
-		return mmeta.Unstructured{}, fmt.Errorf("decoding %T as unstructured: %w", v, err)
-	}
-
-	return mmeta.Unstructured{Object: obj}, nil
+	return mmeta.Unstructured{Object: obj}, err
 }
 
 // machineryToMirrorUnstructured is mirrorToMachineryUnstructured's inverse.
 func machineryToMirrorUnstructured[T any](u mmeta.Unstructured) (T, error) {
-	var out T
+	return jsonConvert[T](u.Object)
+}
 
-	data, err := json.Marshal(u.Object)
+// jsonConvert re-reads in as Out through its JSON form.
+func jsonConvert[Out any](in any) (out Out, err error) {
+	data, err := json.Marshal(in)
 	if err != nil {
-		return out, fmt.Errorf("encoding unstructured: %w", err)
+		return out, fmt.Errorf("encoding %T: %w", in, err)
 	}
 
 	if err := json.Unmarshal(data, &out); err != nil {
-		return out, fmt.Errorf("decoding unstructured as %T: %w", out, err)
+		return out, fmt.Errorf("decoding %T as %T: %w", in, out, err)
 	}
 
 	return out, nil

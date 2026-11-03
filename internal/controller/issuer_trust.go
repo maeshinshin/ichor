@@ -369,7 +369,7 @@ func (r *IssuerTrustReconciler) leafSpec(svc *corev1.Service, ip net.IP) leafSpe
 	base := fmt.Sprintf("%s.%s.svc", svc.Name, r.Namespace)
 	spec := leafSpec{
 		ips: []net.IP{ip, net.IPv4(127, 0, 0, 1)},
-		dns: []string{svc.Name, base, base + ".cluster.local", "localhost"},
+		dns: []string{svc.Name, svc.Name + "." + r.Namespace, base, base + ".cluster.local", "localhost"},
 	}
 
 	if u, err := url.Parse(r.ExternalURL); err == nil && u.Hostname() != "" {

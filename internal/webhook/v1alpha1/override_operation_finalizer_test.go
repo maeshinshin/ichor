@@ -28,8 +28,8 @@ import (
 )
 
 // The etcd-restore and ca-rotation finalizers on a TalosOperation hold a half
-// finished restore or rotation; stripping one is break-glass, like stripping the machine finalizer.
-var _ = Describe("Break-glass webhook on TalosOperation finalizers", func() {
+// finished restore or rotation; stripping one is override, like stripping the machine finalizer.
+var _ = Describe("Override webhook on TalosOperation finalizers", func() {
 	const (
 		editor = "opfin-editor"
 		glass  = "opfin-glass"
@@ -43,7 +43,7 @@ var _ = Describe("Break-glass webhook on TalosOperation finalizers", func() {
 		}
 		bindRole("opfin-editor", editor, edit)
 		bindRole("opfin-glass", glass, edit, rbacv1.PolicyRule{
-			APIGroups: []string{ichorGroup}, Resources: []string{resOperations}, Verbs: []string{BreakGlassVerb},
+			APIGroups: []string{ichorGroup}, Resources: []string{resOperations}, Verbs: []string{OverrideVerb},
 		})
 		bindRole("opfin-controller", testControllerUser, edit)
 
@@ -76,13 +76,13 @@ var _ = Describe("Break-glass webhook on TalosOperation finalizers", func() {
 		return asUser(user).Update(ctx, &o)
 	}
 
-	It("refuses a user without break-glass who strips the finalizer", func() {
+	It("refuses a user without override who strips the finalizer", func() {
 		err := strip(editor)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("finalizer"))
 	})
 
-	It("admits a holder of break-glass and Ichor's own controller", func() {
+	It("admits a holder of override and Ichor's own controller", func() {
 		Expect(strip(glass)).To(Succeed())
 	})
 

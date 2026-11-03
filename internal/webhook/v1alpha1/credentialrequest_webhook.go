@@ -117,7 +117,7 @@ func (h *CredentialRequestHandler) Handle(ctx context.Context, req admission.Req
 		}
 	}
 
-	if r := (&BreakGlassHandler{Client: h.Client}).require(ctx, req, verb, resource, subresource, name,
+	if r := (&OverrideHandler{Client: h.Client}).require(ctx, req, verb, resource, subresource, name,
 		fmt.Sprintf("a %s certificate needs the %q verb on %s/%s (%s); it is not granted by default",
 			cr.Spec.Purpose, verb, resource, subresource, name)); r != nil {
 		return *r

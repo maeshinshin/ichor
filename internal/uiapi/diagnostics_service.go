@@ -40,8 +40,8 @@ import (
 
 // DownloadVerb is the Kubernetes RBAC verb that lets a user start one of the
 // three diagnostic downloads, on the subresource named by the
-// DownloadScope of talosmachines. It follows the break-glass verb's pattern: checked with a SelfSubjectAccessReview
-// as the caller, so
+// DownloadScope of talosmachines. It follows the override verb's pattern: checked with a SelfSubjectAccessReview as
+// the caller, so
 // Kubernetes decides and Ichor keeps no list of who may.
 const DownloadVerb = "download"
 
@@ -191,7 +191,7 @@ func (s *Server) authorizeDownload(ctx context.Context, m *ichorv1alpha1.TalosMa
 
 // emitDownloadEvent records who started which download on m. It carries no
 // content. It uses the backend's own client (the users have no right to create
-// Events), like break-glass.
+// Events), like override.
 func (s *Server) emitDownloadEvent(ctx context.Context, m *ichorv1alpha1.TalosMachine, scope DownloadScope, detail string) error {
 	msg := fmt.Sprintf("%s download started by %s at %s", scope, s.actorName(ctx), s.now().UTC().Format(time.RFC3339))
 

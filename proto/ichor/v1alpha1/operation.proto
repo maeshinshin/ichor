@@ -142,7 +142,7 @@ enum OperationKind {
 }
 
 // EtcdRestoreRequest names the snapshot of an etcd-restore plan or create. Starting
-// it needs the cluster's name typed and a break-glass reason: it rewinds the whole cluster.
+// it needs the cluster's name typed and an override reason: it rewinds the whole cluster.
 message EtcdRestoreRequest {
   // backup is the TalosEtcdBackup whose storage holds the snapshot.
   ObjectRef backup = 1;
@@ -150,8 +150,8 @@ message EtcdRestoreRequest {
   string snapshot = 2;
   // confirm is the cluster's name, typed.
   string confirm = 3;
-  // break_glass is required: the reason goes to the audit record and the Event on the cluster, and the caller must hold the break-glass verb on the TalosCluster.
-  BreakGlass break_glass = 4;
+  // override is required: the reason goes to the audit record and the Event on the cluster, and the caller must hold the override verb on the TalosCluster.
+  Override override = 4;
 }
 
 // NodeAction is what a node-kind operation does to its one machine.
@@ -179,9 +179,9 @@ message NodeActionRequest {
   bool allow_leader = 4;
   // confirm is the machine's name, typed, for reset (and remove).
   string confirm = 5;
-  // break_glass is required for reset: the reason, checked against the break-glass
+  // override is required for reset: the reason, checked against the override
   // verb on the machine.
-  BreakGlass break_glass = 6;
+  Override override = 6;
 }
 
 // OperationMachine is TalosOperation.status.machines[] as it is: a machine
@@ -360,13 +360,13 @@ message PlanOperationResponse {
   // cluster's only approved control plane, so the Kubernetes API is down for
   // the length of the reboot.
   bool kubernetes_api_unavailable = 11;
-  // steps, warning, confirm_name and break_glass_required describe a node action in plain
+  // steps, warning, confirm_name and override_required describe a node action in plain
   // English: what happens in order, what the user should know first, the name they must type
-  // (empty when no typing is needed), and whether a break-glass reason is needed.
+  // (empty when no typing is needed), and whether an override reason is needed.
   repeated string steps = 12;
   string warning = 13;
   string confirm_name = 14;
-  bool break_glass_required = 15;
+  bool override_required = 15;
   // snapshot_time is when the snapshot an etcd restore would put back was taken; everything after it is lost.
   google.protobuf.Timestamp snapshot_time = 16;
   // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.

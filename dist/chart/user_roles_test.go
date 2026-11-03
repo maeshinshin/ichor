@@ -111,7 +111,7 @@ func TestBuiltinUserRoles(t *testing.T) {
 		{ichorGroup, "talosclusters/secret-references", verbUpdate, ""},
 		{ichorGroup, "talosetcdbackups/secret-references", verbUpdate, ""},
 		{ichorGroup, "ichorusers/password", verbUpdate, ""},
-		{ichorGroup, "talosclusters", verbBreakGlass, ""},
+		{ichorGroup, "talosclusters", verbOverride, ""},
 		{ichorGroup, "talosclusters/credentials", "download", ""},
 		{ichorGroup, "talosmachines/support-bundle", "download", ""},
 		{ichorGroup, "ichorusers", "create", ""},
@@ -177,19 +177,19 @@ func TestUserAccessRoleEvents(t *testing.T) {
 		"config/rbac/ichor_user_access_role.yaml", "dist/chart/templates/rbac/ichor-user-roles.yaml")
 }
 
-// TestBreakGlassRole guards: the break-glass verb is grantable on clusters, machines and
+// TestOverrideRole guards: the override verb is grantable on clusters, machines and
 // patches, in the chart and in config/rbac alike.
-func TestBreakGlassRole(t *testing.T) {
+func TestOverrideRole(t *testing.T) {
 	docs := renderChartWithValues(t, "ichor", "rbac.helpers.enabled=true")
-	chartRole := findNameSuffix(docs, kindClusterRole, "break-glass-role")
-	cfgRole := find(loadYAMLDocs(t, "../../config/rbac/break_glass_role.yaml"), kindClusterRole, "ichor-break-glass-role")
+	chartRole := findNameSuffix(docs, kindClusterRole, "override-role")
+	cfgRole := find(loadYAMLDocs(t, "../../config/rbac/override_role.yaml"), kindClusterRole, "ichor-override-role")
 
-	checkRBACRulesMatch(t, "ichor", "ClusterRole ichor-break-glass-role", cfgRole, chartRole,
-		"config/rbac/break_glass_role.yaml", "dist/chart/templates/rbac/ichor-break-glass-role.yaml")
+	checkRBACRulesMatch(t, "ichor", "ClusterRole ichor-override-role", cfgRole, chartRole,
+		"config/rbac/override_role.yaml", "dist/chart/templates/rbac/ichor-override-role.yaml")
 
 	for _, res := range []string{"talosclusters", "talosconfigpatches", "talosmachines"} {
-		if !rbacTriples(cfgRole["rules"].([]any))[rbacTriple{ichorGroup, res, verbBreakGlass, ""}] {
-			t.Errorf("config/rbac/break_glass_role.yaml does not grant break-glass on %s", res)
+		if !rbacTriples(cfgRole["rules"].([]any))[rbacTriple{ichorGroup, res, verbOverride, ""}] {
+			t.Errorf("config/rbac/override_role.yaml does not grant override on %s", res)
 		}
 	}
 }
@@ -197,7 +197,7 @@ func TestBreakGlassRole(t *testing.T) {
 // TestMachineApprovalRightsAndNoImplicitCustomVerbs guards: approving a machine needs
 // approve on talosmachines/approval (operators and admins hold it), an endpoint outside discovery needs
 // update on talosmachines/endpoint (admins), and no helper role lists '*' verbs, so none of them grants a
-// custom verb such as break-glass by accident. The chart and config/rbac copies agree.
+// custom verb such as override by accident. The chart and config/rbac copies agree.
 func TestMachineApprovalRightsAndNoImplicitCustomVerbs(t *testing.T) {
 	docs := renderChartWithValues(t, "ichor", usersOn, usersURL, "rbac.helpers.enabled=true")
 
@@ -228,7 +228,7 @@ func TestMachineApprovalRightsAndNoImplicitCustomVerbs(t *testing.T) {
 		}
 
 		for tr := range rbacTriples(allRules(d)) {
-			if tr.verb == "*" || tr.verb == verbBreakGlass {
+			if tr.verb == "*" || tr.verb == verbOverride {
 				t.Errorf("helper %s grants %s", nameOf(d), tr)
 			}
 		}

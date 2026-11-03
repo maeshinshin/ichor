@@ -68,7 +68,7 @@ func restoreObjects() []client.Object {
 func restoreReq(snapshot, confirm, reason string) *pb.EtcdRestoreRequest {
 	r := &pb.EtcdRestoreRequest{Backup: objectRef(opNS, restoreBackup), Snapshot: snapshot, Confirm: confirm}
 	if reason != "" {
-		r.BreakGlass = &pb.BreakGlass{Reason: reason}
+		r.Override = &pb.Override{Reason: reason}
 	}
 
 	return r
@@ -99,7 +99,7 @@ func TestEtcdRestorePlanSaysWhatIsLost(t *testing.T) {
 		t.Fatalf("blocked: %q", p.GetBlocked())
 	}
 
-	if p.GetConfirmName() != opCluster || !p.GetBreakGlassRequired() || !p.GetKubernetesApiUnavailable() {
+	if p.GetConfirmName() != opCluster || !p.GetOverrideRequired() || !p.GetKubernetesApiUnavailable() {
 		t.Fatalf("plan = %+v", p)
 	}
 
@@ -220,7 +220,7 @@ func TestEtcdRestorePlanRefusals(t *testing.T) {
 				t.Fatalf("blocked = %q, %v", res.Msg.GetBlocked(), err)
 			}
 
-			// Break-glass does not lift it: starting the restore is refused as well.
+			// Override does not lift it: starting the restore is refused as well.
 			if _, err := s.CreateOperation(ctx, restoreCreateReq(restoreReq(restoreSnap, opCluster, bgReason))); connect.CodeOf(err) != connect.CodeFailedPrecondition {
 				t.Fatalf("create: %v", err)
 			}
@@ -240,7 +240,7 @@ func TestEtcdRestorePlanRefusals(t *testing.T) {
 	})
 }
 
-func TestEtcdRestoreNeedsTheClusterNameAndBreakGlass(t *testing.T) {
+func TestEtcdRestoreNeedsTheClusterNameAndOverride(t *testing.T) {
 	s, k8s := opServer(t, restoreObjects()...)
 	bg := context.Background()
 
@@ -252,7 +252,7 @@ func TestEtcdRestoreNeedsTheClusterNameAndBreakGlass(t *testing.T) {
 		t.Fatalf("no reason: %v", err)
 	}
 
-	// With no signed-in user nobody can be asked whether they may break glass.
+	// With no signed-in user nobody can be asked whether they may override.
 	if _, err := s.CreateOperation(bg, restoreCreateReq(restoreReq(restoreSnap, opCluster, bgReason))); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("no user: %v", err)
 	}
@@ -266,7 +266,7 @@ func TestEtcdRestoreNeedsTheClusterNameAndBreakGlass(t *testing.T) {
 		t.Fatalf("RBAC says no: %v", err)
 	}
 
-	// The start right is asked first, and denied here, so break-glass is not reached.
+	// The start right is asked first, and denied here, so override is not reached.
 	if len(asked) == 0 || asked[0].Verb != "start" || asked[0].Subresource != "etcd-restore" {
 		t.Fatalf("start is asked first: %+v", asked)
 	}
@@ -282,7 +282,7 @@ func TestEtcdRestoreNeedsTheClusterNameAndBreakGlass(t *testing.T) {
 		t.Fatalf("allowed: %v", err)
 	}
 
-	if a := res.Msg.GetAudit(); a.GetAction() != "create-break-glass" || a.GetReason() != bgReason {
+	if a := res.Msg.GetAudit(); a.GetAction() != "create-override" || a.GetReason() != bgReason {
 		t.Fatalf("audit = %+v", a)
 	}
 

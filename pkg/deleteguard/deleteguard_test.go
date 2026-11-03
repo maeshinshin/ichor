@@ -232,19 +232,19 @@ func TestCheckLastWorker(t *testing.T) {
 	for _, tc := range []struct {
 		unschedulable bool
 		after         int
-		breakGlass    bool
+		override    bool
 		wantErr       bool
 	}{
 		{true, 0, false, true}, {true, 1, false, false}, {false, 0, false, false},
 		{true, 0, true, false},
 	} {
-		if err := CheckLastWorker(tc.unschedulable, tc.after, tc.breakGlass); (err != nil) != tc.wantErr {
-			t.Errorf("CheckLastWorker(%v, %d, %v) = %v, wantErr %v", tc.unschedulable, tc.after, tc.breakGlass, err, tc.wantErr)
+		if err := CheckLastWorker(tc.unschedulable, tc.after, tc.override); (err != nil) != tc.wantErr {
+			t.Errorf("CheckLastWorker(%v, %d, %v) = %v, wantErr %v", tc.unschedulable, tc.after, tc.override, err, tc.wantErr)
 		}
 	}
 
-	if err := CheckLastWorker(true, 0, false); err == nil || !strings.Contains(err.Error(), "break-glass") {
-		t.Errorf("the refusal should name the break-glass override, got %v", err)
+	if err := CheckLastWorker(true, 0, false); err == nil || !strings.Contains(err.Error(), "override") {
+		t.Errorf("the refusal should name the override override, got %v", err)
 	}
 }
 

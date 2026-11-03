@@ -329,7 +329,7 @@ type ApproveMachineRequest struct {
 	// Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
 	//
 	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
-	BreakGlass *BreakGlass `protobuf:"bytes,6,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
+	Override *Override `protobuf:"bytes,6,opt,name=override,proto3" json:"override,omitempty"`
 	// install is the system disk (TalosMachine.spec.install). Unset
 	// approves without an install target.
 	Install *MachineInstall `protobuf:"bytes,7,opt,name=install,proto3" json:"install,omitempty"`
@@ -408,9 +408,9 @@ func (x *ApproveMachineRequest) GetReason() string {
 }
 
 // Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
-func (x *ApproveMachineRequest) GetBreakGlass() *BreakGlass {
+func (x *ApproveMachineRequest) GetOverride() *Override {
 	if x != nil {
-		return x.BreakGlass
+		return x.Override
 	}
 	return nil
 }
@@ -816,7 +816,7 @@ type RejectMachineRequest struct {
 	// Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
 	//
 	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
-	BreakGlass    *BreakGlass `protobuf:"bytes,3,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
+	Override      *Override `protobuf:"bytes,3,opt,name=override,proto3" json:"override,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -866,9 +866,9 @@ func (x *RejectMachineRequest) GetReason() string {
 }
 
 // Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
-func (x *RejectMachineRequest) GetBreakGlass() *BreakGlass {
+func (x *RejectMachineRequest) GetOverride() *Override {
 	if x != nil {
-		return x.BreakGlass
+		return x.Override
 	}
 	return nil
 }
@@ -882,7 +882,7 @@ type SetMachineInstallRequest struct {
 	// Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
 	//
 	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
-	BreakGlass    *BreakGlass `protobuf:"bytes,4,opt,name=break_glass,json=breakGlass,proto3" json:"break_glass,omitempty"`
+	Override      *Override `protobuf:"bytes,4,opt,name=override,proto3" json:"override,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -939,9 +939,9 @@ func (x *SetMachineInstallRequest) GetReason() string {
 }
 
 // Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
-func (x *SetMachineInstallRequest) GetBreakGlass() *BreakGlass {
+func (x *SetMachineInstallRequest) GetOverride() *Override {
 	if x != nil {
-		return x.BreakGlass
+		return x.Override
 	}
 	return nil
 }
@@ -1517,16 +1517,15 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\x11GetMachineRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\"G\n" +
 	"\x12GetMachineResponse\x121\n" +
-	"\amachine\x18\x01 \x01(\v2\x17.ichor.v1alpha1.MachineR\amachine\"\xb4\x04\n" +
+	"\amachine\x18\x01 \x01(\v2\x17.ichor.v1alpha1.MachineR\amachine\"\xad\x04\n" +
 	"\x15ApproveMachineRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x12/\n" +
 	"\x04role\x18\x02 \x01(\x0e2\x1b.ichor.v1alpha1.MachineRoleR\x04role\x12V\n" +
 	"\vnode_labels\x18\x03 \x03(\v25.ichor.v1alpha1.ApproveMachineRequest.NodeLabelsEntryR\n" +
 	"nodeLabels\x12\x1a\n" +
 	"\bhostname\x18\x04 \x01(\tR\bhostname\x12\x16\n" +
-	"\x06reason\x18\x05 \x01(\tR\x06reason\x12?\n" +
-	"\vbreak_glass\x18\x06 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassB\x02\x18\x01R\n" +
-	"breakGlass\x128\n" +
+	"\x06reason\x18\x05 \x01(\tR\x06reason\x128\n" +
+	"\boverride\x18\x06 \x01(\v2\x18.ichor.v1alpha1.OverrideB\x02\x18\x01R\boverride\x128\n" +
 	"\ainstall\x18\a \x01(\v2\x1e.ichor.v1alpha1.MachineInstallR\ainstall\x128\n" +
 	"\anetwork\x18\b \x01(\v2\x1e.ichor.v1alpha1.MachineNetworkR\anetwork\x125\n" +
 	"\x05disks\x18\t \x03(\v2\x1f.ichor.v1alpha1.MachineDiskRoleR\x05disks\x1a=\n" +
@@ -1562,18 +1561,16 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\amachine\x18\x01 \x01(\v2\x17.ichor.v1alpha1.MachineR\amachine\x121\n" +
 	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12,\n" +
 	"\x10pull_request_url\x18\x03 \x01(\tB\x02\x18\x01R\x0epullRequestUrl\x12\x1a\n" +
-	"\x06notice\x18\x04 \x01(\tB\x02\x18\x01R\x06notice\"\xa4\x01\n" +
+	"\x06notice\x18\x04 \x01(\tB\x02\x18\x01R\x06notice\"\x9d\x01\n" +
 	"\x14RejectMachineRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\x12?\n" +
-	"\vbreak_glass\x18\x03 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassB\x02\x18\x01R\n" +
-	"breakGlass\"\xe2\x01\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\x128\n" +
+	"\boverride\x18\x03 \x01(\v2\x18.ichor.v1alpha1.OverrideB\x02\x18\x01R\boverride\"\xdb\x01\n" +
 	"\x18SetMachineInstallRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x128\n" +
 	"\ainstall\x18\x02 \x01(\v2\x1e.ichor.v1alpha1.MachineInstallR\ainstall\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\x12?\n" +
-	"\vbreak_glass\x18\x04 \x01(\v2\x1a.ichor.v1alpha1.BreakGlassB\x02\x18\x01R\n" +
-	"breakGlass\"\xcb\x01\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\x128\n" +
+	"\boverride\x18\x04 \x01(\v2\x18.ichor.v1alpha1.OverrideB\x02\x18\x01R\boverride\"\xcb\x01\n" +
 	"\x19SetMachineInstallResponse\x121\n" +
 	"\amachine\x18\x01 \x01(\v2\x17.ichor.v1alpha1.MachineR\amachine\x121\n" +
 	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12,\n" +
@@ -1679,7 +1676,7 @@ var file_ichor_v1alpha1_machine_proto_goTypes = []any{
 	nil,                               // 21: ichor.v1alpha1.ApproveMachineRequest.NodeLabelsEntry
 	nil,                               // 22: ichor.v1alpha1.Machine.NodeLabelsEntry
 	(*ObjectRef)(nil),                 // 23: ichor.v1alpha1.ObjectRef
-	(*BreakGlass)(nil),                // 24: ichor.v1alpha1.BreakGlass
+	(*Override)(nil),                  // 24: ichor.v1alpha1.Override
 	(*AuditRecord)(nil),               // 25: ichor.v1alpha1.AuditRecord
 	(*timestamppb.Timestamp)(nil),     // 26: google.protobuf.Timestamp
 	(*Condition)(nil),                 // 27: ichor.v1alpha1.Condition
@@ -1692,7 +1689,7 @@ var file_ichor_v1alpha1_machine_proto_depIdxs = []int32{
 	23, // 4: ichor.v1alpha1.ApproveMachineRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
 	0,  // 5: ichor.v1alpha1.ApproveMachineRequest.role:type_name -> ichor.v1alpha1.MachineRole
 	21, // 6: ichor.v1alpha1.ApproveMachineRequest.node_labels:type_name -> ichor.v1alpha1.ApproveMachineRequest.NodeLabelsEntry
-	24, // 7: ichor.v1alpha1.ApproveMachineRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	24, // 7: ichor.v1alpha1.ApproveMachineRequest.override:type_name -> ichor.v1alpha1.Override
 	10, // 8: ichor.v1alpha1.ApproveMachineRequest.install:type_name -> ichor.v1alpha1.MachineInstall
 	7,  // 9: ichor.v1alpha1.ApproveMachineRequest.network:type_name -> ichor.v1alpha1.MachineNetwork
 	8,  // 10: ichor.v1alpha1.ApproveMachineRequest.disks:type_name -> ichor.v1alpha1.MachineDiskRole
@@ -1701,10 +1698,10 @@ var file_ichor_v1alpha1_machine_proto_depIdxs = []int32{
 	18, // 13: ichor.v1alpha1.ApproveMachineResponse.machine:type_name -> ichor.v1alpha1.Machine
 	25, // 14: ichor.v1alpha1.ApproveMachineResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
 	23, // 15: ichor.v1alpha1.RejectMachineRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	24, // 16: ichor.v1alpha1.RejectMachineRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	24, // 16: ichor.v1alpha1.RejectMachineRequest.override:type_name -> ichor.v1alpha1.Override
 	23, // 17: ichor.v1alpha1.SetMachineInstallRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
 	10, // 18: ichor.v1alpha1.SetMachineInstallRequest.install:type_name -> ichor.v1alpha1.MachineInstall
-	24, // 19: ichor.v1alpha1.SetMachineInstallRequest.break_glass:type_name -> ichor.v1alpha1.BreakGlass
+	24, // 19: ichor.v1alpha1.SetMachineInstallRequest.override:type_name -> ichor.v1alpha1.Override
 	18, // 20: ichor.v1alpha1.SetMachineInstallResponse.machine:type_name -> ichor.v1alpha1.Machine
 	25, // 21: ichor.v1alpha1.SetMachineInstallResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
 	25, // 22: ichor.v1alpha1.RejectMachineResponse.audit:type_name -> ichor.v1alpha1.AuditRecord

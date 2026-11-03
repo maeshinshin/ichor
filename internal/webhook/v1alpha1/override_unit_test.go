@@ -46,7 +46,7 @@ var bgUnitResources = []string{bgUnitMachines, "talosconfigpatches"}
 
 // bgUnitHandler builds a handler on a fake client. SubjectAccessReviews are answered by user
 // (only bgUnitHolder holds the verb).
-func bgUnitHandler(t *testing.T) *BreakGlassHandler {
+func bgUnitHandler(t *testing.T) *OverrideHandler {
 	t.Helper()
 
 	scheme := runtime.NewScheme()
@@ -66,7 +66,7 @@ func bgUnitHandler(t *testing.T) *BreakGlassHandler {
 		},
 	}).Build()
 
-	return &BreakGlassHandler{Client: c, ExemptUsers: DefaultExemptUsers("ichor-system", "ichor-controller")}
+	return &OverrideHandler{Client: c, ExemptUsers: DefaultExemptUsers("ichor-system", "ichor-controller")}
 }
 
 // bgUnitRequest is an UPDATE of a deleting object; removeFinalizer says whether the new object has
@@ -104,7 +104,7 @@ func bgUnitRequest(t *testing.T, resource, user string, removeFinalizer bool) ad
 	return req
 }
 
-func TestBreakGlassFinalizerRemoval(t *testing.T) {
+func TestOverrideFinalizerRemoval(t *testing.T) {
 	t.Parallel()
 
 	for _, resource := range bgUnitResources {
@@ -121,7 +121,7 @@ func TestBreakGlassFinalizerRemoval(t *testing.T) {
 }
 
 // A tracked or untracked update that leaves the finalizers alone is nobody's business here.
-func TestBreakGlassOrdinaryUpdatesAreAdmitted(t *testing.T) {
+func TestOverrideOrdinaryUpdatesAreAdmitted(t *testing.T) {
 	t.Parallel()
 
 	for _, resource := range bgUnitResources {
@@ -133,7 +133,7 @@ func TestBreakGlassOrdinaryUpdatesAreAdmitted(t *testing.T) {
 	}
 }
 
-func TestBreakGlassExemptUsers(t *testing.T) {
+func TestOverrideExemptUsers(t *testing.T) {
 	t.Parallel()
 
 	h := bgUnitHandler(t)

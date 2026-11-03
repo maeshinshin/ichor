@@ -55,7 +55,7 @@ rules:
   resourceNames:
   - ichor-admin
   - ichor-cni-role
-  - ichor-ichor-break-glass-role
+  - ichor-ichor-override-role
   - ichor-ichor-credentials-role
   - ichor-ichor-diagnostics-role
   - ichor-ui-impersonate

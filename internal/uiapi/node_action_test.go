@@ -83,12 +83,12 @@ func TestNodePlanSaysWhatHappensInPlainEnglish(t *testing.T) {
 	}
 
 	reset := planNodeOK(t, s, nodePlanReq("w1", pb.NodeAction_NODE_ACTION_RESET))
-	if reset.GetConfirmName() != "w1" || !reset.GetBreakGlassRequired() || !strings.Contains(reset.GetWarning(), "cannot be undone") {
+	if reset.GetConfirmName() != "w1" || !reset.GetOverrideRequired() || !strings.Contains(reset.GetWarning(), "cannot be undone") {
 		t.Fatalf("reset plan = %+v", reset)
 	}
 
 	rm := planNodeOK(t, s, nodePlanReq("w1", pb.NodeAction_NODE_ACTION_REMOVE))
-	if rm.GetConfirmName() != "w1" || rm.GetBreakGlassRequired() || rm.GetBlocked() != "" {
+	if rm.GetConfirmName() != "w1" || rm.GetOverrideRequired() || rm.GetBlocked() != "" {
 		t.Fatalf("remove plan = %+v", rm)
 	}
 
@@ -205,13 +205,13 @@ func TestNodeShutdownRestingInShutDownDoesNotBlockTheNextOperation(t *testing.T)
 func resetReq(confirm, reason string) *connect.Request[pb.CreateOperationRequest] {
 	n := &pb.NodeActionRequest{Machine: objectRef(opNS, "w1"), Action: pb.NodeAction_NODE_ACTION_RESET, Confirm: confirm}
 	if reason != "" {
-		n.BreakGlass = &pb.BreakGlass{Reason: reason}
+		n.Override = &pb.Override{Reason: reason}
 	}
 
 	return nodeCreateReq(n)
 }
 
-func TestNodeResetNeedsTheNameAndBreakGlass(t *testing.T) {
+func TestNodeResetNeedsTheNameAndOverride(t *testing.T) {
 	s, k8s := opServer(t, opObjects()...)
 	bg := context.Background()
 
@@ -223,7 +223,7 @@ func TestNodeResetNeedsTheNameAndBreakGlass(t *testing.T) {
 		t.Fatalf("no reason: %v", err)
 	}
 
-	// With no signed-in user nobody can be asked whether they may break glass.
+	// With no signed-in user nobody can be asked whether they may override.
 	if _, err := s.CreateOperation(bg, resetReq("w1", bgReason)); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("no user: %v", err)
 	}
@@ -237,7 +237,7 @@ func TestNodeResetNeedsTheNameAndBreakGlass(t *testing.T) {
 		t.Fatalf("RBAC says no: %v", err)
 	}
 
-	// The start right is asked first, and denied here, so break-glass is not reached.
+	// The start right is asked first, and denied here, so override is not reached.
 	if len(asked) == 0 || asked[0].Verb != "start" || asked[0].Subresource != "node-reset" {
 		t.Fatalf("access review = %+v", asked)
 	}
@@ -253,7 +253,7 @@ func TestNodeResetNeedsTheNameAndBreakGlass(t *testing.T) {
 		t.Fatalf("allowed: %v", err)
 	}
 
-	if a := res.Msg.GetAudit(); a.GetAction() != "create-break-glass" || a.GetReason() != bgReason {
+	if a := res.Msg.GetAudit(); a.GetAction() != "create-override" || a.GetReason() != bgReason {
 		t.Fatalf("audit = %+v", a)
 	}
 
@@ -321,7 +321,7 @@ func TestNodeResetByHostnameStoresTheMachineNameAsConfirm(t *testing.T) {
 
 	req := nodeCreateReq(&pb.NodeActionRequest{
 		Machine: objectRef(opNS, "node-w1"), Action: pb.NodeAction_NODE_ACTION_RESET, Confirm: "node-w1",
-		BreakGlass: &pb.BreakGlass{Reason: bgReason},
+		Override: &pb.Override{Reason: bgReason},
 	})
 	if _, err := s.CreateOperation(user, req); err != nil {
 		t.Fatal(err)

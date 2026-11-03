@@ -44,7 +44,7 @@ type etcdRestorePlan struct {
 	backup   *ichorv1alpha1.TalosEtcdBackup
 	snapshot string
 	confirm  string
-	bg       *pb.BreakGlass
+	bg       *pb.Override
 }
 
 //nolint:gocyclo // one list of independent refusals, then the plain-English plan
@@ -71,10 +71,10 @@ func (s *Server) planEtcdRestore(ctx context.Context, clusterRef *pb.ObjectRef, 
 
 	p := &opPlan{
 		kind: ichorv1alpha1.TalosOperationKindEtcdRestore, cluster: cluster,
-		restore: &etcdRestorePlan{backup: &bk, snapshot: req.GetSnapshot(), confirm: req.GetConfirm(), bg: req.GetBreakGlass()},
+		restore: &etcdRestorePlan{backup: &bk, snapshot: req.GetSnapshot(), confirm: req.GetConfirm(), bg: req.GetOverride()},
 		resp: &pb.PlanOperationResponse{
 			MaxUnavailable: 1, Effect: pb.OperationEffect_OPERATION_EFFECT_REBOOT, KubernetesApiUnavailable: true,
-			ConfirmName: cluster.Name, BreakGlassRequired: true,
+			ConfirmName: cluster.Name, OverrideRequired: true,
 		},
 	}
 
@@ -236,7 +236,7 @@ func (s *Server) etcdRestoreBlocked(
 	case controlPlanes == 0:
 		return "the cluster has no approved control plane", nil
 	case etcdbackup.InClusterReason(bk.Spec.Destination.S3.Endpoint, cluster) != "":
-		// Absolute: break-glass does not override it, the restore marker could never be written.
+		// Absolute: override does not override it, the restore marker could never be written.
 		return etcdbackup.InClusterMessage(etcdbackup.InClusterReason(bk.Spec.Destination.S3.Endpoint, cluster)), nil
 	case taken.IsZero():
 		return fmt.Sprintf("snapshot %q is not among the snapshots backup %q last listed (it may have been pruned)", p.restore.snapshot, bk.Name), nil
@@ -272,10 +272,10 @@ func (s *Server) createEtcdRestore(ctx context.Context, p *opPlan) (*pb.CreateOp
 
 	reason := strings.TrimSpace(rp.bg.GetReason())
 	if reason == "" {
-		return nil, invalid("an etcd restore needs a break-glass reason: it goes into the audit record and the Event")
+		return nil, invalid("an etcd restore needs an override reason: it goes into the audit record and the Event")
 	}
 
-	if err := s.authorizeBreakGlass(ctx, cluster); err != nil {
+	if err := s.authorizeOverride(ctx, cluster); err != nil {
 		return nil, err
 	}
 
@@ -293,11 +293,11 @@ func (s *Server) createEtcdRestore(ctx context.Context, p *opPlan) (*pb.CreateOp
 		return nil, err
 	}
 
-	audit := s.opAudit(ctx, "create-break-glass", objectRef(op.Namespace, op.Name))
+	audit := s.opAudit(ctx, "create-override", objectRef(op.Namespace, op.Name))
 	audit.Reason = reason
 
-	msg := fmt.Sprintf("etcd restore of %s from snapshot %s requested by %s under break-glass: %s", cluster.Name, rp.snapshot, audit.Actor, reason)
-	if err := s.emitBreakGlassEvent(ctx, cluster, kindTalosCluster, msg); err != nil {
+	msg := fmt.Sprintf("etcd restore of %s from snapshot %s requested by %s under override: %s", cluster.Name, rp.snapshot, audit.Actor, reason)
+	if err := s.emitOverrideEvent(ctx, cluster, kindTalosCluster, msg); err != nil {
 		audit.Reason += " (the Kubernetes Event could not be recorded)"
 	}
 

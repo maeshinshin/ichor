@@ -2,7 +2,7 @@
 // @generated from file ichor/v1alpha1/reclaim.proto (package ichor.v1alpha1, syntax proto3)
 /* eslint-disable */
 
-// ReclaimService backs the break-glass "Reclaim a configured machine" dialog. It creates a MachineReclaim and its short-lived
+// ReclaimService backs the override "Reclaim a configured machine" dialog. It creates a MachineReclaim and its short-lived
 // credential Secret as the caller and later writes spec.confirmUUID, nothing
 // else. The controller does the node work. Every call is refused when the
 // installation has not enabled reclaim. The talosconfig in CreateReclaim is a

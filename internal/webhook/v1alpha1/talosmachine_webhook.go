@@ -37,7 +37,7 @@ var talosmachinelog = logf.Log.WithName("talosmachine-resource")
 // SetupTalosMachineWebhookWithManager registers the webhook for TalosMachine in the manager.
 func SetupTalosMachineWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &ichorv1alpha1.TalosMachine{}).
-		WithValidator(&TalosMachineCustomValidator{APIReader: mgr.GetAPIReader(), BreakGlass: breakGlassCheckFor(mgr.GetClient()), Can: rightCheckFor(mgr.GetClient())}).
+		WithValidator(&TalosMachineCustomValidator{APIReader: mgr.GetAPIReader(), Override: overrideCheckFor(mgr.GetClient()), Can: rightCheckFor(mgr.GetClient())}).
 		Complete()
 }
 
@@ -57,9 +57,9 @@ type TalosMachineCustomValidator struct {
 	// functions, the one place machines are listed for counting. It also
 	// reads the machine's TalosCluster (count, schedulable).
 	APIReader client.Reader
-	// BreakGlass lets a user holding the break-glass verb on the machine override the
+	// Override lets a user holding the override verb on the machine override the
 	// last-worker guard. nil means no override.
-	BreakGlass BreakGlassCheck
+	Override OverrideCheck
 	// Can asks whether the requesting user holds a verb: approve on
 	// talosmachines/approval, and update on talosmachines/endpoint for an address
 	// the cluster does not declare. nil means nobody does.
@@ -247,7 +247,7 @@ func (v *TalosMachineCustomValidator) checkWorkerLeaves(ctx context.Context, m *
 		return err
 	}
 
-	return v.BreakGlass.checkLastWorker(ctx, workers-1, "talosmachines", m.Name, m.Namespace)
+	return v.Override.checkLastWorker(ctx, workers-1, "talosmachines", m.Name, m.Namespace)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type TalosMachine.

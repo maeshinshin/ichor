@@ -175,7 +175,7 @@ Users never get a talosconfig, because no per-user Talos identity exists. Two
 paths can hand Talos credentials to a person, and both stay admin-only: the
 CLI hand-off and the UI download.
 
-Break-glass: the secrets bundle keeps the `admin` client certificate
+Override: the secrets bundle keeps the `admin` client certificate
 (`system:masters`) and the Talos `os:admin` identity in
 `~/.ichor/clusters/<name>/`. Neither depends on any login. A broken issuer, a
 stopped ichor-ui or a deleted user cannot lock the operator out. Keep this
@@ -386,7 +386,7 @@ annotation; disk roles that require reinstall are immutable after install;
 `TalosCluster` and `TalosMachine` can only be deleted with
 `ichor.maesh.dev/allow-delete: "true"` (so a prune by the user's own tooling can't cascade into
 node resets); removing an Ichor finalizer, resetting a node and restoring etcd
-need the break-glass verb; Talos/Kubernetes version pairs and upgrade paths are checked.
+need the override verb; Talos/Kubernetes version pairs and upgrade paths are checked.
 
 ## Design
 
@@ -522,7 +522,7 @@ inline manifest entry is found by content, its name is recorded in
 `status.cni.takenOverInlineManifest`, and it is removed from the machine
 config only after `CNIHandover` is true. There is no rollback of an adoption.
 
-### Git, break-glass and recovery
+### Git, override and recovery
 
 A user may keep Ichor's CRs in their own Git and apply them with any tool. A write from the UI or CLI lands in the cluster and the user's tool
 decides what to do with the drift. Putting runtime-written state in Git (`TalosOperation`s,
@@ -530,7 +530,7 @@ unapproved machines, the labels and annotations Ichor writes on Nodes and on
 the storage system's node objects) makes that tool and Ichor fight, so keep
 those out. Ichor writes no repository skeleton.
 
-Break-glass is the Kubernetes RBAC verb `break-glass`. It guards the dangerous
+Override is the Kubernetes RBAC verb `override`. It guards the dangerous
 operations: removing an Ichor finalizer from a deleting object, resetting a
 node, restoring etcd and overriding the last-worker guard. It is checked with a
 SubjectAccessReview made as the user.
@@ -711,7 +711,7 @@ and each easy to get fatally wrong:
 The finalizer cannot defend against one thing: a person removing it by hand
 mid-sequence. That deletes the resource immediately and orphans whatever state
 existed — a cordoned node, possibly still an etcd voter, with nothing left to
-resume it. Refusing finalizer removal except through break-glass belongs with
+resume it. Refusing finalizer removal except through override belongs with
 the other dangerous-operation checks.
 
 Draining uses `k8s.io/kubectl`'s own drain helper rather than a hand-written
@@ -971,14 +971,14 @@ surface as metrics and alerts.
 
 Two recovery paths. Restoring into a live cluster stops etcd on all control
 planes and restores the snapshot; the UI and CLI both offer it, as a
-`TalosOperation` that needs the break-glass right on the cluster and the
+`TalosOperation` that needs the override right on the cluster and the
 cluster's name typed. Because the restore rolls the Kubernetes API back past the
 operation itself, its progress is kept in a marker next to the backups, not in
 status, and the operation is recreated from the marker. The backup
 store must therefore live outside the cluster being restored (not a Service
 such as `minio.minio.svc`, nor an address in the cluster's pod or service
 range): the marker is written to the store after the API is down, so a store
-inside the cluster deadlocks the restore. The plan refuses it, break-glass does
+inside the cluster deadlocks the restore. The plan refuses it, override does
 not override that, and the `TalosEtcdBackup` carries a `StoreInCluster`
 warning condition meanwhile. Full-loss
 recovery is CLI-only: `ichor restore --recover-cluster` rebuilds control
@@ -1094,7 +1094,7 @@ resumption works. A short set runs per PR, the full set nightly.
 6. Config editing UI, `TalosOperation`, Talos and Kubernetes upgrades,
    Ichor self-upgrade.
 7. Storage integration (longhorn-v1, operation hooks), CA rotation.
-8. Break-glass.
+8. Override.
 9. Monitoring settings, metrics and dashboards, optional components, OIDC and impersonation, Ichor's own users and issuer.
 10. UI localisation.
 11. Later: more storage presets, IPv6, replica-based

@@ -29,7 +29,7 @@ import (
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
-// The users the break-glass suite acts as. testControllerUser is the exempt
+// The users the override suite acts as. testControllerUser is the exempt
 // name the suite's webhook is set up with (see webhook_suite_test.go).
 const (
 	testControllerUser = "system:serviceaccount:ichor-system:ichor-controller"
@@ -51,7 +51,7 @@ func asUser(name string) client.Client {
 	return cl
 }
 
-// grant gives user the ordinary write rights, and (if glass) the break-glass
+// grant gives user the ordinary write rights, and (if glass) the override
 // verb, on machines and patches.
 func grant(user string, glass bool) {
 	bindRole("bg-test-"+user, user, rbacv1.PolicyRule{
@@ -59,17 +59,17 @@ func grant(user string, glass bool) {
 	})
 }
 
-// writeVerbs are the ordinary read and write verbs, plus break-glass when glass.
+// writeVerbs are the ordinary read and write verbs, plus override when glass.
 func writeVerbs(glass bool) []string {
 	verbs := []string{verbGet, "list", verbUpdate, verbPatch, verbDelete}
 	if glass {
-		verbs = append(verbs, "break-glass")
+		verbs = append(verbs, "override")
 	}
 
 	return verbs
 }
 
-var _ = Describe("Break-glass webhook", func() {
+var _ = Describe("Override webhook", func() {
 	var machine *ichorv1alpha1.TalosMachine
 
 	BeforeEach(func() {

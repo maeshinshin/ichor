@@ -1,10 +1,10 @@
 {{- if .Values.webhook.enabled }}
 {{- /* name (without -v1alpha1.kb.io), handler path suffix, operations, resources */}}
 {{- $hooks := list
-  (dict "name" "vbreakglass" "path" "breakglass" "ops" (list "UPDATE") "res" (list "talosmachines" "talosconfigpatches"))
-  (dict "name" "vbreakglassop" "path" "breakglass" "ops" (list "CREATE" "UPDATE") "res" (list "talosoperations"))
-  (dict "name" "vsecretrefs" "path" "breakglass" "ops" (list "CREATE" "UPDATE") "res" (list "talosetcdbackups"))
-  (dict "name" "vauthentication" "path" "breakglass" "ops" (list "CREATE" "UPDATE") "res" (list "talosclusters"))
+  (dict "name" "voverride" "path" "override" "ops" (list "UPDATE") "res" (list "talosmachines" "talosconfigpatches"))
+  (dict "name" "voverrideop" "path" "override" "ops" (list "CREATE" "UPDATE") "res" (list "talosoperations"))
+  (dict "name" "vsecretrefs" "path" "override" "ops" (list "CREATE" "UPDATE") "res" (list "talosetcdbackups"))
+  (dict "name" "vauthentication" "path" "override" "ops" (list "CREATE" "UPDATE") "res" (list "talosclusters"))
   (dict "name" "vtaloscluster" "path" "taloscluster" "ops" (list "CREATE" "UPDATE" "DELETE") "res" (list "talosclusters"))
   (dict "name" "vtalosconfigpatch" "path" "talosconfigpatch" "ops" (list "CREATE" "UPDATE") "res" (list "talosconfigpatches"))
   (dict "name" "vtalosmachine" "path" "talosmachine" "ops" (list "CREATE" "UPDATE" "DELETE") "res" (list "talosmachines"))

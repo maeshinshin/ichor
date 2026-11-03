@@ -111,7 +111,7 @@ filesystem or source-resolution logic of its own.
   Gitea/Forgejo) -- a later unit's interface, deliberately not designed
   yet, per architecture.md's own phase-8 framing and this unit's own
   instructions. The UI following a PR through merge/sync/apply, the impact
-  preview text in a PR's description, strict mode, and break-glass are
+  preview text in a PR's description, strict mode, and override are
   likewise untouched.
 - `Locate` takes an already-checked-out directory; cloning or fetching a
   repository from `ApplicationSource.RepoURL`/`TargetRevision` is the

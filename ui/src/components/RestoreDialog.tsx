@@ -25,7 +25,7 @@ import { navigate } from '@/router'
 // RestoreDialog is "Restore from backup…" in the cluster page's Danger zone. It never
 // writes on the first click: the user picks a snapshot from the cluster's backups, "Review" asks the
 // server for the plan (what happens, in order, and what is lost) and shows it, and only the second,
-// separate button writes. That one also needs the cluster's name typed and a reason for the break-glass
+// separate button writes. That one also needs the cluster's name typed and a reason for the override
 // permission (the server asks Kubernetes whether this user holds it, and refuses if not). The UI only
 // writes the operation; the controller wipes and recovers etcd.
 export function RestoreDialog({ cluster, disabled = false }: { cluster: { namespace: string; name: string }; disabled?: boolean }) {
@@ -80,7 +80,7 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
       backup: choice?.backup,
       snapshot: choice?.name ?? '',
       confirm,
-      breakGlass: reason.trim() === '' ? undefined : { reason: reason.trim() },
+      override: reason.trim() === '' ? undefined : { reason: reason.trim() },
     },
   })
 

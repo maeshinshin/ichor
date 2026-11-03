@@ -36,7 +36,7 @@ import (
 )
 
 // lastWorkerFixture is an unschedulable cluster with exactly one approved worker, behind a validator
-// whose break-glass check asks the fake SubjectAccessReview of bgUnitHandler (only bgUnitHolder holds it).
+// whose override check asks the fake SubjectAccessReview of bgUnitHandler (only bgUnitHolder holds it).
 func lastWorkerFixture(t *testing.T) (*TalosClusterCustomValidator, *TalosMachineCustomValidator, *ichorv1alpha1.TalosMachine) {
 	t.Helper()
 
@@ -58,10 +58,10 @@ func lastWorkerFixture(t *testing.T) (*TalosClusterCustomValidator, *TalosMachin
 	}
 
 	reader := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, worker).Build()
-	check := breakGlassCheckFor(bgUnitHandler(t).Client)
+	check := overrideCheckFor(bgUnitHandler(t).Client)
 
-	return &TalosClusterCustomValidator{APIReader: reader, BreakGlass: check},
-		&TalosMachineCustomValidator{APIReader: reader, BreakGlass: check}, worker
+	return &TalosClusterCustomValidator{APIReader: reader, Override: check},
+		&TalosMachineCustomValidator{APIReader: reader, Override: check}, worker
 }
 
 func admissionCtxAs(user string) context.Context {
@@ -76,12 +76,12 @@ func TestLastWorkerGuardMachineDelete(t *testing.T) {
 	_, v, worker := lastWorkerFixture(t)
 
 	_, err := v.ValidateDelete(admissionCtxAs(bgUnitPlain), worker)
-	if err == nil || !strings.Contains(err.Error(), "break-glass") {
-		t.Fatalf("a plain user deleting the last worker should be refused naming break-glass, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "override") {
+		t.Fatalf("a plain user deleting the last worker should be refused naming override, got %v", err)
 	}
 
 	if _, err := v.ValidateDelete(admissionCtxAs(bgUnitHolder), worker); err != nil {
-		t.Fatalf("a break-glass holder should be allowed to delete the last worker, got %v", err)
+		t.Fatalf("an override holder should be allowed to delete the last worker, got %v", err)
 	}
 
 	// No admission request in the context: no user, so no override.
@@ -102,11 +102,11 @@ func TestLastWorkerGuardMachineUnapprove(t *testing.T) {
 	}
 
 	if _, err := v.ValidateUpdate(admissionCtxAs(bgUnitHolder), worker, rejected); err != nil {
-		t.Fatalf("a break-glass holder should be allowed, got %v", err)
+		t.Fatalf("an override holder should be allowed, got %v", err)
 	}
 }
 
-// A node operation that carries breakGlassReason (the controller-side override of the last-worker
+// A node operation that carries overrideReason (the controller-side override of the last-worker
 // guard) is admitted only for a user holding the verb on the machine.
 func TestLastWorkerGuardNodeOperationReason(t *testing.T) {
 	t.Parallel()
@@ -120,7 +120,7 @@ func TestLastWorkerGuardNodeOperationReason(t *testing.T) {
 				ClusterRef: corev1.LocalObjectReference{Name: lwCluster}, Kind: ichorv1alpha1.TalosOperationKindNode,
 				Node: &ichorv1alpha1.TalosOperationNodeSpec{
 					MachineRef: corev1.LocalObjectReference{Name: "w1"}, Action: ichorv1alpha1.NodeActionReboot,
-					BreakGlassReason: reason,
+					OverrideReason: reason,
 				},
 			},
 		}
@@ -138,15 +138,15 @@ func TestLastWorkerGuardNodeOperationReason(t *testing.T) {
 	}
 
 	if !handle(bgUnitPlain, "").Allowed {
-		t.Error("a plain reboot needs no break-glass")
+		t.Error("a plain reboot needs no override")
 	}
 
 	if handle(bgUnitPlain, "teardown").Allowed {
-		t.Error("a plain user must not set breakGlassReason")
+		t.Error("a plain user must not set overrideReason")
 	}
 
 	if !handle(bgUnitHolder, "teardown").Allowed {
-		t.Error("a break-glass holder may set breakGlassReason")
+		t.Error("an override holder may set overrideReason")
 	}
 }
 
@@ -165,11 +165,11 @@ func TestLastWorkerGuardClusterUnschedulable(t *testing.T) {
 	newC.Spec.ControlPlane.Schedulable = "false"
 
 	_, err := v.ValidateUpdate(admissionCtxAs(bgUnitPlain), oldC, newC)
-	if err == nil || !strings.Contains(err.Error(), "break-glass") {
-		t.Fatalf("a plain user should be refused naming break-glass, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "override") {
+		t.Fatalf("a plain user should be refused naming override, got %v", err)
 	}
 
 	if _, err := v.ValidateUpdate(admissionCtxAs(bgUnitHolder), oldC, newC); err != nil {
-		t.Fatalf("a break-glass holder should be allowed, got %v", err)
+		t.Fatalf("an override holder should be allowed, got %v", err)
 	}
 }

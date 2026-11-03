@@ -198,20 +198,20 @@ var _ = Describe("TalosOperation node actions", func() {
 			}
 		})
 
-		It("names break-glass in the refusal, and lets spec.node.breakGlassReason override it", func() {
+		It("names override in the refusal, and lets spec.node.overrideReason override it", func() {
 			for _, action := range []string{ichorv1alpha1.NodeActionReboot, ichorv1alpha1.NodeActionShutdown} {
 				f := newNodeFixture(map[string]string{hostW1: roleWorker})
 				Expect(f.kube.CoreV1().Nodes().Delete(context.Background(), nodeSpareWorker, metav1.DeleteOptions{})).To(Succeed())
 
 				got := f.reconcile(f.newOp(hostW1, nodeSpec(action)))
 				Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
-				Expect(got.Status.FailureReason).To(ContainSubstring("break-glass"))
+				Expect(got.Status.FailureReason).To(ContainSubstring("override"))
 
 				f = newNodeFixture(map[string]string{hostW1: roleWorker})
 				Expect(f.kube.CoreV1().Nodes().Delete(context.Background(), nodeSpareWorker, metav1.DeleteOptions{})).To(Succeed())
 
 				spec := nodeSpec(action)
-				spec.BreakGlassReason = "tearing the cluster down"
+				spec.OverrideReason = "tearing the cluster down"
 				got = f.reconcile(f.newOp(hostW1, spec))
 				Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
 

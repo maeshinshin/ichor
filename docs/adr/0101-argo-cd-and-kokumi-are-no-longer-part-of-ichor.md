@@ -41,10 +41,10 @@ GitOps is no longer a requirement, so Ichor stops knowing about GitOps tools at 
 
 Removed:
 
-- Detection of CRs tracked by Argo CD or Flux (`pkg/gitopstracking`, the `argocd-cm` read, the Flux inventory scan) and every refusal built on it: the tracked-write gate in `internal/uiapi` (machines, patches, discovery, install, operations, node actions, Cilium values), the same refusals in the CLI's in-process fallback, and the tracked-CR denial in the break-glass webhook. The webhook keeps its other jobs: removing an `ichor.maesh.dev/*` finalizer, resetting a node, restoring etcd, the last-worker override, `spec.authentication` and secret-reference changes. It no longer exempts Argo CD or Flux service accounts by name; it still exempts Ichor's controller and the Kubernetes namespace and garbage collectors.
-- Pull-request mode (`pkg/prmode`, `pkg/gitops`) and strict mode: no write opens a pull request, and approving a node always writes the `TalosMachine`. Break-glass no longer means "write a tracked CR and open the matching pull request". It stays as the verb that guards the destructive operations.
+- Detection of CRs tracked by Argo CD or Flux (`pkg/gitopstracking`, the `argocd-cm` read, the Flux inventory scan) and every refusal built on it: the tracked-write gate in `internal/uiapi` (machines, patches, discovery, install, operations, node actions, Cilium values), the same refusals in the CLI's in-process fallback, and the tracked-CR denial in the override webhook. The webhook keeps its other jobs: removing an `ichor.maesh.dev/*` finalizer, resetting a node, restoring etcd, the last-worker override, `spec.authentication` and secret-reference changes. It no longer exempts Argo CD or Flux service accounts by name; it still exempts Ichor's controller and the Kubernetes namespace and garbage collectors.
+- Pull-request mode (`pkg/prmode`, `pkg/gitops`) and strict mode: no write opens a pull request, and approving a node always writes the `TalosMachine`. Override no longer means "write a tracked CR and open the matching pull request". It stays as the verb that guards the destructive operations.
 - `GitOpsService`, `proto/ichor/v1alpha1/gitops.proto`, the external-links registry (`ichorUI.links`, `ICHOR_LINK_*`), `ichorUI.argocdNamespace` / `ICHOR_ARGOCD_NAMESPACE` and the CLI's `--argocd-namespace`.
-- The UI GitOps page, its route, navigation entry and strings; the pull-request notice and break-glass dialogs; the Cilium page's tracked-by banner and read-only state.
+- The UI GitOps page, its route, navigation entry and strings; the pull-request notice and override dialogs; the Cilium page's tracked-by banner and read-only state.
 - The Argo CD health-check ConfigMap (ADR 0046): `argocdHealth`, `templates/argocd`, the Lua files and their test; and `examples/argocd-application.yaml`.
 - RBAC: `argocd-cm` get, Flux `kustomizations` list and `applications` get for `ichor-ui`; `argocd-cm` get and Flux `kustomizations` list for the manager.
 - The `IchorInstallation` `ExternalSuggested` condition and the controller's read of its own Deployment.
@@ -66,7 +66,7 @@ Flux CD is permanently out of scope, like every GitOps tool. Ichor holds no Flux
 
 Deprecated, kept (the append-only rule for wire formats):
 
-- Proto fields, marked `deprecated = true` and never set: `tracked_by` (`GetCiliumValuesResponse`), `pull_request_url` and `notice` on the approve, reject, set-install, add-discovery, update-patch, delete-patch and create-operation responses, `break_glass` on the approve, reject, set-install, add-discovery, update-patch and delete-patch requests (the server ignores it), `opens_pull_request` on `PlanOperationResponse` and `management_mode` on `GetIchorInstallationResponse`. `break_glass` on node-action and etcd-restore requests is unchanged.
+- Proto fields, marked `deprecated = true` and never set: `tracked_by` (`GetCiliumValuesResponse`), `pull_request_url` and `notice` on the approve, reject, set-install, add-discovery, update-patch, delete-patch and create-operation responses, `override` on the approve, reject, set-install, add-discovery, update-patch and delete-patch requests (the server ignores it), `opens_pull_request` on `PlanOperationResponse` and `management_mode` on `GetIchorInstallationResponse`. `override` on node-action and etcd-restore requests is unchanged.
 
 Superseded ADRs: 0015, 0028, 0037, 0038, 0044, 0046, 0051, 0056, 0062 in full; 0059 (decision 5 and the external mode) and 0065 (the tracked-write part; the verb and the destructive-operation checks stand) in part.
 

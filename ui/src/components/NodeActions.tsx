@@ -412,7 +412,7 @@ function NodeActionDialog({
     <ConfirmDialog
       open
       onOpenChange={(open) => !open && !busy && onClose()}
-      title={t('node.action.title', { action: t(`node.action.${def.id}`).replace('…', ''), node: machine.name })}
+      title={t('node.action.title', { action: t(`node.action.${def.id}`), node: machine.name })}
       description={plan === null && !error ? t('node.action.checking') : undefined}
       confirm={{
         label: busy ? t('node.action.starting') : t(`node.action.go.${def.id}`),

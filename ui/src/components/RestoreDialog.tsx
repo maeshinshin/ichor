@@ -24,7 +24,7 @@ import { notifyDone } from '@/lib/notify'
 import { useT } from '@/lib/useT'
 import { navigate } from '@/router'
 
-// RestoreDialog is "Restore from backup…" in the cluster page's Danger zone. It never
+// RestoreDialog is "Restore from backup" in the cluster page's Danger zone. It never
 // writes on the first click: the user picks a snapshot from the cluster's backups, "Review" asks the
 // server for the plan (what happens, in order, and what is lost) and shows it, and only the second,
 // separate button writes. That one also needs the cluster's name typed and the override ticked (the

@@ -39,6 +39,7 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 	"github.com/maeshinshin/ichor/pkg/ichorauth"
+	"github.com/maeshinshin/ichor/pkg/render"
 )
 
 // envtest's kube-apiserver enforces RBAC, so these specs run handlers as the real ichor-ui
@@ -100,6 +101,34 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 			Machine: objectRef(m.Namespace, m.Name),
 		}))
 		Expect(err).NotTo(HaveOccurred())
+	})
+
+	// With Ichor's issuer on the render reads ConfigMap ichor-oidc-trust (and only that one).
+	It("lets GetEffectiveConfig read the trust ConfigMap when the cluster enables Ichor's issuer", func() {
+		secret := newTestSecret(newTestBundle())
+		cluster := newTestCluster(secret.Name)
+		cluster.Spec.Authentication = &ichorv1alpha1.TalosClusterAuthentication{
+			Ichor: &ichorv1alpha1.TalosClusterIchorIssuer{Enabled: true, URL: "https://ichor.example.test"},
+		}
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+		trust := &corev1.ConfigMap{
+			Name: render.OIDCTrustConfigMap, Namespace: testNamespace,
+			Data: map[string]string{render.OIDCTrustKeyDiscoveryURL: "https://ichor-ui.ichor-system.svc:8443", render.OIDCTrustKeyCA: "x"},
+		}
+		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, trust))).To(Succeed())
+
+		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-rbac-trust"), roleControlPlane, ichorv1alpha1.MachineApprovalStateApproved)
+
+		s := &Server{Client: saClient, ControllerNamespace: testNamespace}
+		_, err := s.GetEffectiveConfig(ctx, connect.NewRequest(&pb.GetEffectiveConfigRequest{
+			Machine: objectRef(m.Namespace, m.Name),
+		}))
+		Expect(err).NotTo(HaveOccurred())
+
+		other := &corev1.ConfigMap{Name: "something-else", Namespace: testNamespace}
+		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, other))).To(Succeed())
+		Expect(apierrors.IsForbidden(saClient.Get(ctx, client.ObjectKeyFromObject(other), &corev1.ConfigMap{}))).To(BeTrue())
 	})
 
 	It("lets GetNodeTalosRuntime read the Node and the pods bound to it", func() {

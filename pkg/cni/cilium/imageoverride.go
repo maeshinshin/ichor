@@ -23,6 +23,7 @@ import (
 	"golang.org/x/mod/semver"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/values"
 )
 
 // The image keys of a Cilium patch (ADR 0115, amendment 2026-11-03) and the chart values each one
@@ -34,17 +35,11 @@ const (
 	ImageHubbleRelay = "hubble-relay"
 )
 
-// The values keys on the path to an image's override.
-const (
-	keyImage    = "image"
-	keyOverride = "override"
-)
-
-// imageOverrideKeys is the values path of each image key.
-var imageOverrideKeys = map[string][]string{
-	ImageAgent:       {keyImage, keyOverride},
-	ImageOperator:    {"operator", keyImage, keyOverride},
-	ImageHubbleRelay: {"hubble", "relay", keyImage, keyOverride},
+// imageOverridePaths is the dotted values path of each image key's override.
+var imageOverridePaths = map[string]string{
+	ImageAgent:       "image.override",
+	ImageOperator:    "operator.image.override",
+	ImageHubbleRelay: "hubble.relay.image.override",
 }
 
 // ImageOverrideActive is the Cilium patch the release runs on the embedded chart, or nil when there is
@@ -67,7 +62,7 @@ func ImageOverrideActive(cluster *ichorv1alpha1.TalosCluster) *ichorv1alpha1.Tal
 // known, and every reference must be pinned by a sha256 digest, so a tag alone never runs.
 func WithImageOverrides(vals map[string]any, images map[string]string) error {
 	for key, ref := range images {
-		path, ok := imageOverrideKeys[key]
+		path, ok := imageOverridePaths[key]
 		if !ok {
 			return fmt.Errorf("cilium: %q is not an image of a Cilium patch", key)
 		}
@@ -76,18 +71,7 @@ func WithImageOverrides(vals map[string]any, images map[string]string) error {
 			return fmt.Errorf("cilium: the %s image %q is not pinned by a sha256 digest", key, ref)
 		}
 
-		m := vals
-		for _, p := range path[:len(path)-1] {
-			next, ok := m[p].(map[string]any)
-			if !ok {
-				next = map[string]any{}
-				m[p] = next
-			}
-
-			m = next
-		}
-
-		m[path[len(path)-1]] = ref
+		values.Set(vals, path, ref)
 	}
 
 	return nil

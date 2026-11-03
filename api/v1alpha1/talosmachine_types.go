@@ -420,6 +420,21 @@ type TalosMachineStatus struct {
 	// +listType=atomic
 	// +optional
 	APIServerRestartPaths []string `json:"apiServerRestartPaths,omitempty"`
+
+	// discoveredDisks lists the installable disks (no CD-ROM, no read-only one) the node reported
+	// through its maintenance-mode API when discovery last probed it. Approval picks the
+	// install disk and disk roles from this list, and DiscoveryWarnings checks a choice against it.
+	// Empty until a probe has recorded one.
+	// +listType=atomic
+	// +optional
+	DiscoveredDisks []TalosMachineDiscoveredDisk `json:"discoveredDisks,omitempty"`
+
+	// discoveredLinks lists the physical links with a permanent MAC address the node reported
+	// through its maintenance-mode API when discovery last probed it. Approval picks the
+	// primary NIC from this list. Empty until a probe has recorded one.
+	// +listType=atomic
+	// +optional
+	DiscoveredLinks []TalosMachineDiscoveredLink `json:"discoveredLinks,omitempty"`
 }
 
 // +kubebuilder:object:root=true

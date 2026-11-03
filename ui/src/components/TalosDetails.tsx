@@ -15,7 +15,7 @@ import { ToneBadge } from '@/components/ToneBadge'
 import type { GetNodeTalosDetailsResponse } from '@/gen/ichor/v1alpha1/talosdetails_pb'
 import { nodeClient } from '@/lib/connect'
 import { display, formatBytes } from '@/lib/format'
-import { formatSpeed, healthKey, serviceTone, sortServices, visibleVolumes } from '@/lib/talosDetails'
+import { formatSpeed, serviceStatus, sortServices, visibleVolumes } from '@/lib/talosDetails'
 import { useLoad } from '@/lib/useLoad'
 import { useT } from '@/lib/useT'
 
@@ -283,22 +283,21 @@ function ServicesSection({ data }: { data: GetNodeTalosDetailsResponse }) {
               <TableRow>
                 <TableHead>{t('talos.colService')}</TableHead>
                 <TableHead>{t('talos.colState')}</TableHead>
-                <TableHead>{t('talos.colHealth')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortServices(s.services).map((svc) => (
-                <TableRow key={svc.id}>
-                  <TableCell className="font-mono">{svc.id}</TableCell>
-                  <TableCell>
-                    <ToneBadge tone={serviceTone(svc)}>{svc.state}</ToneBadge>
-                  </TableCell>
-                  <TableCell>
-                    <span className={svc.healthUnknown ? 'text-muted-foreground' : undefined}>{t(healthKey(svc))}</span>
-                    {svc.healthMessage && <span class="break-words"> {svc.healthMessage}</span>}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {sortServices(s.services).map((svc) => {
+                const status = serviceStatus(svc)
+                return (
+                  <TableRow key={svc.id}>
+                    <TableCell className="font-mono">{svc.id}</TableCell>
+                    <TableCell>
+                      <ToneBadge tone={status.tone}>{status.labelKey ? t(status.labelKey) : status.label}</ToneBadge>
+                      {status.message && <span className="break-words text-muted-foreground"> {status.message}</span>}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         )}

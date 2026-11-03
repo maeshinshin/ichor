@@ -3,7 +3,7 @@
 
 export type Tone = 'good' | 'bad' | 'neutral'
 
-type ServiceLike = { state: string; healthUnknown: boolean; healthy: boolean }
+type ServiceLike = { state: string; healthUnknown: boolean; healthy: boolean; healthMessage?: string }
 
 export function formatSpeed(mbit: number): string {
   if (!Number.isFinite(mbit) || mbit <= 0) return '-'
@@ -11,21 +11,33 @@ export function formatSpeed(mbit: number): string {
   return `${mbit / 1000} Gbit/s`
 }
 
-// A service Talos reports as failed, or running but unhealthy, is bad; one
-// running and healthy is ok; anything else (finished, unknown health) is shown
-// without colour.
+// A service Talos reports as failed, or running but unhealthy, is bad; a running
+// one that is healthy, or has no health check, is ok; anything else (finished,
+// skipped ...) is shown without colour.
 export function serviceTone(s: ServiceLike): Tone {
   if (s.state === 'Failed') return 'bad'
   if (s.state !== 'Running') return 'neutral'
-  if (s.healthUnknown) return 'neutral'
+  if (s.healthUnknown) return 'good'
   return s.healthy ? 'good' : 'bad'
 }
 
-// The Health cell's text: a service Talos has no health check for says so,
-// rather than showing a dash that reads as broken.
-export function healthKey(s: ServiceLike): 'talos.noHealthCheck' | 'common.yes' | 'common.no' {
-  if (s.healthUnknown) return 'talos.noHealthCheck'
-  return s.healthy ? 'common.yes' : 'common.no'
+export type ServiceStatus = {
+  // Shown as-is, or translated through labelKey when set.
+  label: string
+  labelKey?: 'talos.healthy' | 'talos.unhealthy'
+  tone: Tone
+  // Muted detail after the label; only an unhealthy service carries one.
+  message: string
+}
+
+// The single status cell of a service: a running service reads Healthy or
+// Unhealthy when Talos has a health check for it, and Running when it has none
+// (dashboard). Any other state is shown as Talos reports it.
+export function serviceStatus(s: ServiceLike): ServiceStatus {
+  const tone = serviceTone(s)
+  if (s.state !== 'Running' || s.healthUnknown) return { label: s.state, tone, message: '' }
+  if (s.healthy) return { label: 'Healthy', labelKey: 'talos.healthy', tone, message: '' }
+  return { label: 'Unhealthy', labelKey: 'talos.unhealthy', tone, message: s.healthMessage ?? '' }
 }
 
 export function sortServices<T extends ServiceLike & { id: string }>(services: readonly T[]): T[] {

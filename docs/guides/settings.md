@@ -94,6 +94,11 @@ set updateCheck.enabled=false`, or the chart's `updateCheck.enabled: false`, whi
 removes the controller's egress rule for them (`ichor-controller-release-check`). `status.latestRelease` keeps the
 last result and its error: a failed check shows nothing on the dashboard, and Settings says why.
 
+The CLI shows the same result. After a command that reaches a cluster, `ichor` prints one line on stderr when a
+newer release is known, or when the `ichor` binary itself is older than it. It does this on a terminal only, at most
+once a day per cluster, and not with `-o`. Set `ICHOR_NO_UPDATE_NOTICE=1` to turn the line off. The CLI makes no
+request of its own: the line comes from the `IchorInstallation` the command already reads (ADR 0114).
+
 ## A Helm install
 
 A Helm install gets an `IchorInstallation` too: the controller creates it once,

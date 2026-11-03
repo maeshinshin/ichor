@@ -20,6 +20,7 @@ limitations under the License.
 package deleteguard
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -143,7 +144,6 @@ func CountApprovedWorkers(ctx context.Context, reader client.Reader, namespace, 
 
 func countApproved(ctx context.Context, reader client.Reader, namespace, clusterName, role string) (int, error) {
 	machines, err := ApprovedMachines(ctx, reader, namespace, clusterName, MachineFilter{Role: role})
-
 	return len(machines), err
 }
 
@@ -221,20 +221,12 @@ func ControlPlaneOverCap(
 	}
 
 	slices.SortFunc(cps, func(a, b ichorv1alpha1.TalosMachine) int {
-		if c := approvedAt(&a).Compare(approvedAt(&b)); c != 0 {
-			return c
-		}
-
-		return strings.Compare(a.Name, b.Name)
+		return cmp.Or(approvedAt(&a).Compare(approvedAt(&b)), strings.Compare(a.Name, b.Name))
 	})
 
-	for i := desiredCount + 1; i < len(cps); i++ {
-		if cps[i].Name == machineName {
-			return true, len(cps), nil
-		}
-	}
+	at := slices.IndexFunc(cps, func(m ichorv1alpha1.TalosMachine) bool { return m.Name == machineName })
 
-	return false, len(cps), nil
+	return at > desiredCount, len(cps), nil
 }
 
 // CheckControlPlaneApproval refuses approving one more control plane when

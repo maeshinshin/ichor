@@ -6,6 +6,7 @@ package releasecheck
 import (
 	"fmt"
 	"net"
+	"slices"
 	"strings"
 
 	"golang.org/x/mod/semver"
@@ -14,6 +15,13 @@ import (
 
 // DefaultRepository is the chart repository the controller lists (the chart's OCI address, no scheme).
 const DefaultRepository = "ghcr.io/maeshinshin/charts/ichor"
+
+// The repositories whose tags are the Talos and Kubernetes releases an upgrade can list.
+// Their tags are the releases themselves: the installer image and the kubelet image.
+const (
+	DefaultTalosRepository      = "ghcr.io/siderolabs/installer"
+	DefaultKubernetesRepository = "ghcr.io/siderolabs/kubelet"
+)
 
 // Lister returns the tags of a repository. Helm's registry client is the production one.
 type Lister func(repository string) ([]string, error)
@@ -63,10 +71,10 @@ func canonical(tag string) string {
 	return v
 }
 
-// Latest is the highest final release among the tags, with a leading v ("" when there is none).
+// Finals returns the final releases among the tags, newest first, each with a leading v and each once.
 // Prereleases, build metadata, shorthands like "1.2" and every other tag are ignored.
-func Latest(tags []string) string {
-	latest := ""
+func Finals(tags []string) []string {
+	var out []string
 
 	for _, t := range tags {
 		v := canonical(t)
@@ -74,12 +82,21 @@ func Latest(tags []string) string {
 			continue
 		}
 
-		if latest == "" || semver.Compare(v, latest) > 0 {
-			latest = v
-		}
+		out = append(out, v)
 	}
 
-	return latest
+	slices.SortFunc(out, func(a, b string) int { return semver.Compare(b, a) })
+
+	return slices.Compact(out)
+}
+
+// Latest is the highest final release among the tags, with a leading v ("" when there is none).
+func Latest(tags []string) string {
+	if f := Finals(tags); len(f) > 0 {
+		return f[0]
+	}
+
+	return ""
 }
 
 // Newer reports whether release is a newer version than running. A running version that is not

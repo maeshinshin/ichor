@@ -1,4 +1,4 @@
-// Pure helpers for "Restore from backup…". No import from "@/gen": these run directly
+// Pure helpers for "Restore from backup". No import from "@/gen": these run directly
 // under `node --test`.
 
 export type Ref = { namespace: string; name: string }

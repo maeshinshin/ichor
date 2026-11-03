@@ -18,7 +18,7 @@ import { wireKindOf } from '@/components/opkind'
 import { OperationEffect, type PlanOperationResponse } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
-import { describeError, type ErrorShape } from '@/lib/errors'
+import { describeError, isOverridable, type ErrorShape } from '@/lib/errors'
 import { versionProblem } from '@/lib/clusterOps'
 import { confirmMatches, kindNeedsTypedName, kubernetesStages, planCounts, planSteps, targetError, type OpKind } from '@/lib/operations'
 import { useT } from '@/lib/useT'
@@ -76,6 +76,8 @@ export function StartOperationDialog({
   const [list, setList] = useState<TargetList | null>(null)
   // The override (ADR 0110) lifts a compatibility refusal the plan names; the reason is optional.
   const [overridden, setOverridden] = useState(false)
+  // overridable is set when the server refused the plan for an incompatibility the override lifts; no plan exists then.
+  const [overridable, setOverridable] = useState(false)
   const [reason, setReason] = useState('')
 
   const needsName = kindNeedsTypedName(kind)
@@ -114,6 +116,7 @@ export function StartOperationDialog({
       setTyped('')
       setTouched(false)
       setOverridden(false)
+      setOverridable(false)
       setReason('')
     }
   }
@@ -132,6 +135,7 @@ export function StartOperationDialog({
       )
     } catch (err) {
       setError(describeError(err))
+      setOverridable(withOverride || isOverridable(err))
     } finally {
       setBusy(false)
     }
@@ -189,7 +193,7 @@ export function StartOperationDialog({
               {busy ? t('ops.dialog.starting') : t('ops.dialog.start')}
             </Button>
           ) : (
-            <Button disabled={busy || (needsTarget && targetProblem !== null)} onClick={() => review()}>
+            <Button disabled={busy || (needsTarget && targetProblem !== null) || (overridable && !overridden)} onClick={() => review()}>
               {busy ? t('ops.dialog.reviewing') : t('ops.dialog.review')}
             </Button>
           )}
@@ -224,6 +228,9 @@ export function StartOperationDialog({
               onValueChange={(v) => {
                 setTouched(true)
                 setTarget(v)
+                setError(null)
+                setOverridable(false)
+                setOverridden(false)
               }}
             />
           ) : (
@@ -259,7 +266,7 @@ export function StartOperationDialog({
         </Alert>
       )}
 
-      {plan && (plan.overrideRequired || overridden) && (
+      {(overridable || overridden || (plan && plan.overrideRequired)) && (
         <div class="space-y-3">
           <div class="flex items-center gap-2 text-sm">
             <Checkbox

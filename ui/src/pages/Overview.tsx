@@ -9,12 +9,14 @@ import {
   CloudCogIcon,
   CircleXIcon,
   EllipsisIcon,
+  FileCogIcon,
   InboxIcon,
   NetworkIcon,
   PackageCheckIcon,
   PlusIcon,
   ServerCogIcon,
   ServerIcon,
+  ShieldCheckIcon,
   CpuIcon,
   TriangleAlertIcon,
   WorkflowIcon,
@@ -40,7 +42,7 @@ import { OperationControls } from '@/components/OperationControls'
 import { Field, Fields } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { StartOperationDialog } from '@/components/StartOperationDialog'
-import { HandoverPhase, RolloutKind, type Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
+import { HandoverPhase, RolloutKind, type Cluster, type ComponentVersion } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { OperationKind, type EtcdBackup, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
 import { blockingOperation, recentOperations, rebootPendingCount, type OpRow } from '@/lib/clusterOps'
@@ -52,6 +54,7 @@ import { formatTimestamp } from '@/lib/format'
 import { kubernetesStageProgress, operationState, progressCounts } from '@/lib/operations'
 import { attentionItems, backupsValue, tileTargets, versionLabel, type TileTarget } from '@/lib/overview'
 import { opStateTone, type Tone } from '@/lib/status'
+import { componentOf, stateKey, stateTone, versionPair } from '@/lib/versions'
 import { conditionTone } from '@/lib/conditions'
 import { useCluster } from '@/lib/useCluster'
 import { useT } from '@/lib/useT'
@@ -155,6 +158,7 @@ function Home({
   const currentState = current ? operationState(current.op.phase, current.op.failureReason) : null
   const busyReason = busy ? t('ops.disabledBusy') : undefined
   const kubeProxy = cluster.kubeProxyMode || 'enabled'
+  const versionOf = (name: string) => componentOf(cluster.versions, name)
   const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, opState: currentState })
   const recent = recentOperations(ops, 5)
   const targets = tileTargets(current?.op.ref?.name ?? null)
@@ -369,13 +373,17 @@ function Home({
               </CardHeader>
               <CardContent>
                 <ItemGroup>
-                    <VersionRow name={t('ops.row.talos')} icon={CpuIcon} installed={cluster.talosVersion}>
-                      <StartOperationDialog kind="talos" cluster={ref} current={cluster.talosVersion} label={t('ops.action.upgrade')} disabled={!!busy} />
-                    </VersionRow>
+                    <VersionRow name={t('ops.row.talos')} icon={CpuIcon} installed={cluster.talosVersion} component={versionOf('talos')} />
                     <ItemSeparator />
-                    <VersionRow name={t('ops.row.kubernetes')} icon={ContainerIcon} installed={cluster.kubernetesVersion}>
-                      <StartOperationDialog kind="kubernetes" cluster={ref} current={cluster.kubernetesVersion} label={t('ops.action.upgrade')} disabled={!!busy} />
-                    </VersionRow>
+                    <VersionRow name={t('ops.row.contract')} icon={FileCogIcon} installed={versionOf('version-contract')?.current ?? ''} component={versionOf('version-contract')} />
+                    <ItemSeparator />
+                    <VersionRow name={t('ops.row.kubernetes')} icon={ContainerIcon} installed={cluster.kubernetesVersion} component={versionOf('kubernetes')} />
+                    {!isCniUnmanaged(cluster.cniPreset) && (
+                      <>
+                        <ItemSeparator />
+                        <VersionRow name={t('ops.row.cilium')} icon={ShieldCheckIcon} installed={versionOf('cilium')?.current ?? ''} component={versionOf('cilium')} />
+                      </>
+                    )}
                     <ItemSeparator />
                     <VersionRow name={t('ops.row.ichor')} icon={CloudCogIcon} installed={ichorVersion ?? t('ops.installedUnknown')}>
                       <StartOperationDialog kind="ichor" cluster={ref} current={ichorVersion ?? ''} label={t('ops.action.upgrade')} disabled={!!busy} />
@@ -548,7 +556,21 @@ function NodeRow({ m, first }: { m: Machine; first: boolean }) {
   )
 }
 
-function VersionRow({ name, icon: Icon, installed, children }: { name: string; icon: LucideIcon; installed: string; children: ComponentChildren }) {
+// VersionRow is one component: what it runs and, when the cluster compares it with the release set, the target and a state.
+function VersionRow({
+  name,
+  icon: Icon,
+  installed,
+  component,
+  children,
+}: {
+  name: string
+  icon: LucideIcon
+  installed: string
+  component?: ComponentVersion
+  children?: ComponentChildren
+}) {
+  const t = useT()
   return (
     <Item>
       <ItemMedia variant="icon">
@@ -556,9 +578,12 @@ function VersionRow({ name, icon: Icon, installed, children }: { name: string; i
       </ItemMedia>
       <ItemContent>
         <ItemTitle>{name}</ItemTitle>
-        <ItemDescription>{installed || '-'}</ItemDescription>
+        <ItemDescription>{component ? versionPair(installed, component.target) : installed || '-'}</ItemDescription>
       </ItemContent>
-      <ItemActions>{children}</ItemActions>
+      <ItemActions>
+        {component && <ToneBadge tone={stateTone(component.state)}>{t(stateKey(component.state))}</ToneBadge>}
+        {children}
+      </ItemActions>
     </Item>
   )
 }

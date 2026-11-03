@@ -30,6 +30,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -45,6 +46,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/fieldmeta"
 	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/storage"
@@ -273,7 +275,7 @@ func (a *kubernetesUpgradeAdvancer) Advance(
 
 	if render.Hash(current) != hash {
 		return false, a.releaseOnError(ctx, cluster, m, nodeName, stage,
-			a.begin(ctx, talos, cluster, m, op, &node, stage, current, rendered))
+			a.begin(ctx, talos, cluster, m, bundle, op, &node, stage, current, rendered))
 	}
 
 	done, err := a.verify(ctx, talos, cluster, m, nodeName, stage)
@@ -345,7 +347,8 @@ func (a *kubernetesUpgradeAdvancer) releaseOnError(
 // Talos is still restarting the static pods (ADR 0043's Upgrade call had the same bug).
 func (a *kubernetesUpgradeAdvancer) begin(
 	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
-	op *ichorv1alpha1.TalosOperation, node *corev1.Node, stage string, current, rendered []byte,
+	bundle *secrets.Bundle, op *ichorv1alpha1.TalosOperation, node *corev1.Node, stage string,
+	current, rendered []byte,
 ) error {
 	target := cluster.Spec.KubernetesVersion
 
@@ -385,7 +388,7 @@ func (a *kubernetesUpgradeAdvancer) begin(
 	}
 
 	scrapeCtx, cancelScrape := context.WithTimeout(ctx, etcdDialTimeout)
-	a.warnRemovedAPIs(scrapeCtx, talos, op, target)
+	a.warnRemovedAPIs(scrapeCtx, cluster, bundle, op, target)
 	cancelScrape()
 
 	paths, err := ChangedPaths(current, rendered)
@@ -459,7 +462,8 @@ func (a *kubernetesUpgradeAdvancer) begin(
 // warnRemovedAPIs records, on op, which APIs the target minor removes that clients still use.
 // A failed check is recorded too (Unknown), never swallowed silently and never a gate.
 func (a *kubernetesUpgradeAdvancer) warnRemovedAPIs(
-	dialCtx context.Context, talos TalosClient, op *ichorv1alpha1.TalosOperation, target string,
+	dialCtx context.Context, cluster *ichorv1alpha1.TalosCluster, bundle *secrets.Bundle,
+	op *ichorv1alpha1.TalosOperation, target string,
 ) {
 	if op == nil || a.Admin == nil {
 		return
@@ -471,7 +475,7 @@ func (a *kubernetesUpgradeAdvancer) warnRemovedAPIs(
 	if err == nil {
 		var removed []string
 
-		removed, err = a.Admin.RemovedAPIsInUse(dialCtx, talos, minor)
+		removed, err = a.removedAPIsInUse(dialCtx, cluster, bundle, minor)
 		if err == nil && len(removed) > 0 {
 			cond.Status = metav1.ConditionTrue
 			cond.Reason = reasonRemovedAPIsInUse
@@ -486,6 +490,55 @@ func (a *kubernetesUpgradeAdvancer) warnRemovedAPIs(
 	}
 
 	apimeta.SetStatusCondition(&op.Status.Conditions, cond)
+}
+
+// removedAPIsInUse asks every control plane's API server for the removed APIs it has seen and
+// returns their union, sorted. The request metric counts only what the serving apiserver handled,
+// and only a control plane's Talos API issues the admin kubeconfig (a worker refuses it), so the
+// check never runs against the node being upgraded. A control plane that cannot answer fails the
+// whole check, so the warning is never a silent "none".
+func (a *kubernetesUpgradeAdvancer) removedAPIsInUse(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, bundle *secrets.Bundle, minor string,
+) ([]string, error) {
+	planes, err := deleteguard.ApprovedMachines(ctx, a.Reader, cluster.Namespace, cluster.Name,
+		deleteguard.MachineFilter{Role: roleControlPlane})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(planes) == 0 {
+		return nil, fmt.Errorf("cluster %q has no control plane to ask for removed APIs", cluster.Name)
+	}
+
+	seen := map[string]bool{}
+
+	var out []string
+
+	for i := range planes {
+		talos, err := a.TalosClient(ctx, cluster, &planes[i], bundle)
+		if err != nil {
+			return nil, fmt.Errorf("dialing control plane %q: %w", planes[i].Name, err)
+		}
+
+		removed, err := a.Admin.RemovedAPIsInUse(ctx, talos, minor)
+
+		closeTalosClient(talos)
+
+		if err != nil {
+			return nil, fmt.Errorf("control plane %q: %w", planes[i].Name, err)
+		}
+
+		for _, r := range removed {
+			if !seen[r] {
+				seen[r] = true
+				out = append(out, r)
+			}
+		}
+	}
+
+	sort.Strings(out)
+
+	return out, nil
 }
 
 // prePull pulls the new component images (changed image fields only) onto the node before its

@@ -62,6 +62,7 @@ type fakeKubernetesAdmin struct {
 	removed     []string
 	removedErr  error
 	removedFor  []string
+	removedFrom []TalosClient
 	removedCall int
 }
 
@@ -71,9 +72,10 @@ func (f *fakeKubernetesAdmin) SyncBootstrapManifests(context.Context, TalosClien
 	return f.syncErr
 }
 
-func (f *fakeKubernetesAdmin) RemovedAPIsInUse(_ context.Context, _ TalosClient, targetMinor string) ([]string, error) {
+func (f *fakeKubernetesAdmin) RemovedAPIsInUse(_ context.Context, talos TalosClient, targetMinor string) ([]string, error) {
 	f.removedCall++
 	f.removedFor = append(f.removedFor, targetMinor)
+	f.removedFrom = append(f.removedFrom, talos)
 
 	return f.removed, f.removedErr
 }
@@ -416,6 +418,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		cluster := k8sCluster(testK8sTarget)
 		w := newK8sWorker(cluster.Name, "warn1")
 		newK8sNode(w.Spec.Hostname, true)
+		newK8sControlPlane(cluster.Name, "warn1cp")
 
 		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
 		admin := &fakeKubernetesAdmin{removed: []string{"flowcontrol.apiserver.k8s.io/v1beta3 flowschemas"}}
@@ -432,6 +435,37 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		Expect(cond).NotTo(BeNil())
 		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
 		Expect(cond.Message).To(ContainSubstring("flowschemas"))
+	})
+
+	It("asks every control plane, never the worker being upgraded, for removed APIs", func() {
+		cluster := k8sCluster(testK8sTarget)
+		w := newK8sWorker(cluster.Name, "rmcp-w")
+		newK8sNode(w.Spec.Hostname, true)
+		cp1 := newK8sControlPlane(cluster.Name, "rmcp-cp1")
+		cp2 := newK8sControlPlane(cluster.Name, "rmcp-cp2")
+
+		// A worker's Talos API refuses the admin kubeconfig ("only available on control plane
+		// nodes"), so a fake that shares the worker's client would hide the bug.
+		workerFake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
+		cp1Fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, cp1, testK8sOld)}
+		cp2Fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, cp2, testK8sOld)}
+		byName := map[string]*fakeTalosClient{w.Name: workerFake, cp1.Name: cp1Fake, cp2.Name: cp2Fake}
+		admin := &fakeKubernetesAdmin{removed: []string{"flowcontrol.apiserver.k8s.io/v1beta3 flowschemas"}}
+		adv := &kubernetesUpgradeAdvancer{
+			Client: k8sClient, Reader: k8sClient, ControllerNamespace: tmNamespace,
+			TalosClient: perMachineClientFactory(byName), Admin: admin,
+		}
+
+		op := opAtStage(ichorv1alpha1.KubernetesStageKubelets)
+
+		_, err := adv.Advance(ctx, cluster, w, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(admin.removedFrom).To(HaveLen(2))
+		Expect(admin.removedFrom).To(ConsistOf(BeIdenticalTo(cp1Fake), BeIdenticalTo(cp2Fake)))
+
+		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionRemovedAPIsInUse)
+		Expect(cond).NotTo(BeNil())
+		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
 	})
 
 	It("finds the Kubernetes node from what the node reports when spec.hostname is unset", func() {

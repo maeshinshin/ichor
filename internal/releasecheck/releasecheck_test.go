@@ -52,10 +52,10 @@ func TestNewer(t *testing.T) {
 
 func TestHost(t *testing.T) {
 	cases := map[string]string{
-		DefaultRepository:             "ghcr.io",
+		DefaultRepository:              "ghcr.io",
 		"oci://ghcr.io/x/charts/ichor": "ghcr.io",
-		"127.0.0.1:5000/ichor":        "127.0.0.1",
-		"registry.local:443/a/b":      "registry.local",
+		"127.0.0.1:5000/ichor":         "127.0.0.1",
+		"registry.local:443/a/b":       "registry.local",
 	}
 
 	for in, want := range cases {

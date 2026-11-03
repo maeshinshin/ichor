@@ -341,6 +341,7 @@ rules:
   - ciliumnetworkpolicies
   verbs:
   - create
+  - delete
   - get
   - list
   - update

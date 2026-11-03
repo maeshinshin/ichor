@@ -16,7 +16,11 @@ limitations under the License.
 
 package typedconfig
 
-import specs "github.com/opencontainers/runtime-spec/specs-go"
+import (
+	"slices"
+
+	specs "github.com/opencontainers/runtime-spec/specs-go"
+)
 
 // SeccompProfile is MachineSeccompProfile.MachineSeccompProfileValue's mirror
 // type (internal/tools/mirrorgen/main.go's fieldOverrides): byte-for-byte the
@@ -78,13 +82,8 @@ func deepCopyLinuxSeccomp(in *specs.LinuxSeccomp) *specs.LinuxSeccomp {
 		out.DefaultErrnoRet = &v
 	}
 
-	if in.Architectures != nil {
-		out.Architectures = append([]specs.Arch(nil), in.Architectures...)
-	}
-
-	if in.Flags != nil {
-		out.Flags = append([]specs.LinuxSeccompFlag(nil), in.Flags...)
-	}
+	out.Architectures = slices.Clone(in.Architectures)
+	out.Flags = slices.Clone(in.Flags)
 
 	if in.Syscalls != nil {
 		out.Syscalls = make([]specs.LinuxSyscall, len(in.Syscalls))
@@ -99,9 +98,7 @@ func deepCopyLinuxSeccomp(in *specs.LinuxSeccomp) *specs.LinuxSeccomp {
 func deepCopyLinuxSyscall(in specs.LinuxSyscall) specs.LinuxSyscall {
 	out := in
 
-	if in.Names != nil {
-		out.Names = append([]string(nil), in.Names...)
-	}
+	out.Names = slices.Clone(in.Names)
 
 	if in.ErrnoRet != nil {
 		v := *in.ErrnoRet
@@ -110,9 +107,7 @@ func deepCopyLinuxSyscall(in specs.LinuxSyscall) specs.LinuxSyscall {
 
 	// LinuxSeccompArg (specs-go) is all value fields (uint/uint64/named string), so
 	// copying the slice is already a full deep copy with no further recursion needed.
-	if in.Args != nil {
-		out.Args = append([]specs.LinuxSeccompArg(nil), in.Args...)
-	}
+	out.Args = slices.Clone(in.Args)
 
 	return out
 }

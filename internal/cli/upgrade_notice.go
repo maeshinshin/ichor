@@ -24,6 +24,8 @@ import (
 
 	rbacv1 "k8s.io/api/rbac/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/maeshinshin/ichor/internal/installer"
 )
 
 // earlierOverrideVerb is the RBAC verb the safety-check override had renamed it.
@@ -74,6 +76,22 @@ const ownLabelValue = string(provenanceIchor)
 
 // ownRole reports whether labels mark a role as one Ichor ships.
 func ownRole(labels map[string]string) bool { return labels["app.kubernetes.io/name"] == ownLabelValue }
+
+// noticePendingRenames prints the objects this upgrade removes because it renames them.
+// The run also prunes what the previous run installed and this manifest drops; the CLI cannot
+// know that set without the new manifest, so the installer logs it instead.
+func noticePendingRenames(ctx context.Context, c client.Client, w io.Writer) {
+	names, err := installer.PendingRenames(ctx, c)
+	if err != nil || len(names) == 0 {
+		return
+	}
+
+	_, _ = fmt.Fprintln(w, "NOTICE: this upgrade removes these objects, which Ichor renamed:")
+
+	for _, n := range names {
+		_, _ = fmt.Fprintf(w, "  %s\n", n)
+	}
+}
 
 // noticeEarlierOverrideVerb prints a NOTICE naming the roles that still grant the earlier verb.
 // It is advice: a cluster that cannot be read (no permission, no kubeconfig) prints nothing.

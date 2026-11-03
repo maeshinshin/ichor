@@ -18,8 +18,6 @@ package storage
 
 import (
 	"fmt"
-	"slices"
-	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -36,7 +34,7 @@ import (
 func Select(
 	cluster *ichorv1alpha1.TalosCluster, storages []ichorv1alpha1.TalosStorage, nodeLabels map[string]string,
 ) (*ichorv1alpha1.TalosStorage, error) {
-	var matches []*ichorv1alpha1.TalosStorage
+	var first *ichorv1alpha1.TalosStorage
 
 	for i := range storages {
 		s := &storages[i]
@@ -49,16 +47,10 @@ func Select(
 			return nil, fmt.Errorf("parsing TalosStorage %q's node selector: %w", s.Name, err)
 		}
 
-		if sel.Matches(labels.Set(nodeLabels)) {
-			matches = append(matches, s)
+		if sel.Matches(labels.Set(nodeLabels)) && (first == nil || s.Name < first.Name) {
+			first = s
 		}
 	}
 
-	if len(matches) == 0 {
-		return nil, nil
-	}
-
-	slices.SortFunc(matches, func(a, b *ichorv1alpha1.TalosStorage) int { return strings.Compare(a.Name, b.Name) })
-
-	return matches[0], nil
+	return first, nil
 }

@@ -17,7 +17,6 @@ limitations under the License.
 package storage
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -53,15 +52,12 @@ const (
 	longhornCreateDefaultDiskLabel            = "node.longhorn.io/create-default-disk"
 	longhornDefaultDisksConfigAnnotation      = "node.longhorn.io/default-disks-config"
 	longhornCreateDefaultDiskLabelValueConfig = "config"
-)
 
-// longhornDiskConfig mirrors the one disk entry longhorn.io/docs/1.13.0's
-// default-disks-config annotation example shows (path, allowScheduling);
-// name and tags are omitted since this preset names and tags nothing.
-type longhornDiskConfig struct {
-	Path            string `json:"path"`
-	AllowScheduling bool   `json:"allowScheduling"`
-}
+	// longhornDefaultDisksConfig is the one disk entry longhorn.io/docs/1.13.0's
+	// default-disks-config annotation example shows (path, allowScheduling);
+	// name and tags are omitted since this preset names and tags nothing.
+	longhornDefaultDisksConfig = `[{"path":"` + longhornMountPath + `","allowScheduling":true}]`
+)
 
 // longhornV1 is the longhorn-v1 Preset.
 type longhornV1 struct{}
@@ -73,13 +69,7 @@ func (longhornV1) RequiredExtensions() []string {
 
 // CheckExtensions implements Preset.
 func (p longhornV1) CheckExtensions(installed []string) error {
-	var missing []string
-
-	for _, want := range p.RequiredExtensions() {
-		if !slices.Contains(installed, want) {
-			missing = append(missing, want)
-		}
-	}
+	missing := slices.DeleteFunc(p.RequiredExtensions(), func(e string) bool { return slices.Contains(installed, e) })
 
 	if len(missing) > 0 {
 		return fmt.Errorf("storage: longhorn-v1 needs system extensions not in the node's installer image: %s",
@@ -131,15 +121,7 @@ func (longhornV1) NodeLabels() map[string]string {
 
 // NodeAnnotations implements Preset.
 func (longhornV1) NodeAnnotations() map[string]string {
-	// Marshaling a fixed literal value never fails; the error is checked
-	// anyway rather than ignored, per the project's own rule against
-	// silently dropped errors.
-	config, err := json.Marshal([]longhornDiskConfig{{Path: longhornMountPath, AllowScheduling: true}})
-	if err != nil {
-		panic(fmt.Errorf("storage: marshaling longhorn-v1's default-disks-config: %w", err))
-	}
-
-	return map[string]string{longhornDefaultDisksConfigAnnotation: string(config)}
+	return map[string]string{longhornDefaultDisksConfigAnnotation: longhornDefaultDisksConfig}
 }
 
 // CheckConsistency implements Preset.

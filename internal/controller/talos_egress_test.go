@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -276,6 +277,45 @@ var _ = Describe("TalosEgress", Ordered, func() {
 		Expect(seen).To(HaveKey("192.0.2.77"))
 		Expect(seen).To(HaveKey("192.0.2.129"))
 		Expect(missed).To(BeEmpty(), "every probe must find its address already in the policy")
+	})
+
+	It("retries a write that conflicts with the other reconciler's", func() {
+		cluster := newTestCluster("does-not-exist", "v1.14")
+		cluster.Spec.Discovery = &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{"192.0.2.201"}}
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+		c := &conflictOnce{Client: k8sClient}
+		racing := &TalosEgress{Client: c, Namespace: egressNS}
+
+		changed, err := racing.Sync(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(changed).To(BeTrue())
+		Expect(c.n).To(Equal(2))
+		Expect(specText()).To(ContainSubstring("192.0.2.201/32"))
+	})
+
+	It("requeues soon while a new address finds nothing, and at the normal interval after the window", func() {
+		cluster := newTestCluster("does-not-exist", "v1.14")
+		cluster.Spec.Discovery = &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{"192.0.2.202"}}
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+		now := time.Now()
+		r := &TalosClusterReconciler{
+			Client: k8sClient, Egress: egress, now: func() time.Time { return now },
+			Discovery: &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: func(context.Context, string) (MaintenanceClient, error) {
+				return nil, errFactoryMustNotBeCalled
+			}},
+		}
+
+		res, err := reconcileCluster(r, cluster)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(discoveryFreshInterval))
+
+		now = now.Add(discoveryFreshWindow + time.Second)
+
+		res, err = reconcileCluster(r, cluster)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(discoveryRequeueInterval))
 	})
 
 	It("does not probe when the policy cannot be written", func() {

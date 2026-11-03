@@ -18,6 +18,9 @@ package controller
 
 import (
 	"context"
+	"slices"
+	"strings"
+	"sync"
 	"time"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -34,6 +37,13 @@ import (
 // and matches clusterlock.DefaultDuration as a familiar order of magnitude
 // for "how often is reasonable" elsewhere in this codebase.
 const discoveryRequeueInterval = 5 * time.Minute
+
+// A newly added address or CIDR whose first probe finds nothing is probed again every
+// discoveryFreshInterval until discoveryFreshWindow has passed since it was first seen.
+const (
+	discoveryFreshInterval = 15 * time.Second
+	discoveryFreshWindow   = 3 * time.Minute
+)
 
 // TalosClusterReconciler drives discovery for one TalosCluster
 // (docs/design/architecture.md "Nodes"): it holds no cluster-level
@@ -60,6 +70,10 @@ type TalosClusterReconciler struct {
 	// cluster's declared addresses before any probe is dialled: a newly added
 	// discovery address or CIDR is reachable on the first pass.
 	Egress *TalosEgress
+
+	mu        sync.Mutex
+	firstSeen map[string]time.Time
+	now       func() time.Time // tests; nil means time.Now
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
@@ -84,19 +98,69 @@ func (r *TalosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	if r.Egress != nil {
-		changed, err := r.Egress.Sync(ctx)
-		if err != nil {
+		if _, err := r.Egress.Sync(ctx); err != nil {
 			return ctrl.Result{}, err
 		}
 
-		r.Egress.SettleAfter(ctx, changed)
+		r.Egress.SettleAfter(ctx)
 	}
 
-	if _, err := r.Discovery.DiscoverAll(ctx, &cluster); err != nil {
+	fresh := r.freshAddress(&cluster)
+
+	found, err := r.Discovery.DiscoverAll(ctx, &cluster)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
 
+	if len(found) == 0 && fresh {
+		return ctrl.Result{RequeueAfter: discoveryFreshInterval}, nil
+	}
+
 	return ctrl.Result{RequeueAfter: discoveryRequeueInterval}, nil
+}
+
+// freshAddress records when each discovery address and CIDR of cluster was first seen by this
+// process and reports whether any is younger than discoveryFreshWindow. A machine added by hand
+// is often still booting, or its egress rule not yet enforced, at the first probe; looking again
+// every discoveryFreshInterval for a bounded time beats waiting a full discoveryRequeueInterval.
+// After a controller restart every entry counts as new once, which costs at most the same window.
+func (r *TalosClusterReconciler) freshAddress(cluster *ichorv1alpha1.TalosCluster) bool {
+	now := time.Now()
+	if r.now != nil {
+		now = r.now()
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.firstSeen == nil {
+		r.firstSeen = map[string]time.Time{}
+	}
+
+	prefix := cluster.Namespace + "/" + cluster.Name + "/"
+	current := map[string]bool{}
+	fresh := false
+
+	for _, e := range append(slices.Clone(cluster.Spec.Discovery.Addresses), cluster.Spec.Discovery.CIDRs...) {
+		k := prefix + e
+		current[k] = true
+
+		t, ok := r.firstSeen[k]
+		if !ok {
+			t = now
+			r.firstSeen[k] = t
+		}
+
+		fresh = fresh || now.Sub(t) < discoveryFreshWindow
+	}
+
+	for k := range r.firstSeen {
+		if strings.HasPrefix(k, prefix) && !current[k] {
+			delete(r.firstSeen, k)
+		}
+	}
+
+	return fresh
 }
 
 // SetupWithManager sets up the controller with the Manager.

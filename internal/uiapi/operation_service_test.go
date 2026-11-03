@@ -46,7 +46,7 @@ const (
 	opNS       = "default"
 	opCluster  = "c"
 	opOldTalos = "v1.13.2"
-	opNewTalos = "v1.14.3" // the release set's Talos
+	opNewTalos = "v1.14.5" // the release set's Talos
 
 	testControllerLabelKey = "control-plane"
 	testControllerPodName  = "ichor-controller"

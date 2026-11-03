@@ -41,9 +41,9 @@ upstream repository (the version tag) and from the Go module proxy (https://prox
 - github.com/siderolabs/protoenc@v0.2.4
     Repository: https://github.com/siderolabs/protoenc
     Module proxy: https://proxy.golang.org/github.com/siderolabs/protoenc/@v/v0.2.4.zip
-- github.com/siderolabs/talos/pkg/machinery@v1.14.3
+- github.com/siderolabs/talos/pkg/machinery@v1.14.5
     Repository: https://github.com/siderolabs/talos (directory pkg/machinery)
-    Module proxy: https://proxy.golang.org/github.com/siderolabs/talos/pkg/machinery/@v/v1.14.3.zip
+    Module proxy: https://proxy.golang.org/github.com/siderolabs/talos/pkg/machinery/@v/v1.14.5.zip
 
 MPL-2.0
 
@@ -3339,7 +3339,7 @@ MPL-2.0: see section 1.
 - github.com/siderolabs/go-pointer@v1.0.1
 - github.com/siderolabs/net@v0.4.0
 - github.com/siderolabs/protoenc@v0.2.4
-- github.com/siderolabs/talos/pkg/machinery@v1.14.3
+- github.com/siderolabs/talos/pkg/machinery@v1.14.5
 
 ================================================================================
 4. Licences inside the packages of a module

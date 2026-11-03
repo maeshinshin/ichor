@@ -62,7 +62,7 @@ const relayLocalPort = "16443"
 const talosFactorySchematic = "376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba"
 
 // talosVersion is the Talos release the harness's VM boots; it must match talosctl.Image.
-const talosVersion = "v1.14.3"
+const talosVersion = "v1.14.5"
 
 const vmManifestTmpl = `apiVersion: kubevirt.io/v1
 kind: VirtualMachine

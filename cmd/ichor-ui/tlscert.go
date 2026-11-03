@@ -20,11 +20,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/maeshinshin/ichor/internal/certreload"
@@ -46,11 +48,39 @@ func servingCertificate(ctx context.Context, opCert, opKey, dir string) getCert 
 
 	return func(h *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		if fileExists(opCert) && fileExists(opKey) {
+			if cert, ok := serviceNameCertificate(h, managed); ok {
+				return cert, nil
+			}
+
 			return operator(h)
 		}
 
 		return managed(h)
 	}
+}
+
+// serviceNameCertificate is the Ichor-made certificate for a client that asks, by SNI, for a Service
+// DNS name it covers (2026-11-03). The CLI and in-cluster clients verify
+// ichor-ui by that name against ichor-ui-ca; an operator's certificate for an external name or an
+// address never carries it, so the operator's pair keeps every other handshake. Without the check a
+// user-supplied certificate would make every in-cluster client fail verification.
+func serviceNameCertificate(h *tls.ClientHelloInfo, managed getCert) (*tls.Certificate, bool) {
+	name := strings.ToLower(strings.TrimSuffix(h.ServerName, "."))
+	if !strings.HasSuffix(name, ".svc") && !strings.HasSuffix(name, ".svc.cluster.local") {
+		return nil, false
+	}
+
+	cert, err := managed(h)
+	if err != nil || len(cert.Certificate) == 0 {
+		return nil, false
+	}
+
+	leaf, err := x509.ParseCertificate(cert.Certificate[0])
+	if err != nil || leaf.VerifyHostname(name) != nil {
+		return nil, false
+	}
+
+	return cert, true
 }
 
 func fileExists(p string) bool {

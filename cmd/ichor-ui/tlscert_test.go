@@ -36,8 +36,12 @@ import (
 	"time"
 )
 
-func writePair(t *testing.T, dir, cn string) {
+func writePair(t *testing.T, dir, cn string, dnsNames ...string) {
 	t.Helper()
+
+	if len(dnsNames) == 0 {
+		dnsNames = []string{"localhost"}
+	}
 
 	k, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -47,7 +51,7 @@ func writePair(t *testing.T, dir, cn string) {
 	tpl := &x509.Certificate{
 		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: cn},
 		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
-		DNSNames: []string{"localhost"},
+		DNSNames: dnsNames,
 	}
 
 	der, err := x509.CreateCertificate(rand.Reader, tpl, tpl, &k.PublicKey, k)
@@ -87,8 +91,9 @@ func serve(t *testing.T, get getCert) string {
 	return l.Addr().String()
 }
 
-func servedCN(addr string) (string, error) {
-	c, err := tls.Dial("tcp", addr, &tls.Config{InsecureSkipVerify: true}) //nolint:gosec // test: only the served subject matters
+// servedCN is the subject of the certificate served to a client that sends sni (none when empty).
+func servedCN(addr, sni string) (string, error) {
+	c, err := tls.Dial("tcp", addr, &tls.Config{ServerName: sni, InsecureSkipVerify: true}) //nolint:gosec // test: only the served subject matters
 	if err != nil {
 		return "", err
 	}
@@ -104,7 +109,7 @@ func TestOperatorPairBeatsManaged(t *testing.T) {
 	writePair(t, operator, "operator")
 
 	addr := serve(t, servingCertificate(t.Context(), filepath.Join(operator, "tls.crt"), filepath.Join(operator, "tls.key"), managed))
-	if got, err := servedCN(addr); err != nil || got != "operator" {
+	if got, err := servedCN(addr, ""); err != nil || got != "operator" {
 		t.Fatalf("served %q, %v; want operator", got, err)
 	}
 }
@@ -114,8 +119,44 @@ func TestManagedPairWhenNoOperatorFiles(t *testing.T) {
 	writePair(t, managed, "managed")
 
 	addr := serve(t, servingCertificate(t.Context(), filepath.Join(empty, "tls.crt"), filepath.Join(empty, "tls.key"), managed))
-	if got, err := servedCN(addr); err != nil || got != "managed" {
+	if got, err := servedCN(addr, ""); err != nil || got != "managed" {
 		t.Fatalf("served %q, %v; want managed", got, err)
+	}
+}
+
+// With an operator pair, a client asking for a Service name the Ichor-made certificate covers gets
+// that certificate; every other handshake (an external name, an address, no SNI) gets the operator's.
+func TestServiceNameSNIGetsManagedWhenOperatorPairIsSet(t *testing.T) {
+	const svc = "ichor-ichor-ui-service.ichor-system.svc"
+
+	managed, operator := t.TempDir(), t.TempDir()
+	writePair(t, managed, "managed", "ichor-ichor-ui-service", svc, "ichor-ichor-ui-service.ichor-system.svc.cluster.local", "localhost")
+	writePair(t, operator, "operator", "ui.example.com")
+
+	addr := serve(t, servingCertificate(t.Context(), filepath.Join(operator, "tls.crt"), filepath.Join(operator, "tls.key"), managed))
+
+	for _, tc := range []struct{ sni, want string }{
+		{svc, "managed"},
+		{"ichor-ichor-ui-service.ichor-system.svc.cluster.local", "managed"},
+		{"ichor-ichor-ui-service.ichor-system.svc.", "managed"},
+		{"other.ichor-system.svc", "operator"},
+		{"ui.example.com", "operator"},
+		{"", "operator"},
+	} {
+		if got, err := servedCN(addr, tc.sni); err != nil || got != tc.want {
+			t.Fatalf("sni %q: served %q, %v; want %s", tc.sni, got, err, tc.want)
+		}
+	}
+}
+
+// Before the controller has made the Ichor-made pair, a Service name gets the operator's pair.
+func TestServiceNameFallsBackToOperatorWithoutManaged(t *testing.T) {
+	managed, operator := t.TempDir(), t.TempDir()
+	writePair(t, operator, "operator", "ui.example.com")
+
+	addr := serve(t, servingCertificate(t.Context(), filepath.Join(operator, "tls.crt"), filepath.Join(operator, "tls.key"), managed))
+	if got, err := servedCN(addr, "ichor-ichor-ui-service.ichor-system.svc"); err != nil || got != "operator" {
+		t.Fatalf("served %q, %v; want operator", got, err)
 	}
 }
 
@@ -125,7 +166,7 @@ func TestNoCertificateFailsHandshakeAndNeverPlaintext(t *testing.T) {
 	dir := t.TempDir()
 	addr := serve(t, servingCertificate(t.Context(), "", "", dir))
 
-	if _, err := servedCN(addr); err == nil {
+	if _, err := servedCN(addr, ""); err == nil {
 		t.Fatal("handshake succeeded without a certificate")
 	}
 
@@ -136,7 +177,7 @@ func TestNoCertificateFailsHandshakeAndNeverPlaintext(t *testing.T) {
 
 	writePair(t, dir, "late")
 
-	if got, err := servedCN(addr); err != nil || got != "late" {
+	if got, err := servedCN(addr, ""); err != nil || got != "late" {
 		t.Fatalf("served %q, %v after the certificate appeared; want late", got, err)
 	}
 }

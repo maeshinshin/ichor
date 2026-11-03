@@ -98,3 +98,86 @@ func TestIchorInstallationRefusesANonSemverVersion(t *testing.T) {
 		t.Fatalf("update that leaves the version alone: %v", err)
 	}
 }
+
+// A TalosCluster may be created on any compatible semantic version, the release set's or not. A changed version may
+// move up but not down.
+func TestTalosClusterMovesUpButNotDown(t *testing.T) {
+	t.Parallel()
+
+	v := &TalosClusterCustomValidator{}
+	ctx := context.Background()
+
+	newer := newTestCluster()
+	newer.Spec.TalosVersion, newer.Spec.KubernetesVersion, newer.Spec.VersionContract = "v1.14.4", "v1.37.2", "v1.14"
+
+	if _, err := v.ValidateCreate(ctx, newer); err != nil {
+		t.Fatalf("create on a newer patch: %v", err)
+	}
+
+	older := newTestCluster()
+	older.Spec.TalosVersion, older.Spec.KubernetesVersion, older.Spec.VersionContract = "v1.14.3", "v1.36.2", "v1.14"
+
+	if _, err := v.ValidateCreate(ctx, older); err != nil {
+		t.Fatalf("create on an older patch: %v", err)
+	}
+
+	badContract := newTestCluster()
+	badContract.Spec.VersionContract = "1.14"
+
+	if _, err := v.ValidateCreate(ctx, badContract); err == nil {
+		t.Fatal("create with a contract without a v accepted")
+	}
+
+	if _, err := v.ValidateUpdate(ctx, older, newer); err != nil {
+		t.Fatalf("update that moves up a patch: %v", err)
+	}
+
+	if _, err := v.ValidateUpdate(ctx, newer, older); err == nil || !strings.Contains(err.Error(), "cannot downgrade") {
+		t.Fatalf("update that moves Talos down: err = %v", err)
+	}
+
+	contractDown := newer.DeepCopy()
+	contractDown.Spec.VersionContract = "v1.13"
+
+	if _, err := v.ValidateUpdate(ctx, newer, contractDown); err == nil || !strings.Contains(err.Error(), "versionContract") {
+		t.Fatalf("update that moves the contract down: err = %v", err)
+	}
+}
+
+// An incompatible Talos and Kubernetes pair is refused on create and on an update that moves either
+// side, and the override verb lets it through.
+func TestTalosClusterRefusesAnIncompatiblePairUnlessOverridden(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	noOverride := &TalosClusterCustomValidator{}
+	withOverride := &TalosClusterCustomValidator{Can: func(_ context.Context, verb, _, _, _, _ string) (bool, error) {
+		return verb == OverrideVerb, nil
+	}}
+
+	bad := newTestCluster()
+	bad.Spec.TalosVersion, bad.Spec.KubernetesVersion = "v1.14.3", "v1.32.0"
+
+	if _, err := noOverride.ValidateCreate(ctx, bad); err == nil || !strings.Contains(err.Error(), "v1.32.0") {
+		t.Fatalf("create with an incompatible pair: err = %v", err)
+	}
+
+	if _, err := withOverride.ValidateCreate(ctx, bad); err != nil {
+		t.Fatalf("create with an incompatible pair under the override verb: %v", err)
+	}
+
+	old := newTestCluster()
+	old.Spec.TalosVersion, old.Spec.KubernetesVersion = "v1.14.3", "v1.36.2"
+	old.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{Detected: "cilium", DetectedVersion: "v1.18.0"}
+
+	edited := old.DeepCopy()
+	edited.Spec.KubernetesVersion = "v1.37.1"
+
+	if _, err := noOverride.ValidateUpdate(ctx, old, edited); err == nil || !strings.Contains(err.Error(), "v1.37.1") {
+		t.Fatalf("update to a Kubernetes the installed Cilium does not run: err = %v", err)
+	}
+
+	if _, err := withOverride.ValidateUpdate(ctx, old, edited); err != nil {
+		t.Fatalf("the same update under the override verb: %v", err)
+	}
+}

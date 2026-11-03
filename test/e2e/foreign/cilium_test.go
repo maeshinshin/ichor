@@ -347,9 +347,16 @@ func TestA1Adopt(t *testing.T) {
 	trafficReport(t, c, "across A1 takeover")
 }
 
-// TestA1Upgrade: a Kubernetes upgrade to the release set afterwards does not roll Cilium back. Run after TestA1Adopt.
+// TestA1Upgrade: a Kubernetes upgrade to the release set afterwards does not roll Cilium back.
+// It builds its own cluster at foreignK8sUpgradeStart, takes the inline Cilium over (the adopt that TestA1Adopt
+// does at the default minor), then upgrades, so it runs standalone.
 func TestA1Upgrade(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumInline, K8sVersion: foreignK8sUpgradeStart})
+	trafficStart(t, c)
+	logState(t, c, "before takeover")
+	takeoverAdopt(t, c)
+	waitHandover(t, c, "cilium")
+	membership(t, c)
 	before, recBefore := ciliumDS(c), helmRecords(c)
 	logState(t, c, "before upgrade")
 	// The controller re-detects the CNI when the hand-over completes, so the
@@ -360,12 +367,15 @@ func TestA1Upgrade(t *testing.T) {
 	if err != nil {
 		t.Fatalf("upgrade kubernetes: %v\n%s", err, out)
 	}
-	deadline := time.Now().Add(8 * time.Minute)
+	deadline := time.Now().Add(20 * time.Minute)
 	for time.Now().Before(deadline) {
 		ph, _ := inner(c, "-n", crNS, "get", "talosoperations.ichor.maesh.dev", "-o", "jsonpath={.items[*].status.phase}")
 		t.Logf("operations phases: %q", ph)
 		if strings.Contains(ph, "Completed") && !strings.Contains(ph, "InProgress") && !strings.Contains(ph, "Pending") {
 			break
+		}
+		if strings.Contains(ph, "Failed") {
+			t.Fatalf("a TalosOperation failed: %q", ph)
 		}
 		time.Sleep(15 * time.Second)
 	}

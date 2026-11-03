@@ -35,12 +35,14 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-const verifyServiceName = "ichor-ichor-ui-service.ichor-system.svc"
+const (
+	verifyServiceName = "ichor-ichor-ui-service.ichor-system.svc"
+	verifyLeafCN      = "ichor-ui" // the subject the controller gives its leaf
+)
 
 // ichorLeafServer is an HTTPS server whose certificate is an Ichor-style leaf for verifyServiceName,
 // signed by a private CA. It returns the server and the CA PEM the ichor-ui-ca ConfigMap would hold.
@@ -74,7 +76,7 @@ func ichorLeafServer(t *testing.T) (*httptest.Server, []byte) {
 	}
 
 	leafTpl := &x509.Certificate{
-		SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: "ichor-ui"},
+		SerialNumber: big.NewInt(2), Subject: pkix.Name{CommonName: verifyLeafCN},
 		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
 		DNSNames: []string{verifyServiceName}, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 	}
@@ -110,15 +112,15 @@ func TestTunnelClientVerifiesTheIchorLeafByServiceName(t *testing.T) {
 
 // uiServiceForVerify is the ichor-ui Service of an install that serves HTTPS on 8443 and has ichor-ui-ca.
 func uiServiceForVerify() []client.Object {
-	sel := map[string]string{"app": testUIApp}
+	sel := uiTestSelector
 
 	return []client.Object{
 		&corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{Name: testUIServiceName, Namespace: ichorControllerNamespace, Labels: map[string]string{uiComponentLabel: uiComponentValue}},
-			Spec:       corev1.ServiceSpec{Selector: sel, Ports: []corev1.ServicePort{{Port: uiHTTPSPort}}},
+			Name: testUIServiceName, Namespace: ichorControllerNamespace, Labels: map[string]string{uiComponentLabel: uiComponentValue},
+			Spec: corev1.ServiceSpec{Selector: sel, Ports: []corev1.ServicePort{{Port: uiHTTPSPort}}},
 		},
 		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{Name: "ichor-ui-0", Namespace: ichorControllerNamespace, Labels: sel},
+			Name: "ichor-ui-0", Namespace: ichorControllerNamespace, Labels: sel,
 			Status: corev1.PodStatus{
 				Phase: corev1.PodRunning, Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}},
 			},
@@ -146,8 +148,8 @@ func TestConnectAPIUsesVerifiedIchorUIWithoutWarning(t *testing.T) {
 			objs := uiServiceForVerify()
 			if tc.configMap {
 				objs = append(objs, &corev1.ConfigMap{
-					ObjectMeta: metav1.ObjectMeta{Name: uiCAConfigMap, Namespace: ichorControllerNamespace},
-					Data:       map[string]string{uiCAKey: string(caPEM)},
+					Name: uiCAConfigMap, Namespace: ichorControllerNamespace,
+					Data: map[string]string{uiCAKey: string(caPEM)},
 				})
 			}
 

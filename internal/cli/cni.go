@@ -190,15 +190,27 @@ var cniValuesEditCmd = &cobra.Command{
 	},
 }
 
+var cniUpgradeList bool
+
 var cniUpgradeCmd = &cobra.Command{
-	Use:   "upgrade",
-	Short: "Upgrade Cilium to the chart this Ichor ships",
+	Use:   "upgrade [VERSION]",
+	Short: "Upgrade Cilium to the chart this Ichor ships, or to a verified patch of it",
 	Long: `upgrade checks that a newer Cilium chart is available and that your values still
-validate against it, then starts the cni upgrade operation.`,
-	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, _ []string) error {
+validate against it, then starts the cni upgrade operation.
+
+With VERSION (a patch such as v1.20.5, newer than the chart) the release keeps the embedded chart and
+runs that patch's agent, operator and hubble-relay images, pinned by digest. The images must verify
+against the Cilium release signature first; a patch that does not is not offered and is refused.
+--list prints the patches on offer and exits.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		version := ""
+		if len(args) == 1 {
+			version = args[0]
+		}
+
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
-			return runCniUpgrade(ctx, c, cmd.OutOrStdout(), cniCluster)
+			return runCniUpgrade(ctx, c, cmd.OutOrStdout(), cniCluster, version, cniUpgradeList)
 		})
 	},
 }
@@ -396,13 +408,26 @@ func runCniValuesEdit(
 	return runCniValuesSet(ctx, c, in, out, errw, cluster, text)
 }
 
-func runCniUpgrade(ctx context.Context, c *apiClients, out io.Writer, cluster string) error {
+// runCniUpgrade starts the Cilium upgrade, or with list prints the patches on offer (ADR 0115, amendment
+// 2026-11-03). version names a patch; empty upgrades to the embedded chart.
+func runCniUpgrade(ctx context.Context, c *apiClients, out io.Writer, cluster, version string, list bool) error {
+	if list {
+		m, err := upgradeTargets(ctx, c, cluster, pb.OperationKind_OPERATION_KIND_CNI)
+		if err != nil {
+			return err
+		}
+
+		printUpgradeTargets(out, pb.OperationKind_OPERATION_KIND_CNI, m)
+
+		return nil
+	}
+
 	ref, err := resolveCluster(ctx, c, cluster)
 	if err != nil {
 		return err
 	}
 
-	resp, err := c.Cni.StartCniUpgrade(ctx, connect.NewRequest(&pb.StartCniUpgradeRequest{Cluster: ref}))
+	resp, err := c.Cni.StartCniUpgrade(ctx, connect.NewRequest(&pb.StartCniUpgradeRequest{Cluster: ref, Version: version}))
 	if err != nil {
 		return err
 	}
@@ -429,6 +454,8 @@ func init() {
 		c.Flags().StringVarP(&cniValuesFile, "filename", "f", "", "YAML file holding your layer of the values; - reads stdin (required)")
 		_ = c.MarkFlagRequired("filename")
 	}
+
+	cniUpgradeCmd.Flags().BoolVar(&cniUpgradeList, "list", false, "print the Cilium patches on offer and exit")
 
 	markWrites(cniValuesSetCmd, cniValuesEditCmd, cniUpgradeCmd)
 }

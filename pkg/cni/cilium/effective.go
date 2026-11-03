@@ -102,20 +102,26 @@ func (p Preset) effective(kubeProxy cni.KubeProxyMode) (map[string]any, error) {
 	return values.Effective(defaults, p.user, owned), nil
 }
 
-// newPreset is the Preset for a kube-proxy mode and tunnel, both validated.
-func newPreset(kubeProxy cni.KubeProxyMode, tunnel string) (Preset, error) {
+// newPreset is the Preset for a kube-proxy mode, tunnel and control-plane count, the mode and tunnel
+// validated.
+func newPreset(kubeProxy cni.KubeProxyMode, tunnel string, controlPlanes int) (Preset, error) {
 	if err := kubeProxy.Validate(); err != nil {
 		return Preset{}, err
 	}
 
-	return New().WithTunnel(tunnel)
+	p, err := New().WithTunnel(tunnel)
+	if err != nil {
+		return Preset{}, err
+	}
+
+	return p.WithControlPlanes(controlPlanes), nil
 }
 
 // Layers returns Ichor's own values split into the overridable defaults and
 // the owned keys, for showing the layers separately.
-// tunnel is "", "vxlan" or "geneve".
-func Layers(kubeProxy cni.KubeProxyMode, tunnel string) (defaults, owned map[string]any, err error) {
-	p, err := newPreset(kubeProxy, tunnel)
+// tunnel is "", "vxlan" or "geneve"; controlPlanes is the cluster's control-plane count (0 unknown).
+func Layers(kubeProxy cni.KubeProxyMode, tunnel string, controlPlanes int) (defaults, owned map[string]any, err error) {
+	p, err := newPreset(kubeProxy, tunnel, controlPlanes)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -125,10 +131,12 @@ func Layers(kubeProxy cni.KubeProxyMode, tunnel string) (defaults, owned map[str
 
 // EffectiveValues returns the Helm values Cilium is rendered with: Ichor's
 // defaults, then user, then the Ichor-owned keys.
-// tunnel is "", "vxlan" or "geneve". A user value for an owned key is an
-// error naming the key.
-func EffectiveValues(user map[string]any, kubeProxy cni.KubeProxyMode, tunnel string) (map[string]any, error) {
-	p, err := newPreset(kubeProxy, tunnel)
+// tunnel is "", "vxlan" or "geneve"; controlPlanes is the cluster's control-plane count (0 unknown, which
+// keeps the chart's operator replica default). A user value for an owned key is an error naming the key.
+func EffectiveValues(
+	user map[string]any, kubeProxy cni.KubeProxyMode, tunnel string, controlPlanes int,
+) (map[string]any, error) {
+	p, err := newPreset(kubeProxy, tunnel, controlPlanes)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +163,7 @@ func EffectiveValuesForMode(cluster *ichorv1alpha1.TalosCluster, mode cni.KubePr
 		mode = cni.KubeProxyEnabled
 	}
 
-	eff, err := EffectiveValues(user, mode, c.Tunnel)
+	eff, err := EffectiveValues(user, mode, c.Tunnel, int(cluster.Spec.ControlPlane.Count))
 	if err != nil {
 		return nil, err
 	}

@@ -24,6 +24,7 @@ import (
 
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 
+	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
@@ -43,6 +44,11 @@ func TestPinnedIsConsistentWithMachinery(t *testing.T) {
 	if semver.Compare(Pinned.Kubernetes, "v"+constants.DefaultKubernetesVersion) > 0 {
 		t.Errorf("Pinned.Kubernetes = %s is newer than machinery's default %s",
 			Pinned.Kubernetes, constants.DefaultKubernetesVersion)
+	}
+
+	if Pinned.Kubernetes != cilium.RenderKubernetesVersion {
+		t.Errorf("Pinned.Kubernetes = %s, the Cilium bootstrap render targets %s; they must agree",
+			Pinned.Kubernetes, cilium.RenderKubernetesVersion)
 	}
 
 	if err := upgrade.KubernetesPairing(Pinned.Kubernetes, Pinned.Talos); err != nil {

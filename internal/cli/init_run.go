@@ -124,6 +124,8 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return fmt.Errorf("init: %w", err)
 	}
 
+	preset = preset.WithControlPlanes(int(cluster.Spec.ControlPlane.Count))
+
 	cniBoot, err := buildCNIBootstrap(preset, cluster.Name, cluster.Namespace)
 	if err != nil {
 		return err

@@ -34,6 +34,20 @@ import (
 //go:embed chart/cilium-1.20.4.tgz
 var chartArchive []byte
 
+// renderCapabilities is Helm's default capabilities with the Kubernetes version the bootstrap render
+// targets (RenderKubernetesVersion, which the chart reads for version-gated templates).
+func renderCapabilities() (*chartutil.Capabilities, error) {
+	kv, err := chartutil.ParseKubeVersion(RenderKubernetesVersion)
+	if err != nil {
+		return nil, fmt.Errorf("cilium: rendering Kubernetes version: %w", err)
+	}
+
+	caps := chartutil.DefaultCapabilities.Copy()
+	caps.KubeVersion = *kv
+
+	return caps, nil
+}
+
 // renderChart expands the embedded chart with values into one multi-document
 // YAML stream, like `helm template --namespace kube-system` without hooks
 // (Talos applies the result directly, so Helm hooks have no meaning). The
@@ -56,9 +70,14 @@ func renderChart(values any) ([]byte, error) {
 		return nil, fmt.Errorf("cilium: reading Helm values: %w", err)
 	}
 
+	caps, err := renderCapabilities()
+	if err != nil {
+		return nil, err
+	}
+
 	renderVals, err := chartutil.ToRenderValues(ch, vals, chartutil.ReleaseOptions{
 		Name: ChartName, Namespace: namespace, IsInstall: true, Revision: 1,
-	}, chartutil.DefaultCapabilities)
+	}, caps)
 	if err != nil {
 		return nil, fmt.Errorf("cilium: preparing chart values: %w", err)
 	}

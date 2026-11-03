@@ -167,7 +167,7 @@ func TestPreflight_CaseCTalosGuideIsNotRefused(t *testing.T) {
 	in.KubeProxy = cni.KubeProxyReplaced
 
 	var err error
-	if in.Effective, err = EffectiveValues(nil, cni.KubeProxyReplaced, ""); err != nil {
+	if in.Effective, err = EffectiveValues(nil, cni.KubeProxyReplaced, "", 0); err != nil {
 		t.Fatal(err)
 	}
 

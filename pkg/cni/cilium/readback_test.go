@@ -54,7 +54,7 @@ func TestReadBackRelease_ReproducesTheDeployedValues(t *testing.T) {
 	for _, tunnel := range []string{"", tunnelVxlan, tunnelGeneve} {
 		for _, kp := range []cni.KubeProxyMode{cni.KubeProxyEnabled, cni.KubeProxyReplaced} {
 			for _, u := range []map[string]any{nil, user} {
-				deployed, err := EffectiveValues(u, kp, tunnel)
+				deployed, err := EffectiveValues(u, kp, tunnel, 0)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -72,7 +72,7 @@ func TestReadBackRelease_ReproducesTheDeployedValues(t *testing.T) {
 					t.Fatalf("no user values were set, read back %v", rb.User)
 				}
 
-				again, err := EffectiveValues(rb.User, rb.KubeProxy, rb.Tunnel)
+				again, err := EffectiveValues(rb.User, rb.KubeProxy, rb.Tunnel, 0)
 				if err != nil {
 					t.Fatal(err)
 				}

@@ -330,10 +330,7 @@ func (c VersionCheck) String() string {
 }
 
 func parseVersion(s string) (string, error) {
-	v := s
-	if i := strings.Index(v, "@"); i >= 0 {
-		v = v[:i]
-	}
+	v, _, _ := strings.Cut(s, "@")
 
 	if i := strings.LastIndex(v, ":"); i >= 0 {
 		v = v[i+1:]

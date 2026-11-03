@@ -61,11 +61,11 @@ func (f *fakeImages) Verify(_ context.Context, img imagesig.Image, id imagesig.I
 
 // chartPatches are the newer patches of the embedded Cilium minor (the two after the chart), and the tags
 // that are never offered: the chart's own patch and a prerelease above it.
-func chartPatches(t *testing.T) (minor string, newer []string, others []string) {
+func chartPatches(t *testing.T) (newer []string, others []string) {
 	t.Helper()
 
 	base := "v" + cilium.ChartVersion
-	minor = semver.MajorMinor(base)
+	minor := semver.MajorMinor(base)
 
 	patch, err := strconv.Atoi(strings.TrimPrefix(base, minor+"."))
 	if err != nil {
@@ -82,11 +82,11 @@ func chartPatches(t *testing.T) (minor string, newer []string, others []string) 
 		fmt.Sprintf("%s.%d-rc.1", m, patch+3),
 	}
 
-	return minor, newer, others
+	return newer, others
 }
 
 func TestVerifiedPatchesOffersOnlySignedNewerPatchesOfTheChartMinor(t *testing.T) {
-	_, newer, others := chartPatches(t)
+	newer, others := chartPatches(t)
 	unsigned := newer[1] // the second newer patch has an unsigned operator image
 
 	fake := &fakeImages{unsigned: map[string]bool{"quay.io/cilium/operator-generic v" + unsigned: true}}
@@ -103,7 +103,7 @@ func TestVerifiedPatchesOffersOnlySignedNewerPatchesOfTheChartMinor(t *testing.T
 }
 
 func TestVerifiedPatchesRemembersVerifiedImages(t *testing.T) {
-	_, newer, _ := chartPatches(t)
+	newer, _ := chartPatches(t)
 	fake := &fakeImages{}
 	r := &ReleaseCheck{Images: fake}
 

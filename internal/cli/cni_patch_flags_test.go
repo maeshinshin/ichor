@@ -21,15 +21,17 @@ import (
 	"testing"
 )
 
+const patchV1205 = "v1.20.5"
+
 func TestImageOverrideFromFlags(t *testing.T) {
 	digest := "sha256:" + strings.Repeat("a", 64)
 
-	got, err := imageOverrideFromFlags("v1.20.5", []string{"agent=quay.io/cilium/cilium:v1.20.5@" + digest})
+	got, err := imageOverrideFromFlags(patchV1205, []string{"agent=quay.io/cilium/cilium:v1.20.5@" + digest})
 	if err != nil {
 		t.Fatalf("imageOverrideFromFlags: %v", err)
 	}
 
-	if got.Version != "v1.20.5" || got.Images["agent"] != "quay.io/cilium/cilium:v1.20.5@"+digest {
+	if got.Version != patchV1205 || got.Images["agent"] != "quay.io/cilium/cilium:v1.20.5@"+digest {
 		t.Errorf("override = %+v", got)
 	}
 
@@ -42,10 +44,10 @@ func TestImageOverrideFromFlags(t *testing.T) {
 		overrides     []string
 	}{
 		{"an image without a version", "", []string{"agent=quay.io/cilium/cilium:v1.20.5@" + digest}},
-		{"a version without images", "v1.20.5", nil},
-		{"an image without a reference", "v1.20.5", []string{"agent="}},
-		{"an image without a key", "v1.20.5", []string{"quay.io/cilium/cilium"}},
-		{"the same image twice", "v1.20.5", []string{"agent=a", "agent=b"}},
+		{"a version without images", patchV1205, nil},
+		{"an image without a reference", patchV1205, []string{"agent="}},
+		{"an image without a key", patchV1205, []string{"quay.io/cilium/cilium"}},
+		{"the same image twice", patchV1205, []string{"agent=a", "agent=b"}},
 	} {
 		if _, err := imageOverrideFromFlags(bad.version, bad.overrides); err == nil {
 			t.Errorf("%s was accepted", bad.name)

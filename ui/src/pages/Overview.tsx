@@ -54,6 +54,7 @@ import { machineDisplayName } from '@/lib/machineName'
 import { formatTimestamp } from '@/lib/format'
 import { kubernetesStageProgress, operationState, progressCounts } from '@/lib/operations'
 import { attentionItems, backupsValue, tileTargets, versionLabel, type TileTarget } from '@/lib/overview'
+import { releaseNotice } from '@/lib/ichorVersion'
 import { opStateTone, type Tone } from '@/lib/status'
 import { componentOf, stateKey, stateTone, versionPair } from '@/lib/versions'
 import { conditionTone } from '@/lib/conditions'
@@ -103,6 +104,8 @@ function Home({
   const [machines, setMachines] = useState<Machine[] | null>(null)
   const [backups, setBackups] = useState<EtcdBackup[] | null>(null)
   const [ichorVersion, setIchorVersion] = useState<string | null>(null)
+  // The newer Ichor release the controller found, or null (docs/adr/0114).
+  const [release, setRelease] = useState<string | null>(null)
   const [dialog, setDialog] = useState<'ca-rotation' | 'shutdown' | null>(null)
   const wasBusy = useRef(false)
 
@@ -130,11 +133,20 @@ function Home({
     }
   }
 
+  async function loadRelease() {
+    try {
+      setRelease(releaseNotice(await operationClient.getIchorInstallation({})))
+    } catch {
+      setRelease(null)
+    }
+  }
+
   function reloadAll() {
     reloadCluster()
     reloadMachines()
     loadBackups()
     loadIchor()
+    loadRelease()
   }
 
   // The operations come from the shared cluster poll; a visit refreshes them at once.
@@ -160,7 +172,7 @@ function Home({
   const busyReason = busy ? t('ops.disabledBusy') : undefined
   const kubeProxy = cluster.kubeProxyMode || 'enabled'
   const versionOf = (name: string) => componentOf(cluster.versions, name)
-  const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, opState: currentState })
+  const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, opState: currentState, release })
   const recent = recentOperations(ops, 5)
   const targets = tileTargets(current?.op.ref?.name ?? null)
 
@@ -233,6 +245,12 @@ function Home({
                           <AlertAction>
                             <StartOperationDialog kind="config" cluster={ref} label={t('ops.action.apply')} disabled={!!busy} />
                           </AlertAction>
+                        </>
+                      )}
+                      {a.kind === 'release' && (
+                        <>
+                          <AlertTitle>{t('home.attnRelease', { version: a.version })}</AlertTitle>
+                          <AlertDescription>{t('home.attnReleaseHint')}</AlertDescription>
                         </>
                       )}
                       {(a.kind === 'opFailed' || a.kind === 'opPaused') && current && (
@@ -387,6 +405,7 @@ function Home({
                     )}
                     <ItemSeparator />
                     <VersionRow name={t('ops.row.ichor')} icon={CloudCogIcon} installed={ichorVersion ?? t('ops.installedUnknown')}>
+                      {release && <Badge variant="secondary">{t('version.released', { version: release })}</Badge>}
                       <StartOperationDialog kind="ichor" cluster={ref} current={ichorVersion ?? ''} label={t('ops.action.upgrade')} disabled={!!busy} />
                     </VersionRow>
                     {!isCniUnmanaged(cluster.cniPreset) && (

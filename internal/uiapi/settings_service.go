@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"connectrpc.com/connect"
@@ -56,7 +55,6 @@ func effectivePB(e settings.Effective) *pb.SettingsEffective {
 		TokenTtl:        settingValuePB(e.TokenTTL, time.Duration.String),
 		RefreshLifetime: settingValuePB(e.RefreshLifetime, time.Duration.String),
 		DriftPolicy:     settingValuePB(e.DriftPolicy, func(s string) string { return s }),
-		UpdateCheck:     settingValuePB(e.UpdateCheck, strconv.FormatBool),
 	}
 }
 

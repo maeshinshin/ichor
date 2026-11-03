@@ -9,7 +9,7 @@ import { PageSkeleton } from '@/components/PageStates'
 import { PageTitle } from '@/components/PageTitle'
 import { SectionCard } from '@/components/SectionCard'
 import type { GetSettingsResponse } from '@/gen/ichor/v1alpha1/settings_pb'
-import { settingsClient } from '@/lib/connect'
+import { operationClient, settingsClient } from '@/lib/connect'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { notifyWrite } from '@/lib/notify'
 import {
@@ -27,6 +27,7 @@ import {
   type Form,
   type Source,
 } from '@/lib/settings'
+import { useLoad } from '@/lib/useLoad'
 import { useT } from '@/lib/useT'
 
 // The Settings page (docs/adr/0105, Part B): the runtime settings of the IchorInstallation, one card per
@@ -50,6 +51,7 @@ export function Settings() {
       <DeploymentCard res={res} />
       <UsersCard res={res} onSaved={setRes} />
       <DefaultsCard res={res} onSaved={setRes} />
+      <UpdatesCard res={res} onSaved={setRes} />
     </div>
   )
 }
@@ -237,6 +239,62 @@ function DefaultsCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r:
       </Field>
       {error && <ErrorAlert {...error} />}
       <Button disabled={locked || busy || Object.keys(changes).length === 0} onClick={() => save(changes)}>
+        {busy ? t('settings.saving') : t('settings.save')}
+      </Button>
+    </SectionCard>
+  )
+}
+
+// UpdatesCard is the switch for the check of newer Ichor releases (docs/adr/0114) and what the last
+// check reported. A failed check is said here and nowhere on the dashboard.
+function UpdatesCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: GetSettingsResponse) => void }) {
+  const t = useT()
+  const info = useLoad(() => operationClient.getIchorInstallation({}), []).data
+  const effective = res.effective?.updateCheck
+  const start = effective?.value === 'false' ? 'off' : 'on'
+  const [choice, setChoice] = useState<string>(start)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<ErrorShape | null>(null)
+  const locked = lockedReason(res) !== null
+  const source: Source = effective?.source === 'spec' ? 'spec' : 'deployment'
+  const checkedAt = info?.releaseCheckedAt
+
+  async function save() {
+    setBusy(true)
+    setError(null)
+    try {
+      const out = await settingsClient.updateSettings({ changes: { updateCheckEnabled: choice === 'on' } })
+      if (out.settings) onSaved(out.settings)
+      notifyWrite('settings.saved')
+    } catch (err) {
+      setError(describeError(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <SectionCard title={t('settings.updates')} description={t('settings.updatesDesc')}>
+      <Locked res={res} />
+      <Field>
+        <FieldLabel htmlFor="settings-update-check">
+          {t('settings.updateCheck')}
+          <SourceBadge source={source} />
+        </FieldLabel>
+        <Select value={choice} onValueChange={setChoice} disabled={locked || busy}>
+          <SelectTrigger id="settings-update-check" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="on">{t('settings.updateCheckOn')}</SelectItem>
+            <SelectItem value="off">{t('settings.updateCheckOff')}</SelectItem>
+          </SelectContent>
+        </Select>
+      </Field>
+      {info?.releaseCheckError && <p className="text-sm text-muted-foreground">{t('settings.updateCheckFailed', { error: info.releaseCheckError })}</p>}
+      {checkedAt && <p className="text-sm text-muted-foreground">{t('settings.updateCheckedAt', { time: new Date(Number(checkedAt.seconds) * 1000).toLocaleString() })}</p>}
+      {error && <ErrorAlert {...error} />}
+      <Button disabled={locked || busy || choice === start} onClick={save}>
         {busy ? t('settings.saving') : t('settings.save')}
       </Button>
     </SectionCard>

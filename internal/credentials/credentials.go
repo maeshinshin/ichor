@@ -138,9 +138,7 @@ func Load(ctx context.Context, c client.Client, ichorNamespace string, cluster *
 		return nil, nil, fmt.Errorf("listing the cluster's machines: %w", err)
 	}
 
-	endpoints := Endpoints(machines.Items, cluster.Name)
-
-	return src, endpoints, nil
+	return src, Endpoints(machines.Items, cluster.Name), nil
 }
 
 // lifetime is TTL within [Lifetime default, MaxLifetime cap].
@@ -239,21 +237,19 @@ func BuildKubeconfig(current clientcmdapi.Config, trust, crt, key []byte) ([]byt
 		return nil, err
 	}
 
-	ctxName := current.CurrentContext
-
 	userName := kctx.AuthInfo
 	if userName == "" {
 		userName = KubeAdminCommonName
 	}
 
 	out := clientcmdapi.Config{
-		APIVersion: "v1", Kind: "Config", CurrentContext: ctxName,
+		APIVersion: "v1", Kind: "Config", CurrentContext: current.CurrentContext,
 		Clusters: map[string]*clientcmdapi.Cluster{kctx.Cluster: {
 			Server: cluster.Server, TLSServerName: cluster.TLSServerName, ProxyURL: cluster.ProxyURL,
 			CertificateAuthorityData: trust,
 		}},
 		AuthInfos: map[string]*clientcmdapi.AuthInfo{userName: {ClientCertificateData: crt, ClientKeyData: key}},
-		Contexts: map[string]*clientcmdapi.Context{ctxName: {
+		Contexts: map[string]*clientcmdapi.Context{current.CurrentContext: {
 			Cluster: kctx.Cluster, AuthInfo: userName, Namespace: kctx.Namespace,
 		}},
 	}

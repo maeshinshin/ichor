@@ -110,7 +110,7 @@ func addAPIFlags(cmd *cobra.Command) {
 	f.StringVar(&apiOpts.TLSServerName, "tls-server-name", "",
 		"name on ichor-ui's serving certificate, when it is not the Service's DNS name (<service>.<namespace>.svc)")
 	f.BoolVar(&apiOpts.Override, "override", false,
-		"incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker); "+
+		"incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker, an upgrade the compatibility table refuses); "+
 			"needs the override RBAC verb on the resource; implies --local")
 	f.StringVar(&apiOpts.OverrideReason, "override-reason", "",
 		"optional, with --override: why, recorded in the audit record and an Event (without it the record says no reason given)")

@@ -201,7 +201,11 @@ validate against it, then starts the cni upgrade operation.
 With VERSION (a patch such as v1.20.5, newer than the chart) the release keeps the embedded chart and
 runs that patch's agent, operator and hubble-relay images, pinned by digest. The images must verify
 against the Cilium release signature first; a patch that does not is not offered and is refused.
---list prints the patches on offer and exits.`,
+--list prints the patches on offer and exits.
+
+A verified patch the cluster's Kubernetes is not tested with is refused; --override (with the override
+RBAC verb on the TalosCluster) lifts that, and --override-reason records why. An unverified patch is
+never overridable.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		version := ""
@@ -210,7 +214,7 @@ against the Cilium release signature first; a patch that does not is not offered
 		}
 
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
-			return runCniUpgrade(ctx, c, cmd.OutOrStdout(), cniCluster, version, cniUpgradeList)
+			return runCniUpgrade(ctx, c, cmd.OutOrStdout(), cniCluster, version, cniUpgradeList, overrideOf(apiOpts))
 		})
 	},
 }
@@ -410,7 +414,7 @@ func runCniValuesEdit(
 
 // runCniUpgrade starts the Cilium upgrade, or with list prints the patches on offer. version names a patch; empty
 // upgrades to the embedded chart.
-func runCniUpgrade(ctx context.Context, c *apiClients, out io.Writer, cluster, version string, list bool) error {
+func runCniUpgrade(ctx context.Context, c *apiClients, out io.Writer, cluster, version string, list bool, bg *pb.Override) error {
 	if list {
 		m, err := upgradeTargets(ctx, c, cluster, pb.OperationKind_OPERATION_KIND_CNI)
 		if err != nil {
@@ -427,7 +431,7 @@ func runCniUpgrade(ctx context.Context, c *apiClients, out io.Writer, cluster, v
 		return err
 	}
 
-	resp, err := c.Cni.StartCniUpgrade(ctx, connect.NewRequest(&pb.StartCniUpgradeRequest{Cluster: ref, Version: version}))
+	resp, err := c.Cni.StartCniUpgrade(ctx, connect.NewRequest(&pb.StartCniUpgradeRequest{Cluster: ref, Version: version, Override: bg}))
 	if err != nil {
 		return err
 	}

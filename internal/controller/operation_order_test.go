@@ -62,7 +62,7 @@ func TestPlanOperationOrderMatchesTheExecutorsCandidateOrder(t *testing.T) {
 	objs := []client.Object{
 		&ichorv1alpha1.TalosCluster{
 			Name: cl, Namespace: ns,
-			Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: "v1.10.0", KubernetesVersion: "v1.36.0"},
+			Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: "v1.13.2", KubernetesVersion: "v1.36.0"},
 		},
 		mk("w-b", "worker", nil, nil),
 		mk("w-a", "worker", nil, nil),

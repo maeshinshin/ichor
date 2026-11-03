@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/cosi-project/runtime/pkg/resource"
@@ -26,10 +27,13 @@ import (
 	"github.com/cosi-project/runtime/pkg/state"
 	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/siderolabs/talos/pkg/machinery/client"
+	"github.com/siderolabs/talos/pkg/machinery/resources/block"
 	"github.com/siderolabs/talos/pkg/machinery/resources/hardware"
 	"github.com/siderolabs/talos/pkg/machinery/resources/network"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
 // NewMachineryMaintenanceClient dials endpoint's Talos API in maintenance
@@ -153,4 +157,80 @@ func ReadHardwareIdentity(ctx context.Context, cosi state.State) (HardwareIdenti
 	}
 
 	return id, nil
+}
+
+// Inventory reads the node's disks and NICs over the unauthenticated maintenance API; see ReadInventory.
+func (m *machineryMaintenanceClient) Inventory(ctx context.Context) (Inventory, error) {
+	return ReadInventory(ctx, m.c.COSI)
+}
+
+// ReadInventory lists the disks an install or a disk role can take (block.Disk, minus the CD-ROM drives
+// and read-only disks the approval pickers leave out) and the physical links with a permanent address
+// (network.LinkStatus), the same links ReadHardwareIdentity takes MACs from (ADR 0111). Both lists come
+// back sorted, so an unchanged node writes an unchanged status.
+func ReadInventory(ctx context.Context, cosi state.State) (Inventory, error) {
+	var inv Inventory
+
+	disks, err := safe.StateListAll[*block.Disk](ctx, cosi)
+	if err != nil {
+		return inv, fmt.Errorf("listing disks: %w", err)
+	}
+
+	for i := range disks.Len() {
+		spec := disks.Get(i).TypedSpec()
+		if spec.CDROM || spec.Readonly {
+			continue
+		}
+
+		inv.Disks = append(inv.Disks, discoveredDisk(spec))
+	}
+
+	links, err := safe.StateListAll[*network.LinkStatus](ctx, cosi)
+	if err != nil {
+		return inv, fmt.Errorf("listing link status: %w", err)
+	}
+
+	for i := range links.Len() {
+		spec := links.Get(i).TypedSpec()
+		if !spec.Physical() || len(spec.PermanentAddr) == 0 {
+			continue
+		}
+
+		inv.Links = append(inv.Links, ichorv1alpha1.TalosMachineDiscoveredLink{
+			Name:         links.Get(i).Metadata().ID(),
+			PermanentMAC: spec.PermanentAddr.String(),
+			LinkUp:       spec.LinkState,
+			SpeedMbit:    int32(spec.SpeedMegabits), //nolint:gosec // link speeds fit in int32
+			Driver:       spec.Driver,
+		})
+	}
+
+	slices.SortFunc(inv.Disks, func(a, b ichorv1alpha1.TalosMachineDiscoveredDisk) int {
+		return strings.Compare(a.DevPath, b.DevPath)
+	})
+	slices.SortFunc(inv.Links, func(a, b ichorv1alpha1.TalosMachineDiscoveredLink) int {
+		return strings.Compare(a.Name, b.Name)
+	})
+
+	return inv, nil
+}
+
+// discoveredDisk maps one block.Disk to the status record, taking the by-id path from its symlinks
+// (block.Disk has no field of its own for it).
+func discoveredDisk(spec *block.DiskSpec) ichorv1alpha1.TalosMachineDiscoveredDisk {
+	var byID string
+
+	for _, s := range spec.Symlinks {
+		if strings.Contains(s, "/by-id/") {
+			byID = s
+
+			break
+		}
+	}
+
+	return ichorv1alpha1.TalosMachineDiscoveredDisk{
+		WWID: spec.WWID, Serial: spec.Serial, ByIDPath: byID, BusPath: spec.BusPath, DevPath: spec.DevPath,
+		SizeBytes: int64(spec.Size), //nolint:gosec // disk sizes fit in int64
+		Model:     spec.Model, Transport: spec.Transport,
+	}
 }

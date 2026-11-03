@@ -1,6 +1,6 @@
 # 0113. The cluster follows the release set of its Ichor
 
-Status: Accepted · Date: 2026-11-03 · Design section: Upgrades · Touches: 0043, 0057, 0059, 0098, 0099, 0103
+Status: Accepted · Superseded in part by 0115 · Date: 2026-11-03 · Design section: Upgrades · Touches: 0043, 0057, 0059, 0098, 0099, 0103
 
 Decided: the Talos release, its version contract, the Kubernetes release and the Cilium chart are one release set embedded in each Ichor build (`pkg/release`); init and adopt use it, every upgrade moves only to it, and `ichor upgrade cluster` (or the Versions card's one button) brings a cluster to it one step at a time.
 

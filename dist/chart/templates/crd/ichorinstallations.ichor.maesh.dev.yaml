@@ -92,6 +92,17 @@ spec:
                     description: enabled is deprecated and ignored (ADR 0107).
                     type: boolean
                 type: object
+              updateCheck:
+                description: updateCheck holds the switch for the check of newer Ichor
+                  releases (ADR 0114).
+                properties:
+                  enabled:
+                    description: |-
+                      enabled turns the check on or off. Unset falls back to the controller flag, which the chart
+                      sets from updateCheck.enabled (default true). Off stops the registry request and removes
+                      the controller's egress rule for it.
+                    type: boolean
+                type: object
               users:
                 description: users holds the sign-in lifetimes of ADR 0094.
                 properties:
@@ -283,6 +294,23 @@ spec:
                     - source
                     - value
                     type: object
+                  updateCheck:
+                    description: IchorEffectiveValue is one setting in force.
+                    properties:
+                      source:
+                        description: source is spec when the field is set, deployment
+                          when the flag or chart value applies.
+                        enum:
+                        - spec
+                        - deployment
+                        type: string
+                      value:
+                        description: value is the setting as a string.
+                        type: string
+                    required:
+                    - source
+                    - value
+                    type: object
                 type: object
               installedVersion:
                 description: |-
@@ -290,6 +318,26 @@ spec:
                   itself: the single source of "what is installed", which is also what the CLI compares
                   itself against (ADR 0059).
                 type: string
+              latestRelease:
+                description: |-
+                  latestRelease is the newest final release the controller found in the chart repository
+                  (ADR 0114). Unset until the first check, and cleared while the check is off.
+                properties:
+                  checkedAt:
+                    description: checkedAt is when the last check finished, successful
+                      or not.
+                    format: date-time
+                    type: string
+                  error:
+                    description: error is the failure of the last check; empty after
+                      a successful one.
+                    type: string
+                  version:
+                    description: |-
+                      version is the highest final release found, with a leading v. A failed check keeps the
+                      value of the last good one.
+                    type: string
+                type: object
             type: object
         required:
         - spec

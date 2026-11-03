@@ -28,6 +28,8 @@ type Fallback struct {
 	RefreshLifetime time.Duration
 	// DriftPolicy empty means DriftPolicyDefault.
 	DriftPolicy string
+	// UpdateCheck is the --update-check flag: whether the controller looks for newer releases (ADR 0114).
+	UpdateCheck bool
 }
 
 // Value is a setting and the place it came from (ichorv1alpha1.IchorSourceSpec or IchorSourceDeployment).
@@ -41,6 +43,7 @@ type Effective struct {
 	TokenTTL        Value[time.Duration]
 	RefreshLifetime Value[time.Duration]
 	DriftPolicy     Value[string]
+	UpdateCheck     Value[bool]
 }
 
 func pick[T any](spec *T, fb T, readOnly bool) Value[T] {
@@ -66,6 +69,7 @@ func Resolve(inst *ichorv1alpha1.IchorInstallation, fb Fallback, readOnly bool) 
 	var (
 		ttl, refr   *time.Duration
 		driftPolicy *string
+		updateCheck *bool
 	)
 
 	if inst != nil {
@@ -75,6 +79,10 @@ func Resolve(inst *ichorv1alpha1.IchorInstallation, fb Fallback, readOnly bool) 
 
 		if d := inst.Spec.Defaults; d != nil && d.DriftPolicy != "" {
 			driftPolicy = &d.DriftPolicy
+		}
+
+		if c := inst.Spec.UpdateCheck; c != nil {
+			updateCheck = c.Enabled
 		}
 	}
 
@@ -86,6 +94,7 @@ func Resolve(inst *ichorv1alpha1.IchorInstallation, fb Fallback, readOnly bool) 
 		TokenTTL:        pick(ttl, fb.TokenTTL, readOnly),
 		RefreshLifetime: pick(refr, fb.RefreshLifetime, readOnly),
 		DriftPolicy:     pick(driftPolicy, fb.DriftPolicy, readOnly),
+		UpdateCheck:     pick(updateCheck, fb.UpdateCheck, readOnly),
 	}
 }
 

@@ -61,6 +61,19 @@ type IchorInstallationSpec struct {
 	// defaults holds defaults for objects created later; an existing object is never touched.
 	// +optional
 	Defaults *IchorDefaultSettings `json:"defaults,omitempty"`
+
+	// updateCheck holds the switch for the check of newer Ichor releases (ADR 0114).
+	// +optional
+	UpdateCheck *IchorUpdateCheckSettings `json:"updateCheck,omitempty"`
+}
+
+// IchorUpdateCheckSettings is the switch for the check of newer Ichor releases (ADR 0114).
+type IchorUpdateCheckSettings struct {
+	// enabled turns the check on or off. Unset falls back to the controller flag, which the chart
+	// sets from updateCheck.enabled (default true). Off stops the registry request and removes
+	// the controller's egress rule for it.
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
 }
 
 // Values of spec.deployment.manager.
@@ -126,6 +139,25 @@ type IchorInstallationStatus struct {
 	// Written by the controller.
 	// +optional
 	Effective *IchorEffectiveSettings `json:"effective,omitempty"`
+
+	// latestRelease is the newest final release the controller found in the chart repository
+	// (ADR 0114). Unset until the first check, and cleared while the check is off.
+	// +optional
+	LatestRelease *IchorLatestRelease `json:"latestRelease,omitempty"`
+}
+
+// IchorLatestRelease is the result of the controller's check for a newer Ichor release (ADR 0114).
+type IchorLatestRelease struct {
+	// version is the highest final release found, with a leading v. A failed check keeps the
+	// value of the last good one.
+	// +optional
+	Version string `json:"version,omitempty"`
+	// checkedAt is when the last check finished, successful or not.
+	// +optional
+	CheckedAt *metav1.Time `json:"checkedAt,omitempty"`
+	// error is the failure of the last check; empty after a successful one.
+	// +optional
+	Error string `json:"error,omitempty"`
 }
 
 // ConditionSettingsApplied is True when the controller has seen the generation of the
@@ -168,6 +200,8 @@ type IchorEffectiveSettings struct {
 	RefreshLifetime *IchorEffectiveValue `json:"refreshLifetime,omitempty"`
 	// +optional
 	DriftPolicy *IchorEffectiveValue `json:"driftPolicy,omitempty"`
+	// +optional
+	UpdateCheck *IchorEffectiveValue `json:"updateCheck,omitempty"`
 }
 
 // +kubebuilder:object:root=true

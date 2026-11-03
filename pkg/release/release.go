@@ -37,16 +37,17 @@ type Set struct {
 	Talos string
 	// VersionContract is the Talos version contract the configuration is rendered with, "vX.Y".
 	VersionContract string
-	// Kubernetes is the Kubernetes release, "vX.Y.Z". Talos 1.14.3 supports 1.32.0 to 1.37.99.
+	// Kubernetes is the Kubernetes release, "vX.Y.Z". Talos 1.14 supports Kubernetes 1.33 to 1.37
+	// (the Talos v1.14 support matrix).
 	Kubernetes string
 	// Cilium is the Cilium chart version, without the "v" (the chart's own version string).
 	Cilium string
 }
 
 // Pinned is the set this Ichor build supports. Its Talos release and Kubernetes release agree with
-// pkg/machinery in go.mod (the Talos 1.14.3 compatibility table; the test in this package checks it).
+// pkg/machinery in go.mod (the Talos 1.14.5 compatibility table; the test in this package checks it).
 var Pinned = Set{
-	Talos:           "v1.14.3",
+	Talos:           "v1.14.5",
 	VersionContract: "v1.14",
 	Kubernetes:      "v1.37.1",
 	Cilium:          cilium.ChartVersion,

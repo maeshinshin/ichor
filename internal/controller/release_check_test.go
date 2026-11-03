@@ -166,13 +166,13 @@ var _ = Describe("ReleaseCheck", Ordered, func() {
 
 		Expect(newCheck(byRepo(map[string][]string{
 			releasecheck.DefaultRepository:           {"0.2.0"},
-			releasecheck.DefaultTalosRepository:      {"v1.11.0", "v1.12.0", "v1.14.3", "v1.15.0-rc.1"},
+			releasecheck.DefaultTalosRepository:      {"v1.11.0", "v1.12.0", testTalosVersion, "v1.15.0-rc.1"},
 			releasecheck.DefaultKubernetesRepository: {"v1.29.0", "v1.30.0", "v1.37.1", "v1.37.1-rc.1"},
 		}), true).check(ctx)).To(BeTrue())
 
 		ut := targets()
 		Expect(ut).NotTo(BeNil())
-		Expect(ut.Talos).To(Equal([]string{"v1.14.3", "v1.12.0"}))
+		Expect(ut.Talos).To(Equal([]string{testTalosVersion, "v1.12.0"}))
 		Expect(ut.Kubernetes).To(Equal([]string{"v1.37.1", "v1.30.0"}))
 		Expect(ut.Error).To(BeEmpty())
 		Expect(ut.CheckedAt).NotTo(BeNil())
@@ -183,7 +183,7 @@ var _ = Describe("ReleaseCheck", Ordered, func() {
 
 		Expect(newCheck(byRepo(map[string][]string{
 			releasecheck.DefaultRepository:           {"0.2.0"},
-			releasecheck.DefaultTalosRepository:      {"v1.14.3"},
+			releasecheck.DefaultTalosRepository:      {testTalosVersion},
 			releasecheck.DefaultKubernetesRepository: {"v1.37.1"},
 		}), true).check(ctx)).To(BeTrue())
 
@@ -202,7 +202,7 @@ var _ = Describe("ReleaseCheck", Ordered, func() {
 		createInstallation("v0.1.0")
 		Expect(newCheck(byRepo(map[string][]string{
 			releasecheck.DefaultRepository:           {"0.2.0"},
-			releasecheck.DefaultTalosRepository:      {"v1.14.3"},
+			releasecheck.DefaultTalosRepository:      {testTalosVersion},
 			releasecheck.DefaultKubernetesRepository: {"v1.37.1"},
 		}), true).check(ctx)).To(BeTrue())
 		Expect(targets()).NotTo(BeNil())

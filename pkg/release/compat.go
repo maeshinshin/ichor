@@ -97,7 +97,8 @@ func TalosKubernetesError(talos, kubernetes string) error {
 		return fmt.Errorf("talos %s does not support kubernetes %s: %w", talos, kubernetes, pairErr)
 	}
 
-	return fmt.Errorf("talos %s with kubernetes %s: not known, not compatible: %w: %w", talos, kubernetes, ErrUnknownVersion, pairErr)
+	return fmt.Errorf("talos %s with kubernetes %s: not known, not compatible: %w: %w",
+		talos, kubernetes, ErrUnknownVersion, pairErr)
 }
 
 // machineryKnows reports whether machinery's compatibility table has the Talos minor. For a minor it
@@ -120,7 +121,8 @@ func CiliumKubernetesError(cilium, kubernetes string) error {
 
 	r, ok := ciliumKubernetes[minorKey(cilium)]
 	if !ok {
-		return fmt.Errorf("cilium %s is not known, not compatible with kubernetes %s: %w", cilium, kubernetes, ErrUnknownVersion)
+		return fmt.Errorf("cilium %s is not known, not compatible with kubernetes %s: %w",
+			cilium, kubernetes, ErrUnknownVersion)
 	}
 
 	if !inRange(kubernetes, r) {

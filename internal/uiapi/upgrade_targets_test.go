@@ -1,3 +1,4 @@
+//nolint:goconst // version tables repeat the same release names on purpose
 package uiapi
 
 import (
@@ -13,11 +14,12 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// upgradeCluster is opCluster running the given versions, with Cilium at ciliumVersion ("" for none).
-func upgradeCluster(talos, kubernetes, ciliumVersion string) *ichorv1alpha1.TalosCluster {
+// upgradeCluster is opCluster running Talos talos and Kubernetes 1.34.2, with Cilium at ciliumVersion
+// ("" for none).
+func upgradeCluster(talos, ciliumVersion string) *ichorv1alpha1.TalosCluster {
 	c := &ichorv1alpha1.TalosCluster{
 		Name: opCluster, Namespace: opNS,
-		Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: talos, KubernetesVersion: kubernetes},
+		Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: talos, KubernetesVersion: "v1.34.2"},
 	}
 
 	if ciliumVersion != "" {
@@ -52,7 +54,7 @@ func TestListUpgradeTargetsGroupsTheTalosReleasesTheClusterCanTake(t *testing.T)
 	// Talos 1.12.0 on Kubernetes 1.34.2: 1.14.5 is the release set and a valid upgrade, 1.14.3 skips a
 	// minor and is not offered, 1.15 is unknown to this machinery.
 	srv, _ := opServer(t,
-		upgradeCluster("v1.12.0", "v1.34.2", "1.20.0"),
+		upgradeCluster("v1.12.0", "1.20.0"),
 		recordedLists([]string{"v1.15.0", "v1.14.5", "v1.14.3", "v1.13.2", "v1.12.4", "v1.12.0"}, nil, ""),
 	)
 
@@ -76,7 +78,7 @@ func TestListUpgradeTargetsGroupsTheKubernetesReleasesOfTheClusterTalosAndCilium
 	// Kubernetes 1.34.2 on Talos 1.14.3 with Cilium 1.20: 1.34.3 is a patch, 1.35.0 the next minor,
 	// 1.36.0 and 1.37.1 are more than one minor up, and 1.37.1 is also not tested with Cilium 1.20.
 	srv, _ := opServer(t,
-		upgradeCluster("v1.14.3", "v1.34.2", "1.20.0"),
+		upgradeCluster("v1.14.3", "1.20.0"),
 		recordedLists(nil, []string{"v1.37.1", "v1.36.0", "v1.35.0", "v1.34.3"}, ""),
 	)
 
@@ -94,7 +96,7 @@ func TestListUpgradeTargetsGroupsTheKubernetesReleasesOfTheClusterTalosAndCilium
 
 func TestListUpgradeTargetsOffersNothingWhenCiliumIsUnknown(t *testing.T) {
 	srv, _ := opServer(t,
-		upgradeCluster("v1.14.3", "v1.34.2", ""),
+		upgradeCluster("v1.14.3", ""),
 		recordedLists(nil, []string{"v1.34.3", "v1.35.0"}, ""),
 	)
 
@@ -133,7 +135,7 @@ func TestListUpgradeTargetsSaysWhyTheListIsNotThere(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			srv, _ := opServer(t, append([]client.Object{upgradeCluster("v1.14.3", "v1.34.2", "1.20.0")}, tc.objs...)...)
+			srv, _ := opServer(t, append([]client.Object{upgradeCluster("v1.14.3", "1.20.0")}, tc.objs...)...)
 
 			m := listUpgradeTargets(t, srv, pb.OperationKind_OPERATION_KIND_TALOS)
 
@@ -146,7 +148,7 @@ func TestListUpgradeTargetsSaysWhyTheListIsNotThere(t *testing.T) {
 
 func TestListUpgradeTargetsKeepsTheLastListWhenTheCheckFailed(t *testing.T) {
 	srv, _ := opServer(t,
-		upgradeCluster("v1.12.0", "v1.34.2", "1.20.0"),
+		upgradeCluster("v1.12.0", "1.20.0"),
 		recordedLists([]string{"v1.12.4"}, nil, "listing the Kubernetes releases: registry unreachable"),
 	)
 
@@ -162,7 +164,7 @@ func TestListUpgradeTargetsKeepsTheLastListWhenTheCheckFailed(t *testing.T) {
 }
 
 func TestListUpgradeTargetsRefusesAnotherKind(t *testing.T) {
-	srv, _ := opServer(t, upgradeCluster("v1.14.3", "v1.34.2", "1.20.0"))
+	srv, _ := opServer(t, upgradeCluster("v1.14.3", "1.20.0"))
 
 	_, err := srv.ListUpgradeTargets(context.Background(), connect.NewRequest(&pb.ListUpgradeTargetsRequest{
 		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CNI,
@@ -173,9 +175,9 @@ func TestListUpgradeTargetsRefusesAnotherKind(t *testing.T) {
 }
 
 func TestClusterRolloutRPCsAreUnimplemented(t *testing.T) {
-	srv, _ := opServer(t, upgradeCluster("v1.14.3", "v1.34.2", "1.20.0"))
+	srv, _ := opServer(t, upgradeCluster("v1.14.3", "1.20.0"))
 
-	_, err := srv.PlanClusterUpgrade(context.Background(), connect.NewRequest(&pb.PlanClusterUpgradeRequest{
+	_, err := srv.PlanClusterUpgrade(context.Background(), connect.NewRequest(&pb.PlanClusterUpgradeRequest{ //nolint:staticcheck // deprecated RPC, ADR 0115
 		Cluster: objectRef(opNS, opCluster),
 	}))
 	if connect.CodeOf(err) != connect.CodeUnimplemented {

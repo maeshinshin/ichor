@@ -116,7 +116,7 @@ func TestCheckNoCNIPreconditions(t *testing.T) {
 
 	for contract, want := range map[string]string{
 		kubePrismDocContract: kubePrismDoc, "v1.14.2": kubePrismDoc, "": kubePrismDoc,
-		"v1.13": "machine.features.kubePrism", "v1.12": "machine.features.kubePrism",
+		ver113: "machine.features.kubePrism", "v1.12": "machine.features.kubePrism",
 	} {
 		err := checkNoCNIPreconditions(withCIDR, off, contract)
 		if err == nil || !strings.Contains(err.Error(), want) {

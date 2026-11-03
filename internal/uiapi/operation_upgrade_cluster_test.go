@@ -40,12 +40,12 @@ func TestPlanClusterUpgradeOrdersTalosThenKubernetes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var got []string
+	got := make([]string, 0, len(res.Msg.GetSteps()))
 	for _, s := range res.Msg.GetSteps() {
 		got = append(got, s.GetStep())
 	}
 
-	if want := []string{"talos", "kubernetes"}; !slices.Equal(got, want) {
+	if want := []string{componentTalos, componentK8s}; !slices.Equal(got, want) {
 		t.Fatalf("steps = %v, want %v", got, want)
 	}
 
@@ -67,7 +67,7 @@ func TestStartClusterUpgradeCreatesOnlyTheNextStep(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if res.Msg.GetStep() != "talos" {
+	if res.Msg.GetStep() != componentTalos {
 		t.Fatalf("step = %q, want talos", res.Msg.GetStep())
 	}
 

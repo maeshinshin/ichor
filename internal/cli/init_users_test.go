@@ -292,7 +292,7 @@ func TestRunInit_UsersFlagsAreCheckedBeforeAnythingHappens(t *testing.T) {
 	for name, mutate := range map[string]func(*initOptions){
 		"http url":                  func(o *initOptions) { o.UIURL = "http://ichor.example.com" },
 		"url with a path query":     func(o *initOptions) { o.UIURL = "https://ichor.example.com/?a=b" },
-		"old contract":              func(o *initOptions) { o.UIURL, o.VersionContract = testUIURL, "v1.13" },
+		"old contract":              func(o *initOptions) { o.UIURL, o.VersionContract = testUIURL, ver113 },
 		"admin user without ui-url": func(o *initOptions) { o.AdminUser = testAdminName },
 		"bad admin user name":       func(o *initOptions) { o.UIURL, o.AdminUser = testUIURL, "Root User" },
 	} {

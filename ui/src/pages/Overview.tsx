@@ -600,7 +600,7 @@ function VersionRow({
         <ItemDescription>{component ? versionPair(installed, component.target) : installed || '-'}</ItemDescription>
       </ItemContent>
       <ItemActions>
-        {component && <ToneBadge tone={stateTone(component.state)}>{t(stateKey(component.state))}</ToneBadge>}
+        {component && component.state !== 'up-to-date' && <ToneBadge tone={stateTone(component.state)}>{t(stateKey(component.state))}</ToneBadge>}
         {children}
       </ItemActions>
     </Item>

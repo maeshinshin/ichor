@@ -117,5 +117,13 @@ func newKubeClientForConfig(cfg *rest.Config) (client.Client, error) {
 		return nil, err
 	}
 
-	return client.New(cfg, client.Options{Scheme: scheme, FieldValidation: metav1.FieldValidationStrict})
+	c, err := client.New(cfg, client.Options{Scheme: scheme, FieldValidation: metav1.FieldValidationStrict})
+	if err != nil {
+		return nil, err
+	}
+
+	// The update notice (update_notice.go) reads the installation through the last cluster a command used.
+	lastCluster = noticeTarget{Host: cfg.Host, Client: c}
+
+	return c, nil
 }

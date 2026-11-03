@@ -42,18 +42,18 @@ export function canReview(o: { choice: SnapshotChoice | undefined; busy: boolean
 }
 
 // canRestore folds everything the plan step needs before its button is enabled: the plan came back
-// without a blocker, the cluster's name was typed, and a reason was given (the override reason).
+// without a blocker, the cluster's name was typed, and the override was ticked. A reason is optional.
 export function canRestore(o: {
   planned: boolean
   blocked: string
   clusterName: string
   typed: string
-  reason: string
+  overridden: boolean
   busy: boolean
 }): boolean {
   if (!o.planned || o.blocked !== '' || o.busy) return false
   if (o.clusterName === '' || o.typed.trim() !== o.clusterName) return false
-  return o.reason.trim() !== ''
+  return o.overridden
 }
 
 // The steps status.etcdRestore.step goes through, in order.

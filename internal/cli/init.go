@@ -20,12 +20,29 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/siderolabs/talos/pkg/machinery/constants"
 	"github.com/spf13/cobra"
 
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/installmanifest"
+	"github.com/maeshinshin/ichor/pkg/release"
 )
+
+// checkPinnedFlags refuses a version flag that names anything but the release set of this Ichor
+// build (ADR 0113). An empty value means the pinned one, as the flag default does.
+func checkPinnedFlags(talos, kubernetes, contract string) error {
+	for _, f := range []struct{ flag, value, pinned string }{
+		{"--talos-version", talos, release.Pinned.Talos},
+		{"--kubernetes-version", kubernetes, release.Pinned.Kubernetes},
+		{"--version-contract", contract, release.Pinned.VersionContract},
+	} {
+		if f.value != "" && f.value != f.pinned {
+			return fmt.Errorf("%s %s is refused: this Ichor build supports %s (docs/adr/0113); "+
+				"use the Ichor release that supports the version you want", f.flag, f.value, f.pinned)
+		}
+	}
+
+	return nil
+}
 
 var initOpts initOptions
 
@@ -61,6 +78,10 @@ init never applies anything to a node again after step 3; every later
 change to this cluster goes through the controller, by writing CRs.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		if err := validateOutputFormat(outputFormat); err != nil {
+			return err
+		}
+
+		if err := checkPinnedFlags(initOpts.TalosVersion, initOpts.KubernetesVersion, initOpts.VersionContract); err != nil {
 			return err
 		}
 
@@ -120,9 +141,14 @@ func init() {
 	flags.StringVar(&initOpts.EndpointAddress, "endpoint-address", "", "cluster endpoint address (required)")
 	flags.StringVar(&initOpts.NodeEndpoint, "node-endpoint", "",
 		"Talos API address (host:port) of the first node, currently in maintenance mode (required)")
-	flags.StringVar(&initOpts.TalosVersion, "talos-version", "", "Talos release this cluster renders configuration for (required, vX.Y.Z)")
-	flags.StringVar(&initOpts.KubernetesVersion, "kubernetes-version", "v"+constants.DefaultKubernetesVersion, "Kubernetes release this cluster runs")
-	flags.StringVar(&initOpts.VersionContract, "version-contract", "", "Talos version contract (required, vX.Y)")
+	// The versions are the release set of this Ichor build (ADR 0113): the flags stay so that scripts
+	// keep working, and accept only the value the build pins.
+	flags.StringVar(&initOpts.TalosVersion, "talos-version", release.Pinned.Talos, "Talos release (the release set of this Ichor build; any other value is refused)")
+	flags.StringVar(&initOpts.KubernetesVersion, "kubernetes-version", release.Pinned.Kubernetes, "Kubernetes release (the release set of this Ichor build; any other value is refused)")
+	flags.StringVar(&initOpts.VersionContract, "version-contract", release.Pinned.VersionContract, "Talos version contract (the release set of this Ichor build; any other value is refused)")
+	for _, name := range []string{"talos-version", "kubernetes-version", "version-contract"} {
+		_ = flags.MarkDeprecated(name, "the version is set by this Ichor build (docs/adr/0113); the flag only accepts its value")
+	}
 	flags.StringVar(&initOpts.InstallDisk, "install-disk", "", "the first node's install disk: "+installDiskUsage+" (required)")
 	flags.StringSliceVar(&initOpts.PodSubnets, "pod-subnets", nil,
 		"pod CIDRs (spec.network.podSubnets; at most one per IP family); unset keeps Talos's default 10.244.0.0/16. Fixed once the cluster exists")
@@ -157,7 +183,7 @@ func init() {
 	flags.StringVar(&initOpts.KubeAPITLSServerName, "kube-api-tls-server-name", "",
 		"with --ui-url: tls-server-name in users' kubeconfigs (chart: ichorUI.users.kubeAPITLSServerName)")
 
-	for _, name := range []string{flagCluster, cniKey, "endpoint-address", "node-endpoint", "talos-version", "version-contract", "install-disk"} {
+	for _, name := range []string{flagCluster, cniKey, "endpoint-address", "node-endpoint", "install-disk"} {
 		_ = initCmd.MarkFlagRequired(name)
 	}
 }

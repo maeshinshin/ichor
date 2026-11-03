@@ -136,21 +136,16 @@ func TestLonghornV1_NodeLabelsAndAnnotations(t *testing.T) {
 		t.Fatal(`NodeAnnotations() is missing "node.longhorn.io/default-disks-config"`)
 	}
 
-	var disks []longhornDiskConfig
+	var disks []struct {
+		Path            string `json:"path"`
+		AllowScheduling bool   `json:"allowScheduling"`
+	}
 	if err := json.Unmarshal([]byte(raw), &disks); err != nil {
 		t.Fatalf("default-disks-config annotation is not valid JSON: %v (%s)", err, raw)
 	}
 
-	if len(disks) != 1 {
-		t.Fatalf("default-disks-config has %d disk entries, want 1", len(disks))
-	}
-
-	if disks[0].Path != longhornMountPath {
-		t.Errorf("disk path = %q, want %q", disks[0].Path, longhornMountPath)
-	}
-
-	if !disks[0].AllowScheduling {
-		t.Error("disk allowScheduling = false, want true")
+	if len(disks) != 1 || disks[0].Path != longhornMountPath || !disks[0].AllowScheduling {
+		t.Errorf("default-disks-config = %+v, want one entry {%q, allowScheduling true}", disks, longhornMountPath)
 	}
 }
 

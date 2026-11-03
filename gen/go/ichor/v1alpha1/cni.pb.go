@@ -547,7 +547,11 @@ type StartCniUpgradeRequest struct {
 	// version is a Cilium patch (vX.Y.Z, newer than the chart this Ichor embeds) the list of
 	// ListUpgradeTargets offers as a cni patch; empty upgrades the release to the embedded chart.
 	// The controller verifies the patch's images before it runs them.
-	Version       string `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	Version string `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
+	// override lifts the compatibility refusal of a patch (the Cilium minor is not tested with the
+	// cluster's Kubernetes). The caller must hold the override verb on the TalosCluster;
+	// the reason is optional. A patch whose images are not verified is never overridable.
+	Override      *Override `protobuf:"bytes,3,opt,name=override,proto3" json:"override,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -594,6 +598,13 @@ func (x *StartCniUpgradeRequest) GetVersion() string {
 		return x.Version
 	}
 	return ""
+}
+
+func (x *StartCniUpgradeRequest) GetOverride() *Override {
+	if x != nil {
+		return x.Override
+	}
+	return nil
 }
 
 type StartCniUpgradeResponse struct {
@@ -701,10 +712,11 @@ const file_ichor_v1alpha1_cni_proto_rawDesc = "" +
 	"\tuser_yaml\x18\x02 \x01(\tR\buserYaml\"s\n" +
 	"\x17SetCiliumValuesResponse\x121\n" +
 	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12%\n" +
-	"\x0eeffective_yaml\x18\x02 \x01(\tR\reffectiveYaml\"g\n" +
+	"\x0eeffective_yaml\x18\x02 \x01(\tR\reffectiveYaml\"\x9d\x01\n" +
 	"\x16StartCniUpgradeRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\tR\aversion\"\xc7\x01\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\x124\n" +
+	"\boverride\x18\x03 \x01(\v2\x18.ichor.v1alpha1.OverrideR\boverride\"\xc7\x01\n" +
 	"\x17StartCniUpgradeResponse\x127\n" +
 	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\toperation\x12!\n" +
 	"\ffrom_version\x18\x02 \x01(\tR\vfromVersion\x12\x1d\n" +
@@ -747,6 +759,7 @@ var file_ichor_v1alpha1_cni_proto_goTypes = []any{
 	(*StartCniUpgradeResponse)(nil),      // 10: ichor.v1alpha1.StartCniUpgradeResponse
 	(*ObjectRef)(nil),                    // 11: ichor.v1alpha1.ObjectRef
 	(*AuditRecord)(nil),                  // 12: ichor.v1alpha1.AuditRecord
+	(*Override)(nil),                     // 13: ichor.v1alpha1.Override
 }
 var file_ichor_v1alpha1_cni_proto_depIdxs = []int32{
 	11, // 0: ichor.v1alpha1.GetCiliumValuesRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
@@ -756,23 +769,24 @@ var file_ichor_v1alpha1_cni_proto_depIdxs = []int32{
 	11, // 4: ichor.v1alpha1.SetCiliumValuesRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
 	12, // 5: ichor.v1alpha1.SetCiliumValuesResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
 	11, // 6: ichor.v1alpha1.StartCniUpgradeRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	11, // 7: ichor.v1alpha1.StartCniUpgradeResponse.operation:type_name -> ichor.v1alpha1.ObjectRef
-	12, // 8: ichor.v1alpha1.StartCniUpgradeResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	1,  // 9: ichor.v1alpha1.CniService.GetCiliumValues:input_type -> ichor.v1alpha1.GetCiliumValuesRequest
-	3,  // 10: ichor.v1alpha1.CniService.ValidateCiliumValues:input_type -> ichor.v1alpha1.ValidateCiliumValuesRequest
-	5,  // 11: ichor.v1alpha1.CniService.DiffCiliumValues:input_type -> ichor.v1alpha1.DiffCiliumValuesRequest
-	7,  // 12: ichor.v1alpha1.CniService.SetCiliumValues:input_type -> ichor.v1alpha1.SetCiliumValuesRequest
-	9,  // 13: ichor.v1alpha1.CniService.StartCniUpgrade:input_type -> ichor.v1alpha1.StartCniUpgradeRequest
-	2,  // 14: ichor.v1alpha1.CniService.GetCiliumValues:output_type -> ichor.v1alpha1.GetCiliumValuesResponse
-	4,  // 15: ichor.v1alpha1.CniService.ValidateCiliumValues:output_type -> ichor.v1alpha1.ValidateCiliumValuesResponse
-	6,  // 16: ichor.v1alpha1.CniService.DiffCiliumValues:output_type -> ichor.v1alpha1.DiffCiliumValuesResponse
-	8,  // 17: ichor.v1alpha1.CniService.SetCiliumValues:output_type -> ichor.v1alpha1.SetCiliumValuesResponse
-	10, // 18: ichor.v1alpha1.CniService.StartCniUpgrade:output_type -> ichor.v1alpha1.StartCniUpgradeResponse
-	14, // [14:19] is the sub-list for method output_type
-	9,  // [9:14] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	13, // 7: ichor.v1alpha1.StartCniUpgradeRequest.override:type_name -> ichor.v1alpha1.Override
+	11, // 8: ichor.v1alpha1.StartCniUpgradeResponse.operation:type_name -> ichor.v1alpha1.ObjectRef
+	12, // 9: ichor.v1alpha1.StartCniUpgradeResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	1,  // 10: ichor.v1alpha1.CniService.GetCiliumValues:input_type -> ichor.v1alpha1.GetCiliumValuesRequest
+	3,  // 11: ichor.v1alpha1.CniService.ValidateCiliumValues:input_type -> ichor.v1alpha1.ValidateCiliumValuesRequest
+	5,  // 12: ichor.v1alpha1.CniService.DiffCiliumValues:input_type -> ichor.v1alpha1.DiffCiliumValuesRequest
+	7,  // 13: ichor.v1alpha1.CniService.SetCiliumValues:input_type -> ichor.v1alpha1.SetCiliumValuesRequest
+	9,  // 14: ichor.v1alpha1.CniService.StartCniUpgrade:input_type -> ichor.v1alpha1.StartCniUpgradeRequest
+	2,  // 15: ichor.v1alpha1.CniService.GetCiliumValues:output_type -> ichor.v1alpha1.GetCiliumValuesResponse
+	4,  // 16: ichor.v1alpha1.CniService.ValidateCiliumValues:output_type -> ichor.v1alpha1.ValidateCiliumValuesResponse
+	6,  // 17: ichor.v1alpha1.CniService.DiffCiliumValues:output_type -> ichor.v1alpha1.DiffCiliumValuesResponse
+	8,  // 18: ichor.v1alpha1.CniService.SetCiliumValues:output_type -> ichor.v1alpha1.SetCiliumValuesResponse
+	10, // 19: ichor.v1alpha1.CniService.StartCniUpgrade:output_type -> ichor.v1alpha1.StartCniUpgradeResponse
+	15, // [15:20] is the sub-list for method output_type
+	10, // [10:15] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_cni_proto_init() }

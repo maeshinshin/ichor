@@ -1,0 +1,124 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cilium
+
+import (
+	"strings"
+	"testing"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/cni"
+)
+
+const patchDigest = "sha256:" + "0000000000000000000000000000000000000000000000000000000000000001"
+
+// patchImages are the references of the Cilium patch v1.20.5 for the three images the override covers.
+func patchImages() map[string]string {
+	return map[string]string{
+		ImageAgent:       "quay.io/cilium/cilium:v1.20.5@" + patchDigest,
+		ImageOperator:    "quay.io/cilium/operator-generic:v1.20.5@" + patchDigest,
+		ImageHubbleRelay: "quay.io/cilium/hubble-relay:v1.20.5@" + patchDigest,
+	}
+}
+
+func TestWithImageOverridesSetsTheChartPathsAndRefusesATagWithoutADigest(t *testing.T) {
+	vals := map[string]any{}
+	if err := WithImageOverrides(vals, patchImages()); err != nil {
+		t.Fatalf("WithImageOverrides: %v", err)
+	}
+
+	if got := vals["image"].(map[string]any)["override"]; got != patchImages()[ImageAgent] {
+		t.Errorf("image.override = %v", got)
+	}
+
+	if got := vals["operator"].(map[string]any)["image"].(map[string]any)["override"]; got != patchImages()[ImageOperator] {
+		t.Errorf("operator.image.override = %v", got)
+	}
+
+	if got := vals["hubble"].(map[string]any)["relay"].(map[string]any)["image"].(map[string]any)["override"]; got != patchImages()[ImageHubbleRelay] {
+		t.Errorf("hubble.relay.image.override = %v", got)
+	}
+
+	if err := WithImageOverrides(map[string]any{}, map[string]string{ImageAgent: "quay.io/cilium/cilium:v1.20.5"}); err == nil {
+		t.Error("an image given by tag alone was accepted")
+	}
+
+	if err := WithImageOverrides(map[string]any{}, map[string]string{"envoy": "quay.io/cilium/cilium-envoy:v1@" + patchDigest}); err == nil {
+		t.Error("an image key that is not a Cilium patch image was accepted")
+	}
+}
+
+// patchCluster is a cluster on the embedded chart whose status records the override.
+func patchCluster(version string) *ichorv1alpha1.TalosCluster {
+	c := &ichorv1alpha1.TalosCluster{ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "ns"}}
+	c.Spec.ControlPlane.Count = 1
+	c.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{
+		ImageOverride: &ichorv1alpha1.TalosCiliumImageOverride{Version: version, Images: patchImages()},
+	}
+
+	return c
+}
+
+func TestImageOverrideStopsOnceTheChartReachesIt(t *testing.T) {
+	if ImageOverrideActive(patchCluster("v"+ChartVersion)) != nil {
+		t.Error("an override for the embedded chart's own version is still active")
+	}
+
+	if ImageOverrideActive(patchCluster("v0.0.1")) != nil {
+		t.Error("an override older than the embedded chart is still active")
+	}
+
+	if ImageOverrideActive(patchCluster("v"+ChartVersion[:len(ChartVersion)-1]+"9")) == nil {
+		t.Error("a newer patch of the embedded chart's minor is not active")
+	}
+}
+
+func TestEffectiveValuesCarryThePatchAndRenderItsDigests(t *testing.T) {
+	c := patchCluster("v" + ChartVersion[:len(ChartVersion)-1] + "9")
+
+	vals, err := EffectiveValuesForMode(c, cni.KubeProxyEnabled)
+	if err != nil {
+		t.Fatalf("EffectiveValuesForMode: %v", err)
+	}
+
+	out, err := renderChart(vals)
+	if err != nil {
+		t.Fatalf("renderChart: %v", err)
+	}
+
+	// hubble-relay renders only when Hubble is enabled, which the default preset does not do; its
+	// path is covered by TestWithImageOverridesSetsTheChartPathsAndRefusesATagWithoutADigest.
+	for _, key := range []string{ImageAgent, ImageOperator} {
+		if !strings.Contains(string(out), patchImages()[key]) {
+			t.Errorf("the rendered Cilium does not run %s", patchImages()[key])
+		}
+	}
+
+	// Once the chart reaches the patch, the same cluster renders the chart's own images.
+	c.Status.CNI.ImageOverride.Version = "v" + ChartVersion
+
+	vals, err = EffectiveValuesForMode(c, cni.KubeProxyEnabled)
+	if err != nil {
+		t.Fatalf("EffectiveValuesForMode after the chart reached the patch: %v", err)
+	}
+
+	if img, ok := vals["image"].(map[string]any); ok && img["override"] != nil {
+		t.Error("the agent image still carries the override after the chart reached the patch")
+	}
+}

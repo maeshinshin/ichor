@@ -21,9 +21,11 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"path"
 	"slices"
 	"time"
 
+	"golang.org/x/mod/semver"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -32,10 +34,16 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/imagesig"
 	"github.com/maeshinshin/ichor/internal/releasecheck"
 	"github.com/maeshinshin/ichor/internal/settings"
+	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/release"
 )
+
+// maxCiliumCandidates bounds the Cilium patches checked per run: each one costs a few signature
+// downloads of several megabytes.
+const maxCiliumCandidates = 5
 
 // DefaultReleaseCheckPolicyName is the CiliumNetworkPolicy that lets the controller reach the chart
 // repository for the check of newer releases. It exists only while the check is on.
@@ -67,7 +75,15 @@ type ReleaseCheck struct {
 	// and Kubernetes releases. Empty means the siderolabs default. List lists them too.
 	TalosRepository      string
 	KubernetesRepository string
-	List                 releasecheck.Lister
+	// CiliumRepository is the image repository of the Cilium releases; empty means quay.io/cilium/cilium.
+	// Images resolves the Cilium patches' digests and verifies their signatures; nil offers no Cilium patch and lists
+	// no Cilium repository.
+	CiliumRepository string
+	Images           imagesig.Verifier
+	// verified remembers the images whose signature verified ("repository@digest"), so a patch is
+	// not downloaded again on every check. Checks run on one goroutine, so no lock is needed.
+	verified map[string]bool
+	List     releasecheck.Lister
 	// Interval is the time between checks; zero means releaseCheckInterval.
 	Interval time.Duration
 	// Settle is the wait after the egress policy was written, so the agents have it before the request;
@@ -148,11 +164,94 @@ func (r *ReleaseCheck) check(ctx context.Context) bool {
 		log.Info("Listing the Kubernetes image repository failed", "repository", r.kubernetesRepository(), "error", kubeErr.Error())
 	}
 
+	var cilium listing
+
+	if r.Images != nil {
+		ciliumTags, err := r.List(r.ciliumRepository())
+		if err != nil {
+			log.Info("Listing the Cilium image repository failed", "repository", r.ciliumRepository(), "error", err.Error())
+		}
+
+		cilium = listing{tags: r.verifiedPatches(ctx, ciliumTags), err: err}
+	}
+
 	return r.record(ctx, func(inst *ichorv1alpha1.IchorInstallation, now metav1.Time) {
 		inst.Status.LatestRelease = latestReleaseOf(inst.Status.LatestRelease, releasecheck.Latest(tags), latestErr, now)
 		inst.Status.UpgradeTargets = upgradeTargetsOf(inst.Status.UpgradeTargets, now,
-			listing{tags: talosTags, err: talosErr}, listing{tags: kubeTags, err: kubeErr})
+			listing{tags: talosTags, err: talosErr}, listing{tags: kubeTags, err: kubeErr}, cilium)
 	})
+}
+
+// ciliumRepository is the image repository of the Cilium releases; the default when none is set.
+func (r *ReleaseCheck) ciliumRepository() string {
+	if r.CiliumRepository == "" {
+		return releasecheck.DefaultCiliumRepository
+	}
+
+	return r.CiliumRepository
+}
+
+// verifiedPatches is the newer patches of the embedded Cilium minor whose images verify, newest first. Only the
+// final releases above the embedded chart are candidates:
+// a newer Ichor that embeds the patch makes it no longer an offer (the server filters it), and a
+// candidate whose agent, operator or hubble-relay image is unsigned or cannot be resolved is left out.
+func (r *ReleaseCheck) verifiedPatches(ctx context.Context, tags []string) []string {
+	log := logf.FromContext(ctx).WithName("releasecheck")
+	base := "v" + cilium.ChartVersion
+
+	var out []string
+
+	for _, v := range releasecheck.Finals(tags) {
+		if semver.MajorMinor(v) != semver.MajorMinor(base) || semver.Compare(v, base) <= 0 {
+			continue
+		}
+
+		if len(out) == maxCiliumCandidates {
+			break
+		}
+
+		if err := r.verifyCiliumPatch(ctx, v); err != nil {
+			log.Info("A Cilium patch is not offered", "version", v, "reason", err.Error())
+
+			continue
+		}
+
+		out = append(out, v)
+	}
+
+	return out
+}
+
+// verifyCiliumPatch resolves the tag of each image the patch runs and verifies its signature against the
+// Cilium release workflow of that tag. The images are the agent, the operator (the generic variant the chart
+// renders on a cloud-less cluster) and hubble-relay; all three must verify.
+func (r *ReleaseCheck) verifyCiliumPatch(ctx context.Context, version string) error {
+	base := path.Dir(r.ciliumRepository())
+	id := imagesig.CiliumIdentity(version)
+
+	for _, repo := range []string{r.ciliumRepository(), base + "/operator-generic", base + "/hubble-relay"} {
+		digest, err := r.Images.Digest(ctx, repo, version)
+		if err != nil {
+			return err
+		}
+
+		key := repo + "@" + digest
+		if r.verified[key] {
+			continue
+		}
+
+		if err := r.Images.Verify(ctx, imagesig.Image{Repository: repo, Digest: digest}, id); err != nil {
+			return err
+		}
+
+		if r.verified == nil {
+			r.verified = map[string]bool{}
+		}
+
+		r.verified[key] = true
+	}
+
+	return nil
 }
 
 // talosRepository is the image repository of the Talos releases; the default when none is set.
@@ -194,11 +293,18 @@ func (r *ReleaseCheck) allowRegistry(ctx context.Context) (bool, error) {
 	return writePolicy(ctx, r.Client, r.Namespace, DefaultReleaseCheckPolicyName, app, releaseCheckSpec(app, hosts))
 }
 
-// registryHosts are the distinct registry hosts of the three repositories the check lists.
+// registryHosts are the distinct registry hosts of the repositories the check lists: the chart, Talos and
+// Kubernetes, and Cilium's when the Cilium patches are checked (its signatures are in the same registry).
 func (r *ReleaseCheck) registryHosts() ([]string, error) {
 	var hosts []string
 
-	for _, repo := range []string{r.Repository, r.talosRepository(), r.kubernetesRepository()} {
+	repos := []string{r.Repository, r.talosRepository(), r.kubernetesRepository()}
+	if r.Images != nil {
+		// The Cilium images are listed and verified only when Images is set.
+		repos = append(repos, r.ciliumRepository())
+	}
+
+	for _, repo := range repos {
 		h, err := releasecheck.Host(repo)
 		if err != nil {
 			return nil, err
@@ -272,12 +378,13 @@ func latestReleaseOf(prev *ichorv1alpha1.IchorLatestRelease, found string, check
 }
 
 // upgradeTargetsOf is the new status.upgradeTargets after a listing: the final releases at or
-// above the floors, newest first. A repository that failed keeps its last good list.
-func upgradeTargetsOf(prev *ichorv1alpha1.IchorUpgradeTargets, now metav1.Time, talos, kube listing) *ichorv1alpha1.IchorUpgradeTargets {
+// above the floors, newest first. The Cilium list holds the patches whose images verified, as verifiedPatches
+// returns them. A repository that failed keeps its last good list.
+func upgradeTargetsOf(prev *ichorv1alpha1.IchorUpgradeTargets, now metav1.Time, talos, kube, ciliumList listing) *ichorv1alpha1.IchorUpgradeTargets {
 	out := &ichorv1alpha1.IchorUpgradeTargets{CheckedAt: &now}
 
 	if prev != nil {
-		out.Talos, out.Kubernetes = prev.Talos, prev.Kubernetes
+		out.Talos, out.Kubernetes, out.Cilium = prev.Talos, prev.Kubernetes, prev.Cilium
 	}
 
 	var errs []error
@@ -292,6 +399,12 @@ func upgradeTargetsOf(prev *ichorv1alpha1.IchorUpgradeTargets, now metav1.Time, 
 		errs = append(errs, fmt.Errorf("listing the Kubernetes releases: %w", kube.err))
 	} else {
 		out.Kubernetes = release.AtLeast(releasecheck.Finals(kube.tags), release.KubernetesFloor)
+	}
+
+	if ciliumList.err != nil {
+		errs = append(errs, fmt.Errorf("listing the Cilium releases: %w", ciliumList.err))
+	} else {
+		out.Cilium = ciliumList.tags
 	}
 
 	if err := errors.Join(errs...); err != nil {

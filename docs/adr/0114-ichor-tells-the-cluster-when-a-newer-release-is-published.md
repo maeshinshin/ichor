@@ -57,7 +57,7 @@ and an installation that does not want the network call must be able to turn it 
    by the controller and not rendered by the chart.
 
 8. **Display.** `GetIchorInstallation` gains `latest_version` and `release_available` (the server compares
-   with `installed_version` with semver), and `release_check_error`. The Overview's Ichor row shows
+   with `installed_version` with semver), `release_check_error` and `release_checked_at`. The Overview's Ichor row shows
    "v<X> available" next to Upgrade, and the attention list gets an item. An error shows nothing on the
    Overview; the Settings page shows a muted line with the error and the time of the last check.
    The Upgrade flow is unchanged: it still moves to `spec.version`, and nothing installs a release by itself.

@@ -2,7 +2,7 @@
 # foreign Helm release record there, and to delete it after RetireForeignRecord has backed it up
 # byte for byte into ichor-system (the create/update on that backup is the ichor-system Role in
 # role.yaml). Namespaced to kube-system, never cluster-wide: the foreign record is searched in
-# kube-system only. The Job needs no create, update or patch on Secrets here. Hand-written for
+# kube-system only. This Role grants no create, update or patch on Secrets; the Secret rights the chart's hubble Role needs are in hubble_role.yaml. Hand-written for
 # the same reason as controller_role.yaml; config/installer puts both back in kube-system.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

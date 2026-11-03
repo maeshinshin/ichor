@@ -1068,7 +1068,7 @@ Components:
 - @connectrpc/connect@2.2.0
 - class-variance-authority@0.7.1
     Copyright 2022 Joe Bell
-- Cilium Helm chart 1.18.0
+- Cilium Helm chart 1.20.4
 
 --------------------------------------------------------------------------------
 Apache-2.0 (variant 2 of 2)
@@ -3436,6 +3436,6 @@ Upstream projects:
 
 Embedded chart:
 
-- Cilium Helm chart 1.18.0 (https://github.com/cilium/cilium)
-    pkg/cni/cilium/chart/cilium-1.18.0.tgz
+- Cilium Helm chart 1.20.4 (https://github.com/cilium/cilium)
+    pkg/cni/cilium/chart/cilium-1.20.4.tgz
     Licence: Apache-2.0 (variant 1 of 2) (text in section 3)

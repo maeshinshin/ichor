@@ -31,7 +31,7 @@ import (
 // chart/ and fetched, digest-verified, by `make cilium-chart`. It
 // is embedded so rendering needs no network and is reproducible.
 //
-//go:embed chart/cilium-1.18.0.tgz
+//go:embed chart/cilium-1.20.4.tgz
 var chartArchive []byte
 
 // renderChart expands the embedded chart with values into one multi-document

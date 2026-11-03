@@ -297,7 +297,7 @@ func (s *Server) createEtcdRestore(ctx context.Context, p *opPlan) (*pb.CreateOp
 	audit.Reason = reason
 
 	msg := fmt.Sprintf("etcd restore of %s from snapshot %s requested by %s under override: %s", cluster.Name, rp.snapshot, audit.Actor, reason)
-	if err := s.emitOverrideEvent(ctx, cluster, kindTalosCluster, msg); err != nil {
+	if err := s.emitWarningEvent(ctx, cluster, kindTalosCluster, "Override", msg); err != nil {
 		audit.Reason += " (the Kubernetes Event could not be recorded)"
 	}
 

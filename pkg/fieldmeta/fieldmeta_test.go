@@ -54,15 +54,19 @@ func TestAssess_RebootPathsNameTheFieldsThatNeedTheReboot(t *testing.T) {
 	}
 }
 
-func TestAssess_UnknownPathIsRebootRequired(t *testing.T) {
-	impact := Assess([]string{pathClusterProxyDisabled}, nil)
+// wantRebootRequired fails unless every path, assessed alone, needs a plain reboot and nothing else.
+func wantRebootRequired(t *testing.T, paths ...string) {
+	t.Helper()
 
-	if !impact.RebootRequired {
-		t.Fatalf("Assess(unknown path) = %+v, want RebootRequired true", impact)
+	for _, path := range paths {
+		if got := Assess([]string{path}, nil); !got.RebootRequired || len(got.InstallTimeOnly) != 0 || len(got.APIServerRestartPaths) != 0 {
+			t.Errorf("Assess(%q) = %+v, want reboot-required only", path, got)
+		}
 	}
-	if len(impact.InstallTimeOnly) != 0 {
-		t.Fatalf("Assess(unknown path) = %+v, want no InstallTimeOnly", impact)
-	}
+}
+
+func TestAssess_UnknownPathIsRebootRequired(t *testing.T) {
+	wantRebootRequired(t, pathClusterProxyDisabled)
 }
 
 // TestAssess_UserAndRawVolumeConfigStayRebootRequired pins a deliberate
@@ -73,17 +77,7 @@ func TestAssess_UnknownPathIsRebootRequired(t *testing.T) {
 // correct classification; this test is what would fail if a future change
 // added an (incorrect) installTimeOnly or safe rule for either.
 func TestAssess_UserAndRawVolumeConfigStayRebootRequired(t *testing.T) {
-	for _, path := range []string{pathUserVolumeConfigSelector, pathRawVolumeConfigSelector} {
-		impact := Assess([]string{path}, nil)
-
-		if !impact.RebootRequired {
-			t.Errorf("Assess(%q).RebootRequired = false, want true", path)
-		}
-
-		if len(impact.InstallTimeOnly) != 0 {
-			t.Errorf("Assess(%q).InstallTimeOnly = %v, want empty", path, impact.InstallTimeOnly)
-		}
-	}
+	wantRebootRequired(t, pathUserVolumeConfigSelector, pathRawVolumeConfigSelector)
 }
 
 // TestAssess_HostnameStaysRebootRequired pins spec.hostname's two rendered forms (HostnameConfig
@@ -91,13 +85,7 @@ func TestAssess_UserAndRawVolumeConfigStayRebootRequired(t *testing.T) {
 // would apply a new name live, but the kubelet registers the Kubernetes node under the name it
 // started with, so a rename is only settled by a reboot; no rule is added on purpose.
 func TestAssess_HostnameStaysRebootRequired(t *testing.T) {
-	for _, path := range []string{"HostnameConfig.hostname", "HostnameConfig.auto", "machine.network.hostname"} {
-		impact := Assess([]string{path}, nil)
-
-		if !impact.RebootRequired || len(impact.InstallTimeOnly) != 0 {
-			t.Errorf("Assess(%q) = %+v, want reboot-required", path, impact)
-		}
-	}
+	wantRebootRequired(t, "HostnameConfig.hostname", "HostnameConfig.auto", "machine.network.hostname")
 }
 
 // TestAssess_Rules covers every rule in the table: one path that matches it
@@ -190,31 +178,6 @@ func TestAssess_Rules(t *testing.T) {
 				t.Errorf("Assess(%q) (sibling) = %+v, want no InstallTimeOnly", tc.nonMatch, nonMatchImpact)
 			}
 		})
-	}
-}
-
-func TestAssess_InstallTimeOnlyIsDistinctFromRebootRequired(t *testing.T) {
-	installImpact := Assess([]string{pathMachineInstallDisk}, nil)
-	rebootImpact := Assess([]string{pathClusterProxyDisabled}, nil)
-
-	if installImpact.RebootRequired {
-		t.Fatalf("install-time-only path: RebootRequired = true, want false " +
-			"(needs reset+reinstall, a reboot alone does not help)")
-	}
-	if len(installImpact.InstallTimeOnly) != 1 {
-		t.Fatalf("install-time-only path: InstallTimeOnly = %v, want one entry", installImpact.InstallTimeOnly)
-	}
-
-	if !rebootImpact.RebootRequired {
-		t.Fatalf("unknown path: RebootRequired = false, want true")
-	}
-	if len(rebootImpact.InstallTimeOnly) != 0 {
-		t.Fatalf("unknown path: InstallTimeOnly = %v, want empty", rebootImpact.InstallTimeOnly)
-	}
-
-	// The two outcomes must be told apart by the same struct.
-	if installImpact.RebootRequired == rebootImpact.RebootRequired {
-		t.Fatalf("install-time-only and reboot-required paths produced the same RebootRequired value")
 	}
 }
 
@@ -346,10 +309,7 @@ func TestAssess_APIServerRestartClass(t *testing.T) {
 	}
 
 	// The image stays reboot-required (the Kubernetes upgrade executor owns it).
-	got := Assess([]string{"KubeAPIServerConfig.image"}, nil)
-	if !got.RebootRequired || len(got.APIServerRestartPaths) != 0 {
-		t.Errorf("KubeAPIServerConfig.image = %+v, want reboot-required only", got)
-	}
+	wantRebootRequired(t, "KubeAPIServerConfig.image")
 
 	// The legacy paths are the only spelling a pre-1.14 contract has: the class holds there too, and
 	// their images stay with the Kubernetes upgrade, never safe or apiServerRestart.
@@ -382,13 +342,9 @@ func TestAssess_APIServerRestartClass(t *testing.T) {
 // or a spec.kubernetesVersion bump would be applied to every node at once by
 // the machine controller instead of one at a time by the upgrade executor.
 func TestAssess_KubernetesImagesStayRebootRequired(t *testing.T) {
-	for _, path := range []string{
+	wantRebootRequired(t,
 		"KubeAPIServerConfig.image", "KubeControllerManagerConfig.image", "KubeSchedulerConfig.image",
 		"KubeProxyConfig.image", "KubeletConfig.image",
 		"cluster.apiServer.image", "cluster.controllerManager.image", "cluster.scheduler.image",
-	} {
-		if got := Assess([]string{path}, nil); !got.RebootRequired {
-			t.Errorf("Assess(%q).RebootRequired = false, want true", path)
-		}
-	}
+	)
 }

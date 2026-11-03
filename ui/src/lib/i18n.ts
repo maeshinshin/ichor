@@ -182,18 +182,22 @@ export const en = {
   'approve.installDiskOption': '{id} - {size} ({dev})',
   'approve.installDiskHelp':
     'Talos installs onto this disk. It is picked by its most stable identifier (WWID, serial, by-id path, bus path), not by its device name.',
+  'approve.installDiskDefaulted':
+    'Preselected: the smallest disk of at least 10 GiB. Talos has no default of its own, so check the choice before approving.',
   'approve.installDiskTyped':
-    'No disks were reported by the node, so type a device path. It can change between boots; a stable identifier is better.',
+    'Neither discovery nor the node reported any disk, so type a device path. It can change between boots; a stable identifier is better.',
   'approve.installImage': 'Installer image (optional)',
   'approve.reason': 'Reason (optional)',
   'approve.reasonPlaceholder': "Why, if it isn't obvious from the above",
-  'approve.submitting': 'Approving…',
+  'approve.submitting': 'Approving',
 
   'network.title': 'Network',
   'network.nic': 'Network card',
   'network.nicDefault': 'Leave to Talos (DHCP on every card)',
   'network.nicHelp':
     'The card is picked by its permanent MAC address, so it stays the same even if Linux renames it. Choose one to set how it gets its address.',
+  'network.nicPreselected':
+    'Preselected: the first card with a link, picked by its permanent MAC address. Choose another card, or leave the cards to Talos.',
   'network.nicTyped':
     'The node did not report its network cards, so type the MAC address. It has to be one of the MAC addresses shown above.',
   'network.addressing': 'Address',

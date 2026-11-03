@@ -4,6 +4,7 @@ import type { Disk } from '@/gen/ichor/v1alpha1/node_pb'
 import type { TalosLink } from '@/gen/ichor/v1alpha1/talosdetails_pb'
 import { diskKey } from './installDisk.ts'
 import {
+  defaultLink,
   diskRolesChoice,
   isCidr,
   isIp,
@@ -153,4 +154,18 @@ test('disk roles: volume names and sizes are checked, and a half-filled row is a
     '',
   )
   assert.equal(twice.errors.volumes[1], 'disks.errNameTwice')
+})
+
+test('the NIC form starts on the first card with a link, and says so only when it was not picked', () => {
+  const choices = selectableLinks(
+    [
+      link({ name: 'eth0', permanentMac: 'aa:bb:cc:dd:ee:01', linkUp: false }),
+      link({ name: 'eth1', permanentMac: 'aa:bb:cc:dd:ee:02', linkUp: true }),
+      link({ name: 'eth2', permanentMac: 'aa:bb:cc:dd:ee:03', linkUp: true }),
+    ],
+    [],
+  )
+  assert.equal(defaultLink(choices)?.mac, 'aa:bb:cc:dd:ee:02')
+  assert.equal(defaultLink(choices.map((c) => ({ ...c, up: false }))), undefined, 'no card has a link: the person picks')
+  assert.equal(defaultLink([]), undefined)
 })

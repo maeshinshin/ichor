@@ -13,12 +13,15 @@ export function NetworkFields({
   idPrefix,
   links,
   form,
+  preselected,
   errors,
   onChange,
 }: {
   idPrefix: string
   // links already filtered to those that can be picked (selectableLinks).
   links: LinkChoice[]
+  // preselected is true while the form starts on the default card (defaultLink), not one the person picked.
+  preselected?: boolean
   form: NetworkForm
   errors: NetworkChoice['errors']
   onChange: (f: NetworkForm) => void
@@ -56,7 +59,9 @@ export function NetworkFields({
           />
         )}
         {err(errors.mac)}
-        <p class="text-muted-foreground">{links.length > 0 ? t('network.nicHelp') : t('network.nicTyped')}</p>
+        <p class="text-muted-foreground">
+          {links.length === 0 ? t('network.nicTyped') : preselected ? t('network.nicPreselected') : t('network.nicHelp')}
+        </p>
       </div>
 
       {form.mac !== '' && (

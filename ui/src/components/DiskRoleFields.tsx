@@ -2,10 +2,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { Disk } from '@/gen/ichor/v1alpha1/node_pb'
 import { formatBytes } from '@/lib/format'
 import type { Key } from '@/lib/i18n'
-import { diskKey, diskSelector } from '@/lib/installDisk'
+import { diskKey, diskSelector, type DiskOption } from '@/lib/installDisk'
 import type { DiskRolesChoice, DiskRolesForm } from '@/lib/machineSettings'
 import { useT } from '@/lib/useT'
 
@@ -23,14 +22,14 @@ export function DiskRoleFields({
 }: {
   idPrefix: string
   // disks already filtered to those that can be selected (selectableDisks).
-  disks: Disk[]
+  disks: DiskOption[]
   form: DiskRolesForm
   errors: DiskRolesChoice['errors']
   onChange: (f: DiskRolesForm) => void
 }) {
   const t = useT()
   const err = (k: Key | undefined) => k && <p class="text-destructive">{t(k)}</p>
-  const option = (d: Disk) => (
+  const option = (d: DiskOption) => (
     <SelectItem key={diskKey(d)} value={diskKey(d)}>
       {t('disks.option', {
         id: Object.values(diskSelector(d) ?? {})[0] ?? '',

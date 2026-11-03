@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { Disk } from '@/gen/ichor/v1alpha1/node_pb'
-import { diskKey, diskSelector, installChoice, isValidHostname, needsInstallDisk } from './installDisk.ts'
+import {
+  defaultInstallDisk,
+  diskKey,
+  diskSelector,
+  installChoice,
+  isValidHostname,
+  needsInstallDisk,
+  type DiskOption,
+} from './installDisk.ts'
 
 const disk = (d: Partial<Disk>) => d as Disk
 
@@ -44,4 +52,20 @@ test('only an approved machine without install and waiting for a disk offers to 
   assert.equal(needsInstallDisk({ approved: true, install: {}, conditions: waiting }), false)
   assert.equal(needsInstallDisk({ approved: false, conditions: waiting }), false)
   assert.equal(needsInstallDisk({ approved: true, conditions: [{ type: 'Ready', reason: 'NodeJoined' }] }), false)
+})
+
+test('the install picker starts on the smallest disk that can take Talos', () => {
+  const GiB = 1024 ** 3
+  const opt = (d: Partial<DiskOption>): DiskOption => ({
+    wwid: '', serial: '', byIdPath: '', busPath: '', devPath: '', sizeBytes: 0, ...d,
+  })
+  const small = opt({ wwid: 'w-small', sizeBytes: 20 * GiB })
+  const big = opt({ wwid: 'w-big', sizeBytes: 480 * GiB })
+  const tiny = opt({ wwid: 'w-tiny', sizeBytes: 2 * GiB })
+  const unnamed = opt({ sizeBytes: 100 * GiB })
+  assert.equal(defaultInstallDisk([big, small, tiny]), small)
+  assert.equal(defaultInstallDisk([tiny, unnamed]), undefined, 'too small, or nothing to select it by')
+  assert.equal(defaultInstallDisk([]), undefined)
+  // Equal sizes keep the first one listed.
+  assert.equal(defaultInstallDisk([small, opt({ wwid: 'w-twin', sizeBytes: 20 * GiB })]), small)
 })

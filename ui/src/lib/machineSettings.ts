@@ -1,4 +1,3 @@
-import type { TalosLink } from '@/gen/ichor/v1alpha1/talosdetails_pb'
 import type { Key } from './i18n.ts'
 import type { DiskSelector } from './installDisk.ts'
 
@@ -37,7 +36,11 @@ export function isCidr(s: string): boolean {
 // splitList reads a list typed with commas, spaces or new lines between the items.
 export const splitList = (s: string): string[] => s.split(/[\s,]+/).filter((x) => x !== '')
 
-export type LinkChoice = { mac: string; label: string }
+// NicOption is what the NIC picker reads from a link: a discovered NIC (Machine.discoveredLinks) or
+// one the node reports now (TalosLink), which both have these fields.
+export type NicOption = { name: string; permanentMac: string; linkUp: boolean; speedMbit: number; kind?: string }
+
+export type LinkChoice = { mac: string; label: string; up: boolean }
 
 function speedLabel(mbit: number): string {
   if (mbit <= 0) return 'speed unknown'
@@ -45,19 +48,25 @@ function speedLabel(mbit: number): string {
   return `${mbit / 1000} Gbit/s`
 }
 
-export function linkLabel(l: TalosLink): string {
+export function linkLabel(l: NicOption): string {
   return [l.name, l.permanentMac, speedLabel(l.speedMbit), ...(l.linkUp ? [] : ['no link'])].join(' - ')
 }
 
 // selectableLinks are the physical links that can be picked: virtual ones have no permanent MAC to
 // match. When the machine's identity lists MACs, the link has to be one of them, since that is what
 // the backend accepts.
-export function selectableLinks(links: TalosLink[], identityMacs: string[]): LinkChoice[] {
+export function selectableLinks(links: NicOption[], identityMacs: string[]): LinkChoice[] {
   const known = identityMacs.map((m) => m.toLowerCase())
   return links
-    .filter((l) => l.kind === '' && l.permanentMac !== '')
+    .filter((l) => (l.kind ?? '') === '' && l.permanentMac !== '')
     .filter((l) => known.length === 0 || known.includes(l.permanentMac.toLowerCase()))
-    .map((l) => ({ mac: l.permanentMac.toLowerCase(), label: linkLabel(l) }))
+    .map((l) => ({ mac: l.permanentMac.toLowerCase(), label: linkLabel(l), up: l.linkUp }))
+}
+
+// defaultLink is the NIC the form starts on: the first card with a link, in the order given. Undefined
+// when no card has one, and the person chooses.
+export function defaultLink(links: LinkChoice[]): LinkChoice | undefined {
+  return links.find((l) => l.up)
 }
 
 export type NetworkForm = {

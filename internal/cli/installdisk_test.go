@@ -103,7 +103,7 @@ func TestApproveWarnsAboutAnUndiscoveredDisk(t *testing.T) {
 
 	var errw bytes.Buffer
 	if err := runMachineApprove(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &errw, "strong",
-		machineApproveOptions{Role: testRoleWorker, InstallDisk: "wwid:naa.1"}); err != nil {
+		machineApproveOptions{Role: testRoleWorker, InstallDisk: "wwid:naa.9"}); err != nil {
 		t.Fatal(err)
 	}
 

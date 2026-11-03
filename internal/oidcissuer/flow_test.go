@@ -63,11 +63,7 @@ func TestRedirectRules(t *testing.T) {
 func TestAuthorizeRejectsBadRequests(t *testing.T) {
 	e := newEnv(t, externalURL, "")
 	p := newPKCE()
-	base := url.Values{
-		pRespType: {pCode}, pClientID: {clientCLI}, pRedirect: {cliRedirect},
-		pScope: {scopeOpenID}, pState: {"s"}, pNonce: {"n"},
-		pChallenge: {p.challenge}, pMethod: {pS256},
-	}
+	base := authQuery(clientCLI, cliRedirect, scopeOpenID, p)
 	mut := func(f func(url.Values)) url.Values {
 		v := url.Values{}
 		for k, x := range base {
@@ -113,12 +109,7 @@ func TestAuthorizeRejectsBadRequests(t *testing.T) {
 func TestAuthorizeJSON(t *testing.T) {
 	e := newEnv(t, externalURL, "")
 	get := func(client, redirect string, mut func(url.Values)) *httptest.ResponseRecorder {
-		p := newPKCE()
-		q := url.Values{
-			pRespType: {pCode}, pClientID: {client}, pRedirect: {redirect},
-			pScope: {scopeOpenID}, pState: {"s"}, pNonce: {"n"},
-			pChallenge: {p.challenge}, pMethod: {pS256},
-		}
+		q := authQuery(client, redirect, scopeOpenID, newPKCE())
 		if mut != nil {
 			mut(q)
 		}
@@ -412,24 +403,9 @@ func TestAudienceSurvivesRefresh(t *testing.T) {
 func TestNoOfflineAccessNoRefreshToken(t *testing.T) {
 	e := newEnv(t, externalURL, "")
 	p := newPKCE()
-	q := url.Values{
-		pRespType: {pCode}, pClientID: {clientCLI}, pRedirect: {cliRedirect},
-		pScope: {scopeOpenID}, pState: {stateVal}, pNonce: {"n1"},
-		pChallenge: {p.challenge}, pMethod: {pS256},
-	}
-	ticket := e.ticket(e.do(e.h, http.MethodGet, "/oidc/authorize?"+q.Encode(), "", ""))
-	rec := e.login(ticket, userAlice, "correct horse")
-	if rec.Code != http.StatusOK {
-		t.Fatal(rec.Code)
-	}
-	var out struct {
-		RedirectURI string `json:"redirect_uri"`
-	}
-	if err := jsonUnmarshal(rec.Body.Bytes(), &out); err != nil {
-		t.Fatal(err)
-	}
-	u, _ := url.Parse(out.RedirectURI)
-	s, tr := e.token(codeForm(clientCLI, cliRedirect, u.Query().Get("code"), p))
+	q := authQuery(clientCLI, cliRedirect, scopeOpenID, p)
+	code := e.codeFrom(e.do(e.h, http.MethodGet, "/oidc/authorize?"+q.Encode(), "", ""))
+	s, tr := e.token(codeForm(clientCLI, cliRedirect, code, p))
 	if s != http.StatusOK || tr.RefreshToken != "" {
 		t.Fatalf("%d refresh=%q", s, tr.RefreshToken)
 	}
@@ -440,7 +416,7 @@ func TestDiscoveryVariants(t *testing.T) {
 	ext := e.do(e.h, http.MethodGet, "/.well-known/openid-configuration", "", "")
 	in := e.do(e.iss.InternalHandler(), http.MethodGet, "/.well-known/openid-configuration", "", "")
 	var de, di map[string]any
-	if jsonUnmarshal(ext.Body.Bytes(), &de) != nil || jsonUnmarshal(in.Body.Bytes(), &di) != nil {
+	if json.Unmarshal(ext.Body.Bytes(), &de) != nil || json.Unmarshal(in.Body.Bytes(), &di) != nil {
 		t.Fatal("bad discovery json")
 	}
 	if de["issuer"] != externalURL || di["issuer"] != externalURL {

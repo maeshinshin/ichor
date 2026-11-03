@@ -77,6 +77,21 @@ and an installation that does not want the network call must be able to turn it 
 - The check does not verify signatures; the chart is signed by the release workflow (ADR 0108), and a
   "newer" tag is only a prompt to look at the release notes and verify it as the install guide says.
 
+## Amendment: the CLI notice (2026-11-03)
+
+Decision 9 is extended. After every command that reaches a cluster, the CLI prints one line on stderr when
+`status.latestRelease` is newer than the installed version, or newer than the running `ichor` binary (that line
+says to update the binary). The CLI makes no request of its own: it reads the IchorInstallation through the client
+the command already built, with one Get and a 3-second timeout. A failed check (`error` set) shows nothing.
+
+- It runs from `Execute` after the command returns, so a failed command gets it too (cobra skips
+  `PersistentPostRun` on error).
+- It is shown only on a terminal, not when `-o` is typed (the output is for a script), and never for `help` or
+  shell completion. The default output format does not count as typed, so the default human output shows it.
+- At most once per 24 hours per cluster, keyed by the API server host, in `~/.ichor/update-notice.json` (mode
+  0600). Nothing is recorded when nothing is shown.
+- `ICHOR_NO_UPDATE_NOTICE=1` switches it off.
+
 ## Not decided
 
 - Notifications outside the dashboard (email, webhook). Not part of this ADR.

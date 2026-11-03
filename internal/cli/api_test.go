@@ -556,3 +556,25 @@ func (b *syncBuffer) String() string {
 
 	return b.buf.String()
 }
+
+// --override is a flag and the reason is optional: the field's presence is the override, and a reason
+// without --override is refused rather than dropped (ADR 0110).
+func TestOverrideIsAFlagAndTheReasonIsOptional(t *testing.T) {
+	if overrideOf(apiOptions{}) != nil {
+		t.Fatal("no override must send no field")
+	}
+
+	bare := overrideOf(apiOptions{Override: true})
+	if bare == nil || bare.GetReason() != "" {
+		t.Fatalf("--override alone must send the override without a reason, got %v", bare)
+	}
+
+	if got := overrideOf(apiOptions{Override: true, OverrideReason: "node is dead"}).GetReason(); got != "node is dead" {
+		t.Fatalf("reason = %q", got)
+	}
+
+	_, err := connectAPI(context.Background(), apiOptions{OverrideReason: "node is dead"}, apiDeps{}, false)
+	if err == nil || !strings.Contains(err.Error(), "--override-reason needs --override") {
+		t.Fatalf("a reason without --override = %v", err)
+	}
+}

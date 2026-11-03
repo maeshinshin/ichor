@@ -125,7 +125,7 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 	}
 
 	if s.Action == pb.NodeAction_NODE_ACTION_RESET && bg == nil {
-		return errors.New("node reset: it needs --override <reason> (and the override RBAC verb on the machine); the reason goes into the audit record")
+		return errors.New("node reset: it needs --override (and the override RBAC verb on the machine); --override-reason records why in the audit record")
 	}
 
 	text := nodePlanText(s, plan.Msg)

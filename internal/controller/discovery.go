@@ -176,6 +176,14 @@ func (r *DiscoveryReconciler) Discover(
 
 		r.pinMaintenance(ctx, mc, m)
 
+		// Written to the object Create returned: the cache may not have the new machine yet.
+		if inv, ok := r.readInventory(ctx, mc, m); ok {
+			m.Status.DiscoveredDisks, m.Status.DiscoveredLinks = inv.Disks, inv.Links
+			if err := r.Status().Update(ctx, m); err != nil {
+				logf.FromContext(ctx).Error(err, "recording the disks and NICs of a new TalosMachine", "machine", m.Name)
+			}
+		}
+
 		return m, nil
 
 	case err != nil:
@@ -193,6 +201,12 @@ func (r *DiscoveryReconciler) Discover(
 
 		if !existing.Spec.IsApproved() {
 			r.pinMaintenance(ctx, mc, &existing)
+
+			if inv, ok := r.readInventory(ctx, mc, &existing); ok {
+				if err := recordDiscoveredHardware(ctx, r.Client, r.Client, &existing, inv); err != nil {
+					logf.FromContext(ctx).Error(err, "recording the disks and NICs of a pending TalosMachine", "machine", existing.Name)
+				}
+			}
 		}
 
 		return &existing, nil
@@ -207,6 +221,23 @@ func (r *DiscoveryReconciler) Discover(
 
 		return nil, nil
 	}
+}
+
+// readInventory reads the node's disks and NICs for m's status. A failed read is not a
+// failed discovery: the approval form reads the node itself while the lists are missing, and the next
+// probe records them.
+func (r *DiscoveryReconciler) readInventory(
+	ctx context.Context, mc MaintenanceClient, m *ichorv1alpha1.TalosMachine,
+) (Inventory, bool) {
+	inv, err := mc.Inventory(ctx)
+	if err != nil {
+		logf.FromContext(ctx).Info("reading the node's disks and NICs; not recorded on the TalosMachine",
+			"machine", m.Name, "reason", err.Error())
+
+		return Inventory{}, false
+	}
+
+	return inv, true
 }
 
 // pinMaintenance records the certificate fingerprint the node presented, so the first configuration is

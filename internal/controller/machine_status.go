@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -81,6 +82,21 @@ func recordMaintenanceFingerprint(
 
 	return updateMachineStatus(ctx, rd, c, m, func(fresh *ichorv1alpha1.TalosMachine) {
 		fresh.Status.MaintenanceFingerprint = fingerprint
+	})
+}
+
+// recordDiscoveredHardware stores the disks and NICs a maintenance-mode probe reported on m's status. An unchanged
+// inventory writes nothing.
+func recordDiscoveredHardware(
+	ctx context.Context, rd client.Reader, c client.Client, m *ichorv1alpha1.TalosMachine, inv Inventory,
+) error {
+	if slices.Equal(m.Status.DiscoveredDisks, inv.Disks) && slices.Equal(m.Status.DiscoveredLinks, inv.Links) {
+		return nil
+	}
+
+	return updateMachineStatus(ctx, rd, c, m, func(fresh *ichorv1alpha1.TalosMachine) {
+		fresh.Status.DiscoveredDisks = inv.Disks
+		fresh.Status.DiscoveredLinks = inv.Links
 	})
 }
 

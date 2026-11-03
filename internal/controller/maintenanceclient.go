@@ -16,7 +16,11 @@ limitations under the License.
 
 package controller
 
-import "context"
+import (
+	"context"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+)
 
 // MaintenanceClient is the maintenance-mode Talos API surface discovery
 // needs: just enough to read a node's hardware identity over the
@@ -39,6 +43,16 @@ type MaintenanceClient interface {
 	// why the reconciler follows the node's stage instead of trusting this
 	// return. A node that already has a configuration refuses it.
 	ApplyConfiguration(ctx context.Context, cfg []byte) error
+
+	// Inventory reads the node's installable disks and its physical NICs with permanent addresses,
+	// the lists approval picks from. Discovery records them on the TalosMachine's status.
+	Inventory(ctx context.Context) (Inventory, error)
+}
+
+// Inventory is what MaintenanceClient.Inventory reads from a node's maintenance API.
+type Inventory struct {
+	Disks []ichorv1alpha1.TalosMachineDiscoveredDisk
+	Links []ichorv1alpha1.TalosMachineDiscoveredLink
 }
 
 // HardwareIdentity is what MaintenanceClient.Identity reads from a node's

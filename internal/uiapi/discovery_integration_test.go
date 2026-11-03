@@ -42,6 +42,10 @@ func (f *fakeMaintenanceClient) ApplyConfiguration(context.Context, []byte) erro
 	return nil
 }
 
+func (f *fakeMaintenanceClient) Inventory(context.Context) (controller.Inventory, error) {
+	return controller.Inventory{}, nil
+}
+
 // This file exercises the interaction RejectMachine's own doc comment
 // relies on but cannot test from inside this package: that a rejected
 // TalosMachine is never recreated as fresh and pending by

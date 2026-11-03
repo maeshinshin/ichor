@@ -76,9 +76,7 @@ type generatedConfig struct {
 // once per node, not once per node's own config. The cluster endpoint pins to nodeIPs[0]
 // (this harness has no VIP/load balancer); WithEndpointList carries every node so Talos's
 // own endpoint controllers, and talosctl, know about all of them.
-func generateControlPlaneConfig(
-	clusterName string, nodeIPs []string, extra ...generate.Option,
-) (*generatedConfig, error) {
+func generateControlPlaneConfig(clusterName string, nodeIPs []string) (*generatedConfig, error) {
 	endpoint := fmt.Sprintf("https://%s:6443", nodeIPs[0])
 	installImage := fmt.Sprintf("factory.talos.dev/metal-installer/%s:%s", talosFactorySchematic, talosVersion)
 
@@ -86,13 +84,12 @@ func generateControlPlaneConfig(
 	if v := os.Getenv(k8sVersionEnv); v != "" {
 		k8sVersion = strings.TrimPrefix(v, "v")
 	}
-	opts := append([]generate.Option{
+	input, err := generate.NewInput(clusterName, endpoint, k8sVersion,
 		generate.WithInstallDisk("/dev/vda"),
 		generate.WithInstallImage(installImage),
 		generate.WithEndpointList(nodeIPs),
 		generate.WithAdditionalSubjectAltNames(localhostSANs),
-	}, extra...)
-	input, err := generate.NewInput(clusterName, endpoint, k8sVersion, opts...)
+	)
 	if err != nil {
 		return nil, fmt.Errorf("building config generator input: %w", err)
 	}

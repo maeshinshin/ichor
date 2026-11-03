@@ -32,7 +32,6 @@ import (
 	"time"
 
 	"github.com/maeshinshin/ichor/test/internal/kube"
-	"github.com/maeshinshin/ichor/test/internal/talosctl"
 )
 
 const (
@@ -147,6 +146,7 @@ func upDemo() error {
 
 	names := []string{cp, worker}
 	memory := map[string]string{cp: cpMem, worker: workerMem}
+	group := strings.TrimSuffix(cp, "-cp")
 
 	// ICHOR_UI_DEMO_NO_WORKER=1 boots the control plane only (single-VM test runs).
 	if os.Getenv("ICHOR_UI_DEMO_NO_WORKER") == "1" {
@@ -184,7 +184,7 @@ func upDemo() error {
 	}
 
 	for _, n := range names {
-		if err := kube.Apply(demoVMManifest(n, cp[:len(cp)-len("-cp")], memory[n], iso)); err != nil {
+		if err := kube.Apply(demoVMManifest(n, group, memory[n], iso)); err != nil {
 			return fmt.Errorf("creating VM %s: %w", n, err)
 		}
 	}
@@ -201,22 +201,15 @@ func upDemo() error {
 	}
 
 	for _, n := range names {
-		ip := ips[n]
-		if _, err := kube.Poll("waiting for "+n+" ("+ip+") to reach maintenance", 10*time.Minute, func() (string, bool) {
-			out, err := talosctl.Get(namespace, ip, "machinestatus")
-			if err != nil {
-				return "", false
-			}
-
-			return "", machineInMaintenance(out)
-		}); err != nil {
+		step := "waiting for " + n + " (" + ips[n] + ") to reach maintenance"
+		if err := waitForMaintenance(step, ips[n], 10*time.Minute); err != nil {
 			return err
 		}
 	}
 
 	if c, w := demoScale(); c > 0 && !demoExtra() {
 		for _, n := range append(numbered(cp, c), numbered(worker, w)...) {
-			fmt.Println(strings.ToUpper(strings.ReplaceAll(strings.TrimPrefix(n, cp[:len(cp)-len("-cp")]+"-"), "-", "_")) + "_IP=" + ips[n]) //nolint:lll
+			fmt.Println(strings.ToUpper(strings.TrimPrefix(n, group+"-")) + "_IP=" + ips[n])
 		}
 
 		return nil

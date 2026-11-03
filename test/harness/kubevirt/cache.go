@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"github.com/maeshinshin/ichor/test/internal/kube"
-	"github.com/maeshinshin/ichor/test/utils"
 )
 
 // baseCacheEnv turns the cache off with 0/false/off/no; anything else (including unset)
@@ -128,18 +127,13 @@ func ensureBaseCache() (string, error) {
 	}
 
 	if _, err := kube.Poll("waiting for base cache "+name+" to be ready", 15*time.Minute, func() (string, bool) {
-		out, err := utils.Run(kube.Command("-n", namespace, "get", "dv", name,
-			"-o", "jsonpath={.status.phase}"))
-
-		return "", err == nil && strings.TrimSpace(out) == "Succeeded"
+		phase, err := getJSONPath("dv", name, ".status.phase")
+		return "", err == nil && phase == "Succeeded"
 	}); err != nil {
 		return "", err
 	}
 
-	out, err := utils.Run(kube.Command("-n", namespace, "get", "pvc", name,
-		"-o", "jsonpath={.status.capacity.storage}"))
-	size := strings.TrimSpace(out)
-
+	size, err := getJSONPath("pvc", name, ".status.capacity.storage")
 	if err != nil || size == "" {
 		return "", fmt.Errorf("reading the capacity of base cache PVC %s: %v", name, err)
 	}

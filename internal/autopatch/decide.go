@@ -168,7 +168,7 @@ func Resume(halted, acknowledged string, op *Halting, later []LaterOperation) bo
 	}
 
 	for _, l := range later {
-		if !l.Auto && l.Completed && l.Created.After(op.Created) && l.Cluster == op.Cluster {
+		if !l.Auto && l.Completed && !l.Created.Before(op.Created) && l.Cluster == op.Cluster {
 			return true
 		}
 	}

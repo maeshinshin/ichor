@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	"golang.org/x/mod/semver"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -49,7 +50,9 @@ func SetupTalosClusterWebhookWithManager(mgr ctrl.Manager, s ...*settings.Reader
 
 	return ctrl.NewWebhookManagedBy(mgr, &ichorv1alpha1.TalosCluster{}).
 		WithDefaulter(d).
-		WithValidator(&TalosClusterCustomValidator{APIReader: mgr.GetAPIReader(), Can: rightCheckFor(mgr.GetClient())}).
+		WithValidator(&TalosClusterCustomValidator{
+			APIReader: mgr.GetAPIReader(), Can: rightCheckFor(mgr.GetClient()), ControllerUser: controllerUsername(),
+		}).
 		Complete()
 }
 
@@ -70,6 +73,65 @@ type TalosClusterCustomValidator struct {
 	// ControllerSource finds the address the controller reaches a cluster endpoint from, for the
 	// firewall preflight (ADR 0108). nil asks the routing table.
 	ControllerSource SourceResolver
+	// ControllerUser is the controller's own username. Its one write to a TalosCluster is the automatic
+	// patch upgrade (ADR 0116), which this validator limits to a newer patch of the running minor in
+	// spec.talosVersion or spec.kubernetesVersion. Empty means no user is limited (tests).
+	ControllerUser string
+}
+
+// controllerUsername is the username the controller's ServiceAccount authenticates as, from the downward
+// API values the Deployment sets; empty when they are not set.
+func controllerUsername() string {
+	ns, sa := os.Getenv("POD_NAMESPACE"), os.Getenv("POD_SERVICE_ACCOUNT")
+	if ns == "" || sa == "" {
+		return ""
+	}
+
+	return "system:serviceaccount:" + ns + ":" + sa
+}
+
+// limitController refuses any update by the controller that is not an automatic patch upgrade (ADR 0116): the
+// controller never edits a spec otherwise, so what it may do is exactly one thing, in the two version
+// fields, to a newer patch of the same minor, and nothing else in the object may change.
+func (v *TalosClusterCustomValidator) limitController(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosCluster) error {
+	if v.ControllerUser == "" {
+		return nil
+	}
+
+	req, err := admission.RequestFromContext(ctx)
+	if err != nil || req.UserInfo.Username != v.ControllerUser {
+		return nil //nolint:nilerr // no request in context: not a webhook call we can attribute
+	}
+
+	refuse := func(why string) error {
+		return fmt.Errorf("the controller may only write a newer patch of the running minor to spec.talosVersion or spec.kubernetesVersion (ADR 0116): %s", why)
+	}
+
+	a, b := oldObj.Spec.DeepCopy(), newObj.Spec.DeepCopy()
+	a.TalosVersion, b.TalosVersion = "", ""
+	a.KubernetesVersion, b.KubernetesVersion = "", ""
+
+	if !apiequality.Semantic.DeepEqual(a, b) ||
+		!apiequality.Semantic.DeepEqual(oldObj.Labels, newObj.Labels) ||
+		!apiequality.Semantic.DeepEqual(oldObj.Annotations, newObj.Annotations) ||
+		!apiequality.Semantic.DeepEqual(oldObj.Finalizers, newObj.Finalizers) {
+		return refuse("something else changes")
+	}
+
+	for _, f := range [][3]string{
+		{"talosVersion", oldObj.Spec.TalosVersion, newObj.Spec.TalosVersion},
+		{"kubernetesVersion", oldObj.Spec.KubernetesVersion, newObj.Spec.KubernetesVersion},
+	} {
+		if f[1] == f[2] {
+			continue
+		}
+
+		if !semver.IsValid(f[1]) || !semver.IsValid(f[2]) || semver.MajorMinor(f[1]) != semver.MajorMinor(f[2]) || semver.Compare(f[2], f[1]) <= 0 {
+			return refuse(fmt.Sprintf("%s %s to %s is not a newer patch of the same minor", f[0], f[1], f[2]))
+		}
+	}
+
+	return nil
 }
 
 // isUnschedulable reports spec.controlPlane.schedulable == "false".
@@ -199,6 +261,10 @@ func validateCNICreate(c *ichorv1alpha1.TalosCluster) error {
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type TalosCluster.
 func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
 	talosclusterlog.Info("Validation for TalosCluster upon update", "name", newObj.GetName())
+
+	if err := v.limitController(ctx, oldObj, newObj); err != nil {
+		return nil, err
+	}
 
 	// A stored flannel/custom cluster keeps its metadata and deletion, but no spec change: its
 	// controllers refuse to render it, so a spec edit could never take effect (ADR 0099).

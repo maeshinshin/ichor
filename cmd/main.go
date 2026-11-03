@@ -588,6 +588,11 @@ func main() {
 		Client: mgr.GetClient(), Reader: mgr.GetAPIReader(), Settings: settingsReader, Namespace: ns,
 		Repository: updateCheckRepository, List: relists, Images: ciliumImages, Settle: 3 * time.Second,
 	}), "Failed to add the release check")
+	// Automatic patch upgrades (ADR 0116): off unless spec.autoPatch or the chart turns them on.
+	must(mgr.Add(&controller.AutoPatcher{
+		Client: mgr.GetClient(), Reader: mgr.GetAPIReader(), Settings: settingsReader,
+		Recorder: mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
+	}), "Failed to add the automatic patcher")
 	// Create the singleton once if it is absent (ADR 0105, decision 8). The admission webhook may
 	// not be serving yet, so a failed create is retried; losing the race is not an error.
 	must(mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {

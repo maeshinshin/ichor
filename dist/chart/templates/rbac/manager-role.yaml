@@ -148,6 +148,15 @@ rules:
 - apiGroups:
   - ichor.maesh.dev
   resources:
+  - talosclusters
+  verbs:
+  - get
+  - list
+  - update
+  - watch
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
   - talosmachines
   verbs:
   - create
@@ -184,7 +193,6 @@ rules:
   - ichor.maesh.dev
   resources:
   - ichorusers
-  - talosclusters
   - talosconfigpatches
   - talosetcdbackups
   - talosstorages

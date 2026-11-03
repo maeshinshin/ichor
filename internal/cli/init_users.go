@@ -294,7 +294,7 @@ func initUsersEpilogue(errw io.Writer, opts initOptions, password string) {
 		"the ichor-ui Service (label %s=%s), or ichorUI.tls.secretName); Ichor installs none\n", opts.UIURL, uiComponentLabel, uiComponentValue)
 	_, _ = fmt.Fprintln(errw, "init: spec.authentication.ichor is set; the controller renders the kube-apiserver authentication "+
 		"config next. Applying it restarts kube-apiserver on each control plane, so machines report APIServerRestartRequired "+
-		"until you run `ichor config apply` (or Apply configuration on the Overview page), which rolls one control plane at a time")
+		"until you run `ichor config apply` (or Apply in the Overview page's attention list), which rolls one control plane at a time")
 
 	if password != "" {
 		printGeneratedPassword(errw, opts.AdminUser, password)

@@ -480,6 +480,6 @@ Do not confuse it with the override write in
 Talos applies the login settings without a reboot, but restarts the
 kube-apiserver on each change (15 to 45 seconds of `/readyz` down per control
 plane). The machine controller does not apply the change by itself: the
-machines report `APIServerRestartRequired`, and `ichor config apply` (or Apply configuration on the UI's Overview) rolls it out one control plane at a time with
+machines report `APIServerRestartRequired`, and `ichor config apply` (or Apply in the attention list of the UI's Overview) rolls it out one control plane at a time with
 no drain, waiting for that node's `/readyz` before the next. On a cluster with
 one control plane the API is unavailable while it restarts.

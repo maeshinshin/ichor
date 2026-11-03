@@ -886,7 +886,7 @@ until the Talos side is ready.
    node at a time through the operation hook and drain, control planes with
    etcd checks in between. They never start by themselves: the machine reports
    `RebootRequired` with the fields, and a `config` operation, started from
-   `ichor config apply` or Apply configuration on the Overview page after a plan, rolls them out (ADR 0080).
+   `ichor config apply` or Apply in the Overview page's attention list after a plan, rolls them out (ADR 0080).
    A third class, `APIServerRestart` (for example `spec.authentication`), needs
    no reboot but restarts the kube-apiserver; the machine controller never
    applies it to a control plane, and the same `config` operation does, one
@@ -1056,7 +1056,8 @@ bar shows the cluster's name, its Talos, Kubernetes and Ichor versions and a
 health badge. Screens: an Overview, built from stock preactcn components, with
 tiles for nodes (and the nodes waiting for approval), the running operation,
 backups and versions, a needs-attention list, recent operations, and a
-collapsible cluster details section, with Apply configuration and cluster
+collapsible cluster details section (a config apply waiting for a reboot shows in the
+needs-attention list with its own Apply action), with Add node and cluster
 actions (rotating the CAs, shutting down) in the header; a Nodes list and an add-node
 (approval) page; a node page with tabs for Summary, Storage & network, Talos,
 Kubernetes & etcd, Configuration and Logs; Operations, with a detail page per

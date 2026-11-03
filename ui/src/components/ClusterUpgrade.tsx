@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { CardDescription } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import type { PlanClusterUpgradeResponse, ClusterUpgradeStep } from '@/gen/ichor/v1alpha1/operation_pb'
@@ -69,7 +68,7 @@ export function ClusterUpgrade({
     }
   }
 
-  if (steps?.length === 0) return <CardDescription>{t('versions.state.up-to-date')}</CardDescription>
+  if (steps?.length === 0) return null
 
   const canStart = plan !== null && plan.blocked === '' && plan.steps.length > 0 && !starting && !busy
   return (

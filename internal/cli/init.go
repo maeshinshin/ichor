@@ -44,6 +44,21 @@ func checkPinnedFlags(talos, kubernetes, contract string) error {
 	return nil
 }
 
+// checkInitCompat refuses a first install whose Talos, Kubernetes and Cilium the compatibility table
+// does not hold together (ADR 0115). The pinned set passes by construction; the check guards a set
+// that is edited without the table.
+func checkInitCompat(talos, kubernetes, cilium string) error {
+	if err := release.TalosKubernetesError(talos, kubernetes); err != nil {
+		return fmt.Errorf("init: %w", err)
+	}
+
+	if err := release.CiliumKubernetesError(cilium, kubernetes); err != nil {
+		return fmt.Errorf("init: %w", err)
+	}
+
+	return nil
+}
+
 var initOpts initOptions
 
 // initCmd implements `ichor init`, steps 1-5 of
@@ -82,6 +97,10 @@ change to this cluster goes through the controller, by writing CRs.`,
 		}
 
 		if err := checkPinnedFlags(initOpts.TalosVersion, initOpts.KubernetesVersion, initOpts.VersionContract); err != nil {
+			return err
+		}
+
+		if err := checkInitCompat(release.Pinned.Talos, release.Pinned.Kubernetes, release.Pinned.Cilium); err != nil {
 			return err
 		}
 

@@ -120,6 +120,7 @@ func refuseHelmManagedInstall(ctx context.Context, errOut io.Writer) error {
 	}
 
 	noticeEarlierOverrideVerb(ctx, c, errOut)
+	noticePendingRenames(ctx, c, errOut)
 
 	return nil
 }

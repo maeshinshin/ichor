@@ -115,6 +115,8 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 		return fmt.Errorf("carrying init's customizations over to the new manifest: %w", err)
 	}
 
+	markInstalled(objs)
+
 	p := classify(objs)
 
 	// Refusals come before the snapshot and before any write: nothing to roll back.
@@ -128,6 +130,7 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 	}
 
 	CustomizePolicies(policies, uiSettings)
+	markInstalled(policies)
 
 	// Stage 0: the installer's cluster-scoped RBAC (ClusterRoles, ClusterRoleBindings). A run
 	// started by an older release holds that release's rights, which cannot reach a namespace
@@ -191,6 +194,32 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 		if err := applyStep(ctx, c, opts, s.name, s.objs); err != nil {
 			return failWithRollback(c, opts, snap, err)
 		}
+	}
+
+	// Stage 3, last (ADR 0111): delete what the previous run installed and this manifest no
+	// longer ships. The new manifest is in place and checked by now, and the installer keeps its
+	// own rights until here.
+	applied := slices.Concat(p.clusterRBAC, p.namespacedRBAC, p.crds, p.controller, p.ui, policies)
+	bundle := make([]ref, 0, len(applied))
+
+	for _, o := range applied {
+		bundle = append(bundle, refOf(o))
+	}
+
+	prev, err := readInventory(ctx, c, opts.Namespace, opts.Log)
+	if err != nil {
+		return failWithRollback(c, opts, snap, err)
+	}
+
+	pruned, err := prune(ctx, c, opts, pruneCandidates(prev, bundle, opts.Namespace))
+
+	snap = append(snap, pruned...)
+	if err != nil {
+		return failWithRollback(c, opts, snap, err)
+	}
+
+	if err := writeInventory(ctx, c, opts.Namespace, bundle); err != nil {
+		logf(opts.Log, "could not record what this run installed; the next run prunes less, never more: %v", err)
 	}
 
 	return nil

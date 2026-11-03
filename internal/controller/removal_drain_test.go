@@ -67,9 +67,9 @@ var _ = Describe("a removal whose drain is blocked", func() {
 
 		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
 
-		_, err := reconcileMachine(r, cp1)
-		Expect(err).To(HaveOccurred(), "a blocked drain must be retried, not left until something touches the machine")
-		Expect(err.Error()).To(ContainSubstring("bare-pod"))
+		res, err := reconcileMachine(r, cp1)
+		Expect(err).NotTo(HaveOccurred(), "a blocked drain is a wait, not an error: the error backoff grows to 1000s")
+		Expect(res.RequeueAfter).To(Equal(drainRetryInterval), "retried on the fixed short interval")
 
 		cond := apimeta.FindStatusCondition(fetchMachine(cp1).Status.Conditions, conditionRemoval)
 		Expect(cond).NotTo(BeNil())
@@ -77,10 +77,20 @@ var _ = Describe("a removal whose drain is blocked", func() {
 		Expect(cond.Message).To(ContainSubstring("bare-pod"))
 		Eventually(recorder.Events).Should(Receive(And(ContainSubstring(reasonDrainFailed), ContainSubstring("bare-pod"))))
 
+		// A long blocked stretch keeps the same interval and does not repeat the warning.
+		for range 19 {
+			res, err = reconcileMachine(r, cp1)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(drainRetryInterval))
+		}
+		Expect(recorder.Events).To(BeEmpty(), "the Warning is emitted when the blocking state starts, not on every retry")
+
 		Expect(kube.CoreV1().Pods("default").Delete(context.Background(), "bare-pod", metav1.DeleteOptions{})).To(Succeed())
 
-		_, err = reconcileMachine(r, cp1)
+		// The next retry, one interval later, finishes the removal.
+		res, err = reconcileMachine(r, cp1)
 		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(BeZero())
 
 		var gone ichorv1alpha1.TalosMachine
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, machineKeyOf(cp1), &gone))).To(BeTrue())

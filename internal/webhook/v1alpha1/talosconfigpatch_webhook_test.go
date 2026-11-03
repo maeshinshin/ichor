@@ -28,7 +28,7 @@ const (
 func dryRenderValidator(t *testing.T, objs ...runtime.Object) *TalosConfigPatchCustomValidator {
 	t.Helper()
 
-	contract, err := coreconfig.ParseContractFromVersion("v1.14")
+	contract, err := coreconfig.ParseContractFromVersion(testVersionContract)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,9 +56,9 @@ func dryRenderValidator(t *testing.T, objs ...runtime.Object) *TalosConfigPatchC
 		Name: "c", Namespace: dryRenderNS,
 		Spec: ichorv1alpha1.TalosClusterSpec{
 			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: "vip", Address: "10.0.0.5"},
-			TalosVersion:      "v1.14.3",
+			TalosVersion:      testTalosVersion,
 			KubernetesVersion: "v1.36.0",
-			VersionContract:   "v1.14",
+			VersionContract:   testVersionContract,
 			SecretsRef:        corev1.LocalObjectReference{Name: "bundle"},
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: dryRenderFalse},
 		},

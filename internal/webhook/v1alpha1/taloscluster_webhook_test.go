@@ -27,14 +27,21 @@ import (
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
+// Versions the webhook tests repeat.
+const (
+	testTalosVersion    = "v1.14.3"
+	testVersionContract = "v1.14"
+	testK8sVersion      = "v1.36.2"
+)
+
 func newTestCluster() *ichorv1alpha1.TalosCluster {
 	return &ichorv1alpha1.TalosCluster{
 		GenerateName: "cluster-", Namespace: testNamespace,
 		Spec: ichorv1alpha1.TalosClusterSpec{
 			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: "vip", Address: "10.0.0.1"},
-			TalosVersion:      "v1.14.3",
+			TalosVersion:      testTalosVersion,
 			KubernetesVersion: "v1.36.0",
-			VersionContract:   "v1.14",
+			VersionContract:   testVersionContract,
 			SecretsRef:        corev1.LocalObjectReference{Name: "secrets"},
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: "true"},
 		},

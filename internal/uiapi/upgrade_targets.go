@@ -26,6 +26,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/release"
 )
 
@@ -43,9 +44,10 @@ func (s *Server) ListUpgradeTargets(
 	ctx context.Context, req *connect.Request[pb.ListUpgradeTargetsRequest],
 ) (*connect.Response[pb.ListUpgradeTargetsResponse], error) {
 	kind := req.Msg.GetKind()
-	if kind != pb.OperationKind_OPERATION_KIND_TALOS && kind != pb.OperationKind_OPERATION_KIND_KUBERNETES {
+	if kind != pb.OperationKind_OPERATION_KIND_TALOS && kind != pb.OperationKind_OPERATION_KIND_KUBERNETES &&
+		kind != pb.OperationKind_OPERATION_KIND_CNI {
 		return nil, connect.NewError(connect.CodeInvalidArgument,
-			fmt.Errorf("ListUpgradeTargets lists the talos or kubernetes kind, not %s", kind))
+			fmt.Errorf("ListUpgradeTargets lists the talos, kubernetes or cni kind, not %s", kind))
 	}
 
 	cluster, err := s.loadCluster(ctx, namespacedName(req.Msg.GetCluster()))
@@ -101,18 +103,46 @@ func upgradeLists(inst *ichorv1alpha1.IchorInstallation, found bool) (*ichorv1al
 	return ut, ""
 }
 
-// upgradeChoices groups the recorded releases of kind against the cluster (release.TalosChoices and
-// release.KubernetesChoices). Without a list there is nothing to group.
+// upgradeChoices groups the recorded releases of kind against the cluster (release.TalosChoices,
+// release.KubernetesChoices and, for the cni kind, the Cilium patches of release.CiliumChoices). Without a
+// list there is nothing to group.
 func upgradeChoices(kind pb.OperationKind, cluster *ichorv1alpha1.TalosCluster, lists *ichorv1alpha1.IchorUpgradeTargets) release.Choices {
 	if lists == nil {
 		return release.Choices{}
 	}
 
-	if kind == pb.OperationKind_OPERATION_KIND_TALOS {
+	switch kind {
+	case pb.OperationKind_OPERATION_KIND_TALOS:
 		return release.TalosChoices(cluster.Spec.TalosVersion, cluster.Spec.KubernetesVersion, release.Pinned.Talos, lists.Talos)
+	case pb.OperationKind_OPERATION_KIND_CNI:
+		installed, _ := ciliumVersion(cluster)
+		if installed == "" {
+			return release.Choices{}
+		}
+
+		return release.CiliumChoices("v"+installed, cilium.ChartVersion, cluster.Spec.KubernetesVersion, lists.Cilium)
 	}
 
-	cilium, _ := ciliumVersion(cluster)
+	installed, _ := ciliumVersion(cluster)
 
-	return release.KubernetesChoices(cluster.Spec.KubernetesVersion, cluster.Spec.TalosVersion, cilium, release.Pinned.Kubernetes, lists.Kubernetes)
+	return release.KubernetesChoices(cluster.Spec.KubernetesVersion, cluster.Spec.TalosVersion, installed, release.Pinned.Kubernetes, lists.Kubernetes)
+}
+
+// ciliumPatchChoices is the Cilium patches the cluster can take now, and why the list cannot be used ("" when
+// it can). StartCniUpgrade checks a requested patch against it.
+func (s *Server) ciliumPatchChoices(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) (release.Choices, string, error) {
+	var inst ichorv1alpha1.IchorInstallation
+
+	found := true
+
+	switch err := s.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); {
+	case apierrors.IsNotFound(err):
+		found = false
+	case err != nil:
+		return release.Choices{}, "", mapGetError("IchorInstallation \""+ichorv1alpha1.IchorInstallationName+"\"", err)
+	}
+
+	lists, reason := upgradeLists(&inst, found)
+
+	return upgradeChoices(pb.OperationKind_OPERATION_KIND_CNI, cluster, lists), reason, nil
 }

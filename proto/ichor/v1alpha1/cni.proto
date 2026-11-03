@@ -103,6 +103,10 @@ message SetCiliumValuesResponse {
 
 message StartCniUpgradeRequest {
   ObjectRef cluster = 1;
+  // version is a Cilium patch (vX.Y.Z, newer than the chart this Ichor embeds) the list of
+  // ListUpgradeTargets offers as a cni patch; empty upgrades the release to the embedded chart.
+  // The controller verifies the patch's images before it runs them (ADR 0115, amendment 2026-11-03).
+  string version = 2;
 }
 
 message StartCniUpgradeResponse {

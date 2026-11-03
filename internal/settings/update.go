@@ -3,6 +3,7 @@ package settings
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,11 +20,13 @@ type Changes struct {
 	RefreshLifetime *time.Duration
 	// DriftPolicy is warnOnly or autoCorrect.
 	DriftPolicy *string
+	// UpdateCheck turns the check for newer releases on or off.
+	UpdateCheck *bool
 }
 
 // Empty reports that nothing is to change.
 func (c Changes) Empty() bool {
-	return c.TokenTTL == nil && c.RefreshLifetime == nil && c.DriftPolicy == nil
+	return c.TokenTTL == nil && c.RefreshLifetime == nil && c.DriftPolicy == nil && c.UpdateCheck == nil
 }
 
 // Validate checks the bounds the CRD enforces, so the caller gets the message before the API server's.
@@ -66,6 +69,10 @@ func (c Changes) Apply(inst *ichorv1alpha1.IchorInstallation) {
 	if c.DriftPolicy != nil {
 		s.Defaults = &ichorv1alpha1.IchorDefaultSettings{DriftPolicy: *c.DriftPolicy}
 	}
+
+	if c.UpdateCheck != nil {
+		s.UpdateCheck = &ichorv1alpha1.IchorUpdateCheckSettings{Enabled: c.UpdateCheck}
+	}
 }
 
 // Keys of ParseAssignments, as `ichor settings set` spells them.
@@ -75,6 +82,7 @@ const (
 	KeyTokenTTL        = "users.tokenTTL"
 	KeyRefreshLifetime = "users.refreshLifetime"
 	KeyDriftPolicy     = "defaults.driftPolicy"
+	KeyUpdateCheck     = "updateCheck.enabled"
 )
 
 // ParseAssignments turns KEY=VALUE arguments into Changes.
@@ -104,8 +112,14 @@ func ParseAssignments(args []string) (Changes, error) {
 			}
 		case KeyDriftPolicy:
 			c.DriftPolicy = &v
+		case KeyUpdateCheck:
+			var b bool
+
+			if b, err = strconv.ParseBool(v); err == nil {
+				c.UpdateCheck = &b
+			}
 		default:
-			return c, fmt.Errorf("unknown setting %q (known: %s, %s, %s)", k, KeyTokenTTL, KeyRefreshLifetime, KeyDriftPolicy)
+			return c, fmt.Errorf("unknown setting %q (known: %s, %s, %s, %s)", k, KeyTokenTTL, KeyRefreshLifetime, KeyDriftPolicy, KeyUpdateCheck)
 		}
 
 		if err != nil {

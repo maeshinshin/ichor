@@ -39,6 +39,11 @@ func TestCiliumKubernetesTableLookups(t *testing.T) {
 		{"1.18 one minor above", "1.18.0", "v1.34.0", false},
 		{"1.19 range", "v1.19.2", "v1.34.1", true},
 		{"1.19 below range", "1.19.0", "v1.30.5", false},
+		// The Cilium 1.19.10 CI matrix runs 1.32 to 1.35 (ginkgo/main-k8s-versions.yaml); its requirements page is stale.
+		{"1.19 CI matrix lower bound", "1.19.10", "v1.32.0", true},
+		{"1.19 CI matrix upper bound", "1.19.10", "v1.35.0", true},
+		{"1.19 minor 1.31 is not in the CI matrix", "1.19.10", "v1.31.9", false},
+		{"1.19 one minor above the CI matrix", "1.19.10", "v1.36.0", false},
 		{"1.20 range", "1.20.0", "v1.36.0", true},
 		{"1.20 above range", "1.20.0", "v1.37.1", false},
 		{"unknown Cilium minor", "1.21.0", "v1.33.0", false},

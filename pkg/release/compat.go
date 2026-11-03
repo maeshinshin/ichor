@@ -50,15 +50,19 @@ var talosKubernetes = map[string]kubernetesRange{
 	"1.14": {min: kubernetes133, max: "1.37"},
 }
 
-// ciliumKubernetes maps a Cilium minor to the Kubernetes minors its release notes list as e2e tested
-// (the minors are all guaranteed compatible). Every Cilium minor is entered from its own page;
-// a Cilium minor not here is unknown, and nothing is compatible with it.
+// ciliumKubernetes maps a Cilium minor to the Kubernetes minors it is e2e tested with (the minors are
+// all guaranteed compatible). The source is each release's CI matrix, .github/actions/ginkgo/
+// main-k8s-versions.yaml: the tested list, which the docs' compatibility pages match. Every Cilium
+// minor is entered from its own release; a Cilium minor not here is unknown, and nothing is compatible
+// with it.
 var ciliumKubernetes = map[string]kubernetesRange{
-	// https://docs.cilium.io/en/v1.18/network/kubernetes/requirements/ lists 1.30, 1.31, 1.32, 1.33.
+	// https://github.com/cilium/cilium/blob/v1.18.16/.github/actions/ginkgo/main-k8s-versions.yaml runs 1.30 to 1.33.
 	"1.18": {min: "1.30", max: kubernetes133},
-	// https://docs.cilium.io/en/v1.19/network/kubernetes/requirements/ lists 1.31, 1.32, 1.33, 1.34.
-	"1.19": {min: "1.31", max: "1.34"},
-	// https://docs.cilium.io/en/v1.20/network/kubernetes/requirements/ lists 1.33, 1.34, 1.35, 1.36.
+	// https://github.com/cilium/cilium/blob/v1.19.10/.github/actions/ginkgo/main-k8s-versions.yaml runs 1.32 to 1.35.
+	// The requirements page at v1.19.10 still lists 1.31 to 1.34 (stale); compatibility.rst agrees with the
+	// matrix, so the matrix wins.
+	"1.19": {min: "1.32", max: "1.35"},
+	// https://github.com/cilium/cilium/blob/v1.20.4/.github/actions/ginkgo/main-k8s-versions.yaml runs 1.33 to 1.36.
 	"1.20": {min: kubernetes133, max: "1.36"},
 }
 

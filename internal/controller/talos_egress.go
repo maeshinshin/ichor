@@ -28,6 +28,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/constants"
@@ -63,6 +64,7 @@ var ciliumPolicyGVK = schema.GroupVersionKind{Group: "cilium.io", Version: "v2",
 
 const (
 	talosEgressRecheck = time.Minute
+	syncAttempts       = 3
 	keyPorts           = "ports"
 	keyNamespace       = "namespace"
 	keySpec            = "spec"
@@ -90,6 +92,9 @@ type TalosEgress struct {
 	// Settle is how long Reconcile waits after writing, so the agents have the rule before the
 	// first dial. Zero in tests.
 	Settle time.Duration
+
+	mu        sync.Mutex
+	lastWrite time.Time
 }
 
 func (e *TalosEgress) name() string {
@@ -362,7 +367,30 @@ func (e *TalosEgress) staticPolicy(ctx context.Context) (string, error) {
 }
 
 // Sync is the whole job: gate, collect, build, create or update. It returns changed when it wrote.
+// Two reconcilers call it (the TalosCluster one and this controller's own), so a Conflict or
+// AlreadyExists from the other one's write is retried against the fresh object.
 func (e *TalosEgress) Sync(ctx context.Context) (bool, error) {
+	var (
+		changed bool
+		err     error
+	)
+
+	for range syncAttempts {
+		if changed, err = e.sync(ctx); !apierrors.IsConflict(err) && !apierrors.IsAlreadyExists(err) {
+			break
+		}
+	}
+
+	if changed {
+		e.mu.Lock()
+		e.lastWrite = time.Now()
+		e.mu.Unlock()
+	}
+
+	return changed, err
+}
+
+func (e *TalosEgress) sync(ctx context.Context) (bool, error) {
 	if e.Disabled || e.Namespace == "" {
 		return false, nil
 	}
@@ -453,15 +481,22 @@ func (e *TalosEgress) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Resul
 	return ctrl.Result{RequeueAfter: talosEgressRecheck}, nil
 }
 
-// SettleAfter waits Settle when changed, so the agents have installed the rule before a dial.
-func (e *TalosEgress) SettleAfter(ctx context.Context, changed bool) {
-	if !changed || e.Settle <= 0 {
+// SettleAfter waits until Settle has passed since the last write by either reconciler, so the
+// agents have installed the rule before a dial. Counting a write the other reconciler made is the
+// point: otherwise the TalosCluster pass sees no change, dials at once, and a failed probe waits
+// a full requeue.
+func (e *TalosEgress) SettleAfter(ctx context.Context) {
+	e.mu.Lock()
+	wait := time.Until(e.lastWrite.Add(e.Settle))
+	e.mu.Unlock()
+
+	if wait <= 0 {
 		return
 	}
 
 	select {
 	case <-ctx.Done():
-	case <-time.After(e.Settle):
+	case <-time.After(wait):
 	}
 }
 

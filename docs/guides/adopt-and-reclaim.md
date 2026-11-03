@@ -205,7 +205,11 @@ that contains it, is listed in the cluster's `spec.discovery`.
 A range must be IPv4 and `/24` or smaller (at most 256 addresses), and a cluster
 holds at most 4 ranges. It is scanned address by address on the Talos
 maintenance port, and the scan starts as soon as you add it, not at the next
-5 minute pass. Machines found appear as pending on the Add node page (and in
+5 minute pass. If nothing answers yet (the machine is still booting, or the
+network rule for the new address is still being installed), the controller
+probes it again every 15 seconds for the first 3 minutes, so a machine that
+comes up within that time is found within about 15 to 30 seconds of answering;
+after that the normal 5 minute pass applies. Machines found appear as pending on the Add node page (and in
 `ichor machine list`) and wait for approval. Removing an address or range stops
 the scanning only; machines already found stay.
 

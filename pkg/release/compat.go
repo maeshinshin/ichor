@@ -124,7 +124,7 @@ func CiliumKubernetesError(cilium, kubernetes string) error {
 	}
 
 	if !inRange(kubernetes, r) {
-		return fmt.Errorf("cilium %s is tested with kubernetes %s to %s, not %s", minorKey(cilium), r.min, r.max, kubernetes)
+		return fmt.Errorf("cilium %s is tested with kubernetes %s to %s, not %s", cilium, r.min, r.max, kubernetes)
 	}
 
 	return nil

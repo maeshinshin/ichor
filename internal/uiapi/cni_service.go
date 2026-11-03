@@ -411,7 +411,7 @@ func (s *Server) StartCniUpgrade(
 				why = reason
 			}
 
-			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("Cilium %s is not offered: %s", version, why))
+			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("the Cilium patch %s is not offered: %s", version, why))
 		}
 	}
 
@@ -426,10 +426,17 @@ func (s *Server) StartCniUpgrade(
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(blocked))
 	}
 
+	// The chart the release moves to: the one the status says is available, or for a patch the embedded
+	// chart the patch rides on.
 	cluster := v.cluster
+	chart := cilium.ChartVersion
+	if version == "" {
+		chart = cluster.Status.CNI.AvailableChartVersion
+	}
+
 	to := version
 	if to == "" {
-		to = cluster.Status.CNI.AvailableChartVersion
+		to = chart
 	}
 
 	op := &ichorv1alpha1.TalosOperation{
@@ -438,7 +445,7 @@ func (s *Server) StartCniUpgrade(
 			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
 			Kind:       ichorv1alpha1.TalosOperationKindCNI,
 			CNI: &ichorv1alpha1.TalosOperationCNISpec{
-				Action: ichorv1alpha1.TalosOperationCNIActionUpgrade, ChartVersion: cilium.ChartVersion, ImageVersion: version,
+				Action: ichorv1alpha1.TalosOperationCNIActionUpgrade, ChartVersion: chart, ImageVersion: version,
 			},
 		},
 	}

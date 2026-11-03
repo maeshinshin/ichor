@@ -33,6 +33,13 @@ import (
 // quay.io/cilium/cilium:v1.20.4, read from its bundle (Fulcio certificate, 2026-10-23).
 const certificateSAN = "https://github.com/cilium/cilium/.github/workflows/build-images-releases.yaml@refs/tags/v1.20.4"
 
+// The descriptor keys of the registry's JSON.
+const (
+	keyDigest    = "digest"
+	keyMediaType = "mediaType"
+	keySize      = "size"
+)
+
 // ciliumAgentDigest is the digest of quay.io/cilium/cilium:v1.20.4 (the embedded chart's agent image).
 const ciliumAgentDigest = "sha256:20fe92e4c86641233a450098c158d2d29085f3419931ab6bf681d2485dedf16e"
 
@@ -93,7 +100,7 @@ func (f *fakeRegistry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.oci.image.index.v1+json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"schemaVersion": 2,
-			"mediaType":     "application/vnd.oci.image.index.v1+json",
+			keyMediaType:    "application/vnd.oci.image.index.v1+json",
 			"manifests":     f.referrers,
 		})
 	case strings.HasPrefix(r.URL.Path, "/v2/cilium/cilium/manifests/") || strings.HasPrefix(r.URL.Path, "/v2/cilium/cilium/blobs/"):
@@ -128,10 +135,10 @@ func signatureReferrer(t *testing.T, f *fakeRegistry, bundleBody []byte) map[str
 
 	manifest, err := json.Marshal(map[string]any{
 		"schemaVersion": 2,
-		"mediaType":     "application/vnd.oci.image.manifest.v1+json",
-		"config":        map[string]any{"mediaType": "application/vnd.oci.empty.v1+json", "size": 2, "digest": digestOf([]byte("{}"))},
+		keyMediaType:    "application/vnd.oci.image.manifest.v1+json",
+		"config":        map[string]any{keyMediaType: "application/vnd.oci.empty.v1+json", keySize: 2, keyDigest: digestOf([]byte("{}"))},
 		"layers": []any{map[string]any{
-			"mediaType": bundleMediaType, "size": len(bundleBody), "digest": layer,
+			keyMediaType: bundleMediaType, keySize: len(bundleBody), keyDigest: layer,
 		}},
 	})
 	if err != nil {
@@ -142,9 +149,9 @@ func signatureReferrer(t *testing.T, f *fakeRegistry, bundleBody []byte) map[str
 	f.blobs[md] = manifest
 
 	return map[string]any{
-		"mediaType":    "application/vnd.oci.image.manifest.v1+json",
-		"digest":       md,
-		"size":         len(manifest),
+		keyMediaType:   "application/vnd.oci.image.manifest.v1+json",
+		keyDigest:      md,
+		keySize:        len(manifest),
 		"artifactType": bundleMediaType,
 		"annotations":  map[string]any{predicateKey: signPredicate},
 	}
@@ -178,7 +185,7 @@ func TestVerifyRefusesAnImageWithoutASignature(t *testing.T) {
 
 func TestVerifyRefusesASignatureThatDoesNotVerify(t *testing.T) {
 	srv, f := newFakeRegistry(t)
-	f.referrers = []map[string]any{signatureReferrer(t, f, []byte(`{"mediaType":"not a bundle"}`))}
+	f.referrers = []map[string]any{signatureReferrer(t, f, []byte(`{keyMediaType:"not a bundle"}`))}
 
 	s, err := newWithRoot(trustedRootJSON, true)
 	if err != nil {

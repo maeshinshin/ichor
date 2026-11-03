@@ -20,8 +20,6 @@ import (
 	"strings"
 	"testing"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 )
@@ -43,30 +41,49 @@ func TestWithImageOverridesSetsTheChartPathsAndRefusesATagWithoutADigest(t *test
 		t.Fatalf("WithImageOverrides: %v", err)
 	}
 
-	if got := vals["image"].(map[string]any)["override"]; got != patchImages()[ImageAgent] {
+	if got := overrideAt(vals, "image", "override"); got != patchImages()[ImageAgent] {
 		t.Errorf("image.override = %v", got)
 	}
 
-	if got := vals["operator"].(map[string]any)["image"].(map[string]any)["override"]; got != patchImages()[ImageOperator] {
+	if got := overrideAt(vals, "operator", "image", "override"); got != patchImages()[ImageOperator] {
 		t.Errorf("operator.image.override = %v", got)
 	}
 
-	if got := vals["hubble"].(map[string]any)["relay"].(map[string]any)["image"].(map[string]any)["override"]; got != patchImages()[ImageHubbleRelay] {
+	if got := overrideAt(vals, "hubble", "relay", "image", "override"); got != patchImages()[ImageHubbleRelay] {
 		t.Errorf("hubble.relay.image.override = %v", got)
 	}
 
-	if err := WithImageOverrides(map[string]any{}, map[string]string{ImageAgent: "quay.io/cilium/cilium:v1.20.5"}); err == nil {
+	tagOnly := map[string]string{ImageAgent: "quay.io/cilium/cilium:v1.20.5"}
+	if err := WithImageOverrides(map[string]any{}, tagOnly); err == nil {
 		t.Error("an image given by tag alone was accepted")
 	}
 
-	if err := WithImageOverrides(map[string]any{}, map[string]string{"envoy": "quay.io/cilium/cilium-envoy:v1@" + patchDigest}); err == nil {
+	other := map[string]string{"envoy": "quay.io/cilium/cilium-envoy:v1@" + patchDigest}
+	if err := WithImageOverrides(map[string]any{}, other); err == nil {
 		t.Error("an image key that is not a Cilium patch image was accepted")
 	}
 }
 
+// overrideAt reads the values at path, nil when a key on the way is missing.
+func overrideAt(vals map[string]any, path ...string) any {
+	var cur any = vals
+
+	for _, p := range path {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return nil
+		}
+
+		cur = m[p]
+	}
+
+	return cur
+}
+
 // patchCluster is a cluster on the embedded chart whose status records the override.
 func patchCluster(version string) *ichorv1alpha1.TalosCluster {
-	c := &ichorv1alpha1.TalosCluster{ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "ns"}}
+	c := &ichorv1alpha1.TalosCluster{}
+	c.Name, c.Namespace = "c", "ns"
 	c.Spec.ControlPlane.Count = 1
 	c.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{
 		ImageOverride: &ichorv1alpha1.TalosCiliumImageOverride{Version: version, Images: patchImages()},

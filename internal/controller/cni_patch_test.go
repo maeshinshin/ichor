@@ -22,8 +22,6 @@ import (
 	"strings"
 	"testing"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 )
@@ -47,7 +45,8 @@ func patchAdvancer(images *fakeImages) *cniKubeProxyAdvancer {
 }
 
 func patchCluster() *ichorv1alpha1.TalosCluster {
-	c := &ichorv1alpha1.TalosCluster{ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "ns"}}
+	c := &ichorv1alpha1.TalosCluster{}
+	c.Name, c.Namespace = "c", "ns"
 	c.Spec.KubernetesVersion = "v1.36.6"
 
 	return c

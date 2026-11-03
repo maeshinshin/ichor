@@ -29,16 +29,22 @@ import (
 // overrides. The chart's image helpers print an "override" reference as it is, digest included, in
 // place of the repository, tag and digest it would otherwise compose.
 const (
-	ImageAgent      = "agent"
-	ImageOperator   = "operator"
+	ImageAgent       = "agent"
+	ImageOperator    = "operator"
 	ImageHubbleRelay = "hubble-relay"
+)
+
+// The values keys on the path to an image's override.
+const (
+	keyImage    = "image"
+	keyOverride = "override"
 )
 
 // imageOverrideKeys is the values path of each image key.
 var imageOverrideKeys = map[string][]string{
-	ImageAgent:       {"image", "override"},
-	ImageOperator:    {"operator", "image", "override"},
-	ImageHubbleRelay: {"hubble", "relay", "image", "override"},
+	ImageAgent:       {keyImage, keyOverride},
+	ImageOperator:    {"operator", keyImage, keyOverride},
+	ImageHubbleRelay: {"hubble", "relay", keyImage, keyOverride},
 }
 
 // ImageOverrideActive is the Cilium patch the release runs on the embedded chart, or nil when there is

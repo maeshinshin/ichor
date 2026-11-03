@@ -144,6 +144,29 @@ type IchorInstallationStatus struct {
 	// check, and cleared while the check is off.
 	// +optional
 	LatestRelease *IchorLatestRelease `json:"latestRelease,omitempty"`
+
+	// upgradeTargets are the Talos and Kubernetes releases the controller found in their image
+	// repositories. Unset until the first check, and cleared while the check is off.
+	// +optional
+	UpgradeTargets *IchorUpgradeTargets `json:"upgradeTargets,omitempty"`
+}
+
+// IchorUpgradeTargets is the result of the controller's listing of the Talos and Kubernetes
+// releases. The lists are final releases, newest first, and the servers filter them
+// per cluster.
+type IchorUpgradeTargets struct {
+	// checkedAt is when the last listing finished, successful or not.
+	// +optional
+	CheckedAt *metav1.Time `json:"checkedAt,omitempty"`
+	// talos are the final Talos releases, newest first, with a leading v.
+	// +optional
+	Talos []string `json:"talos,omitempty"`
+	// kubernetes are the final Kubernetes releases, newest first, with a leading v.
+	// +optional
+	Kubernetes []string `json:"kubernetes,omitempty"`
+	// error is the failure of the last listing; a list that failed keeps its last good value.
+	// +optional
+	Error string `json:"error,omitempty"`
 }
 
 // IchorLatestRelease is the result of the controller's check for a newer Ichor release.

@@ -23,7 +23,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/maeshinshin/ichor/internal/oidctrust"
 )
@@ -191,19 +190,15 @@ func TestLeafLifecycle(t *testing.T) {
 // The serving certificate names the Service in every form a client inside the cluster dials it by,
 // the CLI's <name>.<namespace>.svc first, and the external host (docs/adr/0105 decision 2).
 func TestLeafSpecNamesTheServiceForEveryClusterDNSForm(t *testing.T) {
-	r := &IssuerTrustReconciler{Namespace: "ichor-system", ExternalURL: "https://ui.example.com"}
-	svc := &corev1.Service{ObjectMeta: metav1.ObjectMeta{Name: "ichor-ichor-ui-service", Namespace: "ichor-system"}}
+	const name = "ichor-ichor-ui-service"
+
+	r := &IssuerTrustReconciler{Namespace: trustNamespace, ExternalURL: "https://ui.example.com"}
+	svc := &corev1.Service{Name: name, Namespace: trustNamespace}
 
 	spec := r.leafSpec(svc, net.ParseIP("10.96.0.20"))
 
-	wantDNS := []string{
-		"ichor-ichor-ui-service",
-		"ichor-ichor-ui-service.ichor-system",
-		"ichor-ichor-ui-service.ichor-system.svc",
-		"ichor-ichor-ui-service.ichor-system.svc.cluster.local",
-		"localhost",
-		"ui.example.com",
-	}
+	base := name + "." + trustNamespace
+	wantDNS := []string{name, base, base + ".svc", base + ".svc.cluster.local", "localhost", "ui.example.com"}
 	if !slices.Equal(spec.dns, wantDNS) {
 		t.Fatalf("dns = %v, want %v", spec.dns, wantDNS)
 	}

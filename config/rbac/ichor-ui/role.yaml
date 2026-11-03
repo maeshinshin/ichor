@@ -130,6 +130,14 @@ metadata:
 rules:
 - apiGroups:
   - ""
+  resourceNames:
+  - ichor-oidc-trust
+  resources:
+  - configmaps
+  verbs:
+  - get
+- apiGroups:
+  - ""
   resources:
   - secrets
   verbs:

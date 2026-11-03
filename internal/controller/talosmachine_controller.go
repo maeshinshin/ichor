@@ -305,14 +305,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	if !m.DeletionTimestamp.IsZero() {
-		err := r.reconcileRemoval(ctx, &m)
-		if _, blocked := errors.AsType[*drainBlockedError](err); blocked {
-			log.Info("drain blocked, retrying", "after", drainRetryInterval, "reason", err.Error())
-
-			return ctrl.Result{RequeueAfter: drainRetryInterval}, nil
-		}
-
-		return ctrl.Result{}, err
+		return r.reconcileDeletion(ctx, &m)
 	}
 
 	if !m.Spec.IsApproved() {

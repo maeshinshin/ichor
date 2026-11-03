@@ -49,7 +49,8 @@ func listUpgradeTargets(t *testing.T, srv *Server, kind pb.OperationKind) *pb.Li
 }
 
 func TestListUpgradeTargetsGroupsTheTalosReleasesTheClusterCanTake(t *testing.T) {
-	// Talos 1.12.0 on Kubernetes 1.34.2: 1.14.3 is the release set, 1.14.5 skips a minor, 1.15 is unknown.
+	// Talos 1.12.0 on Kubernetes 1.34.2: 1.14.5 is the release set and a valid upgrade, 1.14.3 skips a
+	// minor and is not offered, 1.15 is unknown to this machinery.
 	srv, _ := opServer(t,
 		upgradeCluster("v1.12.0", "v1.34.2", "1.20.0"),
 		recordedLists([]string{"v1.15.0", "v1.14.5", "v1.14.3", "v1.13.2", "v1.12.4", "v1.12.0"}, nil, ""),
@@ -61,12 +62,12 @@ func TestListUpgradeTargetsGroupsTheTalosReleasesTheClusterCanTake(t *testing.T)
 		t.Fatalf("available = %v, reason = %q", m.GetAvailable(), m.GetUnavailableReason())
 	}
 
-	if !slices.Equal(m.GetRecommended(), []string{"v1.14.3"}) || !slices.Equal(m.GetPatch(), []string{"v1.12.4"}) ||
+	if !slices.Equal(m.GetRecommended(), []string{"v1.14.5"}) || !slices.Equal(m.GetPatch(), []string{"v1.12.4"}) ||
 		!slices.Equal(m.GetNextMinor(), []string{"v1.13.2"}) {
 		t.Fatalf("recommended %v, patch %v, next minor %v", m.GetRecommended(), m.GetPatch(), m.GetNextMinor())
 	}
 
-	if m.GetDefault() != "v1.14.3" {
+	if m.GetDefault() != "v1.14.5" {
 		t.Fatalf("default = %q, want the recommended one", m.GetDefault())
 	}
 }

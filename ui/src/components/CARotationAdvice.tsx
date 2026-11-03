@@ -38,7 +38,7 @@ export function CARotationAdvice({ cluster }: { cluster: ObjectRef }) {
         <AlertTitle>{t('caAdvice.title')}</AlertTitle>
         <AlertDescription>{t('caAdvice.text')}</AlertDescription>
         <AlertAction>
-          <Button size="sm" variant="outline" disabled={busy} onClick={dismiss}>
+          <Button size="xs" variant="outline" disabled={busy} onClick={dismiss}>
             {t('caAdvice.dismiss')}
           </Button>
         </AlertAction>

@@ -88,7 +88,7 @@ func TestParseRotationErrorsCarryNoContent(t *testing.T) {
 
 func TestLoadRotationAbsentAndPresent(t *testing.T) {
 	secret := &corev1.Secret{Namespace: testNamespace, Name: testName, Data: map[string][]byte{}}
-	c := newFakeClient(t, secret)
+	c := newFakeClient(secret)
 
 	got, err := LoadRotation(context.Background(), c, testNamespace, testName)
 	if err != nil || got != nil {
@@ -100,7 +100,7 @@ func TestLoadRotationAbsentAndPresent(t *testing.T) {
 	raw, _ := rot.Marshal()
 	secret.Data[RotationKey] = raw
 
-	c = newFakeClient(t, secret)
+	c = newFakeClient(secret)
 
 	got, err = LoadRotation(context.Background(), c, testNamespace, testName)
 	if err != nil || got == nil || !bytes.Equal(got.Talos.Crt, rot.Talos.Crt) {

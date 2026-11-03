@@ -106,27 +106,29 @@ rules:
   - list
   - patch
   - update
+# bind and escalate, by name: Helm's escalation check (ADR 0108) lets the Job create a ClusterRole or
+# Role it does not fully hold when it holds bind or escalate on that name. The names are the ones the
+# embedded Cilium chart renders under Ichor's values, one list per kind; TestCNIEscalationNamesOnlyCiliumsRoles
+# (dist/chart/admission_hardening_test.go) fails when the chart and these lists differ, in either direction.
 - apiGroups:
   - rbac.authorization.k8s.io
   resourceNames:
   - cilium
-  - cilium-bgp-control-plane-secrets
-  - cilium-config-agent
-  - cilium-envoy-config-secrets
-  - cilium-gateway-secrets
-  - cilium-ingress-secrets
   - cilium-operator
-  - cilium-operator-gateway-secrets
-  - cilium-operator-ingress-secrets
+  resources:
+  - clusterroles
+  verbs:
+  - bind
+  - escalate
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resourceNames:
+  - cilium-config-agent
   - cilium-operator-tlsinterception-secrets
   - cilium-operator-ztunnel
   - cilium-tlsinterception-secrets
-  - clustermesh-apiserver
-  - clustermesh-apiserver-generate-certs
   - hubble-generate-certs
-  - hubble-ui
   resources:
-  - clusterroles
   - roles
   verbs:
   - bind

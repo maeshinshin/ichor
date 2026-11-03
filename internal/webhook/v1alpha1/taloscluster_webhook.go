@@ -21,7 +21,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
+	"golang.org/x/mod/semver"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -93,16 +95,18 @@ func (v *TalosClusterCustomValidator) ValidateCreate(ctx context.Context, obj *i
 		return nil, err
 	}
 
-	if err := validateCreateVersions(obj); err != nil {
+	if err := v.validateCreateVersions(ctx, obj); err != nil {
 		return nil, err
 	}
 
 	return warns, nil
 }
 
-// validateCreateVersions checks the three versions of a new cluster against the release set this
-// Ichor supports: a version may be older (an adopted cluster is behind), never newer.
-func validateCreateVersions(c *ichorv1alpha1.TalosCluster) error {
+// validateCreateVersions checks the versions of a new cluster: each must be a semantic version, and
+// the Talos and Kubernetes pair must be compatible. Any version is allowed, the release
+// set's included: it is the first-install default, not a limit. An incompatible pair is refused
+// unless the caller holds the override verb.
+func (v *TalosClusterCustomValidator) validateCreateVersions(ctx context.Context, c *ichorv1alpha1.TalosCluster) error {
 	if err := validateVersion("talosVersion", c.Spec.TalosVersion); err != nil {
 		return err
 	}
@@ -111,15 +115,12 @@ func validateCreateVersions(c *ichorv1alpha1.TalosCluster) error {
 		return err
 	}
 
-	if err := release.CheckCreate("talosVersion", c.Spec.TalosVersion, release.Pinned.Talos); err != nil {
+	if err := validateContract(c.Spec.VersionContract); err != nil {
 		return err
 	}
 
-	if err := release.CheckCreate("versionContract", c.Spec.VersionContract, release.Pinned.VersionContract); err != nil {
-		return err
-	}
-
-	return release.CheckCreate("kubernetesVersion", c.Spec.KubernetesVersion, release.Pinned.Kubernetes)
+	return v.Can.checkCompat(ctx, release.CheckTalosStep(c.Spec.TalosVersion, c.Spec.KubernetesVersion),
+		"talosclusters", c.Name, c.Namespace)
 }
 
 // validateVersion refuses a Talos or Kubernetes version that is not a semantic version. The CRD
@@ -127,6 +128,39 @@ func validateCreateVersions(c *ichorv1alpha1.TalosCluster) error {
 func validateVersion(field, v string) error {
 	if err := version.CheckSemver(v); err != nil {
 		return fmt.Errorf("spec.%s: %w", field, err)
+	}
+
+	return nil
+}
+
+// checkCompat lets an incompatible version pair (err, from pkg/release) through when the caller holds
+// the override verb, the way the last-worker guard is overridden. Without the verb, or
+// without a checker, err stands. The override is logged; the uiapi records it as an Event.
+func (c RightCheck) checkCompat(ctx context.Context, err error, resource, name, namespace string) error {
+	// A version nothing knows cannot be operated, so no override makes it one.
+	if err == nil || c == nil || errors.Is(err, release.ErrUnknownVersion) {
+		return err
+	}
+
+	allowed, aerr := c(ctx, OverrideVerb, resource, "", name, namespace)
+	if aerr != nil {
+		return fmt.Errorf("%w (and the %s right could not be checked: %w)", err, OverrideVerb, aerr)
+	}
+
+	if !allowed {
+		return err
+	}
+
+	talosclusterlog.Info("version compatibility refusal overridden", "resource", resource, "name", name, "reason", err.Error())
+
+	return nil
+}
+
+// validateContract refuses a version contract that is not a semantic version. A contract is "vX.Y",
+// which version.CheckSemver (all three numbers) would refuse.
+func validateContract(v string) error {
+	if !semver.IsValid(v) {
+		return fmt.Errorf("spec.versionContract %q is not a version contract (vX.Y)", v)
 	}
 
 	return nil
@@ -175,7 +209,7 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 
 	// A version is checked when this update changes it, so a stored object that predates the
 	// check can still be edited for something else.
-	if err := validateChangedVersions(oldObj, newObj); err != nil {
+	if err := v.validateChangedVersions(ctx, oldObj, newObj); err != nil {
 		return nil, err
 	}
 
@@ -199,31 +233,61 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 	return warns, nil
 }
 
-// validateChangedVersions checks only the version fields an update changes. A changed version must
-// be the one this Ichor build supports and not a downgrade: the release set moves a
-// cluster only as far as the pinned set.
-func validateChangedVersions(oldObj, newObj *ichorv1alpha1.TalosCluster) error {
-	if oldObj.Spec.TalosVersion != newObj.Spec.TalosVersion {
+// validateChangedVersions checks only the version fields an update changes: each changed value must
+// be a version, and must not be a downgrade. Any newer version is allowed, the release
+// set's included. Whether a Talos or Kubernetes upgrade is a valid step is the plan's and the
+// executors' rule (pkg/release CheckTalosTarget, CheckKubernetesTarget), not the webhook's.
+func (v *TalosClusterCustomValidator) validateChangedVersions(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosCluster) error {
+	talosChanged := oldObj.Spec.TalosVersion != newObj.Spec.TalosVersion
+	k8sChanged := oldObj.Spec.KubernetesVersion != newObj.Spec.KubernetesVersion
+
+	if talosChanged {
 		if err := validateVersion("talosVersion", newObj.Spec.TalosVersion); err != nil {
 			return err
 		}
 	}
 
-	if oldObj.Spec.KubernetesVersion != newObj.Spec.KubernetesVersion {
+	if k8sChanged {
 		if err := validateVersion("kubernetesVersion", newObj.Spec.KubernetesVersion); err != nil {
 			return err
 		}
 	}
 
-	if err := release.CheckUpdate("talosVersion", oldObj.Spec.TalosVersion, newObj.Spec.TalosVersion, release.Pinned.Talos); err != nil {
+	// The pair is checked when either side moves. A Kubernetes move also needs the Cilium
+	// the cluster runs, as the status shows it; an unobserved Cilium is not checked.
+	if talosChanged || k8sChanged {
+		var ciliumDetected string
+		if k8sChanged && newObj.Status.CNI != nil {
+			ciliumDetected = strings.TrimPrefix(newObj.Status.CNI.DetectedVersion, "v")
+		}
+
+		var stepErr error
+		if k8sChanged {
+			stepErr = release.CheckKubernetesStep(newObj.Spec.TalosVersion, newObj.Spec.KubernetesVersion, ciliumDetected)
+		} else {
+			stepErr = release.CheckTalosStep(newObj.Spec.TalosVersion, newObj.Spec.KubernetesVersion)
+		}
+
+		if err := v.Can.checkCompat(ctx, stepErr, "talosclusters", newObj.Name, newObj.Namespace); err != nil {
+			return err
+		}
+	}
+
+	if oldObj.Spec.VersionContract != newObj.Spec.VersionContract {
+		if err := validateContract(newObj.Spec.VersionContract); err != nil {
+			return err
+		}
+	}
+
+	if err := release.CheckUpdate("talosVersion", oldObj.Spec.TalosVersion, newObj.Spec.TalosVersion); err != nil {
 		return err
 	}
 
-	if err := release.CheckUpdate("kubernetesVersion", oldObj.Spec.KubernetesVersion, newObj.Spec.KubernetesVersion, release.Pinned.Kubernetes); err != nil {
+	if err := release.CheckUpdate("kubernetesVersion", oldObj.Spec.KubernetesVersion, newObj.Spec.KubernetesVersion); err != nil {
 		return err
 	}
 
-	return release.CheckUpdate("versionContract", oldObj.Spec.VersionContract, newObj.Spec.VersionContract, release.Pinned.VersionContract)
+	return release.CheckUpdate("versionContract", oldObj.Spec.VersionContract, newObj.Spec.VersionContract)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type TalosCluster.

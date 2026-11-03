@@ -89,9 +89,11 @@ type SettingsFields struct {
 	TokenTtl        *string `protobuf:"bytes,2,opt,name=token_ttl,json=tokenTtl,proto3,oneof" json:"token_ttl,omitempty"`
 	RefreshLifetime *string `protobuf:"bytes,3,opt,name=refresh_lifetime,json=refreshLifetime,proto3,oneof" json:"refresh_lifetime,omitempty"`
 	// drift_policy is warnOnly or autoCorrect.
-	DriftPolicy   *string `protobuf:"bytes,4,opt,name=drift_policy,json=driftPolicy,proto3,oneof" json:"drift_policy,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	DriftPolicy *string `protobuf:"bytes,4,opt,name=drift_policy,json=driftPolicy,proto3,oneof" json:"drift_policy,omitempty"`
+	// update_check_enabled turns the check for newer Ichor releases on or off.
+	UpdateCheckEnabled *bool `protobuf:"varint,5,opt,name=update_check_enabled,json=updateCheckEnabled,proto3,oneof" json:"update_check_enabled,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *SettingsFields) Reset() {
@@ -152,6 +154,13 @@ func (x *SettingsFields) GetDriftPolicy() string {
 	return ""
 }
 
+func (x *SettingsFields) GetUpdateCheckEnabled() bool {
+	if x != nil && x.UpdateCheckEnabled != nil {
+		return *x.UpdateCheckEnabled
+	}
+	return false
+}
+
 // SettingsEffective is every setting in force.
 type SettingsEffective struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -160,8 +169,10 @@ type SettingsEffective struct {
 	TokenTtl        *SettingValue `protobuf:"bytes,2,opt,name=token_ttl,json=tokenTtl,proto3" json:"token_ttl,omitempty"`
 	RefreshLifetime *SettingValue `protobuf:"bytes,3,opt,name=refresh_lifetime,json=refreshLifetime,proto3" json:"refresh_lifetime,omitempty"`
 	DriftPolicy     *SettingValue `protobuf:"bytes,4,opt,name=drift_policy,json=driftPolicy,proto3" json:"drift_policy,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// update_check is the check for newer Ichor releases.
+	UpdateCheck   *SettingValue `protobuf:"bytes,5,opt,name=update_check,json=updateCheck,proto3" json:"update_check,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SettingsEffective) Reset() {
@@ -218,6 +229,13 @@ func (x *SettingsEffective) GetRefreshLifetime() *SettingValue {
 func (x *SettingsEffective) GetDriftPolicy() *SettingValue {
 	if x != nil {
 		return x.DriftPolicy
+	}
+	return nil
+}
+
+func (x *SettingsEffective) GetUpdateCheck() *SettingValue {
+	if x != nil {
+		return x.UpdateCheck
 	}
 	return nil
 }
@@ -478,22 +496,25 @@ const file_ichor_v1alpha1_settings_proto_rawDesc = "" +
 	"\x1dichor/v1alpha1/settings.proto\x12\x0eichor.v1alpha1\"<\n" +
 	"\fSettingValue\x12\x14\n" +
 	"\x05value\x18\x01 \x01(\tR\x05value\x12\x16\n" +
-	"\x06source\x18\x02 \x01(\tR\x06source\"\x80\x02\n" +
+	"\x06source\x18\x02 \x01(\tR\x06source\"\xd0\x02\n" +
 	"\x0eSettingsFields\x12,\n" +
 	"\x0freclaim_enabled\x18\x01 \x01(\bH\x00R\x0ereclaimEnabled\x88\x01\x01\x12 \n" +
 	"\ttoken_ttl\x18\x02 \x01(\tH\x01R\btokenTtl\x88\x01\x01\x12.\n" +
 	"\x10refresh_lifetime\x18\x03 \x01(\tH\x02R\x0frefreshLifetime\x88\x01\x01\x12&\n" +
-	"\fdrift_policy\x18\x04 \x01(\tH\x03R\vdriftPolicy\x88\x01\x01B\x12\n" +
+	"\fdrift_policy\x18\x04 \x01(\tH\x03R\vdriftPolicy\x88\x01\x01\x125\n" +
+	"\x14update_check_enabled\x18\x05 \x01(\bH\x04R\x12updateCheckEnabled\x88\x01\x01B\x12\n" +
 	"\x10_reclaim_enabledB\f\n" +
 	"\n" +
 	"_token_ttlB\x13\n" +
 	"\x11_refresh_lifetimeB\x0f\n" +
-	"\r_drift_policy\"\x9f\x02\n" +
+	"\r_drift_policyB\x17\n" +
+	"\x15_update_check_enabled\"\xe0\x02\n" +
 	"\x11SettingsEffective\x12E\n" +
 	"\x0freclaim_enabled\x18\x01 \x01(\v2\x1c.ichor.v1alpha1.SettingValueR\x0ereclaimEnabled\x129\n" +
 	"\ttoken_ttl\x18\x02 \x01(\v2\x1c.ichor.v1alpha1.SettingValueR\btokenTtl\x12G\n" +
 	"\x10refresh_lifetime\x18\x03 \x01(\v2\x1c.ichor.v1alpha1.SettingValueR\x0frefreshLifetime\x12?\n" +
-	"\fdrift_policy\x18\x04 \x01(\v2\x1c.ichor.v1alpha1.SettingValueR\vdriftPolicy\"\x14\n" +
+	"\fdrift_policy\x18\x04 \x01(\v2\x1c.ichor.v1alpha1.SettingValueR\vdriftPolicy\x12?\n" +
+	"\fupdate_check\x18\x05 \x01(\v2\x1c.ichor.v1alpha1.SettingValueR\vupdateCheck\"\x14\n" +
 	"\x12GetSettingsRequest\"\xa4\x03\n" +
 	"\x13GetSettingsResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12+\n" +
@@ -542,20 +563,21 @@ var file_ichor_v1alpha1_settings_proto_depIdxs = []int32{
 	0,  // 1: ichor.v1alpha1.SettingsEffective.token_ttl:type_name -> ichor.v1alpha1.SettingValue
 	0,  // 2: ichor.v1alpha1.SettingsEffective.refresh_lifetime:type_name -> ichor.v1alpha1.SettingValue
 	0,  // 3: ichor.v1alpha1.SettingsEffective.drift_policy:type_name -> ichor.v1alpha1.SettingValue
-	1,  // 4: ichor.v1alpha1.GetSettingsResponse.spec:type_name -> ichor.v1alpha1.SettingsFields
-	2,  // 5: ichor.v1alpha1.GetSettingsResponse.effective:type_name -> ichor.v1alpha1.SettingsEffective
-	2,  // 6: ichor.v1alpha1.GetSettingsResponse.ui_effective:type_name -> ichor.v1alpha1.SettingsEffective
-	1,  // 7: ichor.v1alpha1.UpdateSettingsRequest.changes:type_name -> ichor.v1alpha1.SettingsFields
-	4,  // 8: ichor.v1alpha1.UpdateSettingsResponse.settings:type_name -> ichor.v1alpha1.GetSettingsResponse
-	3,  // 9: ichor.v1alpha1.SettingsService.GetSettings:input_type -> ichor.v1alpha1.GetSettingsRequest
-	5,  // 10: ichor.v1alpha1.SettingsService.UpdateSettings:input_type -> ichor.v1alpha1.UpdateSettingsRequest
-	4,  // 11: ichor.v1alpha1.SettingsService.GetSettings:output_type -> ichor.v1alpha1.GetSettingsResponse
-	6,  // 12: ichor.v1alpha1.SettingsService.UpdateSettings:output_type -> ichor.v1alpha1.UpdateSettingsResponse
-	11, // [11:13] is the sub-list for method output_type
-	9,  // [9:11] is the sub-list for method input_type
-	9,  // [9:9] is the sub-list for extension type_name
-	9,  // [9:9] is the sub-list for extension extendee
-	0,  // [0:9] is the sub-list for field type_name
+	0,  // 4: ichor.v1alpha1.SettingsEffective.update_check:type_name -> ichor.v1alpha1.SettingValue
+	1,  // 5: ichor.v1alpha1.GetSettingsResponse.spec:type_name -> ichor.v1alpha1.SettingsFields
+	2,  // 6: ichor.v1alpha1.GetSettingsResponse.effective:type_name -> ichor.v1alpha1.SettingsEffective
+	2,  // 7: ichor.v1alpha1.GetSettingsResponse.ui_effective:type_name -> ichor.v1alpha1.SettingsEffective
+	1,  // 8: ichor.v1alpha1.UpdateSettingsRequest.changes:type_name -> ichor.v1alpha1.SettingsFields
+	4,  // 9: ichor.v1alpha1.UpdateSettingsResponse.settings:type_name -> ichor.v1alpha1.GetSettingsResponse
+	3,  // 10: ichor.v1alpha1.SettingsService.GetSettings:input_type -> ichor.v1alpha1.GetSettingsRequest
+	5,  // 11: ichor.v1alpha1.SettingsService.UpdateSettings:input_type -> ichor.v1alpha1.UpdateSettingsRequest
+	4,  // 12: ichor.v1alpha1.SettingsService.GetSettings:output_type -> ichor.v1alpha1.GetSettingsResponse
+	6,  // 13: ichor.v1alpha1.SettingsService.UpdateSettings:output_type -> ichor.v1alpha1.UpdateSettingsResponse
+	12, // [12:14] is the sub-list for method output_type
+	10, // [10:12] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_settings_proto_init() }

@@ -143,7 +143,11 @@ same prefix in the leaf's names). Use that name for `name:` and for the verified
 host name below.
 
 If you supplied your own certificate, the edge verifies your CA instead of
-`ichor-ui-ca`, and the name it checks must be in your certificate.
+`ichor-ui-ca`, and the name it checks must be in your certificate. The `ichor`
+CLI and other clients inside the cluster are not affected: ichor-ui answers a
+handshake that asks for the Service name (SNI `<service>.<namespace>.svc`) with
+Ichor's own certificate, so they still verify it against `ichor-ui-ca`. Every
+other name and address gets your certificate (docs/adr/0105 amendment, 2026-11-03).
 
 ### Ingress-NGINX (re-encrypt to the backend)
 

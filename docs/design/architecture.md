@@ -137,7 +137,9 @@ The certificate is the operator's (`ichorUI.tls.secretName`) or a leaf from the
 Ichor serving CA that the controller keeps for every install. The controller
 publishes the CA, public part only, as `ichor-ui-ca` (ConfigMap and Secret) so an
 edge or a client with `--ca-file` can verify the backend; certificates are
-reloaded when their files change.
+reloaded when their files change. With an operator's certificate, a handshake
+for the Service name still gets the Ichor certificate, so in-cluster clients
+verify ichor-ui by that name (ADR 0105 amendment, 2026-11-03).
 
 Ichor's runtime settings (the sign-in lifetimes, the default
 drift policy) are optional fields of the `IchorInstallation` singleton, read live

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { formatSpeed, healthKey, serviceTone, sortServices, visibleVolumes } from './talosDetails.ts'
+import { formatSpeed, serviceStatus, serviceTone, sortServices, visibleVolumes } from './talosDetails.ts'
 
 test('link speed is shown in Mbit/s or Gbit/s, and unknown speed as a dash', () => {
   assert.equal(formatSpeed(0), '-')
@@ -10,18 +10,46 @@ test('link speed is shown in Mbit/s or Gbit/s, and unknown speed as a dash', () 
   assert.equal(formatSpeed(2500), '2.5 Gbit/s')
 })
 
-test('a running healthy service is ok, a running unhealthy one is bad, unknown health is neutral', () => {
+test('a running service is ok when healthy or without a health check, bad when unhealthy', () => {
   assert.equal(serviceTone({ state: 'Running', healthUnknown: false, healthy: true }), 'good')
   assert.equal(serviceTone({ state: 'Running', healthUnknown: false, healthy: false }), 'bad')
-  assert.equal(serviceTone({ state: 'Running', healthUnknown: true, healthy: false }), 'neutral')
+  assert.equal(serviceTone({ state: 'Running', healthUnknown: true, healthy: false }), 'good')
   assert.equal(serviceTone({ state: 'Failed', healthUnknown: true, healthy: false }), 'bad')
   assert.equal(serviceTone({ state: 'Finished', healthUnknown: true, healthy: false }), 'neutral')
 })
 
-test('a service without a health check says so; yes and no stay as they are', () => {
-  assert.equal(healthKey({ state: 'Running', healthUnknown: true, healthy: false }), 'talos.noHealthCheck')
-  assert.equal(healthKey({ state: 'Running', healthUnknown: false, healthy: true }), 'common.yes')
-  assert.equal(healthKey({ state: 'Running', healthUnknown: false, healthy: false }), 'common.no')
+test('a running service reads Healthy, Unhealthy with its message, or Running without a health check', () => {
+  assert.deepEqual(serviceStatus({ state: 'Running', healthUnknown: false, healthy: true }), {
+    label: 'Healthy',
+    labelKey: 'talos.healthy',
+    tone: 'good',
+    message: '',
+  })
+  assert.deepEqual(serviceStatus({ state: 'Running', healthUnknown: false, healthy: false, healthMessage: 'timeout' }), {
+    label: 'Unhealthy',
+    labelKey: 'talos.unhealthy',
+    tone: 'bad',
+    message: 'timeout',
+  })
+  assert.deepEqual(serviceStatus({ state: 'Running', healthUnknown: false, healthy: false }).message, '')
+  assert.deepEqual(serviceStatus({ state: 'Running', healthUnknown: true, healthy: false }), {
+    label: 'Running',
+    tone: 'good',
+    message: '',
+  })
+})
+
+test('any other state is shown as Talos reports it, with its tone', () => {
+  assert.deepEqual(serviceStatus({ state: 'Failed', healthUnknown: true, healthy: false }), {
+    label: 'Failed',
+    tone: 'bad',
+    message: '',
+  })
+  assert.deepEqual(serviceStatus({ state: 'Waiting', healthUnknown: true, healthy: false }), {
+    label: 'Waiting',
+    tone: 'neutral',
+    message: '',
+  })
 })
 
 test('services needing attention sort first, then by id', () => {

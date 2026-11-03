@@ -123,6 +123,7 @@ rules:
 - apiGroups:
   - rbac.authorization.k8s.io
   resourceNames:
+  - ichor-cni-hubble-role
   - ichor-cni-job-role
   - ichor-cni-records-role
   - ichor-cni-role

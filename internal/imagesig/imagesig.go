@@ -85,10 +85,26 @@ func CiliumIdentity(tag string) Identity {
 	}
 }
 
-// Verifier decides whether an image is signed by the identity. A signature that does not verify is an
-// error; the callers never offer or run such an image.
+// Verifier resolves a tag to its digest and decides whether an image is signed by the identity. A
+// signature that does not verify is an error; the callers never offer or run such an image.
 type Verifier interface {
+	Digest(ctx context.Context, repository, tag string) (string, error)
 	Verify(ctx context.Context, img Image, id Identity) error
+}
+
+// Digest is the digest a tag of the repository resolves to, "sha256:<hex>", with a HEAD request.
+func (s *Sigstore) Digest(ctx context.Context, repository, tag string) (string, error) {
+	repo, err := s.repository(repository)
+	if err != nil {
+		return "", err
+	}
+
+	desc, err := remote.Head(repo.Tag(tag), remote.WithContext(ctx))
+	if err != nil {
+		return "", fmt.Errorf("resolving %s:%s: %w", repository, tag, err)
+	}
+
+	return desc.Digest.String(), nil
 }
 
 // Sigstore verifies signatures with sigstore-go against the embedded trusted root.

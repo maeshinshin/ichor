@@ -164,6 +164,11 @@ type IchorUpgradeTargets struct {
 	// kubernetes are the final Kubernetes releases, newest first, with a leading v.
 	// +optional
 	Kubernetes []string `json:"kubernetes,omitempty"`
+	// cilium are the newer patches of the embedded Cilium minor whose agent, operator and hubble-relay
+	// images verify against the Cilium release signature, newest first,
+	// with a leading v. A patch whose signature does not verify is not listed.
+	// +optional
+	Cilium []string `json:"cilium,omitempty"`
 	// error is the failure of the last listing; a list that failed keeps its last good value.
 	// +optional
 	Error string `json:"error,omitempty"`

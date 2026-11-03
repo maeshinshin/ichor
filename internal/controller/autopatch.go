@@ -47,21 +47,24 @@ const autoPatchInterval = time.Minute
 // autoPatchMarker is the value of the annotation that marks an operation as the patcher's.
 const autoPatchMarker = "true"
 
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=update
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations,verbs=create
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;watch
 
 // AutoPatcher starts upgrades to patch releases of the running minor when the setting allows it (ADR 0116).
 // It runs on the leader only, once a minute. It reads the candidates the release check recorded in
 // IchorInstallation.status.upgradeTargets, decides with package autopatch, and starts at most one
 // operation per cluster by creating a TalosOperation, which the normal executor then runs. A Talos or
-// Kubernetes upgrade also needs the version in the cluster's spec; that one write, to a newer patch of the
-// running minor, is the controller's only write to a TalosCluster spec and the admission webhook limits it to
-// exactly that. A failed or paused automatic operation halts the patcher until a person clears it; it
+// Kubernetes upgrade also needs the version in the cluster's spec. The controller never writes that spec:
+// the version and the operation are written by Actor, a client that impersonates the ServiceAccount
+// ichor-auto-patch, a delegated identity that holds only get and update on talosclusters and create on
+// talosoperations, and that the admission webhook limits to a newer patch of the running minor. The audit
+// log shows the writes as that user. A failed or paused automatic operation halts the patcher until a person clears it; it
 // never starts the operation again by itself.
 type AutoPatcher struct {
-	// Client writes the operation, the cluster's version and the IchorInstallation status.
+	// Client writes the IchorInstallation status and nothing else.
 	Client client.Client
+	// Actor writes the TalosCluster version and creates the operation, as the ServiceAccount ichor-auto-patch
+	// (ADR 0116). Never the controller's own identity.
+	Actor client.Client
 	// Reader reads without the cache: a start must see the operation it made a minute ago.
 	Reader client.Reader
 	// Settings resolves spec.autoPatch against the chart's values.
@@ -380,7 +383,7 @@ func (p *AutoPatcher) start(ctx context.Context, inst *ichorv1alpha1.IchorInstal
 
 	op.Annotations[ichorv1alpha1.OperationFromVersionAnnotation] = from
 
-	if err := p.Client.Create(ctx, op.DeepCopy(), client.DryRunAll); err != nil {
+	if err := p.Actor.Create(ctx, op.DeepCopy(), client.DryRunAll); err != nil {
 		return fmt.Errorf("the %s operation could not be created: %w", op.Spec.Kind, err)
 	}
 
@@ -390,7 +393,7 @@ func (p *AutoPatcher) start(ctx context.Context, inst *ichorv1alpha1.IchorInstal
 		}
 	}
 
-	if err := retry.OnError(retry.DefaultBackoff, func(error) bool { return true }, func() error { return p.Client.Create(ctx, op) }); err != nil {
+	if err := retry.OnError(retry.DefaultBackoff, func(error) bool { return true }, func() error { return p.Actor.Create(ctx, op) }); err != nil {
 		// The version is written and no operation exists: say so, and stop, instead of leaving it unseen.
 		ref := cluster.Namespace + "/" + cluster.Name
 		msg := fmt.Sprintf("the %s version %s was written to cluster %s but its operation could not be created: %v", d.Component, d.Target, ref, err)
@@ -455,7 +458,7 @@ func (p *AutoPatcher) writeVersion(ctx context.Context, cluster *ichorv1alpha1.T
 
 		*field = d.Target
 
-		return p.Client.Update(ctx, &fresh)
+		return p.Actor.Update(ctx, &fresh)
 	})
 }
 

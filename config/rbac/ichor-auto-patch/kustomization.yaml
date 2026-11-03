@@ -1,0 +1,7 @@
+# The identity automatic patch upgrades act as (ADR 0116), a resource entry of its own: the controller
+# holds none of these permissions, it only impersonates the ServiceAccount.
+resources:
+- service_account.yaml
+- role.yaml
+- role_binding.yaml
+- impersonate_role.yaml

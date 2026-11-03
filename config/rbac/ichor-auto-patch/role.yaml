@@ -1,0 +1,26 @@
+# The identity automatic patch upgrades act as (ADR 0116). The controller never writes a TalosCluster spec;
+# it impersonates this ServiceAccount (the Role in impersonate_role.yaml) for the one write that needs it: the
+# newer patch of the running minor in spec.talosVersion or spec.kubernetesVersion, and the TalosOperation
+# that goes with it. The TalosCluster admission webhook refuses anything else this user writes. It holds
+# nothing else, and it is not bound to anyone but itself.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: auto-patch-role
+rules:
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosclusters
+  verbs:
+  - get
+  - update
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosoperations
+  verbs:
+  - create

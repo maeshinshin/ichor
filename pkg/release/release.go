@@ -14,10 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package release is the one set of versions an Ichor build supports: the Talos release
-// and its version contract, the Kubernetes release and the Cilium chart. Init, adopt, the CLI, the
-// API, the admission webhook and the controller all read Pinned; no other code names these
-// versions. Choosing another version means running another Ichor build.
+// Package release holds the one set of versions an Ichor build is tested with: the Talos release and its version
+// contract, the Kubernetes release and the Cilium chart.
+// Pinned is what a first install gets: `ichor init`, the CLI defaults and the UI's proposed values
+// read it. It does not bound an upgrade. After the install each of Talos, Kubernetes and Cilium
+// upgrades on its own, and the rules an upgrade target must meet are in this package too
+// (CheckTalosTarget, CheckKubernetesTarget).
 //
 // The functions here are pure: they take version strings and return answers. They do not talk to a
 // cluster.
@@ -29,9 +31,10 @@ import (
 	"golang.org/x/mod/semver"
 
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
+	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
-// Set is one supported combination of versions.
+// Set is one combination of versions.
 type Set struct {
 	// Talos is the Talos release, "vX.Y.Z".
 	Talos string
@@ -44,8 +47,9 @@ type Set struct {
 	Cilium string
 }
 
-// Pinned is the set this Ichor build supports. Its Talos release and Kubernetes release agree with
-// pkg/machinery in go.mod (the Talos 1.14.5 compatibility table; the test in this package checks it).
+// Pinned is the set this Ichor build is tested with, and the one a first install gets. Its Talos
+// release and Kubernetes release agree with pkg/machinery in go.mod (the test in this package checks
+// it).
 var Pinned = Set{
 	Talos:           "v1.14.5",
 	VersionContract: "v1.14",
@@ -53,19 +57,18 @@ var Pinned = Set{
 	Cilium:          cilium.ChartVersion,
 }
 
-// State is how a component of a cluster compares with the pinned set.
+// State is how a version compares with a reference version.
 type State string
 
-// The states a component can be in.
+// The states a version can be in.
 const (
-	// UpToDate means the cluster runs the pinned version.
+	// UpToDate means the two versions are the same.
 	UpToDate State = "up-to-date"
-	// Behind means the cluster runs an older version; a rollout brings it to the pinned one.
+	// Behind means the first is older than the reference.
 	Behind State = "behind"
-	// Ahead means the cluster runs a newer version than this build supports. Nothing Ichor does
-	// moves it back; the admission rules refuse to create or keep such a cluster.
+	// Ahead means the first is newer than the reference.
 	Ahead State = "ahead"
-	// Unknown means the current version is not known (for example Cilium before it is observed).
+	// Unknown means one of the versions is not known or not a semantic version.
 	Unknown State = "unknown"
 )
 
@@ -86,138 +89,66 @@ func Compare(current, pinned string) State {
 	}
 }
 
-// CheckCreate is the admission rule for a version field of a new TalosCluster: the value
-// must be a semantic version no newer than the pinned one. An adopted cluster is allowed to be
-// behind; `ichor init` always writes the pinned value.
-func CheckCreate(field, value, pinned string) error {
-	if !semver.IsValid(value) {
-		return fmt.Errorf("spec.%s %q is not a version", field, value)
-	}
-
-	if Compare(value, pinned) == Ahead {
-		return fmt.Errorf("spec.%s %s is newer than %s, the version this Ichor build supports: "+
-			"use the Ichor release that supports it", field, value, pinned)
-	}
-
-	return nil
-}
-
 // CheckUpdate is the admission rule for a version field that an update changes: the new
-// value must be the pinned one, reached without a downgrade. An unchanged value is always allowed,
-// so a stored object that is behind can still be edited for something else.
-func CheckUpdate(field, oldValue, newValue, pinned string) error {
-	if oldValue == newValue {
+// value must not be an older one. An unchanged value is always allowed, and so is a value that is
+// not a semantic version (the webhook checks the form of a changed value before it gets here).
+func CheckUpdate(field, oldValue, newValue string) error {
+	if oldValue == newValue || !semver.IsValid(oldValue) || !semver.IsValid(newValue) {
 		return nil
 	}
 
-	if newValue != pinned {
-		return fmt.Errorf("spec.%s may only move to %s, the version this Ichor build supports; "+
-			"%s is not that version", field, pinned, newValue)
-	}
-
-	if semver.IsValid(oldValue) && semver.Compare(newValue, oldValue) < 0 {
+	if semver.Compare(newValue, oldValue) < 0 {
 		return fmt.Errorf("spec.%s cannot downgrade from %s to %s", field, oldValue, newValue)
 	}
 
 	return nil
 }
 
-// CheckTarget refuses an upgrade target that is not the pinned version. kind names the
-// component for the message ("Talos", "Kubernetes").
-func CheckTarget(kind, target, pinned string) error {
-	if target == pinned {
-		return nil
+// CheckTalosTarget reports whether an upgrade of Talos from running to target is one Ichor accepts. The target must
+// be a final "vX.Y.Z" newer than running, and upgrade.TalosPath must
+// accept the step. TalosPath defers to pkg/machinery/compatibility: the target's minor release sets a
+// minimum running version (1.12.0 for Talos 1.14) and a maximum (exclusive) for a downgrade, and
+// denies listed versions. Within those bounds Talos may skip minor releases; its docs recommend
+// adjacent ones. Whether the Kubernetes the cluster runs is supported by the new
+// Talos is checked by the Talos executor, not here.
+func CheckTalosTarget(running, target string) error {
+	if err := checkNewerFinal(running, target); err != nil {
+		return err
 	}
 
-	return fmt.Errorf("%s %s is not the version this Ichor build supports, %s: "+
-		"an upgrade moves the cluster to the release set of its Ichor, see `ichor upgrade cluster`", kind, target, pinned)
+	return upgrade.TalosPath(running, target)
 }
 
-// Adoptable judges the versions of a cluster adopt is about to bring under management. Older than
-// the pinned set is allowed and reported in behind; newer is refused.
-func Adoptable(talos, kubernetes string) (behind []string, err error) {
-	if talos != "" {
-		switch Compare(talos, Pinned.Talos) {
-		case Ahead:
-			return nil, fmt.Errorf("the cluster runs Talos %s, newer than %s, the version this Ichor build supports: "+
-				"adopt needs an Ichor release that supports it", talos, Pinned.Talos)
-		case Behind:
-			behind = append(behind, fmt.Sprintf("Talos %s (supported: %s)", talos, Pinned.Talos))
-		}
+// CheckKubernetesTarget reports whether an upgrade of Kubernetes from running to target is one Ichor
+// accepts. The target must be a final "vX.Y.Z" newer than running, upgrade.KubernetesSkew
+// must accept the step (at most one minor release up, within the same major), and talos, the
+// cluster's Talos, must support the target (upgrade.KubernetesPairing).
+func CheckKubernetesTarget(running, target, talos string) error {
+	if err := checkNewerFinal(running, target); err != nil {
+		return err
 	}
 
-	if kubernetes != "" {
-		switch Compare(kubernetes, Pinned.Kubernetes) {
-		case Ahead:
-			return nil, fmt.Errorf("the cluster runs Kubernetes %s, newer than %s, the version this Ichor build "+
-				"supports", kubernetes, Pinned.Kubernetes)
-		case Behind:
-			behind = append(behind, fmt.Sprintf("Kubernetes %s (supported: %s)", kubernetes, Pinned.Kubernetes))
-		}
+	if err := upgrade.KubernetesSkew(running, target); err != nil {
+		return err
 	}
 
-	return behind, nil
+	return upgrade.KubernetesPairing(target, talos)
 }
 
-// Step is one step of a rollout that brings a cluster to the pinned set. A rollout runs
-// them in this order.
-type Step string
-
-// The rollout's steps, in the order they run.
-const (
-	// StepTalos upgrades Talos on every machine and writes the pinned version contract with it.
-	// Talos goes first: Kubernetes is only supported on the Talos that runs it, and the
-	// Talos upgrade docs say Talos and Kubernetes upgrade separately.
-	StepTalos Step = "talos"
-	// StepConfig applies the configuration the new contract changes. It runs only when Talos is
-	// already at the pinned version, because the Kubernetes step refuses while a machine has a
-	// pending change it does not apply.
-	StepConfig Step = "config"
-	// StepKubernetes upgrades Kubernetes. It needs the running Talos to support the
-	// pinned Kubernetes, which StepTalos establishes.
-	StepKubernetes Step = "kubernetes"
-	// StepCilium upgrades the Cilium release to the embedded chart. It runs last, so the
-	// new chart meets the Kubernetes the set was tested with.
-	StepCilium Step = "cilium"
-)
-
-// Running is what a cluster runs, as a rollout needs to know it.
-type Running struct {
-	Talos           string
-	VersionContract string
-	Kubernetes      string
-	// CiliumBehind is true when the Cilium release is older than the embedded chart
-	// (status.cni.availableChartVersion is set).
-	CiliumBehind bool
-	// ConfigPending is true when an approved machine has a configuration change that needs a reboot
-	// or an API server restart.
-	ConfigPending bool
-}
-
-// Steps returns the steps that bring a cluster in state r to the pinned set, in order. It is empty
-// when the cluster runs the set. A rollout re-plans after each step, so the list is for the state
-// now: a Talos step can leave configuration pending that the config step then applies.
-func Steps(r Running) []Step {
-	talosBehind := Compare(r.Talos, Pinned.Talos) == Behind || Compare(r.VersionContract, Pinned.VersionContract) == Behind
-	k8sBehind := Compare(r.Kubernetes, Pinned.Kubernetes) == Behind
-
-	var out []Step
-
-	if talosBehind {
-		out = append(out, StepTalos)
+// checkNewerFinal refuses a target that is not a final "vX.Y.Z" (no pre-release, no build metadata,
+// and not the "vX.Y" shorthand) newer than running.
+func checkNewerFinal(running, target string) error {
+	if !semver.IsValid(running) {
+		return fmt.Errorf("the running version %q is not a semantic version", running)
 	}
 
-	if r.ConfigPending && !talosBehind && k8sBehind {
-		out = append(out, StepConfig)
+	if !semver.IsValid(target) || semver.Canonical(target) != target || semver.Prerelease(target) != "" {
+		return fmt.Errorf("the target %q is not a final version vX.Y.Z", target)
 	}
 
-	if k8sBehind {
-		out = append(out, StepKubernetes)
+	if semver.Compare(target, running) <= 0 {
+		return fmt.Errorf("the target %s is not newer than %s", target, running)
 	}
 
-	if r.CiliumBehind {
-		out = append(out, StepCilium)
-	}
-
-	return out
+	return nil
 }

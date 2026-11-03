@@ -20,7 +20,7 @@ import {
   WorkflowIcon,
   type LucideIcon,
 } from 'lucide-preact'
-import { Alert } from '@/components/ui/alert'
+import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { ToneBadge } from '@/components/ToneBadge'
 import { Button } from '@/components/ui/button'
@@ -206,41 +206,45 @@ function Home({
                 <li key={a.kind}>
                   <Alert variant={bad ? 'destructive' : 'default'}>
                     {bad ? <CircleXIcon /> : <TriangleAlertIcon />}
-                    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                       {(a.kind === 'certs' || a.kind === 'backupStale' || a.kind === 'clientsNotRestarted') && (
                         <>
-                          <span class="min-w-0 break-words font-medium">{t(a.kind === 'certs' ? 'cluster.certsExpiringTitle' : a.kind === 'backupStale' ? 'home.attnBackupStale' : 'home.attnClientsNotRestarted')}</span>
-                          <span class="min-w-0 break-words text-muted-foreground">{a.message}</span>
+                          <AlertTitle>{t(a.kind === 'certs' ? 'cluster.certsExpiringTitle' : a.kind === 'backupStale' ? 'home.attnBackupStale' : 'home.attnClientsNotRestarted')}</AlertTitle>
+                          <AlertDescription className="break-words">{a.message}</AlertDescription>
                         </>
                       )}
                       {a.kind === 'pending' && (
                         <>
-                          <span class="font-medium">{t('home.attnPending', { n: a.count })}</span>
-                          <Button asChild variant="link" size="sm">
-                            <Link to="/nodes">{t('home.review')}</Link>
-                          </Button>
+                          <AlertTitle>{t('home.attnPending', { n: a.count })}</AlertTitle>
+                          <AlertAction>
+                            <Button asChild variant="link" size="sm">
+                              <Link to="/nodes">{t('home.review')}</Link>
+                            </Button>
+                          </AlertAction>
                         </>
                       )}
                       {a.kind === 'config' && (
                         <>
-                          <span class="font-medium">{t('home.attnConfig', { n: a.count })}</span>
-                          <StartOperationDialog kind="config" cluster={ref} label={t('ops.action.apply')} disabled={!!busy} />
+                          <AlertTitle>{t('home.attnConfig', { n: a.count })}</AlertTitle>
+                          <AlertAction>
+                            <StartOperationDialog kind="config" cluster={ref} label={t('ops.action.apply')} disabled={!!busy} />
+                          </AlertAction>
                         </>
                       )}
                       {(a.kind === 'opFailed' || a.kind === 'opPaused') && current && (
                         <>
-                          <span class="font-medium">{t(a.kind === 'opFailed' ? 'home.attnOpFailed' : 'home.attnOpPaused')}</span>
-                          <div class="flex flex-wrap items-center gap-3">
-                            {current.op.ref && (
-                              <Button asChild variant="link" size="sm">
-                                <Link to={`/operations/${current.op.ref.name}`}>{t('home.open')}</Link>
-                              </Button>
-                            )}
-                            <OperationControls op={current.op} onChanged={reloadCluster} onDeleted={reloadCluster} showDelete={false} />
-                          </div>
+                          <AlertTitle>{t(a.kind === 'opFailed' ? 'home.attnOpFailed' : 'home.attnOpPaused')}</AlertTitle>
+                          <AlertDescription>
+                            <div class="flex flex-wrap items-center gap-3">
+                              {current.op.ref && (
+                                <Button asChild variant="link" size="sm">
+                                  <Link to={`/operations/${current.op.ref.name}`}>{t('home.open')}</Link>
+                                </Button>
+                              )}
+                              <OperationControls op={current.op} onChanged={reloadCluster} onDeleted={reloadCluster} showDelete={false} />
+                            </div>
+                          </AlertDescription>
                         </>
                       )}
-                    </div>
                   </Alert>
                 </li>
               )

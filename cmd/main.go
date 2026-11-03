@@ -53,6 +53,7 @@ import (
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/kubetrust"
 	"github.com/maeshinshin/ichor/internal/metricsauth"
+	"github.com/maeshinshin/ichor/internal/releasecheck"
 	"github.com/maeshinshin/ichor/internal/settings"
 	webhookv1alpha1 "github.com/maeshinshin/ichor/internal/webhook/v1alpha1"
 	// +kubebuilder:scaffold:imports
@@ -153,6 +154,8 @@ func main() {
 	var uiServiceName string
 	var talosEgressPolicy string
 	var talosEgressManage bool
+	var updateCheck bool
+	var updateCheckRepository string
 	var refreshLifetime time.Duration
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
@@ -184,6 +187,10 @@ func main() {
 		"Name of the CiliumNetworkPolicy the controller keeps with the addresses of the machines, clusters and S3 stores it manages.")
 	flag.BoolVar(&talosEgressManage, "talos-egress-policy", true,
 		"Keep the CiliumNetworkPolicy of egress to managed machines and S3 current. Off when the chart sets networkPolicy.cilium.dynamicTalosEgress=false.")
+	flag.BoolVar(&updateCheck, "update-check", true,
+		"Look for newer Ichor releases in the chart repository and record the newest one in the IchorInstallation status (the chart's updateCheck.enabled). spec.updateCheck.enabled overrides it.")
+	flag.StringVar(&updateCheckRepository, "update-check-repository", releasecheck.DefaultRepository,
+		"The chart repository whose tags the release check lists.")
 	flag.BoolVar(&userIssuer, "user-issuer", false,
 		"Keep the signing keys and user credentials for ichor-ui's own OIDC issuer. The serving CA and certificate are kept either way.")
 	flag.StringVar(&externalURL, "ui-external-url", "",
@@ -307,7 +314,7 @@ func main() {
 	evac := &controller.LonghornEvacuator{Client: mgr.GetClient()}
 	// One live reader of the IchorInstallation settings for the controllers and webhooks.
 	// It reads uncached with a short TTL, so a change applies within seconds and nothing needs an informer.
-	settingsFallback := settings.Fallback{RefreshLifetime: refreshLifetime}
+	settingsFallback := settings.Fallback{RefreshLifetime: refreshLifetime, UpdateCheck: updateCheck}
 	settingsReader := &settings.Reader{
 		Client: mgr.GetAPIReader(), Fallback: settingsFallback, ReadOnly: settingsReadOnly, TTL: 2 * time.Second,
 	}
@@ -549,6 +556,13 @@ func main() {
 		Client: mgr.GetClient(), DeployedBy: deployedBy, SettingsFallback: settingsFallback, SettingsReadOnly: settingsReadOnly,
 	}
 	must(ichorInstReconciler.SetupWithManager(mgr), "Failed to create controller", "controller", "ichorinstallation")
+	// The check for a newer release: the egress rule to the chart repository exists only while it is on.
+	relists, err := releasecheck.HelmLister(false)
+	must(err, "Failed to create the release check's registry client")
+	must(mgr.Add(&controller.ReleaseCheck{
+		Client: mgr.GetClient(), Reader: mgr.GetAPIReader(), Settings: settingsReader, Namespace: ns,
+		Repository: updateCheckRepository, List: relists, Settle: 3 * time.Second,
+	}), "Failed to add the release check")
 	// Create the singleton once if it is absent. The admission webhook may
 	// not be serving yet, so a failed create is retried; losing the race is not an error.
 	must(mgr.Add(manager.RunnableFunc(func(ctx context.Context) error {

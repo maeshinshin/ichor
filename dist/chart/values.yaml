@@ -511,6 +511,13 @@ reclaim:
 settings:
   readOnly: false
 
+## The controller looks for a newer Ichor release in the chart repository on start and every 6 hours, and
+## shows the newest one on the dashboard. Each check is one anonymous tag listing and carries
+## nothing about the cluster. false stops the requests and removes the controller's egress rule for them.
+## spec.updateCheck.enabled in the IchorInstallation overrides this unless settings.readOnly is set.
+updateCheck:
+  enabled: true
+
 ## ValidatingAdmissionPolicy guarding TalosCluster.spec.cni.kubeProxy
 ## switches. Independent of webhook.enabled above: it is
 ## enforced by the apiserver itself (stable since Kubernetes 1.30, this

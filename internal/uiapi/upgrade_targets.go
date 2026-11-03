@@ -18,9 +18,12 @@ package uiapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
 
 	"connectrpc.com/connect"
+	"golang.org/x/mod/semver"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -133,9 +136,13 @@ func upgradeChoices(kind pb.OperationKind, cluster *ichorv1alpha1.TalosCluster, 
 		ciliumConstrains, lists.Kubernetes)
 }
 
-// ciliumPatchChoices is the Cilium patches the cluster can take now, and why the list cannot be used ("" when
-// it can). StartCniUpgrade checks a requested patch against it.
-func (s *Server) ciliumPatchChoices(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) (release.Choices, string, error) {
+// ciliumPatchOffer says whether the cluster can take the Cilium patch now. When it is not offered only because the
+// patch's Cilium minor is not tested with the cluster's Kubernetes, compat is that incompatibility: the one refusal the
+// override verb lifts (ADR 0115, amendment). An unverified, not newer or unknown patch is never overridable. reason is
+// why the list cannot be used ("" when it can).
+func (s *Server) ciliumPatchOffer(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, version string,
+) (offered bool, compat error, reason string, err error) {
 	var inst ichorv1alpha1.IchorInstallation
 
 	found := true
@@ -144,10 +151,31 @@ func (s *Server) ciliumPatchChoices(ctx context.Context, cluster *ichorv1alpha1.
 	case apierrors.IsNotFound(err):
 		found = false
 	case err != nil:
-		return release.Choices{}, "", mapGetError("IchorInstallation \""+ichorv1alpha1.IchorInstallationName+"\"", err)
+		return false, nil, "", mapGetError("IchorInstallation \""+ichorv1alpha1.IchorInstallationName+"\"", err)
 	}
 
 	lists, reason := upgradeLists(&inst, found)
+	choices := upgradeChoices(pb.OperationKind_OPERATION_KIND_CNI, cluster, lists)
 
-	return upgradeChoices(pb.OperationKind_OPERATION_KIND_CNI, cluster, lists), reason, nil
+	if slices.Contains(append(slices.Clone(choices.Recommended), choices.Patch...), version) {
+		return true, nil, reason, nil
+	}
+
+	installed, _ := ciliumVersion(cluster)
+	if lists == nil || installed == "" {
+		return false, nil, reason, nil
+	}
+
+	// The same verified, newer patches of the running minor, without the Kubernetes check.
+	relaxed := release.Choose("v"+installed, "", lists.Cilium, func(to string) bool { return semver.Compare("v"+cilium.ChartVersion, to) < 0 })
+	if !slices.Contains(append(slices.Clone(relaxed.Recommended), relaxed.Patch...), version) {
+		return false, nil, reason, nil
+	}
+
+	if err := release.CiliumKubernetesError(version, cluster.Spec.KubernetesVersion); err != nil && !errors.Is(err, release.ErrUnknownVersion) {
+		return false, err, reason, nil
+	}
+
+	return false, nil, reason, nil
 }
+

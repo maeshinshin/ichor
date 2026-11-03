@@ -221,6 +221,52 @@ func trafficReport(t *testing.T, c *foreign.Cluster, label string) {
 	}
 }
 
+// probeDiag logs, on one line, where the A4 probe targets are now: the probe pods (UID, node, pod IP, restarts,
+// deletion), each node's cordon state and Ready, and each Cilium agent's restarts. A pod-IP probe keeps the server's
+// IP from before the upgrade, so a server that moved shows here as a new IP on another node.
+func probeDiag(t *testing.T, c *foreign.Cluster, label string) {
+	t.Helper()
+	pods, _ := inner(c, "get", "pods", "-l", "app in (fa-srv,fa-client)", "-o",
+		`jsonpath={range .items[*]}{.metadata.labels.app}/{.metadata.name}/{.metadata.uid}/{.spec.nodeName}/{.status.podIP}/{.status.phase}/restarts={.status.containerStatuses[0].restartCount}{.metadata.deletionTimestamp}{" "}{end}`)
+	nodes, _ := inner(c, "get", "nodes", "-o",
+		`jsonpath={range .items[*]}{.metadata.name}/unsched={.spec.unschedulable}/ready={.status.conditions[?(@.type=="Ready")].status}{" "}{end}`)
+	cilium, _ := inner(c, "-n", "kube-system", "get", "pods", "-l", "k8s-app=cilium", "-o",
+		`jsonpath={range .items[*]}{.spec.nodeName}/{.metadata.name}/restarts={.status.containerStatuses[0].restartCount}/ready={.status.containerStatuses[0].ready}{" "}{end}`)
+	t.Logf("A4 diag %s %s: pods [%s] nodes [%s] cilium [%s]", time.Now().UTC().Format("15:04:05"), label,
+		strings.TrimSpace(pods), strings.TrimSpace(nodes), strings.TrimSpace(cilium))
+}
+
+// ciliumDrops returns each Cilium agent's drop counters by reason and direction. They only grow, so the delta over a
+// window says whether the datapath dropped packets on that node during it.
+func ciliumDrops(c *foreign.Cluster) string {
+	pods, _ := inner(c, "-n", "kube-system", "get", "pods", "-l", "k8s-app=cilium", "-o", "jsonpath={.items[*].metadata.name}")
+	var b strings.Builder
+	for _, p := range strings.Fields(pods) {
+		out, _ := inner(c, "-n", "kube-system", "exec", p, "-c", "cilium-agent", "--", "cilium-dbg", "metrics", "list")
+		for _, l := range strings.Split(out, "\n") {
+			if strings.Contains(l, "drop_count_total") {
+				fmt.Fprintf(&b, "%s %s\n", p, strings.TrimSpace(l))
+			}
+		}
+	}
+	return b.String()
+}
+
+// eventsTail returns the last events of default and kube-system (drains, evictions, kills, restarts) by time.
+func eventsTail(c *foreign.Cluster) string {
+	var b strings.Builder
+	for _, ns := range []string{"default", "kube-system"} {
+		out, _ := inner(c, "-n", ns, "get", "events", "--sort-by=.lastTimestamp", "-o",
+			"custom-columns=LAST:.lastTimestamp,REASON:.reason,OBJ:.involvedObject.name,MSG:.message")
+		lines := strings.Split(strings.TrimSpace(out), "\n")
+		if len(lines) > 60 {
+			lines = lines[len(lines)-60:]
+		}
+		fmt.Fprintf(&b, "%s:\n%s\n", ns, strings.Join(lines, "\n"))
+	}
+	return b.String()
+}
+
 // ciliumDS is what a takeover or an upgrade must not disturb: the DaemonSet's generation, image and pod UIDs.
 func ciliumDS(c *foreign.Cluster) string {
 	gen, _ := inner(c, "-n", "kube-system", "get", "ds", "cilium", "-o", "jsonpath={.metadata.generation} {.spec.template.spec.containers[0].image} {.status.numberReady}/{.status.desiredNumberScheduled}")
@@ -362,6 +408,8 @@ func TestA1Upgrade(t *testing.T) {
 	// The controller re-detects the CNI when the hand-over completes, so the
 	// upgrade gate sees the Cilium the takeover installed without a wait.
 	t.Logf("status.cni.detectedVersion before the upgrade: %s", clusterJSONPath(c, "{.status.cni.detectedVersion}"))
+	probeDiag(t, c, "before upgrade")
+	dropsBefore := ciliumDrops(c)
 	target := env("ICHOR_E2E_F_K8S_TARGET", "v1.36.6")
 	out, err := ichorCLI(t, c, "upgrade", "kubernetes", target, "--yes")
 	if err != nil {
@@ -371,6 +419,7 @@ func TestA1Upgrade(t *testing.T) {
 	for time.Now().Before(deadline) {
 		ph, _ := inner(c, "-n", crNS, "get", "talosoperations.ichor.maesh.dev", "-o", "jsonpath={.items[*].status.phase}")
 		t.Logf("operations phases: %q", ph)
+		probeDiag(t, c, "upgrade")
 		if strings.Contains(ph, "Completed") && !strings.Contains(ph, "InProgress") && !strings.Contains(ph, "Pending") {
 			break
 		}
@@ -394,6 +443,10 @@ func TestA1Upgrade(t *testing.T) {
 	if recAfter != recBefore {
 		t.Errorf("Helm records changed across the Kubernetes upgrade:\nbefore:\n%s\nafter:\n%s", recBefore, recAfter)
 	}
+	probeDiag(t, c, "after upgrade")
+	t.Logf("cilium drop counters, before the upgrade:\n%s", dropsBefore)
+	t.Logf("cilium drop counters, after the upgrade:\n%s", ciliumDrops(c))
+	t.Logf("events (default, kube-system):\n%s", eventsTail(c))
 	trafficReport(t, c, "across A1 takeover and the Kubernetes upgrade")
 }
 

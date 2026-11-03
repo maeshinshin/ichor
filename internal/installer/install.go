@@ -402,18 +402,13 @@ func applyOne(ctx context.Context, c client.Client, u *unstructured.Unstructured
 
 		repl := u.DeepCopy()
 		repl.SetResourceVersion(live.GetResourceVersion())
-		repl.SetAnnotations(mergeStrings(live.GetAnnotations(), u.GetAnnotations()))
+		ann := map[string]string{}
+		maps.Copy(ann, live.GetAnnotations())
+		maps.Copy(ann, u.GetAnnotations())
+		repl.SetAnnotations(ann)
 
 		return c.Update(ctx, repl, client.FieldOwner(FieldOwner))
 	})
-}
-
-func mergeStrings(base, over map[string]string) map[string]string {
-	out := map[string]string{}
-	maps.Copy(out, base)
-	maps.Copy(out, over)
-
-	return out
 }
 
 // failWithRollback restores snap and returns cause wrapped with how that went. It uses a
@@ -554,7 +549,7 @@ func waitRBACEffective(ctx context.Context, c client.Client, rbac []*unstructure
 	var checks []authorizationv1.ResourceAttributes
 
 	for _, o := range rbac {
-		if o.GetKind() != kindClusterRole && o.GetKind() != "Role" {
+		if o.GetKind() != kindClusterRole && o.GetKind() != kindRole {
 			continue
 		}
 

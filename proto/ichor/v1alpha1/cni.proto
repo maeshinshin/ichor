@@ -107,6 +107,10 @@ message StartCniUpgradeRequest {
   // ListUpgradeTargets offers as a cni patch; empty upgrades the release to the embedded chart.
   // The controller verifies the patch's images before it runs them.
   string version = 2;
+  // override lifts the compatibility refusal of a patch (the Cilium minor is not tested with the
+  // cluster's Kubernetes). The caller must hold the override verb on the TalosCluster;
+  // the reason is optional. A patch whose images are not verified is never overridable.
+  Override override = 3;
 }
 
 message StartCniUpgradeResponse {

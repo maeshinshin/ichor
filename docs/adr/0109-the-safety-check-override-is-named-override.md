@@ -1,8 +1,8 @@
 # 0109. The safety-check override (formerly ADR 0065's mechanism) is named override
 
-Status: Accepted · Date: 2026-11-03 · Design section: Trust, Validation · Touches: 0065, 0085, 0089, 0094, 0101, 0107, 0108
+Status: Accepted · Date: 2026-11-03 · Design section: Trust, Validation · Touches: 0065, 0085, 0089, 0094, 0101, 0107, 0108, 0110
 
-Decided: the permission-gated override of a safety check with a recorded reason (ADR 0065, amended by 0101, 0107 and 0108) is called "override" everywhere, and the earlier name is removed from code, manifests, the UI, the CLI and the docs. The mechanism is unchanged: the user writes a reason, Ichor asks Kubernetes with a SubjectAccessReview made as that user whether they hold the verb, and the reason goes into the audit record and an Event. The CLI flag is `--override "<reason>"`, the RBAC custom verb is `override`, and the old verb is no longer accepted.
+Decided: the permission-gated override of a safety check with a recorded reason (ADR 0065, amended by 0101, 0107 and 0108) is called "override" everywhere, and the earlier name is removed from code, manifests, the UI, the CLI and the docs. The mechanism is unchanged: the user writes a reason, Ichor asks Kubernetes with a SubjectAccessReview made as that user whether they hold the verb, and the reason goes into the audit record and an Event. The CLI flag is `--override` (the reason is `--override-reason` and is optional, ADR 0110), the RBAC custom verb is `override`, and the old verb is no longer accepted.
 
 ## Context
 
@@ -29,4 +29,5 @@ Renames, all in one change:
 ## Consequences
 
 - A user who scripted the old flag or verb must change both once. There is no alias, on purpose.
+- Amended by ADR 0110: the flag no longer takes the reason. `--override` is a boolean and `--override-reason` carries the optional reason; `spec.node.override` is added, and a reason alone still counts as an override. Where this record says `--override "<reason>"`, read `--override` with `--override-reason`.
 - During a rolling upgrade the webhook configuration and the controller image change together; a request made in that window can be refused and succeeds when repeated.

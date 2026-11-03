@@ -328,6 +328,13 @@ type TalosOperationCNISpec struct {
 	// +kubebuilder:validation:MinLength=1
 	// +required
 	ChartVersion string `json:"chartVersion"`
+
+	// imageVersion, when set, makes the upgrade a Cilium patch: the release keeps the chart this Ichor
+	// embeds and runs the agent, operator and hubble-relay images of this newer patch (ADR 0115,
+	// amendment 2026-11-03). The executor verifies each image's signature before it runs the Job.
+	// +optional
+	// +kubebuilder:validation:Pattern=`^v[0-9]+\.[0-9]+\.[0-9]+$`
+	ImageVersion string `json:"imageVersion,omitempty"`
 }
 
 // TalosOperationEtcdRestoreSpec names the snapshot an etcd-restore operation puts back (ADR 0089).

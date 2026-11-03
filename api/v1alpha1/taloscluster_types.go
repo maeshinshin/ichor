@@ -543,6 +543,20 @@ type TalosClusterStatus struct {
 	CNI *TalosClusterCNIStatus `json:"cni,omitempty"`
 }
 
+// TalosCiliumImageOverride is the Cilium patch whose images the release runs on the embedded chart
+// (ADR 0115, amendment 2026-11-03).
+type TalosCiliumImageOverride struct {
+	// version is the patch, with a leading v (v1.20.5).
+	// +kubebuilder:validation:Pattern=`^v[0-9]+\.[0-9]+\.[0-9]+$`
+	// +required
+	Version string `json:"version"`
+
+	// images maps each image key to the reference the Job runs: "agent", "operator" and "hubble-relay"
+	// are repository:tag@sha256:digest, verified against the Cilium release signature.
+	// +required
+	Images map[string]string `json:"images"`
+}
+
 // TalosClusterCNIStatus holds what the kube-proxy switch (ADR 0066) has done to the Talos side.
 type TalosClusterCNIStatus struct {
 	// kubeProxy is the mode the Talos side (cluster.proxy.disabled) is rendered for. Unset until
@@ -558,6 +572,13 @@ type TalosClusterCNIStatus struct {
 	// CiliumUpgradeAvailable condition.
 	// +optional
 	AvailableChartVersion string `json:"availableChartVersion,omitempty"`
+
+	// imageOverride is the Cilium patch the release runs on the embedded chart (ADR 0115, amendment
+	// 2026-11-03): the images of the patch, pinned by digest. Written by the controller after a patch
+	// upgrade's Job rolled out; every later Job keeps it. It stops applying once the embedded chart
+	// reaches the patch, and the controller clears it then.
+	// +optional
+	ImageOverride *TalosCiliumImageOverride `json:"imageOverride,omitempty"`
 
 	// appliedValuesHash is the hash of the effective Cilium values the last successful Helm Job
 	// applied (ADR 0099, decision 2). The controller starts a new Job when the hash of

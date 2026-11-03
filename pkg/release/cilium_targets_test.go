@@ -21,13 +21,19 @@ import (
 	"testing"
 )
 
+// ciliumPatch is the first Cilium patch above the 1.20.4 chart in these tests.
+const ciliumPatch = "v1.20.5"
+
+// ciliumNextPatch is the patch after ciliumPatch.
+const ciliumNextPatch = "v1.20.6"
+
 // The Cilium patches the list offers: newer than the running release,
 // newer than the embedded chart, and compatible with the cluster's Kubernetes in the Cilium minor's range.
 func TestCiliumChoicesOffersTheNewerPatchesThatTheChartDoesNotReach(t *testing.T) {
-	tags := []string{"v1.20.5", "v1.20.6", "v1.20.4", "v1.21.0", "v1.20.7-rc.1"}
+	tags := []string{ciliumPatch, ciliumNextPatch, "v1.20.4", "v1.21.0", "v1.20.7-rc.1"}
 
 	got := CiliumChoices("v1.20.4", "1.20.4", "v1.36.6", tags)
-	if want := []string{"v1.20.6", "v1.20.5"}; !slices.Equal(got.Patch, want) {
+	if want := []string{ciliumNextPatch, ciliumPatch}; !slices.Equal(got.Patch, want) {
 		t.Fatalf("patches = %v, want %v", got.Patch, want)
 	}
 
@@ -35,20 +41,20 @@ func TestCiliumChoicesOffersTheNewerPatchesThatTheChartDoesNotReach(t *testing.T
 		t.Errorf("recommended = %v, next minor = %v; a Cilium patch has neither", got.Recommended, got.NextMinor)
 	}
 
-	if got.Default() != "v1.20.6" {
+	if got.Default() != ciliumNextPatch {
 		t.Errorf("default = %q, want the newest patch", got.Default())
 	}
 }
 
 func TestCiliumChoicesLeavesOutThePatchTheRunningReleaseHas(t *testing.T) {
-	got := CiliumChoices("v1.20.5", "1.20.4", "v1.36.6", []string{"v1.20.5", "v1.20.6"})
-	if want := []string{"v1.20.6"}; !slices.Equal(got.Patch, want) {
+	got := CiliumChoices(ciliumPatch, "1.20.4", "v1.36.6", []string{ciliumPatch, ciliumNextPatch})
+	if want := []string{ciliumNextPatch}; !slices.Equal(got.Patch, want) {
 		t.Fatalf("patches = %v, want %v", got.Patch, want)
 	}
 }
 
 func TestCiliumChoicesStopsOnceTheChartReachesThePatch(t *testing.T) {
-	got := CiliumChoices("v1.20.4", "1.20.6", "v1.36.6", []string{"v1.20.5", "v1.20.6"})
+	got := CiliumChoices("v1.20.4", "1.20.6", "v1.36.6", []string{"v1.20.5", ciliumNextPatch})
 	if len(got.Patch) != 0 {
 		t.Fatalf("patches = %v, want none: the embedded chart is at or past them", got.Patch)
 	}

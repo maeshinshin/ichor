@@ -50,12 +50,20 @@ type fakeMaintenanceClient struct {
 
 	// fingerprint is the maintenance certificate the fake claims to have seen (PeerFingerprinter).
 	fingerprint string
+
+	// inventory and inventoryErr are what the disk and NIC read returns.
+	inventory    Inventory
+	inventoryErr error
 }
 
 func (f *fakeMaintenanceClient) PeerFingerprint() string { return f.fingerprint }
 
 func (f *fakeMaintenanceClient) Identity(context.Context) (HardwareIdentity, error) {
 	return f.identity, f.err
+}
+
+func (f *fakeMaintenanceClient) Inventory(context.Context) (Inventory, error) {
+	return f.inventory, f.inventoryErr
 }
 
 func (f *fakeMaintenanceClient) ApplyConfiguration(_ context.Context, cfg []byte) error {
@@ -184,7 +192,12 @@ var _ = Describe("DiscoveryReconciler.Discover", func() {
 		cluster := newTestCluster("does-not-exist", "v1.14")
 		fake := &fakeMaintenanceClient{identity: HardwareIdentity{
 			UUID: uuidCreate, Serial: "S1", MACAddresses: []string{testMAC}, Manufacturer: "QEMU",
-		}, fingerprint: "OJ+e3lINvDPSrrxIkkatieIh0ewV9pPDSMWLCCGTZ6o="}
+		}, fingerprint: "OJ+e3lINvDPSrrxIkkatieIh0ewV9pPDSMWLCCGTZ6o=",
+			inventory: Inventory{
+				Disks: []ichorv1alpha1.TalosMachineDiscoveredDisk{{Serial: "D1", DevPath: "/dev/sda", SizeBytes: 1 << 30}},
+				Links: []ichorv1alpha1.TalosMachineDiscoveredLink{{Name: "eno1", PermanentMAC: testMAC, LinkUp: true}},
+			},
+		}
 
 		r := &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: maintenanceFactory(fake)}
 
@@ -205,6 +218,28 @@ var _ = Describe("DiscoveryReconciler.Discover", func() {
 		Expect(got.Status.Conditions).To(BeEmpty())
 		// The certificate the node presented is pinned for the first configuration.
 		Expect(got.Status.MaintenanceFingerprint).To(Equal("OJ+e3lINvDPSrrxIkkatieIh0ewV9pPDSMWLCCGTZ6o="))
+		// The disks and NICs the probe read are recorded for approval to choose from.
+		Expect(got.Status.DiscoveredDisks).To(Equal(fake.inventory.Disks))
+		Expect(got.Status.DiscoveredLinks).To(Equal(fake.inventory.Links))
+	})
+
+	It("still registers a pending machine when the disk and NIC read fails", func() {
+		cluster := newTestCluster("does-not-exist", "v1.14")
+		const uuidInventoryFail = "a0a0a0a0-a0a0-a0a0-a0a0-a0a0a0a0a0a0"
+		fake := &fakeMaintenanceClient{identity: HardwareIdentity{
+			UUID: uuidInventoryFail, Serial: "S9", MACAddresses: []string{testMAC},
+		}, inventoryErr: errors.New("permission denied")}
+
+		r := &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: maintenanceFactory(fake)}
+
+		m, err := r.Discover(ctx, cluster, "10.0.0.29:50000")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(m).NotTo(BeNil())
+
+		got := getMachine(cluster.Namespace, uuidInventoryFail)
+		Expect(got).NotTo(BeNil())
+		Expect(got.Status.DiscoveredDisks).To(BeEmpty())
+		Expect(got.Status.DiscoveredLinks).To(BeEmpty())
 	})
 
 	It("links to the existing TalosMachine, and creates nothing new, when the same machine is discovered again", func() {

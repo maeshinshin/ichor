@@ -101,7 +101,7 @@ func (r *ReleaseCheck) check(ctx context.Context) bool {
 	}
 
 	if !eff.UpdateCheck.V {
-		if _, err := removePolicy(ctx, r.Client, r.Namespace, DefaultReleaseCheckPolicyName); err != nil {
+		if err := removePolicy(ctx, r.Client, r.Namespace, DefaultReleaseCheckPolicyName); err != nil {
 			log.Info("Removing the release check's egress policy failed", "error", err.Error())
 		}
 
@@ -139,9 +139,7 @@ func (r *ReleaseCheck) allowRegistry(ctx context.Context) (bool, error) {
 	}
 
 	if app == "" {
-		_, err := removePolicy(ctx, r.Client, r.Namespace, DefaultReleaseCheckPolicyName)
-
-		return false, err
+		return false, removePolicy(ctx, r.Client, r.Namespace, DefaultReleaseCheckPolicyName)
 	}
 
 	host, err := releasecheck.Host(r.Repository)
@@ -158,18 +156,18 @@ func releaseCheckSpec(app, host string) map[string]any {
 	rule := map[string]any{keyToPorts: []any{map[string]any{keyPorts: portList(443)}}}
 
 	if a, err := netip.ParseAddr(host); err == nil {
-		rule["toCIDRSet"] = []any{map[string]any{"cidr": netip.PrefixFrom(a, a.BitLen()).String()}}
+		rule["toCIDRSet"] = []any{map[string]any{keyCIDR: netip.PrefixFrom(a, a.BitLen()).String()}}
 	} else {
-		rule["toFQDNs"] = []any{map[string]any{"matchName": host}}
+		rule["toFQDNs"] = []any{map[string]any{keyMatchName: host}}
 	}
 
 	return map[string]any{
 		"description": "Egress of the controller to the chart repository, for the check of newer Ichor releases " +
 			"(ADR 0114). Written by the controller; edits are overwritten.",
 		"endpointSelector": map[string]any{"matchLabels": map[string]any{
-			"app.kubernetes.io/name": app, "control-plane": "controller-manager",
+			nameLabel: app, "control-plane": valueControllerMgr,
 		}},
-		"egress": []any{rule},
+		keyEgress: []any{rule},
 	}
 }
 

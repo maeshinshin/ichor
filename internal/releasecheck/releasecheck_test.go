@@ -7,6 +7,11 @@ import (
 	"testing"
 )
 
+const (
+	v010 = "v0.1.0"
+	v020 = "v0.2.0"
+)
+
 func TestLatestPicksTheHighestFinalRelease(t *testing.T) {
 	tags := []string{"0.2.0", "0.10.0", "0.9.1", "0.10.0-rc.1", "1.0.0-beta.2", "latest", "1.2", "v0.11.0", "0.11.0+build.7", "0.1.0"}
 
@@ -29,16 +34,16 @@ func TestNewer(t *testing.T) {
 		running, latest string
 		want            bool
 	}{
-		{"older release", "v0.1.0", "v0.2.0", true},
-		{"same release", "v0.2.0", "v0.2.0", false},
-		{"running is newer", "v0.3.0", "v0.2.0", false},
-		{"patch", "v0.2.0", "v0.2.1", true},
-		{"demo build below a release", "v0.0.8-gabc1234", "v0.1.0", true},
-		{"demo build of a release", "v0.1.0-g1f2e3d4", "v0.1.0", true},
-		{"build metadata is ignored", "v0.2.0+meta", "v0.2.0", false},
+		{"older release", v010, v020, true},
+		{"same release", v020, v020, false},
+		{"running is newer", "v0.3.0", v020, false},
+		{"patch", v020, "v0.2.1", true},
+		{"demo build below a release", "v0.0.8-gabc1234", v010, true},
+		{"demo build of a release", "v0.1.0-g1f2e3d4", v010, true},
+		{"build metadata is ignored", "v0.2.0+meta", v020, false},
 		{"dev build never prompts", "dev", "v9.0.0", false},
 		{"empty running never prompts", "", "v9.0.0", false},
-		{"no release known", "v0.1.0", "", false},
+		{"no release known", v010, "", false},
 	}
 
 	for _, tc := range cases {
@@ -107,7 +112,7 @@ func TestHelmListerReadsTagsFromARegistry(t *testing.T) {
 		t.Fatalf("listing tags: %v", err)
 	}
 
-	if got, want := Latest(tags), "v0.2.0"; got != want {
+	if got, want := Latest(tags), v020; got != want {
 		t.Fatalf("Latest over the listed tags = %q, want %q (tags %v)", got, want, tags)
 	}
 }

@@ -17,22 +17,32 @@ import (
 	"github.com/maeshinshin/ichor/internal/settings"
 )
 
-const releaseCheckNS = "release-check-test-ns"
+const (
+	releaseCheckNS  = "release-check-test-ns"
+	releaseCheckApp = "ichor"
+)
+
+// ensureCiliumPolicyCRD installs the CiliumNetworkPolicy CRD the envtest suite lacks (idempotent).
+func ensureCiliumPolicyCRD() {
+	const plural = "ciliumnetworkpolicies"
+
+	crd := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": "apiextensions.k8s.io/v1", "kind": "CustomResourceDefinition",
+		"metadata": map[string]any{labelName: plural + "." + ciliumPolicyGVK.Group},
+		"spec": map[string]any{
+			"group": ciliumPolicyGVK.Group, "scope": "Namespaced",
+			"names": map[string]any{"kind": ciliumPolicyGVK.Kind, "listKind": ciliumPolicyGVK.Kind + "List", "plural": plural, "singular": "ciliumnetworkpolicy"},
+			"versions": []any{map[string]any{labelName: ciliumPolicyGVK.Version, "served": true, "storage": true, "schema": map[string]any{
+				"openAPIV3Schema": map[string]any{"type": "object", "x-kubernetes-preserve-unknown-fields": true},
+			}}},
+		},
+	}}
+	Expect(k8sClient.Create(ctx, crd)).To(Or(Succeed(), MatchError(apierrors.IsAlreadyExists, "already exists")))
+}
 
 var _ = Describe("ReleaseCheck", Ordered, func() {
 	BeforeAll(func() {
-		crd := &unstructured.Unstructured{Object: map[string]any{
-			"apiVersion": "apiextensions.k8s.io/v1", "kind": "CustomResourceDefinition",
-			"metadata": map[string]any{labelName: "ciliumnetworkpolicies.cilium.io"},
-			"spec": map[string]any{
-				"group": "cilium.io", "scope": "Namespaced",
-				"names": map[string]any{"kind": "CiliumNetworkPolicy", "listKind": "CiliumNetworkPolicyList", "plural": "ciliumnetworkpolicies", "singular": "ciliumnetworkpolicy"},
-				"versions": []any{map[string]any{labelName: "v2", "served": true, "storage": true, "schema": map[string]any{
-					"openAPIV3Schema": map[string]any{"type": "object", "x-kubernetes-preserve-unknown-fields": true},
-				}}},
-			},
-		}}
-		Expect(k8sClient.Create(ctx, crd)).To(Or(Succeed(), MatchError(apierrors.IsAlreadyExists, "already exists")))
+		ensureCiliumPolicyCRD()
 		Expect(k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metaOf(releaseCheckNS)})).To(Or(Succeed(), MatchError(apierrors.IsAlreadyExists, "already exists")))
 	})
 
@@ -107,9 +117,9 @@ var _ = Describe("ReleaseCheck", Ordered, func() {
 		static := cnpGVK()
 		static.SetNamespace(releaseCheckNS)
 		static.SetName("ichor-controller-manager")
-		static.Object["spec"] = map[string]any{"endpointSelector": map[string]any{"matchLabels": map[string]any{
-			"control-plane": "controller-manager", "app.kubernetes.io/name": "ichor",
-		}}, "egress": []any{map[string]any{}}}
+		static.Object[keySpec] = map[string]any{"endpointSelector": map[string]any{"matchLabels": map[string]any{
+			"control-plane": "controller-manager", nameLabel: releaseCheckApp,
+		}}, keyEgress: []any{map[string]any{}}}
 		Expect(k8sClient.Create(ctx, static)).To(Succeed())
 		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, static))).To(Succeed()) })
 
@@ -117,13 +127,15 @@ var _ = Describe("ReleaseCheck", Ordered, func() {
 
 		rule := cnpGVK()
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: releaseCheckNS, Name: DefaultReleaseCheckPolicyName}, rule)).To(Succeed())
-		Expect(rule.Object).To(HaveKeyWithValue("spec", HaveKey("egress")))
 
-		egress, _, _ := unstructured.NestedSlice(rule.Object, "spec", "egress")
+		egress, _, _ := unstructured.NestedSlice(rule.Object, keySpec, keyEgress)
 		Expect(egress).To(HaveLen(1))
 
+		host, err := releasecheck.Host(releasecheck.DefaultRepository)
+		Expect(err).NotTo(HaveOccurred())
+
 		toFQDNs, _, _ := unstructured.NestedSlice(egress[0].(map[string]any), "toFQDNs")
-		Expect(toFQDNs).To(ConsistOf(map[string]any{"matchName": "ghcr.io"}))
+		Expect(toFQDNs).To(ConsistOf(map[string]any{keyMatchName: host}))
 
 		Expect(newCheck(listing("0.2.0"), false).check(ctx)).To(BeTrue())
 		err = k8sClient.Get(ctx, types.NamespacedName{Namespace: releaseCheckNS, Name: DefaultReleaseCheckPolicyName}, cnpGVK())

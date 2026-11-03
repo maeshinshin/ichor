@@ -42,7 +42,7 @@ The Talos docs (v1.14, "Upgrading Talos Linux") say an OS upgrade does not upgra
 
 ## Open points
 
-- **Cilium's Kubernetes range.** The Cilium documentation I could retrieve covers newer releases (1.33 to 1.36 e2e tested for the current stable line). I could not confirm from the docs which Kubernetes releases Cilium 1.18.0 is tested with, so the pinned Kubernetes `v1.37.1` may be newer than Cilium 1.18.0's tested range. Before this set ships, check the Cilium 1.18 compatibility page and, if 1.37 is not in it, move the set (Kubernetes or the Cilium chart) in this file's code, not per cluster.
+- **Cilium's Kubernetes range (resolved by the amendment below: the set is now Kubernetes 1.36.6 with Cilium 1.20.4).** The Cilium documentation I could retrieve covers newer releases (1.33 to 1.36 e2e tested for the current stable line). I could not confirm from the docs which Kubernetes releases Cilium 1.18.0 is tested with, so the pinned Kubernetes `v1.37.1` may be newer than Cilium 1.18.0's tested range. Before this set ships, check the Cilium 1.18 compatibility page and, if 1.37 is not in it, move the set (Kubernetes or the Cilium chart) in this file's code, not per cluster.
 - **The version contract moves with Talos.** A contract change rewrites rendered configuration for machines that have not yet rebooted; the config step applies it once Talos is done. If a future contract changes more than the configuration the Kubernetes step can tolerate, the plan will show a config step and the rollout refuses to hide it.
 
 ## Consequences
@@ -57,3 +57,31 @@ The Talos docs (v1.14, "Upgrading Talos Linux") say an OS upgrade does not upgra
 - **ADR 0043 (Talos upgrade executor).** The target is the release set's Talos, and the version contract moves with it in the same write (see the rollout's Talos step). The executor itself is unchanged.
 - **ADR 0057 (Kubernetes upgrade executor).** The target is the release set's Kubernetes. The executor's pairing and skew checks are unchanged, and it runs after the Talos step.
 - **ADR 0059 (Ichor installation and self-upgrade).** An Ichor upgrade does not move the cluster. The cluster follows the new build's set through the rollout.
+
+## Amendment 2026-11-03: the set moves to Talos v1.14.5, Kubernetes v1.36.6 and Cilium 1.20.4
+
+The set in `pkg/release` (`Pinned`) is now:
+
+| Component | Was | Now |
+| --- | --- | --- |
+| Talos (machinery module and `Pinned.Talos`) | v1.14.3 | v1.14.5 |
+| Version contract | v1.14 | v1.14 (unchanged) |
+| Kubernetes (`Pinned.Kubernetes`) | v1.37.1 | v1.36.6 |
+| Cilium chart (`cilium.ChartVersion`, `pkg/cni/cilium/chart/cilium-1.20.4.tgz`) | 1.18.0 | 1.20.4 |
+
+The Decision above is unchanged in form; these values replace the numbers it names.
+
+**Why these versions.** No released Cilium tests Kubernetes 1.37 yet, so a 1.37 set would be untested with the CNI. The compatibility sources are:
+
+- Cilium 1.20 compatibility page (`docs.cilium.io/en/v1.20/network/kubernetes/compatibility/`, read 2026-11-03): "All Kubernetes versions listed are e2e tested and guaranteed to be compatible with Cilium", and the table lists 1.33, 1.34, 1.35, 1.36. It does not list 1.37. Kubernetes 1.36.6 is inside this range.
+- For Cilium 1.18 (tested with 1.30 to 1.33) and 1.19 (1.31 to 1.34), the figures come from the lead's research, not from a page I could read in this session; they are not needed for the set, because the set pins 1.20.
+- Talos v1.14 support matrix (`docs.siderolabs.com/talos/v1.14/getting-started/support-matrix`, read 2026-11-03): Kubernetes "1.37, 1.36, 1.35, 1.34, 1.33". Machinery v1.14.5's compatibility table is wider (`compatibility/talos114`: minimum 1.32.0, maximum 1.37.99); the set uses the documented range. Kubernetes 1.36.6 is inside both. The `pkg/release` comment that said 1.32 was wrong and is fixed.
+- Machinery's `constants.DefaultKubernetesVersion` for v1.14.5 is 1.37.1. The set is deliberately older than that default, so the release test checks that the set is not newer than the default and that `upgrade.KubernetesPairing` accepts the set's Kubernetes with its Talos. It no longer checks equality.
+
+**Cilium values.** The Talos v1.14 Cilium guide (`docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium`, read 2026-11-03) still names chart 1.18.0, but its values are the ones Ichor renders: `ipam.mode: kubernetes`, `kubeProxyReplacement` (false, or true with `k8sServiceHost: localhost` and `k8sServicePort: 7445`), the `securityContext.capabilities` lists, `cgroup.autoMount.enabled: false` and `cgroup.hostRoot: /sys/fs/cgroup`. In chart 1.20.4 every one of these keys still exists with the same meaning, and `certgen.tolerations` is still read by the hubble TLS CronJob. The chart's own default capability list adds `SYSLOG`; Ichor keeps the guide's list because a Helm list replaces the chart's list rather than merging with it. The 1.19 and 1.20 upgrade notes (`docs.cilium.io/en/v1.20/operations/upgrade/`) remove or rename Helm values and agent flags that Ichor does not set (`clustermesh.enableMCSAPISupport`, `encryption.ipsec.interface`, `--k8s-api-server`, `--node-port-*`, `dnsProxy.preCache`, `preflight.tofqdnsPreCache`). The notes on `toServices` with `toPorts`, the NodePort egress change and the empty-policy admission rule do not match any policy Ichor renders; Ichor's own CiliumNetworkPolicies use `toEntities`, `toEndpoints` (DNS through the DNS proxy) and the controller's `toFQDNs` and `toCIDRSet` egress. No values change is needed for the Ichor defaults. The chart's new defaults (`configDriftDetection`, `policy-default-local-cluster=true`, `datapathMode` still `veth`) are accepted. The goldens in `pkg/cni/cilium/testdata` are regenerated from 1.20.4.
+
+**One minor at a time.** A future Ichor release may move Cilium by at most one minor. Cilium's own upgrade notes require one minor at a time, and the chart step check enforces it. Adopt's rule (`pkg/cni/cilium/takeover.go` `CheckVersion`, ADR 0103 section 1.2) is unchanged in form: the live Cilium minor equals the chart's minor or is exactly one lower. With chart 1.20.4 that means live 1.20 or 1.19. A live 1.18 is refused and must be upgraded to 1.19 with the tool that installed it first.
+
+**Open for the user.**
+- `upgradeCompatibility` (Cilium's value for the first install's version) is not set. Cilium recommends setting it to the version the cluster was first installed with; Ichor does not know that version for an adopted cluster, so it stays the chart default. Decide before an adopted cluster is upgraded.
+- `pkg/cni/cilium/chart/cilium-1.18.0.tgz` is still in the repository. The embedded chart is 1.20.4 only; the foreign-cluster hardware tests (ADR 0103 and 0104, `test/e2e/foreign`, `test/internal/foreign`, `test/harness/foreign`) still install Cilium 1.18.0 from that file, and adopt now refuses a live 1.18. Those tests need a 1.19 foreign chart or a rewrite; they were not run for this amendment.

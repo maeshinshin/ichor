@@ -67,7 +67,7 @@ var _ = Describe("TalosCluster Webhook", func() {
 	})
 
 	It("admits update", func() {
-		obj.Spec.KubernetesVersion = "v1.36.1"
+		obj.Spec.KubernetesVersion = "v1.37.1" // the pinned release set
 		Expect(k8sClient.Update(ctx, obj)).To(Succeed())
 	})
 

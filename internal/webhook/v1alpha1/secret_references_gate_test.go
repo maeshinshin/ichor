@@ -36,7 +36,7 @@ const (
 	lwCluster     = "west"
 	verbDelete    = "delete"
 	resOperations = "talosoperations"
-	secrefNewK8s  = "v1.36.1"
+	secrefNewK8s  = "v1.37.1"
 	secrefBucket  = "bucket"
 )
 

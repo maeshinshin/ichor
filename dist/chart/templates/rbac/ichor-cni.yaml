@@ -274,4 +274,58 @@ subjects:
 - kind: ServiceAccount
   name: ichor-cni
   namespace: kube-system
+---
+# The Secret rights of the Cilium chart's hubble-generate-certs Role (ADR 0108), rule for rule
+# (config/rbac/ichor-cni/hubble_role.yaml): Helm refuses to create that Role without them.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: ichor-cni-hubble-role
+  namespace: kube-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  resourceNames:
+  - hubble-server-certs
+  - hubble-relay-client-certs
+  - hubble-relay-server-certs
+  - hubble-metrics-server-certs
+  - hubble-ui-client-certs
+  verbs:
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  resourceNames:
+  - cilium-ca
+  verbs:
+  - get
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: ichor-cni-hubble-rolebinding
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ichor-cni-hubble-role
+subjects:
+- kind: ServiceAccount
+  name: ichor-cni
+  namespace: kube-system
 {{- end }}

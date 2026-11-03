@@ -304,6 +304,162 @@ func TestCNIEscalationNamesOnlyCiliumsRoles(t *testing.T) {
 	}
 }
 
+// TestCNIRoleHoldsEveryRuleTheCiliumChartGrants guards ADR 0108 and ADR 0103 (the 1.19.10 takeover
+// failure): Helm refuses to create a Role that grants a rule its caller does not hold. The Cilium
+// chart's hubble-generate-certs Role, which the Job creates on a takeover, must have every one of its
+// rules held by the Cilium Job's ServiceAccount through its bindings in kube-system, in config/rbac/ichor-cni
+// and in the chart. A chart bump that changes that Role fails here, not on a node. Other Cilium Roles and
+// ClusterRoles are not enforced here: they exist on a takeover and Helm does not create them (ADR 0103 amendment).
+func TestCNIRoleHoldsEveryRuleTheCiliumChartGrants(t *testing.T) {
+	var roles []map[string]any
+
+	for _, mode := range []cni.KubeProxyMode{cni.KubeProxyEnabled, cni.KubeProxyReplaced} {
+		for _, tunnel := range []string{"", "geneve", "vxlan"} {
+			p := cilium.New()
+			if tunnel != "" {
+				var err error
+				if p, err = p.WithTunnel(tunnel); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			manifest, err := p.BootstrapManifest(mode)
+			if err != nil {
+				t.Fatalf("rendering cilium (%s, %q): %v", mode, tunnel, err)
+			}
+
+			for _, d := range decodeYAMLDocs(t, manifest, "cilium bootstrap") {
+				if kindOf(d) == kindRole && namespaceOf(d) == kubeSystemNs && nameOf(d) == "hubble-generate-certs" {
+					roles = append(roles, d)
+				}
+			}
+		}
+	}
+
+	if len(roles) == 0 {
+		t.Fatal("the Cilium chart renders no hubble-generate-certs Role in kube-system; the check would pass for nothing")
+	}
+
+	cfgDocs := loadYAMLDocs(t, "../../config/rbac/ichor-cni/role.yaml")
+	for _, f := range []string{"role_binding.yaml", "records_role.yaml", "hubble_role.yaml"} {
+		cfgDocs = append(cfgDocs, loadYAMLDocs(t, "../../config/rbac/ichor-cni/"+f)...)
+	}
+
+	for label, docs := range map[string][]map[string]any{
+		labelConfig: cfgDocs,
+		labelChart:  renderChartWithValues(t, "ichor", "cniHelm.enabled=true"),
+	} {
+		held := cniGrantedRules(docs, kubeSystemNs)
+		for _, r := range roles {
+			checkCNIHolds(t, label, r, held)
+		}
+	}
+}
+
+// cniGrantedRules returns the rules of the ClusterRoles and Roles that bind the Cilium Job's
+// ServiceAccount in namespace ns (ns "" counts cluster-wide bindings only).
+func cniGrantedRules(docs []map[string]any, ns string) []any {
+	roles := map[string]map[string]any{}
+
+	for _, d := range docs {
+		if k := kindOf(d); k == kindRole || k == kindClusterRole {
+			roles[k+"/"+namespaceOf(d)+"/"+nameOf(d)] = d
+		}
+	}
+
+	var rules []any
+
+	for _, b := range docs {
+		k := kindOf(b)
+		if k != kindClusterRoleBinding && (k != kindRoleBinding || ns == "" || namespaceOf(b) != ns) {
+			continue
+		}
+
+		if !bindsCNIJob(b) {
+			continue
+		}
+
+		ref, _ := b["roleRef"].(map[string]any)
+		rk, _ := ref["kind"].(string)
+		rn, _ := ref["name"].(string)
+
+		refNS := ""
+		if rk == kindRole {
+			refNS = namespaceOf(b)
+		}
+
+		rules = append(rules, allRules(roles[rk+"/"+refNS+"/"+rn])...)
+	}
+
+	return rules
+}
+
+// bindsCNIJob reports whether a binding's subjects include the Cilium Job's ServiceAccount in kube-system.
+// Config names it "cni" (kustomize adds the prefix), the chart and some config files "ichor-cni".
+func bindsCNIJob(b map[string]any) bool {
+	subjects, _ := b["subjects"].([]any)
+
+	for _, s := range subjects {
+		sm, _ := s.(map[string]any)
+		name, _ := sm["name"].(string)
+		ns, _ := sm["namespace"].(string)
+
+		if sm["kind"] == "ServiceAccount" && ns == kubeSystemNs && (name == "ichor-cni" || name == "cni") {
+			return true
+		}
+	}
+
+	return false
+}
+
+// checkCNIHolds reports each (group, resource, verb, resourceName) that role grants and held does not.
+func checkCNIHolds(t *testing.T, label string, role map[string]any, held []any) {
+	t.Helper()
+
+	for _, r := range allRules(role) {
+		rm, _ := r.(map[string]any)
+
+		names := stringsOf(rm["resourceNames"])
+		if len(names) == 0 {
+			names = []string{""}
+		}
+
+		for _, g := range stringsOf(rm["apiGroups"]) {
+			for _, res := range stringsOf(rm["resources"]) {
+				for _, v := range stringsOf(rm["verbs"]) {
+					for _, n := range names {
+						if !cniHolds(held, g, res, v, n) {
+							t.Errorf("%s: %s %s grants %s/%s:%s (name %q) that the Cilium Job does not hold; Helm refuses it (ADR 0108)",
+								label, kindOf(role), nameOf(role), g, res, v, n)
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// cniHolds reports whether one of the held rules grants (group, resource, verb) on name, an empty
+// name meaning an unnamed grant that only a rule without resourceNames gives.
+func cniHolds(held []any, group, res, verb, name string) bool {
+	match := func(list []string, v string) bool { return slices.Contains(list, "*") || slices.Contains(list, v) }
+
+	for _, r := range held {
+		rm, _ := r.(map[string]any)
+		if !match(stringsOf(rm["apiGroups"]), group) || !match(stringsOf(rm["resources"]), res) ||
+			!match(stringsOf(rm["verbs"]), verb) {
+			continue
+		}
+
+		names := stringsOf(rm["resourceNames"])
+		if len(names) == 0 || (name != "" && slices.Contains(names, name)) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func policyValidations(policy map[string]any) (exprs []string, messages []string) {
 	spec, _ := policy["spec"].(map[string]any)
 	list, _ := spec["validations"].([]any)

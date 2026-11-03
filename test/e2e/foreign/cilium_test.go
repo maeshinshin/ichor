@@ -321,7 +321,7 @@ func takeoverAdopt(t *testing.T, c *foreign.Cluster, extra ...string) (first str
 	return first, diffNeeded
 }
 
-// TestA1Adopt: Cilium in a Talos inline manifest (Talos-guide values, 1.18) is taken over by a managed adopt.
+// TestA1Adopt: Cilium in a Talos inline manifest (Talos-guide values, 1.19) is taken over by a managed adopt.
 func TestA1Adopt(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumInline})
 	logState(t, c, "before")
@@ -347,9 +347,9 @@ func TestA1Adopt(t *testing.T) {
 	trafficReport(t, c, "across A1 takeover")
 }
 
-// TestA1Upgrade: a Kubernetes patch upgrade afterwards does not roll Cilium back. Run after TestA1Adopt.
+// TestA1Upgrade: a Kubernetes upgrade to the release set afterwards does not roll Cilium back. Run after TestA1Adopt.
 func TestA1Upgrade(t *testing.T) {
-	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumInline})
+	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumInline, K8sVersion: foreignK8sUpgradeStart})
 	before, recBefore := ciliumDS(c), helmRecords(c)
 	logState(t, c, "before upgrade")
 	target := env("ICHOR_E2E_F_K8S_TARGET", "v1.36.6")
@@ -368,8 +368,8 @@ func TestA1Upgrade(t *testing.T) {
 	}
 	vers, _ := inner(c, "get", "nodes", "-o", "jsonpath={.items[*].status.nodeInfo.kubeletVersion}")
 	t.Logf("kubelet versions: %s", vers)
-	if strings.Contains(vers, "v1.36.5") {
-		t.Errorf("a node is still on v1.36.5: %s", vers)
+	if strings.Contains(vers, foreignK8sUpgradeStart) {
+		t.Errorf("a node is still on %s: %s", foreignK8sUpgradeStart, vers)
 	}
 	if p, _ := hasName(inlineNames(t, c), "cilium"); p != 0 {
 		t.Errorf("the cilium inline entry is back on %d node(s)", p)
@@ -526,8 +526,8 @@ func TestA7Refused(t *testing.T) {
 	}
 }
 
-// TestA6Refused: a Cilium two minors below the embedded 1.18 (here 1.16.x) is refused and nothing is written.
-// (One minor below, 1.17, is accepted as an upgrade by the rule in 1.2; the test plan text and the brief said "1.17 refused".)
+// TestA6Refused: a Cilium more than one minor below the embedded 1.20.4 (here 1.16.x) is refused and nothing
+// is written. One minor below (1.19, TestA6Accepted119) is taken over; two below (1.18) is refused by the same rule.
 // Run `foreign up --workers 0 --cni cilium-helm --cilium-chart bin/foreign/chart116/cilium-1.16.19.tgz --cilium-set tunnelProtocol=vxlan,tunnelPort=4789` first.
 func TestA6Refused(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 0, CNI: foreign.CNICiliumHelm})
@@ -544,28 +544,28 @@ func TestA6Refused(t *testing.T) {
 	refusedWritesNothing(t, c, hashes, records)
 }
 
-// TestA6Accepted117 (the other half of the rule): a Cilium one minor below the embedded 1.18 is taken over and
-// upgraded to it. Run `foreign up --cni cilium-helm --cilium-chart bin/foreign/chart117/cilium-1.17.6.tgz --cilium-set tunnelProtocol=vxlan,tunnelPort=4789` first.
-func TestA6Accepted117(t *testing.T) {
+// TestA6Accepted119 (the other half of the rule): a Cilium one minor below the embedded 1.20.4 (the foreign
+// default, chart 1.19.10, installed by `make foreign-cilium-chart`) is taken over and upgraded to 1.20.4.
+func TestA6Accepted119(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumHelm})
 	logState(t, c, "before")
 	trafficStart(t, c)
 	first, needed := takeoverAdopt(t, c)
 	t.Logf("diff gate needed --accept-cilium-diff: %v", needed)
-	if !strings.Contains(first, "1.17.6") {
-		t.Errorf("the plan does not name the live version 1.17.6")
+	if !strings.Contains(first, "1.19.10") {
+		t.Errorf("the plan does not name the live version 1.19.10")
 	}
 	waitHandover(t, c, "")
 	membership(t, c)
 	if out, err := inner(c, "-n", "kube-system", "rollout", "status", "ds/cilium", "--timeout=300s"); err != nil {
 		t.Errorf("rollout after takeover: %v\n%s", err, out)
 	}
-	if img := ciliumDS(c); !strings.Contains(img, "cilium:v1.18.0") {
-		t.Errorf("the agent was not upgraded to 1.18.0: %s", img)
+	if img := ciliumDS(c); !strings.Contains(img, "cilium:v1.20.4") {
+		t.Errorf("the agent was not upgraded to 1.20.4: %s", img)
 	}
 	logState(t, c, "after takeover")
 	time.Sleep(30 * time.Second)
-	trafficReport(t, c, "across the A6 1.17 to 1.18 takeover")
+	trafficReport(t, c, "across the A6 1.19 to 1.20 takeover")
 }
 
 // TestA1AcceptAll: on the inline-manifest cluster, adopt with every accept flag is still refused for ipam.mode and writes nothing.

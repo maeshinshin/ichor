@@ -56,7 +56,7 @@ func TestStartCniUpgradeRefusesAnIncompatiblePatchWithoutOverride(t *testing.T) 
 	}
 
 	var ce *connect.Error
-	if !errors.As(err, &ce) || ce.Meta().Get(overridableKey) != "true" {
+	if !errors.As(err, &ce) || ce.Meta().Get(overridableKey) != overridableValue {
 		t.Fatalf("the refusal must be marked overridable: %v", err)
 	}
 
@@ -77,7 +77,7 @@ func TestStartCniUpgradeOverridesAnIncompatiblePatchAndRecordsAnEvent(t *testing
 		t.Fatalf("operations = %+v", ops)
 	}
 
-	if len(*asked) != 1 || (*asked)[0].Verb != OverrideVerb || (*asked)[0].Resource != "talosclusters" || (*asked)[0].Name != opCluster {
+	if len(*asked) != 1 || (*asked)[0].Verb != OverrideVerb || (*asked)[0].Resource != resourceTalosClusters || (*asked)[0].Name != opCluster {
 		t.Fatalf("access reviews = %+v, want the override verb on the TalosCluster", *asked)
 	}
 

@@ -53,9 +53,9 @@ On a new cluster, pass the URL to `ichor init`:
 ichor init --ui-url https://ichor.example.com --admin-user admin ...
 ```
 
-The version contract is the release set's (v1.14 in this build, ADR 0113), so
-`--version-contract` accepts only that value; init refuses any other before it
-touches the node. `ichor init` installs Ichor from the manifest in
+The first install's version contract is the release set's (v1.14 in this build,
+ADR 0113, amended by ADR 0115), so `--version-contract` accepts only that value
+on `ichor init`; init refuses any other before it touches the node. `ichor init` installs Ichor from the manifest in
 the binary, not from the Helm chart, so it applies in place what
 `ichorUI.users.enabled` and `ichorUI.users.externalURL` render: the flags,
 the internal port and the key volumes of the ichor-ui Deployment, the internal

@@ -53,6 +53,7 @@ import (
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/kubetrust"
 	"github.com/maeshinshin/ichor/internal/metricsauth"
+	"github.com/maeshinshin/ichor/internal/imagesig"
 	"github.com/maeshinshin/ichor/internal/releasecheck"
 	"github.com/maeshinshin/ichor/internal/settings"
 	webhookv1alpha1 "github.com/maeshinshin/ichor/internal/webhook/v1alpha1"
@@ -561,9 +562,12 @@ func main() {
 	// The check for a newer release (ADR 0114): the egress rule to the chart repository exists only while it is on.
 	relists, err := releasecheck.HelmLister(false)
 	must(err, "Failed to create the release check's registry client")
+	// The Cilium patches are offered only with a verified cosign signature (ADR 0115, amendment 2026-11-03).
+	ciliumImages, err := imagesig.New()
+	must(err, "Failed to load the Sigstore trusted root")
 	must(mgr.Add(&controller.ReleaseCheck{
 		Client: mgr.GetClient(), Reader: mgr.GetAPIReader(), Settings: settingsReader, Namespace: ns,
-		Repository: updateCheckRepository, List: relists, Settle: 3 * time.Second,
+		Repository: updateCheckRepository, List: relists, Images: ciliumImages, Settle: 3 * time.Second,
 	}), "Failed to add the release check")
 	// Create the singleton once if it is absent (ADR 0105, decision 8). The admission webhook may
 	// not be serving yet, so a failed create is retried; losing the race is not an error.

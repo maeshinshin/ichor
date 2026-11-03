@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package imagesig verifies the cosign keyless signatures of the container images an upgrade would
-// run (ADR 0116). Cilium signs its images in its release workflow since 1.13; the signature is an OCI
+// run (ADR 0115, amendment 2026-11-03). Cilium signs its images in its release workflow since 1.13; the signature is an OCI
 // referrer of the image digest, stored as a Sigstore bundle. The check runs offline against the
 // Sigstore public-good trusted root embedded here, so the only network request is the registry's.
 package imagesig
@@ -85,10 +85,26 @@ func CiliumIdentity(tag string) Identity {
 	}
 }
 
-// Verifier decides whether an image is signed by the identity. A signature that does not verify is an
-// error; the callers never offer or run such an image.
+// Verifier resolves a tag to its digest and decides whether an image is signed by the identity. A
+// signature that does not verify is an error; the callers never offer or run such an image.
 type Verifier interface {
+	Digest(ctx context.Context, repository, tag string) (string, error)
 	Verify(ctx context.Context, img Image, id Identity) error
+}
+
+// Digest is the digest a tag of the repository resolves to, "sha256:<hex>", with a HEAD request.
+func (s *Sigstore) Digest(ctx context.Context, repository, tag string) (string, error) {
+	repo, err := s.repository(repository)
+	if err != nil {
+		return "", err
+	}
+
+	desc, err := remote.Head(repo.Tag(tag), remote.WithContext(ctx))
+	if err != nil {
+		return "", fmt.Errorf("resolving %s:%s: %w", repository, tag, err)
+	}
+
+	return desc.Digest.String(), nil
 }
 
 // Sigstore verifies signatures with sigstore-go against the embedded trusted root.

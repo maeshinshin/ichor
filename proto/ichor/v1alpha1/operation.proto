@@ -69,6 +69,15 @@ message GetIchorInstallationResponse {
   // update_available is true when target_version is newer than installed_version and no upgrade
   // is running: the cluster knows a newer version and has not moved to it yet.
   bool update_available = 5;
+  // latest_version is the newest final Ichor release the controller found in the chart repository
+  // (docs/adr/0114); empty until a check has succeeded. It may be older than installed_version.
+  string latest_version = 6;
+  // release_available is true when latest_version is newer than installed_version (docs/adr/0114).
+  bool release_available = 7;
+  // release_check_error is what the last check failed with; empty after a success or before the first check.
+  string release_check_error = 8;
+  // release_checked_at is when the last check finished.
+  google.protobuf.Timestamp release_checked_at = 9;
 }
 
 message ListEtcdBackupsRequest {

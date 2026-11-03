@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"connectrpc.com/connect"
@@ -55,6 +56,7 @@ func effectivePB(e settings.Effective) *pb.SettingsEffective {
 		TokenTtl:        settingValuePB(e.TokenTTL, time.Duration.String),
 		RefreshLifetime: settingValuePB(e.RefreshLifetime, time.Duration.String),
 		DriftPolicy:     settingValuePB(e.DriftPolicy, func(s string) string { return s }),
+		UpdateCheck:     settingValuePB(e.UpdateCheck, strconv.FormatBool),
 	}
 }
 
@@ -74,6 +76,7 @@ func statusEffectivePB(e *ichorv1alpha1.IchorEffectiveSettings) *pb.SettingsEffe
 
 	return &pb.SettingsEffective{
 		TokenTtl: v(e.TokenTTL), RefreshLifetime: v(e.RefreshLifetime), DriftPolicy: v(e.DriftPolicy),
+		UpdateCheck: v(e.UpdateCheck),
 	}
 }
 
@@ -94,6 +97,10 @@ func specFieldsPB(spec *ichorv1alpha1.IchorInstallationSpec) *pb.SettingsFields 
 
 	if d := spec.Defaults; d != nil && d.DriftPolicy != "" {
 		out.DriftPolicy = &d.DriftPolicy
+	}
+
+	if c := spec.UpdateCheck; c != nil {
+		out.UpdateCheckEnabled = c.Enabled
 	}
 
 	return out
@@ -156,6 +163,7 @@ func changesOf(f *pb.SettingsFields) (settings.Changes, error) {
 	}
 
 	c.DriftPolicy = f.DriftPolicy
+	c.UpdateCheck = f.UpdateCheckEnabled
 
 	for _, d := range []struct {
 		in  *string

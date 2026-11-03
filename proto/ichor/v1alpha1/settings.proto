@@ -32,6 +32,8 @@ message SettingsFields {
   optional string refresh_lifetime = 3;
   // drift_policy is warnOnly or autoCorrect.
   optional string drift_policy = 4;
+  // update_check_enabled turns the check for newer Ichor releases on or off (docs/adr/0114).
+  optional bool update_check_enabled = 5;
 }
 
 // SettingsEffective is every setting in force.
@@ -41,6 +43,8 @@ message SettingsEffective {
   SettingValue token_ttl = 2;
   SettingValue refresh_lifetime = 3;
   SettingValue drift_policy = 4;
+  // update_check is the check for newer Ichor releases (docs/adr/0114).
+  SettingValue update_check = 5;
 }
 
 message GetSettingsRequest {}

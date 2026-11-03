@@ -21,11 +21,13 @@ import (
 
 	"connectrpc.com/connect"
 	"golang.org/x/mod/semver"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/releasecheck"
 )
 
 // GetIchorInstallation reports the installed version and whether a newer target is known. A
@@ -59,12 +61,25 @@ func (s *Server) GetIchorInstallation(
 
 	installed := inst.Status.InstalledVersion
 
-	return connect.NewResponse(&pb.GetIchorInstallationResponse{
+	resp := &pb.GetIchorInstallationResponse{
 		InstalledVersion: installed,
 		TargetVersion:    inst.Spec.Version,
 		Upgrading:        upgrading,
 		// Helm moves a Helm-installed Ichor; spec.version only records the version at creation.
 		UpdateAvailable: !upgrading && !inst.HelmManaged() && semver.IsValid(installed) && semver.IsValid(inst.Spec.Version) &&
 			semver.Compare(inst.Spec.Version, installed) > 0,
-	}), nil
+	}
+
+	// What the controller's release check last found (ADR 0114); the Upgrade flow does not use it.
+	if rel := inst.Status.LatestRelease; rel != nil {
+		resp.LatestVersion = rel.Version
+		resp.ReleaseAvailable = releasecheck.Newer(installed, rel.Version)
+		resp.ReleaseCheckError = rel.Error
+
+		if rel.CheckedAt != nil {
+			resp.ReleaseCheckedAt = timestamppb.New(rel.CheckedAt.Time)
+		}
+	}
+
+	return connect.NewResponse(resp), nil
 }

@@ -55,6 +55,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -95,6 +96,38 @@ type drainBlockedError struct {
 func (e *drainBlockedError) Error() string { return e.err.Error() }
 
 func (e *drainBlockedError) Unwrap() error { return e.err }
+
+// drainBlocked records a drain that a pod holds back in the Removal condition (the message names the
+// pod, as kubectl's drain does) and returns the wait verdict. The Warning is emitted when the blocking
+// state starts, not on every retry.
+func (r *TalosMachineReconciler) drainBlocked(ctx context.Context, m *ichorv1alpha1.TalosMachine, drainErr error) error {
+	msg := drainErr.Error()
+	prev := apimeta.FindStatusCondition(m.Status.Conditions, conditionRemoval)
+	wasBlocked := prev != nil && prev.Reason == reasonDrainFailed && prev.Message == msg
+
+	if err := r.removalCondition(ctx, m, metav1.ConditionFalse, reasonDrainFailed, msg); err != nil {
+		return err
+	}
+
+	if !wasBlocked {
+		r.event(m, corev1.EventTypeWarning, reasonDrainFailed, msg)
+	}
+
+	return &drainBlockedError{err: drainErr}
+}
+
+// reconcileDeletion handles a TalosMachine being deleted. A drain that a pod holds back is a wait:
+// the machine is requeued after drainRetryInterval, not sent to the error backoff.
+func (r *TalosMachineReconciler) reconcileDeletion(ctx context.Context, m *ichorv1alpha1.TalosMachine) (ctrl.Result, error) {
+	err := r.reconcileRemoval(ctx, m)
+	if _, blocked := errors.AsType[*drainBlockedError](err); blocked {
+		logf.FromContext(ctx).Info("drain blocked, retrying", "after", drainRetryInterval, "reason", err.Error())
+
+		return ctrl.Result{RequeueAfter: drainRetryInterval}, nil
+	}
+
+	return ctrl.Result{}, err
+}
 
 // etcdDialTimeout bounds every dial and RPC removeEtcdMember/removeEtcdMemberFromSurvivor
 // make. Confirmed necessary for real: a node that just left etcd can itself
@@ -434,24 +467,7 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	}
 
 	if drainErr != nil {
-		// The message names the blocking pod (kubectl's drain does). It is a wait, not a failure:
-		// Reconcile requeues it after drainRetryInterval. An error would go to controller-runtime's
-		// per-object backoff instead, which doubles on every failure up to 1000s and nothing wakes
-		// the machine when the pod goes. The Warning is emitted when the blocking state starts, not
-		// on every retry.
-		msg := drainErr.Error()
-		prev := apimeta.FindStatusCondition(m.Status.Conditions, conditionRemoval)
-		wasBlocked := prev != nil && prev.Reason == reasonDrainFailed && prev.Message == msg
-
-		if err := r.removalCondition(ctx, m, metav1.ConditionFalse, reasonDrainFailed, msg); err != nil {
-			return err
-		}
-
-		if !wasBlocked {
-			r.event(m, corev1.EventTypeWarning, reasonDrainFailed, msg)
-		}
-
-		return &drainBlockedError{err: drainErr}
+		return r.drainBlocked(ctx, m, drainErr)
 	}
 
 	if isControlPlane {

@@ -23,3 +23,10 @@ export function versionLabel(info: IchorVersionInfo | null): VersionLabel | null
     update: info.updateAvailable && info.targetVersion !== '' ? info.targetVersion : null,
   }
 }
+
+// releaseNotice is the newest release the controller found in the chart repository when it is newer than
+// the running version, or null. A failed check shows nothing here; Settings says why.
+export function releaseNotice(info: { latestVersion: string; releaseAvailable: boolean } | null): string | null {
+  if (!info || !info.releaseAvailable || info.latestVersion === '') return null
+  return info.latestVersion
+}

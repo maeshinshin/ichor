@@ -22,6 +22,7 @@ func (r *IchorInstallationReconciler) applySettings(inst *ichorv1alpha1.IchorIns
 
 	eff := &ichorv1alpha1.IchorEffectiveSettings{
 		DriftPolicy: val(e.DriftPolicy.V, e.DriftPolicy.Source),
+		UpdateCheck: val(fmt.Sprint(e.UpdateCheck.V), e.UpdateCheck.Source),
 	}
 
 	manager, source := ichorv1alpha1.IchorManagerInstaller, ichorv1alpha1.IchorSourceDeployment

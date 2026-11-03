@@ -78,7 +78,7 @@ test('a Cilium patch is a newer patch of the same minor', () => {
 
 test('the patch attention names the components that have a patch, in order, and nothing when the fetch failed', () => {
   const failed = null
-  assert.deepEqual(patchComponents({ talos: list, kubernetes: list, cilium: { current: '1.18.3', target: '1.18.5' } }), ['Talos', 'Kubernetes', 'Cilium'])
+  assert.deepEqual(patchComponents({ talos: list, kubernetes: list, cilium: list }), ['Talos', 'Kubernetes', 'Cilium'])
   assert.deepEqual(patchComponents({ talos: list, kubernetes: { ...list, patch: [] }, cilium: null }), ['Talos'])
-  assert.deepEqual(patchComponents({ talos: failed, kubernetes: failed, cilium: { current: '1.18.3', target: '1.18.3' } }), [])
+  assert.deepEqual(patchComponents({ talos: failed, kubernetes: failed, cilium: { ...list, patch: [] } }), [])
 })

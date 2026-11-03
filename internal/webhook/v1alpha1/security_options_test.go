@@ -33,7 +33,7 @@ import (
 
 const (
 	secConfirmed      = "true"
-	secNewKubeVersion = "v1.37.1"
+	secNewKubeVersion = "v1.36.6"
 )
 
 func secTestCluster(s *ichorv1alpha1.TalosClusterSecurity) *ichorv1alpha1.TalosCluster {

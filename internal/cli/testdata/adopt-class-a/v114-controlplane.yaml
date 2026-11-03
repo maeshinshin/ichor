@@ -84,7 +84,7 @@ taints:
 ---
 apiVersion: v1alpha1
 kind: KubeletConfig
-image: ghcr.io/siderolabs/kubelet:v1.37.1
+image: ghcr.io/siderolabs/kubelet:v1.36.6
 config: {}
 defaultRuntimeSeccompProfileEnabled: true
 ---
@@ -262,23 +262,23 @@ issuer:
 ---
 apiVersion: v1alpha1
 kind: KubeAPIServerConfig
-image: registry.k8s.io/kube-apiserver:v1.37.1
+image: registry.k8s.io/kube-apiserver:v1.36.6
 certExtraSANs:
     - 10.5.0.2
     - cp.example.test
 ---
 apiVersion: v1alpha1
 kind: KubeControllerManagerConfig
-image: registry.k8s.io/kube-controller-manager:v1.37.1
+image: registry.k8s.io/kube-controller-manager:v1.36.6
 ---
 apiVersion: v1alpha1
 kind: KubeSchedulerConfig
-image: registry.k8s.io/kube-scheduler:v1.37.1
+image: registry.k8s.io/kube-scheduler:v1.36.6
 config: {}
 ---
 apiVersion: v1alpha1
 kind: KubeProxyConfig
-image: registry.k8s.io/kube-proxy:v1.37.1
+image: registry.k8s.io/kube-proxy:v1.36.6
 config: {}
 ---
 apiVersion: v1alpha1

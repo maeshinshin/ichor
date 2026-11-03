@@ -13,6 +13,12 @@ export function notifyFailed(title: string, detail?: string): void {
   toast.error(title, { description: detail, duration: 15000 })
 }
 
+// notifyWarning is for a write that went through with a remark worth a look, such as a pick the
+// node did not report. The message is the server's own text.
+export function notifyWarning(message: string): void {
+  toast.warning(message)
+}
+
 // notifyWrite is for a write that went through: its message, from the catalogue.
 export function notifyWrite(done: Key, params?: Record<string, string | number>): void {
   toast.success(t(done, params))

@@ -20,18 +20,27 @@ import { NetworkFields } from '@/components/NetworkFields'
 import type { NodeDetail } from '@/gen/ichor/v1alpha1/node_pb'
 import { MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { machineClient, nodeClient } from '@/lib/connect'
-import { notifyWrite } from '@/lib/notify'
+import { notifyWarning, notifyWrite } from '@/lib/notify'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { canApprove, isStrongIdentity } from '@/lib/identity'
-import { diskSelector, installChoice, isValidHostname } from '@/lib/installDisk'
+import {
+  defaultInstallDisk,
+  diskKey,
+  diskSelector,
+  installChoice,
+  isValidHostname,
+  type DiskOption,
+} from '@/lib/installDisk'
 import { formatBytes } from '@/lib/format'
 import type { TalosLink } from '@/gen/ichor/v1alpha1/talosdetails_pb'
 import {
+  defaultLink,
   diskRolesChoice,
   networkChoice,
   selectableLinks,
   type DiskRolesForm,
   type NetworkForm,
+  type NicOption,
 } from '@/lib/machineSettings'
 import { useT } from '@/lib/useT'
 
@@ -53,13 +62,16 @@ export function ApproveDialog({
   const [nodeError, setNodeError] = useState<string | null>(null)
   const [role, setRole] = useState<MachineRole>(MachineRole.UNSPECIFIED)
   const [hostname, setHostname] = useState(machine.hostname)
-  // installKey is diskKey of the chosen disk, or '' for none; installDev is the typed device
-  // path used only while discovery reports no disks.
-  const [installKey, setInstallKey] = useState('')
+  // installKey is diskKey of the chosen disk, '' for none, or null while the person has not chosen:
+  // then the default disk applies (defaultInstallDisk). installDev is the typed device path, used
+  // only while neither discovery nor the node reports a disk.
+  const [installKey, setInstallKey] = useState<string | null>(null)
   const [installDev, setInstallDev] = useState('')
   const [installImage, setInstallImage] = useState('')
+  // links are the node's own NICs, read only while discovery recorded none.
   const [links, setLinks] = useState<TalosLink[]>([])
-  const [networkForm, setNetworkForm] = useState<NetworkForm>(emptyNetwork)
+  // networkForm is null until the person changes it, so the default NIC applies (defaultLink).
+  const [networkForm, setNetworkForm] = useState<NetworkForm | null>(null)
   const [rolesForm, setRolesForm] = useState<DiskRolesForm>(emptyRoles)
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -67,13 +79,21 @@ export function ApproveDialog({
 
   const strong = isStrongIdentity(machine.identity)
   const hostnameOk = isValidHostname(hostname)
-  const disks = (node?.disks ?? []).filter((d) => diskSelector(d))
-  const linkChoices = selectableLinks(links, machine.identity?.macAddresses ?? [])
-  const net = networkChoice(networkForm)
-  const roles = diskRolesChoice(rolesForm, installKey)
-  // The list comes from the node itself; without it (the Talos API unreachable, or no disk
-  // reported) the person can still type a device path.
-  const { install, ok: installOk } = installChoice({ disks, key: installKey, typed: installDev, image: installImage })
+  // The disks and NICs discovery recorded are the list to choose from; the node's own
+  // reads fill in for a machine discovered before they were recorded.
+  const disks: DiskOption[] = (
+    machine.discoveredDisks.length > 0 ? machine.discoveredDisks : (node?.disks ?? [])
+  ).filter((d) => diskSelector(d))
+  const nics: NicOption[] = machine.discoveredLinks.length > 0 ? machine.discoveredLinks : links
+  const linkChoices = selectableLinks(nics, machine.identity?.macAddresses ?? [])
+  const defaultDisk = defaultInstallDisk(disks)
+  const defaultNic = defaultLink(linkChoices)
+  const shownInstallKey = installKey ?? (defaultDisk ? diskKey(defaultDisk) : '')
+  const shownNetwork: NetworkForm = networkForm ?? { ...emptyNetwork, mac: defaultNic?.mac ?? '' }
+  const net = networkChoice(shownNetwork)
+  const roles = diskRolesChoice(rolesForm, shownInstallKey)
+  // Without a list (the Talos API unreachable, or no disk reported) the person can still type a device path.
+  const { install, ok: installOk } = installChoice({ disks, key: shownInstallKey, typed: installDev, image: installImage })
   const canSubmit = canApprove(machine.identity, role !== MachineRole.UNSPECIFIED) && hostnameOk && installOk && net.ok && roles.ok
 
   useEffect(() => {
@@ -91,11 +111,11 @@ export function ApproveDialog({
       () => setLinks([]),
     )
     // Reset the form each time the dialog is reopened.
-    setNetworkForm(emptyNetwork)
+    setNetworkForm(null)
     setRolesForm(emptyRoles)
     setRole(MachineRole.UNSPECIFIED)
     setHostname(machine.hostname)
-    setInstallKey('')
+    setInstallKey(null)
     setInstallDev('')
     setInstallImage('')
     setReason('')
@@ -120,6 +140,8 @@ export function ApproveDialog({
       })
       if (res.machine) onApproved(res.machine)
       notifyWrite('toast.approved', { name: hostname || machine.ref.name })
+      // Approved anyway: a pick discovery did not see is only worth a note.
+      for (const w of res.warnings) notifyWarning(w)
       setOpen(false)
     } catch (err) {
       setSubmitError(describeError(err))
@@ -207,7 +229,8 @@ export function ApproveDialog({
           <InstallDiskPicker
             idPrefix="approve"
             disks={disks}
-            value={installKey}
+            value={shownInstallKey}
+            defaulted={installKey === null && defaultDisk !== undefined}
             typed={installDev}
             image={installImage}
             typedOk={installOk}
@@ -228,7 +251,8 @@ export function ApproveDialog({
           <NetworkFields
             idPrefix="approve"
             links={linkChoices}
-            form={networkForm}
+            form={shownNetwork}
+            preselected={networkForm === null && defaultNic !== undefined}
             errors={net.errors}
             onChange={setNetworkForm}
           />

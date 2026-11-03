@@ -42,7 +42,7 @@ import (
 
 // Image is the talosctl release this package runs; it must match the Talos version the
 // e2e nodes boot.
-var Image = cmp.Or(os.Getenv("ICHOR_E2E_TALOSCTL_IMAGE"), "ghcr.io/siderolabs/talosctl:v1.14.3") // override for an older Talos
+var Image = cmp.Or(os.Getenv("ICHOR_E2E_TALOSCTL_IMAGE"), "ghcr.io/siderolabs/talosctl:v1.14.5") // override for an older Talos
 
 // nodesFlag, talosconfigFlag and talosconfigKey name the repeated CLI flag and secret-data
 // key every authenticated call below shares (goconst).

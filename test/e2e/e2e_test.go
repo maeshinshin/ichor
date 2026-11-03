@@ -49,7 +49,7 @@ const namespace = "ichor-e2e"
 const e2eLabel = "ichor.maesh.dev/e2e-run"
 
 // talosVersion is the Talos release the suite's CEL fixtures declare.
-const talosVersion = "v1.14.3"
+const talosVersion = "v1.14.5"
 
 func testObjectMeta(runID string) metav1.ObjectMeta {
 	return metav1.ObjectMeta{

@@ -24,6 +24,17 @@ export default tseslint.config(
     },
   },
   {
+    // The base-ui shim behind @preactcn/combobox is written by `npx shadcn add` too, and it carries the same kind
+    // of generic code as the radix shim above (the namespace of its component types, untyped ref and prop plumbing).
+    files: ['src/lib/shims/base-ui-react.tsx', 'src/lib/shims/internal/base-ui-*.{ts,tsx}', 'src/lib/shims/internal/shadcn-react-use-render.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-empty-object-type': 'off',
+      '@typescript-eslint/no-namespace': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+    },
+  },
+  {
     // preactcn components merge `className` with their own classes; `class`
     // would replace the whole list (Preact spreads it last) and break layout.
     files: ['src/**/*.tsx'],

@@ -25,7 +25,6 @@ import (
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -41,16 +40,13 @@ func (staleReader) List(context.Context, client.ObjectList, ...client.ListOption
 // A Renew straight after the Acquire that created the Lease used to read a lagging cache, see
 // NotFound and report `held by ""`. Reading through WithReader's live reader sees the holder.
 func TestRenew_ReadsThroughTheReader(t *testing.T) {
-	ns := newTestNamespace(t)
-	ctx := context.Background()
-	key := types.NamespacedName{Namespace: ns, Name: clusterName}
+	ctx, lock := newTestLock(t, time.Minute)
 
-	if err := New(k8sClient, key, time.Minute).Acquire(ctx, identityA); err != nil {
+	if err := lock.Acquire(ctx, identityA); err != nil {
 		t.Fatalf("Acquire: %v", err)
 	}
 
-	stale := New(k8sClient, key, time.Minute).WithReader(staleReader{})
-	err := stale.Renew(ctx, identityA)
+	err := New(k8sClient, lock.key, time.Minute).WithReader(staleReader{}).Renew(ctx, identityA)
 	var held *HeldError
 	if !errors.As(err, &held) || held.Holder != "" {
 		t.Fatalf("Renew through a stale reader = %v, want *HeldError with empty holder", err)
@@ -59,8 +55,7 @@ func TestRenew_ReadsThroughTheReader(t *testing.T) {
 		t.Fatalf("empty-holder message %q should not print an empty quoted holder", held.Error())
 	}
 
-	live := New(k8sClient, key, time.Minute).WithReader(k8sClient)
-	if err := live.Renew(ctx, identityA); err != nil {
+	if err := lock.WithReader(k8sClient).Renew(ctx, identityA); err != nil {
 		t.Fatalf("Renew through the live reader: %v", err)
 	}
 }

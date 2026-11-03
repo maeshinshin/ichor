@@ -79,6 +79,23 @@ const machineRemovalFinalizer = ichorv1alpha1.TalosMachineRemovalFinalizer
 // to renew late once and still not lose the lock.
 const removalRenewInterval = time.Minute
 
+// drainRetryInterval is how long a removal waits before it tries a blocked drain again.
+// Blocked means a pod (a bare pod, a PodDisruptionBudget) that someone has to act on, so the
+// wait is for a person. It is shorter than the TalosOperation poll (operationRequeueInterval,
+// 30s), so an operation waiting on the removal sees the resume at its next poll, and a retry is
+// one Node read, one pod list and one cordon, cheap enough to repeat for hours.
+const drainRetryInterval = 15 * time.Second
+
+// drainBlockedError is reconcileRemoval's verdict when a pod holds the drain back. It is not a
+// failure to report to the error backoff: Reconcile turns it into a requeue after drainRetryInterval.
+type drainBlockedError struct {
+	err error
+}
+
+func (e *drainBlockedError) Error() string { return e.err.Error() }
+
+func (e *drainBlockedError) Unwrap() error { return e.err }
+
 // etcdDialTimeout bounds every dial and RPC removeEtcdMember/removeEtcdMemberFromSurvivor
 // make. Confirmed necessary for real (ADR 0032): a node that just left etcd can itself
 // go unreachable moments later, and an unbounded context on an unreachable target blocks
@@ -418,16 +435,24 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	}
 
 	if drainErr != nil {
-		// The message names the blocking pod (kubectl's drain does). An error, not nil: Reconcile
-		// requeues only on error, with growing backoff, so a drain that a pod blocked is retried
-		// once the pod is gone instead of waiting for something to touch the machine.
-		if err := r.removalCondition(ctx, m, metav1.ConditionFalse, reasonDrainFailed, drainErr.Error()); err != nil {
+		// The message names the blocking pod (kubectl's drain does). It is a wait, not a failure:
+		// Reconcile requeues it after drainRetryInterval. An error would go to controller-runtime's
+		// per-object backoff instead, which doubles on every failure up to 1000s and nothing wakes
+		// the machine when the pod goes. The Warning is emitted when the blocking state starts, not
+		// on every retry.
+		msg := drainErr.Error()
+		prev := apimeta.FindStatusCondition(m.Status.Conditions, conditionRemoval)
+		wasBlocked := prev != nil && prev.Reason == reasonDrainFailed && prev.Message == msg
+
+		if err := r.removalCondition(ctx, m, metav1.ConditionFalse, reasonDrainFailed, msg); err != nil {
 			return err
 		}
 
-		r.event(m, corev1.EventTypeWarning, reasonDrainFailed, drainErr.Error())
+		if !wasBlocked {
+			r.event(m, corev1.EventTypeWarning, reasonDrainFailed, msg)
+		}
 
-		return drainErr
+		return &drainBlockedError{err: drainErr}
 	}
 
 	if isControlPlane {

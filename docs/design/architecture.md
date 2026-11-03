@@ -42,6 +42,9 @@ inventing a new control plane.
 
 - Getting machines to maintenance mode. Boot the ISO however you like.
 - Storage or monitoring, and any CNI other than Cilium.
+- Workloads. Ichor manages the cluster (Talos, Kubernetes, Cilium) and not what
+  runs on it, and it does not sync its own resources with a Git repository; GitOps
+  of workloads, or of Ichor's resources, is the user's tooling (ADR 0101).
 - Replacing the storage system's own controller. Volumes, replicas and disk
   state belong to Longhorn (or whatever you run).
 - Multi-cluster management. One Ichor manages one cluster, and the UI is built

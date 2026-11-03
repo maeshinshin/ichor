@@ -738,9 +738,10 @@ export const en = {
   'node.action.stepsTitle': 'What happens, in order',
   'node.action.apiDown': 'The Kubernetes API will be unavailable',
   'node.action.typeName': 'Type the node name ({name}) to confirm',
-  'node.action.reason': 'Reason',
+  'node.action.override': 'Override the safety check (needs the override permission)',
+  'node.action.reason': 'Reason (optional)',
   'node.action.reasonHint':
-    'Resetting a node needs the override permission. Your reason goes into the audit record and a Kubernetes Event.',
+    'Resetting a node needs the override. A reason you give goes into the audit record and a Kubernetes Event; without one, the record says no reason was given.',
   'node.action.starting': 'Starting…',
   'node.action.started': 'Started “{action}” on {node}.',
   'node.action.removed': 'Removing {node}. The controller drains it and, for a control plane, removes its etcd member.',
@@ -758,7 +759,9 @@ export const en = {
   'restore.none': 'This cluster has no TalosEtcdBackup that has stored a snapshot yet.',
   'restore.warnTitle': 'This rewinds the whole cluster',
   'restore.warn': 'etcd is wiped on every control plane and recovered from the snapshot. The Kubernetes API is unavailable for several minutes and everything written after the snapshot is lost.',
-  'restore.reasonHint': 'A restore needs the override permission on the cluster. Your reason goes into the audit record and a Kubernetes Event.',
+  'restore.override': 'Override the safety check (needs the override permission on the cluster)',
+  'restore.reasonHint':
+    'A restore always needs the override. A reason you give goes into the audit record and a Kubernetes Event; without one, the record says no reason was given.',
   'restore.go': 'Restore cluster',
   'restore.starting': 'Starting…',
   'restore.started': 'Restoring {cluster}. The controller wipes and recovers etcd; follow it on this page.',

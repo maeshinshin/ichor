@@ -21,7 +21,12 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/render"
 )
 
 func ds(ns, name, image string) appsv1.DaemonSet {
@@ -57,5 +62,39 @@ func TestDetectCNI(t *testing.T) {
 				t.Fatalf("DetectCNI = %q, %q; want %q, %q", got, v, tc.detected, tc.wantV)
 			}
 		})
+	}
+}
+
+func TestCNIDetectRefreshesWhenAHandoverOrACNIUpgradeCompletes(t *testing.T) {
+	handover := func(status metav1.ConditionStatus) *ichorv1alpha1.TalosCluster {
+		c := &ichorv1alpha1.TalosCluster{}
+		apimeta.SetStatusCondition(&c.Status.Conditions, metav1.Condition{Type: render.ConditionCNIHandover, Status: status, Reason: "Test"})
+
+		return c
+	}
+	op := func(kind, phase string) *ichorv1alpha1.TalosOperation {
+		return &ichorv1alpha1.TalosOperation{
+			Spec:   ichorv1alpha1.TalosOperationSpec{Kind: kind},
+			Status: ichorv1alpha1.TalosOperationStatus{Phase: phase},
+		}
+	}
+
+	cases := []struct {
+		name     string
+		old, new client.Object
+		want     bool
+	}{
+		{"a cni operation completes", op(ichorv1alpha1.TalosOperationKindCNI, ichorv1alpha1.TalosOperationPhaseInProgress), op(ichorv1alpha1.TalosOperationKindCNI, ichorv1alpha1.TalosOperationPhaseCompleted), true},
+		{"a cni operation is still running", op(ichorv1alpha1.TalosOperationKindCNI, ichorv1alpha1.TalosOperationPhasePending), op(ichorv1alpha1.TalosOperationKindCNI, ichorv1alpha1.TalosOperationPhaseInProgress), false},
+		{"a talos operation completes", op(ichorv1alpha1.TalosOperationKindTalos, ichorv1alpha1.TalosOperationPhaseInProgress), op(ichorv1alpha1.TalosOperationKindTalos, ichorv1alpha1.TalosOperationPhaseCompleted), false},
+		{"the cilium hand-over completes", handover(metav1.ConditionFalse), handover(metav1.ConditionTrue), true},
+		{"the cilium hand-over was already done", handover(metav1.ConditionTrue), handover(metav1.ConditionTrue), false},
+		{"a status write of the detection itself", &ichorv1alpha1.TalosCluster{}, &ichorv1alpha1.TalosCluster{}, false},
+	}
+
+	for _, c := range cases {
+		if got := cniDetectTrigger(c.old, c.new); got != c.want {
+			t.Errorf("%s: cniDetectTrigger = %v, want %v", c.name, got, c.want)
+		}
 	}
 }

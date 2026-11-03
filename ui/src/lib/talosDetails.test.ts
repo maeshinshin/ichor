@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { formatSpeed, serviceTone, sortServices, visibleVolumes } from './talosDetails.ts'
+import { formatSpeed, healthKey, serviceTone, sortServices, visibleVolumes } from './talosDetails.ts'
 
 test('link speed is shown in Mbit/s or Gbit/s, and unknown speed as a dash', () => {
   assert.equal(formatSpeed(0), '-')
@@ -16,6 +16,12 @@ test('a running healthy service is ok, a running unhealthy one is bad, unknown h
   assert.equal(serviceTone({ state: 'Running', healthUnknown: true, healthy: false }), 'neutral')
   assert.equal(serviceTone({ state: 'Failed', healthUnknown: true, healthy: false }), 'bad')
   assert.equal(serviceTone({ state: 'Finished', healthUnknown: true, healthy: false }), 'neutral')
+})
+
+test('a service without a health check says so; yes and no stay as they are', () => {
+  assert.equal(healthKey({ state: 'Running', healthUnknown: true, healthy: false }), 'talos.noHealthCheck')
+  assert.equal(healthKey({ state: 'Running', healthUnknown: false, healthy: true }), 'common.yes')
+  assert.equal(healthKey({ state: 'Running', healthUnknown: false, healthy: false }), 'common.no')
 })
 
 test('services needing attention sort first, then by id', () => {

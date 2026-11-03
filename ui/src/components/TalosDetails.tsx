@@ -15,7 +15,7 @@ import { ToneBadge } from '@/components/ToneBadge'
 import type { GetNodeTalosDetailsResponse } from '@/gen/ichor/v1alpha1/talosdetails_pb'
 import { nodeClient } from '@/lib/connect'
 import { display, formatBytes } from '@/lib/format'
-import { formatSpeed, serviceTone, sortServices, visibleVolumes } from '@/lib/talosDetails'
+import { formatSpeed, healthKey, serviceTone, sortServices, visibleVolumes } from '@/lib/talosDetails'
 import { useLoad } from '@/lib/useLoad'
 import { useT } from '@/lib/useT'
 
@@ -294,7 +294,7 @@ function ServicesSection({ data }: { data: GetNodeTalosDetailsResponse }) {
                     <ToneBadge tone={serviceTone(svc)}>{svc.state}</ToneBadge>
                   </TableCell>
                   <TableCell>
-                    {svc.healthUnknown ? '-' : svc.healthy ? t('common.yes') : t('common.no')}
+                    <span className={svc.healthUnknown ? 'text-muted-foreground' : undefined}>{t(healthKey(svc))}</span>
                     {svc.healthMessage && <span class="break-words"> {svc.healthMessage}</span>}
                   </TableCell>
                 </TableRow>

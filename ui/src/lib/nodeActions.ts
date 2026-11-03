@@ -16,7 +16,7 @@ export type NodeActionDef = {
   destructive: boolean
   // typedName: the user types the node's name before the action can start.
   typedName: boolean
-  // override: the user also gives a reason and needs the override permission (reset).
+  // override: the user must tick the override and needs the override permission (reset). A reason is optional.
   override: boolean
   controlPlaneOnly: boolean
 }
@@ -55,13 +55,13 @@ export function canStart(opts: {
   confirmName: string
   typed: string
   nodeName: string
-  reason: string
+  overridden: boolean
   service: string
   busy: boolean
 }): boolean {
   if (!opts.planned || opts.blocked !== '' || opts.busy) return false
   if (opts.def.id === 'restart-service' && !(restartableServices as readonly string[]).includes(opts.service)) return false
   if (opts.confirmName !== '' && !nodeNameMatches(opts.typed, opts.nodeName)) return false
-  if (opts.def.override && opts.reason.trim() === '') return false
+  if (opts.def.override && !opts.overridden) return false
   return true
 }

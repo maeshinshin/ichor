@@ -2,10 +2,12 @@ import { useEffect, useState } from 'preact/hooks'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { AlertDialogCancel, AlertDialogFooter } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { CircleXIcon } from 'lucide-preact'
 import { Badge } from '@/components/ui/badge'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Item, ItemContent, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -25,8 +27,8 @@ import { navigate } from '@/router'
 // RestoreDialog is "Restore from backup…" in the cluster page's Danger zone. It never
 // writes on the first click: the user picks a snapshot from the cluster's backups, "Review" asks the
 // server for the plan (what happens, in order, and what is lost) and shows it, and only the second,
-// separate button writes. That one also needs the cluster's name typed and a reason for the override
-// permission (the server asks Kubernetes whether this user holds it, and refuses if not). The UI only
+// separate button writes. That one also needs the cluster's name typed and the override ticked (the
+// server asks Kubernetes whether this user holds the override permission, and refuses if not). The UI only
 // writes the operation; the controller wipes and recovers etcd.
 export function RestoreDialog({ cluster, disabled = false }: { cluster: { namespace: string; name: string }; disabled?: boolean }) {
   const t = useT()
@@ -35,6 +37,7 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
   const [chosen, setChosen] = useState('')
   const [plan, setPlan] = useState<PlanOperationResponse | null>(null)
   const [typed, setTyped] = useState('')
+  const [overridden, setOverridden] = useState(false)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
@@ -69,6 +72,7 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
       setPlan(null)
       setError(null)
       setTyped('')
+      setOverridden(false)
       setReason('')
     }
   }
@@ -80,7 +84,7 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
       backup: choice?.backup,
       snapshot: choice?.name ?? '',
       confirm,
-      override: reason.trim() === '' ? undefined : { reason: reason.trim() },
+      override: overridden ? { reason: reason.trim() } : undefined,
     },
   })
 
@@ -116,7 +120,7 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
     blocked: plan?.blocked ?? '',
     clusterName: plan?.confirmName ?? '',
     typed,
-    reason,
+    overridden,
     busy,
   })
 
@@ -237,6 +241,10 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
             <FieldLabel htmlFor="restore-name">{t('ops.dialog.typeName', { name: cluster.name })}</FieldLabel>
             <Input id="restore-name" autoComplete="off" value={typed} onInput={(e) => setTyped((e.currentTarget as HTMLInputElement).value)} />
           </Field>
+          <div class="flex items-center gap-2 text-sm">
+            <Checkbox id="restore-override" checked={overridden} onCheckedChange={(on: boolean | 'indeterminate') => setOverridden(on === true)} />
+            <Label htmlFor="restore-override">{t('restore.override')}</Label>
+          </div>
           <Field>
             <FieldLabel htmlFor="restore-reason">{t('node.action.reason')}</FieldLabel>
             <Textarea id="restore-reason" value={reason} onInput={(e) => setReason((e.currentTarget as HTMLTextAreaElement).value)} />

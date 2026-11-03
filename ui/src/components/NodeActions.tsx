@@ -343,6 +343,7 @@ function NodeActionDialog({
   const [service, setService] = useState(def.id === 'restart-service' ? restartableServices[0] : '')
   const [allowLeader, setAllowLeader] = useState(false)
   const [typed, setTyped] = useState('')
+  const [overridden, setOverridden] = useState(false)
   const [reason, setReason] = useState('')
   const [plan, setPlan] = useState<PlanOperationResponse | null>(null)
   const [busy, setBusy] = useState(false)
@@ -355,7 +356,7 @@ function NodeActionDialog({
     service: def.id === 'restart-service' ? service : '',
     allowLeader: def.id === 'etcd-defrag' && allowLeader,
     confirm,
-    override: def.override && reason.trim() !== '' ? { reason: reason.trim() } : undefined,
+    override: overridden ? { reason: reason.trim() } : undefined,
   })
 
   // The plan is asked for as soon as the dialog opens, and again when an option that changes it
@@ -382,7 +383,7 @@ function NodeActionDialog({
     confirmName,
     typed,
     nodeName: machine.name,
-    reason,
+    overridden,
     service,
     busy,
   })
@@ -486,10 +487,16 @@ function NodeActionDialog({
               </div>
             )}
             {plan.overrideRequired && (
-              <div class="space-y-2">
-                <Label htmlFor="node-action-reason">{t('node.action.reason')}</Label>
-                <Textarea id="node-action-reason" value={reason} onInput={(e) => setReason((e.currentTarget as HTMLTextAreaElement).value)} />
-                <p class="text-xs text-muted-foreground">{t('node.action.reasonHint')}</p>
+              <div class="space-y-3">
+                <div class="flex items-center gap-2 text-sm">
+                  <Checkbox id="node-action-override" checked={overridden} onCheckedChange={(on: boolean | 'indeterminate') => setOverridden(on === true)} />
+                  <Label htmlFor="node-action-override">{t('node.action.override')}</Label>
+                </div>
+                <div class="space-y-2">
+                  <Label htmlFor="node-action-reason">{t('node.action.reason')}</Label>
+                  <Textarea id="node-action-reason" value={reason} onInput={(e) => setReason((e.currentTarget as HTMLTextAreaElement).value)} />
+                  <p class="text-xs text-muted-foreground">{t('node.action.reasonHint')}</p>
+                </div>
               </div>
             )}
           </div>

@@ -41,7 +41,7 @@ func TestPlanAndCreateRefuseADowngrade(t *testing.T) {
 			// The cluster runs above the targets, so both targets are downgrades (the release set moved).
 			objs := opObjects()
 			running := objs[0].(*ichorv1alpha1.TalosCluster)
-			running.Spec.TalosVersion, running.Spec.KubernetesVersion = "v1.14.3", "v1.36.6" //nolint:goconst // the fixture's running versions
+			running.Spec.TalosVersion, running.Spec.KubernetesVersion = fixtureTalos, "v1.36.6" // the fixture's running versions
 
 			srv, base := opServer(t, objs...)
 			before := getCluster(t, base).Spec

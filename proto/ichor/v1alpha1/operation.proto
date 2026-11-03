@@ -142,7 +142,7 @@ enum OperationKind {
 }
 
 // EtcdRestoreRequest names the snapshot of an etcd-restore plan or create. Starting
-// it needs the cluster's name typed and an override reason: it rewinds the whole cluster.
+// it needs the cluster's name typed and an override: it rewinds the whole cluster.
 message EtcdRestoreRequest {
   // backup is the TalosEtcdBackup whose storage holds the snapshot.
   ObjectRef backup = 1;
@@ -150,7 +150,8 @@ message EtcdRestoreRequest {
   string snapshot = 2;
   // confirm is the cluster's name, typed.
   string confirm = 3;
-  // override is required: the reason goes to the audit record and the Event on the cluster, and the caller must hold the override verb on the TalosCluster.
+  // override is required; its reason is optional and goes to the audit record and the Event on the
+  // cluster, and the caller must hold the override verb on the TalosCluster.
   Override override = 4;
 }
 
@@ -179,8 +180,8 @@ message NodeActionRequest {
   bool allow_leader = 4;
   // confirm is the machine's name, typed, for reset (and remove).
   string confirm = 5;
-  // override is required for reset: the reason, checked against the override
-  // verb on the machine.
+  // override is required for reset, and for reboot or shutdown it overrides the last-worker
+  // guard. Its reason is optional, and the caller must hold the override verb on the machine.
   Override override = 6;
 }
 
@@ -362,7 +363,7 @@ message PlanOperationResponse {
   bool kubernetes_api_unavailable = 11;
   // steps, warning, confirm_name and override_required describe a node action in plain
   // English: what happens in order, what the user should know first, the name they must type
-  // (empty when no typing is needed), and whether an override reason is needed.
+  // (empty when no typing is needed), and whether an override is needed.
   repeated string steps = 12;
   string warning = 13;
   string confirm_name = 14;

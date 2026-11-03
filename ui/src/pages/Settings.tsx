@@ -2,7 +2,9 @@ import { useEffect, useState } from 'preact/hooks'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
+import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { PageSkeleton } from '@/components/PageStates'
@@ -13,6 +15,12 @@ import { operationClient, settingsClient } from '@/lib/connect'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { notifyWrite } from '@/lib/notify'
 import {
+  AUTO_PATCH_COMPONENTS,
+  autoPatchChanges,
+  autoPatchFormOf,
+  autoPatchProblem,
+  autoPatchSource,
+  toggleComponent,
   changesOf,
   DRIFT_POLICIES,
   type Fields,
@@ -24,10 +32,12 @@ import {
   sourceOf,
   TOKEN_TTL_PRESETS,
   usersProblem,
+  type AutoPatchForm,
   type Form,
   type Source,
 } from '@/lib/settings'
 import { useLoad } from '@/lib/useLoad'
+import { Switch } from '@/components/ui/switch'
 import { useT } from '@/lib/useT'
 
 // The Settings page (docs/adr/0105, Part B): the runtime settings of the IchorInstallation, one card per
@@ -52,6 +62,7 @@ export function Settings() {
       <UsersCard res={res} onSaved={setRes} />
       <DefaultsCard res={res} onSaved={setRes} />
       <UpdatesCard res={res} onSaved={setRes} />
+      <AutoPatchCard res={res} onSaved={setRes} />
     </div>
   )
 }
@@ -295,6 +306,80 @@ function UpdatesCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: 
       {checkedAt && <p className="text-sm text-muted-foreground">{t('settings.updateCheckedAt', { time: new Date(Number(checkedAt.seconds) * 1000).toLocaleString() })}</p>}
       {error && <ErrorAlert {...error} />}
       <Button disabled={locked || busy || choice === start} onClick={save}>
+        {busy ? t('settings.saving') : t('settings.save')}
+      </Button>
+    </SectionCard>
+  )
+}
+
+// AutoPatchCard is the switch for automatic patch upgrades (docs/adr/0116): off by default, which components, an
+// optional daily UTC window, and, while it is halted by a failed or paused automatic operation, the button that
+// clears the halt. Clearing is allowed on a read-only deployment too; it is an action, not a setting.
+function AutoPatchCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: GetSettingsResponse) => void }) {
+  const t = useT()
+  const start = autoPatchFormOf(res)
+  const [form, setForm] = useState<AutoPatchForm>(start)
+  const { busy, error, save } = useSave(onSaved)
+  const locked = lockedReason(res) !== null
+  const changes = autoPatchChanges(start, form)
+  const problem = autoPatchProblem(form)
+  const halted = res.autoPatchHaltedOperation
+  const mayClear = res.readOnly || res.canEditSettings
+  const componentLabel = (c: string) =>
+    t(c === 'talos' ? 'settings.autoPatchComponent.talos' : c === 'cilium' ? 'settings.autoPatchComponent.cilium' : 'settings.autoPatchComponent.kubernetes')
+
+  return (
+    <SectionCard title={t('settings.autoPatch')} description={t('settings.autoPatchDesc')}>
+      <Locked res={res} />
+      {halted && (
+        <Alert variant="destructive">
+          <AlertDescription>{t('settings.autoPatchHalted', { operation: halted })}</AlertDescription>
+        </Alert>
+      )}
+      {halted && (
+        <Button variant="outline" disabled={busy || !mayClear} onClick={() => save({ autoPatchAcknowledgedHalt: halted })}>
+          {t('settings.autoPatchClear')}
+        </Button>
+      )}
+      <FieldGroup>
+        <Field orientation="horizontal">
+          <Switch id="settings-auto-patch" checked={form.enabled} disabled={locked || busy} onCheckedChange={(on: boolean) => setForm({ ...form, enabled: on })} />
+          <FieldLabel htmlFor="settings-auto-patch">
+            {t('settings.autoPatchEnable')}
+            <SourceBadge source={autoPatchSource(res)} />
+          </FieldLabel>
+        </Field>
+        <FieldSet>
+          <FieldLegend variant="label">{t('settings.autoPatchComponents')}</FieldLegend>
+          <FieldGroup className="gap-2">
+            {AUTO_PATCH_COMPONENTS.map((c) => (
+              <Field key={c} orientation="horizontal">
+                <Checkbox
+                  id={`settings-auto-patch-${c}`}
+                  checked={form.components.includes(c)}
+                  disabled={locked || busy}
+                  onCheckedChange={(on: boolean | 'indeterminate') => setForm({ ...form, components: toggleComponent(form.components, c, on === true) })}
+                />
+                <FieldLabel htmlFor={`settings-auto-patch-${c}`}>{componentLabel(c)}</FieldLabel>
+              </Field>
+            ))}
+          </FieldGroup>
+        </FieldSet>
+        <Field>
+          <FieldLabel htmlFor="settings-auto-patch-window">{t('settings.autoPatchWindow')}</FieldLabel>
+          <Input
+            id="settings-auto-patch-window"
+            value={form.window}
+            placeholder="02:00-05:00"
+            disabled={locked || busy}
+            onInput={(e) => setForm({ ...form, window: (e.currentTarget as HTMLInputElement).value.trim() })}
+          />
+          <FieldDescription>{t('settings.autoPatchWindowHelp')}</FieldDescription>
+        </Field>
+      </FieldGroup>
+      {problem && <p className="text-sm text-destructive">{t(problem)}</p>}
+      {error && <ErrorAlert {...error} />}
+      <Button disabled={locked || busy || problem !== null || Object.keys(changes).length === 0} onClick={() => save(changes)}>
         {busy ? t('settings.saving') : t('settings.save')}
       </Button>
     </SectionCard>

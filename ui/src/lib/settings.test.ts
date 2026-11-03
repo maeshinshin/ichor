@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
+  autoPatchChanges,
+  autoPatchFormOf,
+  autoPatchProblem,
+  autoPatchSource,
+  toggleComponent,
   changesOf,
   durationOptions,
   formOf,
@@ -66,4 +71,48 @@ test('controls are locked for read-only mode and a missing verb', () => {
   assert.equal(lockedReason({ ...view, canEditSettings: true }), null)
   assert.equal(lockedReason(view), 'settings.noPermissionAlert')
   assert.equal(lockedReason({ ...view, readOnly: true }), 'settings.readOnlyAlert')
+})
+
+test('the automatic patch form: off with every component by default, then what is in force', () => {
+  const off = autoPatchFormOf({ readOnly: false, canEditSettings: true })
+  assert.deepEqual(off, { enabled: false, components: ['talos', 'cilium', 'kubernetes'], window: '' })
+
+  const on = autoPatchFormOf({
+    readOnly: false,
+    canEditSettings: true,
+    effective: {
+      autoPatch: { value: 'true', source: 'spec' },
+      autoPatchComponents: { value: 'talos,kubernetes', source: 'spec' },
+      autoPatchWindow: { value: '02:00-05:00', source: 'spec' },
+    },
+  })
+  assert.deepEqual(on, { enabled: true, components: ['talos', 'kubernetes'], window: '02:00-05:00' })
+  assert.equal(autoPatchSource({ readOnly: false, canEditSettings: true, effective: { autoPatch: { value: 'true', source: 'deployment' } } }), 'deployment')
+  assert.equal(autoPatchSource({ readOnly: false, canEditSettings: true, spec: { autoPatchEnabled: false } }), 'spec')
+})
+
+test('components toggle in canonical order', () => {
+  assert.deepEqual(toggleComponent(['talos', 'kubernetes'], 'cilium', true), ['talos', 'cilium', 'kubernetes'])
+  assert.deepEqual(toggleComponent(['talos', 'cilium', 'kubernetes'], 'cilium', false), ['talos', 'kubernetes'])
+})
+
+test('the window must be HH:MM-HH:MM UTC, may wrap midnight, and a component must be selected', () => {
+  const form = (window: string, components = ['talos']) => ({ enabled: true, components, window })
+  assert.equal(autoPatchProblem(form('')), null)
+  assert.equal(autoPatchProblem(form('02:00-05:00')), null)
+  assert.equal(autoPatchProblem(form('22:00-02:00')), null)
+  assert.equal(autoPatchProblem(form('24:00-02:00')), 'settings.badWindow')
+  assert.equal(autoPatchProblem(form('2:00-5:00')), 'settings.badWindow')
+  assert.equal(autoPatchProblem(form('03:00-03:00')), 'settings.badWindow')
+  assert.equal(autoPatchProblem(form('night')), 'settings.badWindow')
+  assert.equal(autoPatchProblem(form('', [])), 'settings.noComponent')
+})
+
+test('autoPatchChanges sends only what differs; every component is the empty list', () => {
+  const start = { enabled: false, components: ['talos', 'cilium', 'kubernetes'], window: '' }
+  assert.deepEqual(autoPatchChanges(start, start), {})
+  assert.deepEqual(autoPatchChanges(start, { ...start, enabled: true }), { autoPatchEnabled: true })
+  assert.deepEqual(autoPatchChanges(start, { ...start, components: ['talos'] }), { autoPatchComponents: 'talos' })
+  assert.deepEqual(autoPatchChanges({ ...start, components: ['talos'] }, start), { autoPatchComponents: '' })
+  assert.deepEqual(autoPatchChanges(start, { ...start, window: '02:00-05:00' }), { autoPatchWindow: '02:00-05:00' })
 })

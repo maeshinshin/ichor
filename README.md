@@ -51,7 +51,7 @@ install.
   ([ADR 0096](docs/adr/0096-a-secret-reference-is-changed-only-with-update-on-secret-references.md)).
 - Upgrades itself through the `IchorInstallation` resource
   ([ADR 0059](docs/adr/0059-ichor-installation-and-self-upgrade.md)).
-- Bootstraps Cilium, the only CNI (pinned 1.18.0 chart embedded in the CLI;
+- Bootstraps Cilium, the only CNI (pinned 1.20.4 chart embedded in the CLI;
   `--cni-tunnel vxlan|geneve` picks its tunnel) and keeps it as a Helm release.
   Edit its values in the UI (Cilium page) or with `ichor cni values`, upgrade
   it with `ichor cni upgrade`, and switch kube-proxy with `ichor cni kube-proxy`

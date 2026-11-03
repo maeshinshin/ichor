@@ -39,12 +39,12 @@ func TestCheckChartStep(t *testing.T) {
 		deployed, target string
 		wantErr          string
 	}{
-		{"1.17.4", chartNext, ""},
-		{chartNext, "1.18.2", ""},
+		{olderMinor, chartNext, ""},
+		{chartNext, "1.20.7", ""},
 		{chartNext, chartNext, ""},
-		{"1.16.9", chartNext, "one minor version at a time"},
+		{skipMinor, chartNext, "one minor version at a time"},
 		{chartNext, "2.0.0", "one minor version at a time"},
-		{"1.19.0", chartNext, "does not downgrade"},
+		{"1.21.0", chartNext, "does not downgrade"},
 		{"nonsense", chartNext, "cannot compare"},
 	} {
 		err := checkChartStep(tc.deployed, tc.target)
@@ -58,9 +58,10 @@ func TestCheckChartStep(t *testing.T) {
 }
 
 const (
-	chartNext  = "1.18.0"
-	olderMinor = "1.17.4"
-	skipMinor  = "1.16.2"
+	// The chart is 1.20.x and the rule accepts the minor below it (ADR 0113): olderMinor is 1.19, skipMinor 1.18.
+	chartNext  = "1.20.4"
+	olderMinor = "1.19.5"
+	skipMinor  = "1.18.2"
 )
 
 var _ = Describe("Cilium chart upgrade", func() {

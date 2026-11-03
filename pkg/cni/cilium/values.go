@@ -27,7 +27,7 @@ const (
 
 	// ChartVersion is the Cilium release the values below were written
 	// against. Bump it alongside the values when moving to a newer Cilium.
-	ChartVersion = "1.18.0"
+	ChartVersion = "1.20.4"
 )
 
 // kubePrismPort is KubePrism's local, load-balanced Kubernetes API port,
@@ -41,7 +41,9 @@ const kubePrismPort = 7445
 // securityContextCapabilities is cilium.securityContext.capabilities: the
 // Linux capabilities Cilium needs instead of running privileged
 // (docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium, Talos v1.14
-// docs / Cilium 1.18.0, retrieved 2026-10-25).
+// docs / Cilium 1.20.4 chart, checked 2026-11-03, ADR 0113). The 1.20.4 chart's own default list
+// also adds SYSLOG (dmesg and kernel pointers, not needed by the datapath); Ichor keeps the guide's
+// list, because a helm list replaces the chart's rather than merging with it.
 type securityContextCapabilities struct {
 	CiliumAgent      []string `json:"ciliumAgent"`
 	CleanCiliumState []string `json:"cleanCiliumState"`
@@ -54,7 +56,7 @@ type securityContext struct {
 // cgroup is cilium.cgroup: Talos already mounts the cgroup2 hierarchy
 // itself, so Cilium must not try to mount its own
 // (docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium, Talos v1.14
-// docs / Cilium 1.18.0, retrieved 2026-10-25).
+// docs / Cilium 1.20.4 chart, checked 2026-11-03, ADR 0113).
 type cgroup struct {
 	AutoMount cgroupAutoMount `json:"autoMount"`
 	HostRoot  string          `json:"hostRoot"`
@@ -103,7 +105,7 @@ type toleration struct {
 
 // Values is cilium's Helm values, built from Talos's recommended settings
 // (docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium, Talos v1.14
-// docs / Cilium 1.18.0, retrieved 2026-10-25) plus the Hubble CronJob
+// docs / Cilium 1.20.4 chart, checked 2026-11-03, ADR 0113) plus the Hubble CronJob
 // setting above. Field order matches the source doc's two values.yaml
 // blocks (kube-proxy kept, then kube-proxy replaced) so a diff against it
 // stays easy to read.

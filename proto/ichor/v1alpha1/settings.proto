@@ -34,6 +34,15 @@ message SettingsFields {
   optional string drift_policy = 4;
   // update_check_enabled turns the check for newer Ichor releases on or off.
   optional bool update_check_enabled = 5;
+  // auto_patch_enabled turns automatic patch upgrades on or off.
+  optional bool auto_patch_enabled = 6;
+  // auto_patch_components is a comma-separated subset of talos, kubernetes, cilium; empty means all three.
+  optional string auto_patch_components = 7;
+  // auto_patch_window is a daily UTC window "HH:MM-HH:MM"; empty means any time.
+  optional string auto_patch_window = 8;
+  // auto_patch_acknowledged_halt clears a halt: the halted operation's namespace/name, as
+  // auto_patch_halted_operation shows it.
+  optional string auto_patch_acknowledged_halt = 9;
 }
 
 // SettingsEffective is every setting in force.
@@ -45,6 +54,11 @@ message SettingsEffective {
   SettingValue drift_policy = 4;
   // update_check is the check for newer Ichor releases.
   SettingValue update_check = 5;
+  // auto_patch is "true" or "false"; auto_patch_components the comma-separated list; auto_patch_window
+  // the daily UTC window, empty for any time.
+  SettingValue auto_patch = 6;
+  SettingValue auto_patch_components = 7;
+  SettingValue auto_patch_window = 8;
 }
 
 message GetSettingsRequest {}
@@ -67,6 +81,9 @@ message GetSettingsResponse {
   bool can_edit_reclaim = 8;
   // The caller may edit the users and defaults groups.
   bool can_edit_settings = 9;
+  // auto_patch_halted_operation is the automatic operation (namespace/name) that stopped automatic patching,
+  // empty when it is not halted.
+  string auto_patch_halted_operation = 10;
 }
 
 message UpdateSettingsRequest {

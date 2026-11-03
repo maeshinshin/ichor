@@ -98,6 +98,14 @@ spec:
         {{- end }}
         # Whether the controller looks for a newer release in the chart repository.
         - --update-check={{ .Values.updateCheck.enabled }}
+        # Automatic patch upgrades.
+        - --auto-patch={{ .Values.autoPatch.enabled }}
+        {{- with .Values.autoPatch.components }}
+        - --auto-patch-components={{ join "," . }}
+        {{- end }}
+        {{- with .Values.autoPatch.window }}
+        - --auto-patch-window={{ . }}
+        {{- end }}
         {{- if eq (toString .Values.networkPolicy.cilium.enabled) "false" }}
         # Explicit opt-out: the installer Job skips Ichor's CiliumNetworkPolicies.
         - --no-cilium-policies

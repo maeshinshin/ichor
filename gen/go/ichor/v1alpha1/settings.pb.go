@@ -92,8 +92,17 @@ type SettingsFields struct {
 	DriftPolicy *string `protobuf:"bytes,4,opt,name=drift_policy,json=driftPolicy,proto3,oneof" json:"drift_policy,omitempty"`
 	// update_check_enabled turns the check for newer Ichor releases on or off.
 	UpdateCheckEnabled *bool `protobuf:"varint,5,opt,name=update_check_enabled,json=updateCheckEnabled,proto3,oneof" json:"update_check_enabled,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// auto_patch_enabled turns automatic patch upgrades on or off.
+	AutoPatchEnabled *bool `protobuf:"varint,6,opt,name=auto_patch_enabled,json=autoPatchEnabled,proto3,oneof" json:"auto_patch_enabled,omitempty"`
+	// auto_patch_components is a comma-separated subset of talos, kubernetes, cilium; empty means all three.
+	AutoPatchComponents *string `protobuf:"bytes,7,opt,name=auto_patch_components,json=autoPatchComponents,proto3,oneof" json:"auto_patch_components,omitempty"`
+	// auto_patch_window is a daily UTC window "HH:MM-HH:MM"; empty means any time.
+	AutoPatchWindow *string `protobuf:"bytes,8,opt,name=auto_patch_window,json=autoPatchWindow,proto3,oneof" json:"auto_patch_window,omitempty"`
+	// auto_patch_acknowledged_halt clears a halt: the halted operation's namespace/name, as
+	// auto_patch_halted_operation shows it.
+	AutoPatchAcknowledgedHalt *string `protobuf:"bytes,9,opt,name=auto_patch_acknowledged_halt,json=autoPatchAcknowledgedHalt,proto3,oneof" json:"auto_patch_acknowledged_halt,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *SettingsFields) Reset() {
@@ -161,6 +170,34 @@ func (x *SettingsFields) GetUpdateCheckEnabled() bool {
 	return false
 }
 
+func (x *SettingsFields) GetAutoPatchEnabled() bool {
+	if x != nil && x.AutoPatchEnabled != nil {
+		return *x.AutoPatchEnabled
+	}
+	return false
+}
+
+func (x *SettingsFields) GetAutoPatchComponents() string {
+	if x != nil && x.AutoPatchComponents != nil {
+		return *x.AutoPatchComponents
+	}
+	return ""
+}
+
+func (x *SettingsFields) GetAutoPatchWindow() string {
+	if x != nil && x.AutoPatchWindow != nil {
+		return *x.AutoPatchWindow
+	}
+	return ""
+}
+
+func (x *SettingsFields) GetAutoPatchAcknowledgedHalt() string {
+	if x != nil && x.AutoPatchAcknowledgedHalt != nil {
+		return *x.AutoPatchAcknowledgedHalt
+	}
+	return ""
+}
+
 // SettingsEffective is every setting in force.
 type SettingsEffective struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -170,9 +207,14 @@ type SettingsEffective struct {
 	RefreshLifetime *SettingValue `protobuf:"bytes,3,opt,name=refresh_lifetime,json=refreshLifetime,proto3" json:"refresh_lifetime,omitempty"`
 	DriftPolicy     *SettingValue `protobuf:"bytes,4,opt,name=drift_policy,json=driftPolicy,proto3" json:"drift_policy,omitempty"`
 	// update_check is the check for newer Ichor releases.
-	UpdateCheck   *SettingValue `protobuf:"bytes,5,opt,name=update_check,json=updateCheck,proto3" json:"update_check,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	UpdateCheck *SettingValue `protobuf:"bytes,5,opt,name=update_check,json=updateCheck,proto3" json:"update_check,omitempty"`
+	// auto_patch is "true" or "false"; auto_patch_components the comma-separated list; auto_patch_window
+	// the daily UTC window, empty for any time.
+	AutoPatch           *SettingValue `protobuf:"bytes,6,opt,name=auto_patch,json=autoPatch,proto3" json:"auto_patch,omitempty"`
+	AutoPatchComponents *SettingValue `protobuf:"bytes,7,opt,name=auto_patch_components,json=autoPatchComponents,proto3" json:"auto_patch_components,omitempty"`
+	AutoPatchWindow     *SettingValue `protobuf:"bytes,8,opt,name=auto_patch_window,json=autoPatchWindow,proto3" json:"auto_patch_window,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *SettingsEffective) Reset() {
@@ -240,6 +282,27 @@ func (x *SettingsEffective) GetUpdateCheck() *SettingValue {
 	return nil
 }
 
+func (x *SettingsEffective) GetAutoPatch() *SettingValue {
+	if x != nil {
+		return x.AutoPatch
+	}
+	return nil
+}
+
+func (x *SettingsEffective) GetAutoPatchComponents() *SettingValue {
+	if x != nil {
+		return x.AutoPatchComponents
+	}
+	return nil
+}
+
+func (x *SettingsEffective) GetAutoPatchWindow() *SettingValue {
+	if x != nil {
+		return x.AutoPatchWindow
+	}
+	return nil
+}
+
 type GetSettingsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -295,8 +358,11 @@ type GetSettingsResponse struct {
 	CanEditReclaim bool `protobuf:"varint,8,opt,name=can_edit_reclaim,json=canEditReclaim,proto3" json:"can_edit_reclaim,omitempty"`
 	// The caller may edit the users and defaults groups.
 	CanEditSettings bool `protobuf:"varint,9,opt,name=can_edit_settings,json=canEditSettings,proto3" json:"can_edit_settings,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// auto_patch_halted_operation is the automatic operation (namespace/name) that stopped automatic patching,
+	// empty when it is not halted.
+	AutoPatchHaltedOperation string `protobuf:"bytes,10,opt,name=auto_patch_halted_operation,json=autoPatchHaltedOperation,proto3" json:"auto_patch_halted_operation,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *GetSettingsResponse) Reset() {
@@ -390,6 +456,13 @@ func (x *GetSettingsResponse) GetCanEditSettings() bool {
 		return x.CanEditSettings
 	}
 	return false
+}
+
+func (x *GetSettingsResponse) GetAutoPatchHaltedOperation() string {
+	if x != nil {
+		return x.AutoPatchHaltedOperation
+	}
+	return ""
 }
 
 type UpdateSettingsRequest struct {
@@ -496,26 +569,38 @@ const file_ichor_v1alpha1_settings_proto_rawDesc = "" +
 	"\x1dichor/v1alpha1/settings.proto\x12\x0eichor.v1alpha1\"<\n" +
 	"\fSettingValue\x12\x14\n" +
 	"\x05value\x18\x01 \x01(\tR\x05value\x12\x16\n" +
-	"\x06source\x18\x02 \x01(\tR\x06source\"\xd0\x02\n" +
+	"\x06source\x18\x02 \x01(\tR\x06source\"\x9b\x05\n" +
 	"\x0eSettingsFields\x12,\n" +
 	"\x0freclaim_enabled\x18\x01 \x01(\bH\x00R\x0ereclaimEnabled\x88\x01\x01\x12 \n" +
 	"\ttoken_ttl\x18\x02 \x01(\tH\x01R\btokenTtl\x88\x01\x01\x12.\n" +
 	"\x10refresh_lifetime\x18\x03 \x01(\tH\x02R\x0frefreshLifetime\x88\x01\x01\x12&\n" +
 	"\fdrift_policy\x18\x04 \x01(\tH\x03R\vdriftPolicy\x88\x01\x01\x125\n" +
-	"\x14update_check_enabled\x18\x05 \x01(\bH\x04R\x12updateCheckEnabled\x88\x01\x01B\x12\n" +
+	"\x14update_check_enabled\x18\x05 \x01(\bH\x04R\x12updateCheckEnabled\x88\x01\x01\x121\n" +
+	"\x12auto_patch_enabled\x18\x06 \x01(\bH\x05R\x10autoPatchEnabled\x88\x01\x01\x127\n" +
+	"\x15auto_patch_components\x18\a \x01(\tH\x06R\x13autoPatchComponents\x88\x01\x01\x12/\n" +
+	"\x11auto_patch_window\x18\b \x01(\tH\aR\x0fautoPatchWindow\x88\x01\x01\x12D\n" +
+	"\x1cauto_patch_acknowledged_halt\x18\t \x01(\tH\bR\x19autoPatchAcknowledgedHalt\x88\x01\x01B\x12\n" +
 	"\x10_reclaim_enabledB\f\n" +
 	"\n" +
 	"_token_ttlB\x13\n" +
 	"\x11_refresh_lifetimeB\x0f\n" +
 	"\r_drift_policyB\x17\n" +
-	"\x15_update_check_enabled\"\xe0\x02\n" +
+	"\x15_update_check_enabledB\x15\n" +
+	"\x13_auto_patch_enabledB\x18\n" +
+	"\x16_auto_patch_componentsB\x14\n" +
+	"\x12_auto_patch_windowB\x1f\n" +
+	"\x1d_auto_patch_acknowledged_halt\"\xb9\x04\n" +
 	"\x11SettingsEffective\x12E\n" +
 	"\x0freclaim_enabled\x18\x01 \x01(\v2\x1c.ichor.v1alpha1.SettingValueR\x0ereclaimEnabled\x129\n" +
 	"\ttoken_ttl\x18\x02 \x01(\v2\x1c.ichor.v1alpha1.SettingValueR\btokenTtl\x12G\n" +
 	"\x10refresh_lifetime\x18\x03 \x01(\v2\x1c.ichor.v1alpha1.SettingValueR\x0frefreshLifetime\x12?\n" +
 	"\fdrift_policy\x18\x04 \x01(\v2\x1c.ichor.v1alpha1.SettingValueR\vdriftPolicy\x12?\n" +
-	"\fupdate_check\x18\x05 \x01(\v2\x1c.ichor.v1alpha1.SettingValueR\vupdateCheck\"\x14\n" +
-	"\x12GetSettingsRequest\"\xa4\x03\n" +
+	"\fupdate_check\x18\x05 \x01(\v2\x1c.ichor.v1alpha1.SettingValueR\vupdateCheck\x12;\n" +
+	"\n" +
+	"auto_patch\x18\x06 \x01(\v2\x1c.ichor.v1alpha1.SettingValueR\tautoPatch\x12P\n" +
+	"\x15auto_patch_components\x18\a \x01(\v2\x1c.ichor.v1alpha1.SettingValueR\x13autoPatchComponents\x12H\n" +
+	"\x11auto_patch_window\x18\b \x01(\v2\x1c.ichor.v1alpha1.SettingValueR\x0fautoPatchWindow\"\x14\n" +
+	"\x12GetSettingsRequest\"\xe3\x03\n" +
 	"\x13GetSettingsResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12+\n" +
 	"\x11installed_version\x18\x02 \x01(\tR\x10installedVersion\x12\x18\n" +
@@ -525,7 +610,9 @@ const file_ichor_v1alpha1_settings_proto_rawDesc = "" +
 	"\teffective\x18\x06 \x01(\v2!.ichor.v1alpha1.SettingsEffectiveR\teffective\x12D\n" +
 	"\fui_effective\x18\a \x01(\v2!.ichor.v1alpha1.SettingsEffectiveR\vuiEffective\x12(\n" +
 	"\x10can_edit_reclaim\x18\b \x01(\bR\x0ecanEditReclaim\x12*\n" +
-	"\x11can_edit_settings\x18\t \x01(\bR\x0fcanEditSettings\"z\n" +
+	"\x11can_edit_settings\x18\t \x01(\bR\x0fcanEditSettings\x12=\n" +
+	"\x1bauto_patch_halted_operation\x18\n" +
+	" \x01(\tR\x18autoPatchHaltedOperation\"z\n" +
 	"\x15UpdateSettingsRequest\x128\n" +
 	"\achanges\x18\x01 \x01(\v2\x1e.ichor.v1alpha1.SettingsFieldsR\achanges\x12'\n" +
 	"\x0fconfirm_reclaim\x18\x02 \x01(\bR\x0econfirmReclaim\"Y\n" +
@@ -564,20 +651,23 @@ var file_ichor_v1alpha1_settings_proto_depIdxs = []int32{
 	0,  // 2: ichor.v1alpha1.SettingsEffective.refresh_lifetime:type_name -> ichor.v1alpha1.SettingValue
 	0,  // 3: ichor.v1alpha1.SettingsEffective.drift_policy:type_name -> ichor.v1alpha1.SettingValue
 	0,  // 4: ichor.v1alpha1.SettingsEffective.update_check:type_name -> ichor.v1alpha1.SettingValue
-	1,  // 5: ichor.v1alpha1.GetSettingsResponse.spec:type_name -> ichor.v1alpha1.SettingsFields
-	2,  // 6: ichor.v1alpha1.GetSettingsResponse.effective:type_name -> ichor.v1alpha1.SettingsEffective
-	2,  // 7: ichor.v1alpha1.GetSettingsResponse.ui_effective:type_name -> ichor.v1alpha1.SettingsEffective
-	1,  // 8: ichor.v1alpha1.UpdateSettingsRequest.changes:type_name -> ichor.v1alpha1.SettingsFields
-	4,  // 9: ichor.v1alpha1.UpdateSettingsResponse.settings:type_name -> ichor.v1alpha1.GetSettingsResponse
-	3,  // 10: ichor.v1alpha1.SettingsService.GetSettings:input_type -> ichor.v1alpha1.GetSettingsRequest
-	5,  // 11: ichor.v1alpha1.SettingsService.UpdateSettings:input_type -> ichor.v1alpha1.UpdateSettingsRequest
-	4,  // 12: ichor.v1alpha1.SettingsService.GetSettings:output_type -> ichor.v1alpha1.GetSettingsResponse
-	6,  // 13: ichor.v1alpha1.SettingsService.UpdateSettings:output_type -> ichor.v1alpha1.UpdateSettingsResponse
-	12, // [12:14] is the sub-list for method output_type
-	10, // [10:12] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	0,  // 5: ichor.v1alpha1.SettingsEffective.auto_patch:type_name -> ichor.v1alpha1.SettingValue
+	0,  // 6: ichor.v1alpha1.SettingsEffective.auto_patch_components:type_name -> ichor.v1alpha1.SettingValue
+	0,  // 7: ichor.v1alpha1.SettingsEffective.auto_patch_window:type_name -> ichor.v1alpha1.SettingValue
+	1,  // 8: ichor.v1alpha1.GetSettingsResponse.spec:type_name -> ichor.v1alpha1.SettingsFields
+	2,  // 9: ichor.v1alpha1.GetSettingsResponse.effective:type_name -> ichor.v1alpha1.SettingsEffective
+	2,  // 10: ichor.v1alpha1.GetSettingsResponse.ui_effective:type_name -> ichor.v1alpha1.SettingsEffective
+	1,  // 11: ichor.v1alpha1.UpdateSettingsRequest.changes:type_name -> ichor.v1alpha1.SettingsFields
+	4,  // 12: ichor.v1alpha1.UpdateSettingsResponse.settings:type_name -> ichor.v1alpha1.GetSettingsResponse
+	3,  // 13: ichor.v1alpha1.SettingsService.GetSettings:input_type -> ichor.v1alpha1.GetSettingsRequest
+	5,  // 14: ichor.v1alpha1.SettingsService.UpdateSettings:input_type -> ichor.v1alpha1.UpdateSettingsRequest
+	4,  // 15: ichor.v1alpha1.SettingsService.GetSettings:output_type -> ichor.v1alpha1.GetSettingsResponse
+	6,  // 16: ichor.v1alpha1.SettingsService.UpdateSettings:output_type -> ichor.v1alpha1.UpdateSettingsResponse
+	15, // [15:17] is the sub-list for method output_type
+	13, // [13:15] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_settings_proto_init() }

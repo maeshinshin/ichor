@@ -30,6 +30,8 @@ type SettingsGate struct {
 	Recorder record.EventRecorder
 }
 
+const pathAutoPatchAck = "spec.autoPatch.acknowledgedHalt"
+
 // settingChange is one changed field of the spec.
 type settingChange struct {
 	path, old, new string
@@ -52,6 +54,19 @@ func boolOf(c *ichorv1alpha1.IchorUpdateCheckSettings) string {
 	}
 
 	return strconv.FormatBool(*c.Enabled)
+}
+
+// autoPatchOf is the automatic patch settings as an old and a new value per field; empty when unset.
+func autoPatchOf(a *ichorv1alpha1.IchorAutoPatchSettings) (enabled, components, window, ack string) {
+	if a == nil {
+		return "", "", "", ""
+	}
+
+	if a.Enabled != nil {
+		enabled = strconv.FormatBool(*a.Enabled)
+	}
+
+	return enabled, strings.Join(a.Components, ","), a.Window, a.AcknowledgedHalt
 }
 
 func durOf(d *metav1.Duration) string {
@@ -98,6 +113,9 @@ func settingChanges(oldSpec, newSpec *ichorv1alpha1.IchorInstallationSpec) []set
 		nDep = &ichorv1alpha1.IchorDeploymentSpec{}
 	}
 
+	oAE, oAC, oAW, oAK := autoPatchOf(oldSpec.AutoPatch)
+	nAE, nAC, nAW, nAK := autoPatchOf(newSpec.AutoPatch)
+
 	const (
 		ver = ichorv1alpha1.IchorSubresourceVersion
 		set = ichorv1alpha1.IchorSubresourceSettings
@@ -111,6 +129,10 @@ func settingChanges(oldSpec, newSpec *ichorv1alpha1.IchorInstallationSpec) []set
 		{"spec.users.refreshLifetime", durOf(oU.RefreshLifetime), durOf(nU.RefreshLifetime), set},
 		{"spec.defaults.driftPolicy", oD.DriftPolicy, nD.DriftPolicy, set},
 		{"spec.updateCheck.enabled", boolOf(oldSpec.UpdateCheck), boolOf(newSpec.UpdateCheck), set},
+		{"spec.autoPatch.enabled", oAE, nAE, set},
+		{"spec.autoPatch.components", oAC, nAC, set},
+		{"spec.autoPatch.window", oAW, nAW, set},
+		{pathAutoPatchAck, oAK, nAK, set},
 	}
 
 	return slices.DeleteFunc(all, func(c settingChange) bool { return c.old == c.new })
@@ -143,7 +165,8 @@ func (g *SettingsGate) check(ctx context.Context, oldObj, newObj *ichorv1alpha1.
 
 	if g.ReadOnly {
 		for _, c := range changes {
-			if c.subresource != ichorv1alpha1.IchorSubresourceVersion {
+			// Clearing an automatic patch halt is an action, not a setting: --settings-read-only does not stop it.
+			if c.subresource != ichorv1alpha1.IchorSubresourceVersion && c.path != pathAutoPatchAck {
 				return fmt.Errorf("%s: settings are managed by the deployment (--settings-read-only / chart settings.readOnly); change them there", c.path)
 			}
 		}

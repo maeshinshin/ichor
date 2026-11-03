@@ -30,7 +30,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemSeparator, ItemTitle } from '@/components/ui/item'
 import { Progress } from '@/components/ui/progress'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { BackupNow } from '@/components/BackupNow'
 import { CARotationAdvice } from '@/components/CARotationAdvice'
 import { isCniUnmanaged } from '@/lib/cni'
@@ -158,8 +158,6 @@ function Home({
   const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, opState: currentState })
   const recent = recentOperations(ops, 5)
   const targets = tileTargets(current?.op.ref?.name ?? null)
-  const nothingWaits = machines !== null && waiting.length === 0
-  const applyDisabledReason = busyReason ?? (nothingWaits ? t('ops.disabledNothing') : undefined)
 
   return (
     <TooltipProvider>
@@ -177,18 +175,6 @@ function Home({
           </Button>
           {backups && backups.length > 0 && (
             <BackupNow backup={backups[0]} onChanged={(next) => setBackups(backups.map((x) => (x.ref?.name === next.ref?.name ? next : x)))} />
-          )}
-          {applyDisabledReason || machines === null ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span tabIndex={0} class="inline-flex">
-                  <StartOperationDialog kind="config" cluster={ref} label={t('home.applyConfig')} disabled />
-                </span>
-              </TooltipTrigger>
-              {applyDisabledReason && <TooltipContent>{applyDisabledReason}</TooltipContent>}
-            </Tooltip>
-          ) : (
-            <StartOperationDialog kind="config" cluster={ref} label={t('home.applyConfig')} />
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

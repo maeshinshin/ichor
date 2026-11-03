@@ -178,4 +178,3 @@ func (s *Server) ciliumPatchOffer(
 
 	return false, nil, reason, nil
 }
-

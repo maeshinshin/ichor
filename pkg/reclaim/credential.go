@@ -51,9 +51,6 @@ func (c Credential) Bytes() []byte { return c.b }
 // Empty reports whether the credential holds nothing.
 func (c Credential) Empty() bool { return len(c.b) == 0 }
 
-// String implements fmt.Stringer.
-func (Credential) String() string { return redacted }
-
 // Format implements fmt.Formatter so that no verb can reach the bytes.
 func (Credential) Format(f fmt.State, _ rune) { _, _ = f.Write([]byte(redacted)) }
 

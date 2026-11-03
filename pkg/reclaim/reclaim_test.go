@@ -286,9 +286,7 @@ func TestExecuteSendsGracefulReset(t *testing.T) {
 }
 
 func TestExecuteUngracefulOnlyWhenForced(t *testing.T) {
-	in := worker()
-	in.ClusterReachable = false
-	n := &fakeNode{in: in}
+	n := &fakeNode{in: unreachable()}
 
 	opt := Options{ForceUngraceful: true}
 	if _, err := Execute(context.Background(), n, Known{}, opt, Confirmation{UUID: testUUID}); err != nil {

@@ -194,17 +194,14 @@ func createControllerPod(binaryPath, kubeconfigPath, kubectlPath string) (string
 		return "", fmt.Errorf("creating the controller pod: %w", err)
 	}
 	if _, err := kube.Poll("waiting for the controller pod to be running", 2*time.Minute, func() (string, bool) {
-		out, err := utils.Run(kube.Command("-n", namespace, "get", "pod", controllerPodName,
-			"-o", "jsonpath={.status.phase}"))
-		return "", err == nil && strings.TrimSpace(out) == "Running"
+		phase, err := getJSONPath("pod", controllerPodName, ".status.phase")
+		return "", err == nil && phase == "Running"
 	}); err != nil {
 		return "", err
 	}
 
 	podIP, err := kube.Poll("waiting for the controller pod's IP", 30*time.Second, func() (string, bool) {
-		out, err := utils.Run(kube.Command("-n", namespace, "get", "pod", controllerPodName,
-			"-o", "jsonpath={.status.podIP}"))
-		ip := strings.TrimSpace(out)
+		ip, err := getJSONPath("pod", controllerPodName, ".status.podIP")
 		return ip, err == nil && ip != ""
 	})
 	if err != nil {
@@ -278,38 +275,40 @@ func startController(bin string) error {
 // straight out of the Secret's "ca.crt" data key exactly as caBundle wants it.
 func waitForWebhookCert() (string, error) {
 	return kube.Poll("waiting for cert-controller to generate the webhook CA", 90*time.Second, func() (string, bool) {
-		out, runErr := innerKubectl("get", "secret", controllerWebhookCertSecret,
-			"-n", controllerLeaderElectionNamespace, "-o", "json").CombinedOutput()
-		if runErr != nil {
+		data, err := webhookCertData()
+		if err != nil {
 			return "", false
 		}
-		var secret struct {
-			Data map[string]string `json:"data"`
-		}
-		if json.Unmarshal(out, &secret) != nil {
-			return "", false
-		}
-		caBundle, ok := secret.Data["ca.crt"]
+		caBundle, ok := data["ca.crt"]
 		return caBundle, ok && caBundle != ""
 	})
+}
+
+// webhookCertData returns the data of the webhook cert Secret on the inner cluster.
+func webhookCertData() (map[string]string, error) {
+	out, err := innerKubectl("get", "secret", controllerWebhookCertSecret,
+		"-n", controllerLeaderElectionNamespace, "-o", "json").CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("reading the webhook cert secret: %w: %s", err, out)
+	}
+	var secret struct {
+		Data map[string]string `json:"data"`
+	}
+	if err := json.Unmarshal(out, &secret); err != nil {
+		return nil, fmt.Errorf("decoding the webhook cert secret: %w", err)
+	}
+	return secret.Data, nil
 }
 
 // mintAndInstallLeafCert fetches the CA cert-controller generated (cert and key) and
 // drops a new leaf for podIP, signed by that CA, into the pod's CertDir -- see package
 // webhookcert for why this cannot be cert-controller's own leaf.
 func mintAndInstallLeafCert(bin, podIP, caBundleB64 string) error {
-	out, err := innerKubectl("get", "secret", controllerWebhookCertSecret,
-		"-n", controllerLeaderElectionNamespace, "-o", "json").CombinedOutput()
+	data, err := webhookCertData()
 	if err != nil {
-		return fmt.Errorf("reading the webhook cert secret: %w: %s", err, out)
+		return err
 	}
-	var secret struct {
-		Data map[string]string `json:"data"`
-	}
-	if err := json.Unmarshal(out, &secret); err != nil {
-		return fmt.Errorf("decoding the webhook cert secret: %w", err)
-	}
-	caKeyB64, ok := secret.Data["ca.key"]
+	caKeyB64, ok := data["ca.key"]
 	if !ok {
 		return fmt.Errorf("webhook cert secret has no ca.key")
 	}

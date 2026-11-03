@@ -34,3 +34,12 @@ Adding a node must also work for a whole range, not only one address. The decisi
 2. **Immediate scan.** Nothing new is needed in the controller: `TalosClusterReconciler` watches `TalosCluster` without a predicate, so the spec write itself enqueues the cluster and `DiscoverAll` runs at once instead of at the 5 minute requeue. The controller still never writes `spec` (a test pins that one pass probes every address of a declared range). Machines found in the range show up as pending in the existing view, which the page polls every 5 seconds.
 3. **UI.** One input takes an address or a CIDR; a slash means a range. It is checked client-side with the same rules (`lib/discovery.ts`) and calls the matching RPC. Every listed address and range has a remove button (ghost icon button with an aria-label); removing a range asks first in a `ConfirmDialog`, an address does not.
 4. **CLI.** `ichor cluster discovery list|add|remove [--cluster NAME]`, through ichor-ui like the other writes; `add` and `remove` pick the RPC by the slash, and `remove` of a range asks unless `--yes`.
+
+## Amendment (2026-11-03): the first scan can miss, so it is repeated soon
+
+Hardware (ADR 0108) saw a machine that had just booted into maintenance at a new address appear as pending only about 8 minutes after `ichor cluster discovery add`, against 9 s to 3 min in the 15-node run. Cause: the first probe ran before the machine or the egress rule was ready and found nothing, and the next pass was the 5 minute requeue. Two things made it worse. The settle wait (3 s) ran only when the TalosCluster reconciler itself had written the egress policy; when the egress reconciler wrote it first, `Sync` reported no change, the probe ran at once, and the log showed a Conflict between the two writers. Decisions:
+
+1. `TalosEgress.Sync` retries a Conflict or AlreadyExists (up to 3 times) against the fresh object, and `SettleAfter` waits until the settle time has passed since the last write by either reconciler.
+2. The TalosCluster reconciler remembers, in memory, when it first saw each discovery address and CIDR. While any is younger than 3 minutes and a pass found nothing, it requeues after 15 s instead of 5 min. That bounds the extra probing to about 12 passes per new entry; after a controller restart every entry counts as new once.
+
+Expected latency: the pending TalosMachine appears within about 15 to 30 s of the machine answering on the maintenance port, if that happens within 3 minutes of the add; later, within the 5 minute pass.

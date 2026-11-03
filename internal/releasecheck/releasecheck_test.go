@@ -3,6 +3,7 @@ package releasecheck
 import (
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -17,6 +18,14 @@ func TestLatestPicksTheHighestFinalRelease(t *testing.T) {
 
 	if got, want := Latest(tags), "v0.11.0"; got != want {
 		t.Fatalf("Latest = %q, want %q", got, want)
+	}
+}
+
+func TestFinalsAreNewestFirstAndOncePerVersion(t *testing.T) {
+	got := Finals([]string{"0.2.0", "v0.10.0", "0.2.0", "0.3.0-rc.1", "v0.9.1", "junk", "v0.2.0+b.1"})
+
+	if want := []string{"v0.10.0", "v0.9.1", "v0.2.0"}; !slices.Equal(got, want) {
+		t.Fatalf("Finals = %v, want %v", got, want)
 	}
 }
 

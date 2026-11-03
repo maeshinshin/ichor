@@ -335,6 +335,33 @@ spec:
                       value of the last good one.
                     type: string
                 type: object
+              upgradeTargets:
+                description: |-
+                  upgradeTargets are the Talos and Kubernetes releases the controller found in their image
+                  repositories (ADR 0115). Unset until the first check, and cleared while the check is off.
+                properties:
+                  checkedAt:
+                    description: checkedAt is when the last listing finished, successful
+                      or not.
+                    format: date-time
+                    type: string
+                  error:
+                    description: error is the failure of the last listing; a list
+                      that failed keeps its last good value.
+                    type: string
+                  kubernetes:
+                    description: kubernetes are the final Kubernetes releases, newest
+                      first, with a leading v.
+                    items:
+                      type: string
+                    type: array
+                  talos:
+                    description: talos are the final Talos releases, newest first,
+                      with a leading v.
+                    items:
+                      type: string
+                    type: array
+                type: object
             type: object
         required:
         - spec

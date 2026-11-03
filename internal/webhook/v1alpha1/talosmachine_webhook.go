@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -82,7 +83,25 @@ func (v *TalosMachineCustomValidator) ValidateCreate(ctx context.Context, obj *i
 		return nil, err
 	}
 
-	return nil, v.checkApprovalCap(ctx, nil, obj)
+	return approvalWarnings(nil, obj), v.checkApprovalCap(ctx, nil, obj)
+}
+
+// approvalWarnings are the DiscoveryWarnings of an approval whose picks are being written: a machine
+// created approved, or an update that moves its install disk, NIC or disk roles (ADR 0111). Nothing else
+// is judged, so an unrelated edit to an approved machine gets no repeated warning.
+func approvalWarnings(oldObj, newObj *ichorv1alpha1.TalosMachine) admission.Warnings {
+	if !newObj.Spec.IsApproved() {
+		return nil
+	}
+
+	if oldObj != nil && oldObj.Spec.IsApproved() &&
+		reflect.DeepEqual(oldObj.Spec.Install, newObj.Spec.Install) &&
+		reflect.DeepEqual(oldObj.Spec.Network, newObj.Spec.Network) &&
+		reflect.DeepEqual(oldObj.Spec.Disks, newObj.Spec.Disks) {
+		return nil
+	}
+
+	return admission.Warnings(newObj.DiscoveryWarnings())
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type TalosMachine.
@@ -105,10 +124,10 @@ func (v *TalosMachineCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 	// another cluster) leaves its old cluster just like a delete does.
 	stillWorker := isApprovedRole(newObj, roleWorker) && sameCluster(oldObj, newObj)
 	if isApprovedRole(oldObj, roleWorker) && !stillWorker {
-		return nil, v.checkWorkerLeaves(ctx, oldObj)
+		return approvalWarnings(oldObj, newObj), v.checkWorkerLeaves(ctx, oldObj)
 	}
 
-	return nil, nil
+	return approvalWarnings(oldObj, newObj), nil
 }
 
 const (

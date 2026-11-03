@@ -9,7 +9,6 @@ import {
   CloudCogIcon,
   CircleXIcon,
   EllipsisIcon,
-  FileCogIcon,
   InboxIcon,
   NetworkIcon,
   PackageCheckIcon,
@@ -417,8 +416,6 @@ function Home({
                       <StartOperationDialog kind="talos" cluster={ref} current={cluster.talosVersion} label={t('ops.action.upgrade')} disabled={!!busy} />
                     </VersionRow>
                     <ItemSeparator />
-                    <VersionRow name={t('ops.row.contract')} icon={FileCogIcon} installed={versionOf('version-contract')?.current ?? ''} />
-                    <ItemSeparator />
                     <VersionRow name={t('ops.row.kubernetes')} icon={ContainerIcon} installed={cluster.kubernetesVersion}>
                       {hasPatch(candidates.kubernetes) && <Badge variant="secondary">{t('versions.patchAvailable')}</Badge>}
                       <StartOperationDialog kind="kubernetes" cluster={ref} current={cluster.kubernetesVersion} label={t('ops.action.upgrade')} disabled={!!busy} />
@@ -480,6 +477,7 @@ function Home({
               <CardContent className="space-y-4">
             <Fields>
               <Field label={t('home.endpoint')} value={cluster.endpoint} />
+              <Field label={t('ops.row.contract')} value={versionOf('version-contract')?.current ?? ''} />
               <Field
                 label={t('cluster.cpCount')}
                 value={`${cluster.controlPlaneCount}${cluster.controlPlaneSchedulable ? ` ${t('clusters.schedulable')}` : ''}`}

@@ -91,3 +91,16 @@ func TestOperationToPBCarriesTheKubernetesStage(t *testing.T) {
 		t.Fatalf("kubernetes stage without status = %q, want empty", got)
 	}
 }
+
+func TestPlanKubernetesSkipsTheCiliumConstraintOfAnUnmanagedFlannel(t *testing.T) {
+	objs := opObjects()
+	objs[0].(*ichorv1alpha1.TalosCluster).Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{Detected: "flannel", DetectedVersion: "v0.28.9"}
+
+	srv, _ := opServer(t, objs...)
+
+	if _, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
+		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_KUBERNETES, Target: "v1.36.6",
+	})); err != nil {
+		t.Fatalf("the Kubernetes plan of a flannel cluster was refused by Cilium's table: %v", err)
+	}
+}

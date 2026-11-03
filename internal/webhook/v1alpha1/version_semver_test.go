@@ -181,3 +181,21 @@ func TestTalosClusterRefusesAnIncompatiblePairUnlessOverridden(t *testing.T) {
 		t.Fatalf("the same update under the override verb: %v", err)
 	}
 }
+
+func TestTalosClusterDoesNotCheckCiliumOfAnUnmanagedFlannel(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	v := &TalosClusterCustomValidator{}
+
+	old := newTestCluster()
+	old.Spec.TalosVersion, old.Spec.KubernetesVersion = testTalosVersion, testK8sVersion
+	old.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{Detected: "flannel", DetectedVersion: "v0.28.9"}
+
+	edited := old.DeepCopy()
+	edited.Spec.KubernetesVersion = "v1.37.1"
+
+	if _, err := v.ValidateUpdate(ctx, old, edited); err != nil {
+		t.Fatalf("a Kubernetes move on an unmanaged flannel cluster was checked against flannel's version as Cilium: %v", err)
+	}
+}

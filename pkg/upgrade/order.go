@@ -17,8 +17,8 @@ limitations under the License.
 package upgrade
 
 import (
+	"cmp"
 	"slices"
-	"strings"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -32,17 +32,15 @@ func SortByOrder(machines []*ichorv1alpha1.TalosMachine) {
 	slices.SortFunc(machines, func(a, b *ichorv1alpha1.TalosMachine) int {
 		av, aok := a.Labels[ichorv1alpha1.TalosMachineUpgradeOrderLabel]
 		bv, bok := b.Labels[ichorv1alpha1.TalosMachineUpgradeOrderLabel]
+		if aok != bok {
+			if aok {
+				return -1
+			}
 
-		switch {
-		case aok && !bok:
-			return -1
-		case !aok && bok:
 			return 1
-		case av != bv:
-			return strings.Compare(av, bv)
-		default:
-			return strings.Compare(a.Name, b.Name)
 		}
+
+		return cmp.Or(cmp.Compare(av, bv), cmp.Compare(a.Name, b.Name))
 	})
 }
 

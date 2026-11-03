@@ -12,6 +12,7 @@ export type Attention =
   | { kind: 'config'; count: number }
   | { kind: 'opFailed' }
   | { kind: 'opPaused' }
+  | { kind: 'patch'; components: string[] }
   | { kind: 'release'; version: string }
 
 // attentionItems lists, in order, only what applies to the cluster now.
@@ -20,6 +21,8 @@ export function attentionItems(i: {
   pending: number
   configWaiting: number
   opState: string | null
+  // patches names the components with a newer patch of their minor; one item lists them.
+  patches?: string[]
   // release is the newer Ichor release the cluster knows, or null.
   release?: string | null
 }): Attention[] {
@@ -34,6 +37,7 @@ export function attentionItems(i: {
   if (clients !== null) out.push({ kind: 'clientsNotRestarted', message: clients })
   if (i.pending > 0) out.push({ kind: 'pending', count: i.pending })
   if (i.configWaiting > 0) out.push({ kind: 'config', count: i.configWaiting })
+  if (i.patches && i.patches.length > 0) out.push({ kind: 'patch', components: i.patches })
   if (i.release) out.push({ kind: 'release', version: i.release })
   return out
 }

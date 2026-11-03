@@ -1,13 +1,17 @@
-import { useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { CircleXIcon, InfoIcon } from 'lucide-preact'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
+import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
+import { VersionPicker } from '@/components/VersionPicker'
 import { AlertDialogCancel, AlertDialogFooter } from '@/components/ui/alert-dialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { wireKindOf } from '@/components/opkind'
@@ -18,6 +22,7 @@ import { describeError, type ErrorShape } from '@/lib/errors'
 import { versionProblem } from '@/lib/clusterOps'
 import { confirmMatches, kindNeedsTypedName, kubernetesStages, planCounts, planSteps, targetError, type OpKind } from '@/lib/operations'
 import { useT } from '@/lib/useT'
+import { type TargetList } from '@/lib/upgradeTargets'
 import { navigate } from '@/router'
 
 const startedByDefault: Record<OpKind, boolean> = { talos: true, kubernetes: true, ichor: true, cni: true, shutdown: false, 'ca-rotation': false, config: false }
@@ -58,19 +63,48 @@ export function StartOperationDialog({
     setOwnOpen(v)
     onOpenChange?.(v)
   }
-  // A version starts as the current one, so a person edits the last digits; a mode starts as the other one.
-  const [target, setTarget] = useState(kind === 'cni' ? (current === 'replaced' ? 'enabled' : 'replaced') : current)
+  // A mode starts as the other one. A Talos or Kubernetes version starts empty and is preselected from the
+  // candidates ListUpgradeTargets gives (its default); any other version starts as the current one.
+  const isVersionPick = kind === 'talos' || kind === 'kubernetes'
+  const [target, setTarget] = useState(kind === 'cni' ? (current === 'replaced' ? 'enabled' : 'replaced') : isVersionPick ? '' : current)
   const [touched, setTouched] = useState(false)
   const [typed, setTyped] = useState('')
   const [plan, setPlan] = useState<PlanOperationResponse | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
+  // list is the candidates for the picker, read when the dialog opens; null while they are read.
+  const [list, setList] = useState<TargetList | null>(null)
+  // The override lifts a compatibility refusal the plan names; the reason is optional.
+  const [overridden, setOverridden] = useState(false)
+  const [reason, setReason] = useState('')
 
   const needsName = kindNeedsTypedName(kind)
   const needsTarget = !needsName
   const targetProblem = needsTarget ? checkTarget(kind, current, target) : null
   const startable =
     plan !== null && plan.blocked === '' && (!needsName || confirmMatches(typed, cluster.name)) && !busy
+
+  useEffect(() => {
+    if (!open || !isVersionPick) return
+    let live = true
+    setList(null)
+    operationClient.listUpgradeTargets({ cluster, kind: wireKindOf(kind) }).then(
+      (res) => {
+        if (!live) return
+        setList(res)
+        // The default is preselected unless the person has already picked a version.
+        if (res.default) setTarget((cur) => (cur === '' ? res.default : cur))
+      },
+      (err) => {
+        if (!live) return
+        const e = describeError(err)
+        setList({ recommended: [], patch: [], nextMinor: [], default: '', available: false, unavailableReason: e.detail || e.title })
+      },
+    )
+    return () => {
+      live = false
+    }
+  }, [open, kind, cluster.namespace, cluster.name])
 
   function reset(next: boolean) {
     setOpen(next)
@@ -79,14 +113,23 @@ export function StartOperationDialog({
       setError(null)
       setTyped('')
       setTouched(false)
+      setOverridden(false)
+      setReason('')
     }
   }
 
-  async function review() {
+  async function review(withOverride = overridden) {
     setBusy(true)
     setError(null)
     try {
-      setPlan(await operationClient.planOperation({ cluster, kind: wireKindOf(kind), target: needsTarget ? target.trim() : '' }))
+      setPlan(
+        await operationClient.planOperation({
+          cluster,
+          kind: wireKindOf(kind),
+          target: needsTarget ? target.trim() : '',
+          override: withOverride ? { reason: reason.trim() } : undefined,
+        }),
+      )
     } catch (err) {
       setError(describeError(err))
     } finally {
@@ -102,6 +145,7 @@ export function StartOperationDialog({
         cluster,
         kind: wireKindOf(kind),
         target: needsTarget ? target.trim() : '',
+        override: overridden ? { reason: reason.trim() } : undefined,
       })
       reset(false)
       notifyDone(t('toast.opStarted', { action: t(`ops.start.${kind}`) }))
@@ -128,7 +172,13 @@ export function StartOperationDialog({
       footer={
         <AlertDialogFooter>
           {plan ? (
-            <Button variant="ghost" onClick={() => setPlan(null)}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setPlan(null)
+                setOverridden(false)
+              }}
+            >
               {t('ops.dialog.back')}
             </Button>
           ) : (
@@ -139,7 +189,7 @@ export function StartOperationDialog({
               {busy ? t('ops.dialog.starting') : t('ops.dialog.start')}
             </Button>
           ) : (
-            <Button disabled={busy || (needsTarget && targetProblem !== null)} onClick={review}>
+            <Button disabled={busy || (needsTarget && targetProblem !== null)} onClick={() => review()}>
               {busy ? t('ops.dialog.reviewing') : t('ops.dialog.review')}
             </Button>
           )}
@@ -166,6 +216,16 @@ export function StartOperationDialog({
                 <SelectItem value="enabled">{t('ops.dialog.modeEnabled')}</SelectItem>
               </SelectContent>
             </Select>
+          ) : isVersionPick ? (
+            <VersionPicker
+              id={`op-target-${kind}`}
+              value={target}
+              list={list}
+              onValueChange={(v) => {
+                setTouched(true)
+                setTarget(v)
+              }}
+            />
           ) : (
             <Input
               id={`op-target-${kind}`}
@@ -197,6 +257,28 @@ export function StartOperationDialog({
           <AlertTitle>{t('ops.plan.warningTitle')}</AlertTitle>
           <AlertDescription>{plan.warning}</AlertDescription>
         </Alert>
+      )}
+
+      {plan && (plan.overrideRequired || overridden) && (
+        <div class="space-y-3">
+          <div class="flex items-center gap-2 text-sm">
+            <Checkbox
+              id={`op-override-${kind}`}
+              checked={overridden}
+              onCheckedChange={(on: boolean | 'indeterminate') => {
+                const next = on === true
+                setOverridden(next)
+                void review(next)
+              }}
+            />
+            <Label htmlFor={`op-override-${kind}`}>{t('ops.dialog.override')}</Label>
+          </div>
+          <div class="space-y-2">
+            <Label htmlFor={`op-reason-${kind}`}>{t('ops.dialog.reason')}</Label>
+            <Textarea id={`op-reason-${kind}`} value={reason} onInput={(e) => setReason((e.currentTarget as HTMLTextAreaElement).value)} />
+            <p class="text-xs text-muted-foreground">{t('ops.dialog.overrideHint')}</p>
+          </div>
+        </div>
       )}
 
       {plan && needsName && plan.blocked === '' && (

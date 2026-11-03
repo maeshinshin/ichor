@@ -41,9 +41,8 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import { OperationControls } from '@/components/OperationControls'
 import { Field, Fields } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
-import { ClusterUpgrade } from '@/components/ClusterUpgrade'
 import { StartOperationDialog } from '@/components/StartOperationDialog'
-import { HandoverPhase, RolloutKind, type Cluster, type ComponentVersion } from '@/gen/ichor/v1alpha1/cluster_pb'
+import { HandoverPhase, RolloutKind, type Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { OperationKind, type EtcdBackup, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
 import { blockingOperation, recentOperations, rebootPendingCount, type OpRow } from '@/lib/clusterOps'
@@ -57,6 +56,7 @@ import { attentionItems, backupsValue, tileTargets, versionLabel, type TileTarge
 import { releaseNotice } from '@/lib/ichorVersion'
 import { opStateTone, type Tone } from '@/lib/status'
 import { componentOf, stateKey, stateTone, versionPair } from '@/lib/versions'
+import { hasPatch, isNewerPatch, patchComponents, type TargetList } from '@/lib/upgradeTargets'
 import { conditionTone } from '@/lib/conditions'
 import { useCluster } from '@/lib/useCluster'
 import { useT } from '@/lib/useT'
@@ -106,8 +106,16 @@ function Home({
   const [ichorVersion, setIchorVersion] = useState<string | null>(null)
   // The newer Ichor release the controller found, or null.
   const [release, setRelease] = useState<string | null>(null)
+  // What Talos and Kubernetes can move to, for the patch hints; null when the list could not be read.
+  const [candidates, setCandidates] = useState<{ talos: TargetList | null; kubernetes: TargetList | null }>({ talos: null, kubernetes: null })
   const [dialog, setDialog] = useState<'ca-rotation' | 'shutdown' | null>(null)
   const wasBusy = useRef(false)
+
+  async function loadCandidates() {
+    const read = (kind: OperationKind) => operationClient.listUpgradeTargets({ cluster: ref, kind }).catch(() => null)
+    const [talos, kubernetes] = await Promise.all([read(OperationKind.TALOS), read(OperationKind.KUBERNETES)])
+    setCandidates({ talos, kubernetes })
+  }
 
   async function reloadMachines() {
     try {
@@ -147,6 +155,7 @@ function Home({
     loadBackups()
     loadIchor()
     loadRelease()
+    loadCandidates()
   }
 
   // The operations come from the shared cluster poll; a visit refreshes them at once.
@@ -172,7 +181,13 @@ function Home({
   const busyReason = busy ? t('ops.disabledBusy') : undefined
   const kubeProxy = cluster.kubeProxyMode || 'enabled'
   const versionOf = (name: string) => componentOf(cluster.versions, name)
-  const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, opState: currentState, release })
+  const cilium = versionOf('cilium')
+  const patches = patchComponents({
+    talos: candidates.talos,
+    kubernetes: candidates.kubernetes,
+    cilium: cilium ? { current: cilium.current, target: cilium.target } : null,
+  })
+  const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, opState: currentState, patches, release })
   const recent = recentOperations(ops, 5)
   const targets = tileTargets(current?.op.ref?.name ?? null)
 
@@ -247,6 +262,7 @@ function Home({
                           </AlertAction>
                         </>
                       )}
+                      {a.kind === 'patch' && <AlertTitle>{t('home.attnPatch', { components: a.components.join(', ') })}</AlertTitle>}
                       {a.kind === 'release' && (
                         <>
                           <AlertTitle>{t('home.attnRelease', { version: a.version })}</AlertTitle>
@@ -392,15 +408,34 @@ function Home({
               </CardHeader>
               <CardContent>
                 <ItemGroup>
-                    <VersionRow name={t('ops.row.talos')} icon={CpuIcon} installed={cluster.talosVersion} component={versionOf('talos')} />
+                    <VersionRow name={t('ops.row.talos')} icon={CpuIcon} installed={cluster.talosVersion}>
+                      {hasPatch(candidates.talos) && <Badge variant="secondary">{t('versions.patchAvailable')}</Badge>}
+                      <StartOperationDialog kind="talos" cluster={ref} current={cluster.talosVersion} label={t('ops.action.upgrade')} disabled={!!busy} />
+                    </VersionRow>
                     <ItemSeparator />
-                    <VersionRow name={t('ops.row.contract')} icon={FileCogIcon} installed={versionOf('version-contract')?.current ?? ''} component={versionOf('version-contract')} />
+                    <VersionRow name={t('ops.row.contract')} icon={FileCogIcon} installed={versionOf('version-contract')?.current ?? ''} />
                     <ItemSeparator />
-                    <VersionRow name={t('ops.row.kubernetes')} icon={ContainerIcon} installed={cluster.kubernetesVersion} component={versionOf('kubernetes')} />
+                    <VersionRow name={t('ops.row.kubernetes')} icon={ContainerIcon} installed={cluster.kubernetesVersion}>
+                      {hasPatch(candidates.kubernetes) && <Badge variant="secondary">{t('versions.patchAvailable')}</Badge>}
+                      <StartOperationDialog kind="kubernetes" cluster={ref} current={cluster.kubernetesVersion} label={t('ops.action.upgrade')} disabled={!!busy} />
+                    </VersionRow>
                     {!isCniUnmanaged(cluster.cniPreset) && (
                       <>
                         <ItemSeparator />
-                        <VersionRow name={t('ops.row.cilium')} icon={ShieldCheckIcon} installed={versionOf('cilium')?.current ?? ''} component={versionOf('cilium')} />
+                        <VersionRow
+                          name={t('ops.row.cilium')}
+                          icon={ShieldCheckIcon}
+                          installed={cilium?.current ?? ''}
+                          target={cilium?.state === 'behind' ? cilium.target : undefined}
+                        >
+                          {cilium && cilium.state !== 'up-to-date' && <ToneBadge tone={stateTone(cilium.state)}>{t(stateKey(cilium.state))}</ToneBadge>}
+                          {cilium && isNewerPatch(cilium.current, cilium.target) && <Badge variant="secondary">{t('versions.patchAvailable')}</Badge>}
+                          {cilium?.state === 'behind' && (
+                            <Button asChild variant="outline" size="sm">
+                              <Link to="/cilium">{t('versions.ciliumUpgrade')}</Link>
+                            </Button>
+                          )}
+                        </VersionRow>
                       </>
                     )}
                     <ItemSeparator />
@@ -418,10 +453,11 @@ function Home({
                     )}
                 </ItemGroup>
               </CardContent>
-              <CardFooter className="flex-col items-stretch gap-2">
-                <ClusterUpgrade cluster={ref} version={ichorVersion} busy={!!busy} onStarted={reloadCluster} />
-                {busyReason && <CardDescription>{busyReason}</CardDescription>}
-              </CardFooter>
+              {busyReason && (
+                <CardFooter>
+                  <CardDescription>{busyReason}</CardDescription>
+                </CardFooter>
+              )}
             </Card>
           </div>
         </div>
@@ -575,21 +611,21 @@ function NodeRow({ m, first }: { m: Machine; first: boolean }) {
   )
 }
 
-// VersionRow is one component: what it runs and, when the cluster compares it with the release set, the target and a state.
+// VersionRow is one component: what it runs, and the version it is going to when there is one (the Cilium chart
+// that is newer than the installed release). Talos, the contract and Kubernetes show what they run.
 function VersionRow({
   name,
   icon: Icon,
   installed,
-  component,
+  target,
   children,
 }: {
   name: string
   icon: LucideIcon
   installed: string
-  component?: ComponentVersion
+  target?: string
   children?: ComponentChildren
 }) {
-  const t = useT()
   return (
     <Item>
       <ItemMedia variant="icon">
@@ -597,12 +633,9 @@ function VersionRow({
       </ItemMedia>
       <ItemContent>
         <ItemTitle>{name}</ItemTitle>
-        <ItemDescription>{component ? versionPair(installed, component.target) : installed || '-'}</ItemDescription>
+        <ItemDescription>{target !== undefined ? versionPair(installed, target) : installed || '-'}</ItemDescription>
       </ItemContent>
-      <ItemActions>
-        {component && component.state !== 'up-to-date' && <ToneBadge tone={stateTone(component.state)}>{t(stateKey(component.state))}</ToneBadge>}
-        {children}
-      </ItemActions>
+      <ItemActions>{children}</ItemActions>
     </Item>
   )
 }

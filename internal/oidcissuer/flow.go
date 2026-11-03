@@ -27,9 +27,13 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func oauthError(w http.ResponseWriter, status int, code, desc string) {
+func noStore(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Pragma", "no-cache")
+}
+
+func oauthError(w http.ResponseWriter, status int, code, desc string) {
+	noStore(w)
 	writeJSON(w, status, map[string]string{"error": code, "error_description": desc})
 }
 
@@ -86,6 +90,11 @@ func isB64URL(s string, minLen, maxLen int, extra string) bool {
 		}
 	}
 	return true
+}
+
+func hasContentType(r *http.Request, want string) bool {
+	mt, _, _ := strings.Cut(r.Header.Get("Content-Type"), ";")
+	return strings.TrimSpace(mt) == want
 }
 
 func hasScope(scope, want string) bool { return slices.Contains(strings.Fields(scope), want) }
@@ -183,7 +192,7 @@ type loginRequest struct {
 // carrying the authorization code.
 func (i *Issuer) login(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	if mt, _, _ := strings.Cut(r.Header.Get("Content-Type"), ";"); strings.TrimSpace(mt) != "application/json" {
+	if !hasContentType(r, "application/json") {
 		oauthError(w, http.StatusUnsupportedMediaType, errInvalidRequest, "JSON body required")
 		return
 	}
@@ -300,7 +309,7 @@ type tokenResponse struct {
 // redirect URI and PKCE.
 func (i *Issuer) token(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxFormBytes)
-	if mt, _, _ := strings.Cut(r.Header.Get("Content-Type"), ";"); strings.TrimSpace(mt) != "application/x-www-form-urlencoded" || r.ParseForm() != nil {
+	if !hasContentType(r, "application/x-www-form-urlencoded") || r.ParseForm() != nil {
 		oauthError(w, http.StatusBadRequest, errInvalidRequest, "form body required")
 		return
 	}
@@ -436,8 +445,7 @@ func (i *Issuer) respond(ctx context.Context, w http.ResponseWriter, u User, cli
 		oauthError(w, http.StatusInternalServerError, "server_error", "")
 		return
 	}
-	w.Header().Set("Cache-Control", "no-store")
-	w.Header().Set("Pragma", "no-cache")
+	noStore(w)
 	writeJSON(w, http.StatusOK, resp)
 }
 

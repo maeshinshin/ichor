@@ -163,12 +163,7 @@ func (i *Issuer) clientIP(r *http.Request) string {
 }
 
 func (i *Issuer) trusted(a netip.Addr) bool {
-	for _, p := range i.cfg.TrustedProxies {
-		if p.Contains(a.Unmap()) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(i.cfg.TrustedProxies, func(p netip.Prefix) bool { return p.Contains(a.Unmap()) })
 }
 
 // lifetimes returns the ID token and refresh token lifetimes for this issuance.
@@ -276,16 +271,14 @@ func (i *Issuer) discovery(jwksURI string) http.HandlerFunc {
 }
 
 func (i *Issuer) jwks(w http.ResponseWriter, _ *http.Request) {
-	set := jose.JSONWebKeySet{}
-	set.Keys = i.cfg.Keys.Public() // public keys with use and alg already set
 	w.Header().Set("Cache-Control", noCache)
-	writeJSON(w, http.StatusOK, set)
+	writeJSON(w, http.StatusOK, jose.JSONWebKeySet{Keys: i.cfg.Keys.Public()}) // use and alg already set
 }
+
+const jwkUseSig = "sig"
 
 // noCache is deliberate for discovery and the JWKS: the kube-apiserver's
 // go-oidc (v2.5.0) keeps fetched keys until the response's own cache expiry
 // and refetches on an unknown kid only after that, so any positive max-age
 // would delay a rotation by that long. Without one it refetches immediately.
-const jwkUseSig = "sig"
-
 const noCache = "no-cache"

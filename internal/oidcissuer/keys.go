@@ -63,7 +63,7 @@ func (s *KeyStore) Signing() (jose.JSONWebKey, error) {
 	if err != nil {
 		return jose.JSONWebKey{}, fmt.Errorf("oidcissuer: key %q: %w", k.KID, err)
 	}
-	return jose.JSONWebKey{Key: priv, KeyID: k.KID, Algorithm: string(jose.RS256), Use: jwkUseSig}, nil
+	return sigKey(priv, k.KID), nil
 }
 
 func (s *KeyStore) Public() []jose.JSONWebKey {
@@ -77,7 +77,11 @@ func (s *KeyStore) Public() []jose.JSONWebKey {
 		if err != nil {
 			continue // ParseKeys validated every key
 		}
-		out = append(out, jose.JSONWebKey{Key: &priv.PublicKey, KeyID: k.KID, Algorithm: string(jose.RS256), Use: jwkUseSig})
+		out = append(out, sigKey(&priv.PublicKey, k.KID))
 	}
 	return out
+}
+
+func sigKey(key any, kid string) jose.JSONWebKey {
+	return jose.JSONWebKey{Key: key, KeyID: kid, Algorithm: string(jose.RS256), Use: jwkUseSig}
 }

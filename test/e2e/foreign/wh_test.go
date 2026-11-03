@@ -40,7 +40,16 @@ import (
 	"github.com/maeshinshin/ichor/test/internal/kube"
 )
 
-const whSampleEvery = 5 * time.Second
+const (
+	whSampleEvery = 5 * time.Second
+	whReady       = "true" // a custom-columns READY value
+	// The custom-columns the sampler prints: name, node, IP, phase, ready, restarts, waiting reason, start time.
+	whPodColumns = "NAME:.metadata.name,NODE:.spec.nodeName,IP:.status.podIP,PHASE:.status.phase," +
+		"READY:.status.containerStatuses[*].ready,RESTARTS:.status.containerStatuses[*].restartCount," +
+		"WAITING:.status.containerStatuses[*].state.waiting.reason,STARTED:.status.startTime"
+	whAgentColumns = "NAME:.metadata.name,NODE:.spec.nodeName,UID:.metadata.uid,READY:.status.containerStatuses[*].ready," +
+		"RESTARTS:.status.containerStatuses[*].restartCount,STARTED:.status.startTime"
+)
 
 // whLog is the sampler's log. Each write is one whole line or block, so the drop streams never interleave with the samples.
 type whLog struct {
@@ -52,13 +61,13 @@ type whLog struct {
 func (w *whLog) printf(format string, args ...any) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	fmt.Fprintf(w.f, "%7s "+format+"\n", append([]any{time.Since(w.start).Round(time.Second)}, args...)...)
+	_, _ = fmt.Fprintf(w.f, "%7s "+format+"\n", append([]any{time.Since(w.start).Round(time.Second)}, args...)...)
 }
 
 func (w *whLog) block(title, text string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	fmt.Fprintf(w.f, "%7s === %s ===\n%s\n", time.Since(w.start).Round(time.Second), title, strings.TrimSpace(text))
+	_, _ = fmt.Fprintf(w.f, "%7s === %s ===\n%s\n", time.Since(w.start).Round(time.Second), title, strings.TrimSpace(text))
 }
 
 // oneLine joins a multi-line kubectl or cilium-dbg answer for a summary line.
@@ -115,19 +124,19 @@ func whSample(c *foreign.Cluster, w *whLog, stop <-chan struct{}) {
 		case <-tick.C:
 		}
 		pods, _ := inner(c, "-n", crNS, "get", "pods", "-l", "app.kubernetes.io/name=ichor", "--no-headers",
-			"-o", "custom-columns=NAME:.metadata.name,NODE:.spec.nodeName,IP:.status.podIP,PHASE:.status.phase,READY:.status.containerStatuses[*].ready,RESTARTS:.status.containerStatuses[*].restartCount,WAITING:.status.containerStatuses[*].state.waiting.reason,STARTED:.status.startTime")
+			"-o", "custom-columns="+whPodColumns)
 		ep, _ := inner(c, "-n", crNS, "get", "endpoints", "ichor-webhook-service", "-o",
 			"jsonpath=ready={.subsets[*].addresses[*].ip} notReady={.subsets[*].notReadyAddresses[*].ip}")
 		cnp, _ := inner(c, "-n", crNS, "get", "ciliumnetworkpolicies", "--no-headers", "-o", "custom-columns=NAME:.metadata.name")
 		cils, _ := inner(c, "-n", "kube-system", "get", "pods", "-l", "k8s-app=cilium", "--no-headers",
-			"-o", "custom-columns=NAME:.metadata.name,NODE:.spec.nodeName,UID:.metadata.uid,READY:.status.containerStatuses[*].ready,RESTARTS:.status.containerStatuses[*].restartCount,STARTED:.status.startTime")
+			"-o", "custom-columns="+whAgentColumns)
 		w.printf("pods {%s} | webhook %s | cnp {%s} | cilium {%s}", oneLine(pods), oneLine(ep), oneLine(cnp), oneLine(cils))
 
 		var ctrlNode, ctrlIP string
 		var ctrlReady bool
 		for _, l := range strings.Split(pods, "\n") {
 			if f := strings.Fields(l); len(f) >= 5 && strings.Contains(f[0], "controller-manager") {
-				ctrlNode, ctrlIP, ctrlReady = f[1], f[2], f[4] == "true"
+				ctrlNode, ctrlIP, ctrlReady = f[1], f[2], f[4] == whReady
 
 				break
 			}
@@ -188,11 +197,7 @@ func TestWHAdopt(t *testing.T) {
 	w := &whLog{f: f, start: time.Now()}
 	stop := make(chan struct{})
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		whSample(c, w, stop)
-	}()
+	wg.Go(func() { whSample(c, w, stop) })
 	defer func() { close(stop); wg.Wait() }()
 	takeoverAdopt(t, c)
 	waitHandover(t, c, "cilium")

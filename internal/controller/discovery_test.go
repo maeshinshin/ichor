@@ -194,8 +194,8 @@ var _ = Describe("DiscoveryReconciler.Discover", func() {
 			UUID: uuidCreate, Serial: "S1", MACAddresses: []string{testMAC}, Manufacturer: "QEMU",
 		}, fingerprint: "OJ+e3lINvDPSrrxIkkatieIh0ewV9pPDSMWLCCGTZ6o=",
 			inventory: Inventory{
-				Disks: []ichorv1alpha1.TalosMachineDiscoveredDisk{{Serial: "D1", DevPath: "/dev/sda", SizeBytes: 1 << 30}},
-				Links: []ichorv1alpha1.TalosMachineDiscoveredLink{{Name: "eno1", PermanentMAC: testMAC, LinkUp: true}},
+				Disks: []ichorv1alpha1.TalosMachineDiscoveredDisk{{Serial: "D1", DevPath: inventoryDisk, SizeBytes: 1 << 30}},
+				Links: []ichorv1alpha1.TalosMachineDiscoveredLink{{Name: inventoryNIC, PermanentMAC: testMAC, LinkUp: true}},
 			},
 		}
 

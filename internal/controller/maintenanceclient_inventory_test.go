@@ -32,6 +32,12 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
+// The names the inventory tests reuse; goconst would otherwise flag each repeated literal.
+const (
+	inventoryDisk = "/dev/sda"
+	inventoryNIC  = "eno1"
+)
+
 // newMaintenanceState is a COSI state with the two resource types ReadInventory lists.
 func newMaintenanceState(t *testing.T) state.State {
 	t.Helper()
@@ -93,11 +99,11 @@ func TestReadInventory(t *testing.T) {
 	}
 
 	putDisk(t, st, "sdb", func(s *block.DiskSpec) {
-		s.DevPath, s.Serial, s.Size, s.Model, s.Transport = "/dev/sdb", "S-B", 500<<30, "WD Blue", "sata"
+		s.DevPath, s.Serial, s.Size, s.Model, s.Transport = testDevice, "S-B", 500<<30, "WD Blue", "sata"
 		s.Symlinks = []string{"/dev/disk/by-path/x", "/dev/disk/by-id/ata-WD-B"}
 	})
 	putDisk(t, st, "sda", func(s *block.DiskSpec) {
-		s.DevPath, s.WWID, s.BusPath, s.Size = "/dev/sda", "naa.1", "/pci0000:00/ata1", 120<<30
+		s.DevPath, s.WWID, s.BusPath, s.Size = inventoryDisk, "naa.1", "/pci0000:00/ata1", 120<<30
 	})
 	putDisk(t, st, "sr0", func(s *block.DiskSpec) { s.DevPath, s.CDROM = "/dev/sr0", true })
 	putDisk(t, st, "loop0", func(s *block.DiskSpec) { s.DevPath, s.Readonly = "/dev/loop0", true })
@@ -106,7 +112,7 @@ func TestReadInventory(t *testing.T) {
 		s.Type, s.PermanentAddr = nethelpers.LinkEther, nethelpers.HardwareAddr(mac("aa:bb:cc:00:00:02"))
 		s.LinkState, s.SpeedMegabits, s.Driver = true, 1000, "igb"
 	})
-	putLink(t, st, "eno1", func(s *network.LinkStatusSpec) {
+	putLink(t, st, inventoryNIC, func(s *network.LinkStatusSpec) {
 		s.Type, s.PermanentAddr = nethelpers.LinkEther, nethelpers.HardwareAddr(mac("aa:bb:cc:00:00:01"))
 	})
 	putLink(t, st, "bond0", func(s *network.LinkStatusSpec) {
@@ -119,8 +125,8 @@ func TestReadInventory(t *testing.T) {
 	}
 
 	wantDisks := []ichorv1alpha1.TalosMachineDiscoveredDisk{
-		{WWID: "naa.1", BusPath: "/pci0000:00/ata1", DevPath: "/dev/sda", SizeBytes: 120 << 30},
-		{Serial: "S-B", ByIDPath: "/dev/disk/by-id/ata-WD-B", DevPath: "/dev/sdb", SizeBytes: 500 << 30, Model: "WD Blue", Transport: "sata"},
+		{WWID: "naa.1", BusPath: "/pci0000:00/ata1", DevPath: inventoryDisk, SizeBytes: 120 << 30},
+		{Serial: "S-B", ByIDPath: "/dev/disk/by-id/ata-WD-B", DevPath: testDevice, SizeBytes: 500 << 30, Model: "WD Blue", Transport: "sata"},
 	}
 	if len(inv.Disks) != len(wantDisks) {
 		t.Fatalf("Disks = %+v, want %+v", inv.Disks, wantDisks)
@@ -133,7 +139,7 @@ func TestReadInventory(t *testing.T) {
 	}
 
 	wantLinks := []ichorv1alpha1.TalosMachineDiscoveredLink{
-		{Name: "eno1", PermanentMAC: "aa:bb:cc:00:00:01"},
+		{Name: inventoryNIC, PermanentMAC: "aa:bb:cc:00:00:01"},
 		{Name: "enp3s0", PermanentMAC: "aa:bb:cc:00:00:02", LinkUp: true, SpeedMbit: 1000, Driver: "igb"},
 	}
 	if len(inv.Links) != len(wantLinks) {

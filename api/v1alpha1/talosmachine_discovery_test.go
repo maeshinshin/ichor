@@ -21,15 +21,21 @@ import (
 	"testing"
 )
 
+const (
+	devVdz    = "/dev/vdz"
+	serialSDA = "S-SDA"
+	nicName   = "eno1"
+)
+
 // TestDiscoveryWarnings is the check on an approval: the install disk, the disk roles and the
 // NIC are compared with what discovery recorded, and nothing is judged until something was recorded.
 func TestDiscoveryWarnings(t *testing.T) {
 	const (
-		nic     = "aa:bb:cc:dd:ee:01"
+		nic      = "aa:bb:cc:dd:ee:01"
 		otherMAC = "aa:bb:cc:dd:ee:02"
 	)
 
-	sda := TalosMachineDiscoveredDisk{Serial: "S-SDA", ByIDPath: "/dev/disk/by-id/ata-sda", DevPath: "/dev/sda"}
+	sda := TalosMachineDiscoveredDisk{Serial: serialSDA, ByIDPath: "/dev/disk/by-id/ata-sda", DevPath: "/dev/sda"}
 	nvme := TalosMachineDiscoveredDisk{WWID: "nvme.1", DevPath: "/dev/nvme0n1"}
 
 	cases := []struct {
@@ -40,21 +46,21 @@ func TestDiscoveryWarnings(t *testing.T) {
 		{
 			name: "nothing recorded, nothing judged",
 			m: TalosMachine{Spec: TalosMachineSpec{
-				Install: &TalosMachineInstall{Disk: TalosMachineDisk{DevPath: "/dev/vdz"}},
+				Install: &TalosMachineInstall{Disk: TalosMachineDisk{DevPath: devVdz}},
 				Network: &TalosMachineNetwork{MAC: otherMAC},
 			}},
 		},
 		{
 			name: "install disk picked from the list",
 			m: TalosMachine{
-				Spec: TalosMachineSpec{Install: &TalosMachineInstall{Disk: TalosMachineDisk{Serial: "S-SDA"}}},
+				Spec:   TalosMachineSpec{Install: &TalosMachineInstall{Disk: TalosMachineDisk{Serial: serialSDA}}},
 				Status: TalosMachineStatus{DiscoveredDisks: []TalosMachineDiscoveredDisk{sda, nvme}},
 			},
 		},
 		{
 			name: "install disk not discovered",
 			m: TalosMachine{
-				Spec:   TalosMachineSpec{Install: &TalosMachineInstall{Disk: TalosMachineDisk{DevPath: "/dev/vdz"}}},
+				Spec:   TalosMachineSpec{Install: &TalosMachineInstall{Disk: TalosMachineDisk{DevPath: devVdz}}},
 				Status: TalosMachineStatus{DiscoveredDisks: []TalosMachineDiscoveredDisk{sda, nvme}},
 			},
 			want: []string{"install disk \"/dev/vdz\" is not one of the 2 disks"},
@@ -63,7 +69,7 @@ func TestDiscoveryWarnings(t *testing.T) {
 			name: "a disk role that is not discovered is named by its role",
 			m: TalosMachine{
 				Spec: TalosMachineSpec{
-					Install: &TalosMachineInstall{Disk: TalosMachineDisk{Serial: "S-SDA"}},
+					Install: &TalosMachineInstall{Disk: TalosMachineDisk{Serial: serialSDA}},
 					Disks: []TalosMachineDiskRole{{
 						Role: MachineDiskRoleUserVolume, Name: "data", Disk: TalosMachineDisk{WWID: "missing"},
 					}},
@@ -77,7 +83,7 @@ func TestDiscoveryWarnings(t *testing.T) {
 			m: TalosMachine{
 				Spec: TalosMachineSpec{Network: &TalosMachineNetwork{MAC: strings.ToUpper(nic)}},
 				Status: TalosMachineStatus{DiscoveredLinks: []TalosMachineDiscoveredLink{
-					{Name: "eno1", PermanentMAC: nic},
+					{Name: nicName, PermanentMAC: nic},
 				}},
 			},
 		},
@@ -86,7 +92,7 @@ func TestDiscoveryWarnings(t *testing.T) {
 			m: TalosMachine{
 				Spec: TalosMachineSpec{Network: &TalosMachineNetwork{MAC: otherMAC}},
 				Status: TalosMachineStatus{DiscoveredLinks: []TalosMachineDiscoveredLink{
-					{Name: "eno1", PermanentMAC: nic},
+					{Name: nicName, PermanentMAC: nic},
 				}},
 			},
 			want: []string{"network MAC " + otherMAC + " is not the permanent address"},
@@ -95,12 +101,12 @@ func TestDiscoveryWarnings(t *testing.T) {
 			name: "both wrong, both named in order",
 			m: TalosMachine{
 				Spec: TalosMachineSpec{
-					Install: &TalosMachineInstall{Disk: TalosMachineDisk{DevPath: "/dev/vdz"}},
+					Install: &TalosMachineInstall{Disk: TalosMachineDisk{DevPath: devVdz}},
 					Network: &TalosMachineNetwork{MAC: otherMAC},
 				},
 				Status: TalosMachineStatus{
 					DiscoveredDisks: []TalosMachineDiscoveredDisk{sda},
-					DiscoveredLinks: []TalosMachineDiscoveredLink{{Name: "eno1", PermanentMAC: nic}},
+					DiscoveredLinks: []TalosMachineDiscoveredLink{{Name: nicName, PermanentMAC: nic}},
 				},
 			},
 			want: []string{"install disk", "network MAC"},

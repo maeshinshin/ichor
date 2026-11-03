@@ -59,9 +59,7 @@ func durationOf(d *metav1.Duration) *time.Duration {
 		return nil
 	}
 
-	v := d.Duration
-
-	return &v
+	return &d.Duration
 }
 
 // Resolve applies the precedence rule. inst may be nil (no IchorInstallation).

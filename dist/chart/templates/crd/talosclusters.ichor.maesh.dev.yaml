@@ -3277,6 +3277,27 @@ spec:
                     description: detectedVersion is the image tag of the detected
                       CNI's DaemonSet where one exposes it.
                     type: string
+                  imageOverride:
+                    description: |-
+                      imageOverride is the Cilium patch the release runs on the embedded chart: the images of the patch, pinned by digest. Written by the controller after a patch
+                      upgrade's Job rolled out; every later Job keeps it. It stops applying once the embedded chart
+                      reaches the patch, and the controller clears it then.
+                    properties:
+                      images:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          images maps each image key to the reference the Job runs: "agent", "operator" and "hubble-relay"
+                          are repository:tag@sha256:digest, verified against the Cilium release signature.
+                        type: object
+                      version:
+                        description: version is the patch, with a leading v (v1.20.5).
+                        pattern: ^v[0-9]+\.[0-9]+\.[0-9]+$
+                        type: string
+                    required:
+                    - images
+                    - version
+                    type: object
                   kubeProxy:
                     description: |-
                       kubeProxy is the mode the Talos side (cluster.proxy.disabled) is rendered for. Unset until

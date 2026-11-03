@@ -188,7 +188,7 @@ func changesOf(f *pb.SettingsFields) (settings.Changes, error) {
 	if f.AutoPatchComponents != nil {
 		c.AutoPatchComponents = []string{}
 
-		for _, comp := range strings.Split(*f.AutoPatchComponents, ",") {
+		for comp := range strings.SplitSeq(*f.AutoPatchComponents, ",") {
 			if comp = strings.TrimSpace(comp); comp != "" {
 				c.AutoPatchComponents = append(c.AutoPatchComponents, comp)
 			}

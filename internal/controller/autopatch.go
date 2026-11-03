@@ -37,11 +37,15 @@ import (
 	"github.com/maeshinshin/ichor/internal/settings"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
 // autoPatchInterval is the time between two passes. The window is a time of day, so the loop runs far
 // more often than the release check (every 6 hours): the check decides what is on offer, this decides when.
 const autoPatchInterval = time.Minute
+
+// autoPatchMarker is the value of the annotation that marks an operation as the patcher's.
+const autoPatchMarker = "true"
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=update
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations,verbs=create
@@ -98,7 +102,7 @@ func (p *AutoPatcher) now() time.Time {
 }
 
 func isAutoOperation(op *ichorv1alpha1.TalosOperation) bool {
-	return op.Annotations[ichorv1alpha1.OperationAutoPatchAnnotation] == "true"
+	return op.Annotations[ichorv1alpha1.OperationAutoPatchAnnotation] == autoPatchMarker
 }
 
 func opRef(op *ichorv1alpha1.TalosOperation) string { return op.Namespace + "/" + op.Name }
@@ -116,7 +120,7 @@ func unfinished(op *ichorv1alpha1.TalosOperation) bool {
 		return false
 	}
 
-	return !(op.Spec.Kind == ichorv1alpha1.TalosOperationKindNode && op.Status.Phase == ichorv1alpha1.TalosOperationPhaseShutDown)
+	return op.Spec.Kind != ichorv1alpha1.TalosOperationKindNode || op.Status.Phase != ichorv1alpha1.TalosOperationPhaseShutDown
 }
 
 // Pass runs one pass: keep the halt state right, then, when the setting is on and nothing is halted, start
@@ -289,7 +293,7 @@ func (p *AutoPatcher) passCluster(
 
 	if c := cluster.Status.CNI; c != nil {
 		in.Cluster.CNIDetected = c.Detected
-		if c.Detected == "cilium" {
+		if c.Detected == ciliumName {
 			in.Cluster.CiliumVersion = strings.TrimPrefix(c.DetectedVersion, "v")
 		}
 	}
@@ -304,7 +308,7 @@ func (p *AutoPatcher) passCluster(
 			in.Busy = o.Name
 		}
 
-		if isAutoOperation(o) && o.CreationTimestamp.Time.After(in.LastStart) {
+		if isAutoOperation(o) && o.CreationTimestamp.After(in.LastStart) {
 			in.LastStart = o.CreationTimestamp.Time
 		}
 	}
@@ -329,29 +333,20 @@ func (p *AutoPatcher) passCluster(
 	return p.start(ctx, inst, cluster, d)
 }
 
-// machinesReady is true when the cluster has approved machines and each is Ready.
+// machinesReady is true when the cluster has approved machines and each is Ready and not being deleted.
 func (p *AutoPatcher) machinesReady(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) (bool, error) {
-	var machines ichorv1alpha1.TalosMachineList
-	if err := p.Reader.List(ctx, &machines, client.InNamespace(cluster.Namespace)); err != nil {
+	machines, err := deleteguard.ApprovedMachines(ctx, p.Reader, cluster.Namespace, cluster.Name, deleteguard.MachineFilter{IncludeDeleting: true})
+	if err != nil {
 		return false, fmt.Errorf("listing the machines: %w", err)
 	}
 
-	approved := 0
-
-	for i := range machines.Items {
-		m := &machines.Items[i]
-		if m.Spec.ClusterRef.Name != cluster.Name || !m.Spec.IsApproved() {
-			continue
-		}
-
-		approved++
-
-		if !apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionReady) {
+	for i := range machines {
+		if !machines[i].DeletionTimestamp.IsZero() || !apimeta.IsStatusConditionTrue(machines[i].Status.Conditions, conditionReady) {
 			return false, nil
 		}
 	}
 
-	return approved > 0, nil
+	return len(machines) > 0, nil
 }
 
 // start creates the operation of the decision. For Talos and Kubernetes the version goes into the cluster's
@@ -361,7 +356,7 @@ func (p *AutoPatcher) start(ctx context.Context, inst *ichorv1alpha1.IchorInstal
 	op := &ichorv1alpha1.TalosOperation{
 		GenerateName: autoPatchKind(d.Component) + "-", Namespace: cluster.Namespace,
 		Annotations: map[string]string{
-			ichorv1alpha1.OperationAutoPatchAnnotation: "true",
+			ichorv1alpha1.OperationAutoPatchAnnotation: autoPatchMarker,
 			ichorv1alpha1.OperationStartedByAnnotation: ichorv1alpha1.AutoPatchStarter,
 		},
 		Spec: ichorv1alpha1.TalosOperationSpec{

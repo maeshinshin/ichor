@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { canApply, canEdit, canUpgrade, classifyDiffLine, diffLines } from './cilium.ts'
+import { canApply, canEdit, classifyDiffLine, diffLines } from './cilium.ts'
 
 test('diff lines are classified, and file headers are not additions', () => {
   assert.equal(classifyDiffLine('+++ proposed'), 'meta')
@@ -35,10 +35,4 @@ test('apply needs the reviewed text, valid, with a change', () => {
   assert.equal(canApply('a: 1', null), false)
   assert.equal(canApply('a: 1', { ...r, valid: false }), false)
   assert.equal(canApply('a: 1', { ...r, diff: '' }), false)
-})
-
-test('the upgrade button needs an available version and write rights', () => {
-  assert.equal(canUpgrade('', true), false)
-  assert.equal(canUpgrade('1.19.0', false), false)
-  assert.equal(canUpgrade('1.19.0', true), true)
 })

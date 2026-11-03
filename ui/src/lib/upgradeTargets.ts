@@ -58,14 +58,6 @@ export function hasPatch(list: TargetList | null): boolean {
   return list !== null && list.available && list.patch.length > 0
 }
 
-// isNewerPatch: target is a newer patch of the same minor as current (Cilium chart versions, with or without v).
-export function isNewerPatch(current: string, target: string): boolean {
-  const c = finalVersion.exec(current.trim())
-  const t = finalVersion.exec(target.trim())
-  if (!c || !t) return false
-  return c[1] === t[1] && c[2] === t[2] && Number(t[3]) > Number(c[3])
-}
-
 // patchComponents names the components that have a patch, in the order Talos, Kubernetes, Cilium. The attention
 // list announces them as one item. A Cilium patch is one whose images verified.
 export function patchComponents(i: {

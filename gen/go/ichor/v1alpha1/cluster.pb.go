@@ -1064,8 +1064,13 @@ type Cluster struct {
 	CniDetected string `protobuf:"bytes,16,opt,name=cni_detected,json=cniDetected,proto3" json:"cni_detected,omitempty"`
 	// cni_detected_version is status.cni.detectedVersion, the detected CNI's image tag where known.
 	CniDetectedVersion string `protobuf:"bytes,17,opt,name=cni_detected_version,json=cniDetectedVersion,proto3" json:"cni_detected_version,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// versions compares what the cluster runs with the release set of this Ichor (ADR 0113): one
+	// entry per talos, version-contract, kubernetes and cilium.
+	Versions []*ComponentVersion `protobuf:"bytes,18,rep,name=versions,proto3" json:"versions,omitempty"`
+	// release_set is the versions this Ichor build supports (ADR 0113); the cluster is brought to it.
+	ReleaseSet    *ReleaseSet `protobuf:"bytes,19,opt,name=release_set,json=releaseSet,proto3" json:"release_set,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Cluster) Reset() {
@@ -1217,6 +1222,163 @@ func (x *Cluster) GetCniDetectedVersion() string {
 	return ""
 }
 
+func (x *Cluster) GetVersions() []*ComponentVersion {
+	if x != nil {
+		return x.Versions
+	}
+	return nil
+}
+
+func (x *Cluster) GetReleaseSet() *ReleaseSet {
+	if x != nil {
+		return x.ReleaseSet
+	}
+	return nil
+}
+
+// ReleaseSet is one supported combination of versions (ADR 0113), embedded in the Ichor build.
+type ReleaseSet struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	TalosVersion       string                 `protobuf:"bytes,1,opt,name=talos_version,json=talosVersion,proto3" json:"talos_version,omitempty"`
+	VersionContract    string                 `protobuf:"bytes,2,opt,name=version_contract,json=versionContract,proto3" json:"version_contract,omitempty"`
+	KubernetesVersion  string                 `protobuf:"bytes,3,opt,name=kubernetes_version,json=kubernetesVersion,proto3" json:"kubernetes_version,omitempty"`
+	CiliumChartVersion string                 `protobuf:"bytes,4,opt,name=cilium_chart_version,json=ciliumChartVersion,proto3" json:"cilium_chart_version,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *ReleaseSet) Reset() {
+	*x = ReleaseSet{}
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReleaseSet) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReleaseSet) ProtoMessage() {}
+
+func (x *ReleaseSet) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReleaseSet.ProtoReflect.Descriptor instead.
+func (*ReleaseSet) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *ReleaseSet) GetTalosVersion() string {
+	if x != nil {
+		return x.TalosVersion
+	}
+	return ""
+}
+
+func (x *ReleaseSet) GetVersionContract() string {
+	if x != nil {
+		return x.VersionContract
+	}
+	return ""
+}
+
+func (x *ReleaseSet) GetKubernetesVersion() string {
+	if x != nil {
+		return x.KubernetesVersion
+	}
+	return ""
+}
+
+func (x *ReleaseSet) GetCiliumChartVersion() string {
+	if x != nil {
+		return x.CiliumChartVersion
+	}
+	return ""
+}
+
+// ComponentVersion compares one component of a cluster with the release set.
+type ComponentVersion struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// name is talos, version-contract, kubernetes or cilium.
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// current is what the cluster runs: the spec for Talos, the contract, and Kubernetes, the
+	// installed Cilium chart where it is observed (empty otherwise).
+	Current string `protobuf:"bytes,2,opt,name=current,proto3" json:"current,omitempty"`
+	// target is the release set's version for this component.
+	Target string `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	// state is up-to-date, behind, ahead or unknown (docs/adr/0113).
+	State         string `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ComponentVersion) Reset() {
+	*x = ComponentVersion{}
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ComponentVersion) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ComponentVersion) ProtoMessage() {}
+
+func (x *ComponentVersion) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ComponentVersion.ProtoReflect.Descriptor instead.
+func (*ComponentVersion) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *ComponentVersion) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ComponentVersion) GetCurrent() string {
+	if x != nil {
+		return x.Current
+	}
+	return ""
+}
+
+func (x *ComponentVersion) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *ComponentVersion) GetState() string {
+	if x != nil {
+		return x.State
+	}
+	return ""
+}
+
 // CertificateExpiry is one CA of the cluster and its last instant of validity.
 type CertificateExpiry struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1229,7 +1391,7 @@ type CertificateExpiry struct {
 
 func (x *CertificateExpiry) Reset() {
 	*x = CertificateExpiry{}
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[17]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1241,7 +1403,7 @@ func (x *CertificateExpiry) String() string {
 func (*CertificateExpiry) ProtoMessage() {}
 
 func (x *CertificateExpiry) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[17]
+	mi := &file_ichor_v1alpha1_cluster_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1254,7 +1416,7 @@ func (x *CertificateExpiry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CertificateExpiry.ProtoReflect.Descriptor instead.
 func (*CertificateExpiry) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{17}
+	return file_ichor_v1alpha1_cluster_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CertificateExpiry) GetName() string {
@@ -1330,7 +1492,7 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\rHandoverState\x12\x1c\n" +
 	"\tcomponent\x18\x01 \x01(\tR\tcomponent\x123\n" +
 	"\x05phase\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.HandoverPhaseR\x05phase\x12L\n" +
-	"\x14last_transition_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"\xc4\x06\n" +
+	"\x14last_transition_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"\xbf\a\n" +
 	"\aCluster\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x12#\n" +
 	"\rtalos_version\x18\x02 \x01(\tR\ftalosVersion\x12-\n" +
@@ -1352,7 +1514,21 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\n" +
 	"cni_preset\x18\x0f \x01(\tR\tcniPreset\x12!\n" +
 	"\fcni_detected\x18\x10 \x01(\tR\vcniDetected\x120\n" +
-	"\x14cni_detected_version\x18\x11 \x01(\tR\x12cniDetectedVersion\"`\n" +
+	"\x14cni_detected_version\x18\x11 \x01(\tR\x12cniDetectedVersion\x12<\n" +
+	"\bversions\x18\x12 \x03(\v2 .ichor.v1alpha1.ComponentVersionR\bversions\x12;\n" +
+	"\vrelease_set\x18\x13 \x01(\v2\x1a.ichor.v1alpha1.ReleaseSetR\n" +
+	"releaseSet\"\xbd\x01\n" +
+	"\n" +
+	"ReleaseSet\x12#\n" +
+	"\rtalos_version\x18\x01 \x01(\tR\ftalosVersion\x12)\n" +
+	"\x10version_contract\x18\x02 \x01(\tR\x0fversionContract\x12-\n" +
+	"\x12kubernetes_version\x18\x03 \x01(\tR\x11kubernetesVersion\x120\n" +
+	"\x14cilium_chart_version\x18\x04 \x01(\tR\x12ciliumChartVersion\"n\n" +
+	"\x10ComponentVersion\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
+	"\acurrent\x18\x02 \x01(\tR\acurrent\x12\x16\n" +
+	"\x06target\x18\x03 \x01(\tR\x06target\x12\x14\n" +
+	"\x05state\x18\x04 \x01(\tR\x05state\"`\n" +
 	"\x11CertificateExpiry\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x127\n" +
 	"\tnot_after\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\bnotAfter*x\n" +
@@ -1391,7 +1567,7 @@ func file_ichor_v1alpha1_cluster_proto_rawDescGZIP() []byte {
 }
 
 var file_ichor_v1alpha1_cluster_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_ichor_v1alpha1_cluster_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_ichor_v1alpha1_cluster_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_ichor_v1alpha1_cluster_proto_goTypes = []any{
 	(RolloutKind)(0),                        // 0: ichor.v1alpha1.RolloutKind
 	(HandoverPhase)(0),                      // 1: ichor.v1alpha1.HandoverPhase
@@ -1412,60 +1588,64 @@ var file_ichor_v1alpha1_cluster_proto_goTypes = []any{
 	(*RolloutProgress)(nil),                 // 16: ichor.v1alpha1.RolloutProgress
 	(*HandoverState)(nil),                   // 17: ichor.v1alpha1.HandoverState
 	(*Cluster)(nil),                         // 18: ichor.v1alpha1.Cluster
-	(*CertificateExpiry)(nil),               // 19: ichor.v1alpha1.CertificateExpiry
-	(*ObjectRef)(nil),                       // 20: ichor.v1alpha1.ObjectRef
-	(*AuditRecord)(nil),                     // 21: ichor.v1alpha1.AuditRecord
-	(*Override)(nil),                        // 22: ichor.v1alpha1.Override
-	(*timestamppb.Timestamp)(nil),           // 23: google.protobuf.Timestamp
-	(*Condition)(nil),                       // 24: ichor.v1alpha1.Condition
+	(*ReleaseSet)(nil),                      // 19: ichor.v1alpha1.ReleaseSet
+	(*ComponentVersion)(nil),                // 20: ichor.v1alpha1.ComponentVersion
+	(*CertificateExpiry)(nil),               // 21: ichor.v1alpha1.CertificateExpiry
+	(*ObjectRef)(nil),                       // 22: ichor.v1alpha1.ObjectRef
+	(*AuditRecord)(nil),                     // 23: ichor.v1alpha1.AuditRecord
+	(*Override)(nil),                        // 24: ichor.v1alpha1.Override
+	(*timestamppb.Timestamp)(nil),           // 25: google.protobuf.Timestamp
+	(*Condition)(nil),                       // 26: ichor.v1alpha1.Condition
 }
 var file_ichor_v1alpha1_cluster_proto_depIdxs = []int32{
-	20, // 0: ichor.v1alpha1.AddDiscoveryCidrRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	22, // 0: ichor.v1alpha1.AddDiscoveryCidrRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
 	18, // 1: ichor.v1alpha1.AddDiscoveryCidrResponse.cluster:type_name -> ichor.v1alpha1.Cluster
-	21, // 2: ichor.v1alpha1.AddDiscoveryCidrResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	20, // 3: ichor.v1alpha1.RemoveDiscoveryAddressRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	20, // 4: ichor.v1alpha1.RemoveDiscoveryCidrRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	23, // 2: ichor.v1alpha1.AddDiscoveryCidrResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	22, // 3: ichor.v1alpha1.RemoveDiscoveryAddressRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	22, // 4: ichor.v1alpha1.RemoveDiscoveryCidrRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
 	18, // 5: ichor.v1alpha1.RemoveDiscoveryAddressResponse.cluster:type_name -> ichor.v1alpha1.Cluster
-	21, // 6: ichor.v1alpha1.RemoveDiscoveryAddressResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	23, // 6: ichor.v1alpha1.RemoveDiscoveryAddressResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
 	18, // 7: ichor.v1alpha1.RemoveDiscoveryCidrResponse.cluster:type_name -> ichor.v1alpha1.Cluster
-	21, // 8: ichor.v1alpha1.RemoveDiscoveryCidrResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	20, // 9: ichor.v1alpha1.DismissCARotationAdviceRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	21, // 10: ichor.v1alpha1.DismissCARotationAdviceResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	20, // 11: ichor.v1alpha1.AddDiscoveryAddressRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	22, // 12: ichor.v1alpha1.AddDiscoveryAddressRequest.override:type_name -> ichor.v1alpha1.Override
+	23, // 8: ichor.v1alpha1.RemoveDiscoveryCidrResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	22, // 9: ichor.v1alpha1.DismissCARotationAdviceRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	23, // 10: ichor.v1alpha1.DismissCARotationAdviceResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	22, // 11: ichor.v1alpha1.AddDiscoveryAddressRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	24, // 12: ichor.v1alpha1.AddDiscoveryAddressRequest.override:type_name -> ichor.v1alpha1.Override
 	18, // 13: ichor.v1alpha1.AddDiscoveryAddressResponse.cluster:type_name -> ichor.v1alpha1.Cluster
-	21, // 14: ichor.v1alpha1.AddDiscoveryAddressResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	23, // 14: ichor.v1alpha1.AddDiscoveryAddressResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
 	18, // 15: ichor.v1alpha1.ListClustersResponse.clusters:type_name -> ichor.v1alpha1.Cluster
-	20, // 16: ichor.v1alpha1.GetClusterRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	22, // 16: ichor.v1alpha1.GetClusterRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
 	18, // 17: ichor.v1alpha1.GetClusterResponse.cluster:type_name -> ichor.v1alpha1.Cluster
 	0,  // 18: ichor.v1alpha1.RolloutProgress.kind:type_name -> ichor.v1alpha1.RolloutKind
 	1,  // 19: ichor.v1alpha1.HandoverState.phase:type_name -> ichor.v1alpha1.HandoverPhase
-	23, // 20: ichor.v1alpha1.HandoverState.last_transition_time:type_name -> google.protobuf.Timestamp
-	20, // 21: ichor.v1alpha1.Cluster.ref:type_name -> ichor.v1alpha1.ObjectRef
-	24, // 22: ichor.v1alpha1.Cluster.conditions:type_name -> ichor.v1alpha1.Condition
+	25, // 20: ichor.v1alpha1.HandoverState.last_transition_time:type_name -> google.protobuf.Timestamp
+	22, // 21: ichor.v1alpha1.Cluster.ref:type_name -> ichor.v1alpha1.ObjectRef
+	26, // 22: ichor.v1alpha1.Cluster.conditions:type_name -> ichor.v1alpha1.Condition
 	16, // 23: ichor.v1alpha1.Cluster.rollout:type_name -> ichor.v1alpha1.RolloutProgress
 	17, // 24: ichor.v1alpha1.Cluster.handovers:type_name -> ichor.v1alpha1.HandoverState
-	19, // 25: ichor.v1alpha1.Cluster.certificates:type_name -> ichor.v1alpha1.CertificateExpiry
-	23, // 26: ichor.v1alpha1.CertificateExpiry.not_after:type_name -> google.protobuf.Timestamp
-	12, // 27: ichor.v1alpha1.ClusterService.ListClusters:input_type -> ichor.v1alpha1.ListClustersRequest
-	14, // 28: ichor.v1alpha1.ClusterService.GetCluster:input_type -> ichor.v1alpha1.GetClusterRequest
-	10, // 29: ichor.v1alpha1.ClusterService.AddDiscoveryAddress:input_type -> ichor.v1alpha1.AddDiscoveryAddressRequest
-	8,  // 30: ichor.v1alpha1.ClusterService.DismissCARotationAdvice:input_type -> ichor.v1alpha1.DismissCARotationAdviceRequest
-	2,  // 31: ichor.v1alpha1.ClusterService.AddDiscoveryCidr:input_type -> ichor.v1alpha1.AddDiscoveryCidrRequest
-	4,  // 32: ichor.v1alpha1.ClusterService.RemoveDiscoveryAddress:input_type -> ichor.v1alpha1.RemoveDiscoveryAddressRequest
-	5,  // 33: ichor.v1alpha1.ClusterService.RemoveDiscoveryCidr:input_type -> ichor.v1alpha1.RemoveDiscoveryCidrRequest
-	13, // 34: ichor.v1alpha1.ClusterService.ListClusters:output_type -> ichor.v1alpha1.ListClustersResponse
-	15, // 35: ichor.v1alpha1.ClusterService.GetCluster:output_type -> ichor.v1alpha1.GetClusterResponse
-	11, // 36: ichor.v1alpha1.ClusterService.AddDiscoveryAddress:output_type -> ichor.v1alpha1.AddDiscoveryAddressResponse
-	9,  // 37: ichor.v1alpha1.ClusterService.DismissCARotationAdvice:output_type -> ichor.v1alpha1.DismissCARotationAdviceResponse
-	3,  // 38: ichor.v1alpha1.ClusterService.AddDiscoveryCidr:output_type -> ichor.v1alpha1.AddDiscoveryCidrResponse
-	6,  // 39: ichor.v1alpha1.ClusterService.RemoveDiscoveryAddress:output_type -> ichor.v1alpha1.RemoveDiscoveryAddressResponse
-	7,  // 40: ichor.v1alpha1.ClusterService.RemoveDiscoveryCidr:output_type -> ichor.v1alpha1.RemoveDiscoveryCidrResponse
-	34, // [34:41] is the sub-list for method output_type
-	27, // [27:34] is the sub-list for method input_type
-	27, // [27:27] is the sub-list for extension type_name
-	27, // [27:27] is the sub-list for extension extendee
-	0,  // [0:27] is the sub-list for field type_name
+	21, // 25: ichor.v1alpha1.Cluster.certificates:type_name -> ichor.v1alpha1.CertificateExpiry
+	20, // 26: ichor.v1alpha1.Cluster.versions:type_name -> ichor.v1alpha1.ComponentVersion
+	19, // 27: ichor.v1alpha1.Cluster.release_set:type_name -> ichor.v1alpha1.ReleaseSet
+	25, // 28: ichor.v1alpha1.CertificateExpiry.not_after:type_name -> google.protobuf.Timestamp
+	12, // 29: ichor.v1alpha1.ClusterService.ListClusters:input_type -> ichor.v1alpha1.ListClustersRequest
+	14, // 30: ichor.v1alpha1.ClusterService.GetCluster:input_type -> ichor.v1alpha1.GetClusterRequest
+	10, // 31: ichor.v1alpha1.ClusterService.AddDiscoveryAddress:input_type -> ichor.v1alpha1.AddDiscoveryAddressRequest
+	8,  // 32: ichor.v1alpha1.ClusterService.DismissCARotationAdvice:input_type -> ichor.v1alpha1.DismissCARotationAdviceRequest
+	2,  // 33: ichor.v1alpha1.ClusterService.AddDiscoveryCidr:input_type -> ichor.v1alpha1.AddDiscoveryCidrRequest
+	4,  // 34: ichor.v1alpha1.ClusterService.RemoveDiscoveryAddress:input_type -> ichor.v1alpha1.RemoveDiscoveryAddressRequest
+	5,  // 35: ichor.v1alpha1.ClusterService.RemoveDiscoveryCidr:input_type -> ichor.v1alpha1.RemoveDiscoveryCidrRequest
+	13, // 36: ichor.v1alpha1.ClusterService.ListClusters:output_type -> ichor.v1alpha1.ListClustersResponse
+	15, // 37: ichor.v1alpha1.ClusterService.GetCluster:output_type -> ichor.v1alpha1.GetClusterResponse
+	11, // 38: ichor.v1alpha1.ClusterService.AddDiscoveryAddress:output_type -> ichor.v1alpha1.AddDiscoveryAddressResponse
+	9,  // 39: ichor.v1alpha1.ClusterService.DismissCARotationAdvice:output_type -> ichor.v1alpha1.DismissCARotationAdviceResponse
+	3,  // 40: ichor.v1alpha1.ClusterService.AddDiscoveryCidr:output_type -> ichor.v1alpha1.AddDiscoveryCidrResponse
+	6,  // 41: ichor.v1alpha1.ClusterService.RemoveDiscoveryAddress:output_type -> ichor.v1alpha1.RemoveDiscoveryAddressResponse
+	7,  // 42: ichor.v1alpha1.ClusterService.RemoveDiscoveryCidr:output_type -> ichor.v1alpha1.RemoveDiscoveryCidrResponse
+	36, // [36:43] is the sub-list for method output_type
+	29, // [29:36] is the sub-list for method input_type
+	29, // [29:29] is the sub-list for extension type_name
+	29, // [29:29] is the sub-list for extension extendee
+	0,  // [0:29] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_cluster_proto_init() }
@@ -1480,7 +1660,7 @@ func file_ichor_v1alpha1_cluster_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ichor_v1alpha1_cluster_proto_rawDesc), len(file_ichor_v1alpha1_cluster_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   18,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

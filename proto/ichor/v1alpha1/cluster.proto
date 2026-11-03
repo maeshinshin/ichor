@@ -179,6 +179,32 @@ message Cluster {
   string cni_detected = 16;
   // cni_detected_version is status.cni.detectedVersion, the detected CNI's image tag where known.
   string cni_detected_version = 17;
+  // versions compares what the cluster runs with the release set of this Ichor (ADR 0113): one
+  // entry per talos, version-contract, kubernetes and cilium.
+  repeated ComponentVersion versions = 18;
+  // release_set is the versions this Ichor build supports (ADR 0113); the cluster is brought to it.
+  ReleaseSet release_set = 19;
+}
+
+// ReleaseSet is one supported combination of versions (ADR 0113), embedded in the Ichor build.
+message ReleaseSet {
+  string talos_version = 1;
+  string version_contract = 2;
+  string kubernetes_version = 3;
+  string cilium_chart_version = 4;
+}
+
+// ComponentVersion compares one component of a cluster with the release set.
+message ComponentVersion {
+  // name is talos, version-contract, kubernetes or cilium.
+  string name = 1;
+  // current is what the cluster runs: the spec for Talos, the contract, and Kubernetes, the
+  // installed Cilium chart where it is observed (empty otherwise).
+  string current = 2;
+  // target is the release set's version for this component.
+  string target = 3;
+  // state is up-to-date, behind, ahead or unknown (docs/adr/0113).
+  string state = 4;
 }
 
 // CertificateExpiry is one CA of the cluster and its last instant of validity.

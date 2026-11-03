@@ -35,6 +35,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/version"
+	"github.com/maeshinshin/ichor/pkg/release"
 	"github.com/maeshinshin/ichor/pkg/upgrade"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -346,6 +347,11 @@ func (s *Server) planOperation(
 		return nil, err
 	}
 
+	// A Talos or Kubernetes target is the release set's version and nothing else (ADR 0113).
+	if err := checkReleaseTarget(kind, target); err != nil {
+		return nil, err
+	}
+
 	if kind == ichorv1alpha1.TalosOperationKindCNI && cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(ichorv1alpha1.CNINotManagedMessage))
 	}
@@ -411,7 +417,10 @@ func (s *Server) planOperation(
 	}
 
 	p.resp.Target = target
-	p.resp.SpecChanges = target != "" && target != specVersion
+	// A Talos step also moves the version contract to the release set's (ADR 0113), so a change of
+	// contract alone is a spec change too.
+	p.resp.SpecChanges = target != "" && (target != specVersion ||
+		(kind == ichorv1alpha1.TalosOperationKindTalos && release.Compare(cluster.Spec.VersionContract, release.Pinned.VersionContract) == release.Behind))
 
 	if err := s.planMachines(ctx, p, cluster, maxUnavailable); err != nil {
 		return nil, err
@@ -764,7 +773,12 @@ func (s *Server) writeTarget(ctx context.Context, p *opPlan) error {
 
 	switch p.kind {
 	case ichorv1alpha1.TalosOperationKindTalos:
-		mutate = func(c *ichorv1alpha1.TalosCluster) { c.Spec.TalosVersion = target }
+		mutate = func(c *ichorv1alpha1.TalosCluster) {
+			c.Spec.TalosVersion = target
+			if release.Compare(c.Spec.VersionContract, release.Pinned.VersionContract) == release.Behind {
+				c.Spec.VersionContract = release.Pinned.VersionContract
+			}
+		}
 	case ichorv1alpha1.TalosOperationKindKubernetes:
 		mutate = func(c *ichorv1alpha1.TalosCluster) { c.Spec.KubernetesVersion = target }
 	case ichorv1alpha1.TalosOperationKindIchor:

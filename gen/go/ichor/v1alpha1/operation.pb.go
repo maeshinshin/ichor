@@ -2674,11 +2674,300 @@ func (x *AcknowledgeCARotationCredentialsResponse) GetAudit() *AuditRecord {
 	return nil
 }
 
+// PlanClusterUpgradeRequest asks for the steps that bring a cluster to its Ichor's release set (ADR 0113).
+type PlanClusterUpgradeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cluster       *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlanClusterUpgradeRequest) Reset() {
+	*x = PlanClusterUpgradeRequest{}
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlanClusterUpgradeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlanClusterUpgradeRequest) ProtoMessage() {}
+
+func (x *PlanClusterUpgradeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlanClusterUpgradeRequest.ProtoReflect.Descriptor instead.
+func (*PlanClusterUpgradeRequest) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *PlanClusterUpgradeRequest) GetCluster() *ObjectRef {
+	if x != nil {
+		return x.Cluster
+	}
+	return nil
+}
+
+// ClusterUpgradeStep is one step of that rollout, in the order it runs.
+type ClusterUpgradeStep struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// step is talos, config, kubernetes or cilium (docs/adr/0113).
+	Step string `protobuf:"bytes,1,opt,name=step,proto3" json:"step,omitempty"`
+	// from is what the cluster runs now: the Talos release, the configuration's contract, the
+	// Kubernetes release or the Cilium chart. Empty for config.
+	From string `protobuf:"bytes,2,opt,name=from,proto3" json:"from,omitempty"`
+	// to is the release set's version for that step; empty for config and cilium.
+	To string `protobuf:"bytes,3,opt,name=to,proto3" json:"to,omitempty"`
+	// kind is the operation kind the step creates (talos, config, kubernetes or cni).
+	Kind          OperationKind `protobuf:"varint,4,opt,name=kind,proto3,enum=ichor.v1alpha1.OperationKind" json:"kind,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ClusterUpgradeStep) Reset() {
+	*x = ClusterUpgradeStep{}
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ClusterUpgradeStep) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ClusterUpgradeStep) ProtoMessage() {}
+
+func (x *ClusterUpgradeStep) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ClusterUpgradeStep.ProtoReflect.Descriptor instead.
+func (*ClusterUpgradeStep) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *ClusterUpgradeStep) GetStep() string {
+	if x != nil {
+		return x.Step
+	}
+	return ""
+}
+
+func (x *ClusterUpgradeStep) GetFrom() string {
+	if x != nil {
+		return x.From
+	}
+	return ""
+}
+
+func (x *ClusterUpgradeStep) GetTo() string {
+	if x != nil {
+		return x.To
+	}
+	return ""
+}
+
+func (x *ClusterUpgradeStep) GetKind() OperationKind {
+	if x != nil {
+		return x.Kind
+	}
+	return OperationKind_OPERATION_KIND_UNSPECIFIED
+}
+
+type PlanClusterUpgradeResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// steps is empty when the cluster runs the release set. The first step is the one
+	// StartClusterUpgrade creates.
+	Steps []*ClusterUpgradeStep `protobuf:"bytes,1,rep,name=steps,proto3" json:"steps,omitempty"`
+	// blocked names what stops a start now (another operation on the cluster); empty when none.
+	Blocked string `protobuf:"bytes,2,opt,name=blocked,proto3" json:"blocked,omitempty"`
+	// release_set is the set the cluster is brought to.
+	ReleaseSet    *ReleaseSet `protobuf:"bytes,3,opt,name=release_set,json=releaseSet,proto3" json:"release_set,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlanClusterUpgradeResponse) Reset() {
+	*x = PlanClusterUpgradeResponse{}
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlanClusterUpgradeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlanClusterUpgradeResponse) ProtoMessage() {}
+
+func (x *PlanClusterUpgradeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlanClusterUpgradeResponse.ProtoReflect.Descriptor instead.
+func (*PlanClusterUpgradeResponse) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *PlanClusterUpgradeResponse) GetSteps() []*ClusterUpgradeStep {
+	if x != nil {
+		return x.Steps
+	}
+	return nil
+}
+
+func (x *PlanClusterUpgradeResponse) GetBlocked() string {
+	if x != nil {
+		return x.Blocked
+	}
+	return ""
+}
+
+func (x *PlanClusterUpgradeResponse) GetReleaseSet() *ReleaseSet {
+	if x != nil {
+		return x.ReleaseSet
+	}
+	return nil
+}
+
+type StartClusterUpgradeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cluster       *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartClusterUpgradeRequest) Reset() {
+	*x = StartClusterUpgradeRequest{}
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartClusterUpgradeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartClusterUpgradeRequest) ProtoMessage() {}
+
+func (x *StartClusterUpgradeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartClusterUpgradeRequest.ProtoReflect.Descriptor instead.
+func (*StartClusterUpgradeRequest) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *StartClusterUpgradeRequest) GetCluster() *ObjectRef {
+	if x != nil {
+		return x.Cluster
+	}
+	return nil
+}
+
+type StartClusterUpgradeResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// step is the step whose operation was created.
+	Step string `protobuf:"bytes,1,opt,name=step,proto3" json:"step,omitempty"`
+	// operation is the operation that runs the step.
+	Operation     *ObjectRef   `protobuf:"bytes,2,opt,name=operation,proto3" json:"operation,omitempty"`
+	Audit         *AuditRecord `protobuf:"bytes,3,opt,name=audit,proto3" json:"audit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartClusterUpgradeResponse) Reset() {
+	*x = StartClusterUpgradeResponse{}
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartClusterUpgradeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartClusterUpgradeResponse) ProtoMessage() {}
+
+func (x *StartClusterUpgradeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_operation_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartClusterUpgradeResponse.ProtoReflect.Descriptor instead.
+func (*StartClusterUpgradeResponse) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_operation_proto_rawDescGZIP(), []int{38}
+}
+
+func (x *StartClusterUpgradeResponse) GetStep() string {
+	if x != nil {
+		return x.Step
+	}
+	return ""
+}
+
+func (x *StartClusterUpgradeResponse) GetOperation() *ObjectRef {
+	if x != nil {
+		return x.Operation
+	}
+	return nil
+}
+
+func (x *StartClusterUpgradeResponse) GetAudit() *AuditRecord {
+	if x != nil {
+		return x.Audit
+	}
+	return nil
+}
+
 var File_ichor_v1alpha1_operation_proto protoreflect.FileDescriptor
 
 const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\n" +
-	"\x1eichor/v1alpha1/operation.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\"\x1d\n" +
+	"\x1eichor/v1alpha1/operation.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\x1a\x1cichor/v1alpha1/cluster.proto\"\x1d\n" +
 	"\x1bGetIchorInstallationRequest\"\xe8\x01\n" +
 	"\x1cGetIchorInstallationResponse\x12+\n" +
 	"\x11installed_version\x18\x01 \x01(\tR\x10installedVersion\x12%\n" +
@@ -2867,7 +3156,25 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\toperation\"\x96\x01\n" +
 	"(AcknowledgeCARotationCredentialsResponse\x127\n" +
 	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.OperationR\toperation\x121\n" +
-	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit*\xac\x02\n" +
+	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"P\n" +
+	"\x19PlanClusterUpgradeRequest\x123\n" +
+	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\x7f\n" +
+	"\x12ClusterUpgradeStep\x12\x12\n" +
+	"\x04step\x18\x01 \x01(\tR\x04step\x12\x12\n" +
+	"\x04from\x18\x02 \x01(\tR\x04from\x12\x0e\n" +
+	"\x02to\x18\x03 \x01(\tR\x02to\x121\n" +
+	"\x04kind\x18\x04 \x01(\x0e2\x1d.ichor.v1alpha1.OperationKindR\x04kind\"\xad\x01\n" +
+	"\x1aPlanClusterUpgradeResponse\x128\n" +
+	"\x05steps\x18\x01 \x03(\v2\".ichor.v1alpha1.ClusterUpgradeStepR\x05steps\x12\x18\n" +
+	"\ablocked\x18\x02 \x01(\tR\ablocked\x12;\n" +
+	"\vrelease_set\x18\x03 \x01(\v2\x1a.ichor.v1alpha1.ReleaseSetR\n" +
+	"releaseSet\"Q\n" +
+	"\x1aStartClusterUpgradeRequest\x123\n" +
+	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\x9d\x01\n" +
+	"\x1bStartClusterUpgradeResponse\x12\x12\n" +
+	"\x04step\x18\x01 \x01(\tR\x04step\x127\n" +
+	"\toperation\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\toperation\x121\n" +
+	"\x05audit\x18\x03 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit*\xac\x02\n" +
 	"\rOperationKind\x12\x1e\n" +
 	"\x1aOPERATION_KIND_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14OPERATION_KIND_TALOS\x10\x01\x12\x1d\n" +
@@ -2895,8 +3202,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"#OPERATION_EFFECT_RESTART_COMPONENTS\x10\x02\x12\x19\n" +
 	"\x15OPERATION_EFFECT_STOP\x10\x03\x12\x19\n" +
 	"\x15OPERATION_EFFECT_NONE\x10\x04\x12 \n" +
-	"\x1cOPERATION_EFFECT_CA_ROTATION\x10\x052\xbb\n" +
-	"\n" +
+	"\x1cOPERATION_EFFECT_CA_ROTATION\x10\x052\x98\f\n" +
 	"\x10OperationService\x12_\n" +
 	"\x0eListOperations\x12%.ichor.v1alpha1.ListOperationsRequest\x1a&.ichor.v1alpha1.ListOperationsResponse\x12Y\n" +
 	"\fGetOperation\x12#.ichor.v1alpha1.GetOperationRequest\x1a$.ichor.v1alpha1.GetOperationResponse\x12\\\n" +
@@ -2909,7 +3215,9 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x0fListEtcdBackups\x12&.ichor.v1alpha1.ListEtcdBackupsRequest\x1a'.ichor.v1alpha1.ListEtcdBackupsResponse\x12h\n" +
 	"\x11RequestEtcdBackup\x12(.ichor.v1alpha1.RequestEtcdBackupRequest\x1a).ichor.v1alpha1.RequestEtcdBackupResponse\x12q\n" +
 	"\x14GetIchorInstallation\x12+.ichor.v1alpha1.GetIchorInstallationRequest\x1a,.ichor.v1alpha1.GetIchorInstallationResponse\x12n\n" +
-	"\x13ListOperationEvents\x12*.ichor.v1alpha1.ListOperationEventsRequest\x1a+.ichor.v1alpha1.ListOperationEventsResponseB\xbf\x01\n" +
+	"\x13ListOperationEvents\x12*.ichor.v1alpha1.ListOperationEventsRequest\x1a+.ichor.v1alpha1.ListOperationEventsResponse\x12k\n" +
+	"\x12PlanClusterUpgrade\x12).ichor.v1alpha1.PlanClusterUpgradeRequest\x1a*.ichor.v1alpha1.PlanClusterUpgradeResponse\x12n\n" +
+	"\x13StartClusterUpgrade\x12*.ichor.v1alpha1.StartClusterUpgradeRequest\x1a+.ichor.v1alpha1.StartClusterUpgradeResponseB\xbf\x01\n" +
 	"\x12com.ichor.v1alpha1B\x0eOperationProtoP\x01Z@github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1;ichorv1alpha1\xa2\x02\x03IXX\xaa\x02\x0eIchor.V1alpha1\xca\x02\x0eIchor\\V1alpha1\xe2\x02\x1aIchor\\V1alpha1\\GPBMetadata\xea\x02\x0fIchor::V1alpha1b\x06proto3"
 
 var (
@@ -2925,7 +3233,7 @@ func file_ichor_v1alpha1_operation_proto_rawDescGZIP() []byte {
 }
 
 var file_ichor_v1alpha1_operation_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_ichor_v1alpha1_operation_proto_msgTypes = make([]protoimpl.MessageInfo, 34)
+var file_ichor_v1alpha1_operation_proto_msgTypes = make([]protoimpl.MessageInfo, 39)
 var file_ichor_v1alpha1_operation_proto_goTypes = []any{
 	(OperationKind)(0),                               // 0: ichor.v1alpha1.OperationKind
 	(NodeAction)(0),                                  // 1: ichor.v1alpha1.NodeAction
@@ -2964,101 +3272,118 @@ var file_ichor_v1alpha1_operation_proto_goTypes = []any{
 	(*DownloadCARotationCredentialsResponse)(nil),    // 34: ichor.v1alpha1.DownloadCARotationCredentialsResponse
 	(*AcknowledgeCARotationCredentialsRequest)(nil),  // 35: ichor.v1alpha1.AcknowledgeCARotationCredentialsRequest
 	(*AcknowledgeCARotationCredentialsResponse)(nil), // 36: ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse
-	(*ObjectRef)(nil),                                // 37: ichor.v1alpha1.ObjectRef
-	(*timestamppb.Timestamp)(nil),                    // 38: google.protobuf.Timestamp
-	(*AuditRecord)(nil),                              // 39: ichor.v1alpha1.AuditRecord
-	(*Override)(nil),                                 // 40: ichor.v1alpha1.Override
-	(*Condition)(nil),                                // 41: ichor.v1alpha1.Condition
+	(*PlanClusterUpgradeRequest)(nil),                // 37: ichor.v1alpha1.PlanClusterUpgradeRequest
+	(*ClusterUpgradeStep)(nil),                       // 38: ichor.v1alpha1.ClusterUpgradeStep
+	(*PlanClusterUpgradeResponse)(nil),               // 39: ichor.v1alpha1.PlanClusterUpgradeResponse
+	(*StartClusterUpgradeRequest)(nil),               // 40: ichor.v1alpha1.StartClusterUpgradeRequest
+	(*StartClusterUpgradeResponse)(nil),              // 41: ichor.v1alpha1.StartClusterUpgradeResponse
+	(*ObjectRef)(nil),                                // 42: ichor.v1alpha1.ObjectRef
+	(*timestamppb.Timestamp)(nil),                    // 43: google.protobuf.Timestamp
+	(*AuditRecord)(nil),                              // 44: ichor.v1alpha1.AuditRecord
+	(*Override)(nil),                                 // 45: ichor.v1alpha1.Override
+	(*Condition)(nil),                                // 46: ichor.v1alpha1.Condition
+	(*ReleaseSet)(nil),                               // 47: ichor.v1alpha1.ReleaseSet
 }
 var file_ichor_v1alpha1_operation_proto_depIdxs = []int32{
-	37, // 0: ichor.v1alpha1.ListEtcdBackupsRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	38, // 1: ichor.v1alpha1.EtcdSnapshot.time:type_name -> google.protobuf.Timestamp
-	37, // 2: ichor.v1alpha1.EtcdBackup.ref:type_name -> ichor.v1alpha1.ObjectRef
+	42, // 0: ichor.v1alpha1.ListEtcdBackupsRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	43, // 1: ichor.v1alpha1.EtcdSnapshot.time:type_name -> google.protobuf.Timestamp
+	42, // 2: ichor.v1alpha1.EtcdBackup.ref:type_name -> ichor.v1alpha1.ObjectRef
 	6,  // 3: ichor.v1alpha1.EtcdBackup.snapshots:type_name -> ichor.v1alpha1.EtcdSnapshot
 	8,  // 4: ichor.v1alpha1.EtcdBackup.destination:type_name -> ichor.v1alpha1.EtcdBackupDestination
-	38, // 5: ichor.v1alpha1.EtcdBackup.last_success_time:type_name -> google.protobuf.Timestamp
-	38, // 6: ichor.v1alpha1.EtcdBackup.last_manual_backup:type_name -> google.protobuf.Timestamp
-	37, // 7: ichor.v1alpha1.RequestEtcdBackupRequest.backup:type_name -> ichor.v1alpha1.ObjectRef
+	43, // 5: ichor.v1alpha1.EtcdBackup.last_success_time:type_name -> google.protobuf.Timestamp
+	43, // 6: ichor.v1alpha1.EtcdBackup.last_manual_backup:type_name -> google.protobuf.Timestamp
+	42, // 7: ichor.v1alpha1.RequestEtcdBackupRequest.backup:type_name -> ichor.v1alpha1.ObjectRef
 	7,  // 8: ichor.v1alpha1.RequestEtcdBackupResponse.backup:type_name -> ichor.v1alpha1.EtcdBackup
-	39, // 9: ichor.v1alpha1.RequestEtcdBackupResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	44, // 9: ichor.v1alpha1.RequestEtcdBackupResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
 	7,  // 10: ichor.v1alpha1.ListEtcdBackupsResponse.backups:type_name -> ichor.v1alpha1.EtcdBackup
-	37, // 11: ichor.v1alpha1.EtcdRestoreRequest.backup:type_name -> ichor.v1alpha1.ObjectRef
-	40, // 12: ichor.v1alpha1.EtcdRestoreRequest.override:type_name -> ichor.v1alpha1.Override
-	37, // 13: ichor.v1alpha1.NodeActionRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	42, // 11: ichor.v1alpha1.EtcdRestoreRequest.backup:type_name -> ichor.v1alpha1.ObjectRef
+	45, // 12: ichor.v1alpha1.EtcdRestoreRequest.override:type_name -> ichor.v1alpha1.Override
+	42, // 13: ichor.v1alpha1.NodeActionRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
 	1,  // 14: ichor.v1alpha1.NodeActionRequest.action:type_name -> ichor.v1alpha1.NodeAction
-	40, // 15: ichor.v1alpha1.NodeActionRequest.override:type_name -> ichor.v1alpha1.Override
-	38, // 16: ichor.v1alpha1.OperationMachine.started_at:type_name -> google.protobuf.Timestamp
-	38, // 17: ichor.v1alpha1.OperationMachine.finished_at:type_name -> google.protobuf.Timestamp
-	37, // 18: ichor.v1alpha1.Operation.ref:type_name -> ichor.v1alpha1.ObjectRef
-	37, // 19: ichor.v1alpha1.Operation.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	45, // 15: ichor.v1alpha1.NodeActionRequest.override:type_name -> ichor.v1alpha1.Override
+	43, // 16: ichor.v1alpha1.OperationMachine.started_at:type_name -> google.protobuf.Timestamp
+	43, // 17: ichor.v1alpha1.OperationMachine.finished_at:type_name -> google.protobuf.Timestamp
+	42, // 18: ichor.v1alpha1.Operation.ref:type_name -> ichor.v1alpha1.ObjectRef
+	42, // 19: ichor.v1alpha1.Operation.cluster:type_name -> ichor.v1alpha1.ObjectRef
 	0,  // 20: ichor.v1alpha1.Operation.kind:type_name -> ichor.v1alpha1.OperationKind
 	14, // 21: ichor.v1alpha1.Operation.machines:type_name -> ichor.v1alpha1.OperationMachine
-	41, // 22: ichor.v1alpha1.Operation.conditions:type_name -> ichor.v1alpha1.Condition
-	38, // 23: ichor.v1alpha1.Operation.created_at:type_name -> google.protobuf.Timestamp
+	46, // 22: ichor.v1alpha1.Operation.conditions:type_name -> ichor.v1alpha1.Condition
+	43, // 23: ichor.v1alpha1.Operation.created_at:type_name -> google.protobuf.Timestamp
 	1,  // 24: ichor.v1alpha1.Operation.node_action:type_name -> ichor.v1alpha1.NodeAction
-	37, // 25: ichor.v1alpha1.Operation.node_machine:type_name -> ichor.v1alpha1.ObjectRef
-	37, // 26: ichor.v1alpha1.Operation.etcd_restore_backup:type_name -> ichor.v1alpha1.ObjectRef
-	38, // 27: ichor.v1alpha1.Operation.etcd_restore_snapshot_time:type_name -> google.protobuf.Timestamp
+	42, // 25: ichor.v1alpha1.Operation.node_machine:type_name -> ichor.v1alpha1.ObjectRef
+	42, // 26: ichor.v1alpha1.Operation.etcd_restore_backup:type_name -> ichor.v1alpha1.ObjectRef
+	43, // 27: ichor.v1alpha1.Operation.etcd_restore_snapshot_time:type_name -> google.protobuf.Timestamp
 	16, // 28: ichor.v1alpha1.Operation.details:type_name -> ichor.v1alpha1.OperationDetail
-	38, // 29: ichor.v1alpha1.Operation.finished_at:type_name -> google.protobuf.Timestamp
-	37, // 30: ichor.v1alpha1.ListOperationEventsRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
-	38, // 31: ichor.v1alpha1.OperationEvent.time:type_name -> google.protobuf.Timestamp
+	43, // 29: ichor.v1alpha1.Operation.finished_at:type_name -> google.protobuf.Timestamp
+	42, // 30: ichor.v1alpha1.ListOperationEventsRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	43, // 31: ichor.v1alpha1.OperationEvent.time:type_name -> google.protobuf.Timestamp
 	18, // 32: ichor.v1alpha1.ListOperationEventsResponse.events:type_name -> ichor.v1alpha1.OperationEvent
-	37, // 33: ichor.v1alpha1.ListOperationsRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	42, // 33: ichor.v1alpha1.ListOperationsRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
 	15, // 34: ichor.v1alpha1.ListOperationsResponse.operations:type_name -> ichor.v1alpha1.Operation
-	37, // 35: ichor.v1alpha1.GetOperationRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	42, // 35: ichor.v1alpha1.GetOperationRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
 	15, // 36: ichor.v1alpha1.GetOperationResponse.operation:type_name -> ichor.v1alpha1.Operation
-	37, // 37: ichor.v1alpha1.PlanOperationRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	42, // 37: ichor.v1alpha1.PlanOperationRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
 	0,  // 38: ichor.v1alpha1.PlanOperationRequest.kind:type_name -> ichor.v1alpha1.OperationKind
 	13, // 39: ichor.v1alpha1.PlanOperationRequest.node:type_name -> ichor.v1alpha1.NodeActionRequest
 	12, // 40: ichor.v1alpha1.PlanOperationRequest.etcd_restore:type_name -> ichor.v1alpha1.EtcdRestoreRequest
 	2,  // 41: ichor.v1alpha1.PlanOperationResponse.effect:type_name -> ichor.v1alpha1.OperationEffect
 	24, // 42: ichor.v1alpha1.PlanOperationResponse.machines:type_name -> ichor.v1alpha1.PlannedMachine
-	38, // 43: ichor.v1alpha1.PlanOperationResponse.snapshot_time:type_name -> google.protobuf.Timestamp
-	37, // 44: ichor.v1alpha1.CreateOperationRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	43, // 43: ichor.v1alpha1.PlanOperationResponse.snapshot_time:type_name -> google.protobuf.Timestamp
+	42, // 44: ichor.v1alpha1.CreateOperationRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
 	0,  // 45: ichor.v1alpha1.CreateOperationRequest.kind:type_name -> ichor.v1alpha1.OperationKind
 	13, // 46: ichor.v1alpha1.CreateOperationRequest.node:type_name -> ichor.v1alpha1.NodeActionRequest
 	12, // 47: ichor.v1alpha1.CreateOperationRequest.etcd_restore:type_name -> ichor.v1alpha1.EtcdRestoreRequest
 	15, // 48: ichor.v1alpha1.CreateOperationResponse.operation:type_name -> ichor.v1alpha1.Operation
-	39, // 49: ichor.v1alpha1.CreateOperationResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	37, // 50: ichor.v1alpha1.SetOperationPausedRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	44, // 49: ichor.v1alpha1.CreateOperationResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	42, // 50: ichor.v1alpha1.SetOperationPausedRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
 	15, // 51: ichor.v1alpha1.SetOperationPausedResponse.operation:type_name -> ichor.v1alpha1.Operation
-	39, // 52: ichor.v1alpha1.SetOperationPausedResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	37, // 53: ichor.v1alpha1.DeleteOperationRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
-	39, // 54: ichor.v1alpha1.DeleteOperationResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	37, // 55: ichor.v1alpha1.DownloadCARotationCredentialsRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
-	37, // 56: ichor.v1alpha1.AcknowledgeCARotationCredentialsRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	44, // 52: ichor.v1alpha1.SetOperationPausedResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	42, // 53: ichor.v1alpha1.DeleteOperationRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	44, // 54: ichor.v1alpha1.DeleteOperationResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	42, // 55: ichor.v1alpha1.DownloadCARotationCredentialsRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
+	42, // 56: ichor.v1alpha1.AcknowledgeCARotationCredentialsRequest.operation:type_name -> ichor.v1alpha1.ObjectRef
 	15, // 57: ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse.operation:type_name -> ichor.v1alpha1.Operation
-	39, // 58: ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	20, // 59: ichor.v1alpha1.OperationService.ListOperations:input_type -> ichor.v1alpha1.ListOperationsRequest
-	22, // 60: ichor.v1alpha1.OperationService.GetOperation:input_type -> ichor.v1alpha1.GetOperationRequest
-	25, // 61: ichor.v1alpha1.OperationService.PlanOperation:input_type -> ichor.v1alpha1.PlanOperationRequest
-	27, // 62: ichor.v1alpha1.OperationService.CreateOperation:input_type -> ichor.v1alpha1.CreateOperationRequest
-	29, // 63: ichor.v1alpha1.OperationService.SetOperationPaused:input_type -> ichor.v1alpha1.SetOperationPausedRequest
-	31, // 64: ichor.v1alpha1.OperationService.DeleteOperation:input_type -> ichor.v1alpha1.DeleteOperationRequest
-	33, // 65: ichor.v1alpha1.OperationService.DownloadCARotationCredentials:input_type -> ichor.v1alpha1.DownloadCARotationCredentialsRequest
-	35, // 66: ichor.v1alpha1.OperationService.AcknowledgeCARotationCredentials:input_type -> ichor.v1alpha1.AcknowledgeCARotationCredentialsRequest
-	5,  // 67: ichor.v1alpha1.OperationService.ListEtcdBackups:input_type -> ichor.v1alpha1.ListEtcdBackupsRequest
-	9,  // 68: ichor.v1alpha1.OperationService.RequestEtcdBackup:input_type -> ichor.v1alpha1.RequestEtcdBackupRequest
-	3,  // 69: ichor.v1alpha1.OperationService.GetIchorInstallation:input_type -> ichor.v1alpha1.GetIchorInstallationRequest
-	17, // 70: ichor.v1alpha1.OperationService.ListOperationEvents:input_type -> ichor.v1alpha1.ListOperationEventsRequest
-	21, // 71: ichor.v1alpha1.OperationService.ListOperations:output_type -> ichor.v1alpha1.ListOperationsResponse
-	23, // 72: ichor.v1alpha1.OperationService.GetOperation:output_type -> ichor.v1alpha1.GetOperationResponse
-	26, // 73: ichor.v1alpha1.OperationService.PlanOperation:output_type -> ichor.v1alpha1.PlanOperationResponse
-	28, // 74: ichor.v1alpha1.OperationService.CreateOperation:output_type -> ichor.v1alpha1.CreateOperationResponse
-	30, // 75: ichor.v1alpha1.OperationService.SetOperationPaused:output_type -> ichor.v1alpha1.SetOperationPausedResponse
-	32, // 76: ichor.v1alpha1.OperationService.DeleteOperation:output_type -> ichor.v1alpha1.DeleteOperationResponse
-	34, // 77: ichor.v1alpha1.OperationService.DownloadCARotationCredentials:output_type -> ichor.v1alpha1.DownloadCARotationCredentialsResponse
-	36, // 78: ichor.v1alpha1.OperationService.AcknowledgeCARotationCredentials:output_type -> ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse
-	11, // 79: ichor.v1alpha1.OperationService.ListEtcdBackups:output_type -> ichor.v1alpha1.ListEtcdBackupsResponse
-	10, // 80: ichor.v1alpha1.OperationService.RequestEtcdBackup:output_type -> ichor.v1alpha1.RequestEtcdBackupResponse
-	4,  // 81: ichor.v1alpha1.OperationService.GetIchorInstallation:output_type -> ichor.v1alpha1.GetIchorInstallationResponse
-	19, // 82: ichor.v1alpha1.OperationService.ListOperationEvents:output_type -> ichor.v1alpha1.ListOperationEventsResponse
-	71, // [71:83] is the sub-list for method output_type
-	59, // [59:71] is the sub-list for method input_type
-	59, // [59:59] is the sub-list for extension type_name
-	59, // [59:59] is the sub-list for extension extendee
-	0,  // [0:59] is the sub-list for field type_name
+	44, // 58: ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	42, // 59: ichor.v1alpha1.PlanClusterUpgradeRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	0,  // 60: ichor.v1alpha1.ClusterUpgradeStep.kind:type_name -> ichor.v1alpha1.OperationKind
+	38, // 61: ichor.v1alpha1.PlanClusterUpgradeResponse.steps:type_name -> ichor.v1alpha1.ClusterUpgradeStep
+	47, // 62: ichor.v1alpha1.PlanClusterUpgradeResponse.release_set:type_name -> ichor.v1alpha1.ReleaseSet
+	42, // 63: ichor.v1alpha1.StartClusterUpgradeRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	42, // 64: ichor.v1alpha1.StartClusterUpgradeResponse.operation:type_name -> ichor.v1alpha1.ObjectRef
+	44, // 65: ichor.v1alpha1.StartClusterUpgradeResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	20, // 66: ichor.v1alpha1.OperationService.ListOperations:input_type -> ichor.v1alpha1.ListOperationsRequest
+	22, // 67: ichor.v1alpha1.OperationService.GetOperation:input_type -> ichor.v1alpha1.GetOperationRequest
+	25, // 68: ichor.v1alpha1.OperationService.PlanOperation:input_type -> ichor.v1alpha1.PlanOperationRequest
+	27, // 69: ichor.v1alpha1.OperationService.CreateOperation:input_type -> ichor.v1alpha1.CreateOperationRequest
+	29, // 70: ichor.v1alpha1.OperationService.SetOperationPaused:input_type -> ichor.v1alpha1.SetOperationPausedRequest
+	31, // 71: ichor.v1alpha1.OperationService.DeleteOperation:input_type -> ichor.v1alpha1.DeleteOperationRequest
+	33, // 72: ichor.v1alpha1.OperationService.DownloadCARotationCredentials:input_type -> ichor.v1alpha1.DownloadCARotationCredentialsRequest
+	35, // 73: ichor.v1alpha1.OperationService.AcknowledgeCARotationCredentials:input_type -> ichor.v1alpha1.AcknowledgeCARotationCredentialsRequest
+	5,  // 74: ichor.v1alpha1.OperationService.ListEtcdBackups:input_type -> ichor.v1alpha1.ListEtcdBackupsRequest
+	9,  // 75: ichor.v1alpha1.OperationService.RequestEtcdBackup:input_type -> ichor.v1alpha1.RequestEtcdBackupRequest
+	3,  // 76: ichor.v1alpha1.OperationService.GetIchorInstallation:input_type -> ichor.v1alpha1.GetIchorInstallationRequest
+	17, // 77: ichor.v1alpha1.OperationService.ListOperationEvents:input_type -> ichor.v1alpha1.ListOperationEventsRequest
+	37, // 78: ichor.v1alpha1.OperationService.PlanClusterUpgrade:input_type -> ichor.v1alpha1.PlanClusterUpgradeRequest
+	40, // 79: ichor.v1alpha1.OperationService.StartClusterUpgrade:input_type -> ichor.v1alpha1.StartClusterUpgradeRequest
+	21, // 80: ichor.v1alpha1.OperationService.ListOperations:output_type -> ichor.v1alpha1.ListOperationsResponse
+	23, // 81: ichor.v1alpha1.OperationService.GetOperation:output_type -> ichor.v1alpha1.GetOperationResponse
+	26, // 82: ichor.v1alpha1.OperationService.PlanOperation:output_type -> ichor.v1alpha1.PlanOperationResponse
+	28, // 83: ichor.v1alpha1.OperationService.CreateOperation:output_type -> ichor.v1alpha1.CreateOperationResponse
+	30, // 84: ichor.v1alpha1.OperationService.SetOperationPaused:output_type -> ichor.v1alpha1.SetOperationPausedResponse
+	32, // 85: ichor.v1alpha1.OperationService.DeleteOperation:output_type -> ichor.v1alpha1.DeleteOperationResponse
+	34, // 86: ichor.v1alpha1.OperationService.DownloadCARotationCredentials:output_type -> ichor.v1alpha1.DownloadCARotationCredentialsResponse
+	36, // 87: ichor.v1alpha1.OperationService.AcknowledgeCARotationCredentials:output_type -> ichor.v1alpha1.AcknowledgeCARotationCredentialsResponse
+	11, // 88: ichor.v1alpha1.OperationService.ListEtcdBackups:output_type -> ichor.v1alpha1.ListEtcdBackupsResponse
+	10, // 89: ichor.v1alpha1.OperationService.RequestEtcdBackup:output_type -> ichor.v1alpha1.RequestEtcdBackupResponse
+	4,  // 90: ichor.v1alpha1.OperationService.GetIchorInstallation:output_type -> ichor.v1alpha1.GetIchorInstallationResponse
+	19, // 91: ichor.v1alpha1.OperationService.ListOperationEvents:output_type -> ichor.v1alpha1.ListOperationEventsResponse
+	39, // 92: ichor.v1alpha1.OperationService.PlanClusterUpgrade:output_type -> ichor.v1alpha1.PlanClusterUpgradeResponse
+	41, // 93: ichor.v1alpha1.OperationService.StartClusterUpgrade:output_type -> ichor.v1alpha1.StartClusterUpgradeResponse
+	80, // [80:94] is the sub-list for method output_type
+	66, // [66:80] is the sub-list for method input_type
+	66, // [66:66] is the sub-list for extension type_name
+	66, // [66:66] is the sub-list for extension extendee
+	0,  // [0:66] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_operation_proto_init() }
@@ -3067,13 +3392,14 @@ func file_ichor_v1alpha1_operation_proto_init() {
 		return
 	}
 	file_ichor_v1alpha1_common_proto_init()
+	file_ichor_v1alpha1_cluster_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ichor_v1alpha1_operation_proto_rawDesc), len(file_ichor_v1alpha1_operation_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   34,
+			NumMessages:   39,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

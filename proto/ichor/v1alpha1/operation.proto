@@ -11,6 +11,7 @@ package ichor.v1alpha1;
 
 import "google/protobuf/timestamp.proto";
 import "ichor/v1alpha1/common.proto";
+import "ichor/v1alpha1/cluster.proto";
 
 service OperationService {
   rpc ListOperations(ListOperationsRequest) returns (ListOperationsResponse);
@@ -48,6 +49,10 @@ service OperationService {
   // ListOperationEvents returns the Kubernetes Events about an operation or one of its machines,
   // within the operation's lifetime, oldest first: the activity log on the operation's page.
   rpc ListOperationEvents(ListOperationEventsRequest) returns (ListOperationEventsResponse);
+  // PlanClusterUpgrade and StartClusterUpgrade are the one action that brings a cluster to the
+  // release set of its Ichor (ADR 0113): each start creates the next step's operation only.
+  rpc PlanClusterUpgrade(PlanClusterUpgradeRequest) returns (PlanClusterUpgradeResponse);
+  rpc StartClusterUpgrade(StartClusterUpgradeRequest) returns (StartClusterUpgradeResponse);
 }
 
 message GetIchorInstallationRequest {}
@@ -443,4 +448,44 @@ message AcknowledgeCARotationCredentialsRequest {
 message AcknowledgeCARotationCredentialsResponse {
   Operation operation = 1;
   AuditRecord audit = 2;
+}
+
+// PlanClusterUpgradeRequest asks for the steps that bring a cluster to its Ichor's release set (ADR 0113).
+message PlanClusterUpgradeRequest {
+  ObjectRef cluster = 1;
+}
+
+// ClusterUpgradeStep is one step of that rollout, in the order it runs.
+message ClusterUpgradeStep {
+  // step is talos, config, kubernetes or cilium (docs/adr/0113).
+  string step = 1;
+  // from is what the cluster runs now: the Talos release, the configuration's contract, the
+  // Kubernetes release or the Cilium chart. Empty for config.
+  string from = 2;
+  // to is the release set's version for that step; empty for config and cilium.
+  string to = 3;
+  // kind is the operation kind the step creates (talos, config, kubernetes or cni).
+  OperationKind kind = 4;
+}
+
+message PlanClusterUpgradeResponse {
+  // steps is empty when the cluster runs the release set. The first step is the one
+  // StartClusterUpgrade creates.
+  repeated ClusterUpgradeStep steps = 1;
+  // blocked names what stops a start now (another operation on the cluster); empty when none.
+  string blocked = 2;
+  // release_set is the set the cluster is brought to.
+  ReleaseSet release_set = 3;
+}
+
+message StartClusterUpgradeRequest {
+  ObjectRef cluster = 1;
+}
+
+message StartClusterUpgradeResponse {
+  // step is the step whose operation was created.
+  string step = 1;
+  // operation is the operation that runs the step.
+  ObjectRef operation = 2;
+  AuditRecord audit = 3;
 }

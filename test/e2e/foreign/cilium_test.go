@@ -352,6 +352,13 @@ func TestA1Upgrade(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNICiliumInline, K8sVersion: foreignK8sUpgradeStart})
 	before, recBefore := ciliumDS(c), helmRecords(c)
 	logState(t, c, "before upgrade")
+	// The upgrade gate reads status.cni.detectedVersion, which the CNI detection refreshes every 10
+	// minutes; wait until it shows the Cilium the takeover installed (1.20.4) before upgrading.
+	for deadline := time.Now().Add(11 * time.Minute); time.Now().Before(deadline) &&
+		!strings.Contains(clusterJSONPath(c, "{.status.cni.detectedVersion}"), "1.20.4"); {
+		time.Sleep(20 * time.Second)
+	}
+	t.Logf("status.cni.detectedVersion before the upgrade: %s", clusterJSONPath(c, "{.status.cni.detectedVersion}"))
 	target := env("ICHOR_E2E_F_K8S_TARGET", "v1.36.6")
 	out, err := ichorCLI(t, c, "upgrade", "kubernetes", target, "--yes")
 	if err != nil {

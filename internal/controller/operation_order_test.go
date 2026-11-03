@@ -30,6 +30,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/uiapi"
+	"github.com/maeshinshin/ichor/pkg/release"
 )
 
 // The order the confirmation plan shows is the order the executor runs in
@@ -91,7 +92,7 @@ func TestPlanOperationOrderMatchesTheExecutorsCandidateOrder(t *testing.T) {
 	}
 
 	res, err := (&uiapi.Server{Client: k8s}).PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: &pb.ObjectRef{Namespace: ns, Name: cl}, Kind: pb.OperationKind_OPERATION_KIND_TALOS, Target: "v1.10.1",
+		Cluster: &pb.ObjectRef{Namespace: ns, Name: cl}, Kind: pb.OperationKind_OPERATION_KIND_TALOS, Target: release.Pinned.Talos,
 	}))
 	if err != nil {
 		t.Fatal(err)

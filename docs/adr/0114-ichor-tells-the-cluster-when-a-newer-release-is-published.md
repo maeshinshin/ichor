@@ -2,6 +2,8 @@
 
 Status: Accepted · Date: 2026-11-03 · Design section: Upgrades (Ichor) · Touches: 0059, 0100, 0105, 0108
 
+Decided: the controller (leader only, at start and every 6 hours with jitter) lists the chart repository's tags on ghcr.io with Helm's registry client, takes the highest final semver release, and records it in `IchorInstallation.status.latestRelease`; the UI shows "v<X> available" on the Ichor row and in the attention list, `ichor version` names it, and the check is switched by `spec.updateCheck.enabled` or the chart's `updateCheck.enabled` (default on), with a controller-only egress policy to the registry host that exists only while the check is on
+
 ## Context
 
 An installed Ichor does not know that a newer release exists. The user asked for the dashboard to show it.

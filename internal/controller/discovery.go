@@ -25,10 +25,10 @@ import (
 	"net/netip"
 	"slices"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/constants"
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -355,39 +355,29 @@ func (r *DiscoveryReconciler) DiscoverAll(
 
 	candidates = slices.DeleteFunc(candidates, func(c string) bool { return known[hostOf(c)] })
 
-	sem := make(chan struct{}, discoveryConcurrency)
+	// One slot per candidate, so the goroutines never write the same element and need no lock.
+	found := make([]*ichorv1alpha1.TalosMachine, len(candidates))
 
-	var (
-		wg      sync.WaitGroup
-		mu      sync.Mutex
-		results []*ichorv1alpha1.TalosMachine
-	)
+	var g errgroup.Group
+	g.SetLimit(discoveryConcurrency)
 
-	for _, endpoint := range candidates {
-		wg.Add(1)
-		sem <- struct{}{}
-
-		go func(endpoint string) {
-			defer wg.Done()
-			defer func() { <-sem }()
-
+	for i, endpoint := range candidates {
+		g.Go(func() error {
 			cctx, cancel := context.WithTimeout(ctx, discoveryDialTimeout)
 			defer cancel()
 
-			m, err := r.Discover(cctx, cluster, endpoint)
-			if err != nil || m == nil {
-				return
+			// A failed probe is a miss, not an error for the pass (see above).
+			if m, err := r.Discover(cctx, cluster, endpoint); err == nil {
+				found[i] = m
 			}
 
-			mu.Lock()
-			results = append(results, m)
-			mu.Unlock()
-		}(endpoint)
+			return nil
+		})
 	}
 
-	wg.Wait()
+	_ = g.Wait() // every task returns nil; the group only bounds concurrency
 
-	return results, nil
+	return slices.DeleteFunc(found, func(m *ichorv1alpha1.TalosMachine) bool { return m == nil }), nil
 }
 
 // hostOf is endpoint without its port; an endpoint with no port is returned as is.

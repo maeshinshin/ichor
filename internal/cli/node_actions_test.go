@@ -135,13 +135,15 @@ func TestNodeRestartServiceAndEtcdRefusalsAreStatedBeforeAnyPrompt(t *testing.T)
 	}
 }
 
-func TestNodeResetNeedsAnOverrideReason(t *testing.T) {
+func TestNodeResetNeedsOverride(t *testing.T) {
 	c, _ := nodeActionClients(t, true)
+	apiOpts.Override = false
+	apiOpts.OverrideReason = ""
 
 	err := runNodeAction(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{},
 		nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_RESET, Confirm: testMachineName})
 	if err == nil || !strings.Contains(err.Error(), "--override") {
-		t.Fatalf("reset without a reason = %v", err)
+		t.Fatalf("reset without override = %v", err)
 	}
 }
 

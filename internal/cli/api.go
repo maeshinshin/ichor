@@ -75,10 +75,11 @@ type apiOptions struct {
 	IchorNamespace string
 	// Local skips ichor-ui and computes from the Kubernetes API.
 	Local bool
-	// Override is the reason of an emergency override; empty
-	// means off. Setting it implies Local: override is decided by the
-	// caller's own RBAC, never by the backend's ServiceAccount.
-	Override string
+	// Override asks for an emergency override of a safety check. Setting it
+	// implies Local: override is decided by the caller's own RBAC, never by the backend's ServiceAccount.
+	Override bool
+	// OverrideReason is the optional reason recorded with the override; it needs Override.
+	OverrideReason string
 	// CAFile is a PEM bundle trusted, besides the system roots, when ichor-ui
 	// serves TLS on its main port (chart ichorUI.tls.secretName).
 	CAFile string
@@ -87,13 +88,14 @@ type apiOptions struct {
 	TLSServerName string
 }
 
-// overrideOf is the request field the --override flag fills; nil when off.
+// overrideOf is the request field the --override flag fills; nil when off. The reason is optional:
+// the field's presence is the override, and an empty reason is recorded as none given.
 func overrideOf(opts apiOptions) *pb.Override {
-	if opts.Override == "" {
+	if !opts.Override {
 		return nil
 	}
 
-	return &pb.Override{Reason: opts.Override}
+	return &pb.Override{Reason: opts.OverrideReason}
 }
 
 // addAPIFlags registers the shared flags on a command group.
@@ -107,9 +109,11 @@ func addAPIFlags(cmd *cobra.Command) {
 		"PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env "+caFileEnv+")")
 	f.StringVar(&apiOpts.TLSServerName, "tls-server-name", "",
 		"name on ichor-ui's serving certificate, when it is not the Service's DNS name (<service>.<namespace>.svc)")
-	f.StringVar(&apiOpts.Override, "override", "",
-		"incident only: override a guard (reset a node, restore etcd); the value is the reason, "+
-			"recorded in the audit record and an Event. Needs the override RBAC verb on the resource; implies --local")
+	f.BoolVar(&apiOpts.Override, "override", false,
+		"incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker); "+
+			"needs the override RBAC verb on the resource; implies --local")
+	f.StringVar(&apiOpts.OverrideReason, "override-reason", "",
+		"optional, with --override: why, recorded in the audit record and an Event (without it the record says no reason given)")
 }
 
 // apiDeps is connectAPI's dependencies. Forward and FreePort are the seams
@@ -201,7 +205,11 @@ var errTLSVerify = errors.New("ichor-ui's TLS certificate cannot be verified")
 // requireBackend turns the fallback into errBackendRequired, for the
 // commands that need the backend's Talos identity.
 func connectAPI(ctx context.Context, opts apiOptions, deps apiDeps, requireBackend bool) (*apiClients, error) {
-	if opts.Override != "" {
+	if opts.OverrideReason != "" && !opts.Override {
+		return nil, errors.New("--override-reason needs --override: the reason is recorded only with an override")
+	}
+
+	if opts.Override {
 		if requireBackend {
 			return nil, fmt.Errorf("--override applies to writes, which never need the backend: %w", errBackendRequired)
 		}

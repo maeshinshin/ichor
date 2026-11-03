@@ -60,7 +60,8 @@ func liveClients(t *testing.T, yes, allowed bool, extra ...client.Object) (*apiC
 
 	setAPITestFlags(t, yes)
 
-	apiOpts.Override = liveReason
+	apiOpts.Override = true
+	apiOpts.OverrideReason = liveReason
 
 	objs := append(opTestObjects(), liveBackupObject(liveBackup, opTestCluster))
 	base := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(objs, extra...)...).Build()
@@ -208,16 +209,17 @@ func TestRestoreLiveYesStillNeedsTheClusterName(t *testing.T) {
 	}
 }
 
-func TestRestoreLiveNeedsAnOverrideReasonAndTheRight(t *testing.T) {
+func TestRestoreLiveNeedsOverrideAndTheRight(t *testing.T) {
 	c, k8s := liveClients(t, true, true)
-	apiOpts.Override = ""
+	apiOpts.Override = false
+	apiOpts.OverrideReason = ""
 
 	s := liveSpec()
 	s.Confirm = opTestCluster
 
 	err := runLiveRestore(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, s)
 	if err == nil || !strings.Contains(err.Error(), "--override") {
-		t.Fatalf("no reason = %v", err)
+		t.Fatalf("no override = %v", err)
 	}
 
 	denied, k8sDenied := liveClients(t, true, false)

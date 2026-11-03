@@ -108,14 +108,14 @@ func TestTalosClusterMovesUpButNotDown(t *testing.T) {
 	ctx := context.Background()
 
 	newer := newTestCluster()
-	newer.Spec.TalosVersion, newer.Spec.KubernetesVersion, newer.Spec.VersionContract = "v1.14.4", "v1.37.2", "v1.14"
+	newer.Spec.TalosVersion, newer.Spec.KubernetesVersion, newer.Spec.VersionContract = "v1.14.4", "v1.37.2", testVersionContract
 
 	if _, err := v.ValidateCreate(ctx, newer); err != nil {
 		t.Fatalf("create on a newer patch: %v", err)
 	}
 
 	older := newTestCluster()
-	older.Spec.TalosVersion, older.Spec.KubernetesVersion, older.Spec.VersionContract = "v1.14.3", "v1.36.2", "v1.14"
+	older.Spec.TalosVersion, older.Spec.KubernetesVersion, older.Spec.VersionContract = testTalosVersion, testK8sVersion, testVersionContract
 
 	if _, err := v.ValidateCreate(ctx, older); err != nil {
 		t.Fatalf("create on an older patch: %v", err)
@@ -156,7 +156,7 @@ func TestTalosClusterRefusesAnIncompatiblePairUnlessOverridden(t *testing.T) {
 	}}
 
 	bad := newTestCluster()
-	bad.Spec.TalosVersion, bad.Spec.KubernetesVersion = "v1.14.3", "v1.32.0"
+	bad.Spec.TalosVersion, bad.Spec.KubernetesVersion = testTalosVersion, "v1.32.0"
 
 	if _, err := noOverride.ValidateCreate(ctx, bad); err == nil || !strings.Contains(err.Error(), "v1.32.0") {
 		t.Fatalf("create with an incompatible pair: err = %v", err)
@@ -167,7 +167,7 @@ func TestTalosClusterRefusesAnIncompatiblePairUnlessOverridden(t *testing.T) {
 	}
 
 	old := newTestCluster()
-	old.Spec.TalosVersion, old.Spec.KubernetesVersion = "v1.14.3", "v1.36.2"
+	old.Spec.TalosVersion, old.Spec.KubernetesVersion = testTalosVersion, testK8sVersion
 	old.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{Detected: "cilium", DetectedVersion: "v1.18.0"}
 
 	edited := old.DeepCopy()

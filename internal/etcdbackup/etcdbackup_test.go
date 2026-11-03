@@ -95,25 +95,13 @@ func TestEncryptRoundTripAndKeyBinding(t *testing.T) {
 	}
 
 	plain := makeSnapshot("etcd data")
+	enc := sealed(t, plain, pass)
 
-	var enc bytes.Buffer
-
-	w, err := Encrypt(&enc, pass)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, _ = w.Write(plain)
-
-	if err := w.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	if bytes.Contains(enc.Bytes(), []byte("etcd data")) {
+	if bytes.Contains(enc, []byte("etcd data")) {
 		t.Fatal("plaintext visible in ciphertext")
 	}
 
-	r, err := Decrypt(bytes.NewReader(enc.Bytes()), pass)
+	r, err := Decrypt(bytes.NewReader(enc), pass)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +111,7 @@ func TestEncryptRoundTripAndKeyBinding(t *testing.T) {
 		t.Fatalf("round trip failed: %v", err)
 	}
 
-	if _, err := Decrypt(bytes.NewReader(enc.Bytes()), other); err == nil {
+	if _, err := Decrypt(bytes.NewReader(enc), other); err == nil {
 		t.Fatal("decrypted with a key derived from a different bundle")
 	}
 
@@ -149,14 +137,7 @@ func TestS3StoreAgainstFake(t *testing.T) {
 	f := newFakeS3()
 	defer f.srv.Close()
 
-	st, err := NewS3Store(S3Config{
-		Endpoint: f.srv.URL, Region: "us-east-1", Bucket: "bkt",
-		AccessKeyID: "AK", SecretAccessKey: "SK", CAPEM: f.caPEM(),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	st := f.store(t)
 	ctx := context.Background()
 	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 
@@ -261,22 +242,7 @@ func TestBackupKeyV2NeedsAControlPlaneSecret(t *testing.T) {
 
 	plain := makeSnapshot("etcd data")
 
-	seal := func(pass string) []byte {
-		var enc bytes.Buffer
-
-		w, err := Encrypt(&enc, Key{Current: pass})
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		_, _ = w.Write(plain)
-
-		if err := w.Close(); err != nil {
-			t.Fatal(err)
-		}
-
-		return enc.Bytes()
-	}
+	seal := func(pass string) []byte { return sealed(t, plain, Key{Current: pass}) }
 
 	open := func(enc []byte, k Key) error {
 		r, err := Decrypt(bytes.NewReader(enc), k)

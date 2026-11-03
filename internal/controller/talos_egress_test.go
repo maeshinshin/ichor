@@ -55,14 +55,14 @@ func TestBuildEgressCoversEveryDialedPort(t *testing.T) {
 	// talosclient_*, discovery), the API server (APIServerReady, the admin kubeconfig) and etcd's
 	// peer port (pkg/reclaim). Each is a Talos constant, so a change there shows up here.
 	for _, p := range talosEgressPorts {
-		if !contains(text, `"port":"`+strconv.Itoa(p)+`"`) {
+		if !strings.Contains(text, `"port":"`+strconv.Itoa(p)+`"`) {
 			t.Errorf("port %d is dialed but no rule allows it: %s", p, text)
 		}
 	}
 
 	for _, want := range []string{`"matchName":"k8s.example.com"`, `"matchName":"s3.example.com"`,
 		`"k8sService":{"namespace":"minio","serviceName":"minio"}`, `"cidr":"192.0.2.9/32"`, `"port":"9000"`, `"port":"80"`} {
-		if !contains(text, want) {
+		if !strings.Contains(text, want) {
 			t.Errorf("missing %s in %s", want, text)
 		}
 	}
@@ -71,12 +71,6 @@ func TestBuildEgressCoversEveryDialedPort(t *testing.T) {
 		t.Errorf("no targets must give the single empty (deny) rule, got %v", got)
 	}
 }
-
-func contains(s, sub string) bool { return strings.Contains(s, sub) }
-
-func metaOf(name string) metav1.ObjectMeta { return metav1.ObjectMeta{Name: name} }
-
-func ctrlNS(ns string) client.ListOption { return client.InNamespace(ns) }
 
 // failingLister fails every List, as an API server that is down would.
 type failingLister struct{ client.Client }
@@ -112,6 +106,8 @@ func TestHostParsing(t *testing.T) {
 
 const egressNS = "egress-test-ns"
 
+func metaOf(name string) metav1.ObjectMeta { return metav1.ObjectMeta{Name: name} }
+
 func cnpGVK() *unstructured.Unstructured {
 	u := &unstructured.Unstructured{}
 	u.SetGroupVersionKind(ciliumPolicyGVK)
@@ -141,7 +137,7 @@ var _ = Describe("TalosEgress", Ordered, func() {
 			var l unstructured.UnstructuredList
 			l.SetGroupVersionKind(ciliumPolicyGVK)
 
-			return k8sClient.List(ctx, &l, ctrlNS(egressNS))
+			return k8sClient.List(ctx, &l, client.InNamespace(egressNS))
 		}, "20s", "200ms").Should(Succeed())
 
 		egress = &TalosEgress{Client: k8sClient, Namespace: egressNS}
@@ -255,7 +251,7 @@ var _ = Describe("TalosEgress", Ordered, func() {
 			seen[host] = true
 
 			// An address in the /30 is covered by its CIDR, the direct address by its /32.
-			if err != nil || (!contains(string(raw), `"`+host+`/32"`) && !contains(string(raw), `"192.0.2.128/30"`)) {
+			if err != nil || (!strings.Contains(string(raw), `"`+host+`/32"`) && !strings.Contains(string(raw), `"192.0.2.128/30"`)) {
 				missed = append(missed, host)
 			}
 

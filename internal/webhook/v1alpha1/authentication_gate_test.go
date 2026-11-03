@@ -26,6 +26,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
+	"github.com/maeshinshin/ichor/pkg/release"
 )
 
 const (
@@ -97,7 +98,7 @@ var _ = Describe("Authentication gate on TalosCluster", func() {
 	It("lets an editor change other fields", func() {
 		c := &ichorv1alpha1.TalosCluster{}
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), c)).To(Succeed())
-		c.Spec.KubernetesVersion = "v1.37.1"
+		c.Spec.KubernetesVersion = release.Pinned.Kubernetes
 		Expect(asUser(editor).Update(ctx, c)).To(Succeed())
 	})
 

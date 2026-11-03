@@ -110,8 +110,8 @@ func CheckUpdate(field, oldValue, newValue, pinned string) error {
 	}
 
 	if newValue != pinned {
-		return fmt.Errorf("spec.%s may only move to %s, the version this Ichor build supports; %s is not that version",
-			field, pinned, newValue)
+		return fmt.Errorf("spec.%s may only move to %s, the version this Ichor build supports; "+
+			"%s is not that version", field, pinned, newValue)
 	}
 
 	if semver.IsValid(oldValue) && semver.Compare(newValue, oldValue) < 0 {
@@ -148,8 +148,8 @@ func Adoptable(talos, kubernetes string) (behind []string, err error) {
 	if kubernetes != "" {
 		switch Compare(kubernetes, Pinned.Kubernetes) {
 		case Ahead:
-			return nil, fmt.Errorf("the cluster runs Kubernetes %s, newer than %s, the version this Ichor build supports",
-				kubernetes, Pinned.Kubernetes)
+			return nil, fmt.Errorf("the cluster runs Kubernetes %s, newer than %s, the version this Ichor build "+
+				"supports", kubernetes, Pinned.Kubernetes)
 		case Behind:
 			behind = append(behind, fmt.Sprintf("Kubernetes %s (supported: %s)", kubernetes, Pinned.Kubernetes))
 		}

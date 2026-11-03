@@ -1,18 +1,19 @@
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { Disk } from '@/gen/ichor/v1alpha1/node_pb'
 import { formatBytes } from '@/lib/format'
-import { diskKey, diskSelector } from '@/lib/installDisk'
+import { diskKey, diskSelector, type DiskOption } from '@/lib/installDisk'
 import { useT } from '@/lib/useT'
 
 // The install disk choice shared by the approval form and the machine page's "set install disk":
-// the node's own disks when it reported any, otherwise a typed device path. The state lives in the
-// parent (see installChoice in lib/installDisk for turning it into the install target).
+// a disk from the list the node reported (discovery's, or the node's own), otherwise a typed device
+// path. The state lives in the parent (see installChoice in lib/installDisk for turning it into the
+// install target).
 export function InstallDiskPicker({
   idPrefix,
   disks,
   value,
+  defaulted,
   typed,
   image,
   typedOk,
@@ -23,8 +24,11 @@ export function InstallDiskPicker({
 }: {
   idPrefix: string
   // disks already filtered to those that can be selected (diskSelector set).
-  disks: Disk[]
+  disks: DiskOption[]
   value: string
+  // defaulted is true while the form starts on the default disk (defaultInstallDisk), not one the
+  // person picked.
+  defaulted?: boolean
   typed: string
   image: string
   typedOk: boolean
@@ -48,7 +52,7 @@ export function InstallDiskPicker({
               <SelectItem key={diskKey(d)} value={diskKey(d)}>
                 {t('approve.installDiskOption', {
                   id: Object.values(diskSelector(d) ?? {})[0] ?? '',
-                  size: formatBytes(d.sizeBytes),
+                  size: [formatBytes(d.sizeBytes), d.model].filter(Boolean).join(' '),
                   dev: d.devPath || '-',
                 })}
               </SelectItem>
@@ -64,7 +68,13 @@ export function InstallDiskPicker({
           aria-invalid={!typedOk}
         />
       )}
-      <p class="text-muted-foreground">{disks.length > 0 ? t('approve.installDiskHelp') : t('approve.installDiskTyped')}</p>
+      <p class="text-muted-foreground">
+        {disks.length === 0
+          ? t('approve.installDiskTyped')
+          : defaulted
+            ? t('approve.installDiskDefaulted')
+            : t('approve.installDiskHelp')}
+      </p>
       {showImage && (
         <>
           <Label htmlFor={`${idPrefix}-install-image`}>{t('approve.installImage')}</Label>

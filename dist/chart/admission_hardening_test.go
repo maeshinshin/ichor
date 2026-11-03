@@ -28,8 +28,8 @@ import (
 )
 
 const (
-	labelConfig    = "config/rbac"
-	labelChart     = "chart"
+	labelConfig  = "config/rbac"
+	labelChart   = "chart"
 	verbOverride = "override"
 )
 

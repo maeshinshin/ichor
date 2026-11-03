@@ -301,6 +301,15 @@ func TestCNIEscalationNamesOnlyCiliumsRoles(t *testing.T) {
 				}
 			}
 		}
+
+		// The other way: a name the chart no longer renders is a grant nothing needs.
+		for res, names := range got {
+			for n := range names {
+				if !rendered[res][n] {
+					t.Errorf("%s: the CNI role binds or escalates %s %q, which the Cilium chart does not render", label, res, n)
+				}
+			}
+		}
 	}
 }
 

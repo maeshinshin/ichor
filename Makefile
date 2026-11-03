@@ -67,6 +67,16 @@ cilium-chart: ## Fetch the pinned Cilium chart into pkg/cni/cilium/chart/ and ve
 	curl -fsSL -o pkg/cni/cilium/chart/cilium-$(CILIUM_CHART_VERSION).tgz https://helm.cilium.io/cilium-$(CILIUM_CHART_VERSION).tgz
 	echo "$(CILIUM_CHART_SHA256)  pkg/cni/cilium/chart/cilium-$(CILIUM_CHART_VERSION).tgz" | sha256sum -c -
 
+# The foreign-cluster e2e tests (test/e2e/foreign) install this one-minor-older chart as the
+# Cilium a foreign cluster starts with, so adopt's takeover of a live 1.19 is covered.
+FOREIGN_CILIUM_CHART_VERSION ?= 1.19.10
+FOREIGN_CILIUM_CHART_SHA256 ?= b7252afca3413a33e2b987c954e52441e96979e411e1495ecc6aefe8cd258863
+
+.PHONY: foreign-cilium-chart
+foreign-cilium-chart: ## Fetch the pinned Cilium 1.19 chart the foreign-cluster e2e tests install and verify its SHA-256.
+	curl -fsSL -o pkg/cni/cilium/chart/cilium-$(FOREIGN_CILIUM_CHART_VERSION).tgz https://helm.cilium.io/cilium-$(FOREIGN_CILIUM_CHART_VERSION).tgz
+	echo "$(FOREIGN_CILIUM_CHART_SHA256)  pkg/cni/cilium/chart/cilium-$(FOREIGN_CILIUM_CHART_VERSION).tgz" | sha256sum -c -
+
 .PHONY: adr-index
 adr-index: ## Regenerate docs/adr/README.md's index table from each ADR's own Decided:/Status: line.
 	go run ./internal/tools/adrindex

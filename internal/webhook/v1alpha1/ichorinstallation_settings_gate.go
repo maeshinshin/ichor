@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -46,14 +47,11 @@ func orUnset(s string) string {
 
 // boolOf is the update check switch as "true", "false" or "" when unset.
 func boolOf(c *ichorv1alpha1.IchorUpdateCheckSettings) string {
-	switch {
-	case c == nil || c.Enabled == nil:
+	if c == nil || c.Enabled == nil {
 		return ""
-	case *c.Enabled:
-		return "true"
-	default:
-		return "false"
 	}
+
+	return strconv.FormatBool(*c.Enabled)
 }
 
 func durOf(d *metav1.Duration) string {

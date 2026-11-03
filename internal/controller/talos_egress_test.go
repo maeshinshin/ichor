@@ -119,18 +119,7 @@ var _ = Describe("TalosEgress", Ordered, func() {
 	var egress *TalosEgress
 
 	BeforeAll(func() {
-		crd := &unstructured.Unstructured{Object: map[string]any{
-			"apiVersion": "apiextensions.k8s.io/v1", "kind": "CustomResourceDefinition",
-			"metadata": map[string]any{labelName: "ciliumnetworkpolicies.cilium.io"},
-			"spec": map[string]any{
-				"group": "cilium.io", "scope": "Namespaced",
-				"names": map[string]any{"kind": "CiliumNetworkPolicy", "listKind": "CiliumNetworkPolicyList", "plural": "ciliumnetworkpolicies", "singular": "ciliumnetworkpolicy"},
-				"versions": []any{map[string]any{labelName: "v2", "served": true, "storage": true, "schema": map[string]any{
-					"openAPIV3Schema": map[string]any{"type": "object", "x-kubernetes-preserve-unknown-fields": true},
-				}}},
-			},
-		}}
-		Expect(k8sClient.Create(ctx, crd)).To(Or(Succeed(), MatchError(apierrors.IsAlreadyExists, "already exists")))
+		ensureCiliumPolicyCRD()
 		Expect(k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metaOf(egressNS)})).To(Or(Succeed(), MatchError(apierrors.IsAlreadyExists, "already exists")))
 
 		Eventually(func() error {

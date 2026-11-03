@@ -69,6 +69,10 @@ const (
 	keyNamespace       = "namespace"
 	keySpec            = "spec"
 	keyToPorts         = "toPorts"
+	keyEgress          = "egress"
+	keyMatchName       = "matchName"
+	valueControllerMgr = "controller-manager"
+	keyCIDR            = "cidr"
 )
 
 // EgressSyncer is what the TalosCluster reconciler calls before it probes a discovery range.
@@ -280,7 +284,7 @@ func buildEgress(t egressTargets) []any {
 	if len(t.cidrs) > 0 {
 		set := make([]any, 0, len(t.cidrs))
 		for _, c := range t.cidrs {
-			set = append(set, map[string]any{"cidr": c})
+			set = append(set, map[string]any{keyCIDR: c})
 		}
 
 		rules = append(rules, map[string]any{
@@ -292,7 +296,7 @@ func buildEgress(t egressTargets) []any {
 	if len(t.names) > 0 {
 		fq := make([]any, 0, len(t.names))
 		for _, n := range t.names {
-			fq = append(fq, map[string]any{"matchName": n})
+			fq = append(fq, map[string]any{keyMatchName: n})
 		}
 
 		rules = append(rules, map[string]any{
@@ -314,12 +318,12 @@ func buildEgress(t egressTargets) []any {
 			})
 		case ipErr == nil:
 			rules = append(rules, map[string]any{
-				"toCIDRSet": []any{map[string]any{"cidr": netip.PrefixFrom(addr, addr.BitLen()).String()}},
+				"toCIDRSet": []any{map[string]any{keyCIDR: netip.PrefixFrom(addr, addr.BitLen()).String()}},
 				keyToPorts:  ports,
 			})
 		default:
 			rules = append(rules, map[string]any{
-				"toFQDNs":  []any{map[string]any{"matchName": s.host}},
+				"toFQDNs":  []any{map[string]any{keyMatchName: s.host}},
 				keyToPorts: ports,
 			})
 		}
@@ -361,7 +365,7 @@ func controllerPolicyApp(ctx context.Context, c client.Client, ns, skip string) 
 		}
 
 		labels, _, _ := unstructured.NestedStringMap(o.Object, keySpec, "endpointSelector", "matchLabels")
-		if labels["control-plane"] == "controller-manager" && labels["app.kubernetes.io/name"] != "" {
+		if labels["control-plane"] == valueControllerMgr && labels["app.kubernetes.io/name"] != "" {
 			return labels["app.kubernetes.io/name"], nil
 		}
 	}
@@ -383,7 +387,7 @@ func writePolicy(ctx context.Context, c client.Client, ns, name, app string, spe
 		cur.SetGroupVersionKind(ciliumPolicyGVK)
 		cur.SetNamespace(ns)
 		cur.SetName(name)
-		cur.SetLabels(map[string]string{"app.kubernetes.io/name": app, "app.kubernetes.io/managed-by": "ichor-controller"})
+		cur.SetLabels(map[string]string{nameLabel: app, "app.kubernetes.io/managed-by": "ichor-controller"})
 
 		if err := c.Create(ctx, cur); err != nil {
 			return false, fmt.Errorf("creating %s: %w", name, err)
@@ -410,8 +414,8 @@ func writePolicy(ctx context.Context, c client.Client, ns, name, app string, spe
 	return true, nil
 }
 
-// removePolicy deletes the CiliumNetworkPolicy name in ns when it exists, and reports whether it did.
-func removePolicy(ctx context.Context, c client.Client, ns, name string) (bool, error) {
+// removePolicy deletes the CiliumNetworkPolicy name in ns; one that is already gone is not an error.
+func removePolicy(ctx context.Context, c client.Client, ns, name string) error {
 	cur := &unstructured.Unstructured{}
 	cur.SetGroupVersionKind(ciliumPolicyGVK)
 	cur.SetNamespace(ns)
@@ -421,12 +425,12 @@ func removePolicy(ctx context.Context, c client.Client, ns, name string) (bool, 
 
 	switch {
 	case apierrors.IsNotFound(err), meta.IsNoMatchError(err):
-		return false, nil
+		return nil
 	case err != nil:
-		return false, fmt.Errorf("deleting %s: %w", name, err)
+		return fmt.Errorf("deleting %s: %w", name, err)
 	}
 
-	return true, nil
+	return nil
 }
 
 // Sync is the whole job: gate, collect, build, create or update. It returns changed when it wrote.
@@ -475,10 +479,10 @@ func (e *TalosEgress) sync(ctx context.Context) (bool, error) {
 		"endpointSelector": map[string]any{
 			"matchLabels": map[string]any{"app.kubernetes.io/name": app},
 			"matchExpressions": []any{map[string]any{
-				"key": "control-plane", "operator": "In", "values": []any{"controller-manager", "ui-backend"},
+				"key": "control-plane", "operator": "In", "values": []any{valueControllerMgr, "ui-backend"},
 			}},
 		},
-		"egress": buildEgress(t),
+		keyEgress: buildEgress(t),
 	}
 
 	return writePolicy(ctx, e.Client, e.Namespace, e.name(), app, spec)

@@ -46,7 +46,7 @@ func TestE2NoCNIKubeProxyDisabled(t *testing.T) {
 	}
 	managedAdopted(t, c, before)
 	// Services work with no kube-proxy: a pod resolves a name through the kube-dns ClusterIP, and the agent says it replaces kube-proxy.
-	probe, perr := inner(c, "run", "svc-probe", "--restart=Never", "--rm", "-i", "--image=quay.io/cilium/cilium:v1.18.0", "--command", "--",
+	probe, perr := inner(c, "run", "svc-probe", "--restart=Never", "--rm", "-i", "--image=quay.io/cilium/cilium:v1.19.10", "--command", "--",
 		"getent", "hosts", "kubernetes.default.svc.cluster.local")
 	t.Logf("service probe: %v\n%s", perr, probe)
 	if perr != nil || !strings.Contains(probe, "10.249.0.1") {

@@ -139,11 +139,12 @@ func (l *Lock) Acquire(ctx context.Context, identity string) error {
 		return err
 	}
 
-	if ptr.Deref(lease.Spec.HolderIdentity, "") == identity {
+	holder := ptr.Deref(lease.Spec.HolderIdentity, "")
+	if holder == identity {
 		return l.renew(ctx, &lease)
 	}
 	if !expired(&lease, l.duration) {
-		return &HeldError{Holder: ptr.Deref(lease.Spec.HolderIdentity, "")}
+		return &HeldError{Holder: holder}
 	}
 	return l.takeOver(ctx, &lease, identity)
 }
@@ -161,12 +162,12 @@ func (l *Lock) Renew(ctx context.Context, identity string) error {
 	var lease coordinationv1.Lease
 	if err := l.reader.Get(ctx, l.key, &lease); err != nil {
 		if apierrors.IsNotFound(err) {
-			return &HeldError{Holder: ""}
+			return &HeldError{}
 		}
 		return err
 	}
-	if ptr.Deref(lease.Spec.HolderIdentity, "") != identity {
-		return &HeldError{Holder: ptr.Deref(lease.Spec.HolderIdentity, "")}
+	if holder := ptr.Deref(lease.Spec.HolderIdentity, ""); holder != identity {
+		return &HeldError{Holder: holder}
 	}
 	return l.renew(ctx, &lease)
 }
@@ -246,15 +247,8 @@ func (l *Lock) create(ctx context.Context, identity string) error {
 // overwritten.
 func (l *Lock) renew(ctx context.Context, lease *coordinationv1.Lease) error {
 	lease.Spec.RenewTime = ptr.To(metav1.NowMicro())
-	seconds := max(int32(l.duration.Seconds()), 1)
-	lease.Spec.LeaseDurationSeconds = &seconds
-	if err := l.client.Update(ctx, lease); err != nil {
-		if apierrors.IsConflict(err) {
-			return &HeldError{Holder: l.currentHolderBestEffort(ctx)}
-		}
-		return err
-	}
-	return nil
+	lease.Spec.LeaseDurationSeconds = leaseSeconds(l.duration)
+	return l.update(ctx, lease)
 }
 
 // takeOver claims an expired lease for identity. lease carries the
@@ -267,6 +261,11 @@ func (l *Lock) takeOver(ctx context.Context, lease *coordinationv1.Lease, identi
 		transitions = *lease.Spec.LeaseTransitions + 1
 	}
 	lease.Spec = heldSpec(identity, l.duration, transitions)
+	return l.update(ctx, lease)
+}
+
+// update writes lease, reporting a lost resourceVersion race as held.
+func (l *Lock) update(ctx context.Context, lease *coordinationv1.Lease) error {
 	if err := l.client.Update(ctx, lease); err != nil {
 		if apierrors.IsConflict(err) {
 			return &HeldError{Holder: l.currentHolderBestEffort(ctx)}
@@ -275,6 +274,8 @@ func (l *Lock) takeOver(ctx context.Context, lease *coordinationv1.Lease, identi
 	}
 	return nil
 }
+
+func leaseSeconds(d time.Duration) *int32 { return ptr.To(max(int32(d.Seconds()), 1)) }
 
 // currentHolderBestEffort re-reads the lease to report who holds it after
 // losing a create/update race. A failure here just means a less specific
@@ -291,10 +292,9 @@ func (l *Lock) currentHolderBestEffort(ctx context.Context) string {
 // acquireTime and renewTime both reset to now.
 func heldSpec(identity string, duration time.Duration, transitions int32) coordinationv1.LeaseSpec {
 	now := ptr.To(metav1.NowMicro())
-	seconds := max(int32(duration.Seconds()), 1)
 	return coordinationv1.LeaseSpec{
 		HolderIdentity:       &identity,
-		LeaseDurationSeconds: &seconds,
+		LeaseDurationSeconds: leaseSeconds(duration),
 		AcquireTime:          now,
 		RenewTime:            now,
 		LeaseTransitions:     &transitions,

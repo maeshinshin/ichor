@@ -95,10 +95,24 @@ func newTestNamespace(t *testing.T) string {
 	return ns.Name
 }
 
+// newTestLock returns a context and a Lock on a fresh namespace's "demo" cluster.
+func newTestLock(t *testing.T, d time.Duration) (context.Context, *Lock) {
+	t.Helper()
+
+	return t.Context(), New(k8sClient, types.NamespacedName{Namespace: newTestNamespace(t), Name: clusterName}, d)
+}
+
+// wantHolder fails unless lock is held by want.
+func wantHolder(t *testing.T, lock *Lock, want string) {
+	t.Helper()
+
+	if holder, held, err := lock.Holder(t.Context()); err != nil || !held || holder != want {
+		t.Fatalf("Holder() = (%q, %v, %v), want (%q, true, nil)", holder, held, err, want)
+	}
+}
+
 func TestAcquire_SecondFailsWhileFirstHolds(t *testing.T) {
-	ns := newTestNamespace(t)
-	ctx := context.Background()
-	lock := New(k8sClient, types.NamespacedName{Namespace: ns, Name: clusterName}, time.Minute)
+	ctx, lock := newTestLock(t, time.Minute)
 
 	if err := lock.Acquire(ctx, identityA); err != nil {
 		t.Fatalf("first Acquire: %v", err)
@@ -129,9 +143,7 @@ func TestAcquire_DifferentClustersBothSucceed(t *testing.T) {
 }
 
 func TestAcquire_ExpiredLeaseIsStolenByDifferentHolder(t *testing.T) {
-	ns := newTestNamespace(t)
-	ctx := context.Background()
-	lock := New(k8sClient, types.NamespacedName{Namespace: ns, Name: clusterName}, time.Second)
+	ctx, lock := newTestLock(t, time.Second)
 
 	if err := lock.Acquire(ctx, identityA); err != nil {
 		t.Fatalf("first Acquire: %v", err)
@@ -143,20 +155,11 @@ func TestAcquire_ExpiredLeaseIsStolenByDifferentHolder(t *testing.T) {
 		t.Fatalf("Acquire of an expired lease by a different holder: %v", err)
 	}
 
-	holder, held, err := lock.Holder(ctx)
-	if err != nil {
-		t.Fatalf("Holder: %v", err)
-	}
-	if !held || holder != identityB {
-		t.Fatalf("Holder() = (%q, %v), want (holder-b, true)", holder, held)
-	}
+	wantHolder(t, lock, identityB)
 }
 
 func TestRenew_KeepsHeldPastOriginalExpiry(t *testing.T) {
-	ns := newTestNamespace(t)
-	ctx := context.Background()
-	duration := time.Second
-	lock := New(k8sClient, types.NamespacedName{Namespace: ns, Name: clusterName}, duration)
+	ctx, lock := newTestLock(t, time.Second)
 
 	if err := lock.Acquire(ctx, identityA); err != nil {
 		t.Fatalf("Acquire: %v", err)
@@ -182,9 +185,7 @@ func TestRenew_KeepsHeldPastOriginalExpiry(t *testing.T) {
 }
 
 func TestRelease_ByHolderFreesIt(t *testing.T) {
-	ns := newTestNamespace(t)
-	ctx := context.Background()
-	lock := New(k8sClient, types.NamespacedName{Namespace: ns, Name: clusterName}, time.Minute)
+	ctx, lock := newTestLock(t, time.Minute)
 
 	if err := lock.Acquire(ctx, identityA); err != nil {
 		t.Fatalf("Acquire: %v", err)
@@ -198,9 +199,7 @@ func TestRelease_ByHolderFreesIt(t *testing.T) {
 }
 
 func TestRelease_ByNonHolderIsNoop(t *testing.T) {
-	ns := newTestNamespace(t)
-	ctx := context.Background()
-	lock := New(k8sClient, types.NamespacedName{Namespace: ns, Name: clusterName}, time.Minute)
+	ctx, lock := newTestLock(t, time.Minute)
 
 	if err := lock.Acquire(ctx, identityA); err != nil {
 		t.Fatalf("Acquire: %v", err)
@@ -214,19 +213,11 @@ func TestRelease_ByNonHolderIsNoop(t *testing.T) {
 		t.Fatalf("Release by a non-holder returned an error: %v, want nil", err)
 	}
 
-	holder, held, err := lock.Holder(ctx)
-	if err != nil {
-		t.Fatalf("Holder: %v", err)
-	}
-	if !held || holder != identityA {
-		t.Fatalf("Holder() after a non-holder Release = (%q, %v), want (holder-a, true): the lock was freed", holder, held)
-	}
+	wantHolder(t, lock, identityA) // not freed
 }
 
 func TestAcquire_SameHolderResumesAfterRestart(t *testing.T) {
-	ns := newTestNamespace(t)
-	ctx := context.Background()
-	lock := New(k8sClient, types.NamespacedName{Namespace: ns, Name: clusterName}, time.Minute)
+	ctx, lock := newTestLock(t, time.Minute)
 
 	if err := lock.Acquire(ctx, "ichor-controller"); err != nil {
 		t.Fatalf("first Acquire: %v", err)
@@ -240,7 +231,7 @@ func TestAcquire_SameHolderResumesAfterRestart(t *testing.T) {
 	// Simulate a restart or a leader change: a new process, holding no
 	// in-memory state from the first Acquire, but configured with the same
 	// stable identity, resumes work on the same cluster.
-	resumed := New(k8sClient, types.NamespacedName{Namespace: ns, Name: clusterName}, time.Minute)
+	resumed := New(k8sClient, lock.key, time.Minute)
 	if err := resumed.Acquire(ctx, "ichor-controller"); err != nil {
 		t.Fatalf("resuming Acquire with the same identity: %v", err)
 	}
@@ -259,9 +250,7 @@ func TestAcquire_SameHolderResumesAfterRestart(t *testing.T) {
 }
 
 func TestAcquire_RaceProducesExactlyOneWinner(t *testing.T) {
-	ns := newTestNamespace(t)
-	ctx := context.Background()
-	lock := New(k8sClient, types.NamespacedName{Namespace: ns, Name: clusterName}, time.Minute)
+	ctx, lock := newTestLock(t, time.Minute)
 
 	const racers = 20
 	var wins atomic.Int32

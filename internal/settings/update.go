@@ -3,6 +3,7 @@ package settings
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -22,11 +23,19 @@ type Changes struct {
 	DriftPolicy *string
 	// UpdateCheck turns the check for newer releases on or off.
 	UpdateCheck *bool
+	// The automatic patch settings; a nil field stays as it is. An empty, non-nil
+	// AutoPatchComponents means all three components.
+	AutoPatchEnabled    *bool
+	AutoPatchComponents []string
+	AutoPatchWindow     *string
+	// AutoPatchAcknowledge clears a halt: the halted operation's namespace/name.
+	AutoPatchAcknowledge *string
 }
 
 // Empty reports that nothing is to change.
 func (c Changes) Empty() bool {
-	return c.TokenTTL == nil && c.RefreshLifetime == nil && c.DriftPolicy == nil && c.UpdateCheck == nil
+	return c.TokenTTL == nil && c.RefreshLifetime == nil && c.DriftPolicy == nil && c.UpdateCheck == nil &&
+		c.AutoPatchEnabled == nil && c.AutoPatchComponents == nil && c.AutoPatchWindow == nil && c.AutoPatchAcknowledge == nil
 }
 
 // Validate checks the bounds the CRD enforces, so the caller gets the message before the API server's.
@@ -43,6 +52,18 @@ func (c Changes) Validate() error {
 
 	if d := c.DriftPolicy; d != nil && *d != DriftWarnOnly && *d != DriftAutoCorrect {
 		errs = append(errs, fmt.Errorf("defaults.driftPolicy must be warnOnly or autoCorrect, not %q", *d))
+	}
+
+	for _, comp := range c.AutoPatchComponents {
+		if !slices.Contains(AllAutoPatchComponents, comp) {
+			errs = append(errs, fmt.Errorf("autoPatch.components: %q is not one of %s", comp, strings.Join(AllAutoPatchComponents, ", ")))
+		}
+	}
+
+	if w := c.AutoPatchWindow; w != nil && *w != "" {
+		if _, _, err := ParseWindow(*w); err != nil {
+			errs = append(errs, fmt.Errorf("autoPatch.window: %w", err))
+		}
 	}
 
 	return errors.Join(errs...)
@@ -73,6 +94,28 @@ func (c Changes) Apply(inst *ichorv1alpha1.IchorInstallation) {
 	if c.UpdateCheck != nil {
 		s.UpdateCheck = &ichorv1alpha1.IchorUpdateCheckSettings{Enabled: c.UpdateCheck}
 	}
+
+	if c.AutoPatchEnabled != nil || c.AutoPatchComponents != nil || c.AutoPatchWindow != nil || c.AutoPatchAcknowledge != nil {
+		if s.AutoPatch == nil {
+			s.AutoPatch = &ichorv1alpha1.IchorAutoPatchSettings{}
+		}
+
+		if c.AutoPatchEnabled != nil {
+			s.AutoPatch.Enabled = c.AutoPatchEnabled
+		}
+
+		if c.AutoPatchComponents != nil {
+			s.AutoPatch.Components = c.AutoPatchComponents
+		}
+
+		if c.AutoPatchWindow != nil {
+			s.AutoPatch.Window = *c.AutoPatchWindow
+		}
+
+		if c.AutoPatchAcknowledge != nil {
+			s.AutoPatch.AcknowledgedHalt = *c.AutoPatchAcknowledge
+		}
+	}
 }
 
 // Keys of ParseAssignments, as `ichor settings set` spells them.
@@ -83,6 +126,13 @@ const (
 	KeyRefreshLifetime = "users.refreshLifetime"
 	KeyDriftPolicy     = "defaults.driftPolicy"
 	KeyUpdateCheck     = "updateCheck.enabled"
+	// The automatic patch keys. autoPatch.components is a comma-separated list (empty: all);
+	// autoPatch.window is "HH:MM-HH:MM" UTC (empty: any time); autoPatch.acknowledgeHalt is the halted
+	// operation's namespace/name.
+	KeyAutoPatchEnabled    = "autoPatch.enabled"
+	KeyAutoPatchComponents = "autoPatch.components"
+	KeyAutoPatchWindow     = "autoPatch.window"
+	KeyAutoPatchAckHalt    = "autoPatch.acknowledgeHalt"
 )
 
 // ParseAssignments turns KEY=VALUE arguments into Changes.
@@ -118,8 +168,27 @@ func ParseAssignments(args []string) (Changes, error) {
 			if b, err = strconv.ParseBool(v); err == nil {
 				c.UpdateCheck = &b
 			}
+		case KeyAutoPatchEnabled:
+			var b bool
+
+			if b, err = strconv.ParseBool(v); err == nil {
+				c.AutoPatchEnabled = &b
+			}
+		case KeyAutoPatchComponents:
+			c.AutoPatchComponents = []string{}
+
+			for _, comp := range strings.Split(v, ",") {
+				if comp = strings.TrimSpace(comp); comp != "" {
+					c.AutoPatchComponents = append(c.AutoPatchComponents, comp)
+				}
+			}
+		case KeyAutoPatchWindow:
+			c.AutoPatchWindow = &v
+		case KeyAutoPatchAckHalt:
+			c.AutoPatchAcknowledge = &v
 		default:
-			return c, fmt.Errorf("unknown setting %q (known: %s, %s, %s, %s)", k, KeyTokenTTL, KeyRefreshLifetime, KeyDriftPolicy, KeyUpdateCheck)
+			return c, fmt.Errorf("unknown setting %q (known: %s, %s, %s, %s, %s, %s, %s, %s)", k, KeyTokenTTL, KeyRefreshLifetime, KeyDriftPolicy, KeyUpdateCheck,
+				KeyAutoPatchEnabled, KeyAutoPatchComponents, KeyAutoPatchWindow, KeyAutoPatchAckHalt)
 		}
 
 		if err != nil {
@@ -135,3 +204,59 @@ const (
 	DriftWarnOnly    = "warnOnly"
 	DriftAutoCorrect = "autoCorrect"
 )
+
+// ParseWindow reads a daily UTC window "HH:MM-HH:MM" as minutes since midnight. The end may be before the
+// start (the window wraps midnight); equal ends are refused as an empty window.
+func ParseWindow(w string) (from, to int, err error) {
+	a, b, ok := strings.Cut(w, "-")
+	if !ok {
+		return 0, 0, fmt.Errorf("%q: want HH:MM-HH:MM", w)
+	}
+
+	from, err = parseClock(a)
+	if err != nil {
+		return 0, 0, fmt.Errorf("%q: %w", w, err)
+	}
+
+	to, err = parseClock(b)
+	if err != nil {
+		return 0, 0, fmt.Errorf("%q: %w", w, err)
+	}
+
+	if from == to {
+		return 0, 0, fmt.Errorf("%q: the window is empty", w)
+	}
+
+	return from, to, nil
+}
+
+func parseClock(s string) (int, error) {
+	t, err := time.Parse("15:04", s)
+	if err != nil || len(s) != 5 {
+		return 0, fmt.Errorf("%q is not HH:MM", s)
+	}
+
+	return t.Hour()*60 + t.Minute(), nil
+}
+
+// InWindow reports whether now (UTC) is inside the window; an empty window is always open. An
+// unparsable window is never open.
+func InWindow(w string, now time.Time) bool {
+	if w == "" {
+		return true
+	}
+
+	from, to, err := ParseWindow(w)
+	if err != nil {
+		return false
+	}
+
+	now = now.UTC()
+	m := now.Hour()*60 + now.Minute()
+
+	if from < to {
+		return m >= from && m < to
+	}
+
+	return m >= from || m < to
+}

@@ -1,0 +1,118 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package uiapi
+
+import (
+	"context"
+	"fmt"
+
+	"connectrpc.com/connect"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/release"
+)
+
+// The reasons a list cannot be given. They are shown as they are.
+const (
+	reasonCheckOff     = "The release check is off: turn on the update check in Settings to list versions."
+	reasonNoListYet    = "No release list yet: the first check has not run."
+	reasonListFailedFm = "The last check could not list the releases: %s"
+)
+
+// ListUpgradeTargets lists the versions a cluster's Talos or Kubernetes can move to, from the lists the
+// controller's release check recorded, filtered against what the cluster runs now. It only
+// reads. A list that cannot be given says why, and the UI still offers a typed version.
+func (s *Server) ListUpgradeTargets(
+	ctx context.Context, req *connect.Request[pb.ListUpgradeTargetsRequest],
+) (*connect.Response[pb.ListUpgradeTargetsResponse], error) {
+	kind := req.Msg.GetKind()
+	if kind != pb.OperationKind_OPERATION_KIND_TALOS && kind != pb.OperationKind_OPERATION_KIND_KUBERNETES {
+		return nil, connect.NewError(connect.CodeInvalidArgument,
+			fmt.Errorf("ListUpgradeTargets lists the talos or kubernetes kind, not %s", kind))
+	}
+
+	cluster, err := s.loadCluster(ctx, namespacedName(req.Msg.GetCluster()))
+	if err != nil {
+		return nil, err
+	}
+
+	var inst ichorv1alpha1.IchorInstallation
+
+	found := true
+
+	switch err := s.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); {
+	case apierrors.IsNotFound(err):
+		found = false
+	case err != nil:
+		return nil, mapGetError("IchorInstallation \""+ichorv1alpha1.IchorInstallationName+"\"", err)
+	}
+
+	lists, reason := upgradeLists(&inst, found)
+	choices := upgradeChoices(kind, cluster, lists)
+
+	return connect.NewResponse(&pb.ListUpgradeTargetsResponse{
+		Recommended:       choices.Recommended,
+		Patch:             choices.Patch,
+		NextMinor:         choices.NextMinor,
+		Default:           choices.Default(),
+		Available:         reason == "",
+		UnavailableReason: reason,
+	}), nil
+}
+
+// upgradeLists is the recorded list the server filters, and why it cannot be used ("" when it can).
+// A list with an error is still returned: its last good value is what the controller kept, and the
+// reason says it may be stale.
+func upgradeLists(inst *ichorv1alpha1.IchorInstallation, found bool) (*ichorv1alpha1.IchorUpgradeTargets, string) {
+	if !found {
+		return nil, reasonNoListYet
+	}
+
+	if e := inst.Status.Effective; e != nil && e.UpdateCheck != nil && e.UpdateCheck.Value == "false" {
+		return nil, reasonCheckOff
+	}
+
+	ut := inst.Status.UpgradeTargets
+	if ut == nil {
+		return nil, reasonNoListYet
+	}
+
+	if ut.Error != "" {
+		return ut, fmt.Sprintf(reasonListFailedFm, ut.Error)
+	}
+
+	return ut, ""
+}
+
+// upgradeChoices groups the recorded releases of kind against the cluster (release.TalosChoices and
+// release.KubernetesChoices). Without a list there is nothing to group.
+func upgradeChoices(kind pb.OperationKind, cluster *ichorv1alpha1.TalosCluster, lists *ichorv1alpha1.IchorUpgradeTargets) release.Choices {
+	if lists == nil {
+		return release.Choices{}
+	}
+
+	if kind == pb.OperationKind_OPERATION_KIND_TALOS {
+		return release.TalosChoices(cluster.Spec.TalosVersion, cluster.Spec.KubernetesVersion, release.Pinned.Talos, lists.Talos)
+	}
+
+	cilium, _ := ciliumVersion(cluster)
+
+	return release.KubernetesChoices(cluster.Spec.KubernetesVersion, cluster.Spec.TalosVersion, cilium, release.Pinned.Kubernetes, lists.Kubernetes)
+}

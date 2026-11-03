@@ -391,8 +391,28 @@ func (s *Server) StartCniUpgrade(
 		return nil, err
 	}
 
-	if v.cluster.Status.CNI == nil || v.cluster.Status.CNI.AvailableChartVersion == "" {
-		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no Cilium upgrade is available: status.cni.availableChartVersion is empty"))
+	// A patch is the one the server offers as a cni patch: its images
+	// verified and it is newer than the chart this Ichor embeds. The release moves to the embedded chart
+	// with the patch's images; the controller checks the signatures before the Job runs them.
+	version := req.Msg.GetVersion()
+	if version == "" {
+		if v.cluster.Status.CNI == nil || v.cluster.Status.CNI.AvailableChartVersion == "" {
+			return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no Cilium upgrade is available: status.cni.availableChartVersion is empty"))
+		}
+	} else {
+		choices, reason, err := s.ciliumPatchChoices(ctx, v.cluster)
+		if err != nil {
+			return nil, err
+		}
+
+		if !slices.Contains(append(slices.Clone(choices.Recommended), choices.Patch...), version) {
+			why := "it is not a verified newer patch of the running Cilium minor"
+			if reason != "" {
+				why = reason
+			}
+
+			return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("Cilium %s is not offered: %s", version, why))
+		}
 	}
 
 	if errs := flattenErrors(cilium.ValidateValues(v.user, s.validationContext(ctx, v))); len(errs) > 0 {
@@ -407,13 +427,19 @@ func (s *Server) StartCniUpgrade(
 	}
 
 	cluster := v.cluster
-	to := cluster.Status.CNI.AvailableChartVersion
+	to := version
+	if to == "" {
+		to = cluster.Status.CNI.AvailableChartVersion
+	}
+
 	op := &ichorv1alpha1.TalosOperation{
 		GenerateName: ichorv1alpha1.TalosOperationKindCNI + "-", Namespace: cluster.Namespace, Annotations: s.startedByAnnotation(ctx),
 		Spec: ichorv1alpha1.TalosOperationSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
 			Kind:       ichorv1alpha1.TalosOperationKindCNI,
-			CNI:        &ichorv1alpha1.TalosOperationCNISpec{Action: ichorv1alpha1.TalosOperationCNIActionUpgrade, ChartVersion: to},
+			CNI: &ichorv1alpha1.TalosOperationCNISpec{
+				Action: ichorv1alpha1.TalosOperationCNIActionUpgrade, ChartVersion: cilium.ChartVersion, ImageVersion: version,
+			},
 		},
 	}
 

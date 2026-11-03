@@ -114,6 +114,7 @@ rules:
   - cilium-operator-gateway-secrets
   - cilium-operator-ingress-secrets
   - cilium-operator-tlsinterception-secrets
+  - cilium-operator-ztunnel
   - cilium-tlsinterception-secrets
   - clustermesh-apiserver
   - clustermesh-apiserver-generate-certs

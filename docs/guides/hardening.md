@@ -203,8 +203,8 @@ for this. The path, one node at a time: set the option and the annotation, then
 reset a worker, wait for it to rejoin and come up encrypted, then do each
 control plane in turn, leaving etcd quorum intact. Back up etcd first. "Reset
 and add" is for machines of another cluster and refuses one already
-in Ichor; for your own node use `ichor node reset NODE --override REASON --confirm NODE`
-(NODE is the machine's name or its hostname; `--confirm` takes the same name),
+in Ichor; for your own node use `ichor node reset NODE --override --confirm NODE`
+(add `--override-reason "REASON"` to record why; NODE is the machine's name or its hostname; `--confirm` takes the same name),
 and approve the pending machine again once it is rediscovered. Pods that no
 controller manages (bare pods) block the drain: the machine's `Removal`
 condition says `DrainFailed` and names the pod, a Warning Event repeats it,

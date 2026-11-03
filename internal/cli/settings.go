@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"text/tabwriter"
 
 	"connectrpc.com/connect"
@@ -33,7 +34,7 @@ import (
 // ones the UI's Settings page edits. Both go through SettingsService, so RBAC and the bounds are judged in one place.
 var settingsCmd = &cobra.Command{
 	Use:   "settings",
-	Short: "Show and change Ichor's runtime settings (sign-in lifetimes, default drift policy)",
+	Short: "Show and change Ichor's runtime settings (sign-in lifetimes, default drift policy, update check, automatic patching)",
 }
 
 var settingsGetCmd = &cobra.Command{
@@ -57,12 +58,17 @@ sets it, "deployment" when the flag or chart value applies. The default is a tab
 
 var settingsSetCmd = &cobra.Command{
 	Use:   "set KEY=VALUE...",
-	Short: "Change settings: " + settings.KeyTokenTTL + ", " + settings.KeyRefreshLifetime + ", " + settings.KeyDriftPolicy,
+	Short: "Change settings (see --help for the keys)",
 	Long: `Change one or more settings; only the keys you name are written.
 
   ` + settings.KeyTokenTTL + `=15m           token lifetime, 1m to 1h
   ` + settings.KeyRefreshLifetime + `=168h  refresh lifetime, 1h to 720h
   ` + settings.KeyDriftPolicy + `=warnOnly|autoCorrect   default for a new TalosCluster
+  ` + settings.KeyUpdateCheck + `=true|false    look for newer releases
+  ` + settings.KeyAutoPatchEnabled + `=true|false    apply patch releases of the running minor by itself
+  ` + settings.KeyAutoPatchComponents + `=talos,cilium,kubernetes   which components (empty: all)
+  ` + settings.KeyAutoPatchWindow + `=02:00-05:00   daily UTC window an automatic upgrade may start in (empty: any time)
+  ` + settings.KeyAutoPatchAckHalt + `=NAMESPACE/NAME   resume after an automatic operation halted auto-patching
 
 reclaim.enabled is removed: who may reset and add a machine is decided by RBAC alone.`,
 	Args: cobra.MinimumNArgs(1),
@@ -96,7 +102,16 @@ func settingsUpdateRequest(args []string) (*pb.UpdateSettingsRequest, error) {
 		return nil, err
 	}
 
-	f := &pb.SettingsFields{DriftPolicy: c.DriftPolicy}
+	f := &pb.SettingsFields{
+		DriftPolicy: c.DriftPolicy, UpdateCheckEnabled: c.UpdateCheck, AutoPatchEnabled: c.AutoPatchEnabled,
+		AutoPatchWindow: c.AutoPatchWindow, AutoPatchAcknowledgedHalt: c.AutoPatchAcknowledge,
+	}
+
+	if c.AutoPatchComponents != nil {
+		v := strings.Join(c.AutoPatchComponents, ",")
+		f.AutoPatchComponents = &v
+	}
+
 	if c.TokenTTL != nil {
 		v := c.TokenTTL.String()
 		f.TokenTtl = &v
@@ -151,10 +166,22 @@ func settingRows(r *pb.GetSettingsResponse) []settingRow {
 		pick(eff.GetTokenTtl(), str(spec.TokenTtl)),
 		pick(eff.GetRefreshLifetime(), str(spec.RefreshLifetime)),
 		pick(eff.GetDriftPolicy(), str(spec.DriftPolicy)),
+		pick(eff.GetUpdateCheck(), ""),
+		pick(eff.GetAutoPatch(), ""),
+		pick(eff.GetAutoPatchComponents(), str(spec.AutoPatchComponents)),
+		pick(eff.GetAutoPatchWindow(), str(spec.AutoPatchWindow)),
 	}
 
-	for i, k := range []string{settings.KeyTokenTTL, settings.KeyRefreshLifetime, settings.KeyDriftPolicy} {
+	keys := []string{
+		settings.KeyTokenTTL, settings.KeyRefreshLifetime, settings.KeyDriftPolicy, settings.KeyUpdateCheck,
+		settings.KeyAutoPatchEnabled, settings.KeyAutoPatchComponents, settings.KeyAutoPatchWindow,
+	}
+	for i, k := range keys {
 		rows[i+3].key = k
+	}
+
+	if h := r.GetAutoPatchHaltedOperation(); h != "" {
+		rows = append(rows, settingRow{"autoPatch.halted", h, sourceStatus})
 	}
 
 	return rows

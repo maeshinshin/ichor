@@ -15,7 +15,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file ichor/v1alpha1/settings.proto.
  */
 export const file_ichor_v1alpha1_settings: GenFile = /*@__PURE__*/
-  fileDesc("Ch1pY2hvci92MWFscGhhMS9zZXR0aW5ncy5wcm90bxIOaWNob3IudjFhbHBoYTEiLQoMU2V0dGluZ1ZhbHVlEg0KBXZhbHVlGAEgASgJEg4KBnNvdXJjZRgCIAEoCSKEAgoOU2V0dGluZ3NGaWVsZHMSHAoPcmVjbGFpbV9lbmFibGVkGAEgASgISACIAQESFgoJdG9rZW5fdHRsGAIgASgJSAGIAQESHQoQcmVmcmVzaF9saWZldGltZRgDIAEoCUgCiAEBEhkKDGRyaWZ0X3BvbGljeRgEIAEoCUgDiAEBEiEKFHVwZGF0ZV9jaGVja19lbmFibGVkGAUgASgISASIAQFCEgoQX3JlY2xhaW1fZW5hYmxlZEIMCgpfdG9rZW5fdHRsQhMKEV9yZWZyZXNoX2xpZmV0aW1lQg8KDV9kcmlmdF9wb2xpY3lCFwoVX3VwZGF0ZV9jaGVja19lbmFibGVkIpsCChFTZXR0aW5nc0VmZmVjdGl2ZRI1Cg9yZWNsYWltX2VuYWJsZWQYASABKAsyHC5pY2hvci52MWFscGhhMS5TZXR0aW5nVmFsdWUSLwoJdG9rZW5fdHRsGAIgASgLMhwuaWNob3IudjFhbHBoYTEuU2V0dGluZ1ZhbHVlEjYKEHJlZnJlc2hfbGlmZXRpbWUYAyABKAsyHC5pY2hvci52MWFscGhhMS5TZXR0aW5nVmFsdWUSMgoMZHJpZnRfcG9saWN5GAQgASgLMhwuaWNob3IudjFhbHBoYTEuU2V0dGluZ1ZhbHVlEjIKDHVwZGF0ZV9jaGVjaxgFIAEoCzIcLmljaG9yLnYxYWxwaGExLlNldHRpbmdWYWx1ZSIUChJHZXRTZXR0aW5nc1JlcXVlc3QitwIKE0dldFNldHRpbmdzUmVzcG9uc2USDwoHdmVyc2lvbhgBIAEoCRIZChFpbnN0YWxsZWRfdmVyc2lvbhgCIAEoCRIPCgdtYW5hZ2VyGAMgASgJEhEKCXJlYWRfb25seRgEIAEoCBIsCgRzcGVjGAUgASgLMh4uaWNob3IudjFhbHBoYTEuU2V0dGluZ3NGaWVsZHMSNAoJZWZmZWN0aXZlGAYgASgLMiEuaWNob3IudjFhbHBoYTEuU2V0dGluZ3NFZmZlY3RpdmUSNwoMdWlfZWZmZWN0aXZlGAcgASgLMiEuaWNob3IudjFhbHBoYTEuU2V0dGluZ3NFZmZlY3RpdmUSGAoQY2FuX2VkaXRfcmVjbGFpbRgIIAEoCBIZChFjYW5fZWRpdF9zZXR0aW5ncxgJIAEoCCJhChVVcGRhdGVTZXR0aW5nc1JlcXVlc3QSLwoHY2hhbmdlcxgBIAEoCzIeLmljaG9yLnYxYWxwaGExLlNldHRpbmdzRmllbGRzEhcKD2NvbmZpcm1fcmVjbGFpbRgCIAEoCCJPChZVcGRhdGVTZXR0aW5nc1Jlc3BvbnNlEjUKCHNldHRpbmdzGAEgASgLMiMuaWNob3IudjFhbHBoYTEuR2V0U2V0dGluZ3NSZXNwb25zZTLKAQoPU2V0dGluZ3NTZXJ2aWNlElYKC0dldFNldHRpbmdzEiIuaWNob3IudjFhbHBoYTEuR2V0U2V0dGluZ3NSZXF1ZXN0GiMuaWNob3IudjFhbHBoYTEuR2V0U2V0dGluZ3NSZXNwb25zZRJfCg5VcGRhdGVTZXR0aW5ncxIlLmljaG9yLnYxYWxwaGExLlVwZGF0ZVNldHRpbmdzUmVxdWVzdBomLmljaG9yLnYxYWxwaGExLlVwZGF0ZVNldHRpbmdzUmVzcG9uc2VCvgEKEmNvbS5pY2hvci52MWFscGhhMUINU2V0dGluZ3NQcm90b1ABWkBnaXRodWIuY29tL21hZXNoaW5zaGluL2ljaG9yL2dlbi9nby9pY2hvci92MWFscGhhMTtpY2hvcnYxYWxwaGExogIDSVhYqgIOSWNob3IuVjFhbHBoYTHKAg5JY2hvclxWMWFscGhhMeICGkljaG9yXFYxYWxwaGExXEdQQk1ldGFkYXRh6gIPSWNob3I6OlYxYWxwaGExYgZwcm90bzM");
+  fileDesc("Ch1pY2hvci92MWFscGhhMS9zZXR0aW5ncy5wcm90bxIOaWNob3IudjFhbHBoYTEiLQoMU2V0dGluZ1ZhbHVlEg0KBXZhbHVlGAEgASgJEg4KBnNvdXJjZRgCIAEoCSL8AwoOU2V0dGluZ3NGaWVsZHMSHAoPcmVjbGFpbV9lbmFibGVkGAEgASgISACIAQESFgoJdG9rZW5fdHRsGAIgASgJSAGIAQESHQoQcmVmcmVzaF9saWZldGltZRgDIAEoCUgCiAEBEhkKDGRyaWZ0X3BvbGljeRgEIAEoCUgDiAEBEiEKFHVwZGF0ZV9jaGVja19lbmFibGVkGAUgASgISASIAQESHwoSYXV0b19wYXRjaF9lbmFibGVkGAYgASgISAWIAQESIgoVYXV0b19wYXRjaF9jb21wb25lbnRzGAcgASgJSAaIAQESHgoRYXV0b19wYXRjaF93aW5kb3cYCCABKAlIB4gBARIpChxhdXRvX3BhdGNoX2Fja25vd2xlZGdlZF9oYWx0GAkgASgJSAiIAQFCEgoQX3JlY2xhaW1fZW5hYmxlZEIMCgpfdG9rZW5fdHRsQhMKEV9yZWZyZXNoX2xpZmV0aW1lQg8KDV9kcmlmdF9wb2xpY3lCFwoVX3VwZGF0ZV9jaGVja19lbmFibGVkQhUKE19hdXRvX3BhdGNoX2VuYWJsZWRCGAoWX2F1dG9fcGF0Y2hfY29tcG9uZW50c0IUChJfYXV0b19wYXRjaF93aW5kb3dCHwodX2F1dG9fcGF0Y2hfYWNrbm93bGVkZ2VkX2hhbHQiwwMKEVNldHRpbmdzRWZmZWN0aXZlEjUKD3JlY2xhaW1fZW5hYmxlZBgBIAEoCzIcLmljaG9yLnYxYWxwaGExLlNldHRpbmdWYWx1ZRIvCgl0b2tlbl90dGwYAiABKAsyHC5pY2hvci52MWFscGhhMS5TZXR0aW5nVmFsdWUSNgoQcmVmcmVzaF9saWZldGltZRgDIAEoCzIcLmljaG9yLnYxYWxwaGExLlNldHRpbmdWYWx1ZRIyCgxkcmlmdF9wb2xpY3kYBCABKAsyHC5pY2hvci52MWFscGhhMS5TZXR0aW5nVmFsdWUSMgoMdXBkYXRlX2NoZWNrGAUgASgLMhwuaWNob3IudjFhbHBoYTEuU2V0dGluZ1ZhbHVlEjAKCmF1dG9fcGF0Y2gYBiABKAsyHC5pY2hvci52MWFscGhhMS5TZXR0aW5nVmFsdWUSOwoVYXV0b19wYXRjaF9jb21wb25lbnRzGAcgASgLMhwuaWNob3IudjFhbHBoYTEuU2V0dGluZ1ZhbHVlEjcKEWF1dG9fcGF0Y2hfd2luZG93GAggASgLMhwuaWNob3IudjFhbHBoYTEuU2V0dGluZ1ZhbHVlIhQKEkdldFNldHRpbmdzUmVxdWVzdCLcAgoTR2V0U2V0dGluZ3NSZXNwb25zZRIPCgd2ZXJzaW9uGAEgASgJEhkKEWluc3RhbGxlZF92ZXJzaW9uGAIgASgJEg8KB21hbmFnZXIYAyABKAkSEQoJcmVhZF9vbmx5GAQgASgIEiwKBHNwZWMYBSABKAsyHi5pY2hvci52MWFscGhhMS5TZXR0aW5nc0ZpZWxkcxI0CgllZmZlY3RpdmUYBiABKAsyIS5pY2hvci52MWFscGhhMS5TZXR0aW5nc0VmZmVjdGl2ZRI3Cgx1aV9lZmZlY3RpdmUYByABKAsyIS5pY2hvci52MWFscGhhMS5TZXR0aW5nc0VmZmVjdGl2ZRIYChBjYW5fZWRpdF9yZWNsYWltGAggASgIEhkKEWNhbl9lZGl0X3NldHRpbmdzGAkgASgIEiMKG2F1dG9fcGF0Y2hfaGFsdGVkX29wZXJhdGlvbhgKIAEoCSJhChVVcGRhdGVTZXR0aW5nc1JlcXVlc3QSLwoHY2hhbmdlcxgBIAEoCzIeLmljaG9yLnYxYWxwaGExLlNldHRpbmdzRmllbGRzEhcKD2NvbmZpcm1fcmVjbGFpbRgCIAEoCCJPChZVcGRhdGVTZXR0aW5nc1Jlc3BvbnNlEjUKCHNldHRpbmdzGAEgASgLMiMuaWNob3IudjFhbHBoYTEuR2V0U2V0dGluZ3NSZXNwb25zZTLKAQoPU2V0dGluZ3NTZXJ2aWNlElYKC0dldFNldHRpbmdzEiIuaWNob3IudjFhbHBoYTEuR2V0U2V0dGluZ3NSZXF1ZXN0GiMuaWNob3IudjFhbHBoYTEuR2V0U2V0dGluZ3NSZXNwb25zZRJfCg5VcGRhdGVTZXR0aW5ncxIlLmljaG9yLnYxYWxwaGExLlVwZGF0ZVNldHRpbmdzUmVxdWVzdBomLmljaG9yLnYxYWxwaGExLlVwZGF0ZVNldHRpbmdzUmVzcG9uc2VCvgEKEmNvbS5pY2hvci52MWFscGhhMUINU2V0dGluZ3NQcm90b1ABWkBnaXRodWIuY29tL21hZXNoaW5zaGluL2ljaG9yL2dlbi9nby9pY2hvci92MWFscGhhMTtpY2hvcnYxYWxwaGExogIDSVhYqgIOSWNob3IuVjFhbHBoYTHKAg5JY2hvclxWMWFscGhhMeICGkljaG9yXFYxYWxwaGExXEdQQk1ldGFkYXRh6gIPSWNob3I6OlYxYWxwaGExYgZwcm90bzM");
 
 /**
  * SettingValue is one setting in force. source is "spec" or "deployment".
@@ -79,6 +79,35 @@ export type SettingsFields = Message<"ichor.v1alpha1.SettingsFields"> & {
    * @generated from field: optional bool update_check_enabled = 5;
    */
   updateCheckEnabled?: boolean | undefined;
+
+  /**
+   * auto_patch_enabled turns automatic patch upgrades on or off.
+   *
+   * @generated from field: optional bool auto_patch_enabled = 6;
+   */
+  autoPatchEnabled?: boolean | undefined;
+
+  /**
+   * auto_patch_components is a comma-separated subset of talos, kubernetes, cilium; empty means all three.
+   *
+   * @generated from field: optional string auto_patch_components = 7;
+   */
+  autoPatchComponents?: string | undefined;
+
+  /**
+   * auto_patch_window is a daily UTC window "HH:MM-HH:MM"; empty means any time.
+   *
+   * @generated from field: optional string auto_patch_window = 8;
+   */
+  autoPatchWindow?: string | undefined;
+
+  /**
+   * auto_patch_acknowledged_halt clears a halt: the halted operation's namespace/name, as
+   * auto_patch_halted_operation shows it.
+   *
+   * @generated from field: optional string auto_patch_acknowledged_halt = 9;
+   */
+  autoPatchAcknowledgedHalt?: string | undefined;
 };
 
 /**
@@ -122,6 +151,24 @@ export type SettingsEffective = Message<"ichor.v1alpha1.SettingsEffective"> & {
    * @generated from field: ichor.v1alpha1.SettingValue update_check = 5;
    */
   updateCheck?: SettingValue | undefined;
+
+  /**
+   * auto_patch is "true" or "false"; auto_patch_components the comma-separated list; auto_patch_window
+   * the daily UTC window, empty for any time.
+   *
+   * @generated from field: ichor.v1alpha1.SettingValue auto_patch = 6;
+   */
+  autoPatch?: SettingValue | undefined;
+
+  /**
+   * @generated from field: ichor.v1alpha1.SettingValue auto_patch_components = 7;
+   */
+  autoPatchComponents?: SettingValue | undefined;
+
+  /**
+   * @generated from field: ichor.v1alpha1.SettingValue auto_patch_window = 8;
+   */
+  autoPatchWindow?: SettingValue | undefined;
 };
 
 /**
@@ -208,6 +255,14 @@ export type GetSettingsResponse = Message<"ichor.v1alpha1.GetSettingsResponse"> 
    * @generated from field: bool can_edit_settings = 9;
    */
   canEditSettings: boolean;
+
+  /**
+   * auto_patch_halted_operation is the automatic operation (namespace/name) that stopped automatic patching,
+   * empty when it is not halted.
+   *
+   * @generated from field: string auto_patch_halted_operation = 10;
+   */
+  autoPatchHaltedOperation: string;
 };
 
 /**

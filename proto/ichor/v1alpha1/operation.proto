@@ -84,6 +84,11 @@ message GetIchorInstallationResponse {
   string release_check_error = 8;
   // release_checked_at is when the last check finished.
   google.protobuf.Timestamp release_checked_at = 9;
+  // auto_patch_enabled is true when automatic patch upgrades are on.
+  bool auto_patch_enabled = 10;
+  // auto_patch_halted_operation is the automatic operation (namespace/name) that stopped automatic
+  // patching; empty when it is not halted.
+  string auto_patch_halted_operation = 11;
 }
 
 message ListEtcdBackupsRequest {

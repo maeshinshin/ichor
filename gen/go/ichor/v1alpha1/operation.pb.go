@@ -299,8 +299,13 @@ type GetIchorInstallationResponse struct {
 	ReleaseCheckError string `protobuf:"bytes,8,opt,name=release_check_error,json=releaseCheckError,proto3" json:"release_check_error,omitempty"`
 	// release_checked_at is when the last check finished.
 	ReleaseCheckedAt *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=release_checked_at,json=releaseCheckedAt,proto3" json:"release_checked_at,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// auto_patch_enabled is true when automatic patch upgrades are on.
+	AutoPatchEnabled bool `protobuf:"varint,10,opt,name=auto_patch_enabled,json=autoPatchEnabled,proto3" json:"auto_patch_enabled,omitempty"`
+	// auto_patch_halted_operation is the automatic operation (namespace/name) that stopped automatic
+	// patching; empty when it is not halted.
+	AutoPatchHaltedOperation string `protobuf:"bytes,11,opt,name=auto_patch_halted_operation,json=autoPatchHaltedOperation,proto3" json:"auto_patch_halted_operation,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *GetIchorInstallationResponse) Reset() {
@@ -395,6 +400,20 @@ func (x *GetIchorInstallationResponse) GetReleaseCheckedAt() *timestamppb.Timest
 		return x.ReleaseCheckedAt
 	}
 	return nil
+}
+
+func (x *GetIchorInstallationResponse) GetAutoPatchEnabled() bool {
+	if x != nil {
+		return x.AutoPatchEnabled
+	}
+	return false
+}
+
+func (x *GetIchorInstallationResponse) GetAutoPatchHaltedOperation() string {
+	if x != nil {
+		return x.AutoPatchHaltedOperation
+	}
+	return ""
 }
 
 type ListEtcdBackupsRequest struct {
@@ -3182,7 +3201,7 @@ var File_ichor_v1alpha1_operation_proto protoreflect.FileDescriptor
 const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\n" +
 	"\x1eichor/v1alpha1/operation.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\x1a\x1cichor/v1alpha1/cluster.proto\"\x1d\n" +
-	"\x1bGetIchorInstallationRequest\"\xb6\x03\n" +
+	"\x1bGetIchorInstallationRequest\"\xa3\x04\n" +
 	"\x1cGetIchorInstallationResponse\x12+\n" +
 	"\x11installed_version\x18\x01 \x01(\tR\x10installedVersion\x12%\n" +
 	"\x0etarget_version\x18\x02 \x01(\tR\rtargetVersion\x12+\n" +
@@ -3192,7 +3211,10 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x0elatest_version\x18\x06 \x01(\tR\rlatestVersion\x12+\n" +
 	"\x11release_available\x18\a \x01(\bR\x10releaseAvailable\x12.\n" +
 	"\x13release_check_error\x18\b \x01(\tR\x11releaseCheckError\x12H\n" +
-	"\x12release_checked_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\x10releaseCheckedAt\"M\n" +
+	"\x12release_checked_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\x10releaseCheckedAt\x12,\n" +
+	"\x12auto_patch_enabled\x18\n" +
+	" \x01(\bR\x10autoPatchEnabled\x12=\n" +
+	"\x1bauto_patch_halted_operation\x18\v \x01(\tR\x18autoPatchHaltedOperation\"M\n" +
 	"\x16ListEtcdBackupsRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"f\n" +
 	"\fEtcdSnapshot\x12\x12\n" +

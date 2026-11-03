@@ -44,7 +44,7 @@ spec:
       tolerations: [{operator: Exists}]
       containers:
       - name: wipe
-        image: quay.io/cilium/cilium:v1.18.0
+        image: quay.io/cilium/cilium:v1.19.10
         securityContext: {privileged: true}
         command: ["sh", "-c", "while true; do rm -f /host/*; sleep 2; done"]
         volumeMounts: [{name: cni, mountPath: /host}]

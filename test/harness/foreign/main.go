@@ -39,7 +39,8 @@ func main() {
 	var keepRegistry bool
 	fs.StringVar(&o.Prefix, "prefix", foreign.PrefixRoot, "object name prefix (must start with "+foreign.PrefixRoot+")")
 	fs.StringVar(&o.TalosVersion, "talos", "", "Talos version, e.g. v1.14.3 (default: the cached ISO's)")
-	fs.StringVar(&o.K8sVersion, "k8s", "", "Kubernetes version (default: v1.36.5, one patch below the release set)")
+	fs.StringVar(&o.K8sVersion, "k8s", "",
+		"Kubernetes version (default: v1.34.12, supported by Cilium 1.19 and Talos v1.14.5; the upgrade cases use v1.35.10)")
 	fs.IntVar(&o.ControlPlanes, "cps", 1, "control planes (1..3)")
 	fs.IntVar(&o.Workers, "workers", 1, "workers (0..4)")
 	fs.StringVar(&o.CNI, "cni", foreign.CNIFlannel, "talos-flannel|none|cilium-inline|cilium-helm|cilium-cli|calico")
@@ -51,7 +52,8 @@ func main() {
 	fs.StringVar(&o.WorkerMemory, "worker-memory", "", "worker memory (default 1536Mi)")
 	fs.BoolVar(&o.RegistryMirror, "registry-mirror", false, "create <prefix>-registry and mirror ghcr.io to it")
 	fs.StringVar(&o.RelayPort, "relay-port", "5015", "local port of the API tunnel")
-	fs.StringVar(&o.CiliumChart, "cilium-chart", "pkg/cni/cilium/chart/cilium-1.18.0.tgz", "cilium chart archive")
+	fs.StringVar(&o.CiliumChart, "cilium-chart", foreign.CiliumChartPath,
+		"cilium chart archive (make foreign-cilium-chart fetches it)")
 	var sets string
 	fs.StringVar(&sets, "cilium-set", "",
 		"comma-separated extra --set values for the cilium-* variants, e.g. operator.replicas=1")

@@ -54,6 +54,9 @@ const (
 	ns      = "ichor-e2e"
 	crNS    = "ichor-system"
 	prefixE = "ICHOR_E2E_F_PREFIX"
+	// foreignK8sUpgradeStart is where the cases that upgrade Kubernetes to the release set (v1.36.6) start: one
+	// minor below it, in the Cilium 1.19 and Talos v1.14.5 range (the foreign default is v1.34.12).
+	foreignK8sUpgradeStart = "v1.35.10"
 )
 
 // repoPath resolves a repository-relative path (the harness helpers run from the repo root).
@@ -86,7 +89,7 @@ func build(t *testing.T, o foreign.Options) *foreign.Cluster {
 	o.TalosVersion = env("ICHOR_E2E_F_TALOS", o.TalosVersion)
 	o.RegistryMirror = true
 	o.RelayPort = env("ICHOR_E2E_F_RELAY_PORT", o.RelayPort)
-	o.CiliumChart = repoPath(t, "pkg/cni/cilium/chart/cilium-1.18.0.tgz")
+	o.CiliumChart = repoPath(t, foreign.CiliumChartPath)
 	if !strings.HasPrefix(o.Prefix, foreign.PrefixRoot) {
 		t.Fatal("bad prefix")
 	}

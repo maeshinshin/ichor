@@ -51,15 +51,22 @@ const (
 
 	namespace = kube.Namespace
 	schematic = "376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba"
-	// cachedVersion is the Talos version whose ISO is already cached as a DataVolume (ADR 0102).
-	cachedVersion = "v1.14.3"
-	// foreignK8sVersion is the Kubernetes a foreign cluster starts on when a test does not say: one patch
-	// below the release set (pkg/release), so the Kubernetes upgrade test has a step to take.
-	foreignK8sVersion = "v1.36.5"
-	maxWorkers        = 4
-	maxCPs            = 3
-	podSubnet         = "10.248.0.0/16"
-	serviceSubnet     = "10.249.0.0/16"
+	// cachedVersion is the Talos version whose ISO is already cached as a DataVolume (ADR 0102): the release set's.
+	cachedVersion = "v1.14.5"
+	// foreignK8sVersion is the Kubernetes a foreign cluster starts on when a test does not say: the latest 1.34
+	// patch minus one. Cilium 1.19 is tested with 1.32 to 1.35 and Talos v1.14.5 supports 1.33 to 1.37 (ADR 0103,
+	// amendment 2026-11-03). A test that upgrades to the release set starts one minor below it (see TestA1Upgrade).
+	foreignK8sVersion = "v1.34.12"
+	// foreignCiliumVersion is the Cilium the foreign clusters start with: one minor below the embedded 1.20.4, so
+	// adopt's takeover of a one-minor-older Cilium (ADR 0113) is what the cases exercise. The chart is
+	// fetched by `make foreign-cilium-chart`.
+	foreignCiliumVersion = "1.19.10"
+	// CiliumChartPath is the chart archive (relative to the repository root) the foreign tests install.
+	CiliumChartPath = "pkg/cni/cilium/chart/cilium-" + foreignCiliumVersion + ".tgz"
+	maxWorkers      = 4
+	maxCPs          = 3
+	podSubnet       = "10.248.0.0/16"
+	serviceSubnet   = "10.249.0.0/16"
 
 	// CNI variants.
 	CNIFlannel      = "talos-flannel"
@@ -699,7 +706,7 @@ func (c *Cluster) installCNI() error {
 		}
 	}
 	if o.CNI == CNICiliumCLI { // the chart version is pinned to the one the helm variant uses; the CLI downloads it and writes the Helm record
-		args := append([]string{ciliumName, "install", "--version", "1.18.0", "--kubeconfig", c.LocalKube, "--wait=false"}, c.ciliumHelmArgs()...)
+		args := append([]string{ciliumName, "install", "--version", foreignCiliumVersion, "--kubeconfig", c.LocalKube, "--wait=false"}, c.ciliumHelmArgs()...)
 		if out, err := runLocal(args...); err != nil {
 			return fmt.Errorf("cilium install: %w: %s", err, tail(out))
 		}

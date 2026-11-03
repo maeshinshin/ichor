@@ -74,7 +74,7 @@ func nothingWritten(t *testing.T, c *foreign.Cluster) {
 // helmSet changes the Cilium release the harness installed (reuse values) and waits for the DaemonSet.
 func helmSet(t *testing.T, c *foreign.Cluster, sets ...string) {
 	t.Helper()
-	args := []string{"upgrade", "cilium", repoPath(t, "pkg/cni/cilium/chart/cilium-1.18.0.tgz"), "--kubeconfig", c.LocalKube,
+	args := []string{"upgrade", "cilium", repoPath(t, foreign.CiliumChartPath), "--kubeconfig", c.LocalKube,
 		"--namespace", "kube-system", "--reuse-values"}
 	for _, s := range sets {
 		args = append(args, "--set", s)

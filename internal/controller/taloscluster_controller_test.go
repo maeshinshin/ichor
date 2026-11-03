@@ -116,7 +116,7 @@ var _ = Describe("TalosClusterReconciler", func() {
 
 		result, err := reconcileCluster(r, cluster)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(result.RequeueAfter).To(Equal(discoveryRequeueInterval))
+		Expect(result.RequeueAfter).To(Equal(discoveryFreshInterval), "nothing answered and the range is new")
 
 		mu.Lock()
 		Expect(dialed).To(HaveLen(4))

@@ -121,7 +121,9 @@ func TalosChoices(running, kubernetesRunning, pinned string, tags []string) Choi
 // Kubernetes release, as nothing is known to be compatible with it. ciliumConstrains is false when
 // the observed CNI is not Cilium: then there is no Cilium to match and the
 // Talos pairing alone decides.
-func KubernetesChoices(running, talosRunning, ciliumRunning, pinned string, ciliumConstrains bool, tags []string) Choices {
+func KubernetesChoices(
+	running, talosRunning, ciliumRunning, pinned string, ciliumConstrains bool, tags []string,
+) Choices {
 	return Choose(running, pinned, tags, func(to string) bool {
 		return upgrade.KubernetesSkew(running, to) == nil &&
 			TalosKubernetesError(talosRunning, to) == nil &&

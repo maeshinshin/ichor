@@ -124,7 +124,7 @@ var _ = Describe("IssuerTrustReconciler", func() {
 		Expect(cert.IPAddresses).To(HaveLen(2))
 		Expect(cert.IPAddresses[0].String()).To(Equal("10.0.0.50"))
 		Expect(cert.IPAddresses[1].String()).To(Equal("127.0.0.1"))
-		Expect(cert.DNSNames).To(ConsistOf("ichor-ui-service", "ichor-ui-service.ichor-oidc-it.svc",
+		Expect(cert.DNSNames).To(ConsistOf("ichor-ui-service", "ichor-ui-service.ichor-oidc-it", "ichor-ui-service.ichor-oidc-it.svc",
 			"ichor-ui-service.ichor-oidc-it.svc.cluster.local", "localhost"))
 
 		var caAgain, leafAgain corev1.Secret

@@ -26,6 +26,13 @@ import (
 	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
+// Versions older than the pinned set, which the tests start from.
+const (
+	olderTalos    = "v1.12.4"
+	olderContract = "v1.13"
+	olderK8s      = "v1.36.0"
+)
+
 // The pinned Kubernetes is the one pkg/machinery defaults to, and it is one the pinned Talos supports.
 func TestPinnedIsConsistentWithMachinery(t *testing.T) {
 	t.Parallel()
@@ -50,13 +57,13 @@ func TestCompare(t *testing.T) {
 		current, pinned string
 		want            State
 	}{
-		{"v1.12.4", "v1.14.3", Behind},
-		{"v1.14.3", "v1.14.3", UpToDate},
-		{"v1.15.0", "v1.14.3", Ahead},
-		{"v1.13", "v1.14", Behind},
-		{"v1.14", "v1.14", UpToDate},
-		{"", "v1.14.3", Unknown},
-		{"1.14.3", "v1.14.3", Unknown},
+		{olderTalos, Pinned.Talos, Behind},
+		{Pinned.Talos, Pinned.Talos, UpToDate},
+		{"v1.15.0", Pinned.Talos, Ahead},
+		{olderContract, Pinned.VersionContract, Behind},
+		{Pinned.VersionContract, Pinned.VersionContract, UpToDate},
+		{"", Pinned.Talos, Unknown},
+		{"1.14.3", Pinned.Talos, Unknown},
 	}
 
 	for _, c := range cases {
@@ -69,19 +76,19 @@ func TestCompare(t *testing.T) {
 func TestCheckCreate(t *testing.T) {
 	t.Parallel()
 
-	if err := CheckCreate("talosVersion", "v1.12.4", "v1.14.3"); err != nil {
+	if err := CheckCreate("talosVersion", olderTalos, Pinned.Talos); err != nil {
 		t.Errorf("older version on create refused: %v", err)
 	}
 
-	if err := CheckCreate("talosVersion", "v1.15.0", "v1.14.3"); err == nil {
+	if err := CheckCreate("talosVersion", "v1.15.0", Pinned.Talos); err == nil {
 		t.Error("newer version on create accepted")
 	}
 
-	if err := CheckCreate("versionContract", "v1.14", "v1.14"); err != nil {
+	if err := CheckCreate("versionContract", Pinned.VersionContract, Pinned.VersionContract); err != nil {
 		t.Errorf("pinned contract refused: %v", err)
 	}
 
-	if err := CheckCreate("versionContract", "1.14", "v1.14"); err == nil {
+	if err := CheckCreate("versionContract", "1.14", Pinned.VersionContract); err == nil {
 		t.Error("contract without a v accepted")
 	}
 }
@@ -89,16 +96,16 @@ func TestCheckCreate(t *testing.T) {
 func TestCheckUpdate(t *testing.T) {
 	t.Parallel()
 
-	const pinned = "v1.14.3"
+	pinned := Pinned.Talos
 
 	cases := []struct {
 		name, old, new string
 		ok             bool
 	}{
-		{"unchanged behind", "v1.12.4", "v1.12.4", true},
-		{"moved to pinned", "v1.12.4", pinned, true},
-		{"moved to other version", "v1.12.4", "v1.13.0", false},
-		{"downgrade to older pinned is impossible", pinned, "v1.12.4", false},
+		{"unchanged behind", olderTalos, olderTalos, true},
+		{"moved to pinned", olderTalos, pinned, true},
+		{"moved to other version", olderTalos, "v1.13.0", false},
+		{"downgrade to older pinned is impossible", pinned, olderTalos, false},
 		{"unchanged pinned", pinned, pinned, true},
 	}
 
@@ -113,11 +120,11 @@ func TestCheckUpdate(t *testing.T) {
 func TestCheckTarget(t *testing.T) {
 	t.Parallel()
 
-	if err := CheckTarget("Talos", "v1.14.3", "v1.14.3"); err != nil {
+	if err := CheckTarget("Talos", Pinned.Talos, Pinned.Talos); err != nil {
 		t.Errorf("pinned target refused: %v", err)
 	}
 
-	if err := CheckTarget("Talos", "v1.13.0", "v1.14.3"); err == nil {
+	if err := CheckTarget("Talos", "v1.13.0", Pinned.Talos); err == nil {
 		t.Error("other target accepted")
 	}
 }
@@ -125,7 +132,7 @@ func TestCheckTarget(t *testing.T) {
 func TestAdoptable(t *testing.T) {
 	t.Parallel()
 
-	behind, err := Adoptable("v1.12.4", "v1.33.0")
+	behind, err := Adoptable(olderTalos, "v1.33.0")
 	if err != nil {
 		t.Fatalf("older cluster refused: %v", err)
 	}
@@ -138,7 +145,7 @@ func TestAdoptable(t *testing.T) {
 		t.Error("cluster newer than the set adopted")
 	}
 
-	if _, err := Adoptable("v1.14.3", "v1.38.0"); err == nil {
+	if _, err := Adoptable(Pinned.Talos, "v1.38.0"); err == nil {
 		t.Error("Kubernetes newer than the set adopted")
 	}
 
@@ -156,7 +163,9 @@ func TestSteps(t *testing.T) {
 		t.Errorf("up-to-date cluster has steps %v", got)
 	}
 
-	all := Running{Talos: "v1.13.0", VersionContract: "v1.13", Kubernetes: "v1.36.0", CiliumBehind: true, ConfigPending: true}
+	all := Running{
+		Talos: "v1.13.0", VersionContract: olderContract, Kubernetes: olderK8s, CiliumBehind: true, ConfigPending: true,
+	}
 
 	want := []Step{StepTalos, StepKubernetes, StepCilium}
 	if got := Steps(all); !slices.Equal(got, want) {
@@ -164,7 +173,9 @@ func TestSteps(t *testing.T) {
 	}
 
 	// Config is applied only once Talos is at the pinned set, and only to unblock Kubernetes.
-	k8sOnly := Running{Talos: Pinned.Talos, VersionContract: Pinned.VersionContract, Kubernetes: "v1.36.0", ConfigPending: true}
+	k8sOnly := Running{
+		Talos: Pinned.Talos, VersionContract: Pinned.VersionContract, Kubernetes: olderK8s, ConfigPending: true,
+	}
 
 	want = []Step{StepConfig, StepKubernetes}
 	if got := Steps(k8sOnly); !slices.Equal(got, want) {
@@ -172,7 +183,7 @@ func TestSteps(t *testing.T) {
 	}
 
 	// A contract bump on its own is a Talos step, not a config step.
-	contractOnly := Running{Talos: Pinned.Talos, VersionContract: "v1.13", Kubernetes: Pinned.Kubernetes}
+	contractOnly := Running{Talos: Pinned.Talos, VersionContract: olderContract, Kubernetes: Pinned.Kubernetes}
 	if got := Steps(contractOnly); !slices.Equal(got, []Step{StepTalos}) {
 		t.Errorf("Steps(contract behind) = %v, want [talos]", got)
 	}

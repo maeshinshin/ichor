@@ -53,8 +53,10 @@ live config and what Ichor would render:
   out. If every machine is blocked nothing is written.
 
 It also prints the Talos version contract it chose (probed from the running
-version down to v1.12), the CNI it found and the kube-proxy setting. Override
-the contract with `--version-contract v1.13`, for example.
+version down to v1.12), the CNI it found and the kube-proxy setting. The cluster
+may run an older Talos or Kubernetes than this Ichor's release set: adopt says it
+is "behind" and `ichor upgrade cluster` rolls it there, one step at a time. A newer cluster is refused. `--version-contract` accepts only the
+release set's contract, and not for a cluster that is behind.
 
 ### Step 2: the secrets bundle
 

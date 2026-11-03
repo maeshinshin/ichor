@@ -90,3 +90,4 @@ mirror pods skipped) unless node registration is skipped, and the upgrading stag
 (`controllers/k8s/node_cordoned_spec.go:73-76`). It does not hold for `Reboot`, which ADR 0080 now drains itself. The
 executor also no longer requires `spec.hostname`: the node name comes from the node's `Nodename` resource when the
 field is unset (ADR 0080, "Observed on hardware").
+- Amendment (ADR 0113): the target of a Talos upgrade is the release set's Talos, and the admission webhook and the operation's planning refuse any other. A Talos step of the cluster rollout also writes the release set's version contract in the same write. The executor is unchanged.

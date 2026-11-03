@@ -43,3 +43,5 @@ Hardware (ADR 0108) saw a machine that had just booted into maintenance at a new
 2. The TalosCluster reconciler remembers, in memory, when it first saw each discovery address and CIDR. While any is younger than 3 minutes and a pass found nothing, it requeues after 15 s instead of 5 min. That bounds the extra probing to about 12 passes per new entry; after a controller restart every entry counts as new once.
 
 Expected latency: the pending TalosMachine appears within about 15 to 30 s of the machine answering on the maintenance port, if that happens within 3 minutes of the add; later, within the 5 minute pass.
+
+Hardware check (2026-11-03, build `v0.0.1893200000-gd0cf510f`, base `d0cf510f`, prefix `ichor-e2e-dl`, 1 control plane, users off, default-deny Cilium policies on): the pending TalosMachine appeared 4 s after `ichor cluster discovery add <ip>` for a machine already in maintenance, and 18 to 34 s after the maintenance API of a machine booted after the add of covering ranges (within the 3 minute window). No Conflict on the egress policy in either case; details in ADR 0108, "Hardware recheck of the 15-node fixes".

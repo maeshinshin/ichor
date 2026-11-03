@@ -35,6 +35,15 @@ func TestParsePodLegTakesTheLastTally(t *testing.T) {
 	}
 }
 
+func TestParsePodLegReadsTheClientScriptLine(t *testing.T) {
+	// The COUNT line as the client script prints it, from a local run against a fake wget (20 failed probes of a dead
+	// IP, then 20 rounds with no Ready address, then a probe of the new Ready IP).
+	got, ok := ParsePodLeg("COUNT 01:23:02 ok=50 fail=0 pok=10 pfail=20 pskip=20 retarget=2\n")
+	if !ok || got != (PodLeg{OK: 10, Fails: 20, Skipped: 20, Retargets: 2}) {
+		t.Fatalf("ParsePodLeg = %+v, %v", got, ok)
+	}
+}
+
 func TestParsePodLegWithoutTally(t *testing.T) {
 	if _, ok := ParsePodLeg("FAIL 10:00:03 http://10.0.0.9:8080: wget: timed out\n"); ok {
 		t.Fatal("ParsePodLeg reported a tally for a log with no COUNT line")

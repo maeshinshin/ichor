@@ -18,6 +18,13 @@ package uiapi
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
 	"os"
 	"strings"
 	"time"
@@ -114,7 +121,7 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 
 		trust := &corev1.ConfigMap{
 			Name: render.OIDCTrustConfigMap, Namespace: testNamespace,
-			Data: map[string]string{render.OIDCTrustKeyDiscoveryURL: "https://ichor-ui.ichor-system.svc:8443", render.OIDCTrustKeyCA: "x"},
+			Data: map[string]string{render.OIDCTrustKeyDiscoveryURL: "https://ichor-ui.ichor-system.svc:8443", render.OIDCTrustKeyCA: testCAPEM()},
 		}
 		Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, trust))).To(Succeed())
 
@@ -248,3 +255,18 @@ var _ = Describe("ichor-ui generated RBAC", func() {
 		// Reclaim (ADR 0103) gives the backend create on Secrets, nothing more: it cannot patch, so the line above holds.
 	})
 })
+
+// testCAPEM is a throwaway self-signed CA: the render validates the PEM it is given.
+func testCAPEM() string {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	Expect(err).NotTo(HaveOccurred())
+
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "test"}, IsCA: true, BasicConstraintsValid: true,
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &key.PublicKey, key)
+	Expect(err).NotTo(HaveOccurred())
+
+	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
+}

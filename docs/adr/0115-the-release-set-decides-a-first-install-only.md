@@ -76,9 +76,9 @@ Compatibility is enforced, and it is not a note. The override verb (ADR 0110) is
 - The operation path (`PlanOperation`, `CreateOperation`) takes the `override` request field (field 7 on both requests; the same request shape node actions and etcd restores use). Without it the refusal stands. With it, the caller must hold the override verb on the cluster (`authorizeOverride`). The plan carries the override as a warning, and `CreateOperation` writes a Warning Event with the reason "Override" on the TalosCluster, with the reason the caller gave.
 - The webhook path passes a refused pair when the caller holds the override verb (the RightCheck), and logs the override.
 - A version that neither machinery nor the table knows is refused on every path, and no override passes it.
-- The CLI's operation start (`ichor upgrade`) does not send the override field; only node actions and restores do. See the open points.
+- The CLI's operation start (`ichor upgrade talos|kubernetes`) sends the override when `--override` and `--override-reason` are given, the same flags node actions and restores take (`overrideOf(apiOpts)` into `startSpec.Override`), on both the plan and the create.
 
-In the UI, the picker offers only compatible versions, so the override is used by the plan refusal path. A refused target shows its reason, with an override checkbox; otherwise the checkbox is disabled with the reason. The UI part is not built on this branch (see "the UI on this branch").
+In the UI, the picker offers only compatible versions, so the override is used by the plan refusal path. A refused target shows its reason, with an override checkbox; otherwise the checkbox is disabled with the reason.
 
 ### The version picker
 
@@ -103,7 +103,7 @@ The Cilium upgrade is not in `ListUpgradeTargets`, which lists only talos and ku
 
 ### The UI on this branch
 
-The Patch-available hint (a newer patch of the running minor is available) and one attention item for an upgrade are UI decisions the user approved. The `ui/` code on this branch does not call `ListUpgradeTargets` yet, so the picker, the override checkbox, the hint and the attention item are not built here. The `ui/` change that adds them builds them against the proto below.
+The picker (a stock preactcn combobox over the grouped `ListUpgradeTargets` lists, filtered in the frontend, with a "Use vX.Y.Z" entry and the offline fallback to a plain input with the reason as a muted note), the override checkbox in the plan view, the Patch-available hint (a newer compatible patch of the running minor, on the Talos, Kubernetes and Cilium rows) and one attention item ("Patch updates are available for Talos, Kubernetes") are built on the UI commits of this branch. The Cilium row keeps its state badge and links to the Cilium page for its upgrade; its Upgrade button does not open the kube-proxy dialog.
 
 ### Adopt
 
@@ -136,7 +136,7 @@ The table is data, and the rules are code. The tests run the rules, not the tabl
 - Adopt warns for a known incompatible pair and refuses an unknown version (`TestCheckAdoptCompatWarnsOrRefuses`).
 - Init refuses an incompatible set (`TestCheckInitCompatRefusesAnIncompatibleSet`); the pinned set is checked to be consistent with machinery (`TestPinnedIsConsistentWithMachinery`).
 - The candidate lists: `TestListUpgradeTargets*` in `internal/uiapi` cover the groups, the Cilium rule, the unavailable reasons and the last good list after a failed check.
-- The webhook refuses an incompatible pair and accepts it under the override verb (`TestTalosClusterRefusesAnIncompatiblePairUnlessOverridden`). **This test currently fails**: it expects Talos 1.14.3 with Kubernetes 1.32.0 to be refused, and machinery accepts that pair. See the open point on the Talos 1.14 range.
+- The webhook refuses an incompatible pair and accepts it under the override verb (`TestTalosClusterRefusesAnIncompatiblePairUnlessOverridden`). **This test currently fails**: it now uses Kubernetes 1.31.9, below machinery's Talos 1.14 range, so the refusal is still exercised. Machinery accepts 1.32.0 with Talos 1.14 (see the open point on the Talos 1.14 range).
 
 ## Why this shape
 
@@ -155,8 +155,7 @@ The table is data, and the rules are code. The tests run the rules, not the tabl
 
 ## Open points
 
-- **The Talos 1.14 Kubernetes range (decision needed: which source wins).** Machinery v1.14.5 (`pkg/machinery/compatibility/talos114`) accepts Kubernetes 1.32.0 to 1.37.99 with Talos 1.14. The Talos v1.14 support matrix (docs.siderolabs.com/talos/v1.14/getting-started/support-matrix) lists Kubernetes 1.33 to 1.37. The code follows machinery first: `KubernetesPairing` decides every minor machinery knows, and the typed Talos table (`talosKubernetesNewer`) is consulted only for minors machinery does not know. The typed Talos table is therefore empty, and Kubernetes 1.32 is accepted with Talos 1.14. Options: (a) keep machinery as the source (the code as it is now; the Talos table stays empty, and `TestTalosClusterRefusesAnIncompatiblePairUnlessOverridden` must be changed to expect acceptance); (b) let the documented range win (the lookup order must change so the Talos table is consulted for Talos 1.14 before machinery, and the table holds 1.33 to 1.37). The failing webhook test stays failing until one is chosen.
-- **The CLI cannot send an override.** `ichor upgrade` (the operation start, `runStartOperation`) sends no override field, so an incompatible upgrade cannot be forced from the CLI. Decide whether `ichor upgrade` takes `--override` and `--override-reason` as node actions and restores do.
-- **The UI on this branch.** The picker, the override checkbox, the "Use vX.Y.Z" entry, the Patch-available hint and the attention item are decided and not built on this branch (see "The UI on this branch").
+- **The Talos 1.14 Kubernetes range (decision needed: which source wins).** Machinery v1.14.5 (`pkg/machinery/compatibility/talos114`) accepts Kubernetes 1.32.0 to 1.37.99 with Talos 1.14. The Talos v1.14 support matrix (docs.siderolabs.com/talos/v1.14/getting-started/support-matrix) lists Kubernetes 1.33 to 1.37. The code follows machinery first: `KubernetesPairing` decides every minor machinery knows, and the typed Talos table (`talosKubernetesNewer`) is consulted only for minors machinery does not know. The typed Talos table is therefore empty, and Kubernetes 1.32 is accepted with Talos 1.14. Options: (a) keep machinery as the source (the code as it is now; the Talos table stays empty, and the refusal test uses a Kubernetes version below machinery's range); (b) let the documented range win (the lookup order must change so the Talos table is consulted for Talos 1.14 before machinery, and the table holds 1.33 to 1.37). The user chooses; the code follows machinery until then.
+- **The Talos 1.14 range is decided by machinery for now.** The test that exercised the refusal uses Kubernetes 1.31.9; the documented 1.33 to 1.37 range is still to be chosen as the source (see the first open point).
 - **The embedded set.** The table must hold the pinned set together: `Pinned` (Talos, Kubernetes and the embedded Cilium) is checked by `TestPinnedIsConsistentWithMachinery`. When it is not, the first install is refused by `checkInitCompat`, so the set and the chart move together in one change.
 - **Talos 1.15 and later** are not in machinery's table of this build, so they are refused as unknown until a build that knows them.

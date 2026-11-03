@@ -34,8 +34,8 @@ func TestPlanAndCreateRefuseADowngrade(t *testing.T) {
 		kind   pb.OperationKind
 		target string
 	}{
-		"talos":      {pb.OperationKind_OPERATION_KIND_TALOS, "v1.14.2"},
-		"kubernetes": {pb.OperationKind_OPERATION_KIND_KUBERNETES, "v1.35.9"},
+		componentTalos: {pb.OperationKind_OPERATION_KIND_TALOS, "v1.14.2"},
+		componentK8s:   {pb.OperationKind_OPERATION_KIND_KUBERNETES, "v1.35.9"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			srv, base := opServer(t, opObjects()...)

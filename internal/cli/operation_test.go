@@ -50,7 +50,7 @@ func opTestObjects() []client.Object {
 	cp.Name, cp.Spec.Role = opCP, roleControlPlane
 
 	cluster := newTestCluster()
-	cluster.Spec.TalosVersion, cluster.Spec.VersionContract = opOldVersion, "v1.13"
+	cluster.Spec.TalosVersion, cluster.Spec.VersionContract = opOldVersion, ver113
 
 	return []client.Object{cluster, cp, newTestMachine(opTestCluster)}
 }

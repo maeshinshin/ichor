@@ -233,7 +233,7 @@ func clusterPlanText(cluster string, p *pb.PlanClusterUpgradeResponse) string {
 			line = "Configuration: the pending change the new contract needs is applied; a machine that needs a reboot REBOOTS."
 		case "kubernetes":
 			line = fmt.Sprintf("Kubernetes %s -> %s: restarts the control plane components and kubelets, no reboot.", s.GetFrom(), s.GetTo())
-		case "cilium":
+		case string(detectedCilium):
 			line = fmt.Sprintf("Cilium %s -> %s: the Cilium Helm release is upgraded.", s.GetFrom(), s.GetTo())
 		}
 

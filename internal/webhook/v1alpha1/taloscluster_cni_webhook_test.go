@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/release"
 )
 
 var _ = Describe("TalosCluster Webhook: removed CNI presets", func() {
@@ -53,7 +54,7 @@ var _ = Describe("TalosCluster Webhook: removed CNI presets", func() {
 		old := withPreset("flannel")
 
 		changed := old.DeepCopy()
-		changed.Spec.KubernetesVersion = "v1.37.1"
+		changed.Spec.KubernetesVersion = release.Pinned.Kubernetes
 		_, err := v.ValidateUpdate(ctx, old, changed)
 		Expect(err).To(MatchError(ContainSubstring("Cilium is the only CNI")))
 
@@ -92,7 +93,7 @@ var _ = Describe("TalosCluster Webhook: unmanaged CNI preset", func() {
 	It("does not treat unmanaged as a removed preset on update", func() {
 		old := unmanaged(adopted)
 		changed := old.DeepCopy()
-		changed.Spec.KubernetesVersion = "v1.37.1"
+		changed.Spec.KubernetesVersion = release.Pinned.Kubernetes
 		_, err := v.ValidateUpdate(ctx, old, changed)
 		Expect(err).NotTo(HaveOccurred())
 	})

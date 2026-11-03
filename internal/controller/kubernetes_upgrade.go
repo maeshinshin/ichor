@@ -30,7 +30,7 @@ package controller
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -536,7 +536,7 @@ func (a *kubernetesUpgradeAdvancer) removedAPIsInUse(
 		}
 	}
 
-	sort.Strings(out)
+	slices.Sort(out)
 
 	return out, nil
 }

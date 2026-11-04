@@ -183,6 +183,11 @@ type TalosClient interface {
 	// ("NOSPACE", "CORRUPT"); empty when there are none.
 	EtcdAlarms(ctx context.Context) ([]string, error)
 
+	// EtcdPKI reports which CA certificates this node's etcd trusts and which of them signed its etcd
+	// server certificate, as the node's configuration has Talos set them up. It is what a
+	// CA rotation checks before it restarts the member to load them.
+	EtcdPKI(ctx context.Context) (EtcdPKI, error)
+
 	// EtcdDefragment defragments this node's own etcd member. It blocks until the member is done.
 	EtcdDefragment(ctx context.Context) error
 

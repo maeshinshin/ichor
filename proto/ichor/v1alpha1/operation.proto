@@ -386,6 +386,8 @@ message PlanOperationRequest {
   Override override = 7;
   // ichor_installer is for kind ICHOR only (ADR 0122).
   IchorInstallerOptions ichor_installer = 8;
+  // ca_targets: see CreateOperationRequest.
+  repeated string ca_targets = 9;
 }
 
 message PlanOperationResponse {
@@ -447,6 +449,9 @@ message CreateOperationRequest {
   Override override = 7;
   // ichor_installer is for kind ICHOR only (ADR 0122).
   IchorInstallerOptions ichor_installer = 8;
+  // ca_targets chooses the CAs of a ca-rotation: talos, kubernetes, etcd, kubernetes-aggregator
+  // (ADR 0120). Empty means talos and kubernetes. Must be empty for every other kind.
+  repeated string ca_targets = 9;
 }
 
 message CreateOperationResponse {

@@ -1976,8 +1976,10 @@ type PlanOperationRequest struct {
 	Override *Override `protobuf:"bytes,7,opt,name=override,proto3" json:"override,omitempty"`
 	// ichor_installer is for kind ICHOR only (ADR 0122).
 	IchorInstaller *IchorInstallerOptions `protobuf:"bytes,8,opt,name=ichor_installer,json=ichorInstaller,proto3" json:"ichor_installer,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// ca_targets: see CreateOperationRequest.
+	CaTargets     []string `protobuf:"bytes,9,rep,name=ca_targets,json=caTargets,proto3" json:"ca_targets,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PlanOperationRequest) Reset() {
@@ -2062,6 +2064,13 @@ func (x *PlanOperationRequest) GetOverride() *Override {
 func (x *PlanOperationRequest) GetIchorInstaller() *IchorInstallerOptions {
 	if x != nil {
 		return x.IchorInstaller
+	}
+	return nil
+}
+
+func (x *PlanOperationRequest) GetCaTargets() []string {
+	if x != nil {
+		return x.CaTargets
 	}
 	return nil
 }
@@ -2295,8 +2304,11 @@ type CreateOperationRequest struct {
 	Override *Override `protobuf:"bytes,7,opt,name=override,proto3" json:"override,omitempty"`
 	// ichor_installer is for kind ICHOR only (ADR 0122).
 	IchorInstaller *IchorInstallerOptions `protobuf:"bytes,8,opt,name=ichor_installer,json=ichorInstaller,proto3" json:"ichor_installer,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// ca_targets chooses the CAs of a ca-rotation: talos, kubernetes, etcd, kubernetes-aggregator
+	// (ADR 0120). Empty means talos and kubernetes. Must be empty for every other kind.
+	CaTargets     []string `protobuf:"bytes,9,rep,name=ca_targets,json=caTargets,proto3" json:"ca_targets,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateOperationRequest) Reset() {
@@ -2381,6 +2393,13 @@ func (x *CreateOperationRequest) GetOverride() *Override {
 func (x *CreateOperationRequest) GetIchorInstaller() *IchorInstallerOptions {
 	if x != nil {
 		return x.IchorInstaller
+	}
+	return nil
+}
+
+func (x *CreateOperationRequest) GetCaTargets() []string {
+	if x != nil {
+		return x.CaTargets
 	}
 	return nil
 }
@@ -3465,7 +3484,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04role\x18\x02 \x01(\tR\x04role\x12\x12\n" +
 	"\x04step\x18\x03 \x01(\x05R\x04step\x12#\n" +
-	"\rreboot_fields\x18\x04 \x03(\tR\frebootFields\"\xc3\x03\n" +
+	"\rreboot_fields\x18\x04 \x03(\tR\frebootFields\"\xe2\x03\n" +
 	"\x14PlanOperationRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.OperationKindR\x04kind\x12\x16\n" +
@@ -3474,7 +3493,9 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x04node\x18\x05 \x01(\v2!.ichor.v1alpha1.NodeActionRequestR\x04node\x12E\n" +
 	"\fetcd_restore\x18\x06 \x01(\v2\".ichor.v1alpha1.EtcdRestoreRequestR\vetcdRestore\x124\n" +
 	"\boverride\x18\a \x01(\v2\x18.ichor.v1alpha1.OverrideR\boverride\x12N\n" +
-	"\x0fichor_installer\x18\b \x01(\v2%.ichor.v1alpha1.IchorInstallerOptionsR\x0eichorInstaller\"\x91\x06\n" +
+	"\x0fichor_installer\x18\b \x01(\v2%.ichor.v1alpha1.IchorInstallerOptionsR\x0eichorInstaller\x12\x1d\n" +
+	"\n" +
+	"ca_targets\x18\t \x03(\tR\tcaTargets\"\x91\x06\n" +
 	"\x15PlanOperationResponse\x127\n" +
 	"\x06effect\x18\x01 \x01(\x0e2\x1f.ichor.v1alpha1.OperationEffectR\x06effect\x12:\n" +
 	"\bmachines\x18\x02 \x03(\v2\x1e.ichor.v1alpha1.PlannedMachineR\bmachines\x12\x12\n" +
@@ -3495,7 +3516,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\rsnapshot_time\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\fsnapshotTime\x120\n" +
 	"\x12opens_pull_request\x18\x11 \x01(\bB\x02\x18\x01R\x10opensPullRequest\x12+\n" +
 	"\x11current_schematic\x18\x12 \x01(\tR\x10currentSchematic\x12)\n" +
-	"\x10target_schematic\x18\x13 \x01(\tR\x0ftargetSchematic\"\xc5\x03\n" +
+	"\x10target_schematic\x18\x13 \x01(\tR\x0ftargetSchematic\"\xe4\x03\n" +
 	"\x16CreateOperationRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.OperationKindR\x04kind\x12\x16\n" +
@@ -3504,7 +3525,9 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x04node\x18\x05 \x01(\v2!.ichor.v1alpha1.NodeActionRequestR\x04node\x12E\n" +
 	"\fetcd_restore\x18\x06 \x01(\v2\".ichor.v1alpha1.EtcdRestoreRequestR\vetcdRestore\x124\n" +
 	"\boverride\x18\a \x01(\v2\x18.ichor.v1alpha1.OverrideR\boverride\x12N\n" +
-	"\x0fichor_installer\x18\b \x01(\v2%.ichor.v1alpha1.IchorInstallerOptionsR\x0eichorInstaller\"\xd6\x01\n" +
+	"\x0fichor_installer\x18\b \x01(\v2%.ichor.v1alpha1.IchorInstallerOptionsR\x0eichorInstaller\x12\x1d\n" +
+	"\n" +
+	"ca_targets\x18\t \x03(\tR\tcaTargets\"\xd6\x01\n" +
 	"\x17CreateOperationResponse\x127\n" +
 	"\toperation\x18\x01 \x01(\v2\x19.ichor.v1alpha1.OperationR\toperation\x121\n" +
 	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12!\n" +

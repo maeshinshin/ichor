@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"golang.org/x/mod/semver"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -285,6 +286,66 @@ type opPlan struct {
 	// override is set when an incompatible target goes through under the override verb (ADR 0115):
 	// the plan's warning, and the Event CreateOperation records.
 	override string
+	// caTargets is the ca-rotation's choice (ADR 0120), in canonical order; nil means the default.
+	caTargets []string
+}
+
+// normalizeCATargets validates the CAs a ca-rotation is asked to replace and returns them in canonical
+// order. A request for the default pair returns nil: the spec then carries no caRotation, as before.
+func normalizeCATargets(kind string, targets []string) ([]string, error) {
+	if len(targets) == 0 {
+		return nil, nil
+	}
+
+	if kind != ichorv1alpha1.TalosOperationKindCARotation {
+		return nil, invalid("ca_targets only applies to a ca-rotation, not to a %s", kind)
+	}
+
+	var out []string
+
+	for _, name := range []string{
+		ichorv1alpha1.CARotationTargetTalos, ichorv1alpha1.CARotationTargetKubernetes,
+		ichorv1alpha1.CARotationTargetEtcd, ichorv1alpha1.CARotationTargetAggregator,
+	} {
+		if slices.Contains(targets, name) {
+			out = append(out, name)
+		}
+	}
+
+	for _, t := range targets {
+		if !slices.Contains(out, t) {
+			return nil, invalid("%q is not a CA a rotation can replace; the choices are talos, kubernetes, etcd, kubernetes-aggregator", t)
+		}
+	}
+
+	if len(out) != len(targets) {
+		return nil, invalid("ca_targets names a CA twice")
+	}
+
+	if slices.Equal(out, ichorv1alpha1.DefaultCARotationTargets()) {
+		return nil, nil
+	}
+
+	return out, nil
+}
+
+// caRotationWarning is what the user must know before an etcd or aggregator CA is rotated (ADR 0120).
+func caRotationWarning(targets []string) string {
+	var parts []string
+
+	if slices.Contains(targets, ichorv1alpha1.CARotationTargetEtcd) {
+		parts = append(parts, "The etcd of every control plane is restarted once in each of the three stages, one member at a time and only "+
+			"while etcd is healthy; with one control plane the Kubernetes API is unavailable while its etcd restarts. "+
+			"Take an etcd snapshot first (ichor etcd backup now).")
+	}
+
+	if slices.Contains(targets, ichorv1alpha1.CARotationTargetAggregator) {
+		parts = append(parts, "Extension API servers (for example metrics-server) must load the new aggregator CA before the "+
+			"front-proxy certificate changes; Ichor waits two minutes after kube-apiserver publishes it and restarts none of them. "+
+			"One that reads the CA only once needs a restart by its owner.")
+	}
+
+	return strings.Join(parts, " ")
 }
 
 // normalizeTarget validates target for kind and returns it in the form the spec stores.
@@ -319,8 +380,14 @@ func normalizeTarget(kind, target string) (string, error) {
 func (s *Server) planOperation(
 	ctx context.Context, clusterRef *pb.ObjectRef, pbKind pb.OperationKind, rawTarget string, maxUnavailable int32,
 	node *pb.NodeActionRequest, restore *pb.EtcdRestoreRequest, bg *pb.Override, installer *pb.IchorInstallerOptions,
+	rawCATargets []string,
 ) (*opPlan, error) {
 	kind, err := kindToSpec(pbKind)
+	if err != nil {
+		return nil, err
+	}
+
+	caTargets, err := normalizeCATargets(kind, rawCATargets)
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +423,7 @@ func (s *Server) planOperation(
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(ichorv1alpha1.CNINotManagedMessage))
 	}
 
-	p := &opPlan{kind: kind, cluster: cluster, resp: &pb.PlanOperationResponse{MaxUnavailable: maxUnavailable}}
+	p := &opPlan{kind: kind, cluster: cluster, caTargets: caTargets, resp: &pb.PlanOperationResponse{MaxUnavailable: maxUnavailable}}
 
 	if kind == ichorv1alpha1.TalosOperationKindIchor {
 		if err := checkInstallerOptions(installer); err != nil {
@@ -395,6 +462,7 @@ func (s *Server) planOperation(
 			ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDropping,
 		}
 		p.resp.ReplacesSecretsBundle = true
+		p.resp.Warning = caRotationWarning(p.caTargets)
 	case ichorv1alpha1.TalosOperationKindIchor:
 		p.resp.Effect = pb.OperationEffect_OPERATION_EFFECT_NONE
 		p.install = &ichorv1alpha1.IchorInstallation{}
@@ -630,6 +698,12 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 	// server to answer).
 	p.resp.KubernetesApiUnavailable = apiGoesDown(p) && approvedControlPlanes == 1 && len(cps) == 1
 
+	// An etcd CA rotation restarts the member of every control plane (ADR 0120): with one, the API goes down each time.
+	if p.kind == ichorv1alpha1.TalosOperationKindCARotation && slices.Contains(p.caTargets, ichorv1alpha1.CARotationTargetEtcd) &&
+		approvedControlPlanes == 1 {
+		p.resp.KubernetesApiUnavailable = true
+	}
+
 	// Through a single node's address, every kubelet and controller talks to one API server; while
 	// that node's API server restarts the whole cluster has none (ADR 0087).
 	if p.kind == ichorv1alpha1.TalosOperationKindKubernetes && approvedControlPlanes > 1 &&
@@ -708,6 +782,14 @@ func (s *Server) blockedReason(
 		return fmt.Sprintf("cannot downgrade %s from %s to %s: the executor refuses it, and the spec is not written", p.kind, p.resp.Current, p.resp.Target), nil
 	}
 
+	if p.kind == ichorv1alpha1.TalosOperationKindCARotation && slices.Contains(p.caTargets, ichorv1alpha1.CARotationTargetAggregator) {
+		contract, err := coreconfig.ParseContractFromVersion(cluster.Spec.VersionContract)
+		if err == nil && !contract.MultidocKubernetesConfigSupported() {
+			return fmt.Sprintf("the aggregator CA has an accepted list only from version contract v1.14, and the cluster has %s: "+
+				"there is no moment with both CAs trusted, so it is not rotated", cluster.Spec.VersionContract), nil
+		}
+	}
+
 	if p.kind == ichorv1alpha1.TalosOperationKindConfig && len(p.resp.Machines) == 0 {
 		return "no approved machine has a pending configuration change that needs a reboot or an API server restart (nothing is waiting in Ready=RebootRequired or APIServerRestartRequired)", nil
 	}
@@ -759,7 +841,7 @@ func (s *Server) unfinishedOperation(ctx context.Context, cluster *ichorv1alpha1
 func (s *Server) PlanOperation(
 	ctx context.Context, req *connect.Request[pb.PlanOperationRequest],
 ) (*connect.Response[pb.PlanOperationResponse], error) {
-	p, err := s.planOperation(ctx, req.Msg.GetCluster(), req.Msg.GetKind(), req.Msg.GetTarget(), req.Msg.GetMaxUnavailable(), req.Msg.GetNode(), req.Msg.GetEtcdRestore(), req.Msg.GetOverride(), req.Msg.GetIchorInstaller())
+	p, err := s.planOperation(ctx, req.Msg.GetCluster(), req.Msg.GetKind(), req.Msg.GetTarget(), req.Msg.GetMaxUnavailable(), req.Msg.GetNode(), req.Msg.GetEtcdRestore(), req.Msg.GetOverride(), req.Msg.GetIchorInstaller(), req.Msg.GetCaTargets())
 	if err != nil {
 		return nil, err
 	}
@@ -780,7 +862,7 @@ func (s *Server) CreateOperation(
 ) (*connect.Response[pb.CreateOperationResponse], error) {
 	m := req.Msg
 
-	p, err := s.planOperation(ctx, m.GetCluster(), m.GetKind(), m.GetTarget(), m.GetMaxUnavailable(), m.GetNode(), m.GetEtcdRestore(), m.GetOverride(), m.GetIchorInstaller())
+	p, err := s.planOperation(ctx, m.GetCluster(), m.GetKind(), m.GetTarget(), m.GetMaxUnavailable(), m.GetNode(), m.GetEtcdRestore(), m.GetOverride(), m.GetIchorInstaller(), m.GetCaTargets())
 	if err != nil {
 		return nil, err
 	}
@@ -814,6 +896,10 @@ func (s *Server) CreateOperation(
 			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name}, Kind: p.kind, MaxUnavailable: m.GetMaxUnavailable(),
 		},
 	}
+	if len(p.caTargets) > 0 {
+		op.Spec.CARotation = &ichorv1alpha1.TalosOperationCARotationSpec{Targets: p.caTargets}
+	}
+
 	clusterKey := client.ObjectKeyFromObject(cluster)
 
 	if p.resp.GetSpecChanges() && p.resp.GetCurrent() != "" && slices.Contains([]string{

@@ -4,13 +4,16 @@
 package releasecheck
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"slices"
 	"strings"
 
 	"golang.org/x/mod/semver"
-	"helm.sh/helm/v3/pkg/registry"
+	"oras.land/oras-go/v2/registry/remote"
+	"oras.land/oras-go/v2/registry/remote/auth"
+	"oras.land/oras-go/v2/registry/remote/retry"
 )
 
 // DefaultRepository is the chart repository the controller lists (the chart's OCI address, no scheme).
@@ -30,23 +33,34 @@ const (
 // amendment 2026-11-03). Its sibling images (operator-generic, hubble-relay) sit beside it in quay.io/cilium.
 const DefaultCiliumRepository = "quay.io/cilium/cilium"
 
-// Lister returns the tags of a repository. Helm's registry client is the production one.
+// Lister returns the tags of a repository. RegistryLister is the production one.
 type Lister func(repository string) ([]string, error)
 
-// HelmLister lists tags with Helm's registry client, anonymously (the chart repository is public).
-// plainHTTP is for a local registry only.
-func HelmLister(plainHTTP bool) (Lister, error) {
-	var opts []registry.ClientOption
-	if plainHTTP {
-		opts = append(opts, registry.ClientOptPlainHTTP())
-	}
+// RegistryLister lists the tags of a repository over the OCI distribution API, anonymously (the chart and
+// image repositories are public), page by page. It returns every tag as it is. Helm's own Tags would drop
+// the "v1.14.3" style tags of the Talos, Kubernetes and Cilium images, because it keeps only semantic
+// versions without a leading v, which left every image-based upgrade list empty (ADR 0115, amendment
+// 2026-11-04). plainHTTP is for a local registry only.
+func RegistryLister(plainHTTP bool) Lister {
+	return func(repository string) ([]string, error) {
+		repo, err := remote.NewRepository(strings.TrimPrefix(repository, "oci://"))
+		if err != nil {
+			return nil, err
+		}
 
-	c, err := registry.NewClient(opts...)
-	if err != nil {
-		return nil, fmt.Errorf("creating the registry client: %w", err)
-	}
+		repo.PlainHTTP = plainHTTP
+		repo.Client = &auth.Client{Client: retry.DefaultClient, Cache: auth.NewCache()}
 
-	return c.Tags, nil
+		var tags []string
+
+		err = repo.Tags(context.Background(), "", func(page []string) error {
+			tags = append(tags, page...)
+
+			return nil
+		})
+
+		return tags, err
+	}
 }
 
 // Host is the registry host of a repository reference, without the port: the name a network

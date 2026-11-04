@@ -104,17 +104,14 @@ func fakeRegistry(t *testing.T, repo string, tags string) *httptest.Server {
 	return srv
 }
 
-func TestHelmListerReadsTagsFromARegistry(t *testing.T) {
+func TestRegistryListerReadsTagsFromARegistry(t *testing.T) {
 	const repo = "test/charts/ichor"
 
 	srv := fakeRegistry(t, repo, `{"name":"test/charts/ichor","tags":["0.1.0","0.3.0-rc.1","0.2.0","notes"]}`)
 
 	host := strings.TrimPrefix(srv.URL, "http://")
 
-	list, err := HelmLister(true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	list := RegistryLister(true)
 
 	tags, err := list(host + "/" + repo)
 	if err != nil {
@@ -126,18 +123,64 @@ func TestHelmListerReadsTagsFromARegistry(t *testing.T) {
 	}
 }
 
-func TestHelmListerFailsWhenTheRegistryDoesNotAnswer(t *testing.T) {
+func TestRegistryListerFailsWhenTheRegistryDoesNotAnswer(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "down", http.StatusServiceUnavailable)
 	}))
 	t.Cleanup(srv.Close)
 
-	list, err := HelmLister(true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	list := RegistryLister(true)
 
 	if _, err := list(strings.TrimPrefix(srv.URL, "http://") + "/test/charts/ichor"); err == nil {
 		t.Fatal("a 503 from the registry must be an error")
+	}
+}
+
+// The Talos, Kubernetes and Cilium repositories tag their releases with a leading v ("v1.14.3"); the chart's
+// tags have none. The lister must return both kinds, or every image-based upgrade list is empty (ADR 0115).
+func TestListerKeepsVPrefixedTags(t *testing.T) {
+	const repo = "siderolabs/kubelet"
+
+	srv := fakeRegistry(t, repo, `{"name":"siderolabs/kubelet","tags":["v1.35.1","v1.36.0-rc.1","v1.35.0","latest","v1.36.2-1-gabc1234"]}`)
+
+	list := RegistryLister(true)
+
+	tags, err := list(strings.TrimPrefix(srv.URL, "http://") + "/" + repo)
+	if err != nil {
+		t.Fatalf("listing tags: %v", err)
+	}
+
+	if got, want := Finals(tags), []string{"v1.35.1", "v1.35.0"}; !slices.Equal(got, want) {
+		t.Fatalf("Finals over the listed tags = %v, want %v (tags %v)", got, want, tags)
+	}
+}
+
+func TestListerFollowsPagedTagLists(t *testing.T) {
+	const repo = "siderolabs/installer-base"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/v2/":
+			w.WriteHeader(http.StatusOK)
+		case r.URL.Path == "/v2/"+repo+"/tags/list" && r.URL.Query().Get("last") == "":
+			w.Header().Set("Link", `</v2/`+repo+`/tags/list?last=v1.13.0&n=2>; rel="next"`)
+			_, _ = w.Write([]byte(`{"name":"` + repo + `","tags":["v1.12.0","v1.13.0"]}`))
+		case r.URL.Path == "/v2/"+repo+"/tags/list":
+			_, _ = w.Write([]byte(`{"name":"` + repo + `","tags":["v1.14.3"]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	list := RegistryLister(true)
+
+	tags, err := list(strings.TrimPrefix(srv.URL, "http://") + "/" + repo)
+	if err != nil {
+		t.Fatalf("listing tags: %v", err)
+	}
+
+	if got, want := Finals(tags), []string{"v1.14.3", "v1.13.0", "v1.12.0"}; !slices.Equal(got, want) {
+		t.Fatalf("Finals over the listed tags = %v, want %v", got, want)
 	}
 }

@@ -75,6 +75,8 @@ type AutoPatcher struct {
 	Interval time.Duration
 	// Now is the clock; nil means time.Now.
 	Now func() time.Time
+	// Namespace limits the patcher to the clusters of one namespace; empty means all (tests set it).
+	Namespace string
 }
 
 // NeedLeaderElection makes the patcher run on the leader only.
@@ -162,7 +164,7 @@ func (p *AutoPatcher) Pass(ctx context.Context) error {
 	}
 
 	var clusters ichorv1alpha1.TalosClusterList
-	if err := p.Reader.List(ctx, &clusters); err != nil {
+	if err := p.Reader.List(ctx, &clusters, client.InNamespace(p.Namespace)); err != nil {
 		return fmt.Errorf("listing the clusters: %w", err)
 	}
 

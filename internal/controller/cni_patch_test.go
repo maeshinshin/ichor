@@ -111,7 +111,7 @@ func TestCiliumJobCarriesTheActivePatch(t *testing.T) {
 		},
 	}}
 
-	job := newCNIHelmJob("ichor-system", "job", c, "enabled", &ichorv1alpha1.IchorInstallation{}, "hash", false)
+	job := newCNIHelmJob("ichor-system", "job", c, "enabled", &ichorv1alpha1.IchorInstallation{}, "hash", false, 0)
 	args := strings.Join(job.Spec.Template.Spec.Containers[0].Args, " ")
 
 	if !strings.Contains(args, "--image-version="+version) {
@@ -124,7 +124,7 @@ func TestCiliumJobCarriesTheActivePatch(t *testing.T) {
 		}
 	}
 
-	plain := newCNIHelmJob("ichor-system", "job", patchCluster(), "enabled", &ichorv1alpha1.IchorInstallation{}, "hash", false)
+	plain := newCNIHelmJob("ichor-system", "job", patchCluster(), "enabled", &ichorv1alpha1.IchorInstallation{}, "hash", false, 0)
 	if strings.Contains(strings.Join(plain.Spec.Template.Spec.Containers[0].Args, " "), "--image-version") {
 		t.Error("a Job with no patch names one")
 	}

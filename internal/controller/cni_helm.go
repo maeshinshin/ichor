@@ -95,13 +95,33 @@ var cniPodGrace = 2 * time.Minute
 // mode is the kube-proxy mode Cilium is to run with. The hand-over passes the mode the cluster
 // runs now (currentKubeProxyMode), never spec.cni.kubeProxy: only the kube-proxy switch applies
 // the spec's mode, under its operation.
-func CNIValuesHash(cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode) (string, error) {
-	vals, err := cilium.EffectiveValuesForMode(cluster, mode)
+//
+// nodes is how many Nodes the cluster has now (clusterNodeCount; 0 unknown): the operator's replicas follow
+// it, so a node joining can change the values. The Job is handed the same
+// number (--nodes), so it applies the values that were hashed.
+func CNIValuesHash(cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, nodes int) (string, error) {
+	vals, err := cilium.EffectiveValuesForNodes(cluster, mode, nodes)
 	if err != nil {
 		return "", err
 	}
 
 	return hashCiliumValues(vals)
+}
+
+// clusterNodeCount is how many Nodes the cluster has right now, every one of them: a Node that is not
+// Ready yet (the first, before Cilium is up) still counts, and the operator tolerates every taint. It is
+// the input of CNIValuesHash, so a caller counts once and passes the number to everything that hashes or
+// applies the values.
+func clusterNodeCount(ctx context.Context, reader client.Reader) (int, error) {
+	var nodes metav1.PartialObjectMetadataList
+
+	nodes.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("NodeList"))
+
+	if err := reader.List(ctx, &nodes); err != nil {
+		return 0, fmt.Errorf("counting the cluster's nodes for the Cilium values: %w", err)
+	}
+
+	return len(nodes.Items), nil
 }
 
 // currentKubeProxyMode is the kube-proxy mode Cilium runs with now, which is what every Cilium
@@ -194,14 +214,14 @@ func cniHelmJobName(cluster *ichorv1alpha1.TalosCluster, valuesHash string) stri
 // that ended before since (the install's, or an earlier switch's, within its 24 h TTL) is not its
 // run. It is deleted and the next call starts a new one. A zero since takes any Job as it is.
 func AdvanceCNIHelmJob(
-	ctx context.Context, c client.Client, ns string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode,
+	ctx context.Context, c client.Client, ns string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, nodes int,
 	inst *ichorv1alpha1.IchorInstallation, salt string, since time.Time,
 ) (bool, error) {
 	if mode == "" {
 		mode = cni.KubeProxyEnabled
 	}
 
-	hash, err := CNIValuesHash(cluster, mode)
+	hash, err := CNIValuesHash(cluster, mode, nodes)
 	if err != nil {
 		return false, err
 	}
@@ -215,7 +235,7 @@ func AdvanceCNIHelmJob(
 	switch {
 	case apierrors.IsNotFound(err):
 		// AlreadyExists: the cache has not seen the Job just created.
-		return false, client.IgnoreAlreadyExists(c.Create(ctx, newCNIHelmJob(ns, name, cluster, mode, inst, hash, takeoverJob(cluster))))
+		return false, client.IgnoreAlreadyExists(c.Create(ctx, newCNIHelmJob(ns, name, cluster, mode, inst, hash, takeoverJob(cluster), nodes)))
 	case err != nil:
 		return false, err
 	}
@@ -279,7 +299,7 @@ func takeoverJob(cluster *ichorv1alpha1.TalosCluster) bool {
 // its API access while Cilium restarts.
 func newCNIHelmJob(
 	storageNS, name string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode,
-	inst *ichorv1alpha1.IchorInstallation, valuesHash string, takeover bool,
+	inst *ichorv1alpha1.IchorInstallation, valuesHash string, takeover bool, nodes int,
 ) *batchv1.Job {
 	// One attempt, as for the installer: an upgrade that failed has been rolled back, and
 	// running it again without anyone looking at why would only repeat it. The caller
@@ -297,6 +317,11 @@ func newCNIHelmJob(
 	}
 	if takeover {
 		args = append(args, "--takeover")
+	}
+
+	// The node count the values were hashed with (see CNIValuesHash).
+	if nodes > 0 {
+		args = append(args, "--nodes="+strconv.Itoa(nodes))
 	}
 
 	// A Cilium patch's images: the Job applies them with the values.

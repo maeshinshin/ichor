@@ -41,7 +41,11 @@ import (
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
@@ -157,7 +161,12 @@ func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	hash, err := CNIValuesHash(&cluster, mode)
+	nodes, err := clusterNodeCount(ctx, r.reader())
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	hash, err := CNIValuesHash(&cluster, mode, nodes)
 	if err != nil {
 		// A values change fixes it and triggers a new reconcile; retrying now would not.
 		return ctrl.Result{}, r.setCondition(ctx, &cluster, ichorv1alpha1.ConditionCNIValuesApplied,
@@ -216,7 +225,7 @@ func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}
 
-	return r.runJob(ctx, &cluster, mode, hash, handedOver)
+	return r.runJob(ctx, &cluster, mode, nodes, hash, handedOver)
 }
 
 // networkMismatch compares the tunnel protocol, routing mode and IPAM mode the effective values
@@ -274,7 +283,7 @@ func (r *CNIHandoverReconciler) networkMismatch(
 // runJob advances the Helm Job for hash under the cluster operation lock, and on completion
 // records the result.
 func (r *CNIHandoverReconciler) runJob(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, hash string, handedOver bool,
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, nodes int, hash string, handedOver bool,
 ) (ctrl.Result, error) {
 	inst, err := installerSource(ctx, r.Client)
 	if err != nil {
@@ -298,7 +307,7 @@ func (r *CNIHandoverReconciler) runJob(
 		return ctrl.Result{}, err
 	}
 
-	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, mode, inst, "", time.Time{})
+	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, mode, nodes, inst, "", time.Time{})
 
 	var failed *CNIHelmJobFailedError
 
@@ -676,11 +685,33 @@ func (r *CNIHandoverReconciler) markCNIUnsupported(ctx context.Context, cluster 
 			"no configuration is rendered or applied; delete and recreate the cluster", cluster.Spec.CNI.Preset))
 }
 
+// allClusters enqueues every TalosCluster: the Cilium values follow the number of Nodes (CNIValuesHash),
+// so a Node that appears or goes away may change them, and nothing else would look again once the
+// values were applied.
+func (r *CNIHandoverReconciler) allClusters(ctx context.Context, _ client.Object) []reconcile.Request {
+	var clusters ichorv1alpha1.TalosClusterList
+	if err := r.List(ctx, &clusters); err != nil {
+		return nil
+	}
+
+	reqs := make([]reconcile.Request, 0, len(clusters.Items))
+	for i := range clusters.Items {
+		reqs = append(reqs, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&clusters.Items[i])})
+	}
+
+	return reqs
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *CNIHandoverReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.TalosCluster{}).
 		Watches(&ichorv1alpha1.TalosOperation{}, handler.EnqueueRequestsFromMapFunc(cniUpgradeOperationClusters)).
+		// Only a Node coming or going counts; its heartbeats and status updates do not.
+		Watches(&corev1.Node{}, handler.EnqueueRequestsFromMapFunc(r.allClusters), builder.WithPredicates(predicate.Funcs{
+			UpdateFunc:  func(event.UpdateEvent) bool { return false },
+			GenericFunc: func(event.GenericEvent) bool { return false },
+		})).
 		Named("cnihandover").
 		Complete(r)
 }

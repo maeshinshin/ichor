@@ -80,7 +80,7 @@ var _ = Describe("Cilium chart upgrade", func() {
 		It("is set when the release's chart differs from the embedded one, and cleared when it matches", func() {
 			ciliumDaemonSet()(true)
 
-			hash, err := CNIValuesHash(cluster, specMode(cluster))
+			hash, err := CNIValuesHash(cluster, specMode(cluster), 0)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Handed over already.
@@ -133,7 +133,7 @@ var _ = Describe("Cilium chart upgrade", func() {
 		jobFor := func(op *ichorv1alpha1.TalosOperation) *batchv1.Job {
 			GinkgoHelper()
 
-			hash, err := CNIValuesHash(cluster, specMode(cluster))
+			hash, err := CNIValuesHash(cluster, specMode(cluster), 0)
 			Expect(err).NotTo(HaveOccurred())
 
 			var job batchv1.Job
@@ -260,10 +260,10 @@ func finishCNIJobAt(cluster *ichorv1alpha1.TalosCluster) {
 	var inst ichorv1alpha1.IchorInstallation
 	Expect(k8sClient.Get(ctx, client.ObjectKey{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
 
-	_, err := AdvanceCNIHelmJob(ctx, k8sClient, testIchorNamespace, cluster, specMode(cluster), &inst, "", time.Time{})
+	_, err := AdvanceCNIHelmJob(ctx, k8sClient, testIchorNamespace, cluster, specMode(cluster), 0, &inst, "", time.Time{})
 	Expect(err).NotTo(HaveOccurred())
 
-	hash, err := CNIValuesHash(cluster, specMode(cluster))
+	hash, err := CNIValuesHash(cluster, specMode(cluster), 0)
 	Expect(err).NotTo(HaveOccurred())
 
 	var job batchv1.Job

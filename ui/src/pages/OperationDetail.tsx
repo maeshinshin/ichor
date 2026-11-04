@@ -115,8 +115,7 @@ export function OperationDetail({ name }: { name: string }) {
   const shownEvents = visibleEvents(events ?? [], warningsOnly)
   const title = op.summary || summaryFallback(op.ref?.name ?? name, enumLabel(OperationKind, op.kind), op.nodeMachine?.name)
   const { done, running } = progressCounts(op.machines)
-  const position = op.caRotationStage === '' ? null : caStageProgress(op.caRotationStage)
-  const stage = position ? { name: op.caRotationStage, ...position } : null
+  const stage = caStageProgress(op.caRotationStage)
   const kubeStage = kubernetesStageProgress(op.kubernetesStage)
   const restoreStep = restoreStepProgress(op.etcdRestoreStep)
   const panel = credentialsPanel(op.kind === OperationKind.CA_ROTATION, op.caRotationStage, state === 'done')

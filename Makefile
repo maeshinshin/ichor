@@ -67,6 +67,14 @@ cilium-chart: ## Fetch the pinned Cilium chart into pkg/cni/cilium/chart/ and ve
 	curl -fsSL -o pkg/cni/cilium/chart/cilium-$(CILIUM_CHART_VERSION).tgz https://helm.cilium.io/cilium-$(CILIUM_CHART_VERSION).tgz
 	echo "$(CILIUM_CHART_SHA256)  pkg/cni/cilium/chart/cilium-$(CILIUM_CHART_VERSION).tgz" | sha256sum -c -
 
+.PHONY: cilium-goldens
+cilium-goldens: ## Regenerate pkg/cni/cilium/testdata/bootstrap-*.golden.yaml from the embedded Cilium chart.
+	go run ./internal/tools/ciliumgolden
+
+.PHONY: bump-cilium-patch
+bump-cilium-patch: ## Move the embedded Cilium chart to the newest patch of its minor, if the images are signed (hack/bump-cilium-patch.sh; CI runs it daily).
+	hack/bump-cilium-patch.sh
+
 # The foreign-cluster e2e tests (ADR 0103 section 1.2, test/e2e/foreign) install this one-minor-older chart as the
 # Cilium a foreign cluster starts with, so adopt's takeover of a live 1.19 is covered.
 FOREIGN_CILIUM_CHART_VERSION ?= 1.19.10

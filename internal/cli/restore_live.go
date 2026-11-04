@@ -205,7 +205,7 @@ func runLiveRestore(ctx context.Context, c *apiClients, in io.Reader, out, errw 
 		return printAPI(out, resp.Msg, renderRestoreStarted)
 	}
 
-	_, _ = fmt.Fprintf(errw, "created operation %s\n", resp.Msg.GetOperation().GetRef().GetName())
+	announceCreated(errw, resp.Msg.GetOperation().GetRef().GetName())
 
 	return watchRestoreOperation(ctx, c, resp.Msg.GetOperation().GetRef(), out, errw)
 }

@@ -105,7 +105,7 @@ func afterRotateCACreate(ctx context.Context, cmd *cobra.Command, cluster string
 
 	progress := &stageProgress{w: errw}
 
-	_, _ = fmt.Fprintf(errw, "created operation %s\n", ref.GetName())
+	announceCreated(errw, ref.GetName())
 
 	files, err := runRotateCAHandoff(ctx, handoffDeps{K8s: k8s, Checks: defaultHandoffChecks(), Poll: opWatchInterval, Progress: progress}, req, ref.GetName(), errw)
 	if err != nil {

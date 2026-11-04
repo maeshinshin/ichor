@@ -60,18 +60,20 @@ table accepts; a refusal passes only with the override verb.
   change in a pipe or CI log. It honours `NO_COLOR` and `TERM=dumb`, prints a
   total and the next commands at the end, and keeps `-o yaml|json` on stdout
   free of progress lines.
-- The CLI prints for people by default: `cluster list|get|status`,
-  `machine list|get` and `version` show tables and aligned blocks with plain
-  enum names (`control-plane`, `approved`), ✓ ! ✗ … for status and ages like
-  `5m`, with colour only on a terminal. `-o yaml` and `-o json` print what they
-  always printed, so a script names its format; a command not converted yet
-  still prints YAML. `ichor ui` prints its status in the same style.
-- `ichor operation list|get|pause|resume|delete`, `ichor upgrade
-  talos|kubernetes|ichor` (the result, `--list`, `--follow`), the node actions and
-  `ichor node get` print for people too. `--follow` and `operation get --watch`
-  show one live line with the phase and message and end it with ✓ Completed or
-  ✗ Failed and the time taken, or a line per change in a pipe; the exit codes and the
-  resume hint are unchanged.
+- The CLI prints for people by default. Lists and results are
+  tables and aligned blocks with plain enum names (`control-plane`,
+  `approved`), ✓ ! ✗ … for status and ages like `5m`; a change prints one ✓
+  line. Colour appears only on a terminal (`NO_COLOR` and `TERM=dumb` are
+  honoured) and the layout is the same in a pipe. This covers `cluster`,
+  `machine`, `node`, `operation`, `upgrade`, `patch`, `user`, `settings`,
+  `config`, `cni`, `etcd`, `restore`, `adopt`, `version` and `ichor ui`.
+  `-o yaml` and `-o json` print what they always printed, so a script names
+  its format.
+- `--follow` (on `upgrade`, `config apply`, `cni kube-proxy`, the node and etcd
+  actions and `restore --live`) and `operation get --watch` show one live line
+  with the phase and message and end it with ✓ Completed or ✗ Failed and the
+  time taken, or a line per change in a pipe. The exit codes and the resume
+  hint are unchanged.
 
 ### Not part of Ichor
 

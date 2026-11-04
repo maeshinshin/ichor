@@ -12,11 +12,16 @@ import (
 	"github.com/maeshinshin/ichor/internal/oidcissuer"
 )
 
-const formType = "application/x-www-form-urlencoded"
+const (
+	formType           = "application/x-www-form-urlencoded"
+	pToken             = "token"
+	codeInvalidGrant   = "invalid_grant"
+	codeInvalidRequest = "invalid_request"
+)
 
 // RFC 7009: POST /oidc/revoke, form token (+ optional token_type_hint) and client_id for a public client.
 func revokeForm(client, token string) url.Values {
-	return url.Values{pClientID: {client}, "token": {token}, "token_type_hint": {pRefresh}}
+	return url.Values{pClientID: {client}, pToken: {token}, "token_type_hint": {pRefresh}}
 }
 
 func (e *env) revokeRaw(ctype, body string) (int, string) {
@@ -93,7 +98,7 @@ func TestRevokeRefusesATokenIssuedToAnotherClientAndKeepsTheFamily(t *testing.T)
 	e := newRevokeEnv(t)
 	rt := e.tokens(clientCLI, cliRedirect, "").RefreshToken
 
-	if s, errc := e.revoke(revokeForm(clientUI, rt)); s != http.StatusBadRequest || errc != "invalid_grant" {
+	if s, errc := e.revoke(revokeForm(clientUI, rt)); s != http.StatusBadRequest || errc != codeInvalidGrant {
 		t.Fatalf("other client's token: %d %q", s, errc)
 	}
 	if s, _ := e.token(refreshForm(clientCLI, rt, "")); s != http.StatusOK {
@@ -110,13 +115,13 @@ func TestRevokeRejectsMalformedRequests(t *testing.T) {
 		status      int
 		errc        string
 	}{
-		"no token":          {formType, url.Values{pClientID: {clientCLI}}.Encode(), 400, "invalid_request"},
-		"empty token":       {formType, url.Values{pClientID: {clientCLI}, "token": {""}}.Encode(), 400, "invalid_request"},
-		"json body":         {"application/json", `{"token":"x"}`, 400, "invalid_request"},
-		"repeated token":    {formType, "client_id=ichor-cli&token=a&token=b", 400, "invalid_request"},
-		"unknown client":    {formType, url.Values{pClientID: {"evil"}, "token": {rt}}.Encode(), 401, "invalid_client"},
-		"no client":         {formType, url.Values{"token": {rt}}.Encode(), 401, "invalid_client"},
-		"access_token hint": {formType, url.Values{pClientID: {clientCLI}, "token": {rt}, "token_type_hint": {"access_token"}}.Encode(), 400, "unsupported_token_type"},
+		"no token":          {formType, url.Values{pClientID: {clientCLI}}.Encode(), 400, codeInvalidRequest},
+		"empty token":       {formType, url.Values{pClientID: {clientCLI}, pToken: {""}}.Encode(), 400, codeInvalidRequest},
+		"json body":         {"application/json", `{"token":"x"}`, 400, codeInvalidRequest},
+		"repeated token":    {formType, "client_id=ichor-cli&token=a&token=b", 400, codeInvalidRequest},
+		"unknown client":    {formType, url.Values{pClientID: {"evil"}, pToken: {rt}}.Encode(), 401, "invalid_client"},
+		"no client":         {formType, url.Values{pToken: {rt}}.Encode(), 401, "invalid_client"},
+		"access_token hint": {formType, url.Values{pClientID: {clientCLI}, pToken: {rt}, "token_type_hint": {"access_token"}}.Encode(), 400, "unsupported_token_type"},
 	} {
 		if s, errc := e.revokeRaw(c.ctype, c.body); s != c.status || errc != c.errc {
 			t.Errorf("%s: %d %q, want %d %q", name, s, errc, c.status, c.errc)

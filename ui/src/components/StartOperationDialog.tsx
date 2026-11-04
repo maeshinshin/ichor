@@ -21,6 +21,7 @@ import { notifyDone } from '@/lib/notify'
 import { describeError, isOverridable, type ErrorShape } from '@/lib/errors'
 import { versionProblem } from '@/lib/clusterOps'
 import { confirmMatches, kindNeedsTypedName, kubernetesStages, planCounts, planSteps, targetError, type OpKind } from '@/lib/operations'
+import { caNeedsCredentials, caTargetChoices, defaultCATargets, toggleCATarget, type CATarget } from '@/lib/caTargets'
 import { t } from '@/lib/i18n'
 import { type TargetList } from '@/lib/upgradeTargets'
 import { navigate } from '@/router'
@@ -81,6 +82,8 @@ export function StartOperationDialog({
   const [skipReason, setSkipReason] = useState('')
   const skipProblem = kind === 'ichor' && skipSignature && skipReason.trim() === ''
   const ichorInstaller = kind === 'ichor' ? { digest: '', skipSignatureReason: skipSignature ? skipReason.trim() : '' } : undefined
+  // The CAs a rotation replaces (ADR 0120); the Talos API and Kubernetes API CAs unless changed.
+  const [caTargets, setCATargets] = useState<CATarget[]>(defaultCATargets)
 
   const needsName = kindNeedsTypedName(kind)
   const needsTarget = !needsName
@@ -122,6 +125,7 @@ export function StartOperationDialog({
       setReason('')
       setSkipSignature(false)
       setSkipReason('')
+      setCATargets(defaultCATargets)
     }
   }
 
@@ -136,6 +140,7 @@ export function StartOperationDialog({
           target: needsTarget ? target.trim() : '',
           override: withOverride ? { reason: reason.trim() } : undefined,
           ichorInstaller,
+          caTargets: kind === 'ca-rotation' ? caTargets : [],
         }),
       )
     } catch (err) {
@@ -156,6 +161,7 @@ export function StartOperationDialog({
         target: needsTarget ? target.trim() : '',
         override: overridden ? { reason: reason.trim() } : undefined,
         ichorInstaller,
+        caTargets: kind === 'ca-rotation' ? caTargets : [],
       })
       reset(false)
       notifyDone(t('toast.opStarted', { action: t(`ops.start.${kind}`) }))
@@ -199,7 +205,10 @@ export function StartOperationDialog({
               {busy ? t('ops.dialog.starting') : t('ops.dialog.start')}
             </Button>
           ) : (
-            <Button disabled={busy || (needsTarget && targetProblem !== null) || (overridable && !overridden) || skipProblem} onClick={() => review()}>
+            <Button
+              disabled={busy || (needsTarget && targetProblem !== null) || (overridable && !overridden) || skipProblem || (kind === 'ca-rotation' && caTargets.length === 0)}
+              onClick={() => review()}
+            >
               {busy ? t('ops.dialog.reviewing') : t('ops.dialog.review')}
             </Button>
           )}
@@ -268,6 +277,24 @@ export function StartOperationDialog({
             </Field>
           )}
         </div>
+      )}
+
+      {!plan && kind === 'ca-rotation' && (
+        <Field data-invalid={caTargets.length === 0}>
+          <FieldLabel>{t('ops.dialog.caTargets')}</FieldLabel>
+          {caTargetChoices.map((c) => (
+            <div key={c} class="flex items-center gap-2 text-sm">
+              <Checkbox
+                id={`op-ca-${c}`}
+                checked={caTargets.includes(c)}
+                onCheckedChange={(on: boolean | 'indeterminate') => setCATargets(toggleCATarget(caTargets, c, on === true))}
+              />
+              <Label htmlFor={`op-ca-${c}`}>{t(`ops.dialog.ca.${c}`)}</Label>
+            </div>
+          ))}
+          <FieldDescription>{t('ops.dialog.caTargetsHint')}</FieldDescription>
+          {caTargets.length === 0 && <FieldError>{t('ops.dialog.caNone')}</FieldError>}
+        </Field>
       )}
 
       {(!plan || plan.blocked === '') && (
@@ -362,7 +389,7 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
           <CardTitle>
             {kind === 'talos' && plan.targetSchematic !== '' && to === plan.current
               ? t('ops.plan.talosSchematic', { version: plan.current, from: plan.currentSchematic, to: plan.targetSchematic })
-              : t(`ops.plan.${kind}`, { from: plan.current, to })}
+              : t(`ops.plan.${kind}`, { from: plan.current, to, cas: plan.caTargets.map(caShortName).join(', ') })}
           </CardTitle>
           {plan.specChanges && <CardDescription>{t('ops.plan.specChanges', { to })}</CardDescription>}
         </CardHeader>
@@ -418,7 +445,7 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
           <AlertDescription>{t('ops.plan.apiDown')}</AlertDescription>
         </Alert>
       )}
-      {kind === 'ca-rotation' && (
+      {kind === 'ca-rotation' && caNeedsCredentials(plan.caTargets) && (
         <Alert variant="destructive">
           <CircleXIcon />
           <AlertTitle>{t('ops.plan.credentialsTitle')}</AlertTitle>
@@ -461,6 +488,22 @@ function KubernetesStages({ names }: { names: string[] }) {
       </ItemGroup>
     </div>
   )
+}
+
+// caShortName names a CA of the plan's ca_targets in words.
+function caShortName(c: string): string {
+  switch (c) {
+    case 'talos':
+      return t('ops.dialog.ca.talos.short')
+    case 'kubernetes':
+      return t('ops.dialog.ca.kubernetes.short')
+    case 'etcd':
+      return t('ops.dialog.ca.etcd.short')
+    case 'kubernetes-aggregator':
+      return t('ops.dialog.ca.kubernetes-aggregator.short')
+    default:
+      return c
+  }
 }
 
 function roleText(role: string): string {

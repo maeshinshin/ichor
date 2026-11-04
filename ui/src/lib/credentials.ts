@@ -1,6 +1,8 @@
 // Logic behind the CA rotation credential hand-off on the operation page (docs/adr/0093). Pure: no DOM,
 // no preact, so it runs under `node --test`.
 
+import { caNeedsCredentials } from './caTargets.ts'
+
 // Where the credentials panel is shown for an operation:
 //   gate   the operation waits in AwaitingCredentials: download and continue.
 //   issued the rotation went on (Issuing, Dropping, Finalizing): the old files no longer work, so a
@@ -11,8 +13,8 @@ export type CredentialsPanel = 'gate' | 'issued' | 'none'
 
 const issuedStages = ['Issuing', 'Dropping', 'Finalizing']
 
-export function credentialsPanel(isCARotation: boolean, stage: string, finished: boolean): CredentialsPanel {
-  if (!isCARotation || finished) return 'none'
+export function credentialsPanel(isCARotation: boolean, stage: string, finished: boolean, caTargets: readonly string[] = []): CredentialsPanel {
+  if (!isCARotation || finished || !caNeedsCredentials(caTargets)) return 'none'
   if (stage === 'AwaitingCredentials') return 'gate'
   return issuedStages.includes(stage) ? 'issued' : 'none'
 }

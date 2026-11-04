@@ -108,6 +108,10 @@ func operationToPB(op *ichorv1alpha1.TalosOperation) *pb.Operation {
 		out.CaRotationStage = op.Status.CARotation.Stage
 	}
 
+	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindCARotation {
+		out.CaTargets = caRotationTargets(op)
+	}
+
 	if op.Status.Kubernetes != nil {
 		out.KubernetesStage = op.Status.Kubernetes.Stage
 	}

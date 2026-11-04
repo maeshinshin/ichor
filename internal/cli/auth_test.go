@@ -59,9 +59,9 @@ type fakeIssuer struct {
 	lastAudience string
 	ignoreAud    bool
 	// RFC 7009 sign-out: what /revoke received, whether discovery advertises it, and what it answers (0 is 200).
-	revoked        []url.Values
-	noRevocation   bool
-	revokeStatus   int
+	revoked      []url.Values
+	noRevocation bool
+	revokeStatus int
 }
 
 type fakeCode struct {

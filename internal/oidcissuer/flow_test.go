@@ -144,13 +144,13 @@ func TestCodeGrantNegatives(t *testing.T) {
 		if s, _ := e.token(codeForm(clientCLI, cliRedirect, code, p)); s != http.StatusOK {
 			t.Fatalf("first use: %d", s)
 		}
-		if s, tr := e.token(codeForm(clientCLI, cliRedirect, code, p)); s != http.StatusBadRequest || tr.Error != "invalid_grant" {
+		if s, tr := e.token(codeForm(clientCLI, cliRedirect, code, p)); s != http.StatusBadRequest || tr.Error != codeInvalidGrant {
 			t.Fatalf("replay: %d %q", s, tr.Error)
 		}
 	})
 	t.Run("wrong verifier", func(t *testing.T) {
 		code := e.code(clientCLI, cliRedirect, "", p)
-		if s, tr := e.token(codeForm(clientCLI, cliRedirect, code, newPKCE())); s != http.StatusBadRequest || tr.Error != "invalid_grant" {
+		if s, tr := e.token(codeForm(clientCLI, cliRedirect, code, newPKCE())); s != http.StatusBadRequest || tr.Error != codeInvalidGrant {
 			t.Fatalf("%d %q", s, tr.Error)
 		}
 		// the attempt burned the code

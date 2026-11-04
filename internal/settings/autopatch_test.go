@@ -16,7 +16,7 @@ func TestAutoPatchResolve(t *testing.T) {
 	}
 
 	inst := &ichorv1alpha1.IchorInstallation{Spec: ichorv1alpha1.IchorInstallationSpec{
-		AutoPatch: &ichorv1alpha1.IchorAutoPatchSettings{Enabled: boolPtr(true), Components: []string{"talos"}},
+		AutoPatch: &ichorv1alpha1.IchorAutoPatchSettings{Enabled: new(true), Components: []string{"talos"}},
 	}}
 
 	got := Resolve(inst, fb, false).AutoPatch

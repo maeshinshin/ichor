@@ -21,13 +21,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/credentials"
 )
 
 const credentialRequestWebhookPath = "/validate-ichor-maesh-dev-v1alpha1-taloscredentialrequest"
@@ -38,7 +42,7 @@ const downloadVerb = "download"
 
 const credentialClusters = "talosclusters"
 
-// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-taloscredentialrequest,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=None,groups=ichor.maesh.dev,resources=taloscredentialrequests,verbs=create,versions=v1alpha1,name=vtaloscredentialrequest-v1alpha1.kb.io,admissionReviewVersions=v1
+// +kubebuilder:webhook:path=/validate-ichor-maesh-dev-v1alpha1-taloscredentialrequest,mutating=false,failurePolicy=fail,timeoutSeconds=5,sideEffects=NoneOnDryRun,groups=ichor.maesh.dev,resources=taloscredentialrequests,verbs=create,versions=v1alpha1,name=vtaloscredentialrequest-v1alpha1.kb.io,admissionReviewVersions=v1
 
 // CredentialRequestHandler is the gate in front of the controller's signing key. A
 // TalosCredentialRequest asks the controller, which alone reads the secrets bundle, for a certificate; the
@@ -75,6 +79,8 @@ func credentialPermission(cr *ichorv1alpha1.TalosCredentialRequest) (verb, resou
 		return ichorv1alpha1.CredentialIssueVerb, credentialClusters, "node-reader", cluster, true
 	case ichorv1alpha1.CredentialPurposeCredentialsTalos, ichorv1alpha1.CredentialPurposeCredentialsKubernetes:
 		return downloadVerb, credentialClusters, "credentials", cluster, true
+	case ichorv1alpha1.CredentialPurposeTalosconfigReader:
+		return downloadVerb, credentialClusters, "talosconfig-reader", cluster, true
 	case ichorv1alpha1.CredentialPurposeSupportBundle, ichorv1alpha1.CredentialPurposeEtcdSnapshot,
 		ichorv1alpha1.CredentialPurposePacketCapture:
 		if cr.Spec.MachineRef == nil {
@@ -123,5 +129,56 @@ func (h *CredentialRequestHandler) Handle(ctx context.Context, req admission.Req
 		return *r
 	}
 
+	if cr.Spec.Purpose == ichorv1alpha1.CredentialPurposeTalosconfigReader {
+		if r := h.recordTalosconfigReader(ctx, req, &cr); r != nil {
+			return *r
+		}
+	}
+
 	return admission.Allowed("")
+}
+
+// talosconfigReaderReason is the Event reason of a reader talosconfig.
+const talosconfigReaderReason = "TalosconfigReader"
+
+// recordTalosconfigReader refuses a lifetime above the cap and writes the Event that names the requesting
+// user, with the controller's own client because the people who ask may not create Events. A
+// request that cannot be recorded is refused; a dry run writes nothing.
+func (h *CredentialRequestHandler) recordTalosconfigReader(ctx context.Context, req admission.Request, cr *ichorv1alpha1.TalosCredentialRequest) *admission.Response {
+	var asked time.Duration
+	if cr.Spec.TTL != nil {
+		asked = cr.Spec.TTL.Duration
+	}
+
+	ttl, err := credentials.PurposeLifetime(cr.Spec.Purpose, asked)
+	if err != nil {
+		r := admission.Denied(err.Error())
+
+		return &r
+	}
+
+	if req.DryRun != nil && *req.DryRun {
+		return nil
+	}
+
+	now := metav1.Now()
+	ev := &corev1.Event{
+		InvolvedObject: corev1.ObjectReference{
+			APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: "TalosCluster", Namespace: req.Namespace, Name: cr.Spec.ClusterRef.Name,
+		},
+		Reason:         talosconfigReaderReason,
+		Message:        fmt.Sprintf("an os:reader talosconfig was requested by %s (lifetime %s)", req.UserInfo.Username, ttl),
+		Type:           corev1.EventTypeNormal,
+		Source:         corev1.EventSource{Component: "ichor-webhook"},
+		FirstTimestamp: now, LastTimestamp: now, Count: 1,
+	}
+	ev.GenerateName, ev.Namespace = cr.Spec.ClusterRef.Name+".", req.Namespace
+
+	if err := h.Client.Create(ctx, ev); err != nil {
+		r := admission.Errored(http.StatusServiceUnavailable, fmt.Errorf("refused because the audit Event could not be recorded: %w", err))
+
+		return &r
+	}
+
+	return nil
 }

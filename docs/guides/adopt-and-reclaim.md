@@ -5,8 +5,7 @@ bringing a whole running cluster under management (`ichor adopt`), and
 resetting one machine that another cluster configured so it can join an Ichor
 cluster (`ichor machine reclaim`, or the UI).
 
-Status: built. The hardware test plan has not been run
-yet, so treat both features as untested on real clusters until it has.
+Status: built and hardware-verified on Talos v1.14 (2026-10-30). Not yet run on bare metal.
 
 ## Adopt a running cluster
 

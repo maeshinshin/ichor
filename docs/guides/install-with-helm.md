@@ -3,8 +3,8 @@
 This guide installs Ichor itself with `helm install` and then registers an
 existing Talos cluster with `ichor adopt`.
 
-Status: built. Its hardware tests have not been run, so treat this
-path as untested on real clusters until they have.
+Status: built and hardware-verified (cases E1 to E7 on Talos v1.14
+nodes, 2026-10-30). Not yet run on bare metal.
 
 The chart installs Ichor, not a cluster: CRDs (kept on uninstall), the
 controller and its RBAC, the webhooks, the UI and the optional Cilium policies.

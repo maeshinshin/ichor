@@ -478,7 +478,7 @@ func (r *TalosOperationReconciler) operationEvent(op client.Object, eventType, r
 	}
 }
 
-// setPhase persists op's phase, reason and message, then writes status.
+// setPhase persists op's phase, reason and message (status.message while InProgress), then writes status.
 func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alpha1.TalosOperation, phase, reason, message string) error {
 	previous := op.Status.Phase
 	previousPauseReason := ""
@@ -492,6 +492,13 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 	if phase == ichorv1alpha1.TalosOperationPhaseCompleted && op.Status.FinishedAt == nil {
 		now := metav1.Now()
 		op.Status.FinishedAt = &now
+	}
+
+	// status.message is what an InProgress operation is doing now; a pause says why elsewhere, and a
+	// finished operation says nothing more. An unchanged value makes the update below a no-op.
+	op.Status.Message = ""
+	if phase == ichorv1alpha1.TalosOperationPhaseInProgress {
+		op.Status.Message = message
 	}
 
 	if reason == reasonOperationStepFailed {

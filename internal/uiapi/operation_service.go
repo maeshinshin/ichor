@@ -98,6 +98,7 @@ func operationToPB(op *ichorv1alpha1.TalosOperation) *pb.Operation {
 		MaxUnavailable: op.Spec.MaxUnavailable,
 		Phase:          op.Status.Phase,
 		FailureReason:  op.Status.FailureReason,
+		Message:        op.Status.Message,
 		Conditions:     conditions(op.Status.Conditions),
 		CreatedAt:      timestamppb.New(op.CreationTimestamp.Time),
 	}

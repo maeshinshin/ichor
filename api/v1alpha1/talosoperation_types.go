@@ -540,6 +540,13 @@ type TalosOperationStatus struct {
 	// +optional
 	FailureReason string `json:"failureReason,omitempty"`
 
+	// message is what an InProgress operation is doing or waiting for right now, as the controller
+	// last saw it ("waiting for the ichor-ui Deployment to finish rolling out (1 of 2 updated
+	// replicas are available)"). It is replaced when it changes and cleared in every other phase;
+	// a pause says why in failureReason or the Paused condition, a finished operation in its Events.
+	// +optional
+	Message string `json:"message,omitempty"`
+
 	// fromVersion is deprecated and unused: Ichor no longer writes or reads it. The from-version
 	// now lives in the ichor.maesh.dev/from-version annotation (OperationFromVersionAnnotation).
 	// The field stays so the CRD never drops a field an installed version has.

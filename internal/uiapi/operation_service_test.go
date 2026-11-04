@@ -716,6 +716,25 @@ func TestListAndGetReturnStatusMachinesAsTheyAre(t *testing.T) {
 	}
 }
 
+func TestGetOperationCarriesTheStatusMessage(t *testing.T) {
+	op := &ichorv1alpha1.TalosOperation{
+		Name: "x", Namespace: opNS,
+		Spec:   ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindIchor},
+		Status: ichorv1alpha1.TalosOperationStatus{Phase: ichorv1alpha1.TalosOperationPhaseInProgress, Message: "the installer Job is running"},
+	}
+
+	srv, _ := opServer(t, append(opObjects(), op)...)
+
+	g, err := srv.GetOperation(context.Background(), connect.NewRequest(&pb.GetOperationRequest{Operation: objectRef(opNS, "x")}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := g.Msg.GetOperation().GetMessage(); got != "the installer Job is running" {
+		t.Fatalf("message = %q", got)
+	}
+}
+
 func TestAPausedOperationBlocksAndNamesBothWaysOut(t *testing.T) {
 	paused := &ichorv1alpha1.TalosOperation{
 		Name: "upgrade-x", Namespace: opNS,

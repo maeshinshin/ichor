@@ -171,17 +171,15 @@ func ParseAssignments(args []string) (Changes, error) {
 			}
 		case KeyDriftPolicy:
 			c.DriftPolicy = &v
-		case KeyUpdateCheck:
+		case KeyUpdateCheck, KeyAutoPatchEnabled:
 			var b bool
 
 			if b, err = strconv.ParseBool(v); err == nil {
-				c.UpdateCheck = &b
-			}
-		case KeyAutoPatchEnabled:
-			var b bool
-
-			if b, err = strconv.ParseBool(v); err == nil {
-				c.AutoPatchEnabled = &b
+				if k == KeyUpdateCheck {
+					c.UpdateCheck = &b
+				} else {
+					c.AutoPatchEnabled = &b
+				}
 			}
 		case KeyAutoPatchComponents:
 			c.AutoPatchComponents = []string{}

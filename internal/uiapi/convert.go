@@ -130,6 +130,15 @@ func approvalDecisionToPB(d *ichorv1alpha1.TalosMachineApprovalDecision) *pb.Mac
 	}
 }
 
+// createdAtToPB is an object's creation time, nil when unset (an object not read from an API server).
+func createdAtToPB(t metav1.Time) *timestamppb.Timestamp {
+	if t.IsZero() {
+		return nil
+	}
+
+	return timestamppb.New(t.Time)
+}
+
 // machineToPB converts a TalosMachine to the wire Machine message
 // MachineService's four methods all return (machine.proto's doc comment:
 // "One Machine message serves both" the list and the detail view).
@@ -157,6 +166,7 @@ func machineToPB(m *ichorv1alpha1.TalosMachine) *pb.Machine {
 		Conditions:       conditions(m.Status.Conditions),
 		Deleting:         !m.DeletionTimestamp.IsZero(),
 		RebootPaths:      m.Status.RebootPaths,
+		CreatedAt:        createdAtToPB(m.CreationTimestamp),
 		Stage:            "", // Talos's own MachineStatus stage: not read by this phase (GetNode's job); see docs/adr/0018.
 	}
 }
@@ -412,6 +422,7 @@ func clusterToPB(c *ichorv1alpha1.TalosCluster) *pb.Cluster {
 		Certificates:            certificatesToPB(c.Status.Certificates),
 		Versions:                componentVersionsToPB(c),
 		ReleaseSet:              releaseSetToPB(),
+		CreatedAt:               createdAtToPB(c.CreationTimestamp),
 		// Rollout and Handovers stay unset: TalosClusterStatus carries
 		// neither a rollout nor a hand-over state yet (roadmap phases 6 and
 		// 4/8's controller-side work; see docs/adr/0018's note on this).

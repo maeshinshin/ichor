@@ -1068,7 +1068,9 @@ type Cluster struct {
 	// entry per talos, version-contract, kubernetes and cilium.
 	Versions []*ComponentVersion `protobuf:"bytes,18,rep,name=versions,proto3" json:"versions,omitempty"`
 	// release_set is the versions this Ichor build supports (ADR 0113); the cluster is brought to it.
-	ReleaseSet    *ReleaseSet `protobuf:"bytes,19,opt,name=release_set,json=releaseSet,proto3" json:"release_set,omitempty"`
+	ReleaseSet *ReleaseSet `protobuf:"bytes,19,opt,name=release_set,json=releaseSet,proto3" json:"release_set,omitempty"`
+	// created_at is the object's creation time; unset when talking to an older backend.
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,20,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1232,6 +1234,13 @@ func (x *Cluster) GetVersions() []*ComponentVersion {
 func (x *Cluster) GetReleaseSet() *ReleaseSet {
 	if x != nil {
 		return x.ReleaseSet
+	}
+	return nil
+}
+
+func (x *Cluster) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
 	}
 	return nil
 }
@@ -1492,7 +1501,7 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\rHandoverState\x12\x1c\n" +
 	"\tcomponent\x18\x01 \x01(\tR\tcomponent\x123\n" +
 	"\x05phase\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.HandoverPhaseR\x05phase\x12L\n" +
-	"\x14last_transition_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"\xbf\a\n" +
+	"\x14last_transition_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"\xfa\a\n" +
 	"\aCluster\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x12#\n" +
 	"\rtalos_version\x18\x02 \x01(\tR\ftalosVersion\x12-\n" +
@@ -1517,7 +1526,9 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\x14cni_detected_version\x18\x11 \x01(\tR\x12cniDetectedVersion\x12<\n" +
 	"\bversions\x18\x12 \x03(\v2 .ichor.v1alpha1.ComponentVersionR\bversions\x12;\n" +
 	"\vrelease_set\x18\x13 \x01(\v2\x1a.ichor.v1alpha1.ReleaseSetR\n" +
-	"releaseSet\"\xbd\x01\n" +
+	"releaseSet\x129\n" +
+	"\n" +
+	"created_at\x18\x14 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xbd\x01\n" +
 	"\n" +
 	"ReleaseSet\x12#\n" +
 	"\rtalos_version\x18\x01 \x01(\tR\ftalosVersion\x12)\n" +
@@ -1626,26 +1637,27 @@ var file_ichor_v1alpha1_cluster_proto_depIdxs = []int32{
 	21, // 25: ichor.v1alpha1.Cluster.certificates:type_name -> ichor.v1alpha1.CertificateExpiry
 	20, // 26: ichor.v1alpha1.Cluster.versions:type_name -> ichor.v1alpha1.ComponentVersion
 	19, // 27: ichor.v1alpha1.Cluster.release_set:type_name -> ichor.v1alpha1.ReleaseSet
-	25, // 28: ichor.v1alpha1.CertificateExpiry.not_after:type_name -> google.protobuf.Timestamp
-	12, // 29: ichor.v1alpha1.ClusterService.ListClusters:input_type -> ichor.v1alpha1.ListClustersRequest
-	14, // 30: ichor.v1alpha1.ClusterService.GetCluster:input_type -> ichor.v1alpha1.GetClusterRequest
-	10, // 31: ichor.v1alpha1.ClusterService.AddDiscoveryAddress:input_type -> ichor.v1alpha1.AddDiscoveryAddressRequest
-	8,  // 32: ichor.v1alpha1.ClusterService.DismissCARotationAdvice:input_type -> ichor.v1alpha1.DismissCARotationAdviceRequest
-	2,  // 33: ichor.v1alpha1.ClusterService.AddDiscoveryCidr:input_type -> ichor.v1alpha1.AddDiscoveryCidrRequest
-	4,  // 34: ichor.v1alpha1.ClusterService.RemoveDiscoveryAddress:input_type -> ichor.v1alpha1.RemoveDiscoveryAddressRequest
-	5,  // 35: ichor.v1alpha1.ClusterService.RemoveDiscoveryCidr:input_type -> ichor.v1alpha1.RemoveDiscoveryCidrRequest
-	13, // 36: ichor.v1alpha1.ClusterService.ListClusters:output_type -> ichor.v1alpha1.ListClustersResponse
-	15, // 37: ichor.v1alpha1.ClusterService.GetCluster:output_type -> ichor.v1alpha1.GetClusterResponse
-	11, // 38: ichor.v1alpha1.ClusterService.AddDiscoveryAddress:output_type -> ichor.v1alpha1.AddDiscoveryAddressResponse
-	9,  // 39: ichor.v1alpha1.ClusterService.DismissCARotationAdvice:output_type -> ichor.v1alpha1.DismissCARotationAdviceResponse
-	3,  // 40: ichor.v1alpha1.ClusterService.AddDiscoveryCidr:output_type -> ichor.v1alpha1.AddDiscoveryCidrResponse
-	6,  // 41: ichor.v1alpha1.ClusterService.RemoveDiscoveryAddress:output_type -> ichor.v1alpha1.RemoveDiscoveryAddressResponse
-	7,  // 42: ichor.v1alpha1.ClusterService.RemoveDiscoveryCidr:output_type -> ichor.v1alpha1.RemoveDiscoveryCidrResponse
-	36, // [36:43] is the sub-list for method output_type
-	29, // [29:36] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	25, // 28: ichor.v1alpha1.Cluster.created_at:type_name -> google.protobuf.Timestamp
+	25, // 29: ichor.v1alpha1.CertificateExpiry.not_after:type_name -> google.protobuf.Timestamp
+	12, // 30: ichor.v1alpha1.ClusterService.ListClusters:input_type -> ichor.v1alpha1.ListClustersRequest
+	14, // 31: ichor.v1alpha1.ClusterService.GetCluster:input_type -> ichor.v1alpha1.GetClusterRequest
+	10, // 32: ichor.v1alpha1.ClusterService.AddDiscoveryAddress:input_type -> ichor.v1alpha1.AddDiscoveryAddressRequest
+	8,  // 33: ichor.v1alpha1.ClusterService.DismissCARotationAdvice:input_type -> ichor.v1alpha1.DismissCARotationAdviceRequest
+	2,  // 34: ichor.v1alpha1.ClusterService.AddDiscoveryCidr:input_type -> ichor.v1alpha1.AddDiscoveryCidrRequest
+	4,  // 35: ichor.v1alpha1.ClusterService.RemoveDiscoveryAddress:input_type -> ichor.v1alpha1.RemoveDiscoveryAddressRequest
+	5,  // 36: ichor.v1alpha1.ClusterService.RemoveDiscoveryCidr:input_type -> ichor.v1alpha1.RemoveDiscoveryCidrRequest
+	13, // 37: ichor.v1alpha1.ClusterService.ListClusters:output_type -> ichor.v1alpha1.ListClustersResponse
+	15, // 38: ichor.v1alpha1.ClusterService.GetCluster:output_type -> ichor.v1alpha1.GetClusterResponse
+	11, // 39: ichor.v1alpha1.ClusterService.AddDiscoveryAddress:output_type -> ichor.v1alpha1.AddDiscoveryAddressResponse
+	9,  // 40: ichor.v1alpha1.ClusterService.DismissCARotationAdvice:output_type -> ichor.v1alpha1.DismissCARotationAdviceResponse
+	3,  // 41: ichor.v1alpha1.ClusterService.AddDiscoveryCidr:output_type -> ichor.v1alpha1.AddDiscoveryCidrResponse
+	6,  // 42: ichor.v1alpha1.ClusterService.RemoveDiscoveryAddress:output_type -> ichor.v1alpha1.RemoveDiscoveryAddressResponse
+	7,  // 43: ichor.v1alpha1.ClusterService.RemoveDiscoveryCidr:output_type -> ichor.v1alpha1.RemoveDiscoveryCidrResponse
+	37, // [37:44] is the sub-list for method output_type
+	30, // [30:37] is the sub-list for method input_type
+	30, // [30:30] is the sub-list for extension type_name
+	30, // [30:30] is the sub-list for extension extendee
+	0,  // [0:30] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_cluster_proto_init() }

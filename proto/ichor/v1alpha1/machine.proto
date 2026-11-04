@@ -242,6 +242,8 @@ message Machine {
   // discovered_links are the physical NICs with a permanent MAC the node reported in maintenance mode
   // (TalosMachine.status.discoveredLinks, ADR 0112); approval picks the primary NIC from them.
   repeated DiscoveredLink discovered_links = 20;
+  // created_at is the object's creation time; unset when talking to an older backend.
+  google.protobuf.Timestamp created_at = 21;
 }
 
 // DiscoveredDisk is one installable disk as discovery recorded it (ADR 0112). The identifiers are

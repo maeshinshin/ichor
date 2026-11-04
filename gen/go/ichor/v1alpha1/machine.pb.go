@@ -1272,8 +1272,10 @@ type Machine struct {
 	// discovered_links are the physical NICs with a permanent MAC the node reported in maintenance mode
 	// (TalosMachine.status.discoveredLinks, ADR 0112); approval picks the primary NIC from them.
 	DiscoveredLinks []*DiscoveredLink `protobuf:"bytes,20,rep,name=discovered_links,json=discoveredLinks,proto3" json:"discovered_links,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// created_at is the object's creation time; unset when talking to an older backend.
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,21,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Machine) Reset() {
@@ -1435,6 +1437,13 @@ func (x *Machine) GetDiscoveredDisks() []*DiscoveredDisk {
 func (x *Machine) GetDiscoveredLinks() []*DiscoveredLink {
 	if x != nil {
 		return x.DiscoveredLinks
+	}
+	return nil
+}
+
+func (x *Machine) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
 	}
 	return nil
 }
@@ -1798,7 +1807,7 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\x17MachineApprovalDecision\x12\x14\n" +
 	"\x05actor\x18\x01 \x01(\tR\x05actor\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12*\n" +
-	"\x02at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\"\xbb\b\n" +
+	"\x02at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\"\xf6\b\n" +
 	"\aMachine\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x123\n" +
 	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12;\n" +
@@ -1822,7 +1831,9 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\x05disks\x18\x11 \x03(\v2\x1f.ichor.v1alpha1.MachineDiskRoleR\x05disks\x12\x1b\n" +
 	"\tnode_name\x18\x12 \x01(\tR\bnodeName\x12I\n" +
 	"\x10discovered_disks\x18\x13 \x03(\v2\x1e.ichor.v1alpha1.DiscoveredDiskR\x0fdiscoveredDisks\x12I\n" +
-	"\x10discovered_links\x18\x14 \x03(\v2\x1e.ichor.v1alpha1.DiscoveredLinkR\x0fdiscoveredLinks\x1a=\n" +
+	"\x10discovered_links\x18\x14 \x03(\v2\x1e.ichor.v1alpha1.DiscoveredLinkR\x0fdiscoveredLinks\x129\n" +
+	"\n" +
+	"created_at\x18\x15 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x1a=\n" +
 	"\x0fNodeLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01J\x04\b\b\x10\tR\bapproved\"\xe3\x01\n" +
@@ -1952,25 +1963,26 @@ var file_ichor_v1alpha1_machine_proto_depIdxs = []int32{
 	8,  // 34: ichor.v1alpha1.Machine.disks:type_name -> ichor.v1alpha1.MachineDiskRole
 	19, // 35: ichor.v1alpha1.Machine.discovered_disks:type_name -> ichor.v1alpha1.DiscoveredDisk
 	20, // 36: ichor.v1alpha1.Machine.discovered_links:type_name -> ichor.v1alpha1.DiscoveredLink
-	25, // 37: ichor.v1alpha1.RemoveMachineRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	27, // 38: ichor.v1alpha1.RemoveMachineResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	2,  // 39: ichor.v1alpha1.MachineService.ListMachines:input_type -> ichor.v1alpha1.ListMachinesRequest
-	4,  // 40: ichor.v1alpha1.MachineService.GetMachine:input_type -> ichor.v1alpha1.GetMachineRequest
-	6,  // 41: ichor.v1alpha1.MachineService.ApproveMachine:input_type -> ichor.v1alpha1.ApproveMachineRequest
-	12, // 42: ichor.v1alpha1.MachineService.RejectMachine:input_type -> ichor.v1alpha1.RejectMachineRequest
-	21, // 43: ichor.v1alpha1.MachineService.RemoveMachine:input_type -> ichor.v1alpha1.RemoveMachineRequest
-	13, // 44: ichor.v1alpha1.MachineService.SetMachineInstall:input_type -> ichor.v1alpha1.SetMachineInstallRequest
-	3,  // 45: ichor.v1alpha1.MachineService.ListMachines:output_type -> ichor.v1alpha1.ListMachinesResponse
-	5,  // 46: ichor.v1alpha1.MachineService.GetMachine:output_type -> ichor.v1alpha1.GetMachineResponse
-	11, // 47: ichor.v1alpha1.MachineService.ApproveMachine:output_type -> ichor.v1alpha1.ApproveMachineResponse
-	15, // 48: ichor.v1alpha1.MachineService.RejectMachine:output_type -> ichor.v1alpha1.RejectMachineResponse
-	22, // 49: ichor.v1alpha1.MachineService.RemoveMachine:output_type -> ichor.v1alpha1.RemoveMachineResponse
-	14, // 50: ichor.v1alpha1.MachineService.SetMachineInstall:output_type -> ichor.v1alpha1.SetMachineInstallResponse
-	45, // [45:51] is the sub-list for method output_type
-	39, // [39:45] is the sub-list for method input_type
-	39, // [39:39] is the sub-list for extension type_name
-	39, // [39:39] is the sub-list for extension extendee
-	0,  // [0:39] is the sub-list for field type_name
+	28, // 37: ichor.v1alpha1.Machine.created_at:type_name -> google.protobuf.Timestamp
+	25, // 38: ichor.v1alpha1.RemoveMachineRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	27, // 39: ichor.v1alpha1.RemoveMachineResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	2,  // 40: ichor.v1alpha1.MachineService.ListMachines:input_type -> ichor.v1alpha1.ListMachinesRequest
+	4,  // 41: ichor.v1alpha1.MachineService.GetMachine:input_type -> ichor.v1alpha1.GetMachineRequest
+	6,  // 42: ichor.v1alpha1.MachineService.ApproveMachine:input_type -> ichor.v1alpha1.ApproveMachineRequest
+	12, // 43: ichor.v1alpha1.MachineService.RejectMachine:input_type -> ichor.v1alpha1.RejectMachineRequest
+	21, // 44: ichor.v1alpha1.MachineService.RemoveMachine:input_type -> ichor.v1alpha1.RemoveMachineRequest
+	13, // 45: ichor.v1alpha1.MachineService.SetMachineInstall:input_type -> ichor.v1alpha1.SetMachineInstallRequest
+	3,  // 46: ichor.v1alpha1.MachineService.ListMachines:output_type -> ichor.v1alpha1.ListMachinesResponse
+	5,  // 47: ichor.v1alpha1.MachineService.GetMachine:output_type -> ichor.v1alpha1.GetMachineResponse
+	11, // 48: ichor.v1alpha1.MachineService.ApproveMachine:output_type -> ichor.v1alpha1.ApproveMachineResponse
+	15, // 49: ichor.v1alpha1.MachineService.RejectMachine:output_type -> ichor.v1alpha1.RejectMachineResponse
+	22, // 50: ichor.v1alpha1.MachineService.RemoveMachine:output_type -> ichor.v1alpha1.RemoveMachineResponse
+	14, // 51: ichor.v1alpha1.MachineService.SetMachineInstall:output_type -> ichor.v1alpha1.SetMachineInstallResponse
+	46, // [46:52] is the sub-list for method output_type
+	40, // [40:46] is the sub-list for method input_type
+	40, // [40:40] is the sub-list for extension type_name
+	40, // [40:40] is the sub-list for extension extendee
+	0,  // [0:40] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_machine_proto_init() }

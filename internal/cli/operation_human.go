@@ -32,13 +32,16 @@ import (
 // resume and delete, and the live view of --follow and get --watch.
 
 const (
-	colMachine = "machine"
+	opColName      = "name"
+	opColMachine   = "machine"
+	opColAge       = "age"
+	opLabelCreated = "Created"
 	// opGoneMessage is said once when a live etcd restore's operation vanishes with the rolled-back API.
-	opGoneMessage = "the operation is gone from the API (the cluster was rolled back to the snapshot); waiting for the restore to resume…"
-	labelPhase    = "Phase"
-	labelKind     = "Kind"
-	labelCluster  = "Cluster"
-	phaseWaiting  = ichorv1alpha1.TalosOperationPhasePending
+	opGoneMessage  = "the operation is gone from the API (the cluster was rolled back to the snapshot); waiting for the restore to resume…"
+	opLabelPhase   = "Phase"
+	opLabelKind    = "Kind"
+	opLabelCluster = "Cluster"
+	opPhaseWaiting = ichorv1alpha1.TalosOperationPhasePending
 )
 
 // opFailed is an operation that paused itself because a step failed (an operator's pause has no reason).
@@ -66,7 +69,7 @@ func opMark(op *pb.Operation) mark {
 }
 
 func (h *human) phase(op *pb.Operation) string {
-	return h.Mark(opMark(op)) + " " + cmp.Or(op.GetPhase(), phaseWaiting)
+	return h.Mark(opMark(op)) + " " + cmp.Or(op.GetPhase(), opPhaseWaiting)
 }
 
 // opTarget is what an operation acts on: the node of a node action, else its cluster.
@@ -91,7 +94,7 @@ func renderOperationList(h *human, resp *pb.ListOperationsResponse) error {
 		namespaces[op.GetRef().GetNamespace()] = true
 	}
 
-	header := []string{"name", "kind", "phase", "target", "message", "age"}
+	header := []string{opColName, "kind", "phase", "target", "message", opColAge}
 	if len(namespaces) > 1 {
 		header = slices.Insert(header, 0, "namespace")
 	}
@@ -125,8 +128,8 @@ func opNote(op *pb.Operation) string {
 
 func opHead(h *human, op *pb.Operation) []kv {
 	return []kv{
-		{labelKind, kindName(op.GetKind())}, {"Summary", op.GetSummary()}, {labelCluster, op.GetCluster().GetName()},
-		{labelPhase, h.phase(op)}, {"Stage", opStage(op)}, {"Message", opNote(op)}, {"Failure", op.GetFailureReason()},
+		{opLabelKind, kindName(op.GetKind())}, {"Summary", op.GetSummary()}, {opLabelCluster, op.GetCluster().GetName()},
+		{opLabelPhase, h.phase(op)}, {"Stage", opStage(op)}, {"Message", opNote(op)}, {"Failure", op.GetFailureReason()},
 		{condPaused, yesIf(op.GetPaused() && op.GetPhase() != condPaused)},
 	}
 }
@@ -135,14 +138,14 @@ func renderOperationGet(h *human, resp *pb.GetOperationResponse) error {
 	op := resp.GetOperation()
 
 	rows := opHead(h, op)
-	rows = append(rows, kv{"Started by", op.GetStartedBy()}, kv{"Created", agoOrEmpty(op.GetCreatedAt())},
+	rows = append(rows, kv{"Started by", op.GetStartedBy()}, kv{opLabelCreated, agoOrEmpty(op.GetCreatedAt())},
 		kv{"Finished", agoOrEmpty(op.GetFinishedAt())})
 	h.Block(nsName(op.GetRef()), rows...)
 
 	details := make([]kv, 0, len(op.GetDetails()))
 
 	for _, d := range op.GetDetails() {
-		if d.GetKey() != labelCluster && d.GetKey() != labelKind { // shown above
+		if d.GetKey() != opLabelCluster && d.GetKey() != opLabelKind { // shown above
 			details = append(details, kv{d.GetKey(), d.GetValue()})
 		}
 	}
@@ -161,7 +164,7 @@ func renderOperationMachines(h *human, op *pb.Operation) {
 	}
 
 	named := slices.ContainsFunc(ms, func(m *pb.OperationMachine) bool { return m.GetDisplayName() != "" })
-	header := []string{colMachine, "phase", "step", "time", "message"}
+	header := []string{opColMachine, "phase", "step", "time", "message"}
 
 	if named {
 		header = slices.Insert(header, 1, colNode)
@@ -258,7 +261,12 @@ func newOpWatch(errw io.Writer) *opWatch {
 
 // detail is what the operation is doing, in one line.
 func (w *opWatch) detail(op *pb.Operation, stage string) string {
-	parts := []string{cmp.Or(op.GetPhase(), phaseWaiting)}
+	return w.detailIn(op, stage, cmp.Or(op.GetPhase(), opPhaseWaiting))
+}
+
+// detailIn is detail with the phase given: a stage a poll jumped over was passed while the operation ran.
+func (w *opWatch) detailIn(op *pb.Operation, stage, phase string) string {
+	parts := []string{phase}
 
 	if n := len(op.GetMachines()); n > 0 {
 		done := 0
@@ -300,17 +308,16 @@ func (w *opWatch) show(op *pb.Operation) {
 		w.began(op)
 	}
 
-	if opFinished(op) || opFailed(op) {
-		return
-	}
-
 	stage := op.GetCaRotationStage()
 	for _, s := range passedStages(w.stage, stage) {
-		w.st.Update(w.detail(op, s))
+		w.st.Update(w.detailIn(op, s, ichorv1alpha1.TalosOperationPhaseInProgress))
 	}
 
-	w.st.Update(w.detail(op, stage))
 	w.stage = stage
+
+	if !opFinished(op) && !opFailed(op) { // the end line says how it ended
+		w.st.Update(w.detail(op, stage))
+	}
 }
 
 // began makes the step's time the operation's own: from its creation, or for a finished one how

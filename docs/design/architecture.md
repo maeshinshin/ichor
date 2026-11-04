@@ -928,7 +928,7 @@ The upgrade dialog offers the Talos and Kubernetes targets as a searchable list 
 controller found: the patches of the current minor and the next minor, grouped "Recommended" (the set's
 version, when newer), "Patch" and "Next minor", newest first, with the newest patch of the current minor as
 the default. A version typed in and not in the list can still be chosen; the server validates it the same
-way. `ichor upgrade talos|kubernetes --list` prints the same groups. An Ichor upgrade does not move the
+way. `ichor upgrade talos|kubernetes --list` prints the same groups as a table (recommended, patch, next minor, the default marked). An Ichor upgrade does not move the
 cluster; each component is upgraded by its own operation.
 
 A step that fails pauses its operation with a `failureReason` and is never

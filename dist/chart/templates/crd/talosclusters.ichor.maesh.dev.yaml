@@ -3298,6 +3298,19 @@ spec:
                     - images
                     - version
                     type: object
+                  jobFailures:
+                    description: |-
+                      jobFailures is how many Cilium Helm Jobs failed in a row for the values whose hash is
+                      jobFailuresHash, counted when the controller removes a failed Job to try again. Each failure
+                      doubles the wait before the next attempt (a minute, up to 30 minutes), so a Job that keeps failing
+                      does not hold the cluster operation lock in a near-continuous loop. Other values (another hash)
+                      start again at once, and a successful Job clears it. Written by the controller only.
+                    format: int32
+                    type: integer
+                  jobFailuresHash:
+                    description: jobFailuresHash is the effective-values hash jobFailures
+                      counts for.
+                    type: string
                   kubeProxy:
                     description: |-
                       kubeProxy is the mode the Talos side (cluster.proxy.disabled) is rendered for. Unset until

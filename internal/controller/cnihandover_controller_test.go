@@ -153,10 +153,36 @@ func helmReleaseAt(version int, status, chartVersion string, config map[string]a
 	DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, secret))).To(Succeed()) })
 }
 
+// liveNodes is how many Nodes the envtest API server has, which is what the reconcilers count into the
+// Cilium values.
+func liveNodes() int {
+	GinkgoHelper()
+
+	n, err := clusterNodeCount(ctx, k8sClient)
+	Expect(err).NotTo(HaveOccurred())
+
+	return n
+}
+
+// failJobJustNow marks job failed at this moment (setJobCondition leaves the transition time empty,
+// which reads as long ago and so as a retry interval that is already over).
+func failJobJustNow(job *batchv1.Job, msg string) {
+	GinkgoHelper()
+
+	setJobCondition(job, batchv1.JobFailed, msg)
+
+	now := metav1.Now()
+	for i := range job.Status.Conditions {
+		job.Status.Conditions[i].LastTransitionTime = now
+	}
+
+	Expect(k8sClient.Status().Update(ctx, job)).To(Succeed())
+}
+
 func effectiveValues(cluster *ichorv1alpha1.TalosCluster) map[string]any {
 	GinkgoHelper()
 
-	vals, err := cilium.EffectiveValuesForMode(cluster, specMode(cluster))
+	vals, err := cilium.EffectiveValuesForNodes(cluster, specMode(cluster), liveNodes())
 	Expect(err).NotTo(HaveOccurred())
 
 	return vals
@@ -165,7 +191,7 @@ func effectiveValues(cluster *ichorv1alpha1.TalosCluster) map[string]any {
 func cniJob(cluster *ichorv1alpha1.TalosCluster) *batchv1.Job {
 	GinkgoHelper()
 
-	hash, err := CNIValuesHash(cluster, specMode(cluster), 0)
+	hash, err := CNIValuesHash(cluster, specMode(cluster), liveNodes())
 	Expect(err).NotTo(HaveOccurred())
 
 	var job batchv1.Job
@@ -334,7 +360,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(conditionOf(cluster, render.ConditionCNIHandover).Reason).To(Equal("Complete"))
 		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Status).To(Equal(metav1.ConditionTrue))
 
-		hash, err := CNIValuesHash(cluster, specMode(cluster), 0)
+		hash, err := CNIValuesHash(cluster, specMode(cluster), liveNodes())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(getCluster(cluster).Status.CNI.AppliedValuesHash).To(Equal(hash))
 
@@ -441,7 +467,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionTrue))
 
-		first, err := CNIValuesHash(cluster, specMode(cluster), 0)
+		first, err := CNIValuesHash(cluster, specMode(cluster), liveNodes())
 		Expect(err).NotTo(HaveOccurred())
 
 		// The user edits the values.
@@ -455,7 +481,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.RequeueAfter).To(Equal(cniJobPollInterval))
 
-		second, err := CNIValuesHash(getCluster(cluster), specMode(cluster), 0)
+		second, err := CNIValuesHash(getCluster(cluster), specMode(cluster), liveNodes())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(second).NotTo(Equal(first))
 
@@ -534,6 +560,92 @@ var _ = Describe("CNIHandoverReconciler", func() {
 			_, failedCond := jobOutcome(&job)
 			g.Expect(failedCond).To(BeNil())
 		}).Should(Succeed())
+	})
+
+	// A Job that fails again with the same values waits twice as long each time (up to 30 minutes), and
+	// the condition says how often it failed, so it does not hold the cluster lock in a near-continuous
+	// loop.
+	DescribeTable("waits longer after each failure of the same values",
+		func(earlierFailures int32, wantWait time.Duration, wantMessage string) {
+			cluster := newTestCiliumCluster()
+			ciliumDaemonSet()(true)
+			r.JobRetryInterval = time.Minute
+
+			_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+			Expect(err).NotTo(HaveOccurred())
+
+			hash, err := CNIValuesHash(cluster, specMode(cluster), liveNodes())
+			Expect(err).NotTo(HaveOccurred())
+
+			seeded := getCluster(cluster)
+			seeded.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{JobFailures: earlierFailures, JobFailuresHash: hash}
+			Expect(k8sClient.Status().Update(ctx, seeded)).To(Succeed())
+
+			failJobJustNow(cniJob(cluster), "Job has reached the specified backoff limit")
+
+			result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(BeNumerically("~", wantWait, 10*time.Second))
+			Expect(cniJobCount(cluster)).To(Equal(1), "the failed Job stays until its wait is over")
+			Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Message).To(ContainSubstring(wantMessage))
+		},
+		Entry("the third failure", int32(2), 4*time.Minute, "failed 3 times in a row"),
+		Entry("the first failure", int32(0), time.Minute, "failed 1 time in a row"),
+		Entry("a long streak stops at the cap", int32(9), 30*time.Minute, "failed 10 times in a row"),
+	)
+
+	It("counts the failures of one set of values, starts over for other values and clears them on success", func() {
+		cluster := newTestCiliumCluster()
+		ciliumDaemonSet()(true)
+		r.JobRetryInterval = time.Nanosecond
+
+		failures := func() int32 {
+			if cni := getCluster(cluster).Status.CNI; cni != nil {
+				return cni.JobFailures
+			}
+
+			return 0
+		}
+
+		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+
+		for want := int32(1); want <= 2; want++ {
+			failJobJustNow(cniJob(cluster), "Job has reached the specified backoff limit")
+
+			_, err = reconcileHandover(r, cluster.Namespace, cluster.Name) // retires the failed Job
+			Expect(err).NotTo(HaveOccurred())
+			Expect(failures()).To(Equal(want))
+
+			_, err = reconcileHandover(r, cluster.Namespace, cluster.Name) // starts the next one
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// Other values are another Job at once, and the count starts again for them.
+		edited := getCluster(cluster)
+		edited.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{
+			Values: &apiextensionsv1.JSON{Raw: []byte(`{"debug":{"enabled":true}}`)},
+		}
+		Expect(k8sClient.Update(ctx, edited)).To(Succeed())
+
+		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		failJobJustNow(cniJob(edited), "Job has reached the specified backoff limit")
+
+		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(failures()).To(Equal(int32(1)))
+
+		// A Job that works clears the count.
+		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		setJobCondition(cniJob(edited), batchv1.JobComplete, "")
+		helmRelease(1, "deployed", effectiveValues(getCluster(cluster)))
+
+		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(failures()).To(BeZero())
+		Expect(getCluster(cluster).Status.CNI.JobFailuresHash).To(BeEmpty())
 	})
 
 	It("puts the Job's last log line in the failure condition", func() {

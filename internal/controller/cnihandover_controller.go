@@ -316,14 +316,22 @@ func (r *CNIHandoverReconciler) runJob(
 		_ = lock.Release(ctx, cniHelmLockIdentity)
 
 		res := ctrl.Result{}
+		msg := r.failureMessage(ctx, failed)
+
 		if failed.NoPod {
 			// The Job is gone; try again later, whatever was refusing its pod may have been fixed.
 			res.RequeueAfter = handoverRequeueInterval
-		} else if res.RequeueAfter, err = r.retryFailedJob(ctx, cluster, hash); err != nil {
-			return ctrl.Result{}, err
+		} else {
+			var failures int32
+			if res.RequeueAfter, failures, err = r.retryFailedJob(ctx, cluster, hash); err != nil {
+				return ctrl.Result{}, err
+			}
+
+			msg += fmt.Sprintf("; failed %d %s in a row with these values, next attempt in %s",
+				failures, map[bool]string{true: "time", false: "times"}[failures == 1], res.RequeueAfter.Round(time.Second))
 		}
 
-		return res, r.setProgress(ctx, cluster, handedOver, reasonCNIJobFailed, r.failureMessage(ctx, failed))
+		return res, r.setProgress(ctx, cluster, handedOver, reasonCNIJobFailed, msg)
 	case err != nil:
 		return ctrl.Result{}, err
 	case !done:
@@ -339,28 +347,64 @@ func (r *CNIHandoverReconciler) runJob(
 	return r.finish(ctx, cluster, hash, handedOver)
 }
 
+// cniJobRetryCap is the longest wait between two attempts of a Helm Job that keeps failing.
+const cniJobRetryCap = 30 * time.Minute
+
+// cniRetryBackoff is how long a failed Cilium Helm Job stands before it is replaced, after failures
+// failures in a row with the same values: base, doubling with each, up to cniJobRetryCap.
+func cniRetryBackoff(base time.Duration, failures int32) time.Duration {
+	d := base
+	for range max(failures, 1) - 1 {
+		if d = 2 * d; d >= cniJobRetryCap {
+			return max(cniJobRetryCap, base)
+		}
+	}
+
+	return d
+}
+
 // retryFailedJob schedules the next attempt after a Job failed: a failure may be transient (a
 // pending record another run left behind, a node restarting), and nothing else would ever look at
-// it again. Once the Job has been failed for the retry interval it is deleted, so the next pass
-// creates a fresh one (the failure stays in the condition until that Job reports). Returns when to
-// reconcile again. ponytail: a fixed interval, no growing backoff.
+// it again. Once the Job has been failed for the backoff (cniRetryBackoff: the retry interval,
+// doubling with each failure of the same values) it is deleted, so the next pass creates a fresh
+// one (the failure stays in the condition until that Job reports). A failing Job otherwise holds the
+// cluster lock for its whole run, over and over. The failure count
+// lives in status.cni.jobFailures, updated when the failed Job is removed; another values hash is
+// another Job and counts from zero. Returns when to reconcile again and how often these values have
+// failed in a row, the Job just seen included.
 func (r *CNIHandoverReconciler) retryFailedJob(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, hash string,
-) (time.Duration, error) {
+) (time.Duration, int32, error) {
 	interval := cmp.Or(r.JobRetryInterval, cniJobRetryInterval)
+
+	var retired int32
+	if s := cluster.Status.CNI; s != nil && s.JobFailuresHash == hash {
+		retired = s.JobFailures
+	}
 
 	var job batchv1.Job
 
 	err := r.reader().Get(ctx, types.NamespacedName{Namespace: cniJobNamespace, Name: cniHelmJobName(cluster, hash)}, &job)
 	if err != nil {
-		return interval, client.IgnoreNotFound(err)
+		return cniRetryBackoff(interval, retired), retired, client.IgnoreNotFound(err)
 	}
 
-	if wait := interval - time.Since(jobEnded(&job)); wait > 0 {
-		return wait, nil
+	failures := retired + 1
+
+	if wait := cniRetryBackoff(interval, failures) - time.Since(jobEnded(&job)); wait > 0 {
+		return wait, failures, nil
 	}
 
-	return time.Second, deleteCNIHelmJob(ctx, r.Client, &job)
+	if cluster.Status.CNI == nil {
+		cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{}
+	}
+
+	cluster.Status.CNI.JobFailures, cluster.Status.CNI.JobFailuresHash = failures, hash
+	if err := r.Status().Update(ctx, cluster); err != nil {
+		return 0, failures, err
+	}
+
+	return time.Second, failures, deleteCNIHelmJob(ctx, r.Client, &job)
 }
 
 // finish checks the Helm release and the DaemonSet after a completed Job and records the hand-over.
@@ -400,6 +444,7 @@ func (r *CNIHandoverReconciler) finish(
 	}
 
 	cluster.Status.CNI.AppliedValuesHash = hash
+	cluster.Status.CNI.JobFailures, cluster.Status.CNI.JobFailuresHash = 0, ""
 
 	// An adopted cluster's own Cilium inline manifest entry (named by `ichor adopt` in an
 	// annotation) is recorded in the same update that sets CNIHandover, so render drops it exactly

@@ -99,7 +99,7 @@ func renderPatchList(h *human, resp *pb.ListPatchesResponse) error {
 	}
 
 	withCluster := len(clusters) > 1
-	header := []string{nameColumn, "target", "priority", "documents", ageColumn}
+	header := []string{colName, "target", "priority", "documents", colAge}
 
 	if withCluster {
 		header = slices.Insert(header, 1, "cluster")
@@ -123,8 +123,8 @@ func renderPatchList(h *human, resp *pb.ListPatchesResponse) error {
 
 func renderPatchGet(h *human, resp *pb.GetPatchResponse) error {
 	p := resp.GetPatch()
-	h.Block(nsName(p.GetRef()), kv{"Cluster", p.GetCluster().GetName()}, kv{"Target", patchTarget(p)},
-		kv{"Priority", fmt.Sprint(p.GetPriority())}, kv{createdLabel, agoOrEmpty(p.GetCreatedAt())})
+	h.Block(nsName(p.GetRef()), kv{labelCluster, p.GetCluster().GetName()}, kv{"Target", patchTarget(p)},
+		kv{"Priority", fmt.Sprint(p.GetPriority())}, kv{labelCreated, agoOrEmpty(p.GetCreatedAt())})
 
 	if len(p.GetDocuments()) == 0 {
 		return h.Err()

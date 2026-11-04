@@ -59,7 +59,7 @@ func initshowCluster() *pb.Cluster {
 		Versions: []*pb.ComponentVersion{
 			{Name: compTalos, Current: testTalosVersion, Target: testTalosVersion, State: humanUpToDate},
 			{Name: "version-contract", Current: testVersionContract, Target: testVersionContract, State: humanUpToDate},
-			{Name: compKubernetes, Current: "v1.36.4", Target: humanK8s, State: "behind"},
+			{Name: compKubernetes, Current: testOldK8s, Target: humanK8s, State: stateBehind},
 			{Name: string(detectedCilium), Current: testCiliumVersion, Target: testCiliumVersion, State: humanUpToDate},
 		},
 		Certificates: []*pb.CertificateExpiry{
@@ -193,6 +193,7 @@ const (
 	testCiliumVersion = "1.20.4"
 	cpUUID            = "fa70962a-4fd9-4d01-88c5-f9966adcda99"
 	pendingUID        = "0b1c2d3e-4f50-6071-8293-a4b5c6d7e8f9"
+	testOldK8s        = "v1.36.4"
 )
 
 func machinesFixture() []*pb.Machine {
@@ -505,12 +506,12 @@ func TestVersionRowPrintsTheBareVersionUnlessItDiffers(t *testing.T) {
 		v    *pb.ComponentVersion
 		want string
 	}{
-		{"equal, empty state", &pb.ComponentVersion{Current: "v1.14.5", Target: "v1.14.5"}, "v1.14.5"},
-		{"equal, up to date", &pb.ComponentVersion{Current: "v1.14.5", Target: "v1.14.5", State: stateUpToDate}, "v1.14.5"},
-		{"equal, unknown", &pb.ComponentVersion{Current: "v1.14.5", Target: "v1.14.5", State: "unknown"}, "v1.14.5"},
-		{"no target", &pb.ComponentVersion{Current: "v1.14.5"}, "v1.14.5"},
-		{"behind", &pb.ComponentVersion{Current: "v1.36.4", Target: "v1.36.6", State: "behind"}, "v1.36.4 (behind: this Ichor ships v1.36.6)"},
-		{"differs, empty state", &pb.ComponentVersion{Current: "v1.36.4", Target: "v1.36.6"}, "v1.36.4 (this Ichor ships v1.36.6)"},
+		{"equal, empty state", &pb.ComponentVersion{Current: testTalosVersion, Target: testTalosVersion}, testTalosVersion},
+		{"equal, up to date", &pb.ComponentVersion{Current: testTalosVersion, Target: testTalosVersion, State: stateUpToDate}, testTalosVersion},
+		{"equal, unknown", &pb.ComponentVersion{Current: testTalosVersion, Target: testTalosVersion, State: "unknown"}, testTalosVersion},
+		{"no target", &pb.ComponentVersion{Current: testTalosVersion}, testTalosVersion},
+		{"behind", &pb.ComponentVersion{Current: testOldK8s, Target: "v1.36.6", State: stateBehind}, "v1.36.4 (behind: this Ichor ships v1.36.6)"},
+		{"differs, empty state", &pb.ComponentVersion{Current: testOldK8s, Target: "v1.36.6"}, "v1.36.4 (this Ichor ships v1.36.6)"},
 	} {
 		if got := versionRow(tc.v); got != tc.want {
 			t.Errorf("%s: versionRow = %q, want %q", tc.name, got, tc.want)

@@ -47,7 +47,7 @@ func renderMachineList(h *human, resp *pb.ListMachinesResponse) error {
 
 	names = shortNames(names)
 	withCluster := len(clusters) > 1
-	header := []string{colName, colRole, "approval", "ready", "endpoint", colNode, colAge}
+	header := []string{colName, colRole, "approval", colReady, "endpoint", colNode, colAge}
 
 	if withCluster {
 		header = slices.Insert(header, 1, "cluster")

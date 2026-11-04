@@ -30,6 +30,7 @@ const (
 	colNode    = "node"
 	colVersion = "version"
 	colAge     = "age"
+	colReady   = "ready"
 
 	labelCluster = "Cluster"
 	labelCreated = "Created"

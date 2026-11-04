@@ -146,6 +146,9 @@ type fakeTalosClient struct {
 	identityErr  error
 	schematic    string
 	schematicErr error
+	// securityState is the boot security the fake node reports.
+	securityState SecurityState
+	securityErr   error
 	// node-action fields.
 	serviceRestarts   []string
 	serviceRestartErr error
@@ -288,6 +291,10 @@ func (f *fakeTalosClient) Identity(context.Context) (HardwareIdentity, error) {
 
 func (f *fakeTalosClient) Schematic(context.Context) (string, error) {
 	return f.schematic, f.schematicErr
+}
+
+func (f *fakeTalosClient) SecurityState(context.Context) (SecurityState, error) {
+	return f.securityState, f.securityErr
 }
 
 func (f *fakeTalosClient) Version(context.Context) (string, error) {

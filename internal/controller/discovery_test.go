@@ -56,6 +56,14 @@ type fakeMaintenanceClient struct {
 	// inventory and inventoryErr are what the disk and NIC read returns.
 	inventory    Inventory
 	inventoryErr error
+
+	// securityState and securityErr are what the maintenance-mode SecurityState read returns.
+	securityState SecurityState
+	securityErr   error
+}
+
+func (f *fakeMaintenanceClient) SecurityState(context.Context) (SecurityState, error) {
+	return f.securityState, f.securityErr
 }
 
 func (f *fakeMaintenanceClient) PeerFingerprint() string { return f.fingerprint }

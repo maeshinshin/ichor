@@ -164,6 +164,11 @@ func (m *machineryMaintenanceClient) Inventory(ctx context.Context) (Inventory, 
 	return ReadInventory(ctx, m.c.COSI)
 }
 
+// SecurityState reads the node's boot security over the unauthenticated maintenance API; see ReadSecurityState.
+func (m *machineryMaintenanceClient) SecurityState(ctx context.Context) (SecurityState, error) {
+	return ReadSecurityState(ctx, m.c.COSI)
+}
+
 // ReadInventory lists the disks an install or a disk role can take (block.Disk, minus the CD-ROM drives
 // and read-only disks the approval pickers leave out) and the physical links with a permanent address
 // (network.LinkStatus), the same links ReadHardwareIdentity takes MACs from. Both lists come

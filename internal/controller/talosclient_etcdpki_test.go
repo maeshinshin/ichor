@@ -58,7 +58,7 @@ func newTestCA(t *testing.T, name string) testCA {
 
 	cert, _ := stdx509.ParseCertificate(der)
 
-	return testCA{cert: cert, key: key, pem: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})}
+	return testCA{cert: cert, key: key, pem: pem.EncodeToMemory(&pem.Block{Type: pemTypeCertificate, Bytes: der})}
 }
 
 func (ca testCA) issue(t *testing.T) []byte {
@@ -66,7 +66,7 @@ func (ca testCA) issue(t *testing.T) []byte {
 
 	key, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	tmpl := &stdx509.Certificate{
-		SerialNumber: big.NewInt(time.Now().UnixNano() + 1), Subject: pkix.Name{CommonName: "etcd"},
+		SerialNumber: big.NewInt(time.Now().UnixNano() + 1), Subject: pkix.Name{CommonName: serviceEtcd},
 		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
 	}
 
@@ -75,13 +75,13 @@ func (ca testCA) issue(t *testing.T) []byte {
 		t.Fatal(err)
 	}
 
-	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	return pem.EncodeToMemory(&pem.Block{Type: pemTypeCertificate, Bytes: der})
 }
 
 // Two CAs with the same subject name must still be told apart: the rotation's old and new etcd CAs
 // are generated the same way and carry the same name.
 func TestEtcdPKIFromTellsTwoCAsOfTheSameNameApart(t *testing.T) {
-	oldCA, newCA := newTestCA(t, "etcd"), newTestCA(t, "etcd")
+	oldCA, newCA := newTestCA(t, serviceEtcd), newTestCA(t, serviceEtcd)
 	bundle := slices.Concat(newCA.pem, oldCA.pem)
 
 	got, err := etcdPKIFrom(bundle, oldCA.issue(t))
@@ -107,7 +107,7 @@ func TestEtcdPKIFromTellsTwoCAsOfTheSameNameApart(t *testing.T) {
 }
 
 func TestEtcdPKIFromRefusesWhatItCannotRead(t *testing.T) {
-	ca := newTestCA(t, "etcd")
+	ca := newTestCA(t, serviceEtcd)
 
 	if _, err := etcdPKIFrom(nil, ca.issue(t)); err == nil {
 		t.Fatal("an empty CA field must be an error")

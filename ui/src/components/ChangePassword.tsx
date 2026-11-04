@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { userClient } from '@/lib/connect'
-import { signOut } from '@/lib/oidc'
+import { signInAgain } from '@/lib/login'
+import { clearToken } from '@/lib/oidc'
 import { minPasswordLength, passwordError, passwordOk } from '@/lib/users'
 import type { ErrorShape } from '@/lib/errors'
 import { t } from '@/lib/i18n'
@@ -31,11 +32,14 @@ export function ChangePasswordForm({ onCancel }: { onCancel?: () => void }) {
     setError(null)
     try {
       await userClient.changeOwnPassword({ oldPassword, newPassword: next })
+      // The change ended every token issued before it, this tab's included, so sign
+      // this tab in again with the new password; other sessions stay
+      // ended. If that fails the tab signs out and the person signs in by hand.
+      await signInAgain(next).catch(clearToken)
       setOld('')
       setNext('')
       setAgain('')
-      // A password change ends every token issued before it, this tab's included, so sign in again with the new password.
-      signOut()
+      window.location.assign('/')
     } catch (err) {
       setError(passwordError(err))
     } finally {

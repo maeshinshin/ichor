@@ -357,24 +357,41 @@ func rejectRegistryCredentials(cluster *ichorv1alpha1.TalosCluster) error {
 // createCRs implements design step 5, "create the CRs": the
 // TalosCluster, the first control plane's TalosMachine, and every
 // candidate TalosConfigPatch, then prints what it created in the
-// requested output format (design: "-o yaml|json").
+// requested output format (design: "-o yaml|json"); by default only one line per object.
 func createCRs(
 	ctx context.Context, create func(context.Context, client.Object) error,
 	cluster *ichorv1alpha1.TalosCluster, machine *ichorv1alpha1.TalosMachine, candidates []ichorv1alpha1.TalosConfigPatch,
 	stdout io.Writer, output string,
 ) error {
+	// With no -o given (output ""), one line per object; the objects themselves only on -o yaml|json.
+	created := func(kind string, obj client.Object) {
+		if output == "" {
+			_, _ = fmt.Fprintf(stdout, "init: created %s %s/%s\n", kind, obj.GetNamespace(), obj.GetName())
+		}
+	}
+
 	if err := create(ctx, cluster); err != nil {
 		return fmt.Errorf("init: creating TalosCluster: %w", err)
 	}
+
+	created("TalosCluster", cluster)
 
 	if err := create(ctx, machine); err != nil {
 		return fmt.Errorf("init: creating TalosMachine: %w", err)
 	}
 
-	for _, p := range candidates {
-		if err := create(ctx, &p); err != nil {
-			return fmt.Errorf("init: creating TalosConfigPatch %q: %w", p.Name, err)
+	created("TalosMachine", machine)
+
+	for i := range candidates {
+		if err := create(ctx, &candidates[i]); err != nil {
+			return fmt.Errorf("init: creating TalosConfigPatch %q: %w", candidates[i].Name, err)
 		}
+
+		created("TalosConfigPatch", &candidates[i])
+	}
+
+	if output == "" {
+		return nil
 	}
 
 	out := []client.Object{cluster, machine}

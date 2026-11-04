@@ -27,6 +27,13 @@ import (
 	"github.com/spf13/pflag"
 )
 
+const (
+	testOtherCluster = "other"
+	testOtherAddr    = "10.9.9.9"
+	testVDA          = "/dev/vda"
+	initKeyName      = "name"
+)
+
 const initFileFull = `apiVersion: ichor.maesh.dev/v1alpha1
 kind: InitConfig
 cluster:
@@ -135,7 +142,7 @@ func TestInitFile_FullExampleEqualsTheFlagLine(t *testing.T) {
 		"--endpoint-type", "node", "--endpoint-address", "10.244.1.56",
 		"--pod-subnets", "10.248.0.0/16", "--service-subnets", "10.249.0.0/16",
 		"--cni-tunnel", "geneve", "--registry-mirror", "ghcr.io=http://10.107.28.190:5000",
-		"--node-endpoint", "10.244.1.56:50000", "--install-disk", "/dev/vda",
+		"--node-endpoint", "10.244.1.56:50000", "--install-disk", testVDA,
 		"--ephemeral-disk-selector", `disk.wwid == "e"`,
 		"--storage-disk-selector", `disk.wwid == "s"`, "--storage-volume-name", "storage",
 		"--user-volume-disk-selector", `disk.wwid == "u"`, "--user-volume-name", "data",
@@ -160,20 +167,20 @@ func TestInitFile_FullExampleEqualsTheFlagLine(t *testing.T) {
 func TestInitFile_AFlagOverridesTheFile(t *testing.T) {
 	file := writeInitFile(t, t.TempDir(), initFileFull)
 
-	o, _, err := parsedInit(t, file, "--cluster", "other", "--discover-address", "10.9.9.9", "--preset", "large")
+	o, _, err := parsedInit(t, file, "--cluster", testOtherCluster, "--discover-address", testOtherAddr, "--preset", "large")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if o.Cluster != "other" || o.Preset != "large" {
+	if o.Cluster != testOtherCluster || o.Preset != "large" {
 		t.Errorf("cluster %q preset %q, want the flags' values", o.Cluster, o.Preset)
 	}
 
-	if !reflect.DeepEqual(o.DiscoverAddresses, []string{"10.9.9.9"}) {
+	if !reflect.DeepEqual(o.DiscoverAddresses, []string{testOtherAddr}) {
 		t.Errorf("discover addresses %v, want only the flag's", o.DiscoverAddresses)
 	}
 
-	if o.InstallDisk != "/dev/vda" {
+	if o.InstallDisk != testVDA {
 		t.Errorf("install disk %q, want the file's", o.InstallDisk)
 	}
 }
@@ -185,8 +192,8 @@ func TestInitFile_ParseErrors(t *testing.T) {
 		},
 		"wrong kind":       {strings.Replace(initFileMinimal, "InitConfig", "Other", 1), `"Other"`},
 		"wrong apiVersion": {strings.Replace(initFileMinimal, "v1alpha1", "v2", 1), `"ichor.maesh.dev/v2"`},
-		"wrong type":       {strings.Replace(initFileMinimal, "name: demo", "name: [a]", 1), "name"},
-		"duplicate key":    {initFileMinimal + "cluster:\n  name: x\n", "cluster"},
+		"wrong type":       {strings.Replace(initFileMinimal, "name: demo", "name: [a]", 1), initKeyName},
+		"duplicate key":    {initFileMinimal + "cluster:\n  name: x\n", flagCluster},
 		"bad duration":     {initFileMinimal + "waitTimeout: soon\n", "waitTimeout"},
 	} {
 		t.Run(name, func(t *testing.T) {

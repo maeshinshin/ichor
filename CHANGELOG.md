@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.0 (unreleased date: 2026-11-04)
+## v0.1.0 (2026-11-04)
 
 First release. Alpha: exercised end to end on Talos v1.14 clusters running as
 KubeVirt VMs, not yet on bare metal.

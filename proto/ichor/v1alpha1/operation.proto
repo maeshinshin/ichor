@@ -295,6 +295,9 @@ message Operation {
   // started_by is who created the operation, when Ichor recorded it; empty otherwise.
   string started_by = 42;
   google.protobuf.Timestamp finished_at = 43;
+  // ca_targets are the CAs of a ca-rotation; empty for every other kind. The credential
+  // hand-off applies when talos or kubernetes is one.
+  repeated string ca_targets = 44;
 }
 
 message OperationDetail {

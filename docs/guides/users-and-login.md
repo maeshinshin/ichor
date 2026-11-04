@@ -401,10 +401,24 @@ a new one.
 - An ID token lasts 5 minutes by default (1 minute to 1 hour). ichor-ui checks
   it against the user's `notBefore` on every request: **revoking sessions or
   changing the password ends tokens issued before it**, here within 10 seconds
-  per replica (a cache), and a browser that changes its own password is signed
-  out. The kube-apiserver cannot do this check, so a token already given to
+  per replica (a cache). The kube-apiserver cannot do this check, so a token already given to
   `kubectl` lives out its 5 minutes there.
-- A refresh token (CLI only) is single-use: every refresh returns a new one
+- The browser stays signed in for as long as the CLI would, not for 5 minutes.
+  The sign-in form asks for a refresh token, and the page trades it for a new
+  ID token about a minute before the current one ends (and when you come back to
+  a tab, and when a request is refused), until the **session lifetime**
+  (`ichorUI.users.refreshLifetime`, 12 hours by default, 1 hour to 30 days) since
+  you typed the password. It does not slide: after that you sign in again, even in
+  a tab you are using. Sign out, a revoke-sessions, a password change or a
+  disabled user end it as before (the next refresh is refused and the tab
+  returns to the sign-in card). The refresh token lives in the tab's
+  `sessionStorage` next to the ID token, so closing the tab ends the browser
+  session; each tab has its own sign-in, and a tab duplicated by the browser
+  signs in again instead of sharing the original's session. There is no idle
+  timeout: an open tab on an unattended screen stays signed in until the
+  session lifetime, so lock the screen, or shorten `refreshLifetime`. The
+  sign-in with an external identity provider is unchanged.
+- A refresh token is single-use: every refresh returns a new one
   and retires the old. Presenting a retired token ends the whole chain, which is
   what a stolen copy looks like; the owner signs in again. The state is kept
   in the user's entry of the `ichor-user-credentials` Secret, so all replicas
@@ -484,8 +498,11 @@ Ichor has no way to take back a token that is already issued. The 5 minute
 token lifetime is the limit.
 
 To end every existing session of a user, revoke their sessions. Changing a
-user's password also ends their earlier sessions. A session lasts at most 12
-hours.
+user's password also ends their earlier sessions. A session lasts at most the
+session lifetime (12 hours by default). Signing out in the browser (or
+`ichor auth logout`) discards the tokens in that browser or cache; it does not
+revoke a copy someone took before, which lasts to the end of its lifetime unless
+you revoke the user's sessions.
 
 ## Override
 

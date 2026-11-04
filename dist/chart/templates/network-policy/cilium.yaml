@@ -112,14 +112,17 @@ spec:
     - ports:
       - port: "8081"
         protocol: TCP
-  {{- if .Values.metrics.enabled }}
-  # /metrics: in-cluster scrapers only; with metricsNamespaces, only pods of those namespaces.
-  - {{ if $metricsNamespaces }}fromEndpoints:
+  {{- if and .Values.metrics.enabled $metricsNamespaces }}
+  # /metrics: only pods of the named namespaces, and with metricsPodLabels only those pods (ADR 0126). With
+  # none named nothing may open the port.
+  - fromEndpoints:
     {{- range $metricsNamespaces }}
     - matchLabels:
         k8s:io.kubernetes.pod.namespace: {{ . | quote }}
-    {{- end }}{{ else }}fromEntities:
-    - cluster{{ end }}
+        {{- range $k, $v := $.Values.networkPolicy.cilium.metricsPodLabels }}
+        {{ printf "k8s:%s" $k | quote }}: {{ $v | quote }}
+        {{- end }}
+    {{- end }}
     toPorts:
     - ports:
       - port: {{ .Values.metrics.port | quote }}
@@ -231,8 +234,11 @@ spec:
         protocol: TCP
   {{- end }}
   {{- include "ichor.cnp.dns" . | nindent 2 }}
-  # The external OIDC issuer.
+  {{- if and .Values.ichorUI.oidc.enabled (or (not $dynamic) $externalCIDRs) }}
+  # The external OIDC issuer: the controller's ichor-ui-oidc-egress names it from the Deployment (ADR 0126);
+  # this is the fallback when that policy is off, or the CIDRs named here.
   {{- include "ichor.cnp.world" $external | nindent 2 }}
+  {{- end }}
 {{- end }}
 {{- if .Values.installer.enabled }}
 ---

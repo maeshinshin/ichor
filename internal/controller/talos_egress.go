@@ -71,6 +71,9 @@ const (
 	keyToPorts         = "toPorts"
 	keyEgress          = "egress"
 	keyMatchName       = "matchName"
+	keyDescription     = "description"
+	keySelector        = "endpointSelector"
+	keyMatchLabels     = "matchLabels"
 	valueControllerMgr = "controller-manager"
 	keyCIDR            = "cidr"
 )
@@ -372,7 +375,7 @@ func controllerPolicyApp(ctx context.Context, c client.Client, ns, skip string) 
 		}
 
 		labels, _, _ := unstructured.NestedStringMap(o.Object, keySpec, "endpointSelector", "matchLabels")
-		if labels["control-plane"] == valueControllerMgr && labels["app.kubernetes.io/name"] != "" {
+		if labels[controlPlaneLabel] == valueControllerMgr && labels["app.kubernetes.io/name"] != "" {
 			return labels["app.kubernetes.io/name"], nil
 		}
 	}
@@ -481,12 +484,12 @@ func (e *TalosEgress) sync(ctx context.Context) (bool, error) {
 	}
 
 	spec := map[string]any{
-		"description": "Egress of the controller and ichor-ui to the machines, cluster endpoints and S3 stores " +
+		keyDescription: "Egress of the controller and ichor-ui to the machines, cluster endpoints and S3 stores " +
 			"Ichor's own objects name. Written by the controller (ADR 0100); edits are overwritten.",
-		"endpointSelector": map[string]any{
-			"matchLabels": map[string]any{"app.kubernetes.io/name": app},
+		keySelector: map[string]any{
+			keyMatchLabels: map[string]any{"app.kubernetes.io/name": app},
 			"matchExpressions": []any{map[string]any{
-				"key": "control-plane", "operator": "In", "values": []any{valueControllerMgr, "ui-backend"},
+				"key": controlPlaneLabel, "operator": "In", "values": []any{valueControllerMgr, "ui-backend"},
 			}},
 		},
 		keyEgress: buildEgress(t),

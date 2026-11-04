@@ -16,6 +16,10 @@ Network: Ichor's CiliumNetworkPolicies are on for namespace {{ .Release.Namespac
 NOTICE: an earlier release of this chart did not render them by default. To opt out, set networkPolicy.cilium.enabled=false
 (or delete the ciliumnetworkpolicies in the namespace after setting it).
 {{- end }}
+{{- if and .Values.metrics.enabled (not .Values.networkPolicy.cilium.metricsNamespaces) }}
+The controller's metrics port ({{ .Values.metrics.port }}) is closed to every pod (ADR 0126). To let a Prometheus scrape it, set
+networkPolicy.cilium.metricsNamespaces to its namespace (and networkPolicy.cilium.metricsPodLabels to narrow it to its pods).
+{{- end }}
 {{- end }}
 
 To verify the installation:

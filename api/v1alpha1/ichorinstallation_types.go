@@ -246,6 +246,16 @@ type IchorUpgradeTargets struct {
 	// error is the failure of the last listing; a list that failed keeps its last good value.
 	// +optional
 	Error string `json:"error,omitempty"`
+	// talosError is why the last listing of the Talos releases failed; empty when it succeeded. The
+	// other lists are unaffected (ADR 0115, amendment 2026-11-04).
+	// +optional
+	TalosError string `json:"talosError,omitempty"`
+	// kubernetesError is why the last listing of the Kubernetes releases failed; empty when it succeeded.
+	// +optional
+	KubernetesError string `json:"kubernetesError,omitempty"`
+	// ciliumError is why the last listing of the Cilium releases failed; empty when it succeeded.
+	// +optional
+	CiliumError string `json:"ciliumError,omitempty"`
 }
 
 // IchorLatestRelease is the result of the controller's check for a newer Ichor release (ADR 0114).

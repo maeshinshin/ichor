@@ -146,11 +146,30 @@ func TestListUpgradeTargetsSaysWhyTheListIsNotThere(t *testing.T) {
 	}
 }
 
+// One repository that could not be listed must not make the other lists unavailable (ADR 0115, amendment
+// 2026-11-04): each kind reports its own error.
+func TestListUpgradeTargetsReportsTheErrorOfTheKindAskedOnly(t *testing.T) {
+	inst := recordedLists([]string{"v1.12.4"}, nil, "listing the Kubernetes releases: registry unreachable")
+	inst.Status.UpgradeTargets.KubernetesError = "listing the Kubernetes releases: registry unreachable"
+
+	srv, _ := opServer(t, upgradeCluster("v1.12.0", "1.20.0"), inst)
+
+	if m := listUpgradeTargets(t, srv, pb.OperationKind_OPERATION_KIND_TALOS); !m.GetAvailable() || m.GetDefault() != "v1.12.4" {
+		t.Fatalf("a Kubernetes failure blanked Talos: available = %v, reason = %q, default = %q",
+			m.GetAvailable(), m.GetUnavailableReason(), m.GetDefault())
+	}
+
+	if m := listUpgradeTargets(t, srv, pb.OperationKind_OPERATION_KIND_KUBERNETES); m.GetAvailable() ||
+		!strings.Contains(m.GetUnavailableReason(), "registry unreachable") {
+		t.Fatalf("the Kubernetes list should say why: available = %v, reason = %q", m.GetAvailable(), m.GetUnavailableReason())
+	}
+}
+
 func TestListUpgradeTargetsKeepsTheLastListWhenTheCheckFailed(t *testing.T) {
-	srv, _ := opServer(t,
-		upgradeCluster("v1.12.0", "1.20.0"),
-		recordedLists([]string{"v1.12.4"}, nil, "listing the Kubernetes releases: registry unreachable"),
-	)
+	inst := recordedLists([]string{"v1.12.4"}, nil, "listing the Talos releases: registry unreachable")
+	inst.Status.UpgradeTargets.TalosError = "listing the Talos releases: registry unreachable"
+
+	srv, _ := opServer(t, upgradeCluster("v1.12.0", "1.20.0"), inst)
 
 	m := listUpgradeTargets(t, srv, pb.OperationKind_OPERATION_KIND_TALOS)
 

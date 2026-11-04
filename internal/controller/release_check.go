@@ -389,20 +389,24 @@ func upgradeTargetsOf(prev *ichorv1alpha1.IchorUpgradeTargets, now metav1.Time, 
 
 	var errs []error
 
+	// Each list fails on its own: its error is recorded beside it and the others are untouched.
 	if talos.err != nil {
-		errs = append(errs, fmt.Errorf("listing the Talos releases: %w", talos.err))
+		out.TalosError = fmt.Errorf("listing the Talos releases: %w", talos.err).Error()
+		errs = append(errs, errors.New(out.TalosError))
 	} else {
 		out.Talos = release.AtLeast(releasecheck.Finals(talos.tags), release.TalosFloor)
 	}
 
 	if kube.err != nil {
-		errs = append(errs, fmt.Errorf("listing the Kubernetes releases: %w", kube.err))
+		out.KubernetesError = fmt.Errorf("listing the Kubernetes releases: %w", kube.err).Error()
+		errs = append(errs, errors.New(out.KubernetesError))
 	} else {
 		out.Kubernetes = release.AtLeast(releasecheck.Finals(kube.tags), release.KubernetesFloor)
 	}
 
 	if ciliumList.err != nil {
-		errs = append(errs, fmt.Errorf("listing the Cilium releases: %w", ciliumList.err))
+		out.CiliumError = fmt.Errorf("listing the Cilium releases: %w", ciliumList.err).Error()
+		errs = append(errs, errors.New(out.CiliumError))
 	} else {
 		out.Cilium = ciliumList.tags
 	}

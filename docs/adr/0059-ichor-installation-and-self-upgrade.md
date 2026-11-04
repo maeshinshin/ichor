@@ -86,8 +86,8 @@ judge" and the command proceeds. Not marked yet: `init`, `adopt`, `restore`, `gi
 server exists or against its absence; revisit when `ichor self-upgrade` lands). `ichor init` now creates the
 `IchorInstallation` with its own version (skipped for a `dev` build).
 
-**7. UI response header: not started.** `internal/uiapi` and `ui/` were being changed by the OIDC unit. After it
-lands: the backend sends `X-Ichor-Version` on every response from `internal/version`; the SPA compares it with
+**7. UI response header: not built.** Nothing sends or reads it; the version badge (`ui/src/lib/ichorVersion.ts`)
+is what exists. It was to work like this: the backend sends `X-Ichor-Version` on every response from `internal/version`; the SPA compares it with
 the version baked into its bundle and prompts a reload when they differ.
 
 ## The installer's RBAC, and how far it narrows
@@ -149,7 +149,8 @@ released version yet and no cluster to run it on.
    cluster without an `IchorInstallation` answers with empty fields, not an error. The app shell shows the
    installed version as a badge in the top bar, plus an "Update available" badge only when the server says so; a
    failed read shows nothing. The `X-Ichor-Version` response header (decision 7, a reload prompt when the bundle
-   and backend differ) is still not built; this label is separate from it.
+   and backend differ) is still not built (decision 7 says so too); this label (`ui/src/lib/ichorVersion.ts`) is
+   separate from it.
 4. **`external` mode and Git: a pull request.** What the PR changes is the one thing prmode can edit safely:
    the `IchorInstallation` document in the file the tracking Argo CD Application's plain path source holds,
    field `spec.version` (target `IchorInstallation/ichor`, branch `ichor/upgrade-ichor-<version>`, so asking

@@ -1,0 +1,84 @@
+name: Cilium patch
+
+# Ichor pins the Cilium chart it embeds; a new upstream patch reaches users through an Ichor release.
+# This turns a new patch of the pinned minor into a pull request (hack/bump-cilium-patch.sh, CONTRIBUTING.md).
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: cilium-patch
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    permissions:
+      contents: write
+      pull-requests: write
+    name: Bump the embedded Cilium chart
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+
+      # Exits 0 without a change when the pinned chart is already the newest patch of its minor; refuses
+      # (non-zero, no change) when the images of the new patch are not signed by Cilium's release workflow.
+      - name: Move the pins to the newest patch
+        id: bump
+        run: nix develop --command hack/bump-cilium-patch.sh
+
+      # The gates test.yml and lint.yml run, so the pull request is opened only for a change that passes
+      # them. A red run here is the signal that this patch needs a person.
+      - name: Running Tests
+        if: steps.bump.outputs.new != ''
+        run: nix develop --command make test
+
+      - name: Run linter
+        if: steps.bump.outputs.new != ''
+        run: nix develop --command make lint
+
+      # A pull request opened with the default GITHUB_TOKEN does not start other workflows. Set the
+      # CILIUM_PATCH_PR_TOKEN secret (a fine-grained token with contents and pull requests write) to have
+      # Tests, Lint and PR Title run on it as on any other pull request.
+      - name: Open the pull request
+        if: steps.bump.outputs.new != ''
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ secrets.CILIUM_PATCH_PR_TOKEN || secrets.GITHUB_TOKEN }}
+          branch: chore/cilium-patch
+          sign-commits: true
+          add-paths: |
+            Makefile
+            README.md
+            docs/guides
+            pkg/cni/cilium
+            pkg/release/compat.go
+            test/e2e/foreign/cilium_test.go
+            test/internal/foreign/foreign.go
+          commit-message: "chore(cni): bump the embedded Cilium chart to ${{ steps.bump.outputs.new }}"
+          title: "chore(cni): bump the embedded Cilium chart to ${{ steps.bump.outputs.new }}"
+          body: |
+            Moves the Cilium chart Ichor embeds from ${{ steps.bump.outputs.old }} to ${{ steps.bump.outputs.new }}, the newest patch of the same minor.
+
+            Upstream release notes: https://github.com/cilium/cilium/releases/tag/v${{ steps.bump.outputs.new }}
+
+            Checked by `hack/bump-cilium-patch.sh` before it wrote anything:
+
+            - the chart archive matches the digest in https://helm.cilium.io/index.yaml (`make cilium-chart` verifies it again);
+            - the agent, operator-generic and hubble-relay images the chart pins are signed by the Cilium release workflow of tag v${{ steps.bump.outputs.new }} (cosign, keyless);
+            - Cilium tests this minor with the same Kubernetes versions as before, so `pkg/release/compat.go` still holds.
+
+            Changed: the pin and digest in the Makefile, the `go:embed` line and `ChartVersion` in `pkg/cni/cilium`, the chart archive, the bootstrap goldens (`make cilium-goldens`) and the version named in the README, the guides and the foreign-cluster hardware tests. `make test` and `make lint` passed on this change.
+
+            Merging does not move any cluster: a cluster's Cilium only moves to the chart embedded in the running Ichor, so this reaches users with the next Ichor release (CONTRIBUTING.md, "Cilium patch bumps").
+          delete-branch: true

@@ -325,8 +325,8 @@ func TestAdoptNoCNI_InstalledValuesEqualTheControllersValues(t *testing.T) {
 		t.Fatalf("installed values differ from the controller's:\ninstalled %v\nderived   %v", installed, derived)
 	}
 
-	h1, err1 := controller.CNIValuesHash(calls[0].cluster, calls[0].mode)
-	h2, err2 := controller.CNIValuesHash(&written, mode)
+	h1, err1 := controller.CNIValuesHash(calls[0].cluster, calls[0].mode, 0)
+	h2, err2 := controller.CNIValuesHash(&written, mode, 0)
 
 	if err1 != nil || err2 != nil || h1 != h2 {
 		t.Fatalf("values hashes differ: %q (%v) vs %q (%v)", h1, err1, h2, err2)

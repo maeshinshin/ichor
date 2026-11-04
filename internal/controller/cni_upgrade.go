@@ -227,7 +227,12 @@ func (a *cniKubeProxyAdvancer) upgradeChartRelease(
 	}
 
 	if rel.Status == helmStatusDeployed && rel.ChartVersion == target {
-		hash, err := CNIValuesHash(cluster, mode)
+		nodes, err := clusterNodeCount(ctx, a.Reader)
+		if err != nil {
+			return false, err
+		}
+
+		hash, err := CNIValuesHash(cluster, mode, nodes)
 		if err != nil {
 			return false, err
 		}

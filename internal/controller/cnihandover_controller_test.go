@@ -165,7 +165,7 @@ func effectiveValues(cluster *ichorv1alpha1.TalosCluster) map[string]any {
 func cniJob(cluster *ichorv1alpha1.TalosCluster) *batchv1.Job {
 	GinkgoHelper()
 
-	hash, err := CNIValuesHash(cluster, specMode(cluster))
+	hash, err := CNIValuesHash(cluster, specMode(cluster), 0)
 	Expect(err).NotTo(HaveOccurred())
 
 	var job batchv1.Job
@@ -334,7 +334,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(conditionOf(cluster, render.ConditionCNIHandover).Reason).To(Equal("Complete"))
 		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Status).To(Equal(metav1.ConditionTrue))
 
-		hash, err := CNIValuesHash(cluster, specMode(cluster))
+		hash, err := CNIValuesHash(cluster, specMode(cluster), 0)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(getCluster(cluster).Status.CNI.AppliedValuesHash).To(Equal(hash))
 
@@ -441,7 +441,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionTrue))
 
-		first, err := CNIValuesHash(cluster, specMode(cluster))
+		first, err := CNIValuesHash(cluster, specMode(cluster), 0)
 		Expect(err).NotTo(HaveOccurred())
 
 		// The user edits the values.
@@ -455,7 +455,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.RequeueAfter).To(Equal(cniJobPollInterval))
 
-		second, err := CNIValuesHash(getCluster(cluster), specMode(cluster))
+		second, err := CNIValuesHash(getCluster(cluster), specMode(cluster), 0)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(second).NotTo(Equal(first))
 

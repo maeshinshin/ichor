@@ -123,7 +123,7 @@ export function ReclaimDialog({
           {label ?? t('reclaim.button')}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-lg overflow-y-auto">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-cols-1 overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('reclaim.title')}</DialogTitle>
           <DialogDescription>{t('reclaim.description')}</DialogDescription>
@@ -192,7 +192,7 @@ export function ReclaimDialog({
                 <>
                   <Field label={t('reclaim.foreignCluster')}>{insp.clusterName || '-'}</Field>
                   <Field label={t('reclaim.uuid')}>
-                    <span class="font-mono">{insp.uuid}</span>
+                    <span class="font-mono break-all">{insp.uuid}</span>
                   </Field>
                   <Field label={t('reclaim.hostname')}>{insp.hostname || '-'}</Field>
                   <Field label={t('reclaim.role')}>{insp.role || '-'}</Field>

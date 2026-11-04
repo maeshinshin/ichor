@@ -62,7 +62,7 @@ export function SetInstallDialog({
       <DialogTrigger asChild>
         <Button size="sm">{t('installDisk.button')}</Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="grid-cols-1 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('installDisk.title', { name: machine.ref?.name ?? '' })}</DialogTitle>
           <DialogDescription>{t('installDisk.description')}</DialogDescription>

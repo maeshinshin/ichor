@@ -61,6 +61,9 @@ func checkInitCompat(talos, kubernetes, cilium string) error {
 
 var initOpts initOptions
 
+// initWaitTimeout is --wait-timeout: how long init waits for Ichor's controller to serve its webhooks.
+var initWaitTimeout = defaultWebhookWait
+
 // initCmd implements `ichor init`, steps 1-5 of
 // docs/design/architecture.md's "Bootstrap" (step 6, hand-over, is a
 // continuous reconciliation and a different unit's work). Alongside
@@ -116,6 +119,7 @@ change to this cluster goes through the controller, by writing CRs.`,
 			Stdin:           cmd.InOrStdin(),
 			AssumeYes:       assumeYes,
 			Output:          outputFormat,
+			WebhookWait:     initWaitTimeout,
 		}
 
 		return runInit(cmd.Context(), initOpts, deps)
@@ -143,6 +147,8 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 
 	flags := initCmd.Flags()
+	flags.DurationVar(&initWaitTimeout, "wait-timeout", defaultWebhookWait,
+		"how long to wait for Ichor's controller to serve its admission webhooks before writing the first resources")
 	flags.StringVar(&initOpts.Cluster, flagCluster, "", "name of the TalosCluster to create (required)")
 	flags.StringVarP(&initOpts.Namespace, "namespace", "n", ichorControllerNamespace,
 		"namespace the TalosCluster, its TalosMachine and the secrets bundle Secret live in; "+

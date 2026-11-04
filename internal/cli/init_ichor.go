@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"golang.org/x/mod/semver"
@@ -123,7 +124,12 @@ var initRetryWindow = 3 * time.Minute
 // initRetryable is an error init's apply steps wait out: a transient API error, or a kind the
 // API server does not know yet (a CRD this install just created is not Established yet).
 func initRetryable(err error) bool {
-	return isTransient(err) || apimeta.IsNoMatchError(err)
+	return isTransient(err) || apimeta.IsNoMatchError(err) || webhookRefused(err)
+}
+
+// webhookRefused is the API server failing to call one of Ichor's admission webhooks.
+func webhookRefused(err error) bool {
+	return apierrors.IsInternalError(err) && strings.Contains(err.Error(), "webhook")
 }
 
 // retryInit runs fn, retrying initRetryable errors with backoff for up to initRetryWindow and

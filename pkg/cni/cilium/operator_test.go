@@ -25,25 +25,7 @@ func renderedOperatorReplicas(t *testing.T, cluster *ichorv1alpha1.TalosCluster,
 		t.Fatal(err)
 	}
 
-	for doc := range strings.SplitSeq(string(manifest), "\n---\n") {
-		var obj struct {
-			Kind     string `json:"kind"`
-			Metadata struct {
-				Name string `json:"name"`
-			} `json:"metadata"`
-			Spec struct {
-				Replicas int `json:"replicas"`
-			} `json:"spec"`
-		}
-
-		if err := sigsyaml.Unmarshal([]byte(doc), &obj); err == nil && obj.Kind == "Deployment" && obj.Metadata.Name == "cilium-operator" {
-			return obj.Spec.Replicas
-		}
-	}
-
-	t.Fatal("no cilium-operator Deployment in the rendered chart")
-
-	return 0
+	return operatorReplicas(t, manifest)
 }
 
 // A cluster that is bootstrapped with one node and grows to its desired control-plane count must not

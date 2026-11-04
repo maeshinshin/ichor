@@ -303,21 +303,8 @@ type tokenResponse struct {
 // public (no secret), so client_id is the only client check besides the
 // redirect URI and PKCE.
 func (i *Issuer) token(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, maxFormBytes)
-	if !hasContentType(r, "application/x-www-form-urlencoded") || r.ParseForm() != nil {
-		oauthError(w, http.StatusBadRequest, errInvalidRequest, "form body required")
-		return
-	}
-	f := r.PostForm
-	for _, v := range f {
-		if len(v) > 1 {
-			oauthError(w, http.StatusBadRequest, errInvalidRequest, "repeated parameter")
-			return
-		}
-	}
-	client := f.Get("client_id")
-	if client != ichorauth.ClientUI && client != ichorauth.ClientCLI {
-		oauthError(w, http.StatusUnauthorized, "invalid_client", "unknown client")
+	f, client, ok := publicClientForm(w, r)
+	if !ok {
 		return
 	}
 	switch f.Get("grant_type") {
@@ -328,6 +315,64 @@ func (i *Issuer) token(w http.ResponseWriter, r *http.Request) {
 	default:
 		oauthError(w, http.StatusBadRequest, "unsupported_grant_type", "")
 	}
+}
+
+// publicClientForm reads the form body of a token-endpoint request and the public client it names.
+// It has answered the request itself when ok is false.
+func publicClientForm(w http.ResponseWriter, r *http.Request) (f url.Values, client string, ok bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxFormBytes)
+	if !hasContentType(r, "application/x-www-form-urlencoded") || r.ParseForm() != nil {
+		oauthError(w, http.StatusBadRequest, errInvalidRequest, "form body required")
+		return nil, "", false
+	}
+	f = r.PostForm
+	for _, v := range f {
+		if len(v) > 1 {
+			oauthError(w, http.StatusBadRequest, errInvalidRequest, "repeated parameter")
+			return nil, "", false
+		}
+	}
+	client = f.Get("client_id")
+	if client != ichorauth.ClientUI && client != ichorauth.ClientCLI {
+		oauthError(w, http.StatusUnauthorized, "invalid_client", "unknown client")
+		return nil, "", false
+	}
+	return f, client, true
+}
+
+// revoke is the RFC 7009 revocation endpoint for refresh tokens: it deletes the token's family, so the
+// token and every other token of the family stop refreshing. Like the token endpoint it knows only
+// public clients, so client_id is the sole client check. A token that is not a valid refresh token
+// (unknown, expired, an ID token, the family already gone) answers 200 like a revoked one (no oracle);
+// a valid token issued to another client is refused and left alone. ID tokens are not revocable (they
+// end by themselves within TokenTTL), so a token_type_hint of access_token is unsupported_token_type.
+func (i *Issuer) revoke(w http.ResponseWriter, r *http.Request) {
+	f, client, ok := publicClientForm(w, r)
+	if !ok {
+		return
+	}
+	if f.Get("token") == "" {
+		oauthError(w, http.StatusBadRequest, errInvalidRequest, "token required")
+		return
+	}
+	if f.Get("token_type_hint") == "access_token" {
+		oauthError(w, http.StatusBadRequest, "unsupported_token_type", "only refresh tokens can be revoked")
+		return
+	}
+	var rc refreshClaims
+	std, err := i.verify(f.Get("token"), ichorauth.TypRefresh, &rc)
+	if err == nil && rc.ClientID != client {
+		oauthError(w, http.StatusBadRequest, errInvalidGrant, "token was issued to another client")
+		return
+	}
+	if err == nil && rc.Family != "" && i.cfg.Refresh != nil {
+		if err := i.cfg.Refresh.Revoke(r.Context(), std.Subject, rc.Family); err != nil && !errors.Is(err, ErrRefreshReused) {
+			oauthError(w, http.StatusInternalServerError, "server_error", "")
+			return
+		}
+	}
+	noStore(w)
+	w.WriteHeader(http.StatusOK)
 }
 
 func (i *Issuer) codeGrant(w http.ResponseWriter, r *http.Request, client string) {

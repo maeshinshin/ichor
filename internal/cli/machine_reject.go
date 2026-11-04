@@ -54,6 +54,10 @@ func runMachineReject(ctx context.Context, c *apiClients, in io.Reader, out, err
 		return err
 	}
 
+	if outputFormat == outputHuman {
+		return renderMachineRejected(newHuman(out), name, reason)
+	}
+
 	return writeMessage(out, outputFormat, resp.Msg)
 }
 

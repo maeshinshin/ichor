@@ -14,6 +14,14 @@ version: 2
 # "dist/" entirely rather than trying to carve out a shared subdirectory.
 dist: .goreleaser-dist
 
+# Produce what `make build-ichor-embed` embeds, naming the images of the tag being released, so the
+# released CLI's `ichor init` applies a real install manifest (-tags installembed below).
+before:
+  hooks:
+    - make build-installer IMG=ghcr.io/maeshinshin/ichor-controller:{{ .Tag }} IMG_UI=ghcr.io/maeshinshin/ichor-ui:{{ .Tag }}
+    - cp dist/install.yaml internal/installmanifest/install.yaml
+    - cp dist/network-policies.yaml internal/installmanifest/network-policies.yaml
+
 builds:
   - id: ichor
     main: ./cmd/ichor
@@ -28,9 +36,11 @@ builds:
       - arm64
     flags:
       - -trimpath
+    tags:
+      - installembed
     mod_timestamp: "{{ .CommitTimestamp }}"
     ldflags:
-      - -s -w -X github.com/maeshinshin/ichor/internal/version.Version={{ .Version }}
+      - -s -w -X github.com/maeshinshin/ichor/internal/version.Version={{ .Tag }}
 
 archives:
   - formats: [tar.gz]

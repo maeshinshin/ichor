@@ -98,6 +98,21 @@ func (b *IssuerBackend) Rotate(ctx context.Context, user, family, oldJTI, newJTI
 	})
 }
 
+// Revoke implements oidcissuer.RefreshStore: sign-out (RFC 7009) deletes the family. A family or user
+// entry that is already gone is success.
+func (b *IssuerBackend) Revoke(ctx context.Context, user, family string) error {
+	err := b.updateCredential(ctx, user, func(c *ichorauth.Credential, _ time.Time) error {
+		delete(c.Families, family)
+
+		return nil
+	})
+	if errors.Is(err, oidcissuer.ErrRefreshReused) {
+		return nil
+	}
+
+	return err
+}
+
 // updateCredential applies fn to the user's entry and stores the result with an
 // optimistic lock, retrying on a concurrent write. fn's error is returned after
 // the entry was stored.

@@ -23,6 +23,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/siderolabs/crypto/x509"
@@ -32,6 +33,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
 // RotationKey is the key, in the same Secret as SecretKey, under which a CA rotation keeps the new
@@ -39,39 +42,118 @@ import (
 // crash can never leave nodes trusting a CA whose key nobody has.
 const RotationKey = "rotation.yaml"
 
-// Rotation is the new Talos API CA and Kubernetes API CA of a CA rotation in progress.
+// Rotation is the new CAs of a CA rotation in progress. A CA that is not rotated is nil; the set of
+// CAs present is the rotation's targets, fixed when it started. Rotations saved by an
+// earlier Ichor hold the Talos and Kubernetes CAs only.
 type Rotation struct {
-	Talos      *x509.PEMEncodedCertificateAndKey `yaml:"talos"`
-	Kubernetes *x509.PEMEncodedCertificateAndKey `yaml:"kubernetes"`
+	Talos      *x509.PEMEncodedCertificateAndKey `yaml:"talos,omitempty"`
+	Kubernetes *x509.PEMEncodedCertificateAndKey `yaml:"kubernetes,omitempty"`
+	Etcd       *x509.PEMEncodedCertificateAndKey `yaml:"etcd,omitempty"`
+	Aggregator *x509.PEMEncodedCertificateAndKey `yaml:"aggregator,omitempty"`
 }
 
-// NewRotation generates the two new CAs the way a new bundle does.
+// NewRotation generates the new Talos API CA and Kubernetes API CA the way a new bundle does.
 func NewRotation(now time.Time, contract *config.VersionContract) (*Rotation, error) {
-	talosCA, err := secrets.NewTalosCA(now)
-	if err != nil {
-		return nil, fmt.Errorf("generating a Talos API CA: %w", err)
-	}
-
-	k8sCA, err := secrets.NewKubernetesCA(now, contract)
-	if err != nil {
-		return nil, fmt.Errorf("generating a Kubernetes API CA: %w", err)
-	}
-
-	return &Rotation{
-		Talos:      &x509.PEMEncodedCertificateAndKey{Crt: talosCA.CrtPEM, Key: talosCA.KeyPEM},
-		Kubernetes: &x509.PEMEncodedCertificateAndKey{Crt: k8sCA.CrtPEM, Key: k8sCA.KeyPEM},
-	}, nil
+	return NewRotationFor(now, contract, ichorv1alpha1.DefaultCARotationTargets())
 }
 
-// Validate reports whether r holds both CAs with a key. The message never includes their content.
-func (r *Rotation) Validate() error {
-	for name, ca := range map[string]*x509.PEMEncodedCertificateAndKey{"talos": r.Talos, "kubernetes": r.Kubernetes} {
-		if ca == nil || len(ca.Crt) == 0 || len(ca.Key) == 0 {
-			return fmt.Errorf("rotation CA %q is missing its certificate or key", name)
+// NewRotationFor generates the new CAs for targets (the ichorv1alpha1.CARotationTarget* names).
+func NewRotationFor(now time.Time, contract *config.VersionContract, targets []string) (*Rotation, error) {
+	if len(targets) == 0 {
+		return nil, errors.New("a rotation needs at least one CA to replace")
+	}
+
+	var (
+		r   Rotation
+		err error
+	)
+
+	for _, target := range targets {
+		var (
+			ca   *x509.CertificateAuthority
+			into **x509.PEMEncodedCertificateAndKey
+		)
+
+		switch target {
+		case ichorv1alpha1.CARotationTargetTalos:
+			ca, err = secrets.NewTalosCA(now)
+			into = &r.Talos
+		case ichorv1alpha1.CARotationTargetKubernetes:
+			ca, err = secrets.NewKubernetesCA(now, contract)
+			into = &r.Kubernetes
+		case ichorv1alpha1.CARotationTargetEtcd:
+			ca, err = secrets.NewEtcdCA(now, contract)
+			into = &r.Etcd
+		case ichorv1alpha1.CARotationTargetAggregator:
+			ca, err = secrets.NewAggregatorCA(now, contract)
+			into = &r.Aggregator
+		default:
+			return nil, fmt.Errorf("%q is not a CA this rotation can replace", target)
 		}
 
-		if _, err := Fingerprint(ca.Crt); err != nil {
-			return fmt.Errorf("rotation CA %q: %w", name, err)
+		if err != nil {
+			return nil, fmt.Errorf("generating the new %s CA: %w", target, err)
+		}
+
+		*into = &x509.PEMEncodedCertificateAndKey{Crt: ca.CrtPEM, Key: ca.KeyPEM}
+	}
+
+	return &r, nil
+}
+
+// named lists the rotation's CAs with their target names, in the fixed order of Targets.
+func (r *Rotation) named() []struct {
+	Name string
+	CA   *x509.PEMEncodedCertificateAndKey
+} {
+	return []struct {
+		Name string
+		CA   *x509.PEMEncodedCertificateAndKey
+	}{
+		{ichorv1alpha1.CARotationTargetTalos, r.Talos},
+		{ichorv1alpha1.CARotationTargetKubernetes, r.Kubernetes},
+		{ichorv1alpha1.CARotationTargetEtcd, r.Etcd},
+		{ichorv1alpha1.CARotationTargetAggregator, r.Aggregator},
+	}
+}
+
+// Targets lists the CAs r replaces, in a fixed order: talos, kubernetes, etcd, kubernetes-aggregator.
+func (r *Rotation) Targets() []string {
+	var out []string
+
+	for _, n := range r.named() {
+		if n.CA != nil {
+			out = append(out, n.Name)
+		}
+	}
+
+	return out
+}
+
+// RotatesCredentials reports whether r replaces a CA the operator's talosconfig or kubeconfig
+// depends on, which is what makes the operation wait for a credential hand-off.
+func (r *Rotation) RotatesCredentials() bool {
+	return r.Talos != nil || r.Kubernetes != nil
+}
+
+// Validate reports whether r holds at least one CA and every CA it holds has a certificate and a
+// key. The message never includes their content.
+func (r *Rotation) Validate() error {
+	if len(r.Targets()) == 0 {
+		return errors.New("the rotation holds no CA")
+	}
+
+	for _, n := range r.named() {
+		if n.CA == nil {
+			continue
+		}
+
+		if len(n.CA.Crt) == 0 || len(n.CA.Key) == 0 {
+			return fmt.Errorf("rotation CA %q is missing its certificate or key", n.Name)
+		}
+
+		if _, err := Fingerprint(n.CA.Crt); err != nil {
+			return fmt.Errorf("rotation CA %q: %w", n.Name, err)
 		}
 	}
 
@@ -97,14 +179,28 @@ func ParseRotation(raw []byte) (*Rotation, error) {
 	return &r, nil
 }
 
-// Apply returns a copy of bundle with its Talos API CA and Kubernetes API CA replaced by r's. Every
-// other field, including everything the etcd backup key derives from, is shared with bundle
-// unchanged.
+// Apply returns a copy of bundle with the CAs r holds replaced. Every other field, including
+// everything the etcd backup key derives from, is shared with bundle unchanged.
 func (r *Rotation) Apply(bundle *secrets.Bundle) *secrets.Bundle {
 	out := *bundle
 	certs := *bundle.Certs
-	certs.OS = r.Talos
-	certs.K8s = r.Kubernetes
+
+	if r.Talos != nil {
+		certs.OS = r.Talos
+	}
+
+	if r.Kubernetes != nil {
+		certs.K8s = r.Kubernetes
+	}
+
+	if r.Etcd != nil {
+		certs.Etcd = r.Etcd
+	}
+
+	if r.Aggregator != nil {
+		certs.K8sAggregator = r.Aggregator
+	}
+
 	out.Certs = &certs
 
 	return &out
@@ -163,6 +259,35 @@ func BundleFingerprint(bundle *secrets.Bundle) (string, error) {
 	}
 
 	sum := sha256.Sum256([]byte(talos + "/" + k8s))
+
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// ExportFingerprint identifies the CAs a saved copy of the bundle must carry to recover the cluster
+// from: BundleFingerprint's two CAs and the etcd and aggregator CAs. `bundle-export` and
+// the cert-expiry reconciler compare it; the credentials code, which only needs the Talos and
+// Kubernetes CAs, keeps BundleFingerprint. A bundle without an etcd or aggregator CA counts them empty.
+func ExportFingerprint(bundle *secrets.Bundle) (string, error) {
+	base, err := BundleFingerprint(bundle)
+	if err != nil {
+		return "", err
+	}
+
+	parts := []string{base}
+
+	for _, ca := range []*x509.PEMEncodedCertificateAndKey{bundle.Certs.Etcd, bundle.Certs.K8sAggregator} {
+		fp := ""
+
+		if ca != nil {
+			if fp, err = Fingerprint(ca.Crt); err != nil {
+				return "", err
+			}
+		}
+
+		parts = append(parts, fp)
+	}
+
+	sum := sha256.Sum256([]byte(strings.Join(parts, "/")))
 
 	return hex.EncodeToString(sum[:]), nil
 }

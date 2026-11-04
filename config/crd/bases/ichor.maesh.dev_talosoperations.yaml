@@ -59,6 +59,27 @@ spec:
           spec:
             description: spec defines the desired state of TalosOperation
             properties:
+              caRotation:
+                description: |-
+                  caRotation chooses which CAs a ca-rotation-kind operation replaces. Absent means the
+                  Talos API CA and the Kubernetes API CA, as before.
+                properties:
+                  targets:
+                    description: |-
+                      targets lists the CAs to replace: talos, kubernetes, etcd, kubernetes-aggregator. Empty means
+                      talos and kubernetes. The set is fixed when the rotation starts; the new CAs saved in the bundle
+                      Secret are what a restarted controller follows.
+                    items:
+                      enum:
+                      - talos
+                      - kubernetes
+                      - etcd
+                      - kubernetes-aggregator
+                      type: string
+                    maxItems: 4
+                    type: array
+                    x-kubernetes-list-type: set
+                type: object
               clusterRef:
                 description: clusterRef names the TalosCluster this operation acts
                   on.
@@ -306,6 +327,11 @@ spec:
             - message: node cannot change after creation
               rule: has(self.node) == has(oldSelf.node) && (!has(self.node) || self.node
                 == oldSelf.node)
+            - message: spec.caRotation is only allowed for the ca-rotation kind
+              rule: '!has(self.caRotation) || self.kind == ''ca-rotation'''
+            - message: caRotation cannot change after creation
+              rule: has(self.caRotation) == has(oldSelf.caRotation) && (!has(self.caRotation)
+                || self.caRotation == oldSelf.caRotation)
           status:
             description: status defines the observed state of TalosOperation
             properties:
@@ -334,8 +360,9 @@ spec:
                             in the current stage.
                           type: string
                         name:
-                          description: name is talos (the Talos API CA) or kubernetes
-                            (the Kubernetes API CA).
+                          description: |-
+                            name is talos (the Talos API CA), kubernetes (the Kubernetes API CA), etcd (the etcd CA) or
+                            kubernetes-aggregator (the aggregator, or front-proxy, CA).
                           type: string
                         next:
                           description: |-
@@ -354,6 +381,19 @@ spec:
                     x-kubernetes-list-map-keys:
                     - name
                     x-kubernetes-list-type: map
+                  etcdRestarted:
+                    description: |-
+                      etcdRestarted names the control planes whose etcd was restarted in the current stage, in the order
+                      they were restarted. Emptied when the stage changes.
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: set
+                  etcdRestartedAt:
+                    description: etcdRestartedAt is when the last etcd member was
+                      restarted; the next one waits after it.
+                    format: date-time
+                    type: string
                   stage:
                     description: |-
                       stage is the stage every node is being taken to; see the CARotationStage* constants.

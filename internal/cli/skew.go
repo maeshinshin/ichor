@@ -85,5 +85,5 @@ func init() {
 	markWrites(machineApproveCmd, machineRejectCmd, patchCreateCmd, patchUpdateCmd, patchDeleteCmd)
 
 	rootCmd.PersistentPreRunE = skewPreRun
-	rootCmd.Version = version.Version
+	rootCmd.Version = clientVersion()
 }

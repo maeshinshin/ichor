@@ -65,7 +65,7 @@ func TestBundleExportSavesReadsBackAndAcknowledges(t *testing.T) {
 	var out bytes.Buffer
 
 	err := runBundleExport(context.Background(),
-		bundleExportDeps{K8s: k8s, Save: saveBundleFile, Load: loadBundleFile, Stdout: &out}, testNamespace, testNamespace, name)
+		bundleExportDeps{K8s: k8s, Save: savePlainBundle, Load: loadBundleFile, Stdout: &out}, testNamespace, testNamespace, name)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestBundleExportDoesNotAcknowledgeWhatItCouldNotSave(t *testing.T) {
 	other := newFreshTestBundle(t)
 	deps := bundleExportDeps{
 		K8s: k8s, Stdout: &bytes.Buffer{},
-		Save: func(cluster string, _ *secrets.Bundle) (string, error) { return saveBundleFile(cluster, other) },
+		Save: func(cluster string, _ *secrets.Bundle) (string, error) { return saveBundleFile(cluster, other, "") },
 		Load: loadBundleFile,
 	}
 
@@ -129,7 +129,7 @@ func TestBundleExportRefusesWhileARotationIsUnderWay(t *testing.T) {
 	k8s, name := bundleExportFixture(t, newTestBundle(t), map[string][]byte{secretsbundle.RotationKey: []byte("x")})
 
 	err := runBundleExport(context.Background(),
-		bundleExportDeps{K8s: k8s, Save: saveBundleFile, Load: loadBundleFile, Stdout: &bytes.Buffer{}}, testNamespace, testNamespace, name)
+		bundleExportDeps{K8s: k8s, Save: savePlainBundle, Load: loadBundleFile, Stdout: &bytes.Buffer{}}, testNamespace, testNamespace, name)
 	if err == nil || !strings.Contains(err.Error(), "rotation") {
 		t.Fatalf("export during a rotation must be refused, got %v", err)
 	}

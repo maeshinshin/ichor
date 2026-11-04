@@ -45,7 +45,7 @@ func TestSaveBundleFile_PermissionsAndRoundTrip(t *testing.T) {
 
 	bundle := newTestBundle(t)
 
-	path, err := saveBundleFile("my-cluster", bundle)
+	path, err := saveBundleFile("my-cluster", bundle, "")
 	if err != nil {
 		t.Fatalf("saveBundleFile: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestSaveBundleFile_FixesLooseExistingDirectory(t *testing.T) {
 		t.Fatalf("pre-creating loose directory: %v", err)
 	}
 
-	if _, err := saveBundleFile("my-cluster", newTestBundle(t)); err != nil {
+	if _, err := saveBundleFile("my-cluster", newTestBundle(t), ""); err != nil {
 		t.Fatalf("saveBundleFile: %v", err)
 	}
 
@@ -232,7 +232,7 @@ func TestFsyncDir_ErrorsOnMissingDir(t *testing.T) {
 func TestLoadBundleFileFillsClock(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
-	path, err := saveBundleFile("my-cluster", newTestBundle(t))
+	path, err := saveBundleFile("my-cluster", newTestBundle(t), "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -59,7 +59,8 @@ func wantRebootRequired(t *testing.T, paths ...string) {
 	t.Helper()
 
 	for _, path := range paths {
-		if got := Assess([]string{path}, nil); !got.RebootRequired || len(got.InstallTimeOnly) != 0 || len(got.APIServerRestartPaths) != 0 {
+		got := Assess([]string{path}, nil)
+		if !got.RebootRequired || len(got.InstallTimeOnly) != 0 || len(got.APIServerRestartPaths) != 0 {
 			t.Errorf("Assess(%q) = %+v, want reboot-required only", path, got)
 		}
 	}

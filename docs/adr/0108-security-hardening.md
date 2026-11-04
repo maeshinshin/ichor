@@ -131,11 +131,9 @@ Decided: documented as a follow-up. Ichor's rotation covers the Talos API CA and
 - **Restore marker (S7).** The marker in the backup bucket is stored as `{"marker": ..., "mac": ...}`. The MAC is
   HMAC-SHA256 over the marker JSON, keyed by HKDF over the backup passphrase with info
   `ichor.maesh.dev/etcd-backup/marker/v1`, so it follows whatever key material the backup passphrase derives from.
-  A signature mismatch is an error. A legacy unsigned marker is accepted with a logged warning and re-signed by the
-  next write: refusing it would strand a restore that is half done across an upgrade, since the marker is the only
-  record of how far the destructive part got. The cost is that an attacker with bucket write access can still strip the
-  signature; refusing unsigned markers is planned for the release after this one. Snapshot rollback by replaying an
-  older valid snapshot is not addressed here.
+  A signature mismatch is an error. Snapshot rollback by replaying an older valid snapshot is not addressed here.
+  Amendment (before v0.1.0): an unsigned marker is refused as well (`ErrMarkerSignature`, "take a new backup with this
+  version"); the earlier compatibility path for unsigned markers served builds that never shipped, so it was removed.
 - **Scrubber (S8).** `bundleSecretMaterial` is derived by reflection over every exported string and `[]byte` field of
   the Talos secrets bundle (trimmed, so a PEM that lost its trailing newline still matches), so keys the bundle gains
   or that were missing (etcd, aggregator and service-account keys, encryption secrets) are redacted. Rotation CAs were

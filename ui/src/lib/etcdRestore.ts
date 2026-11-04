@@ -1,6 +1,8 @@
 // Pure helpers for "Restore from backup". No import from "@/gen": these run directly
 // under `node --test`.
 
+import { stageProgress } from './operations.ts'
+
 export type Ref = { namespace: string; name: string }
 
 // SnapshotChoice is one snapshot the user can restore, with the backup that holds it.
@@ -57,10 +59,5 @@ export function canRestore(o: {
 }
 
 // The steps status.etcdRestore.step goes through, in order.
-export const restoreSteps = ['Wiping', 'Recovering', 'Rejoining', 'Reconciling'] as const
-
-// restoreStepProgress is where a restore is, as a 1-based position; null before the first step.
-export function restoreStepProgress(step: string): { name: (typeof restoreSteps)[number]; index: number; total: number } | null {
-  const i = (restoreSteps as readonly string[]).indexOf(step)
-  return i < 0 ? null : { name: restoreSteps[i], index: i + 1, total: restoreSteps.length }
-}
+const restoreSteps = ['Wiping', 'Recovering', 'Rejoining', 'Reconciling'] as const
+export const restoreStepProgress = (step: string) => stageProgress(restoreSteps, step)

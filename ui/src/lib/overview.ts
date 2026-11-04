@@ -1,3 +1,5 @@
+import { newestSnapshot } from './backups.ts'
+
 // activeCondition is the message of a condition of this type while it is True, else null.
 function activeCondition(conds: readonly { type: string; status: string; message?: string }[], type: string): string | null {
   const c = conds.find((x) => x.type === type && x.status === 'True')
@@ -62,13 +64,8 @@ export function timeAgo(nowMs: number, thenMs: number): string {
 export function backupsValue(backups: Snapshots | null, nowMs: number): string {
   if (backups === null) return '-'
   if (backups.length === 0) return 'Not configured'
-  let newest: number | null = null
-  for (const b of backups) {
-    for (const s of b.snapshots) {
-      if (s.time && (newest === null || Number(s.time.seconds) > newest)) newest = Number(s.time.seconds)
-    }
-  }
-  return newest === null ? 'No snapshot yet' : timeAgo(nowMs, newest * 1000)
+  const time = newestSnapshot(backups.flatMap((b) => b.snapshots))?.time
+  return time ? timeAgo(nowMs, Number(time.seconds) * 1000) : 'No snapshot yet'
 }
 
 export type TileTarget = { kind: 'route'; to: string } | { kind: 'anchor'; id: string }

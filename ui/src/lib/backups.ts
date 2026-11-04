@@ -4,7 +4,7 @@ type SnapshotLike = { name: string; time?: { seconds: bigint }; size: bigint }
 
 // newestSnapshot is the snapshot with the latest time, or undefined when there is none. Its time is the
 // backup's "last success": a snapshot is only stored after it was verified.
-export function newestSnapshot<S extends SnapshotLike>(snapshots: readonly S[]): S | undefined {
+export function newestSnapshot<S extends Pick<SnapshotLike, 'time'>>(snapshots: readonly S[]): S | undefined {
   let best: S | undefined
   for (const s of snapshots) {
     if (!best || (s.time?.seconds ?? 0n) > (best.time?.seconds ?? 0n)) best = s

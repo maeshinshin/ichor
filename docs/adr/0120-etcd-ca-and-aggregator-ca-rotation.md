@@ -37,7 +37,7 @@ The stages and their meaning stay: Accepting (the new CA is trusted, the old one
 
 The etcd rows rely on two facts read in Talos's source (above): the certificate field is written verbatim into the trust file, which etcd and kube-apiserver read as a PEM bundle, and the signing CA is the first block with the key. The first row therefore keeps the old CA signing while both are trusted; the second changes the signer while both are still trusted; the third drops the old one. Dropping and Finalizing render byte for byte what a bundle holding the new CAs renders (a test pins it), so the machine controller sees no drift afterwards. A target that is not rotated renders exactly as before.
 
-Refused at the start (plan `blocked` and executor preflight): `kubernetes-aggregator` on a cluster whose version contract is older than v1.14 (no accepted list exists there); `etcd` with exactly two control planes (restarting one member loses the quorum of a two-member etcd).
+Refused at the start (plan `blocked` and executor preflight): `kubernetes-aggregator` on a cluster whose version contract is older than v1.14 (no accepted list exists there). A two-member etcd, which would lose its quorum while one member restarts, needs no check of its own: the cluster lock already refuses every disruptive operation on an even number of approved control planes (`ClusterTransitioning`). An etcd rotation also refuses to start unless etcd is whole: every control plane reports etcd Running and healthy, one member per control plane, no alarm, kube-apiserver ready.
 
 ### 3. etcd: restart the members, one at a time, after each pass
 
@@ -90,7 +90,7 @@ Every step is idempotent and re-derived from the nodes and from status (ADR 0063
 
 ## Test
 
-envtest (`internal/controller`, a fake node per machine as in ADR 0063): the stage sequence, rendered documents per stage and role for etcd and aggregator (typed: `cluster.etcd.ca` certificate order and key, `KubeAggregatorCAConfig`), Dropping equal to the replaced bundle's render, rotation of only etcd skipping AwaitingCredentials, etcd members restarted in order with the health gate and leader forfeit, a restart not repeated after a controller restart, an unhealthy member holding the roll, two control planes and a legacy contract refused, the aggregator wait, `rotation.yaml` keys and the replaced bundle, backup key unchanged; `pkg/render` goldens per stage; CLI flags and plan output; UI selection and card.
+envtest (`internal/controller`, a fake node per machine as in ADR 0063): the stage sequence, rendered documents per stage and role for etcd and aggregator (typed: `cluster.etcd.ca` certificate order and key, `KubeAggregatorCAConfig`), Dropping equal to the replaced bundle's render, rotation of only etcd skipping AwaitingCredentials, etcd members restarted in order with the health gate and leader forfeit, each member restarted exactly once per stage with a new reconciler at every step, an unhealthy member holding the roll, a node that has not yet loaded the stage's etcd PKI holding it, a missing member and two control planes refusing the start, a legacy contract refused (render), the aggregator wait, `rotation.yaml` keys and the replaced bundle, backup key unchanged; `pkg/render` tests per stage and role; CLI flags and plan output; UI selection and card.
 
 ## Hardware verification
 

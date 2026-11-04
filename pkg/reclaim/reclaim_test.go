@@ -32,6 +32,8 @@ import (
 
 const testUUID = "AAAA-1"
 
+const testOldClusterID = "cid-old"
+
 const marker = "TOPSECRET-MARKER-9f3a"
 
 func TestCredentialNeverPrints(t *testing.T) {
@@ -161,7 +163,7 @@ func TestAssess(t *testing.T) {
 		},
 		{
 			name: "a managed cluster's node is pointed at --add-machine", in: worker(), refused: "ichor adopt --cluster",
-			known: Known{ClusterIDs: []string{"cid-old"}},
+			known: Known{ClusterIDs: []string{testOldClusterID}},
 		},
 		{name: "no uuid", in: func() Inspection { i := worker(); i.UUID = ""; return i }(), refused: "no UUID"},
 		{name: "unreachable cluster refused",

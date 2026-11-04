@@ -72,7 +72,9 @@ The executor returns a typed error; `advanceIchor` pauses the operation (ADR 002
 - `internal/controller`: `ichor_upgrade.go` (resolve, verify, digest Job, Job annotation, record, Event), the pause reasons, the egress policy in the IchorInstallation reconciler.
 - `config/admission/controller-jobs-policy.yaml` and the chart copy; `internal/webhook/v1alpha1` settings gate (the new fields need the `version` subresource).
 - `proto/ichor/v1alpha1/operation.proto` (`IchorInstallerOptions` on plan and create; installer-image fields on `GetIchorInstallationResponse`), `internal/uiapi`, `internal/cli/upgrade.go`, `ui/` (badge, alert).
-- Docs: `docs/guides/install-with-helm.md` (Verify a release), `docs/guides/upgrade.md` if present, `test/harness/ui-demo/README.md` (the demo upgrade passes `--skip-signature-check`), ADR 0108's follow-up table.
+- `internal/controller/talosoperation_controller.go`: the two refusal reasons set `status.failureReason` like `StepFailed`, which the CLI, the UI, the retry request (ADR 0095) and the "one unfinished operation" rule key on; a pause with only a condition reason would be resumed by the controller by itself. `controllerPolicyApp` no longer treats a policy the controller wrote itself as Ichor's installed policy.
+- `ichor version` shows the installer image line; `PlanOperation` warns on a skip; a new Ichor upgrade replaces the installer settings (a pin or skip is written even when the version is already the target, so "retry with a skip" after a refusal works: delete the paused operation, run the upgrade with the flag).
+- Docs: `docs/guides/install-with-helm.md` ("The installer image on an upgrade"), `test/harness/ui-demo/README.md` (the demo upgrade passes `--installer-digest` and `--skip-signature-check`: the controller cannot resolve a demo tag, which only the nodes' containerd mirror serves), ADR 0108's follow-up table.
 
 ## Tests
 

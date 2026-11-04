@@ -52,6 +52,14 @@ import (
 // Table, Block, Mark, humanEnum, humanAge and humanUntil are the vocabulary; conditionMark picks
 // the glyph of a status condition. They write with the first error kept in Err.
 
+// The status values of a condition (metav1.ConditionTrue and False, as the wire message carries them).
+const (
+	condTrue  = "True"
+	condFalse = "False"
+	// condPaused is the Paused condition type and phase.
+	condPaused = "Paused"
+)
+
 // outputHuman is the -o value of "not given": print for a person.
 const outputHuman = ""
 
@@ -273,7 +281,7 @@ var (
 	problemWhenTrue = map[string]bool{
 		"ConfigWarnings": true, "CARotationAdvised": true, "CNIUnsupported": true, "CiliumUpgradeAvailable": true,
 		"CertificatesExpiring": true, "AutoPatchHalted": true, "CAClientsNotRestarted": true, "BundleBackupStale": true,
-		"RemovedAPIsInUse": true, "AdoptionHeld": true, "ExternalSuggested": true, "Paused": true,
+		"RemovedAPIsInUse": true, "AdoptionHeld": true, "ExternalSuggested": true, condPaused: true,
 	}
 	progressWhenTrue = map[string]bool{
 		"Transitioning": true, "VerifyingNewSide": true, "ConfigRollout": true, "KubernetesUpgrade": true,
@@ -284,23 +292,23 @@ var (
 // conditionMark is the glyph of a condition of type typ and status "True", "False" or "Unknown".
 func conditionMark(typ, status string) mark {
 	switch {
-	case status != "True" && status != "False":
+	case status != condTrue && status != condFalse:
 		return markPending
 	case problemWhenTrue[typ]:
-		if status == "True" {
+		if status == condTrue {
 			return markWarning
 		}
 
 		return markOK
 	case progressWhenTrue[typ]:
-		if status == "True" {
+		if status == condTrue {
 			return markPending
 		}
 
 		return markOK
-	case status == "True":
+	case status == condTrue:
 		return markOK
-	case typ == "Ready":
+	case typ == conditionReady:
 		return markFailed
 	default:
 		return markWarning

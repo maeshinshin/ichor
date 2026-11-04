@@ -52,24 +52,24 @@ func cond(typ, status, reason, msg string, age time.Duration) *pb.Condition {
 
 func initshowCluster() *pb.Cluster {
 	return &pb.Cluster{
-		Ref: &pb.ObjectRef{Namespace: "ichor-system", Name: "initshow"}, TalosVersion: "v1.14.5", KubernetesVersion: "v1.36.6",
-		Endpoint: "10.244.1.136", EndpointType: "node", ControlPlaneCount: 1, ControlPlaneSchedulable: true,
-		CniPreset: "cilium", CniTunnel: "geneve", KubeProxyMode: "enabled", CreatedAt: ago(5 * time.Minute),
-		PodSubnets: []string{"10.244.0.0/16"}, ServiceSubnets: []string{"10.96.0.0/12"},
+		Ref: &pb.ObjectRef{Namespace: ichorControllerNamespace, Name: humanCluster}, TalosVersion: testTalosVersion, KubernetesVersion: humanK8s,
+		Endpoint: "10.244.1.136", EndpointType: endpointNode, ControlPlaneCount: 1, ControlPlaneSchedulable: true,
+		CniPreset: string(detectedCilium), CniTunnel: "geneve", KubeProxyMode: "enabled", CreatedAt: ago(5 * time.Minute),
+		PodSubnets: []string{testPodCIDR}, ServiceSubnets: []string{humanSvcCIDR},
 		Versions: []*pb.ComponentVersion{
-			{Name: "talos", Current: "v1.14.5", Target: "v1.14.5", State: "up-to-date"},
-			{Name: "version-contract", Current: "v1.14", Target: "v1.14", State: "up-to-date"},
-			{Name: "kubernetes", Current: "v1.36.4", Target: "v1.36.6", State: "behind"},
-			{Name: "cilium", Current: "1.20.4", Target: "1.20.4", State: "up-to-date"},
+			{Name: compTalos, Current: testTalosVersion, Target: testTalosVersion, State: humanUpToDate},
+			{Name: "version-contract", Current: testVersionContract, Target: testVersionContract, State: humanUpToDate},
+			{Name: compKubernetes, Current: "v1.36.4", Target: humanK8s, State: "behind"},
+			{Name: string(detectedCilium), Current: testCiliumVersion, Target: testCiliumVersion, State: humanUpToDate},
 		},
 		Certificates: []*pb.CertificateExpiry{
-			{Name: "talos", NotAfter: timestamppb.New(humanTestNow.Add(364 * 24 * time.Hour))},
-			{Name: "kubernetes", NotAfter: timestamppb.New(humanTestNow.Add(-2 * 24 * time.Hour))},
+			{Name: compTalos, NotAfter: timestamppb.New(humanTestNow.Add(364 * 24 * time.Hour))},
+			{Name: humanEtcd, NotAfter: timestamppb.New(humanTestNow.Add(-2 * 24 * time.Hour))},
 		},
 		Conditions: []*pb.Condition{
-			cond("Ready", "True", "Converged", "all machines match their rendered configuration", 4*time.Minute),
-			cond("CertificatesExpiring", "False", "NoneExpiring", "no CA expires within 30 days", 4*time.Minute),
-			cond("NetworkPoliciesApplied", "False", "CNINotCilium", "the detected CNI is not Cilium", time.Minute),
+			cond(conditionReady, condTrue, "Converged", "all machines match their rendered configuration", 4*time.Minute),
+			cond("CertificatesExpiring", condFalse, "NoneExpiring", "no CA expires within 30 days", 4*time.Minute),
+			cond("NetworkPoliciesApplied", condFalse, "CNINotCilium", "the detected CNI is not Cilium", time.Minute),
 		},
 	}
 }
@@ -97,8 +97,8 @@ func TestClusterStatusHumanOutputForAnUnmanagedAndAnUnreadyCluster(t *testing.T)
 	setHumanTestFlags(t, outputHuman)
 
 	cl := initshowCluster()
-	cl.CniPreset, cl.CniDetected = ichorv1alpha1.TalosClusterCNIPresetUnmanaged, "flannel"
-	cl.Conditions = []*pb.Condition{cond("Ready", "False", "MachinesNotReady", "1 of 3 machines", time.Minute)}
+	cl.CniPreset, cl.CniDetected = ichorv1alpha1.TalosClusterCNIPresetUnmanaged, string(detectedFlannel)
+	cl.Conditions = []*pb.Condition{cond(conditionReady, condFalse, "MachinesNotReady", "1 of 3 machines", time.Minute)}
 
 	var out bytes.Buffer
 	if err := renderClusterStatus(newHuman(&out), cl); err != nil {
@@ -149,7 +149,7 @@ Control plane
 
 Certificates
   talos        2027-11-03 (in 364d)
-  kubernetes   2026-11-02 (expired 2d ago)
+  etcd         2026-11-02 (expired 2d ago)
 
 Conditions
   ✓ Ready                   Converged     all machines match their rendered configuration
@@ -165,8 +165,8 @@ func TestClusterListHumanOutput(t *testing.T) {
 	setHumanTestFlags(t, outputHuman)
 
 	other := initshowCluster()
-	other.Ref = &pb.ObjectRef{Namespace: "ichor-system", Name: "second"}
-	other.CniPreset, other.CniDetected = ichorv1alpha1.TalosClusterCNIPresetUnmanaged, "flannel"
+	other.Ref = &pb.ObjectRef{Namespace: ichorControllerNamespace, Name: "second"}
+	other.CniPreset, other.CniDetected = ichorv1alpha1.TalosClusterCNIPresetUnmanaged, string(detectedFlannel)
 	other.Conditions, other.CreatedAt = nil, ago(3*24*time.Hour)
 
 	var out bytes.Buffer
@@ -189,28 +189,30 @@ func TestClusterListHumanOutput(t *testing.T) {
 }
 
 const (
-	cpUUID     = "fa70962a-4fd9-4d01-88c5-f9966adcda99"
-	pendingUID = "0b1c2d3e-4f50-6071-8293-a4b5c6d7e8f9"
+	testPodCIDR       = "10.244.0.0/16"
+	testCiliumVersion = "1.20.4"
+	cpUUID            = "fa70962a-4fd9-4d01-88c5-f9966adcda99"
+	pendingUID        = "0b1c2d3e-4f50-6071-8293-a4b5c6d7e8f9"
 )
 
 func machinesFixture() []*pb.Machine {
 	return []*pb.Machine{
 		{
-			Ref: &pb.ObjectRef{Namespace: "ichor-system", Name: cpUUID}, Cluster: &pb.ObjectRef{Namespace: "ichor-system", Name: "initshow"},
+			Ref: &pb.ObjectRef{Namespace: ichorControllerNamespace, Name: cpUUID}, Cluster: &pb.ObjectRef{Namespace: ichorControllerNamespace, Name: humanCluster},
 			Role: pb.MachineRole_MACHINE_ROLE_CONTROL_PLANE, ApprovalState: pb.MachineApprovalState_MACHINE_APPROVAL_STATE_APPROVED,
 			Endpoint: "10.244.1.136:50000", NodeName: "ichor-e2e-initshow-cp", CreatedAt: ago(5 * time.Minute),
-			Identity: &pb.MachineIdentity{Uuid: cpUUID, Serial: "c427f61b", MacAddresses: []string{"a6:c8:83:c3:79:d9"}},
-			Install:  &pb.MachineInstall{Disk: &pb.MachineDisk{DevPath: "/dev/vda"}},
-			ApprovalDecision: &pb.MachineApprovalDecision{Actor: "ichor-cli", At: ago(4 * time.Minute), Reason: "first node"},
+			Identity:         &pb.MachineIdentity{Uuid: cpUUID, Serial: "c427f61b", MacAddresses: []string{"a6:c8:83:c3:79:d9"}},
+			Install:          &pb.MachineInstall{Disk: &pb.MachineDisk{DevPath: classADisk}},
+			ApprovalDecision: &pb.MachineApprovalDecision{Actor: actorCLI, At: ago(4 * time.Minute), Reason: "first node"},
 			Conditions: []*pb.Condition{
-				cond("Ready", "True", "Converged", "node configuration matches the rendered configuration", 4*time.Minute),
-				cond("ConfigWarnings", "False", "DryRunWarnings", "dry run reported no warnings", 4*time.Minute),
+				cond(conditionReady, condTrue, "Converged", "node configuration matches the rendered configuration", 4*time.Minute),
+				cond("ConfigWarnings", condFalse, "DryRunWarnings", "dry run reported no warnings", 4*time.Minute),
 			},
 		},
 		{
-			Ref: &pb.ObjectRef{Namespace: "ichor-system", Name: pendingUID}, Cluster: &pb.ObjectRef{Namespace: "ichor-system", Name: "initshow"},
+			Ref: &pb.ObjectRef{Namespace: ichorControllerNamespace, Name: pendingUID}, Cluster: &pb.ObjectRef{Namespace: ichorControllerNamespace, Name: humanCluster},
 			ApprovalState: pb.MachineApprovalState_MACHINE_APPROVAL_STATE_PENDING, Endpoint: "10.244.1.150:50000", CreatedAt: ago(30 * time.Second),
-			DiscoveredDisks: []*pb.DiscoveredDisk{{DevPath: "/dev/vda", SizeBytes: 40 << 30, Model: "QEMU HARDDISK", Transport: "virtio"}},
+			DiscoveredDisks: []*pb.DiscoveredDisk{{DevPath: classADisk, SizeBytes: 40 << 30, Model: "QEMU HARDDISK", Transport: "virtio"}},
 			DiscoveredLinks: []*pb.DiscoveredLink{{Name: "eth0", PermanentMac: "a6:c8:83:00:00:01", LinkUp: true, SpeedMbit: 10000, Driver: "virtio_net"}},
 		},
 	}
@@ -237,14 +239,14 @@ func TestMachineListKeepsFullNamesWhenShortOnesClash(t *testing.T) {
 
 	ms := machinesFixture()
 	ms[1].Ref.Name = "fa70962a-ffff-ffff-ffff-ffffffffffff"
-	ms[1].Cluster.Name = "other"
+	ms[1].Cluster.Name = humanElsewhere
 
 	var out bytes.Buffer
 	if err := renderMachineList(newHuman(&out), &pb.ListMachinesResponse{Machines: ms}); err != nil {
 		t.Fatal(err)
 	}
 
-	for _, want := range []string{cpUUID + "  initshow  control-plane", "fa70962a-ffff-ffff-ffff-ffffffffffff  other"} {
+	for _, want := range []string{cpUUID + "  initshow  control-plane", "fa70962a-ffff-ffff-ffff-ffffffffffff  elsewhere"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("missing %q in:\n%s", want, out.String())
 		}
@@ -311,9 +313,9 @@ func TestMachineGetHumanOutputForAPendingMachineShowsWhatDiscoveryFound(t *testi
 
 func TestVersionHumanOutput(t *testing.T) {
 	info := versionInfo{
-		Client:  versionClient{Version: "v0.1.0"},
-		Release: &versionRelease{Talos: "v1.14.5", VersionContract: "v1.14", Kubernetes: "v1.36.6", Cilium: "1.20.4"},
-		Server:  &versionServer{InstalledVersion: "v0.1.0"},
+		Client:  versionClient{Version: testSettingsVersion},
+		Release: &versionRelease{Talos: testTalosVersion, VersionContract: testVersionContract, Kubernetes: humanK8s, Cilium: "1.20.4"},
+		Server:  &versionServer{InstalledVersion: testSettingsVersion},
 	}
 
 	var out bytes.Buffer
@@ -328,7 +330,7 @@ func TestVersionHumanOutput(t *testing.T) {
 		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
 	}
 
-	info.Server.SpecVersion, info.Server.LatestRelease = "v0.2.0", "v0.3.0"
+	info.Server.SpecVersion, info.Server.LatestRelease = "v0.2.0", humanLatest
 	out.Reset()
 
 	if err := writeVersion(&out, outputHuman, info); err != nil {
@@ -368,9 +370,9 @@ func TestUIHumanOutput(t *testing.T) {
 func TestMachineFormatsOfTheConvertedCommandsAreUnchanged(t *testing.T) {
 	setHumanTestFlags(t, outputYAML)
 
-	cl := &pb.Cluster{Ref: &pb.ObjectRef{Namespace: "ichor-system", Name: "initshow"}, TalosVersion: "v1.14.5", Endpoint: "10.244.1.136"}
+	cl := &pb.Cluster{Ref: &pb.ObjectRef{Namespace: ichorControllerNamespace, Name: humanCluster}, TalosVersion: testTalosVersion, Endpoint: "10.244.1.136"}
 	m := &pb.Machine{
-		Ref: &pb.ObjectRef{Namespace: "ichor-system", Name: "m"}, Role: pb.MachineRole_MACHINE_ROLE_CONTROL_PLANE,
+		Ref: &pb.ObjectRef{Namespace: ichorControllerNamespace, Name: "m"}, Role: pb.MachineRole_MACHINE_ROLE_CONTROL_PLANE,
 		ApprovalState: pb.MachineApprovalState_MACHINE_APPROVAL_STATE_APPROVED,
 	}
 
@@ -385,10 +387,10 @@ func TestMachineFormatsOfTheConvertedCommandsAreUnchanged(t *testing.T) {
 			return printAPI(b, &pb.GetMachineResponse{Machine: m}, func(h *human, r *pb.GetMachineResponse) error { return renderMachineGet(h, r.GetMachine()) })
 		}, "machine:\n  approvalState: MACHINE_APPROVAL_STATE_APPROVED\n  ref:\n    name: m\n    namespace: ichor-system\n  role: MACHINE_ROLE_CONTROL_PLANE\n"},
 		"version yaml": {func(b *bytes.Buffer) error {
-			return writeVersion(b, outputYAML, versionInfo{Client: versionClient{Version: "v0.1.0"}, Server: &versionServer{InstalledVersion: "v0.1.0"}})
+			return writeVersion(b, outputYAML, versionInfo{Client: versionClient{Version: testSettingsVersion}, Server: &versionServer{InstalledVersion: testSettingsVersion}})
 		}, "client:\n  version: v0.1.0\nserver:\n  installedVersion: v0.1.0\n"},
 		"version json": {func(b *bytes.Buffer) error {
-			return writeVersion(b, outputJSON, versionInfo{Client: versionClient{Version: "v0.1.0"}})
+			return writeVersion(b, outputJSON, versionInfo{Client: versionClient{Version: testSettingsVersion}})
 		}, "{\n  \"client\": {\n    \"version\": \"v0.1.0\"\n  }\n}\n"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -429,7 +431,7 @@ func TestMachineFormatOfClusterStatusIsTheKeyValueLines(t *testing.T) {
 func statusFixtureCluster() *ichorv1alpha1.TalosCluster {
 	cl := newTestCluster()
 	cl.CreationTimestamp = metav1.NewTime(humanTestNow.Add(-5 * time.Minute))
-	cl.Status.Conditions = []metav1.Condition{{Type: "Ready", Status: metav1.ConditionTrue, Reason: "Converged", Message: "ok"}}
+	cl.Status.Conditions = []metav1.Condition{{Type: conditionReady, Status: metav1.ConditionTrue, Reason: "Converged", Message: "ok"}}
 
 	return cl
 }
@@ -439,11 +441,11 @@ func TestAnUnconvertedCommandPrintsYAMLWhenOutputIsUnset(t *testing.T) {
 	setHumanTestFlags(t, outputHuman)
 
 	var out bytes.Buffer
-	if err := writeMessage(&out, outputFormat, &pb.ObjectRef{Namespace: "ns", Name: "node"}); err != nil {
+	if err := writeMessage(&out, outputFormat, &pb.ObjectRef{Namespace: "ns", Name: "name-1"}); err != nil {
 		t.Fatal(err)
 	}
 
-	if want := "name: node\nnamespace: ns\n"; out.String() != want {
+	if want := "name: name-1\nnamespace: ns\n"; out.String() != want {
 		t.Errorf("got %q, want %q", out.String(), want)
 	}
 
@@ -463,7 +465,7 @@ func TestHumanOutputThroughTheInProcessAPI(t *testing.T) {
 	cl := statusFixtureCluster()
 	m := newTestMachine(cl.Name)
 	m.Name, m.CreationTimestamp = cpUUID, metav1.NewTime(humanTestNow.Add(-2*time.Hour))
-	m.Status.Conditions = []metav1.Condition{{Type: "Ready", Status: metav1.ConditionTrue, Reason: "Converged"}}
+	m.Status.Conditions = []metav1.Condition{{Type: conditionReady, Status: metav1.ConditionTrue, Reason: "Converged"}}
 
 	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cl, m).Build()
 	c := localClients(apiOpts, apiDeps{K8s: k8s})

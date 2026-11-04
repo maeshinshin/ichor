@@ -55,11 +55,11 @@ var operationListCmd = &cobra.Command{
 	Short: "List operations",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		return showAPI(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.ListOperationsResponse], error) {
+		return showAPIHuman(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.ListOperationsResponse], error) {
 			return c.Operation.ListOperations(ctx, connect.NewRequest(&pb.ListOperationsRequest{
 				Cluster: clusterFilter(apiOpts.Namespace, operationClusterFlag),
 			}))
-		})
+		}, renderOperationList)
 	},
 }
 
@@ -85,7 +85,7 @@ which is an error exit).`,
 				return err
 			}
 
-			return writeMessage(cmd.OutOrStdout(), outputFormat, resp.Msg)
+			return printAPI(cmd.OutOrStdout(), resp.Msg, renderOperationGet)
 		})
 	},
 }
@@ -113,10 +113,10 @@ func runSetPaused(ctx context.Context, c *apiClients, out, errw io.Writer, name 
 
 	// Resuming an operation that failed also asks for its failed step to run again (ADR 0095).
 	if op := resp.Msg.GetOperation(); !paused && op.GetPhase() == condPaused && op.GetFailureReason() != "" {
-		_, _ = fmt.Fprintf(errw, "ichor: re-running the step that failed: %s\n", op.GetFailureReason())
+		rerunNotice(errw, op.GetFailureReason())
 	}
 
-	return writeMessage(out, outputFormat, resp.Msg)
+	return printAPI(out, resp.Msg, renderOperationPaused)
 }
 
 var operationPauseCmd = newPauseCmd("pause", "Stop the operation from advancing any further machine (the cluster lock stays held, nothing is undone)", true)
@@ -159,7 +159,11 @@ func runOperationDelete(ctx context.Context, c *apiClients, in io.Reader, out, e
 		return err
 	}
 
-	return writeMessage(out, outputFormat, resp.Msg)
+	return printAPI(out, resp.Msg, func(h *human, _ *pb.DeleteOperationResponse) error {
+		h.Note(h.Mark(markOK) + " deleted operation " + ref.GetNamespace() + "/" + name)
+
+		return h.Err()
+	})
 }
 
 func kindName(k pb.OperationKind) string {
@@ -282,14 +286,14 @@ func watchRestoreOperation(ctx context.Context, c *apiClients, ref *pb.ObjectRef
 // watchOperationUntil is the watch; goneWindow > 0 treats NotFound as transient for that long.
 func watchOperationUntil(ctx context.Context, c *apiClients, ref *pb.ObjectRef, out, errw io.Writer, goneWindow time.Duration) error {
 	var (
-		progress  = stageProgress{w: errw}
+		rep       = newOpReporter(errw)
 		goneSince time.Time
 	)
 
 	for {
 		var resp *connect.Response[pb.GetOperationResponse]
 
-		err := retryTransient(ctx, c, errw, func() (err error) {
+		err := retryTransient(ctx, c, rep.retryWriter(), func() (err error) {
 			resp, err = c.Operation.GetOperation(ctx, connect.NewRequest(&pb.GetOperationRequest{Operation: ref}))
 
 			return err
@@ -298,16 +302,16 @@ func watchOperationUntil(ctx context.Context, c *apiClients, ref *pb.ObjectRef, 
 			if goneSince.IsZero() {
 				goneSince = time.Now()
 
-				_, _ = fmt.Fprintln(errw, "ichor: the operation is gone from the API (the cluster was rolled back to the snapshot); waiting for the restore to resume…")
+				rep.gone()
 			}
 
 			if time.Since(goneSince) > goneWindow {
-				return err
+				return rep.abort(err, false)
 			}
 
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				return rep.abort(ctx.Err(), true)
 			case <-time.After(opWatchInterval):
 			}
 
@@ -315,18 +319,20 @@ func watchOperationUntil(ctx context.Context, c *apiClients, ref *pb.ObjectRef, 
 		}
 
 		if err != nil {
-			return err
+			return rep.abort(err, ctx.Err() != nil)
 		}
 
 		goneSince = time.Time{}
 
 		op := resp.Msg.GetOperation()
 
-		progress.show(op.GetCaRotationStage(), func(stage string) string { return progressLineAt(op, stage) })
+		rep.show(op)
 
-		failed := op.GetPhase() == condPaused && op.GetFailureReason() != ""
-		if op.GetPhase() == "Completed" || op.GetPhase() == "ShutDown" || failed {
-			if err := writeMessage(out, outputFormat, resp.Msg); err != nil {
+		failed := opFailed(op)
+		if opFinished(op) || failed {
+			rep.end(op)
+
+			if err := printAPI(out, resp.Msg, renderOperationGet); err != nil {
 				return err
 			}
 
@@ -339,7 +345,7 @@ func watchOperationUntil(ctx context.Context, c *apiClients, ref *pb.ObjectRef, 
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return rep.abort(ctx.Err(), true)
 		case <-time.After(opWatchInterval):
 		}
 	}
@@ -452,10 +458,10 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 	}
 
 	if !s.Follow {
-		return writeMessage(out, outputFormat, resp.Msg)
+		return printAPI(out, resp.Msg, renderOperationCreated)
 	}
 
-	_, _ = fmt.Fprintf(errw, "created operation %s\n", resp.Msg.GetOperation().GetRef().GetName())
+	announceCreated(errw, resp.Msg.GetOperation().GetRef().GetName())
 
 	return watchOperation(ctx, c, resp.Msg.GetOperation().GetRef(), out, errw)
 }

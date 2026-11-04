@@ -39,9 +39,9 @@ var clusterListCmd = &cobra.Command{
 	Short: "List clusters",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		return showAPI(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.ListClustersResponse], error) {
+		return showAPIHuman(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.ListClustersResponse], error) {
 			return c.Cluster.ListClusters(ctx, connect.NewRequest(&pb.ListClustersRequest{}))
-		})
+		}, renderClusterList)
 	},
 }
 
@@ -50,9 +50,9 @@ var clusterGetCmd = &cobra.Command{
 	Short: "Show one cluster: versions, conditions, rollout and hand-over state",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return showAPI(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.GetClusterResponse], error) {
+		return showAPIHuman(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.GetClusterResponse], error) {
 			return c.Cluster.GetCluster(ctx, connect.NewRequest(&pb.GetClusterRequest{Cluster: objectRef(apiOpts.Namespace, args[0])}))
-		})
+		}, func(h *human, r *pb.GetClusterResponse) error { return renderClusterGet(h, r.GetCluster()) })
 	},
 }
 
@@ -67,7 +67,26 @@ var clusterStatusCmd = &cobra.Command{
 	},
 }
 
-// cniStatusLine is the cni line of `ichor cluster status`.
+func runClusterStatus(ctx context.Context, c *apiClients, out io.Writer, name string) error {
+	resp, err := c.Cluster.GetCluster(ctx, connect.NewRequest(&pb.GetClusterRequest{Cluster: objectRef(apiOpts.Namespace, name)}))
+	if err != nil {
+		return err
+	}
+
+	cl := resp.Msg.GetCluster()
+	if outputFormat == outputHuman {
+		return renderClusterStatus(newHuman(out), cl)
+	}
+
+	// -o yaml and -o json keep the key: value lines status always printed (scripts read them).
+	_, err = fmt.Fprintf(out, "cluster: %s/%s\ntalos: %s\nkubernetes: %s\nendpoint: %s\ncni: %s\n",
+		cl.GetRef().GetNamespace(), cl.GetRef().GetName(), cl.GetTalosVersion(), cl.GetKubernetesVersion(),
+		cl.GetEndpoint(), cniStatusLine(cl))
+
+	return err
+}
+
+// cniStatusLine is the cni line of `ichor cluster status -o yaml`.
 func cniStatusLine(cl *pb.Cluster) string {
 	if cl.GetCniPreset() != ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
 		return "cilium"
@@ -79,20 +98,6 @@ func cniStatusLine(cl *pb.Cluster) string {
 	}
 
 	return fmt.Sprintf("unmanaged (%s, not managed by Ichor)", detected)
-}
-
-func runClusterStatus(ctx context.Context, c *apiClients, out io.Writer, name string) error {
-	resp, err := c.Cluster.GetCluster(ctx, connect.NewRequest(&pb.GetClusterRequest{Cluster: objectRef(apiOpts.Namespace, name)}))
-	if err != nil {
-		return err
-	}
-
-	cl := resp.Msg.GetCluster()
-	_, err = fmt.Fprintf(out, "cluster: %s/%s\ntalos: %s\nkubernetes: %s\nendpoint: %s\ncni: %s\n",
-		cl.GetRef().GetNamespace(), cl.GetRef().GetName(), cl.GetTalosVersion(), cl.GetKubernetesVersion(),
-		cl.GetEndpoint(), cniStatusLine(cl))
-
-	return err
 }
 
 func init() {

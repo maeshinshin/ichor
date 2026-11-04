@@ -117,7 +117,31 @@ func collectVersion(ctx context.Context, c client.Reader, cliVersion string) (in
 	return info, ""
 }
 
+// writeVersionHuman prints what a person wants from `ichor version`: the CLI, the installed Ichor,
+// an upgrade or newer release when there is one, and what a new install would get.
+func writeVersionHuman(w io.Writer, info versionInfo) error {
+	rows := []kv{{"ichor", info.Client.Version}}
+
+	if s := info.Server; s != nil {
+		rows = append(rows, kv{"installed", s.InstalledVersion}, kv{"upgrading to", s.SpecVersion}, kv{"newer release", s.LatestRelease})
+	}
+
+	if r := info.Release; r != nil {
+		rows = append(rows, kv{"new installs", fmt.Sprintf("Talos %s · Kubernetes %s · Cilium %s (contract %s)",
+			r.Talos, r.Kubernetes, r.Cilium, r.VersionContract)})
+	}
+
+	h := newHuman(w)
+	h.Block("", rows...)
+
+	return h.Err()
+}
+
 func writeVersion(w io.Writer, format string, info versionInfo) error {
+	if format == outputHuman {
+		return writeVersionHuman(w, info)
+	}
+
 	var (
 		out []byte
 		err error

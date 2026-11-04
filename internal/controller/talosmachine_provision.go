@@ -54,6 +54,7 @@ const (
 	reasonNodeRebooting      = "NodeRebooting"
 	reasonNodeStarting       = "NodeStarting"
 	reasonNodeJoined         = "NodeJoined"
+	reasonSecureBootRequired = "SecureBootRequired"
 )
 
 // Stage values recorded in TalosMachineStatus.Stage (Talos's MachineStatus stage names).
@@ -146,6 +147,12 @@ func (r *TalosMachineReconciler) provision(
 		return r.retryLater(ctx, m, reasonIdentityMismatch,
 			fmt.Sprintf("the node at %s reports UUID %q, serial %q and MAC addresses %v, which do not match this machine's "+
 				"recorded identity; nothing was applied", m.Spec.Endpoint, hw.UUID, hw.Serial, hw.MACAddresses))
+	}
+
+	// SecureBoot Required: the controller cannot make a node boot with SecureBoot, but it
+	// can decline to install onto one that did not, before the first configuration is sent.
+	if res, stop, err := r.requireSecureBoot(ctx, cluster, m, mc); stop {
+		return res, err
 	}
 
 	known, err := installDiskKnown(rendered)

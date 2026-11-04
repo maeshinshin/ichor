@@ -26,6 +26,7 @@ import (
 	runtimeres "github.com/siderolabs/talos/pkg/machinery/resources/runtime"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/secureboot"
@@ -94,6 +95,43 @@ func recordSecurity(
 		c.ObservedGeneration = m.Generation
 		apimeta.SetStatusCondition(&m.Status.Conditions, c)
 	}
+}
+
+// requireSecureBoot is the first-configuration gate of spec.security.secureBoot.mode Required: it
+// reads the maintenance-mode node's SecurityState and holds the machine (Ready=False,
+// SecureBootRequired, nothing sent) unless it booted with SecureBoot. A state that cannot be read
+// holds it too: Required is not guessed at. stop=false means carry on.
+func (r *TalosMachineReconciler) requireSecureBoot(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, mc MaintenanceClient,
+) (res ctrl.Result, stop bool, err error) {
+	if secureboot.Mode(cluster.Spec.Security) != ichorv1alpha1.SecureBootRequired {
+		return ctrl.Result{}, false, nil
+	}
+
+	callCtx, cancel := context.WithTimeout(ctx, talosCallTimeout)
+	defer cancel()
+
+	ss, rerr := mc.SecurityState(callCtx)
+	if rerr != nil {
+		res, err = r.retryLater(ctx, m, reasonSecureBootRequired, fmt.Sprintf(
+			"spec.security.secureBoot.mode is Required and the node's SecureBoot state could not be read (%v), so the "+
+				"configuration was not sent", rerr))
+
+		return res, true, err
+	}
+
+	m.Status.Security = ss.status()
+
+	if ss.SecureBoot {
+		return ctrl.Result{}, false, nil
+	}
+
+	res, err = r.retryLater(ctx, m, reasonSecureBootRequired,
+		"spec.security.secureBoot.mode is Required and this node booted without SecureBoot, so the configuration was not sent: "+
+			"boot it from the SecureBoot ISO of this cluster's schematic and Talos version with the firmware in setup mode "+
+			"(docs/guides/hardening.md), or set the mode to Preferred")
+
+	return res, true, err
 }
 
 // status is the form kept in TalosMachine.status.security.

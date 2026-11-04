@@ -45,6 +45,32 @@ func printRotateCADone(out io.Writer, opName, cluster, kubeconfig string) error 
 	return h.Err()
 }
 
+// printRotateCAStartedPlain ends a rotate-ca without a credential hand-off (the etcd or aggregator CA
+// alone, ADR 0120) and without --follow: your kubeconfig still works, so the operation is followed with it.
+func printRotateCAStartedPlain(out io.Writer, opName, cluster string) error {
+	h := newHuman(out)
+
+	h.done("started ca-rotation operation %s", opName)
+	h.Line("follow with: ichor operation get " + opName + " --watch")
+	h.Note("")
+	h.Title("When it completes")
+	h.Line("ichor cluster bundle-export " + cluster + h.Paint(sgrDim, "   save the new secrets bundle"))
+
+	return h.Err()
+}
+
+// printRotateCADonePlain ends a rotate-ca --follow without a credential hand-off.
+func printRotateCADonePlain(out io.Writer, opName, cluster string) error {
+	h := newHuman(out)
+
+	h.done("ca-rotation operation %s completed", opName)
+	h.Note("")
+	h.Title("Next")
+	h.Line("ichor cluster bundle-export " + cluster + h.Paint(sgrDim, "   save the new secrets bundle"))
+
+	return h.Err()
+}
+
 // rotateCAAfterwardsHuman is rotateCAAfterwards as lines: the old kubeconfig trusts only the old CA,
 // so the credentials command is pointed at the new one.
 func rotateCAAfterwardsHuman(h *human, title, cluster, kubeconfig string) {

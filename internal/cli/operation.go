@@ -362,6 +362,8 @@ type startSpec struct {
 	Override *pb.Override
 	// Installer is the installer image settings of an Ichor upgrade (ADR 0122); nil for the other kinds.
 	Installer *pb.IchorInstallerOptions
+	// CATargets are the CAs of a ca-rotation (ADR 0120); empty is the default pair.
+	CATargets []string
 
 	// AfterCreate, when set, takes over once the operation exists: it gets the operation's ref and
 	// the create response and does the output and any follow itself (ca-rotation's credential
@@ -434,7 +436,7 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 	}
 
 	plan, err := c.Operation.PlanOperation(ctx, connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: cluster, Kind: s.Kind, Target: s.Target, MaxUnavailable: s.MaxUnavailable, Override: s.Override, IchorInstaller: s.Installer,
+		Cluster: cluster, Kind: s.Kind, Target: s.Target, MaxUnavailable: s.MaxUnavailable, Override: s.Override, IchorInstaller: s.Installer, CaTargets: s.CATargets,
 	}))
 	if err != nil {
 		return err
@@ -449,7 +451,7 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 	}
 
 	resp, err := c.Operation.CreateOperation(ctx, connect.NewRequest(&pb.CreateOperationRequest{
-		Cluster: cluster, Kind: s.Kind, Target: s.Target, MaxUnavailable: s.MaxUnavailable, Override: s.Override, IchorInstaller: s.Installer,
+		Cluster: cluster, Kind: s.Kind, Target: s.Target, MaxUnavailable: s.MaxUnavailable, Override: s.Override, IchorInstaller: s.Installer, CaTargets: s.CATargets,
 	}))
 	if err != nil {
 		return err

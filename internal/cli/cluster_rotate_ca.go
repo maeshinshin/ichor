@@ -19,8 +19,11 @@ package cli
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -32,7 +35,44 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-var clusterRotateCAFollow bool
+var (
+	clusterRotateCAFollow  bool
+	clusterRotateCATargets []string
+	clusterRotateCAAll     bool
+)
+
+// allCARotationTargets is every CA a rotation can replace, in the order the plan names them.
+var allCARotationTargets = []string{
+	ichorv1alpha1.CARotationTargetTalos, ichorv1alpha1.CARotationTargetKubernetes,
+	ichorv1alpha1.CARotationTargetEtcd, ichorv1alpha1.CARotationTargetAggregator,
+}
+
+// rotateCATargets resolves --ca and --all into the targets the request carries: none (the default pair
+// the server fills in) when neither flag is given.
+func rotateCATargets(ca []string, all bool) ([]string, error) {
+	if all {
+		if len(ca) > 0 {
+			return nil, errors.New("--all and --ca are alternatives")
+		}
+
+		return slices.Clone(allCARotationTargets), nil
+	}
+
+	for _, t := range ca {
+		if !slices.Contains(allCARotationTargets, t) {
+			return nil, fmt.Errorf("--ca %q: the choices are %s", t, strings.Join(allCARotationTargets, ", "))
+		}
+	}
+
+	return ca, nil
+}
+
+// needsCredentialHandoff reports whether a rotation of targets changes a CA the operator's kubeconfig or
+// talosconfig depends on (ADR 0091): the Talos API CA or the Kubernetes API CA. No target means the default pair.
+func needsCredentialHandoff(targets []string) bool {
+	return len(targets) == 0 || slices.Contains(targets, ichorv1alpha1.CARotationTargetTalos) ||
+		slices.Contains(targets, ichorv1alpha1.CARotationTargetKubernetes)
+}
 
 // clusterRotateCACmd implements `ichor cluster rotate-ca`: it starts a ca-rotation TalosOperation
 // (ADR 0063) through OperationService like every other start (ADR 0068), so the plan, the
@@ -43,13 +83,23 @@ var clusterRotateCAFollow bool
 // writes them while the old ones still work and tells the controller to go on.
 var clusterRotateCACmd = &cobra.Command{
 	Use:   "rotate-ca NAME",
-	Short: "Replace the cluster's Talos API and Kubernetes API certificate authorities",
+	Short: "Replace the cluster's certificate authorities (Talos API, Kubernetes API, and optionally etcd and aggregator)",
 	Long: `rotate-ca starts a CA rotation operation: the Talos API CA and the Kubernetes API CA are
 replaced in passes over every machine (accept the new CA, make it the issuer, drop the old one),
 each verified before the next. The kubelet restarts on each machine in the passes that change the
-Kubernetes CA. The etcd and aggregator CAs and the service-account key are not rotated.
+Kubernetes CA.
 
-Your ` + credentialsStopWorking + ` So after every
+--ca chooses the CAs (talos, kubernetes, etcd, kubernetes-aggregator; repeat the flag or separate
+with commas), --all takes the four. Without either, the Talos API and Kubernetes API CAs are
+replaced. The etcd CA is replaced by restarting the etcd of every control plane, one member at a
+time, after each pass, and only while etcd is healthy; with one control plane the Kubernetes API is
+unavailable during each restart. Take an etcd snapshot first ('ichor etcd backup now NAME'). The
+aggregator CA needs the extension API servers (metrics-server, for one) to load the new CA: Ichor
+waits for kube-apiserver to publish it and restarts none of them. A rotation of etcd and the
+aggregator CA alone changes nothing your kubeconfig or talosconfig depends on, so it has no
+credential hand-off. The service-account signing key and the secretbox key are not rotated.
+
+When the Talos API or Kubernetes API CA is replaced, your ` + credentialsStopWorking + ` So after every
 machine accepts the new CAs, the operation WAITS, changing nothing, until you have new credentials.
 This command waits for that point while your current credentials still work, then writes
 
@@ -76,17 +126,67 @@ It shows which machines are reconfigured and in which order, and asks for confir
 new kubeconfig (the ichor-ui tunnel does not survive the rotation).`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		targets, err := rotateCATargets(clusterRotateCATargets, clusterRotateCAAll)
+		if err != nil {
+			return err
+		}
+
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 			name := args[0]
 
 			return runStartOperation(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), startSpec{
-				Kind: pb.OperationKind_OPERATION_KIND_CA_ROTATION, Cluster: name,
+				Kind: pb.OperationKind_OPERATION_KIND_CA_ROTATION, Cluster: name, CATargets: targets,
 				AfterCreate: func(ctx context.Context, ref *pb.ObjectRef, created *pb.CreateOperationResponse) error {
+					if !needsCredentialHandoff(targets) {
+						return afterRotateCAWithoutHandoff(ctx, cmd, name, ref, created)
+					}
+
 					return afterRotateCACreate(ctx, cmd, name, ref, created)
 				},
 			})
 		})
 	},
+}
+
+// afterRotateCAWithoutHandoff follows a rotation whose CAs no credential of the operator depends on (the etcd
+// or the aggregator CA alone, ADR 0120): the current kubeconfig keeps working throughout, so there is
+// nothing to write, nothing to wait for, and the operation is followed with it.
+func afterRotateCAWithoutHandoff(ctx context.Context, cmd *cobra.Command, cluster string, ref *pb.ObjectRef, created *pb.CreateOperationResponse) error {
+	out, errw := cmd.OutOrStdout(), cmd.ErrOrStderr()
+
+	announceCreated(errw, ref.GetName())
+
+	if !clusterRotateCAFollow {
+		if outputFormat == outputHuman {
+			return printRotateCAStartedPlain(out, ref.GetName(), cluster)
+		}
+
+		if err := writeMessage(out, outputFormat, created); err != nil {
+			return err
+		}
+
+		_, _ = fmt.Fprintf(errw, "Follow it with: ichor operation get %s --watch\nWhen it completes: ichor cluster bundle-export %s\n", ref.GetName(), cluster)
+
+		return nil
+	}
+
+	k8s, err := newKubeClient(kubeconfigPath)
+	if err != nil {
+		return fmt.Errorf("operation %s was created, but following it needs your kubeconfig: %w; follow it with 'ichor operation get %s --watch'",
+			ref.GetName(), err, ref.GetName())
+	}
+
+	if err := watchCARotation(ctx, k8s, ref.GetNamespace(), ref.GetName(), errw, nil); err != nil {
+		return err
+	}
+
+	if outputFormat == outputHuman {
+		return printRotateCADonePlain(out, ref.GetName(), cluster)
+	}
+
+	_, _ = fmt.Fprintf(errw, "When it completes: ichor cluster bundle-export %s\n", cluster)
+
+	return nil
 }
 
 func afterRotateCACreate(ctx context.Context, cmd *cobra.Command, cluster string, ref *pb.ObjectRef, created *pb.CreateOperationResponse) error {
@@ -279,5 +379,8 @@ func init() {
 	clusterCmd.AddCommand(clusterRotateCACmd)
 	clusterRotateCACmd.Flags().BoolVar(&clusterRotateCAFollow, "follow", false,
 		"after the credential hand-off, follow the rotation until it completes or fails")
+	clusterRotateCACmd.Flags().StringSliceVar(&clusterRotateCATargets, "ca", nil,
+		"the CAs to replace: talos, kubernetes, etcd, kubernetes-aggregator (default: talos and kubernetes)")
+	clusterRotateCACmd.Flags().BoolVar(&clusterRotateCAAll, "all", false, "replace all four CAs")
 	markWrites(clusterRotateCACmd)
 }

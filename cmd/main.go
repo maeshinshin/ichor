@@ -582,8 +582,7 @@ func main() {
 	}
 	must(ichorInstReconciler.SetupWithManager(mgr), "Failed to create controller", "controller", "ichorinstallation")
 	// The check for a newer release: the egress rule to the chart repository exists only while it is on.
-	relists, err := releasecheck.HelmLister(false)
-	must(err, "Failed to create the release check's registry client")
+	relists := releasecheck.RegistryLister(false)
 	must(mgr.Add(&controller.ReleaseCheck{
 		Client: mgr.GetClient(), Reader: mgr.GetAPIReader(), Settings: settingsReader, Namespace: ns,
 		Repository: updateCheckRepository, List: relists, Images: ciliumImages, Settle: 3 * time.Second,

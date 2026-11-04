@@ -201,7 +201,7 @@ func renderClusterGet(h *human, cl *pb.Cluster) error {
 
 	h.Block("Versions", vers...)
 	h.Block("Endpoint", kv{"Address", cl.GetEndpoint()}, kv{"Type", cl.GetEndpointType()})
-	h.Block("Network", kv{"Pod subnets", strings.Join(cl.GetPodSubnets(), ", ")}, kv{"Service subnets", strings.Join(cl.GetServiceSubnets(), ", ")})
+	h.Block("Network", kv{"Pods", strings.Join(cl.GetPodSubnets(), ", ")}, kv{"Services", strings.Join(cl.GetServiceSubnets(), ", ")})
 	h.Block("CNI", kv{"Preset", cl.GetCniPreset()}, kv{"Detected", strings.TrimSpace(cl.GetCniDetected() + " " + cl.GetCniDetectedVersion())},
 		kv{"Tunnel", cl.GetCniTunnel()}, kv{"Kube-proxy", cl.GetKubeProxyMode()})
 	h.Block("Control plane", kv{"Nodes", fmt.Sprint(cl.GetControlPlaneCount())}, kv{"Schedulable", yesNo(cl.GetControlPlaneSchedulable())})

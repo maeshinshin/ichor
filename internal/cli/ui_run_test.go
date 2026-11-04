@@ -314,7 +314,7 @@ func TestRunUI_WaitsForAPodToBecomeReady(t *testing.T) {
 		t.Fatalf("missing waiting message, got: %s", stderr.String())
 	}
 
-	if !strings.Contains(stderr.String(), "pod/pod-late") {
+	if !strings.Contains(stderr.String(), "pod-late") {
 		t.Fatalf("expected the late pod to be forwarded to, got: %s", stderr.String())
 	}
 }

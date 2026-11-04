@@ -90,7 +90,7 @@ var (
 // ValidateUserName checks the IchorUser name rules: a lower-case DNS label of at most 63
 // characters (the CRD enforces the same with CEL).
 func ValidateUserName(name string) error {
-	if len(name) == 0 || len(name) > 63 || !userNameRE.MatchString(name) {
+	if len(name) > 63 || !userNameRE.MatchString(name) {
 		return fmt.Errorf("user name must be a lower-case DNS label of at most 63 characters")
 	}
 	return nil

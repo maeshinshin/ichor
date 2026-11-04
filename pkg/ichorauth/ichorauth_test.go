@@ -116,7 +116,7 @@ func TestVerifyDummyAlwaysFalse(t *testing.T) {
 // (flaky); the shape is: both derive with DefaultParams.
 func TestDummyHashUsesDefaultParams(t *testing.T) {
 	VerifyDummy("x")
-	p, _, _, err := decode(dummyHash)
+	p, _, _, err := decode(dummyHash())
 	if err != nil {
 		t.Fatal(err)
 	}

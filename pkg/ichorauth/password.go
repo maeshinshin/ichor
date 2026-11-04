@@ -127,8 +127,7 @@ func decode(encoded string) (p Params, salt, key []byte, err error) {
 	if version != argon2.Version {
 		return p, nil, nil, ErrIncompatibleVersion
 	}
-	var m, t uint64
-	var th uint64
+	var m, t, th uint64
 	for kv := range strings.SplitSeq(parts[3], ",") {
 		k, v, ok := strings.Cut(kv, "=")
 		if !ok {
@@ -182,22 +181,17 @@ func weaker(p, want Params) bool {
 	return p.Time < want.Time || p.Memory < want.Memory || p.Threads < want.Threads || p.KeyLen < want.KeyLen
 }
 
-var (
-	dummyOnce sync.Once
-	dummyHash string
-)
+// dummyHash is a hash of a random, discarded input, so no one can log in with it.
+var dummyHash = sync.OnceValue(func() string {
+	h, _ := hashUnchecked(rand.Text(), DefaultParams)
+	return h
+})
 
 // VerifyDummy burns the same work as Verify against a hash nobody can match. Call it for an
 // unknown or password-less user so the response time does not reveal which users exist. It always
 // returns false.
 func VerifyDummy(password string) bool {
-	dummyOnce.Do(func() {
-		// The input is random and discarded, so no one can log in with it.
-		b := make([]byte, 32)
-		_, _ = rand.Read(b)
-		dummyHash, _ = hashUnchecked(base64.RawStdEncoding.EncodeToString(b), DefaultParams)
-	})
-	_, _, _ = Verify(password, dummyHash)
+	_, _, _ = Verify(password, dummyHash())
 	return false
 }
 

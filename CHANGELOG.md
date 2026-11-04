@@ -60,6 +60,12 @@ table accepts; a refusal passes only with the override verb.
   change in a pipe or CI log. It honours `NO_COLOR` and `TERM=dumb`, prints a
   total and the next commands at the end, and keeps `-o yaml|json` on stdout
   free of progress lines.
+- The CLI prints for people by default: `cluster list|get|status`,
+  `machine list|get` and `version` show tables and aligned blocks with plain
+  enum names (`control-plane`, `approved`), ✓ ! ✗ … for status and ages like
+  `5m`, with colour only on a terminal. `-o yaml` and `-o json` print what they
+  always printed, so a script names its format; a command not converted yet
+  still prints YAML. `ichor ui` prints its status in the same style.
 
 ### Not part of Ichor
 

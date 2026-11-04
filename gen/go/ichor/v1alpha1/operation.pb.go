@@ -1166,6 +1166,9 @@ type Operation struct {
 	EtcdRestoreSnapshot     string                 `protobuf:"bytes,18,opt,name=etcd_restore_snapshot,json=etcdRestoreSnapshot,proto3" json:"etcd_restore_snapshot,omitempty"`
 	EtcdRestoreSnapshotTime *timestamppb.Timestamp `protobuf:"bytes,19,opt,name=etcd_restore_snapshot_time,json=etcdRestoreSnapshotTime,proto3" json:"etcd_restore_snapshot_time,omitempty"`
 	EtcdRestoreMessage      string                 `protobuf:"bytes,20,opt,name=etcd_restore_message,json=etcdRestoreMessage,proto3" json:"etcd_restore_message,omitempty"`
+	// message is status.message: what an InProgress operation is doing or waiting for right now;
+	// empty in every other phase.
+	Message string `protobuf:"bytes,21,opt,name=message,proto3" json:"message,omitempty"`
 	// --- operation detail page ---
 	// summary is one human sentence built from the kind and the spec ("Reboot node talos-02").
 	Summary string `protobuf:"bytes,40,opt,name=summary,proto3" json:"summary,omitempty"`
@@ -1344,6 +1347,13 @@ func (x *Operation) GetEtcdRestoreSnapshotTime() *timestamppb.Timestamp {
 func (x *Operation) GetEtcdRestoreMessage() string {
 	if x != nil {
 		return x.EtcdRestoreMessage
+	}
+	return ""
+}
+
+func (x *Operation) GetMessage() string {
+	if x != nil {
+		return x.Message
 	}
 	return ""
 }
@@ -3270,7 +3280,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"started_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
 	"\vfinished_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"finishedAt\x12!\n" +
-	"\fdisplay_name\x18\x0e \x01(\tR\vdisplayName\"\xae\t\n" +
+	"\fdisplay_name\x18\x0e \x01(\tR\vdisplayName\"\xc8\t\n" +
 	"\tOperation\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x123\n" +
 	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
@@ -3297,6 +3307,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x15etcd_restore_snapshot\x18\x12 \x01(\tR\x13etcdRestoreSnapshot\x12W\n" +
 	"\x1aetcd_restore_snapshot_time\x18\x13 \x01(\v2\x1a.google.protobuf.TimestampR\x17etcdRestoreSnapshotTime\x120\n" +
 	"\x14etcd_restore_message\x18\x14 \x01(\tR\x12etcdRestoreMessage\x12\x18\n" +
+	"\amessage\x18\x15 \x01(\tR\amessage\x12\x18\n" +
 	"\asummary\x18( \x01(\tR\asummary\x129\n" +
 	"\adetails\x18) \x03(\v2\x1f.ichor.v1alpha1.OperationDetailR\adetails\x12\x1d\n" +
 	"\n" +

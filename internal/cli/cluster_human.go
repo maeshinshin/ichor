@@ -58,7 +58,7 @@ func clusterHealth(cl *pb.Cluster) (mark, string) {
 
 		switch c.GetStatus() {
 		case condTrue:
-			return markOK, "ready"
+			return markOK, colReady
 		case condFalse:
 			return markFailed, "not ready" + parenthesized(c.GetReason())
 		}
@@ -82,7 +82,7 @@ func clusterHealth(cl *pb.Cluster) (mark, string) {
 		}
 	}
 
-	return markOK, "ready"
+	return markOK, colReady
 }
 
 // clusterHealthRow is clusterHealth with its glyph, for a Block.
@@ -176,7 +176,7 @@ func renderClusterList(h *human, resp *pb.ListClustersResponse) error {
 	}
 
 	withNS := len(namespaces) > 1
-	header := []string{colName, "talos", "kubernetes", "cni", "endpoint", "ready", colAge}
+	header := []string{colName, "talos", "kubernetes", "cni", "endpoint", colReady, colAge}
 
 	if withNS {
 		header = slices.Insert(header, 0, "namespace")
@@ -247,6 +247,7 @@ func versionRow(v *pb.ComponentVersion) string {
 // Release-set component names (ComponentVersion.name) and the labels they get.
 const (
 	stateUpToDate   = "up-to-date"
+	stateBehind     = "behind"
 	compTalos       = "talos"
 	labelTalos      = "Talos"
 	compKubernetes  = "kubernetes"

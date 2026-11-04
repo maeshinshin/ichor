@@ -30,7 +30,10 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-const ichorV3 = "v0.3.0"
+const (
+	ichorV2 = "v0.2.0"
+	ichorV3 = "v0.3.0"
+)
 
 func TestOperationSummaryPerKind(t *testing.T) {
 	cluster := &ichorv1alpha1.TalosCluster{Spec: ichorv1alpha1.TalosClusterSpec{
@@ -38,7 +41,7 @@ func TestOperationSummaryPerKind(t *testing.T) {
 		Schematic: &ichorv1alpha1.TalosClusterSchematic{ID: "abcdef0123456789abcdef"},
 	}}
 	install := &ichorv1alpha1.IchorInstallation{
-		Spec: ichorv1alpha1.IchorInstallationSpec{Version: ichorV3}, Status: ichorv1alpha1.IchorInstallationStatus{InstalledVersion: "v0.2.0"},
+		Spec: ichorv1alpha1.IchorInstallationSpec{Version: ichorV3}, Status: ichorv1alpha1.IchorInstallationStatus{InstalledVersion: ichorV2},
 	}
 	node := func(action, service string) *ichorv1alpha1.TalosOperationNodeSpec {
 		return &ichorv1alpha1.TalosOperationNodeSpec{
@@ -173,7 +176,7 @@ func TestIchorSummaryKeepsTheFromVersionAfterTheUpgrade(t *testing.T) {
 		Spec: ichorv1alpha1.IchorInstallationSpec{Version: ichorV3}, Status: ichorv1alpha1.IchorInstallationStatus{InstalledVersion: ichorV3},
 	}
 	op := &ichorv1alpha1.TalosOperation{
-		Annotations: map[string]string{ichorv1alpha1.OperationFromVersionAnnotation: "v0.2.0"},
+		Annotations: map[string]string{ichorv1alpha1.OperationFromVersionAnnotation: ichorV2},
 		Spec:        ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindIchor},
 	}
 	out := &pb.Operation{}
@@ -250,7 +253,7 @@ func TestIchorDetailsDropTheInstalledVersionOnceCompleted(t *testing.T) {
 	}
 	detail := func(phase string) string {
 		op := &ichorv1alpha1.TalosOperation{
-			Annotations: map[string]string{ichorv1alpha1.OperationFromVersionAnnotation: "v0.2.0"},
+			Annotations: map[string]string{ichorv1alpha1.OperationFromVersionAnnotation: ichorV2},
 			Spec:        ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindIchor},
 			Status:      ichorv1alpha1.TalosOperationStatus{Phase: phase},
 		}
@@ -266,8 +269,8 @@ func TestIchorDetailsDropTheInstalledVersionOnceCompleted(t *testing.T) {
 		return ""
 	}
 
-	if got := detail(ichorv1alpha1.TalosOperationPhaseInProgress); got != "v0.2.0" {
-		t.Errorf("in progress: installed = %q, want v0.2.0", got)
+	if got := detail(ichorv1alpha1.TalosOperationPhaseInProgress); got != ichorV2 {
+		t.Errorf("in progress: installed = %q, want %s", got, ichorV2)
 	}
 
 	if got := detail(ichorv1alpha1.TalosOperationPhaseCompleted); got != "" {

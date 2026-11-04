@@ -4,7 +4,7 @@ description: A Helm chart to distribute ichor
 type: application
 
 version: 0.1.0
-appVersion: "0.1.0"
+appVersion: "v0.1.0"
 
 # ValidatingAdmissionPolicy (templates/admission/) is stable --
 # enabled by default, no feature gate -- only from Kubernetes 1.30 onward

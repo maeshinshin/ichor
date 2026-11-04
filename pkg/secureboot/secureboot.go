@@ -28,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
 // Image Factory's installer reference shape (Talos v1.14, "Boot assets" and "SecureBoot"):
@@ -47,6 +48,17 @@ func InstallerImage(schematic, version string, secureBoot bool) string {
 	}
 
 	return fmt.Sprintf("%s/%s/%s:%s", imageFactoryHost, name, schematic, version)
+}
+
+// ClusterInstallerImage is InstallerImage for cluster's schematic (spec.schematic, else the stock
+// installer's) and spec.talosVersion.
+func ClusterInstallerImage(cluster *ichorv1alpha1.TalosCluster, secureBoot bool) string {
+	schematic := upgrade.DefaultSchematic
+	if cluster.Spec.Schematic != nil && cluster.Spec.Schematic.ID != "" {
+		schematic = cluster.Spec.Schematic.ID
+	}
+
+	return InstallerImage(schematic, cluster.Spec.TalosVersion, secureBoot)
 }
 
 // IsSecureBootInstaller reports whether image names a SecureBoot installer (the stock Image

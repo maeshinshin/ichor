@@ -182,6 +182,8 @@ message Cluster {
   repeated ComponentVersion versions = 18;
   // release_set is the versions this Ichor build supports; the cluster is brought to it.
   ReleaseSet release_set = 19;
+  // created_at is the object's creation time; unset when talking to an older backend.
+  google.protobuf.Timestamp created_at = 20;
 }
 
 // ReleaseSet is one supported combination of versions, embedded in the Ichor build.

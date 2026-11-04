@@ -624,6 +624,40 @@ spec:
                   it. Empty when the node did not boot an Image Factory asset or was never read. It is what
                   a Talos upgrade and its plan compare spec.schematic against.
                 type: string
+              security:
+                description: |-
+                  security is the boot security the node reported on the last reconcile that reached it (its
+                  SecurityState and KernelCmdline resources). Unset until a node has been read.
+                properties:
+                  bootedWithUKI:
+                    description: |-
+                      bootedWithUKI is true when the node booted a Unified Kernel Image. A node that did not (a
+                      GRUB install) cannot get SecureBoot without a reinstall.
+                    type: boolean
+                  kernelLockdown:
+                    description: |-
+                      kernelLockdown is the lockdown level in effect: the last lockdown= word of the kernel
+                      command line, else integrity under SecureBoot (Talos v1.14's implicit level), else none.
+                    enum:
+                    - none
+                    - integrity
+                    - confidentiality
+                    type: string
+                  moduleSignatureEnforced:
+                    description: moduleSignatureEnforced is true when the kernel only
+                      loads signed modules.
+                    type: boolean
+                  secureBoot:
+                    description: secureBoot is true when the node booted with UEFI
+                      SecureBoot enabled.
+                    type: boolean
+                  ukiSigningKeyFingerprint:
+                    description: |-
+                      ukiSigningKeyFingerprint is the fingerprint of the key that signed the booted UKI; empty
+                      without SecureBoot.
+                    maxLength: 128
+                    type: string
+                type: object
               stage:
                 description: |-
                   stage is the last stage the node was seen in on its way from maintenance mode to

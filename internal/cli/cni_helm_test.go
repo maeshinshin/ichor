@@ -18,6 +18,7 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -76,7 +77,7 @@ func TestCNIHelmApplyAdoptsThenUpgrades(t *testing.T) {
 
 		var out bytes.Buffer
 
-		err := runCNIHelmApply(t.Context(), k8s, cfg, key, "", 0, false, nil, nil, &out)
+		err := runCNIHelmApply(t.Context(), k8s, cfg, key, "", 0, false, 0, nil, nil, &out)
 
 		return out.String(), err
 	}
@@ -101,12 +102,36 @@ func TestCNIHelmApplyAdoptsThenUpgrades(t *testing.T) {
 	}
 }
 
+// The controller names the number of Nodes the cluster has (--nodes): an HA cluster that has only its
+// first node runs one operator replica, whatever spec.controlPlane.count says.
+func TestCNIHelmApplyOperatorFollowsTheNodes(t *testing.T) {
+	cluster := ciliumTestCluster("")
+	cluster.Spec.ControlPlane.Count = 3
+	cfg := memoryHelmConfig()
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster).Build()
+
+	err := runCNIHelmApply(t.Context(), k8s, cfg,
+		types.NamespacedName{Namespace: ichorControllerNamespace, Name: cniHelmTestCluster}, "", 0, false, 1, nil, nil, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rel, err := cfg.Releases.Last("cilium")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if op, _ := rel.Config["operator"].(map[string]any); fmt.Sprint(op["replicas"]) != "1" {
+		t.Errorf("operator = %v, want one replica for one node", rel.Config["operator"])
+	}
+}
+
 // A user value for an Ichor-owned key stops the run before Helm is touched.
 func TestCNIHelmApplyRefusesOwnedKeys(t *testing.T) {
 	cfg := memoryHelmConfig()
 	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(ciliumTestCluster(`{"ipam":{"mode":"cluster-pool"}}`)).Build()
 
-	err := runCNIHelmApply(t.Context(), k8s, cfg, types.NamespacedName{Namespace: ichorControllerNamespace, Name: "home"}, "", 0, false, nil, nil, io.Discard)
+	err := runCNIHelmApply(t.Context(), k8s, cfg, types.NamespacedName{Namespace: ichorControllerNamespace, Name: "home"}, "", 0, false, 0, nil, nil, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "ipam.mode") {
 		t.Fatalf("error = %v, want one naming ipam.mode", err)
 	}
@@ -136,7 +161,7 @@ func TestCNIHelmApplyTakeoverRetiresTheForeignRecord(t *testing.T) {
 	var out bytes.Buffer
 
 	err := runCNIHelmApply(t.Context(), k8s, memoryHelmConfig(),
-		types.NamespacedName{Namespace: ichorControllerNamespace, Name: cniHelmTestCluster}, "", 0, false,
+		types.NamespacedName{Namespace: ichorControllerNamespace, Name: cniHelmTestCluster}, "", 0, false, 0,
 		&takeoverOptions{Kube: kube, IchorNamespace: ichorControllerNamespace}, nil, &out)
 	if err != nil {
 		t.Fatalf("runCNIHelmApply: %v", err)

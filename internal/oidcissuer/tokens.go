@@ -44,8 +44,7 @@ func (i *Issuer) sign(typ string, std jwt.Claims, private ...any) (string, error
 	if err != nil {
 		return "", err
 	}
-	opts := (&jose.SignerOptions{}).WithType(jose.ContentType(typ))
-	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: key}, opts)
+	signer, err := jose.NewSigner(jose.SigningKey{Algorithm: jose.RS256, Key: key}, (&jose.SignerOptions{}).WithType(jose.ContentType(typ)))
 	if err != nil {
 		return "", err
 	}

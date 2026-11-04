@@ -41,6 +41,17 @@ type Preset struct {
 	user map[string]any
 	// controlPlanes is the cluster's control-plane count; 0 means unknown (the chart's defaults).
 	controlPlanes int
+	// nodes is how many Nodes the cluster has right now; 0 means unknown (WithNodes).
+	nodes int
+}
+
+// WithNodes returns a copy of p for a cluster that has n Nodes now. A cluster with one Node runs one
+// operator replica whatever its desired control-plane count: it is bootstrapped with one Node and the
+// others join later, and a second replica without a Node blocks every rollout of the operator (values.go).
+func (p Preset) WithNodes(n int) Preset {
+	p.nodes = n
+
+	return p
 }
 
 // WithControlPlanes returns a copy of p for a cluster with n control planes. One control plane pins the

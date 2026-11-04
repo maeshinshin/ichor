@@ -97,9 +97,15 @@ type shuttingDownError struct {
 	// rotation marks the refusal made for a CA rotation in progress (ca_rotation.go), which
 	// refuses the same work for the same reason: the nodes are not in one settled state.
 	rotation bool
+	// keys marks the refusal made for a service-account and secretbox key rotation in progress (key_rotation.go).
+	keys bool
 }
 
 func (e *shuttingDownError) Error() string {
+	if e.keys {
+		return fmt.Sprintf("cluster key rotation is in progress (TalosOperation %q); disruptive work is refused until it completes", e.operation)
+	}
+
 	if e.rotation {
 		return fmt.Sprintf("cluster CA rotation is in progress (TalosOperation %q); disruptive work is refused until it completes", e.operation)
 	}
@@ -108,6 +114,10 @@ func (e *shuttingDownError) Error() string {
 }
 
 func (e *shuttingDownError) reason() string {
+	if e.keys {
+		return reasonOperationKeyRotating
+	}
+
 	if e.rotation {
 		return reasonOperationCARotating
 	}
@@ -136,6 +146,10 @@ func shutdownBlocker(ctx context.Context, reader client.Reader, namespace, clust
 		other := &ops.Items[i]
 		if other.Spec.ClusterRef.Name == cluster && caRotationUnderway(other) && (self == nil || self.Name != other.Name) {
 			return &shuttingDownError{operation: other.Name, rotation: true}
+		}
+
+		if other.Spec.ClusterRef.Name == cluster && keyRotationUnderway(other) && (self == nil || self.Name != other.Name) {
+			return &shuttingDownError{operation: other.Name, rotation: true, keys: true}
 		}
 
 		if other.Spec.ClusterRef.Name != cluster || other.Spec.Kind != ichorv1alpha1.TalosOperationKindShutdown ||

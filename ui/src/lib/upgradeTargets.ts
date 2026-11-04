@@ -59,14 +59,14 @@ export function hasPatch(list: TargetList | null): boolean {
 }
 
 // unavailableNotes says why the Versions card has no patch hint for a component: the lists that could not be
-// given, grouped by reason so one cause (the check is off) is one note, in the order Talos, Kubernetes, Cilium.
+// given, grouped by reason so one cause (the check is off) is one note, in the order Talos, Kubernetes.
+// Cilium has no list: it moves only to the chart Ichor embeds.
 export function unavailableNotes(i: {
   talos: TargetList | null
   kubernetes: TargetList | null
-  cilium: TargetList | null
 }): { components: string[]; reason: string }[] {
   const out: { components: string[]; reason: string }[] = []
-  for (const [name, list] of [['Talos', i.talos], ['Kubernetes', i.kubernetes], ['Cilium', i.cilium]] as const) {
+  for (const [name, list] of [['Talos', i.talos], ['Kubernetes', i.kubernetes]] as const) {
     if (list === null || list.available || list.unavailableReason === '') continue
     const note = out.find((n) => n.reason === list.unavailableReason)
     if (note) note.components.push(name)
@@ -75,16 +75,11 @@ export function unavailableNotes(i: {
   return out
 }
 
-// patchComponents names the components that have a patch, in the order Talos, Kubernetes, Cilium. The attention
-// list announces them as one item. A Cilium patch is one whose images verified.
-export function patchComponents(i: {
-  talos: TargetList | null
-  kubernetes: TargetList | null
-  cilium: TargetList | null
-}): string[] {
+// patchComponents names the components that have a patch, in the order Talos, Kubernetes. The attention
+// list announces them as one item.
+export function patchComponents(i: { talos: TargetList | null; kubernetes: TargetList | null }): string[] {
   const out: string[] = []
   if (hasPatch(i.talos)) out.push('Talos')
   if (hasPatch(i.kubernetes)) out.push('Kubernetes')
-  if (hasPatch(i.cilium)) out.push('Cilium')
   return out
 }

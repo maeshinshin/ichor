@@ -55,6 +55,7 @@ import (
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/kubetrust"
 	"github.com/maeshinshin/ichor/internal/metricsauth"
+	"github.com/maeshinshin/ichor/internal/imagesig"
 	"github.com/maeshinshin/ichor/internal/releasecheck"
 	"github.com/maeshinshin/ichor/internal/settings"
 	webhookv1alpha1 "github.com/maeshinshin/ichor/internal/webhook/v1alpha1"
@@ -517,7 +518,12 @@ func main() {
 		evac, kubeClient,
 	)
 
-	ichorUpgradeAdvance := controller.NewIchorUpgradeAdvancer(mgr.GetClient(), mgr.GetAPIReader(), ns, noCiliumPolicies)
+	// The installer image is pinned to a digest and its signature verified before the Job exists.
+	installerImages, err := imagesig.New()
+	must(err, "Failed to create the installer image verifier")
+
+	ichorUpgradeAdvance := controller.NewIchorUpgradeAdvancer(mgr.GetClient(), mgr.GetAPIReader(), ns, noCiliumPolicies,
+		installerImages, mgr.GetEventRecorderFor("ichor-controller")) //nolint:staticcheck // typed against record.EventRecorder, as above
 	cniKubeProxyAdvance := controller.NewCNIKubeProxyAdvancer(
 		mgr.GetClient(), mgr.GetAPIReader(), ns, controller.NewMachineryTalosClient,
 		controller.NewKubeProxyAdmin(),
@@ -579,6 +585,7 @@ func main() {
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "talosetcdbackup")
 	ichorInstReconciler := &controller.IchorInstallationReconciler{
 		Client: mgr.GetClient(), DeployedBy: deployedBy, SettingsFallback: settingsFallback, SettingsReadOnly: settingsReadOnly,
+		Namespace: ns,
 	}
 	must(ichorInstReconciler.SetupWithManager(mgr), "Failed to create controller", "controller", "ichorinstallation")
 	// The check for a newer release: the egress rule to the chart repository exists only while it is on.

@@ -25,7 +25,7 @@ import (
 // A hung installer must not keep its ServiceAccount's rights, and the cluster lock,
 // forever.
 func TestInstallerJobIsBoundedInTime(t *testing.T) {
-	job := newInstallerJob("ichor-system", "ichor-installer-x", &ichorv1alpha1.TalosOperation{}, &ichorv1alpha1.IchorInstallation{}, "cilium", false)
+	job := newInstallerJob("ichor-system", "ichor-installer-x", &ichorv1alpha1.TalosOperation{}, &ichorv1alpha1.IchorInstallation{}, testInstallerDigest, "cilium", false)
 
 	got := job.Spec.ActiveDeadlineSeconds
 	if got == nil || *got != installerDeadline {

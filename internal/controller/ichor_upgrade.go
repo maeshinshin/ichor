@@ -22,17 +22,21 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"time"
 
 	"golang.org/x/mod/semver"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/imagesig"
 	"github.com/maeshinshin/ichor/internal/oidctrust"
 	"github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
@@ -60,7 +64,47 @@ const (
 	// ichorInstallerOperationLabel carries a hash of the operation's namespace/name; labels
 	// cannot hold both, and the Job lives in the controller's namespace, not the operation's.
 	ichorInstallerOperationLabel = "ichor.maesh.dev/installer-operation"
+
+	// IchorInstallerDigestAnnotation records the image digest a Job runs.
+	IchorInstallerDigestAnnotation = "ichor.maesh.dev/installer-image-digest"
+
+	// installerImageTimeout bounds the registry requests that resolve and verify the installer image.
+	installerImageTimeout = 2 * time.Minute
+
+	// Reasons an Ichor upgrade pauses before it creates the installer Job.
+	reasonInstallerImageUnresolved = "InstallerImageUnresolved"
+	reasonInstallerImageUnverified = "InstallerImageUnverified"
+
+	// reasonInstallerSignatureSkipped is the Reason of the Warning Event for a Job run without a signature check.
+	reasonInstallerSignatureSkipped = "InstallerSignatureSkipped"
 )
+
+// InstallerImages pins the installer image to a digest and checks its signature.
+// *imagesig.Sigstore is the production implementation.
+type InstallerImages interface {
+	// Resolve is the digest the tag points at now.
+	Resolve(ctx context.Context, repository, tag string) (string, error)
+	// Verify succeeds when a cosign signature of the digest was made by the identity.
+	Verify(ctx context.Context, img imagesig.Image, id imagesig.Identity) error
+}
+
+// installerImageError is a refusal to create the Job. reason is the reason the operation pauses with.
+type installerImageError struct {
+	reason string
+	err    error
+}
+
+func (e *installerImageError) Error() string { return e.err.Error() }
+func (e *installerImageError) Unwrap() error { return e.err }
+
+// pauseReason is the reason a failed step pauses its operation with.
+func pauseReason(err error) string {
+	if ie := (*installerImageError)(nil); errors.As(err, &ie) {
+		return ie.reason
+	}
+
+	return reasonOperationStepFailed
+}
 
 // The operation does not need the installer Job after jobTTL: once the upgrade succeeded the new
 // controller's version equals spec.version, which the executor checks before it looks for a Job.
@@ -91,6 +135,7 @@ func ichorInstallerJobName(op *ichorv1alpha1.TalosOperation) string {
 // from the Job and the cluster.
 func NewIchorUpgradeAdvancer(
 	c client.Client, uncached client.Reader, controllerNamespace string, noCiliumPolicies bool,
+	images InstallerImages, recorder record.EventRecorder,
 ) AdvanceMachineFunc {
 	return func(
 		ctx context.Context, cluster *ichorv1alpha1.TalosCluster, _ *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation,
@@ -119,7 +164,7 @@ func NewIchorUpgradeAdvancer(
 				inst.Spec.Version, version.Version)
 		}
 
-		return advanceInstallerJob(ctx, c, uncached, controllerNamespace, op, &inst, detectedCNI(cluster), noCiliumPolicies)
+		return advanceInstallerJob(ctx, c, uncached, controllerNamespace, op, &inst, detectedCNI(cluster), noCiliumPolicies, images, recorder)
 	}
 }
 
@@ -139,7 +184,7 @@ func (r *TalosOperationReconciler) advanceIchor(
 
 	done, err := r.Advance(ctx, cluster, nil, op)
 	if err != nil {
-		return ctrl.Result{}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationStepFailed, err.Error())
+		return ctrl.Result{}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused, pauseReason(err), err.Error())
 	}
 
 	if done {
@@ -194,7 +239,7 @@ func ichorWaitingFor(
 
 func advanceInstallerJob(
 	ctx context.Context, c client.Client, uncached client.Reader, ns string, op *ichorv1alpha1.TalosOperation,
-	inst *ichorv1alpha1.IchorInstallation, cni string, noPolicies bool,
+	inst *ichorv1alpha1.IchorInstallation, cni string, noPolicies bool, images InstallerImages, recorder record.EventRecorder,
 ) (bool, error) {
 	name := ichorInstallerJobName(op)
 
@@ -204,7 +249,16 @@ func advanceInstallerJob(
 
 	switch {
 	case apierrors.IsNotFound(err):
-		return false, c.Create(ctx, newInstallerJob(ns, name, op, inst, cni, noPolicies))
+		img, err := pinInstallerImage(ctx, images, inst)
+		if err != nil {
+			return false, err
+		}
+
+		if err := recordInstallerImage(ctx, c, inst, img, recorder); err != nil {
+			return false, err
+		}
+
+		return false, c.Create(ctx, newInstallerJob(ns, name, op, inst, img.Digest, cni, noPolicies))
 	case err != nil:
 		return false, err
 	}
@@ -214,7 +268,89 @@ func advanceInstallerJob(
 			"delete the Job and this operation, then create a new operation", name, got, inst.Spec.Version)
 	}
 
+	if got := job.Annotations[IchorInstallerDigestAnnotation]; inst.Spec.InstallerDigest != "" && got != inst.Spec.InstallerDigest {
+		return false, fmt.Errorf("installer Job %s runs the image %s but spec.installerDigest is now %s; "+
+			"delete the Job and this operation, then create a new operation", name, got, inst.Spec.InstallerDigest)
+	}
+
 	return installerJobSettled(ctx, uncached, ns, &job)
+}
+
+// pinnedInstallerImage is the installer image an Ichor upgrade runs and how far it was checked.
+type pinnedInstallerImage struct {
+	Digest       string
+	Verification string // ichorv1alpha1.InstallerImageVerified or InstallerImageSkipped
+	Signer       string
+	Reason       string
+}
+
+// pinInstallerImage resolves the installer image to a digest and verifies its signature, or says why not. Nothing
+// falls back to a tag or to an unchecked image: the only way past the signature is
+// spec.installerSignature.mode skip, with its reason.
+func pinInstallerImage(
+	ctx context.Context, images InstallerImages, inst *ichorv1alpha1.IchorInstallation,
+) (pinnedInstallerImage, error) {
+	if images == nil {
+		return pinnedInstallerImage{}, &installerImageError{reason: reasonInstallerImageUnverified,
+			err: errors.New("this controller has no installer image verifier; refusing to run an unchecked installer image")}
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, installerImageTimeout)
+	defer cancel()
+
+	repo, tag := inst.Spec.InstallerRepository, inst.Spec.Version
+	digest := inst.Spec.InstallerDigest
+
+	if digest == "" {
+		var err error
+
+		if digest, err = images.Resolve(ctx, repo, tag); err != nil {
+			return pinnedInstallerImage{}, &installerImageError{reason: reasonInstallerImageUnresolved,
+				err: fmt.Errorf("the installer image %s:%s was not resolved to a digest, so no installer Job was created "+
+					"(check that the registry is reachable from the controller, or pin spec.installerDigest): %w", repo, tag, err)}
+		}
+	}
+
+	if sig := inst.Spec.InstallerSignature; sig != nil && sig.Mode == ichorv1alpha1.InstallerSignatureSkip {
+		return pinnedInstallerImage{Digest: digest, Verification: ichorv1alpha1.InstallerImageSkipped, Reason: sig.Reason}, nil
+	}
+
+	id := imagesig.IchorIdentity(tag)
+	if err := images.Verify(ctx, imagesig.Image{Repository: repo, Digest: digest}, id); err != nil {
+		return pinnedInstallerImage{}, &installerImageError{reason: reasonInstallerImageUnverified,
+			err: fmt.Errorf("the installer image %s@%s is not verified, so no installer Job was created "+
+				"(fix the registry or mirror, or run the upgrade with a recorded reason to skip the check: "+
+				"`ichor upgrade ichor --skip-signature-check REASON`): %w", repo, digest, err)}
+	}
+
+	return pinnedInstallerImage{Digest: digest, Verification: ichorv1alpha1.InstallerImageVerified, Signer: id.SANRegexp}, nil
+}
+
+// recordInstallerImage writes what the Job will run to status.installerImage and, for a skipped check,
+// a Warning Event: the opt-out is shown, never silent.
+func recordInstallerImage(
+	ctx context.Context, c client.Client, inst *ichorv1alpha1.IchorInstallation, img pinnedInstallerImage,
+	recorder record.EventRecorder,
+) error {
+	orig := inst.DeepCopy()
+	now := metav1.Now()
+
+	inst.Status.InstallerImage = &ichorv1alpha1.IchorInstallerImageStatus{
+		Version: inst.Spec.Version, Repository: inst.Spec.InstallerRepository, Digest: img.Digest,
+		Verification: img.Verification, Signer: img.Signer, Reason: img.Reason, ResolvedAt: &now,
+	}
+
+	if err := c.Status().Patch(ctx, inst, client.MergeFrom(orig)); err != nil {
+		return fmt.Errorf("recording the installer image in IchorInstallation status: %w", err)
+	}
+
+	if img.Verification == ichorv1alpha1.InstallerImageSkipped && recorder != nil {
+		recorder.Eventf(inst, corev1.EventTypeWarning, reasonInstallerSignatureSkipped,
+			"the signature of the installer image %s@%s for %s is NOT checked: %s",
+			inst.Spec.InstallerRepository, img.Digest, inst.Spec.Version, img.Reason)
+	}
+
+	return nil
 }
 
 // installerSettled is the end of an upgrade once the running version is the target: the installer
@@ -311,9 +447,11 @@ func deploymentRolledOut(d *appsv1.Deployment) bool {
 		s.UpdatedReplicas == want && s.Replicas == want && s.ReadyReplicas == want && s.AvailableReplicas == want
 }
 
-// newInstallerJob is the whole installer process: the target version's own image, run once,
-// under a ServiceAccount that exists for this and nothing else.
-func newInstallerJob(ns, name string, op *ichorv1alpha1.TalosOperation, inst *ichorv1alpha1.IchorInstallation, cni string, noPolicies bool) *batchv1.Job {
+// newInstallerJob is the whole installer process: the target version's own image, pinned to digest, run
+// once, under a ServiceAccount that exists for this and nothing else.
+func newInstallerJob(
+	ns, name string, op *ichorv1alpha1.TalosOperation, inst *ichorv1alpha1.IchorInstallation, digest, cni string, noPolicies bool,
+) *batchv1.Job {
 	sum := sha256.Sum256([]byte(op.Namespace + "/" + op.Name))
 
 	// One attempt: a retry after a rollback would redo a failed upgrade without anyone having
@@ -325,10 +463,10 @@ func newInstallerJob(ns, name string, op *ichorv1alpha1.TalosOperation, inst *ic
 
 	return newJob(ns, name, "ichor-installer", IchorInstallerServiceAccount, installerDeadline,
 		map[string]string{ichorInstallerOperationLabel: hex.EncodeToString(sum[:])[:32]},
-		map[string]string{IchorInstallerTargetAnnotation: inst.Spec.Version},
+		map[string]string{IchorInstallerTargetAnnotation: inst.Spec.Version, IchorInstallerDigestAnnotation: digest},
 		corev1.Container{
 			Name:  "installer",
-			Image: inst.Spec.InstallerRepository + ":" + inst.Spec.Version,
+			Image: inst.Spec.InstallerRepository + "@" + digest,
 			Args:  args,
 		})
 }

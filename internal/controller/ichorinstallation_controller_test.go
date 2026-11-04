@@ -200,7 +200,7 @@ var _ = Describe("IchorInstallation", func() {
 		It("launches the installer Job for spec.version once, and reports its progress", func() {
 			withVersion("v0.1.0")
 			createInstallation("v0.2.0")
-			advance := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false)
+			advance := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false, &fakeInstallerImages{digest: testInstallerDigest}, nil)
 			o := op()
 
 			done, err := advance(ctx, nil, nil, o)
@@ -209,7 +209,7 @@ var _ = Describe("IchorInstallation", func() {
 			Expect(jobs()).To(HaveLen(1))
 
 			job := jobs()[0]
-			Expect(job.Spec.Template.Spec.Containers[0].Image).To(Equal("registry.example/ichor-installer:v0.2.0"))
+			Expect(job.Spec.Template.Spec.Containers[0].Image).To(Equal("registry.example/ichor-installer@" + testInstallerDigest))
 			Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(IchorInstallerServiceAccount))
 			// A finished Job is removed after a day: long enough to read its log, and the
 			// operation never needs it afterwards (the next test).
@@ -230,7 +230,7 @@ var _ = Describe("IchorInstallation", func() {
 		It("turns a failed Job into an error", func() {
 			withVersion("v0.1.0")
 			createInstallation("v0.2.0")
-			advance := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false)
+			advance := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false, &fakeInstallerImages{digest: testInstallerDigest}, nil)
 			o := op()
 
 			_, err := advance(ctx, nil, nil, o)
@@ -255,7 +255,7 @@ var _ = Describe("IchorInstallation", func() {
 			Expect(k8sClient.Create(ctx, inst)).To(Succeed())
 			DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, inst))).To(Succeed()) })
 
-			_, err := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false)(ctx, nil, nil, op())
+			_, err := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false, &fakeInstallerImages{digest: testInstallerDigest}, nil)(ctx, nil, nil, op())
 			Expect(err).To(MatchError(ContainSubstring("helm upgrade")))
 			Expect(jobs()).To(BeEmpty())
 		})
@@ -264,7 +264,7 @@ var _ = Describe("IchorInstallation", func() {
 			withVersion("v0.3.0")
 			createInstallation("v0.2.0")
 
-			_, err := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false)(ctx, nil, nil, op())
+			_, err := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false, &fakeInstallerImages{digest: testInstallerDigest}, nil)(ctx, nil, nil, op())
 			Expect(err).To(MatchError(ContainSubstring("does not downgrade")))
 			Expect(jobs()).To(BeEmpty())
 		})
@@ -273,7 +273,7 @@ var _ = Describe("IchorInstallation", func() {
 			withVersion("v0.2.0")
 			createInstallation("v0.2.0")
 
-			done, err := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false)(ctx, nil, nil, op())
+			done, err := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false, &fakeInstallerImages{digest: testInstallerDigest}, nil)(ctx, nil, nil, op())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(done).To(BeTrue())
 			Expect(jobs()).To(BeEmpty())

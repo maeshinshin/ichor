@@ -632,7 +632,7 @@ Amendment 7 measured the refusal at about 20 to 30 seconds after `ichor init` or
 
 The wait polls on the existing pod diagnostics (`waitDiag`), so a cluster with no pod network still fails early. After it, the write goes through `createRetrying`, which now also retries a webhook refusal (an InternalError naming a webhook) but only inside `initRetryWindow` (3 minutes): that covers the short gap between a ready endpoint and the API server picking up the webhook's CA bundle. There is no second long loop.
 
-**Bound.** Default 5 minutes for both commands (it was 30 and 15; ADR 0104 kept 30 for `init` because of image pulls over a slow link, so `init` gets the same flag `adopt` has): `--wait-timeout` on `ichor init` and `ichor adopt`. A timeout fails with: `the controller Deployment ichor-controller-manager in ichor-system is not Ready after 5m0s (<pod reasons>): <what is missing>; check "kubectl -n ichor-system get pods"`.
+**Bound.** The defaults are unchanged: 30 minutes for `init` and 15 for `adopt` (ADR 0104 kept 30 for `init` because a first install pulls images over a slow link, and a fresh install must not fail on a shorter default). `--wait-timeout` sets the bound; `adopt` already had it and `init` gets the same flag. A timeout fails with: `the controller Deployment ichor-controller-manager in ichor-system is not Ready after 30m0s (<pod reasons>): <what is missing>; check "kubectl -n ichor-system get pods"`.
 
 **Not covered.** The names are the manifest's and the chart's defaults (release `ichor`, namespace `ichor-system`). A Helm release with another name or namespace is not found by label and the wait times out with the message above. An operator who may not read EndpointSlices is judged on the Deployment alone.
 

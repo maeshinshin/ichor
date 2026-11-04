@@ -19,16 +19,20 @@ package uiapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"connectrpc.com/connect"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	sigsyaml "sigs.k8s.io/yaml"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/values"
 )
 
 const (
@@ -178,6 +182,91 @@ var _ = Describe("CniService", func() {
 
 	It("refuses a document that is not a mapping", func() {
 		Expect(connect.CodeOf(set(cniOperatorUser, "- a\n- b\n"))).To(Equal(connect.CodeInvalidArgument))
+	})
+
+	// The operator's replicas follow the Nodes the cluster has, as the controller hashes and applies them
+	// (ADR 0113 amendment 2026-11-04): an HA cluster that has one Node so far runs one replica, and the
+	// preview must say so.
+	Context("on an HA cluster", func() {
+		operatorReplicas := func(effectiveYAML string) (any, bool) {
+			var vals map[string]any
+			Expect(sigsyaml.Unmarshal([]byte(effectiveYAML), &vals)).To(Succeed())
+
+			return values.Get(vals, "operator.replicas")
+		}
+
+		// haWithNodes makes the cluster HA and leaves exactly n Nodes in the API.
+		haWithNodes := func(n int) {
+			cluster.Spec.ControlPlane.Count = 3
+			Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+			var existing corev1.NodeList
+			Expect(k8sClient.List(ctx, &existing)).To(Succeed())
+
+			for i := range existing.Items {
+				Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &existing.Items[i]))).To(Succeed())
+			}
+
+			for i := range n {
+				Expect(k8sClient.Create(ctx, &corev1.Node{Name: fmt.Sprintf("cni-preview-node-%d", i)})).To(Succeed())
+			}
+
+			DeferCleanup(func() {
+				for i := range n {
+					Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, &corev1.Node{Name: fmt.Sprintf("cni-preview-node-%d", i)}))).To(Succeed())
+				}
+			})
+		}
+
+		It("shows one operator replica while the cluster has one Node, in the layers, the diff and a write", func() {
+			haWithNodes(1)
+
+			got, err := s.GetCiliumValues(asCniUser(cniViewerUser), connect.NewRequest(&pb.GetCiliumValuesRequest{Cluster: ref}))
+			Expect(err).NotTo(HaveOccurred())
+
+			replicas, ok := operatorReplicas(got.Msg.GetEffectiveYaml())
+			Expect(ok).To(BeTrue())
+			Expect(replicas).To(BeEquivalentTo(1))
+			Expect(got.Msg.GetDefaultsYaml()).To(ContainSubstring("replicas: 1"))
+
+			// The diff compares what is applied now, so a change that touches nothing else shows nothing of the operator.
+			diff, err := s.DiffCiliumValues(asCniUser(cniViewerUser), connect.NewRequest(&pb.DiffCiliumValuesRequest{
+				Cluster: ref, UserYaml: cniDebugOn,
+			}))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(diff.Msg.GetDiff()).To(ContainSubstring("+  enabled: true"))
+			Expect(diff.Msg.GetDiff()).NotTo(ContainSubstring("replicas"))
+
+			written, err := s.SetCiliumValues(asCniUser(cniOperatorUser), connect.NewRequest(&pb.SetCiliumValuesRequest{
+				Cluster: ref, UserYaml: cniDebugOn,
+			}))
+			Expect(err).NotTo(HaveOccurred())
+
+			replicas, ok = operatorReplicas(written.Msg.GetEffectiveYaml())
+			Expect(ok).To(BeTrue())
+			Expect(replicas).To(BeEquivalentTo(1))
+		})
+
+		It("keeps the chart default once the cluster has three Nodes", func() {
+			haWithNodes(3)
+
+			got, err := s.GetCiliumValues(asCniUser(cniViewerUser), connect.NewRequest(&pb.GetCiliumValuesRequest{Cluster: ref}))
+			Expect(err).NotTo(HaveOccurred())
+
+			_, ok := operatorReplicas(got.Msg.GetEffectiveYaml())
+			Expect(ok).To(BeFalse())
+			Expect(got.Msg.GetDefaultsYaml()).NotTo(ContainSubstring("replicas"))
+		})
+
+		It("falls back to the desired control-plane count when there are no Nodes to count", func() {
+			haWithNodes(0)
+
+			got, err := s.GetCiliumValues(asCniUser(cniViewerUser), connect.NewRequest(&pb.GetCiliumValuesRequest{Cluster: ref}))
+			Expect(err).NotTo(HaveOccurred())
+
+			_, ok := operatorReplicas(got.Msg.GetEffectiveYaml())
+			Expect(ok).To(BeFalse())
+		})
 	})
 
 	It("lets an operator set the values, shows them in the diff, and clears them again", func() {

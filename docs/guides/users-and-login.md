@@ -368,8 +368,9 @@ This opens a browser for the login page. The password is typed only into that
 page; the CLI never sees it. The default audience is `ichor-kube`, the login
 `kubectl` needs; `--audience ichor-ui` is the one the `ichor user` commands use.
 `ichor auth status` shows who you are and when the
-cached tokens expire; it prints no token. `ichor auth logout` removes the local
-login cache. If the certificate of ichor-ui comes from a private CA, add
+cached tokens expire; it prints no token. `ichor auth logout` revokes the
+refresh token of each cached login at the issuer, then removes the local login
+cache; if the issuer cannot be reached it warns, and still removes the cache. If the certificate of ichor-ui comes from a private CA, add
 `--ca-file ca.pem` (or `export ICHOR_CA_FILE=ca.pem`) to every `ichor auth`
 and `ichor user` command.
 
@@ -410,7 +411,7 @@ a new one.
   a tab, and when a request is refused), until the **session lifetime**
   (`ichorUI.users.refreshLifetime`, 12 hours by default, 1 hour to 30 days) since
   you typed the password. It does not slide: after that you sign in again, even in
-  a tab you are using. Sign out, a revoke-sessions, a password change or a
+  a tab you are using. Sign out (which revokes the refresh token at the issuer), a revoke-sessions, a password change or a
   disabled user end it as before (the next refresh is refused and the tab
   returns to the sign-in card). The refresh token lives in the tab's
   `sessionStorage` next to the ID token, so closing the tab ends the browser
@@ -501,9 +502,14 @@ token lifetime is the limit.
 To end every existing session of a user, revoke their sessions. Changing a
 user's password also ends their earlier sessions. A session lasts at most the
 session lifetime (12 hours by default). Signing out in the browser (or
-`ichor auth logout`) discards the tokens in that browser or cache; it does not
-revoke a copy someone took before, which lasts to the end of its lifetime unless
-you revoke the user's sessions.
+`ichor auth logout`) revokes that session's refresh token at the issuer (RFC
+7009, `POST /oidc/revoke`) and then discards the tokens, so a copy of the
+refresh token someone took earlier stops working too. The ID token already
+issued is not revocable and ends within its 5 minutes. The revocation is best
+effort: if the issuer cannot be reached when you sign out, the sign-out still
+completes, and the refresh token then lasts to the end of its lifetime unless
+you revoke the user's sessions. A tab signed in before this was added has no
+revocation endpoint stored and only discards its tokens.
 
 ## Override
 

@@ -130,7 +130,8 @@ func (s *CATrustSync) syncOnce(ctx context.Context) {
 		}
 
 		rot, err := secretsbundle.LoadRotation(ctx, s.Reader, s.ControllerNamespace, cluster.Spec.SecretsRef.Name)
-		if err != nil || rot == nil {
+		// An etcd or aggregator rotation alone brings no new Kubernetes CA to trust.
+		if err != nil || rot == nil || rot.Kubernetes == nil {
 			continue
 		}
 

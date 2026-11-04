@@ -108,8 +108,10 @@ const (
 	// write, not by waiting.
 	caRotationNextStage = time.Second
 
-	talosCAName       = "talos"
-	kubernetesCAName  = "kubernetes"
+	talosCAName       = ichorv1alpha1.CARotationTargetTalos
+	kubernetesCAName  = ichorv1alpha1.CARotationTargetKubernetes
+	etcdCAName        = ichorv1alpha1.CARotationTargetEtcd
+	aggregatorCAName  = ichorv1alpha1.CARotationTargetAggregator
 	bundleStaleReason = "CARotated"
 )
 
@@ -236,11 +238,13 @@ func (r *TalosOperationReconciler) advanceCARotation(
 		// Trust the new Kubernetes CA's certificate (never its key) before the API server switches to it at
 		// Issuing, so this controller's own client keeps verifying. A failure only costs the
 		// restart this avoids, so it does not stop the rotation.
-		if err := kubetrust.Shared.Publish(rot.Kubernetes.Crt, kubetrust.TrustFile); err != nil {
-			ctrl.LoggerFrom(ctx).Error(err, "Could not publish the new Kubernetes CA to this controller's trust pool")
+		if rot.Kubernetes != nil {
+			if err := kubetrust.Shared.Publish(rot.Kubernetes.Crt, kubetrust.TrustFile); err != nil {
+				ctrl.LoggerFrom(ctx).Error(err, "Could not publish the new Kubernetes CA to this controller's trust pool")
+			}
 		}
 
-		run.scrub.add(string(rot.Talos.Key), string(rot.Kubernetes.Key), string(rot.Talos.Crt), string(rot.Kubernetes.Crt))
+		run.scrub.add(rotationMaterial(rot)...)
 	}
 
 	rs := op.Status.CARotation
@@ -397,6 +401,16 @@ func (c *caRun) preflight(ctx context.Context) (ctrl.Result, error) {
 		return c.retry(ctx, "the cluster has no approved machine to rotate")
 	}
 
+	// The targets are what rotation.yaml holds when an earlier attempt saved one, else what was asked for.
+	targets := c.requestedTargets()
+	if c.rot != nil {
+		targets = c.rot.Targets()
+	}
+
+	if err := c.checkTargets(targets, machines); err != nil {
+		return c.retry(ctx, "not starting the rotation: "+err.Error())
+	}
+
 	var patches ichorv1alpha1.TalosConfigPatchList
 	if err := c.r.List(ctx, &patches, client.InNamespace(c.cluster.Namespace)); err != nil {
 		return ctrl.Result{}, err
@@ -433,6 +447,13 @@ func (c *caRun) preflight(ctx context.Context) (ctrl.Result, error) {
 		return c.retry(ctx, "not starting the rotation: "+err.Error())
 	}
 
+	// etcd loses a member for each restart of the roll: it must be whole before the first one.
+	if slices.Contains(targets, etcdCAName) {
+		if err := c.etcdHealthy(ctx, controlPlanes(machines), c.bundle, nil); err != nil {
+			return c.retry(ctx, "not starting the rotation: "+err.Error())
+		}
+	}
+
 	// Save the new CAs, keys included, before any machine is asked to trust them. A rotation.yaml
 	// left by an earlier attempt that never reached a machine is adopted, not replaced.
 	if c.rot == nil {
@@ -441,7 +462,7 @@ func (c *caRun) preflight(ctx context.Context) (ctrl.Result, error) {
 			return c.retry(ctx, "invalid versionContract")
 		}
 
-		rot, err := secretsbundle.NewRotation(time.Now(), contract)
+		rot, err := secretsbundle.NewRotationFor(time.Now(), contract, targets)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -451,7 +472,7 @@ func (c *caRun) preflight(ctx context.Context) (ctrl.Result, error) {
 		}
 
 		c.rot = rot
-		c.scrub.add(string(rot.Talos.Key), string(rot.Kubernetes.Key), string(rot.Talos.Crt), string(rot.Kubernetes.Crt))
+		c.scrub.add(rotationMaterial(rot)...)
 	}
 
 	certs, err := c.initialCertificates()
@@ -514,13 +535,12 @@ func (c *caRun) saveRotation(ctx context.Context, rot *secretsbundle.Rotation) e
 func (c *caRun) initialCertificates() ([]ichorv1alpha1.CARotationCertificate, error) {
 	var out []ichorv1alpha1.CARotationCertificate
 
-	for _, p := range []struct {
-		name      string
-		old, next []byte
-	}{
-		{talosCAName, c.bundle.Certs.OS.Crt, c.rot.Talos.Crt},
-		{kubernetesCAName, c.bundle.Certs.K8s.Crt, c.rot.Kubernetes.Crt},
-	} {
+	pairs, err := c.pairs()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, p := range pairs {
 		prev, err := secretsbundle.Fingerprint(p.old)
 		if err != nil {
 			return nil, fmt.Errorf("%s CA: %w", p.name, err)
@@ -587,13 +607,19 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 
 	// Accepting is applied with the old client certificate, which every machine still accepts;
 	// every later stage with the new one, which the Accepting pass proved they accept.
-	applySigner, applyOther := c.rot.Talos, c.bundle.Certs.OS
-	if stage == ichorv1alpha1.CARotationStageAccepting {
-		applySigner, applyOther = c.bundle.Certs.OS, c.rot.Talos
+	// A rotation without the Talos API CA (etcd, aggregator) dials with the bundle as it is.
+	applyBundle, verifyBundle := c.bundle, c.bundle
+
+	if c.rot.Talos != nil {
+		applySigner, applyOther := c.rot.Talos, c.bundle.Certs.OS
+		if stage == ichorv1alpha1.CARotationStageAccepting {
+			applySigner, applyOther = c.bundle.Certs.OS, c.rot.Talos
+		}
+
+		applyBundle = dialBundle(c.bundle, applySigner, applyOther)
+		verifyBundle = dialBundle(c.bundle, c.rot.Talos, c.bundle.Certs.OS)
 	}
 
-	applyBundle := dialBundle(c.bundle, applySigner, applyOther)
-	verifyBundle := dialBundle(c.bundle, c.rot.Talos, c.bundle.Certs.OS)
 	rotation := &render.CARotation{Stage: stage, New: c.rot}
 
 	applied := 0
@@ -650,8 +676,14 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 			fmt.Sprintf("stage %s: applied to %d of %d machine(s); verifying on the next pass", stage, applied, len(machines)))
 	}
 
-	// Every machine runs the stage's configuration. Verify Ichor can still reach each one with
-	// the credentials of the stage, and that Kubernetes is healthy, before moving on.
+	// Every machine runs the stage's configuration. etcd loads its CA field only at start, so its members
+	// are restarted now, one at a time.
+	if res, wait, err := c.rollEtcd(ctx, stage, machines, verifyBundle); wait {
+		return res, err
+	}
+
+	// Verify Ichor can still reach each one with the credentials of the stage, and that Kubernetes is
+	// healthy, before moving on.
 	for _, m := range machines {
 		err := c.withNode(ctx, m, verifyBundle, func(ctx context.Context, talos TalosClient) error {
 			if _, err := talos.Version(ctx); err != nil {
@@ -669,15 +701,22 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 		return c.retry(ctx, fmt.Sprintf("stage %s is not verified, so the next stage is not started: %v", stage, err))
 	}
 
-	if stage == ichorv1alpha1.CARotationStageIssuing {
+	if stage == ichorv1alpha1.CARotationStageIssuing && c.hasTarget(kubernetesCAName) {
 		if res, wait, err := c.awaitClients(ctx, machines[0], verifyBundle); wait {
+			return res, err
+		}
+	}
+
+	if stage == ichorv1alpha1.CARotationStageAccepting {
+		if res, wait, err := c.awaitAggregator(ctx, machines[0], verifyBundle); wait {
 			return res, err
 		}
 	}
 
 	// status.machines shows the stage under way: the next one starts empty.
 	c.op.Status.Machines = nil
-	c.op.Status.CARotation.Stage = nextStage(stage)
+	c.op.Status.CARotation.EtcdRestarted, c.op.Status.CARotation.EtcdRestartedAt = nil, nil
+	c.op.Status.CARotation.Stage = c.nextStage(stage)
 	setStageCertificates(c.op.Status.CARotation)
 
 	return ctrl.Result{RequeueAfter: caRotationNextStage}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue,
@@ -763,7 +802,7 @@ func (c *caRun) awaitClients(ctx context.Context, first *ichorv1alpha1.TalosMach
 func (c *caRun) awaitCredentials(ctx context.Context) (ctrl.Result, error) {
 	want := ichorv1alpha1.CARotationHandoffToken(c.op.Status.CARotation)
 	if want != "" && c.op.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation] == want {
-		c.op.Status.CARotation.Stage = nextStage(c.op.Status.CARotation.Stage)
+		c.op.Status.CARotation.Stage = c.nextStage(c.op.Status.CARotation.Stage)
 		setStageCertificates(c.op.Status.CARotation)
 
 		return ctrl.Result{RequeueAfter: caRotationNextStage}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress,
@@ -830,18 +869,29 @@ func (c *caRun) finalize(ctx context.Context) (ctrl.Result, error) {
 		}
 	}
 
-	if len(machines) > 0 {
-		if res, wait, err := c.awaitNodes(ctx, machines[0], bundle); wait {
+	// The kubelets and the in-cluster clients depend on the Kubernetes API CA only. A rotation without it
+	// (Talos API, etcd, aggregator) needs the Nodes Ready and nothing restarted.
+	switch {
+	case !c.hasTarget(kubernetesCAName):
+		if len(machines) > 0 {
+			if err := c.nodesReady(ctx, machines[0], bundle); err != nil {
+				return c.retry(ctx, "the replaced bundle is not verified: "+err.Error())
+			}
+		}
+	default:
+		if len(machines) > 0 {
+			if res, wait, err := c.awaitNodes(ctx, machines[0], bundle); wait {
+				return res, err
+			}
+		}
+
+		res, note, done, err := c.restartClients(ctx)
+		if !done {
 			return res, err
 		}
-	}
 
-	res, note, done, err := c.restartClients(ctx)
-	if !done {
-		return res, err
+		c.restartNote = note
 	}
-
-	c.restartNote = note
 
 	// Done is the last thing this reconcile verified, so the operation completes now: a requeue here
 	// would leave it InProgress at Done for as long as the requeue takes to come back.
@@ -906,16 +956,7 @@ func (c *caRun) awaitNodes(ctx context.Context, first *ichorv1alpha1.TalosMachin
 // holdsNewCAs reports whether bundle already carries the CAs this rotation is moving to.
 func (c *caRun) holdsNewCAs(bundle *secrets.Bundle) bool {
 	for _, cert := range c.op.Status.CARotation.Certificates {
-		var crt []byte
-
-		switch cert.Name {
-		case talosCAName:
-			crt = bundle.Certs.OS.Crt
-		case kubernetesCAName:
-			crt = bundle.Certs.K8s.Crt
-		}
-
-		if fp, err := secretsbundle.Fingerprint(crt); err != nil || fp != cert.Next {
+		if fp, err := secretsbundle.Fingerprint(bundleCrt(bundle, cert.Name)); err != nil || fp != cert.Next {
 			return false
 		}
 	}
@@ -988,9 +1029,13 @@ func (c *caRun) complete(ctx context.Context) (ctrl.Result, error) {
 		ctrl.LoggerFrom(ctx).Error(err, "Could not clear this controller's extra trusted CAs")
 	}
 
-	reason, message := reasonCARotationComplete, "the Talos API and Kubernetes API CAs are replaced; export the new secrets bundle"+c.restartNote
+	reason, message := reasonCARotationComplete, "the "+c.replacedCAs()+" CAs are replaced; export the new secrets bundle"+c.restartNote
 
-	if c.cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
+	if c.hasTarget(aggregatorCAName) {
+		message += "; an extension API server that read the aggregator CA only once needs a restart by its owner"
+	}
+
+	if c.hasTarget(kubernetesCAName) && c.cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
 		message += "; the CNI is unmanaged, so Ichor did not restart it: restart its pods if they report x509 errors"
 	}
 

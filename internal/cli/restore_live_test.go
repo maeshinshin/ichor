@@ -43,10 +43,10 @@ const (
 
 var liveSnapTime = time.Date(2026, 10, 1, 2, 0, 0, 0, time.UTC)
 
-func liveBackupObject(name, cluster string) *ichorv1alpha1.TalosEtcdBackup {
+func liveBackupObject(name string) *ichorv1alpha1.TalosEtcdBackup {
 	return &ichorv1alpha1.TalosEtcdBackup{
 		Name: name, Namespace: testNamespace,
-		Spec: ichorv1alpha1.TalosEtcdBackupSpec{ClusterRef: corev1.LocalObjectReference{Name: cluster}, Schedule: "0 2 * * *"},
+		Spec: ichorv1alpha1.TalosEtcdBackupSpec{ClusterRef: corev1.LocalObjectReference{Name: opTestCluster}, Schedule: "0 2 * * *"},
 		Status: ichorv1alpha1.TalosEtcdBackupStatus{Snapshots: []ichorv1alpha1.TalosEtcdBackupStored{
 			{Name: liveNewest, Time: metav1.NewTime(liveSnapTime), Size: 4096},
 			{Name: liveOlder, Time: metav1.NewTime(liveSnapTime.Add(-24 * time.Hour)), Size: 4000},
@@ -63,7 +63,7 @@ func liveClients(t *testing.T, yes, allowed bool, extra ...client.Object) (*apiC
 	apiOpts.Override = true
 	apiOpts.OverrideReason = liveReason
 
-	objs := append(opTestObjects(), liveBackupObject(liveBackup, opTestCluster))
+	objs := append(opTestObjects(), liveBackupObject(liveBackup))
 	base := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(objs, extra...)...).Build()
 	k8s := interceptor.NewClient(base, interceptor.Funcs{
 		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
@@ -268,7 +268,7 @@ func TestRestoreLiveRefusesWhatThePlanBlocks(t *testing.T) {
 
 func TestRestoreLiveRefusesABackupStoreInsideTheCluster(t *testing.T) {
 	for _, endpoint := range []string{"http://minio.minio.svc:9000", "http://minio.minio.svc.cluster.local:9000", "http://10.96.7.7:9000"} {
-		inside := liveBackupObject("inside", opTestCluster)
+		inside := liveBackupObject("inside")
 		inside.Spec.Destination.S3.Endpoint = endpoint
 
 		c, k8s := liveClients(t, true, true, inside)

@@ -160,10 +160,9 @@ func TestCniKubeProxyAndConfigApplyPrintHumanOutputAndTheWireMessageOnYAML(t *te
 	for _, tc := range []struct {
 		name string
 		spec startSpec
-		kind string
 	}{
-		{"cni kube-proxy", startSpec{Kind: pb.OperationKind_OPERATION_KIND_CNI, Cluster: opTestCluster, Target: "replaced"}, "cni"},
-		{"config apply", startSpec{Kind: pb.OperationKind_OPERATION_KIND_CONFIG, Cluster: opTestCluster}, "config"},
+		{"cni kube-proxy", startSpec{Kind: pb.OperationKind_OPERATION_KIND_CNI, Cluster: opTestCluster, Target: kubeProxyReplaced}},
+		{"config apply", startSpec{Kind: pb.OperationKind_OPERATION_KIND_CONFIG, Cluster: opTestCluster}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			setAPITestFlags(t, true)
@@ -180,7 +179,7 @@ func TestCniKubeProxyAndConfigApplyPrintHumanOutputAndTheWireMessageOnYAML(t *te
 				t.Fatal(err)
 			}
 
-			startedBlock(t, out.String(), opTestOps(t, k8s), tc.kind)
+			startedBlock(t, out.String(), opTestOps(t, k8s), kindName(tc.spec.Kind))
 
 			c, _ = freshClients(t, configApplyObjects())
 			outputFormat = outputYAML
@@ -200,7 +199,7 @@ func TestCniKubeProxyAndConfigApplyPrintHumanOutputAndTheWireMessageOnYAML(t *te
 
 func TestStartFollowUsesTheSharedWatch(t *testing.T) {
 	for _, spec := range []startSpec{
-		{Kind: pb.OperationKind_OPERATION_KIND_CNI, Cluster: opTestCluster, Target: "replaced", Follow: true},
+		{Kind: pb.OperationKind_OPERATION_KIND_CNI, Cluster: opTestCluster, Target: kubeProxyReplaced, Follow: true},
 		{Kind: pb.OperationKind_OPERATION_KIND_CONFIG, Cluster: opTestCluster, Follow: true},
 	} {
 		t.Run(kindName(spec.Kind), func(t *testing.T) {
@@ -232,7 +231,7 @@ func TestRestoreLiveFollowUsesTheSharedWatchAndYAMLKeepsTheAnnouncement(t *testi
 	s := liveSpec()
 	s.Confirm, s.Follow = opTestCluster, true
 
-	c := completingClients(t, append(opTestObjects(), liveBackupObject(liveBackup, opTestCluster)))
+	c := completingClients(t, append(opTestObjects(), liveBackupObject(liveBackup)))
 
 	outputFormat = outputHuman
 
@@ -249,7 +248,7 @@ func TestRestoreLiveFollowUsesTheSharedWatchAndYAMLKeepsTheAnnouncement(t *testi
 		t.Errorf("human stderr:\n%s\nstdout:\n%s", errw.String(), out.String())
 	}
 
-	c = completingClients(t, append(opTestObjects(), liveBackupObject(liveBackup, opTestCluster)))
+	c = completingClients(t, append(opTestObjects(), liveBackupObject(liveBackup)))
 	outputFormat = outputYAML
 
 	out.Reset()

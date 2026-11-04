@@ -104,6 +104,7 @@ func TestBuiltinUserRoles(t *testing.T) {
 	adminOnly := []rbacTriple{
 		{ichorGroup, "talosoperations/shutdown", verbStart, ""},
 		{ichorGroup, "talosoperations/ca-rotation", verbStart, ""},
+		{ichorGroup, "talosoperations/key-rotation", verbStart, ""},
 		{ichorGroup, "talosoperations/etcd-restore", verbStart, ""},
 		{ichorGroup, "talosoperations/node-reset", verbStart, ""},
 		{ichorGroup, "talosoperations/node-shutdown", verbStart, ""},

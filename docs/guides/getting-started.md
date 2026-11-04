@@ -59,6 +59,15 @@ from `IMG` and `IMG_UI`, which default to `controller:latest` and
 `ichor-ui:latest`; pass them as in the `demo-images-build` recipe if you use it.
 `make help` lists the other targets.
 
+To build the release artifacts for a tag instead, run
+`make release VERSION=v0.1.0`. It writes `bin/release/ichor` (the CLI with its
+install manifest embedded), `bin/release/install.yaml`,
+`bin/release/network-policies.yaml` and the chart tgz to `bin/release/`, with
+images named `ghcr.io/maeshinshin/<name>:v0.1.0`. `RELEASE_REGISTRY=<registry>/<namespace>`
+changes that image prefix (the default is `ghcr.io/maeshinshin`). It pushes
+nothing, so the `demo-images` steps above are still how you build and push
+the images.
+
 ## 2. Create the cluster
 
 `ichor init` makes the node the first control plane of a new cluster. It

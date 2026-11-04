@@ -192,8 +192,8 @@ func setCertificatesExpiring(
 			cond.Reason = "Expired"
 		}
 
-		cond.Message = strings.Join(soon, "; ") + ". Rotate the CAs (ichor cluster rotate-ca) before they expire; " +
-			"the etcd and aggregator CAs are not covered by that command."
+		cond.Message = strings.Join(soon, "; ") + ". Rotate the CAs (ichor cluster rotate-ca; add --ca etcd or " +
+			"--ca kubernetes-aggregator for those) before they expire."
 	}
 
 	before := apimeta.FindStatusCondition(cluster.Status.Conditions, cond.Type)
@@ -218,7 +218,7 @@ func (r *CertExpiryReconciler) clearBundleBackupStale(
 		return nil
 	}
 
-	want, err := secretsbundle.BundleFingerprint(bundle)
+	want, err := secretsbundle.ExportFingerprint(bundle)
 	if err != nil || cluster.Annotations[ichorv1alpha1.BundleExportedAnnotation] != want {
 		return nil //nolint:nilerr // an unreadable bundle keeps the condition up; the expiry path reports it
 	}

@@ -216,7 +216,14 @@ func bundleMatchesCluster(ctx context.Context, k8s ctrlclient.Client, req creden
 
 	if rot != nil && rot.Validate() == nil && live.Certs != nil {
 		certs := *live.Certs
-		certs.OS, certs.K8s = rot.Talos, rot.Kubernetes
+		if rot.Talos != nil {
+			certs.OS = rot.Talos
+		}
+
+		if rot.Kubernetes != nil {
+			certs.K8s = rot.Kubernetes
+		}
+
 		candidates = append(candidates, &secrets.Bundle{Certs: &certs})
 	}
 

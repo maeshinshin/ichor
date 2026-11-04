@@ -135,6 +135,10 @@ type TalosOperationReconciler struct {
 	// pick up the projected file (0 means caClientSettleDelay).
 	RootCAPublished   RootCAPublishedFunc
 	ClientSettleDelay time.Duration
+	// AggregatorCAPublished reads whether kube-apiserver publishes the new aggregator CA to extension
+	// API servers before the front-proxy certificate changes CA (ca_rotation_targets.go, ADR 0120);
+	// nil skips the check. ClientSettleDelay is the wait after it.
+	AggregatorCAPublished AggregatorCAPublishedFunc
 
 	// KubeClient, Evacuator serve the node kind alone (node_action.go, ADR 0085): KubeClient
 	// cordons, drains and reads Node readiness live (nil skips the drain and reads the cache),

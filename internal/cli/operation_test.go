@@ -151,7 +151,7 @@ func TestStartThroughTheBackendAndWithoutItDoTheSame(t *testing.T) {
 	}
 
 	if err := runStartOperation(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{},
-		startSpec{Kind: pb.OperationKind_OPERATION_KIND_CNI, Target: "replaced"}); err != nil {
+		startSpec{Kind: pb.OperationKind_OPERATION_KIND_CNI, Target: kubeProxyReplaced}); err != nil {
 		t.Fatal(err)
 	}
 

@@ -18,13 +18,12 @@ import { operationClient } from '@/lib/connect'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { formatBytes, formatTimestamp } from '@/lib/format'
 import { useCluster } from '@/lib/useCluster'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 // Backups: the cluster's TalosEtcdBackups, the snapshots they hold, and restore.
 // A backup is created by applying a TalosEtcdBackup, and the controller takes the snapshots; Back up now only
 // sets a request on it.
 export function Backups() {
-  const t = useT()
   const { cluster, loading, error: clusterError } = useCluster()
   const [backups, setBackups] = useState<EtcdBackup[] | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)

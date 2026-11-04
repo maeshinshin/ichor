@@ -38,13 +38,12 @@ import {
 } from '@/lib/settings'
 import { useLoad } from '@/lib/useLoad'
 import { Switch } from '@/components/ui/switch'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 // The Settings page: the runtime settings of the IchorInstallation, one card per
 // group. Each value carries a badge for where it comes from. Writes go through SettingsService as the
 // caller; a read-only deployment or a missing verb leaves the controls disabled with the reason in an Alert.
 export function Settings() {
-  const t = useT()
   const [res, setRes] = useState<GetSettingsResponse | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
 
@@ -68,12 +67,10 @@ export function Settings() {
 }
 
 function SourceBadge({ source }: { source: Source }) {
-  const t = useT()
   return <Badge variant={source === 'spec' ? 'secondary' : 'outline'}>{t(source === 'spec' ? 'settings.sourceSpec' : 'settings.sourceDeployment')}</Badge>
 }
 
 function Locked({ res }: { res: GetSettingsResponse }) {
-  const t = useT()
   const reason = lockedReason(res)
   if (!reason) return null
   return (
@@ -84,7 +81,6 @@ function Locked({ res }: { res: GetSettingsResponse }) {
 }
 
 function DeploymentCard({ res }: { res: GetSettingsResponse }) {
-  const t = useT()
   const helm = res.manager === 'helm'
   return (
     <SectionCard title={t('settings.deployment')} description={t('settings.deploymentDesc')}>
@@ -134,7 +130,6 @@ function useSave(onSaved: (r: GetSettingsResponse) => void) {
 }
 
 function UsersCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: GetSettingsResponse) => void }) {
-  const t = useT()
   const start = formOf(res)
   const [form, setForm] = useState<Form>(start)
   const { busy, error, save } = useSave(onSaved)
@@ -220,7 +215,6 @@ function DurationField({
 }
 
 function DefaultsCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: GetSettingsResponse) => void }) {
-  const t = useT()
   const start = formOf(res)
   const [form, setForm] = useState<Form>(start)
   const { busy, error, save } = useSave(onSaved)
@@ -259,7 +253,6 @@ function DefaultsCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r:
 // UpdatesCard is the switch for the check of newer Ichor releases and what the last
 // check reported. A failed check is said here and nowhere on the dashboard.
 function UpdatesCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: GetSettingsResponse) => void }) {
-  const t = useT()
   const info = useLoad(() => operationClient.getIchorInstallation({}), []).data
   const effective = res.effective?.updateCheck
   const start = effective?.value === 'false' ? 'off' : 'on'
@@ -316,7 +309,6 @@ function UpdatesCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: 
 // optional daily UTC window, and, while it is halted by a failed or paused automatic operation, the button that
 // clears the halt. Clearing is allowed on a read-only deployment too; it is an action, not a setting.
 function AutoPatchCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: GetSettingsResponse) => void }) {
-  const t = useT()
   const start = autoPatchFormOf(res)
   const [form, setForm] = useState<AutoPatchForm>(start)
   const { busy, error, save } = useSave(onSaved)

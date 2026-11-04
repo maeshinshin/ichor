@@ -17,7 +17,7 @@ import { conditionTone } from '@/lib/conditions'
 import { userError } from '@/lib/users'
 import type { User } from '@/gen/ichor/v1alpha1/user_pb'
 import { useList } from '@/lib/useList'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 type Dialog = 'edit' | 'password' | 'revoke' | 'delete'
 
@@ -25,7 +25,6 @@ type Dialog = 'edit' | 'password' | 'revoke' | 'delete'
 // is checked by Kubernetes RBAC as the caller, so a person without ichor-admin gets the 403 shown
 // inline instead of a list.
 export function Users() {
-  const t = useT()
   const { items: users, error, reload } = useList(async () => (await userClient.listUsers({})).users, undefined, userError)
   const [query, setQuery] = useState('')
 
@@ -68,7 +67,6 @@ export function Users() {
 }
 
 function UserRow({ user, onChanged }: { user: User; onChanged: () => void }) {
-  const t = useT()
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const ready = user.conditions.find((c) => c.type === 'Ready')
   const close = (d: Dialog) => (open: boolean) => setDialog(open ? d : null)

@@ -21,7 +21,7 @@ import { notifyDone } from '@/lib/notify'
 import { describeError, isOverridable, type ErrorShape } from '@/lib/errors'
 import { versionProblem } from '@/lib/clusterOps'
 import { confirmMatches, kindNeedsTypedName, kubernetesStages, planCounts, planSteps, targetError, type OpKind } from '@/lib/operations'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 import { type TargetList } from '@/lib/upgradeTargets'
 import { navigate } from '@/router'
 
@@ -56,7 +56,6 @@ export function StartOperationDialog({
   open?: boolean
   onOpenChange?: (open: boolean) => void
 }) {
-  const t = useT()
   const [ownOpen, setOwnOpen] = useState(false)
   const open = controlledOpen ?? ownOpen
   const setOpen = (v: boolean) => {
@@ -244,7 +243,7 @@ export function StartOperationDialog({
             />
           )}
           {current !== '' && <FieldDescription>{t(kind === 'cni' ? 'ops.modeHint' : 'ops.versionHint', { current })}</FieldDescription>}
-          {touched && targetProblem && <FieldError>{problemText(t, kind, targetProblem, current)}</FieldError>}
+          {touched && targetProblem && <FieldError>{problemText(kind, targetProblem, current)}</FieldError>}
         </Field>
       )}
 
@@ -313,7 +312,7 @@ function checkTarget(kind: OpKind, current: string, target: string): TargetProbl
   return versionProblem(current, target)
 }
 
-function problemText(t: ReturnType<typeof useT>, kind: OpKind, problem: TargetProblem, current: string): string {
+function problemText(kind: OpKind, problem: TargetProblem, current: string): string {
   switch (problem) {
     case 'required':
       return t('ops.dialog.errRequired')
@@ -329,7 +328,6 @@ function problemText(t: ReturnType<typeof useT>, kind: OpKind, problem: TargetPr
 // PlanView says what the server's plan will do, in the words of the screen's
 // language. The server's own text (a blocking reason) is shown as received.
 function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperationResponse; clusterName: string }) {
-  const t = useT()
   const counts = planCounts(plan.machines)
   const steps = planSteps(plan.machines)
   const to = plan.target === '' ? plan.current : plan.target
@@ -346,7 +344,7 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
           {plan.specChanges && <CardDescription>{t('ops.plan.specChanges', { to })}</CardDescription>}
         </CardHeader>
         <CardContent className="space-y-3">
-          <p>{effectText(t, plan.effect, kind)}</p>
+          <p>{effectText(plan.effect, kind)}</p>
           {kind === 'kubernetes' && plan.stages.length > 0 && <KubernetesStages names={plan.stages} />}
           {kind === 'ca-rotation' && plan.stages.length > 0 && <p>{t('ops.plan.stages', { stages: plan.stages.join(', ') })}</p>}
           {plan.machines.length > 0 ? (
@@ -363,7 +361,7 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
                 {steps.map((s, i) => (
                   <Item key={s.step} size="xs" variant="outline">
                     <ItemContent>
-                      <ItemTitle>{t('ops.plan.step', { n: i + 1, names: s.names.join(', '), role: roleText(t, s.role) })}</ItemTitle>
+                      <ItemTitle>{t('ops.plan.step', { n: i + 1, names: s.names.join(', '), role: roleText(s.role) })}</ItemTitle>
                     </ItemContent>
                   </Item>
                 ))}
@@ -425,7 +423,6 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
 // KubernetesStages lists the plan's stages in order, each with what it does. The
 // explanation is looked up by the stage's position: the plan names them in the order of kubernetesStages.
 function KubernetesStages({ names }: { names: string[] }) {
-  const t = useT()
   return (
     <div class="space-y-2">
       <p>{t('ops.plan.kubeStages', { n: names.length })}</p>
@@ -443,11 +440,11 @@ function KubernetesStages({ names }: { names: string[] }) {
   )
 }
 
-function roleText(t: ReturnType<typeof useT>, role: string): string {
+function roleText(role: string): string {
   return role === 'controlplane' ? t('ops.plan.role.controlplane') : t('ops.plan.role.worker')
 }
 
-function effectText(t: ReturnType<typeof useT>, effect: number, kind: OpKind): string {
+function effectText(effect: number, kind: OpKind): string {
   switch (effect) {
     case OperationEffect.REBOOT:
       return t(kind === 'config' ? 'ops.plan.effectConfigReboot' : 'ops.plan.effectReboot')

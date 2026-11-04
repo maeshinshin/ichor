@@ -6,13 +6,12 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import type { ObjectRef } from '@/gen/ichor/v1alpha1/common_pb'
 import { clusterClient } from '@/lib/connect'
 import { describeError, type ErrorShape } from '@/lib/errors'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 // CARotationAdvice is the notice an adopted cluster carries: the
 // previous administrators' credentials stay valid until the CAs are rotated. It is advice only;
 // Dismiss writes an annotation on the TalosCluster and the controller clears the condition.
 export function CARotationAdvice({ cluster }: { cluster: ObjectRef }) {
-  const t = useT()
   const [dismissed, setDismissed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)

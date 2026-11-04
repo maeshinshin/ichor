@@ -11,7 +11,7 @@ import { cniClient } from '@/lib/connect'
 import { describeError, isOverridable, type ErrorShape } from '@/lib/errors'
 import { notifyDone } from '@/lib/notify'
 import type { TargetList } from '@/lib/upgradeTargets'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 // CiliumUpgradeDialog starts a Cilium upgrade: to the embedded chart when the picker is left empty, or to the
 // verified patch it names. The Cilium page and the Versions card share it.
@@ -30,7 +30,6 @@ export function CiliumUpgradeDialog({
   size?: 'sm'
   disabled?: boolean
 }) {
-  const t = useT()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)

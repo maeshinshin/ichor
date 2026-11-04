@@ -42,7 +42,7 @@ import {
   type NetworkForm,
   type NicOption,
 } from '@/lib/machineSettings'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 const emptyNetwork: NetworkForm = { mac: '', addressing: 'dhcp', addresses: '', gateway: '', dns: '', vlan: '' }
 const emptyRoles: DiskRolesForm = { ephemeral: '', volumes: [] }
@@ -56,7 +56,6 @@ export function ApproveDialog({
   machine: Machine
   onApproved: (m: Machine) => void
 }) {
-  const t = useT()
   const [open, setOpen] = useState(false)
   const [node, setNode] = useState<NodeDetail | null>(null)
   const [nodeError, setNodeError] = useState<string | null>(null)

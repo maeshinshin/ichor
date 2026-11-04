@@ -264,23 +264,65 @@ func download[M chunk](cmd *cobra.Command, call downloadCall[M]) error {
 // runDownload runs call and saves the stream. A refusal from ichor-ui says how
 // to use the caller's own credentials instead.
 func runDownload[M chunk](ctx context.Context, c *apiClients, output string, stdout, stderr io.Writer, call downloadCall[M]) error {
+	if output == "-" { // the bytes go to stdout, and stderr stays free of anything but errors
+		_, _, err := fetchDownload(ctx, c, output, stdout, call, nil)
+
+		return err
+	}
+
+	p := newProgress(stderr)
+	step := p.Start(downloadStep)
+
+	path, n, err := fetchDownload(ctx, c, output, stdout, call, step)
+	if err != nil {
+		return step.Fail(err)
+	}
+
+	step.Done(fmt.Sprintf("%s to %s (mode 0600)", byteSize(n), path))
+	p.Warn("the file is NOT encrypted and may contain secrets; keep it safe")
+
+	return nil
+}
+
+// downloadStep is the name of the progress step of a download to a file.
+const downloadStep = "Download"
+
+// fetchDownload runs call and saves the stream, telling step (if any) how much has arrived.
+func fetchDownload[M chunk](ctx context.Context, c *apiClients, output string, stdout io.Writer, call downloadCall[M], step *step) (string, int64, error) {
 	stream, err := call(ctx, c.Diagnostics)
 	if err != nil {
-		return explainDownloadError(err, c.Local)
+		return "", 0, explainDownloadError(err, c.Local)
 	}
 
 	defer func() { _ = stream.Close() }()
 
+	if step != nil {
+		stream = &countingStream[M]{chunkStream: stream, report: func(n int64) { step.Update(byteSize(n)) }}
+	}
+
 	path, n, err := saveDownload(stream, output, stdout)
 	if err != nil {
-		return explainDownloadError(err, c.Local)
+		return "", n, explainDownloadError(err, c.Local)
 	}
 
-	if path != "-" {
-		_, _ = fmt.Fprintf(stderr, "ichor: wrote %d bytes to %s (mode 0600). The file is NOT encrypted and may contain secrets; keep it safe.\n", n, path)
+	return path, n, nil
+}
+
+// countingStream tells report how many bytes the stream has delivered.
+type countingStream[M chunk] struct {
+	chunkStream[M]
+	n      int64
+	report func(int64)
+}
+
+func (s *countingStream[M]) Receive() bool {
+	ok := s.chunkStream.Receive()
+	if ok {
+		s.n += int64(len(s.Msg().GetData()))
+		s.report(s.n)
 	}
 
-	return nil
+	return ok
 }
 
 func supportBundleRequest(namespace string, args []string, cluster string) (*pb.DownloadSupportBundleRequest, error) {

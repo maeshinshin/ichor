@@ -308,8 +308,12 @@ func runCniValuesDiff(ctx context.Context, c *apiClients, out io.Writer, cluster
 		return err
 	}
 
+	if outputFormat == outputHuman {
+		return renderValuesDiff(newHuman(out), diff)
+	}
+
 	if diff == "" {
-		diff = "no change to the effective values\n"
+		diff = noValueChange + "\n"
 	}
 
 	_, err = io.WriteString(out, diff)
@@ -344,7 +348,7 @@ func runCniValuesSet(ctx context.Context, c *apiClients, in io.Reader, out, errw
 		return err
 	}
 
-	return writeMessage(out, outputFormat, resp.Msg)
+	return printAPI(out, resp.Msg, func(h *human, _ *pb.SetCiliumValuesResponse) error { return renderValuesSet(h, ref) })
 }
 
 // runEditor opens path in $VISUAL, $EDITOR or vi and waits. A var so a test can stand in for the editor.
@@ -436,7 +440,7 @@ func runCniUpgrade(ctx context.Context, c *apiClients, out io.Writer, cluster, v
 		return err
 	}
 
-	return writeMessage(out, outputFormat, resp.Msg)
+	return printAPI(out, resp.Msg, renderCniUpgradeStarted)
 }
 
 func init() {

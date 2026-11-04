@@ -289,7 +289,16 @@ func (r *TalosMachineReconciler) acquireDisruptiveLock(
 	}
 
 	lock := clusterlock.New(r.Client, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0).WithReader(r.APIReader)
-	if err := lock.Acquire(ctx, identity); err != nil {
+	err := lock.Acquire(ctx, identity)
+	// A holder that will never renew (a deleted machine or operation, a finished one) is not waited
+	// for five minutes.
+	if retry, rerr := releaseIfHolderStopped(ctx, readerOrClient(r.APIReader, r.Client), lock, err); rerr != nil {
+		err = rerr
+	} else if retry {
+		err = lock.Acquire(ctx, identity)
+	}
+
+	if err != nil {
 		return nil, err
 	}
 
@@ -361,7 +370,7 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	// live count back to the declared one (3->4->3's last step), so it
 	// must be allowed to proceed while the count is still even -- refusing
 	// it here would make that replacement impossible to ever finish.
-	lock, err := r.acquireDisruptiveLock(ctx, &cluster, m, controllerIdentity, true)
+	lock, err := r.acquireDisruptiveLock(ctx, &cluster, m, machineLockIdentity(m), true)
 	if err != nil {
 		if shuttingDown, ok := errors.AsType[*shuttingDownError](err); ok {
 			return r.removalCondition(ctx, m, metav1.ConditionFalse, shuttingDown.reason(),
@@ -369,12 +378,12 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		}
 		if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {
 			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonClusterLockHeld,
-				held.Error()+"; removal deferred")
+				lockHeldBy(held)+"; removal deferred")
 		}
 		return err
 	}
 	defer func() {
-		if err := lock.Release(ctx, controllerIdentity); err != nil {
+		if err := lock.Release(ctx, machineLockIdentity(m)); err != nil {
 			log.Error(err, "releasing cluster lock")
 		}
 	}()
@@ -460,7 +469,7 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	var drainErr error
 
 	if !deadMember {
-		stop := renewWhile(ctx, lock, controllerIdentity, removalRenewInterval)
+		stop := renewWhile(ctx, lock, machineLockIdentity(m), removalRenewInterval)
 		drainErr = r.drainNode(ctx, nodeName)
 
 		stop()

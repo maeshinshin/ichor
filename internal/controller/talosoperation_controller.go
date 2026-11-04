@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -366,10 +365,10 @@ func operationLockIdentity(op *ichorv1alpha1.TalosOperation) string {
 	return operationLockIdentityPrefix + op.Namespace + "/" + op.Name
 }
 
-// lockHeldMessage words a refused Acquire; a lock held by a TalosOperation names that operation.
+// lockHeldMessage words a refused Acquire; a lock held by a TalosOperation or a TalosMachine names it.
 func lockHeldMessage(held *clusterlock.HeldError) string {
-	if nn, ok := strings.CutPrefix(held.Holder, operationLockIdentityPrefix); ok {
-		return fmt.Sprintf("the cluster lock is held by TalosOperation %q; this operation starts when it finishes", nn)
+	if who := describeLockHolder(held.Holder); who != "" {
+		return fmt.Sprintf("the cluster lock is held by %s; this operation starts when it finishes", who)
 	}
 
 	return held.Error()
@@ -758,11 +757,11 @@ func (r *TalosOperationReconciler) acquireDisruptiveLock(
 
 	lock := clusterlock.New(r.Client, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0).WithReader(r.APIReader)
 	err = lock.Acquire(ctx, operationLockIdentity(op))
-	if held, ok := errors.AsType[*clusterlock.HeldError](err); ok && r.holderStopped(ctx, held.Holder) {
-		// The holder will never renew: do not make this operation wait out its five minutes.
-		if err = lock.Release(ctx, held.Holder); err == nil {
-			err = lock.Acquire(ctx, operationLockIdentity(op))
-		}
+	// A holder that will never renew is not waited for five minutes.
+	if retry, rerr := releaseIfHolderStopped(ctx, readerOrClient(r.APIReader, r.Client), lock, err); rerr != nil {
+		err = rerr
+	} else if retry {
+		err = lock.Acquire(ctx, operationLockIdentity(op))
 	}
 
 	if err != nil {
@@ -770,26 +769,6 @@ func (r *TalosOperationReconciler) acquireDisruptiveLock(
 	}
 
 	return lock, nil
-}
-
-// holderStopped reports whether holder is a TalosOperation that is gone, completed, or paused on a failed
-// step (which only an explicit retry moves, and that takes the lock again). Any other holder, including the
-// shared machine identity, may still be working.
-func (r *TalosOperationReconciler) holderStopped(ctx context.Context, holder string) bool {
-	nn, ok := strings.CutPrefix(holder, operationLockIdentityPrefix)
-	if !ok {
-		return false
-	}
-
-	namespace, name, _ := strings.Cut(nn, "/")
-
-	var o ichorv1alpha1.TalosOperation
-	if err := readerOrClient(r.APIReader, r.Client).Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, &o); err != nil {
-		return apierrors.IsNotFound(err)
-	}
-
-	return o.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted ||
-		(o.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused && o.Status.FailureReason != "" && !o.Spec.Paused)
 }
 
 // SetupWithManager sets up the controller with the Manager.

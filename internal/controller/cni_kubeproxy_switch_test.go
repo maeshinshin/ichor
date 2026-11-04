@@ -198,7 +198,7 @@ func ageCondition(op *ichorv1alpha1.TalosOperation, condType string, by time.Dur
 }
 
 func cniJobExists(cluster *ichorv1alpha1.TalosCluster) bool {
-	hash, err := CNIValuesHash(cluster, specMode(cluster), 0)
+	hash, err := CNIValuesHash(cluster, specMode(cluster), liveNodes())
 	Expect(err).NotTo(HaveOccurred())
 
 	err = k8sClient.Get(ctx, client.ObjectKey{Namespace: cniJobNamespace, Name: cniHelmJobName(cluster, hash)}, &batchv1.Job{})
@@ -215,7 +215,7 @@ func finishCNIJob(cluster *ichorv1alpha1.TalosCluster) {
 	var inst ichorv1alpha1.IchorInstallation
 	Expect(k8sClient.Get(ctx, client.ObjectKey{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
 
-	_, err := AdvanceCNIHelmJob(ctx, k8sClient, tmNamespace, cluster, specMode(cluster), 0, &inst, "", time.Time{})
+	_, err := AdvanceCNIHelmJob(ctx, k8sClient, tmNamespace, cluster, specMode(cluster), liveNodes(), &inst, "", time.Time{})
 	Expect(err).NotTo(HaveOccurred())
 
 	setJobCondition(cniJob(cluster), batchv1.JobComplete, "")
@@ -322,13 +322,13 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		Expect(fetchCluster(cluster).Status.CNI).To(BeNil(), "the Talos side is not switched yet")
 
 		job := cniJob(cluster)
-		hash, err := CNIValuesHash(cluster, specMode(cluster), 0)
+		hash, err := CNIValuesHash(cluster, specMode(cluster), liveNodes())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(job.Annotations).To(HaveKeyWithValue(CNIValuesHashAnnotation, hash))
 
 		other := cluster.DeepCopy()
 		other.Spec.CNI.KubeProxy = modeEnabled
-		otherHash, err := CNIValuesHash(other, specMode(other), 0)
+		otherHash, err := CNIValuesHash(other, specMode(other), liveNodes())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(hash).NotTo(Equal(otherHash), "the Job carries the target mode's values")
 
@@ -427,7 +427,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
 		Expect(err).NotTo(HaveOccurred())
 
-		hash, err := CNIValuesHash(replaced, cni.KubeProxyReplaced, 0)
+		hash, err := CNIValuesHash(replaced, cni.KubeProxyReplaced, liveNodes())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fetchCluster(cluster).Status.CNI.AppliedValuesHash).To(Equal(hash))
 		Expect(cniJobCount(cluster)).To(Equal(2), "no further Job")
@@ -649,7 +649,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 
 		var inst ichorv1alpha1.IchorInstallation
 		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
-		_, err := AdvanceCNIHelmJob(ctx, k8sClient, tmNamespace, cluster, specMode(cluster), 0, &inst, "", time.Time{})
+		_, err := AdvanceCNIHelmJob(ctx, k8sClient, tmNamespace, cluster, specMode(cluster), liveNodes(), &inst, "", time.Time{})
 		Expect(err).NotTo(HaveOccurred())
 
 		old := cniJob(cluster)

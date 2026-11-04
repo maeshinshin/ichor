@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { hasPatch, patchComponents, pickerOptions, typedVersion, type TargetList } from './upgradeTargets.ts'
+import { hasPatch, patchComponents, pickerOptions, typedVersion, unavailableNotes, type TargetList } from './upgradeTargets.ts'
 
 const list: TargetList = {
   recommended: ['v1.14.3'],
@@ -71,4 +71,15 @@ test('the patch attention names the components that have a patch, in order, and 
   assert.deepEqual(patchComponents({ talos: list, kubernetes: list, cilium: list }), ['Talos', 'Kubernetes', 'Cilium'])
   assert.deepEqual(patchComponents({ talos: list, kubernetes: { ...list, patch: [] }, cilium: null }), ['Talos'])
   assert.deepEqual(patchComponents({ talos: failed, kubernetes: failed, cilium: { ...list, patch: [] } }), [])
+})
+
+test('the unavailable lists are named with their reason, grouped by reason', () => {
+  const off: TargetList = { ...list, patch: [], available: false, unavailableReason: 'check is off' }
+  const failed: TargetList = { ...list, patch: [], available: false, unavailableReason: 'quay unreachable' }
+  assert.deepEqual(unavailableNotes({ talos: list, kubernetes: list, cilium: list }), [])
+  assert.deepEqual(unavailableNotes({ talos: null, kubernetes: null, cilium: null }), [])
+  assert.deepEqual(unavailableNotes({ talos: off, kubernetes: off, cilium: failed }), [
+    { components: ['Talos', 'Kubernetes'], reason: 'check is off' },
+    { components: ['Cilium'], reason: 'quay unreachable' },
+  ])
 })

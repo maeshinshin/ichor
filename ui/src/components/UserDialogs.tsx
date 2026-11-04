@@ -138,7 +138,7 @@ export function CreateUserDialog({ onDone }: { onDone: () => void }) {
         {t('users.create')}
       </Button>
       <Dialog open={open} onOpenChange={change}>
-        <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-lg overflow-y-auto">
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
           {generated ? (
             <>
               <DialogHeader>
@@ -223,7 +223,7 @@ export function EditUserDialog({ user, open, onOpenChange, onDone }: { user: Use
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] max-w-lg overflow-y-auto">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('users.editTitle', { name: user.name })}</DialogTitle>
         </DialogHeader>
@@ -282,7 +282,7 @@ export function SetPasswordDialog({ user, open, onOpenChange }: { user: User; op
 
   return (
     <Dialog open={open} onOpenChange={change}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('users.setPasswordTitle', { name: user.name })}</DialogTitle>
           <DialogDescription>{t('users.setPasswordDescription')}</DialogDescription>

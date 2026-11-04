@@ -259,7 +259,7 @@ function CaptureDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('capture.title', { name: machine.name })}</DialogTitle>
           <DialogDescription>{t('capture.description')}</DialogDescription>

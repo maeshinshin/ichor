@@ -128,7 +128,7 @@ func NewIchorUpgradeAdvancer(
 func (r *TalosOperationReconciler) advanceIchor(
 	ctx context.Context, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster, lock *clusterlock.Lock,
 ) (ctrl.Result, error) {
-	if err := lock.Renew(ctx, controllerIdentity); err != nil {
+	if err := lock.Renew(ctx, operationLockIdentity(op)); err != nil {
 		return renewRefusal(ctx, err)
 	}
 
@@ -143,7 +143,7 @@ func (r *TalosOperationReconciler) advanceIchor(
 	}
 
 	if done {
-		if err := lock.Release(ctx, controllerIdentity); err != nil {
+		if err := lock.Release(ctx, operationLockIdentity(op)); err != nil {
 			return ctrl.Result{}, err
 		}
 

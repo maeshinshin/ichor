@@ -210,7 +210,7 @@ func (r *TalosOperationReconciler) advanceCARotation(
 			reasonOperationNoExecutor, "no Talos client or Kubernetes readiness check is wired up for this controller")
 	}
 
-	if err := lock.Renew(ctx, controllerIdentity); err != nil {
+	if err := lock.Renew(ctx, operationLockIdentity(op)); err != nil {
 		return renewRefusal(ctx, err)
 	}
 
@@ -978,7 +978,7 @@ func (c *caRun) markBundleBackupStale(ctx context.Context) error {
 
 // complete ends the operation: the lock is released, the phase is Completed.
 func (c *caRun) complete(ctx context.Context) (ctrl.Result, error) {
-	if err := c.lock.Release(ctx, controllerIdentity); err != nil {
+	if err := c.lock.Release(ctx, operationLockIdentity(c.op)); err != nil {
 		return ctrl.Result{}, err
 	}
 

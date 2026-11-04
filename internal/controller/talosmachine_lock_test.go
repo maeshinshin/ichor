@@ -98,7 +98,7 @@ var _ = Describe("two control-plane TalosMachines of one cluster at a step that 
 		maintA.applyHook = once(func() {
 			_, err := reconcileMachine(r, b)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(maintB.applyCalls)).To(BeZero(), "a second join must not apply while the first holds the cluster lock")
+			Expect(maintB.applyCalls).To(BeEmpty(), "a second join must not apply while the first holds the cluster lock")
 			expectWaitsFor(b, a, reasonClusterLockHeld, conditionReady)
 		})
 
@@ -154,7 +154,7 @@ var _ = Describe("two control-plane TalosMachines of one cluster at a step that 
 			// The join's reconcile after the finalizer pass; the first one ran in controlPlane.
 			_, err := reconcileMachine(r, joiner)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(maint[joiner.Spec.Endpoint].applyCalls)).To(BeZero(), "a join must not apply while a removal holds the cluster lock")
+			Expect(maint[joiner.Spec.Endpoint].applyCalls).To(BeEmpty(), "a join must not apply while a removal holds the cluster lock")
 			expectWaitsFor(joiner, a, reasonClusterLockHeld, conditionReady)
 		})
 

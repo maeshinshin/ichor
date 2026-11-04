@@ -42,3 +42,15 @@ export const credentialLifetimes = [
 export function lifetimeSeconds(key: string): number {
   return credentialLifetimes.find((l) => l.key === key)?.seconds ?? credentialLifetimes[0].seconds
 }
+
+// How long the os:reader talosconfig a person takes for talosctl is valid: an hour by default,
+// twelve at most (the server refuses more).
+export const readerLifetimes = [
+  { key: 'hour', seconds: 3600 },
+  { key: 'four', seconds: 4 * 3600 },
+  { key: 'twelve', seconds: 12 * 3600 },
+] as const
+
+export function readerLifetimeSeconds(key: string): number {
+  return readerLifetimes.find((l) => l.key === key)?.seconds ?? readerLifetimes[0].seconds
+}

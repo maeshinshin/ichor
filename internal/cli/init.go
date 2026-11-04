@@ -19,8 +19,10 @@ package cli
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/installmanifest"
@@ -61,6 +63,12 @@ func checkInitCompat(talos, kubernetes, cilium string) error {
 
 var initOpts initOptions
 
+// initFile is -f/--file; initPrintTemplate is --print-config-template.
+var (
+	initFile          string
+	initPrintTemplate bool
+)
+
 // initWaitTimeout is --wait-timeout: how long init waits for Ichor's controller to serve its webhooks.
 var initWaitTimeout = defaultWebhookWait
 
@@ -93,8 +101,28 @@ new cluster:
      (TalosCluster CNIHandover).
 
 init never applies anything to a node again after step 3; every later
-change to this cluster goes through the controller, by writing CRs.`,
+change to this cluster goes through the controller, by writing CRs.
+
+The settings can come from a file instead of flags: -f init.yaml (an
+InitConfig; --print-config-template prints an example). A flag on the command
+line overrides the file; relative paths in the file are relative to it.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
+		if initPrintTemplate {
+			_, err := fmt.Fprint(cmd.OutOrStdout(), initConfigTemplate)
+
+			return err
+		}
+
+		if initFile != "" {
+			if err := applyInitFile(cmd.Flags(), initFile); err != nil {
+				return err
+			}
+		}
+
+		if err := checkInitRequired(cmd.Flags()); err != nil {
+			return err
+		}
+
 		if err := validateOutputFormat(outputFormat); err != nil {
 			return err
 		}
@@ -143,72 +171,76 @@ func identityOverMaintenance(ctx context.Context, endpoint string) (controller.H
 	return c.Identity(ctx)
 }
 
+// bindInitFlags registers every setting flag of `ichor init` on flags, bound to o and wait. The
+// required ones are checked by checkInitRequired, since -f/--file can stand in for them.
+func bindInitFlags(flags *pflag.FlagSet, o *initOptions, wait *time.Duration) {
+	flags.DurationVar(wait, "wait-timeout", defaultWebhookWait,
+		"how long to wait for Ichor's controller to serve its admission webhooks before writing the first resources")
+	flags.StringVar(&o.Cluster, flagCluster, "", "name of the TalosCluster to create (required)")
+	flags.StringVarP(&o.Namespace, "namespace", "n", ichorControllerNamespace,
+		"namespace the TalosCluster, its TalosMachine and the secrets bundle Secret live in; "+
+			"Ichor's own install manifest always deploys its controller to \""+ichorControllerNamespace+"\"")
+	flags.StringVar(&o.Preset, "preset", defaultPreset,
+		"topology preset: single (1 node, schedulable), compact-ha (3 control planes, schedulable), "+
+			"standard (3 control planes + workers added later, tainted; recommended), or "+
+			"large (5 control planes + workers added later, tainted)")
+	flags.StringVar(&o.CNIPreset, "cni", cniCilium, "CNI preset; cilium is the only one")
+	_ = flags.MarkHidden("cni")
+	flags.StringVar(&o.CNITunnel, "cni-tunnel", "",
+		"Cilium's tunnel protocol, vxlan or geneve (default: Cilium's vxlan); "+
+			"geneve for virtualised networks that pass geneve but not vxlan")
+	flags.StringVar(&o.EndpointType, "endpoint-type", "vip", "cluster endpoint type: vip, loadBalancer, dns or node")
+	flags.StringVar(&o.EndpointAddress, "endpoint-address", "", "cluster endpoint address (required)")
+	flags.StringVar(&o.NodeEndpoint, "node-endpoint", "",
+		"Talos API address (host:port) of the first node, currently in maintenance mode (required)")
+	// The versions are the release set of this Ichor build: the flags stay so that scripts
+	// keep working, and accept only the value the build pins.
+	flags.StringVar(&o.TalosVersion, "talos-version", release.Pinned.Talos, "Talos release (the release set of this Ichor build; any other value is refused)")
+	flags.StringVar(&o.KubernetesVersion, "kubernetes-version", release.Pinned.Kubernetes, "Kubernetes release (the release set of this Ichor build; any other value is refused)")
+	flags.StringVar(&o.VersionContract, "version-contract", release.Pinned.VersionContract, "Talos version contract (the release set of this Ichor build; any other value is refused)")
+	for _, name := range []string{"talos-version", "kubernetes-version", "version-contract"} {
+		_ = flags.MarkDeprecated(name, "the version is set by this Ichor build; the flag only accepts its value")
+	}
+	flags.StringVar(&o.InstallDisk, "install-disk", "", "the first node's install disk: "+installDiskUsage+" (required)")
+	flags.StringSliceVar(&o.PodSubnets, "pod-subnets", nil,
+		"pod CIDRs (spec.network.podSubnets; at most one per IP family); unset keeps Talos's default 10.244.0.0/16. Fixed once the cluster exists")
+	flags.StringSliceVar(&o.ServiceSubnets, "service-subnets", nil,
+		"service CIDRs (spec.network.serviceSubnets); unset keeps Talos's default 10.96.0.0/12. Fixed once the cluster exists")
+	flags.StringArrayVar(&o.RegistryMirrors, "registry-mirror", nil,
+		"anonymous registry mirror as HOST=URL (spec.registries), e.g. ghcr.io=http://10.0.0.5:5000; repeatable")
+	flags.StringArrayVar(&o.DiscoverAddresses, "discover-address", nil,
+		"IPv4 address of a node booted into maintenance mode for the controller to probe (spec.discovery.addresses); repeatable")
+	flags.StringArrayVar(&o.DiscoverCIDRs, "discover-cidr", nil,
+		"IPv4 CIDR (/24 or smaller) of maintenance-mode nodes for the controller to probe (spec.discovery.cidrs); repeatable")
+	flags.StringVar(&o.DiskRoles.EphemeralDiskSelector, "ephemeral-disk-selector", "",
+		"CEL disk selector (e.g. disk.wwid == \"...\") for a dedicated EPHEMERAL disk, separate from --install-disk")
+	flags.StringVar(&o.DiskRoles.StorageDiskSelector, "storage-disk-selector", "",
+		"CEL disk selector for a disk prepared for a storage system (RawVolumeConfig)")
+	flags.StringVar(&o.DiskRoles.StorageVolumeName, "storage-volume-name", "", "name for --storage-disk-selector's volume (default \"storage\")")
+	flags.StringVar(&o.DiskRoles.UserVolumeDiskSelector, "user-volume-disk-selector", "", "CEL disk selector for a UserVolumeConfig disk")
+	flags.StringVar(&o.DiskRoles.UserVolumeName, "user-volume-name", "", "name for --user-volume-disk-selector's volume (default \"data\")")
+
+	flags.StringVar(&o.UIURL, "ui-url", "",
+		"turn Ichor's own users on: the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; "+
+			"needs --version-contract v1.14 or later")
+	flags.StringVar(&o.AdminUser, "admin-user", "",
+		"with --ui-url: name of the first admin (default "+defaultAdminUser+"); its generated password is printed once to stderr "+
+			"and must be changed at the first sign-in")
+	flags.StringVar(&o.UITLSSecret, "ui-tls-secret", "",
+		"with --ui-url: serve ichor-ui over TLS with this existing kubernetes.io/tls Secret in "+ichorControllerNamespace+" (chart: ichorUI.tls.secretName)")
+	flags.StringVar(&o.UITLSCert, "ui-tls-cert", "", "with --ui-url: PEM certificate file for ichor-ui's TLS; init stores it with --ui-tls-key as a Secret")
+	flags.StringVar(&o.UITLSKey, "ui-tls-key", "", "with --ui-tls-cert: PEM private key file (never printed)")
+	flags.StringVar(&o.KubeAPIServerURL, "kube-api-server-url", "",
+		"with --ui-url: https URL of the Kubernetes API put in users' kubeconfigs (chart: ichorUI.users.kubeAPIServerURL)")
+	flags.StringVar(&o.KubeAPITLSServerName, "kube-api-tls-server-name", "",
+		"with --ui-url: tls-server-name in users' kubeconfigs (chart: ichorUI.users.kubeAPITLSServerName)")
+}
+
 func init() {
 	rootCmd.AddCommand(initCmd)
 
 	flags := initCmd.Flags()
-	flags.DurationVar(&initWaitTimeout, "wait-timeout", defaultWebhookWait,
-		"how long to wait for Ichor's controller to serve its admission webhooks before writing the first resources")
-	flags.StringVar(&initOpts.Cluster, flagCluster, "", "name of the TalosCluster to create (required)")
-	flags.StringVarP(&initOpts.Namespace, "namespace", "n", ichorControllerNamespace,
-		"namespace the TalosCluster, its TalosMachine and the secrets bundle Secret live in; "+
-			"Ichor's own install manifest always deploys its controller to \""+ichorControllerNamespace+"\"")
-	flags.StringVar(&initOpts.Preset, "preset", defaultPreset,
-		"topology preset: single (1 node, schedulable), compact-ha (3 control planes, schedulable), "+
-			"standard (3 control planes + workers added later, tainted; recommended), or "+
-			"large (5 control planes + workers added later, tainted)")
-	flags.StringVar(&initOpts.CNIPreset, "cni", cniCilium, "CNI preset; cilium is the only one")
-	_ = flags.MarkHidden("cni")
-	flags.StringVar(&initOpts.CNITunnel, "cni-tunnel", "",
-		"Cilium's tunnel protocol, vxlan or geneve (default: Cilium's vxlan); "+
-			"geneve for virtualised networks that pass geneve but not vxlan")
-	flags.StringVar(&initOpts.EndpointType, "endpoint-type", "vip", "cluster endpoint type: vip, loadBalancer, dns or node")
-	flags.StringVar(&initOpts.EndpointAddress, "endpoint-address", "", "cluster endpoint address (required)")
-	flags.StringVar(&initOpts.NodeEndpoint, "node-endpoint", "",
-		"Talos API address (host:port) of the first node, currently in maintenance mode (required)")
-	// The versions are the release set of this Ichor build: the flags stay so that scripts
-	// keep working, and accept only the value the build pins.
-	flags.StringVar(&initOpts.TalosVersion, "talos-version", release.Pinned.Talos, "Talos release (the release set of this Ichor build; any other value is refused)")
-	flags.StringVar(&initOpts.KubernetesVersion, "kubernetes-version", release.Pinned.Kubernetes, "Kubernetes release (the release set of this Ichor build; any other value is refused)")
-	flags.StringVar(&initOpts.VersionContract, "version-contract", release.Pinned.VersionContract, "Talos version contract (the release set of this Ichor build; any other value is refused)")
-	for _, name := range []string{"talos-version", "kubernetes-version", "version-contract"} {
-		_ = flags.MarkDeprecated(name, "the version is set by this Ichor build; the flag only accepts its value")
-	}
-	flags.StringVar(&initOpts.InstallDisk, "install-disk", "", "the first node's install disk: "+installDiskUsage+" (required)")
-	flags.StringSliceVar(&initOpts.PodSubnets, "pod-subnets", nil,
-		"pod CIDRs (spec.network.podSubnets; at most one per IP family); unset keeps Talos's default 10.244.0.0/16. Fixed once the cluster exists")
-	flags.StringSliceVar(&initOpts.ServiceSubnets, "service-subnets", nil,
-		"service CIDRs (spec.network.serviceSubnets); unset keeps Talos's default 10.96.0.0/12. Fixed once the cluster exists")
-	flags.StringArrayVar(&initOpts.RegistryMirrors, "registry-mirror", nil,
-		"anonymous registry mirror as HOST=URL (spec.registries), e.g. ghcr.io=http://10.0.0.5:5000; repeatable")
-	flags.StringArrayVar(&initOpts.DiscoverAddresses, "discover-address", nil,
-		"IPv4 address of a node booted into maintenance mode for the controller to probe (spec.discovery.addresses); repeatable")
-	flags.StringArrayVar(&initOpts.DiscoverCIDRs, "discover-cidr", nil,
-		"IPv4 CIDR (/24 or smaller) of maintenance-mode nodes for the controller to probe (spec.discovery.cidrs); repeatable")
-	flags.StringVar(&initOpts.DiskRoles.EphemeralDiskSelector, "ephemeral-disk-selector", "",
-		"CEL disk selector (e.g. disk.wwid == \"...\") for a dedicated EPHEMERAL disk, separate from --install-disk")
-	flags.StringVar(&initOpts.DiskRoles.StorageDiskSelector, "storage-disk-selector", "",
-		"CEL disk selector for a disk prepared for a storage system (RawVolumeConfig)")
-	flags.StringVar(&initOpts.DiskRoles.StorageVolumeName, "storage-volume-name", "", "name for --storage-disk-selector's volume (default \"storage\")")
-	flags.StringVar(&initOpts.DiskRoles.UserVolumeDiskSelector, "user-volume-disk-selector", "", "CEL disk selector for a UserVolumeConfig disk")
-	flags.StringVar(&initOpts.DiskRoles.UserVolumeName, "user-volume-name", "", "name for --user-volume-disk-selector's volume (default \"data\")")
-
-	flags.StringVar(&initOpts.UIURL, "ui-url", "",
-		"turn Ichor's own users on: the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; "+
-			"needs --version-contract v1.14 or later")
-	flags.StringVar(&initOpts.AdminUser, "admin-user", "",
-		"with --ui-url: name of the first admin (default "+defaultAdminUser+"); its generated password is printed once to stderr "+
-			"and must be changed at the first sign-in")
-	flags.StringVar(&initOpts.UITLSSecret, "ui-tls-secret", "",
-		"with --ui-url: serve ichor-ui over TLS with this existing kubernetes.io/tls Secret in "+ichorControllerNamespace+" (chart: ichorUI.tls.secretName)")
-	flags.StringVar(&initOpts.UITLSCert, "ui-tls-cert", "", "with --ui-url: PEM certificate file for ichor-ui's TLS; init stores it with --ui-tls-key as a Secret")
-	flags.StringVar(&initOpts.UITLSKey, "ui-tls-key", "", "with --ui-tls-cert: PEM private key file (never printed)")
-	flags.StringVar(&initOpts.KubeAPIServerURL, "kube-api-server-url", "",
-		"with --ui-url: https URL of the Kubernetes API put in users' kubeconfigs (chart: ichorUI.users.kubeAPIServerURL)")
-	flags.StringVar(&initOpts.KubeAPITLSServerName, "kube-api-tls-server-name", "",
-		"with --ui-url: tls-server-name in users' kubeconfigs (chart: ichorUI.users.kubeAPITLSServerName)")
-
-	for _, name := range []string{flagCluster, "endpoint-address", "node-endpoint", "install-disk"} {
-		_ = initCmd.MarkFlagRequired(name)
-	}
+	bindInitFlags(flags, &initOpts, &initWaitTimeout)
+	flags.StringVarP(&initFile, "file", "f", "", "read the init settings from this "+initConfigKind+" file (see --print-config-template); a flag given on the command line overrides the file")
+	flags.BoolVar(&initPrintTemplate, "print-config-template", false, "print an example "+initConfigKind+" file and exit")
 }

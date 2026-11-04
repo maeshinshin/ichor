@@ -10,7 +10,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 // Every action that is hard to undo asks through this (preactcn alert-dialog). It cannot be dismissed by a click outside, and focus starts on
 // Cancel. The confirm button is a plain Button, not AlertDialogAction, so the
@@ -39,7 +39,6 @@ export function ConfirmDialog({
   footer?: ComponentChildren
   closeLabel?: string
 }) {
-  const t = useT()
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       {trigger && <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>}

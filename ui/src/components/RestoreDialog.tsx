@@ -21,7 +21,7 @@ import { describeError, type ErrorShape } from '@/lib/errors'
 import { canRestore, canReview, snapshotChoices, type SnapshotChoice } from '@/lib/etcdRestore'
 import { formatBytes, formatDate } from '@/lib/format'
 import { notifyDone } from '@/lib/notify'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 import { navigate } from '@/router'
 
 // RestoreDialog is "Restore from backup" in the cluster page's Danger zone. It never
@@ -31,7 +31,6 @@ import { navigate } from '@/router'
 // server asks Kubernetes whether this user holds the override permission, and refuses if not). The UI only
 // writes the operation; the controller wipes and recovers etcd.
 export function RestoreDialog({ cluster, disabled = false }: { cluster: { namespace: string; name: string }; disabled?: boolean }) {
-  const t = useT()
   const [open, setOpen] = useState(false)
   const [choices, setChoices] = useState<SnapshotChoice[] | null>(null)
   const [chosen, setChosen] = useState('')

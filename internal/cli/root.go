@@ -83,18 +83,31 @@ func init() {
 		"path to the kubeconfig for the cluster's Kubernetes API; defaults to $KUBECONFIG, then ~/.kube/config")
 	rootCmd.PersistentFlags().StringVar(&talosconfigPath, "talosconfig", "",
 		"path to the talosconfig used to reach each node's Talos API; defaults to $TALOSCONFIG, then ~/.talos/config")
-	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", outputYAML,
-		fmt.Sprintf("output format: %q or %q", outputYAML, outputJSON))
+	rootCmd.PersistentFlags().StringVarP(&outputFormat, "output", "o", outputHuman,
+		fmt.Sprintf("output format: %q or %q for scripts; by default a command prints for people (commands without a human view print YAML)",
+			outputYAML, outputJSON))
 	rootCmd.PersistentFlags().BoolVar(&assumeYes, "yes", false,
 		"skip interactive confirmation before a dangerous operation")
 }
 
 // validateOutputFormat rejects anything but the two formats the design
-// document promises ("-o yaml|json"), before a command does any real work.
+// document promises ("-o yaml|json") and the unset default, before a command
+// does any real work.
 func validateOutputFormat(format string) error {
-	if format != outputYAML && format != outputJSON {
+	if format != outputHuman && format != outputYAML && format != outputJSON {
 		return fmt.Errorf("invalid --output %q: must be %q or %q", format, outputYAML, outputJSON)
 	}
 
 	return nil
+}
+
+// machineFormat is the format for a command that has no human view yet: the unset -o is YAML, the
+// output every command had before human output became the default (docs/adr). Every writer of a
+// machine format goes through it, so an unconverted command never prints nothing.
+func machineFormat(format string) string {
+	if format == outputHuman {
+		return outputYAML
+	}
+
+	return format
 }

@@ -30,9 +30,9 @@ var machineGetCmd = &cobra.Command{
 	Short: "Show one machine",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return showAPI(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.GetMachineResponse], error) {
+		return showAPIHuman(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.GetMachineResponse], error) {
 			return c.Machine.GetMachine(ctx, connect.NewRequest(&pb.GetMachineRequest{Machine: objectRef(apiOpts.Namespace, args[0])}))
-		})
+		}, func(h *human, r *pb.GetMachineResponse) error { return renderMachineGet(h, r.GetMachine()) })
 	},
 }
 

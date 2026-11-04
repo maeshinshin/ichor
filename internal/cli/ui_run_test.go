@@ -227,7 +227,7 @@ func TestRunUI_ReforwardsToAnotherPodWhenForwardFails(t *testing.T) {
 		t.Fatalf("forward calls = %v, want [pod-a pod-b]", calls)
 	}
 
-	if !strings.Contains(stderr, "forwarding localhost:8080 -> pod/pod-a") {
+	if !strings.Contains(stderr, "port-forward to "+uiTestNamespace+"/pod-a") {
 		t.Fatalf("missing initial forward message, got: %s", stderr)
 	}
 

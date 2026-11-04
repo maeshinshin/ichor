@@ -131,7 +131,9 @@ func waitForReadyPod(
 		}
 
 		if !printedWaiting {
-			_, _ = fmt.Fprintf(stderr, "ichor ui: waiting for a ready ichor-ui pod in namespace %s...\n", namespace)
+			h := newHuman(stderr)
+			h.Note(h.Mark(markPending) + " waiting for a ready ichor-ui pod in namespace " + namespace)
+
 			printedWaiting = true
 		}
 
@@ -173,6 +175,8 @@ func runUI(ctx context.Context, opts uiOptions, deps uiDeps) error {
 		localPort = remotePort
 	}
 
+	h := newHuman(deps.Stderr)
+	url := fmt.Sprintf("%s://localhost:%d/", scheme, localPort)
 	opened := false
 	lastPod := ""
 
@@ -186,12 +190,7 @@ func runUI(ctx context.Context, opts uiOptions, deps uiDeps) error {
 			return err
 		}
 
-		if lastPod == "" {
-			_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: forwarding localhost:%d -> pod/%s (namespace %s)\n", localPort, pod.Name, opts.Namespace)
-		} else {
-			_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: re-established the port-forward -> pod/%s\n", pod.Name)
-		}
-
+		reforwarded := lastPod != ""
 		lastPod = pod.Name
 
 		ready := make(chan struct{})
@@ -218,17 +217,22 @@ func runUI(ctx context.Context, opts uiOptions, deps uiDeps) error {
 			}
 		}
 
+		if isReady && reforwarded {
+			h.Note(h.Mark(markOK) + " re-established the port-forward -> pod/" + pod.Name)
+		}
+
 		if isReady && !opened {
-			_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: open %s://localhost:%d/ in your browser\n", scheme, localPort)
+			h.Note(h.Mark(markOK) + " ichor-ui  " + url)
+			h.Line(h.Paint(sgrDim, "port-forward to "+opts.Namespace+"/"+pod.Name+" · Ctrl-C to stop"))
 
 			if len(caPEM) > 0 {
-				_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: the certificate is signed by the Ichor serving CA "+
-					"(ConfigMap %s/%s, key %s); import it into your browser to remove the warning\n", svc.Namespace, uiCAConfigMap, uiCAKey)
+				h.Line(h.Paint(sgrDim, fmt.Sprintf("signed by the Ichor serving CA (ConfigMap %s/%s, key %s): import it into your browser to remove the warning",
+					svc.Namespace, uiCAConfigMap, uiCAKey)))
 			}
 
 			if opts.OpenBrowser {
-				if err := deps.OpenBrowser(fmt.Sprintf("%s://localhost:%d/", scheme, localPort)); err != nil {
-					_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: could not open a browser automatically: %v\n", err)
+				if err := deps.OpenBrowser(url); err != nil {
+					h.Note(h.Mark(markWarning) + " could not open a browser automatically: " + err.Error())
 				}
 			}
 
@@ -244,9 +248,9 @@ func runUI(ctx context.Context, opts uiOptions, deps uiDeps) error {
 		}
 
 		if err != nil {
-			_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: lost the port-forward to pod/%s (%v); looking for another pod...\n", pod.Name, err)
+			h.Note(fmt.Sprintf("%s lost the port-forward to pod/%s (%v); looking for another pod", h.Mark(markWarning), pod.Name, err))
 		} else {
-			_, _ = fmt.Fprintf(deps.Stderr, "ichor ui: the port-forward to pod/%s ended; looking for another pod...\n", pod.Name)
+			h.Note(fmt.Sprintf("%s the port-forward to pod/%s ended; looking for another pod", h.Mark(markWarning), pod.Name))
 		}
 	}
 }

@@ -31,6 +31,14 @@ test('the live demo condition set (CiliumUpgradeAvailable=False) is ready', () =
   assert.equal(clusterHealth(demo, false, false), 'ready')
 })
 
+test('a cluster still waiting for kubelet serving certificates is ready', () => {
+  const waiting = [
+    { type: 'KubeletServingCertificates', status: 'False' },
+    { type: 'KubeletServingVerified', status: 'False' },
+  ]
+  assert.equal(clusterHealth(waiting, false, false), 'ready')
+})
+
 test('a cluster with only CertificatesExpiring=False and Transitioning=False is ready', () => {
   const demo = [
     { type: 'CertificatesExpiring', status: 'False' },

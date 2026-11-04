@@ -41,6 +41,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/etcdbackup"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
@@ -333,6 +334,30 @@ func storedSnapshots(ctx context.Context, store etcdbackup.Store, prefix string)
 	return out
 }
 
+// backupKey derives the passphrases of cluster's backups from bundle and from the secretbox secrets key
+// rotations retired, so backups sealed before a rotation stay readable. Every secret it touches is
+// added to scrub.
+func backupKey(
+	ctx context.Context, c client.Reader, controllerNamespace string, cluster *ichorv1alpha1.TalosCluster,
+	bundle *secrets.Bundle, scrub *scrubber,
+) (etcdbackup.Key, error) {
+	retired, err := secretsbundle.LoadRetired(ctx, c, controllerNamespace, cluster.Spec.SecretsRef.Name)
+	if err != nil {
+		return etcdbackup.Key{}, err
+	}
+
+	scrub.add(retired.Secretboxes()...)
+
+	passphrase, err := etcdbackup.DeriveKey(bundle, retired.Secretboxes()...)
+	if err != nil {
+		return etcdbackup.Key{}, err
+	}
+
+	scrub.add(passphrase.Secrets()...)
+
+	return passphrase, nil
+}
+
 // loadBackupStore loads what a backup and a restore both start from: the cluster's secrets bundle, the
 // passphrase derived from it, and the opened object store (newStore nil means S3). Each secret is
 // added to scrub as it is loaded.
@@ -347,12 +372,10 @@ func loadBackupStore(
 
 	scrub.add(bundleSecretMaterial(bundle)...)
 
-	passphrase, err := etcdbackup.DeriveKey(bundle)
+	passphrase, err := backupKey(ctx, c, controllerNamespace, cluster, bundle, scrub)
 	if err != nil {
 		return nil, etcdbackup.Key{}, nil, err
 	}
-
-	scrub.add(passphrase.Secrets()...)
 
 	s3cfg, err := loadS3ConfigFrom(ctx, c, controllerNamespace, dst, scrub)
 	if err != nil {

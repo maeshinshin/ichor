@@ -31,8 +31,6 @@ type Cluster struct {
 	// CNIDetected is status.cni.detected ("cilium", another CNI, or "" when not observed yet) and
 	// CiliumVersion is the running release without its v ("" when it is not Cilium or not known).
 	CNIDetected, CiliumVersion string
-	// CiliumChart is the chart version this Ichor embeds, without its v.
-	CiliumChart string
 	// MachinesReady is true when the cluster has approved machines and every one is Ready (a pending
 	// configuration change leaves a machine not Ready, so it counts here).
 	MachinesReady bool
@@ -131,14 +129,8 @@ func Candidate(component string, c Cluster, t *ichorv1alpha1.IchorUpgradeTargets
 		constrains := c.CNIDetected == "" || c.CNIDetected == "cilium"
 		running = c.Kubernetes
 		choices = release.KubernetesChoices(c.Kubernetes, c.Talos, c.CiliumVersion, release.Pinned.Kubernetes, constrains, t.Kubernetes)
-	case ichorv1alpha1.AutoPatchCilium:
-		if c.CNIUnmanaged || c.CNIDetected != "cilium" || c.CiliumVersion == "" {
-			return ""
-		}
-
-		running = "v" + c.CiliumVersion
-		choices = release.CiliumChoices(running, c.CiliumChart, c.Kubernetes, t.Cilium)
 	default:
+		// Cilium has no candidate: it moves only to the chart this Ichor embeds, which a person starts.
 		return ""
 	}
 

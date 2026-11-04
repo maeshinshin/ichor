@@ -150,8 +150,18 @@ line overrides the file; relative paths in the file are relative to it.`,
 			WebhookWait:     initWaitTimeout,
 		}
 
-		return runInit(cmd.Context(), initOpts, deps)
+		return silenceIfShown(cmd, runInit(cmd.Context(), initOpts, deps))
 	},
+}
+
+// silenceIfShown keeps cobra from printing an error a failed step already showed in full; any other
+// error is still printed.
+func silenceIfShown(cmd *cobra.Command, err error) error {
+	if errorShown(err) {
+		cmd.SilenceErrors = true
+	}
+
+	return err
 }
 
 // initOutput is the -o format when it was given, and "" (one line per created object) when it was

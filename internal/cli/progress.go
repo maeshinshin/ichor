@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -196,7 +197,7 @@ func (p *progress) Run(name string, fn func(*step) (string, error)) error {
 	switch {
 	case s.isEnded():
 	case err != nil:
-		s.Fail(err)
+		err = s.Fail(err)
 	default:
 		s.Done(detail)
 	}
@@ -399,8 +400,33 @@ func (s *step) Done(detail string) { s.end(markDone, sgrGreen, detail, nil) }
 // Warn ends the step with a warning: it finished, but the reader should look at the detail.
 func (s *step) Warn(detail string) { s.end(markWarn, sgrYellow, detail, nil) }
 
-// Fail ends the step as failed and prints err indented below it.
-func (s *step) Fail(err error) { s.end(markFail, sgrRed, "failed", err) }
+// Fail ends the step as failed and prints err indented below it. It returns err marked as shown,
+// so that the caller returns it and Execute does not print it a second time.
+func (s *step) Fail(err error) error {
+	s.end(markFail, sgrRed, "failed", err)
+
+	return shownErr(err)
+}
+
+// shownError is an error a progress step already printed in full.
+type shownError struct{ error }
+
+func (e shownError) Unwrap() error { return e.error }
+
+func shownErr(err error) error {
+	if err == nil || errorShown(err) {
+		return err
+	}
+
+	return shownError{err}
+}
+
+// errorShown reports whether err was printed by a failed step already.
+func errorShown(err error) bool {
+	var s shownError
+
+	return errors.As(err, &s)
+}
 
 func (s *step) end(mark, style, detail string, err error) {
 	s.p.mu.Lock()

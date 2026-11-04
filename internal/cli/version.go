@@ -117,10 +117,13 @@ func collectVersion(ctx context.Context, c client.Reader, cliVersion string) (in
 	return info, ""
 }
 
+// labelIchor is the CLI line of `ichor version`.
+const labelIchor = "ichor"
+
 // writeVersionHuman prints what a person wants from `ichor version`: the CLI, the installed Ichor,
 // an upgrade or newer release when there is one, and what a new install would get.
 func writeVersionHuman(w io.Writer, info versionInfo) error {
-	rows := []kv{{"ichor", info.Client.Version}}
+	rows := []kv{{labelIchor, info.Client.Version}}
 
 	if s := info.Server; s != nil {
 		rows = append(rows, kv{"installed", s.InstalledVersion}, kv{"upgrading", s.SpecVersion})

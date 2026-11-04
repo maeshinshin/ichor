@@ -983,8 +983,10 @@ cluster-scoped, plus a Role in Ichor's namespace. It then snapshots the current
 manifests, updates CRDs (additive, never downgraded), the controller, then the
 UI, applies the network policies when Cilium's CRD exists, runs post-checks, and
 rolls back from the snapshot on failure. The CLI refuses writes when more than one minor
-away from the server; the UI backend sends its version in a header so a stale
-SPA prompts a reload.
+away from the server. A UI backend response header (`X-Ichor-Version`) that
+would make a stale SPA prompt a reload is not built; the
+top bar shows the installed Ichor version as a badge instead
+(`ui/src/lib/ichorVersion.ts`).
 
 Shutdown: a `TalosOperation` of kind `shutdown` stops the whole cluster for
 planned downtime. Workers go first, in parallel and drained by Talos's
@@ -1056,8 +1058,8 @@ user's choice.
 Registry mirrors are optional and off by default: they are pushed to every
 node through the system layer, alongside an override for the installer image
 source and a self-hosted Image Factory URL. They serve pull-through caches and
-private registries, not air-gapped installs. The pre-checks can verify mirror
-reachability before an upgrade.
+private registries, not air-gapped installs. Ichor does not check
+that a mirror is reachable before an upgrade.
 
 ## CLI and UI
 

@@ -581,6 +581,8 @@ func (r *TalosMachineReconciler) readNode(
 
 	cancelSchem()
 
+	recordSecurity(ctx, cluster, m, talos)
+
 	// Recorded once: a node does not rename itself, and asking again would be a call per reconcile.
 	if m.Status.NodeName == "" {
 		nameCtx, cancelName := context.WithTimeout(ctx, talosCallTimeout)

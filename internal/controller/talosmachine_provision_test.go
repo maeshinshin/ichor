@@ -28,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
@@ -228,6 +229,56 @@ var _ = Describe("TalosMachineReconciler provisioning a node in maintenance mode
 		Expect(maint.applyCalls).To(BeEmpty())
 		Expect(readyCondition(got).Reason).To(Equal(reasonInstallDiskUnknown))
 		Expect(got.Status.ConfigStoredAt).To(BeNil())
+	})
+
+	// ADR 0123: Required is refused where refusing prevents a mistake, before the first configuration.
+	Describe("with spec.security.secureBoot", func() {
+		withMode := func(mode string) {
+			setup(roleWorker)
+			installDiskPatch(roleWorker)
+
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), cluster)).To(Succeed())
+			cluster.Spec.Security = &ichorv1alpha1.TalosClusterSecurity{SecureBoot: &ichorv1alpha1.TalosClusterSecureBoot{Mode: mode}}
+			Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+		}
+
+		It("Required: sends nothing to a maintenance-mode node that booted without SecureBoot", func() {
+			withMode(ichorv1alpha1.SecureBootRequired)
+			maint.securityState = SecurityState{BootedWithUKI: true}
+
+			got := reconcileOnce()
+			Expect(maint.applyCalls).To(BeEmpty())
+			Expect(got.Status.ConfigStoredAt).To(BeNil())
+			Expect(readyCondition(got).Reason).To(Equal(reasonSecureBootRequired))
+			Expect(readyCondition(got).Message).To(ContainSubstring("SecureBoot ISO"))
+		})
+
+		It("Required: applies to a node that booted with SecureBoot", func() {
+			withMode(ichorv1alpha1.SecureBootRequired)
+			maint.securityState = SecurityState{SecureBoot: true, BootedWithUKI: true}
+
+			got := reconcileOnce()
+			Expect(maint.applyCalls).To(HaveLen(1))
+			Expect(got.Status.Security).NotTo(BeNil())
+			Expect(got.Status.Security.SecureBoot).To(BeTrue())
+		})
+
+		It("Required: does not guess when the state cannot be read", func() {
+			withMode(ichorv1alpha1.SecureBootRequired)
+			maint.securityErr = errors.New("boom")
+
+			got := reconcileOnce()
+			Expect(maint.applyCalls).To(BeEmpty())
+			Expect(readyCondition(got).Reason).To(Equal(reasonSecureBootRequired))
+		})
+
+		It("Preferred: only reports, and applies to a node without SecureBoot", func() {
+			withMode(ichorv1alpha1.SecureBootPreferred)
+			maint.securityState = SecurityState{}
+
+			reconcileOnce()
+			Expect(maint.applyCalls).To(HaveLen(1))
+		})
 	})
 
 	It("reports the old CurrentConfigUnavailable when the node answers neither API", func() {

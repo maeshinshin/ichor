@@ -28,7 +28,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -139,32 +138,74 @@ var _ = Describe("Cilium chart upgrade", func() {
 	})
 
 	Describe("a Cilium patch an earlier Ichor recorded", func() {
-		It("is dropped, and the cluster's Events say why when it was newer than the embedded chart", func() {
+		// recorded hands the cluster over with the patch in status.cni.imageOverride and the values hash applied
+		// with it, as an earlier Ichor left it, and returns the hash.
+		recorded := func(version string) string {
+			GinkgoHelper()
+
 			ciliumDaemonSet()(true)
 
-			// The patch is a newer one than any this chart reaches; the hash was applied with its images.
-			patch := "v" + semver.MajorMinor("v" + cilium.ChartVersion)[1:] + ".999"
 			cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{
-				AppliedValuesHash: "applied-with-the-patch-images",
 				ImageOverride: &ichorv1alpha1.TalosCiliumImageOverride{
-					Version: patch,
-					Images:  map[string]string{"agent": "quay.io/cilium/cilium:" + patch + "@sha256:" + strings.Repeat("1", 64)},
+					Version: version,
+					Images:  map[string]string{"agent": "quay.io/cilium/cilium:" + version + "@sha256:" + strings.Repeat("1", 64)},
 				},
 			}
+
+			hash, err := CNIValuesHash(cluster, specMode(cluster), liveNodes())
+			Expect(err).NotTo(HaveOccurred())
+
+			cluster.Status.CNI.AppliedValuesHash = hash
 			apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 				Type: render.ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: reasonHandoverComplete,
 			})
 			Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
 
-			rec := record.NewFakeRecorder(4)
-			r := &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace, Recorder: rec}
+			return hash
+		}
+
+		It("stays while the embedded chart is behind it: the values and the hash do not move, and the condition says so", func() {
+			// A patch newer than any this chart reaches.
+			patch := "v" + semver.MajorMinor("v" + cilium.ChartVersion)[1:] + ".999"
+			hash := recorded(patch)
+			helmReleaseAt(1, "deployed", cilium.ChartVersion, effectiveValues(cluster))
+
+			r := &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace}
+
+			_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+			Expect(err).NotTo(HaveOccurred())
+
+			got := getCluster(cluster).Status.CNI
+			Expect(got.ImageOverride).NotTo(BeNil(), "the patch is frozen, not dropped")
+			Expect(got.ImageOverride.Version).To(Equal(patch))
+			Expect(got.AppliedValuesHash).To(Equal(hash), "no step back, so no Job")
+
+			var jobs batchv1.JobList
+			Expect(k8sClient.List(ctx, &jobs, client.InNamespace(cniJobNamespace))).To(Succeed())
+			Expect(jobs.Items).To(BeEmpty())
+
+			// CiliumUpgradeAvailable, not CNIValuesApplied: a Job's progress rewrites the latter.
+			cond := conditionOf(cluster, ichorv1alpha1.ConditionCiliumUpgradeAvailable)
+			Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+			Expect(cond.Message).To(And(
+				ContainSubstring(strings.TrimPrefix(patch, "v")), ContainSubstring(cilium.ChartVersion), ContainSubstring("earlier Ichor"),
+				ContainSubstring("stays")))
+		})
+
+		It("is dropped once the embedded chart reaches it, with no step back and no mention in the condition", func() {
+			recorded("v" + cilium.ChartVersion)
+			helmReleaseAt(1, "deployed", cilium.ChartVersion, effectiveValues(cluster))
+
+			r := &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace}
 
 			_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getCluster(cluster).Status.CNI.ImageOverride).To(BeNil())
 
-			Expect(rec.Events).To(Receive(And(
-				ContainSubstring(reasonCiliumPatchDropped), ContainSubstring(patch), ContainSubstring(cilium.ChartVersion))))
+			// The patch was cleared in this pass; the next one computes the availability.
+			_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(conditionOf(cluster, ichorv1alpha1.ConditionCiliumUpgradeAvailable).Message).NotTo(ContainSubstring("earlier Ichor"))
 		})
 	})
 

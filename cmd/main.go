@@ -486,7 +486,7 @@ func main() {
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "issuertrust")
 	must((&controller.CNIHandoverReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(), Kube: kubeClient,
-		Namespace: ns, Recorder: mgr.GetEventRecorderFor("ichor-cni"), //nolint:staticcheck // typed against record.EventRecorder, as the others
+		Namespace: ns,
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "cnihandover")
 	must((&controller.CNIDetectReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),

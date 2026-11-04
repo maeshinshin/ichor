@@ -543,8 +543,9 @@ type TalosClusterStatus struct {
 	CNI *TalosClusterCNIStatus `json:"cni,omitempty"`
 }
 
-// TalosCiliumImageOverride is deprecated and unused: the Cilium patch whose images an earlier Ichor ran on the
-// embedded chart (ADR 0115, amendment 2026-11-03). Ichor no longer renders it (amendment 2026-11-04 (3)).
+// TalosCiliumImageOverride is the Cilium patch whose images an earlier Ichor ran on the embedded chart (ADR 0115,
+// amendment 2026-11-03). Ichor sets no new one (amendment 2026-11-04 (3)); a recorded one stays until the embedded
+// chart reaches it.
 type TalosCiliumImageOverride struct {
 	// version is the patch, with a leading v (v1.20.5).
 	// +kubebuilder:validation:Pattern=`^v[0-9]+\.[0-9]+\.[0-9]+$`
@@ -573,11 +574,10 @@ type TalosClusterCNIStatus struct {
 	// +optional
 	AvailableChartVersion string `json:"availableChartVersion,omitempty"`
 
-	// imageOverride is deprecated and unused. An earlier Ichor recorded here the Cilium patch whose images the
-	// release ran on the embedded chart (ADR 0115, amendment 2026-11-03). Ichor now runs only the images of the
-	// chart it embeds (amendment 2026-11-04 (3)): it renders nothing from this field and clears it, and the next
-	// Helm Job returns the release to the chart's images. Kept so the schema does not lose a field an installed
-	// build had.
+	// imageOverride is the Cilium patch an earlier Ichor recorded as the images the release runs over the embedded
+	// chart (ADR 0115, amendment 2026-11-03). Ichor sets no new one (amendment 2026-11-04 (3)). A recorded patch
+	// newer than the embedded chart keeps being rendered, so an Ichor upgrade never steps Cilium back, and the
+	// CiliumUpgradeAvailable condition says so; the controller clears it once the embedded chart reaches the patch.
 	// +optional
 	ImageOverride *TalosCiliumImageOverride `json:"imageOverride,omitempty"`
 

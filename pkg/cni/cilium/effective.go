@@ -187,6 +187,14 @@ func EffectiveValuesForNodes(
 		return nil, err
 	}
 
+	// A Cilium patch an earlier Ichor ran stays until the embedded chart reaches it, so an Ichor upgrade never steps
+	// Cilium back (ADR 0115, amendment 2026-11-04 (3), revised). Nothing sets a new one.
+	if o := ImageOverrideActive(cluster); o != nil {
+		if err := WithImageOverrides(eff, o.Images); err != nil {
+			return nil, err
+		}
+	}
+
 	// spec.security.wireGuard (ADR 0108) is typed and wins over a conflicting user value.
 	if s := cluster.Spec.Security; s != nil && s.WireGuard != nil && s.WireGuard.Enabled {
 		w := s.WireGuard

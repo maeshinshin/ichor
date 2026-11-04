@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"golang.org/x/mod/semver"
-	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -44,7 +43,6 @@ import (
 const (
 	reasonCiliumUpgradeAvailable = "UpgradeAvailable"
 	reasonCiliumUpToDate         = "UpToDate"
-	reasonCiliumPatchDropped     = "CiliumPatchDropped"
 )
 
 // isCNIUpgrade reports whether op is a Cilium chart upgrade rather than a kube-proxy switch.
@@ -99,6 +97,15 @@ func (r *CNIHandoverReconciler) syncUpgradeAvailable(ctx context.Context, cluste
 		Message: "the Cilium release is at the chart " + cilium.ChartVersion + " this Ichor embeds",
 	}
 
+	// A patch an earlier Ichor ran over the embedded chart stays until a chart that reaches it arrives. The
+	// condition carries it because no Job rewrites it, unlike CNIValuesApplied.
+	frozen := ""
+	if o := cilium.ImageOverrideActive(cluster); o != nil {
+		frozen = fmt.Sprintf("Cilium runs patch %s over chart %s (set by an earlier Ichor); it stays until an Ichor embedding %s or newer",
+			strings.TrimPrefix(o.Version, "v"), cilium.ChartVersion, strings.TrimPrefix(o.Version, "v"))
+		cond.Message += ": " + frozen
+	}
+
 	if rel.ChartVersion != cilium.ChartVersion {
 		available = cilium.ChartVersion
 		cond.Status, cond.Reason = metav1.ConditionTrue, reasonCiliumUpgradeAvailable
@@ -107,6 +114,10 @@ func (r *CNIHandoverReconciler) syncUpgradeAvailable(ctx context.Context, cluste
 		if err := checkChartStep(rel.ChartVersion, available); err != nil {
 			cond.Message = fmt.Sprintf("Cilium chart %s is embedded (installed %s), but it cannot be applied in one step: %v",
 				available, rel.ChartVersion, err)
+		}
+
+		if frozen != "" {
+			cond.Message += "; " + frozen
 		}
 	}
 
@@ -130,32 +141,19 @@ func (r *CNIHandoverReconciler) syncUpgradeAvailable(ctx context.Context, cluste
 	return r.Status().Update(ctx, cluster)
 }
 
-// dropPatchImages clears status.cni.imageOverride, the Cilium patch an earlier build recorded (ADR 0115,
-// amendment 2026-11-04 (3)). Ichor renders only the images of the chart it embeds now, so the next Helm Job
-// returns the release to them. When the patch is newer than the embedded chart that is a step back within the
-// minor, and the cluster's Events say so, because nothing else would: the Job runs on its own once the values
-// hash moves.
+// dropPatchImages clears status.cni.imageOverride, the Cilium patch an earlier build recorded, once the embedded
+// chart has reached it (ADR 0115, amendment 2026-11-04 (3), revised): the chart carries those images now, so this is
+// no step back. A patch newer than the embedded chart is left alone and keeps being rendered; syncUpgradeAvailable
+// says so in the CiliumUpgradeAvailable condition.
 func (r *CNIHandoverReconciler) dropPatchImages(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) error {
-	if cluster.Status.CNI == nil || cluster.Status.CNI.ImageOverride == nil {
+	if cluster.Status.CNI == nil || cluster.Status.CNI.ImageOverride == nil || cilium.ImageOverrideActive(cluster) != nil {
 		return nil
 	}
 
-	o := cluster.Status.CNI.ImageOverride
 	orig := cluster.DeepCopy()
 	cluster.Status.CNI.ImageOverride = nil
 
-	if err := r.Status().Patch(ctx, cluster, client.MergeFrom(orig)); err != nil {
-		return err
-	}
-
-	if r.Recorder != nil && semver.Compare(o.Version, "v"+cilium.ChartVersion) > 0 {
-		r.Recorder.Eventf(cluster, corev1.EventTypeWarning, reasonCiliumPatchDropped,
-			"Cilium %s ran on this cluster from an earlier Ichor. This Ichor embeds chart %s and runs only its images, "+
-				"so the Cilium Helm Job returns the release to them. Upgrade Ichor to a release that embeds Cilium %s or newer to keep that version.",
-			o.Version, cilium.ChartVersion, strings.TrimPrefix(o.Version, "v"))
-	}
-
-	return nil
+	return r.Status().Patch(ctx, cluster, client.MergeFrom(orig))
 }
 
 // cniUpgradeOperationClusters maps a cni-kind operation to its cluster, so the end of an upgrade

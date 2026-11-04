@@ -18,38 +18,63 @@ package cilium
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/values"
 )
 
-// Cilium runs only the images of the chart Ichor embeds (ADR 0115, amendment 2026-11-04 (3)). A patch an
-// earlier build recorded in status.cni.imageOverride changes nothing in the values.
-func TestEffectiveValuesIgnoreARecordedPatchOverride(t *testing.T) {
-	plain := &ichorv1alpha1.TalosCluster{}
-	plain.Name, plain.Namespace = "c", "ns"
-	plain.Spec.ControlPlane.Count = 1
-
-	patched := plain.DeepCopy()
-	patched.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{
+// recordedPatchCluster is a cluster whose status records a Cilium patch an earlier Ichor ran (ADR 0115,
+// amendment 2026-11-04 (3), revised): nothing sets a new one any more.
+func recordedPatchCluster(version string) *ichorv1alpha1.TalosCluster {
+	c := &ichorv1alpha1.TalosCluster{}
+	c.Name, c.Namespace = "c", "ns"
+	c.Spec.ControlPlane.Count = 1
+	c.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{
 		ImageOverride: &ichorv1alpha1.TalosCiliumImageOverride{
-			Version: "v1.99.9",
-			Images:  map[string]string{"agent": "quay.io/cilium/cilium:v1.99.9"},
+			Version: version,
+			Images:  map[string]string{ImageAgent: "quay.io/cilium/cilium:" + version + "@sha256:" + strings.Repeat("1", 64)},
 		},
 	}
+
+	return c
+}
+
+// A recorded patch newer than the embedded chart keeps being rendered, so an Ichor upgrade never steps Cilium back.
+func TestEffectiveValuesRenderARecordedPatchNewerThanTheChart(t *testing.T) {
+	c := recordedPatchCluster("v" + ChartVersion[:len(ChartVersion)-1] + "9" + "9")
+
+	vals, err := EffectiveValuesForMode(c, cni.KubeProxyEnabled)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, _ := values.Get(vals, "image.override")
+	if got != c.Status.CNI.ImageOverride.Images[ImageAgent] {
+		t.Fatalf("image.override = %v, want the recorded agent image", got)
+	}
+}
+
+// A recorded patch the embedded chart has reached (or passed) is not rendered: the chart's own images run.
+func TestEffectiveValuesDropARecordedPatchTheChartReached(t *testing.T) {
+	plain := recordedPatchCluster("v" + ChartVersion)
+	plain.Status.CNI = nil
 
 	want, err := EffectiveValuesForMode(plain, cni.KubeProxyEnabled)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := EffectiveValuesForMode(patched, cni.KubeProxyEnabled)
-	if err != nil {
-		t.Fatal(err)
-	}
+	for _, version := range []string{"v" + ChartVersion, "v0.0.1"} {
+		got, err := EffectiveValuesForMode(recordedPatchCluster(version), cni.KubeProxyEnabled)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("a recorded patch override changed the values:\n got  %v\n want %v", got, want)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("a recorded patch %s changed the values", version)
+		}
 	}
 }

@@ -548,6 +548,12 @@ func TestClusterHealthWithoutAReadyCondition(t *testing.T) {
 		{"an advisory condition is true", func(cl *pb.Cluster) {
 			cl.Conditions[4] = cond("CiliumUpgradeAvailable", condTrue, "Newer", "", time.Minute)
 		}, "✓ ready", "✓"},
+		// Kubelet serving certificates still being issued is progress, not ill health.
+		{"kubelet serving certificates are pending", func(cl *pb.Cluster) {
+			cl.Conditions = append(cl.Conditions,
+				cond("KubeletServingCertificates", condFalse, "Pending", "waiting for a serving certificate for: w-1", time.Minute),
+				cond("KubeletServingVerified", condFalse, "Waiting", "", time.Minute))
+		}, "✓ " + colReady, "✓"},
 	} {
 		cl := initshowCluster()
 		cl.Conditions = realConditions()

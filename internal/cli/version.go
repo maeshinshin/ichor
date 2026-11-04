@@ -123,7 +123,11 @@ func writeVersionHuman(w io.Writer, info versionInfo) error {
 	rows := []kv{{"ichor", info.Client.Version}}
 
 	if s := info.Server; s != nil {
-		rows = append(rows, kv{"installed", s.InstalledVersion}, kv{"upgrading to", s.SpecVersion}, kv{"newer release", s.LatestRelease})
+		rows = append(rows, kv{"installed", s.InstalledVersion}, kv{"upgrading", s.SpecVersion})
+
+		if s.LatestRelease != "" {
+			rows = append(rows, kv{"latest", s.LatestRelease + " available"})
+		}
 	}
 
 	if r := info.Release; r != nil {

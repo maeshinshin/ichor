@@ -118,7 +118,7 @@ func TestVersionClientFlagDoesNotTouchTheCluster(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if errOut.Len() != 0 || !strings.Contains(out.String(), "version: ") || strings.Contains(out.String(), "server") {
+	if errOut.Len() != 0 || !strings.HasPrefix(out.String(), "ichor ") || strings.Contains(out.String(), "installed") {
 		t.Fatalf("stdout = %q, stderr = %q", out.String(), errOut.String())
 	}
 }

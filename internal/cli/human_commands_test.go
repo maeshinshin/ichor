@@ -544,7 +544,9 @@ func TestClusterHealthWithoutAReadyCondition(t *testing.T) {
 		{"a health condition is false", func(cl *pb.Cluster) {
 			cl.Conditions = append(cl.Conditions, cond("ControlPlaneAvailable", condFalse, "NoQuorum", "", time.Minute))
 		}, "! not ready (ControlPlaneAvailable)", "!"},
-		{"an advisory condition is true", func(cl *pb.Cluster) { cl.Conditions[4] = cond("CiliumUpgradeAvailable", condTrue, "Newer", "", time.Minute) }, "✓ ready", "✓"},
+		{"an advisory condition is true", func(cl *pb.Cluster) {
+			cl.Conditions[4] = cond("CiliumUpgradeAvailable", condTrue, "Newer", "", time.Minute)
+		}, "✓ ready", "✓"},
 	} {
 		cl := initshowCluster()
 		cl.Conditions = realConditions()

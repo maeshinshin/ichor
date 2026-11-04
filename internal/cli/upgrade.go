@@ -108,9 +108,7 @@ and in which order, and asks for confirmation unless --yes.`,
 						return err
 					}
 
-					printUpgradeTargets(cmd.OutOrStdout(), kind, m)
-
-					return nil
+					return printUpgradeTargets(cmd.OutOrStdout(), kind, m)
 				}
 
 				if optional && target == "" {
@@ -162,52 +160,16 @@ func chooseUpgradeTarget(ctx context.Context, c *apiClients, errw io.Writer, kin
 		return d, nil
 	}
 
-	printUpgradeTargets(errw, kind, m)
+	_ = renderUpgradeTargets(newHuman(errw), kind, m)
 
 	return "", fmt.Errorf("no %s version to upgrade to by default: name one, as `ichor upgrade %s VERSION` (see --list)",
 		kindName(kind), kindName(kind))
 }
 
-// printUpgradeTargets writes the versions the cluster can move to: a table for a person, the
-// groups below for -o yaml|json.
-func printUpgradeTargets(w io.Writer, kind pb.OperationKind, m *pb.ListUpgradeTargetsResponse) {
-	if outputFormat == outputHuman {
-		_ = renderUpgradeTargets(newHuman(w), kind, m)
-
-		return
-	}
-
-	printUpgradeTargetsText(w, kind, m)
-}
-
-// printUpgradeTargetsText writes the groups of versions, newest first, and marks the default. A list that
-// cannot be given says why.
-func printUpgradeTargetsText(w io.Writer, kind pb.OperationKind, m *pb.ListUpgradeTargetsResponse) {
-	if !m.GetAvailable() {
-		_, _ = fmt.Fprintf(w, "no list of %s versions: %s\n", kindName(kind), m.GetUnavailableReason())
-	}
-
-	n := 0
-
-	group := func(label string, versions []string) {
-		for _, v := range versions {
-			mark := ""
-			if v == m.GetDefault() {
-				mark = "  (default)"
-			}
-
-			_, _ = fmt.Fprintf(w, "  %-12s %s%s\n", label, v, mark)
-			n++
-		}
-	}
-
-	group("recommended", m.GetRecommended())
-	group("patch", m.GetPatch())
-	group("next minor", m.GetNextMinor())
-
-	if n == 0 {
-		_, _ = fmt.Fprintln(w, "  no version to move to")
-	}
+// printUpgradeTargets writes the versions the cluster can move to: a table for a person, the wire
+// message for -o yaml|json.
+func printUpgradeTargets(w io.Writer, kind pb.OperationKind, m *pb.ListUpgradeTargetsResponse) error {
+	return printAPI(w, m, func(h *human, m *pb.ListUpgradeTargetsResponse) error { return renderUpgradeTargets(h, kind, m) })
 }
 
 // pinnedOf is the release set's version of a kind that has one ("" for the others).

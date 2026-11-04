@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -304,4 +305,49 @@ func TestProgress_PlainSampleOfAWholeRun(t *testing.T) {
 	p.Next("ichor cluster status initshow")
 
 	t.Logf("\n%s", buf.String())
+}
+
+// The ticker goroutine redraws the live line and stops drawing once the step is over (run with -race).
+func TestProgress_TickerRedrawsUntilTheStepEnds(t *testing.T) {
+	var mu sync.Mutex
+
+	var buf bytes.Buffer
+
+	p := &progress{w: lockedWriter{&mu, &buf}, now: time.Now, size: func() int { return 80 }, tty: true, tick: 2 * time.Millisecond}
+	p.began = time.Now()
+
+	s := p.Start("Ichor controller")
+
+	time.Sleep(40 * time.Millisecond)
+	s.Done("ready")
+
+	mu.Lock()
+	n := buf.Len()
+	redraws := strings.Count(buf.String(), "\r\x1b[2K")
+	mu.Unlock()
+
+	time.Sleep(20 * time.Millisecond)
+
+	mu.Lock()
+	defer mu.Unlock()
+
+	if redraws < 4 {
+		t.Errorf("only %d draws in 40ms at a 2ms tick", redraws)
+	}
+
+	if buf.Len() != n {
+		t.Errorf("the ticker drew after the step ended")
+	}
+}
+
+type lockedWriter struct {
+	mu  *sync.Mutex
+	buf *bytes.Buffer
+}
+
+func (w lockedWriter) Write(b []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	return w.buf.Write(b)
 }

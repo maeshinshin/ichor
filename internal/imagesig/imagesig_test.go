@@ -167,8 +167,15 @@ func newFakeRegistry(t *testing.T) (*httptest.Server, *fakeRegistry) {
 	return srv, f
 }
 
-func TestVerifyRefusesAnImageWithoutASignature(t *testing.T) {
-	srv, _ := newFakeRegistry(t)
+// verifyFake runs Verify for the Cilium v1.20.4 identity against a fake registry holding the
+// given signature referrers (none when bundles is empty).
+func verifyFake(t *testing.T, bundles ...[]byte) error {
+	t.Helper()
+
+	srv, f := newFakeRegistry(t)
+	for _, b := range bundles {
+		f.referrers = append(f.referrers, signatureReferrer(t, f, b))
+	}
 
 	s, err := newWithRoot(trustedRootJSON, true)
 	if err != nil {
@@ -177,25 +184,17 @@ func TestVerifyRefusesAnImageWithoutASignature(t *testing.T) {
 
 	img := Image{Repository: strings.TrimPrefix(srv.URL, "http://") + "/cilium/cilium", Digest: ciliumAgentDigest}
 
-	err = s.Verify(context.Background(), img, CiliumIdentity("v1.20.4"))
-	if err == nil || !strings.Contains(err.Error(), "has no cosign signature") {
+	return s.Verify(context.Background(), img, CiliumIdentity("v1.20.4"))
+}
+
+func TestVerifyRefusesAnImageWithoutASignature(t *testing.T) {
+	if err := verifyFake(t); err == nil || !strings.Contains(err.Error(), "has no cosign signature") {
 		t.Fatalf("an unsigned image: err = %v", err)
 	}
 }
 
 func TestVerifyRefusesASignatureThatDoesNotVerify(t *testing.T) {
-	srv, f := newFakeRegistry(t)
-	f.referrers = []map[string]any{signatureReferrer(t, f, []byte(`{keyMediaType:"not a bundle"}`))}
-
-	s, err := newWithRoot(trustedRootJSON, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	img := Image{Repository: strings.TrimPrefix(srv.URL, "http://") + "/cilium/cilium", Digest: ciliumAgentDigest}
-
-	err = s.Verify(context.Background(), img, CiliumIdentity("v1.20.4"))
-	if err == nil || !strings.Contains(err.Error(), "is not signed by") {
+	if err := verifyFake(t, []byte(`{keyMediaType:"not a bundle"}`)); err == nil || !strings.Contains(err.Error(), "is not signed by") {
 		t.Fatalf("a signature that does not parse: err = %v", err)
 	}
 }

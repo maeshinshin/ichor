@@ -23,7 +23,7 @@ import (
 )
 
 // TalosCredentialPurpose is what a TalosCredentialRequest asks the controller for (ADR 0108).
-// +kubebuilder:validation:Enum=public;node-reader;support-bundle;etcd-snapshot;packet-capture;credentials-talos;credentials-kubernetes
+// +kubebuilder:validation:Enum=public;node-reader;support-bundle;etcd-snapshot;packet-capture;credentials-talos;credentials-kubernetes;talosconfig-reader
 type TalosCredentialPurpose string
 
 const (
@@ -41,6 +41,10 @@ const (
 	// both.
 	CredentialPurposeCredentialsTalos      TalosCredentialPurpose = "credentials-talos"
 	CredentialPurposeCredentialsKubernetes TalosCredentialPurpose = "credentials-kubernetes"
+	// CredentialPurposeTalosconfigReader is the os:reader talosconfig a person takes for talosctl
+	// (ADR 0124): one hour by default, twelve at most, for whoever may `download` on
+	// talosclusters/talosconfig-reader.
+	CredentialPurposeTalosconfigReader TalosCredentialPurpose = "talosconfig-reader"
 )
 
 const (

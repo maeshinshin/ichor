@@ -46,11 +46,34 @@ func TestPurposeLifetime(t *testing.T) {
 		{ichorv1alpha1.CredentialPurposeCredentialsKubernetes, 24 * time.Hour, 24 * time.Hour, false},
 		{ichorv1alpha1.CredentialPurposeCredentialsKubernetes, 2 * Lifetime, 0, true},
 		{ichorv1alpha1.CredentialPurposeCredentialsKubernetes, -time.Second, 0, true},
+		// ADR 0124: a person's reader talosconfig is one hour by default and at most twelve.
+		{ichorv1alpha1.CredentialPurposeTalosconfigReader, 0, TalosconfigLifetime, false},
+		{ichorv1alpha1.CredentialPurposeTalosconfigReader, MaxTalosconfigLifetime, MaxTalosconfigLifetime, false},
+		{ichorv1alpha1.CredentialPurposeTalosconfigReader, MaxTalosconfigLifetime + time.Second, 0, true},
 	} {
 		got, err := PurposeLifetime(tt.purpose, tt.asked)
 		if (err != nil) != tt.wantError || got != tt.want {
 			t.Errorf("%s asked %s: got %s, %v; want %s, error=%v", tt.purpose, tt.asked, got, err, tt.want, tt.wantError)
 		}
+	}
+}
+
+// ADR 0124: the talosconfig a person takes is os:reader and nothing else.
+func TestTalosconfigReaderIsOnlyOSReader(t *testing.T) {
+	t.Parallel()
+
+	// talosRole belongs to credentials-talos; it must not widen this purpose.
+	got, err := TalosRoles(ichorv1alpha1.CredentialPurposeTalosconfigReader, "admin")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if s := got.Strings(); len(s) != 1 || s[0] != "os:reader" {
+		t.Errorf("roles = %v, want only os:reader", s)
+	}
+
+	if IsDialPurpose(ichorv1alpha1.CredentialPurposeTalosconfigReader) {
+		t.Error("a person's talosconfig is not a dial purpose: it must be signed rotation-aware")
 	}
 }
 

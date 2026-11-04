@@ -58,6 +58,10 @@ type fakeIssuer struct {
 	idTokenTTL   time.Duration
 	lastAudience string
 	ignoreAud    bool
+	// RFC 7009 sign-out: what /revoke received, whether discovery advertises it, and what it answers (0 is 200).
+	revoked        []url.Values
+	noRevocation   bool
+	revokeStatus   int
 }
 
 type fakeCode struct {
@@ -78,6 +82,7 @@ func newFakeIssuer(t *testing.T) *fakeIssuer {
 	mux.HandleFunc("/keys", f.keys)
 	mux.HandleFunc("/authorize", f.authorize)
 	mux.HandleFunc("/token", f.token)
+	mux.HandleFunc("/revoke", f.revoke)
 	f.srv = httptest.NewServer(mux)
 	t.Cleanup(f.srv.Close)
 
@@ -85,13 +90,32 @@ func newFakeIssuer(t *testing.T) *fakeIssuer {
 }
 
 func (f *fakeIssuer) discovery(w http.ResponseWriter, _ *http.Request) {
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	doc := map[string]any{
 		"issuer":                                f.srv.URL,
 		"authorization_endpoint":                f.srv.URL + "/authorize",
 		"token_endpoint":                        f.srv.URL + "/token",
 		"jwks_uri":                              f.srv.URL + "/keys",
 		"id_token_signing_alg_values_supported": []string{"RS256"},
-	})
+	}
+
+	if !f.noRevocation {
+		doc["revocation_endpoint"] = f.srv.URL + "/revoke"
+	}
+
+	_ = json.NewEncoder(w).Encode(doc)
+}
+
+func (f *fakeIssuer) revoke(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.revoked = append(f.revoked, r.PostForm)
+
+	if f.revokeStatus != 0 {
+		w.WriteHeader(f.revokeStatus)
+	}
 }
 
 func (f *fakeIssuer) keys(w http.ResponseWriter, _ *http.Request) {

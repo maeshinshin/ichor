@@ -208,7 +208,7 @@ func init() {
 	flags.StringVar(&initOpts.KubeAPITLSServerName, "kube-api-tls-server-name", "",
 		"with --ui-url: tls-server-name in users' kubeconfigs (chart: ichorUI.users.kubeAPITLSServerName)")
 
-	for _, name := range []string{flagCluster, cniKey, "endpoint-address", "node-endpoint", "install-disk"} {
+	for _, name := range []string{flagCluster, "endpoint-address", "node-endpoint", "install-disk"} {
 		_ = initCmd.MarkFlagRequired(name)
 	}
 }

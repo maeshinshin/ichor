@@ -157,7 +157,9 @@ func EffectiveValuesForMode(cluster *ichorv1alpha1.TalosCluster, mode cni.KubePr
 // that exist, not spec.controlPlane.count: an HA cluster is bootstrapped with one node and the others
 // join later (ADR 0113 amendment 2026-11-04). The caller must pass the same count to everything that
 // hashes or applies the values.
-func EffectiveValuesForNodes(cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, nodes int) (map[string]any, error) {
+func EffectiveValuesForNodes(
+	cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, nodes int,
+) (map[string]any, error) {
 	c := cluster.Spec.CNI
 
 	var user map[string]any

@@ -88,7 +88,9 @@ type fakeTalosClient struct {
 	applyCalls                [][]byte
 
 	// etcd-related fields: removal_test.go's fixtures for removeEtcdMember.
-	etcdMembers    []EtcdMember
+	etcdMembers []EtcdMember
+	// etcdListHook runs inside EtcdMemberList: another reconcile arriving while a removal holds the cluster lock.
+	etcdListHook   func()
 	etcdMembersErr error
 	etcdLeaveErr   error
 	etcdLeaveCalls int
@@ -226,6 +228,10 @@ func (f *fakeTalosClient) Reboot(ctx context.Context) error {
 }
 
 func (f *fakeTalosClient) EtcdMemberList(context.Context) ([]EtcdMember, error) {
+	if f.etcdListHook != nil {
+		f.etcdListHook()
+	}
+
 	return f.etcdMembers, f.etcdMembersErr
 }
 

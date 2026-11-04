@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { LoginError, loginBody, loginErrorKey, loginReady, passwordSignIn, redirectTarget, ticketFromSearch } from './login.ts'
+import { LoginError, loginBody, loginErrorKey, loginReady, passwordSignIn, redirectTarget, signInAgain, ticketFromSearch } from './login.ts'
 import { en } from './i18n.ts'
 import { base64url, redirectUriFor, storedToken, type AuthProvider } from './oidc.ts'
 
@@ -114,4 +114,39 @@ test('the in-page sign-in refuses a redirect with the wrong state or another ori
     })
     await assert.rejects(passwordSignIn(ichor, { username: 'ann', password: 'pw' }), LoginError)
   }
+})
+
+// A password change ends the tab's own ID token (docs/adr/0108), so the SPA signs in again with
+// the new password through the normal flow, as the user the old token names.
+test('signing in again after a password change reuses the user of the stored token and the ichor provider', async () => {
+  let nonce = ''
+  let state = ''
+  const old = `h.${base64url(new TextEncoder().encode(JSON.stringify({ sub: 'ann', exp: 9999999999 })))}.s`
+  const calls = stubSignIn({
+    '/auth/config': () => json({ enabled: true, providers: [{ id: 'oidc', issuer: 'https://idp.example', clientId: 'x' }, ichor] }),
+    '/.well-known/openid-configuration': discovery,
+    '/oidc/authorize': (_i, url) => {
+      nonce = new URL(url!).searchParams.get('nonce')!
+      state = new URL(url!).searchParams.get('state')!
+      return json({ ticket: 't1' })
+    },
+    '/oidc/login': (init) => {
+      assert.deepEqual(JSON.parse(init!.body as string), { ticket: 't1', username: 'ann', password: 'new-pw' })
+      return json({ redirect_uri: `https://ui.example/auth/callback?code=c1&state=${state}` })
+    },
+    '/oidc/token': () => json({ id_token: idToken(nonce) }),
+  })
+  sessionStorage.setItem('ichor.idToken', old)
+  await signInAgain('new-pw')
+  assert.deepEqual(calls, ['/auth/config', '/.well-known/openid-configuration', '/oidc/authorize', '/oidc/login', '/oidc/token'])
+  assert.notEqual(storedToken(), old)
+})
+
+test('signing in again fails, for the caller to sign out, without an ichor provider or a user', async () => {
+  stubSignIn({ '/auth/config': () => json({ enabled: true, providers: [] }) })
+  sessionStorage.setItem('ichor.idToken', `h.${base64url(new TextEncoder().encode(JSON.stringify({ sub: 'ann' })))}.s`)
+  await assert.rejects(signInAgain('pw'), LoginError)
+
+  stubSignIn({ '/auth/config': () => json({ enabled: true, providers: [ichor] }) })
+  await assert.rejects(signInAgain('pw'), LoginError)
 })

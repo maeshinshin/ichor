@@ -82,17 +82,21 @@ install.
 
 ## Quick start
 
-Inside `nix develop`, with a node in maintenance mode:
+From a checkout, inside `nix develop`, with a node booted from a Talos ISO
+(maintenance mode) and a registry the nodes can reach:
 
 ```
-ichor init --help          # create the first control plane and install Ichor
-ichor machine approve --help
-ichor cluster get
-ichor version              # CLI version and the installed Ichor version (--client skips the cluster, -o json|yaml)
+make demo-images-build VERSION=v0.1.0
+make demo-images-push VERSION=v0.1.0 REGISTRY=192.168.1.10:5000
+bin/img/ichor/ichor init --help     # create the first control plane and install Ichor
+bin/img/ichor/ichor machine approve --help
+bin/img/ichor/ichor cluster get NAME
+bin/img/ichor/ichor version         # CLI version and the installed Ichor version (--client skips the cluster, -o json|yaml)
 ```
 
-`ichor <command> --help` lists the rest. Existing clusters are brought in
-with `ichor adopt`.
+[Getting started](docs/guides/getting-started.md) walks through all of it,
+from the build to the first sign-in to the UI. `ichor <command> --help` lists
+the rest. Existing clusters are brought in with `ichor adopt`.
 
 ## Security
 

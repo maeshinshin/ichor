@@ -431,6 +431,9 @@ message PlanOperationResponse {
   // spec.schematic.id (the Talos default schematic when unset). Both are empty otherwise.
   string current_schematic = 18;
   string target_schematic = 19;
+  // ca_targets are the CAs a ca-rotation would replace, the default pair spelled out when none
+  // was asked for; empty for every other kind. The credential hand-off applies when talos or kubernetes is one.
+  repeated string ca_targets = 20;
 }
 
 message CreateOperationRequest {

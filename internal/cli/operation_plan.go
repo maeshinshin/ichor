@@ -18,6 +18,7 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -29,6 +30,35 @@ import (
 // that trusts only the old CA fails from there on.
 const credentialsStopWorking = "kubeconfig and talosconfig STOP WORKING from the second pass (Issuing) on: " +
 	"the nodes start serving certificates from the new CA, and a file that trusts only the old CA can no longer verify them."
+
+// caPlanHas reports whether the plan's CA targets include name; a plan from a server that does not say
+// (empty) is the default pair, talos and kubernetes.
+func caPlanHas(targets []string, name string) bool {
+	if len(targets) == 0 {
+		targets = []string{"talos", "kubernetes"}
+	}
+
+	return slices.Contains(targets, name)
+}
+
+// caPlanNames names the CAs of a ca-rotation plan in words: "Talos API and Kubernetes API".
+func caPlanNames(targets []string) string {
+	var names []string
+
+	for _, n := range []struct{ target, words string }{
+		{"talos", "Talos API"}, {"kubernetes", "Kubernetes API"}, {"etcd", "etcd"}, {"kubernetes-aggregator", "Kubernetes aggregator"},
+	} {
+		if caPlanHas(targets, n.target) {
+			names = append(names, n.words)
+		}
+	}
+
+	if len(names) < 2 {
+		return strings.Join(names, "")
+	}
+
+	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
+}
 
 // configRestartText is what a config operation whose changes need no reboot does; the UI says the same in
 // ops.plan.effectConfigRestart.
@@ -72,18 +102,35 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 	case pb.OperationEffect_OPERATION_EFFECT_NONE:
 		b.WriteString("No machine is touched; a Job applies the new install manifest.\n")
 	case pb.OperationEffect_OPERATION_EFFECT_CA_ROTATION:
-		fmt.Fprintf(&b, "Every machine is reconfigured once per pass (%s), without a reboot. "+
-			"The kubelet RESTARTS on each machine in the passes that change the Kubernetes CA.\n", strings.Join(p.GetStages(), ", "))
-		b.WriteString("YOUR " + credentialsStopWorking + "\n" +
-			"So after every machine accepts the new CAs the operation WAITS, changing nothing, until you have new credentials. " +
-			"'ichor cluster rotate-ca' writes them (a kubeconfig and a talosconfig trusting the old and the new CAs, next to your current ones, " +
-			"mode 0600, never printed) while your current ones still work, checks them, and only then lets the operation go on. " +
-			"To continue, run 'ichor cluster credentials NAME --acknowledge' with your current kubeconfig, or, if you may " +
-			"(the 'download' verb on talosclusters/credentials), use the operation page of the UI: it downloads the same files and continues the rotation.\n")
-		b.WriteString("Pods change from the old CA to the new one at the second pass (Issuing): the API server's certificate changes at once, " +
-			"but a pod's copy of the CA (kube-root-ca.crt) is refreshed by the kubelet within about a minute, so for that time in-cluster clients " +
-			"cannot verify the API server. Ichor waits until every namespace has the new CA and then two minutes before the old CAs are dropped. " +
-			"CoreDNS, kube-proxy, the CNI and ichor-ui are restarted once after the old CAs are dropped; other in-cluster clients that load the CA once may need a restart.\n")
+		targets := p.GetCaTargets()
+		kube := caPlanHas(targets, "kubernetes")
+		credentials := kube || caPlanHas(targets, "talos")
+
+		fmt.Fprintf(&b, "Every machine is reconfigured once per pass (%s), without a reboot.", strings.Join(p.GetStages(), ", "))
+
+		if kube {
+			b.WriteString(" The kubelet RESTARTS on each machine in the passes that change the Kubernetes CA.")
+		}
+
+		b.WriteString("\n")
+
+		if credentials {
+			b.WriteString("YOUR " + credentialsStopWorking + "\n" +
+				"So after every machine accepts the new CAs the operation WAITS, changing nothing, until you have new credentials. " +
+				"'ichor cluster rotate-ca' writes them (a kubeconfig and a talosconfig trusting the old and the new CAs, next to your current ones, " +
+				"mode 0600, never printed) while your current ones still work, checks them, and only then lets the operation go on. " +
+				"To continue, run 'ichor cluster credentials NAME --acknowledge' with your current kubeconfig, or, if you may " +
+				"(the 'download' verb on talosclusters/credentials), use the operation page of the UI: it downloads the same files and continues the rotation.\n")
+		} else {
+			b.WriteString("Nothing your kubeconfig or talosconfig depends on changes, so there is no credential hand-off.\n")
+		}
+
+		if kube {
+			b.WriteString("Pods change from the old CA to the new one at the second pass (Issuing): the API server's certificate changes at once, " +
+				"but a pod's copy of the CA (kube-root-ca.crt) is refreshed by the kubelet within about a minute, so for that time in-cluster clients " +
+				"cannot verify the API server. Ichor waits until every namespace has the new CA and then two minutes before the old CAs are dropped. " +
+				"CoreDNS, kube-proxy, the CNI and ichor-ui are restarted once after the old CAs are dropped; other in-cluster clients that load the CA once may need a restart.\n")
+		}
 	case pb.OperationEffect_OPERATION_EFFECT_UNSPECIFIED:
 	}
 
@@ -150,7 +197,7 @@ func headline(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 
 		return fmt.Sprintf("Switch kube-proxy on cluster %q from %s to %s.", cluster, p.GetCurrent(), p.GetTarget())
 	case pb.OperationKind_OPERATION_KIND_CA_ROTATION:
-		return fmt.Sprintf("Rotate the Talos API and Kubernetes API certificate authorities (ca-rotation) of cluster %q.", cluster)
+		return fmt.Sprintf("Rotate the %s certificate authorities (ca-rotation) of cluster %q.", caPlanNames(p.GetCaTargets()), cluster)
 	case pb.OperationKind_OPERATION_KIND_CONFIG:
 		if p.GetEffect() == pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS {
 			return fmt.Sprintf("Apply the pending configuration changes that restart the Kubernetes API server (config) of cluster %q.", cluster)

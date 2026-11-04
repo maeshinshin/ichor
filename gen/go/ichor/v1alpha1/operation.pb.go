@@ -2121,8 +2121,11 @@ type PlanOperationResponse struct {
 	// spec.schematic.id (the Talos default schematic when unset). Both are empty otherwise.
 	CurrentSchematic string `protobuf:"bytes,18,opt,name=current_schematic,json=currentSchematic,proto3" json:"current_schematic,omitempty"`
 	TargetSchematic  string `protobuf:"bytes,19,opt,name=target_schematic,json=targetSchematic,proto3" json:"target_schematic,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// ca_targets are the CAs a ca-rotation would replace, the default pair spelled out when none
+	// was asked for; empty for every other kind. The credential hand-off applies when talos or kubernetes is one.
+	CaTargets     []string `protobuf:"bytes,20,rep,name=ca_targets,json=caTargets,proto3" json:"ca_targets,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PlanOperationResponse) Reset() {
@@ -2287,6 +2290,13 @@ func (x *PlanOperationResponse) GetTargetSchematic() string {
 		return x.TargetSchematic
 	}
 	return ""
+}
+
+func (x *PlanOperationResponse) GetCaTargets() []string {
+	if x != nil {
+		return x.CaTargets
+	}
+	return nil
 }
 
 type CreateOperationRequest struct {
@@ -3494,7 +3504,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\boverride\x18\a \x01(\v2\x18.ichor.v1alpha1.OverrideR\boverride\x12N\n" +
 	"\x0fichor_installer\x18\b \x01(\v2%.ichor.v1alpha1.IchorInstallerOptionsR\x0eichorInstaller\x12\x1d\n" +
 	"\n" +
-	"ca_targets\x18\t \x03(\tR\tcaTargets\"\x91\x06\n" +
+	"ca_targets\x18\t \x03(\tR\tcaTargets\"\xb0\x06\n" +
 	"\x15PlanOperationResponse\x127\n" +
 	"\x06effect\x18\x01 \x01(\x0e2\x1f.ichor.v1alpha1.OperationEffectR\x06effect\x12:\n" +
 	"\bmachines\x18\x02 \x03(\v2\x1e.ichor.v1alpha1.PlannedMachineR\bmachines\x12\x12\n" +
@@ -3515,7 +3525,9 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\rsnapshot_time\x18\x10 \x01(\v2\x1a.google.protobuf.TimestampR\fsnapshotTime\x120\n" +
 	"\x12opens_pull_request\x18\x11 \x01(\bB\x02\x18\x01R\x10opensPullRequest\x12+\n" +
 	"\x11current_schematic\x18\x12 \x01(\tR\x10currentSchematic\x12)\n" +
-	"\x10target_schematic\x18\x13 \x01(\tR\x0ftargetSchematic\"\xe4\x03\n" +
+	"\x10target_schematic\x18\x13 \x01(\tR\x0ftargetSchematic\x12\x1d\n" +
+	"\n" +
+	"ca_targets\x18\x14 \x03(\tR\tcaTargets\"\xe4\x03\n" +
 	"\x16CreateOperationRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
 	"\x04kind\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.OperationKindR\x04kind\x12\x16\n" +

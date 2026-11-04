@@ -49,8 +49,7 @@ func (s *Server) ListUpgradeTargets(
 	kind := req.Msg.GetKind()
 	if kind != pb.OperationKind_OPERATION_KIND_TALOS && kind != pb.OperationKind_OPERATION_KIND_KUBERNETES &&
 		kind != pb.OperationKind_OPERATION_KIND_CNI {
-		return nil, connect.NewError(connect.CodeInvalidArgument,
-			fmt.Errorf("ListUpgradeTargets lists the talos, kubernetes or cni kind, not %s", kind))
+		return nil, invalid("ListUpgradeTargets lists the talos, kubernetes or cni kind, not %s", kind)
 	}
 
 	cluster, err := s.loadCluster(ctx, namespacedName(req.Msg.GetCluster()))

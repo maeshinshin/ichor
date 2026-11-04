@@ -122,11 +122,22 @@ clusters keep the old CAs, but never starts one.`,
 			return dialTalos(ctx, talosconfigPath, adoptContext, endpoint)
 		}
 
+		// For a person, adopt shows its steps; the bundle reminder is then a warning among them.
+		var (
+			steps     *progress
+			nagWriter = cmd.ErrOrStderr()
+		)
+
+		if outputFormat == outputHuman {
+			steps = newProgress(cmd.ErrOrStderr())
+			nagWriter = bundleNagWriter{steps}
+		}
+
 		bundle, saveBundle, err := resolveAdoptBundle(cmd.Context(), adoptSecretsOptions{
 			File: adoptSecretsBundle, Recover: adoptRecover, RecoverFrom: adoptRecoverFrom,
 			Cluster:  adoptCluster,
 			Contract: clusterVersionContract(cmd.Context(), k8sClient, adoptNamespace, adoptCluster),
-		}, dial, cmd.ErrOrStderr())
+		}, dial, nagWriter)
 		if err != nil {
 			return err
 		}
@@ -156,6 +167,7 @@ clusters keep the old CAs, but never starts one.`,
 			Stdin:      cmd.InOrStdin(),
 			AssumeYes:  assumeYes,
 			Output:     outputFormat,
+			Steps:      steps,
 
 			Target:       k8sClient,
 			CNIUnmanaged: adoptCNIUnmanaged,
@@ -194,7 +206,7 @@ clusters keep the old CAs, but never starts one.`,
 			Ichor: &adoptWriteIchor{Manifest: installmanifest.Manifest, NetworkPolicies: installmanifest.NetworkPolicies},
 		}
 
-		return runAdopt(cmd.Context(), adoptCluster, adoptNamespace, deps)
+		return silenceIfShown(cmd, runAdopt(cmd.Context(), adoptCluster, adoptNamespace, deps))
 	},
 }
 

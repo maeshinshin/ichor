@@ -126,6 +126,12 @@ func TestCheckCNIAdoption(t *testing.T) {
 		t.Errorf("flannel without flag: err = %v, want refusal naming flannel and --cni-unmanaged", err)
 	}
 
+	// The refusal also says that Ichor does not migrate a CNI and where the options are.
+	if err := checkCNIAdoption(flannel, false); err == nil || !strings.Contains(err.Error(), "does not migrate a CNI") ||
+		!strings.Contains(err.Error(), "Moving from flannel") {
+		t.Errorf("flannel without flag: err = %v, want the migration pointer", err)
+	}
+
 	if err := checkCNIAdoption(flannel, true); err != nil {
 		t.Errorf("flannel with flag: %v", err)
 	}

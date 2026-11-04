@@ -236,7 +236,9 @@ func checkCNIAdoption(r *cniReport, unmanaged bool) error {
 	}
 
 	return fmt.Errorf("the cluster runs %s. Ichor will not install or operate it; "+
-		"to adopt the cluster with the CNI left exactly as it is, run again with --cni-unmanaged", what)
+		"to adopt the cluster with the CNI left exactly as it is, run again with --cni-unmanaged. "+
+		"Ichor does not migrate a CNI: to have it manage Cilium instead, the cluster needs Cilium with ipam.mode kubernetes, or no CNI; "+
+		"see \"Moving from flannel\" in docs/guides/adopt-and-reclaim.md", what)
 }
 
 const (

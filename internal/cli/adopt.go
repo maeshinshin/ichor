@@ -267,7 +267,7 @@ func init() {
 	adoptCmd.Flags().BoolVar(&adoptRequireIchor, "require-ichor", false,
 		"fail when Ichor is not installed (for example with Helm) instead of installing it")
 	adoptCmd.Flags().StringVar(&adoptCiliumValues, "cilium-values", "",
-		"YAML file of Cilium Helm values for the Cilium adopt installs on a cluster with no CNI (Ichor-owned keys are refused)")
+		"YAML file of Cilium Helm values for the Cilium adopt installs on a cluster with no CNI, or for a Cilium it takes over that has no Helm release record (Ichor-owned keys are refused)")
 	adoptCmd.Flags().BoolVar(&adoptPlanOnly, "plan", false, "print the plan and write nothing")
 	adoptCmd.Flags().StringVar(&adoptSeed, adoptFlagNode, "",
 		"address of one control plane; adopt discovers the cluster's machines from its membership when the TalosCluster does not exist yet")

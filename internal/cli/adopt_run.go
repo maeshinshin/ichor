@@ -841,8 +841,11 @@ func (st *adoptState) planInstallCilium(deps adoptDeps) error {
 			return errors.New("adopt: --tunnel only applies when adopt installs Cilium, which it does only on a cluster with no CNI")
 		}
 
-		if len(deps.CiliumValues) > 0 {
-			return errors.New("adopt: --cilium-values only applies when adopt installs Cilium, which it does only on a cluster with no CNI")
+		// A Cilium Ichor does not own yet is taken over with the operator's values when it has no
+		// Helm release record; takeoverPlan refuses the flag if there is one.
+		if len(deps.CiliumValues) > 0 && !st.needsTakeover() {
+			return errors.New("adopt: --cilium-values only applies when adopt installs Cilium (a cluster with no CNI) or takes over " +
+				"a Cilium that has no Helm release record")
 		}
 
 		return nil
@@ -1050,7 +1053,15 @@ func (st *adoptState) takeoverPlan(ctx context.Context, deps adoptDeps) (takeove
 		return tp, err
 	}
 
-	// The operator's own values come from the foreign release; the diff gate must see them.
+	// The record's values and --cilium-values would silently disagree: the flag is for a Cilium that
+	// has no record.
+	if rep.Foreign != nil && len(deps.CiliumValues) > 0 {
+		return tp, errors.New("adopt: --cilium-values is for a Cilium that has no Helm release record; this one has, " +
+			"and its values are used. Drop --cilium-values (or, to change them, set spec.cni.cilium.values after the adoption)")
+	}
+
+	// The operator's own values come from the foreign release, or are --cilium-values for a Cilium
+	// with no record; the diff gate must see them.
 	if len(rep.UserValues) > 0 {
 		tp.userValues = rep.UserValues
 
@@ -1095,7 +1106,8 @@ func (st *adoptState) preflight(ctx context.Context, deps adoptDeps, user map[st
 	}
 
 	rep, err := deps.Preflight(ctx, cilium.PreflightInput{
-		IchorNamespace: ichorControllerNamespace, Effective: effective, KubeProxy: mode, Tunnel: st.cluster.Spec.CNI.Tunnel,
+		IchorNamespace: ichorControllerNamespace, Effective: effective, UserValues: deps.CiliumValues,
+		KubeProxy: mode, Tunnel: st.cluster.Spec.CNI.Tunnel,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("adopt: Cilium takeover checks: %w", err)

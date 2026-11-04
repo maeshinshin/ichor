@@ -39,16 +39,18 @@ const (
 	opHumanFailure = "drain of cp2 timed out: pod etcd-backup cannot be evicted"
 )
 
-func opRef(name string) *pb.ObjectRef { return &pb.ObjectRef{Namespace: ichorControllerNamespace, Name: name} }
+func opRef(name string) *pb.ObjectRef {
+	return &pb.ObjectRef{Namespace: ichorControllerNamespace, Name: name}
+}
 
 func opHumanTalosOp(phase string) *pb.Operation {
 	return &pb.Operation{
 		Ref: opRef(opHumanName), Cluster: opRef(humanCluster), Kind: pb.OperationKind_OPERATION_KIND_TALOS, Phase: phase,
 		Summary: opHumanTalos, CreatedAt: ago(12 * time.Minute), StartedBy: actorCLI, MaxUnavailable: 1,
-		Details: []*pb.OperationDetail{{Key: "Cluster", Value: humanCluster}, {Key: "Kind", Value: "talos"},
+		Details: []*pb.OperationDetail{{Key: "Cluster", Value: humanCluster}, {Key: "Kind", Value: compTalos},
 			{Key: "Target Talos version", Value: testTalosVersion}, {Key: "Max unavailable", Value: "1"}},
 		Machines: []*pb.OperationMachine{
-			{Name: "cp1", Phase: ichorv1alpha1.TalosOperationMachinePhaseCompleted, StartedAt: ago(11 * time.Minute), FinishedAt: ago(7*time.Minute + 30*time.Second)},
+			{Name: opCP, Phase: ichorv1alpha1.TalosOperationMachinePhaseCompleted, StartedAt: ago(11 * time.Minute), FinishedAt: ago(7*time.Minute + 30*time.Second)},
 			{Name: "cp2", DisplayName: "talos-cp2", Phase: ichorv1alpha1.TalosOperationMachinePhaseInProgress, StartedAt: ago(7 * time.Minute)},
 			{Name: "w1"},
 		},
@@ -405,7 +407,7 @@ func watchOpFixture(phase, failure string) *ichorv1alpha1.TalosOperation {
 	op.Spec.ClusterRef.Name, op.Spec.Kind = opTestCluster, ichorv1alpha1.TalosOperationKindTalos
 	op.Status = ichorv1alpha1.TalosOperationStatus{
 		Phase: phase, FailureReason: failure,
-		Machines: []ichorv1alpha1.TalosOperationMachineStatus{{Name: "cp1", Phase: "Completed"}, {Name: "w", Phase: "InProgress"}},
+		Machines: []ichorv1alpha1.TalosOperationMachineStatus{{Name: opCP, Phase: ichorv1alpha1.TalosOperationMachinePhaseCompleted}, {Name: "w", Phase: ichorv1alpha1.TalosOperationMachinePhaseInProgress}},
 	}
 
 	return op

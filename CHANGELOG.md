@@ -73,6 +73,12 @@ table accepts; a refusal passes only with the override verb
   always printed, so a script names its format; a command not converted yet
   still prints YAML. `ichor ui` prints its status in the same style
   (ADR 0118).
+- `ichor operation list|get|pause|resume|delete`, `ichor upgrade
+  talos|kubernetes|ichor` (the result, `--list`, `--follow`), the node actions and
+  `ichor node get` print for people too. `--follow` and `operation get --watch`
+  show one live line with the phase and message and end it with ✓ Completed or
+  ✗ Failed and the time taken, or a line per change in a pipe; the exit codes and the
+  resume hint are unchanged (ADR 0118).
 
 ### Not part of Ichor
 

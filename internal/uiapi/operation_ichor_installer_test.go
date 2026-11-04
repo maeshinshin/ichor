@@ -29,6 +29,9 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
+// demoBuild is the reason the tests give for skipping the signature check.
+const demoBuild = "demo build"
+
 func getInstallation(t *testing.T, k8s client.Client) ichorv1alpha1.IchorInstallation {
 	t.Helper()
 
@@ -48,7 +51,7 @@ func TestIchorUpgradeWritesTheInstallerSettingsAndClearsThemNextTime(t *testing.
 	srv, k8s := opServer(t, append(opObjects(), ichorInstallation(ichorOld, ichorOld))...)
 
 	req := ichorCreate(ichorNew)
-	req.Msg.IchorInstaller = &pb.IchorInstallerOptions{Digest: pin, SkipSignatureReason: "demo build"}
+	req.Msg.IchorInstaller = &pb.IchorInstallerOptions{Digest: pin, SkipSignatureReason: demoBuild}
 
 	if _, err := srv.CreateOperation(context.Background(), req); err != nil {
 		t.Fatal(err)
@@ -56,7 +59,7 @@ func TestIchorUpgradeWritesTheInstallerSettingsAndClearsThemNextTime(t *testing.
 
 	inst := getInstallation(t, k8s)
 	if inst.Spec.InstallerDigest != pin || inst.Spec.InstallerSignature == nil ||
-		inst.Spec.InstallerSignature.Mode != ichorv1alpha1.InstallerSignatureSkip || inst.Spec.InstallerSignature.Reason != "demo build" {
+		inst.Spec.InstallerSignature.Mode != ichorv1alpha1.InstallerSignatureSkip || inst.Spec.InstallerSignature.Reason != demoBuild {
 		t.Fatalf("spec = %+v", inst.Spec)
 	}
 
@@ -87,13 +90,13 @@ func TestIchorPlanWarnsWhenTheSignatureCheckIsSkipped(t *testing.T) {
 
 	plan, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
 		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_ICHOR, Target: ichorNew,
-		IchorInstaller: &pb.IchorInstallerOptions{SkipSignatureReason: "demo build"},
+		IchorInstaller: &pb.IchorInstallerOptions{SkipSignatureReason: demoBuild},
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if w := plan.Msg.GetWarning(); !strings.Contains(w, "NOT checked") || !strings.Contains(w, "demo build") {
+	if w := plan.Msg.GetWarning(); !strings.Contains(w, "NOT checked") || !strings.Contains(w, demoBuild) {
 		t.Fatalf("warning = %q", w)
 	}
 
@@ -118,7 +121,7 @@ func TestIchorUpgradeRefusesBadInstallerSettings(t *testing.T) {
 		"a blank reason":     {SkipSignatureReason: "   "},
 		"an overlong reason": {SkipSignatureReason: strings.Repeat("x", 513)},
 	} {
-		req := ichorCreate(ichorNew)
+		req := ichorCreate("v0.3.0")
 		req.Msg.IchorInstaller = o
 
 		if _, err := srv.CreateOperation(context.Background(), req); connect.CodeOf(err) != connect.CodeInvalidArgument {
@@ -142,9 +145,9 @@ func TestIchorUpgradeRefusesBadInstallerSettings(t *testing.T) {
 
 func TestGetIchorInstallationShowsTheInstallerImage(t *testing.T) {
 	inst := ichorInstallation(ichorNew, ichorOld)
-	inst.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip, Reason: "demo build"}
+	inst.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip, Reason: demoBuild}
 	inst.Status.InstallerImage = &ichorv1alpha1.IchorInstallerImageStatus{
-		Digest: "sha256:" + strings.Repeat("a", 64), Verification: ichorv1alpha1.InstallerImageSkipped, Reason: "demo build",
+		Digest: "sha256:" + strings.Repeat("a", 64), Verification: ichorv1alpha1.InstallerImageSkipped, Reason: demoBuild,
 	}
 
 	srv, _ := opServer(t, inst)
@@ -155,7 +158,7 @@ func TestGetIchorInstallationShowsTheInstallerImage(t *testing.T) {
 	}
 
 	m := res.Msg
-	if !m.GetInstallerSignatureSkip() || m.GetInstallerVerification() != "Skipped" || m.GetInstallerSkipReason() != "demo build" ||
+	if !m.GetInstallerSignatureSkip() || m.GetInstallerVerification() != "Skipped" || m.GetInstallerSkipReason() != demoBuild ||
 		m.GetInstallerDigest() != "sha256:"+strings.Repeat("a", 64) {
 		t.Fatalf("got %v", m)
 	}

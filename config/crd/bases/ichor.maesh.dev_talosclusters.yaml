@@ -4331,11 +4331,10 @@ spec:
                     type: string
                   imageOverride:
                     description: |-
-                      imageOverride is deprecated and unused. An earlier Ichor recorded here the Cilium patch whose images the
-                      release ran on the embedded chart. Ichor now runs only the images of the
-                      chart it embeds (amendment 2026-11-04 (3)): it renders nothing from this field and clears it, and the next
-                      Helm Job returns the release to the chart's images. Kept so the schema does not lose a field an installed
-                      build had.
+                      imageOverride is the Cilium patch an earlier Ichor recorded as the images the release runs over the embedded
+                      chart. Ichor sets no new one (amendment 2026-11-04 (3)). A recorded patch
+                      newer than the embedded chart keeps being rendered, so an Ichor upgrade never steps Cilium back, and the
+                      CiliumUpgradeAvailable condition says so; the controller clears it once the embedded chart reaches the patch.
                     properties:
                       images:
                         additionalProperties:

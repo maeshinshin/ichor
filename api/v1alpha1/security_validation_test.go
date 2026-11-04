@@ -105,6 +105,21 @@ var _ = Describe("TalosCluster spec.security", func() {
 		Entry("static is not a type", &TalosClusterSecurity{DiskEncryption: &TalosClusterDiskEncryption{Type: "static"}}, false),
 	)
 
+	// ADR 0125.
+	DescribeTable("kubeletServingCertificates",
+		func(k *TalosClusterKubeletServing, accepted bool) {
+			if accepted {
+				Expect(create(&TalosClusterSecurity{KubeletServingCertificates: k})).To(Succeed())
+			} else {
+				Expect(create(&TalosClusterSecurity{KubeletServingCertificates: k})).NotTo(Succeed())
+			}
+		},
+		Entry("empty (off)", &TalosClusterKubeletServing{}, true),
+		Entry("enabled", &TalosClusterKubeletServing{Enabled: true}, true),
+		Entry("enabled with apiserver verification", &TalosClusterKubeletServing{Enabled: true, VerifyFromAPIServer: true}, true),
+		Entry("verification without enabled is rejected", &TalosClusterKubeletServing{VerifyFromAPIServer: true}, false),
+	)
+
 	It("rejects requireSecureBoot on a key type other than tpm", func() {
 		yes := true
 

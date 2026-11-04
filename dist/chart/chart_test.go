@@ -1595,7 +1595,8 @@ func TestControllerRBACApprovesOnlyKubeletServing(t *testing.T) {
 				sawApprove = true
 			case tr.resource == "certificatesigningrequests/approval" && tr.verb == verbUpdate:
 				sawApproval = true
-			case tr.resource == "certificatesigningrequests" && slices.Contains([]string{verbGetController, verbList, "watch"}, tr.verb):
+			case tr.resource == "certificatesigningrequests" &&
+				slices.Contains([]string{verbGetController, verbList, verbWatch}, tr.verb):
 			default:
 				t.Errorf("the controller holds %s; it may only approve %s requests (ADR 0125)", tr, signer)
 			}

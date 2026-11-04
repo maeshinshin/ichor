@@ -32,6 +32,8 @@
               cosign # keyless signing of the release images and chart (ADR 0108)
               syft # SBOMs of the release images (ADR 0108)
               actionlint # syntax check of .github/workflows
+              shellcheck # lints hack/*.sh and the shell steps actionlint finds in the workflows
+              yq-go # hack/bump-cilium-patch.sh reads the Cilium Helm index and chart values with it
               qemu
               cni-plugins
               nodejs

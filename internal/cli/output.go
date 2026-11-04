@@ -33,7 +33,7 @@ import (
 // -- never the secrets bundle, never a rendered machine configuration --
 // so there is nothing sensitive for either encoder to reach.
 func writeOutput(w io.Writer, format string, patches []ichorv1alpha1.TalosConfigPatch) error {
-	switch format {
+	switch machineFormat(format) {
 	case outputJSON:
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
@@ -75,7 +75,7 @@ func writeOutput(w io.Writer, format string, patches []ichorv1alpha1.TalosConfig
 // is creating or just created, never the secrets bundle or a rendered
 // machine configuration.
 func writeOutputObjects(w io.Writer, format string, objs []client.Object) error {
-	switch format {
+	switch machineFormat(format) {
 	case outputJSON:
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")

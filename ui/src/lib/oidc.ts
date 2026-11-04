@@ -83,7 +83,8 @@ export function storedToken(): string | null {
 
 // The refresh token of the ichor issuer's session, with where to present it (docs/adr/0094,
 // 2026-11-04). Same storage as the ID token: tab-scoped and gone when the tab closes.
-export type StoredRefresh = { token: string; endpoint: string; clientId: string }
+// revocationEndpoint is absent for a session stored before the issuer advertised one (RFC 7009).
+export type StoredRefresh = { token: string; endpoint: string; clientId: string; revocationEndpoint?: string }
 
 export function storedRefresh(): StoredRefresh | null {
   try {
@@ -110,7 +111,7 @@ export function clearToken() {
   }
 }
 
-export type Discovery = { authorization_endpoint: string; token_endpoint: string }
+export type Discovery = { authorization_endpoint: string; token_endpoint: string; revocation_endpoint?: string }
 
 export async function discover(issuer: string): Promise<Discovery> {
   const res = await fetch(`${issuer.replace(/\/$/, '')}/.well-known/openid-configuration`)
@@ -183,12 +184,30 @@ export async function exchangeCode(d: Discovery, cfg: AuthProvider, code: string
   const idToken = body.id_token as string | undefined
   if (!idToken || idTokenClaims(idToken)?.nonce !== nonce) throw new Error('Login response did not match this session')
   const refresh = cfg.id === 'ichor' && typeof body.refresh_token === 'string' ? body.refresh_token : ''
-  storeTokens(idToken, refresh ? { token: refresh, endpoint: d.token_endpoint, clientId: cfg.clientId } : null)
+  storeTokens(idToken, refresh ? { token: refresh, endpoint: d.token_endpoint, clientId: cfg.clientId, revocationEndpoint: d.revocation_endpoint } : null)
 }
 
-// signOut drops the ID token and the refresh token and reloads, which shows the sign-in screen. The
-// issuer keeps no browser session of its own (docs/adr/0094), so there is nothing to call.
-export function signOut() {
+const REVOKE_TIMEOUT_MS = 3000
+
+// signOut revokes the refresh token at the issuer (RFC 7009, docs/adr/0094), so a copy taken earlier
+// stops working, then drops the ID token and the refresh token and reloads, which shows the sign-in
+// screen. The issuer keeps no browser session of its own. The revocation is best effort and bounded:
+// a failure or a hung issuer never keeps the user signed in.
+export async function signOut() {
+  const r = storedRefresh()
+  if (r?.revocationEndpoint) {
+    try {
+      await fetch(r.revocationEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token: r.token, token_type_hint: 'refresh_token', client_id: r.clientId }),
+        keepalive: true,
+        signal: AbortSignal.timeout(REVOKE_TIMEOUT_MS),
+      })
+    } catch {
+      // the token ends with its lifetime or an administrator's revoke
+    }
+  }
   clearToken()
   window.location.assign('/')
 }

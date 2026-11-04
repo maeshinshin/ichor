@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { base64url, buildAuthUrl, clearToken, exchangeCode, finishLogin, idTokenClaims, pkceChallenge, storedToken, tokenUsable } from './oidc.ts'
+import { base64url, buildAuthUrl, clearToken, exchangeCode, finishLogin, idTokenClaims, pkceChallenge, signOut, storedToken, tokenUsable } from './oidc.ts'
 
 function jwt(claims: object): string {
   return `h.${base64url(new TextEncoder().encode(JSON.stringify(claims)))}.s`
@@ -138,5 +138,88 @@ test('a new sign-in drops the refresh token of the one before it', async () => {
     assert.equal(b.store.has('ichor.refresh'), false)
   } finally {
     b.cleanup()
+  }
+})
+
+// ADR 0094 amendment (2026-11-04, sign-out revocation): the refresh token is revoked at the issuer (RFC 7009)
+// before the tab forgets it, so a copy taken earlier stops working.
+const revocable = { ...discovered, revocation_endpoint: 'https://ui.example/oidc/revoke' }
+
+test('the code exchange keeps the issuer revocation endpoint beside the refresh token', async () => {
+  const b = stubToken({ id_token: jwt({ nonce: 'n', exp: 9999999999 }), refresh_token: 'r1' })
+  try {
+    await exchangeCode(revocable, ichorCfg, 'c', 'v', 'n')
+    assert.equal(JSON.parse(b.store.get('ichor.refresh')!).revocationEndpoint, revocable.revocation_endpoint)
+  } finally {
+    b.cleanup()
+  }
+})
+
+type Call = { url: string; body: URLSearchParams; signal: unknown; hadRefresh: boolean }
+
+// stubSignOut is a signed-in tab whose fetch records what it was asked while the storage still held the tokens.
+function stubSignOut(refresh: object | null, fetchImpl?: () => Promise<Response>) {
+  const b = stubBrowser('')
+  b.store.set('ichor.idToken', 'id')
+  if (refresh) b.store.set('ichor.refresh', JSON.stringify(refresh))
+  const calls: Call[] = []
+  const navigated: string[] = []
+  ;(globalThis as unknown as { window: { location: Record<string, unknown> } }).window.location.assign = (u: string) => void navigated.push(u)
+  Object.defineProperty(globalThis, 'fetch', {
+    value: async (url: string, init: RequestInit) => {
+      calls.push({ url, body: new URLSearchParams(init.body as URLSearchParams), signal: init.signal, hadRefresh: b.store.has('ichor.refresh') })
+      return fetchImpl ? fetchImpl() : new Response(null, { status: 200 })
+    },
+    configurable: true,
+    writable: true,
+  })
+  return { ...b, calls, navigated }
+}
+
+const signedIn = { token: 'r9', endpoint: 'https://ui.example/oidc/token', clientId: 'ichor-ui', revocationEndpoint: 'https://ui.example/oidc/revoke' }
+
+test('sign-out revokes the refresh token at the issuer, then clears the tokens and leaves', async () => {
+  const s = stubSignOut(signedIn)
+  try {
+    await signOut()
+    assert.equal(s.calls.length, 1)
+    assert.equal(s.calls[0].url, signedIn.revocationEndpoint)
+    assert.equal(s.calls[0].body.get('token'), 'r9')
+    assert.equal(s.calls[0].body.get('token_type_hint'), 'refresh_token')
+    assert.equal(s.calls[0].body.get('client_id'), 'ichor-ui')
+    assert.equal(s.calls[0].hadRefresh, true, 'revoked before the token was cleared')
+    assert.ok(s.calls[0].signal, 'bounded by a timeout so a hung issuer cannot hold the tab')
+    assert.equal(s.store.size, 0)
+    assert.deepEqual(s.navigated, ['/'])
+  } finally {
+    s.cleanup()
+  }
+})
+
+test('sign-out still clears the tokens and leaves when the revocation fails or is refused', async () => {
+  for (const impl of [() => Promise.reject(new Error('offline')), () => Promise.resolve(new Response('{}', { status: 500 }))]) {
+    const s = stubSignOut(signedIn, impl)
+    try {
+      await signOut()
+      assert.equal(s.calls.length, 1)
+      assert.equal(s.store.size, 0)
+      assert.deepEqual(s.navigated, ['/'])
+    } finally {
+      s.cleanup()
+    }
+  }
+})
+
+test('sign-out of a tab with no refresh token, or one stored before the issuer advertised revocation, calls nothing', async () => {
+  for (const refresh of [null, { token: 'r9', endpoint: 'e', clientId: 'ichor-ui' }]) {
+    const s = stubSignOut(refresh)
+    try {
+      await signOut()
+      assert.equal(s.calls.length, 0)
+      assert.equal(s.store.size, 0)
+      assert.deepEqual(s.navigated, ['/'])
+    } finally {
+      s.cleanup()
+    }
   }
 })

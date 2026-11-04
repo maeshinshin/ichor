@@ -68,6 +68,7 @@ var opKinds = []struct {
 	{pb.OperationKind_OPERATION_KIND_CONFIG, ichorv1alpha1.TalosOperationKindConfig},
 	{pb.OperationKind_OPERATION_KIND_NODE, ichorv1alpha1.TalosOperationKindNode},
 	{pb.OperationKind_OPERATION_KIND_ETCD_RESTORE, ichorv1alpha1.TalosOperationKindEtcdRestore},
+	{pb.OperationKind_OPERATION_KIND_KEY_ROTATION, ichorv1alpha1.TalosOperationKindKeyRotation},
 }
 
 func kindToSpec(k pb.OperationKind) (string, error) {
@@ -106,6 +107,10 @@ func operationToPB(op *ichorv1alpha1.TalosOperation) *pb.Operation {
 
 	if op.Status.CARotation != nil {
 		out.CaRotationStage = op.Status.CARotation.Stage
+	}
+
+	if op.Status.KeyRotation != nil {
+		out.KeyRotationStage = op.Status.KeyRotation.Stage
 	}
 
 	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindCARotation {
@@ -287,6 +292,8 @@ type opPlan struct {
 	restore *etcdRestorePlan
 	// installer is the installer image settings the Ichor upgrade asked for (ADR 0122), nil for another kind.
 	installer *pb.IchorInstallerOptions
+	// keys is set for the key-rotation kind: the spec the operation is created with.
+	keys *ichorv1alpha1.TalosOperationKeyRotationSpec
 	// override is set when an incompatible target goes through under the override verb (ADR 0115):
 	// the plan's warning, and the Event CreateOperation records.
 	override string
@@ -356,7 +363,7 @@ func caRotationWarning(targets []string) string {
 func normalizeTarget(kind, target string) (string, error) {
 	switch kind {
 	case ichorv1alpha1.TalosOperationKindShutdown, ichorv1alpha1.TalosOperationKindCARotation, ichorv1alpha1.TalosOperationKindConfig,
-		ichorv1alpha1.TalosOperationKindNode, ichorv1alpha1.TalosOperationKindEtcdRestore:
+		ichorv1alpha1.TalosOperationKindNode, ichorv1alpha1.TalosOperationKindEtcdRestore, ichorv1alpha1.TalosOperationKindKeyRotation:
 		if target != "" {
 			return "", invalid("a %s has no target", kind)
 		}
@@ -384,7 +391,7 @@ func normalizeTarget(kind, target string) (string, error) {
 func (s *Server) planOperation(
 	ctx context.Context, clusterRef *pb.ObjectRef, pbKind pb.OperationKind, rawTarget string, maxUnavailable int32,
 	node *pb.NodeActionRequest, restore *pb.EtcdRestoreRequest, bg *pb.Override, installer *pb.IchorInstallerOptions,
-	rawCATargets []string,
+	rawCATargets []string, keys *pb.KeyRotationRequest,
 ) (*opPlan, error) {
 	kind, err := kindToSpec(pbKind)
 	if err != nil {
@@ -413,8 +420,8 @@ func (s *Server) planOperation(
 		return nil, invalid("max_unavailable cannot be negative")
 	}
 
-	// A CA rotation visits the machines one at a time, control planes first (ADR 0063).
-	if maxUnavailable == 0 || kind == ichorv1alpha1.TalosOperationKindCARotation {
+	// A CA rotation visits the machines one at a time, control planes first (ADR 0063); so does a key rotation.
+	if maxUnavailable == 0 || kind == ichorv1alpha1.TalosOperationKindCARotation || kind == ichorv1alpha1.TalosOperationKindKeyRotation {
 		maxUnavailable = 1
 	}
 
@@ -471,6 +478,10 @@ func (s *Server) planOperation(
 
 		if p.resp.CaTargets == nil {
 			p.resp.CaTargets = ichorv1alpha1.DefaultCARotationTargets()
+		}
+	case ichorv1alpha1.TalosOperationKindKeyRotation:
+		if err := planKeyRotation(p, keys); err != nil {
+			return nil, err
 		}
 	case ichorv1alpha1.TalosOperationKindIchor:
 		p.resp.Effect = pb.OperationEffect_OPERATION_EFFECT_NONE
@@ -643,7 +654,8 @@ func configEffect(machines []*ichorv1alpha1.TalosMachine) pb.OperationEffect {
 // the etcd member the API server of that control plane depends on (ADR 0120).
 func apiGoesDown(p *opPlan) bool {
 	return p.resp.Effect == pb.OperationEffect_OPERATION_EFFECT_REBOOT || p.kind == ichorv1alpha1.TalosOperationKindConfig ||
-		(p.kind == ichorv1alpha1.TalosOperationKindCARotation && slices.Contains(p.caTargets, ichorv1alpha1.CARotationTargetEtcd))
+		(p.kind == ichorv1alpha1.TalosOperationKindCARotation && slices.Contains(p.caTargets, ichorv1alpha1.CARotationTargetEtcd)) ||
+		p.kind == ichorv1alpha1.TalosOperationKindKeyRotation
 }
 
 func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1alpha1.TalosCluster, maxUnavailable int32) error {
@@ -691,7 +703,8 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 
 		if m.Spec.Role == opRoleControlPlane {
 			cps = append(cps, m)
-		} else {
+		} else if p.kind != ichorv1alpha1.TalosOperationKindKeyRotation {
+			// Neither document a key rotation edits is in a worker's configuration: it is not touched.
 			workers = append(workers, m)
 		}
 	}
@@ -795,6 +808,12 @@ func (s *Server) blockedReason(
 		}
 	}
 
+	if p.kind == ichorv1alpha1.TalosOperationKindKeyRotation {
+		if reason := keyRotationBlocked(cluster); reason != "" {
+			return reason, nil
+		}
+	}
+
 	if p.kind == ichorv1alpha1.TalosOperationKindConfig && len(p.resp.Machines) == 0 {
 		return "no approved machine has a pending configuration change that needs a reboot or an API server restart (nothing is waiting in Ready=RebootRequired or APIServerRestartRequired)", nil
 	}
@@ -846,7 +865,9 @@ func (s *Server) unfinishedOperation(ctx context.Context, cluster *ichorv1alpha1
 func (s *Server) PlanOperation(
 	ctx context.Context, req *connect.Request[pb.PlanOperationRequest],
 ) (*connect.Response[pb.PlanOperationResponse], error) {
-	p, err := s.planOperation(ctx, req.Msg.GetCluster(), req.Msg.GetKind(), req.Msg.GetTarget(), req.Msg.GetMaxUnavailable(), req.Msg.GetNode(), req.Msg.GetEtcdRestore(), req.Msg.GetOverride(), req.Msg.GetIchorInstaller(), req.Msg.GetCaTargets())
+	p, err := s.planOperation(ctx, req.Msg.GetCluster(), req.Msg.GetKind(), req.Msg.GetTarget(), req.Msg.GetMaxUnavailable(),
+		req.Msg.GetNode(), req.Msg.GetEtcdRestore(), req.Msg.GetOverride(), req.Msg.GetIchorInstaller(), req.Msg.GetCaTargets(),
+		req.Msg.GetKeyRotation())
 	if err != nil {
 		return nil, err
 	}
@@ -867,7 +888,8 @@ func (s *Server) CreateOperation(
 ) (*connect.Response[pb.CreateOperationResponse], error) {
 	m := req.Msg
 
-	p, err := s.planOperation(ctx, m.GetCluster(), m.GetKind(), m.GetTarget(), m.GetMaxUnavailable(), m.GetNode(), m.GetEtcdRestore(), m.GetOverride(), m.GetIchorInstaller(), m.GetCaTargets())
+	p, err := s.planOperation(ctx, m.GetCluster(), m.GetKind(), m.GetTarget(), m.GetMaxUnavailable(),
+		m.GetNode(), m.GetEtcdRestore(), m.GetOverride(), m.GetIchorInstaller(), m.GetCaTargets(), m.GetKeyRotation())
 	if err != nil {
 		return nil, err
 	}
@@ -899,6 +921,7 @@ func (s *Server) CreateOperation(
 		GenerateName: p.kind + "-", Namespace: cluster.Namespace, Annotations: s.startedByAnnotation(ctx),
 		Spec: ichorv1alpha1.TalosOperationSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name}, Kind: p.kind, MaxUnavailable: m.GetMaxUnavailable(),
+			KeyRotation: p.keys,
 		},
 	}
 	if len(p.caTargets) > 0 {

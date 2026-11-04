@@ -185,6 +185,20 @@ enum OperationKind {
   OPERATION_KIND_NODE = 8;
   // ETCD_RESTORE rewinds the whole cluster to a stored etcd snapshot (ADR 0089).
   OPERATION_KIND_ETCD_RESTORE = 9;
+  // KEY_ROTATION replaces the service-account signing key and the secretbox (encryption at rest) key
+  // through a dual-key period (ADR 0121).
+  OPERATION_KIND_KEY_ROTATION = 10;
+}
+
+// KeyRotationRequest says which keys a key-rotation plan or create is for (ADR 0121).
+message KeyRotationRequest {
+  // targets are the keys to replace: "serviceAccount", "secretbox", or both. Empty means both.
+  repeated string targets = 1;
+  // token_settle is how long the old service-account key is kept after the new one signs, as a Go
+  // duration ("90m"); empty is the default of 90 minutes.
+  string token_settle = 2;
+  // ignore_legacy_tokens lets the old service-account key be dropped although token Secrets it signed still exist.
+  bool ignore_legacy_tokens = 3;
 }
 
 // EtcdRestoreRequest names the snapshot of an etcd-restore plan or create (ADR 0089). Starting
@@ -288,6 +302,10 @@ message Operation {
   // message is status.message: what an InProgress operation is doing or waiting for right now;
   // empty in every other phase.
   string message = 21;
+  // key_rotation_stage is status.keyRotation.stage of a key-rotation operation (Accepting, Issuing,
+  // Reencrypting, SettlingTokens, Dropping, Finalizing, Done); empty before the new keys are saved, and for
+  // every other kind.
+  string key_rotation_stage = 22;
 
   // --- operation detail page ---
   // summary is one human sentence built from the kind and the spec ("Reboot node talos-02").
@@ -357,6 +375,9 @@ enum OperationEffect {
   // CA_ROTATION: every machine is reconfigured once per stage (no reboot); the
   // kubelet restarts on each machine in the stages that change the Kubernetes CA.
   OPERATION_EFFECT_CA_ROTATION = 5;
+  // KEY_ROTATION: every control plane is reconfigured once per stage (no reboot), one at a time; its
+  // kube-apiserver restarts each time. Workers are not touched.
+  OPERATION_EFFECT_KEY_ROTATION = 6;
 }
 
 message PlannedMachine {
@@ -391,6 +412,8 @@ message PlanOperationRequest {
   IchorInstallerOptions ichor_installer = 8;
   // ca_targets: see CreateOperationRequest.
   repeated string ca_targets = 9;
+  // key_rotation is the request of kind KEY_ROTATION; unset means both keys with the defaults.
+  KeyRotationRequest key_rotation = 10;
 }
 
 message PlanOperationResponse {
@@ -458,6 +481,8 @@ message CreateOperationRequest {
   // ca_targets chooses the CAs of a ca-rotation: talos, kubernetes, etcd, kubernetes-aggregator
   // (ADR 0120). Empty means talos and kubernetes. Must be empty for every other kind.
   repeated string ca_targets = 9;
+  // key_rotation: see PlanOperationRequest.
+  KeyRotationRequest key_rotation = 10;
 }
 
 message CreateOperationResponse {

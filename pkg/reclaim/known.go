@@ -38,7 +38,9 @@ func LoadKnown(ctx context.Context, c client.Reader, ichorNamespace string) (Kno
 	}
 
 	for i := range machines.Items {
-		if u := machines.Items[i].Spec.Identity.UUID; u != "" {
+		// A pending or rejected machine was made from a node seen in maintenance mode; for a node
+		// that is configured now it is stale and must not stop a reclaim (ADR 0128).
+		if u := machines.Items[i].Spec.Identity.UUID; u != "" && machines.Items[i].Spec.IsApproved() {
 			k.MachineUUIDs = append(k.MachineUUIDs, u)
 		}
 	}

@@ -51,7 +51,9 @@ func printDiscoveryEdit(out io.Writer, msg proto.Message, remove bool, target st
 	}
 
 	if slices.Contains(alreadyConfigured, target) {
-		h.warn(target + " already runs a Talos configuration, so discovery does not add it as a machine; to bring it in, see `ichor adopt`")
+		h.warn(target + " already runs a Talos configuration, so discovery does not add it as a machine; " +
+			"if it is a member of this cluster's Talos cluster run `ichor adopt --cluster " + ref.GetName() + " --add-machine " + target + "`, " +
+			"if another cluster configured it run `ichor machine reclaim " + target + " --talosconfig FILE --cluster " + ref.GetName() + "`")
 	}
 
 	return h.Err()

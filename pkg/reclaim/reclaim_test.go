@@ -159,6 +159,10 @@ func TestAssess(t *testing.T) {
 			name: "already an Ichor cluster", in: worker(), refused: "already manages",
 			known: Known{ClusterIDs: []string{"cid-old"}},
 		},
+		{
+			name: "a managed cluster's node is pointed at --add-machine", in: worker(), refused: "ichor adopt --cluster",
+			known: Known{ClusterIDs: []string{"cid-old"}},
+		},
 		{name: "no uuid", in: func() Inspection { i := worker(); i.UUID = ""; return i }(), refused: "no UUID"},
 		{name: "unreachable cluster refused",
 			in: unreachable(), refused: "--force-ungraceful"},

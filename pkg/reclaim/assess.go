@@ -27,7 +27,7 @@ import (
 // Known is what Ichor already manages. A node whose identity or cluster ID is
 // in it is in state (iii) of ADR 0103 and is never reclaimed.
 type Known struct {
-	// MachineUUIDs are the SMBIOS UUIDs of every TalosMachine.
+	// MachineUUIDs are the SMBIOS UUIDs of every approved TalosMachine.
 	MachineUUIDs []string
 	// ClusterIDs are the Talos cluster IDs of every Ichor cluster.
 	ClusterIDs []string
@@ -80,8 +80,9 @@ func Assess(in Inspection, known Known, opt Options) Plan {
 	}
 
 	if in.ClusterID != "" && containsFold(known.ClusterIDs, in.ClusterID) {
-		p.Refusals = append(p.Refusals,
-			fmt.Sprintf("node belongs to cluster %q, which Ichor already manages", in.ClusterName))
+		p.Refusals = append(p.Refusals, fmt.Sprintf(
+			"node belongs to cluster %q, which Ichor already manages; a reset is not needed, add it to that Ichor cluster with "+
+				"`ichor adopt --cluster NAME --add-machine %s`", in.ClusterName, in.Address))
 	}
 
 	p.Graceful = in.ClusterReachable && !opt.ForceUngraceful

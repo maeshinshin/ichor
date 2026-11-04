@@ -34,8 +34,7 @@ const wipingStep = "Wiping"
 // through the real S3 client: a missing marker is "none", not an error, and neither object is ever
 // taken for a snapshot by List or Prune.
 func TestRestoreObjectsAgainstFakeS3(t *testing.T) {
-	f := newFakeS3()
-	defer f.srv.Close()
+	f := newFakeS3(t)
 
 	st := f.store(t)
 	ctx := context.Background()
@@ -230,3 +229,21 @@ func TestMarkerSignature(t *testing.T) {
 }
 
 const wrongPass = "other"
+
+// A marker signed with the v1 key by an earlier release is still accepted after the upgrade.
+func TestMarkerSignedWithTheV1KeyIsAccepted(t *testing.T) {
+	st := memStore{}
+	ctx := context.Background()
+
+	if err := PutMarker(ctx, st, "p", Key{Current: "v1"}, &RestoreMarker{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := GetMarker(ctx, st, "p", Key{Current: "v2", Legacy: "v1"}); err != nil {
+		t.Fatalf("v1-signed marker refused: %v", err)
+	}
+
+	if _, err := GetMarker(ctx, st, "p", Key{Current: "v2", Legacy: "unknown"}); err == nil {
+		t.Fatal("a marker signed with an unknown key was accepted")
+	}
+}

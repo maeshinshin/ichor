@@ -138,7 +138,7 @@ type uiTargets struct {
 }
 
 // findDeploymentByLabel returns the first Deployment in ns with label key=value.
-func findDeploymentByLabel(ctx context.Context, k client.Client, ns, key, value string) (*appsv1.Deployment, error) {
+func findDeploymentByLabel(ctx context.Context, k client.Reader, ns, key, value string) (*appsv1.Deployment, error) {
 	var list appsv1.DeploymentList
 	if err := k.List(ctx, &list, client.InNamespace(ns), client.MatchingLabels{key: value}); err != nil {
 		return nil, fmt.Errorf("init: listing Deployments labelled %s=%s in %s: %w", key, value, ns, err)

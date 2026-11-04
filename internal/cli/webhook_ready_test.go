@@ -40,6 +40,7 @@ import (
 // call waitForWebhookServer directly or put the real one back with realWebhookWait.
 func TestMain(m *testing.M) {
 	waitForController = func(context.Context, client.Reader, time.Duration, time.Duration, io.Writer) error { return nil }
+	waitForUI = func(context.Context, client.Reader, time.Duration, time.Duration, io.Writer) error { return nil }
 
 	os.Exit(m.Run())
 }

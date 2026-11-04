@@ -282,7 +282,33 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
-	return waitForCiliumHandover(ctx, k8sClient, created, cluster, deps)
+	if err := waitForCiliumHandover(ctx, k8sClient, created, cluster, deps); err != nil {
+		return err
+	}
+
+	return waitForUIReady(ctx, k8sClient, deps)
+}
+
+// waitForUIReady ends init once the ichor-ui Deployment is rolled out. Running out of time is a
+// warning, not a failure: the cluster itself is fine and ichor-ui comes up on its own.
+func waitForUIReady(ctx context.Context, k8sClient client.Client, deps initDeps) error {
+	timeout := cmp.Or(deps.WebhookWait, defaultWebhookWait)
+
+	err := waitForUI(ctx, k8sClient, timeout, deps.BootstrapInterval, deps.Stderr)
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
+	if err != nil {
+		_, _ = fmt.Fprintf(deps.Stderr, "init: warning: ichor-ui was not ready after %s (%v); the cluster is fine, "+
+			"and the first ichor commands may warn that ichor-ui is not reachable until it is\n", timeout, err)
+
+		return nil
+	}
+
+	_, _ = fmt.Fprintln(deps.Stderr, "init: ichor-ui is ready")
+
+	return nil
 }
 
 // waitForCiliumHandover is the end of init (ADR 0099): the controller, not the CLI, hands Cilium

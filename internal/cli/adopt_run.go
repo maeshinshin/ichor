@@ -104,6 +104,10 @@ type adoptDeps struct {
 	WebhookWait time.Duration
 	// RequireIchor is --require-ichor: a cluster without Ichor is an error, not an install.
 	RequireIchor bool
+
+	// Steps renders adopt's steps for a person (Output unset); nil on -o yaml|json, where the
+	// "adopt: ..." lines on Stderr stay as they were. runAdopt makes one on Stderr when it is nil.
+	Steps *progress
 }
 
 // adoptState is everything the read-only phase established.
@@ -152,7 +156,7 @@ func (st *adoptState) needsTakeover() bool {
 // table does not know at all is refused: Ichor could not operate the
 // cluster. A pair the table marks incompatible is only reported, and the Cilium adopt installs (the
 // chart this Ichor embeds) is judged too.
-func checkAdoptCompat(w io.Writer, talos, kubernetes string, ichorInstallsCilium bool) error {
+func checkAdoptCompat(say adoptSay, talos, kubernetes string, ichorInstallsCilium bool) error {
 	errs := []error{release.TalosKubernetesError(talos, kubernetes)}
 	if ichorInstallsCilium {
 		errs = append(errs, release.CiliumKubernetesError(release.Pinned.Cilium, kubernetes))
@@ -164,8 +168,8 @@ func checkAdoptCompat(w io.Writer, talos, kubernetes string, ichorInstallsCilium
 		case errors.Is(err, release.ErrUnknownVersion):
 			return fmt.Errorf("adopt: %w: Ichor cannot operate this cluster", err)
 		default:
-			_, _ = fmt.Fprintf(w, "adopt: warning: %v; the cluster is adopted as it runs, and an upgrade that would make it "+
-				"compatible is refused until the pair is compatible\n", err)
+			say(adoptWarn, "warning: %v; the cluster is adopted as it runs, and an upgrade that would make it "+
+				"compatible is refused until the pair is compatible", err)
 		}
 	}
 
@@ -173,82 +177,109 @@ func checkAdoptCompat(w io.Writer, talos, kubernetes string, ichorInstallsCilium
 }
 
 func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps) error {
+	if deps.Output == outputHuman && deps.Steps == nil {
+		deps.Steps = newProgress(deps.Stderr)
+	}
+
+	if deps.Steps != nil {
+		deps.Steps.Header("Ichor adopt · "+clusterName, adoptSummary(deps, namespace))
+	}
+
 	if deps.Ichor != nil || deps.RequireIchor {
-		if err := checkIchorPresence(ctx, deps.K8s, deps.Stderr, ichorversion.Version, deps.RequireIchor); err != nil {
+		if err := checkIchorPresence(ctx, deps.K8s, deps.findings(adoptInfo), ichorversion.Version, deps.RequireIchor); err != nil {
 			return err
 		}
 	}
 
-	st, err := loadAdoption(ctx, clusterName, namespace, deps)
-	if err != nil {
-		return err
-	}
+	var st *adoptState
 
-	// An unmanaged adopt installs no Cilium, so there is none for the pairing to judge.
-	unmanaged := deps.CNIUnmanaged || st.cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged
-	if err := checkAdoptCompat(deps.Stderr, st.cluster.Spec.TalosVersion, st.cluster.Spec.KubernetesVersion, !unmanaged); err != nil {
+	err := deps.run("Read cluster", func(d adoptDeps) (string, error) {
+		var err error
+
+		if st, err = loadAdoption(ctx, clusterName, namespace, d); err != nil {
+			return "", err
+		}
+
+		// An unmanaged adopt installs no Cilium, so there is none for the pairing to judge.
+		unmanaged := d.CNIUnmanaged || st.cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged
+		if err := checkAdoptCompat(d.say, st.cluster.Spec.TalosVersion, st.cluster.Spec.KubernetesVersion, !unmanaged); err != nil {
+			return "", err
+		}
+
+		return st.readSummary(), nil
+	})
+	if err != nil {
 		return err
 	}
 
 	// Phase 1: plan.
-	if err := st.inspect(ctx, deps); err != nil {
+	if err := deps.run("Inspect CNI", func(d adoptDeps) (string, error) { return "", st.inspect(ctx, d) }); err != nil {
 		return err
 	}
 
-	if err := st.chooseContract(deps); err != nil {
-		return err
-	}
+	var pl *adoptPlanned
 
-	plans, err := st.plan(deps)
+	err = deps.run("Plan", func(d adoptDeps) (string, error) {
+		var err error
+
+		pl, err = st.planPhase(d)
+		if err != nil {
+			return "", err
+		}
+
+		return pl.summary(), nil
+	})
 	if err != nil {
 		return err
 	}
 
-	toCreate := reportPlans(deps.Stderr, plans)
-	owned := reportOwned(deps.Stderr, plans)
-
-	writable, blocked := splitBlocked(st.nodes, plans)
-
-	held := st.heldNodes(writable)
-	if !st.fresh && len(toCreate) == 0 && len(held) == 0 {
-		_, _ = fmt.Fprintln(deps.Stderr, "adopt: nothing to adopt, every machine already matches a fresh render")
+	if pl.nothing {
+		deps.epilogue(clusterName, namespace, adoptEnd{})
 
 		return nil
 	}
 
-	if st.fresh && len(writable) == 0 {
-		return fmt.Errorf("adopt: every machine is blocked by configuration Ichor cannot represent (%s); nothing was written", strings.Join(blocked, ", "))
-	}
+	var tp takeoverPlan
 
-	patches := make([]ichorv1alpha1.TalosConfigPatch, 0, len(toCreate))
-	for _, p := range toCreate {
-		patches = append(patches, *p.Patch)
-	}
+	checks := func(d adoptDeps) (string, error) {
+		var err error
 
-	if len(patches) > 0 {
-		if err := writeOutput(deps.Stdout, deps.Output, patches); err != nil {
-			return err
+		tp, err = st.takeoverPlan(ctx, d)
+
+		if d.Preflight == nil {
+			return "pending", err
 		}
+
+		return "ready", err
 	}
 
-	tp, err := st.takeoverPlan(ctx, deps)
+	if st.needsTakeover() {
+		err = deps.run("Cilium checks", checks)
+	} else {
+		_, err = checks(deps)
+	}
+
 	if err != nil {
 		return err
 	}
 
 	if deps.PlanOnly {
-		_, _ = fmt.Fprintln(deps.Stderr, "adopt: --plan: nothing was written")
+		deps.say(adoptInfo, "--plan: nothing was written")
+		deps.epilogue(clusterName, namespace, adoptEnd{})
 
 		return nil
 	}
 
-	if err := st.consent(deps, clusterName, len(patches), len(writable), owned, tp.deleteRecord); err != nil {
+	if err := st.consent(deps, clusterName, len(pl.patches), len(pl.writable), pl.owned, tp.deleteRecord); err != nil {
 		return err
 	}
 
 	// Phase 2: write.
 	if deps.SaveBundle != nil {
-		if err := deps.SaveBundle(); err != nil {
+		err := deps.run("Secrets bundle", func(d adoptDeps) (string, error) {
+			return "stored under ~/.ichor/clusters/" + clusterName + "/", d.SaveBundle()
+		})
+		if err != nil {
 			return err
 		}
 	}
@@ -258,44 +289,121 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		return err
 	}
 
-	if _, err := writeAdopt(ctx, deps.K8s, st.writeInput(ctx, deps, namespace, writable, patches, tp)); err != nil {
+	err = deps.run("Create resources", func(d adoptDeps) (string, error) {
+		res, err := writeAdopt(ctx, d.K8s, st.writeInput(ctx, d, namespace, pl.writable, pl.patches, tp))
+		if err != nil {
+			return "", err
+		}
+
+		return fmt.Sprintf("%d created, %d unchanged", len(res.Created), len(res.Unchanged)), nil
+	})
+	if err != nil {
 		return err
 	}
 
-	return st.finishAdopt(ctx, deps, clusterName, namespace, held, blocked)
+	complete, err := st.finishAdopt(ctx, deps, clusterName, namespace, pl.held)
+	if err != nil {
+		return err
+	}
+
+	deps.epilogue(clusterName, namespace, adoptEnd{complete: complete, blocked: pl.blocked})
+
+	return nil
+}
+
+// adoptPlanned is what the plan step settled.
+type adoptPlanned struct {
+	writable []*adoptNode
+	held     []*adoptNode
+	blocked  []string
+	patches  []ichorv1alpha1.TalosConfigPatch
+	owned    int // Ichor-owned paths the first render will change
+	nothing  bool
+}
+
+// planPhase is Phase 1's second half: the version contract, each machine's three-class plan and its
+// report. With nothing to adopt it says so and sets nothing.
+func (st *adoptState) planPhase(deps adoptDeps) (*adoptPlanned, error) {
+	if err := st.chooseContract(deps); err != nil {
+		return nil, err
+	}
+
+	plans, err := st.plan(deps)
+	if err != nil {
+		return nil, err
+	}
+
+	toCreate := reportPlans(deps.say, plans)
+	pl := &adoptPlanned{owned: reportOwned(deps.say, plans)}
+
+	pl.writable, pl.blocked = splitBlocked(st.nodes, plans)
+	pl.held = st.heldNodes(pl.writable)
+
+	if !st.fresh && len(toCreate) == 0 && len(pl.held) == 0 {
+		deps.say(adoptInfo, "nothing to adopt, every machine already matches a fresh render")
+
+		pl.nothing = true
+
+		return pl, nil
+	}
+
+	if st.fresh && len(pl.writable) == 0 {
+		return nil, fmt.Errorf("adopt: every machine is blocked by configuration Ichor cannot represent (%s); nothing was written", strings.Join(pl.blocked, ", "))
+	}
+
+	pl.patches = make([]ichorv1alpha1.TalosConfigPatch, 0, len(toCreate))
+	for _, p := range toCreate {
+		pl.patches = append(pl.patches, *p.Patch)
+	}
+
+	switch {
+	case len(pl.patches) == 0:
+	case deps.Steps != nil:
+		deps.say(adoptInfo, "the patches are not printed here; add -o yaml (or json) to print them")
+	default:
+		if err := writeOutput(deps.Stdout, deps.Output, pl.patches); err != nil {
+			return nil, err
+		}
+	}
+
+	return pl, nil
 }
 
 // finishAdopt is the last part of adopt: the Cilium takeover (Phase 3), then the release of the
-// hold, machine by machine (Phase 4).
-func (st *adoptState) finishAdopt(ctx context.Context, deps adoptDeps, clusterName, namespace string, held []*adoptNode, blocked []string) error {
+// hold, machine by machine (Phase 4). It reports whether it got to the end: a takeover whose checks
+// are pending leaves every machine held.
+func (st *adoptState) finishAdopt(ctx context.Context, deps adoptDeps, clusterName, namespace string, held []*adoptNode) (bool, error) {
 	// Phase 3: takeover (never in unmanaged mode, nothing to take over from Ichor's own Cilium).
 	// Cilium that adopt installed itself has nothing to take over: the controller only sees the
 	// release at its hash and sets CNIHandover, with no Job.
 	if st.installCilium || st.needsTakeover() {
 		if !st.installCilium && deps.Preflight == nil {
-			_, _ = fmt.Fprintln(deps.Stderr, "adopt: Cilium takeover: pending; the machines stay held, nothing was applied to any node")
+			deps.say(adoptWarn, "Cilium takeover: pending; the machines stay held, nothing was applied to any node")
 
-			return nil
+			return false, nil
 		}
 
 		// The controller's ichor-cni Job takes the Cilium over; adopt waits for CNIHandover.
-		if err := waitHandover(ctx, deps, types.NamespacedName{Namespace: namespace, Name: clusterName}); err != nil {
-			return err
+		err := deps.run("Cilium hand-over", func(d adoptDeps) (string, error) {
+			return "Helm release owned by Ichor", waitHandover(ctx, d, types.NamespacedName{Namespace: namespace, Name: clusterName})
+		})
+		if err != nil {
+			return false, err
 		}
 	}
 
 	// Phase 4: release the hold, machine by machine.
-	if _, err := releaseHold(ctx, deps, clusterName, namespace, held, deps.Bundle, st.sys, st.own); err != nil {
-		return err
+	if len(held) == 0 {
+		return true, nil
 	}
 
-	if len(blocked) > 0 {
-		_, _ = fmt.Fprintf(deps.Stderr, "adopt: blocked machines were left out: %s\n", strings.Join(blocked, ", "))
-	}
+	err := deps.run("Release holds", func(d adoptDeps) (string, error) {
+		n, err := releaseHold(ctx, d, clusterName, namespace, held, d.Bundle, st.sys, st.own)
 
-	_, _ = fmt.Fprintf(deps.Stderr, "adopt: %s\n", caRotationAdvice)
+		return fmt.Sprintf("%d released", n), err
+	})
 
-	return nil
+	return err == nil, err
 }
 
 // loadAdoption reads the TalosCluster and machines (or discovers them), applies the Talos v1.12
@@ -529,7 +637,7 @@ func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 		return err
 	}
 
-	st.announceInstallCilium(deps.Stderr)
+	st.announceInstallCilium(deps.say)
 
 	if st.fresh {
 		st.cluster.Spec.CNI.KubeProxy = st.kubeProxy
@@ -623,7 +731,7 @@ func (st *adoptState) bootstrapCilium(ctx context.Context, deps adoptDeps) error
 	repair := st.readBack != nil && st.readBack.Pending
 	if !st.installCilium && !repair {
 		if st.ichorOwnedCilium() {
-			_, _ = fmt.Fprintln(deps.Stderr, "adopt: Cilium is already installed (Ichor's own release); not installing it again")
+			deps.say(adoptInfo, "Cilium is already installed (Ichor's own release); not installing it again")
 		}
 
 		return nil
@@ -633,22 +741,24 @@ func (st *adoptState) bootstrapCilium(ctx context.Context, deps adoptDeps) error
 		return errors.New("adopt: no way to install Cilium was given")
 	}
 
-	if repair {
-		// A killed install left Ichor's own record pending-*; Helm refuses every later operation
-		// until it is repaired, and the controller's Job would fail on it. This run is the only
-		// writer, so the same step as on a fresh cluster (which repairs it exclusively) fixes it.
-		_, _ = fmt.Fprintln(deps.Stderr, "adopt: Ichor's Cilium release record was left pending by an interrupted install; repairing it")
-	}
+	return deps.run("Install Cilium", func(d adoptDeps) (string, error) {
+		if repair {
+			// A killed install left Ichor's own record pending-*; Helm refuses every later operation
+			// until it is repaired, and the controller's Job would fail on it. This run is the only
+			// writer, so the same step as on a fresh cluster (which repairs it exclusively) fixes it.
+			d.say(adoptWarn, "Ichor's Cilium release record was left pending by an interrupted install; repairing it")
+		}
 
-	_, _ = fmt.Fprintf(deps.Stderr, "adopt: installing Cilium %s (this waits for every node to be Ready)\n", cilium.ChartVersion)
+		_, _ = fmt.Fprintf(d.Stderr, "adopt: installing Cilium %s (this waits for every node to be Ready)\n", cilium.ChartVersion)
 
-	if err := deps.BootstrapCilium(ctx, st.cluster, cni.KubeProxyMode(st.kubeProxy)); err != nil {
-		return fmt.Errorf("adopt: installing Cilium: %w; run adopt again to continue (the install is safe to repeat)", err)
-	}
+		if err := d.BootstrapCilium(ctx, st.cluster, cni.KubeProxyMode(st.kubeProxy)); err != nil {
+			return "", fmt.Errorf("adopt: installing Cilium: %w; run adopt again to continue (the install is safe to repeat)", err)
+		}
 
-	_, _ = fmt.Fprintln(deps.Stderr, "adopt: Cilium is installed and the nodes are Ready")
+		_, _ = fmt.Fprintln(d.Stderr, "adopt: Cilium is installed and the nodes are Ready")
 
-	return nil
+		return "", nil
+	})
 }
 
 // settleCiliumValues merges --cilium-values into the TalosCluster adopt creates, refusing a key
@@ -734,15 +844,15 @@ func (st *adoptState) planInstallCilium(deps adoptDeps) error {
 }
 
 // announceInstallCilium is the plan text of the no-CNI path.
-func (st *adoptState) announceInstallCilium(w io.Writer) {
+func (st *adoptState) announceInstallCilium(say adoptSay) {
 	if !st.installCilium {
 		return
 	}
 
 	tunnel := cmp.Or(st.tunnel, "the default")
 
-	_, _ = fmt.Fprintf(w, "adopt: no CNI found: Cilium will be installed by adopt (Cilium %s, tunnel %s, kube-proxy %s) as Ichor's own Helm release, "+
-		"then Ichor is installed, then the cluster is adopted with the managed cilium preset\n", cilium.ChartVersion, tunnel, st.kubeProxy)
+	say(adoptInfo, "no CNI found: Cilium will be installed by adopt (Cilium %s, tunnel %s, kube-proxy %s) as Ichor's own Helm release, "+
+		"then Ichor is installed, then the cluster is adopted with the managed cilium preset", cilium.ChartVersion, tunnel, st.kubeProxy)
 }
 
 // chooseContract settles spec.versionContract of a cluster adopt creates: the --version-contract
@@ -779,7 +889,7 @@ func (st *adoptState) chooseContract(deps adoptDeps) error {
 		parts = append(parts, fmt.Sprintf("%s: %d unrepresentable path(s)", p.Contract, len(p.UnrepresentablePaths)))
 	}
 
-	_, _ = fmt.Fprintf(deps.Stderr, "adopt: version contract %s chosen (%s); override with --version-contract\n", chosen, strings.Join(parts, "; "))
+	deps.say(adoptInfo, "version contract %s chosen (%s); override with --version-contract", chosen, strings.Join(parts, "; "))
 
 	st.cluster.Spec.VersionContract = chosen
 
@@ -844,7 +954,7 @@ func (st *adoptState) heldNodes(writable []*adoptNode) []*adoptNode {
 }
 
 // reportOwned prints the class B list and returns its length in paths.
-func reportOwned(w io.Writer, plans []*adoptPlan) int {
+func reportOwned(say adoptSay, plans []*adoptPlan) int {
 	total := 0
 
 	for _, p := range plans {
@@ -854,7 +964,7 @@ func reportOwned(w io.Writer, plans []*adoptPlan) int {
 
 		total += len(p.Owned)
 
-		_, _ = fmt.Fprintf(w, "adopt: machine %q: Ichor-owned settings its first render will change (need consent): %s\n",
+		say(adoptWarn, "machine %q: Ichor-owned settings its first render will change (need consent): %s",
 			p.Machine, strings.Join(p.Owned, ", "))
 	}
 
@@ -904,10 +1014,8 @@ func (st *adoptState) takeoverPlan(ctx context.Context, deps adoptDeps) (takeove
 		return tp, nil
 	}
 
-	w := deps.Stderr
-
 	if deps.Preflight == nil {
-		_, _ = fmt.Fprintln(w, "adopt: Cilium takeover checks: pending")
+		deps.say(adoptWarn, "Cilium takeover checks: pending")
 
 		return tp, nil
 	}
@@ -926,13 +1034,13 @@ func (st *adoptState) takeoverPlan(ctx context.Context, deps adoptDeps) (takeove
 		}
 	}
 
-	printPreflight(w, rep)
+	printPreflight(deps.say, rep)
 
 	if rep.Foreign != nil && st.rep.Provenance == provenanceHelm {
 		tp.deleteRecord = true
 
-		_, _ = fmt.Fprintf(w, "adopt: the Helm release record(s) of the existing Cilium will be copied to Secret ichor-cilium-prior-release in %s "+
-			"and then deleted (the record Secrets only; helm uninstall is never run)\n", ichorControllerNamespace)
+		deps.say(adoptWarn, "the Helm release record(s) of the existing Cilium will be copied to Secret ichor-cilium-prior-release in %s "+
+			"and then deleted (the record Secrets only; helm uninstall is never run)", ichorControllerNamespace)
 	}
 
 	if err := rep.Err(deps.AcceptCiliumChanges, deps.AcceptCiliumDiff); err != nil {
@@ -971,32 +1079,32 @@ func (st *adoptState) preflight(ctx context.Context, deps adoptDeps, user map[st
 	return rep, nil
 }
 
-func printPreflight(w io.Writer, rep *cilium.PreflightReport) {
+func printPreflight(say adoptSay, rep *cilium.PreflightReport) {
 	if rep.Foreign != nil {
 		names := make([]string, 0, len(rep.Foreign.Records))
 		for _, r := range rep.Foreign.Records {
 			names = append(names, r.Secret.Name)
 		}
 
-		_, _ = fmt.Fprintf(w, "adopt: Cilium takeover: Helm release records in %s: %s\n", rep.Foreign.Namespace, strings.Join(names, ", "))
+		say(adoptInfo, "Cilium takeover: Helm release records in %s: %s", rep.Foreign.Namespace, strings.Join(names, ", "))
 	}
 
 	if rep.VersionErr == nil {
-		_, _ = fmt.Fprintf(w, "adopt: Cilium takeover: %s\n", rep.Version)
+		say(adoptInfo, "Cilium takeover: %s", rep.Version)
 	}
 
 	for _, e := range []error{rep.ForeignErr, rep.VersionErr, rep.CRDsErr} {
 		if e != nil {
-			_, _ = fmt.Fprintf(w, "adopt: Cilium takeover: %v\n", e)
+			say(adoptWarn, "Cilium takeover: %v", e)
 		}
 	}
 
 	for _, c := range rep.Conflicts {
-		_, _ = fmt.Fprintf(w, "adopt: Cilium takeover: Ichor-owned key %s\n", c)
+		say(adoptWarn, "Cilium takeover: Ichor-owned key %s", c)
 	}
 
 	for _, d := range rep.Differences {
-		_, _ = fmt.Fprintf(w, "adopt: Cilium takeover: live differs from the chart: %s\n", d)
+		say(adoptWarn, "Cilium takeover: live differs from the chart: %s", d)
 	}
 }
 
@@ -1052,7 +1160,10 @@ func (st *adoptState) consent(deps adoptDeps, clusterName string, patches, machi
 
 // writeInput assembles the write phase's input from what the plan established.
 func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace string, writable []*adoptNode, patches []ichorv1alpha1.TalosConfigPatch, tp takeoverPlan) adoptWriteInput {
-	in := adoptWriteInput{Namespace: namespace, Patches: patches, Stderr: deps.Stderr, Interval: deps.Interval, WebhookWait: deps.WebhookWait}
+	in := adoptWriteInput{
+		Namespace: namespace, Patches: patches, Stderr: deps.Stderr, Interval: deps.Interval, WebhookWait: deps.WebhookWait,
+		Note: func(msg string) { deps.say(adoptWarn, "%s", msg) },
+	}
 
 	if !st.fresh {
 		return in
@@ -1124,30 +1235,30 @@ func ciliumPolicyCRDPresent(ctx context.Context, r client.Reader) bool {
 	return r.Get(ctx, types.NamespacedName{Name: "ciliumnetworkpolicies.cilium.io"}, crd) == nil
 }
 
-// reportPlans writes a one-line-per-machine summary to w and returns the
+// reportPlans says a line per machine and returns the
 // plans that have a patch ready to create.
-func reportPlans(w io.Writer, plans []*adoptPlan) []*adoptPlan {
+func reportPlans(say adoptSay, plans []*adoptPlan) []*adoptPlan {
 	var toCreate []*adoptPlan
 
 	for _, p := range plans {
 		switch {
 		case p.Skipped != "":
-			_, _ = fmt.Fprintf(w, "adopt: machine %q: skipped, %s (only approved machines are read; approve it and re-run adopt to include it)\n",
+			say(adoptWarn, "machine %q: skipped, %s (only approved machines are read; approve it and re-run adopt to include it)",
 				p.Machine, p.Skipped)
 		case p.Patch != nil:
-			_, _ = fmt.Fprintf(w, "adopt: machine %q: drift found, patch ready (zero drift verified)\n", p.Machine)
+			say(adoptInfo, "machine %q: drift found, patch ready (zero drift verified)", p.Machine)
 
 			toCreate = append(toCreate, p)
 		case len(p.UnrepresentablePaths) > 0:
-			_, _ = fmt.Fprintf(w, "adopt: machine %q: drift found in %d field(s) that adopt cannot patch automatically: %s\n",
+			say(adoptWarn, "machine %q: drift found in %d field(s) that adopt cannot patch automatically: %s",
 				p.Machine, len(p.UnrepresentablePaths), strings.Join(p.UnrepresentablePaths, ", "))
 			for _, line := range explainUnrepresentable(p.UnrepresentablePaths) {
-				_, _ = fmt.Fprintf(w, "adopt: machine %q: %s\n", p.Machine, line)
+				say(adoptWarn, "machine %q: %s", p.Machine, line)
 			}
 		case len(p.Owned) > 0:
-			_, _ = fmt.Fprintf(w, "adopt: machine %q: no drift beyond the Ichor-owned settings listed below\n", p.Machine)
+			say(adoptInfo, "machine %q: no drift beyond the Ichor-owned settings listed below", p.Machine)
 		default:
-			_, _ = fmt.Fprintf(w, "adopt: machine %q: already matches a fresh render, nothing to do\n", p.Machine)
+			say(adoptInfo, "machine %q: already matches a fresh render, nothing to do", p.Machine)
 		}
 	}
 

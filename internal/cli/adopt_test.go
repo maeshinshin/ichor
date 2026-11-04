@@ -377,7 +377,7 @@ func TestRunAdopt_SkipsMachinesThatAreNotApproved(t *testing.T) {
 func TestReportPlans_ExplainsUnrepresentablePaths(t *testing.T) {
 	var out bytes.Buffer
 
-	reportPlans(&out, []*adoptPlan{{
+	reportPlans(adoptDeps{Stderr: &out}.say, []*adoptPlan{{
 		Machine: "node-a",
 		UnrepresentablePaths: []string{
 			"KubeNetworkConfig.podSubnets", "KubeNetworkConfig.serviceSubnets", "UnattendedInstallConfig.installer.image",

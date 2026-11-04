@@ -374,7 +374,7 @@ func TestCredentialsFromABundleFileWorkOffline(t *testing.T) {
 	f := newCredFixture(t, false, "")
 	t.Setenv("HOME", t.TempDir())
 
-	path, err := saveBundleFile("offline", f.old)
+	path, err := saveBundleFile("offline", f.old, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -406,12 +406,12 @@ func TestBundleFromBeforeTheCurrentCAsIsRefusedUnlessForced(t *testing.T) {
 	ctx := context.Background()
 
 	// newTestBundle is shared: a bundle with CAs of its own needs a fresh one.
-	stalePath, err := saveBundleFile("stale", newFreshTestBundle(t))
+	stalePath, err := saveBundleFile("stale", newFreshTestBundle(t), "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	curPath, err := saveBundleFile("current", f.old)
+	curPath, err := saveBundleFile("current", f.old, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -458,7 +458,7 @@ func TestBundleWithTheNewCAsIsCurrentDuringARotation(t *testing.T) {
 	certs.OS, certs.K8s = f.rot.Talos, f.rot.Kubernetes
 	withNew.Certs = &certs
 
-	path, err := saveBundleFile("new", &withNew)
+	path, err := saveBundleFile("new", &withNew, "")
 	if err != nil {
 		t.Fatal(err)
 	}

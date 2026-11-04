@@ -287,6 +287,7 @@ func (f *fakeBootstrapClient) Kubeconfig(context.Context) ([]byte, error) {
 // TalosConfigPatch to assert on alongside the TalosCluster/TalosMachine.
 func validInitOptions() initOptions {
 	return initOptions{
+		BundlePlaintext:   true,
 		Cluster:           testInitClusterName,
 		Namespace:         testNamespace,
 		Preset:            defaultPreset,

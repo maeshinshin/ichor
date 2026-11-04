@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
+	"io/fs"
 	"path/filepath"
 
 	yaml "go.yaml.in/yaml/v4"
@@ -49,6 +49,11 @@ type adoptSecretsOptions struct {
 	Cluster string
 	// Contract is the cluster's version contract ("vX.Y"); empty means the machinery's current one.
 	Contract string
+	// Plaintext is --bundle-plaintext: store a recovered bundle unencrypted (ADR 0127).
+	Plaintext bool
+	// Announce receives a generated bundle passphrase and the plaintext warning; nil means stderr. It is
+	// separate because stderr may be the progress view, which would rewrite the lines.
+	Announce io.Writer
 }
 
 // errNoSecretsSource and friends are the flag-combination refusals. They
@@ -113,17 +118,26 @@ func resolveAdoptBundle(
 
 	// A bundle stored by an earlier run (killed after it saved) is fine when this recovery
 	// reproduces it exactly; a different one is never overwritten.
-	if stored, err := os.ReadFile(target); err == nil {
+	switch stored, _, err := readBundlePlain(target); {
+	case err == nil:
 		again, mErr := yaml.Marshal(bundle)
 		if mErr != nil || !bytes.Equal(stored, again) {
 			return nil, nil, errRecoveredExists
 		}
 
 		return bundle, func() error { return nil }, nil
+	case !errors.Is(err, fs.ErrNotExist):
+		// An encrypted file that cannot be opened: say so rather than overwrite or ignore it.
+		return nil, nil, err
 	}
 
 	return bundle, func() error {
-		path, err := saveBundleFile(opts.Cluster, bundle)
+		announce := opts.Announce
+		if announce == nil {
+			announce = stderr
+		}
+
+		path, err := saveSealedBundle(opts.Cluster, bundle, opts.Plaintext, false, announce)
 		if err != nil {
 			return err
 		}

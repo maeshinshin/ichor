@@ -19,6 +19,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/installmanifest"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 	"github.com/maeshinshin/ichor/pkg/release"
 )
 
@@ -86,8 +88,11 @@ yet configured) under Ichor's management as the first control plane of a
 new cluster:
 
   1. Generates a secrets bundle locally and backs it up to
-     ~/.ichor/clusters/<cluster>/secrets.yaml (0600) -- this is the
-     cluster's only root of trust. BACK IT UP before doing anything else.
+     ~/.ichor/clusters/<cluster>/secrets.yaml (0600), encrypted with a
+     passphrase (--bundle-passphrase-file, $ICHOR_BUNDLE_PASSPHRASE, or one
+     generated and shown once on a terminal; ADR 0127) -- this is the
+     cluster's only root of trust. BACK IT UP, and the passphrase, before
+     doing anything else.
   2. Settles the cluster's shape from flags (topology preset, CNI, endpoint).
   3. Renders and applies that configuration to --node-endpoint using
      Talos's insecure apply. THIS STEP IS IRREVERSIBLE: insecure apply does
@@ -135,6 +140,10 @@ line overrides the file; relative paths in the file are relative to it.`,
 			return err
 		}
 
+		if err := chooseInitBundleProtection(cmd, &initOpts); err != nil {
+			return err
+		}
+
 		deps := initDeps{
 			Identity:        identityOverMaintenance,
 			DialMaintenance: dialMaintenance,
@@ -152,6 +161,36 @@ line overrides the file; relative paths in the file are relative to it.`,
 
 		return silenceIfShown(cmd, runInit(cmd.Context(), initOpts, deps))
 	},
+}
+
+// chooseInitBundleProtection decides how the local secrets bundle will be stored (ADR 0127) before init
+// touches the network: a passphrase from --bundle-passphrase-file or $ICHOR_BUNDLE_PASSPHRASE, one
+// generated and shown once on a terminal (init then waits for Enter, so it is not scrolled away unseen),
+// or plaintext when --bundle-plaintext asks for it. With none of those it refuses.
+func chooseInitBundleProtection(cmd *cobra.Command, opts *initOptions) error {
+	pass, generated, err := resolveSealPassphrase(opts.BundlePlaintext)
+	if err != nil {
+		return fmt.Errorf("init: %w", err)
+	}
+
+	opts.BundlePassphrase = pass
+
+	if !generated {
+		return nil
+	}
+
+	dir, err := bundleDir(opts.Cluster)
+	if err != nil {
+		return err
+	}
+
+	announceBundlePassphrase(cmd.ErrOrStderr(), tildePath(filepath.Join(dir, secretsbundle.SecretKey)), pass)
+
+	if _, err := readLine(cmd.InOrStdin(), cmd.ErrOrStderr(), "Press Enter once you have saved the passphrase: "); err != nil {
+		return fmt.Errorf("init: reading the confirmation: %w", err)
+	}
+
+	return nil
 }
 
 // silenceIfShown keeps cobra from printing an error a failed step already showed in full; any other
@@ -262,5 +301,7 @@ func init() {
 	flags := initCmd.Flags()
 	bindInitFlags(flags, &initOpts, &initWaitTimeout)
 	flags.StringVarP(&initFile, "file", "f", "", "read the init settings from this "+initConfigKind+" file (see --print-config-template); a flag given on the command line overrides the file")
+	flags.BoolVar(&initOpts.BundlePlaintext, bundlePlaintextFlag, false,
+		"store the secrets bundle unencrypted (default: encrypted with --bundle-passphrase-file, $"+bundlePassphraseEnv+", or a passphrase generated on a terminal)")
 	flags.BoolVar(&initPrintTemplate, "print-config-template", false, "print an example "+initConfigKind+" file and exit")
 }

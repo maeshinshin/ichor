@@ -40,6 +40,12 @@ install.
   ([ADR 0063](docs/adr/0063-certificate-expiry-visibility-and-ca-rotation-decisions.md),
   [0091](docs/adr/0091-a-ca-rotation-waits-for-the-operators-new-credentials-before-anything-they-hold-stops-working.md),
   [0093](docs/adr/0093-the-ui-hands-over-a-ca-rotations-new-credentials-to-administrators-who-hold-the-download-verb.md)).
+- Rotates the service-account signing key and the secretbox (encryption at rest)
+  key in a dual-key period: both keys are accepted before either is dropped,
+  every Secret is rewritten under the new key, and backups sealed before stay
+  readable
+  ([ADR 0121](docs/adr/0121-the-service-account-key-and-the-secretbox-key-rotate-in-a-dual-key-period-and-the-backup-key-is-versioned.md),
+  [guide](docs/guides/rotate-keys.md)).
 - Backs up etcd on a schedule or on demand (`ichor etcd backup now`, Back up now
   in the UI), restores a snapshot into a running cluster, and can rebuild a
   cluster from the secrets bundle and a snapshot alone.

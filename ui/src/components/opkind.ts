@@ -18,5 +18,7 @@ export function wireKindOf(k: OpKind): OperationKind {
       return OperationKindValues.CA_ROTATION
     case 'config':
       return OperationKindValues.CONFIG
+    case 'key-rotation':
+      return OperationKindValues.KEY_ROTATION
   }
 }

@@ -2,7 +2,7 @@
 // "@/gen": these run directly under `node --test`.
 
 // The kinds an operation can have, as the screens name them.
-export type OpKind = 'talos' | 'kubernetes' | 'ichor' | 'cni' | 'shutdown' | 'ca-rotation' | 'config'
+export type OpKind = 'talos' | 'kubernetes' | 'ichor' | 'cni' | 'shutdown' | 'ca-rotation' | 'config' | 'key-rotation'
 
 export type OpState = 'pending' | 'running' | 'paused' | 'failed' | 'shutdown' | 'done'
 
@@ -99,7 +99,7 @@ export function confirmMatches(typed: string, name: string): boolean {
 // kindNeedsTypedName: the kinds that take every machine through a disruptive
 // change ask for the cluster's name to be typed.
 export function kindNeedsTypedName(kind: OpKind): boolean {
-  return kind === 'shutdown' || kind === 'ca-rotation' || kind === 'config'
+  return kind === 'shutdown' || kind === 'ca-rotation' || kind === 'config' || kind === 'key-rotation'
 }
 
 // stageProgress is where a multi-stage operation is: the stage's name and a 1-based position among the
@@ -112,6 +112,10 @@ export function stageProgress<S extends string>(stages: readonly S[], stage: str
 // The stages status.caRotation.stage goes through, in order.
 const caStages = ['Accepting', 'AwaitingCredentials', 'Issuing', 'Dropping', 'Finalizing', 'Done'] as const
 export const caStageProgress = (stage: string) => stageProgress(caStages, stage)
+
+// The stages status.keyRotation.stage goes through, in order. A rotation of one key skips one of them.
+const keyStages = ['Accepting', 'Issuing', 'Reencrypting', 'SettlingTokens', 'Dropping', 'Finalizing', 'Done'] as const
+export const keyStageProgress = (stage: string) => stageProgress(keyStages, stage)
 
 // The stages status.kubernetes.stage goes through, in order.
 export const kubernetesStages = ['APIServers', 'ControlPlaneComponents', 'KubeProxy', 'Kubelets'] as const

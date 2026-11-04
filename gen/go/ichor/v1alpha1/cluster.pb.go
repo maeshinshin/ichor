@@ -1070,7 +1070,14 @@ type Cluster struct {
 	// release_set is the versions this Ichor build supports; the cluster is brought to it.
 	ReleaseSet *ReleaseSet `protobuf:"bytes,19,opt,name=release_set,json=releaseSet,proto3" json:"release_set,omitempty"`
 	// created_at is the object's creation time; unset when talking to an older backend.
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,20,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,20,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// endpoint_type is spec.endpoint.type: vip, loadBalancer, dns or node.
+	EndpointType string `protobuf:"bytes,21,opt,name=endpoint_type,json=endpointType,proto3" json:"endpoint_type,omitempty"`
+	// pod_subnets and service_subnets are spec.network; empty keeps Talos's defaults.
+	PodSubnets     []string `protobuf:"bytes,22,rep,name=pod_subnets,json=podSubnets,proto3" json:"pod_subnets,omitempty"`
+	ServiceSubnets []string `protobuf:"bytes,23,rep,name=service_subnets,json=serviceSubnets,proto3" json:"service_subnets,omitempty"`
+	// cni_tunnel is spec.cni.tunnel (vxlan or geneve); empty means Cilium's default.
+	CniTunnel     string `protobuf:"bytes,24,opt,name=cni_tunnel,json=cniTunnel,proto3" json:"cni_tunnel,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1243,6 +1250,34 @@ func (x *Cluster) GetCreatedAt() *timestamppb.Timestamp {
 		return x.CreatedAt
 	}
 	return nil
+}
+
+func (x *Cluster) GetEndpointType() string {
+	if x != nil {
+		return x.EndpointType
+	}
+	return ""
+}
+
+func (x *Cluster) GetPodSubnets() []string {
+	if x != nil {
+		return x.PodSubnets
+	}
+	return nil
+}
+
+func (x *Cluster) GetServiceSubnets() []string {
+	if x != nil {
+		return x.ServiceSubnets
+	}
+	return nil
+}
+
+func (x *Cluster) GetCniTunnel() string {
+	if x != nil {
+		return x.CniTunnel
+	}
+	return ""
 }
 
 // ReleaseSet is one supported combination of versions, embedded in the Ichor build.
@@ -1501,7 +1536,7 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\rHandoverState\x12\x1c\n" +
 	"\tcomponent\x18\x01 \x01(\tR\tcomponent\x123\n" +
 	"\x05phase\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.HandoverPhaseR\x05phase\x12L\n" +
-	"\x14last_transition_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"\xfa\a\n" +
+	"\x14last_transition_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"\x88\t\n" +
 	"\aCluster\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x12#\n" +
 	"\rtalos_version\x18\x02 \x01(\tR\ftalosVersion\x12-\n" +
@@ -1528,7 +1563,13 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\vrelease_set\x18\x13 \x01(\v2\x1a.ichor.v1alpha1.ReleaseSetR\n" +
 	"releaseSet\x129\n" +
 	"\n" +
-	"created_at\x18\x14 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xbd\x01\n" +
+	"created_at\x18\x14 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12#\n" +
+	"\rendpoint_type\x18\x15 \x01(\tR\fendpointType\x12\x1f\n" +
+	"\vpod_subnets\x18\x16 \x03(\tR\n" +
+	"podSubnets\x12'\n" +
+	"\x0fservice_subnets\x18\x17 \x03(\tR\x0eserviceSubnets\x12\x1d\n" +
+	"\n" +
+	"cni_tunnel\x18\x18 \x01(\tR\tcniTunnel\"\xbd\x01\n" +
 	"\n" +
 	"ReleaseSet\x12#\n" +
 	"\rtalos_version\x18\x01 \x01(\tR\ftalosVersion\x12)\n" +

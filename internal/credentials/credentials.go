@@ -99,11 +99,18 @@ func NewSources(bundle *secrets.Bundle, rot *secretsbundle.Rotation) (*Sources, 
 			return nil, err
 		}
 
-		s.Dual = true
-		s.KubernetesSigner = rot.Kubernetes
-		s.KubernetesTrust = slices.Concat(pemWithNewline(rot.Kubernetes.Crt), pemWithNewline(bundle.Certs.K8s.Crt))
-		s.TalosSigner = rot.Talos
-		s.TalosTrust = slices.Concat(pemWithNewline(rot.Talos.Crt), pemWithNewline(bundle.Certs.OS.Crt))
+		// A rotation of the etcd or aggregator CA alone changes nothing a credential depends on.
+		if rot.Kubernetes != nil {
+			s.Dual = true
+			s.KubernetesSigner = rot.Kubernetes
+			s.KubernetesTrust = slices.Concat(pemWithNewline(rot.Kubernetes.Crt), pemWithNewline(bundle.Certs.K8s.Crt))
+		}
+
+		if rot.Talos != nil {
+			s.Dual = true
+			s.TalosSigner = rot.Talos
+			s.TalosTrust = slices.Concat(pemWithNewline(rot.Talos.Crt), pemWithNewline(bundle.Certs.OS.Crt))
+		}
 	}
 
 	derived := *bundle

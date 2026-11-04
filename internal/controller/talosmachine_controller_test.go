@@ -158,6 +158,8 @@ type fakeTalosClient struct {
 	etcdStatusErr     error
 	etcdAlarms        []string
 	etcdAlarmsErr     error
+	etcdPKI           EtcdPKI
+	etcdPKIErr        error
 	defragCalls       int
 	defragErr         error
 	forfeitCalls      int
@@ -1324,6 +1326,10 @@ func (f *fakeTalosClient) EtcdStatus(context.Context) (EtcdStatus, error) {
 
 func (f *fakeTalosClient) EtcdAlarms(context.Context) ([]string, error) {
 	return f.etcdAlarms, f.etcdAlarmsErr
+}
+
+func (f *fakeTalosClient) EtcdPKI(context.Context) (EtcdPKI, error) {
+	return f.etcdPKI, f.etcdPKIErr
 }
 
 func (f *fakeTalosClient) EtcdDefragment(context.Context) error {

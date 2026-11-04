@@ -545,7 +545,9 @@ func main() {
 		// state machine: it needs the Kubernetes Node readiness check and an Event recorder.
 		NodesReady:      controller.NewNodesReady(),
 		RootCAPublished: controller.NewRootCAPublished(),
-		Recorder:        mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
+		// The aggregator CA's wait for extension API servers.
+		AggregatorCAPublished: controller.NewAggregatorCAPublished(),
+		Recorder:       mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
 		// The node kind drains with the same clientset and storage hook as the
 		// config rollout.
 		KubeClient: kubeClient,

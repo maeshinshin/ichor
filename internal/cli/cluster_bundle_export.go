@@ -95,7 +95,7 @@ func runBundleExport(ctx context.Context, d bundleExportDeps, namespace, ichorNa
 		return err
 	}
 
-	want, err := secretsbundle.BundleFingerprint(bundle)
+	want, err := secretsbundle.ExportFingerprint(bundle)
 	if err != nil {
 		return err
 	}
@@ -110,7 +110,7 @@ func runBundleExport(ctx context.Context, d bundleExportDeps, namespace, ichorNa
 		return err
 	}
 
-	got, err := secretsbundle.BundleFingerprint(saved)
+	got, err := secretsbundle.ExportFingerprint(saved)
 	if err != nil || got != want {
 		return fmt.Errorf("the file written to %s does not hold the cluster's current bundle; not acknowledging", path)
 	}

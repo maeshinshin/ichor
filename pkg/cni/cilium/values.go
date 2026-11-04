@@ -127,7 +127,10 @@ type Values struct {
 // required pod anti-affinity per node, so on a one-node cluster the second replica never schedules and
 // the chart's rolling update, and with it the hand-over, cannot finish. A single
 // control plane runs one; the operator's work is control-plane work (IPAM allocation, garbage
-// collection), and the datapath keeps running while it restarts.
+// collection), and the datapath keeps running while it restarts. So does a cluster that has one Node
+// now, whatever its desired control-plane count. The chart rolls a
+// one-replica Deployment with maxUnavailable 100% (templates/cilium-operator/deployment.yaml), so
+// no updateStrategy is needed.
 type operator struct {
 	Replicas int `json:"replicas"`
 }
@@ -171,7 +174,7 @@ func (p Preset) valuesFor(kubeProxy cni.KubeProxyMode) Values {
 		v.K8sServicePort = kubePrismPort
 	}
 
-	if p.controlPlanes == 1 {
+	if p.controlPlanes == 1 || p.nodes == 1 {
 		v.Operator = &operator{Replicas: 1}
 	}
 

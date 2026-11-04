@@ -215,7 +215,7 @@ func TestReaderTalosconfigNeverOverwritesTheCurrentTalosconfig(t *testing.T) {
 	f := newCredFixture(t, false, "")
 
 	current := filepath.Join(f.dir, "talosconfig")
-	if err := os.WriteFile(current, []byte("mine"), 0o600); err != nil {
+	if err := os.WriteFile(current, []byte("user-owned"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -228,7 +228,7 @@ func TestReaderTalosconfigNeverOverwritesTheCurrentTalosconfig(t *testing.T) {
 		t.Fatal("overwriting the current talosconfig was accepted")
 	}
 
-	if got, _ := os.ReadFile(current); string(got) != "mine" {
+	if got, _ := os.ReadFile(current); string(got) != "user-owned" {
 		t.Errorf("the current talosconfig changed: %q", got)
 	}
 
@@ -243,7 +243,7 @@ func TestReaderTalosconfigNeedsAnEndpoint(t *testing.T) {
 	var seen []ichorv1alpha1.TalosCredentialRequest
 
 	req := f.readerRequest()
-	req.Cluster = "other"
+	req.Cluster = "no-such-cluster"
 
 	if _, _, err := writeReaderTalosconfig(context.Background(), controllerStub(t, f, "", &seen), req); err == nil {
 		t.Error("a missing cluster was accepted")

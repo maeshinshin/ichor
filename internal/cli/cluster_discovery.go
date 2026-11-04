@@ -101,28 +101,28 @@ func runDiscoveryEdit(ctx context.Context, c *apiClients, cmd *cobra.Command, ta
 			return err
 		}
 
-		return writeMessage(out, outputFormat, resp.Msg)
+		return printDiscoveryEdit(out, resp.Msg, true, target, ref, nil)
 	case remove:
 		resp, err := c.Cluster.RemoveDiscoveryAddress(ctx, connect.NewRequest(&pb.RemoveDiscoveryAddressRequest{Cluster: ref, Address: target}))
 		if err != nil {
 			return err
 		}
 
-		return writeMessage(out, outputFormat, resp.Msg)
+		return printDiscoveryEdit(out, resp.Msg, true, target, ref, nil)
 	case isCidr:
 		resp, err := c.Cluster.AddDiscoveryCidr(ctx, connect.NewRequest(&pb.AddDiscoveryCidrRequest{Cluster: ref, Cidr: target}))
 		if err != nil {
 			return err
 		}
 
-		return writeMessage(out, outputFormat, resp.Msg)
+		return printDiscoveryEdit(out, resp.Msg, false, target, ref, nil)
 	default:
 		resp, err := c.Cluster.AddDiscoveryAddress(ctx, connect.NewRequest(&pb.AddDiscoveryAddressRequest{Cluster: ref, Address: target}))
 		if err != nil {
 			return err
 		}
 
-		return writeMessage(out, outputFormat, resp.Msg)
+		return printDiscoveryEdit(out, resp.Msg, false, target, ref, resp.Msg.GetCluster().GetAlreadyConfiguredAddresses())
 	}
 }
 
@@ -142,6 +142,15 @@ func runDiscoveryList(ctx context.Context, c *apiClients, out io.Writer) error {
 		_, err = fmt.Fprintln(out, "discovery is off: no address or range is listed")
 
 		return err
+	}
+
+	if outputFormat == outputHuman {
+		found, err := c.Machine.ListMachines(ctx, connect.NewRequest(&pb.ListMachinesRequest{Cluster: ref}))
+		if err != nil {
+			return err
+		}
+
+		return renderDiscoveryList(newHuman(out), cl, found.Msg.GetMachines())
 	}
 
 	for _, a := range cl.GetDiscoveryAddresses() {

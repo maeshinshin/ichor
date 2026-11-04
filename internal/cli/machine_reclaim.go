@@ -104,7 +104,7 @@ so that Ichor registers it as a pending machine.`,
 			In: cmd.InOrStdin(), Out: cmd.OutOrStdout(), Poll: 5 * time.Second,
 		}
 
-		return runMachineReclaim(cmd.Context(), deps, args[0], f)
+		return silenceIfShown(cmd, runMachineReclaim(cmd.Context(), deps, args[0], f))
 	},
 }
 
@@ -140,7 +140,7 @@ func runMachineReclaim(ctx context.Context, d reclaimDeps, address string, f rec
 	opt := reclaim.Options{Force: f.Force, ForceUngraceful: f.ForceUngraceful}
 	plan := reclaim.Assess(in, known, opt)
 
-	printInspection(d.Out, in, plan)
+	renderInspection(newHuman(d.Out), in, plan)
 
 	if err := plan.Refused(); err != nil {
 		return fmt.Errorf("machine reclaim: %w", err)
@@ -164,91 +164,75 @@ func runMachineReclaim(ctx context.Context, d reclaimDeps, address string, f rec
 			return fmt.Errorf("machine reclaim: reading the cluster name (pass --confirm-cluster NAME when not interactive): %w", err)
 		}
 	}
-
 	// Execute inspects once more, so a node swapped after the report is caught.
-	if _, err := reclaim.Execute(ctx, node, known, opt, c); err != nil {
-		return fmt.Errorf("machine reclaim: %w", err)
+	steps := newProgress(d.Out)
+
+	err = steps.Run("Reset", func(*step) (string, error) {
+		if _, err := reclaim.Execute(ctx, node, known, opt, c); err != nil {
+			return "", fmt.Errorf("machine reclaim: %w", err)
+		}
+
+		return "accepted, " + map[bool]string{true: "graceful", false: "not graceful"}[plan.Graceful], nil
+	})
+	if err != nil {
+		return err
 	}
 
-	say(d.Out, "\nReset accepted (graceful: %t). Waiting for %s to return to maintenance mode.\n", plan.Graceful, address)
-
-	return finishReclaim(ctx, d, address, in.UUID, f)
+	return finishReclaim(ctx, d, steps, address, in.UUID, f)
 }
 
 // finishReclaim waits for the machine to answer in maintenance mode with the
 // same UUID, then registers it. A changed DHCP address is reported, not guessed.
-func finishReclaim(ctx context.Context, d reclaimDeps, address, uuid string, f reclaimFlags) error {
+func finishReclaim(ctx context.Context, d reclaimDeps, steps *progress, address, uuid string, f reclaimFlags) error {
 	if f.Wait <= 0 {
-		say(d.Out, "Not waiting (--wait 0).\n")
+		steps.Info("not waiting (--wait 0)")
+		steps.Done()
 
 		return nil
 	}
 
 	host := reclaim.HostOnly(address)
 
-	wctx, cancel := context.WithTimeout(ctx, f.Wait)
-	defer cancel()
+	err := steps.Run("Maintenance mode", func(s *step) (string, error) {
+		s.Update("waiting for " + host + " to come back")
 
-	if err := reclaim.WaitMaintenance(wctx, host, uuid, d.Poll, d.Probe); err != nil {
-		say(d.Out, "\n%v\nThe machine may have taken a new address from DHCP after the reboot. "+
-			"Find it (its UUID is %s) and add it to a cluster's spec.discovery.addresses or cidrs.\n", err, uuid)
+		wctx, cancel := context.WithTimeout(ctx, f.Wait)
+		defer cancel()
 
-		return fmt.Errorf("machine reclaim: the reset was sent but the machine did not come back at %s", host)
+		if err := reclaim.WaitMaintenance(wctx, host, uuid, d.Poll, d.Probe); err != nil {
+			return "", fmt.Errorf("machine reclaim: the reset was sent but the machine did not come back at %s: %w\n"+
+				"The machine may have taken a new address from DHCP after the reboot. "+
+				"Find it (its UUID is %s) and add it to a cluster's spec.discovery.addresses or cidrs", host, err, uuid)
+		}
+
+		return host + " answers with UUID " + uuid, nil
+	})
+	if err != nil {
+		return err
 	}
 
-	say(d.Out, "%s is in maintenance mode with UUID %s.\n", host, uuid)
-
 	if f.Cluster == "" {
-		say(d.Out, "To register it, add its address to a cluster's spec.discovery.addresses (or run again with --cluster NAME).\n")
+		steps.Info("To register it, add its address to a cluster's spec.discovery.addresses (or run again with --cluster NAME)")
+		steps.Done()
 
 		return nil
 	}
 
-	if err := d.Register(ctx, host); err != nil {
-		return fmt.Errorf("machine reclaim: %w", err)
-	}
-
-	say(d.Out, "Added %s to cluster %s's discovery addresses; it will appear as a pending machine.\n", host, f.Cluster)
-
-	return nil
-}
-
-func printInspection(w io.Writer, in reclaim.Inspection, p reclaim.Plan) {
-	role := "worker"
-	if in.ControlPlane {
-		role = "control plane"
-	}
-
-	say(w, "Machine   %s (%s), %s, Talos %s\n", in.Hostname, in.Address, role, in.Version)
-	say(w, "UUID      %s\n", orNone(in.UUID))
-	say(w, "Cluster   %s (id %s), reachable from the node: %t\n", orNone(in.ClusterName), orNone(in.ClusterID), in.ClusterReachable)
-
-	if in.EtcdKnown {
-		say(w, "etcd      %d members\n", len(in.EtcdMembers))
-	}
-
-	say(w, "Reset     STATE and EPHEMERAL, reboot, graceful: %t\n", p.Graceful)
-
-	if len(in.Volumes) == 0 {
-		say(w, "Volumes   no orphaned volumes found\n")
-	}
-
-	for _, v := range in.Volumes {
-		note := ""
-		if v.Encrypted {
-			note = "  ENCRYPTED: its key may depend on STATE, so the data may be unreadable afterwards"
+	err = steps.Run("Register", func(*step) (string, error) {
+		if err := d.Register(ctx, host); err != nil {
+			return "", fmt.Errorf("machine reclaim: %w", err)
 		}
 
-		say(w, "Volume    %s on %s (%d bytes), not wiped%s\n", v.Name, v.Location, v.Size, note)
+		return "added to cluster " + f.Cluster + "'s discovery addresses; it will appear as a pending machine", nil
+	})
+	if err != nil {
+		return err
 	}
 
-	for _, s := range p.Warnings {
-		say(w, "Warning   %s\n", s)
-	}
+	steps.Done()
+	steps.Next("ichor machine list" + nsFlag(apiOpts.Namespace))
 
-	for _, s := range p.Refusals {
-		say(w, "Refused   %s\n", s)
-	}
+	return nil
 }
 
 // say writes a formatted line to w; a failing terminal is not worth failing a reset report.

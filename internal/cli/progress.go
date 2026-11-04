@@ -356,7 +356,7 @@ func (s *step) Write(b []byte) (int, error) {
 	s.p.mu.Lock()
 	defer s.p.mu.Unlock()
 
-	for _, line := range strings.Split(string(b), "\n") {
+	for line := range strings.SplitSeq(string(b), "\n") {
 		s.ingestLocked(strings.TrimSpace(line))
 	}
 
@@ -454,7 +454,7 @@ func (p *progress) endLocked(s *step, mark, style, detail, errMsg string) {
 	}
 
 	if errMsg != "" {
-		for _, l := range strings.Split(strings.TrimRight(errMsg, "\n"), "\n") {
+		for l := range strings.SplitSeq(strings.TrimRight(errMsg, "\n"), "\n") {
 			p.out(p.indent() + "    " + l + "\n")
 		}
 	}
@@ -596,7 +596,7 @@ func firstSentence(s string, n int) string {
 type lineWriter func(line string)
 
 func (f lineWriter) Write(b []byte) (int, error) {
-	for _, l := range strings.Split(string(b), "\n") {
+	for l := range strings.SplitSeq(string(b), "\n") {
 		if l = strings.TrimSpace(l); l != "" {
 			f(l)
 		}

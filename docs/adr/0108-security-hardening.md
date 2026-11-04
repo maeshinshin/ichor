@@ -434,3 +434,7 @@ The last follow-up (encrypting the local `secrets.yaml`) is decided and built in
 ## Amendment 2026-11-04: the FQDN and metrics-namespace follow-up
 
 The follow-up row "FQDN network-policy rules and a metrics-namespace restriction" is resolved by ADR 0126: ichor-ui's last `world` egress rule (the external OIDC issuer) is replaced by a `toFQDNs` policy the controller writes from the issuer the ichor-ui Deployment names, the static install copy keeps no `world` egress rule, and the controller's metrics port is open only to the namespaces `networkPolicy.cilium.metricsNamespaces` names (a policy of the operator's own on an installer or `ichor init` install). ichor-ui's `/metrics` shares its serving port and stays protected by its token check alone.
+
+## Amendment 2026-11-04: the os:reader talosconfig role is built (ADR 0124)
+
+The follow-up "an `os:reader` talosconfig role" (table above, "Not modelled") is resolved by ADR 0124: a new `TalosCredentialRequest` purpose `talosconfig-reader` (1 hour default, 12 hour cap), gated by `download` on `talosclusters/talosconfig-reader`, recorded as an Event naming the user, with `ichor cluster talosconfig` and a UI download. SecureBoot and UKI, kernel lockdown and the kubelet serving-certificate bootstrap remain follow-ups.

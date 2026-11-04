@@ -131,10 +131,19 @@ computes from the Kubernetes API directly.
 kubectl --context $C -n ichor-e2e port-forward svc/$P-registry 5000:5000 &   # only ever this service
 PF=$!   # the port-forward's PID, to stop it below
 V=v0.0.$(date +%s)-$(git rev-parse --short HEAD)   # always newer than the installed one
-make demo-images VERSION=$V REGISTRY=localhost:5000
+make demo-images VERSION=$V REGISTRY=localhost:5000 DIGEST_FILE=bin/demo-digests.txt
 kill $PF   # stop the port-forward once the images are pushed
-bin/img/ichor/ichor upgrade ichor $V --cluster $P -n ichor-system --kubeconfig bin/ui-demo.kubeconfig --yes --follow
+D=$(sed -n 's/.*ichor-installer@//p' bin/demo-digests.txt)   # the installer image's digest
+bin/img/ichor/ichor upgrade ichor $V --cluster $P -n ichor-system --kubeconfig bin/ui-demo.kubeconfig --yes --follow \
+  --installer-digest $D --skip-signature-check "demo build, not signed"
 ```
+
+The controller pins the installer image to a digest and checks its signature before it runs the Job.
+A demo image is not signed, and the controller cannot resolve its tag: the Talos nodes reach the demo registry
+through a containerd mirror for `ghcr.io`, the controller does not. So the upgrade names the digest
+(`--installer-digest`, from `DIGEST_FILE`) and skips the signature check with a recorded reason
+(`--skip-signature-check`); the Job then pulls `ghcr.io/maeshinshin/ichor-installer@$D` through the mirror. The CLI,
+`ichor version` and the UI say loudly that the check was skipped.
 
 `demo-images` leaves the git tree unchanged and fails if a binary is not freshly built with that `VERSION`;
 `bin/img/ichor/ichor` is the CLI it built, so upgrade with that one (there is no `bin/ichor`).

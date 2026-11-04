@@ -49,9 +49,8 @@ const (
 	// the label value "config" tells Longhorn's node controller to read
 	// the disk list from the annotation below, instead of auto-creating a
 	// default disk from whatever Longhorn's own default path setting says.
-	longhornCreateDefaultDiskLabel            = "node.longhorn.io/create-default-disk"
-	longhornDefaultDisksConfigAnnotation      = "node.longhorn.io/default-disks-config"
-	longhornCreateDefaultDiskLabelValueConfig = "config"
+	longhornCreateDefaultDiskLabel       = "node.longhorn.io/create-default-disk"
+	longhornDefaultDisksConfigAnnotation = "node.longhorn.io/default-disks-config"
 
 	// longhornDefaultDisksConfig is the one disk entry longhorn.io/docs/1.13.0's
 	// default-disks-config annotation example shows (path, allowScheduling);
@@ -62,16 +61,14 @@ const (
 // longhornV1 is the longhorn-v1 Preset.
 type longhornV1 struct{}
 
-// RequiredExtensions implements Preset.
 func (longhornV1) RequiredExtensions() []string {
 	return []string{"siderolabs/iscsi-tools", "siderolabs/util-linux-tools"}
 }
 
-// CheckExtensions implements Preset.
 func (p longhornV1) CheckExtensions(installed []string) error {
-	missing := slices.DeleteFunc(p.RequiredExtensions(), func(e string) bool { return slices.Contains(installed, e) })
-
-	if len(missing) > 0 {
+	if missing := slices.DeleteFunc(p.RequiredExtensions(), func(e string) bool {
+		return slices.Contains(installed, e)
+	}); len(missing) > 0 {
 		return fmt.Errorf("storage: longhorn-v1 needs system extensions not in the node's installer image: %s",
 			strings.Join(missing, ", "))
 	}
@@ -114,17 +111,14 @@ func (longhornV1) KubeletMounts() []KubeletMount {
 	}}
 }
 
-// NodeLabels implements Preset.
 func (longhornV1) NodeLabels() map[string]string {
-	return map[string]string{longhornCreateDefaultDiskLabel: longhornCreateDefaultDiskLabelValueConfig}
+	return map[string]string{longhornCreateDefaultDiskLabel: "config"}
 }
 
-// NodeAnnotations implements Preset.
 func (longhornV1) NodeAnnotations() map[string]string {
 	return map[string]string{longhornDefaultDisksConfigAnnotation: longhornDefaultDisksConfig}
 }
 
-// CheckConsistency implements Preset.
 func (longhornV1) CheckConsistency(live LiveConfig) error {
 	if !live.CreateDefaultDiskOnLabeledNodes {
 		return fmt.Errorf("storage: longhorn-v1 registers disks through node labels and annotations, " +
@@ -144,7 +138,6 @@ func (longhornV1) BeginEvacuation() (allowScheduling, evictionRequested bool) {
 	return false, true
 }
 
-// EndEvacuation implements EvacuationHook.
 func (longhornV1) EndEvacuation() (allowScheduling, evictionRequested bool) {
 	return true, false
 }

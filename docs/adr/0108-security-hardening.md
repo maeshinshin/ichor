@@ -426,3 +426,7 @@ Everything above is built except these five items, which were deferred on purpos
 | FQDN network-policy rules and a metrics-namespace restriction | "Supply chain and workloads", Network | The static install copy has no values to carry names. |
 | SecureBoot and UKI, kernel lockdown, an `os:reader` talosconfig role, kubelet serving-certificate bootstrap | "Typed hardening options for managed clusters", Not modelled | Not modelled as typed options yet. |
 | Encrypting the local secrets bundle (`secrets.yaml`, plaintext 0600) | "Secrets handling", Local files (S9) | The file is mode 0600 and written atomically; `loadBundleFile` warns when it is group or world accessible. |
+
+## Amendment 2026-11-04: the local secrets bundle is encrypted
+
+The last follow-up (encrypting the local `secrets.yaml`) is decided and built in ADR 0127: an armored age file with a scrypt passphrase, encrypted by default for new files, plaintext files still load with a warning and `ichor secrets encrypt` migrates them. The "Local files (S9)" text above (plaintext 0600) describes the state before that ADR.

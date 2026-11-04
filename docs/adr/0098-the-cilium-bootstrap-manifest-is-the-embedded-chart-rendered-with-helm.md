@@ -32,3 +32,5 @@ Found on the rs2 hardware run (ADR 0113 amendment). The bootstrap render used He
 - **Readback.** The release record's `operator.replicas` says whether it was made for one control plane, so an adopt readback reconstructs the same values.
 
 Covered by `TestOperatorReplicasFollowTheControlPlaneCount` (counts 0, 1, 2, 3) and the goldens.
+
+The rule above covered only `count == 1`. An HA cluster has the same problem while it has one node: see ADR 0113, amendment 2026-11-04, where the replicas follow the nodes that exist.

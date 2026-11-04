@@ -19,25 +19,15 @@ package cli
 import (
 	"strings"
 	"testing"
-
-	"github.com/spf13/pflag"
 )
 
 // The hidden --cni flag has a default and cilium is the only CNI, so it must not be a
 // required flag: the getting-started guide's command has no --cni.
 func TestInitCmd_GettingStartedFlagsPassTheRequiredCheck(t *testing.T) {
-	t.Cleanup(func() {
-		initCmd.Flags().VisitAll(func(f *pflag.Flag) { f.Changed = false })
-	})
-
-	err := initCmd.ParseFlags(strings.Fields("--cluster demo --node-endpoint 192.168.1.50:50000 " +
-		"--endpoint-type node --endpoint-address 192.168.1.50 --install-disk /dev/sda " +
-		"--preset single --registry-mirror ghcr.io=http://192.168.1.10:5000"))
+	_, _, err := parsedInit(t, "", strings.Fields("--cluster demo --node-endpoint 192.168.1.50:50000 "+
+		"--endpoint-type node --endpoint-address 192.168.1.50 --install-disk /dev/sda "+
+		"--preset single --registry-mirror ghcr.io=http://192.168.1.10:5000")...)
 	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := initCmd.ValidateRequiredFlags(); err != nil {
 		t.Errorf("the getting-started flags are refused: %v", err)
 	}
 }

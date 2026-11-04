@@ -218,7 +218,13 @@ func (r *CertExpiryReconciler) clearBundleBackupStale(
 		return nil
 	}
 
-	want, err := secretsbundle.ExportFingerprint(bundle, &secretsbundle.Retired{})
+	// The keys a key rotation retired are part of what a saved copy must hold.
+	retired, err := secretsbundle.LoadRetired(ctx, r.Client, r.ControllerNamespace, cluster.Spec.SecretsRef.Name)
+	if err != nil {
+		return nil //nolint:nilerr // an unreadable Secret keeps the condition up; the expiry path reports it
+	}
+
+	want, err := secretsbundle.ExportFingerprint(bundle, retired)
 	if err != nil || cluster.Annotations[ichorv1alpha1.BundleExportedAnnotation] != want {
 		return nil //nolint:nilerr // an unreadable bundle keeps the condition up; the expiry path reports it
 	}

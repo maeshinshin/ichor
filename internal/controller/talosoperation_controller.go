@@ -140,6 +140,12 @@ type TalosOperationReconciler struct {
 	// nil skips the check. ClientSettleDelay is the wait after it.
 	AggregatorCAPublished AggregatorCAPublishedFunc
 
+	// Reencrypt and LegacyTokens serve the key-rotation kind alone (key_rotation.go, ADR 0121): the first
+	// stores every Secret under the current secretbox key, the second finds token Secrets the old
+	// service-account key signed. Both reach the managed cluster through an admin kubeconfig a Talos node issues.
+	Reencrypt    ReencryptSecretsFunc
+	LegacyTokens LegacyTokensFunc
+
 	// KubeClient, Evacuator serve the node kind alone (node_action.go, ADR 0085): KubeClient
 	// cordons, drains and reads Node readiness live (nil skips the drain and reads the cache),
 	// Evacuator is the storage hook run before a node is taken away (nil skips it).
@@ -180,6 +186,10 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	if handled, err := r.caRotationFinalizerStep(ctx, &op); handled || err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if handled, err := r.keyRotationFinalizerStep(ctx, &op); handled || err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -394,7 +404,7 @@ func renewRefusal(ctx context.Context, err error) (ctrl.Result, error) {
 }
 
 // advanceOwnStateMachine runs the kinds that are not a rollout over the machines but a state machine of
-// their own: shutdown, node, etcd-restore and ca-rotation. handled is false for every other kind.
+// their own: shutdown, node, etcd-restore, ca-rotation and key-rotation. handled is false for every other kind.
 func (r *TalosOperationReconciler) advanceOwnStateMachine(
 	ctx context.Context, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster, lock *clusterlock.Lock,
 ) (res ctrl.Result, handled bool, err error) {
@@ -407,6 +417,8 @@ func (r *TalosOperationReconciler) advanceOwnStateMachine(
 		res, err = r.beginEtcdRestore(ctx, op, cluster, lock)
 	case ichorv1alpha1.TalosOperationKindCARotation:
 		res, err = r.advanceCARotation(ctx, op, cluster, lock)
+	case ichorv1alpha1.TalosOperationKindKeyRotation:
+		res, err = r.advanceKeyRotation(ctx, op, cluster, lock)
 	default:
 		return ctrl.Result{}, false, nil
 	}

@@ -229,7 +229,7 @@ func runUserUpdate(ctx context.Context, u ichorv1alpha1connect.UserServiceClient
 	}
 
 	return printAPI(cmd.OutOrStdout(), resp.Msg, func(h *human, _ *pb.UpdateUserResponse) error {
-		return userDone(h, verbUpdate+" "+kindUser, name)
+		return doneLine(h, "%s %s %s", verbUpdate, kindUser, name)
 	})
 }
 
@@ -239,22 +239,26 @@ var userDeleteCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return withUsers(cmd, func(ctx context.Context, u ichorv1alpha1connect.UserServiceClient) error {
-			if !assumeYes {
-				if err := confirmOrAbort(cmd.InOrStdin(), cmd.ErrOrStderr(), "user delete", fmt.Sprintf("Delete user %s? Their sessions stop working within minutes. [y/N] ", args[0]), "aborted"); err != nil {
-					return err
-				}
-			}
-
-			resp, err := u.DeleteUser(ctx, connect.NewRequest(&pb.DeleteUserRequest{Name: args[0]}))
-			if err != nil {
-				return err
-			}
-
-			return printAPI(cmd.OutOrStdout(), resp.Msg, func(h *human, _ *pb.DeleteUserResponse) error {
-				return userDone(h, verbDelete+" "+kindUser, args[0])
-			})
+			return runUserDelete(ctx, u, cmd, args[0])
 		})
 	},
+}
+
+func runUserDelete(ctx context.Context, u ichorv1alpha1connect.UserServiceClient, cmd *cobra.Command, name string) error {
+	if !assumeYes {
+		if err := confirmOrAbort(cmd.InOrStdin(), cmd.ErrOrStderr(), "user delete", fmt.Sprintf("Delete user %s? Their sessions stop working within minutes. [y/N] ", name), "aborted"); err != nil {
+			return err
+		}
+	}
+
+	resp, err := u.DeleteUser(ctx, connect.NewRequest(&pb.DeleteUserRequest{Name: name}))
+	if err != nil {
+		return err
+	}
+
+	return printAPI(cmd.OutOrStdout(), resp.Msg, func(h *human, _ *pb.DeleteUserResponse) error {
+		return doneLine(h, "%s %s %s", verbDelete, kindUser, name)
+	})
 }
 
 var userSetPasswordCmd = &cobra.Command{
@@ -263,25 +267,30 @@ var userSetPasswordCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return withUsers(cmd, func(ctx context.Context, u ichorv1alpha1connect.UserServiceClient) error {
-			password, err := resolvePassword(cmd, userOpts.passwordStdin, userOpts.generate)
-			if err != nil {
-				return err
-			}
-
-			generated, err := setPassword(ctx, u, args[0], password)
-			if err != nil {
-				return err
-			}
-
-			if outputFormat == outputHuman {
-				err = userDone(newHuman(cmd.OutOrStdout()), "set the password of", args[0]+" (they must change it at the next sign-in)")
-			}
-
-			showGeneratedPassword(cmd.ErrOrStderr(), args[0], generated)
-
-			return err
+			return runUserSetPassword(ctx, u, cmd, args[0])
 		})
 	},
+}
+
+func runUserSetPassword(ctx context.Context, u ichorv1alpha1connect.UserServiceClient, cmd *cobra.Command, name string) error {
+	password, err := resolvePassword(cmd, userOpts.passwordStdin, userOpts.generate)
+	if err != nil {
+		return err
+	}
+
+	generated, err := setPassword(ctx, u, name, password)
+	if err != nil {
+		return err
+	}
+
+	// The generated password comes last, under the result, and is printed even when that cannot be written.
+	if outputFormat == outputHuman {
+		err = doneLine(newHuman(cmd.OutOrStdout()), "set the password of %s (they must change it at the next sign-in)", name)
+	}
+
+	showGeneratedPassword(cmd.ErrOrStderr(), name, generated)
+
+	return err
 }
 
 var userRevokeCmd = &cobra.Command{
@@ -290,16 +299,20 @@ var userRevokeCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return withUsers(cmd, func(ctx context.Context, u ichorv1alpha1connect.UserServiceClient) error {
-			resp, err := u.RevokeSessions(ctx, connect.NewRequest(&pb.RevokeSessionsRequest{Name: args[0]}))
-			if err != nil {
-				return err
-			}
-
-			return printAPI(cmd.OutOrStdout(), resp.Msg, func(h *human, _ *pb.RevokeSessionsResponse) error {
-				return userDone(h, "revoked the sessions of", args[0])
-			})
+			return runUserRevoke(ctx, u, cmd, args[0])
 		})
 	},
+}
+
+func runUserRevoke(ctx context.Context, u ichorv1alpha1connect.UserServiceClient, cmd *cobra.Command, name string) error {
+	resp, err := u.RevokeSessions(ctx, connect.NewRequest(&pb.RevokeSessionsRequest{Name: name}))
+	if err != nil {
+		return err
+	}
+
+	return printAPI(cmd.OutOrStdout(), resp.Msg, func(h *human, _ *pb.RevokeSessionsResponse) error {
+		return doneLine(h, "revoked the sessions of %s", name)
+	})
 }
 
 // setPassword calls SetPassword and returns the password the server generated, "" when the caller

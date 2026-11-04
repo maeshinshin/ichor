@@ -38,6 +38,7 @@ const (
 	endpointAuthorize    = "/oidc/authorize"
 	endpointLogin        = "/oidc/login"
 	endpointToken        = "/oidc/token"
+	endpointRevoke       = "/oidc/revoke"
 	endpointJWKS         = "/oidc/jwks"
 	endpointDiscovery    = "/.well-known/openid-configuration"
 )
@@ -85,6 +86,9 @@ type RefreshStore interface {
 	// Rotate makes newJTI the current token of family if oldJTI is, else
 	// revokes the family. Either failure returns ErrRefreshReused.
 	Rotate(ctx context.Context, user, family, oldJTI, newJTI string) error
+	// Revoke deletes family so none of its tokens refreshes again (RFC 7009). An unknown family is
+	// not an error: the goal is already met.
+	Revoke(ctx context.Context, user, family string) error
 }
 
 // Config configures an Issuer.
@@ -132,7 +136,7 @@ type Issuer struct {
 	usedCodes   *jtiSet
 	usedTickets *jtiSet
 	// Per-source request rates: signing a ticket and answering a token request cost CPU.
-	authzRate, loginRate, tokenRate *bucket
+	authzRate, loginRate, tokenRate, revokeRate *bucket
 }
 
 // ErrBusy is returned by PasswordVerifier.VerifyPassword when too many password checks are
@@ -216,11 +220,11 @@ func New(cfg Config) (*Issuer, error) {
 	return &Issuer{
 		cfg: cfg, failures: NewBackoff(), srcFailures: &Backoff{free: srcFreeFailures, max: srcMaxBackoff}, ceiling: &userCeiling{},
 		usedCodes: newJTISet(), usedTickets: newJTISet(),
-		authzRate: newBucket(20, 100), loginRate: newBucket(10, 50), tokenRate: newBucket(20, 100),
+		authzRate: newBucket(20, 100), loginRate: newBucket(10, 50), tokenRate: newBucket(20, 100), revokeRate: newBucket(20, 100),
 	}, nil
 }
 
-// Handler serves discovery, JWKS, authorize, login and token (port 8080 side).
+// Handler serves discovery, JWKS, authorize, login, token and revoke (port 8080 side).
 func (i *Issuer) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+endpointDiscovery, i.discovery(i.cfg.Issuer+endpointJWKS))
@@ -228,6 +232,7 @@ func (i *Issuer) Handler() http.Handler {
 	mux.HandleFunc("GET "+endpointAuthorize, i.limit(i.authzRate, i.authorize))
 	mux.HandleFunc("POST "+endpointLogin, i.limit(i.loginRate, i.login))
 	mux.HandleFunc("POST "+endpointToken, i.limit(i.tokenRate, i.token))
+	mux.HandleFunc("POST "+endpointRevoke, i.limit(i.revokeRate, i.revoke))
 	return http.MaxBytesHandler(mux, maxFormBytes)
 }
 
@@ -255,6 +260,7 @@ func (i *Issuer) discovery(jwksURI string) http.HandlerFunc {
 		"issuer":                                i.cfg.Issuer,
 		"authorization_endpoint":                i.cfg.Issuer + endpointAuthorize,
 		"token_endpoint":                        i.cfg.Issuer + endpointToken,
+		"revocation_endpoint":                   i.cfg.Issuer + endpointRevoke,
 		"jwks_uri":                              jwksURI,
 		"response_types_supported":              []string{"code"},
 		"grant_types_supported":                 []string{"authorization_code", "refresh_token"},

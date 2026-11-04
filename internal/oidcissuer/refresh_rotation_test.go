@@ -34,6 +34,13 @@ func (m *memStore) Rotate(_ context.Context, _, family, oldJTI, newJTI string) e
 	return nil
 }
 
+func (m *memStore) Revoke(_ context.Context, _, family string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.cur, family)
+	return nil
+}
+
 func TestRefreshTokensRotateAndReuseRevokesTheFamily(t *testing.T) {
 	st := &memStore{cur: map[string]string{}}
 	e := newEnvWith(t, externalURL, "", func(c *oidcissuer.Config) { c.Refresh = st })

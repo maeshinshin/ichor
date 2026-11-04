@@ -62,11 +62,11 @@ var _ = Describe("TalosMachineReconciler boot security (ADR 0123)", func() {
 
 	It("records what the node reports and reports conformance as conditions", func() {
 		got := securityMachine(preferred("integrity"), &fakeTalosClient{securityState: SecurityState{
-			SecureBoot: true, BootedWithUKI: true, ModuleSignatureEnforced: true, UKISigningKeyFingerprint: "ab:cd",
+			SecureBoot: true, BootedWithUKI: true, ModuleSignatureEnforced: true, UKISigningKeyFingerprint: testUKIFingerprint,
 		}})
 
 		Expect(got.Status.Security).To(Equal(&ichorv1alpha1.TalosMachineSecurity{
-			SecureBoot: true, BootedWithUKI: true, ModuleSignatureEnforced: true, UKISigningKeyFingerprint: "ab:cd",
+			SecureBoot: true, BootedWithUKI: true, ModuleSignatureEnforced: true, UKISigningKeyFingerprint: testUKIFingerprint,
 			KernelLockdown: "integrity",
 		}))
 

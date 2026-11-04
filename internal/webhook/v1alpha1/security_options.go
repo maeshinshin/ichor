@@ -36,6 +36,9 @@ import (
 
 // Admission rules for the opt-in hardening options of ADR 0108.
 
+// annotationTrue is the value of a confirmation annotation.
+const annotationTrue = "true"
+
 // SourceResolver returns the local address the controller would connect from to reach host. It
 // is a seam for tests; the default asks the kernel's routing table (a UDP "connect" sends nothing).
 type SourceResolver func(ctx context.Context, host string) (netip.Addr, error)
@@ -202,7 +205,7 @@ func (v *TalosClusterCustomValidator) checkSecureBootConfirmed(
 
 	names := strings.Join(lacking, ", ")
 
-	if mode == ichorv1alpha1.SecureBootRequired && newC.GetAnnotations()[ichorv1alpha1.TalosClusterSecureBootConfirmAnnotation] != "true" {
+	if mode == ichorv1alpha1.SecureBootRequired && newC.GetAnnotations()[ichorv1alpha1.TalosClusterSecureBootConfirmAnnotation] != annotationTrue {
 		return nil, fmt.Errorf("spec.security.secureBoot.mode Required for a cluster whose machine(s) %s do not run SecureBoot: Talos cannot "+
 			"convert an installed node, so each must be reset and added again from the SecureBoot ISO, one at a time (see "+
 			"docs/guides/hardening.md; Ichor does not do it for you). Set the annotation %s=\"true\" to confirm you will do that, or use Preferred",
@@ -341,7 +344,7 @@ func (v *TalosClusterCustomValidator) checkDiskEncryptionConfirmed(ctx context.C
 		return err
 	}
 
-	if len(machines) == 0 || newC.GetAnnotations()[ichorv1alpha1.TalosClusterDiskEncryptionConfirmAnnotation] == "true" {
+	if len(machines) == 0 || newC.GetAnnotations()[ichorv1alpha1.TalosClusterDiskEncryptionConfirmAnnotation] == annotationTrue {
 		return nil
 	}
 

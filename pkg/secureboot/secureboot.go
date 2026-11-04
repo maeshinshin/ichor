@@ -105,7 +105,7 @@ var lockdownRank = map[string]int{
 func LockdownLevel(cmdline string, secureBoot bool) string {
 	level := ""
 
-	for _, w := range strings.Fields(cmdline) {
+	for w := range strings.FieldsSeq(cmdline) {
 		if v, ok := strings.CutPrefix(w, "lockdown="); ok {
 			if _, known := lockdownRank[v]; known {
 				level = v
@@ -135,7 +135,9 @@ func LockdownMeets(observed, expected string) bool {
 // the node reported (nil when it was not read yet). An option that is not set contributes no
 // condition, so a cluster that does not use them shows none. The messages are stable for a given
 // state, so an unchanged state writes nothing.
-func MachineConditions(sec *ichorv1alpha1.TalosClusterSecurity, node *ichorv1alpha1.TalosMachineSecurity) []metav1.Condition {
+func MachineConditions(
+	sec *ichorv1alpha1.TalosClusterSecurity, node *ichorv1alpha1.TalosMachineSecurity,
+) []metav1.Condition {
 	var out []metav1.Condition
 
 	if sec == nil {
@@ -154,48 +156,51 @@ func MachineConditions(sec *ichorv1alpha1.TalosClusterSecurity, node *ichorv1alp
 	return out
 }
 
+// reasonNotRead is the reason of an Unknown condition whose node has not been read yet.
+const reasonNotRead = "NotRead"
+
+func condition(typ string, status metav1.ConditionStatus, reason, message string) metav1.Condition {
+	return metav1.Condition{Type: typ, Status: status, Reason: reason, Message: message}
+}
+
 func secureBootCondition(mode string, node *ichorv1alpha1.TalosMachineSecurity) metav1.Condition {
-	c := metav1.Condition{Type: ichorv1alpha1.ConditionSecureBoot}
+	const typ = ichorv1alpha1.ConditionSecureBoot
 
 	switch {
 	case node == nil:
-		c.Status, c.Reason, c.Message = metav1.ConditionUnknown, "NotRead", "the node's security state has not been read yet"
+		return condition(typ, metav1.ConditionUnknown, reasonNotRead, "the node's security state has not been read yet")
 	case mode == ichorv1alpha1.SecureBootOff:
-		c.Status, c.Reason = metav1.ConditionFalse, "ModeOffButSecureBoot"
-		c.Message = "spec.security.secureBoot.mode is Off but the node runs SecureBoot: upgrades keep using the SecureBoot installer " +
-			"(the stock one would not boot); set the mode to Preferred or Required"
+		return condition(typ, metav1.ConditionFalse, "ModeOffButSecureBoot",
+			"spec.security.secureBoot.mode is Off but the node runs SecureBoot: upgrades keep using the SecureBoot "+
+				"installer (the stock one would not boot); set the mode to Preferred or Required")
 	case node.SecureBoot:
-		c.Status, c.Reason, c.Message = metav1.ConditionTrue, "SecureBootOn", "the node booted with SecureBoot enabled"
+		return condition(typ, metav1.ConditionTrue, "SecureBootOn", "the node booted with SecureBoot enabled")
 	case !node.BootedWithUKI:
-		c.Status, c.Reason = metav1.ConditionFalse, "NotUKI"
-		c.Message = "the node booted from GRUB, not a Unified Kernel Image: Talos cannot convert it, so SecureBoot needs the node " +
-			"to be reset and added again from the SecureBoot ISO (docs/guides/hardening.md)"
+		return condition(typ, metav1.ConditionFalse, "NotUKI",
+			"the node booted from GRUB, not a Unified Kernel Image: Talos cannot convert it, so SecureBoot needs the "+
+				"node to be reset and added again from the SecureBoot ISO (docs/guides/hardening.md)")
 	default:
-		c.Status, c.Reason = metav1.ConditionFalse, "SecureBootOff"
-		c.Message = "the node booted a UKI with SecureBoot disabled in the firmware: enable SecureBoot and enrol the keys (the " +
-			"firmware in setup mode), or reset and add the node from the SecureBoot ISO (docs/guides/hardening.md)"
+		return condition(typ, metav1.ConditionFalse, "SecureBootOff",
+			"the node booted a UKI with SecureBoot disabled in the firmware: enable SecureBoot and enrol the keys (the "+
+				"firmware in setup mode), or reset and add the node from the SecureBoot ISO (docs/guides/hardening.md)")
 	}
-
-	return c
 }
 
 func lockdownCondition(expected string, node *ichorv1alpha1.TalosMachineSecurity) metav1.Condition {
-	c := metav1.Condition{Type: ichorv1alpha1.ConditionKernelLockdown}
+	const typ = ichorv1alpha1.ConditionKernelLockdown
 
 	switch {
 	case node == nil || node.KernelLockdown == "":
-		c.Status, c.Reason, c.Message = metav1.ConditionUnknown, "NotRead", "the node's kernel lockdown level has not been read yet"
+		return condition(typ, metav1.ConditionUnknown, reasonNotRead, "the node's lockdown level has not been read yet")
 	case LockdownMeets(node.KernelLockdown, expected):
-		c.Status, c.Reason = metav1.ConditionTrue, "LockdownMet"
-		c.Message = fmt.Sprintf("the kernel runs with lockdown %s (expected at least %s)", node.KernelLockdown, expected)
+		return condition(typ, metav1.ConditionTrue, "LockdownMet",
+			fmt.Sprintf("the kernel runs with lockdown %s (expected at least %s)", node.KernelLockdown, expected))
 	default:
-		c.Status, c.Reason = metav1.ConditionFalse, "LockdownBelowExpected"
-		c.Message = fmt.Sprintf("the kernel runs with lockdown %s, expected at least %s: the kernel command line is part of the "+
-			"boot asset; build lockdown=%s into it with an Image Factory schematic (spec.schematic) and reinstall (docs/guides/hardening.md)",
-			node.KernelLockdown, expected, expected)
+		return condition(typ, metav1.ConditionFalse, "LockdownBelowExpected",
+			fmt.Sprintf("the kernel runs with lockdown %s, expected at least %s: the kernel command line is part of the "+
+				"boot asset; build lockdown=%s into it with an Image Factory schematic (spec.schematic) and reinstall "+
+				"(docs/guides/hardening.md)", node.KernelLockdown, expected, expected))
 	}
-
-	return c
 }
 
 // ClusterCondition summarises one condition type over the approved machines (name to conditions):
@@ -235,7 +240,7 @@ func ClusterCondition(typ string, machines map[string][]metav1.Condition) metav1
 		c.Message = fmt.Sprintf("%d of %d machines do not match: %s; the machine's %s condition says what to do",
 			len(bad), len(machines), strings.Join(bad, ", "), typ)
 	case unknown > 0:
-		c.Status, c.Reason = metav1.ConditionUnknown, "NotRead"
+		c.Status, c.Reason = metav1.ConditionUnknown, reasonNotRead
 		c.Message = fmt.Sprintf("%d of %d machines have not been read yet", unknown, len(machines))
 	default:
 		c.Status, c.Reason = metav1.ConditionTrue, "AllNodesConformant"

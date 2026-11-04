@@ -17,6 +17,8 @@ by writing the CR). The controller applies it; it never edits your `spec`.
 | Pod Security | `spec.security.podSecurity` | Pod Security admission levels and exempt namespaces | kube-apiserver restarts on each control plane, no node reboot |
 | Audit policy | `spec.security.audit` | One of three kube-apiserver audit policy presets | kube-apiserver restarts on each control plane, no node reboot |
 | Disk encryption | `spec.security.diskEncryption` | LUKS2 on STATE and EPHEMERAL | Wipe and rejoin of every node, see below |
+| SecureBoot | `spec.security.secureBoot` | Uses Talos's signed UKI installer, reports each node's SecureBoot state, refuses a `Required` cluster's unsecured machines where it can | Never touches an installed node: reset and add each one, see below |
+| Kernel lockdown | `spec.security.kernelLockdown` | Checks each node's lockdown level and reports a node below it | Checked only: the level is baked into the boot asset |
 | Talos API from pods | (a `Config` patch) | Warns about `kubernetesTalosAPIAccess` (`os:admin` most strongly); rendered on control planes only | None |
 
 ## Ingress firewall
@@ -217,6 +219,74 @@ Node with `kubectl delete node` anyway. Measured: about 45 seconds to reset and
 2 minutes from approval to Ready; the volumes show `encryptionProvider: luks2`
 in `talosctl get volumestatus`.
 
+## SecureBoot, UKI and kernel lockdown
+
+```yaml
+spec:
+  security:
+    secureBoot: {mode: Preferred}      # Off (default), Preferred or Required
+    kernelLockdown: integrity          # or confidentiality; checked, not rendered
+```
+
+Talos (v1.14, "SecureBoot") boots a signed Unified Kernel Image through
+systemd-boot, so the firmware verifies kernel, initramfs and command line. It
+needs UEFI (not BIOS) and a fresh install from the SecureBoot images: Talos
+cannot turn a GRUB install into a UKI one. Image Factory serves the installer as
+`factory.talos.dev/metal-installer-secureboot/<schematic>:<version>` and the
+ISO as `metal-amd64-secureboot.iso`.
+
+What the modes do:
+
+- `Off` (or unset): nothing changes. A node that nevertheless runs SecureBoot is
+  still upgraded with the SecureBoot installer, because the stock one writes an
+  unsigned UKI the firmware would refuse; its `SecureBoot` condition says the
+  mode and the node disagree.
+- `Preferred`: where Ichor picks the installer it picks the SecureBoot variant
+  (a Talos upgrade of a node that booted a UKI; an approval that names a disk
+  and no `--install-image`, which then records
+  `factory.talos.dev/metal-installer-secureboot/<spec.schematic or the stock
+  schematic>:<spec.talosVersion>` in `spec.install.image`). Machines without
+  SecureBoot are reported and left alone.
+- `Required`: as `Preferred`, and also: a TPM disk key renders
+  `checkSecurebootStatusOnEnroll: true` unless `requireSecureBoot: false` says
+  otherwise; the webhook refuses to set `Required` while an approved machine does
+  not run SecureBoot, unless the cluster carries
+  `ichor.maesh.dev/confirm-secureboot-reinstall: "true"`; and the controller does
+  not send the first configuration to a machine in maintenance mode that booted
+  without SecureBoot (`Ready=False`, reason `SecureBootRequired`, nothing sent).
+  A node that is already installed without SecureBoot is reported
+  (`SecureBoot=False`), never reconfigured or wiped.
+
+Every node's state is read from Talos (`talosctl get securitystate`) and kept in
+`TalosMachine.status.security`; the conditions `SecureBoot` and `KernelLockdown`
+exist on each machine and, summarised, on the cluster while the option is set.
+The UI's node page (Talos details, System) shows the same fields live. The
+condition reasons: `SecureBootOn`, `SecureBootOff` (a UKI node whose firmware has
+SecureBoot disabled), `NotUKI` (a GRUB install), `ModeOffButSecureBoot`.
+
+**Lockdown.** In Talos v1.14 SecureBoot images run with `lockdown=integrity`
+implicitly and no longer force `lockdown=confidentiality`. The command line is
+embedded in the UKI and ignored at boot, and `machine.install.extraKernelArgs` is
+refused with the UKI command line, so Ichor cannot render a lockdown level: for
+`confidentiality` create an Image Factory schematic with
+`extraKernelArgs: [lockdown=confidentiality]` and set `spec.schematic.id` to it.
+Ichor reads the node's command line and reports the level in effect
+(`status.security.kernelLockdown`: the last `lockdown=` word, else `integrity`
+under SecureBoot, else `none`).
+
+**Moving an installed cluster.** Changing the mode never changes an installed
+node, for three reasons Talos gives: a GRUB install cannot become UKI, key
+enrolment happens in the firmware, and a TPM disk key is bound to the SecureBoot
+state (PCR 7). The path, one node at a time, as for disk encryption: set the
+mode (and the confirm annotation for `Required`); take an etcd backup; reset the
+node (`ichor node reset NODE --override --confirm NODE`); boot the machine from
+the SecureBoot ISO of this cluster's schematic and Talos version with the
+firmware in setup mode (virtual machines enrol the keys by themselves; on bare
+metal choose "Enroll Secure Boot keys: auto" in the boot menu); approve it again;
+wait for `SecureBoot=True` before the next node, control planes one at a time
+with etcd quorum intact. Keep the UKI and PCR signing keys if you build your own
+images: losing them stops the next UKI booting and the encrypted disks unlocking.
+
 ## Talos API access from Kubernetes pods
 
 `machine.features.kubernetesTalosAPIAccess` in a `Config` patch with `os:admin` in
@@ -275,8 +345,5 @@ that holds the bundle for the controller is not affected.
 
 ## Not modelled
 
-SecureBoot and UKI images, kernel lockdown, kubelet serving-certificate
-bootstrap, private NTP and a Kubernetes audit log sink are not options yet.
-SecureBoot and UKI are a matter of the install image (`spec.install.image` and
-the schematic); moving to one is an upgrade to a different installer image with
-a reboot and firmware key enrolment. A follow-up.
+Kubelet serving-certificate bootstrap, private NTP and a Kubernetes audit log
+sink are not options yet.

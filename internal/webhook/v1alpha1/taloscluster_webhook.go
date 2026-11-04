@@ -262,7 +262,7 @@ func validateCNICreate(c *ichorv1alpha1.TalosCluster) error {
 	switch cni := c.Spec.CNI; {
 	case removedPreset(c):
 		return fmt.Errorf(presetRemovedMessage, cni.Preset)
-	case cni.Preset == presetUnmanaged && c.GetAnnotations()[ichorv1alpha1.TalosClusterAdoptedAnnotation] != "true":
+	case cni.Preset == presetUnmanaged && c.GetAnnotations()[ichorv1alpha1.TalosClusterAdoptedAnnotation] != annotationTrue:
 		return fmt.Errorf("spec.cni.preset %q is only for clusters brought in by `ichor adopt` (ADR 0103): "+
 			"the object must carry the annotation %s=\"true\"", presetUnmanaged, ichorv1alpha1.TalosClusterAdoptedAnnotation)
 	case cni.Custom != nil:

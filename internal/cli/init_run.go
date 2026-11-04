@@ -22,6 +22,9 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
@@ -33,6 +36,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
+	"github.com/maeshinshin/ichor/pkg/release"
 	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
@@ -78,6 +82,9 @@ type initDeps struct {
 	Stderr io.Writer
 	Stdin  io.Reader
 
+	// Progress renders init's steps on Stderr; nil means a new one on Stderr.
+	Progress *progress
+
 	AssumeYes bool
 	Output    string
 
@@ -94,6 +101,15 @@ type initDeps struct {
 	HandoverInterval time.Duration
 }
 
+// progress is the renderer of init's steps: Progress, or one on Stderr.
+func (d initDeps) progress() *progress {
+	if d.Progress != nil {
+		return d.Progress
+	}
+
+	return newProgress(d.Stderr)
+}
+
 // runInit implements `ichor init` (docs/design/architecture.md, "Bootstrap"): steps 1-5, then it
 // waits for the Cilium hand-over, a
 // reconciliation the CLI only watches.
@@ -107,14 +123,19 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
+	steps := deps.progress()
+	deps.Progress = steps
+
 	// The generated admin password is printed once, at the very end, also when a later step fails: by then
 	// the user exists and nothing else could show it.
 	var adminPassword string
 
-	defer func() { initUsersEpilogue(deps.Stderr, opts, adminPassword) }()
+	defer func() { initEpilogue(steps, opts, adminPassword, err == nil) }()
+
+	steps.Header("Ichor init · "+opts.Cluster, initSummary(opts))
 
 	// Step 2: settle the cluster's shape.
-	cluster, err := buildInitPlan(opts.initPlanInput, deps.Stderr)
+	cluster, err := buildInitPlan(opts.initPlanInput, steps.WarnWriter())
 	if err != nil {
 		return err
 	}
@@ -167,22 +188,32 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	// Step 1: generate the secrets bundle and back it up locally before
 	// anything else happens -- losing it after this point is the one
 	// mistake this command cannot undo for the operator.
-	contract, err := coreconfig.ParseContractFromVersion(opts.VersionContract)
-	if err != nil {
-		return fmt.Errorf("init: parsing --version-contract: %w", err)
-	}
+	var bundle *secrets.Bundle
 
-	bundle, err := secrets.NewBundle(secrets.NewClock(), contract)
-	if err != nil {
-		return fmt.Errorf("init: generating the secrets bundle: %w", err)
-	}
+	err = steps.Run("Secrets bundle", func(s *step) (string, error) {
+		contract, err := coreconfig.ParseContractFromVersion(opts.VersionContract)
+		if err != nil {
+			return "", fmt.Errorf("init: parsing --version-contract: %w", err)
+		}
 
-	bundlePath, err := saveBundleFile(cluster.Name, bundle)
-	if err != nil {
-		return fmt.Errorf("init: saving the secrets bundle: %w", err)
-	}
+		if bundle, err = secrets.NewBundle(secrets.NewClock(), contract); err != nil {
+			return "", fmt.Errorf("init: generating the secrets bundle: %w", err)
+		}
 
-	nagBackup(deps.Stderr, bundlePath)
+		bundlePath, err := saveBundleFile(cluster.Name, bundle)
+		if err != nil {
+			return "", fmt.Errorf("init: saving the secrets bundle: %w", err)
+		}
+
+		// The cluster's only root of trust: without it and the Secret in the cluster, nothing can
+		// be recovered. The call to action stays on the line, in yellow on a terminal.
+		s.Attn("back this up now")
+
+		return tildePath(bundlePath), nil
+	})
+	if err != nil {
+		return err
+	}
 
 	// Step 3: render the first control plane's configuration.
 	candidates := candidatePatches(cluster, machine, cniBoot, opts.NodeEndpoint, opts.DiskRoles)
@@ -214,18 +245,9 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		}
 	}
 
-	maint, err := deps.DialMaintenance(ctx, opts.NodeEndpoint)
-	if err != nil {
-		return fmt.Errorf("init: %w", err)
-	}
-
-	if err := maint.ApplyInsecure(ctx, rendered); err != nil {
-		return fmt.Errorf("init: applying configuration to %q: %w", opts.NodeEndpoint, err)
-	}
-
 	// Step 4: bootstrap etcd, fetch the kubeconfig, store the bundle as a
 	// Secret.
-	k8sClient, err := initBootstrapAccess(ctx, opts, deps, cluster, bundle)
+	k8sClient, err := initBootstrapAccess(ctx, opts, deps, cluster, bundle, rendered)
 	if err != nil {
 		return err
 	}
@@ -236,7 +258,12 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	}
 
 	// The API server comes up some time after etcd is bootstrapped.
-	if err := waitForAPIServer(ctx, k8sClient, deps.BootstrapWait, deps.BootstrapInterval, deps.Stderr); err != nil {
+	err = steps.Run("Kubernetes API", func(s *step) (string, error) {
+		s.Update("waiting for the API server")
+
+		return "reachable", waitForAPIServer(ctx, k8sClient, deps.BootstrapWait, deps.BootstrapInterval, s.Rewrite(initDetail))
+	})
+	if err != nil {
 		return err
 	}
 
@@ -244,42 +271,98 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	// in hand -- not inlined into the node's boot config: its
 	// CRDs must exist before step 5 can create any of them, and its
 	// namespace before the bundle Secret can.
-	if err := applyIchorManifest(ctx, k8sClient, deps.IchorManifest, deps.Stderr); err != nil {
+	err = steps.Run("Install Ichor", func(s *step) (string, error) {
+		s.Update("applying Ichor's install manifest")
+
+		if err := applyIchorManifest(ctx, k8sClient, deps.IchorManifest, s.Rewrite(initDetail)); err != nil {
+			return "", err
+		}
+
+		objects := s.Detail()
+
+		// A Create that timed out may still have gone through; createRetrying counts that as success.
+		if err := createRetrying(ctx, k8sClient, bundleSecret, s); err != nil {
+			return "", fmt.Errorf("init: creating the secrets bundle Secret: %w", err)
+		}
+
+		return objects, nil
+	})
+	if err != nil {
 		return err
 	}
 
-	// A Create that timed out may still have gone through; createRetrying counts that as success.
-	if err := createRetrying(ctx, k8sClient, bundleSecret, deps.Stderr); err != nil {
-		return fmt.Errorf("init: creating the secrets bundle Secret: %w", err)
-	}
+	var created bool
 
-	created, err := createIchorInstallation(ctx, k8sClient, deps.Stderr, deps.WebhookWait)
+	err = steps.Run("Ichor controller", func(s *step) (string, error) {
+		s.Update("waiting for the controller to roll out")
+
+		var err error
+		if created, err = createIchorInstallation(ctx, k8sClient, s.Rewrite(initDetail), deps.WebhookWait); err != nil {
+			return "", err
+		}
+
+		if !created {
+			s.Warn(s.Detail())
+
+			return "", nil
+		}
+
+		return "serving Ichor's webhooks", nil
+	})
 	if err != nil {
 		return err
 	}
 
 	// The first admin exists before the switch that makes every request need a token.
-	if adminPassword, err = initUsers(ctx, opts, k8sClient, deps.Stderr); err != nil {
-		return err
+	if opts.UIURL != "" {
+		err = steps.Run("Ichor users", func(s *step) (string, error) {
+			var err error
+
+			adminPassword, err = initUsers(ctx, opts, k8sClient, s)
+
+			return s.Detail(), err
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	// Step 5: create the CRs.
-	create := func(ctx context.Context, obj client.Object) error {
-		return createWhenWebhooksUp(ctx, k8sClient, obj, cmp.Or(deps.WebhookWait, deps.BootstrapWait, defaultWebhookWait), deps.BootstrapInterval, deps.Stderr)
-	}
+	err = steps.Run("Cluster resources", func(s *step) (string, error) {
+		create := func(ctx context.Context, obj client.Object) error {
+			return createWhenWebhooksUp(ctx, k8sClient, obj, cmp.Or(deps.WebhookWait, deps.BootstrapWait, defaultWebhookWait), deps.BootstrapInterval, s)
+		}
 
-	if err := createCRs(ctx, create, cluster, machine, candidates, deps.Stdout, deps.Output); err != nil {
+		err := createCRs(ctx, create, cluster, machine, candidates, deps.Stdout, deps.Output, s)
+
+		return fmt.Sprintf("TalosCluster, TalosMachine, TalosConfigPatch ×%d", len(candidates)), err
+	})
+	if err != nil {
 		return err
 	}
 
 	// Once Cilium is Ready: their CRD does not exist when the install manifest is applied.
-	if err := applyNetworkPolicies(ctx, k8sClient, deps.NetworkPolicies, opts.CNIPreset,
-		cmp.Or(deps.CiliumWait, defaultCiliumWait), deps.BootstrapInterval, deps.Stderr); err != nil {
-		return err
+	if len(deps.NetworkPolicies) > 0 {
+		err = steps.Run("Network policies", func(s *step) (string, error) {
+			s.Update("waiting for Cilium to be Ready")
+
+			err := applyNetworkPolicies(ctx, k8sClient, deps.NetworkPolicies, opts.CNIPreset,
+				cmp.Or(deps.CiliumWait, defaultCiliumWait), deps.BootstrapInterval, s.Rewrite(initDetail))
+
+			return s.Detail(), err
+		})
+		if err != nil {
+			return err
+		}
 	}
 
-	if err := setClusterAuthentication(ctx, k8sClient, cluster, opts.UIURL, deps.Stderr); err != nil {
-		return err
+	if opts.UIURL != "" {
+		err = steps.Run("Authentication", func(s *step) (string, error) {
+			return "spec.authentication.ichor is set", setClusterAuthentication(ctx, k8sClient, cluster, opts.UIURL, s)
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	if err := waitForCiliumHandover(ctx, k8sClient, created, cluster, deps); err != nil {
@@ -289,24 +372,48 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	return waitForUIReady(ctx, k8sClient, deps)
 }
 
+// initSummary is the second line of init's header: the preset and the release set it installs.
+func initSummary(opts initOptions) string {
+	return strings.Join([]string{
+		opts.Preset,
+		"Talos " + cmp.Or(opts.TalosVersion, release.Pinned.Talos),
+		"Kubernetes " + cmp.Or(opts.KubernetesVersion, release.Pinned.Kubernetes),
+		"Cilium " + release.Pinned.Cilium,
+	}, " · ")
+}
+
+// tildePath shortens a path under the home directory to ~/...
+func tildePath(path string) string {
+	if home, err := os.UserHomeDir(); err == nil && home != "" && strings.HasPrefix(path, home+string(os.PathSeparator)) {
+		return "~" + strings.TrimPrefix(path, home)
+	}
+
+	return path
+}
+
 // waitForUIReady ends init once the ichor-ui Deployment is rolled out. Running out of time is a
 // warning, not a failure: the cluster itself is fine and ichor-ui comes up on its own.
 func waitForUIReady(ctx context.Context, k8sClient client.Client, deps initDeps) error {
 	timeout := cmp.Or(deps.WebhookWait, defaultWebhookWait)
 
-	err := waitForUI(ctx, k8sClient, timeout, deps.BootstrapInterval, deps.Stderr)
+	s := deps.progress().Start("ichor-ui")
+	s.Update("waiting for ichor-ui to roll out")
+
+	err := waitForUI(ctx, k8sClient, timeout, deps.BootstrapInterval, s.Rewrite(initDetail))
 	if ctx.Err() != nil {
+		s.Fail(ctx.Err())
+
 		return ctx.Err()
 	}
 
 	if err != nil {
-		_, _ = fmt.Fprintf(deps.Stderr, "init: warning: ichor-ui was not ready after %s (%v); the cluster is fine, "+
-			"and the first ichor commands may warn that ichor-ui is not reachable until it is\n", timeout, err)
+		s.Warn(fmt.Sprintf("not ready after %s (%v); the cluster is fine, "+
+			"and the first ichor commands may warn that ichor-ui is not reachable until it is", timeout, err))
 
 		return nil
 	}
 
-	_, _ = fmt.Fprintln(deps.Stderr, "init: ichor-ui is ready")
+	s.Done("ready")
 
 	return nil
 }
@@ -317,58 +424,121 @@ func waitForUIReady(ctx context.Context, k8sClient client.Client, deps initDeps)
 func waitForCiliumHandover(
 	ctx context.Context, k8sClient client.Client, created bool, cluster *ichorv1alpha1.TalosCluster, deps initDeps,
 ) error {
+	s := deps.progress().Start("Cilium hand-over")
+
 	if !created {
-		_, _ = fmt.Fprintln(deps.Stderr, "init: not waiting for the Cilium hand-over: no IchorInstallation was created")
+		s.Warn("not waiting: no IchorInstallation was created")
 
 		return nil
 	}
 
+	s.Update("waiting for the controller to hand Cilium over")
+
 	if err := waitForCNIHandover(ctx, k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name},
-		cmp.Or(deps.HandoverWait, defaultHandoverWait), deps.HandoverInterval, deps.Stderr); err != nil {
+		cmp.Or(deps.HandoverWait, defaultHandoverWait), deps.HandoverInterval, s.Rewrite(initDetail)); err != nil {
 		if cluster.Spec.ControlPlane.Schedulable == schedulableFalse {
 			err = fmt.Errorf("%w (the control planes are tainted: if workloads are what is pending, approve a worker with `ichor machine approve`)", err)
 		}
 
-		return fmt.Errorf("init: Cilium was not handed over to Ichor: %w", err)
+		err = fmt.Errorf("init: Cilium was not handed over to Ichor: %w", err)
+		s.Fail(err)
+
+		return err
 	}
 
-	_, _ = fmt.Fprintln(deps.Stderr, "init: Cilium is now a Helm release owned by Ichor")
+	s.Done("Helm release owned by Ichor")
 
 	return nil
 }
 
-// initBootstrapAccess is step 4's first half: bootstrap etcd, fetch and save the kubeconfig, and connect.
+// initBootstrapAccess is step 4: apply the rendered configuration to the node and wait for it to
+// come back (Configure node), then bootstrap etcd, fetch and save the kubeconfig, and connect
+// (Bootstrap etcd). The wait is the Bootstrap call itself, retried until the node answers.
 func initBootstrapAccess(
 	ctx context.Context, opts initOptions, deps initDeps, cluster *ichorv1alpha1.TalosCluster, bundle *secrets.Bundle,
+	rendered []byte,
 ) (client.Client, error) {
-	admin, err := deps.DialAdmin(ctx, cluster, opts.NodeEndpoint, bundle)
+	steps := deps.progress()
+
+	var admin bootstrapClient
+
+	err := steps.Run("Configure node", func(s *step) (string, error) {
+		s.Update("applying the configuration")
+
+		maint, err := deps.DialMaintenance(ctx, opts.NodeEndpoint)
+		if err != nil {
+			return "", fmt.Errorf("init: %w", err)
+		}
+
+		if err := maint.ApplyInsecure(ctx, rendered); err != nil {
+			return "", fmt.Errorf("init: applying configuration to %q: %w", opts.NodeEndpoint, err)
+		}
+
+		s.Update("installing Talos and rebooting")
+
+		if admin, err = deps.DialAdmin(ctx, cluster, opts.NodeEndpoint, bundle); err != nil {
+			return "", fmt.Errorf("init: %w", err)
+		}
+
+		if err := bootstrapWhenUp(ctx, admin, deps.BootstrapWait, deps.BootstrapInterval, s.Rewrite(initDetail)); err != nil {
+			return "", fmt.Errorf("init: bootstrapping etcd: %w", err)
+		}
+
+		return opts.NodeEndpoint + " installed Talos and rebooted", nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("init: %w", err)
+		return nil, err
 	}
 
-	if err := bootstrapWhenUp(ctx, admin, deps.BootstrapWait, deps.BootstrapInterval, deps.Stderr); err != nil {
-		return nil, fmt.Errorf("init: bootstrapping etcd: %w", err)
-	}
+	var k8sClient client.Client
 
-	kubeconfig, err := admin.Kubeconfig(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("init: fetching the kubeconfig: %w", err)
-	}
+	err = steps.Run("Bootstrap etcd", func(*step) (string, error) {
+		kubeconfig, err := admin.Kubeconfig(ctx)
+		if err != nil {
+			return "", fmt.Errorf("init: fetching the kubeconfig: %w", err)
+		}
 
-	kubeconfigPath, err := saveKubeconfigFile(cluster.Name, kubeconfig)
-	if err != nil {
-		return nil, fmt.Errorf("init: saving the kubeconfig: %w", err)
-	}
+		kubeconfigPath, err := saveKubeconfigFile(cluster.Name, kubeconfig)
+		if err != nil {
+			return "", fmt.Errorf("init: saving the kubeconfig: %w", err)
+		}
 
-	_, _ = fmt.Fprintf(deps.Stderr, "init: kubeconfig written to %s\n", kubeconfigPath)
+		if k8sClient, err = deps.NewK8sClient(kubeconfig); err != nil {
+			return "", fmt.Errorf("init: connecting to the new cluster: %w", err)
+		}
 
-	k8sClient, err := deps.NewK8sClient(kubeconfig)
-	if err != nil {
-		return nil, fmt.Errorf("init: connecting to the new cluster: %w", err)
-	}
+		return "kubeconfig saved to " + tildePath(kubeconfigPath), nil
+	})
 
-	return k8sClient, nil
+	return k8sClient, err
 }
+
+// initDetail turns a message of the wait helpers into the short detail of a step.
+func initDetail(msg string) string {
+	switch {
+	case strings.Contains(msg, "code = Unavailable"):
+		return "waiting for the node's Talos API"
+	case strings.Contains(msg, "bootstrap is not available yet"):
+		return "waiting for etcd to start"
+	case strings.Contains(msg, "connection refused"):
+		return "connection refused"
+	}
+
+	if m := deploymentRolloutRE.FindStringSubmatch(msg); m != nil {
+		return fmt.Sprintf("rolling out (%s/%s available)", m[1], m[2])
+	}
+
+	if m := appliedObjectsRE.FindStringSubmatch(msg); m != nil {
+		return m[1] + " objects"
+	}
+
+	return msg
+}
+
+var (
+	deploymentRolloutRE = regexp.MustCompile(`^the Deployment \S+ is not rolled out \(\d+ updated, (\d+) available of (\d+)\)$`)
+	appliedObjectsRE    = regexp.MustCompile(`^applied .* \((\d+) objects\)$`)
+)
 
 func rejectRegistryCredentials(cluster *ichorv1alpha1.TalosCluster) error {
 	for _, r := range cluster.Spec.Registries {
@@ -383,17 +553,15 @@ func rejectRegistryCredentials(cluster *ichorv1alpha1.TalosCluster) error {
 // createCRs implements design step 5, "create the CRs": the
 // TalosCluster, the first control plane's TalosMachine, and every
 // candidate TalosConfigPatch, then prints what it created in the
-// requested output format (design: "-o yaml|json"); by default only one line per object.
+// requested output format (design: "-o yaml|json"). Each object created is the step's detail;
+// stdout carries only the objects themselves, and only with -o.
 func createCRs(
 	ctx context.Context, create func(context.Context, client.Object) error,
 	cluster *ichorv1alpha1.TalosCluster, machine *ichorv1alpha1.TalosMachine, candidates []ichorv1alpha1.TalosConfigPatch,
-	stdout io.Writer, output string,
+	stdout io.Writer, output string, s *step,
 ) error {
-	// With no -o given (output ""), one line per object; the objects themselves only on -o yaml|json.
 	created := func(kind string, obj client.Object) {
-		if output == "" {
-			_, _ = fmt.Fprintf(stdout, "init: created %s %s/%s\n", kind, obj.GetNamespace(), obj.GetName())
-		}
+		s.Update(fmt.Sprintf("created %s %s/%s", kind, obj.GetNamespace(), obj.GetName()))
 	}
 
 	if err := create(ctx, cluster); err != nil {
@@ -416,6 +584,7 @@ func createCRs(
 		created("TalosConfigPatch", &candidates[i])
 	}
 
+	// With no -o given (output ""), only the steps' lines; the objects themselves only on -o yaml|json.
 	if output == "" {
 		return nil
 	}

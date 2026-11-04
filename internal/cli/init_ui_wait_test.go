@@ -60,7 +60,7 @@ func TestWaitForUIReady_ReadyDeploymentEndsTheWait(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(stderr.String(), "ichor-ui is ready") {
+	if !strings.Contains(stderr.String(), "ichor-ui — ready") {
 		t.Errorf("stderr: %s", stderr.String())
 	}
 }
@@ -78,7 +78,7 @@ func TestWaitForUIReady_TimeoutWarnsAndReturnsNil(t *testing.T) {
 		t.Fatalf("a timeout must not fail init: %v", err)
 	}
 
-	if !strings.Contains(stderr.String(), "warning: ichor-ui was not ready") {
+	if !strings.Contains(stderr.String(), "ichor-ui — not ready after") {
 		t.Errorf("stderr lacks the warning:\n%s", stderr.String())
 	}
 }

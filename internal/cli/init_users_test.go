@@ -234,7 +234,7 @@ func TestRunInit_UIURLRetriesAnEtcdTimeoutOnTheCredentialsSecret(t *testing.T) {
 		t.Fatalf("runInit: %v", err)
 	}
 
-	if timeouts != 1 || !strings.Contains(stderr.String(), "init: retrying") {
+	if timeouts != 1 || !strings.Contains(stderr.String(), "retrying in") {
 		t.Errorf("the timeout was not retried (timeouts=%d):\n%s", timeouts, stderr.String())
 	}
 }

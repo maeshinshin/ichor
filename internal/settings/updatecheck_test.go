@@ -3,8 +3,6 @@ package settings
 import (
 	"testing"
 
-	"k8s.io/utils/ptr"
-
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
@@ -16,7 +14,7 @@ func TestUpdateCheckResolve(t *testing.T) {
 	}
 
 	inst := &ichorv1alpha1.IchorInstallation{Spec: ichorv1alpha1.IchorInstallationSpec{
-		UpdateCheck: &ichorv1alpha1.IchorUpdateCheckSettings{Enabled: ptr.To(false)},
+		UpdateCheck: &ichorv1alpha1.IchorUpdateCheckSettings{Enabled: new(false)},
 	}}
 	if got := Resolve(inst, fb, false).UpdateCheck; got.V || got.Source != ichorv1alpha1.IchorSourceSpec {
 		t.Fatalf("spec false: got %+v, want (false, spec)", got)
@@ -55,7 +53,7 @@ func TestUpdateCheckAssignmentsAndApply(t *testing.T) {
 		t.Fatalf("Apply wrote %+v", inst.Spec.UpdateCheck)
 	}
 
-	if !(Changes{}).Empty() || (Changes{UpdateCheck: ptr.To(true)}).Empty() {
+	if !(Changes{}).Empty() || (Changes{UpdateCheck: new(true)}).Empty() {
 		t.Fatal("Empty must count the update check switch")
 	}
 }

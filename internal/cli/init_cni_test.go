@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	sigsyaml "sigs.k8s.io/yaml"
+
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 )
 
@@ -80,5 +82,49 @@ func TestBuildCNIBootstrap_Cilium(t *testing.T) {
 
 	if out.InlineManifest == nil || out.InlineManifest.InlineManifestContents == "" {
 		t.Fatal("expected a non-empty inline manifest for cilium")
+	}
+}
+
+// ciliumOperatorReplicas is spec.replicas of the cilium-operator Deployment in a rendered manifest.
+func ciliumOperatorReplicas(t *testing.T, manifest string) int {
+	t.Helper()
+
+	for doc := range strings.SplitSeq(manifest, "\n---\n") {
+		var obj struct {
+			Kind     string `json:"kind"`
+			Metadata struct {
+				Name string `json:"name"`
+			} `json:"metadata"`
+			Spec struct {
+				Replicas int `json:"replicas"`
+			} `json:"spec"`
+		}
+
+		if err := sigsyaml.Unmarshal([]byte(doc), &obj); err != nil {
+			continue
+		}
+
+		if obj.Kind == "Deployment" && obj.Metadata.Name == "cilium-operator" {
+			return obj.Spec.Replicas
+		}
+	}
+
+	t.Fatal("no cilium-operator Deployment in the manifest")
+
+	return 0
+}
+
+// `ichor init` renders Cilium into the first control plane's machine config when that node is the only
+// Node there is, so an HA cluster's operator starts with one replica, not the desired count's two.
+func TestBuildCNIBootstrap_HAOperatorStartsWithOneReplica(t *testing.T) {
+	preset := cilium.New().WithControlPlanes(3)
+
+	out, err := buildCNIBootstrap(preset, "my-cluster", testNamespace)
+	if err != nil {
+		t.Fatalf("buildCNIBootstrap: %v", err)
+	}
+
+	if got := ciliumOperatorReplicas(t, out.InlineManifest.InlineManifestContents); got != 1 {
+		t.Errorf("operator replicas = %d, want 1 for the one node init bootstraps", got)
 	}
 }

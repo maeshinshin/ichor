@@ -1,6 +1,6 @@
 # 0108. Security hardening
 
-Status: Accepted; in progress · Date: 2026-11-02 · Design section: Trust, Deployment, Nodes · Touches: 0011, 0041, 0058, 0063, 0089, 0103, 0105, 0107
+Status: Accepted; built, hardware-verified (see the Hardware results sections); five items deferred as explicit follow-ups (see "Follow-ups") · Date: 2026-11-02 · Design section: Trust, Deployment, Nodes · Touches: 0011, 0041, 0058, 0063, 0089, 0103, 0105, 0107
 
 Decided: Ichor is hardened area by area after five read-only audits (2026-11-02): ichor-ui and its auth, the controller's privileges and admission, workloads and the supply chain, the security of the clusters Ichor creates, and secrets and credentials. Fixes to Ichor itself are made directly. For the clusters Ichor creates, every new hardening is a typed option that is off by default, for new and existing clusters alike; disk encryption stays opt-in (the user's decision, 2026-11-02). Each area below records its decisions and what was built.
 
@@ -412,3 +412,15 @@ Open for the user (ADR 0108 decision): whether the Job may keep a Secret mirror 
 ## RBAC: ichor-ui reads the trust ConfigMap by name
 
 GetEffectiveConfig renders in ichor-ui, and with `spec.authentication.ichor.enabled` the render reads ConfigMap `ichor-oidc-trust` (ADR 0094). The ServiceAccount had no ConfigMap rule, so the node page's Effective config tab failed with `forbidden`. Nothing stored by the controller can stand in for it: the tab renders from the CRs and the bundle on every call, there is no stored render. Decided: `get` on `configmaps` with `resourceNames: ichor-oidc-trust`, in the namespaced Role in `ichor-system`, never list or watch. The rule lives in `internal/uiapi/rbac_markers.go`, and `config/rbac/ichor-ui/role.yaml` and the chart's `ichor-ui-secrets-role.yaml` carry it. The envtest spec "lets GetEffectiveConfig read the trust ConfigMap" in `internal/uiapi/rbac_enforced_test.go` runs the handler with the generated role.
+
+## Follow-ups
+
+Everything above is built except these five items, which were deferred on purpose. None is in progress; each needs its own decision before work starts.
+
+| Item | Where decided | Why it waits |
+|---|---|---|
+| CA rotation beyond the Talos API CA and the Kubernetes API CA: the etcd CA, the aggregator CA, the service-account signing key and the secretbox key | "6. CA rotation coverage (S6)" | Needs a dual-key period, a re-encryption pass and a versioned backup key; not an extension of the two-CA stages. |
+| Resolving the installer image by digest (`spec.installerDigest`, audit M3), and verifying a signature before the installer Job runs | "Supply chain and workloads", Decisions | Verification is documented in `docs/guides/install-with-helm.md`; Ichor does not enforce it. |
+| FQDN network-policy rules and a metrics-namespace restriction | "Supply chain and workloads", Network | The static install copy has no values to carry names. |
+| SecureBoot and UKI, kernel lockdown, an `os:reader` talosconfig role, kubelet serving-certificate bootstrap | "Typed hardening options for managed clusters", Not modelled | Not modelled as typed options yet. |
+| Encrypting the local secrets bundle (`secrets.yaml`, plaintext 0600) | "Secrets handling", Local files (S9) | The file is mode 0600 and written atomically; `loadBundleFile` warns when it is group or world accessible. |

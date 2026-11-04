@@ -46,22 +46,31 @@ const (
 	hkdfInfoV2 = "ichor.maesh.dev/etcd-backup/v2"
 )
 
-// Key is the pair of passphrases of one cluster: Current seals new backups, Legacy (v1) is only tried when
-// reading. Nothing about either is stored anywhere: whoever holds the bundle can derive them again, which is
-// what lets "bundle + snapshot" be enough to recover (design, "Backup, recovery, certificates"), and
+// Key is the passphrases of one cluster: Current seals new backups, Legacy (v1) and Retired are only tried
+// when reading. Retired holds the passphrases derived from the secretbox secrets that key rotations retired, newest
+// first, so a backup sealed before a rotation stays readable. Nothing about any of them is
+// stored anywhere: whoever holds the bundle (which keeps the retired secretbox secrets) can derive them again,
+// which is what lets "bundle + snapshot" be enough to recover (design, "Backup, recovery, certificates"), and
 // whoever has only the bucket cannot.
 //
-// The values are secret material: never log them or put them in an error. Secrets lists both for a scrubber.
-type Key struct{ Current, Legacy string }
+// The values are secret material: never log them or put them in an error. Secrets lists them all for a scrubber.
+type Key struct {
+	Current, Legacy string
+	Retired         []string
+}
 
-// Secrets is every passphrase of k, for a scrubber.
-func (k Key) Secrets() []string { return []string{k.Current, k.Legacy} }
+// Secrets is every passphrase of k, for a scrubber, in the order Decrypt tries them.
+func (k Key) Secrets() []string { return append([]string{k.Current, k.Legacy}, k.Retired...) }
 
 // DeriveKey derives the backup passphrases from the cluster's secrets bundle. The v2 input is the
 // secretbox key (then the legacy AES-CBC key) of the Kubernetes API server: control planes alone hold it,
-// and Ichor never rotates it, so it keeps older backups readable across a CA rotation. The v1
+// and a CA rotation does not touch it, so it keeps older backups readable across one. The v1
 // input, Cluster.Secret, is in every worker's machine config.
-func DeriveKey(bundle *secrets.Bundle) (Key, error) {
+//
+// A key rotation replaces the secretbox secret; retired are the secrets it retired, newest
+// first (secretsbundle.Retired.Secretboxes), and each derives one more passphrase, the way Current does,
+// that Decrypt tries after the others. An empty entry is skipped.
+func DeriveKey(bundle *secrets.Bundle, retired ...string) (Key, error) {
 	if bundle == nil || bundle.Cluster == nil || bundle.Cluster.Secret == "" {
 		return Key{}, errors.New("secrets bundle carries no cluster secret to derive the backup key from")
 	}
@@ -86,7 +95,22 @@ func DeriveKey(bundle *secrets.Bundle) (Key, error) {
 		return Key{}, fmt.Errorf("deriving backup key: %w", err)
 	}
 
-	return Key{Current: hex.EncodeToString(v2), Legacy: hex.EncodeToString(v1)}, nil
+	key := Key{Current: hex.EncodeToString(v2), Legacy: hex.EncodeToString(v1)}
+
+	for _, secret := range retired {
+		if secret == "" {
+			continue
+		}
+
+		old, err := hkdf.Key(sha256.New, []byte(secret), []byte(bundle.Cluster.ID), hkdfInfoV2, 32)
+		if err != nil {
+			return Key{}, fmt.Errorf("deriving backup key: %w", err)
+		}
+
+		key.Retired = append(key.Retired, hex.EncodeToString(old))
+	}
+
+	return key, nil
 }
 
 // encryptWorkFactor is log2 of scrypt's N, r=8 (1 MiB). The passphrase is a 256-bit HKDF output, not something

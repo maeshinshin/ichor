@@ -97,3 +97,10 @@ func TestEveryWriteCommandIsGatedAndReadsAreNot(t *testing.T) {
 		}
 	}
 }
+
+// TestRootVersionMatchesVersionClient keeps `ichor --version` and `ichor version --client` on one source.
+func TestRootVersionMatchesVersionClient(t *testing.T) {
+	if got, want := rootCmd.Version, clientVersion(); got != want {
+		t.Errorf("rootCmd.Version = %q, clientVersion() = %q", got, want)
+	}
+}

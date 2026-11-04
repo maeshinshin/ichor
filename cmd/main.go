@@ -549,7 +549,7 @@ func main() {
 		RootCAPublished: controller.NewRootCAPublished(),
 		// The aggregator CA's wait for extension API servers (ADR 0120).
 		AggregatorCAPublished: controller.NewAggregatorCAPublished(),
-		Recorder:       mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
+		Recorder:              mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
 		// The node kind (ADR 0085) drains with the same clientset and storage hook as the
 		// config rollout.
 		KubeClient: kubeClient,

@@ -639,9 +639,11 @@ func configEffect(machines []*ichorv1alpha1.TalosMachine) pb.OperationEffect {
 }
 
 // apiGoesDown reports whether the plan's own step takes a lone control plane's API server away:
-// a reboot, or a config change (which reboots or restarts it).
+// a reboot, or a config change (which reboots or restarts it), or an etcd CA rotation, which restarts
+// the etcd member the API server of that control plane depends on (ADR 0120).
 func apiGoesDown(p *opPlan) bool {
-	return p.resp.Effect == pb.OperationEffect_OPERATION_EFFECT_REBOOT || p.kind == ichorv1alpha1.TalosOperationKindConfig
+	return p.resp.Effect == pb.OperationEffect_OPERATION_EFFECT_REBOOT || p.kind == ichorv1alpha1.TalosOperationKindConfig ||
+		(p.kind == ichorv1alpha1.TalosOperationKindCARotation && slices.Contains(p.caTargets, ichorv1alpha1.CARotationTargetEtcd))
 }
 
 func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1alpha1.TalosCluster, maxUnavailable int32) error {
@@ -706,12 +708,6 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 	// server) takes the Kubernetes API down for the length of it (the cluster has no other API
 	// server to answer).
 	p.resp.KubernetesApiUnavailable = apiGoesDown(p) && approvedControlPlanes == 1 && len(cps) == 1
-
-	// An etcd CA rotation restarts the member of every control plane (ADR 0120): with one, the API goes down each time.
-	if p.kind == ichorv1alpha1.TalosOperationKindCARotation && slices.Contains(p.caTargets, ichorv1alpha1.CARotationTargetEtcd) &&
-		approvedControlPlanes == 1 {
-		p.resp.KubernetesApiUnavailable = true
-	}
 
 	// Through a single node's address, every kubelet and controller talks to one API server; while
 	// that node's API server restarts the whole cluster has none (ADR 0087).

@@ -45,6 +45,8 @@ func pemCerts(crt []byte) [][]byte {
 
 func firstDER(crt []byte) []byte { return pemCerts(crt)[0] }
 
+var aggregatorOnly = []string{ichorv1alpha1.CARotationTargetAggregator}
+
 // TestCARotationEtcdStagesRenderABundleWithTheSigningCAFirst pins the etcd CA field of a control
 // plane in each stage (ADR 0120): both certificates while both are trusted, the signing CA first
 // with its own key (Talos signs with the first block and the key), the new one alone at the end.
@@ -95,7 +97,8 @@ func TestCARotationEtcdStagesRenderABundleWithTheSigningCAFirst(t *testing.T) {
 		}
 
 		// A CA that is not a target renders exactly as before.
-		if !bytes.Equal(cfg.Machine().Security().IssuingCA().Crt, old.Certs.OS.Crt) || len(cfg.Machine().Security().AcceptedCAs()) != 0 {
+		sec := cfg.Machine().Security()
+		if !bytes.Equal(sec.IssuingCA().Crt, old.Certs.OS.Crt) || len(sec.AcceptedCAs()) != 0 {
 			t.Errorf("%s: the Talos CA changed in an etcd-only rotation", tc.stage)
 		}
 	}
@@ -107,21 +110,22 @@ func TestCARotationAggregatorStagesUseTheAcceptedList(t *testing.T) {
 	cluster := testCluster("true")
 	old := testBundle(t)
 
-	next, err := secretsbundle.NewRotationFor(time.Now(), testContract(t), []string{ichorv1alpha1.CARotationTargetAggregator})
+	next, err := secretsbundle.NewRotationFor(time.Now(), testContract(t), aggregatorOnly)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	m := testMachine("cp", roleControlPlane, nil)
+	oldAgg, newAgg := old.Certs.K8sAggregator.Crt, next.Aggregator.Crt
 
 	for _, tc := range []struct {
 		stage    string
 		issuer   []byte
 		accepted [][]byte // what the apiserver trusts, issuing CA included
 	}{
-		{ichorv1alpha1.CARotationStageAccepting, old.Certs.K8sAggregator.Crt, [][]byte{old.Certs.K8sAggregator.Crt, next.Aggregator.Crt}},
-		{ichorv1alpha1.CARotationStageIssuing, next.Aggregator.Crt, [][]byte{next.Aggregator.Crt, old.Certs.K8sAggregator.Crt}},
-		{ichorv1alpha1.CARotationStageDropping, next.Aggregator.Crt, [][]byte{next.Aggregator.Crt}},
+		{ichorv1alpha1.CARotationStageAccepting, oldAgg, [][]byte{oldAgg, newAgg}},
+		{ichorv1alpha1.CARotationStageIssuing, newAgg, [][]byte{newAgg, oldAgg}},
+		{ichorv1alpha1.CARotationStageDropping, newAgg, [][]byte{newAgg}},
 	} {
 		cfg, err := BuildConfig(cluster, m, old, nil, &SystemInputs{CARotation: &CARotation{Stage: tc.stage, New: next}})
 		if err != nil {
@@ -218,9 +222,9 @@ func TestCARotationAllFourLastStagesEqualTheFinalConfiguration(t *testing.T) {
 // field with no accepted list, so there is no stage in which both are trusted.
 func TestCARotationAggregatorNeedsTheMultiDocumentContract(t *testing.T) {
 	cluster := testCluster("true")
-	cluster.Spec.VersionContract = "v1.13"
+	cluster.Spec.VersionContract = contractV113
 
-	next, err := secretsbundle.NewRotationFor(time.Now(), testContract(t), []string{ichorv1alpha1.CARotationTargetAggregator})
+	next, err := secretsbundle.NewRotationFor(time.Now(), testContract(t), aggregatorOnly)
 	if err != nil {
 		t.Fatal(err)
 	}

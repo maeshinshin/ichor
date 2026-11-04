@@ -463,7 +463,7 @@ func (c *caRun) replacedCAs() string {
 		case kubernetesCAName:
 			names = append(names, "Kubernetes API")
 		case etcdCAName:
-			names = append(names, "etcd")
+			names = append(names, serviceEtcd)
 		case aggregatorCAName:
 			names = append(names, "Kubernetes aggregator")
 		}

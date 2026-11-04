@@ -35,6 +35,13 @@ import (
 
 // rotate-ca --ca and --all (docs/adr/0120).
 
+const (
+	caTalos      = ichorv1alpha1.CARotationTargetTalos
+	caKubernetes = ichorv1alpha1.CARotationTargetKubernetes
+	caEtcd       = ichorv1alpha1.CARotationTargetEtcd
+	caAggregator = ichorv1alpha1.CARotationTargetAggregator
+)
+
 func TestRotateCATargetsFromTheFlags(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
@@ -44,11 +51,11 @@ func TestRotateCATargetsFromTheFlags(t *testing.T) {
 		wantErr string
 	}{
 		{name: "none", want: nil},
-		{name: "one", ca: []string{"etcd"}, want: []string{"etcd"}},
-		{name: "several", ca: []string{"etcd", "kubernetes-aggregator"}, want: []string{"etcd", "kubernetes-aggregator"}},
-		{name: "all", all: true, want: []string{"talos", "kubernetes", "etcd", "kubernetes-aggregator"}},
-		{name: "all and ca", ca: []string{"etcd"}, all: true, wantErr: "alternatives"},
-		{name: "unknown", ca: []string{"service-account"}, wantErr: "the choices are talos, kubernetes, etcd, kubernetes-aggregator"},
+		{name: "one", ca: []string{caEtcd}, want: []string{caEtcd}},
+		{name: "several", ca: []string{caEtcd, caAggregator}, want: []string{caEtcd, caAggregator}},
+		{name: "all", all: true, want: []string{caTalos, caKubernetes, caEtcd, caAggregator}},
+		{name: "all and ca", ca: []string{caEtcd}, all: true, wantErr: "alternatives"},
+		{name: "not a CA", ca: []string{"service-account"}, wantErr: "the choices are talos, kubernetes, etcd, kubernetes-aggregator"},
 	} {
 		got, err := rotateCATargets(tt.ca, tt.all)
 		if tt.wantErr != "" {
@@ -66,17 +73,15 @@ func TestRotateCATargetsFromTheFlags(t *testing.T) {
 }
 
 func TestOnlyTheTalosAndKubernetesCAsNeedTheCredentialHandoff(t *testing.T) {
-	for targets, want := range map[string]bool{
-		"": true, "talos": true, "kubernetes": true, "etcd,talos": true,
-		"etcd": false, "kubernetes-aggregator": false, "etcd,kubernetes-aggregator": false,
+	for _, tt := range []struct {
+		targets []string
+		want    bool
+	}{
+		{nil, true}, {[]string{caTalos}, true}, {[]string{caKubernetes}, true}, {[]string{caEtcd, caTalos}, true},
+		{[]string{caEtcd}, false}, {[]string{caAggregator}, false}, {[]string{caEtcd, caAggregator}, false},
 	} {
-		var in []string
-		if targets != "" {
-			in = strings.Split(targets, ",")
-		}
-
-		if got := needsCredentialHandoff(in); got != want {
-			t.Errorf("targets %q: got %v, want %v", targets, got, want)
+		if got := needsCredentialHandoff(tt.targets); got != tt.want {
+			t.Errorf("targets %v: got %v, want %v", tt.targets, got, tt.want)
 		}
 	}
 }
@@ -107,7 +112,7 @@ func TestRotateCAPlanOfEtcdAloneHasNoHandoffAndWarnsAboutRestartsAndTheSnapshot(
 	var prompt bytes.Buffer
 
 	err := runStartOperation(context.Background(), c, strings.NewReader("n\n"), &bytes.Buffer{}, &prompt,
-		startSpec{Kind: pb.OperationKind_OPERATION_KIND_CA_ROTATION, Cluster: opTestCluster, CATargets: []string{"etcd"}})
+		startSpec{Kind: pb.OperationKind_OPERATION_KIND_CA_ROTATION, Cluster: opTestCluster, CATargets: []string{caEtcd}})
 	if err == nil || !strings.Contains(err.Error(), "aborted") {
 		t.Fatalf("want aborted, got %v", err)
 	}
@@ -137,16 +142,16 @@ func TestRotateCAPlanOfAllFourNamesEachAndKeepsTheHandoff(t *testing.T) {
 
 	objs := opTestObjects()
 
-	// The fixture's cluster has version contract v1.13, where the aggregator CA cannot be rotated.
+	// The fixture's cluster has an old version contract, where the aggregator CA cannot be rotated.
 	c := localClients(apiOpts, apiDeps{K8s: fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(objs...).Build()})
 
 	err := runStartOperation(context.Background(), c, strings.NewReader("n\n"), &bytes.Buffer{}, &bytes.Buffer{},
-		startSpec{Kind: pb.OperationKind_OPERATION_KIND_CA_ROTATION, Cluster: opTestCluster, CATargets: []string{"kubernetes-aggregator"}})
+		startSpec{Kind: pb.OperationKind_OPERATION_KIND_CA_ROTATION, Cluster: opTestCluster, CATargets: []string{caAggregator}})
 	if err == nil || !strings.Contains(err.Error(), "accepted list") {
-		t.Fatalf("want the v1.13 refusal, got %v", err)
+		t.Fatalf("want the refusal of an old contract, got %v", err)
 	}
 
-	objs[0].(*ichorv1alpha1.TalosCluster).Spec.VersionContract = "v1.14"
+	objs[0].(*ichorv1alpha1.TalosCluster).Spec.VersionContract = kubePrismDocContract
 	c = localClients(apiOpts, apiDeps{K8s: fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(objs...).Build()})
 
 	var prompt bytes.Buffer
@@ -182,7 +187,7 @@ func TestRotateCAOfEtcdAloneWritesTheTargetsAndFollowsNothingItDoesNotNeed(t *te
 	cmd.SetErr(&errw)
 
 	err := runStartOperation(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, startSpec{
-		Kind: pb.OperationKind_OPERATION_KIND_CA_ROTATION, Cluster: opTestCluster, CATargets: []string{"etcd"},
+		Kind: pb.OperationKind_OPERATION_KIND_CA_ROTATION, Cluster: opTestCluster, CATargets: []string{caEtcd},
 		AfterCreate: func(ctx context.Context, ref *pb.ObjectRef, created *pb.CreateOperationResponse) error {
 			return afterRotateCAWithoutHandoff(ctx, cmd, opTestCluster, ref, created)
 		},
@@ -192,7 +197,7 @@ func TestRotateCAOfEtcdAloneWritesTheTargetsAndFollowsNothingItDoesNotNeed(t *te
 	}
 
 	ops := opTestOps(t, k8s)
-	if len(ops) != 1 || ops[0].Spec.CARotation == nil || !slices.Equal(ops[0].Spec.CARotation.Targets, []string{"etcd"}) {
+	if len(ops) != 1 || ops[0].Spec.CARotation == nil || !slices.Equal(ops[0].Spec.CARotation.Targets, []string{caEtcd}) {
 		t.Fatalf("ops = %+v", ops)
 	}
 

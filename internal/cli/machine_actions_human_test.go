@@ -38,6 +38,10 @@ const (
 	actionsMachineShort = "fa70962a"
 	actionsMachineIP    = "10.0.0.10"
 	actionsRangeIP      = "10.1.0.0/24"
+	actionsNewAddress   = "10.0.0.7"
+	actionsNewCluster   = "new"
+	// actionsOtherMachine is a second, pending machine.
+	actionsOtherMachine = "other-machine"
 )
 
 func pendingActionsMachine() *ichorv1alpha1.TalosMachine {
@@ -120,7 +124,7 @@ func TestMachineActionsMachineFormatsAreUnchanged(t *testing.T) {
 			setHumanTestFlags(t, format)
 
 			other := strongMachine()
-			other.Name = "other"
+			other.Name = actionsOtherMachine
 
 			k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(pendingActionsMachine(), other).Build()
 			c := localClients(apiOpts, apiDeps{K8s: k8s})
@@ -136,7 +140,7 @@ func TestMachineActionsMachineFormatsAreUnchanged(t *testing.T) {
 
 			out.Reset()
 
-			if err := runMachineReject(context.Background(), c, strings.NewReader(""), &out, &bytes.Buffer{}, "other", "x"); err != nil {
+			if err := runMachineReject(context.Background(), c, strings.NewReader(""), &out, &bytes.Buffer{}, actionsOtherMachine, "x"); err != nil {
 				t.Fatal(err)
 			}
 
@@ -150,7 +154,7 @@ func TestMachineActionsMachineFormatsAreUnchanged(t *testing.T) {
 func TestMachineReclaimHumanOutputOnAPlainWriter(t *testing.T) {
 	h := newReclaimHarness("AAAA-1\n", reclaim.Known{})
 
-	if err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Wait: time.Second, Cluster: "new"}); err != nil {
+	if err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Wait: time.Second, Cluster: actionsNewCluster}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -173,7 +177,7 @@ func TestMachineReclaimHumanOutputOnAPlainWriter(t *testing.T) {
 		"✓ Reset — accepted, graceful\n",
 		"✓ Maintenance mode — 10.0.0.5 answers with UUID AAAA-1\n",
 		"✓ Register — added to cluster new's discovery addresses; it will appear as a pending machine\n",
-		"Done in ",
+		doneInPrefix,
 		"Next\n  ichor machine list",
 	}
 
@@ -202,7 +206,7 @@ func TestMachineReclaimARefusalIsAFailedLineAndTheHintStaysVisible(t *testing.T)
 	h = newReclaimHarness("AAAA-1\n", reclaim.Known{})
 	h.deps.Probe = func(context.Context, string) (string, error) { return "", context.DeadlineExceeded }
 
-	err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Wait: 20 * time.Millisecond, Cluster: "new"})
+	err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Wait: 20 * time.Millisecond, Cluster: actionsNewCluster})
 	if err == nil || !errorShown(err) {
 		t.Fatalf("want an error a step already showed, got %v", err)
 	}
@@ -255,8 +259,8 @@ func TestClusterDiscoveryEditHumanOutput(t *testing.T) {
 	cmd := discoveryCmdIO("")
 
 	for target, want := range map[string]string{
-		"10.0.0.6":       "✓ added 10.0.0.6 to the discovery of adopt-cluster\n",
-		"192.168.0.9/24": "✓ added 192.168.0.9/24 to the discovery of adopt-cluster\n",
+		actionsNewAddress: "✓ added " + actionsNewAddress + " to the discovery of adopt-cluster\n",
+		"192.168.0.9/24":  "✓ added 192.168.0.9/24 to the discovery of adopt-cluster\n",
 	} {
 		if err := runDiscoveryEdit(context.Background(), c, cmd, target, false); err != nil {
 			t.Fatal(err)

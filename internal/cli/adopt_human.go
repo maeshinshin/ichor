@@ -131,12 +131,7 @@ func (d adoptDeps) epilogue(cluster, namespace string, e adoptEnd) {
 		return
 	}
 
-	flags := ""
-	if namespace != ichorControllerNamespace {
-		flags = " -n " + namespace
-	}
-
-	d.Steps.Next("ichor cluster status "+cluster+flags, "ichor machine list"+flags)
+	d.Steps.Next("ichor cluster status "+cluster+nsFlag(namespace), "ichor machine list"+nsFlag(namespace))
 }
 
 // adoptSummary is the second line of adopt's header.

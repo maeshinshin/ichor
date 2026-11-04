@@ -117,7 +117,7 @@ func renderMachineGet(h *human, m *pb.Machine) error {
 		kv{"Deleting", map[bool]string{true: "yes"}[m.GetDeleting()]}, kv{"Created", agoOrEmpty(m.GetCreatedAt())})
 
 	id := m.GetIdentity()
-	h.Block("Identity", kv{"UUID", id.GetUuid()}, kv{"Serial", id.GetSerial()}, kv{"MAC addresses", strings.Join(id.GetMacAddresses(), ", ")})
+	h.Block("Identity", kv{"UUID", id.GetUuid()}, kv{"Serial", id.GetSerial()}, kv{"MACs", strings.Join(id.GetMacAddresses(), ", ")})
 
 	if in := m.GetInstall(); in != nil {
 		h.Block("Install", kv{"Disk", diskDesc(in.GetDisk())}, kv{"Image", in.GetImage()})

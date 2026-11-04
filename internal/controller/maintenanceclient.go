@@ -47,6 +47,11 @@ type MaintenanceClient interface {
 	// Inventory reads the node's installable disks and its physical NICs with permanent addresses,
 	// the lists approval picks from (ADR 0112). Discovery records them on the TalosMachine's status.
 	Inventory(ctx context.Context) (Inventory, error)
+
+	// SecurityState reads the node's SecureBoot state over the maintenance API (`talosctl get
+	// securitystate --insecure`), so a cluster that requires SecureBoot can refuse a machine that
+	// booted without it before giving it a configuration (ADR 0123).
+	SecurityState(ctx context.Context) (SecurityState, error)
 }
 
 // Inventory is what MaintenanceClient.Inventory reads from a node's maintenance API.

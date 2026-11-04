@@ -76,7 +76,7 @@ func (s *Server) caRotationOperation(ctx context.Context, ref *pb.ObjectRef, sta
 	}
 
 	if op.Spec.Kind != ichorv1alpha1.TalosOperationKindCARotation {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("operation %q is not a ca-rotation", op.Name))
+		return nil, invalid("operation %q is not a ca-rotation", op.Name)
 	}
 
 	stage := ""

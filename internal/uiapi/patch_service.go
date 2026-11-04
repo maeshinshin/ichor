@@ -18,7 +18,6 @@ package uiapi
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"maps"
 	"slices"
@@ -105,8 +104,7 @@ func (s *Server) CreatePatch(
 	ref := wire.GetRef()
 
 	if ref.GetNamespace() == "" || ref.GetName() == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument,
-			errors.New("patch.ref.namespace and patch.ref.name are required"))
+		return nil, invalid("patch.ref.namespace and patch.ref.name are required")
 	}
 
 	p := &ichorv1alpha1.TalosConfigPatch{}
@@ -198,7 +196,7 @@ func (s *Server) PreviewImpact(
 
 	clusterRef := wire.GetCluster()
 	if clusterRef.GetName() == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("patch.cluster is required"))
+		return nil, invalid("patch.cluster is required")
 	}
 
 	cluster, err := s.loadCluster(ctx, namespacedName(clusterRef))

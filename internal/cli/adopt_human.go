@@ -125,7 +125,10 @@ func (d adoptDeps) epilogue(cluster, namespace string, e adoptEnd) {
 		d.say(adoptWarn, "blocked machines were left out: %s", strings.Join(e.blocked, ", "))
 	}
 
-	d.say(adoptWarn, "%s", caRotationAdvice)
+	// A machine added to a cluster Ichor already manages brings no new administrator with it.
+	if len(d.AddMachines) == 0 {
+		d.say(adoptWarn, "%s", caRotationAdvice)
+	}
 
 	if d.Steps == nil {
 		return

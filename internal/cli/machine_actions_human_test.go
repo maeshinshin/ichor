@@ -293,9 +293,9 @@ func TestClusterDiscoveryAddWarnsAboutAnAlreadyConfiguredAddress(t *testing.T) {
 	}
 
 	want := "✓ added 10.0.0.5 to the discovery of initshow\n" +
-		"! 10.0.0.5 already runs a Talos configuration, so discovery does not add it as a machine; "+
-			"if it is a member of this cluster's Talos cluster run `ichor adopt --cluster initshow --add-machine 10.0.0.5`, "+
-			"if another cluster configured it run `ichor machine reclaim 10.0.0.5 --talosconfig FILE --cluster initshow`\n"
+		"! 10.0.0.5 already runs a Talos configuration, so discovery does not add it as a machine; " +
+		"if it is a member of this cluster's Talos cluster run `ichor adopt --cluster initshow --add-machine 10.0.0.5`, " +
+		"if another cluster configured it run `ichor machine reclaim 10.0.0.5 --talosconfig FILE --cluster initshow`\n"
 	if out.String() != want {
 		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
 	}

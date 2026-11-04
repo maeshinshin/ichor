@@ -24,6 +24,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	"github.com/spf13/cobra"
 	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/yaml"
@@ -53,6 +54,7 @@ var (
 	adoptAcceptChanges   bool
 	adoptAcceptDiff      bool
 	adoptWaitTimeout     time.Duration
+	adoptAddMachines     []string
 )
 
 // adoptCmd implements `ichor adopt` (docs/design/architecture.md,
@@ -106,6 +108,15 @@ data plane (IPAM and the tunnel protocol are never changed). Any other CNI is
 adopted only with --cni-unmanaged, which leaves the CNI exactly as it is: Ichor
 will not install, upgrade or configure it. A cluster with two CNIs is refused.
 
+--add-machine ADDRESS (repeatable) does not adopt a cluster: it adds a machine to a
+cluster Ichor already manages. The machine already runs a configuration signed by
+that cluster's CAs, for example because it joined with your own tooling after the
+adoption or its TalosMachine was deleted. adopt reads it, plans it in the same three
+classes, creates a held TalosMachine and releases the hold after the zero-drift check.
+A machine of another Talos cluster is refused; "ichor machine reclaim" resets it. The
+secrets bundle is read from the cluster's own Secret unless you pass one of the flags
+above, and --talosconfig may come from "ichor cluster credentials".
+
 adopt only reads the Talos nodes (using --talosconfig); it never applies
 configuration to them. Afterwards it advises a CA rotation, since adopted
 clusters keep the old CAs, but never starts one.`,
@@ -134,11 +145,26 @@ clusters keep the old CAs, but never starts one.`,
 			nagWriter = bundleNagWriter{steps}
 		}
 
-		bundle, saveBundle, err := resolveAdoptBundle(cmd.Context(), adoptSecretsOptions{
-			File: adoptSecretsBundle, Recover: adoptRecover, RecoverFrom: adoptRecoverFrom,
-			Cluster: adoptCluster, Plaintext: adoptBundlePlaintext, Announce: cmd.ErrOrStderr(),
-			Contract: clusterVersionContract(cmd.Context(), k8sClient, adoptNamespace, adoptCluster),
-		}, dial, nagWriter)
+		if err := checkAddMachineFlags(cmd, adoptAddMachines); err != nil {
+			return err
+		}
+
+		var (
+			bundle     *secrets.Bundle
+			saveBundle func() error
+		)
+
+		if len(adoptAddMachines) > 0 && adoptSecretsBundle == "" && !adoptRecover {
+			// A cluster Ichor manages keeps its bundle in a Secret (ADR 0128 1).
+			bundle, err = resolveClusterBundle(cmd.Context(), k8sClient, adoptNamespace, adoptCluster)
+		} else {
+			bundle, saveBundle, err = resolveAdoptBundle(cmd.Context(), adoptSecretsOptions{
+				File: adoptSecretsBundle, Recover: adoptRecover, RecoverFrom: adoptRecoverFrom,
+				Cluster: adoptCluster, Plaintext: adoptBundlePlaintext, Announce: cmd.ErrOrStderr(),
+				Contract: clusterVersionContract(cmd.Context(), k8sClient, adoptNamespace, adoptCluster),
+			}, dial, nagWriter)
+		}
+
 		if err != nil {
 			return err
 		}
@@ -189,6 +215,7 @@ clusters keep the old CAs, but never starts one.`,
 			RequireIchor:     adoptRequireIchor,
 			Seed:             cmp.Or(adoptSeed, adoptRecoverFrom),
 			ContractOverride: adoptContract,
+			AddMachines:      adoptAddMachines,
 			ReadIdentity: func(ctx context.Context, address string) (controller.HardwareIdentity, error) {
 				t, err := dialTalos(ctx, talosconfigPath, adoptContext, address)
 				if err != nil {
@@ -207,6 +234,10 @@ clusters keep the old CAs, but never starts one.`,
 			Ichor: &adoptWriteIchor{Manifest: installmanifest.Manifest, NetworkPolicies: installmanifest.NetworkPolicies},
 		}
 
+		if len(adoptAddMachines) > 0 {
+			deps.Ichor = nil // the cluster is Ichor's already; a machine is all that is added
+		}
+
 		return silenceIfShown(cmd, runAdopt(cmd.Context(), adoptCluster, adoptNamespace, deps))
 	},
 }
@@ -217,7 +248,7 @@ func init() {
 	adoptCmd.Flags().StringVar(&adoptCluster, flagCluster, "", "name of the TalosCluster to adopt (required)")
 	adoptCmd.Flags().StringVarP(&adoptNamespace, "namespace", "n", "default", "namespace the TalosCluster and its TalosMachines live in")
 	adoptCmd.Flags().StringVar(&adoptSecretsBundle, "secrets-bundle", "",
-		"path to the cluster's existing secrets bundle (the file produced by 'talosctl gen secrets'); give this or --recover-secrets")
+		"path to the cluster's existing secrets bundle (the file produced by 'talosctl gen secrets'); give this or --recover-secrets (not needed with --add-machine)")
 	adoptCmd.Flags().BoolVar(&adoptRecover, "recover-secrets", false,
 		"rebuild the secrets bundle from a control plane's machine config (read-only) and store it under ~/.ichor/clusters/<cluster>/ with mode 0600")
 	adoptCmd.Flags().BoolVar(&adoptBundlePlaintext, bundlePlaintextFlag, false,
@@ -238,9 +269,9 @@ func init() {
 	adoptCmd.Flags().StringVar(&adoptCiliumValues, "cilium-values", "",
 		"YAML file of Cilium Helm values for the Cilium adopt installs on a cluster with no CNI (Ichor-owned keys are refused)")
 	adoptCmd.Flags().BoolVar(&adoptPlanOnly, "plan", false, "print the plan and write nothing")
-	adoptCmd.Flags().StringVar(&adoptSeed, "node", "",
+	adoptCmd.Flags().StringVar(&adoptSeed, adoptFlagNode, "",
 		"address of one control plane; adopt discovers the cluster's machines from its membership when the TalosCluster does not exist yet")
-	adoptCmd.Flags().StringVar(&adoptContract, "version-contract", "",
+	adoptCmd.Flags().StringVar(&adoptContract, adoptFlagVersionContract, "",
 		"use this Talos version contract (v1.12 to the running minor) instead of the probed one")
 
 	adoptCmd.Flags().BoolVar(&adoptAcceptChanges, "accept-cilium-changes", false,
@@ -248,9 +279,40 @@ func init() {
 	adoptCmd.Flags().BoolVar(&adoptAcceptDiff, "accept-cilium-diff", false,
 		"accept the differences between the live Cilium objects and the pinned chart")
 
+	adoptCmd.Flags().StringArrayVar(&adoptAddMachines, "add-machine", nil,
+		"address of a machine that already runs a configuration signed by this cluster's CAs but has no TalosMachine; "+
+			"adds it to the existing cluster instead of adopting the cluster (repeatable; ADR 0128)")
+
 	_ = adoptCmd.MarkFlagRequired(flagCluster)
 	adoptCmd.MarkFlagsMutuallyExclusive("secrets-bundle", "recover-secrets")
-	adoptCmd.MarkFlagsOneRequired("secrets-bundle", "recover-secrets")
+	// With --add-machine neither is needed: the cluster's own bundle Secret is read. resolveAdoptBundle
+	// refuses a run that has neither and no --add-machine.
+}
+
+// addMachineExcluded are the flags of an adoption that mean nothing when a machine is added to a
+// cluster Ichor already manages.
+const (
+	adoptFlagNode            = "node"
+	adoptFlagVersionContract = "version-contract"
+)
+
+var addMachineExcluded = []string{
+	adoptFlagNode, "cni-unmanaged", "tunnel", "cilium-values", "accept-cilium-changes", "accept-cilium-diff", "require-ichor", adoptFlagVersionContract,
+}
+
+// checkAddMachineFlags refuses a flag that does not apply to --add-machine, instead of ignoring it.
+func checkAddMachineFlags(cmd *cobra.Command, add []string) error {
+	if len(add) == 0 {
+		return nil
+	}
+
+	for _, name := range addMachineExcluded {
+		if cmd.Flags().Changed(name) {
+			return fmt.Errorf("adopt: --%s does not apply to --add-machine, which adds a machine to a cluster Ichor already manages", name)
+		}
+	}
+
+	return nil
 }
 
 // readCiliumValuesFile reads --cilium-values: a YAML mapping, or nil when the flag is not given.

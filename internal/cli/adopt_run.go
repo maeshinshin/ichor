@@ -87,6 +87,9 @@ type adoptDeps struct {
 	Seed string
 	// ContractOverride is --version-contract: it replaces the probed contract.
 	ContractOverride string
+	// AddMachines is --add-machine (ADR 0128 1): the addresses of configured machines to add to
+	// the existing TalosCluster instead of adopting the cluster.
+	AddMachines []string
 	// ReadIdentity reads a node's hardware identity over the authenticated Talos API.
 	ReadIdentity func(ctx context.Context, address string) (controller.HardwareIdentity, error)
 	// Ichor, when set, is installed if Ichor is not running yet. nil skips the install.
@@ -114,6 +117,7 @@ type adoptDeps struct {
 type adoptState struct {
 	cluster  *ichorv1alpha1.TalosCluster
 	fresh    bool // the TalosCluster does not exist yet and will be created
+	adding   bool // --add-machine: nodes are the machines to add to the existing cluster, and only those
 	nodes    []*adoptNode
 	existing []ichorv1alpha1.TalosConfigPatch
 	sys      *render.SystemInputs
@@ -212,8 +216,21 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		return err
 	}
 
+	if st.adding && len(st.nodes) == 0 {
+		deps.say(adoptInfo, "nothing to add, every listed machine is already a TalosMachine")
+		deps.epilogue(clusterName, namespace, adoptEnd{})
+
+		return nil
+	}
+
 	// Phase 1: plan.
-	if err := deps.run("Inspect CNI", func(d adoptDeps) (string, error) { return "", st.inspect(ctx, d) }); err != nil {
+	if st.adding {
+		err = deps.run("Check machines", func(d adoptDeps) (string, error) { return "", st.inspectAdded(d) })
+	} else {
+		err = deps.run("Inspect CNI", func(d adoptDeps) (string, error) { return "", st.inspect(ctx, d) })
+	}
+
+	if err != nil {
 		return err
 	}
 
@@ -347,7 +364,7 @@ func (st *adoptState) planPhase(deps adoptDeps) (*adoptPlanned, error) {
 		return pl, nil
 	}
 
-	if st.fresh && len(pl.writable) == 0 {
+	if (st.fresh || st.adding) && len(pl.writable) == 0 {
 		return nil, fmt.Errorf("adopt: every machine is blocked by configuration Ichor cannot represent (%s); nothing was written", strings.Join(pl.blocked, ", "))
 	}
 
@@ -432,6 +449,10 @@ func loadAdoption(ctx context.Context, clusterName, namespace string, deps adopt
 			}
 		}
 	case apierrors.IsNotFound(err) || apimeta.IsNoMatchError(err):
+		if len(deps.AddMachines) > 0 {
+			return nil, fmt.Errorf("adopt: TalosCluster %q does not exist; --add-machine adds to a cluster Ichor already manages, adopt the cluster first", clusterName)
+		}
+
 		// Ichor is not installed yet: its kinds are not served, which is as fresh as not found.
 		st.fresh = true
 
@@ -446,6 +467,10 @@ func loadAdoption(ctx context.Context, clusterName, namespace string, deps adopt
 		}
 	default:
 		return nil, fmt.Errorf("adopt: getting TalosCluster %q: %w", clusterName, err)
+	}
+
+	if len(deps.AddMachines) > 0 {
+		return st, st.loadAdded(ctx, deps, &cluster, machines, namespace)
 	}
 
 	var approved []*ichorv1alpha1.TalosMachine
@@ -907,7 +932,7 @@ func (st *adoptState) plan(deps adoptDeps) ([]*adoptPlan, error) {
 			continue
 		}
 
-		if st.fresh && n.M.Spec.Install == nil && n.Facts.Install.DiskSelector != "" {
+		if (st.fresh || n.added) && n.M.Spec.Install == nil && n.Facts.Install.DiskSelector != "" {
 			return nil, fmt.Errorf("adopt: machine %q installs to a disk chosen by a selector; Ichor needs a plain device path in "+
 				"machine.install.disk to record spec.install", n.M.Name)
 		}
@@ -945,7 +970,7 @@ func (st *adoptState) heldNodes(writable []*adoptNode) []*adoptNode {
 	var out []*adoptNode
 
 	for _, n := range writable {
-		if st.fresh || n.M.Annotations[ichorv1alpha1.TalosMachineHoldApplyAnnotation] == annotationTrue {
+		if st.fresh || n.added || n.M.Annotations[ichorv1alpha1.TalosMachineHoldApplyAnnotation] == annotationTrue {
 			out = append(out, n)
 		}
 	}
@@ -1138,6 +1163,10 @@ func (st *adoptState) consent(deps adoptDeps, clusterName string, patches, machi
 	}
 
 	what := fmt.Sprintf("Create %d TalosConfigPatch object(s) to adopt cluster %q with zero drift", patches, clusterName)
+	if st.adding {
+		what = fmt.Sprintf("Create %d held TalosMachine(s) and %d TalosConfigPatch object(s) to add the machine(s) to cluster %q", machines, patches, clusterName)
+	}
+
 	if st.fresh {
 		what = fmt.Sprintf("Create the Secret, TalosCluster %q, %d held TalosMachine(s) and %d TalosConfigPatch object(s)", clusterName, machines, patches)
 	}
@@ -1163,6 +1192,16 @@ func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace 
 	in := adoptWriteInput{
 		Namespace: namespace, Patches: patches, Stderr: deps.Stderr, Interval: deps.Interval, WebhookWait: deps.WebhookWait,
 		Note: func(msg string) { deps.say(adoptWarn, "%s", msg) },
+	}
+
+	if st.adding {
+		in.ClusterName, in.ReadIdentity = st.cluster.Name, deps.ReadIdentity
+
+		for _, n := range writable {
+			in.Machines = append(in.Machines, writeMachineOf(n))
+		}
+
+		return in
 	}
 
 	if !st.fresh {
@@ -1194,12 +1233,7 @@ func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace 
 	}
 
 	for _, n := range writable {
-		m := adoptWriteMachine{Address: n.M.Spec.Endpoint, Role: n.M.Spec.Role, InstallDisk: n.InstallDisk}
-		if inst := n.M.Spec.Install; inst != nil {
-			m.InstallImage, m.InstallWipe = inst.Image, inst.Wipe
-		}
-
-		in.Machines = append(in.Machines, m)
+		in.Machines = append(in.Machines, writeMachineOf(n))
 	}
 
 	if deps.Ichor != nil {
@@ -1220,6 +1254,16 @@ func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace 
 	}
 
 	return in
+}
+
+// writeMachineOf is the write phase's view of one node adopt creates a TalosMachine for.
+func writeMachineOf(n *adoptNode) adoptWriteMachine {
+	m := adoptWriteMachine{Address: n.M.Spec.Endpoint, Role: n.M.Spec.Role, InstallDisk: n.InstallDisk}
+	if inst := n.M.Spec.Install; inst != nil {
+		m.InstallImage, m.InstallWipe = inst.Image, inst.Wipe
+	}
+
+	return m
 }
 
 // ciliumPolicyCRDPresent reports whether the CiliumNetworkPolicy CRD exists (the second input of

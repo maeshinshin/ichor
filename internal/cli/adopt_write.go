@@ -66,6 +66,10 @@ type adoptWriteInput struct {
 	// Machines are the TalosMachines to create, all held (hold-apply annotation).
 	Machines []adoptWriteMachine
 
+	// ClusterName names the existing TalosCluster the Machines belong to when Cluster is nil
+	// (--add-machine, ADR 0128 1).
+	ClusterName string
+
 	// Patches are the TalosConfigPatches to create (class A captures).
 	Patches []ichorv1alpha1.TalosConfigPatch
 
@@ -174,7 +178,7 @@ func writeAdopt(ctx context.Context, c client.Client, in adoptWriteInput) (*adop
 		return w.res, err
 	}
 
-	if err := w.machines(ctx, cluster); err != nil {
+	if err := w.machines(ctx, cmp.Or(cluster, in.ClusterName)); err != nil {
 		return w.res, err
 	}
 

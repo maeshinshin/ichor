@@ -630,12 +630,23 @@ func (r *TalosMachineReconciler) holdUntilEligible(
 	}
 
 	rotation, err := activeCARotation(ctx, readerOrClient(r.APIReader, r.Client), m.Namespace, cluster.Name)
+	if err != nil {
+		return ctrl.Result{}, true, err
+	}
+
+	if rotation != "" {
+		return ctrl.Result{RequeueAfter: transientRecheck}, true, r.ready(ctx, m, metav1.ConditionUnknown, reasonCARotationInProgress,
+			fmt.Sprintf("TalosOperation %q is rotating the cluster's CAs; this machine is not reconciled until it completes", rotation))
+	}
+
+	// A key rotation puts configuration on the control planes that the bundle does not describe either.
+	rotation, err = activeKeyRotation(ctx, readerOrClient(r.APIReader, r.Client), m.Namespace, cluster.Name)
 	if err != nil || rotation == "" {
 		return ctrl.Result{}, err != nil, err
 	}
 
-	return ctrl.Result{RequeueAfter: transientRecheck}, true, r.ready(ctx, m, metav1.ConditionUnknown, reasonCARotationInProgress,
-		fmt.Sprintf("TalosOperation %q is rotating the cluster's CAs; this machine is not reconciled until it completes", rotation))
+	return ctrl.Result{RequeueAfter: transientRecheck}, true, r.ready(ctx, m, metav1.ConditionUnknown, reasonKeyRotationInProgress,
+		fmt.Sprintf("TalosOperation %q is rotating the cluster's service-account and secretbox keys; this machine is not reconciled until it completes", rotation))
 }
 
 // renderVersion is render.Version; a variable only so tests can simulate an Ichor upgrade.

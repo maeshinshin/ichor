@@ -121,6 +121,11 @@ type TalosOperationKeyRotationStatus struct {
 	// reencryption is the progress of the Reencrypting stage.
 	// +optional
 	Reencryption *KeyRotationReencryption `json:"reencryption,omitempty"`
+
+	// settlingSince is when the SettlingTokens stage started waiting for the projected tokens signed by the old
+	// service-account key to be re-issued. The wait ends spec.keyRotation.tokenSettle after it.
+	// +optional
+	SettlingSince *metav1.Time `json:"settlingSince,omitempty"`
 }
 
 // KeyRotationKey is one rotated key. Identifiers are public: the SHA-256 of the service-account public key's

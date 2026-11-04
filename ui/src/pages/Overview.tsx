@@ -115,7 +115,7 @@ function Home({
     talos: null,
     kubernetes: null,
   })
-  const [dialog, setDialog] = useState<'ca-rotation' | 'shutdown' | 'reader-talosconfig' | null>(null)
+  const [dialog, setDialog] = useState<'ca-rotation' | 'key-rotation' | 'shutdown' | 'reader-talosconfig' | null>(null)
   // The caller's "download" verb on talosclusters/talosconfig-reader; undefined offers nothing.
   const perms = useMyPermissions(undefined, ref)
   const wasBusy = useRef(false)
@@ -232,6 +232,9 @@ function Home({
               <DropdownMenuItem onSelect={() => setDialog('ca-rotation')}>
                 {t('overview.rotateCAs')}
               </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setDialog('key-rotation')}>
+                {t('overview.rotateKeys')}
+              </DropdownMenuItem>
               {perms?.talosconfigReader && (
                 <DropdownMenuItem onSelect={() => setDialog('reader-talosconfig')}>{t('readerTalosconfig.menu')}</DropdownMenuItem>
               )}
@@ -241,6 +244,7 @@ function Home({
             </DropdownMenuContent>
           </DropdownMenu>
           <StartOperationDialog kind="ca-rotation" cluster={ref} open={dialog === 'ca-rotation'} onOpenChange={(o) => !o && setDialog(null)} />
+          <StartOperationDialog kind="key-rotation" cluster={ref} open={dialog === 'key-rotation'} onOpenChange={(o) => !o && setDialog(null)} />
           <StartOperationDialog kind="shutdown" cluster={ref} open={dialog === 'shutdown'} onOpenChange={(o) => !o && setDialog(null)} />
           <ReaderTalosconfigDialog cluster={ref} open={dialog === 'reader-talosconfig'} onOpenChange={(o) => !o && setDialog(null)} />
         </div>

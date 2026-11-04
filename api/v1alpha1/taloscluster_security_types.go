@@ -67,6 +67,13 @@ type TalosClusterSecurity struct {
 	// +kubebuilder:validation:Enum=integrity;confidentiality
 	// +optional
 	KernelLockdown string `json:"kernelLockdown,omitempty"`
+
+	// kubeletServingCertificates makes every kubelet serve a certificate signed by the Kubernetes
+	// CA instead of a self-signed one. Ichor's controller approves the kubelets'
+	// serving-certificate requests itself, for the machines it manages and nothing else. A
+	// kubelet restart on every node, no node reboot.
+	// +optional
+	KubeletServingCertificates *TalosClusterKubeletServing `json:"kubeletServingCertificates,omitempty"`
 }
 
 // SecureBoot modes of spec.security.secureBoot.mode.
@@ -107,6 +114,28 @@ type TalosClusterSecureBoot struct {
 	// +kubebuilder:validation:Enum=Off;Preferred;Required
 	// +required
 	Mode string `json:"mode"`
+}
+
+// TalosClusterKubeletServing is spec.security.kubeletServingCertificates. Enabled sets
+// serverTLSBootstrap on every kubelet, so each requests a certificate from the
+// kubernetes.io/kubelet-serving signer, and the controller approves a request only when it came
+// from that node's own kubelet and names only addresses the node owns. Without it the kubelets
+// serve self-signed certificates and the kube-apiserver cannot verify them for logs, exec and
+// port-forward.
+// +kubebuilder:validation:XValidation:rule="!has(self.verifyFromAPIServer) || !self.verifyFromAPIServer || (has(self.enabled) && self.enabled)",message="verifyFromAPIServer needs enabled"
+type TalosClusterKubeletServing struct {
+	// enabled turns serverTLSBootstrap on and the controller's approval of the requests on.
+	// +kubebuilder:default=false
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// verifyFromAPIServer also makes the kube-apiserver check the kubelets' certificates against
+	// the Kubernetes CA (--kubelet-certificate-authority). Ichor renders it only once every
+	// machine has been issued a serving certificate (condition KubeletServingCertificates), and
+	// keeps it once rendered. It restarts the kube-apiserver on every control plane. Until then
+	// the apiserver does not verify the kubelets, as before.
+	// +optional
+	VerifyFromAPIServer bool `json:"verifyFromAPIServer,omitempty"`
 }
 
 // TalosClusterFirewall is spec.security.firewall. Enabled renders NetworkDefaultActionConfig

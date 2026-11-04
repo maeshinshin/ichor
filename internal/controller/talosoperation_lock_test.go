@@ -137,4 +137,33 @@ var _ = Describe("two TalosOperations on one cluster", func() {
 		Expect(fake.calls).To(BeEmpty())
 		expectPausedBecause(fetchOperation(op), reasonOperationLockHeld)
 	})
+
+	// A machine join or removal now takes the lock under the machine's own identity.
+	It("waits for a machine that holds the lock, naming it, and takes over the lease of one that is gone", func() {
+		cluster := newOpTestCluster()
+		newOpTestMachine(cluster.Name, "controlplane", "mh-cp1")
+		op := newOpTestOperation(cluster.Name)
+
+		holder := newOpTestMachine(cluster.Name, "worker", "mh-w1")
+		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+		Expect(lock.Acquire(ctx, machineLockIdentity(holder))).To(Succeed())
+
+		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
+		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+
+		_, err := reconcileOperation(r, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.calls).To(BeEmpty())
+
+		got := fetchOperation(op)
+		expectPausedBecause(got, reasonOperationLockHeld)
+		Expect(apimeta.FindStatusCondition(got.Status.Conditions, conditionOperationPaused).Message).
+			To(And(ContainSubstring("TalosMachine"), ContainSubstring(holder.Name)))
+
+		Expect(k8sClient.Delete(ctx, holder)).To(Succeed())
+
+		_, err = reconcileOperation(r, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.calls).To(HaveLen(1), "the lease of a deleted machine is not waited for")
+	})
 })

@@ -185,7 +185,16 @@ bin/ichor machine approve NAME --role worker --install-disk /dev/sda
 ```
 
 `NAME` is the pending machine from the list. The command asks for
-confirmation unless `--yes`. `approve` also takes a hostname, labels, a static
+confirmation unless `--yes`, then prints one line (`-o yaml` prints the
+machine as before):
+
+```
+✓ approved fa70962a as worker in demo
+```
+
+If the install disk, a disk role or the NIC you named was not among those
+discovery recorded on the node, a `!` line follows: advice, not a refusal.
+`approve` also takes a hostname, labels, a static
 address and extra disk roles; see `ichor machine approve --help`. A machine
 with a weak identity (no UUID, serial or permanent MAC) is refused. After
 approval the controller renders and applies the configuration; the node

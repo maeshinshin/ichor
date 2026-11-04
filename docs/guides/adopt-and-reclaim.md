@@ -150,8 +150,39 @@ ichor adopt --cluster prod --node 10.0.0.11 --recover-secrets \
   --recover-from 10.0.0.11 --accept-cilium-diff --accept-cilium-changes
 ```
 
-Adopt prints the plan again and asks for consent (`--yes` skips the prompt).
-Then it works in phases:
+Adopt shows its steps like `ichor init` does: one line per step, the findings of
+the plan as lines of their own (`!` for what needs your attention: a skipped
+machine, Ichor-owned settings, a Cilium difference, the Helm record that will be
+deleted), and a `Done in` and `Next` at the end. It asks for consent before it
+writes anything (`--yes` skips the prompt). The patches themselves are not
+printed; add `-o yaml` (or `json`) to print them on stdout, in which case adopt
+keeps writing its `adopt: ...` lines on stderr as before. A run on a cluster with
+no CNI that Ichor has never seen looks like this:
+
+```
+Ichor adopt · prod
+namespace default · discovering from 10.0.0.11
+✓ Read cluster — Talos v1.14.5 · Kubernetes v1.36.6 · 2 read · no TalosCluster yet
+  no CNI found: Cilium will be installed by adopt (Cilium 1.20.4, tunnel the default, kube-proxy enabled) as Ichor's own Helm release, then Ichor is installed, then the cluster is adopted with the managed cilium preset
+✓ Inspect CNI — CNI: none (no CNI installed, every node NotReady)
+  machine "uuid-10.0.0.10": already matches a fresh render, nothing to do
+  machine "uuid-10.0.0.11": already matches a fresh render, nothing to do
+✓ Plan — no patch needed
+✓ Secrets bundle — stored under ~/.ichor/clusters/prod/
+✓ Install Cilium — Cilium is installed and the nodes are Ready
+✓ Create resources — 5 created, 0 unchanged
+✓ Cilium hand-over — Helm release owned by Ichor
+✓ Release holds — 2 released
+Done in 4m12s
+! the Talos and Kubernetes client certificates of the previous administrators, and the CA keys held by whoever created this cluster, remain valid; consider `ichor cluster rotate-ca`
+
+Next
+  ichor cluster status prod -n default
+  ichor machine list -n default
+```
+
+The consent prompt and the reminder to back up a recovered secrets bundle stay
+as they were (the reminder is a `!` line). Then it works in phases:
 
 1. Writes the bundle Secret, the `TalosCluster`, the `TalosMachine`s (held),
    the patches and, if Ichor is not running yet, Ichor's install manifest. On a
@@ -207,6 +238,22 @@ that contains it, is listed in the cluster's `spec.discovery`.
   `ichor cluster discovery list` and `ichor cluster discovery remove ADDRESS|CIDR`.
   Name the cluster with `--cluster` unless the namespace has only one.
 
+`add` and `remove` print one line, `list` a table of what is scanned and what
+each address or range has found so far (the API keeps no time of the last probe):
+
+```
+$ ichor cluster discovery add 192.168.1.51 --cluster demo
+✓ added 192.168.1.51 to the discovery of demo
+
+$ ichor cluster discovery list --cluster demo
+ADDRESS/CIDR      KIND     FOUND
+192.168.1.51      address  fa70962a
+192.168.1.0/24    range    fa70962a, 3c1d0e44
+```
+
+An address that already runs a Talos configuration is not added as a machine;
+`add` then ends with a `!` line that says so and points to `ichor adopt`.
+
 A range must be IPv4 and `/24` or smaller (at most 256 addresses), and a cluster
 holds at most 4 ranges. It is scanned address by address on the Talos
 maintenance port, and the scan starts as soon as you add it, not at the next
@@ -248,6 +295,30 @@ ichor machine reclaim 10.0.0.21 --talosconfig ./foreign-talosconfig --cluster pr
 It prints the machine's UUID, hostname, role, the cluster that will lose it,
 its disks and, for a control plane, the etcd members, then asks for the UUID.
 For scripts, pass `--confirm UUID` (`--yes` does not replace it).
+
+```
+w1 · 10.0.0.21
+  Role         worker · Talos v1.13.2
+  UUID         5b2c0d1e-7f44-4c35-9a0e-2f6f1c4b8e11
+  Cluster      old (id 3f9a), reachable from the node
+  Reset        STATE and EPHEMERAL, then reboot · graceful
+  Volume       data on /dev/sdb1 (10737418240 bytes), not wiped  ! ENCRYPTED: its key may depend on STATE, so the data may be unreadable afterwards
+
+This wipes STATE and EPHEMERAL on w1 and removes it from cluster "old".
+Type the machine's UUID to continue: 5b2c0d1e-7f44-4c35-9a0e-2f6f1c4b8e11
+✓ Reset — accepted, graceful
+✓ Maintenance mode — 10.0.0.21 answers with UUID 5b2c0d1e-7f44-4c35-9a0e-2f6f1c4b8e11
+✓ Register — added to cluster prod's discovery addresses; it will appear as a pending machine
+Done in 2m41s
+
+Next
+  ichor machine list -n default
+```
+
+A refusal (the machine is already an Ichor machine, or a control plane whose
+removal breaks etcd quorum) is a `✗ refused:` line under the block. If the
+machine does not come back, the `Maintenance mode` step fails with the hint that
+it may have taken a new address from DHCP.
 
 Flags:
 

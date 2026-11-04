@@ -167,7 +167,7 @@ func TestClusterListHumanOutput(t *testing.T) {
 	other := initshowCluster()
 	other.Ref = &pb.ObjectRef{Namespace: ichorControllerNamespace, Name: "second"}
 	other.CniPreset, other.CniDetected = ichorv1alpha1.TalosClusterCNIPresetUnmanaged, string(detectedFlannel)
-	other.Conditions, other.CreatedAt = nil, ago(3*24*time.Hour)
+	other.Conditions, other.CreatedAt = []*pb.Condition{cond("Transitioning", condTrue, "Rolling", "", time.Minute)}, ago(3*24*time.Hour)
 
 	var out bytes.Buffer
 	if err := renderClusterList(newHuman(&out), &pb.ListClustersResponse{Clusters: []*pb.Cluster{initshowCluster(), other}}); err != nil {
@@ -176,7 +176,7 @@ func TestClusterListHumanOutput(t *testing.T) {
 
 	want := "NAME      TALOS    KUBERNETES  CNI                  ENDPOINT      READY  AGE\n" +
 		"initshow  v1.14.5  v1.36.6     cilium               10.244.1.136  ✓      5m\n" +
-		"second    v1.14.5  v1.36.6     unmanaged (flannel)  10.244.1.136  -      3d\n"
+		"second    v1.14.5  v1.36.6     unmanaged (flannel)  10.244.1.136  …      3d\n"
 	if out.String() != want {
 		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
 	}
@@ -514,6 +514,77 @@ func TestVersionRowPrintsTheBareVersionUnlessItDiffers(t *testing.T) {
 	} {
 		if got := versionRow(tc.v); got != tc.want {
 			t.Errorf("%s: versionRow = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+// A TalosCluster has no Ready condition: these are the conditions of a healthy one as the controller sets them.
+func realConditions() []*pb.Condition {
+	return []*pb.Condition{
+		cond("CertificatesExpiring", condFalse, "NoneExpiring", "no CA expires within 30 days", time.Minute),
+		cond("Transitioning", condFalse, "Settled", "", time.Minute),
+		cond("CNIHandover", condTrue, "Complete", "Cilium is handed over", time.Minute),
+		cond("CNIValuesApplied", condTrue, "Applied", "", time.Minute),
+		cond("CiliumUpgradeAvailable", condFalse, "UpToDate", "", time.Minute),
+	}
+}
+
+func TestClusterHealthWithoutAReadyCondition(t *testing.T) {
+	setHumanTestFlags(t, outputHuman)
+
+	for _, tc := range []struct {
+		name    string
+		mutate  func(*pb.Cluster)
+		want    string
+		wantRow string
+	}{
+		{"settled", func(*pb.Cluster) {}, "✓ ready", "✓"},
+		{"transitioning", func(cl *pb.Cluster) { cl.Conditions[1] = cond("Transitioning", condTrue, "Rolling", "", time.Minute) }, "… transitioning", "…"},
+		{"rolling out", func(cl *pb.Cluster) { cl.Rollout = &pb.RolloutProgress{} }, "… upgrading", "…"},
+		{"a health condition is false", func(cl *pb.Cluster) {
+			cl.Conditions = append(cl.Conditions, cond("ControlPlaneAvailable", condFalse, "NoQuorum", "", time.Minute))
+		}, "! not ready (ControlPlaneAvailable)", "!"},
+		{"an advisory condition is true", func(cl *pb.Cluster) { cl.Conditions[4] = cond("CiliumUpgradeAvailable", condTrue, "Newer", "", time.Minute) }, "✓ ready", "✓"},
+	} {
+		cl := initshowCluster()
+		cl.Conditions = realConditions()
+		tc.mutate(cl)
+
+		var out bytes.Buffer
+		if err := renderClusterStatus(newHuman(&out), cl); err != nil {
+			t.Fatal(err)
+		}
+
+		if want := "  Health       " + tc.want + "\n"; !strings.Contains(out.String(), want) {
+			t.Errorf("%s: status lacks %q:\n%s", tc.name, want, out.String())
+		}
+
+		out.Reset()
+
+		if err := renderClusterList(newHuman(&out), &pb.ListClustersResponse{Clusters: []*pb.Cluster{cl}}); err != nil {
+			t.Fatal(err)
+		}
+
+		if !strings.Contains(out.String(), "  "+tc.wantRow+"  ") {
+			t.Errorf("%s: list lacks the READY mark %q:\n%s", tc.name, tc.wantRow, out.String())
+		}
+	}
+}
+
+func TestClusterGetDrawsACompletedHandoverAsDone(t *testing.T) {
+	setHumanTestFlags(t, outputHuman)
+
+	cl := initshowCluster()
+	cl.Conditions = realConditions()
+
+	var out bytes.Buffer
+	if err := renderClusterGet(newHuman(&out), cl); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, want := range []string{"  Health       ✓ ready\n", "  ✓ CNIHandover "} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("get lacks %q:\n%s", want, out.String())
 		}
 	}
 }

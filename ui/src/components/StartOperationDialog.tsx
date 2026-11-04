@@ -26,7 +26,7 @@ import { t } from '@/lib/i18n'
 import { type TargetList } from '@/lib/upgradeTargets'
 import { navigate } from '@/router'
 
-const startedByDefault: Record<OpKind, boolean> = { talos: true, kubernetes: true, ichor: true, cni: true, shutdown: false, 'ca-rotation': false, config: false }
+const startedByDefault: Record<OpKind, boolean> = { talos: true, kubernetes: true, ichor: true, cni: true, shutdown: false, 'ca-rotation': false, config: false, 'key-rotation': false }
 
 // StartOperationDialog is the only way the UI starts an upgrade or a shutdown.
 // It never writes on the first click: "Review" asks the server for the plan
@@ -397,6 +397,7 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
           <p>{effectText(plan.effect, kind)}</p>
           {kind === 'kubernetes' && plan.stages.length > 0 && <KubernetesStages names={plan.stages} />}
           {kind === 'ca-rotation' && plan.stages.length > 0 && <p>{t('ops.plan.stages', { stages: plan.stages.join(', ') })}</p>}
+          {kind === 'key-rotation' && plan.stages.length > 0 && <p>{t('ops.plan.keyStages', { stages: plan.stages.join(', ') })}</p>}
           {plan.machines.length > 0 ? (
             <>
               <p>{t('ops.plan.counts', { total: plan.machines.length, ...counts })}</p>
@@ -405,7 +406,9 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
                   ? t('ops.plan.orderShutdown')
                   : kind === 'ca-rotation'
                     ? t('ops.plan.orderCARotation')
-                    : t('ops.plan.orderRollout', { n: Math.max(plan.maxUnavailable, 1) })}
+                    : kind === 'key-rotation'
+                      ? t('ops.plan.orderKeyRotation')
+                      : t('ops.plan.orderRollout', { n: Math.max(plan.maxUnavailable, 1) })}
               </CardDescription>
               <ItemGroup>
                 {steps.map((s, i) => (
@@ -520,6 +523,8 @@ function effectText(effect: number, kind: OpKind): string {
       return t('ops.plan.effectStop')
     case OperationEffect.CA_ROTATION:
       return t('ops.plan.effectCARotation')
+    case OperationEffect.KEY_ROTATION:
+      return t('ops.plan.effectKeyRotation')
     default:
       return t('ops.plan.effectNone')
   }

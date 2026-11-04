@@ -24,7 +24,7 @@ import { describeError, type ErrorShape } from '@/lib/errors'
 import { restoreStepProgress } from '@/lib/etcdRestore'
 import { formatTimestamp } from '@/lib/format'
 import { formatDuration, nodePath, spanMs, summaryFallback, visibleEvents } from '@/lib/operationDetail'
-import { caStageProgress, kubernetesStageProgress, operationState, pollIntervalMs, progressCounts } from '@/lib/operations'
+import { caStageProgress, keyStageProgress, kubernetesStageProgress, operationState, pollIntervalMs, progressCounts } from '@/lib/operations'
 import { opStateTone } from '@/lib/status'
 import { useCluster } from '@/lib/useCluster'
 import { useMyPermissions } from '@/lib/useMyPermissions'
@@ -115,6 +115,7 @@ export function OperationDetail({ name }: { name: string }) {
   const title = op.summary || summaryFallback(op.ref?.name ?? name, enumLabel(OperationKind, op.kind), op.nodeMachine?.name)
   const { done, running } = progressCounts(op.machines)
   const stage = caStageProgress(op.caRotationStage)
+  const keyStage = keyStageProgress(op.keyRotationStage)
   const kubeStage = kubernetesStageProgress(op.kubernetesStage)
   const restoreStep = restoreStepProgress(op.etcdRestoreStep)
   const panel = credentialsPanel(op.kind === OperationKind.CA_ROTATION, op.caRotationStage, state === 'done', op.caTargets)
@@ -135,6 +136,7 @@ export function OperationDetail({ name }: { name: string }) {
             <ToneBadge tone={opStateTone(state)}>{t(`ops.state.${state}`)}</ToneBadge>
             {op.machines.length > 0 && <Badge variant="outline">{t('ops.progress', { done, running })}</Badge>}
             {stage && <Badge variant="outline">{t('ops.caStage', { stage: stage.name, n: stage.index, total: stage.total })}</Badge>}
+            {keyStage && <Badge variant="outline">{t('ops.keyStage', { stage: keyStage.name, n: keyStage.index, total: keyStage.total })}</Badge>}
             {restoreStep && (
               <Badge variant="outline">
                 {t('restore.stepName', { n: restoreStep.index, total: restoreStep.total, name: t(`restore.stepName.${restoreStep.name}`) })}
@@ -192,7 +194,7 @@ export function OperationDetail({ name }: { name: string }) {
             </AlertDescription>
           </Alert>
         )}
-        {op.kind === OperationKind.CA_ROTATION && state === 'done' && (
+        {(op.kind === OperationKind.CA_ROTATION || op.kind === OperationKind.KEY_ROTATION) && state === 'done' && (
           <Alert>
             <InfoIcon />
             <AlertTitle>{t('ops.plan.bundleStaleTitle')}</AlertTitle>

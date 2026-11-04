@@ -580,6 +580,7 @@ export const en = {
   'ops.maxUnavailable': 'Workers at once',
   'ops.currently': 'Currently',
   'ops.caStage': 'Pass {n} of {total}: {stage}',
+  'ops.keyStage': 'Stage {n} of {total}: {stage}',
   'ops.kubeStage': 'Stage {n} of {total}: {stage}',
   'ops.kubeStageName.APIServers': 'API servers',
   'ops.kubeStageName.ControlPlaneComponents': 'controller-manager and scheduler',
@@ -594,6 +595,7 @@ export const en = {
   'ops.start.cni': 'Switch kube-proxy',
   'ops.start.shutdown': 'Shut down cluster',
   'ops.start.ca-rotation': 'Rotate CAs',
+  'ops.start.key-rotation': 'Rotate keys',
   'ops.start.config': 'Apply config (reboots)',
 
   'ops.row.talos': 'Talos',
@@ -623,6 +625,7 @@ export const en = {
   'ops.warn.cni': 'Changing the kube-proxy mode can cut pod networking for a short time.',
   'ops.warn.config': 'The nodes in this plan reboot to apply the new config.',
   'ops.warn.ca-rotation': 'This replaces the cluster certificate authorities. Any client that still holds the old ones stops working.',
+  'ops.warn.key-rotation': 'This replaces the service-account signing key and the key Secrets are encrypted with. The Kubernetes API restarts on each control plane, one at a time, and every Secret is rewritten. Tokens kept outside the cluster stop working when the old signing key is dropped.',
   'ops.warn.shutdown': 'This powers the nodes off. They stay off until someone starts them again.',
 
   'toast.opPaused': 'Operation paused',
@@ -670,8 +673,9 @@ export const en = {
   'ops.dialog.ca.etcd.short': 'etcd',
   'ops.dialog.ca.kubernetes-aggregator.short': 'Kubernetes aggregator',
   'ops.dialog.caTargetsHint':
-    'The Talos API and Kubernetes API CAs are replaced by default. The service-account signing key and the secretbox key are not rotated.',
+    'The Talos API and Kubernetes API CAs are replaced by default. The service-account signing key and the secretbox key are rotated by Rotate keys.',
   'ops.dialog.caNone': 'Choose at least one certificate authority.',
+  'ops.plan.key-rotation': 'Replace the service-account signing key and the secretbox (encryption at rest) key.',
   'ops.plan.config': 'Apply the pending configuration changes that need a reboot.',
   'ops.plan.effectConfigReboot':
     'Each node below gets its rendered configuration staged and reboots; Ichor cordons and drains it first (Talos does not drain on a reboot), and uncordons it once it is Ready again.',
@@ -690,6 +694,9 @@ export const en = {
   'ops.plan.effectCARotation':
     'Every node is reconfigured once per pass, without a reboot. The kubelet restarts on each node in the passes that change the Kubernetes CA.',
   'ops.plan.stages': 'Passes over every node, each verified before the next: {stages}.',
+  'ops.plan.keyStages': 'Stages, each verified before the next: {stages}.',
+  'ops.plan.effectKeyRotation':
+    'Every control plane is reconfigured once per applying stage, one at a time, without a reboot; its Kubernetes API server restarts each time and is waited for. New keys are first accepted everywhere, then made primary; every Secret is rewritten under the new key; the old signing key is kept for 90 minutes by default while tokens are re-issued. Workers are not touched. Both keys are rotated here; the CLI (ichor cluster rotate-keys) can rotate one, change the wait, or skip the check for legacy token Secrets.',
   'ops.plan.kubeStages': 'The upgrade runs in {n} stages, each verified before the next:',
   'ops.plan.kubeStageHint.APIServers': 'The API server moves to the new version on every control plane, one at a time.',
   'ops.plan.kubeStageHint.ControlPlaneComponents': 'Controller-manager and scheduler move to the new version, one control plane at a time, once every API server has.',
@@ -697,6 +704,7 @@ export const en = {
   'ops.plan.kubeStageHint.Kubelets': 'Kubelets move to the new version: control planes one at a time, then workers.',
   'ops.plan.warningTitle': 'Before you go on',
   'ops.plan.orderCARotation': 'One node at a time, control planes first; every node is visited in each pass:',
+  'ops.plan.orderKeyRotation': 'One control plane at a time; every one is visited in each applying stage:',
   'ops.plan.bundleStaleTitle': 'Your secrets bundle becomes stale',
   'ops.plan.bundleStale':
     'When the rotation completes, the secrets bundle in the cluster is replaced and the copy on your machine is out of date. Run "ichor cluster bundle-export {name}" and keep the file safe. Nodes held with upgrade-hold are not skipped.',
@@ -819,6 +827,7 @@ export const en = {
   'enum.CNI': 'CNI',
   'enum.SHUTDOWN': 'Shutdown',
   'enum.CA_ROTATION': 'CA rotation',
+  'enum.KEY_ROTATION': 'Key rotation',
   'enum.NODE': 'Node action',
   'enum.ETCD_RESTORE': 'etcd restore',
   'enum.REBOOT': 'Reboot',
@@ -1165,6 +1174,7 @@ export const en = {
   'overview.title': 'Overview',
   'overview.more': 'More actions',
   'overview.rotateCAs': 'Rotate CAs',
+  'overview.rotateKeys': 'Rotate keys',
   'overview.shutdownCluster': 'Shut down cluster',
   'overview.tile.nodes': 'Nodes',
   'overview.tile.operation': 'Operation',

@@ -1,0 +1,114 @@
+# 0128. Adopting installed Talos machines and clusters: what is covered, the gaps, and what closes them
+
+Status: Accepted; built; hardware verification pending (see "Hardware verification") · Date: 2026-11-04 · Design section: Bootstrap (`ichor adopt`), Nodes · Builds on: 0103, 0104, 0107, 0115
+
+Decided: Ichor already adopts a running cluster (ADR 0103, 0104) and resets and adds a machine that another cluster configured (ADR 0103 section 2, 0107). A map of those two paths against the cases a user has in front of them (below) shows four gaps, and this ADR closes them without a new object kind and without any new write path to a node. (1) A machine that already runs a configuration signed by an Ichor cluster's own CAs, but has no `TalosMachine` (it joined the Talos cluster by the user's own tooling after the adoption, or its `TalosMachine` was deleted), has no way in: discovery skips it, `ichor adopt` only reads the machines already recorded, and `ichor machine reclaim` refuses it. `ichor adopt --cluster NAME --add-machine ADDRESS` (repeatable) now registers such a machine: the same read-only plan, the same three classes of drift, the same held `TalosMachine` and the same zero-drift release as an adoption, for the listed addresses only, with a trust check that refuses a machine that does not carry the cluster's CAs and names `ichor machine reclaim` instead. (2) `ichor machine reclaim` and the UI refusal text now say that a machine of an Ichor-managed cluster is added with `--add-machine`, not reclaimed, and a stale pending `TalosMachine` no longer counts as "already an Ichor machine" (hardware finding C7 of ADR 0103). (3) `ichor adopt --cilium-values FILE` now also supplies the operator's Helm values when an existing Cilium with no Helm release record (the common Talos-guide install, an inline manifest made with `helm template`) is taken over; until now those values could not be carried and the diff gate could only be accepted. (4) A non-Cilium cluster stays unmanaged-only and Ichor still does not migrate a CNI. The refusal now says why a migration into a managed Cilium is not offered, and the guide states the three honest options (leave the CNI, a new cluster, or a planned outage that ends in a cluster with no CNI, which ADR 0104 adopts as managed Cilium). Cilium's documented live migration is not one of them: it ends on `ipam.mode: cluster-pool`, which Ichor refuses.
+
+## Context
+
+The user's backlog item (2026-10-29): "deploy onto machines that already have Talos installed". ADR 0103 answered it in two parts and ADR 0104 added the cluster with no CNI. They are built and were hardware-verified. This ADR does not redo them. It lists exactly what the code does today, so that the gaps are the ones that remain and not the ones the text of the first ADR once had.
+
+### What is covered today (read from `internal/cli/adopt*.go`, `pkg/reclaim`, the controllers and the guide at this commit)
+
+| Situation | Today | Where |
+|---|---|---|
+| A running cluster Ichor did not make, Cilium from Helm, the Cilium CLI, an inline manifest or `helm template` | `ichor adopt`: plan, consent, held `TalosMachine`s, takeover by the `ichor-cni` Job, zero-drift release. | 0103 section 1, built |
+| A running cluster on flannel, Calico or another CNI | Refused unless `--cni-unmanaged`; then adopted with the CNI left alone (`spec.cni.preset: unmanaged`, immutable). | 0103 1.1a |
+| A running cluster with no CNI (`cni.name: none`, nodes NotReady) | `ichor adopt` installs Ichor's pinned Cilium first, then Ichor, then adopts as managed. | 0104 |
+| The cluster's secrets | `--secrets-bundle FILE` or `--recover-secrets --recover-from ADDRESS` (rebuilt read-only from a control plane's config, stored 0600). | 0103 1.3 |
+| Talos or Kubernetes version different from this Ichor's release set | Taken as it runs, floor Talos v1.12; an unknown version is refused, an incompatible pair is a warning and the upgrade that would fix it is refused until compatible; the version contract is probed. | 0103 1.9, 0115 |
+| Configuration that has no typed field | Class A (sysctl, kernel modules, install, registry mirrors, cert SANs, subnets) is captured; class B (Ichor-owned) is listed for consent; class C blocks that machine. | 0103 1.7, as built |
+| Foreign-owned machine (another cluster's config), operator has its talosconfig | `ichor machine reclaim` / UI "Reset and add": inspect, typed UUID, reset `STATE` and `EPHEMERAL`, wait for maintenance, register. Refuses an Ichor machine, a quorum break, the last control plane. | 0103 section 2, 0107 |
+| Foreign-owned machine, no credential | No API route. Reinstall, or a kernel-argument wipe (hardware case C6). | 0103 2.1, C6 |
+| A node in maintenance mode (fresh ISO, or `STATE` wiped) | The normal discovery and approval flow. | 0076 |
+
+Talos behaviour this rests on (Talos v1.14 docs, "Disk Encryption", via Context7): wiping `STATE` with `talosctl reset --system-labels-to-wipe STATE --reboot=true` makes the node lose its configuration and enter maintenance mode, where `apply-config --insecure` works. That is the whole reason a reset is the join path for a foreign machine and why the join never needs the foreign cluster's secrets.
+
+## Findings: the gaps
+
+**G1. A machine that is in an Ichor cluster's PKI but unknown to Ichor is a dead end.** It carries the cluster's CAs (a node added to an adopted cluster with the user's own `talosctl apply-config`, a node whose `TalosMachine` was deleted, a node built from the exported bundle). It is not in maintenance mode, so discovery gets a TLS rejection and records `AlreadyConfigured` (`discovery.go`), and the Kubernetes Node it already has makes `knownHosts` skip its address anyway. The UI then offers "Reset and add". `pkg/reclaim.Assess` refuses it, rightly, because its cluster ID is a managed one (`known.ClusterIDs`). `ichor adopt` on an existing `TalosCluster` reads only the `TalosMachine`s that exist (`loadAdoption`), so a rerun does not see it. Nothing registers it. A reset would work, but destroys the node's etcd membership or kubelet state for no reason: the controller can already authenticate to it, and a machine in the cluster's own PKI that the controller can read is exactly the "returning machine" (state iii) of ADR 0103 section 2.
+
+**G2. Reclaim counts a pending machine as an Ichor machine.** Hardware finding of ADR 0103 (C7 follow-up): a second `ichor machine reclaim` was refused while the first run's pending `TalosMachine` for the UUID still existed, and deleting a `TalosMachine` needs the `allow-delete` annotation. A pending machine is only ever created from a node seen in maintenance mode, so if the node is now configured by a foreign cluster the pending entry is stale.
+
+**G3. A Cilium without a release record cannot be taken over with its values.** ADR 0103 1.2 step 3 planned `--cilium-values FILE` for case C (the Cilium of the Talos guide: an inline manifest from `helm template`, no `sh.helm.release.v1.cilium.vN` Secret). The "As built" list records it was not built, and `planInstallCilium` refuses the flag unless the cluster has no CNI. The takeover then renders Ichor's defaults, the diff gate prints every value the operator set, and the only way on is `--accept-cilium-diff`, which silently replaces their data-plane settings (hubble, l2announcements, BGP, resources) with the defaults.
+
+**G4. The non-Cilium refusal gives no way forward, and the obvious one does not exist.** ADR 0103 decided (user, 2026-10-29): not refused, unmanaged mode; a CNI migration is not offered. The refusal tells the operator to rerun with `--cni-unmanaged`, which is right for someone who wants the CNI left alone, and says nothing to someone who wants Ichor to manage Cilium. Cilium's documented live migration from flannel (docs.cilium.io, "Migrating a cluster to Cilium", via Context7) installs Cilium with a new pod CIDR and `ipam.mode: cluster-pool`, a distinct tunnel port and per-node `CiliumNodeConfig`. Its end state is `cluster-pool`, which ADR 0103 1.2 refuses ("changing IPAM renumbers pods") and ADR 0099 makes Ichor-owned (`kubernetes`). So there is no live route from flannel to a cluster Ichor can adopt as managed, and `spec.cni.preset` is immutable, so an unmanaged adoption cannot be converted either.
+
+**Checked and found fine** (no change): the secrets bundle import and recovery; version skew with the release set; adopt never touches workloads (it reads Kubernetes, writes `ichor-system` objects and the CRs, and the Cilium takeover is the only step that restarts anything, which the plan announces); the foreign-machine reset (credential handling, UUID confirmation, audit).
+
+## Decision
+
+### 1. Adding a machine that is already in the cluster's PKI: `ichor adopt --add-machine`
+
+```
+ichor adopt --cluster prod --add-machine 10.0.0.21 [--add-machine 10.0.0.22 ...] --talosconfig FILE [--plan] [--yes]
+```
+
+It is the adoption path with a smaller input, not a new path. For an existing `TalosCluster` and the listed addresses only:
+
+1. The bundle comes from `--secrets-bundle` or `--recover-secrets` as before, or, when neither is given, from the cluster's own bundle Secret (`secretsbundle.Load`, the operator's kubeconfig), and a CA rotation under way refuses the command (the Secret carries the rotation key).
+2. Each address is dialled with the operator's talosconfig (`ichor cluster credentials NAME` writes one from the bundle for a cluster Ichor made). The hardware identity is read over the authenticated API. **Trust check:** the node's own configuration must name this cluster's ID and the bundle's Talos API CA (`cluster.id`, `machine.ca.crt`). A node that does not is refused, with nothing written, naming its cluster and the command that does apply: `ichor machine reclaim ADDRESS --talosconfig FILE --cluster NAME`. This is the "refuse if it belongs to another live cluster unless explicitly reset" rule, and the reset stays an explicit, separate, typed-UUID action.
+3. A node whose UUID is already a `TalosMachine` is reported and skipped (idempotent rerun). The Talos floor v1.12 applies. A control plane that would exceed `spec.controlPlane.count` is refused before anything is written, with the instruction to raise the count first; the webhook would refuse it anyway.
+4. The plan is the adoption's: the node's live configuration is diffed against a render of the cluster plus the existing patches (`buildAdoptPlan`), sorted into class A (captured as one machine-layer `TalosConfigPatch`), class B (Ichor-owned, listed, consented) and class C (unrepresentable, blocks that machine). The role and install disk, image and wipe flag come from the node's configuration (`completeNode`), so the install-time fields do not show as drift that can never be applied.
+5. After consent: the `TalosMachine` is created approved and **held** (`ichor.maesh.dev/hold-apply`), the patches are created, and each hold is released only after the live zero-drift check passes, control planes first, each waiting for Ready without `AdoptionHeld`. Everything after the write is the controller's, unchanged. The CLI applies nothing to a node.
+
+No CRD field, controller code path or webhook changes: the controller already reads a configured node with the bundle's identity (`readNode`), holds on the annotation (`reportHold`) and applies a released machine like any other. The new code is the CLI's input handling.
+
+*Why the CLI and not discovery.* A discovery path that retried `AlreadyConfigured` addresses with the cluster's own admin identity would make the machine appear in the UI. It would also need a pending state that carries the node's role, install disk and image (all unreadable from the maintenance API), a way to release a hold from the UI (there is none, the hold is a CLI-written annotation) and a decision on drift for a machine the user never described. Adoption has solved all of those once, in the CLI, with the operator's credential; reusing it is the smaller change and keeps drift handling in one place. It does not close the UI side. `knownHosts` also keeps skipping an address that has a Node, so the UI does not offer "Reset and add" for it; that stays, and the discovery hint of the CLI now names both commands (below). A UI enrolment is a follow-up.
+
+*Rejected: apply Ichor's rendered config over the node's own with the foreign admin credential, no reset.* For a node in this cluster's PKI that is what 1 does (through the controller, after the hold). For a node with **different** secrets it is ADR 0103's "joining without a reset", already rejected: the node keeps the old cluster's etcd data, kubelet state and certificates, a worker's kubelet client certificate is for the other apiserver, and a control plane would carry another cluster's etcd. A new CA cannot be swapped under a running node by `apply-config`. The reset is the join path.
+
+*A node that never joined anything but has its own config* (an installed machine with a generated config whose cluster is not running) is a foreign node like any other: `ichor machine reclaim --force-ungraceful`, since a graceful reset of a cluster that is not reachable would hang (`Assess` already says so). No change.
+
+### 2. Reclaim refusals
+
+- `Known.MachineUUIDs` counts only approved `TalosMachine`s. A pending or rejected one is stale for a node that is now configured (G2).
+- The refusal for a node of a managed cluster reads: `node belongs to cluster "X", which Ichor already manages; a reset is not needed: add it to that Ichor cluster with ichor adopt --cluster NAME --add-machine ADDRESS`. The controller path's refusal (the UI) uses the same text through `Assess`.
+- `ichor cluster discovery add` prints, for an address that already runs a configuration, both commands and when each applies.
+
+### 3. `--cilium-values` also for a takeover
+
+When a Cilium is taken over and the operator gave `--cilium-values FILE`: the values are validated like `spec.cni.cilium.values` (Ichor-owned keys refused), stored as the new cluster's values, and used for the preflight, so the diff gate compares the live objects with a render that includes them. If the Cilium has a Helm release record that carries values, the record's values win and the flag is refused ("the existing release already carries values; drop --cilium-values or remove them from the plan"), because two sources would silently disagree. `--cilium-values` on an unmanaged adoption stays refused. For the no-CNI install nothing changes.
+
+### 4. Non-Cilium clusters: no migration, a clearer refusal, the options written down
+
+Kept: unmanaged adoption on request, nothing migrated, `spec.cni.preset` immutable. Why a guided migration is still rejected is ADR 0103 1.1a ("Why refuse migration, still"), plus the finding of G4: the documented live path ends where Ichor cannot adopt it. What changes is the text. The refusal adds: "Ichor does not migrate a CNI. To have Ichor manage Cilium you need a cluster whose CNI is Cilium with `ipam.mode: kubernetes`, or none; see the adopt guide, 'Moving from flannel'." The guide lists:
+
+1. leave the CNI (`--cni-unmanaged`), the default recommendation;
+2. a new cluster built with `ichor init`, workloads moved over;
+3. a planned outage: the operator removes the CNI themselves (Talos `cluster.network.cni.name: none`, remove the CNI workload, reboot the nodes) so that the cluster has no CNI, then runs `ichor adopt`, which installs Ichor's Cilium and adopts it as managed (ADR 0104). Ichor does not run the removal. **This route has not been run on hardware** and is marked so in the guide and below.
+
+### 5. Documentation
+
+The adopt guide gets: the coverage table, the `--add-machine` section (with the credentials step), the four-state decision table for a machine that is not in maintenance mode, `--cilium-values` for a takeover, "Moving from flannel", and a short statement of what adopt does to running workloads. The architecture's Nodes paragraph names the new command next to reclaim.
+
+## Alternatives rejected
+
+- **Discovery registers a configured member automatically** (retry with the cluster identity, create a pending machine): see 1, "Why the CLI". It also would create objects for any node that answers the cluster's CA, including a node of a cluster that shares a CA by accident of a copied bundle, without a person looking at its drift.
+- **`ichor machine reclaim --keep-state`**, i.e. apply Ichor's config to a foreign node without wiping: rejected with ADR 0103's "joining without a reset".
+- **Auto-converting an unmanaged cluster to managed** (relaxing the immutable preset for adopted clusters): the render and the Cilium takeover assume the preset at creation (flannel removal, kube-proxy, KubePrism, inline entry); a changed value on a running network is the hazard the immutability exists for. Not done here.
+- **A migration operation** wrapping Cilium's dual-overlay procedure: its end state is `cluster-pool`, Ichor refuses that, and it makes Ichor the operator of a rolling network outage (ADR 0103).
+
+## Risks
+
+- **The trust check reads the node's own config.** A node that presents the bundle's CA and cluster ID is the cluster's member by construction; the check is a guard against a wrong address or a stale talosconfig, not an authentication (the dial is). A CA rotation under way changes the CAs the nodes trust, hence the refusal while the rotation key is present.
+- **A member with drift is held, not applied.** If the operator's node has class C configuration the command blocks it and prints the paths with the same hints as an adoption. There is no override; the answer is to bring the node's configuration into what Ichor can render, or leave it unmanaged.
+- **`--add-machine` of a worker that never joined Kubernetes.** The machine registers and converges, but the Node appears when the kubelet joins; Ichor does not wait for the Node.
+- **The values in G3 are the operator's word.** A wrong `--cilium-values` shows as a diff; consent is still required.
+- **The planned-outage route is untested.** Said so wherever it is written.
+
+## Hardware verification (not run in this batch; no cluster access)
+
+Plain Talos nodes on the e2e harness, built with `talosctl`, not by Ichor (ADR 0103 test plan conventions, prefix `ichor-e2e-*`, homelab budget):
+
+1. `E1` (`--add-machine`, worker, same PKI): an Ichor cluster `ichor init` (1 control plane, 1 worker). Boot a third node from the plain Talos ISO. Write a worker config from the **exported bundle** (`ichor cluster bundle-export prod`, then `talosctl gen config --with-secrets ~/.ichor/clusters/prod/secrets.yaml ...` with the cluster's endpoint) and `talosctl apply-config --insecure` it, so it joins by itself. `ichor cluster credentials prod`, then `ichor adopt --cluster prod --add-machine <vm> --talosconfig <that file> --plan` (expect: role worker, install disk from the config, zero or class A/B drift only), without `--plan` (expect: a held `TalosMachine`, hold released, Ready). Record the drift paths the plan printed.
+2. `E2` (control plane): the same with a control-plane config and `spec.controlPlane.count` raised first; expect the pre-write refusal before the raise.
+3. `E3` (foreign): a node configured by an unrelated `talosctl gen config`. `--add-machine` must refuse and name `ichor machine reclaim`; then run that command with `--force-ungraceful` (the foreign cluster does not exist) and confirm the join.
+4. `E4` (`TalosMachine` deleted): delete the worker's `TalosMachine` (allow-delete) of E1 and re-add it with `--add-machine`; expect no reset.
+5. `E5` (stale pending machine, G2): reproduce ADR 0103 C7's second `ichor machine reclaim` without deleting the pending `TalosMachine`; expect it to proceed.
+6. `E6` (G3): a Cilium installed through a Talos inline manifest from `helm template` with a non-default value (for example `hubble.enabled=true`); adopt without `--cilium-values` (expect the diff naming it), with the values file (expect an empty diff for those keys and a takeover that keeps Hubble).
+7. `E7` (planned outage, unverified): a flannel cluster, set `cni.name: none` through `talosctl patch mc`, delete the flannel DaemonSet, reboot the nodes, confirm the nodes are NotReady with no CNI workload, then `ichor adopt`. Record the outage time and every step that was needed beyond these.
+
+## Tests
+
+CLI tests with fake Talos clients (`internal/cli/adopt_add_test.go`, `adopt_cilium_values_test.go`), `pkg/reclaim/reclaim_test.go` for the refusal text and the pending machine, `machine_reclaim_test.go` for the command. No controller code changed: the hold and release behaviour an added machine relies on is covered by the envtest specs in `internal/controller/talosmachine_controller_test.go` ("held" and "released" cases).

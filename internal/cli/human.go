@@ -56,6 +56,8 @@ import (
 const (
 	condTrue  = "True"
 	condFalse = "False"
+	// condCNIHandover is the condition that turns True when Ichor owns the Cilium release.
+	condCNIHandover = "CNIHandover"
 	// condPaused is the Paused condition type and phase.
 	condPaused = "Paused"
 )
@@ -285,7 +287,7 @@ var (
 	}
 	progressWhenTrue = map[string]bool{
 		"Transitioning": true, "VerifyingNewSide": true, "ConfigRollout": true, "KubernetesUpgrade": true,
-		"TalosUpgrade": true, "CARotation": true, "Removal": true, "Shutdown": true, "CNIHandover": true,
+		"TalosUpgrade": true, "CARotation": true, "Removal": true, "Shutdown": true,
 	}
 )
 
@@ -308,6 +310,8 @@ func conditionMark(typ, status string) mark {
 		return markOK
 	case status == condTrue:
 		return markOK
+	case typ == condCNIHandover: // good when True; False is the wait for Cilium, not a failure
+		return markPending
 	case typ == conditionReady:
 		return markFailed
 	default:

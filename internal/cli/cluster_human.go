@@ -19,6 +19,7 @@ package cli
 import (
 	"cmp"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -38,7 +39,67 @@ func conditionsOf(conds []*pb.Condition) []conditionRow {
 	return rows
 }
 
-// readyMark is the glyph of the Ready condition, "" when there is none yet.
+// healthTypes are the condition types that read as health when False, as the UI decides it
+// (ui/src/lib/conditions.ts); CiliumUpgradeAvailable only ends in a health word.
+var healthTypes = regexp.MustCompile(`(Ready|Available|Healthy|Synced|Approved|Present)$`)
+
+// clusterHealth is the one rule for the health of a cluster, shared by get, status and list, and the
+// same as the UI's (ui/src/lib/clusterHealth.ts) so the two agree. A TalosCluster has no Ready
+// condition today, so then: a rollout or Transitioning=True is in progress (...); a health-style
+// condition that is False is bad (!); anything else is ready. A Ready condition, where one is
+// reported, decides alone. The text has no mark.
+func clusterHealth(cl *pb.Cluster) (mark, string) {
+	conds := cl.GetConditions()
+
+	for _, c := range conds {
+		if c.GetType() != conditionReady {
+			continue
+		}
+
+		switch c.GetStatus() {
+		case condTrue:
+			return markOK, "ready"
+		case condFalse:
+			return markFailed, "not ready" + parenthesized(c.GetReason())
+		}
+
+		return markPending, "waiting"
+	}
+
+	if cl.GetRollout() != nil {
+		return markPending, "upgrading"
+	}
+
+	for _, c := range conds {
+		if c.GetType() == "Transitioning" && c.GetStatus() == condTrue {
+			return markPending, "transitioning"
+		}
+	}
+
+	for _, c := range conds {
+		if c.GetStatus() == condFalse && c.GetType() != "CiliumUpgradeAvailable" && healthTypes.MatchString(c.GetType()) {
+			return markWarning, "not ready" + parenthesized(c.GetType())
+		}
+	}
+
+	return markOK, "ready"
+}
+
+// clusterHealthRow is clusterHealth with its glyph, for a Block.
+func (h *human) clusterHealthRow(cl *pb.Cluster) string {
+	m, text := clusterHealth(cl)
+
+	return h.Mark(m) + " " + text
+}
+
+// clusterReadyMark is the glyph of clusterHealth, for the READY column.
+func (h *human) clusterReadyMark(cl *pb.Cluster) string {
+	m, _ := clusterHealth(cl)
+
+	return h.Mark(m)
+}
+
+// readyMark is the glyph of the Ready condition of a machine, "" when there is none yet.
 func (h *human) readyMark(conds []*pb.Condition) string {
 	for _, c := range conds {
 		if c.GetType() == conditionReady {
@@ -49,7 +110,7 @@ func (h *human) readyMark(conds []*pb.Condition) string {
 	return ""
 }
 
-// health is "✓ ready", "✗ not ready (reason)" or "… waiting" from the Ready condition.
+// health is "✓ ready", "✗ not ready (reason)" or "… waiting" from the Ready condition of a machine.
 func (h *human) health(conds []*pb.Condition) string {
 	for _, c := range conds {
 		if c.GetType() != conditionReady {
@@ -125,7 +186,7 @@ func renderClusterList(h *human, resp *pb.ListClustersResponse) error {
 
 	for i, cl := range cls {
 		row := []string{cl.GetRef().GetName(), cl.GetTalosVersion(), cl.GetKubernetesVersion(), cniColumn(cl),
-			cl.GetEndpoint(), h.readyMark(cl.GetConditions()), humanAge(cl.GetCreatedAt())}
+			cl.GetEndpoint(), h.clusterReadyMark(cl), humanAge(cl.GetCreatedAt())}
 		if withNS {
 			row = slices.Insert(row, 0, cl.GetRef().GetNamespace())
 		}
@@ -158,7 +219,7 @@ func renderClusterStatus(h *human, cl *pb.Cluster) error {
 		rows = append(rows, kv{"CNI", string(detectedCilium)})
 	}
 
-	rows = append(rows, kv{"Endpoint", endpointWithType(cl)}, kv{labelHealth, h.health(cl.GetConditions())})
+	rows = append(rows, kv{"Endpoint", endpointWithType(cl)}, kv{labelHealth, h.clusterHealthRow(cl)})
 	h.Block(nsName(cl.GetRef()), rows...)
 
 	return h.Err()
@@ -197,7 +258,7 @@ var componentLabels = map[string]string{compTalos: labelTalos, compKubernetes: l
 func date(ts *timestamppb.Timestamp) string { return ts.AsTime().UTC().Format("2006-01-02") }
 
 func renderClusterGet(h *human, cl *pb.Cluster) error {
-	h.Block(nsName(cl.GetRef()), kv{labelHealth, h.health(cl.GetConditions())}, kv{labelCreated, agoOrEmpty(cl.GetCreatedAt())})
+	h.Block(nsName(cl.GetRef()), kv{labelHealth, h.clusterHealthRow(cl)}, kv{labelCreated, agoOrEmpty(cl.GetCreatedAt())})
 
 	vers := make([]kv, 0, len(cl.GetVersions()))
 

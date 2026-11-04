@@ -81,6 +81,8 @@ func operationMachineToPB(op *ichorv1alpha1.TalosOperation, m ichorv1alpha1.Talo
 			out.Step = op.Status.Kubernetes.Stage
 		case op.Status.CARotation != nil:
 			out.Step = op.Status.CARotation.Stage
+		case op.Status.KeyRotation != nil:
+			out.Step = op.Status.KeyRotation.Stage
 		case op.Status.EtcdRestore != nil:
 			out.Step = op.Status.EtcdRestore.Step
 		}
@@ -236,6 +238,9 @@ func describeOperation(out *pb.Operation, op *ichorv1alpha1.TalosOperation, clus
 		if rs := op.Status.CARotation; rs != nil && len(rs.EtcdRestarted) > 0 {
 			add("etcd restarted in this stage", strings.Join(rs.EtcdRestarted, ", "))
 		}
+
+	case ichorv1alpha1.TalosOperationKindKeyRotation:
+		describeKeyRotation(out, op, add)
 	case ichorv1alpha1.TalosOperationKindConfig:
 		out.Summary = "Apply configuration to the machines with pending changes"
 		if machines > 0 {

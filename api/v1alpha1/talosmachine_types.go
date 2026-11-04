@@ -371,6 +371,11 @@ type TalosMachineStatus struct {
 	// +optional
 	Schematic string `json:"schematic,omitempty"`
 
+	// security is the boot security the node reported on the last reconcile that reached it (its
+	// SecurityState and KernelCmdline resources, ADR 0123). Unset until a node has been read.
+	// +optional
+	Security *TalosMachineSecurity `json:"security,omitempty"`
+
 	// nodeName is the Kubernetes node name the node reports (its Nodename resource), recorded
 	// once it is read so that views can name a machine that has no spec.hostname. Empty until
 	// the node has been read.

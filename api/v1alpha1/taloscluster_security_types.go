@@ -52,6 +52,61 @@ type TalosClusterSecurity struct {
 	// wipe-and-rejoin path (see docs/guides/hardening.md) and the confirm annotation.
 	// +optional
 	DiskEncryption *TalosClusterDiskEncryption `json:"diskEncryption,omitempty"`
+
+	// secureBoot asks for UEFI SecureBoot with Talos's UKI images (ADR 0123). It picks the
+	// installer image variant and reports each node's actual state; it never changes an installed
+	// node, because Talos cannot convert a GRUB install and the firmware keys are not Talos's.
+	// +optional
+	SecureBoot *TalosClusterSecureBoot `json:"secureBoot,omitempty"`
+
+	// kernelLockdown is the kernel lockdown level the nodes are expected to run with. Ichor checks
+	// it and reports a node below it; it does not render it, because the kernel command line is
+	// embedded in the UKI (build it into the boot asset with an Image Factory schematic whose
+	// extraKernelArgs has lockdown=confidentiality, and set spec.schematic). SecureBoot images run
+	// at integrity by themselves in Talos v1.14.
+	// +kubebuilder:validation:Enum=integrity;confidentiality
+	// +optional
+	KernelLockdown string `json:"kernelLockdown,omitempty"`
+}
+
+// SecureBoot modes of spec.security.secureBoot.mode.
+const (
+	SecureBootOff       = "Off"
+	SecureBootPreferred = "Preferred"
+	SecureBootRequired  = "Required"
+)
+
+// Kernel lockdown levels, as spec.security.kernelLockdown and TalosMachine.status.security.kernelLockdown
+// name them (none is only ever observed).
+const (
+	KernelLockdownNone            = "none"
+	KernelLockdownIntegrity       = "integrity"
+	KernelLockdownConfidentiality = "confidentiality"
+)
+
+// TalosClusterSecureBootConfirmAnnotation confirms that making SecureBoot required on a cluster
+// whose machines do not all run it is understood to need a reset and re-add of each (ADR 0123).
+const TalosClusterSecureBootConfirmAnnotation = "ichor.maesh.dev/confirm-secureboot-reinstall"
+
+// Condition types that report spec.security.secureBoot and spec.security.kernelLockdown against
+// what the nodes say, on a TalosMachine and, summarised, on the TalosCluster. They exist only
+// while the matching option is set.
+const (
+	ConditionSecureBoot     = "SecureBoot"
+	ConditionKernelLockdown = "KernelLockdown"
+)
+
+// TalosClusterSecureBoot is spec.security.secureBoot.
+type TalosClusterSecureBoot struct {
+	// mode is Off (the default: the stock installer, nothing reported), Preferred (Ichor uses the
+	// SecureBoot installer where it chooses one and reports nodes without SecureBoot) or Required
+	// (as Preferred, a TPM disk key must check SecureBoot, enabling it needs the confirm
+	// annotation while any approved machine lacks SecureBoot, and a machine in maintenance mode
+	// without SecureBoot is not given its first configuration). A node that already runs
+	// SecureBoot is upgraded with the SecureBoot installer whatever the mode.
+	// +kubebuilder:validation:Enum=Off;Preferred;Required
+	// +required
+	Mode string `json:"mode"`
 }
 
 // TalosClusterFirewall is spec.security.firewall. Enabled renders NetworkDefaultActionConfig

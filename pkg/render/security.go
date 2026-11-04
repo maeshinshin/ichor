@@ -31,6 +31,7 @@ import (
 	resblock "github.com/siderolabs/talos/pkg/machinery/resources/block"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/secureboot"
 )
 
 // ValidateSecurity checks spec.security as a whole (ADR 0108): the shapes the CRD cannot say and
@@ -222,7 +223,13 @@ func injectDiskEncryption(
 
 		switch d.Type {
 		case ichorv1alpha1.DiskEncryptionTPM:
-			key.KeyTPM = &block.EncryptionKeyTPM{TPMCheckSecurebootStatusOnEnroll: d.RequireSecureBoot}
+			// SecureBoot Required (ADR 0123) makes the key check it unless the user said otherwise.
+			check := d.RequireSecureBoot
+			if check == nil && secureboot.Mode(securityOf(cluster)) == ichorv1alpha1.SecureBootRequired {
+				check = new(true)
+			}
+
+			key.KeyTPM = &block.EncryptionKeyTPM{TPMCheckSecurebootStatusOnEnroll: check}
 		case ichorv1alpha1.DiskEncryptionNodeID:
 			key.KeyNodeID = &block.EncryptionKeyNodeID{}
 		case ichorv1alpha1.DiskEncryptionKMS:

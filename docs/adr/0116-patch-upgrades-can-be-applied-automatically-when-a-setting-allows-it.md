@@ -81,3 +81,7 @@ The target of a Talos or Kubernetes upgrade is `TalosCluster.spec.talosVersion` 
 - The release check must be on for there to be anything to apply; with it off `status.upgradeTargets` is cleared and the patcher starts nothing.
 - `ichor settings get` and the Settings page show the effective switch, components and window, and the halted operation.
 - Tests: table tests of `autopatch.Decide` for every guard and of `autopatch.Resume`; an envtest of `AutoPatcher` for start (annotations, spec bump, no second start), the guards that need a cluster, halt on a paused operation, resume by acknowledgement and by a later manual operation; the webhook tests of the automatic patcher's limited write and of the controller's refused one, the chart test of the identity and of the settings gate (including read-only and the acknowledgement); the uiapi tests of the new fields; the UI's pure tests of the form.
+
+## Amendment 2026-11-04: Cilium has no automatic patch
+
+ADR 0115, amendment 2026-11-04 (3), removed the Cilium patches that run on the embedded chart, so there is nothing for the patcher to apply for Cilium: `autopatch.Candidate("cilium", ...)` returns nothing and `Cluster.CiliumChart` is gone. `cilium` remains an accepted value of `components` (stored settings and the chart defaults keep working) and selects no operation. The patcher's order is Talos, then Kubernetes. A Cilium patch reaches a cluster with an Ichor release; the chart upgrade stays a manual operation.

@@ -38,7 +38,7 @@ func uiDeployment(c ...corev1.Container) *appsv1.Deployment {
 }
 
 func TestOIDCIssuerOf(t *testing.T) {
-	envOnly := corev1.Container{Name: uiContainerName, Env: []corev1.EnvVar{{Name: "ICHOR_OIDC_ISSUER", Value: "https://env.example.test"}}}
+	envOnly := corev1.Container{Name: uiContainerName, Env: []corev1.EnvVar{{Name: envOIDCIssuer, Value: "https://env.example.test"}}}
 	both := corev1.Container{
 		Name: uiContainerName, Args: []string{"--addr=:8443", "--oidc-issuer=https://arg.example.test/realms/x"},
 		Env: envOnly.Env,
@@ -55,7 +55,7 @@ func TestOIDCIssuerOf(t *testing.T) {
 		{"the flag wins over the environment, as it does in ichor-ui", uiDeployment(both), "https://arg.example.test/realms/x"},
 		{"another container is not ichor-ui", uiDeployment(corev1.Container{Name: "sidecar", Env: envOnly.Env}), ""},
 		{"an env from a Secret has no value to read", uiDeployment(corev1.Container{Name: uiContainerName, Env: []corev1.EnvVar{{
-			Name: "ICHOR_OIDC_ISSUER", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{}},
+			Name: envOIDCIssuer, ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{}},
 		}}}), ""},
 	} {
 		if got := oidcIssuerOf(tc.dep); got != tc.want {
@@ -78,10 +78,10 @@ func TestUIEgressSpecNamesTheIssuerOnItsPortAndSelectsOnlyIchorUI(t *testing.T) 
 			t.Fatalf("%s: %q does not parse", tc.name, tc.issuer)
 		}
 
-		raw, _ := json.Marshal(uiEgressSpec("ichor", target))
+		raw, _ := json.Marshal(uiEgressSpec(releaseCheckApp, target))
 		text := string(raw)
 
-		for _, want := range []string{tc.want, tc.wantPort, `"control-plane":"ui-backend"`, `"app.kubernetes.io/name":"ichor"`} {
+		for _, want := range []string{tc.want, tc.wantPort, `"control-plane":"ui-backend"`, `"app.kubernetes.io/name":"` + releaseCheckApp + `"`} {
 			if !strings.Contains(text, want) {
 				t.Errorf("%s: %s is missing from %s", tc.name, want, text)
 			}
@@ -121,13 +121,13 @@ var _ = Describe("UIEgress", Ordered, func() {
 	setIssuer := func(issuer string) *appsv1.Deployment {
 		dep := &appsv1.Deployment{}
 		dep.Namespace, dep.Name = uiEgressNS, "ichor-ui"
-		dep.Labels = map[string]string{"control-plane": "ui-backend", nameLabel: "ichor"}
-		dep.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{"control-plane": "ui-backend"}}
-		dep.Spec.Template.Labels = map[string]string{"control-plane": "ui-backend"}
+		dep.Labels = map[string]string{controlPlaneLabel: uiPodLabelValue, nameLabel: releaseCheckApp}
+		dep.Spec.Selector = &metav1.LabelSelector{MatchLabels: map[string]string{controlPlaneLabel: uiPodLabelValue}}
+		dep.Spec.Template.Labels = map[string]string{controlPlaneLabel: uiPodLabelValue}
 		dep.Spec.Template.Spec.Containers = []corev1.Container{{Name: uiContainerName, Image: "ichor-ui:test"}}
 
 		if issuer != "" {
-			dep.Spec.Template.Spec.Containers[0].Env = []corev1.EnvVar{{Name: "ICHOR_OIDC_ISSUER", Value: issuer}}
+			dep.Spec.Template.Spec.Containers[0].Env = []corev1.EnvVar{{Name: envOIDCIssuer, Value: issuer}}
 		}
 
 		Expect(k8sClient.Create(ctx, dep)).To(Succeed())
@@ -152,7 +152,7 @@ var _ = Describe("UIEgress", Ordered, func() {
 		static.SetNamespace(uiEgressNS)
 		static.SetName("ichor-controller-manager")
 		static.Object[keySpec] = map[string]any{"endpointSelector": map[string]any{"matchLabels": map[string]any{
-			"control-plane": valueControllerMgr, nameLabel: "ichor",
+			controlPlaneLabel: valueControllerMgr, nameLabel: releaseCheckApp,
 		}}, keyEgress: []any{map[string]any{}}}
 		Expect(k8sClient.Create(ctx, static)).To(Succeed())
 		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, static))).To(Succeed()) })

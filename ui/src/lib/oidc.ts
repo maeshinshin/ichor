@@ -35,13 +35,15 @@ export async function pkceChallenge(verifier: string): Promise<string> {
 
 export function buildAuthUrl(
   authorizationEndpoint: string,
-  p: { clientId: string; redirectUri: string; state: string; nonce: string; challenge: string },
+  p: { clientId: string; redirectUri: string; state: string; nonce: string; challenge: string; offline?: boolean },
 ): string {
   const u = new URL(authorizationEndpoint)
   u.searchParams.set('response_type', 'code')
   u.searchParams.set('client_id', p.clientId)
   u.searchParams.set('redirect_uri', p.redirectUri)
-  u.searchParams.set('scope', 'openid email profile groups')
+  // offline_access is what makes the ichor issuer return a refresh token (2026-11-04);
+  // an external IdP is not asked for one.
+  u.searchParams.set('scope', 'openid email profile groups' + (p.offline ? ' offline_access' : ''))
   u.searchParams.set('state', p.state)
   u.searchParams.set('nonce', p.nonce)
   u.searchParams.set('code_challenge', p.challenge)
@@ -66,6 +68,7 @@ export function tokenUsable(token: string | null, nowMs: number): boolean {
 }
 
 const KEY = 'ichor.idToken'
+const REFRESH = 'ichor.refresh'
 const PENDING = 'ichor.oidcPending'
 
 // sessionStorage: gone when the tab closes, and a failure to use it just means
@@ -78,9 +81,29 @@ export function storedToken(): string | null {
   }
 }
 
+// The refresh token of the ichor issuer's session, with where to present it (2026-11-04). Same storage as the ID token: tab-scoped and gone when the tab closes.
+export type StoredRefresh = { token: string; endpoint: string; clientId: string }
+
+export function storedRefresh(): StoredRefresh | null {
+  try {
+    const r = JSON.parse(sessionStorage.getItem(REFRESH) ?? 'null')
+    return r && typeof r.token === 'string' && typeof r.endpoint === 'string' && typeof r.clientId === 'string' ? r : null
+  } catch {
+    return null
+  }
+}
+
+export function storeTokens(idToken: string, refresh: StoredRefresh | null) {
+  sessionStorage.setItem(KEY, idToken)
+  if (refresh) sessionStorage.setItem(REFRESH, JSON.stringify(refresh))
+  else sessionStorage.removeItem(REFRESH)
+}
+
+// clearToken ends this tab's sign-in: the ID token and the refresh token.
 export function clearToken() {
   try {
     sessionStorage.removeItem(KEY)
+    sessionStorage.removeItem(REFRESH)
   } catch {
     // nothing to clear
   }
@@ -107,6 +130,7 @@ export async function startLogin(cfg: AuthProvider): Promise<never> {
       state,
       nonce,
       challenge: await pkceChallenge(verifier),
+      offline: cfg.id === 'ichor',
     }),
   )
   return new Promise(() => {})
@@ -154,13 +178,15 @@ export async function exchangeCode(d: Discovery, cfg: AuthProvider, code: string
     }),
   })
   if (!res.ok) throw new Error('Login failed at the identity provider')
-  const idToken = (await res.json()).id_token as string | undefined
+  const body = await res.json()
+  const idToken = body.id_token as string | undefined
   if (!idToken || idTokenClaims(idToken)?.nonce !== nonce) throw new Error('Login response did not match this session')
-  sessionStorage.setItem(KEY, idToken)
+  const refresh = cfg.id === 'ichor' && typeof body.refresh_token === 'string' ? body.refresh_token : ''
+  storeTokens(idToken, refresh ? { token: refresh, endpoint: d.token_endpoint, clientId: cfg.clientId } : null)
 }
 
-// signOut drops the ID token and reloads, which shows the sign-in screen. The issuer keeps no
-// browser session of its own, so there is nothing to call.
+// signOut drops the ID token and the refresh token and reloads, which shows the sign-in screen. The
+// issuer keeps no browser session of its own, so there is nothing to call.
 export function signOut() {
   clearToken()
   window.location.assign('/')

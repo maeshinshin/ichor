@@ -108,3 +108,30 @@ test('stops without reconnecting once aborted', async () => {
   assert.equal(result.done, true)
   assert.equal(calls, 1)
 })
+
+// The server ends a stream with Unauthenticated when the ID token it was opened with expires
+// (internal/uiapi/auth.go); with a refresh token the page signs in silently and resumes.
+test('an expired sign-in is refreshed and the stream resumes from the latest token', async () => {
+  const requested: string[] = []
+  async function* expiring(resumeToken: string): AsyncIterable<FakeLine> {
+    requested.push(resumeToken)
+    if (requested.length === 1) {
+      yield { message: 'a', resumeToken: 't1' }
+      throw new ConnectError('your sign-in expired; sign in again', Code.Unauthenticated)
+    }
+    yield { message: 'b', resumeToken: 't2' }
+  }
+  let reauths = 0
+  const seen: string[] = []
+  for await (const l of streamWithResume(expiring, (x) => x.resumeToken, '', { reauth: async () => ++reauths > 0 })) seen.push(l.message)
+  assert.deepEqual(seen, ['a', 'b'])
+  assert.deepEqual(requested, ['', 't1'])
+  assert.equal(reauths, 1)
+})
+
+test('an expired sign-in that cannot be refreshed ends the stream with the error', async () => {
+  const iterator = streamWithResume(() => rejecting(new ConnectError('expired', Code.Unauthenticated)), (l) => l.resumeToken, '', { reauth: async () => false })
+  await assert.rejects(() => iterator.next(), /expired/)
+  const plain = streamWithResume(() => rejecting(new ConnectError('expired', Code.Unauthenticated)), (l) => l.resumeToken)
+  await assert.rejects(() => plain.next(), /expired/)
+})

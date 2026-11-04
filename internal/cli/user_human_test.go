@@ -29,17 +29,22 @@ import (
 
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
+	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
 // Golden tests of the human output of `ichor user`, on a pipe: no colour codes.
 
-const userBob = "bob"
+const (
+	userBob          = "bob"
+	userAliceDisplay = "Alice"
+	userAliceEmail   = "alice@example.com"
+)
 
 func usersFixture() []*pb.User {
 	return []*pb.User{
-		{Name: testUserAlice, DisplayName: "Alice", Email: "alice@example.com", Roles: []string{"admin"}, PasswordSet: true, CreatedAt: ago(48 * time.Hour)},
-		{Name: userBob, Roles: []string{"viewer", "operator"}, PasswordSet: true, Disabled: true, CreatedAt: ago(3 * time.Hour)},
-		{Name: "carol", DisplayName: "Carol", Roles: []string{"viewer"}, CreatedAt: ago(30 * time.Second)},
+		{Name: testUserAlice, DisplayName: userAliceDisplay, Email: userAliceEmail, Roles: []string{ichorauth.RoleAdmin}, PasswordSet: true, CreatedAt: ago(48 * time.Hour)},
+		{Name: userBob, Roles: []string{ichorauth.RoleViewer, ichorauth.RoleOperator}, PasswordSet: true, Disabled: true, CreatedAt: ago(3 * time.Hour)},
+		{Name: "carol", DisplayName: "Carol", Roles: []string{ichorauth.RoleViewer}, CreatedAt: ago(30 * time.Second)},
 	}
 }
 
@@ -103,7 +108,7 @@ func (humanUserService) RevokeSessions(context.Context, *connect.Request[pb.Revo
 }
 
 func (f *humanUserService) GetUser(_ context.Context, r *connect.Request[pb.GetUserRequest]) (*connect.Response[pb.GetUserResponse], error) {
-	return connect.NewResponse(&pb.GetUserResponse{User: &pb.User{Name: r.Msg.GetName(), Roles: []string{"viewer"}}}), nil
+	return connect.NewResponse(&pb.GetUserResponse{User: &pb.User{Name: r.Msg.GetName(), Roles: []string{ichorauth.RoleViewer}}}), nil
 }
 
 func newHumanUserClient(t *testing.T, f *humanUserService) ichorv1alpha1connect.UserServiceClient {
@@ -129,7 +134,7 @@ func TestUserCreateHumanOutputPrintsTheGeneratedPasswordOnceAndLast(t *testing.T
 	setHumanTestFlags(t, outputHuman)
 	resetUserWriteOpts(t)
 
-	userOpts.generate, userOpts.roles = true, []string{"viewer", "operator"}
+	userOpts.generate, userOpts.roles = true, []string{ichorauth.RoleViewer, ichorauth.RoleOperator}
 
 	cmd, out, errw := newUserCmd("")
 	if err := runUserCreate(context.Background(), newHumanUserClient(t, &humanUserService{}), cmd, userBob); err != nil {
@@ -196,7 +201,7 @@ func TestUserMachineOutputIsUnchanged(t *testing.T) {
 
 		resetUserWriteOpts(t)
 
-		userOpts.generate, userOpts.roles = true, []string{"viewer"}
+		userOpts.generate, userOpts.roles = true, []string{ichorauth.RoleViewer}
 
 		cmd, out, errw := newUserCmd("")
 		if err := runUserCreate(context.Background(), newHumanUserClient(t, &humanUserService{}), cmd, userBob); err != nil {
@@ -204,7 +209,7 @@ func TestUserMachineOutputIsUnchanged(t *testing.T) {
 		}
 
 		var want bytes.Buffer
-		if err := writeMessage(&want, format, &pb.CreateUserResponse{User: &pb.User{Name: userBob, Roles: []string{"viewer"}}}); err != nil {
+		if err := writeMessage(&want, format, &pb.CreateUserResponse{User: &pb.User{Name: userBob, Roles: []string{ichorauth.RoleViewer}}}); err != nil {
 			t.Fatal(err)
 		}
 

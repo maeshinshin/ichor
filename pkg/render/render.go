@@ -195,6 +195,12 @@ func BuildConfig(
 		return nil, err
 	}
 
+	// A key rotation in progress puts the new keys next to the old ones in the control planes' documents.
+	cfg, err = sys.KeyRotation.inject(cfg, bundle, machineType)
+	if err != nil {
+		return nil, err
+	}
+
 	// System layer: registry mirrors and their resolved auth are
 	// merged in before any TalosConfigPatch, same as the control-plane
 	// taint above -- Ichor-generated, not patch-shaped, and the lowest

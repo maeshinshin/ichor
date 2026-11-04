@@ -57,7 +57,7 @@ func recoverFlags(c *foreign.Cluster) []string {
 	if b := os.Getenv("ICHOR_E2E_F_BUNDLE"); b != "" { // a rerun after adopt wrote the recovered bundle
 		return []string{"--secrets-bundle", b}
 	}
-	return []string{"--recover-secrets", "--recover-from", c.CPs[0]}
+	return []string{"--recover-secrets", "--recover-from", c.CPs[0], "--bundle-plaintext"}
 }
 
 // nothingWritten asserts the ichor-system namespace and Ichor's CRDs do not exist on the foreign cluster.

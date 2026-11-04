@@ -519,6 +519,12 @@ Talos `os:admin` identity in the same folder. If ichor-ui is down, the issuer is
 broken, or every user is locked out, use this credential.
 
 Once users are on, keep this folder offline and use it only in an incident.
+The bundle in that folder (`secrets.yaml`) is encrypted with a passphrase
+(see [Getting started](getting-started.md)); the kubeconfig is not, because
+`kubectl` reads it directly. The bundle is what matters: with it
+`ichor cluster credentials --bundle` makes a new kubeconfig and talosconfig at
+any time. So you can move or delete the kubeconfig once login works, and keep
+only the encrypted bundle and its passphrase.
 Do not confuse it with the override write in
 [ADR 0065](../adr/0065-override.md), which is an RBAC verb that guards destructive operations.
 

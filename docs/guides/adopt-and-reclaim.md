@@ -68,12 +68,18 @@ from the running Talos unless you name one (ADR 0103).
 Give adopt the bundle in one of two ways (they are mutually exclusive, and one
 is required):
 
-- `--secrets-bundle FILE`: a file produced by `talosctl gen secrets`.
+- `--secrets-bundle FILE`: a file produced by `talosctl gen secrets`, or an
+  encrypted one Ichor wrote earlier (adopt asks for its passphrase, see below).
+  A plaintext file works but draws a warning: encrypt it with
+  `ichor secrets encrypt --file FILE`.
 - `--recover-secrets`: adopt rebuilds the bundle from a control plane's machine
   config. Read-only on the node. `--recover-from ADDRESS` names that control
   plane (required with `--recover-secrets`). The bundle is stored under
-  `~/.ichor/clusters/<cluster>/` with mode 0600. Back it up; adopt does not
-  print it.
+  `~/.ichor/clusters/<cluster>/` with mode 0600, encrypted like the one
+  `ichor init` writes (a generated passphrase printed once on a terminal,
+  `--bundle-passphrase-file`, or `ICHOR_BUNDLE_PASSPHRASE`;
+  `--bundle-plaintext` opts out). Back up the file and its passphrase; adopt
+  does not print the bundle.
 
 A wrong or partial bundle cannot get through. It shows up as secret-field
 drift, and no patch is produced for that machine.

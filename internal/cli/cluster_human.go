@@ -164,15 +164,20 @@ func renderClusterStatus(h *human, cl *pb.Cluster) error {
 	return h.Err()
 }
 
-// versionRow is "v1.14.5", or "v1.14.3 (behind: this Ichor ships v1.14.5)" when it differs from the release set.
+// versionRow is "v1.14.5", or "v1.14.3 (behind: this Ichor ships v1.14.5)" when it differs from the release
+// set. The state may be empty (an older backend); then the difference alone is said.
 func versionRow(v *pb.ComponentVersion) string {
 	cur := v.GetCurrent()
 	if cur == "" {
 		cur = "unknown"
 	}
 
-	if v.GetState() == stateUpToDate || v.GetTarget() == "" {
+	if v.GetState() == stateUpToDate || v.GetTarget() == "" || v.GetTarget() == v.GetCurrent() {
 		return cur
+	}
+
+	if v.GetState() == "" {
+		return fmt.Sprintf("%s (this Ichor ships %s)", cur, v.GetTarget())
 	}
 
 	return fmt.Sprintf("%s (%s: this Ichor ships %s)", cur, v.GetState(), v.GetTarget())

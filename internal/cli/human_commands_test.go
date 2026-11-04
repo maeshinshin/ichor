@@ -498,3 +498,22 @@ func TestHumanOutputThroughTheInProcessAPI(t *testing.T) {
 		t.Errorf("status:\n%s", out.String())
 	}
 }
+
+func TestVersionRowPrintsTheBareVersionUnlessItDiffers(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		v    *pb.ComponentVersion
+		want string
+	}{
+		{"equal, empty state", &pb.ComponentVersion{Current: "v1.14.5", Target: "v1.14.5"}, "v1.14.5"},
+		{"equal, up to date", &pb.ComponentVersion{Current: "v1.14.5", Target: "v1.14.5", State: stateUpToDate}, "v1.14.5"},
+		{"equal, unknown", &pb.ComponentVersion{Current: "v1.14.5", Target: "v1.14.5", State: "unknown"}, "v1.14.5"},
+		{"no target", &pb.ComponentVersion{Current: "v1.14.5"}, "v1.14.5"},
+		{"behind", &pb.ComponentVersion{Current: "v1.36.4", Target: "v1.36.6", State: "behind"}, "v1.36.4 (behind: this Ichor ships v1.36.6)"},
+		{"differs, empty state", &pb.ComponentVersion{Current: "v1.36.4", Target: "v1.36.6"}, "v1.36.4 (this Ichor ships v1.36.6)"},
+	} {
+		if got := versionRow(tc.v); got != tc.want {
+			t.Errorf("%s: versionRow = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}

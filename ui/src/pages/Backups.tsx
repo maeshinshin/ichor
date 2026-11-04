@@ -104,12 +104,12 @@ export function Backups() {
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('backups.colName')}</TableHead>
-                  <TableHead>{t('backups.colSchedule')}</TableHead>
-                  <TableHead>{t('backups.colDestination')}</TableHead>
-                  <TableHead>{t('backups.colRetention')}</TableHead>
-                  <TableHead>{t('backups.colLast')}</TableHead>
-                  <TableHead>{t('backups.colSnapshots')}</TableHead>
-                  <TableHead>{t('backups.colSize')}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('backups.colSchedule')}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('backups.colDestination')}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('backups.colRetention')}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('backups.colLast')}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('backups.colSnapshots')}</TableHead>
+                  <TableHead className="hidden md:table-cell">{t('backups.colSize')}</TableHead>
                   <TableHead>{t('backups.colStatus')}</TableHead>
                   <TableHead />
                 </TableRow>
@@ -117,15 +117,20 @@ export function Backups() {
               <TableBody>
                 {backups.map((b) => {
                   const last = newestSnapshot(b.snapshots)
+                  const lastText = b.lastSuccessTime ? formatTimestamp(b.lastSuccessTime) : last ? formatTimestamp(last.time) : t('backups.never')
                   return (
                     <TableRow key={b.ref?.name}>
-                      <TableCell className="font-medium">{b.ref?.name}</TableCell>
-                      <TableCell className="font-mono">{b.schedule}</TableCell>
-                      <TableCell className="font-mono">{destinationLabel(b.destination)}</TableCell>
-                      <TableCell>{t('backups.keepLast', { count: b.keepLast })}</TableCell>
-                      <TableCell>{b.lastSuccessTime ? formatTimestamp(b.lastSuccessTime) : last ? formatTimestamp(last.time) : t('backups.never')}</TableCell>
-                      <TableCell>{b.snapshots.length}</TableCell>
-                      <TableCell>{formatBytes(totalBytes(b.snapshots))}</TableCell>
+                      <TableCell className="font-medium max-md:whitespace-normal max-md:wrap-anywhere">
+                        {b.ref?.name}
+                        <div class="font-mono font-normal text-muted-foreground md:hidden">{b.schedule}</div>
+                        <div class="font-normal text-muted-foreground md:hidden">{lastText}</div>
+                      </TableCell>
+                      <TableCell className="hidden font-mono md:table-cell">{b.schedule}</TableCell>
+                      <TableCell className="hidden font-mono md:table-cell">{destinationLabel(b.destination)}</TableCell>
+                      <TableCell className="hidden md:table-cell">{t('backups.keepLast', { count: b.keepLast })}</TableCell>
+                      <TableCell className="hidden md:table-cell">{lastText}</TableCell>
+                      <TableCell className="hidden md:table-cell">{b.snapshots.length}</TableCell>
+                      <TableCell className="hidden md:table-cell">{formatBytes(totalBytes(b.snapshots))}</TableCell>
                       <TableCell>
                         {b.suspended ? (
                           <ToneBadge tone="neutral">{t('backups.suspended')}</ToneBadge>
@@ -176,17 +181,21 @@ export function Backups() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t('backups.snapTime')}</TableHead>
-                    <TableHead>{t('backups.snapName')}</TableHead>
-                    <TableHead>{t('backups.colName')}</TableHead>
+                    <TableHead className="hidden sm:table-cell">{t('backups.snapName')}</TableHead>
+                    <TableHead className="hidden sm:table-cell">{t('backups.colName')}</TableHead>
                     <TableHead>{t('backups.colSize')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {all.map(({ backup, snap }) => (
                     <TableRow key={`${backup.ref?.name}/${snap.name}`}>
-                      <TableCell>{formatTimestamp(snap.time)}</TableCell>
-                      <TableCell className="font-mono">{snap.name}</TableCell>
-                      <TableCell>{backup.ref?.name}</TableCell>
+                      <TableCell className="max-sm:whitespace-normal">
+                        {formatTimestamp(snap.time)}
+                        <div class="font-mono text-muted-foreground wrap-anywhere sm:hidden">{snap.name}</div>
+                        <div class="text-muted-foreground wrap-anywhere sm:hidden">{backup.ref?.name}</div>
+                      </TableCell>
+                      <TableCell className="hidden font-mono sm:table-cell">{snap.name}</TableCell>
+                      <TableCell className="hidden sm:table-cell">{backup.ref?.name}</TableCell>
                       <TableCell>{formatBytes(snap.size)}</TableCell>
                     </TableRow>
                   ))}

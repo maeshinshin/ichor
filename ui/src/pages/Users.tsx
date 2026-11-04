@@ -45,9 +45,9 @@ export function Users() {
             <TableHeader>
               <TableRow>
                 <TableHead>{t('users.colName')}</TableHead>
-                <TableHead>{t('users.colDisplayName')}</TableHead>
-                <TableHead>{t('users.colRoles')}</TableHead>
-                <TableHead>{t('users.colDisabled')}</TableHead>
+                <TableHead className="hidden sm:table-cell">{t('users.colDisplayName')}</TableHead>
+                <TableHead className="hidden sm:table-cell">{t('users.colRoles')}</TableHead>
+                <TableHead className="hidden sm:table-cell">{t('users.colDisabled')}</TableHead>
                 <TableHead>{t('users.colReady')}</TableHead>
                 <TableHead className="w-10">
                   <span class="sr-only">{t('col.actions')}</span>
@@ -70,25 +70,34 @@ function UserRow({ user, onChanged }: { user: User; onChanged: () => void }) {
   const [dialog, setDialog] = useState<Dialog | null>(null)
   const ready = user.conditions.find((c) => c.type === 'Ready')
   const close = (d: Dialog) => (open: boolean) => setDialog(open ? d : null)
+  const roles =
+    user.roles.length > 0 ? (
+      <div class="flex flex-wrap gap-1">
+        {user.roles.map((r) => (
+          <Badge key={r} variant="secondary">
+            {r}
+          </Badge>
+        ))}
+      </div>
+    ) : (
+      t('common.none')
+    )
 
   return (
     <TableRow>
-      <TableCell>{user.name}</TableCell>
-      <TableCell>{user.displayName || '-'}</TableCell>
-      <TableCell>
-        {user.roles.length > 0 ? (
-          <div class="flex flex-wrap gap-1">
-            {user.roles.map((r) => (
-              <Badge key={r} variant="secondary">
-                {r}
-              </Badge>
-            ))}
+      <TableCell className="max-sm:whitespace-normal max-sm:wrap-anywhere">
+        {user.name}
+        <div class="text-muted-foreground sm:hidden">{user.displayName || '-'}</div>
+        <div class="mt-1 sm:hidden">{roles}</div>
+        {user.disabled && (
+          <div class="mt-1 sm:hidden">
+            <Badge variant="destructive">{t('users.colDisabled')}</Badge>
           </div>
-        ) : (
-          t('common.none')
         )}
       </TableCell>
-      <TableCell>
+      <TableCell className="hidden sm:table-cell">{user.displayName || '-'}</TableCell>
+      <TableCell className="hidden sm:table-cell">{roles}</TableCell>
+      <TableCell className="hidden sm:table-cell">
         <Badge variant={user.disabled ? 'destructive' : 'outline'}>{user.disabled ? t('common.yes') : t('common.no')}</Badge>
       </TableCell>
       <TableCell>{ready ? <ToneBadge tone={conditionTone(ready.type, ready.status)}>{ready.reason || ready.status}</ToneBadge> : '-'}</TableCell>

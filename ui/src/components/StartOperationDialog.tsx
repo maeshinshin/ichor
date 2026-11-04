@@ -246,8 +246,8 @@ export function StartOperationDialog({
       )}
 
       {(!plan || plan.blocked === '') && (
-        <Alert variant="destructive">
-          <CircleXIcon />
+        <Alert>
+          <InfoIcon />
           <AlertTitle>{t('ops.warn.title')}</AlertTitle>
           <AlertDescription>{t(`ops.warn.${kind}`)}</AlertDescription>
         </Alert>

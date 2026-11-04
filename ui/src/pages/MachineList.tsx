@@ -77,17 +77,20 @@ export function MachineList() {
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('col.identity')}</TableHead>
-                  <TableHead>{t('col.endpoint')}</TableHead>
+                  <TableHead className="hidden sm:table-cell">{t('col.endpoint')}</TableHead>
                   <TableHead>{t('col.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {pending.map((m) => (
                   <TableRow key={refKey(m)}>
-                    <TableCell>{identitySummary(m, t('machines.unknown'))}</TableCell>
-                    <TableCell>{m.endpoint || '-'}</TableCell>
+                    <TableCell className="max-sm:whitespace-normal max-sm:wrap-anywhere">
+                      {identitySummary(m, t('machines.unknown'))}
+                      <div class="whitespace-nowrap text-muted-foreground sm:hidden">{m.endpoint || '-'}</div>
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell">{m.endpoint || '-'}</TableCell>
                     <TableCell>
-                      <div class="flex gap-2">
+                      <div class="flex gap-2 max-sm:flex-wrap">
                         <ApproveDialog machine={m} onApproved={replaceMachine} />
                         <RejectDialog machine={m} onRejected={reload} />
                       </div>
@@ -107,22 +110,25 @@ export function MachineList() {
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('col.identity')}</TableHead>
-                  <TableHead>{t('machines.colReason')}</TableHead>
-                  <TableHead>{t('machines.colWhen')}</TableHead>
+                  <TableHead className="hidden sm:table-cell">{t('machines.colReason')}</TableHead>
+                  <TableHead className="hidden sm:table-cell">{t('machines.colWhen')}</TableHead>
                   <TableHead>{t('col.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rejected.map((m) => (
                   <TableRow key={refKey(m)}>
-                    <TableCell>{identitySummary(m, t('machines.unknown'))}</TableCell>
+                    <TableCell className="max-sm:whitespace-normal max-sm:wrap-anywhere">
+                      {identitySummary(m, t('machines.unknown'))}
+                      <div class="text-muted-foreground sm:hidden">{m.approvalDecision?.reason || '-'}</div>
+                    </TableCell>
                     {/* The decision record (ADR 0021's amendment): recorded on the CR
                         itself, not just a one-shot RPC response, so it's still here the
                         next time anyone loads this list. */}
-                    <TableCell>{m.approvalDecision?.reason || '-'}</TableCell>
-                    <TableCell>{formatTimestamp(m.approvalDecision?.at)}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{m.approvalDecision?.reason || '-'}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{formatTimestamp(m.approvalDecision?.at)}</TableCell>
                     <TableCell>
-                      <div class="flex gap-2">
+                      <div class="flex gap-2 max-sm:flex-wrap">
                         {/* Rejection is reversible (ADR 0018's amendment): approving a
                             rejected machine simply moves it to approved, no separate
                             "un-reject" action exists. */}
@@ -147,14 +153,14 @@ export function MachineList() {
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('machines.colHostname')}</TableHead>
-                  <TableHead>{t('col.role')}</TableHead>
+                  <TableHead className="hidden sm:table-cell">{t('col.role')}</TableHead>
                   <TableHead>{t('col.ready')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {approved.map((m) => (
                   <LinkRow key={refKey(m)} to={m.ref ? `/nodes/${m.ref.name}` : '/nodes'}>
-                    <TableCell>
+                    <TableCell className="max-sm:whitespace-normal max-sm:wrap-anywhere">
                       {m.ref ? (
                         <Link to={`/nodes/${m.ref.name}`} className="font-medium hover:underline">
                           {machineDisplayName(m)}
@@ -162,8 +168,9 @@ export function MachineList() {
                       ) : (
                         m.hostname || '-'
                       )}
+                      <div class="text-muted-foreground sm:hidden">{enumLabel(MachineRole, m.role)}</div>
                     </TableCell>
-                    <TableCell>{enumLabel(MachineRole, m.role)}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{enumLabel(MachineRole, m.role)}</TableCell>
                     <TableCell>
                       <ReadyCell machine={m} />
                     </TableCell>

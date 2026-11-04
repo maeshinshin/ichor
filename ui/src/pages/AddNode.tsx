@@ -116,15 +116,18 @@ export function AddNode() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t('col.identity')}</TableHead>
-                    <TableHead>{t('col.endpoint')}</TableHead>
+                    <TableHead className="hidden sm:table-cell">{t('col.endpoint')}</TableHead>
                     <TableHead>{t('col.actions')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {pending.map((m) => (
                     <TableRow key={m.ref?.name}>
-                      <TableCell className="font-mono">{m.identity?.uuid || m.ref?.name}</TableCell>
-                      <TableCell>{m.endpoint || '-'}</TableCell>
+                      <TableCell className="font-mono max-sm:whitespace-normal max-sm:wrap-anywhere">
+                        {m.identity?.uuid || m.ref?.name}
+                        <div class="font-sans whitespace-nowrap text-muted-foreground sm:hidden">{m.endpoint || '-'}</div>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">{m.endpoint || '-'}</TableCell>
                       <TableCell>
                         <ApproveDialog
                           machine={m}

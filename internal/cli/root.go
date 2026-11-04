@@ -102,7 +102,7 @@ func validateOutputFormat(format string) error {
 }
 
 // machineFormat is the format for a command that has no human view yet: the unset -o is YAML, the
-// output every command had before human output became the default (docs/adr). Every writer of a
+// output every command had before human output became the default (docs/adr/0118). Every writer of a
 // machine format goes through it, so an unconverted command never prints nothing.
 func machineFormat(format string) string {
 	if format == outputHuman {

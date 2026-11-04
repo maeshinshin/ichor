@@ -91,12 +91,12 @@ make demo-images-push VERSION=v0.1.0 REGISTRY=192.168.1.10:5000
 bin/img/ichor/ichor init --help     # create the first control plane and install Ichor
 bin/img/ichor/ichor machine approve --help
 bin/img/ichor/ichor cluster get NAME
-bin/img/ichor/ichor version         # CLI version and the installed Ichor version (--client skips the cluster, -o json|yaml)
+bin/img/ichor/ichor version         # CLI version and the installed Ichor version (--client skips the cluster)
 ```
 
 [Getting started](docs/guides/getting-started.md) walks through all of it,
 from the build to the first sign-in to the UI. `ichor <command> --help` lists
-the rest. Existing clusters are brought in with `ichor adopt`.
+the rest. The CLI prints for people; add `-o yaml` or `-o json` in a script. Existing clusters are brought in with `ichor adopt`.
 
 ## Security
 

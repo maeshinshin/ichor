@@ -407,7 +407,7 @@ func (c *caRun) preflight(ctx context.Context) (ctrl.Result, error) {
 		targets = c.rot.Targets()
 	}
 
-	if err := c.checkTargets(targets, machines); err != nil {
+	if err := c.checkTargets(targets); err != nil {
 		return c.retry(ctx, "not starting the rotation: "+err.Error())
 	}
 

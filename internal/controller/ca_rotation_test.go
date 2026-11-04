@@ -82,6 +82,16 @@ type rotWorld struct {
 	dialLeak string
 	// dials counts successful dials.
 	dials int
+
+	// etcd fields: restarts is every etcd service restart in order, with the PKI the node's
+	// configuration gave it at that moment; etcdUnhealthy marks nodes whose etcd does not report healthy;
+	// afterRestart runs after each restart; pkiStale makes a node report the PKI it had before the stage.
+	restarts      []etcdRestart
+	etcdUnhealthy map[string]bool
+	afterRestart  func(node string)
+	pkiStale      map[string]bool
+	// memberCount is how many etcd members every node's member list reports.
+	memberCount int
 }
 
 func parseCerts(crt []byte) []*stdx509.Certificate {
@@ -233,17 +243,35 @@ type caRotFixture struct {
 	nodeChecks int
 	// kube is the in-cluster API the restarts go through; nil leaves the reconciler without one.
 	kube kubernetes.Interface
+	// targets is spec.caRotation.targets of the operation newOp creates (empty: the default).
+	targets []string
+	// aggregatorPublished is what the fake extension-apiserver-authentication check reports;
+	// aggregatorChecks the fingerprints it was asked about.
+	aggregatorPublished bool
+	aggregatorChecks    []string
 }
 
-func newCARotFixture() *caRotFixture {
-	f := &caRotFixture{recorder: record.NewFakeRecorder(100), settleDelay: time.Nanosecond}
+func newCARotFixture() *caRotFixture { return newCARotFixtureCPs(3) }
+
+// newCARotFixtureCPs is a cluster with the given number of control planes and two workers.
+func newCARotFixtureCPs(controlPlanes int) *caRotFixture {
+	f := &caRotFixture{recorder: record.NewFakeRecorder(100), settleDelay: time.Nanosecond, aggregatorPublished: true}
 	f.old = newTestBundle("v1.14")
 	f.secret = newTestSecret(f.old)
-	f.cluster = newTestClusterWithCount(3, f.secret.Name)
-	f.world = &rotWorld{nodes: map[string]*rotNode{}, secretName: f.secret.Name, versionErr: map[string]error{}}
+	// The CRD allows 1, 3 or 5 control planes: two machines are a three-machine cluster that lost one.
+	count := controlPlanes
+	if count == 2 {
+		count = 3
+	}
 
-	for _, n := range []string{"cp1", "cp2", "cp3"} {
-		f.machines = append(f.machines, newOpTestMachine(f.cluster.Name, roleControlPlane, "rot-"+n))
+	f.cluster = newTestClusterWithCount(int32(count), f.secret.Name) //nolint:gosec // a handful
+	f.world = &rotWorld{
+		nodes: map[string]*rotNode{}, secretName: f.secret.Name, versionErr: map[string]error{},
+		etcdUnhealthy: map[string]bool{}, pkiStale: map[string]bool{}, memberCount: controlPlanes,
+	}
+
+	for i := 1; i <= controlPlanes; i++ {
+		f.machines = append(f.machines, newOpTestMachine(f.cluster.Name, roleControlPlane, fmt.Sprintf("rot-cp%d", i)))
 	}
 
 	for _, n := range []string{"w1", "w2"} {
@@ -278,6 +306,11 @@ func (f *caRotFixture) newReconciler() *TalosOperationReconciler {
 
 			return f.rootCAStale, nil
 		},
+		AggregatorCAPublished: func(_ context.Context, _ TalosClient, fp string) (bool, error) {
+			f.aggregatorChecks = append(f.aggregatorChecks, fp)
+
+			return f.aggregatorPublished, nil
+		},
 		ClientSettleDelay: f.settleDelay,
 	}
 }
@@ -286,6 +319,11 @@ func (f *caRotFixture) newOp() *ichorv1alpha1.TalosOperation {
 	op := &ichorv1alpha1.TalosOperation{}
 	op.GenerateName, op.Namespace = "rot-op-", tmNamespace
 	op.Spec.ClusterRef.Name, op.Spec.Kind = f.cluster.Name, ichorv1alpha1.TalosOperationKindCARotation
+
+	if len(f.targets) > 0 {
+		op.Spec.CARotation = &ichorv1alpha1.TalosOperationCARotationSpec{Targets: f.targets}
+	}
+
 	Expect(k8sClient.Create(ctx, op)).To(Succeed())
 
 	return op

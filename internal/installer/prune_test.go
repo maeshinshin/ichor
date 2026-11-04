@@ -88,8 +88,7 @@ func TestPruneCandidatesNeverPrunesAShippedRenamedName(t *testing.T) {
 // The mark: an object is the installer's when it carries the installed-by label; a renamed object
 // from before that label also counts with the app name label; nothing else does.
 func TestOwnedNeedsTheInstalledByLabelOrARenamesAppLabel(t *testing.T) {
-	plain := ref{APIVersion: rbacAPI, Kind: kindClusterRole, Name: "ichor-manager-role"}.candidate("")
-	renamed := ref{APIVersion: rbacAPI, Kind: kindClusterRole, Name: breakGlassRole}.candidate(overrideRole)
+	plain, renamed := pruneCandidate{}, pruneCandidate{renamedTo: overrideRole}
 
 	withLabels := func(labels map[string]string) *unstructured.Unstructured {
 		o := &unstructured.Unstructured{}

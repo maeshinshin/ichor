@@ -60,17 +60,28 @@ It refuses while a CA rotation is still under way, because the bundle is about t
 			return saveSealedBundle(cluster, bundle, bundleExportPlaintext, true, cmd.ErrOrStderr())
 		}
 
-		return runBundleExport(cmd.Context(), bundleExportDeps{K8s: k8s, Save: save, Load: loadBundleFile, Stdout: cmd.OutOrStdout()},
-			apiOpts.Namespace, apiOpts.IchorNamespace, args[0])
+		return runBundleExport(cmd.Context(), bundleExportDeps{
+			K8s: k8s, Save: save, Load: loadBundleFile,
+			SaveRetired: func(cluster string, retired *secretsbundle.Retired, bundlePath string) (string, error) {
+				return saveRetiredFile(cluster, retired, bundlePath, cmd.ErrOrStderr())
+			},
+			LoadRetired: loadRetiredFile, Stdout: cmd.OutOrStdout(),
+		}, apiOpts.Namespace, apiOpts.IchorNamespace, args[0])
 	},
 }
 
 // bundleExportDeps are runBundleExport's seams; the real ones touch ~/.ichor and a cluster.
 type bundleExportDeps struct {
-	K8s    client.Client
-	Save   func(cluster string, bundle *secrets.Bundle) (string, error)
-	Load   func(path string) (*secrets.Bundle, error)
-	Stdout io.Writer
+	K8s  client.Client
+	Save func(cluster string, bundle *secrets.Bundle) (string, error)
+	Load func(path string) (*secrets.Bundle, error)
+	// SaveRetired and LoadRetired write and read back the keys a key rotation retired. They are
+	// only called for a cluster that has retired keys; nil there is an error, not a silent skip.
+	// The retired keys are stored like the bundle file next to which they go: sealed under the same
+	// passphrase, or plaintext when the bundle is.
+	SaveRetired func(cluster string, retired *secretsbundle.Retired, bundlePath string) (string, error)
+	LoadRetired func(bundlePath string) (*secretsbundle.Retired, error)
+	Stdout      io.Writer
 }
 
 func runBundleExport(ctx context.Context, d bundleExportDeps, namespace, ichorNamespace, name string) error {
@@ -95,7 +106,12 @@ func runBundleExport(ctx context.Context, d bundleExportDeps, namespace, ichorNa
 		return err
 	}
 
-	want, err := secretsbundle.ExportFingerprint(bundle, &secretsbundle.Retired{})
+	retired, err := secretsbundle.LoadRetired(ctx, d.K8s, ichorNamespace, secretName)
+	if err != nil {
+		return err
+	}
+
+	want, err := secretsbundle.ExportFingerprint(bundle, retired)
 	if err != nil {
 		return err
 	}
@@ -110,7 +126,25 @@ func runBundleExport(ctx context.Context, d bundleExportDeps, namespace, ichorNa
 		return err
 	}
 
-	got, err := secretsbundle.ExportFingerprint(saved, &secretsbundle.Retired{})
+	// The retired keys go next to the bundle and are read back with it: a copy without them cannot open a backup
+	// sealed before a key rotation.
+	savedRetired := &secretsbundle.Retired{}
+
+	if len(retired.Keys) > 0 {
+		if d.SaveRetired == nil || d.LoadRetired == nil {
+			return errors.New("this cluster rotated its keys and the retired keys cannot be saved; not acknowledging")
+		}
+
+		if _, err := d.SaveRetired(name, retired, path); err != nil {
+			return err
+		}
+
+		if savedRetired, err = d.LoadRetired(path); err != nil {
+			return err
+		}
+	}
+
+	got, err := secretsbundle.ExportFingerprint(saved, savedRetired)
 	if err != nil || got != want {
 		return fmt.Errorf("the file written to %s does not hold the cluster's current bundle; not acknowledging", path)
 	}
@@ -128,6 +162,12 @@ func runBundleExport(ctx context.Context, d bundleExportDeps, namespace, ichorNa
 
 	_, err = fmt.Fprintf(d.Stdout, "Saved the current secrets bundle to %s and marked %s as exported.\n"+
 		"Keep that file safe: with it and an etcd snapshot a lost cluster can be recovered.\n", path, name)
+	if err != nil || len(retired.Keys) == 0 {
+		return err
+	}
+
+	_, err = fmt.Fprintf(d.Stdout, "The cluster rotated its keys: the retired keys were saved next to it as %s. Keep that file with the bundle, "+
+		"it opens the backups sealed before the rotation.\n", retiredFilePath(path))
 
 	return err
 }

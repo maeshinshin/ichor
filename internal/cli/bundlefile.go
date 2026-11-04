@@ -286,6 +286,8 @@ func readBundlePlain(path string) (plain []byte, encrypted bool, err error) {
 		return nil, true, fmt.Errorf("opening secrets bundle %q: %w", path, err)
 	}
 
+	openedThisRun[path] = pass
+
 	return plain, true, nil
 }
 

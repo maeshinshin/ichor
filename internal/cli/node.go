@@ -59,9 +59,9 @@ var nodeGetCmd = &cobra.Command{
 	Short: "Show a node's hardware, disks, network interfaces, usage and Kubernetes status",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return showAPI(cmd, true, func(ctx context.Context, c *apiClients) (*connect.Response[pb.GetNodeResponse], error) {
+		return showAPIHuman(cmd, true, func(ctx context.Context, c *apiClients) (*connect.Response[pb.GetNodeResponse], error) {
 			return c.Node.GetNode(ctx, connect.NewRequest(&pb.GetNodeRequest{Machine: objectRef(apiOpts.Namespace, args[0])}))
-		})
+		}, renderNodeGet)
 	},
 }
 
@@ -146,7 +146,7 @@ func runNodeLogs(
 			return err
 		}
 
-		_, _ = fmt.Fprintf(errw, "ichor: log stream ended (%v); reconnecting...\n", err)
+		logsReconnectNotice(errw, err)
 
 		select {
 		case <-ctx.Done():

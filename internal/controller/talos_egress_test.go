@@ -43,7 +43,7 @@ func TestBuildEgressCoversEveryDialedPort(t *testing.T) {
 	rules := buildEgress(egressTargets{
 		cidrs: []string{"10.0.0.1/32"},
 		names: []string{"k8s.example.com"},
-		s3: []s3Target{
+		s3: []urlTarget{
 			{host: "s3.example.com", port: 443}, {host: "minio.minio.svc", port: 9000}, {host: "192.0.2.9", port: 80},
 		},
 	})
@@ -95,11 +95,11 @@ func TestHostParsing(t *testing.T) {
 		t.Errorf("names: %v", got)
 	}
 
-	if st, ok := parseS3Endpoint("http://minio.minio.svc:9000"); !ok || st.port != 9000 || st.host != "minio.minio.svc" {
+	if st, ok := parseURLTarget("http://minio.minio.svc:9000"); !ok || st.port != 9000 || st.host != "minio.minio.svc" {
 		t.Errorf("s3: %v %v", st, ok)
 	}
 
-	if st, ok := parseS3Endpoint("https://s3.eu-west-1.amazonaws.com"); !ok || st.port != 443 {
+	if st, ok := parseURLTarget("https://s3.eu-west-1.amazonaws.com"); !ok || st.port != 443 {
 		t.Errorf("s3 https default: %v %v", st, ok)
 	}
 }

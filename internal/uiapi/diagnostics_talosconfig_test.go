@@ -37,6 +37,8 @@ import (
 const (
 	readerTCUser   = "rtc-holder"
 	readerTCNoUser = "rtc-other"
+
+	credentialRequestsResource = "taloscredentialrequests"
 )
 
 // ADR 0124: the UI download of the os:reader talosconfig. The webhook (not running in this suite) makes the
@@ -46,7 +48,7 @@ var _ = Describe("Reader talosconfig download (ADR 0124)", func() {
 
 	BeforeEach(func() {
 		group := ichorv1alpha1.GroupVersion.Group
-		mint := rbacv1.PolicyRule{APIGroups: []string{group}, Resources: []string{"taloscredentialrequests"}, Verbs: []string{cniVerbCreate}}
+		mint := rbacv1.PolicyRule{APIGroups: []string{group}, Resources: []string{credentialRequestsResource}, Verbs: []string{cniVerbCreate}}
 		verb := rbacv1.PolicyRule{
 			APIGroups: []string{group}, Resources: []string{resourceTalosClusters + "/" + TalosconfigReaderScope}, Verbs: []string{DownloadVerb},
 		}

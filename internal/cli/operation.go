@@ -217,7 +217,7 @@ func (p *stageProgress) print(line string) {
 
 // progressLine is one line of --watch output.
 func progressLine(op *pb.Operation) string {
-	return progressLineAt(op, op.GetCaRotationStage())
+	return progressLineAt(op, cmp.Or(op.GetCaRotationStage(), op.GetKeyRotationStage()))
 }
 
 // progressLineAt is progressLine with the CA rotation stage given, so that a stage a poll skipped can be
@@ -364,6 +364,8 @@ type startSpec struct {
 	Installer *pb.IchorInstallerOptions
 	// CATargets are the CAs of a ca-rotation (ADR 0120); empty is the default pair.
 	CATargets []string
+	// KeyRotation is the request of a key-rotation start (ADR 0121); nil for every other kind.
+	KeyRotation *pb.KeyRotationRequest
 
 	// AfterCreate, when set, takes over once the operation exists: it gets the operation's ref and
 	// the create response and does the output and any follow itself (ca-rotation's credential
@@ -437,6 +439,7 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 
 	plan, err := c.Operation.PlanOperation(ctx, connect.NewRequest(&pb.PlanOperationRequest{
 		Cluster: cluster, Kind: s.Kind, Target: s.Target, MaxUnavailable: s.MaxUnavailable, Override: s.Override, IchorInstaller: s.Installer, CaTargets: s.CATargets,
+		KeyRotation: s.KeyRotation,
 	}))
 	if err != nil {
 		return err
@@ -452,6 +455,7 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 
 	resp, err := c.Operation.CreateOperation(ctx, connect.NewRequest(&pb.CreateOperationRequest{
 		Cluster: cluster, Kind: s.Kind, Target: s.Target, MaxUnavailable: s.MaxUnavailable, Override: s.Override, IchorInstaller: s.Installer, CaTargets: s.CATargets,
+		KeyRotation: s.KeyRotation,
 	}))
 	if err != nil {
 		return err

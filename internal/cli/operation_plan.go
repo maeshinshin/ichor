@@ -69,6 +69,21 @@ func caPlanNames(targets []string) string {
 	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
 }
 
+// keyRotationText is what a key rotation does, in the words the plan and rotate-keys' help share (the UI's
+// copy says the same in its own strings).
+func keyRotationText(stages []string) string {
+	return fmt.Sprintf("Every control plane is reconfigured once per applying stage (%s), one at a time, without a reboot: its "+
+		"kube-apiserver RESTARTS each time and Ichor waits for it to answer before the next control plane. Workers carry neither key and are not touched.\n"+
+		"The new keys are first only accepted everywhere (the service-account public key verifies, the secretbox key decrypts), then made "+
+		"primary. With the secretbox key, every Secret in the cluster is then rewritten under the new key by the controller (through an "+
+		"admin kubeconfig a control plane issues, so Ichor needs no new permission) until a sweep finds none left. With the service-account "+
+		"key, the old one is kept for 90 minutes by default (--token-settle) while pods' tokens are re-issued, and until no legacy "+
+		"token Secret (type kubernetes.io/service-account-token) is signed by it (--ignore-legacy-tokens skips that check); tokens kept "+
+		"outside the cluster stop working when it is dropped.\n"+
+		"Backups sealed before the rotation stay readable (the bundle keeps the retired keys), but a snapshot taken before the "+
+		"rotation finished cannot be restored.\n", strings.Join(stages, ", "))
+}
+
 // configRestartText is what a config operation whose changes need no reboot does (ADR 0080
 // amendment); the UI says the same in ops.plan.effectConfigRestart.
 const configRestartText = "Restarts the Kubernetes API server on each control plane, one at a time; no reboot."
@@ -140,6 +155,8 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 				"cannot verify the API server. Ichor waits until every namespace has the new CA and then two minutes before the old CAs are dropped. " +
 				"CoreDNS, kube-proxy, the CNI and ichor-ui are restarted once after the old CAs are dropped; other in-cluster clients that load the CA once may need a restart.\n")
 		}
+	case pb.OperationEffect_OPERATION_EFFECT_KEY_ROTATION:
+		b.WriteString(keyRotationText(p.GetStages()))
 	case pb.OperationEffect_OPERATION_EFFECT_UNSPECIFIED:
 	}
 
@@ -207,6 +224,8 @@ func headline(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 		return fmt.Sprintf("Switch kube-proxy on cluster %q from %s to %s.", cluster, p.GetCurrent(), p.GetTarget())
 	case pb.OperationKind_OPERATION_KIND_CA_ROTATION:
 		return fmt.Sprintf("Rotate the %s certificate authorities (ca-rotation) of cluster %q.", caPlanNames(p.GetCaTargets()), cluster)
+	case pb.OperationKind_OPERATION_KIND_KEY_ROTATION:
+		return fmt.Sprintf("Rotate the service-account signing key and the secretbox (encryption at rest) key (key-rotation) of cluster %q.", cluster)
 	case pb.OperationKind_OPERATION_KIND_CONFIG:
 		if p.GetEffect() == pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS {
 			return fmt.Sprintf("Apply the pending configuration changes that restart the Kubernetes API server (config) of cluster %q.", cluster)
@@ -258,6 +277,8 @@ func orderText(kind pb.OperationKind, p *pb.PlanOperationResponse) string {
 		b.WriteString(": workers first, drained and stopped together, then the control planes at once:\n")
 	case pb.OperationKind_OPERATION_KIND_CA_ROTATION:
 		b.WriteString(", one at a time, control planes first; every machine is visited in each pass:\n")
+	case pb.OperationKind_OPERATION_KIND_KEY_ROTATION:
+		b.WriteString(", one at a time, waiting for each kube-apiserver to come back; every one is visited in each applying stage:\n")
 	case pb.OperationKind_OPERATION_KIND_KUBERNETES:
 		fmt.Fprintf(&b, ": the control planes one at a time in each of the first three stages; in the kubelet stage the control planes "+
 			"one at a time, then workers (at most %d at once), in this order:\n", max(p.GetMaxUnavailable(), 1))

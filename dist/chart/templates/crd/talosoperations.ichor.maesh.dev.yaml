@@ -555,6 +555,13 @@ spec:
                 x-kubernetes-list-map-keys:
                 - name
                 x-kubernetes-list-type: map
+              message:
+                description: |-
+                  message is what an InProgress operation is doing or waiting for right now, as the controller
+                  last saw it ("waiting for the ichor-ui Deployment to finish rolling out (1 of 2 updated
+                  replicas are available)"). It is replaced when it changes and cleared in every other phase;
+                  a pause says why in failureReason or the Paused condition, a finished operation in its Events.
+                type: string
               node:
                 description: node is the node kind's state machine.
                 properties:

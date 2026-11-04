@@ -23,6 +23,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
@@ -80,5 +85,52 @@ var _ = Describe("TalosOperationReconciler, kind ichor", func() {
 		got := fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
 		Expect(got.Status.Machines).To(BeEmpty())
+	})
+
+	It("shows what it waits for in status.message while InProgress, and clears it when done", func() {
+		op := newIchorOp(newOpTestCluster().Name)
+
+		labels := map[string]string{controlPlaneLabel: valueControllerMgr}
+		d := &appsv1.Deployment{
+			Name: "msg-controller", Namespace: testIchorNamespace, Labels: labels,
+			Spec: appsv1.DeploymentSpec{
+				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"msg-test": "x"}},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"msg-test": "x"}},
+					Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "registry.example/c:v1"}}},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, d)).To(Succeed())
+		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, d))).To(Succeed()) })
+		setRollout(d, false)
+
+		done := false
+		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: testIchorNamespace, Advance: func(
+			context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *ichorv1alpha1.TalosOperation,
+		) (bool, error) {
+			return done, nil
+		}}
+
+		_, err := reconcileOperation(r, op)
+		Expect(err).NotTo(HaveOccurred())
+
+		got := fetchOperation(op)
+		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
+		Expect(got.Status.Message).To(Equal("waiting for the controller Deployment to finish rolling out (0 of 1 updated replicas are available)"))
+
+		// An unchanged message is not written again.
+		version := got.ResourceVersion
+		_, err = reconcileOperation(r, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fetchOperation(op).ResourceVersion).To(Equal(version))
+
+		done = true
+		_, err = reconcileOperation(r, op)
+		Expect(err).NotTo(HaveOccurred())
+
+		got = fetchOperation(op)
+		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
+		Expect(got.Status.Message).To(BeEmpty())
 	})
 })

@@ -47,7 +47,6 @@ func TestLonghornV1_BeginAndEndEvacuation(t *testing.T) {
 		t.Errorf("BeginEvacuation() = (%v, %v), want (false, true)", allow, evict)
 	}
 
-	// EndEvacuation must be the exact inverse.
 	if allow, evict := h.EndEvacuation(); !allow || evict {
 		t.Errorf("EndEvacuation() = (%v, %v), want (true, false)", allow, evict)
 	}

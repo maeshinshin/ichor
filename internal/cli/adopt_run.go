@@ -250,7 +250,7 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 			return "pending", err
 		}
 
-		return "ready", err
+		return "passed", err
 	}
 
 	if st.needsTakeover() {

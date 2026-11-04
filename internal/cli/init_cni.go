@@ -58,7 +58,9 @@ type cniBootstrap struct {
 func buildCNIBootstrap(preset cilium.Preset, clusterName, namespace string) (*cniBootstrap, error) {
 	out := &cniBootstrap{}
 
-	manifest, err := preset.BootstrapManifest(cniKubeProxy)
+	// The manifest goes into the first control plane's config: when it applies, that node is the only
+	// Node, whatever control-plane count the cluster is meant to reach (ADR 0113 amendment 2026-11-04).
+	manifest, err := preset.WithNodes(1).BootstrapManifest(cniKubeProxy)
 	if err != nil {
 		return nil, fmt.Errorf("init: rendering cni bootstrap manifest: %w", err)
 	}

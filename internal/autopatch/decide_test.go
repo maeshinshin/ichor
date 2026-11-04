@@ -21,7 +21,8 @@ func targets() *ichorv1alpha1.IchorUpgradeTargets {
 		CheckedAt:  &at,
 		Talos:      []string{"v1.15.0", "v1.14.5", "v1.14.4", "v1.14.3"},
 		Kubernetes: []string{"v1.37.0", "v1.36.6", "v1.36.2", "v1.36.1"},
-		Cilium:     []string{"v1.20.6", "v1.20.5"},
+		// A list an earlier controller wrote: Cilium has no candidate, whatever it holds.
+		Cilium: []string{"v1.20.6", "v1.20.5"},
 	}
 }
 
@@ -30,7 +31,7 @@ func good() Input {
 	return Input{
 		Now: now, Enabled: true, Targets: targets(),
 		Cluster: Cluster{
-			Talos: "v1.14.3", Kubernetes: "v1.36.1", CNIDetected: "cilium", CiliumVersion: "1.20.4", CiliumChart: "1.20.4",
+			Talos: "v1.14.3", Kubernetes: "v1.36.1", CNIDetected: "cilium", CiliumVersion: "1.20.4",
 			MachinesReady: true,
 		},
 	}
@@ -61,7 +62,7 @@ func TestDecideGuards(t *testing.T) {
 		{name: "a start moments ago", mod: func(i *Input) { i.LastStart = now.Add(-time.Minute) }, skip: "less than"},
 		{name: "a start long ago", mod: func(i *Input) { i.LastStart = now.Add(-time.Hour) }, want: Decision{Component: "talos", Target: "v1.14.5"}},
 		{name: "only kubernetes selected", mod: func(i *Input) { i.Setting.Components = []string{"kubernetes"} }, want: Decision{Component: "kubernetes", Target: "v1.36.6"}},
-		{name: "only cilium selected", mod: func(i *Input) { i.Setting.Components = []string{"cilium"} }, want: Decision{Component: "cilium", Target: "v1.20.6"}},
+		{name: "only cilium selected", mod: func(i *Input) { i.Setting.Components = []string{"cilium"} }, skip: "no patch"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			t.Parallel()
@@ -87,7 +88,7 @@ func TestDecideGuards(t *testing.T) {
 	}
 }
 
-// TestDecideOrder: Talos, then Cilium, then Kubernetes, each only when the earlier has nothing.
+// TestDecideOrder: Talos, then Kubernetes, each only when the earlier has nothing. Cilium is never chosen.
 func TestDecideOrder(t *testing.T) {
 	t.Parallel()
 
@@ -97,13 +98,8 @@ func TestDecideOrder(t *testing.T) {
 	}
 
 	in.Cluster.Talos = "v1.14.5"
-	if got := Decide(in); got.Component != "cilium" || got.Target != "v1.20.6" {
-		t.Fatalf("after Talos is current: %+v", got)
-	}
-
-	in.Cluster.CiliumVersion = "1.20.6"
 	if got := Decide(in); got.Component != "kubernetes" || got.Target != "v1.36.6" {
-		t.Fatalf("after Cilium is current: %+v", got)
+		t.Fatalf("after Talos is current: %+v", got)
 	}
 
 	in.Cluster.Kubernetes = "v1.36.6"
@@ -131,7 +127,7 @@ func TestCandidateNeverMinorsOrIncompatible(t *testing.T) {
 
 	// A Kubernetes patch Cilium 1.19 is not tested with is refused by the table, not offered.
 	tg = targets()
-	c.CiliumVersion, c.CiliumChart = "1.19.8", "1.19.8"
+	c.CiliumVersion = "1.19.8"
 	c.Kubernetes = "v1.35.1"
 	tg.Kubernetes = []string{"v1.35.2"}
 
@@ -155,20 +151,10 @@ func TestCandidateNeverMinorsOrIncompatible(t *testing.T) {
 		t.Errorf("no Cilium patch on a non-Cilium cluster: %q", got)
 	}
 
-	// The unmanaged preset: Ichor does not operate Cilium.
+	// Cilium has no candidate on a managed Cilium cluster either, whatever list a status holds.
 	c = good().Cluster
-	c.CNIUnmanaged = true
-
 	if got := Candidate("cilium", c, targets()); got != "" {
-		t.Errorf("no Cilium patch on an unmanaged CNI: %q", got)
-	}
-
-	// A Cilium patch the embedded chart already reaches is not an offer.
-	c = good().Cluster
-	c.CiliumChart = "1.20.6"
-
-	if got := Candidate("cilium", c, targets()); got != "" {
-		t.Errorf("a patch the chart reaches: %q", got)
+		t.Errorf("a Cilium candidate on a Cilium cluster: %q", got)
 	}
 
 	// The newest wins even when the release set's version is older.

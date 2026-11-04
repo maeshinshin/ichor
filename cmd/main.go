@@ -53,7 +53,6 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/certreload"
 	"github.com/maeshinshin/ichor/internal/controller"
-	"github.com/maeshinshin/ichor/internal/imagesig"
 	"github.com/maeshinshin/ichor/internal/kubetrust"
 	"github.com/maeshinshin/ichor/internal/metricsauth"
 	"github.com/maeshinshin/ichor/internal/releasecheck"
@@ -486,7 +485,7 @@ func main() {
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "issuertrust")
 	must((&controller.CNIHandoverReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(), Kube: kubeClient,
-		Namespace: ns,
+		Namespace: ns, Recorder: mgr.GetEventRecorderFor("ichor-cni"), //nolint:staticcheck // typed against record.EventRecorder, as the others
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "cnihandover")
 	must((&controller.CNIDetectReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
@@ -514,13 +513,9 @@ func main() {
 	)
 
 	ichorUpgradeAdvance := controller.NewIchorUpgradeAdvancer(mgr.GetClient(), mgr.GetAPIReader(), ns, noCiliumPolicies)
-	// The Cilium patches are offered and run only with a verified cosign signature, checked offline
-	// against the embedded Sigstore trusted root.
-	ciliumImages, err := imagesig.New()
-	must(err, "Failed to load the Sigstore trusted root")
 	cniKubeProxyAdvance := controller.NewCNIKubeProxyAdvancer(
 		mgr.GetClient(), mgr.GetAPIReader(), ns, controller.NewMachineryTalosClient,
-		controller.NewKubeProxyAdmin(), ciliumImages,
+		controller.NewKubeProxyAdmin(),
 	)
 
 	// The shutdown kind is not a rollout and has no Advance entry: the backbone
@@ -585,7 +580,7 @@ func main() {
 	relists := releasecheck.RegistryLister(false)
 	must(mgr.Add(&controller.ReleaseCheck{
 		Client: mgr.GetClient(), Reader: mgr.GetAPIReader(), Settings: settingsReader, Namespace: ns,
-		Repository: updateCheckRepository, List: relists, Images: ciliumImages, Settle: 3 * time.Second,
+		Repository: updateCheckRepository, List: relists, Settle: 3 * time.Second,
 	}), "Failed to add the release check")
 	// Automatic patch upgrades: off unless spec.autoPatch or the chart turns them on.
 	// The controller never writes a TalosCluster spec: the version and the operation are written as the

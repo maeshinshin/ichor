@@ -187,14 +187,6 @@ func EffectiveValuesForNodes(
 		return nil, err
 	}
 
-	// The Cilium patch the release runs on this chart keeps its images
-	// in every later Job until the embedded chart reaches it.
-	if o := ImageOverrideActive(cluster); o != nil {
-		if err := WithImageOverrides(eff, o.Images); err != nil {
-			return nil, err
-		}
-	}
-
 	// spec.security.wireGuard is typed and wins over a conflicting user value.
 	if s := cluster.Spec.Security; s != nil && s.WireGuard != nil && s.WireGuard.Enabled {
 		w := s.WireGuard

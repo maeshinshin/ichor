@@ -279,18 +279,15 @@ export type StartCniUpgradeRequest = Message<"ichor.v1alpha1.StartCniUpgradeRequ
   cluster?: ObjectRef | undefined;
 
   /**
-   * version is a Cilium patch (vX.Y.Z, newer than the chart this Ichor embeds) the list of
-   * ListUpgradeTargets offers as a cni patch; empty upgrades the release to the embedded chart.
-   * The controller verifies the patch's images before it runs them.
+   * version is deprecated and unused: it named a Cilium patch to run on the embedded chart. Cilium moves only to the chart this Ichor embeds (amendment 2026-11-04 (3)), so
+   * the server refuses a request that sets it. Kept so the wire format does not break.
    *
    * @generated from field: string version = 2;
    */
   version: string;
 
   /**
-   * override lifts the compatibility refusal of a patch (the Cilium minor is not tested with the
-   * cluster's Kubernetes). The caller must hold the override verb on the TalosCluster;
-   * the reason is optional. A patch whose images are not verified is never overridable.
+   * override is deprecated and unused: it lifted the compatibility refusal of a patch. The server ignores it.
    *
    * @generated from field: ichor.v1alpha1.Override override = 3;
    */

@@ -329,9 +329,10 @@ type TalosOperationCNISpec struct {
 	// +required
 	ChartVersion string `json:"chartVersion"`
 
-	// imageVersion, when set, makes the upgrade a Cilium patch: the release keeps the chart this Ichor
-	// embeds and runs the agent, operator and hubble-relay images of this newer patch. The executor verifies each
-	// image's signature before it runs the Job.
+	// imageVersion is deprecated and unused. An earlier Ichor made the upgrade a Cilium patch with it. Cilium now moves
+	// only to the chart the running Ichor embeds (amendment 2026-11-04
+	// (3)): the executor refuses an operation that sets it. Kept so the schema does not lose a field an
+	// installed build had.
 	// +optional
 	// +kubebuilder:validation:Pattern=`^v[0-9]+\.[0-9]+\.[0-9]+$`
 	ImageVersion string `json:"imageVersion,omitempty"`

@@ -3279,9 +3279,11 @@ spec:
                     type: string
                   imageOverride:
                     description: |-
-                      imageOverride is the Cilium patch the release runs on the embedded chart: the images of the patch, pinned by digest. Written by the controller after a patch
-                      upgrade's Job rolled out; every later Job keeps it. It stops applying once the embedded chart
-                      reaches the patch, and the controller clears it then.
+                      imageOverride is deprecated and unused. An earlier Ichor recorded here the Cilium patch whose images the
+                      release ran on the embedded chart. Ichor now runs only the images of the
+                      chart it embeds (amendment 2026-11-04 (3)): it renders nothing from this field and clears it, and the next
+                      Helm Job returns the release to the chart's images. Kept so the schema does not lose a field an installed
+                      build had.
                     properties:
                       images:
                         additionalProperties:

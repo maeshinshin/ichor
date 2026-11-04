@@ -658,6 +658,20 @@ func apiGoesDown(p *opPlan) bool {
 		p.kind == ichorv1alpha1.TalosOperationKindKeyRotation
 }
 
+// sortIntoTiers puts m into the control planes or the workers a plan of kind visits. Neither document a key
+// rotation edits is in a worker's configuration, so a worker is not touched by it.
+func sortIntoTiers(kind string, m *ichorv1alpha1.TalosMachine, cps, workers []*ichorv1alpha1.TalosMachine,
+) (outCPs, outWorkers []*ichorv1alpha1.TalosMachine) {
+	switch {
+	case m.Spec.Role == opRoleControlPlane:
+		return append(cps, m), workers
+	case kind == ichorv1alpha1.TalosOperationKindKeyRotation:
+		return cps, workers
+	default:
+		return cps, append(workers, m)
+	}
+}
+
 func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1alpha1.TalosCluster, maxUnavailable int32) error {
 	if p.kind == ichorv1alpha1.TalosOperationKindIchor {
 		return nil
@@ -701,12 +715,7 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 			notePendingSchematic(p, cluster, m)
 		}
 
-		if m.Spec.Role == opRoleControlPlane {
-			cps = append(cps, m)
-		} else if p.kind != ichorv1alpha1.TalosOperationKindKeyRotation {
-			// Neither document a key rotation edits is in a worker's configuration: it is not touched.
-			workers = append(workers, m)
-		}
+		cps, workers = sortIntoTiers(p.kind, m, cps, workers)
 	}
 
 	slices.Sort(p.resp.Held)

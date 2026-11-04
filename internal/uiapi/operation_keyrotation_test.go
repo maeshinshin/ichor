@@ -65,7 +65,7 @@ func TestPlanKeyRotationNamesTheControlPlanesTheStagesAndTheStaleBundle(t *testi
 		names = append(names, m.GetName())
 	}
 
-	if got := strings.Join(names, ","); got != "cp1" {
+	if got := strings.Join(names, ","); got != nodeTestCP {
 		t.Fatalf("machines = %s", got)
 	}
 
@@ -83,7 +83,7 @@ func TestPlanKeyRotationNamesTheControlPlanesTheStagesAndTheStaleBundle(t *testi
 	}
 
 	// Without the secretbox target there is nothing to re-encrypt, without the other nothing to settle.
-	plan, err = keyPlan(srv, &pb.KeyRotationRequest{Targets: []string{"secretbox"}})
+	plan, err = keyPlan(srv, &pb.KeyRotationRequest{Targets: []string{ichorv1alpha1.KeyRotationTargetSecretbox}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestPlanKeyRotationNamesTheControlPlanesTheStagesAndTheStaleBundle(t *testi
 		t.Fatalf("secretbox-only stages = %s", got)
 	}
 
-	plan, err = keyPlan(srv, &pb.KeyRotationRequest{Targets: []string{"serviceAccount"}})
+	plan, err = keyPlan(srv, &pb.KeyRotationRequest{Targets: []string{ichorv1alpha1.KeyRotationTargetServiceAccount}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,8 +123,8 @@ func TestPlanKeyRotationRefusesWhatItCannotRun(t *testing.T) {
 	srv, _ := opServer(t, keyObjects("v1.14")...)
 
 	for name, req := range map[string]*pb.KeyRotationRequest{
-		"an unknown key":      {Targets: []string{"etcd"}},
-		"a duplicated key":    {Targets: []string{"secretbox", "secretbox"}},
+		"an unknown key":      {Targets: []string{"aescbc"}},
+		"a duplicated key":    {Targets: []string{ichorv1alpha1.KeyRotationTargetSecretbox, ichorv1alpha1.KeyRotationTargetSecretbox}},
 		"a bad duration":      {TokenSettle: "soon"},
 		"a negative duration": {TokenSettle: "-5m"},
 	} {
@@ -152,7 +152,7 @@ func TestCreateKeyRotationWritesTheSpecOfTheRequestAndNoClusterSpec(t *testing.T
 	srv, k8s := opServer(t, keyObjects("v1.14")...)
 
 	res, err := srv.CreateOperation(context.Background(), keyCreate(&pb.KeyRotationRequest{
-		Targets: []string{"secretbox", "serviceAccount"}, TokenSettle: "2h", IgnoreLegacyTokens: true,
+		Targets: []string{ichorv1alpha1.KeyRotationTargetSecretbox, ichorv1alpha1.KeyRotationTargetServiceAccount}, TokenSettle: "2h", IgnoreLegacyTokens: true,
 	}))
 	if err != nil {
 		t.Fatal(err)
@@ -171,7 +171,7 @@ func TestCreateKeyRotationWritesTheSpecOfTheRequestAndNoClusterSpec(t *testing.T
 	targets := slices.Clone(kr.Targets)
 	slices.Sort(targets)
 
-	if !slices.Equal(targets, []string{"secretbox", "serviceAccount"}) || kr.TokenSettle == nil ||
+	if !slices.Equal(targets, []string{ichorv1alpha1.KeyRotationTargetSecretbox, ichorv1alpha1.KeyRotationTargetServiceAccount}) || kr.TokenSettle == nil ||
 		kr.TokenSettle.Duration != 2*time.Hour || !kr.IgnoreLegacyTokens {
 		t.Fatalf("spec.keyRotation = %+v", kr)
 	}
@@ -189,7 +189,7 @@ func TestCreateKeyRotationDefaultsToBothKeysAndTheDefaultSettle(t *testing.T) {
 	targets := slices.Clone(kr.Targets)
 	slices.Sort(targets)
 
-	if !slices.Equal(targets, []string{"secretbox", "serviceAccount"}) || kr.TokenSettle != nil || kr.IgnoreLegacyTokens {
+	if !slices.Equal(targets, []string{ichorv1alpha1.KeyRotationTargetSecretbox, ichorv1alpha1.KeyRotationTargetServiceAccount}) || kr.TokenSettle != nil || kr.IgnoreLegacyTokens {
 		t.Fatalf("spec.keyRotation = %+v", kr)
 	}
 }
@@ -205,7 +205,7 @@ func TestCreateKeyRotationRefusedWhileAnotherOperationIsUnfinished(t *testing.T)
 func TestOperationToPBCarriesTheKeyRotationStageAndDetails(t *testing.T) {
 	op := caOp("")
 	op.Spec.Kind = ichorv1alpha1.TalosOperationKindKeyRotation
-	op.Spec.KeyRotation = &ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: []string{"secretbox"}}
+	op.Spec.KeyRotation = &ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: []string{ichorv1alpha1.KeyRotationTargetSecretbox}}
 	op.Status.KeyRotation = &ichorv1alpha1.TalosOperationKeyRotationStatus{Stage: ichorv1alpha1.KeyRotationStageReencrypting}
 
 	got := operationToPB(op)
@@ -222,7 +222,7 @@ func TestOperationToPBCarriesTheKeyRotationStageAndDetails(t *testing.T) {
 		details[d.GetKey()] = d.GetValue()
 	}
 
-	if details["Keys"] != "secretbox" {
+	if details["Keys"] != ichorv1alpha1.KeyRotationTargetSecretbox {
 		t.Fatalf("details = %v", details)
 	}
 }

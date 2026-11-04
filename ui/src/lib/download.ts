@@ -15,7 +15,11 @@ export type DiagnosticsDownloadRequest =
   | { kind: 'packet-capture'; capture: Pick<CapturePacketsRequest, 'interface' | 'bpfFilter' | 'durationSeconds'> & { machine: Ref } }
 
 // The new credentials of a CA rotation are saved the same way.
-export type DownloadRequest = DiagnosticsDownloadRequest | { kind: 'ca-credentials'; operation: Ref; lifetimeSeconds?: number; readOnly?: boolean }
+// An os:reader talosconfig for talosctl too.
+export type DownloadRequest =
+  | DiagnosticsDownloadRequest
+  | { kind: 'ca-credentials'; operation: Ref; lifetimeSeconds?: number; readOnly?: boolean }
+  | { kind: 'reader-talosconfig'; cluster: Ref; lifetimeSeconds?: number }
 
 function open(req: DownloadRequest, signal: AbortSignal): AsyncIterable<{ filename: string; contentType: string; data: Uint8Array }> {
   switch (req.kind) {
@@ -30,6 +34,8 @@ function open(req: DownloadRequest, signal: AbortSignal): AsyncIterable<{ filena
         { operation: req.operation, lifetimeSeconds: BigInt(req.lifetimeSeconds ?? 0), readOnly: req.readOnly ?? false },
         { signal },
       )
+    case 'reader-talosconfig':
+      return diagnosticsClient.downloadReaderTalosconfig({ cluster: req.cluster, lifetimeSeconds: BigInt(req.lifetimeSeconds ?? 0) }, { signal })
   }
 }
 

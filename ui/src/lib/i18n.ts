@@ -700,6 +700,17 @@ export const en = {
   'creds.readOnly': 'Read-only talosconfig (os:reader instead of os:admin)',
   'creds.downloaded': 'Saved {file}',
   'creds.downloadFailed': 'The credentials download failed',
+  'readerTalosconfig.menu': 'Download read-only talosconfig',
+  'readerTalosconfig.title': 'Download a read-only talosconfig?',
+  'readerTalosconfig.description':
+    'A talosconfig for talosctl whose certificate is os:reader: it can read the nodes and cannot change them. It expires after the chosen time and cannot be revoked before. The request is recorded as an Event on the cluster, with your name.',
+  'readerTalosconfig.confirm': 'Download',
+  'readerTalosconfig.lifetime': 'Valid for',
+  'readerTalosconfig.lifetime.hour': '1 hour',
+  'readerTalosconfig.lifetime.four': '4 hours',
+  'readerTalosconfig.lifetime.twelve': '12 hours',
+  'readerTalosconfig.downloaded': 'Saved {file}',
+  'readerTalosconfig.failed': 'The talosconfig download failed',
   'creds.continue': 'Continue rotation',
   'creds.continueTitle': 'Continue the rotation?',
   'creds.continueDescription':

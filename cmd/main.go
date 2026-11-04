@@ -484,6 +484,8 @@ func main() {
 		Client:              mgr.GetClient(),
 		ExpiryWarning:       time.Duration(certExpiryWarningDays) * 24 * time.Hour,
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "certexpiry")
+	must((&controller.BootSecurityReconciler{Client: mgr.GetClient()}).SetupWithManager(mgr),
+		"Failed to create controller", "controller", "bootsecurity")
 	must((&controller.IssuerTrustReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
 		Namespace: ns, UIServiceName: uiServiceName,

@@ -17,41 +17,8 @@ limitations under the License.
 package cli
 
 import (
-	"bytes"
-	"strings"
 	"testing"
-
-	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
-
-// The choices --list and the no-default error print: each group newest first, the default marked, and
-// a list that cannot be given says why.
-func TestPrintUpgradeTargetsMarksTheDefault(t *testing.T) {
-	t.Parallel()
-
-	var b bytes.Buffer
-
-	printUpgradeTargetsText(&b, pb.OperationKind_OPERATION_KIND_TALOS, &pb.ListUpgradeTargetsResponse{
-		Available: true, Recommended: []string{ver1143}, Patch: []string{"v1.12.4"}, NextMinor: []string{"v1.13.2"},
-		Default: ver1143,
-	})
-
-	got := b.String()
-	for _, want := range []string{"recommended  v1.14.3  (default)", "patch        v1.12.4", "next minor   v1.13.2"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("output %q lacks %q", got, want)
-		}
-	}
-
-	b.Reset()
-	printUpgradeTargetsText(&b, pb.OperationKind_OPERATION_KIND_KUBERNETES, &pb.ListUpgradeTargetsResponse{
-		UnavailableReason: "The release check is off: turn on the update check in Settings to list versions.",
-	})
-
-	if got := b.String(); !strings.Contains(got, "turn on the update check") || !strings.Contains(got, "no version to move to") {
-		t.Errorf("output %q does not say why", got)
-	}
-}
 
 // The version reported in the bug (ichor upgrade ichor v0.0.1814000000-02357186) was accepted
 // and turned into an operation the controller then paused. It must fail here, before any

@@ -52,6 +52,12 @@ func renderUpgradeTargets(h *human, kind pb.OperationKind, m *pb.ListUpgradeTarg
 	group(channelNextMinor, m.GetNextMinor())
 
 	if len(rows) == 0 {
+		if m.GetAvailable() { // every listed version is a valid upgrade, so none left means there is nothing newer to allow
+			h.Note(h.Mark(markOK) + " " + kindName(kind) + " is on the newest release this Ichor allows")
+
+			return h.Err()
+		}
+
 		h.Note("no version to move to")
 
 		return h.Err()

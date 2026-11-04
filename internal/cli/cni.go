@@ -425,9 +425,7 @@ func runCniUpgrade(ctx context.Context, c *apiClients, out io.Writer, cluster, v
 			return err
 		}
 
-		printUpgradeTargets(out, pb.OperationKind_OPERATION_KIND_CNI, m)
-
-		return nil
+		return printUpgradeTargets(out, pb.OperationKind_OPERATION_KIND_CNI, m)
 	}
 
 	ref, err := resolveCluster(ctx, c, cluster)

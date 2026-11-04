@@ -39,15 +39,8 @@ func webhookServerNotReady(ctx context.Context, c client.Reader) error {
 		return err
 	}
 
-	want := int32(1)
-	if d.Spec.Replicas != nil {
-		want = *d.Spec.Replicas
-	}
-
-	st := d.Status
-	if st.ObservedGeneration < d.Generation || st.UpdatedReplicas < want || st.Replicas != st.UpdatedReplicas || st.AvailableReplicas < 1 {
-		return fmt.Errorf("the Deployment %s is not rolled out (%d updated, %d available of %d)",
-			controllerDeploymentName, st.UpdatedReplicas, st.AvailableReplicas, want)
+	if err := deploymentNotRolledOut(&d); err != nil {
+		return err
 	}
 
 	var slices discoveryv1.EndpointSliceList
@@ -103,4 +96,36 @@ func waitForWebhookServer(ctx context.Context, c client.Reader, timeout, interva
 	}
 
 	return fmt.Errorf("%s: %w; check `kubectl -n %s get pods`", msg, err, ichorControllerNamespace)
+}
+
+// deploymentNotRolledOut says why d is not rolled out with an available replica, or returns nil.
+func deploymentNotRolledOut(d *appsv1.Deployment) error {
+	want := int32(1)
+	if d.Spec.Replicas != nil {
+		want = *d.Spec.Replicas
+	}
+
+	st := d.Status
+	if st.ObservedGeneration < d.Generation || st.UpdatedReplicas < want || st.Replicas != st.UpdatedReplicas || st.AvailableReplicas < 1 {
+		return fmt.Errorf("the Deployment %s is not rolled out (%d updated, %d available of %d)",
+			d.Name, st.UpdatedReplicas, st.AvailableReplicas, want)
+	}
+
+	return nil
+}
+
+// waitForUI is waitForUIRollout; a var for the same reason as waitForController.
+var waitForUI = waitForUIRollout
+
+// waitForUIRollout waits, for up to timeout, until the ichor-ui Deployment is rolled out, so the
+// first CLI calls after init do not find no ready ichor-ui pod.
+func waitForUIRollout(ctx context.Context, c client.Reader, timeout, interval time.Duration, progress io.Writer) error {
+	return pollWhile(ctx, timeout, interval, progress, "ichor-ui to roll out", func(ctx context.Context) error {
+		d, err := findDeploymentByLabel(ctx, c, ichorControllerNamespace, uiComponentLabel, uiComponentValue)
+		if err != nil {
+			return err
+		}
+
+		return deploymentNotRolledOut(d)
+	}, func(error) bool { return true })
 }

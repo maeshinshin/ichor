@@ -20,6 +20,13 @@ import (
 	"fmt"
 )
 
+// The age column and the created row, shared by the tables and blocks of the human output.
+const (
+	nameColumn   = "name"
+	ageColumn    = "age"
+	createdLabel = "Created"
+)
+
 // doneLine prints the one result line of a command that changed something: "✓ created patch
 // sysctl · ichor-system" (docs/adr/0118). The mark is green on a colour terminal.
 func doneLine(h *human, format string, args ...any) error {
@@ -49,4 +56,3 @@ func byteSize(n int64) string {
 
 	return fmt.Sprintf("%.1f %s", size, suffix)
 }
-

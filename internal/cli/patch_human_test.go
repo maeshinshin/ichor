@@ -38,6 +38,7 @@ const (
 	hpSysctlKind  = "SysctlConfig"
 	hpModulesKind = "KernelModuleConfig"
 	hpSysctlDoc   = `{"params":{"net.core.somaxconn":"1024"}}`
+	hpRole        = "control-plane"
 )
 
 func patchRef(name string) *pb.ObjectRef {
@@ -54,7 +55,7 @@ func patchesFixture() []*pb.Patch {
 		},
 		{
 			Ref: patchRef(hpModulesName), Cluster: cluster, Layer: pb.ConfigLayer_CONFIG_LAYER_ROLE, Priority: 10, CreatedAt: ago(3 * time.Hour),
-			Target: &pb.PatchTarget{Role: "control-plane"},
+			Target: &pb.PatchTarget{Role: hpRole},
 			Documents: []*pb.PatchDocument{
 				{Kind: hpModulesKind, Document: `{"modules":[{"name":"br_netfilter"}]}`},
 				{Kind: hpSysctlKind, Document: hpSysctlDoc},
@@ -150,7 +151,7 @@ func TestPatchImpactHumanOutput(t *testing.T) {
 		resp *pb.PreviewImpactResponse
 		want string
 	}{
-		{"nothing", &pb.PreviewImpactResponse{}, "Impact\n  ✓ no reboot needed; nothing install-time-only or too new for the cluster's Talos\n"},
+		{"clean", &pb.PreviewImpactResponse{}, "Impact\n  ✓ no reboot needed; nothing install-time-only or too new for the cluster's Talos\n"},
 		{
 			"everything",
 			&pb.PreviewImpactResponse{RebootRequired: true, InstallTimeOnly: []string{"machine.install.disk"}, Unsupported: []string{"machine.new"}},
@@ -183,7 +184,7 @@ func newPatchEnv(t *testing.T) *patchEnv {
 	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster).Build()
 
 	p := sysctlPatch(cluster.Name, map[string]string{testSysctlKey: "1"})
-	p.Name, p.Spec.Layer = testPatchName, "cluster"
+	p.Name, p.Spec.Layer = testPatchName, layerAll
 
 	return &patchEnv{c: localClients(apiOpts, apiDeps{K8s: k8s}), cluster: cluster.Name, patch: p}
 }

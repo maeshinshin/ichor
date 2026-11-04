@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
@@ -56,4 +59,62 @@ func TestSettingsTable(t *testing.T) {
 
 const (
 	testSettingsVersion = "v0.1.0"
+	settingsTTL         = "30m"
 )
+
+func TestSettingsMachineOutputIsUnchanged(t *testing.T) {
+	r := &pb.GetSettingsResponse{Version: testSettingsVersion, Manager: string(provenanceHelm)}
+
+	for _, format := range []string{outputYAML, outputJSON} {
+		setHumanTestFlags(t, format)
+
+		var got, want bytes.Buffer
+
+		cmd := &cobra.Command{}
+		cmd.SetOut(&got)
+
+		if err := writeSettings(cmd, r); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := writeMessage(&want, format, r); err != nil {
+			t.Fatal(err)
+		}
+
+		if got.String() != want.String() || strings.Contains(got.String(), "SETTING") {
+			t.Errorf("-o %s:\n%s\nwant:\n%s", format, got.String(), want.String())
+		}
+	}
+}
+
+func TestSettingsTableHumanOutput(t *testing.T) {
+	ttl := settingsTTL
+
+	var sb strings.Builder
+
+	err := writeSettingsTable(&sb, &pb.GetSettingsResponse{
+		Version: testSettingsVersion, Manager: string(provenanceHelm), ReadOnly: true,
+		Spec:      &pb.SettingsFields{TokenTtl: &ttl},
+		Effective: &pb.SettingsEffective{TokenTtl: &pb.SettingValue{Value: settingsTTL, Source: sourceSpec}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := "SETTING                VALUE   SOURCE\n" +
+		"version                v0.1.0  spec\n" +
+		"installedVersion       -       status\n" +
+		"deployment.manager     helm    spec\n" +
+		"users.tokenTTL         30m     spec\n" +
+		"users.refreshLifetime  -       -\n" +
+		"defaults.driftPolicy   -       -\n" +
+		"updateCheck.enabled    -       -\n" +
+		"autoPatch.enabled      -       -\n" +
+		"autoPatch.components   -       -\n" +
+		"autoPatch.window       -       -\n" +
+		"\n" +
+		"! The settings are managed by the deployment (--settings-read-only); change them there.\n"
+	if sb.String() != want {
+		t.Errorf("got:\n%s\nwant:\n%s", sb.String(), want)
+	}
+}

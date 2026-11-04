@@ -188,8 +188,10 @@ func settingRows(r *pb.GetSettingsResponse) []settingRow {
 func writeSettingsTable(w io.Writer, r *pb.GetSettingsResponse) error {
 	h := newHuman(w)
 
-	rows := [][]string{}
-	for _, row := range settingRows(r) {
+	settingRows := settingRows(r)
+	rows := make([][]string, 0, len(settingRows))
+
+	for _, row := range settingRows {
 		rows = append(rows, []string{row.key, row.value, row.source})
 	}
 

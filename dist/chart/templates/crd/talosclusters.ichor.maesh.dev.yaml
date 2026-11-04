@@ -4207,6 +4207,31 @@ spec:
                     - integrity
                     - confidentiality
                     type: string
+                  kubeletServingCertificates:
+                    description: |-
+                      kubeletServingCertificates makes every kubelet serve a certificate signed by the Kubernetes
+                      CA instead of a self-signed one. Ichor's controller approves the kubelets'
+                      serving-certificate requests itself, for the machines it manages and nothing else. A
+                      kubelet restart on every node, no node reboot.
+                    properties:
+                      enabled:
+                        default: false
+                        description: enabled turns serverTLSBootstrap on and the controller's
+                          approval of the requests on.
+                        type: boolean
+                      verifyFromAPIServer:
+                        description: |-
+                          verifyFromAPIServer also makes the kube-apiserver check the kubelets' certificates against
+                          the Kubernetes CA (--kubelet-certificate-authority). Ichor renders it only once every
+                          machine has been issued a serving certificate (condition KubeletServingCertificates), and
+                          keeps it once rendered. It restarts the kube-apiserver on every control plane. Until then
+                          the apiserver does not verify the kubelets, as before.
+                        type: boolean
+                    type: object
+                    x-kubernetes-validations:
+                    - message: verifyFromAPIServer needs enabled
+                      rule: '!has(self.verifyFromAPIServer) || !self.verifyFromAPIServer
+                        || (has(self.enabled) && self.enabled)'
                   podSecurity:
                     description: |-
                       podSecurity sets the Pod Security admission levels of the kube-apiserver. Restarts the

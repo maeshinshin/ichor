@@ -114,6 +114,10 @@ func afterRotateCACreate(ctx context.Context, cmd *cobra.Command, cluster string
 	}
 
 	if !clusterRotateCAFollow {
+		if outputFormat == outputHuman {
+			return printRotateCAStarted(out, ref.GetName(), cluster, files.Kubeconfig)
+		}
+
 		if err := writeMessage(out, outputFormat, created); err != nil {
 			return err
 		}
@@ -134,6 +138,10 @@ func afterRotateCACreate(ctx context.Context, cmd *cobra.Command, cluster string
 
 	if err := watchCARotation(ctx, newClient, ref.GetNamespace(), ref.GetName(), errw, progress); err != nil {
 		return err
+	}
+
+	if outputFormat == outputHuman {
+		return printRotateCADone(out, ref.GetName(), cluster, files.Kubeconfig)
 	}
 
 	rotateCAAfterwards(errw, cluster, files.Kubeconfig)

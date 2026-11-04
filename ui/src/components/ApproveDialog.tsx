@@ -154,7 +154,7 @@ export function ApproveDialog({
       <DialogTrigger asChild>
         <Button size="sm">{t('approve.button')}</Button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="grid-cols-1 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('approve.title', { name: machine.ref?.name ?? '' })}</DialogTitle>
           <DialogDescription>{t('approve.description')}</DialogDescription>
@@ -163,13 +163,13 @@ export function ApproveDialog({
         <div class="space-y-3 text-sm">
           <section>
             <h4 class="font-medium">{t('approve.identity')}</h4>
-            <dl class="mt-1 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-muted-foreground">
+            <dl class="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-muted-foreground">
               <dt>{t('approve.uuid')}</dt>
-              <dd class="text-foreground">{machine.identity?.uuid || t('approve.missing')}</dd>
+              <dd class="break-all text-foreground">{machine.identity?.uuid || t('approve.missing')}</dd>
               <dt>{t('approve.serial')}</dt>
-              <dd class="text-foreground">{machine.identity?.serial || t('approve.missing')}</dd>
+              <dd class="break-all text-foreground">{machine.identity?.serial || t('approve.missing')}</dd>
               <dt>{t('approve.mac')}</dt>
-              <dd class="text-foreground">
+              <dd class="break-all text-foreground">
                 {machine.identity?.macAddresses.length ? machine.identity.macAddresses.join(', ') : t('common.none')}
               </dd>
             </dl>

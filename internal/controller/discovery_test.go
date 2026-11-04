@@ -47,6 +47,8 @@ type fakeMaintenanceClient struct {
 	// applyErr and applyCalls serve talosmachine_provision_test.go.
 	applyErr   error
 	applyCalls [][]byte
+	// applyHook runs inside ApplyConfiguration: another reconcile arriving while this one holds the cluster lock.
+	applyHook func()
 
 	// fingerprint is the maintenance certificate the fake claims to have seen (PeerFingerprinter).
 	fingerprint string
@@ -68,6 +70,10 @@ func (f *fakeMaintenanceClient) Inventory(context.Context) (Inventory, error) {
 
 func (f *fakeMaintenanceClient) ApplyConfiguration(_ context.Context, cfg []byte) error {
 	f.applyCalls = append(f.applyCalls, cfg)
+
+	if f.applyHook != nil {
+		f.applyHook()
+	}
 
 	return f.applyErr
 }

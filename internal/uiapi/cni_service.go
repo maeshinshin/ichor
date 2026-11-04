@@ -53,6 +53,7 @@ type ciliumView struct {
 	kubeProxy cni.KubeProxyMode
 	tunnel    string
 	user      map[string]any
+	nodes     int // the Nodes the cluster has now (countNodes); 0 unknown
 }
 
 func (s *Server) getCiliumView(ctx context.Context, ref *pb.ObjectRef) (*ciliumView, error) {
@@ -69,6 +70,7 @@ func (s *Server) getCiliumView(ctx context.Context, ref *pb.ObjectRef) (*ciliumV
 
 	v := &ciliumView{
 		cluster: cluster, kubeProxy: cni.KubeProxyMode(cluster.Spec.CNI.KubeProxy), tunnel: cluster.Spec.CNI.Tunnel,
+		nodes: s.countNodes(ctx),
 	}
 	if v.kubeProxy == "" {
 		v.kubeProxy = cni.KubeProxyEnabled
@@ -194,8 +196,43 @@ func (s *Server) talosFacts(ctx context.Context, cluster *ichorv1alpha1.TalosClu
 	return forward, prism
 }
 
+// effective is the Helm values the controller would apply for user as the user layer: the same
+// function it hashes and applies (cilium.EffectiveValuesForNodes) with the Nodes the cluster has now,
+// so a preview is what gets applied.
 func (v *ciliumView) effective(user map[string]any) (map[string]any, error) {
-	return cilium.EffectiveValues(user, v.kubeProxy, v.tunnel, int(v.cluster.Spec.ControlPlane.Count))
+	c := v.cluster.DeepCopy()
+	if c.Spec.CNI.Cilium == nil {
+		c.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{}
+	}
+
+	c.Spec.CNI.Cilium.Values = nil
+
+	if len(user) > 0 {
+		raw, err := json.Marshal(user)
+		if err != nil {
+			return nil, err
+		}
+
+		c.Spec.CNI.Cilium.Values = &apiextensionsv1.JSON{Raw: raw}
+	}
+
+	return cilium.EffectiveValuesForNodes(c, v.kubeProxy, v.nodes)
+}
+
+// countNodes is how many Nodes the cluster has right now, as the controller counts them for the
+// Cilium values (clusterNodeCount): all of them, Ready or not. 0 when they cannot be listed (the
+// reader may not be allowed to), which gives the desired control-plane count, as before. ichor-ui
+// already may list Nodes (GetNode), so this adds no RBAC.
+func (s *Server) countNodes(ctx context.Context) int {
+	var nodes metav1.PartialObjectMetadataList
+
+	nodes.SetGroupVersionKind(corev1.SchemeGroupVersion.WithKind("NodeList"))
+
+	if err := s.Client.List(ctx, &nodes); err != nil {
+		return 0
+	}
+
+	return len(nodes.Items)
 }
 
 // GetCiliumValues returns the layers of a cluster's Cilium values separately.
@@ -207,7 +244,7 @@ func (s *Server) GetCiliumValues(
 		return nil, err
 	}
 
-	defaults, owned, err := cilium.Layers(v.kubeProxy, v.tunnel, int(v.cluster.Spec.ControlPlane.Count))
+	defaults, owned, err := cilium.Layers(v.kubeProxy, v.tunnel, int(v.cluster.Spec.ControlPlane.Count), v.nodes)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}

@@ -389,7 +389,7 @@ func (c Conflict) String() string {
 // sorted by key; empty means nothing conflicts.
 func OwnedKeyConflicts(live map[string]any, kubeProxy cni.KubeProxyMode, tunnel string) ([]Conflict, error) {
 	// Only the owned layer is compared, and the control-plane count sets a default: 0 is enough.
-	_, owned, err := Layers(kubeProxy, tunnel, 0)
+	_, owned, err := Layers(kubeProxy, tunnel, 0, 0)
 	if err != nil {
 		return nil, err
 	}

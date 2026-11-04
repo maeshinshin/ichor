@@ -101,15 +101,10 @@ func TestAuthenticationRender(t *testing.T) {
 			t.Fatalf("no KubeAuthenticationConfig document:\n%s", out)
 		}
 
-		for _, want := range []string{
-			"url: " + authIchorURL, "discoveryURL: " + authDiscovery, "- ichor-kube", "claim: sub", "prefix: 'ichor:'",
-			"url: " + authExternalURL, "claim: email", "prefix: 'oidc:'", "- ichor",
-			"startsWith(''system:'')", "/livez", "/readyz", "/healthz", "enabled: true", "-----BEGIN CERTIFICATE-----",
-		} {
-			if !strings.Contains(doc, want) {
-				t.Errorf("document lacks %q:\n%s", want, doc)
-			}
-		}
+		requireAll(t, doc,
+			"url: "+authIchorURL, "discoveryURL: "+authDiscovery, "- ichor-kube", "claim: sub", "prefix: 'ichor:'",
+			"url: "+authExternalURL, "claim: email", "prefix: 'oidc:'", "- ichor",
+			"startsWith(''system:'')", "/livez", "/readyz", "/healthz", "enabled: true", "-----BEGIN CERTIFICATE-----")
 
 		if strings.Index(doc, authIchorURL) > strings.Index(doc, authExternalURL) {
 			t.Errorf("Ichor's issuer must come first:\n%s", doc)
@@ -122,16 +117,12 @@ func TestAuthenticationRender(t *testing.T) {
 			t.Fatalf("Render: %v", err)
 		}
 
-		if strings.Contains(string(out), authKind) {
-			t.Errorf("worker carries %s", authKind)
-		}
+		requireNone(t, string(out), authKind)
 	})
 
 	t.Run("unset leaves Talos's default: no jwt entry", func(t *testing.T) {
 		doc := section(mustRender(t, authCluster(versionContract, nil), cp, bundle, nil), authKind)
-		if strings.Contains(doc, "issuer") {
-			t.Errorf("default document has an issuer:\n%s", doc)
-		}
+		requireNone(t, doc, "issuer")
 	})
 
 	t.Run("a contract below 1.14 is refused", func(t *testing.T) {

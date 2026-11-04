@@ -31,6 +31,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -97,6 +98,8 @@ type Sigstore struct {
 	verifier *verify.Verifier
 	// insecure reads an http registry; only tests set it.
 	insecure bool
+	// auth is the keychain registry requests use; nil is anonymous, as the controller reads.
+	auth authn.Keychain
 }
 
 // New returns the verifier with the embedded trusted root.
@@ -144,7 +147,7 @@ func (s *Sigstore) Verify(ctx context.Context, img Image, id Identity) error {
 
 	ref := repo.Digest(img.Digest)
 
-	idx, err := remote.Referrers(ref, remote.WithContext(ctx))
+	idx, err := remote.Referrers(ref, s.opts(ctx)...)
 	if err != nil {
 		return fmt.Errorf("listing the signatures of %s@%s: %w", img.Repository, img.Digest, err)
 	}
@@ -182,6 +185,23 @@ func (s *Sigstore) Verify(ctx context.Context, img Image, id Identity) error {
 	}
 
 	return fmt.Errorf("%s@%s is not signed by %s: %w", img.Repository, img.Digest, id.SANRegexp, errors.Join(errs...))
+}
+
+// WithKeychain makes the verifier's registry requests authenticate with k (the docker config's default
+// keychain, for the release workflow); the controller reads anonymously.
+func (s *Sigstore) WithKeychain(k authn.Keychain) *Sigstore {
+	s.auth = k
+
+	return s
+}
+
+func (s *Sigstore) opts(ctx context.Context) []remote.Option {
+	opts := []remote.Option{remote.WithContext(ctx)}
+	if s.auth != nil {
+		opts = append(opts, remote.WithAuthFromKeychain(s.auth))
+	}
+
+	return opts
 }
 
 // check verifies one signed entity against the digest and the identity.
@@ -251,7 +271,7 @@ func (s *Sigstore) repository(repo string) (name.Repository, error) {
 // bundle reads the Sigstore bundle of a signature referrer: the layer of its manifest with the bundle
 // media type.
 func (s *Sigstore) bundle(ctx context.Context, repo name.Repository, digest v1.Hash) (*bundle.Bundle, error) {
-	desc, err := remote.Get(repo.Digest(digest.String()), remote.WithContext(ctx))
+	desc, err := remote.Get(repo.Digest(digest.String()), s.opts(ctx)...)
 	if err != nil {
 		return nil, fmt.Errorf("reading the signature manifest %s: %w", digest, err)
 	}
@@ -266,7 +286,7 @@ func (s *Sigstore) bundle(ctx context.Context, repo name.Repository, digest v1.H
 			continue
 		}
 
-		layer, err := remote.Layer(repo.Digest(l.Digest.String()), remote.WithContext(ctx))
+		layer, err := remote.Layer(repo.Digest(l.Digest.String()), s.opts(ctx)...)
 		if err != nil {
 			return nil, fmt.Errorf("reading the bundle %s: %w", l.Digest, err)
 		}

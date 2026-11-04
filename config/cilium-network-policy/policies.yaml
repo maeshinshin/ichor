@@ -50,13 +50,8 @@ spec:
     - ports:
       - port: "8081"
         protocol: TCP
-  # /metrics, behind TokenReview and SubjectAccessReview. In-cluster scrapers only.
-  - fromEntities:
-    - cluster
-    toPorts:
-    - ports:
-      - port: "8443"
-        protocol: TCP
+  # /metrics is not opened here: the operator names the scraper with a policy of their own,
+  # which adds to this one (docs/guides/install-with-helm.md, "Network policies").
   egress:
   # The Kubernetes API through the kubernetes Service (Cilium translates it to the apiserver backend).
   - toEntities:
@@ -155,14 +150,8 @@ spec:
       rules:
         dns:
         - matchPattern: "*"
-  # The external OIDC issuer (ichorUI.oidc) and the host of a pull request. Their names are not
-  # known here; the chart's externalCIDRs narrow this.
-  - toEntities:
-    - world
-    toPorts:
-    - ports:
-      - port: "443"
-        protocol: TCP
+  # An external OIDC issuer (ichorUI.oidc) is allowed by ichor-ui-oidc-egress, which the controller writes
+  # from the issuer the Deployment names: nothing outside the cluster is open here.
 ---
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy

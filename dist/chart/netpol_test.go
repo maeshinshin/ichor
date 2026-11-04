@@ -96,11 +96,20 @@ func ingressPorts(spec map[string]any) map[string][]string {
 		entities, _ := rule["fromEntities"].([]any)
 		toPorts, _ := rule["toPorts"].([]any)
 
+		peers := make([]string, 0, len(entities)+1)
 		for _, e := range entities {
+			peers = append(peers, fmt.Sprint(e))
+		}
+
+		if rule["fromEndpoints"] != nil {
+			peers = append(peers, "endpoints")
+		}
+
+		for _, peer := range peers {
 			for _, tp := range toPorts {
 				ports, _ := tp.(map[string]any)["ports"].([]any)
 				for _, p := range ports {
-					out[fmt.Sprint(e)] = append(out[fmt.Sprint(e)], p.(map[string]any)["port"].(string))
+					out[peer] = append(out[peer], p.(map[string]any)["port"].(string))
 				}
 			}
 		}
@@ -140,7 +149,8 @@ func requireSubset(t *testing.T, what string, sel, labels map[string]any) {
 }
 
 func TestChartCiliumPolicyPortsAndSelectorsComeFromTheDeployments(t *testing.T) {
-	ports := []string{"webhook.port=9555", "metrics.port=8555", "ichorUI.port=8099", "ichorUI.users.internalPort=8455"}
+	ports := []string{"webhook.port=9555", "metrics.port=8555", "ichorUI.port=8099", "ichorUI.users.internalPort=8455",
+		"networkPolicy.cilium.metricsNamespaces={monitoring}"}
 	docs := renderChartWithValues(t, "ichor", slices.Concat(ports, netpolAllOn)...)
 	specs := cnpSpecs(t, docs, "ichor-")
 
@@ -155,8 +165,12 @@ func TestChartCiliumPolicyPortsAndSelectorsComeFromTheDeployments(t *testing.T) 
 		t.Errorf("webhook ingress from kube-apiserver = %q, want the webhook port 9555", got)
 	}
 
-	if got := strings.Join(ctrlPorts["cluster"], ","); got != "8555" {
-		t.Errorf("metrics ingress from the cluster = %q, want the metrics port 8555", got)
+	if got := strings.Join(ctrlPorts["endpoints"], ","); got != "8555" {
+		t.Errorf("metrics ingress from the named namespaces = %q, want the metrics port 8555", got)
+	}
+
+	if len(ctrlPorts["cluster"]) != 0 {
+		t.Errorf("the cluster entity still reaches the controller on %v", ctrlPorts["cluster"])
 	}
 
 	if got := strings.Join(ctrlPorts["host"], ","); got != "8081" {
@@ -251,7 +265,6 @@ func TestKustomizeCiliumPolicyPortsMatchTheBaseDeployments(t *testing.T) {
 		what, got, source, want string
 	}{
 		{"webhook", strings.Join(ctrl["kube-apiserver"], ","), webhookPatch, "containerPort: 9443"},
-		{"metrics", strings.Join(ctrl["cluster"], ","), metricsPatch, "--metrics-bind-address=:8443"},
 		{"probes", strings.Join(ctrl["host"], ","), managerBase, "--health-probe-bind-address=:8081"},
 		{"ui", strings.Join(ui["world"], ","), uiBase, "--addr=:8443"},
 		{"ui internal", strings.Join(ui["kube-apiserver"], ","), "", fmt.Sprint(installer.UIInternalPort)},
@@ -266,6 +279,15 @@ func TestKustomizeCiliumPolicyPortsMatchTheBaseDeployments(t *testing.T) {
 		if c.source != "" && !strings.Contains(c.source, c.want) {
 			t.Errorf("%s: %q not found in its source", c.what, c.want)
 		}
+	}
+
+	// The install copy opens no metrics source; the operator names a scraper with a policy of their own.
+	if !strings.Contains(metricsPatch, "--metrics-bind-address=:8443") {
+		t.Errorf("the metrics port moved: update the guide's example policy (docs/guides/install-with-helm.md)")
+	}
+
+	if len(ctrl["cluster"]) != 0 || len(ctrl["endpoints"]) != 0 {
+		t.Errorf("the install copy opens the metrics port to %v %v", ctrl["cluster"], ctrl["endpoints"])
 	}
 
 	requireSubset(t, "the controller policy", selectorLabels(specs["controller-manager"]),

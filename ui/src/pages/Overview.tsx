@@ -59,7 +59,7 @@ import { componentOf, stateKey, stateTone, versionPair } from '@/lib/versions'
 import { hasPatch, patchComponents, unavailableNotes, type TargetList } from '@/lib/upgradeTargets'
 import { conditionTone } from '@/lib/conditions'
 import { useCluster } from '@/lib/useCluster'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 import { Link } from '@/router'
 
 type Row = OpRow & { op: Operation }
@@ -79,7 +79,6 @@ const readyOf = (m: Machine) => m.conditions.find((c) => c.type === 'Ready')
 // details last. The top bar's badge is the one place for health. It only reads; every change goes
 // through the dialogs, which ask the server for a plan first.
 export function Overview() {
-  const t = useT()
   const { cluster, operations, opsError, loading, error, reload } = useCluster()
   if (error) return <ErrorAlert {...error} />
   if (loading) return <PageSkeleton label={t('cluster.loading')} />
@@ -98,7 +97,6 @@ function Home({
   opsError: ErrorShape | null
   reloadCluster: () => void
 }) {
-  const t = useT()
   const ref = cluster.ref!
   const ops = operations.map(toRow)
   const [machines, setMachines] = useState<Machine[] | null>(null)
@@ -603,7 +601,6 @@ function Tile({ label, icon: Icon, value, sub, badge, target }: { label: string;
 }
 
 function NodeRow({ m, first }: { m: Machine; first: boolean }) {
-  const t = useT()
   const ready = readyOf(m)
   const tone: Tone = ready ? conditionTone(ready.type, ready.status) : 'neutral'
   const word = !ready ? t('overview.nodeUnknown') : ready.status === 'True' ? t('overview.nodeReady') : t('overview.nodeNotReady')
@@ -668,7 +665,6 @@ function VersionRow({
 
 // ActiveProgress is the running operation's progress: nodes done, or its state, and the Kubernetes stage.
 function ActiveProgress({ row, total }: { row: Row; total: number }) {
-  const t = useT()
   const op = row.op
   const { done } = progressCounts(op.machines)
   const kubeStage = kubernetesStageProgress(op.kubernetesStage)

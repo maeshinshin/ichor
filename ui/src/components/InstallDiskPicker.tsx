@@ -3,7 +3,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatBytes } from '@/lib/format'
 import { diskKey, diskSelector, type DiskOption } from '@/lib/installDisk'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 // The install disk choice shared by the approval form and the machine page's "set install disk":
 // a disk from the list the node reported (discovery's, or the node's own), otherwise a typed device
@@ -37,7 +37,6 @@ export function InstallDiskPicker({
   onTyped: (v: string) => void
   onImage: (v: string) => void
 }) {
-  const t = useT()
   return (
     <section class="space-y-1">
       <Label htmlFor={`${idPrefix}-install-disk`}>{t('approve.installDisk')}</Label>

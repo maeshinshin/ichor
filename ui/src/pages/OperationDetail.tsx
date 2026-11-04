@@ -28,7 +28,7 @@ import { caStageProgress, kubernetesStageProgress, operationState, pollIntervalM
 import { opStateTone } from '@/lib/status'
 import { useCluster } from '@/lib/useCluster'
 import { useMyPermissions } from '@/lib/useMyPermissions'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 import { Link, navigate } from '@/router'
 
 const toDate = (ts: Timestamp | undefined): Date | undefined => (ts ? timestampDate(ts) : undefined)
@@ -38,7 +38,6 @@ const toDate = (ts: Timestamp | undefined): Date | undefined => (ts ? timestampD
 // exactly as the controller recorded them in status. A machine that does not
 // appear has not been reached. It polls while the operation can still change.
 export function OperationDetail({ name }: { name: string }) {
-  const t = useT()
   const { cluster, error: clusterError } = useCluster()
   const namespace = cluster?.ref?.namespace
   const [op, setOp] = useState<Operation | null>(null)

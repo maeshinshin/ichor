@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 import { TableRow } from '@/components/ui/table'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 import { navigate } from '@/router'
 
 // ListToolbar sits above every list table: a search box, the count of rows
@@ -27,7 +27,6 @@ export function ListToolbar({
   stock?: boolean
   children?: ComponentChildren
 }) {
-  const t = useT()
   return (
     <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
       <InputGroup className="w-full sm:w-72">

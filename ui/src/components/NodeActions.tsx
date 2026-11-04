@@ -56,7 +56,7 @@ import {
 } from '@/lib/diagnostics'
 import { download, type DiagnosticsDownloadRequest } from '@/lib/download'
 import { describeError, type ErrorShape } from '@/lib/errors'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 type Ref = { namespace: string; name: string }
 const wireAction: Record<NodeActionId, NodeAction> = {
@@ -93,7 +93,6 @@ export function NodeActions({
   deleting: boolean
   onStarted: () => void
 }) {
-  const t = useT()
   // The download waiting for the user's confirmation, with its request when it has parameters.
   const [pending, setPending] = useState<DiagnosticsDownloadRequest | null>(null)
   const [captureOpen, setCaptureOpen] = useState(false)
@@ -230,7 +229,6 @@ function CaptureDialog({
   onOpenChange: (open: boolean) => void
   onSubmit: (c: CaptureParams) => void
 }) {
-  const t = useT()
   const [names, setNames] = useState<string[]>([])
   const [iface, setIface] = useState('')
   const [duration, setDuration] = useState(`${defaultCaptureSeconds}s`)
@@ -339,7 +337,6 @@ function NodeActionDialog({
   onClose: () => void
   onStarted: () => void
 }) {
-  const t = useT()
   const [service, setService] = useState(def.id === 'restart-service' ? restartableServices[0] : '')
   const [allowLeader, setAllowLeader] = useState(false)
   const [typed, setTyped] = useState('')

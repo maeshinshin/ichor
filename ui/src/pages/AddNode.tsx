@@ -24,7 +24,7 @@ import { describeError, type ErrorShape } from '@/lib/errors'
 import { notifyWrite } from '@/lib/notify'
 import { useCluster } from '@/lib/useCluster'
 import { useCanReclaim } from '@/lib/useCanReclaim'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 import { Link } from '@/router'
 
 const POLL_MS = 5000
@@ -34,7 +34,6 @@ const POLL_MS = 5000
 // page shows those, lets the person add one, and lists the nodes that were found
 // and now wait for a decision. Approving uses the same dialog as the node list.
 export function AddNode() {
-  const t = useT()
   const { cluster: current, error: clusterError, reload: reloadCurrent } = useCluster()
   const [cluster, setCluster] = useState<Cluster | null>(null)
   const namespace = current?.ref?.namespace
@@ -146,7 +145,6 @@ export function AddNode() {
 // RemoveCidr confirms first: a range can stand for 256 machines. onRemove throws
 // when the server refuses; the page shows the error, the dialog just stays open.
 function RemoveCidr({ cidr, onRemove }: { cidr: string; onRemove: () => Promise<void> }) {
-  const t = useT()
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
@@ -191,7 +189,6 @@ function Discovery({
   configured: readonly string[]
   onAdded: (c: Cluster | undefined) => void
 }) {
-  const t = useT()
   const [address, setAddress] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)

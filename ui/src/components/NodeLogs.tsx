@@ -21,8 +21,7 @@ import { describeError, type ErrorShape } from '@/lib/errors'
 import { formatTimestamp } from '@/lib/format'
 import { createBatcher, type Entry, LogBuffer, truncateMessage } from '@/lib/logBuffer'
 import { streamWithResume } from '@/lib/resumableStream'
-import { useT } from '@/lib/useT'
-import type { Key } from '@/lib/i18n'
+import { t, type Key } from '@/lib/i18n'
 
 // The viewer keeps the newest MAX_LINES lines, appends them in
 // batches every FLUSH_MS, and shows at most MAX_CHARS of one message until
@@ -67,7 +66,6 @@ export function NodeLogs({ namespace, name }: { namespace: string; name: string 
 }
 
 function LogsSection({ namespace, name }: { namespace: string; name: string }) {
-  const t = useT()
   const [source, setSource] = useState('kernel')
   const [entries, setEntries] = useState<Entry<StreamNodeLogsResponse>[]>([])
   const [error, setError] = useState<ErrorShape | null>(null)

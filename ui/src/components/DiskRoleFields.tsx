@@ -3,10 +3,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatBytes } from '@/lib/format'
-import type { Key } from '@/lib/i18n'
 import { diskKey, diskSelector, type DiskOption } from '@/lib/installDisk'
 import type { DiskRolesChoice, DiskRolesForm } from '@/lib/machineSettings'
-import { useT } from '@/lib/useT'
+import { t, type Key } from '@/lib/i18n'
 
 const NONE = 'none'
 
@@ -27,7 +26,6 @@ export function DiskRoleFields({
   errors: DiskRolesChoice['errors']
   onChange: (f: DiskRolesForm) => void
 }) {
-  const t = useT()
   const err = (k: Key | undefined) => k && <p class="text-destructive">{t(k)}</p>
   const option = (d: DiskOption) => (
     <SelectItem key={diskKey(d)} value={diskKey(d)}>

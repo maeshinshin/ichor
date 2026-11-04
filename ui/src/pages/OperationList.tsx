@@ -16,7 +16,7 @@ import { matchesQuery } from '@/lib/filter'
 import { operationState, progressCounts } from '@/lib/operations'
 import { opStateTone } from '@/lib/status'
 import { useList } from '@/lib/useList'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 import { Link } from '@/router'
 
 // Operation list: every TalosOperation the signed-in user may list, newest
@@ -24,7 +24,6 @@ import { Link } from '@/router'
 // cannot see does not appear. It is re-read every few seconds while open, since
 // a rollout is the thing people watch.
 export function OperationList() {
-  const t = useT()
   const { items: ops, error, reload } = useList(async () => (await operationClient.listOperations({})).operations.slice().sort((a, b) => Number(b.createdAt?.seconds ?? 0n) - Number(a.createdAt?.seconds ?? 0n)), 5000)
   const [query, setQuery] = useState('')
 
@@ -68,7 +67,6 @@ export function OperationList() {
 }
 
 function OperationRow({ op, onChanged }: { op: Operation; onChanged: () => void }) {
-  const t = useT()
   const state = operationState(op.phase, op.failureReason)
   const { done, running } = progressCounts(op.machines)
 

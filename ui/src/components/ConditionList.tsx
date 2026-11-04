@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import type { Condition } from '@/gen/ichor/v1alpha1/common_pb'
 import { formatDate } from '@/lib/format'
 import { conditionTone } from '@/lib/conditions'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 // ConditionBadge shows a condition's True/False/Unknown as a stock Badge, coloured by whether that status is healthy for its type.
 export function ConditionBadge({ type, status }: { type: string; status: string }) {
@@ -15,7 +15,6 @@ export function ConditionBadge({ type, status }: { type: string; status: string 
 // ConditionList is the one place conditions are rendered: type, status badge,
 // reason, plain-text message and the last transition time.
 export function ConditionList({ conditions }: { conditions: Condition[] }) {
-  const t = useT()
   if (conditions.length === 0) return <EmptyNote>{t('cluster.noConditions')}</EmptyNote>
   return (
       <Table>

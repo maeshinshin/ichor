@@ -34,9 +34,8 @@ import {
 } from '@/components/ui/sidebar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { breadcrumbsFor } from '@/lib/breadcrumbs'
-import type { Key } from '@/lib/i18n'
 import { usePageTitles } from '@/lib/usePageTitles'
-import { useT } from '@/lib/useT'
+import { t, type Key } from '@/lib/i18n'
 import { clusterHealth, type Health } from '@/lib/clusterHealth'
 import { detectedCni, isCniUnmanaged } from '@/lib/cni'
 import { useCluster } from '@/lib/useCluster'
@@ -48,7 +47,6 @@ const HealthIcon: Record<Health, typeof CircleCheckIcon> = { ready: CircleCheckI
 
 // The cluster this Ichor manages: name, Talos and Kubernetes versions, health.
 function ClusterBar() {
-  const t = useT()
   const { cluster, opRunning } = useCluster()
   if (!cluster) return null
   const health = clusterHealth(cluster.conditions, !!cluster.rollout, opRunning)
@@ -110,7 +108,6 @@ function isCurrent(r: { path: string; section: string }, path: string): boolean 
 }
 
 function NavGroups({ path, usersEnabled }: { path: string; usersEnabled: boolean }) {
-  const t = useT()
   const { setOpenMobile } = useSidebar()
   return (
     <>
@@ -138,7 +135,6 @@ function NavGroups({ path, usersEnabled }: { path: string; usersEnabled: boolean
 }
 
 function Crumbs({ path }: { path: string }) {
-  const t = useT()
   const titles = usePageTitles()
   const crumbs = breadcrumbsFor(path, titles)
   return (
@@ -184,7 +180,6 @@ export function AppShell({
   usersEnabled: boolean
   children: ComponentChildren
 }) {
-  const t = useT()
   return (
     <TooltipProvider>
       <SidebarProvider>

@@ -1,9 +1,8 @@
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { Key } from '@/lib/i18n'
 import type { LinkChoice, NetworkChoice, NetworkForm } from '@/lib/machineSettings'
-import { useT } from '@/lib/useT'
+import { t, type Key } from '@/lib/i18n'
 
 const DEFAULT = 'default'
 
@@ -26,7 +25,6 @@ export function NetworkFields({
   errors: NetworkChoice['errors']
   onChange: (f: NetworkForm) => void
 }) {
-  const t = useT()
   const set = (patch: Partial<NetworkForm>) => onChange({ ...form, ...patch })
   const err = (k: Key | undefined) => k && <p class="text-destructive">{t(k)}</p>
 

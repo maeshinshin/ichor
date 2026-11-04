@@ -9,7 +9,7 @@ import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { buildSysctlDocument, defaultDocument, DOCUMENT_KINDS, kindInfo, parseSysctlParams, summarizeDocument, type SysctlRow } from '@/lib/patchDocs'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 export interface DocItem {
   id: number
@@ -33,7 +33,6 @@ export function PatchDocumentCard({
   onChange: (next: Partial<DocItem>) => void
   onRemove: () => void
 }) {
-  const t = useT()
   const [editing, setEditing] = useState(startEditing)
   const info = kindInfo(doc.kind)
   const summary = summarizeDocument(doc.kind, doc.document)
@@ -112,7 +111,6 @@ export function PatchDocumentCard({
 // Key/value rows for sysctl params. The rows live here, not in the document:
 // a row with an empty key is not part of the JSON yet and would vanish.
 function SysctlRows({ initial, onChange }: { initial: SysctlRow[]; onChange: (rows: SysctlRow[]) => void }) {
-  const t = useT()
   const [rows, setRows] = useState<SysctlRow[]>(initial)
 
   function update(next: SysctlRow[]) {

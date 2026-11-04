@@ -5,7 +5,7 @@ import { MustChangePassword } from '@/components/ChangePassword'
 import type { WhoAmIResponse } from '@/gen/ichor/v1alpha1/user_pb'
 import { userClient } from '@/lib/connect'
 import { finishLogin, startLogin, storedToken, tokenUsable, type AuthConfig, type AuthProvider } from '@/lib/oidc'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 import { AddNode } from '@/pages/AddNode'
 import { MachineList } from '@/pages/MachineList'
 import { Backups } from '@/pages/Backups'
@@ -27,7 +27,6 @@ import { redirectFor } from '@/lib/routes'
 import { useCluster } from '@/lib/useCluster'
 import { PageSkeleton } from '@/components/PageStates'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { t as translateNow } from '@/lib/i18n'
 
 type LoginState = 'loading' | 'open' | 'choose' | 'ready' | 'error'
 
@@ -54,7 +53,7 @@ function useLogin(): { state: LoginState; error: string; providers: AuthProvider
       if (list.length === 1 && list[0].id === 'oidc') await startLogin(list[0])
       else setState('choose')
     })().catch((e) => {
-      setError(e instanceof Error ? e.message : translateNow('app.loginFailed'))
+      setError(e instanceof Error ? e.message : t('app.loginFailed'))
       setState('error')
     })
   }, [])
@@ -97,7 +96,6 @@ export function App() {
 }
 
 function Authenticated({ path }: { path: string }) {
-  const t = useT()
   const login = useLogin()
   const signedIn = login.state === 'ready'
   const who = useWhoAmI(signedIn)
@@ -127,7 +125,6 @@ function Authenticated({ path }: { path: string }) {
 // Routes gates the cluster pages on the one cluster: none shows the empty state, several a
 // warning. /users and /settings do not need a cluster.
 function Routes({ path, usersEnabled }: { path: string; usersEnabled: boolean }) {
-  const t = useT()
   const { cluster, count, loading, error } = useCluster()
   if (path === '/users' && usersEnabled) return <Users />
   if (path === '/settings') return <Settings />

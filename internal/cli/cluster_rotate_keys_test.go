@@ -35,7 +35,10 @@ import (
 
 // rotate-keys goes through OperationService like every other start.
 
-const keyTestContract = "v1.14"
+const (
+	keyTestContract    = "v1.14"
+	onlyServiceAccount = "service-account"
+)
 
 // keyTestObjects is opTestObjects on a contract the key rotation can run under.
 func keyTestObjects() []client.Object {
@@ -60,7 +63,7 @@ func TestRotateKeysPromptSaysWhatHappensToTheKeysAndDeclineWritesNothing(t *test
 	}
 
 	for _, want := range []string{
-		"service-account", ichorv1alpha1.KeyRotationTargetSecretbox, "Accepting, Issuing, Reencrypting, SettlingTokens, Dropping",
+		onlyServiceAccount, ichorv1alpha1.KeyRotationTargetSecretbox, "Accepting, Issuing, Reencrypting, SettlingTokens, Dropping",
 		"kube-apiserver", "one at a time", "1. " + opCP + " (controlplane)", "ichor cluster bundle-export " + opTestCluster,
 		"every Secret", "legacy", "90 minutes",
 	} {
@@ -118,7 +121,7 @@ func TestRotateKeysWithTheFlagsCreatesTheOperationTheyDescribe(t *testing.T) {
 func TestRotateKeysOnlyAcceptsTheKeysItKnows(t *testing.T) {
 	for only, want := range map[string][]string{
 		"":                          nil,
-		"service-account":           {ichorv1alpha1.KeyRotationTargetServiceAccount},
+		onlyServiceAccount:          {ichorv1alpha1.KeyRotationTargetServiceAccount},
 		"serviceAccount":            {ichorv1alpha1.KeyRotationTargetServiceAccount},
 		"secretbox":                 {ichorv1alpha1.KeyRotationTargetSecretbox},
 		"secretbox,service-account": {ichorv1alpha1.KeyRotationTargetSecretbox, ichorv1alpha1.KeyRotationTargetServiceAccount},

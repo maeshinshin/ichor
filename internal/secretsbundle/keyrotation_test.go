@@ -114,7 +114,7 @@ func TestNewKeyRotationRespectsTargetsAndKeyType(t *testing.T) {
 		t.Fatal("a rotation of no key must be refused")
 	}
 
-	if _, err := NewKeyRotation(bundle, []string{"etcd"}); err == nil {
+	if _, err := NewKeyRotation(bundle, []string{"aescbc"}); err == nil {
 		t.Fatal("an unknown target must be refused")
 	}
 }

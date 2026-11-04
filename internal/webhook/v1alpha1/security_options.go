@@ -31,6 +31,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/render"
+	"github.com/maeshinshin/ichor/pkg/secureboot"
 )
 
 // Admission rules for the opt-in hardening options.
@@ -72,7 +73,7 @@ func (v *TalosClusterCustomValidator) validateSecurityCreate(ctx context.Context
 		return nil, err
 	}
 
-	return firewallWarnings(c), nil
+	return append(firewallWarnings(c), secureBootWarnings(c)...), nil
 }
 
 // validateSecurityUpdate checks spec.security of an updated cluster. Only what the update
@@ -102,7 +103,114 @@ func (v *TalosClusterCustomValidator) validateSecurityUpdate(ctx context.Context
 		warns = append(covers, firewallWarnings(newC)...)
 	}
 
-	return warns, v.checkDiskEncryptionConfirmed(ctx, oldC, newC)
+	if err := v.checkDiskEncryptionConfirmed(ctx, oldC, newC); err != nil {
+		return nil, err
+	}
+
+	sbWarns, err := v.checkSecureBootConfirmed(ctx, oldC, newC)
+	if err != nil {
+		return nil, err
+	}
+
+	if secureBootInputsChanged(oldC.Spec.Security, newC.Spec.Security) {
+		warns = append(warns, secureBootWarnings(newC)...)
+	}
+
+	return append(warns, sbWarns...), nil
+}
+
+// secureBootInputsChanged reports whether an update touches what secureBootWarnings judge, so
+// an unrelated security edit is not warned about again.
+func secureBootInputsChanged(oldS, newS *ichorv1alpha1.TalosClusterSecurity) bool {
+	if oldS == nil {
+		oldS = &ichorv1alpha1.TalosClusterSecurity{}
+	}
+
+	if newS == nil {
+		newS = &ichorv1alpha1.TalosClusterSecurity{}
+	}
+
+	return !apiequality.Semantic.DeepEqual(oldS.SecureBoot, newS.SecureBoot) || oldS.KernelLockdown != newS.KernelLockdown ||
+		!apiequality.Semantic.DeepEqual(oldS.DiskEncryption, newS.DiskEncryption)
+}
+
+// secureBootWarnings are the static warnings about spec.security.secureBoot, kernelLockdown and
+// their neighbours. Nothing here refuses: the cluster is the user's.
+func secureBootWarnings(c *ichorv1alpha1.TalosCluster) admission.Warnings {
+	s := c.Spec.Security
+	if s == nil {
+		return nil
+	}
+
+	mode := secureboot.Mode(s)
+
+	var warns admission.Warnings
+
+	switch {
+	case s.KernelLockdown != "" && mode == ichorv1alpha1.SecureBootOff:
+		warns = append(warns, fmt.Sprintf("spec.security.kernelLockdown %s is only checked, never rendered, and Talos v1.14 locks the kernel "+
+			"down by itself only under SecureBoot: without secureBoot the level has to be built into the boot asset (an Image Factory "+
+			"schematic with extraKernelArgs lockdown=%[1]s, set as spec.schematic)", s.KernelLockdown))
+	case s.KernelLockdown == ichorv1alpha1.KernelLockdownConfidentiality:
+		warns = append(warns, "spec.security.kernelLockdown confidentiality is not Talos's default under SecureBoot (integrity is): "+
+			"nodes only reach it from an Image Factory schematic with extraKernelArgs lockdown=confidentiality, set as spec.schematic; "+
+			"the KernelLockdown condition says which nodes do not")
+	}
+
+	if d := s.DiskEncryption; d != nil && d.Type == ichorv1alpha1.DiskEncryptionTPM && d.RequireSecureBoot != nil && *d.RequireSecureBoot &&
+		mode == ichorv1alpha1.SecureBootOff {
+		warns = append(warns, "spec.security.diskEncryption.requireSecureBoot is true but spec.security.secureBoot is not set: "+
+			"enrolling the TPM key fails on a node booted without SecureBoot; set secureBoot.mode to Preferred or Required so the "+
+			"SecureBoot installer is used")
+	}
+
+	return warns
+}
+
+// checkSecureBootConfirmed handles a change of spec.security.secureBoot.mode to Preferred or
+// Required on a cluster whose approved machines do not all run SecureBoot. Talos cannot
+// convert an installed node (GRUB to UKI, firmware keys, a TPM key bound to the SecureBoot state), so
+// the machines stay as they are and are reported; Required, which says the cluster must not have such
+// machines, is refused unless the object carries the confirm annotation. An unchanged mode is not
+// asked again. Machines not read yet count as not running it.
+func (v *TalosClusterCustomValidator) checkSecureBootConfirmed(
+	ctx context.Context, oldC, newC *ichorv1alpha1.TalosCluster,
+) (admission.Warnings, error) {
+	mode := secureboot.Mode(newC.Spec.Security)
+	if mode == ichorv1alpha1.SecureBootOff || mode == secureboot.Mode(oldC.Spec.Security) || v.APIReader == nil {
+		return nil, nil
+	}
+
+	machines, err := deleteguard.ApprovedMachines(ctx, v.APIReader, newC.Namespace, newC.Name, deleteguard.MachineFilter{IncludeDeleting: true})
+	if err != nil {
+		return nil, err
+	}
+
+	var lacking []string
+
+	for i := range machines {
+		if s := machines[i].Status.Security; s == nil || !s.SecureBoot {
+			lacking = append(lacking, machines[i].Name)
+		}
+	}
+
+	if len(lacking) == 0 {
+		return nil, nil
+	}
+
+	slices.Sort(lacking)
+
+	names := strings.Join(lacking, ", ")
+
+	if mode == ichorv1alpha1.SecureBootRequired && newC.GetAnnotations()[ichorv1alpha1.TalosClusterSecureBootConfirmAnnotation] != "true" {
+		return nil, fmt.Errorf("spec.security.secureBoot.mode Required for a cluster whose machine(s) %s do not run SecureBoot: Talos cannot "+
+			"convert an installed node, so each must be reset and added again from the SecureBoot ISO, one at a time (see "+
+			"docs/guides/hardening.md; Ichor does not do it for you). Set the annotation %s=\"true\" to confirm you will do that, or use Preferred",
+			names, ichorv1alpha1.TalosClusterSecureBootConfirmAnnotation)
+	}
+
+	return admission.Warnings{fmt.Sprintf("spec.security.secureBoot.mode %s: machine(s) %s do not run SecureBoot and stay as they are until "+
+		"they are reset and added again; their SecureBoot condition says so", mode, names)}, nil
 }
 
 // firewallWarnings warns about a firewall with no talosAPICIDRs: nobody but the controller and

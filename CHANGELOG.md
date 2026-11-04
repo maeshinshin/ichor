@@ -55,6 +55,7 @@ table accepts; a refusal passes only with the override verb
   forced password change at first login (ADR 0094, 0105).
 - Hardening of Ichor itself and typed, off-by-default hardening options for
   the clusters it creates (ADR 0108).
+- Release artifacts are built with `make release VERSION=v0.1.0`.
 
 ### Not part of Ichor
 

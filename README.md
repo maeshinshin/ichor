@@ -83,7 +83,8 @@ bin/img/ichor/ichor version         # CLI version and the installed Ichor versio
 
 [Getting started](docs/guides/getting-started.md) walks through all of it,
 from the build to the first sign-in to the UI. `ichor <command> --help` lists
-the rest. The CLI prints for people; add `-o yaml` or `-o json` in a script. Existing clusters are brought in with `ichor adopt`.
+the rest. The CLI prints for people; add `-o yaml` or `-o json` in a script. Existing
+clusters are brought in with `ichor adopt`.
 
 ## Security
 

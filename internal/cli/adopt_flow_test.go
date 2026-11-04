@@ -59,6 +59,8 @@ type flowEnv struct {
 	// released records the machines whose hold annotation was removed, in order.
 	released *[]string
 	live     map[string][]byte
+	// afterGet, when set before the run starts, sees every object a Get found.
+	afterGet func(client.Object)
 	stdout   bytes.Buffer
 	stderr   bytes.Buffer
 }
@@ -126,6 +128,14 @@ func newFlowEnv(t *testing.T, adoptPreset string, liveMutate func(*ichorv1alpha1
 				record("create", obj)
 
 				return c.Create(ctx, obj, o...)
+			},
+			Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, o ...client.GetOption) error {
+				err := c.Get(ctx, key, obj, o...)
+				if err == nil && env.afterGet != nil {
+					env.afterGet(obj)
+				}
+
+				return err
 			},
 			Update: func(ctx context.Context, c client.WithWatch, obj client.Object, o ...client.UpdateOption) error {
 				record("update", obj)

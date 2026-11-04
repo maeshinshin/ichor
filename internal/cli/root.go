@@ -67,7 +67,7 @@ help and completion. Set ICHOR_NO_UPDATE_NOTICE=1 to turn it off.`,
 func Execute() {
 	// PersistentPostRun does not run after a failed command, and the notice should show then too.
 	cmd, err := rootCmd.ExecuteC()
-	if err != nil {
+	if err != nil && !errorShown(err) {
 		fmt.Fprintln(os.Stderr, err)
 	}
 

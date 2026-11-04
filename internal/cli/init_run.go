@@ -420,9 +420,7 @@ func waitForUIReady(ctx context.Context, k8sClient client.Client, deps initDeps)
 
 	err := waitForUI(ctx, k8sClient, timeout, deps.BootstrapInterval, s.Rewrite(initDetail))
 	if ctx.Err() != nil {
-		s.Fail(ctx.Err())
-
-		return ctx.Err()
+		return s.Fail(ctx.Err())
 	}
 
 	if err != nil {
@@ -459,10 +457,7 @@ func waitForCiliumHandover(
 			err = fmt.Errorf("%w (the control planes are tainted: if workloads are what is pending, approve a worker with `ichor machine approve`)", err)
 		}
 
-		err = fmt.Errorf("init: Cilium was not handed over to Ichor: %w", err)
-		s.Fail(err)
-
-		return err
+		return s.Fail(fmt.Errorf("init: Cilium was not handed over to Ichor: %w", err))
 	}
 
 	s.Done("Helm release owned by Ichor")

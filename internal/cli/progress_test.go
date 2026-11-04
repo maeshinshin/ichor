@@ -24,6 +24,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/spf13/cobra"
 )
 
 // fakeClock is a settable clock for the renderer.
@@ -92,6 +94,54 @@ func TestProgress_WarnFailAndNoticeLines(t *testing.T) {
 		"    second line\n"
 	if buf.String() != want {
 		t.Errorf("got:\n%s\nwant:\n%s", buf.String(), want)
+	}
+}
+
+func TestProgress_FailReturnsTheErrorMarkedAsShown(t *testing.T) {
+	p, _, _ := newTestProgress(false, false, 80)
+
+	boom := errors.New("boom")
+
+	err := p.Start("A").Fail(boom)
+	if !errors.Is(err, boom) || !errorShown(err) || err.Error() != "boom" {
+		t.Errorf("Fail returned %v (shown=%v)", err, errorShown(err))
+	}
+
+	if errorShown(boom) {
+		t.Error("an error no step printed counts as shown")
+	}
+
+	if err := p.Run("B", func(*step) (string, error) { return "", boom }); !errorShown(err) {
+		t.Errorf("Run did not mark the error: %v", err)
+	}
+}
+
+// An error a failed step printed is not printed again by cobra; any other error still is.
+func TestSilenceIfShown(t *testing.T) {
+	run := func(fail func() error) string {
+		var errw bytes.Buffer
+
+		cmd := &cobra.Command{Use: "x", SilenceUsage: true, RunE: func(cmd *cobra.Command, _ []string) error {
+			return silenceIfShown(cmd, fail())
+		}}
+		cmd.SetErr(&errw)
+		cmd.SetArgs(nil)
+
+		if err := cmd.Execute(); err == nil {
+			t.Fatal("Execute returned no error")
+		}
+
+		return errw.String()
+	}
+
+	p, _, _ := newTestProgress(false, false, 80)
+
+	if got := run(func() error { return p.Start("A").Fail(errors.New("boom")) }); got != "" {
+		t.Errorf("a shown error was printed again by cobra: %q", got)
+	}
+
+	if got := run(func() error { return errors.New("flag is invalid") }); !strings.Contains(got, "flag is invalid") {
+		t.Errorf("an error no step showed must still be printed: %q", got)
 	}
 }
 

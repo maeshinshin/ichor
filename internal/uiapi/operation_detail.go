@@ -186,6 +186,7 @@ func describeOperation(out *pb.Operation, op *ichorv1alpha1.TalosOperation, clus
 			add("Target Ichor version", install.Spec.Version)
 
 			// The stamped from-version outlives the upgrade; installedVersion only helps before it finishes.
+			// The row says what runs now, so it is left out once the operation Completed.
 			from := op.Annotations[ichorv1alpha1.OperationFromVersionAnnotation]
 			if from == "" {
 				from = install.Status.InstalledVersion
@@ -193,7 +194,7 @@ func describeOperation(out *pb.Operation, op *ichorv1alpha1.TalosOperation, clus
 
 			out.Summary += fromTo(from, install.Spec.Version)
 
-			if from != "" && from != install.Spec.Version {
+			if from != "" && from != install.Spec.Version && op.Status.Phase != ichorv1alpha1.TalosOperationPhaseCompleted {
 				add("Installed Ichor version", from)
 			}
 		}

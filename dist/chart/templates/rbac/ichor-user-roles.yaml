@@ -252,6 +252,7 @@ rules:
   resources:
   - talosoperations/ca-rotation
   - talosoperations/etcd-restore
+  - talosoperations/key-rotation
   - talosoperations/node-reset
   - talosoperations/node-shutdown
   - talosoperations/shutdown

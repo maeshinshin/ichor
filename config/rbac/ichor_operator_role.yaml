@@ -1,6 +1,6 @@
 # Built-in role for the Ichor users group ichor:operator (docs/adr/0094): everything
 # ichor-viewer has, plus the routine writes. Starting a destructive TalosOperation (shutdown,
-# ca-rotation, etcd-restore, node reset or shutdown) needs the `start` verb that only
+# ca-rotation, key-rotation, etcd-restore, node reset or shutdown) needs the `start` verb that only
 # ichor-admin holds. Bound by ichor_roles_binding.yaml.
 
 apiVersion: rbac.authorization.k8s.io/v1

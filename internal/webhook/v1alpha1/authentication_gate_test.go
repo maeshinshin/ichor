@@ -220,6 +220,22 @@ var _ = Describe("Start gate on TalosOperation", func() {
 		Expect(err.Error()).To(ContainSubstring("talosoperations/ca-rotation"))
 	})
 
+	It("asks for key-rotation on a key rotation, a verb apart from ca-rotation", func() {
+		keys := op(ichorv1alpha1.TalosOperationSpec{
+			Kind:        ichorv1alpha1.TalosOperationKindKeyRotation,
+			KeyRotation: &ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: []string{ichorv1alpha1.KeyRotationTargetSecretbox}},
+		})
+
+		err := asUser(creator).Create(ctx, keys)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("talosoperations/key-rotation"))
+
+		// start on ca-rotation is not start on key-rotation.
+		err = asUser(starter).Create(ctx, keys.DeepCopy())
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("talosoperations/key-rotation"))
+	})
+
 	It("does not ask for start on a non-destructive kind", func() {
 		Expect(asUser(creator).Create(ctx, op(ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindTalos}))).To(Succeed())
 	})

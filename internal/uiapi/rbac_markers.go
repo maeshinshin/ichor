@@ -48,7 +48,7 @@ package uiapi
 // The destructive starts (ADR 0094, Decision 4) need the verb start on talosoperations/<kind>. With
 // OIDC on the backend asks it as the user; with OIDC off the backend is the caller and the validating
 // webhook judges its ServiceAccount, so it holds the verb exactly as it holds create above.
-// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations/shutdown;talosoperations/ca-rotation;talosoperations/etcd-restore;talosoperations/node-reset;talosoperations/node-shutdown,verbs=start
+// +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations/shutdown;talosoperations/ca-rotation;talosoperations/key-rotation;talosoperations/etcd-restore;talosoperations/node-reset;talosoperations/node-shutdown,verbs=start
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;update
 // SettingsService (ADR 0105): with OIDC off the backend is the caller and the settings webhook judges its
 // ServiceAccount, so it holds the settings subresource like it holds update above (never .../version).

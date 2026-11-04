@@ -20,11 +20,23 @@ import (
 	"fmt"
 )
 
-// The age column and the created row, shared by the tables and blocks of the human output.
+// The column headers and block labels the human output shares. A command that needs
+// one of these uses the constant, so the same word is spelled the same in every table.
 const (
-	nameColumn   = "name"
-	ageColumn    = "age"
-	createdLabel = "Created"
+	colName    = "name"
+	colRole    = "role"
+	colKind    = "kind"
+	colMachine = "machine"
+	colNode    = "node"
+	colVersion = "version"
+	colAge     = "age"
+
+	labelCluster = "Cluster"
+	labelCreated = "Created"
+	labelHealth  = "Health"
+	labelKind    = "Kind"
+	labelNode    = "Node"
+	labelPhase   = "Phase"
 )
 
 // doneLine prints the one result line of a command that changed something: "✓ created patch

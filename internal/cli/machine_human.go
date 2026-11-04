@@ -26,9 +26,6 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// colNode is the column of a machine's Kubernetes node name.
-const colNode = "node"
-
 // machineNode is the name the machine has as a Kubernetes node, else its hostname.
 func machineNode(m *pb.Machine) string { return cmp.Or(m.GetNodeName(), m.GetHostname()) }
 
@@ -50,7 +47,7 @@ func renderMachineList(h *human, resp *pb.ListMachinesResponse) error {
 
 	names = shortNames(names)
 	withCluster := len(clusters) > 1
-	header := []string{"name", "role", "approval", "ready", "endpoint", colNode, "age"}
+	header := []string{colName, colRole, "approval", "ready", "endpoint", colNode, colAge}
 
 	if withCluster {
 		header = slices.Insert(header, 1, "cluster")
@@ -114,10 +111,10 @@ func approvalRow(m *pb.Machine) string {
 }
 
 func renderMachineGet(h *human, m *pb.Machine) error {
-	h.Block(nsName(m.GetRef()), kv{"Cluster", m.GetCluster().GetName()}, kv{"Role", humanEnum(m.GetRole().String())},
-		kv{"Approval", approvalRow(m)}, kv{labelHealth, machineHealth(h, m)}, kv{"Node", m.GetNodeName()},
+	h.Block(nsName(m.GetRef()), kv{labelCluster, m.GetCluster().GetName()}, kv{"Role", humanEnum(m.GetRole().String())},
+		kv{"Approval", approvalRow(m)}, kv{labelHealth, machineHealth(h, m)}, kv{labelNode, m.GetNodeName()},
 		kv{"Hostname", m.GetHostname()}, kv{"Endpoint", m.GetEndpoint()}, kv{"Stage", m.GetStage()},
-		kv{"Deleting", yesIf(m.GetDeleting())}, kv{"Created", agoOrEmpty(m.GetCreatedAt())})
+		kv{"Deleting", yesIf(m.GetDeleting())}, kv{labelCreated, agoOrEmpty(m.GetCreatedAt())})
 
 	id := m.GetIdentity()
 	h.Block("Identity", kv{"UUID", id.GetUuid()}, kv{"Serial", id.GetSerial()}, kv{"MACs", strings.Join(id.GetMacAddresses(), ", ")})

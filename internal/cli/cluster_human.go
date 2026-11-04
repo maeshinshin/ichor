@@ -115,7 +115,7 @@ func renderClusterList(h *human, resp *pb.ListClustersResponse) error {
 	}
 
 	withNS := len(namespaces) > 1
-	header := []string{"name", "talos", "kubernetes", "cni", "endpoint", "ready", "age"}
+	header := []string{colName, "talos", "kubernetes", "cni", "endpoint", "ready", colAge}
 
 	if withNS {
 		header = slices.Insert(header, 0, "namespace")
@@ -185,7 +185,6 @@ const (
 	labelTalos      = "Talos"
 	compKubernetes  = "kubernetes"
 	labelKubernetes = "Kubernetes"
-	labelHealth     = "Health"
 )
 
 var componentLabels = map[string]string{compTalos: labelTalos, compKubernetes: labelKubernetes, string(detectedCilium): "Cilium", "version-contract": "Contract"}
@@ -193,7 +192,7 @@ var componentLabels = map[string]string{compTalos: labelTalos, compKubernetes: l
 func date(ts *timestamppb.Timestamp) string { return ts.AsTime().UTC().Format("2006-01-02") }
 
 func renderClusterGet(h *human, cl *pb.Cluster) error {
-	h.Block(nsName(cl.GetRef()), kv{labelHealth, h.health(cl.GetConditions())}, kv{"Created", agoOrEmpty(cl.GetCreatedAt())})
+	h.Block(nsName(cl.GetRef()), kv{labelHealth, h.health(cl.GetConditions())}, kv{labelCreated, agoOrEmpty(cl.GetCreatedAt())})
 
 	vers := make([]kv, 0, len(cl.GetVersions()))
 
@@ -220,8 +219,8 @@ func renderClusterGet(h *human, cl *pb.Cluster) error {
 		kv{"Already running", strings.Join(cl.GetAlreadyConfiguredAddresses(), ", ")})
 
 	if r := cl.GetRollout(); r != nil {
-		h.Block("Rollout", kv{"Kind", humanEnum(r.GetKind().String())}, kv{"Target", r.GetTargetVersion()},
-			kv{"Progress", fmt.Sprintf("%d/%d nodes", r.GetNodesDone(), r.GetNodesTotal())}, kv{"Phase", r.GetCurrentPhase()},
+		h.Block("Rollout", kv{labelKind, humanEnum(r.GetKind().String())}, kv{"Target", r.GetTargetVersion()},
+			kv{"Progress", fmt.Sprintf("%d/%d nodes", r.GetNodesDone(), r.GetNodesTotal())}, kv{labelPhase, r.GetCurrentPhase()},
 			kv{condPaused, yesIf(r.GetPaused())})
 	}
 

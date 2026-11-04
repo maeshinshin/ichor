@@ -28,11 +28,6 @@ import (
 // Human output of the node commands. `node logs` streams raw lines and stays as it
 // is; only its status line is in the new style.
 
-const (
-	nodeLabelNode = "Node"
-	nodeColRole   = "role"
-)
-
 // gibPrecise is a size as MiB below a GiB and GiB or TiB above, one decimal for the larger ones.
 func gibPrecise(n int64) string {
 	const (
@@ -86,10 +81,10 @@ func renderNodeGet(h *human, resp *pb.GetNodeResponse) error {
 			ready = h.Mark(markFailed) + " not ready"
 		}
 
-		h.Block("Kubernetes", kv{nodeLabelNode, k.GetNodeName()}, kv{"Ready", ready}, kv{"Kubelet", k.GetKubeletVersion()},
+		h.Block("Kubernetes", kv{labelNode, k.GetNodeName()}, kv{"Ready", ready}, kv{"Kubelet", k.GetKubeletVersion()},
 			kv{"Schedulable", yesNo(k.GetSchedulable())})
 	case n.GetKubernetesPermissionDenied():
-		h.Block("Kubernetes", kv{nodeLabelNode, "you may not read the Kubernetes Node"})
+		h.Block("Kubernetes", kv{labelNode, "you may not read the Kubernetes Node"})
 	}
 
 	if len(n.GetDisks()) > 0 {
@@ -101,7 +96,7 @@ func renderNodeGet(h *human, resp *pb.GetNodeResponse) error {
 		}
 
 		h.Title("Disks")
-		h.Table([]string{"disk", nodeColRole, "size", "id"}, rows)
+		h.Table([]string{"disk", colRole, "size", "id"}, rows)
 	}
 
 	return h.Err()

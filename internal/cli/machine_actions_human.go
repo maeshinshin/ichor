@@ -120,7 +120,7 @@ func renderInspection(h *human, in reclaim.Inspection, p reclaim.Plan) {
 	}
 
 	rows := []kv{
-		{"Role", role + " · Talos " + in.Version}, {"UUID", orNone(in.UUID)}, {"Cluster", cluster}, {"etcd", etcd},
+		{"Role", role + " · Talos " + in.Version}, {"UUID", orNone(in.UUID)}, {labelCluster, cluster}, {"etcd", etcd},
 		{"Reset", "STATE and EPHEMERAL, then reboot · " + graceful},
 	}
 

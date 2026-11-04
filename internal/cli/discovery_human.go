@@ -89,7 +89,7 @@ func renderDiscoveryList(h *human, cl *pb.Cluster, machines []*pb.Machine) error
 		rows = append(rows, []string{r, discoveryKindRange, cell})
 	}
 
-	h.Table([]string{"address/cidr", "kind", "found"}, rows)
+	h.Table([]string{"address/cidr", colKind, "found"}, rows)
 
 	return h.Err()
 }

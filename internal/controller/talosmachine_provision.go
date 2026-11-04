@@ -164,13 +164,13 @@ func (r *TalosMachineReconciler) provision(
 	// (the replacement in progress) back to odd; refusing it would deadlock the replacement.
 	// The over-cap and CA-rotation holds already ran in Reconcile.
 	if m.Spec.Role == roleControlPlane {
-		lock, err := r.acquireDisruptiveLock(ctx, cluster, m, controllerIdentity, true)
+		lock, err := r.acquireDisruptiveLock(ctx, cluster, m, machineLockIdentity(m), true)
 		if err != nil {
 			return r.lockRefusal(ctx, m, err, "", "control plane join deferred")
 		}
 
 		defer func() {
-			if err := lock.Release(ctx, controllerIdentity); err != nil {
+			if err := lock.Release(ctx, machineLockIdentity(m)); err != nil {
 				log.Error(err, "releasing cluster lock")
 			}
 		}()

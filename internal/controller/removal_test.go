@@ -189,7 +189,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 			// memory of r1 at all, same identity (clusterlock's own
 			// contract: identity, not process, is what resumption keys on).
 			lock := clusterlock.New(k8sClient, clusterKeyOf(cp1), 0)
-			Expect(lock.Acquire(ctx, controllerIdentity)).To(Succeed())
+			Expect(lock.Acquire(ctx, machineLockIdentity(cp1))).To(Succeed())
 
 			r2 := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 			_, err = reconcileMachine(r2, cp1)
@@ -202,7 +202,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 			// resumed reconcile reaches a verdict rather than erroring out.
 			Expect(cond.Reason).To(Equal(reasonRemovalRefused))
 
-			Expect(lock.Release(ctx, controllerIdentity)).To(Succeed())
+			Expect(lock.Release(ctx, machineLockIdentity(cp1))).To(Succeed())
 		})
 	})
 

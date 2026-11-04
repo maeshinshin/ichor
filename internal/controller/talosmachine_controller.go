@@ -829,7 +829,7 @@ func (r *TalosMachineReconciler) lockRefusal(
 	}
 
 	if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {
-		return r.retryLater(ctx, m, reasonClusterLockHeld, fmt.Sprintf("%s; %s", held.Error(), deferred))
+		return r.retryLater(ctx, m, reasonClusterLockHeld, fmt.Sprintf("%s; %s", lockHeldBy(held), deferred))
 	}
 
 	return ctrl.Result{}, err

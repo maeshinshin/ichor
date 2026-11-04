@@ -619,3 +619,20 @@ The 21-second and 15-minute refusals of amendments 3 and 4 were investigated on 
 **Test.** `TestWHAdopt` is kept as the diagnostic; run it attached (`ICHOR_E2E_F_ATTACH=1`, `ICHOR_E2E_F_KEEP=1`) to a cluster `foreign up --cps 1 --workers 1 --cni cilium-inline --talos v1.14.5 --k8s v1.35.10`. Its 580-second Bash-call limit can end a slow takeover before CNIHandover (run 2); the log is complete up to that point. `go vet -tags e2e` passes on the package; the golangci-lint run reports nothing on the new file (the 92 baseline issues are elsewhere).
 
 **Teardown.** Every `ichor-e2e-fwh` node, disk, pod, Service, Secret and the registry was deleted; the port-forwards on 5064 and 5065 are gone. The `ichor-ui-demo5-*` objects and the cached ISO disks were not touched.
+
+## Amendment 8 (2026-11-04): init and adopt wait for the controller to be ready before writing, instead of retrying the write
+
+Amendment 7 measured the refusal at about 20 to 30 seconds after `ichor init` or the adopt install step: the API server calls the validating webhooks of the controller that was started moments earlier. The retry-the-write loop covered it but printed one refusal per attempt and bounded the wait at 30 minutes (`init`) and 15 (`adopt`). It is replaced.
+
+**Decision.** `createWhenWebhooksUp` (every CR write of `init` and `adopt`, and `createIchorInstallation`) first waits until the controller can serve the webhook, then writes. Ready means both:
+
+- the Deployment `ichor-controller-manager` in `ichor-system` is rolled out (its generation observed, all replicas updated, no old replica left) with at least one available replica;
+- the Service `ichor-webhook-service` has an EndpointSlice endpoint that is ready (a missing `ready` condition counts as ready, per the API).
+
+The wait polls on the existing pod diagnostics (`waitDiag`), so a cluster with no pod network still fails early. After it, the write goes through `createRetrying`, which now also retries a webhook refusal (an InternalError naming a webhook) but only inside `initRetryWindow` (3 minutes): that covers the short gap between a ready endpoint and the API server picking up the webhook's CA bundle. There is no second long loop.
+
+**Bound.** Default 5 minutes for both commands (it was 30 and 15; ADR 0104 kept 30 for `init` because of image pulls over a slow link, so `init` gets the same flag `adopt` has): `--wait-timeout` on `ichor init` and `ichor adopt`. A timeout fails with: `the controller Deployment ichor-controller-manager in ichor-system is not Ready after 5m0s (<pod reasons>): <what is missing>; check "kubectl -n ichor-system get pods"`.
+
+**Not covered.** The names are the manifest's and the chart's defaults (release `ichor`, namespace `ichor-system`). A Helm release with another name or namespace is not found by label and the wait times out with the message above. An operator who may not read EndpointSlices is judged on the Deployment alone.
+
+**Tests.** `internal/cli/webhook_ready_test.go`: ready, becoming ready after polls, four timeout shapes (no Deployment, no available replica, no endpoint, endpoint not ready), and no `Create` before the controller is ready.

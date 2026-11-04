@@ -267,6 +267,31 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
+	var created bool
+
+	created, adminPassword, err = initInstall(ctx, opts, deps, k8sClient, bundleSecret, cluster, machine, candidates)
+	if err != nil {
+		return err
+	}
+
+	if err := waitForCiliumHandover(ctx, k8sClient, created, cluster, deps); err != nil {
+		return err
+	}
+
+	return waitForUIReady(ctx, k8sClient, deps)
+}
+
+// initInstall is the second half of init, once the API server answers: Ichor's own install
+// manifest and the bundle Secret, the IchorInstallation (which waits for the controller's
+// webhooks), the first admin with --ui-url, the CRs, the network policies and the issuer switch.
+// It returns whether the IchorInstallation was created and the generated admin password, which
+// the caller prints even when a later step fails.
+func initInstall(
+	ctx context.Context, opts initOptions, deps initDeps, k8sClient client.Client, bundleSecret *corev1.Secret,
+	cluster *ichorv1alpha1.TalosCluster, machine *ichorv1alpha1.TalosMachine, candidates []ichorv1alpha1.TalosConfigPatch,
+) (created bool, adminPassword string, err error) {
+	steps := deps.progress()
+
 	// Ichor itself, applied through the API server now that kubeconfig is
 	// in hand -- not inlined into the node's boot config: its
 	// CRDs must exist before step 5 can create any of them, and its
@@ -288,10 +313,8 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return objects, nil
 	})
 	if err != nil {
-		return err
+		return created, adminPassword, err
 	}
-
-	var created bool
 
 	err = steps.Run("Ichor controller", func(s *step) (string, error) {
 		s.Update("waiting for the controller to roll out")
@@ -310,7 +333,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return "serving Ichor's webhooks", nil
 	})
 	if err != nil {
-		return err
+		return created, adminPassword, err
 	}
 
 	// The first admin exists before the switch that makes every request need a token.
@@ -323,7 +346,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 			return s.Detail(), err
 		})
 		if err != nil {
-			return err
+			return created, adminPassword, err
 		}
 	}
 
@@ -338,7 +361,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return fmt.Sprintf("TalosCluster, TalosMachine, TalosConfigPatch ×%d", len(candidates)), err
 	})
 	if err != nil {
-		return err
+		return created, adminPassword, err
 	}
 
 	// Once Cilium is Ready: their CRD does not exist when the install manifest is applied.
@@ -352,7 +375,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 			return s.Detail(), err
 		})
 		if err != nil {
-			return err
+			return created, adminPassword, err
 		}
 	}
 
@@ -361,15 +384,11 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 			return "spec.authentication.ichor is set", setClusterAuthentication(ctx, k8sClient, cluster, opts.UIURL, s)
 		})
 		if err != nil {
-			return err
+			return created, adminPassword, err
 		}
 	}
 
-	if err := waitForCiliumHandover(ctx, k8sClient, created, cluster, deps); err != nil {
-		return err
-	}
-
-	return waitForUIReady(ctx, k8sClient, deps)
+	return created, adminPassword, nil
 }
 
 // initSummary is the second line of init's header: the preset and the release set it installs.

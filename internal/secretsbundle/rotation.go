@@ -263,11 +263,15 @@ func BundleFingerprint(bundle *secrets.Bundle) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-// ExportFingerprint identifies the CAs a saved copy of the bundle must carry to recover the cluster
-// from: BundleFingerprint's two CAs and the etcd and aggregator CAs (ADR 0120). `bundle-export` and
-// the cert-expiry reconciler compare it; the credentials code, which only needs the Talos and
+// ExportFingerprint identifies what a saved copy of the bundle must carry to recover the cluster
+// from: BundleFingerprint's two CAs, the etcd and aggregator CAs (ADR 0120) and, once a key rotation
+// has happened, the keys it retired (ADR 0121; retired may be nil). `bundle-export` and the
+// cert-expiry reconciler compare it; the credentials code, which only needs the Talos and
 // Kubernetes CAs, keeps BundleFingerprint. A bundle without an etcd or aggregator CA counts them empty.
-func ExportFingerprint(bundle *secrets.Bundle) (string, error) {
+// A cluster that never rotated its keys keeps the value it had before ADR 0121, so existing
+// acknowledgements stay valid; a retired key changes it, so an export from before the rotation does not
+// clear BundleBackupStale.
+func ExportFingerprint(bundle *secrets.Bundle, retired *Retired) (string, error) {
 	base, err := BundleFingerprint(bundle)
 	if err != nil {
 		return "", err
@@ -285,6 +289,10 @@ func ExportFingerprint(bundle *secrets.Bundle) (string, error) {
 		}
 
 		parts = append(parts, fp)
+	}
+
+	if rf := retired.Fingerprint(); rf != "" {
+		parts = append(parts, rf)
 	}
 
 	sum := sha256.Sum256([]byte(strings.Join(parts, "/")))

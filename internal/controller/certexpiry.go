@@ -218,7 +218,7 @@ func (r *CertExpiryReconciler) clearBundleBackupStale(
 		return nil
 	}
 
-	want, err := secretsbundle.ExportFingerprint(bundle)
+	want, err := secretsbundle.ExportFingerprint(bundle, &secretsbundle.Retired{})
 	if err != nil || cluster.Annotations[ichorv1alpha1.BundleExportedAnnotation] != want {
 		return nil //nolint:nilerr // an unreadable bundle keeps the condition up; the expiry path reports it
 	}

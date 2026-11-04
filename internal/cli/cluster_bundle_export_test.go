@@ -75,7 +75,7 @@ func TestBundleExportSavesReadsBackAndAcknowledges(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want, err := secretsbundle.ExportFingerprint(bundle)
+	want, err := secretsbundle.ExportFingerprint(bundle, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

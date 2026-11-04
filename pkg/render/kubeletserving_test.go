@@ -27,13 +27,17 @@ import (
 
 const (
 	serverTLSBootstrap = "serverTLSBootstrap: true"
-	kubeletCAPath     = "/system/secrets/kubernetes/kube-apiserver/ca.crt"
+	kubeletCAPath      = "/system/secrets/kubernetes/kube-apiserver/ca.crt"
 )
 
+func kubeletServingSecurity(k *ichorv1alpha1.TalosClusterKubeletServing) *ichorv1alpha1.TalosClusterSecurity {
+	return &ichorv1alpha1.TalosClusterSecurity{KubeletServingCertificates: k}
+}
+
 func kubeletServingCluster(contract string, verify, latched bool) *ichorv1alpha1.TalosCluster {
-	c := secCluster(&ichorv1alpha1.TalosClusterSecurity{KubeletServingCertificates: &ichorv1alpha1.TalosClusterKubeletServing{
+	c := secCluster(kubeletServingSecurity(&ichorv1alpha1.TalosClusterKubeletServing{
 		Enabled: true, VerifyFromAPIServer: verify,
-	}})
+	}))
 	if contract != "" {
 		c.Spec.VersionContract = contract
 	}
@@ -58,7 +62,7 @@ func TestKubeletServingRendering(t *testing.T) {
 	t.Run("off renders the same bytes", func(t *testing.T) {
 		for _, m := range []*ichorv1alpha1.TalosMachine{cp, worker} {
 			base := mustRender(t, testCluster("true"), m, bundle, nil)
-			off := secCluster(&ichorv1alpha1.TalosClusterSecurity{KubeletServingCertificates: &ichorv1alpha1.TalosClusterKubeletServing{}})
+			off := secCluster(kubeletServingSecurity(&ichorv1alpha1.TalosClusterKubeletServing{}))
 
 			if got := mustRender(t, off, m, bundle, nil); got != base {
 				t.Errorf("%s: a disabled option changed the render", m.Name)

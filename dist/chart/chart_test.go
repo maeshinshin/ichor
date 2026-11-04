@@ -1554,6 +1554,46 @@ func TestControllerRBACHoldsNoEscalation(t *testing.T) {
 	}
 }
 
+// TestControllerRBACApprovesOnlyKubeletServing pins: the controller approves the kubelets'
+// serving-certificate requests and nothing else. It may read requests, write their approval
+// subresource and `approve` the signer kubernetes.io/kubelet-serving by name; it never holds
+// `sign`, `create` on requests, or `approve` on another (or every) signer.
+func TestControllerRBACApprovesOnlyKubeletServing(t *testing.T) {
+	const (
+		certsGroup = "certificates.k8s.io"
+		signer     = "kubernetes.io/kubelet-serving"
+	)
+
+	var sawApprove, sawApproval bool
+
+	for _, d := range findAll(renderChart(t, "ichor"), kindClusterRole) {
+		if !strings.HasSuffix(nameOf(d), "-manager-role") {
+			continue
+		}
+
+		for tr := range rbacTriples(allRules(d)) {
+			if tr.group != certsGroup {
+				continue
+			}
+
+			switch {
+			case tr.resource == "signers" && tr.verb == "approve" && tr.names == signer:
+				sawApprove = true
+			case tr.resource == "certificatesigningrequests/approval" && tr.verb == verbUpdate:
+				sawApproval = true
+			case tr.resource == "certificatesigningrequests" && slices.Contains([]string{verbGetController, verbList, "watch"}, tr.verb):
+			default:
+				t.Errorf("the controller holds %s; it may only approve %s requests", tr, signer)
+			}
+		}
+	}
+
+	if !sawApprove || !sawApproval {
+		t.Errorf("the controller cannot approve %s requests: approve on the signer %v, update on approval %v",
+			signer, sawApprove, sawApproval)
+	}
+}
+
 // checkInstallerCoversEveryCRD fails when a CRD in config/crd/bases is missing from the
 // installer ClusterRole's patch/update resourceNames: server-side apply of that CRD is then
 // Forbidden and the whole upgrade rolls back (ichorusers, found on the demo).

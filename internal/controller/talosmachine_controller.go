@@ -695,6 +695,11 @@ func desiredInputsHash(
 		parts = append(parts, "kubeproxy="+string(mode))
 	}
 
+	// The latch that adds the apiserver's --kubelet-certificate-authority is a status value too.
+	if render.KubeletServingVerified(cluster) {
+		parts = append(parts, "kubeletservingverified=true")
+	}
+
 	return render.Hash([]byte(strings.Join(parts, ";"))), nil
 }
 
@@ -972,7 +977,8 @@ func clusterStatusRenderInputChanged() predicate.Funcs {
 
 			return apimeta.IsStatusConditionTrue(oldC.Status.Conditions, render.ConditionCNIHandover) !=
 				apimeta.IsStatusConditionTrue(newC.Status.Conditions, render.ConditionCNIHandover) ||
-				oldMode != newMode || oldFrom != newFrom
+				oldMode != newMode || oldFrom != newFrom ||
+				render.KubeletServingVerified(oldC) != render.KubeletServingVerified(newC)
 		},
 	}
 }

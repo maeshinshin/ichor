@@ -24,6 +24,7 @@ import (
 	"fmt"
 
 	"golang.org/x/mod/semver"
+	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -32,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/oidctrust"
 	"github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
 )
@@ -47,6 +49,9 @@ const (
 	installerDeadline = 30 * 60
 
 	ichorInstallerJobPrefix = "ichor-installer-"
+
+	// controlPlaneLabel names the controller Deployment, with valueControllerMgr.
+	controlPlaneLabel = "control-plane"
 
 	// IchorInstallerTargetAnnotation records the version a Job was started for, so a changed
 	// spec.version is noticed instead of silently running the old installer to completion.
@@ -84,7 +89,9 @@ func ichorInstallerJobName(op *ichorv1alpha1.TalosOperation) string {
 // Everything is re-derived per call: nothing is remembered in
 // the process, so a restart of the controller -- which the Job itself causes -- resumes
 // from the Job and the cluster.
-func NewIchorUpgradeAdvancer(c client.Client, controllerNamespace string, noCiliumPolicies bool) AdvanceMachineFunc {
+func NewIchorUpgradeAdvancer(
+	c client.Client, uncached client.Reader, controllerNamespace string, noCiliumPolicies bool,
+) AdvanceMachineFunc {
 	return func(
 		ctx context.Context, cluster *ichorv1alpha1.TalosCluster, _ *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation,
 	) (bool, error) {
@@ -93,11 +100,13 @@ func NewIchorUpgradeAdvancer(c client.Client, controllerNamespace string, noCili
 			return false, fmt.Errorf("reading IchorInstallation %q: %w", ichorv1alpha1.IchorInstallationName, err)
 		}
 
-		// Done must be decided before the mode: after a successful upgrade the new
-		// controller resumes this operation, and an installation that has become
-		// external in the meantime is still an upgrade that happened.
+		// Decided before the mode: after a successful upgrade the new controller resumes this
+		// operation, and an installation that has become external in the meantime is still an
+		// upgrade that happened. The new controller runs well before the upgrade is over (the
+		// installer Job is still post-checking, ichor-ui still rolling), so a matching version
+		// only means the Job and the rollout are what is left to wait for.
 		if inst.Spec.Version == version.Version {
-			return true, nil
+			return installerSettled(ctx, c, uncached, controllerNamespace, op)
 		}
 
 		// Second line behind the webhook: Helm moves this install, not the installer Job.
@@ -110,7 +119,7 @@ func NewIchorUpgradeAdvancer(c client.Client, controllerNamespace string, noCili
 				inst.Spec.Version, version.Version)
 		}
 
-		return advanceInstallerJob(ctx, c, controllerNamespace, op, &inst, detectedCNI(cluster), noCiliumPolicies)
+		return advanceInstallerJob(ctx, c, uncached, controllerNamespace, op, &inst, detectedCNI(cluster), noCiliumPolicies)
 	}
 }
 
@@ -147,7 +156,8 @@ func (r *TalosOperationReconciler) advanceIchor(
 }
 
 func advanceInstallerJob(
-	ctx context.Context, c client.Client, ns string, op *ichorv1alpha1.TalosOperation, inst *ichorv1alpha1.IchorInstallation, cni string, noPolicies bool,
+	ctx context.Context, c client.Client, uncached client.Reader, ns string, op *ichorv1alpha1.TalosOperation,
+	inst *ichorv1alpha1.IchorInstallation, cni string, noPolicies bool,
 ) (bool, error) {
 	name := ichorInstallerJobName(op)
 
@@ -167,13 +177,78 @@ func advanceInstallerJob(
 			"delete the Job and this operation, then create a new operation", name, got, inst.Spec.Version)
 	}
 
-	done, failed := jobOutcome(&job)
-	if failed != nil {
-		return false, fmt.Errorf("installer Job %s failed (%s: %s); the installer rolls back from its snapshot "+
-			"before it fails, see the Job's pod log", name, failed.Reason, failed.Message)
+	return installerJobSettled(ctx, uncached, ns, &job)
+}
+
+// installerSettled is the end of an upgrade once the running version is the target: the installer
+// Job (if it still exists; it may be long gone) has succeeded and the Deployments have rolled out.
+func installerSettled(
+	ctx context.Context, c client.Client, uncached client.Reader, ns string, op *ichorv1alpha1.TalosOperation,
+) (bool, error) {
+	var job batchv1.Job
+
+	switch err := c.Get(ctx, types.NamespacedName{Namespace: ns, Name: ichorInstallerJobName(op)}, &job); {
+	case apierrors.IsNotFound(err):
+		return ichorRolledOut(ctx, uncached, ns)
+	case err != nil:
+		return false, err
 	}
 
-	return done, nil
+	return installerJobSettled(ctx, uncached, ns, &job)
+}
+
+// installerJobSettled is done when the Job has succeeded and the controller and ichor-ui have
+// finished rolling out; a failed Job is an error.
+func installerJobSettled(ctx context.Context, uncached client.Reader, ns string, job *batchv1.Job) (bool, error) {
+	done, failed := jobOutcome(job)
+	if failed != nil {
+		return false, fmt.Errorf("installer Job %s failed (%s: %s); the installer rolls back from its snapshot "+
+			"before it fails, see the Job's pod log", job.Name, failed.Reason, failed.Message)
+	}
+
+	if !done {
+		return false, nil
+	}
+
+	return ichorRolledOut(ctx, uncached, ns)
+}
+
+// ichorRolledOut reports whether the controller's and ichor-ui's Deployments have finished
+// rolling out. Both are found by the labels every install path sets (kustomize prefixes their
+// names); one that is not installed is not waited for. The reader is uncached: a cached read of
+// Deployments would start a cluster-wide informer (cache.go).
+func ichorRolledOut(ctx context.Context, uncached client.Reader, ns string) (bool, error) {
+	for _, labels := range []client.MatchingLabels{
+		{controlPlaneLabel: valueControllerMgr},
+		{oidctrust.UIComponentLabel: oidctrust.UIComponentValue},
+	} {
+		var list appsv1.DeploymentList
+		if err := uncached.List(ctx, &list, client.InNamespace(ns), labels); err != nil {
+			return false, fmt.Errorf("reading the Deployments %v: %w", labels, err)
+		}
+
+		for i := range list.Items {
+			if !deploymentRolledOut(&list.Items[i]) {
+				return false, nil
+			}
+		}
+	}
+
+	return true, nil
+}
+
+// deploymentRolledOut is kubectl rollout status's test: the controller has seen the latest spec,
+// every replica is of that spec, no old replica is left, and all are ready and available.
+func deploymentRolledOut(d *appsv1.Deployment) bool {
+	want := int32(1)
+	if d.Spec.Replicas != nil {
+		want = *d.Spec.Replicas
+	}
+
+	s := d.Status
+
+	return s.ObservedGeneration >= d.Generation &&
+		s.UpdatedReplicas == want && s.Replicas == want && s.ReadyReplicas == want && s.AvailableReplicas == want
 }
 
 // newInstallerJob is the whole installer process: the target version's own image, run once,

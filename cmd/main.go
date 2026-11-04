@@ -513,7 +513,7 @@ func main() {
 		evac, kubeClient,
 	)
 
-	ichorUpgradeAdvance := controller.NewIchorUpgradeAdvancer(mgr.GetClient(), ns, noCiliumPolicies)
+	ichorUpgradeAdvance := controller.NewIchorUpgradeAdvancer(mgr.GetClient(), mgr.GetAPIReader(), ns, noCiliumPolicies)
 	// The Cilium patches are offered and run only with a verified cosign signature, checked offline
 	// against the embedded Sigstore trusted root.
 	ciliumImages, err := imagesig.New()

@@ -83,5 +83,5 @@ func (s *KeyStore) Public() []jose.JSONWebKey {
 }
 
 func sigKey(key any, kid string) jose.JSONWebKey {
-	return jose.JSONWebKey{Key: key, KeyID: kid, Algorithm: string(jose.RS256), Use: jwkUseSig}
+	return jose.JSONWebKey{Key: key, KeyID: kid, Algorithm: string(jose.RS256), Use: "sig"}
 }

@@ -3,8 +3,6 @@ package oidcissuer_test
 import (
 	"context"
 	"crypto/x509"
-	"encoding/base64"
-	"encoding/json"
 	"encoding/pem"
 	"slices"
 	"strings"
@@ -66,11 +64,6 @@ func TestGoOIDCVerifiesIDToken(t *testing.T) {
 	}
 }
 
-func caProvider(t *testing.T, cert *x509.Certificate) k8soidc.CAContentProvider {
-	t.Helper()
-	return staticCA(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: cert.Raw}))
-}
-
 type staticCA []byte
 
 func (s staticCA) CurrentCABundleContent() []byte { return s }
@@ -91,7 +84,7 @@ func apiserverAuthenticator(t *testing.T, srvCert *x509.Certificate, discovery s
 				Groups:   apiserver.PrefixedClaimOrExpression{Claim: "groups", Prefix: ptr.To("ichor:")},
 			},
 		},
-		CAContentProvider: caProvider(t, srvCert),
+		CAContentProvider: staticCA(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srvCert.Raw})),
 		APIServerID:       "test",
 	})
 	if err != nil {
@@ -182,15 +175,5 @@ func TestAPIServerAuthenticator(t *testing.T) {
 
 func claimsKID(t *testing.T, jws string) string {
 	t.Helper()
-	b, err := base64.RawURLEncoding.DecodeString(strings.Split(jws, ".")[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	var h struct {
-		KID string `json:"kid"`
-	}
-	if err := json.Unmarshal(b, &h); err != nil {
-		t.Fatal(err)
-	}
-	return h.KID
+	return jwsPart(t, jws, 0)["kid"].(string)
 }

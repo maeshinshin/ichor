@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { releaseNotice, versionLabel } from './ichorVersion.ts'
+import { installerUnverified, releaseNotice, versionLabel } from './ichorVersion.ts'
 
 test('shows nothing without an installation or a reported version', () => {
   assert.equal(versionLabel(null), null)
@@ -28,4 +28,22 @@ test('offers the release the controller found only when it is newer than the run
   assert.equal(releaseNotice({ latestVersion: '', releaseAvailable: false }), null)
   assert.equal(releaseNotice({ latestVersion: 'v0.2.0', releaseAvailable: false }), null)
   assert.equal(releaseNotice({ latestVersion: 'v0.2.0', releaseAvailable: true }), 'v0.2.0')
+})
+
+test('says nothing about a verified installer image, and names an unchecked one with its reason and digest', () => {
+  const quiet = { installerVerification: 'Verified', installerSkipReason: '', installerDigest: 'sha256:a', installerSignatureSkip: false }
+  assert.equal(installerUnverified(null), null)
+  assert.equal(installerUnverified(quiet), null)
+  assert.equal(installerUnverified({ ...quiet, installerVerification: '' }), null)
+  assert.deepEqual(installerUnverified({ ...quiet, installerVerification: 'Skipped', installerSkipReason: 'demo build' }), {
+    reason: 'demo build',
+    digest: 'sha256:a',
+    pending: false,
+  })
+  // The spec says skip but no upgrade has run since: the next one will not check.
+  assert.deepEqual(installerUnverified({ ...quiet, installerVerification: '', installerDigest: '', installerSignatureSkip: true }), {
+    reason: '',
+    digest: '',
+    pending: true,
+  })
 })

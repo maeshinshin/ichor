@@ -81,51 +81,36 @@ func runRecoverCluster(ctx context.Context, opts restoreOptions, deps restoreDep
 		}
 	}
 
-	bundlePath := opts.SecretsBundle
-	if bundlePath == "" {
-		dir, err := bundleDir(opts.Cluster)
+	p := newProgress(deps.Stderr)
+	p.Header("Recover etcd", fmt.Sprintf("cluster %s · node %s", opts.Cluster, opts.NodeEndpoint))
+
+	var in *recoveryInputs
+
+	if err := p.Run("Check inputs", func(*step) (string, error) {
+		var err error
+
+		in, err = openRecoveryInputs(opts, deps)
 		if err != nil {
-			return fmt.Errorf("restore: %w", err)
+			return "", err
 		}
 
-		bundlePath = filepath.Join(dir, secretsbundle.SecretKey)
+		return in.bundlePath, nil
+	}); err != nil {
+		return err
 	}
 
-	bundle, err := loadBundleFile(bundlePath)
-	if err != nil {
-		return fmt.Errorf("restore: %w", err)
-	}
+	var snap *verifiedSnapshot
 
-	passphrase, err := etcdbackup.DeriveKey(bundle)
-	if err != nil {
-		return fmt.Errorf("restore: %w", err)
-	}
+	if err := p.Run("Verify snapshot", func(*step) (string, error) {
+		var err error
 
-	s3 := opts.S3
-	s3.AccessKeyID = firstEnv(deps.Getenv, "ICHOR_S3_ACCESS_KEY_ID", "AWS_ACCESS_KEY_ID")
-	s3.SecretAccessKey = firstEnv(deps.Getenv, "ICHOR_S3_SECRET_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY")
-	s3.SessionToken = firstEnv(deps.Getenv, "ICHOR_S3_SESSION_TOKEN", "AWS_SESSION_TOKEN")
-
-	if s3.AccessKeyID == "" || s3.SecretAccessKey == "" {
-		return errors.New("restore: set ICHOR_S3_ACCESS_KEY_ID and ICHOR_S3_SECRET_ACCESS_KEY (they are not accepted as flags)")
-	}
-
-	if opts.S3CAFile != "" {
-		if s3.CAPEM, err = deps.ReadFile(opts.S3CAFile); err != nil {
-			return fmt.Errorf("restore: reading --s3-ca-file: %w", err)
+		snap, err = pickSnapshot(ctx, in.store, opts, in.passphrase, p.WarnWriter(), in.scrub)
+		if err != nil {
+			return "", err
 		}
-	}
 
-	// Errors whose text comes from S3, TLS or gRPC are scrubbed of every secret held here.
-	scrub := newScrubber(append(passphrase.Secrets(), s3.AccessKeyID, s3.SecretAccessKey, s3.SessionToken)...)
-
-	store, err := deps.NewStore(s3)
-	if err != nil {
-		return fmt.Errorf("restore: %w", scrub(err))
-	}
-
-	snap, err := pickSnapshot(ctx, store, opts, passphrase, deps.Stderr, scrub)
-	if err != nil {
+		return fmt.Sprintf("%s (taken %s, %s, verified)", snap.name, snap.time.Format("2006-01-02 15:04:05 UTC"), byteSize(int64(snap.data.Len()))), nil
+	}); err != nil {
 		return err
 	}
 
@@ -140,28 +125,114 @@ func runRecoverCluster(ctx context.Context, opts restoreOptions, deps restoreDep
 		}
 	}
 
-	c, err := deps.Dial(ctx, opts.Cluster, opts.NodeEndpoint, bundle)
+	if err := recoverOnNode(ctx, p, opts, deps, in, snap); err != nil {
+		return err
+	}
+
+	h := newHuman(deps.Stdout)
+	h.Note(h.Mark(markOK) + " etcd on " + opts.NodeEndpoint + " is recovering from " + snap.name)
+	h.Note("Next: once the Kubernetes API is back, the restored Ichor controller re-reconciles the cluster; " +
+		"check each machine before approving anything.")
+
+	return h.Err()
+}
+
+// recoveryInputs is what the recovery needs before it touches the node.
+type recoveryInputs struct {
+	bundlePath string
+	bundle     *secrets.Bundle
+	passphrase etcdbackup.Key
+	store      etcdbackup.Store
+	// scrub rewrites an error with every secret held here replaced.
+	scrub func(error) error
+}
+
+// openRecoveryInputs reads the secrets bundle, derives the snapshot key, takes the S3 credentials
+// from the environment and opens the store.
+func openRecoveryInputs(opts restoreOptions, deps restoreDeps) (*recoveryInputs, error) {
+	bundlePath := opts.SecretsBundle
+	if bundlePath == "" {
+		dir, err := bundleDir(opts.Cluster)
+		if err != nil {
+			return nil, fmt.Errorf("restore: %w", err)
+		}
+
+		bundlePath = filepath.Join(dir, secretsbundle.SecretKey)
+	}
+
+	bundle, err := loadBundleFile(bundlePath)
 	if err != nil {
-		return fmt.Errorf("restore: %w", scrub(err))
+		return nil, fmt.Errorf("restore: %w", err)
+	}
+
+	passphrase, err := etcdbackup.DeriveKey(bundle)
+	if err != nil {
+		return nil, fmt.Errorf("restore: %w", err)
+	}
+
+	s3 := opts.S3
+	s3.AccessKeyID = firstEnv(deps.Getenv, "ICHOR_S3_ACCESS_KEY_ID", "AWS_ACCESS_KEY_ID")
+	s3.SecretAccessKey = firstEnv(deps.Getenv, "ICHOR_S3_SECRET_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY")
+	s3.SessionToken = firstEnv(deps.Getenv, "ICHOR_S3_SESSION_TOKEN", "AWS_SESSION_TOKEN")
+
+	if s3.AccessKeyID == "" || s3.SecretAccessKey == "" {
+		return nil, errors.New("restore: set ICHOR_S3_ACCESS_KEY_ID and ICHOR_S3_SECRET_ACCESS_KEY (they are not accepted as flags)")
+	}
+
+	if opts.S3CAFile != "" {
+		if s3.CAPEM, err = deps.ReadFile(opts.S3CAFile); err != nil {
+			return nil, fmt.Errorf("restore: reading --s3-ca-file: %w", err)
+		}
+	}
+
+	// Errors whose text comes from S3, TLS or gRPC are scrubbed of every secret held here.
+	scrub := newScrubber(append(passphrase.Secrets(), s3.AccessKeyID, s3.SecretAccessKey, s3.SessionToken)...)
+
+	store, err := deps.NewStore(s3)
+	if err != nil {
+		return nil, fmt.Errorf("restore: %w", scrub(err))
+	}
+
+	return &recoveryInputs{bundlePath: bundlePath, bundle: bundle, passphrase: passphrase, store: store, scrub: scrub}, nil
+}
+
+// recoverOnNode uploads the snapshot to the node and bootstraps etcd from it.
+func recoverOnNode(ctx context.Context, p *progress, opts restoreOptions, deps restoreDeps, in *recoveryInputs, snap *verifiedSnapshot) error {
+	var c recoverClient
+
+	if err := p.Run("Connect", func(*step) (string, error) {
+		var err error
+
+		if c, err = deps.Dial(ctx, opts.Cluster, opts.NodeEndpoint, in.bundle); err != nil {
+			return "", fmt.Errorf("restore: %w", in.scrub(err))
+		}
+
+		return opts.NodeEndpoint, nil
+	}); err != nil {
+		return err
 	}
 
 	if closer, ok := c.(io.Closer); ok {
 		defer func() { _ = closer.Close() }()
 	}
 
-	if err := c.EtcdRecover(ctx, bytes.NewReader(snap.data.Bytes())); err != nil {
-		return fmt.Errorf("restore: uploading the snapshot to %q: %w", opts.NodeEndpoint, scrub(err))
+	if err := p.Run("Upload snapshot", func(*step) (string, error) {
+		if err := c.EtcdRecover(ctx, bytes.NewReader(snap.data.Bytes())); err != nil {
+			return "", fmt.Errorf("restore: uploading the snapshot to %q: %w", opts.NodeEndpoint, in.scrub(err))
+		}
+
+		return byteSize(int64(snap.data.Len())), nil
+	}); err != nil {
+		return err
 	}
 
-	if err := c.BootstrapRecover(ctx); err != nil {
-		return fmt.Errorf("restore: bootstrapping etcd from the snapshot on %q: %w", opts.NodeEndpoint, scrub(err))
-	}
+	return p.Run("Bootstrap etcd", func(*step) (string, error) {
+		if err := c.BootstrapRecover(ctx); err != nil {
+			return "", fmt.Errorf("restore: bootstrapping etcd from the snapshot on %q: %w", opts.NodeEndpoint, in.scrub(err))
+		}
 
-	_, _ = fmt.Fprintf(deps.Stdout, "etcd on %s is recovering from %s.\n"+
-		"Next: once the Kubernetes API is back, the restored Ichor controller re-reconciles the cluster; "+
-		"check each machine before approving anything.\n", opts.NodeEndpoint, snap.name)
-
-	return nil
+		return "from the snapshot", nil
+	})
 }
 
 type verifiedSnapshot struct {

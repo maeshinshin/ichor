@@ -165,7 +165,13 @@ func openRecoveryInputs(opts restoreOptions, deps restoreDeps) (*recoveryInputs,
 		return nil, fmt.Errorf("restore: %w", err)
 	}
 
-	passphrase, err := etcdbackup.DeriveKey(bundle)
+	// The keys a key rotation retired sit next to the bundle (ADR 0121); without them a backup sealed before it is unreadable.
+	retired, err := loadRetiredFile(bundlePath)
+	if err != nil {
+		return nil, fmt.Errorf("restore: %w", err)
+	}
+
+	passphrase, err := etcdbackup.DeriveKey(bundle, retired.Secretboxes()...)
 	if err != nil {
 		return nil, fmt.Errorf("restore: %w", err)
 	}
@@ -186,7 +192,7 @@ func openRecoveryInputs(opts restoreOptions, deps restoreDeps) (*recoveryInputs,
 	}
 
 	// Errors whose text comes from S3, TLS or gRPC are scrubbed of every secret held here.
-	scrub := newScrubber(append(passphrase.Secrets(), s3.AccessKeyID, s3.SecretAccessKey, s3.SessionToken)...)
+	scrub := newScrubber(append(append(passphrase.Secrets(), retired.Secretboxes()...), s3.AccessKeyID, s3.SecretAccessKey, s3.SessionToken)...)
 
 	store, err := deps.NewStore(s3)
 	if err != nil {

@@ -68,6 +68,10 @@ var bundlePassphraseFile string
 // (bundle-export checks what it wrote) does not prompt for a passphrase the operator was just shown.
 var sealedThisRun = map[string]string{}
 
+// openedThisRun remembers the passphrase that opened each encrypted bundle this process read: the retired
+// keys next to it (ADR 0121) are sealed under the same one, so they must not prompt for it again.
+var openedThisRun = map[string]string{}
+
 // readFromFile keeps the passphrase read from --bundle-passphrase-file for the rest of the process: a
 // descriptor or a pipe (<(pass show ...)) can be read only once, and a command may need it twice.
 var readFromFile = map[string]string{}

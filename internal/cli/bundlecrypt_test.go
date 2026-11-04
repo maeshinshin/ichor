@@ -49,9 +49,11 @@ func useBundleCrypto(t *testing.T) *bytes.Buffer {
 
 	t.Setenv(bundlePassphraseEnv, "")
 	clear(sealedThisRun)
+	clear(openedThisRun)
 	clear(readFromFile)
 	t.Cleanup(func() {
 		clear(sealedThisRun)
+		clear(openedThisRun)
 		clear(readFromFile)
 		bundleWorkFactor, bundlePassphraseFile, bundleTerminal, readPasswordFn, bundleWarnings = oldFactor, oldFile, oldTerm, oldPrompt, oldWarn
 	})

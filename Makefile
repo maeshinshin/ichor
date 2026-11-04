@@ -191,36 +191,72 @@ docker-build-installer: build-installer ## Build the installer image: the ichor 
 	cp dist/network-policies.yaml internal/installmanifest/network-policies.yaml
 	$(CONTAINER_TOOL) build -f Dockerfile.installer --build-arg VERSION=$(VERSION) -t ${IMG_INSTALLER} .
 
-.PHONY: demo-images
-demo-images: ui-build ## Build the three demo images with crane and push them to REGISTRY (VERSION=v0.0.8-abc1234 REGISTRY=localhost:5000); the tree stays unchanged.
-	@# CRANE_INSECURE (default --insecure, for a local registry) is read by images.sh; the release workflow sets it empty.
-	$(MAKE) build-installer IMG=ghcr.io/maeshinshin/ichor-controller:$(VERSION) IMG_UI=ghcr.io/maeshinshin/ichor-ui:$(VERSION)
-	VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" test/harness/ui-demo/images.sh
+# The digest flow: the installer image embeds the install manifest, so it is built last,
+# from a manifest that names the controller and ichor-ui images by digest (IMAGE_DIGESTS, below). Each step is a
+# target so the release workflow can run them in separate jobs; demo-images runs them all.
+IMAGE_TAG_CTL = ghcr.io/maeshinshin/ichor-controller:$(VERSION)
+IMAGE_TAG_UI = ghcr.io/maeshinshin/ichor-ui:$(VERSION)
+## File of "<repo>@<digest>" lines (images.sh's DIGEST_FILE) that build-installer and helm-package pin the controller and ichor-ui images with.
+IMAGE_DIGESTS ?=
+DIGEST_FILE ?= bin/digests.txt
 
-# The release workflow runs the two halves in separate jobs: the build job fetches dependencies and holds no
-# registry token, the push job holds the token and runs no dependency fetch.
+.PHONY: demo-images
+demo-images: ## Build the three demo images with crane and push them to REGISTRY (VERSION=v0.0.8-abc1234 REGISTRY=localhost:5000); the install manifest names the controller and UI images by digest (DIGEST_FILE=bin/digests.txt); the tree stays unchanged.
+	@# CRANE_INSECURE (default --insecure, for a local registry) is read by images.sh; the release workflow sets it empty.
+	$(MAKE) images-build-core VERSION="$(VERSION)"
+	$(MAKE) images-push-core VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" DIGEST_FILE="$(DIGEST_FILE)"
+	$(MAKE) images-build-installer VERSION="$(VERSION)" IMAGE_DIGESTS="$(DIGEST_FILE)"
+	$(MAKE) images-push-installer VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" DIGEST_FILE="$(DIGEST_FILE)"
+
+.PHONY: images-build-core
+images-build-core: ui-build ## Compile the controller and ichor-ui binaries into bin/img (no registry).
+	VERSION="$(VERSION)" test/harness/ui-demo/images.sh build-core
+
+.PHONY: images-push-core
+images-push-core: ## Layer the controller and ichor-ui binaries on the pinned base and push them (DIGEST_FILE receives their repo@digest lines).
+	VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" DIGEST_FILE="$(DIGEST_FILE)" test/harness/ui-demo/images.sh push-core
+
+.PHONY: images-build-installer
+images-build-installer: ## Render the install manifest with the digests in IMAGE_DIGESTS, embed it and compile the installer into bin/img.
+	test -s "$(IMAGE_DIGESTS)"
+	$(MAKE) build-installer IMG=$(IMAGE_TAG_CTL) IMG_UI=$(IMAGE_TAG_UI) IMAGE_DIGESTS="$(IMAGE_DIGESTS)"
+	VERSION="$(VERSION)" IMAGE_DIGESTS="$(IMAGE_DIGESTS)" test/harness/ui-demo/images.sh build-installer
+
+.PHONY: images-push-installer
+images-push-installer: ## Layer the installer binary on the pinned base and push it (its repo@digest line is appended to DIGEST_FILE).
+	VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" DIGEST_FILE="$(DIGEST_FILE)" test/harness/ui-demo/images.sh push-installer
+
+# The two-step flow with tags in the manifest (no digests): build, then push to a registry of your own
+# (docs/guides/getting-started.md). The release workflow uses the digest flow above.
 .PHONY: demo-images-build
-demo-images-build: ui-build ## Compile the three image binaries into bin/img (the first half of demo-images, no registry).
-	$(MAKE) build-installer IMG=ghcr.io/maeshinshin/ichor-controller:$(VERSION) IMG_UI=ghcr.io/maeshinshin/ichor-ui:$(VERSION)
+demo-images-build: ui-build ## Compile the three image binaries into bin/img, the install manifest naming the images by tag (no registry).
+	$(MAKE) build-installer IMG=$(IMAGE_TAG_CTL) IMG_UI=$(IMAGE_TAG_UI)
 	VERSION="$(VERSION)" test/harness/ui-demo/images.sh build
 
 .PHONY: demo-images-push
 demo-images-push: ## Layer the binaries from demo-images-build on the pinned base and push them (DIGEST_FILE=<path> receives repo@digest lines).
-	VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" test/harness/ui-demo/images.sh push
+	VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" DIGEST_FILE="$(DIGEST_FILE)" test/harness/ui-demo/images.sh push
 
 .PHONY: docker-build-ichor-ui
 docker-build-ichor-ui: ## Build docker image with ichor-ui, the real UI embedded (not the placeholder).
 	$(CONTAINER_TOOL) build -f Dockerfile.ichor-ui -t ${IMG_UI} .
 
+## Where build-installer writes install.yaml and network-policies.yaml.
+INSTALL_OUT ?= dist
+
 .PHONY: build-installer
-build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
+build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment. IMAGE_DIGESTS (repo@digest lines) pins IMG and IMG_UI by digest as <repo>:<tag>@<digest>; without it they stay tags.
 	@# Built from a temp copy of config/, so the tracked kustomization.yaml files are never edited.
-	mkdir -p dist
+	mkdir -p $(INSTALL_OUT)
 	@work=$$(mktemp -d) && trap 'rm -rf "$$work"' EXIT && cp -r config "$$work/config" && \
-	(cd "$$work/config/manager" && "$(KUSTOMIZE)" edit set image controller=${IMG}) && \
-	(cd "$$work/config/manager-ui" && "$(KUSTOMIZE)" edit set image ichor-ui=${IMG_UI}) && \
-	"$(KUSTOMIZE)" build "$$work/config/installer" > dist/install.yaml && \
-	"$(KUSTOMIZE)" build "$$work/config/cilium-network-policy" > dist/network-policies.yaml
+	ctl='${IMG}' && ui='${IMG_UI}' && \
+	if [ -n "$(IMAGE_DIGESTS)" ]; then \
+	  ctl=$$(hack/pin-image.sh "$(IMAGE_DIGESTS)" ichor-controller "$$ctl") && ui=$$(hack/pin-image.sh "$(IMAGE_DIGESTS)" ichor-ui "$$ui"); \
+	fi && \
+	(cd "$$work/config/manager" && "$(KUSTOMIZE)" edit set image controller="$$ctl") && \
+	(cd "$$work/config/manager-ui" && "$(KUSTOMIZE)" edit set image ichor-ui="$$ui") && \
+	"$(KUSTOMIZE)" build "$$work/config/installer" > $(INSTALL_OUT)/install.yaml && \
+	"$(KUSTOMIZE)" build "$$work/config/cilium-network-policy" > $(INSTALL_OUT)/network-policies.yaml
 
 ##@ Deployment
 
@@ -361,8 +397,16 @@ APP_VERSION ?= v$(CHART_VERSION)
 CHART_DIST ?= bin/chart
 
 .PHONY: helm-package
-helm-package: ## Package the chart into CHART_DIST (bin/chart) with CHART_VERSION and APP_VERSION.
+helm-package: ## Package the chart into CHART_DIST (bin/chart) with CHART_VERSION and APP_VERSION. IMAGE_DIGESTS pins the default controller and ichor-ui images by digest.
+	@# With digests the default repositories become <repo>:<tag>@<digest> (the templates add no tag to a repository with an @), in a temp copy.
 	@work=$$(mktemp -d) && trap 'rm -rf "$$work"' EXIT && cp -r $(HELM_CHART_DIR) "$$work/ichor" && cp LICENSE NOTICE "$$work/ichor/" && \
+	if [ -n "$(IMAGE_DIGESTS)" ]; then \
+	  for n in ichor-controller ichor-ui; do \
+	    pin=$$(hack/pin-image.sh "$(IMAGE_DIGESTS)" $$n ghcr.io/maeshinshin/$$n:$(APP_VERSION)) && \
+	    sed -i "s|^\( *repository: \)ghcr.io/maeshinshin/$$n\$$|\1$$pin|" "$$work/ichor/values.yaml" && \
+	    grep -qF "$$pin" "$$work/ichor/values.yaml" || { echo "helm-package: the chart has no default $$n image to pin" >&2; exit 1; }; \
+	  done; \
+	fi && \
 	cp THIRD-PARTY-NOTICES "$$work/ichor/" && \
 	$(HELM) package "$$work/ichor" --version $(CHART_VERSION) --app-version $(APP_VERSION) --destination $(CHART_DIST)
 

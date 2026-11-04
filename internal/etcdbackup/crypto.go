@@ -22,6 +22,7 @@ package etcdbackup
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/hkdf"
 	"crypto/sha256"
 	"encoding/hex"
@@ -67,11 +68,8 @@ func DeriveKey(bundle *secrets.Bundle) (Key, error) {
 
 	var ikm string
 
-	if bundle.Secrets != nil {
-		ikm = bundle.Secrets.SecretboxEncryptionSecret
-		if ikm == "" {
-			ikm = bundle.Secrets.AESCBCEncryptionSecret
-		}
+	if s := bundle.Secrets; s != nil {
+		ikm = cmp.Or(s.SecretboxEncryptionSecret, s.AESCBCEncryptionSecret)
 	}
 
 	if ikm == "" {
@@ -126,7 +124,7 @@ func Decrypt(src io.Reader, key Key) (io.Reader, error) {
 
 	var first error
 
-	for _, pass := range []string{key.Current, key.Legacy} {
+	for _, pass := range key.Secrets() {
 		if pass == "" {
 			continue
 		}

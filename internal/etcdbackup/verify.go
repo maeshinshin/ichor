@@ -61,10 +61,6 @@ func (v *Verifier) Verify() error {
 		return fmt.Errorf("snapshot is %d bytes, not a bbolt file plus a sha256 trailer", v.n)
 	}
 
-	if len(v.tail) != sha256.Size {
-		return errors.New("snapshot is shorter than its checksum")
-	}
-
 	if !bytes.Equal(v.h.Sum(nil), v.tail) {
 		return errors.New("snapshot checksum mismatch")
 	}

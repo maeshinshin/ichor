@@ -276,6 +276,19 @@ var _ = Describe("TalosMachineReconciler provisioning a node in maintenance mode
 		Expect(held).To(BeFalse(), "the lock is released once the configuration is stored")
 	})
 
+	It("joins a worker while the cluster lock is held: a worker is no etcd member, so its join takes no lock", func() {
+		setup(roleWorker)
+		installDiskPatch(roleWorker)
+
+		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+		Expect(lock.Acquire(ctx, "someone-else")).To(Succeed())
+		DeferCleanup(func() { Expect(lock.Release(ctx, "someone-else")).To(Succeed()) })
+
+		got := reconcileOnce()
+		Expect(maint.applyCalls).To(HaveLen(1))
+		Expect(got.Status.ConfigStoredAt).NotTo(BeNil())
+	})
+
 	It("does not join a control plane held by the approval cap", func() {
 		secret := newTestSecret(newTestBundle("v1.14"))
 		cluster = newTestClusterWithCount(1, secret.Name)

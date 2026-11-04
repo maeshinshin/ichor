@@ -245,7 +245,7 @@ func BuildConfig(
 	}
 
 	// Opt-in hardening (ADR 0108), below every patch.
-	cfg, err = injectSecurity(cfg, cluster, machineType)
+	cfg, err = injectSecurity(cfg, contract, cluster, machineType)
 	if err != nil {
 		return nil, err
 	}

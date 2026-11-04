@@ -136,6 +136,14 @@ func TestAssess_Rules(t *testing.T) {
 			name: "KubeAuthenticationConfig is safe (ADR 0094)", match: pathKubeAuthJWT,
 			nonMatch: "KubeletConfig.image",
 		},
+		{
+			name: "KubeletConfig.config is safe (ADR 0125)", match: "KubeletConfig.config.serverTLSBootstrap",
+			nonMatch: "KubeletConfig.image",
+		},
+		{
+			name: "machine.kubelet.extraConfig is safe (ADR 0125)", match: "machine.kubelet.extraConfig.serverTLSBootstrap",
+			nonMatch: "machine.kubelet.image",
+		},
 		{name: "LinkConfig is safe", match: "LinkConfig.addresses", nonMatch: pathLinkAliasSelector},
 		{name: "VLANConfig is safe", match: "VLANConfig.vlanID", nonMatch: pathLinkAliasSelector},
 		{name: "DHCPv4Config is safe", match: "DHCPv4Config.routeMetric", nonMatch: pathLinkAliasSelector},

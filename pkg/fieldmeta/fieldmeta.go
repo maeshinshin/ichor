@@ -291,6 +291,14 @@ var rules = []rule{
 	{prefix: "KubeAuditPolicyConfig", apiServerRestart: true},
 	{prefix: "KubeAuthorizerConfig", apiServerRestart: true},
 	{prefix: "KubeAuthenticationConfig", apiServerRestart: true, introducedAfter: machineryconfig.TalosVersion1_13},
+	// The kubelet's own configuration file (ADR 0125), Talos v1.14.5 controllers/k8s:
+	// KubeletConfigController folds KubeletConfig.config (and machine.kubelet.extraConfig) into
+	// k8s.KubeletConfig; KubeletServiceController (kubelet_service.go) rewrites the kubelet
+	// configuration file and stops and starts the kubelet service when it changes. The node does not
+	// reboot and the pods keep running. KubeletConfig.image and machine.kubelet.image keep the
+	// reboot-required default (the Kubernetes upgrade owns the image).
+	{prefix: "KubeletConfig.config", safe: true},
+	{prefix: "machine.kubelet.extraConfig", safe: true},
 	{prefix: "KubeControllerManagerConfig", safe: true},
 	{prefix: "KubeControllerManagerConfig.image"},
 	{prefix: "KubeSchedulerConfig", safe: true},

@@ -280,6 +280,8 @@ type opPlan struct {
 	node *nodePlan
 	// restore is set for the etcd-restore kind.
 	restore *etcdRestorePlan
+	// installer is the installer image settings the Ichor upgrade asked for, nil for another kind.
+	installer *pb.IchorInstallerOptions
 	// override is set when an incompatible target goes through under the override verb:
 	// the plan's warning, and the Event CreateOperation records.
 	override string
@@ -316,7 +318,7 @@ func normalizeTarget(kind, target string) (string, error) {
 //nolint:gocyclo // one switch over the seven kinds, each a few lines
 func (s *Server) planOperation(
 	ctx context.Context, clusterRef *pb.ObjectRef, pbKind pb.OperationKind, rawTarget string, maxUnavailable int32,
-	node *pb.NodeActionRequest, restore *pb.EtcdRestoreRequest, bg *pb.Override,
+	node *pb.NodeActionRequest, restore *pb.EtcdRestoreRequest, bg *pb.Override, installer *pb.IchorInstallerOptions,
 ) (*opPlan, error) {
 	kind, err := kindToSpec(pbKind)
 	if err != nil {
@@ -355,6 +357,16 @@ func (s *Server) planOperation(
 	}
 
 	p := &opPlan{kind: kind, cluster: cluster, resp: &pb.PlanOperationResponse{MaxUnavailable: maxUnavailable}}
+
+	if kind == ichorv1alpha1.TalosOperationKindIchor {
+		if err := checkInstallerOptions(installer); err != nil {
+			return nil, err
+		}
+
+		p.installer = installer
+	} else if installer != nil {
+		return nil, invalid("installer settings belong to an Ichor upgrade, not a %s", kind)
+	}
 
 	switch kind {
 	case ichorv1alpha1.TalosOperationKindTalos:
@@ -429,6 +441,16 @@ func (s *Server) planOperation(
 
 	p.resp.Target = target
 	p.resp.SpecChanges = target != "" && target != specVersion
+
+	if p.install != nil {
+		if installerOptionsChange(p.install, p.installer) {
+			p.resp.SpecChanges = true
+		}
+
+		if reason := p.installer.GetSkipSignatureReason(); reason != "" {
+			p.resp.Warning = strings.TrimSpace(p.resp.GetWarning() + " " + installerSkipWarning(reason))
+		}
+	}
 
 	if err := s.planMachines(ctx, p, cluster, maxUnavailable); err != nil {
 		return nil, err
@@ -714,7 +736,8 @@ func (s *Server) unfinishedOperation(ctx context.Context, cluster *ichorv1alpha1
 		if o.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused && o.Spec.Kind == ichorv1alpha1.TalosOperationKindIchor && o.Status.FailureReason != "" {
 			// The installer Job failed and rolled back; a resume would only meet the same failed Job
 			// (it is kept for a day), and spec.version still names the failed target.
-			return fmt.Sprintf("the Ichor upgrade %q failed and the installer rolled back (see 'ichor operation get %s' and the installer Job's log); "+
+			return fmt.Sprintf("the Ichor upgrade %q failed: the installer image was refused before it ran, or the installer rolled back "+
+				"(see 'ichor operation get %s' and the installer Job's log); "+
 				"delete it with 'ichor operation delete %s', then run 'ichor upgrade ichor <version>' again",
 				o.Name, o.Name, o.Name), nil
 		}
@@ -736,7 +759,7 @@ func (s *Server) unfinishedOperation(ctx context.Context, cluster *ichorv1alpha1
 func (s *Server) PlanOperation(
 	ctx context.Context, req *connect.Request[pb.PlanOperationRequest],
 ) (*connect.Response[pb.PlanOperationResponse], error) {
-	p, err := s.planOperation(ctx, req.Msg.GetCluster(), req.Msg.GetKind(), req.Msg.GetTarget(), req.Msg.GetMaxUnavailable(), req.Msg.GetNode(), req.Msg.GetEtcdRestore(), req.Msg.GetOverride())
+	p, err := s.planOperation(ctx, req.Msg.GetCluster(), req.Msg.GetKind(), req.Msg.GetTarget(), req.Msg.GetMaxUnavailable(), req.Msg.GetNode(), req.Msg.GetEtcdRestore(), req.Msg.GetOverride(), req.Msg.GetIchorInstaller())
 	if err != nil {
 		return nil, err
 	}
@@ -757,7 +780,7 @@ func (s *Server) CreateOperation(
 ) (*connect.Response[pb.CreateOperationResponse], error) {
 	m := req.Msg
 
-	p, err := s.planOperation(ctx, m.GetCluster(), m.GetKind(), m.GetTarget(), m.GetMaxUnavailable(), m.GetNode(), m.GetEtcdRestore(), m.GetOverride())
+	p, err := s.planOperation(ctx, m.GetCluster(), m.GetKind(), m.GetTarget(), m.GetMaxUnavailable(), m.GetNode(), m.GetEtcdRestore(), m.GetOverride(), m.GetIchorInstaller())
 	if err != nil {
 		return nil, err
 	}
@@ -849,7 +872,11 @@ func (s *Server) writeTarget(ctx context.Context, p *opPlan) error {
 	case ichorv1alpha1.TalosOperationKindKubernetes:
 		mutate = func(c *ichorv1alpha1.TalosCluster) { c.Spec.KubernetesVersion = target }
 	case ichorv1alpha1.TalosOperationKindIchor:
-		p.install.Spec.Version = target
+		if target != "" {
+			p.install.Spec.Version = target
+		}
+
+		applyInstallerOptions(&p.install.Spec, p.installer)
 
 		if err := s.Update(ctx, p.install, strictFieldValidation); err != nil {
 			return mapOperationWriteError("updating IchorInstallation", client.ObjectKeyFromObject(p.install), err)

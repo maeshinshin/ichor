@@ -37,11 +37,28 @@ type IchorInstallationSpec struct {
 	Version string `json:"version"`
 
 	// installerRepository is the image repository of the installer image; the Job runs
-	// <installerRepository>:<version>. Point it at a mirror or private registry if you need to.
+	// <installerRepository>@<digest>, where the digest is installerDigest or the one <version> resolves
+	// to in that repository when the Job is created. Point it at a mirror or private registry
+	// if you need to; a mirror has to carry the image's signature too (the OCI referrers), or
+	// installerSignature has to say skip.
 	// +kubebuilder:default="ghcr.io/maeshinshin/ichor-installer"
 	// +kubebuilder:validation:MinLength=1
 	// +optional
 	InstallerRepository string `json:"installerRepository,omitempty"`
+
+	// installerDigest pins the installer image to a digest ("sha256:" and 64 hex digits). Unset, the
+	// controller resolves the tag <version> in installerRepository itself when it creates the Job and
+	// records the digest in status.installerImage. Set, it never resolves the tag, so the registry
+	// is only asked for the signature (none when installerSignature says skip). Change it together with
+	// version.
+	// +kubebuilder:validation:Pattern=`^sha256:[a-f0-9]{64}$`
+	// +optional
+	InstallerDigest string `json:"installerDigest,omitempty"`
+
+	// installerSignature says how the signature of the installer image is checked before the Job runs.
+	// Unset means required.
+	// +optional
+	InstallerSignature *IchorInstallerSignature `json:"installerSignature,omitempty"`
 
 	// deployment records who deploys this Ichor.
 	// +optional
@@ -70,6 +87,65 @@ type IchorInstallationSpec struct {
 	// Off unless enabled here or by the chart.
 	// +optional
 	AutoPatch *IchorAutoPatchSettings `json:"autoPatch,omitempty"`
+}
+
+// Values of IchorInstallerSignature.Mode.
+const (
+	// InstallerSignatureRequired is the default: the installer image must carry a keyless cosign signature
+	// of this repository's release workflow for spec.version, or the Ichor upgrade pauses.
+	InstallerSignatureRequired = "required"
+	// InstallerSignatureSkip runs an installer image without checking a signature, for builds nobody signs
+	// (development and demo images). The controller records it in status.installerImage and an Event, and
+	// the CLI and the UI show it.
+	InstallerSignatureSkip = "skip"
+)
+
+// IchorInstallerSignature is the signature policy of the installer image.
+// +kubebuilder:validation:XValidation:rule="self.mode != 'skip' || (has(self.reason) && size(self.reason) > 0)",message="reason is required when mode is skip"
+type IchorInstallerSignature struct {
+	// mode is required (the default) or skip.
+	// +kubebuilder:validation:Enum=required;skip
+	// +kubebuilder:default=required
+	Mode string `json:"mode"`
+
+	// reason is why the signature is not checked; required with skip, and recorded with the digest.
+	// +kubebuilder:validation:MaxLength=512
+	// +optional
+	Reason string `json:"reason,omitempty"`
+}
+
+// Values of IchorInstallerImageStatus.Verification.
+const (
+	InstallerImageVerified = "Verified"
+	InstallerImageSkipped  = "Skipped"
+)
+
+// IchorInstallerImageStatus is the installer image the controller last started an Ichor upgrade with, and
+// whether its signature was checked.
+type IchorInstallerImageStatus struct {
+	// version is the Ichor version the image was resolved for.
+	// +optional
+	Version string `json:"version,omitempty"`
+	// repository is the image repository the Job pulled from.
+	// +optional
+	Repository string `json:"repository,omitempty"`
+	// digest is the image digest the Job runs, "sha256:...".
+	// +optional
+	Digest string `json:"digest,omitempty"`
+	// verification is Verified when a cosign signature of the release workflow for version matched the
+	// digest, Skipped when spec.installerSignature said skip.
+	// +kubebuilder:validation:Enum=Verified;Skipped
+	// +optional
+	Verification string `json:"verification,omitempty"`
+	// signer is the identity the signature matched (the certificate subject pattern); empty when Skipped.
+	// +optional
+	Signer string `json:"signer,omitempty"`
+	// reason is the reason given for skipping the check; empty when Verified.
+	// +optional
+	Reason string `json:"reason,omitempty"`
+	// resolvedAt is when the controller resolved and checked the image.
+	// +optional
+	ResolvedAt *metav1.Time `json:"resolvedAt,omitempty"`
 }
 
 // Values of IchorAutoPatchSettings.Components.
@@ -193,6 +269,11 @@ type IchorInstallationStatus struct {
 	// autoPatch is what the automatic patcher last did and why it stopped.
 	// +optional
 	AutoPatch *IchorAutoPatchStatus `json:"autoPatch,omitempty"`
+
+	// installerImage is the installer image the last Ichor upgrade ran, by digest, and whether its
+	// signature was checked.
+	// +optional
+	InstallerImage *IchorInstallerImageStatus `json:"installerImage,omitempty"`
 }
 
 // ConditionAutoPatchHalted is True while automatic patching is stopped by an automatic operation that failed
@@ -279,7 +360,7 @@ type IchorLatestRelease struct {
 const ConditionSettingsApplied = "SettingsApplied"
 
 // The RBAC subresources the webhook checks with verb update on ichorinstallations are
-// IchorSubresourceVersion (spec.version, installerRepository, deployment) and
+// IchorSubresourceVersion (spec.version, installerRepository, installerDigest, installerSignature, deployment) and
 // IchorSubresourceSettings (users, defaults).
 const (
 	IchorSubresourceVersion  = "version"

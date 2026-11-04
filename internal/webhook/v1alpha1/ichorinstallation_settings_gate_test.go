@@ -72,6 +72,10 @@ func TestSettingsGate(t *testing.T) {
 		s.AutoPatch = &ichorv1alpha1.IchorAutoPatchSettings{AcknowledgedHalt: "ns/op"}
 	}
 	bump := func(s *ichorv1alpha1.IchorInstallationSpec) { s.Version = "v0.2.0" }
+	skipSig := func(s *ichorv1alpha1.IchorInstallationSpec) {
+		s.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: "skip", Reason: "demo build"}
+	}
+	pin := func(s *ichorv1alpha1.IchorInstallationSpec) { s.InstallerDigest = "sha256:" + strings.Repeat("a", 64) }
 	table := map[string][]string{
 		gateAdmin:     {"version", gateSettings},
 		gateSettings:  {gateSettings},
@@ -91,6 +95,10 @@ func TestSettingsGate(t *testing.T) {
 		{name: "no spec change needs nothing", user: bgUnitPlain, old: inst(nil), new: inst(nil)},
 		{name: "version needs /version", user: bgUnitPlain, old: inst(nil), new: inst(bump), wantErr: "ichorinstallations/version"},
 		{name: "version by holder", user: gateVersioner, old: inst(nil), new: inst(bump), wantEv: "spec.version: v0.1.0 -> v0.2.0"},
+		{name: "skipping the signature check needs /version", user: gateSettings, old: inst(nil), new: inst(skipSig), wantErr: "ichorinstallations/version"},
+		{name: "skipping the signature check is recorded with its reason", user: gateVersioner, old: inst(nil), new: inst(skipSig), wantEv: "spec.installerSignature.mode: <unset> -> skip"},
+		{name: "a digest pin needs /version", user: gateSettings, old: inst(nil), new: inst(pin), wantErr: "ichorinstallations/version"},
+		{name: "a digest pin by holder", user: gateVersioner, old: inst(nil), new: inst(pin), wantEv: "spec.installerDigest: <unset> -> sha256:"},
 		{name: "users need /settings", user: gateVersioner, old: inst(nil), new: inst(ttl), wantErr: "ichorinstallations/settings"},
 		{name: "users by holder", user: gateSettings, old: inst(nil), new: inst(ttl), wantEv: "spec.users.tokenTTL: <unset> -> 10m0s"},
 		{name: "the deprecated reclaim field is ignored: no check, no Event", user: bgUnitPlain, old: inst(nil), new: inst(enableReclaim)},

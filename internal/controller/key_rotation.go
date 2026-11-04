@@ -78,7 +78,7 @@ const (
 	// blocked, with the reason.
 	conditionKeyRotation = "KeyRotation"
 
-	reasonOperationKeyRotating = "ClusterKeyRotating"
+	reasonOperationKeyRotating  = "ClusterKeyRotating"
 	reasonKeyRotationInProgress = "KeyRotationInProgress"
 
 	reasonKeyRotationStage        = "StageInProgress"

@@ -260,6 +260,8 @@ const TalosMachineUpgradeOrderLabel = "ichor.maesh.dev/upgrade-order"
 // +kubebuilder:validation:XValidation:rule="(self.kind == 'node') == has(self.node)",message="spec.node is required for the node kind and only allowed there"
 // +kubebuilder:validation:XValidation:rule="!has(self.cni) || self.kind == 'cni'",message="spec.cni is only allowed for the cni kind"
 // +kubebuilder:validation:XValidation:rule="has(self.cni) == has(oldSelf.cni) && (!has(self.cni) || self.cni == oldSelf.cni)",message="cni cannot change after creation"
+// +kubebuilder:validation:XValidation:rule="(self.kind == 'key-rotation') == has(self.keyRotation)",message="spec.keyRotation is required for the key-rotation kind and only allowed there"
+// +kubebuilder:validation:XValidation:rule="has(self.keyRotation) == has(oldSelf.keyRotation) && (!has(self.keyRotation) || self.keyRotation == oldSelf.keyRotation)",message="keyRotation cannot change after creation"
 // +kubebuilder:validation:XValidation:rule="(self.kind == 'etcd-restore') == has(self.etcdRestore)",message="spec.etcdRestore is required for the etcd-restore kind and only allowed there"
 // +kubebuilder:validation:XValidation:rule="!has(self.etcdRestore) || self.etcdRestore.confirm == self.clusterRef.name",message="an etcd restore needs spec.etcdRestore.confirm equal to the cluster name"
 // +kubebuilder:validation:XValidation:rule="has(self.etcdRestore) == has(oldSelf.etcdRestore) && (!has(self.etcdRestore) || self.etcdRestore == oldSelf.etcdRestore)",message="etcdRestore cannot change after creation"
@@ -282,9 +284,14 @@ type TalosOperationSpec struct {
 	// config applies the pending reboot-requiring configuration changes, one machine at a time
 	// with a reboot each.
 	// etcd-restore rewinds the cluster to a stored etcd snapshot.
-	// +kubebuilder:validation:Enum=talos;kubernetes;ichor;cni;shutdown;ca-rotation;config;node;etcd-restore
+	// key-rotation replaces the service-account signing key and the secretbox key.
+	// +kubebuilder:validation:Enum=talos;kubernetes;ichor;cni;shutdown;ca-rotation;config;node;etcd-restore;key-rotation
 	// +required
 	Kind string `json:"kind"`
+
+	// keyRotation is the key-rotation kind's request: which keys, and how long the old service-account key is kept.
+	// +optional
+	KeyRotation *TalosOperationKeyRotationSpec `json:"keyRotation,omitempty"`
 
 	// etcdRestore is the snapshot of an etcd-restore-kind operation.
 	// +optional
@@ -614,6 +621,11 @@ type TalosOperationStatus struct {
 	// to, and which CA is accepted and which issues in it. Public fingerprints only.
 	// +optional
 	CARotation *TalosOperationCARotationStatus `json:"caRotation,omitempty"`
+
+	// keyRotation is the key-rotation kind's state machine: which stage every control plane is being taken to,
+	// which key signs or encrypts in it, and the progress of the re-encryption. Public identifiers only.
+	// +optional
+	KeyRotation *TalosOperationKeyRotationStatus `json:"keyRotation,omitempty"`
 
 	// conditions represent the current state of the TalosOperation resource.
 	// +listType=map

@@ -425,7 +425,7 @@ func (r *TalosOperationReconciler) advanceShutdown(
 		return ctrl.Result{}, err
 	}
 
-	if err := lock.Renew(ctx, controllerIdentity); err != nil {
+	if err := lock.Renew(ctx, operationLockIdentity(op)); err != nil {
 		return renewRefusal(ctx, err)
 	}
 
@@ -466,7 +466,7 @@ func (r *TalosOperationReconciler) advanceShutdown(
 		return ctrl.Result{}, err
 	}
 
-	if err := lock.Release(ctx, controllerIdentity); err != nil {
+	if err := lock.Release(ctx, operationLockIdentity(op)); err != nil {
 		return ctrl.Result{}, err
 	}
 

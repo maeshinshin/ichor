@@ -178,3 +178,20 @@ type KeyRotationReencryption struct {
 	// +optional
 	Scanned int64 `json:"scanned,omitempty"`
 }
+
+// KeyRotationOutdatesSnapshot reports whether op, a TalosOperation, is a key rotation that was not finished
+// when a snapshot was taken: still under way, or finished after the snapshot's time. Such a snapshot holds
+// Secrets, among them the secrets bundle, under keys the control planes no longer configure, so restoring
+// it would leave Ichor unable to read its own bundle (ADR 0121).
+func KeyRotationOutdatesSnapshot(op *TalosOperation, snapshot time.Time) bool {
+	if op.Spec.Kind != TalosOperationKindKeyRotation {
+		return false
+	}
+
+	if op.Status.Phase != TalosOperationPhaseCompleted {
+		// Not finished: it counts once it has changed a control plane.
+		return op.Status.KeyRotation != nil && op.Status.KeyRotation.Stage != ""
+	}
+
+	return op.Status.FinishedAt != nil && snapshot.Before(op.Status.FinishedAt.Time)
+}

@@ -28,13 +28,14 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	yaml "go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/etcdbackup"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
+
+const backupKeyBundle = "backup-key-bundle"
 
 // ADR 0121: the backup key of a cluster that rotated its secretbox key must still open backups sealed before.
 func TestBackupKeyReadsBackupsSealedBeforeASecretboxRotation(t *testing.T) {
@@ -90,18 +91,18 @@ func TestBackupKeyReadsBackupsSealedBeforeASecretboxRotation(t *testing.T) {
 	}
 
 	cluster := &ichorv1alpha1.TalosCluster{
-		ObjectMeta: metav1.ObjectMeta{Name: "c", Namespace: "ns"},
-		Spec:       ichorv1alpha1.TalosClusterSpec{SecretsRef: corev1.LocalObjectReference{Name: "bundle"}},
+		Name: "c", Namespace: "ns",
+		Spec: ichorv1alpha1.TalosClusterSpec{SecretsRef: corev1.LocalObjectReference{Name: backupKeyBundle}},
 	}
 
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "bundle", Namespace: "ichor-system"},
-		Data:       map[string][]byte{secretsbundle.SecretKey: rawBundle, secretsbundle.RetiredKeysKey: rawRetired},
+		Name: backupKeyBundle, Namespace: trustNamespace,
+		Data: map[string][]byte{secretsbundle.SecretKey: rawBundle, secretsbundle.RetiredKeysKey: rawRetired},
 	}
 
 	var scrub scrubber
 
-	key, err := backupKey(context.Background(), fake.NewClientBuilder().WithObjects(secret).Build(), "ichor-system", cluster, after, &scrub)
+	key, err := backupKey(context.Background(), fake.NewClientBuilder().WithObjects(secret).Build(), trustNamespace, cluster, after, &scrub)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +125,7 @@ func TestBackupKeyReadsBackupsSealedBeforeASecretboxRotation(t *testing.T) {
 	// No retired-keys.yaml: the key is what DeriveKey says.
 	delete(secret.Data, secretsbundle.RetiredKeysKey)
 
-	plain, err := backupKey(context.Background(), fake.NewClientBuilder().WithObjects(secret).Build(), "ichor-system", cluster, after, &scrubber{})
+	plain, err := backupKey(context.Background(), fake.NewClientBuilder().WithObjects(secret).Build(), trustNamespace, cluster, after, &scrubber{})
 	if err != nil || len(plain.Retired) != 0 {
 		t.Fatalf("a cluster that never rotated has no retired passphrase: %v %v", plain.Retired, err)
 	}

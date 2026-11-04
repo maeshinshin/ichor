@@ -437,7 +437,9 @@ func (r *TalosOperationReconciler) restoreReachable(
 
 // noRotationSince refuses a restore whose snapshot is older than a CA rotation of the cluster: the
 // restored secrets bundle would not match the certificates the nodes now hold, and Ichor could no
-// longer reach them (ADR 0063, 0089).
+// longer reach them (ADR 0063, 0089). A snapshot taken before a key rotation finished is refused for the
+// same kind of reason: its Secrets, the bundle among them, are under keys the control planes no longer
+// configure (ADR 0121).
 func (r *TalosOperationReconciler) noRotationSince(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, snapshot time.Time) error {
 	var ops ichorv1alpha1.TalosOperationList
 	if err := r.List(ctx, &ops, client.InNamespace(cluster.Namespace)); err != nil {
@@ -450,6 +452,13 @@ func (r *TalosOperationReconciler) noRotationSince(ctx context.Context, cluster 
 			o.CreationTimestamp.After(snapshot) {
 			return fmt.Errorf("operation %q rotated the cluster's CAs after this snapshot was taken (%s): the restored secrets "+
 				"bundle would not match the nodes' certificates; choose a snapshot taken after the rotation",
+				o.Name, snapshot.UTC().Format(time.RFC3339))
+		}
+
+		if o.Spec.ClusterRef.Name == cluster.Name && ichorv1alpha1.KeyRotationOutdatesSnapshot(o, snapshot) {
+			return fmt.Errorf("operation %q rotated the cluster's service-account or secretbox key and had not finished when this snapshot "+
+				"was taken (%s): the Secrets in it, the secrets bundle among them, are under keys the control planes no longer use, so "+
+				"Ichor could not read them after the restore; choose a snapshot taken after the rotation finished",
 				o.Name, snapshot.UTC().Format(time.RFC3339))
 		}
 	}

@@ -550,11 +550,15 @@ func main() {
 		TalosClient:         controller.NewMachineryTalosClient,
 		NodeName:            os.Getenv("NODE_NAME"),
 		// The ca-rotation kind (ADR 0063) is, like shutdown, dispatched by the backbone to its own
-		// state machine: it needs the Kubernetes Node readiness check and an Event recorder.
+		// state machine: it needs the Kubernetes Node readiness check and an Event recorder. The key-rotation
+		// kind (ADR 0121) also rewrites every Secret and looks for token Secrets, both through an admin
+		// kubeconfig a Talos node issues, so the controller needs no new right in the managed cluster.
 		NodesReady:      controller.NewNodesReady(),
 		RootCAPublished: controller.NewRootCAPublished(),
 		// The aggregator CA's wait for extension API servers (ADR 0120).
 		AggregatorCAPublished: controller.NewAggregatorCAPublished(),
+		Reencrypt:             controller.NewReencryptSecrets(),
+		LegacyTokens:          controller.NewLegacyTokens(),
 		Recorder:              mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
 		// The node kind (ADR 0085) drains with the same clientset and storage hook as the
 		// config rollout.

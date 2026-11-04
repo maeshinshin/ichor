@@ -50,7 +50,9 @@ type KeyRotation struct {
 
 // inject edits the service-account and etcd encryption documents of the control-plane configuration cfg that
 // was generated from bundle. It is the identity for a nil r and for a worker.
-func (r *KeyRotation) inject(cfg coreconfig.Provider, bundle *secrets.Bundle, machineType machine.Type) (coreconfig.Provider, error) {
+func (r *KeyRotation) inject(
+	cfg coreconfig.Provider, bundle *secrets.Bundle, machineType machine.Type,
+) (coreconfig.Provider, error) {
 	if r == nil {
 		return cfg, nil
 	}
@@ -60,8 +62,9 @@ func (r *KeyRotation) inject(cfg coreconfig.Provider, bundle *secrets.Bundle, ma
 	}
 
 	switch r.Stage {
-	case ichorv1alpha1.KeyRotationStageAccepting, ichorv1alpha1.KeyRotationStageIssuing, ichorv1alpha1.KeyRotationStageReencrypting,
-		ichorv1alpha1.KeyRotationStageSettlingTokens, ichorv1alpha1.KeyRotationStageDropping, ichorv1alpha1.KeyRotationStageFinalizing:
+	case ichorv1alpha1.KeyRotationStageAccepting, ichorv1alpha1.KeyRotationStageIssuing,
+		ichorv1alpha1.KeyRotationStageReencrypting, ichorv1alpha1.KeyRotationStageSettlingTokens,
+		ichorv1alpha1.KeyRotationStageDropping, ichorv1alpha1.KeyRotationStageFinalizing:
 	default:
 		return nil, fmt.Errorf("render: key rotation stage %q is not one a configuration is rendered for", r.Stage)
 	}
@@ -87,6 +90,19 @@ func (r *KeyRotation) inject(cfg coreconfig.Provider, bundle *secrets.Bundle, ma
 	return cfg, nil
 }
 
+// injectRotations applies what the rotations in progress add to the base configuration: the accepted CAs of a
+// CA rotation and the new keys of a key rotation. Either may be nil.
+func injectRotations(
+	cfg coreconfig.Provider, accepted *acceptedCAs, keys *KeyRotation, bundle *secrets.Bundle, machineType machine.Type,
+) (coreconfig.Provider, error) {
+	cfg, err := injectAcceptedCAs(cfg, accepted)
+	if err != nil {
+		return nil, err
+	}
+
+	return keys.inject(cfg, bundle, machineType)
+}
+
 // requireDocument fails with the way out when cfg does not carry the multi-document form of a Kubernetes
 // setting. The legacy contract keeps one service-account key and one secretbox secret in single fields, which
 // cannot hold two keys.
@@ -99,7 +115,9 @@ func requireDocument(cfg coreconfig.Provider, kind string) error {
 		"a key rotation needs versionContract v1.14 or later", kind)
 }
 
-func (r *KeyRotation) injectServiceAccount(cfg coreconfig.Provider, bundle *secrets.Bundle) (coreconfig.Provider, error) {
+func (r *KeyRotation) injectServiceAccount(
+	cfg coreconfig.Provider, bundle *secrets.Bundle,
+) (coreconfig.Provider, error) {
 	if err := requireDocument(cfg, k8s.KubeServiceAccountConfig); err != nil {
 		return nil, err
 	}
@@ -162,12 +180,14 @@ func (r *KeyRotation) rotateProviders(obj map[string]any, old string) error {
 
 	at := slices.IndexFunc(providers, func(p any) bool { return secretboxKeyName(p, old) != "" })
 	if at < 0 {
-		return errors.New("render: the etcd encryption configuration has no secretbox provider holding the bundle's secretbox secret")
+		return errors.New("render: the etcd encryption configuration has no secretbox provider " +
+			"holding the bundle's secretbox secret")
 	}
 
 	name := secretboxKeyName(providers[at], old)
 
-	fresh := map[string]any{"secretbox": map[string]any{"keys": []any{map[string]any{"name": name, "secret": r.New.Secretbox}}}}
+	key := map[string]any{"name": name, "secret": r.New.Secretbox}
+	fresh := map[string]any{"secretbox": map[string]any{"keys": []any{key}}}
 
 	switch r.Stage {
 	case ichorv1alpha1.KeyRotationStageAccepting:

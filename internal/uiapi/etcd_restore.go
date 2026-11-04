@@ -253,6 +253,12 @@ func (s *Server) etcdRestoreBlocked(
 			return fmt.Sprintf("operation %q rotated the cluster's CAs after this snapshot was taken: the restored secrets bundle would "+
 				"not match the nodes' certificates, so choose a snapshot taken after the rotation", o.Name), nil
 		}
+
+		if o.Spec.ClusterRef.Name == cluster.Name && ichorv1alpha1.KeyRotationOutdatesSnapshot(o, taken) {
+			return fmt.Sprintf("operation %q rotated the cluster's service-account or secretbox key and had not finished when this snapshot "+
+				"was taken: the Secrets in it, the secrets bundle among them, are under keys the control planes no longer use, so choose a "+
+				"snapshot taken after the rotation finished", o.Name), nil
+		}
 	}
 
 	return "", nil

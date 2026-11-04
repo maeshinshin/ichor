@@ -104,6 +104,21 @@ rules:
   - talosmachines/approval
   verbs:
   - approve
+# A short-lived os:reader talosconfig for talosctl: the webhook checks the download verb; the CLI
+# reads the answer of its own request. Not in ichor-viewer.
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosclusters/talosconfig-reader
+  verbs:
+  - download
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - taloscredentialrequests
+  verbs:
+  - create
+  - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -254,6 +269,7 @@ rules:
   - ichor.maesh.dev
   resources:
   - talosclusters/credentials
+  - talosclusters/talosconfig-reader
   - talosmachines/etcd-snapshot
   - talosmachines/packet-capture
   - talosmachines/support-bundle
@@ -274,6 +290,7 @@ rules:
   - taloscredentialrequests
   verbs:
   - create
+  - get
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

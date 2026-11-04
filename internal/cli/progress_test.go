@@ -61,8 +61,8 @@ func TestProgress_PlainDeduplicatesTheDetailAndShowsElapsed(t *testing.T) {
 	clock.advance(67 * time.Second)
 	s.Done("serving Ichor's webhooks")
 
-	want := "… Ichor controller\n" +
-		"… Ichor controller — rolling out (0/1 available)\n" +
+	// No bare start line, and the 1/1 that the next update superseded is printed.
+	want := "… Ichor controller — rolling out (0/1 available)\n" +
 		"… Ichor controller — rolling out (1/1 available)\n" +
 		"… Ichor controller — rolling out (0/1 available)\n" +
 		"✓ Ichor controller — serving Ichor's webhooks (1m12s)\n"
@@ -182,26 +182,62 @@ func TestProgress_StepWriterTurnsHelperMessagesIntoDetail(t *testing.T) {
 
 	_, _ = fmt.Fprintf(s, "wait: pod ichor-system/ichor-controller-manager-abc Pending: 0/1 nodes are available: 1 node(s) had untolerated taint(s). no new claims, preemption: no\n")
 
-	got := buf.String()
-	for _, want := range []string{
-		"… Ichor controller — rolling out (0/1 available)\n",
-		"… Ichor controller — rolling out (0/1 available) · pod Pending: 0/1 nodes are available: 1 node(s) had untolerated taint(s).\n",
-	} {
-		if !strings.Contains(got, want) {
-			t.Errorf("output lacks %q:\n%s", want, got)
-		}
-	}
-
-	if n := strings.Count(got, "rolling out"); n != 2 {
-		t.Errorf("the repeated detail was printed %d times, want the detail once and once with the pod reason:\n%s", n, got)
-	}
-
 	// A pod reason goes stale: the next detail change no longer carries it.
 	clock.advance(progressNoteTTL + time.Second)
 	s.Update("rolling out (1/1 available)")
+	s.Done("ready")
 
-	if !strings.HasSuffix(buf.String(), "… Ichor controller — rolling out (1/1 available)\n") {
-		t.Errorf("a stale pod reason is still shown:\n%s", buf.String())
+	want := "… Ichor controller — rolling out (0/1 available)\n" +
+		"… Ichor controller — rolling out (0/1 available) · pod Pending: 0/1 nodes are available: 1 node(s) had untolerated taint(s).\n" +
+		"… Ichor controller — rolling out (1/1 available)\n" +
+		"✓ Ichor controller — ready (49s)\n"
+	if buf.String() != want {
+		t.Errorf("got:\n%s\nwant:\n%s", buf.String(), want)
+	}
+}
+
+// A detail that the end line repeats is not printed twice, and a step with no update at all gets
+// its bare start line next to the end line.
+func TestProgress_PlainDoesNotRepeatTheFinalDetailOrPrintABareStart(t *testing.T) {
+	p, buf, _ := newTestProgress(false, false, 80)
+
+	s := p.Start("Install Ichor")
+	s.Update("applying Ichor's install manifest")
+	s.Update("2 objects")
+	s.Done("2 objects")
+
+	w := p.Start("Ichor controller")
+	w.Update("not creating IchorInstallation")
+	w.Warn("not creating IchorInstallation")
+
+	p.Start("Secrets bundle").Done("~/s.yaml")
+
+	want := "… Install Ichor — applying Ichor's install manifest\n" +
+		"✓ Install Ichor — 2 objects\n" +
+		"! Ichor controller — not creating IchorInstallation\n" +
+		"… Secrets bundle\n" +
+		"✓ Secrets bundle — ~/s.yaml\n"
+	if buf.String() != want {
+		t.Errorf("got:\n%s\nwant:\n%s", buf.String(), want)
+	}
+}
+
+// A detail that stays for a while is printed while the step runs, not only at its end.
+func TestProgress_PlainPrintsALongWaitsDetailWhileItRuns(t *testing.T) {
+	p, buf, clock := newTestProgress(false, false, 80)
+
+	s := p.Start("Ichor controller")
+	s.Update("rolling out (0/1 available)")
+
+	if buf.Len() != 0 {
+		t.Fatalf("the newest detail is held back at first: %q", buf.String())
+	}
+
+	clock.advance(plainHold)
+	s.Update("rolling out (0/1 available)")
+
+	if want := "… Ichor controller — rolling out (0/1 available)\n"; buf.String() != want {
+		t.Errorf("got %q, want %q", buf.String(), want)
 	}
 }
 

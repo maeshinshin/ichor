@@ -206,6 +206,8 @@ func TestConditionMarkKnowsWhichWayAConditionReads(t *testing.T) {
 		{"CertificatesExpiring", condTrue, markWarning},
 		{"Transitioning", condTrue, markPending},
 		{"Transitioning", condFalse, markOK},
+		{"CNIHandover", condTrue, markOK},
+		{"CNIHandover", condFalse, markPending},
 		{"NetworkPoliciesApplied", condFalse, markWarning},
 	} {
 		if got := conditionMark(tc.typ, tc.status); got != tc.want {

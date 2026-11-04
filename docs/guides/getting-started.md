@@ -103,6 +103,31 @@ bin/ichor init \
 - `ichor init --help` lists the rest (pod and service subnets, disk selectors,
   discovery addresses).
 
+The same settings can come from a file instead of flags. `bin/ichor init -f
+init.yaml` reads an `InitConfig`; `bin/ichor init --print-config-template`
+prints a commented example. The command above is this file:
+
+```
+apiVersion: ichor.maesh.dev/v1alpha1
+kind: InitConfig
+cluster:
+  name: demo
+  preset: single
+  endpoint:
+    type: node
+    address: 192.168.1.50
+  registryMirrors:
+    ghcr.io: http://192.168.1.10:5000
+firstNode:
+  endpoint: 192.168.1.50:50000
+  installDisk: /dev/sda
+```
+
+A flag on the command line overrides the file. Paths in the file (the TLS
+certificate and key below) are relative to the file. The file never holds the
+key itself, only its path. The file keys are in
+[ADR 0117](../adr/0117-init-reads-a-structured-config-file.md).
+
 Init first writes the secrets bundle to `~/.ichor/clusters/demo/secrets.yaml`
 (mode 0600). It is the cluster's root of trust: back it up before anything
 else. It then applies the configuration to the node (which installs Talos and
@@ -121,6 +146,17 @@ it:
 ```
   --ui-url https://192.168.1.60 --admin-user admin \
   --ui-tls-cert ui.crt --ui-tls-key ui.key
+```
+
+In the file this is a `ui` block, next to `cluster` and `firstNode`:
+
+```
+ui:
+  url: https://192.168.1.60
+  adminUser: admin
+  tls:
+    certFile: ./ui.crt
+    keyFile: ./ui.key
 ```
 
 The URL is the issuer of every login. Making it reachable (a LoadBalancer, an

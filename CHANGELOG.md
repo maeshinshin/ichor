@@ -56,6 +56,12 @@ table accepts; a refusal passes only with the override verb
 - Hardening of Ichor itself and typed, off-by-default hardening options for
   the clusters it creates (ADR 0108).
 - Release artifacts are built with `make release VERSION=v0.1.0`.
+- `ichor init -f init.yaml` reads the init settings from an `InitConfig` file
+  instead of a long flag line (a flag overrides the file;
+  `--print-config-template` prints an example; ADR 0117). `ichor init` also
+  prints one line per created object unless `-o yaml|json` is given, waits
+  for ichor-ui to roll out before it returns, and no longer requires the
+  hidden `--cni` flag.
 
 ### Not part of Ichor
 

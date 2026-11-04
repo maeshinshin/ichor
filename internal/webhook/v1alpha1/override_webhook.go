@@ -125,7 +125,7 @@ func (h *OverrideHandler) Handle(ctx context.Context, req admission.Request) adm
 
 // checkFinalizerRemoval refuses removing an ichor.maesh.dev finalizer from a deleting object unless
 // the user holds override on it. Finalizers are the controller's: machine-removal on a
-// TalosMachine, etcd-restore and ca-rotation on a TalosOperation.
+// TalosMachine, etcd-restore, ca-rotation and key-rotation on a TalosOperation.
 func (h *OverrideHandler) checkFinalizerRemoval(ctx context.Context, req admission.Request) admission.Response {
 	if req.Operation != opUpdate {
 		return admission.Allowed("")

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useState } from 'preact/hooks'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -14,16 +14,14 @@ import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { CiliumUpgradeDialog } from '@/components/CiliumUpgradeDialog'
 import type { GetCiliumValuesResponse } from '@/gen/ichor/v1alpha1/cni_pb'
 import type { ObjectRef } from '@/gen/ichor/v1alpha1/common_pb'
-import { OperationKind } from '@/gen/ichor/v1alpha1/operation_pb'
 import { canApply, canEdit, diffLines, type DiffKind } from '@/lib/cilium'
-import { cniClient, operationClient } from '@/lib/connect'
+import { cniClient } from '@/lib/connect'
 import { detectedCni, isCniUnmanaged } from '@/lib/cni'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { notifyDone } from '@/lib/notify'
 import { useCluster } from '@/lib/useCluster'
 import { useLoad } from '@/lib/useLoad'
 import { useMyPermissions } from '@/lib/useMyPermissions'
-import type { TargetList } from '@/lib/upgradeTargets'
 import { t } from '@/lib/i18n'
 
 type Reviewed = { text: string; valid: boolean; errors: string[]; diff: string }
@@ -295,27 +293,20 @@ function UserValues({
   )
 }
 
-// CiliumUpgrade reads the Cilium patches the cluster can take, verified against Cilium's release signature
-// (docs/adr/0115, amendment 2026-11-03), and shows the upgrade when the embedded chart is newer or a patch is
-// on offer. Nothing is shown to a viewer who may not upgrade.
+// CiliumUpgrade shows the upgrade to the chart this Ichor embeds when it is newer than the release. Nothing is
+// shown to a viewer who may not upgrade, or when the cluster is up to date: a newer Cilium arrives with a newer
+// Ichor (docs/adr/0115, amendment 2026-11-04 (3)).
 function CiliumUpgrade({ cluster, chart, editable }: { cluster: ObjectRef; chart: string; editable: boolean }) {
-  const [list, setList] = useState<TargetList | null>(null)
-
-  useEffect(() => {
-    operationClient.listUpgradeTargets({ cluster, kind: OperationKind.CNI }).then(setList, () => setList(null))
-  }, [cluster.name, cluster.namespace])
-
-  const patches = list?.available ? list.patch : []
-  if (!editable || (chart === '' && patches.length === 0)) return null
+  if (!editable || chart === '') return null
 
   return (
     <Card id="upgrade" className="scroll-mt-section">
       <CardHeader>
         <CardTitle>{t('cilium.upgradeTitle')}</CardTitle>
-        <CardDescription>{chart !== '' ? t('cilium.upgradeAvailable', { version: chart }) : t('cilium.patchesAvailable')}</CardDescription>
+        <CardDescription>{t('cilium.upgradeAvailable', { version: chart })}</CardDescription>
       </CardHeader>
       <CardFooter>
-        <CiliumUpgradeDialog cluster={cluster} chart={chart} list={list} />
+        <CiliumUpgradeDialog cluster={cluster} chart={chart} />
       </CardFooter>
     </Card>
   )

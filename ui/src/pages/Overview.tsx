@@ -107,18 +107,17 @@ function Home({
   // Automatic patching: whether it is on, and the automatic operation that halted it (docs/adr/0116).
   const [autoPatch, setAutoPatch] = useState<{ enabled: boolean; halted: string }>({ enabled: false, halted: '' })
   // What Talos and Kubernetes can move to, for the patch hints; null when the list could not be read (docs/adr/0115).
-  const [candidates, setCandidates] = useState<{ talos: TargetList | null; kubernetes: TargetList | null; cilium: TargetList | null }>({
+  const [candidates, setCandidates] = useState<{ talos: TargetList | null; kubernetes: TargetList | null }>({
     talos: null,
     kubernetes: null,
-    cilium: null,
   })
   const [dialog, setDialog] = useState<'ca-rotation' | 'shutdown' | null>(null)
   const wasBusy = useRef(false)
 
   async function loadCandidates() {
     const read = (kind: OperationKind) => operationClient.listUpgradeTargets({ cluster: ref, kind }).catch(() => null)
-    const [talos, kubernetes, cilium] = await Promise.all([read(OperationKind.TALOS), read(OperationKind.KUBERNETES), read(OperationKind.CNI)])
-    setCandidates({ talos, kubernetes, cilium })
+    const [talos, kubernetes] = await Promise.all([read(OperationKind.TALOS), read(OperationKind.KUBERNETES)])
+    setCandidates({ talos, kubernetes })
   }
 
   async function reloadMachines() {
@@ -192,7 +191,6 @@ function Home({
   const patches = patchComponents({
     talos: candidates.talos,
     kubernetes: candidates.kubernetes,
-    cilium: candidates.cilium,
   })
   const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, opState: currentState, patches, release, autoPatchHalted: autoPatch.halted })
   const recent = recentOperations(ops, 5)
@@ -450,10 +448,7 @@ function Home({
                           target={cilium?.state === 'behind' ? cilium.target : undefined}
                         >
                           {cilium && cilium.state !== 'up-to-date' && <ToneBadge tone={stateTone(cilium.state)}>{t(stateKey(cilium.state))}</ToneBadge>}
-                          {hasPatch(candidates.cilium) && <Badge variant="secondary">{t('versions.patchAvailable')}</Badge>}
-                          {(cilium?.state === 'behind' || hasPatch(candidates.cilium)) && (
-                            <CiliumUpgradeDialog cluster={ref} chart={cilium?.state === 'behind' ? cilium.target : ''} list={candidates.cilium} size="sm" />
-                          )}
+                          {cilium?.state === 'behind' && <CiliumUpgradeDialog cluster={ref} chart={cilium.target} size="sm" />}
                         </VersionRow>
                       </>
                     )}

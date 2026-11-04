@@ -87,6 +87,37 @@ var _ = Describe("two TalosOperations on one cluster", func() {
 		Expect(fetchOperation(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
 	})
 
+	// A lease whose holder is gone or has stopped for good does not make anyone wait out its five minutes.
+	It("takes over a lease held by a deleted operation, and by one paused on a failed step", func() {
+		cluster := newOpTestCluster()
+		newOpTestMachine(cluster.Name, "controlplane", "gone-cp1")
+		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+
+		deleted := newOpTestOperation(cluster.Name)
+		Expect(lock.Acquire(ctx, operationLockIdentity(deleted))).To(Succeed())
+		Expect(k8sClient.Delete(ctx, deleted)).To(Succeed())
+
+		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
+		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+
+		next := newOpTestOperation(cluster.Name)
+		_, err := reconcileOperation(r, next)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.calls).To(HaveLen(1), "the lease of a deleted operation is not waited for")
+
+		failed := newOpTestOperation(cluster.Name)
+		failed.Status.Phase = ichorv1alpha1.TalosOperationPhasePaused
+		failed.Status.FailureReason = "boom"
+		Expect(k8sClient.Status().Update(ctx, failed)).To(Succeed())
+		Expect(lock.Release(ctx, operationLockIdentity(next))).To(Succeed())
+		Expect(lock.Acquire(ctx, operationLockIdentity(failed))).To(Succeed())
+
+		another := newOpTestOperation(cluster.Name)
+		_, err = reconcileOperation(r, another)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.calls).To(HaveLen(2), "an operation paused on a failed step does not hold the cluster")
+	})
+
 	// A lease the old build left under the shared "ichor-controller" identity is indistinguishable from
 	// a machine removal or join, which still use it: the operation waits, and the lease ages out within
 	// clusterlock.DefaultDuration because nothing renews it any more.

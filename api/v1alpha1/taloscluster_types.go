@@ -587,6 +587,18 @@ type TalosClusterCNIStatus struct {
 	// +optional
 	AppliedValuesHash string `json:"appliedValuesHash,omitempty"`
 
+	// jobFailures is how many Cilium Helm Jobs failed in a row for the values whose hash is
+	// jobFailuresHash, counted when the controller removes a failed Job to try again. Each failure
+	// doubles the wait before the next attempt (a minute, up to 30 minutes), so a Job that keeps failing
+	// does not hold the cluster operation lock in a near-continuous loop. Other values (another hash)
+	// start again at once, and a successful Job clears it. Written by the controller only.
+	// +optional
+	JobFailures int32 `json:"jobFailures,omitempty"`
+
+	// jobFailuresHash is the effective-values hash jobFailures counts for.
+	// +optional
+	JobFailuresHash string `json:"jobFailuresHash,omitempty"`
+
 	// detected is the CNI the cluster is observed to run, read-only display and the
 	// network-policy gate (ADR 0103). Written by the controller only.
 	// +kubebuilder:validation:Enum=cilium;flannel;calico;other;none

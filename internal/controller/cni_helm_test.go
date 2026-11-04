@@ -203,6 +203,33 @@ func TestCNIValuesHashFollowsTheNodeCount(t *testing.T) {
 	}
 }
 
+// A Helm Job that keeps failing with the same values waits twice as long after each failure, up to 30
+// minutes, so it does not hold the cluster operation lock in a near-continuous loop (ADR 0113 amendment
+// 2026-11-04).
+func TestCNIRetryBackoffDoublesUpToACap(t *testing.T) {
+	for _, tc := range []struct {
+		failures int32
+		want     time.Duration
+	}{
+		{0, time.Minute}, // no failure counted yet: the base interval
+		{1, time.Minute},
+		{2, 2 * time.Minute},
+		{3, 4 * time.Minute},
+		{5, 16 * time.Minute},
+		{6, 30 * time.Minute},
+		{7, 30 * time.Minute},
+		{1000, 30 * time.Minute}, // no overflow
+	} {
+		if got := cniRetryBackoff(time.Minute, tc.failures); got != tc.want {
+			t.Errorf("after %d failures: wait %s, want %s", tc.failures, got, tc.want)
+		}
+	}
+
+	if got := cniRetryBackoff(time.Nanosecond, 3); got != 4*time.Nanosecond {
+		t.Errorf("a test's tiny interval doubles too: got %s", got)
+	}
+}
+
 func TestClusterNodeCountCountsEveryNode(t *testing.T) {
 	notReady := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "a"}}
 	ready := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "b"}, Status: corev1.NodeStatus{

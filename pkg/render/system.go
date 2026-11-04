@@ -51,6 +51,10 @@ type SystemInputs struct {
 	// executor sets it; nil is the normal case.
 	CARotation *CARotation
 
+	// KeyRotation is a service-account and secretbox key rotation's current stage and new keys (ADR 0121).
+	// Only the rotation executor sets it; nil is the normal case.
+	KeyRotation *KeyRotation
+
 	// Staged pins the controller-manager, scheduler, kubelet and kube-proxy below
 	// spec.kubernetesVersion while a Kubernetes upgrade moves the control planes first
 	// (ADR 0087). Only the upgrade executor sets it; nil is the normal case.

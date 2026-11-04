@@ -26,6 +26,9 @@ import (
 // These tests pin adopt's human output on a writer that is no terminal, so as a pipe or
 // a CI log shows it, and that -o yaml keeps the "adopt:" lines.
 
+// doneInPrefix starts the line that ends a run.
+const doneInPrefix = "Done in "
+
 var errDialRefused = errors.New("connection refused")
 
 func humanAdoptDeps(t *testing.T, env *flowEnv) adoptDeps {
@@ -76,7 +79,7 @@ func TestRunAdopt_StepsOnAPlainWriter(t *testing.T) {
 		"… Cilium hand-over — waiting for the controller",
 		"✓ Cilium hand-over — Helm release owned by Ichor",
 		"✓ Release holds — ",
-		"Done in ",
+		doneInPrefix,
 		"! " + caRotationAdvice,
 		"Next",
 		"ichor cluster status " + f.env.cluster.Name + " -n " + testNamespace,
@@ -116,7 +119,7 @@ func TestRunAdopt_PlanOnlyInHumanOutput(t *testing.T) {
 		t.Fatalf("--plan wrote: %v", *env.writes)
 	}
 
-	for _, want := range []string{"plan only, nothing is written", "! machine \"" + flowCP + "\": Ichor-owned settings", "--plan: nothing was written", "Done in "} {
+	for _, want := range []string{"plan only, nothing is written", "! machine \"" + flowCP + "\": Ichor-owned settings", "--plan: nothing was written", doneInPrefix} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}

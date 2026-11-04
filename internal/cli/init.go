@@ -146,12 +146,22 @@ line overrides the file; relative paths in the file are relative to it.`,
 			Stderr:          cmd.ErrOrStderr(),
 			Stdin:           cmd.InOrStdin(),
 			AssumeYes:       assumeYes,
-			Output:          outputFormat,
+			Output:          initOutput(cmd),
 			WebhookWait:     initWaitTimeout,
 		}
 
 		return runInit(cmd.Context(), initOpts, deps)
 	},
+}
+
+// initOutput is the -o format when it was given, and "" (one line per created object) when it was
+// left at its default: the full objects are about two thousand lines of YAML.
+func initOutput(cmd *cobra.Command) string {
+	if cmd.Flags().Changed("output") {
+		return outputFormat
+	}
+
+	return ""
 }
 
 // identityOverMaintenance reads a node's hardware identity the same way

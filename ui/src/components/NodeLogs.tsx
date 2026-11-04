@@ -21,6 +21,7 @@ import { describeError, type ErrorShape } from '@/lib/errors'
 import { formatTimestamp } from '@/lib/format'
 import { createBatcher, type Entry, LogBuffer, truncateMessage } from '@/lib/logBuffer'
 import { streamWithResume } from '@/lib/resumableStream'
+import { refreshSession } from '@/lib/session'
 import { t, type Key } from '@/lib/i18n'
 
 // The viewer keeps the newest MAX_LINES lines, appends them in
@@ -115,7 +116,7 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
         )
       }
       try {
-        for await (const line of streamWithResume(call, (l) => l.resumeToken, '', { signal: controller.signal })) {
+        for await (const line of streamWithResume(call, (l) => l.resumeToken, '', { signal: controller.signal, reauth: async () => (await refreshSession()) === 'ok' })) {
           if (cancelled) return
           setReconnecting(false)
           batcher.push(line)

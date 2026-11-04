@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { base64url, buildAuthUrl, finishLogin, idTokenClaims, pkceChallenge, tokenUsable } from './oidc.ts'
+import { base64url, buildAuthUrl, clearToken, exchangeCode, finishLogin, idTokenClaims, pkceChallenge, storedToken, tokenUsable } from './oidc.ts'
 
 function jwt(claims: object): string {
   return `h.${base64url(new TextEncoder().encode(JSON.stringify(claims)))}.s`
@@ -88,4 +88,55 @@ test('an expired, missing or malformed token is not usable', () => {
   assert.equal(tokenUsable(null, now), false)
   assert.equal(tokenUsable('garbage', now), false)
   assert.equal(idTokenClaims('garbage'), null)
+})
+
+const buildArgs = { clientId: 'ichor-ui', redirectUri: 'https://ui.example/auth/callback', state: 's', nonce: 'n', challenge: 'c' }
+
+// The ichor issuer only hands out a refresh token for offline_access.
+test('the ichor sign-in asks for offline_access, the external IdP request does not', () => {
+  const scope = (offline?: boolean) => new URL(buildAuthUrl('https://ui.example/oidc/authorize', { ...buildArgs, offline })).searchParams.get('scope')!.split(' ')
+  assert.ok(scope(true).includes('offline_access'))
+  assert.ok(scope(true).includes('openid'))
+  assert.equal(scope(false).includes('offline_access'), false)
+  assert.equal(scope().includes('offline_access'), false)
+})
+
+const ichorCfg = { id: 'ichor', issuer: 'https://ui.example', clientId: 'ichor-ui' }
+const discovered = { authorization_endpoint: 'https://ui.example/oidc/authorize', token_endpoint: 'https://ui.example/oidc/token' }
+
+function stubToken(body: unknown) {
+  const b = stubBrowser('')
+  Object.defineProperty(globalThis, 'fetch', { value: async () => new Response(JSON.stringify(body), { status: 200 }), configurable: true, writable: true })
+  return b
+}
+
+test('the code exchange keeps the refresh token with its token endpoint and client, for the ichor provider only', async () => {
+  const b = stubToken({ id_token: jwt({ nonce: 'n', exp: 9999999999 }), refresh_token: 'r1' })
+  try {
+    await exchangeCode(discovered, ichorCfg, 'c', 'v', 'n')
+    assert.deepEqual(JSON.parse(b.store.get('ichor.refresh')!), { token: 'r1', endpoint: discovered.token_endpoint, clientId: 'ichor-ui' })
+    assert.ok(storedToken())
+    clearToken()
+    assert.equal(b.store.size, 0)
+  } finally {
+    b.cleanup()
+  }
+  const x = stubToken({ id_token: jwt({ nonce: 'n', exp: 9999999999 }), refresh_token: 'r1' })
+  try {
+    await exchangeCode(discovered, { id: 'oidc', issuer: 'https://idp.example', clientId: 'ichor' }, 'c', 'v', 'n')
+    assert.equal(x.store.has('ichor.refresh'), false)
+  } finally {
+    x.cleanup()
+  }
+})
+
+test('a new sign-in drops the refresh token of the one before it', async () => {
+  const b = stubToken({ id_token: jwt({ nonce: 'n', exp: 9999999999 }) })
+  b.store.set('ichor.refresh', JSON.stringify({ token: 'old', endpoint: 'e', clientId: 'c' }))
+  try {
+    await exchangeCode(discovered, ichorCfg, 'c', 'v', 'n')
+    assert.equal(b.store.has('ichor.refresh'), false)
+  } finally {
+    b.cleanup()
+  }
 })

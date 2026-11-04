@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -263,7 +264,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	if len(toAdvance) == 0 {
-		if err := lock.Release(ctx, controllerIdentity); err != nil {
+		if err := lock.Release(ctx, operationLockIdentity(&op)); err != nil {
 			return ctrl.Result{}, err
 		}
 
@@ -274,7 +275,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// The long-operation half of "the lock": renewed once per batch, the
 	// same way removal.go's renewWhile already renews repeatedly for a
 	// drain, well inside clusterlock.DefaultDuration's five minutes.
-	if err := lock.Renew(ctx, controllerIdentity); err != nil {
+	if err := lock.Renew(ctx, operationLockIdentity(&op)); err != nil {
 		return renewRefusal(ctx, err)
 	}
 
@@ -347,10 +348,31 @@ func (r *TalosOperationReconciler) lockUnavailable(ctx context.Context, op *icho
 
 	if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {
 		return ctrl.Result{RequeueAfter: operationRequeueInterval}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused,
-			reasonOperationLockHeld, held.Error())
+			reasonOperationLockHeld, lockHeldMessage(held))
 	}
 
 	return ctrl.Result{}, err
+}
+
+// operationLockIdentityPrefix starts the cluster lock identity of every TalosOperation.
+const operationLockIdentityPrefix = controllerIdentity + "/op/"
+
+// operationLockIdentity is the identity op takes the cluster lock under. It is derived from the
+// operation's namespace and name, so it is the same across reconciles and controller restarts (the
+// holder re-enters its own lock, which resumption needs) and different for every other operation,
+// which therefore waits (clusterlock.Acquire lets only the same identity back in). The UID is not
+// used: an etcd restore rolls the API back, and the restored operation must find its own lock.
+func operationLockIdentity(op *ichorv1alpha1.TalosOperation) string {
+	return operationLockIdentityPrefix + op.Namespace + "/" + op.Name
+}
+
+// lockHeldMessage words a refused Acquire; a lock held by a TalosOperation names that operation.
+func lockHeldMessage(held *clusterlock.HeldError) string {
+	if nn, ok := strings.CutPrefix(held.Holder, operationLockIdentityPrefix); ok {
+		return fmt.Sprintf("the cluster lock is held by TalosOperation %q; this operation starts when it finishes", nn)
+	}
+
+	return held.Error()
 }
 
 // renewRefusal turns the failure of a lock.Renew into a reconcile result. Losing the lock to
@@ -735,7 +757,7 @@ func (r *TalosOperationReconciler) acquireDisruptiveLock(
 	}
 
 	lock := clusterlock.New(r.Client, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0).WithReader(r.APIReader)
-	if err := lock.Acquire(ctx, controllerIdentity); err != nil {
+	if err := lock.Acquire(ctx, operationLockIdentity(op)); err != nil {
 		return nil, err
 	}
 

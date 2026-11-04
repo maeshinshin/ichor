@@ -19,10 +19,13 @@ package controller
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/cosi-project/runtime/pkg/safe"
 	"github.com/cosi-project/runtime/pkg/state"
 	runtimeres "github.com/siderolabs/talos/pkg/machinery/resources/runtime"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/secureboot"
@@ -62,6 +65,35 @@ func ReadSecurityState(ctx context.Context, cosi state.State) (SecurityState, er
 	}
 
 	return out, nil
+}
+
+// recordSecurity reads the node's boot security into m.Status.Security and sets the SecureBoot and
+// KernelLockdown conditions for the options cluster sets (ADR 0123). It mutates m only; the caller's
+// status write persists it. A node that cannot be asked keeps its last recorded state.
+func recordSecurity(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, talos TalosClient,
+) {
+	callCtx, cancel := context.WithTimeout(ctx, talosCallTimeout)
+	defer cancel()
+
+	if ss, err := talos.SecurityState(callCtx); err == nil {
+		m.Status.Security = ss.status()
+	}
+
+	want := secureboot.MachineConditions(cluster.Spec.Security, m.Status.Security)
+
+	for _, typ := range []string{ichorv1alpha1.ConditionSecureBoot, ichorv1alpha1.ConditionKernelLockdown} {
+		i := slices.IndexFunc(want, func(c metav1.Condition) bool { return c.Type == typ })
+		if i < 0 {
+			apimeta.RemoveStatusCondition(&m.Status.Conditions, typ)
+
+			continue
+		}
+
+		c := want[i]
+		c.ObservedGeneration = m.Generation
+		apimeta.SetStatusCondition(&m.Status.Conditions, c)
+	}
 }
 
 // status is the form kept in TalosMachine.status.security.

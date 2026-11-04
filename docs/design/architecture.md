@@ -1044,7 +1044,7 @@ regularly.
 
 Ichor's own Talos client certificates are short-lived and renewed
 automatically; an expired one would lock Ichor out with no way back. CA
-rotation (Talos and Kubernetes; the etcd and aggregator CAs, the service-account key and the secretbox key are not rotated) follows the documented Talos procedure and
+rotation (Talos and Kubernetes by default, the etcd and aggregator CAs on request; the service-account key and the secretbox key are not rotated) follows the documented Talos procedure and
 runs through the same machinery as upgrades, except that it waits, after every
 node accepts the new CAs, until the operator has credentials that work with
 both CAs; otherwise the first stage that changes what the API

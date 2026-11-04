@@ -68,7 +68,7 @@ func (n *rotNode) pki() (EtcdPKI, error) {
 		return EtcdPKI{}, err
 	}
 
-	pair, err := sx509.NewKeyPair(authority, sx509.CommonName("etcd"), sx509.ECDSA(true))
+	pair, err := sx509.NewKeyPair(authority, sx509.CommonName(serviceEtcd), sx509.ECDSA(true))
 	if err != nil {
 		return EtcdPKI{}, err
 	}
@@ -78,7 +78,9 @@ func (n *rotNode) pki() (EtcdPKI, error) {
 
 func (c *rotClient) EtcdPKI(context.Context) (EtcdPKI, error) {
 	if c.w.pkiStale[c.name] {
-		return EtcdPKI{CAs: []string{"the-previous-stage"}, ServerSignedBy: "the-previous-stage"}, nil
+		const previous = "the-previous-stage"
+
+		return EtcdPKI{CAs: []string{previous}, ServerSignedBy: previous}, nil
 	}
 
 	return c.node.pki()
@@ -97,7 +99,7 @@ func (c *rotClient) ServiceState(context.Context, string) (string, bool, bool, e
 }
 
 func (c *rotClient) ServiceRestart(_ context.Context, id string) error {
-	Expect(id).To(Equal("etcd"), "a CA rotation restarts etcd and nothing else")
+	Expect(id).To(Equal(serviceEtcd), "a CA rotation restarts etcd and nothing else")
 
 	pki, err := c.node.pki()
 	Expect(err).NotTo(HaveOccurred())
@@ -265,7 +267,7 @@ var _ = Describe("TalosOperation ca-rotation of the etcd CA and the aggregator C
 
 		f.world.etcdUnhealthy = map[string]bool{}
 
-		op, _ = f.runUntil(op, completed)
+		f.runUntil(op, completed)
 		Expect(f.world.restarts).To(HaveLen(9))
 	})
 

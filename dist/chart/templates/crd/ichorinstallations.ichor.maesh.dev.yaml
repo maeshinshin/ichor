@@ -111,13 +111,49 @@ spec:
                     - helm
                     type: string
                 type: object
+              installerDigest:
+                description: |-
+                  installerDigest pins the installer image to a digest ("sha256:" and 64 hex digits). Unset, the
+                  controller resolves the tag <version> in installerRepository itself when it creates the Job and
+                  records the digest in status.installerImage. Set, it never resolves the tag, so the registry
+                  is only asked for the signature (none when installerSignature says skip). Change it together with
+                  version (ADR 0122).
+                pattern: ^sha256:[a-f0-9]{64}$
+                type: string
               installerRepository:
                 default: ghcr.io/maeshinshin/ichor-installer
                 description: |-
                   installerRepository is the image repository of the installer image; the Job runs
-                  <installerRepository>:<version>. Point it at a mirror or private registry if you need to.
+                  <installerRepository>@<digest>, where the digest is installerDigest or the one <version> resolves
+                  to in that repository when the Job is created (ADR 0122). Point it at a mirror or private registry
+                  if you need to; a mirror has to carry the image's signature too (the OCI referrers), or
+                  installerSignature has to say skip.
                 minLength: 1
                 type: string
+              installerSignature:
+                description: |-
+                  installerSignature says how the signature of the installer image is checked before the Job runs.
+                  Unset means required (ADR 0122).
+                properties:
+                  mode:
+                    default: required
+                    description: mode is required (the default) or skip.
+                    enum:
+                    - required
+                    - skip
+                    type: string
+                  reason:
+                    description: reason is why the signature is not checked; required
+                      with skip, and recorded with the digest.
+                    maxLength: 512
+                    type: string
+                required:
+                - mode
+                type: object
+                x-kubernetes-validations:
+                - message: reason is required when mode is skip
+                  rule: self.mode != 'skip' || (has(self.reason) && size(self.reason)
+                    > 0)
               reclaim:
                 description: |-
                   reclaim is deprecated and ignored (ADR 0107): "Reset and add" has no installation switch;
@@ -425,6 +461,44 @@ spec:
                   itself: the single source of "what is installed", which is also what the CLI compares
                   itself against (ADR 0059).
                 type: string
+              installerImage:
+                description: |-
+                  installerImage is the installer image the last Ichor upgrade ran, by digest, and whether its
+                  signature was checked (ADR 0122).
+                properties:
+                  digest:
+                    description: digest is the image digest the Job runs, "sha256:...".
+                    type: string
+                  reason:
+                    description: reason is the reason given for skipping the check;
+                      empty when Verified.
+                    type: string
+                  repository:
+                    description: repository is the image repository the Job pulled
+                      from.
+                    type: string
+                  resolvedAt:
+                    description: resolvedAt is when the controller resolved and checked
+                      the image.
+                    format: date-time
+                    type: string
+                  signer:
+                    description: signer is the identity the signature matched (the
+                      certificate subject pattern); empty when Skipped.
+                    type: string
+                  verification:
+                    description: |-
+                      verification is Verified when a cosign signature of the release workflow for version matched the
+                      digest, Skipped when spec.installerSignature said skip.
+                    enum:
+                    - Verified
+                    - Skipped
+                    type: string
+                  version:
+                    description: version is the Ichor version the image was resolved
+                      for.
+                    type: string
+                type: object
               latestRelease:
                 description: |-
                   latestRelease is the newest final release the controller found in the chart repository

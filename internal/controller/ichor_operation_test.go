@@ -71,6 +71,32 @@ var _ = Describe("TalosOperationReconciler, kind ichor", func() {
 		Expect(got.Status.Machines).To(BeEmpty())
 	})
 
+	It("pauses with the installer image's reason and a failureReason, so it is not retried by itself (ADR 0122)", func() {
+		op := newIchorOp(newOpTestCluster().Name)
+
+		refusal := &installerImageError{reason: reasonInstallerImageUnverified, err: errors.New("has no cosign signature")}
+		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: testIchorNamespace, Advance: func(
+			context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *ichorv1alpha1.TalosOperation,
+		) (bool, error) {
+			return false, refusal
+		}}
+
+		_, err := reconcileOperation(r, op)
+		Expect(err).NotTo(HaveOccurred())
+
+		got := fetchOperation(op)
+		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(got.Status.FailureReason).To(ContainSubstring("has no cosign signature"))
+		Expect(got.Status.Conditions).To(ContainElement(And(
+			HaveField("Type", conditionOperationPaused), HaveField("Reason", reasonInstallerImageUnverified))))
+
+		// Reconciled again without a retry request, it stays paused and runs nothing.
+		refusal.err = errors.New("must not run")
+		_, err = reconcileOperation(r, op)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fetchOperation(op).Status.FailureReason).To(ContainSubstring("has no cosign signature"))
+	})
+
 	It("completes with no machines once the executor is done", func() {
 		op := newIchorOp(newOpTestCluster().Name)
 		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: func(

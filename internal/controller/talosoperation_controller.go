@@ -522,7 +522,7 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 		op.Status.Message = message
 	}
 
-	if reason == reasonOperationStepFailed {
+	if isStepFailure(reason) {
 		op.Status.FailureReason = message
 	} else if phase != ichorv1alpha1.TalosOperationPhasePaused {
 		op.Status.FailureReason = ""
@@ -548,13 +548,20 @@ func (r *TalosOperationReconciler) setPhase(ctx context.Context, op *ichorv1alph
 	return nil
 }
 
+// isStepFailure is true for the pause reasons that mean "a step failed, never retry automatically": they set
+// status.failureReason, which the CLI, the UI and the retry request (ADR 0095) key on. The installer image
+// refusals of ADR 0122 are failures of the Ichor upgrade's first step.
+func isStepFailure(reason string) bool {
+	return reason == reasonOperationStepFailed || reason == reasonInstallerImageUnresolved || reason == reasonInstallerImageUnverified
+}
+
 // phaseEvent records the Event for a phase transition: a pause (once per reason), a resume out of a
 // pause, and completion. The steady InProgress/Advancing reconcile records nothing.
 func (r *TalosOperationReconciler) phaseEvent(op *ichorv1alpha1.TalosOperation, previous, previousPauseReason, phase, reason, message string) {
 	switch {
 	case phase == ichorv1alpha1.TalosOperationPhasePaused && (previous != phase || previousPauseReason != reason):
 		eventType := corev1.EventTypeNormal
-		if reason == reasonOperationStepFailed {
+		if isStepFailure(reason) {
 			eventType = corev1.EventTypeWarning
 		}
 

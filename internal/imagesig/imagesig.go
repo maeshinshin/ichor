@@ -204,6 +204,11 @@ func ResolveDigest(ctx context.Context, repository, tag string) (string, error) 
 	return resolveDigest(ctx, repository, tag, false)
 }
 
+// Resolve is ResolveDigest for the registry this verifier reads (tests point it at an http registry).
+func (s *Sigstore) Resolve(ctx context.Context, repository, tag string) (string, error) {
+	return resolveDigest(ctx, repository, tag, s.insecure)
+}
+
 func resolveDigest(ctx context.Context, repository, tag string, insecure bool) (string, error) {
 	var opts []name.Option
 	if insecure {

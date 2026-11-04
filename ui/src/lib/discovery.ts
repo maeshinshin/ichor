@@ -4,14 +4,19 @@ export type AddressCheck = 'ok' | 'empty' | 'invalid' | 'duplicate'
 
 const OCTET = /^(0|[1-9]\d{0,2})$/
 
+// ipv4Octets is the four octets of a plain dotted IPv4 address (no leading zeros), or null.
+function ipv4Octets(a: string): number[] | null {
+  const parts = a.split('.')
+  return parts.length === 4 && parts.every((p) => OCTET.test(p) && Number(p) <= 255) ? parts.map(Number) : null
+}
+
 // checkDiscoveryAddress is the same test the backend makes: one plain IPv4
 // address (no range, no IPv6, no leading zeros), not already listed. The
 // backend stays the judge; this only saves a round trip.
 export function checkDiscoveryAddress(input: string, existing: readonly string[]): AddressCheck {
   const a = input.trim()
   if (a === '') return 'empty'
-  const parts = a.split('.')
-  if (parts.length !== 4 || !parts.every((p) => OCTET.test(p) && Number(p) <= 255)) return 'invalid'
+  if (!ipv4Octets(a)) return 'invalid'
   return existing.includes(a) ? 'duplicate' : 'ok'
 }
 
@@ -24,11 +29,11 @@ export const MAX_DISCOVERY_CIDRS = 4
 export function maskCidr(input: string): string | null {
   const [ip, bits, ...rest] = input.trim().split('/')
   if (bits === undefined || rest.length > 0 || !/^(0|[1-9]\d?)$/.test(bits) || Number(bits) > 32) return null
-  const parts = ip.split('.')
-  if (parts.length !== 4 || !parts.every((p) => OCTET.test(p) && Number(p) <= 255)) return null
+  const octets = ipv4Octets(ip)
+  if (!octets) return null
   const n = Number(bits)
   const mask = n === 0 ? 0 : (0xffffffff << (32 - n)) >>> 0
-  const v = (parts.reduce((acc, p) => acc * 256 + Number(p), 0) & mask) >>> 0
+  const v = (octets.reduce((acc, o) => acc * 256 + o, 0) & mask) >>> 0
   return `${v >>> 24}.${(v >>> 16) & 255}.${(v >>> 8) & 255}.${v & 255}/${n}`
 }
 

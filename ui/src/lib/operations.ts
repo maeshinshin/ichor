@@ -102,23 +102,17 @@ export function kindNeedsTypedName(kind: OpKind): boolean {
   return kind === 'shutdown' || kind === 'ca-rotation' || kind === 'config'
 }
 
+// stageProgress is where a multi-stage operation is: the stage's name and a 1-based position among the
+// stages; null for an empty stage (nothing recorded yet) or one this UI does not know.
+export function stageProgress<S extends string>(stages: readonly S[], stage: string): { name: S; index: number; total: number } | null {
+  const i = (stages as readonly string[]).indexOf(stage)
+  return i < 0 ? null : { name: stages[i], index: i + 1, total: stages.length }
+}
+
 // The stages status.caRotation.stage goes through, in order (ADR 0063).
 const caStages = ['Accepting', 'AwaitingCredentials', 'Issuing', 'Dropping', 'Finalizing', 'Done'] as const
-
-// caStageProgress is where a rotation is, as a 1-based position; null before
-// the new CAs are saved (empty stage) or for a stage this UI does not know.
-export function caStageProgress(stage: string): { index: number; total: number } | null {
-  const i = (caStages as readonly string[]).indexOf(stage)
-  return i < 0 ? null : { index: i + 1, total: caStages.length }
-}
+export const caStageProgress = (stage: string) => stageProgress(caStages, stage)
 
 // The stages status.kubernetes.stage goes through, in order (ADR 0087).
 export const kubernetesStages = ['APIServers', 'ControlPlaneComponents', 'KubeProxy', 'Kubelets'] as const
-export type KubernetesStage = (typeof kubernetesStages)[number]
-
-// kubernetesStageProgress is where a Kubernetes upgrade is: its stage's name and a
-// 1-based position among the four stages. Null before the first stage is recorded or for an unknown one.
-export function kubernetesStageProgress(stage: string): { name: KubernetesStage; index: number; total: number } | null {
-  const i = (kubernetesStages as readonly string[]).indexOf(stage)
-  return i < 0 ? null : { name: kubernetesStages[i], index: i + 1, total: kubernetesStages.length }
-}
+export const kubernetesStageProgress = (stage: string) => stageProgress(kubernetesStages, stage)

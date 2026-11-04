@@ -8,6 +8,9 @@ interface FakeLine {
   resumeToken: string
 }
 
+// rejecting is a stream whose first read fails with err.
+const rejecting = (err: Error): AsyncIterable<FakeLine> => ({ [Symbol.asyncIterator]: () => ({ next: () => Promise.reject(err) }) })
+
 test('reconnects from the latest resume token after CodeUnavailable', async () => {
   const tokensRequested: string[] = []
 
@@ -34,15 +37,7 @@ test('reconnects from the latest resume token after CodeUnavailable', async () =
 })
 
 test('does not reconnect on an error other than CodeUnavailable', async () => {
-  function fails(): AsyncIterable<FakeLine> {
-    return {
-      [Symbol.asyncIterator]() {
-        return { next: () => Promise.reject(new ConnectError('no permission', Code.PermissionDenied)) }
-      },
-    }
-  }
-
-  const iterator = streamWithResume(fails, (l) => l.resumeToken)
+  const iterator = streamWithResume(() => rejecting(new ConnectError('no permission', Code.PermissionDenied)), (l) => l.resumeToken)
   await assert.rejects(() => iterator.next(), /no permission/)
 })
 
@@ -67,11 +62,7 @@ test('backs off between reconnects and gives up after repeated failures with no 
   const delays: number[] = []
   function alwaysUnavailable(): AsyncIterable<FakeLine> {
     calls++
-    return {
-      [Symbol.asyncIterator]() {
-        return { next: () => Promise.reject(new ConnectError('node unreachable', Code.Unavailable)) }
-      },
-    }
+    return rejecting(new ConnectError('node unreachable', Code.Unavailable))
   }
 
   const iterator = streamWithResume(alwaysUnavailable, (l) => l.resumeToken, '', {
@@ -107,11 +98,7 @@ test('stops without reconnecting once aborted', async () => {
   let calls = 0
   function unavailable(): AsyncIterable<FakeLine> {
     calls++
-    return {
-      [Symbol.asyncIterator]() {
-        return { next: () => Promise.reject(new ConnectError('draining', Code.Unavailable)) }
-      },
-    }
+    return rejecting(new ConnectError('draining', Code.Unavailable))
   }
   const iterator = streamWithResume(unavailable, (l) => l.resumeToken, '', {
     signal: controller.signal,

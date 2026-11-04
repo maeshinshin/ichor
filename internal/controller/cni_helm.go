@@ -327,7 +327,7 @@ func newCNIHelmJob(
 		map[string]string{CNIValuesHashAnnotation: valuesHash},
 		corev1.Container{
 			Name:  "cni",
-			Image: inst.Spec.InstallerRepository + ":" + inst.Spec.Version,
+			Image: cniJobImage(inst),
 			Args:  args,
 			Env: []corev1.EnvVar{
 				{Name: "KUBERNETES_SERVICE_HOST", Value: kubePrismHost},
@@ -348,6 +348,20 @@ func newCNIHelmJob(
 	pod.Volumes = []corev1.Volume{{Name: "tmp", EmptyDir: &corev1.EmptyDirVolumeSource{}}}
 
 	return job
+}
+
+// cniJobImage is the installer image the Cilium Helm Job runs: the digest the last Ichor upgrade pinned (and
+// verified, or recorded as skipped) when that record is for the installed version and repository, so this Job
+// runs the very image the installer did and not whatever the tag points at now. Without
+// such a record (a fresh install, a Helm-only install, a hand-edited version) it is the tag, as the apiserver's
+// Job-image policy also allows.
+func cniJobImage(inst *ichorv1alpha1.IchorInstallation) string {
+	if rec := inst.Status.InstallerImage; rec != nil && rec.Digest != "" &&
+		rec.Version == inst.Spec.Version && rec.Repository == inst.Spec.InstallerRepository {
+		return inst.Spec.InstallerRepository + "@" + rec.Digest
+	}
+
+	return inst.Spec.InstallerRepository + ":" + inst.Spec.Version
 }
 
 // defaultInstallerRepository is the API default of IchorInstallation.spec.installerRepository.

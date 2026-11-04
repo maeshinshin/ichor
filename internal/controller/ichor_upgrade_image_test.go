@@ -43,7 +43,6 @@ const (
 	testGHCR          = "ghcr.io"
 
 	keyEndpointSelector = "endpointSelector"
-	keyMatchLabels      = "matchLabels"
 )
 
 // testInstallerDigest is the digest the fake registry resolves every installer tag to.

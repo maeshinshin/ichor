@@ -2,7 +2,7 @@
 // /login?ticket=..., this page posts {ticket, username, password} to /oidc/login and follows the
 // redirect_uri it answers. Pure helpers only; the password never reaches a log, a URL or storage.
 import type { Key } from './i18n.ts'
-import { buildAuthUrl, discover, exchangeCode, pkceChallenge, randomString, redirectUriFor, type AuthProvider, type Discovery } from './oidc.ts'
+import { buildAuthUrl, discover, exchangeCode, idTokenClaims, pkceChallenge, randomString, redirectUriFor, storedToken, type AuthConfig, type AuthProvider, type Discovery } from './oidc.ts'
 
 export function ticketFromSearch(search: string): string {
   return new URLSearchParams(search).get('ticket') ?? ''
@@ -90,4 +90,21 @@ export async function passwordSignIn(cfg: AuthProvider, f: { username: string; p
   } catch {
     throw new LoginError('login.unavailable')
   }
+}
+
+// signInAgain signs the tab in again after its own password change:
+// the change moved the user's notBefore, which ended this tab's ID token, so the new password
+// goes through the normal flow above as the user the old token names. Nothing new is minted
+// server-side and the password stays in memory for this call. Any failure is a LoginError, and
+// the caller then falls back to signing out.
+export async function signInAgain(password: string): Promise<void> {
+  const sub = idTokenClaims(storedToken() ?? '')?.sub
+  let cfg: AuthProvider | undefined
+  try {
+    cfg = ((await (await fetch('/auth/config')).json()) as AuthConfig).providers?.find((p) => p.id === 'ichor')
+  } catch {
+    throw new LoginError('login.unavailable')
+  }
+  if (!cfg || typeof sub !== 'string' || !sub) throw new LoginError('login.unavailable')
+  await passwordSignIn(cfg, { username: sub, password })
 }

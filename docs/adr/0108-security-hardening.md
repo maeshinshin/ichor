@@ -410,6 +410,10 @@ Open for the user (ADR 0108 decision): whether the Job may keep a Secret mirror 
 
 GetEffectiveConfig renders in ichor-ui, and with `spec.authentication.ichor.enabled` the render reads ConfigMap `ichor-oidc-trust` (ADR 0094). The ServiceAccount had no ConfigMap rule, so the node page's Effective config tab failed with `forbidden`. Nothing stored by the controller can stand in for it: the tab renders from the CRs and the bundle on every call, there is no stored render. Decided: `get` on `configmaps` with `resourceNames: ichor-oidc-trust`, in the namespaced Role in `ichor-system`, never list or watch. The rule lives in `internal/uiapi/rbac_markers.go`, and `config/rbac/ichor-ui/role.yaml` and the chart's `ichor-ui-secrets-role.yaml` carry it. The envtest spec "lets GetEffectiveConfig read the trust ConfigMap" in `internal/uiapi/rbac_enforced_test.go` runs the handler with the generated role.
 
+## Amendment 2026-11-04: the UI no longer signs out after its own password change
+
+Token revocation (F6) is unchanged: a password change still moves `notBefore` and drops every refresh family. The line "The UI signs out after its own password change" is replaced by ADR 0094's amendment of the same date: the tab signs in again with the new password through the normal login, so only the user's other sessions end.
+
 ## Follow-ups
 
 Everything above is built except these five items, which were deferred on purpose. None is in progress; each needs its own decision before work starts.

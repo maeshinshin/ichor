@@ -151,8 +151,45 @@ func (r *TalosOperationReconciler) advanceIchor(
 			reasonOperationComplete, what+" completed")
 	}
 
+	waiting := what + " is running"
+	if !isCNIUpgrade(op) {
+		if waiting, err = ichorWaitingFor(ctx, r.Client, r.APIReader, r.ControllerNamespace, op); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	return ctrl.Result{RequeueAfter: operationRequeueInterval}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhaseInProgress,
-		reasonOperationAdvancing, what+" is running")
+		reasonOperationAdvancing, waiting)
+}
+
+// ichorWaitingFor says what an ichor operation that is not done is waiting for, for its status: the
+// installer Job while it runs, then the first Deployment still rolling out. The executor reports only
+// done or not, so the state is read again here.
+func ichorWaitingFor(
+	ctx context.Context, c client.Client, uncached client.Reader, ns string, op *ichorv1alpha1.TalosOperation,
+) (string, error) {
+	var job batchv1.Job
+
+	switch err := c.Get(ctx, types.NamespacedName{Namespace: ns, Name: ichorInstallerJobName(op)}, &job); {
+	case apierrors.IsNotFound(err): // not created yet, or long gone: the Deployments are what is left
+	case err != nil:
+		return "", err
+	default:
+		if done, _ := jobOutcome(&job); !done {
+			return "the installer Job is running", nil
+		}
+	}
+
+	waiting, err := ichorRolloutWaiting(ctx, uncached, ns)
+	if err != nil {
+		return "", err
+	}
+
+	if waiting != "" {
+		return waiting, nil
+	}
+
+	return "finishing the upgrade", nil
 }
 
 func advanceInstallerJob(
@@ -214,36 +251,59 @@ func installerJobSettled(ctx context.Context, uncached client.Reader, ns string,
 }
 
 // ichorRolledOut reports whether the controller's and ichor-ui's Deployments have finished
-// rolling out. Both are found by the labels every install path sets (kustomize prefixes their
-// names); one that is not installed is not waited for. The reader is uncached: a cached read of
-// Deployments would start a cluster-wide informer (cache.go).
+// rolling out.
 func ichorRolledOut(ctx context.Context, uncached client.Reader, ns string) (bool, error) {
-	for _, labels := range []client.MatchingLabels{
-		{controlPlaneLabel: valueControllerMgr},
-		{oidctrust.UIComponentLabel: oidctrust.UIComponentValue},
+	waiting, err := ichorRolloutWaiting(ctx, uncached, ns)
+	if err != nil {
+		return false, err
+	}
+
+	return waiting == "", nil
+}
+
+// ichorRolloutWaiting names the first of the controller's and ichor-ui's Deployments that has not
+// finished rolling out, as the operation's status says it; "" when both have. Both are found by the
+// labels every install path sets (kustomize prefixes their names); one that is not installed is not
+// waited for. The reader is uncached: a cached read of Deployments would start a cluster-wide
+// informer (cache.go).
+func ichorRolloutWaiting(ctx context.Context, uncached client.Reader, ns string) (string, error) {
+	for _, dep := range []struct {
+		role   string
+		labels client.MatchingLabels
+	}{
+		{"controller", client.MatchingLabels{controlPlaneLabel: valueControllerMgr}},
+		{"ichor-ui", client.MatchingLabels{oidctrust.UIComponentLabel: oidctrust.UIComponentValue}},
 	} {
 		var list appsv1.DeploymentList
-		if err := uncached.List(ctx, &list, client.InNamespace(ns), labels); err != nil {
-			return false, fmt.Errorf("reading the Deployments %v: %w", labels, err)
+		if err := uncached.List(ctx, &list, client.InNamespace(ns), dep.labels); err != nil {
+			return "", fmt.Errorf("reading the Deployments %v: %w", dep.labels, err)
 		}
 
 		for i := range list.Items {
-			if !deploymentRolledOut(&list.Items[i]) {
-				return false, nil
+			d := &list.Items[i]
+			if !deploymentRolledOut(d) {
+				return fmt.Sprintf("waiting for the %s Deployment to finish rolling out (%d of %d updated replicas are available)",
+					dep.role, min(d.Status.UpdatedReplicas, d.Status.AvailableReplicas), desiredReplicas(d)), nil
 			}
 		}
 	}
 
-	return true, nil
+	return "", nil
+}
+
+// desiredReplicas is the replica count a Deployment asks for: one when unset, as the API defaults it.
+func desiredReplicas(d *appsv1.Deployment) int32 {
+	if d.Spec.Replicas == nil {
+		return 1
+	}
+
+	return *d.Spec.Replicas
 }
 
 // deploymentRolledOut is kubectl rollout status's test: the controller has seen the latest spec,
 // every replica is of that spec, no old replica is left, and all are ready and available.
 func deploymentRolledOut(d *appsv1.Deployment) bool {
-	want := int32(1)
-	if d.Spec.Replicas != nil {
-		want = *d.Spec.Replicas
-	}
+	want := desiredReplicas(d)
 
 	s := d.Status
 

@@ -151,6 +151,33 @@ var _ = Describe("kind: ichor executor, completion", func() {
 		Expect(done).To(BeFalse())
 	})
 
+	It("says which rollout it is waiting for, for the operation's status", func() {
+		job := startJob()
+		controller := deployment("rollout-controller", controllerLabels, true)
+		ui := deployment("rollout-ui", uiLabels, true)
+
+		waiting := func() string {
+			GinkgoHelper()
+
+			w, err := ichorWaitingFor(ctx, k8sClient, k8sClient, ns, op)
+			Expect(err).NotTo(HaveOccurred())
+
+			return w
+		}
+
+		Expect(waiting()).To(Equal("the installer Job is running"))
+
+		setJobCondition(&job, batchv1.JobComplete, "")
+		Expect(waiting()).To(Equal("finishing the upgrade"))
+
+		setRollout(ui, false)
+		Expect(waiting()).To(Equal("waiting for the ichor-ui Deployment to finish rolling out (0 of 1 updated replicas are available)"))
+
+		setRollout(ui, true)
+		setRollout(controller, false)
+		Expect(waiting()).To(Equal("waiting for the controller Deployment to finish rolling out (0 of 1 updated replicas are available)"))
+	})
+
 	It("is done once the Job has succeeded and both Deployments are rolled out", func() {
 		job := startJob()
 		deployment("rollout-controller", controllerLabels, true)

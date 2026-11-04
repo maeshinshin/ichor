@@ -114,6 +114,10 @@ func runSecretsEncrypt(path string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("writing %s: %w", path, err)
 	}
 
+	if err := sealRetiredKeysNextTo(path, pass); err != nil {
+		return err
+	}
+
 	if generated {
 		announceBundlePassphrase(stderr, path, pass)
 	}
@@ -121,6 +125,32 @@ func runSecretsEncrypt(path string, stdout, stderr io.Writer) error {
 	_, err = fmt.Fprintf(stdout, "Encrypted %s. Keep the passphrase with your other backups.\n", path)
 
 	return err
+}
+
+// sealRetiredKeysNextTo seals a plaintext retired-keys.yaml that sits next to the bundle at path, under
+// the passphrase the bundle was just sealed with. No such file, or one already encrypted, is left alone.
+func sealRetiredKeysNextTo(path, pass string) error {
+	retired := retiredFilePath(path)
+
+	plain, err := os.ReadFile(retired)
+	if err != nil || isEncryptedBundle(plain) {
+		return nil //nolint:nilerr // nothing there to seal
+	}
+
+	sealed, err := sealBundleBytes(plain, pass)
+	if err != nil {
+		return err
+	}
+
+	if back, err := openBundleBytes(sealed, pass); err != nil || !bytes.Equal(back, plain) {
+		return errors.New("the sealed retired keys did not open back to the original; that file was not changed")
+	}
+
+	if err := writeFileAtomic(retired, sealed); err != nil {
+		return fmt.Errorf("writing %s: %w", retired, err)
+	}
+
+	return nil
 }
 
 func init() {

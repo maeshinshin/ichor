@@ -117,7 +117,7 @@ export function OperationDetail({ name }: { name: string }) {
   const stage = caStageProgress(op.caRotationStage)
   const kubeStage = kubernetesStageProgress(op.kubernetesStage)
   const restoreStep = restoreStepProgress(op.etcdRestoreStep)
-  const panel = credentialsPanel(op.kind === OperationKind.CA_ROTATION, op.caRotationStage, state === 'done')
+  const panel = credentialsPanel(op.kind === OperationKind.CA_ROTATION, op.caRotationStage, state === 'done', op.caTargets)
 
   const nodeLink = op.nodeMachine ? (
     <Button asChild variant="link" size="sm">

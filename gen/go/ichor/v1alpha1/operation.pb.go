@@ -1270,8 +1270,11 @@ type Operation struct {
 	// details are the spec's facts as key/value pairs, in display order.
 	Details []*OperationDetail `protobuf:"bytes,41,rep,name=details,proto3" json:"details,omitempty"`
 	// started_by is who created the operation, when Ichor recorded it; empty otherwise.
-	StartedBy     string                 `protobuf:"bytes,42,opt,name=started_by,json=startedBy,proto3" json:"started_by,omitempty"`
-	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,43,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	StartedBy  string                 `protobuf:"bytes,42,opt,name=started_by,json=startedBy,proto3" json:"started_by,omitempty"`
+	FinishedAt *timestamppb.Timestamp `protobuf:"bytes,43,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	// ca_targets are the CAs of a ca-rotation; empty for every other kind. The credential
+	// hand-off applies when talos or kubernetes is one.
+	CaTargets     []string `protobuf:"bytes,44,rep,name=ca_targets,json=caTargets,proto3" json:"ca_targets,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1477,6 +1480,13 @@ func (x *Operation) GetStartedBy() string {
 func (x *Operation) GetFinishedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.FinishedAt
+	}
+	return nil
+}
+
+func (x *Operation) GetCaTargets() []string {
+	if x != nil {
+		return x.CaTargets
 	}
 	return nil
 }
@@ -3429,7 +3439,7 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"started_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
 	"\vfinished_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\n" +
 	"finishedAt\x12!\n" +
-	"\fdisplay_name\x18\x0e \x01(\tR\vdisplayName\"\xc8\t\n" +
+	"\fdisplay_name\x18\x0e \x01(\tR\vdisplayName\"\xe7\t\n" +
 	"\tOperation\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x123\n" +
 	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
@@ -3462,7 +3472,9 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\n" +
 	"started_by\x18* \x01(\tR\tstartedBy\x12;\n" +
 	"\vfinished_at\x18+ \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"finishedAt\"9\n" +
+	"finishedAt\x12\x1d\n" +
+	"\n" +
+	"ca_targets\x18, \x03(\tR\tcaTargets\"9\n" +
 	"\x0fOperationDetail\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value\"U\n" +

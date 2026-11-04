@@ -86,6 +86,7 @@ func settingChanges(oldSpec, newSpec *ichorv1alpha1.IchorInstallationSpec) []set
 		oU, nU     = cmp.Or(oldSpec.Users, &ichorv1alpha1.IchorUserSettings{}), cmp.Or(newSpec.Users, &ichorv1alpha1.IchorUserSettings{})
 		oD, nD     = cmp.Or(oldSpec.Defaults, &ichorv1alpha1.IchorDefaultSettings{}), cmp.Or(newSpec.Defaults, &ichorv1alpha1.IchorDefaultSettings{})
 		oDep, nDep = cmp.Or(oldSpec.Deployment, &ichorv1alpha1.IchorDeploymentSpec{}), cmp.Or(newSpec.Deployment, &ichorv1alpha1.IchorDeploymentSpec{})
+		oSig, nSig = cmp.Or(oldSpec.InstallerSignature, &ichorv1alpha1.IchorInstallerSignature{}), cmp.Or(newSpec.InstallerSignature, &ichorv1alpha1.IchorInstallerSignature{})
 	)
 
 	oAE, oAC, oAW, oAK := autoPatchOf(oldSpec.AutoPatch)
@@ -99,6 +100,9 @@ func settingChanges(oldSpec, newSpec *ichorv1alpha1.IchorInstallationSpec) []set
 	all := []settingChange{
 		{"spec.version", oldSpec.Version, newSpec.Version, ver},
 		{"spec.installerRepository", oldSpec.InstallerRepository, newSpec.InstallerRepository, ver},
+		{"spec.installerDigest", oldSpec.InstallerDigest, newSpec.InstallerDigest, ver},
+		{"spec.installerSignature.mode", oSig.Mode, nSig.Mode, ver},
+		{"spec.installerSignature.reason", oSig.Reason, nSig.Reason, ver},
 		{"spec.deployment.manager", oDep.Manager, nDep.Manager, ver},
 		{"spec.users.tokenTTL", durOf(oU.TokenTTL), durOf(nU.TokenTTL), set},
 		{"spec.users.refreshLifetime", durOf(oU.RefreshLifetime), durOf(nU.RefreshLifetime), set},

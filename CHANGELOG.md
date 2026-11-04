@@ -51,6 +51,10 @@ table accepts; a refusal passes only with the override verb.
   forced password change at first login.
 - Hardening of Ichor itself and typed, off-by-default hardening options for
   the clusters it creates.
+- Kubelet serving certificates signed by the Kubernetes CA
+  (`spec.security.kubeletServingCertificates`): the controller approves each
+  kubelet's serving-certificate request itself, only for that node's own names
+  and addresses, and the kube-apiserver can then verify the kubelets.
 - `ichor cluster talosconfig` and a UI download give operators and admins a
   short-lived (1 hour, at most 12) `os:reader` talosconfig for `talosctl`,
   without access to the secrets bundle; each request is an Event with the

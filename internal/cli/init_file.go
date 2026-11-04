@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -34,6 +34,10 @@ import (
 // command line wins over the file.
 
 const (
+	flagEndpointAddress = "endpoint-address"
+	flagNodeEndpoint    = "node-endpoint"
+	flagInstallDisk     = "install-disk"
+
 	initConfigAPIVersion = "ichor.maesh.dev/v1alpha1"
 	initConfigKind       = "InitConfig"
 )
@@ -158,10 +162,10 @@ type initFileValue struct {
 
 // initFileKeys maps each required flag to the file key that can stand in for it.
 var initFileKeys = map[string]string{
-	flagCluster:        "cluster.name",
-	"endpoint-address": "cluster.endpoint.address",
-	"node-endpoint":    "firstNode.endpoint",
-	"install-disk":     "firstNode.installDisk",
+	flagCluster:         "cluster.name",
+	flagEndpointAddress: "cluster.endpoint.address",
+	flagNodeEndpoint:    "firstNode.endpoint",
+	flagInstallDisk:     "firstNode.installDisk",
 }
 
 // parseInitConfig decodes data strictly: an unknown key, a duplicate key, a wrong type, apiVersion
@@ -199,25 +203,25 @@ func (c initConfigFile) values(dir string) []initFileValue {
 		return []string{s}
 	}
 
-	var mirrors []string
+	mirrors := make([]string, 0, len(c.Cluster.RegistryMirrors))
 	for host, u := range c.Cluster.RegistryMirrors {
 		mirrors = append(mirrors, host+"="+u)
 	}
 
-	sort.Strings(mirrors)
+	slices.Sort(mirrors)
 
 	all := []initFileValue{
 		{flagCluster, "cluster.name", one(c.Cluster.Name)},
 		{"namespace", "cluster.namespace", one(c.Cluster.Namespace)},
 		{"preset", "cluster.preset", one(c.Cluster.Preset)},
 		{"endpoint-type", "cluster.endpoint.type", one(c.Cluster.Endpoint.Type)},
-		{"endpoint-address", "cluster.endpoint.address", one(c.Cluster.Endpoint.Address)},
+		{flagEndpointAddress, "cluster.endpoint.address", one(c.Cluster.Endpoint.Address)},
 		{"pod-subnets", "cluster.network.podSubnets", c.Cluster.Network.PodSubnets},
 		{"service-subnets", "cluster.network.serviceSubnets", c.Cluster.Network.ServiceSubnets},
 		{"cni-tunnel", "cluster.network.cni.tunnel", one(c.Cluster.Network.CNI.Tunnel)},
 		{"registry-mirror", "cluster.registryMirrors", mirrors},
-		{"node-endpoint", "firstNode.endpoint", one(c.FirstNode.Endpoint)},
-		{"install-disk", "firstNode.installDisk", one(c.FirstNode.InstallDisk)},
+		{flagNodeEndpoint, "firstNode.endpoint", one(c.FirstNode.Endpoint)},
+		{flagInstallDisk, "firstNode.installDisk", one(c.FirstNode.InstallDisk)},
 		{"ephemeral-disk-selector", "firstNode.disks.ephemeralSelector", one(c.FirstNode.Disks.EphemeralSelector)},
 		{"storage-disk-selector", "firstNode.disks.storage.selector", one(c.FirstNode.Disks.Storage.Selector)},
 		{"storage-volume-name", "firstNode.disks.storage.volumeName", one(c.FirstNode.Disks.Storage.VolumeName)},
@@ -284,7 +288,7 @@ func applyInitFile(flags *pflag.FlagSet, path string) error {
 func checkInitRequired(flags *pflag.FlagSet) error {
 	var missing []string
 
-	for _, name := range []string{flagCluster, "endpoint-address", "node-endpoint", "install-disk"} {
+	for _, name := range []string{flagCluster, flagEndpointAddress, flagNodeEndpoint, flagInstallDisk} {
 		if !flags.Changed(name) {
 			missing = append(missing, fmt.Sprintf("%q (file key %s)", name, initFileKeys[name]))
 		}

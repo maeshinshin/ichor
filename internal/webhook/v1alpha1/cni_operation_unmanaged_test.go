@@ -38,10 +38,7 @@ import (
 func TestCNIOperationIsRefusedForAnUnmanagedCluster(t *testing.T) {
 	t.Parallel()
 
-	scheme := runtime.NewScheme()
-	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
+	scheme := schemeOf(t)
 
 	cluster := func(name, preset string) *ichorv1alpha1.TalosCluster {
 		c := &ichorv1alpha1.TalosCluster{}

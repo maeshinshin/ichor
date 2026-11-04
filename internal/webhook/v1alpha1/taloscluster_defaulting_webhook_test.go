@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	admissionv1 "k8s.io/api/admission/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -18,10 +17,7 @@ import (
 func TestTalosClusterDefaulter(t *testing.T) {
 	t.Parallel()
 
-	scheme := runtime.NewScheme()
-	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
+	scheme := schemeOf(t)
 
 	inst := &ichorv1alpha1.IchorInstallation{
 		Name: settings.SingletonName,

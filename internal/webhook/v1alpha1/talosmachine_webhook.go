@@ -160,13 +160,13 @@ func (v *TalosMachineCustomValidator) getCluster(ctx context.Context, m *ichorv1
 
 // can asks the requesting user's right; a missing checker or a failed check refuses.
 func (v *TalosMachineCustomValidator) can(ctx context.Context, verb, sub string, m *ichorv1alpha1.TalosMachine) error {
-	if v.Can == nil {
-		return fmt.Errorf("you need the %q verb on talosmachines/%s", verb, sub)
-	}
+	var ok bool
 
-	ok, err := v.Can(ctx, verb, "talosmachines", sub, m.Name, m.Namespace)
-	if err != nil {
-		return fmt.Errorf("cannot check the %q right on talosmachines/%s: %w", verb, sub, err)
+	if v.Can != nil {
+		var err error
+		if ok, err = v.Can(ctx, verb, "talosmachines", sub, m.Name, m.Namespace); err != nil {
+			return fmt.Errorf("cannot check the %q right on talosmachines/%s: %w", verb, sub, err)
+		}
 	}
 
 	if !ok {

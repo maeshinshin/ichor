@@ -43,14 +43,7 @@ func dryRenderValidator(t *testing.T, objs ...runtime.Object) *TalosConfigPatchC
 		t.Fatal(err)
 	}
 
-	scheme := runtime.NewScheme()
-	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := corev1.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
+	scheme := schemeOf(t, corev1.AddToScheme)
 
 	cluster := &ichorv1alpha1.TalosCluster{
 		Name: "c", Namespace: dryRenderNS,

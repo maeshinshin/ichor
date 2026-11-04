@@ -24,7 +24,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -136,10 +135,7 @@ func TestSecurityContractAndKMS(t *testing.T) {
 func TestSecurityFirewallCoversMachines(t *testing.T) {
 	ctx := context.Background()
 
-	scheme := runtime.NewScheme()
-	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
+	scheme := schemeOf(t)
 
 	mach := func(name, role, endpoint string) *ichorv1alpha1.TalosMachine {
 		return &ichorv1alpha1.TalosMachine{
@@ -207,10 +203,7 @@ func TestSecurityFirewallCoversMachines(t *testing.T) {
 func TestSecurityDiskEncryptionNeedsConfirmation(t *testing.T) {
 	ctx := context.Background()
 
-	scheme := runtime.NewScheme()
-	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
+	scheme := schemeOf(t)
 
 	machine := &ichorv1alpha1.TalosMachine{
 		Name: "m1", Namespace: testNamespace,

@@ -78,9 +78,6 @@ func renderUserCreated(h *human, resp *pb.CreateUserResponse) error {
 	return doneLine(h, "%s %s %s%s", verbCreate, kindUser, u.GetName(), parenthesized(strings.Join(u.GetRoles(), ", ")))
 }
 
-// userDone is the result line of a command that answers with no data of its own.
-func userDone(h *human, what, name string) error { return doneLine(h, "%s %s", what, name) }
-
 // showGeneratedPassword prints a password the server generated, once, to errw, with the wording the
 // machine formats have always had; for a person it gets a mark and is bold. password == "" prints
 // nothing.

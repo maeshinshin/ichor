@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"golang.org/x/mod/semver"
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
@@ -26,8 +27,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/releasecheck"
 	"github.com/maeshinshin/ichor/internal/settings"
 	"github.com/maeshinshin/ichor/internal/version"
 )
@@ -53,7 +56,22 @@ type IchorInstallationReconciler struct {
 	// SettingsFallback and SettingsReadOnly are the flag values status.effective reports against.
 	SettingsFallback settings.Fallback
 	SettingsReadOnly bool
+	// Namespace is the controller's namespace, where the egress policy for the installer image's registry
+	// lives. Empty writes no policy.
+	Namespace string
 }
+
+// DefaultInstallerImagePolicyName is the CiliumNetworkPolicy that lets the controller reach the registry
+// that holds the installer image and its signature. It exists whenever Ichor's own controller
+// policy does, and is maintained from spec.installerRepository.
+const DefaultInstallerImagePolicyName = "ichor-controller-installer-image"
+
+// ghcrBlobHost is where ghcr.io redirects the blobs of an image, a signature bundle among them.
+const ghcrBlobHost = "pkg-containers.githubusercontent.com"
+
+// installerRegistryRequeue is how often the policy is checked again: Ichor's controller policy may be
+// applied after this reconcile ran.
+const installerRegistryRequeue = 5 * time.Minute
 
 // Seed creates the singleton once when it does not exist: spec.version is
 // this controller's version and spec.deployment.manager is --deployed-by. It is the one place
@@ -122,7 +140,49 @@ func (r *IchorInstallationReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		}
 	}
 
-	return ctrl.Result{}, nil
+	if r.Namespace == "" {
+		return ctrl.Result{}, nil
+	}
+
+	if err := r.allowInstallerRegistry(ctx, &inst); err != nil {
+		logf.FromContext(ctx).Info("Writing the egress policy for the installer image's registry failed; "+
+			"an Ichor upgrade may not reach it", "error", err.Error())
+	}
+
+	return ctrl.Result{RequeueAfter: installerRegistryRequeue}, nil
+}
+
+// allowInstallerRegistry writes the egress rule to the host of spec.installerRepository, but only while
+// Ichor's own controller policy is installed (a lone egress rule would cut every other flow of the
+// controller) and the install is not Helm's (which refuses Ichor upgrades).
+func (r *IchorInstallationReconciler) allowInstallerRegistry(ctx context.Context, inst *ichorv1alpha1.IchorInstallation) error {
+	app, err := controllerPolicyApp(ctx, r.Client, r.Namespace, DefaultInstallerImagePolicyName)
+	if err != nil {
+		return err
+	}
+
+	repo := inst.Spec.InstallerRepository
+	if app == "" || inst.HelmManaged() || repo == "" {
+		return removePolicy(ctx, r.Client, r.Namespace, DefaultInstallerImagePolicyName)
+	}
+
+	host, err := releasecheck.Host(repo)
+	if err != nil {
+		return err
+	}
+
+	hosts := []string{host}
+	if host == "ghcr.io" {
+		hosts = append(hosts, ghcrBlobHost)
+	}
+
+	spec := releaseCheckSpec(app, hosts)
+	spec["description"] = "Egress of the controller to the registry of the installer image, to resolve its digest and " +
+		"verify its signature before an Ichor upgrade. Written by the controller; edits are overwritten."
+
+	_, err = writePolicy(ctx, r.Client, r.Namespace, DefaultInstallerImagePolicyName, app, spec)
+
+	return err
 }
 
 // SetupWithManager sets up the controller with the Manager.

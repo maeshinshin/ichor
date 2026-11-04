@@ -95,7 +95,7 @@ var _ = Describe("kind: ichor executor, completion", func() {
 	uiLabels := map[string]string{"app.kubernetes.io/component": "ui"}
 
 	BeforeEach(func() {
-		advance = NewIchorUpgradeAdvancer(k8sClient, k8sClient, ns, false)
+		advance = NewIchorUpgradeAdvancer(k8sClient, k8sClient, ns, false, &fakeInstallerImages{digest: testInstallerDigest}, nil)
 		op = &ichorv1alpha1.TalosOperation{Namespace: "ns", Name: "upgrade-rollout"}
 	})
 

@@ -21,14 +21,12 @@ export function CiliumUpgradeDialog({
   chart,
   list,
   size,
-  disabled,
 }: {
   cluster: ObjectRef
   // chart is the embedded chart version when the cluster runs an older one, else ''.
   chart: string
   list: TargetList | null
   size?: 'sm'
-  disabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -69,7 +67,7 @@ export function CiliumUpgradeDialog({
         }
       }}
       trigger={
-        <Button variant="outline" size={size} disabled={disabled}>
+        <Button variant="outline" size={size}>
           {t('cilium.upgradeStart')}
         </Button>
       }

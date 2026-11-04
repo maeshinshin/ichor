@@ -185,7 +185,6 @@ function Home({
   const ready = approved.filter((m) => readyOf(m)?.status === 'True').length
   const waiting = approved.filter((m) => rebootPendingCount([{ rebootPaths: m.rebootPaths, readyReason: readyOf(m)?.reason ?? '' }]) > 0)
   const currentState = current ? operationState(current.op.phase, current.op.failureReason) : null
-  const busyReason = busy ? t('ops.disabledBusy') : undefined
   const kubeProxy = cluster.kubeProxyMode || 'enabled'
   const versionOf = (name: string) => componentOf(cluster.versions, name)
   const cilium = versionOf('cilium')
@@ -223,10 +222,10 @@ function Home({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem disabled={!!busy} onSelect={() => setDialog('ca-rotation')}>
+              <DropdownMenuItem onSelect={() => setDialog('ca-rotation')}>
                 {t('overview.rotateCAs')}
               </DropdownMenuItem>
-              <DropdownMenuItem variant="destructive" disabled={!!busy} onSelect={() => setDialog('shutdown')}>
+              <DropdownMenuItem variant="destructive" onSelect={() => setDialog('shutdown')}>
                 {t('overview.shutdownCluster')}
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -266,7 +265,7 @@ function Home({
                         <>
                           <AlertTitle>{t('home.attnConfig', { n: a.count })}</AlertTitle>
                           <AlertAction>
-                            <StartOperationDialog kind="config" cluster={ref} label={t('ops.action.apply')} disabled={!!busy} size="xs" />
+                            <StartOperationDialog kind="config" cluster={ref} label={t('ops.action.apply')} size="xs" />
                           </AlertAction>
                         </>
                       )}
@@ -434,12 +433,12 @@ function Home({
                 <ItemGroup>
                     <VersionRow name={t('ops.row.talos')} icon={CpuIcon} installed={cluster.talosVersion}>
                       {hasPatch(candidates.talos) && <Badge variant="secondary">{t('versions.patchAvailable')}</Badge>}
-                      <StartOperationDialog kind="talos" cluster={ref} current={cluster.talosVersion} label={t('ops.action.upgrade')} disabled={!!busy} />
+                      <StartOperationDialog kind="talos" cluster={ref} current={cluster.talosVersion} label={t('ops.action.upgrade')} />
                     </VersionRow>
                     <ItemSeparator />
                     <VersionRow name={t('ops.row.kubernetes')} icon={ContainerIcon} installed={cluster.kubernetesVersion}>
                       {hasPatch(candidates.kubernetes) && <Badge variant="secondary">{t('versions.patchAvailable')}</Badge>}
-                      <StartOperationDialog kind="kubernetes" cluster={ref} current={cluster.kubernetesVersion} label={t('ops.action.upgrade')} disabled={!!busy} />
+                      <StartOperationDialog kind="kubernetes" cluster={ref} current={cluster.kubernetesVersion} label={t('ops.action.upgrade')} />
                     </VersionRow>
                     {!isCniUnmanaged(cluster.cniPreset) && (
                       <>
@@ -453,7 +452,7 @@ function Home({
                           {cilium && cilium.state !== 'up-to-date' && <ToneBadge tone={stateTone(cilium.state)}>{t(stateKey(cilium.state))}</ToneBadge>}
                           {hasPatch(candidates.cilium) && <Badge variant="secondary">{t('versions.patchAvailable')}</Badge>}
                           {(cilium?.state === 'behind' || hasPatch(candidates.cilium)) && (
-                            <CiliumUpgradeDialog cluster={ref} chart={cilium?.state === 'behind' ? cilium.target : ''} list={candidates.cilium} size="sm" disabled={!!busy} />
+                            <CiliumUpgradeDialog cluster={ref} chart={cilium?.state === 'behind' ? cilium.target : ''} list={candidates.cilium} size="sm" />
                           )}
                         </VersionRow>
                       </>
@@ -461,21 +460,20 @@ function Home({
                     <ItemSeparator />
                     <VersionRow name={t('ops.row.ichor')} icon={CloudCogIcon} installed={ichorVersion ?? t('ops.installedUnknown')}>
                       {release && <Badge variant="secondary">{t('version.released', { version: release })}</Badge>}
-                      <StartOperationDialog kind="ichor" cluster={ref} current={ichorVersion ?? ''} label={t('ops.action.upgrade')} disabled={!!busy} />
+                      <StartOperationDialog kind="ichor" cluster={ref} current={ichorVersion ?? ''} label={t('ops.action.upgrade')} />
                     </VersionRow>
                     {!isCniUnmanaged(cluster.cniPreset) && (
                       <>
                         <ItemSeparator />
                         <VersionRow name={t('ops.row.cni')} icon={NetworkIcon} installed={t(kubeProxy === 'replaced' ? 'ops.modeReplaced' : 'ops.modeEnabled')}>
-                          <StartOperationDialog kind="cni" cluster={ref} current={kubeProxy} label={t('ops.action.switch')} disabled={!!busy} />
+                          <StartOperationDialog kind="cni" cluster={ref} current={kubeProxy} label={t('ops.action.switch')} />
                         </VersionRow>
                       </>
                     )}
                 </ItemGroup>
               </CardContent>
-              {(busyReason || notes.length > 0) && (
+              {notes.length > 0 && (
                 <CardFooter className="flex-col items-start gap-1">
-                  {busyReason && <CardDescription>{busyReason}</CardDescription>}
                   {notes.map((n) => (
                     <CardDescription key={n.reason}>{t('versions.checkFailed', { components: n.components.join(', '), reason: n.reason })}</CardDescription>
                   ))}

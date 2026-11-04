@@ -257,6 +257,16 @@ var _ = Describe("two control-plane TalosMachines of one cluster at a step that 
 			Expect(readyCondition(fetchMachine(waiting)).Message).To(ContainSubstring(removing.Name))
 		})
 
+		It("is held by the Cilium Helm Job: a control plane join waits for it (ADR 0113)", func() {
+			Expect(lock.Acquire(ctx, cniHelmLockIdentity)).To(Succeed())
+			DeferCleanup(func() { Expect(lock.Release(ctx, cniHelmLockIdentity)).To(Succeed()) })
+
+			cp := controlPlane("71")
+			Expect(join(cp)).To(BeFalse())
+			Expect(readyCondition(fetchMachine(cp)).Reason).To(Equal(reasonClusterLockHeld))
+			Expect(readyCondition(fetchMachine(cp)).Message).To(ContainSubstring(cniHelmLockIdentity))
+		})
+
 		It("is left by the previous build under the shared identity: a join waits, and it ages out", func() {
 			legacy := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, time.Second)
 			Expect(legacy.Acquire(ctx, controllerIdentity)).To(Succeed())

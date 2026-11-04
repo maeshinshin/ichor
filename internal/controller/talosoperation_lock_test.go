@@ -118,10 +118,11 @@ var _ = Describe("two TalosOperations on one cluster", func() {
 		Expect(fake.calls).To(HaveLen(2), "an operation paused on a failed step does not hold the cluster")
 	})
 
-	// A lease the old build left under the shared "ichor-controller" identity is indistinguishable from
-	// a machine removal or join, which still use it: the operation waits, and the lease ages out within
-	// clusterlock.DefaultDuration because nothing renews it any more.
-	It("waits for a lease held by the shared machine identity", func() {
+	// A lease the old build left under the shared "ichor-controller" identity belongs to nobody this build
+	// can name (machine removals and joins used it before they got their own identity, ADR 0026
+	// follow-up): the operation waits, and the lease ages out within clusterlock.DefaultDuration because
+	// nothing renews it any more.
+	It("waits for a lease left under the old shared identity", func() {
 		cluster := newOpTestCluster()
 		newOpTestMachine(cluster.Name, "controlplane", "old-cp1")
 		op := newOpTestOperation(cluster.Name)

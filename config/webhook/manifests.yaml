@@ -218,7 +218,7 @@ webhooks:
     - CREATE
     resources:
     - taloscredentialrequests
-  sideEffects: None
+  sideEffects: NoneOnDryRun
   timeoutSeconds: 5
 - admissionReviewVersions:
   - v1

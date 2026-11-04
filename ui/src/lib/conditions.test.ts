@@ -13,6 +13,12 @@ test('other conditions are neutral whatever their status', () => {
   assert.equal(conditionTone('Transitioning', 'False'), 'neutral')
 })
 
+test('kubelet serving certificate conditions are neutral: pending issuance is progress, not failure (ADR 0125)', () => {
+  assert.equal(conditionTone('KubeletServingCertificates', 'False'), 'neutral')
+  assert.equal(conditionTone('KubeletServingCertificates', 'True'), 'neutral')
+  assert.equal(conditionTone('KubeletServingVerified', 'False'), 'neutral')
+})
+
 test("ExtensionsPresent False reads as a failure", () => {
   assert.equal(conditionTone("ExtensionsPresent", "False"), "bad")
   assert.equal(conditionTone("ExtensionsPresent", "True"), "good")

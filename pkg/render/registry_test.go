@@ -201,11 +201,7 @@ func TestRenderRegistries(t *testing.T) {
 		t.Fatalf("Render: %v", err)
 	}
 
-	for _, want := range []string{registryHost, "mirror.example.com", "username: deploy", "password: s3cr3t-pw"} {
-		if !strings.Contains(string(out), want) {
-			t.Fatalf("rendered config missing %q:\n%s", want, out)
-		}
-	}
+	requireAll(t, string(out), registryHost, "mirror.example.com", "username: deploy", "password: s3cr3t-pw")
 
 	// System layer (ADR 0027): a cluster-layer TalosConfigPatch that also sets
 	// machine.registries must still win over what injectRegistries put there, same as any
@@ -244,18 +240,9 @@ func TestRenderRegistries(t *testing.T) {
 			t.Fatalf("Render: %v", err)
 		}
 
-		if !strings.Contains(string(out), "username: overridden-user") {
-			t.Fatalf("expected the patch's username to win over the system-layer one:\n%s", out)
-		}
-
-		if strings.Contains(string(out), "username: deploy") {
-			t.Fatalf("system-layer username should have been overridden:\n%s", out)
-		}
-
 		// The credential the patch never touched must survive the override.
-		if !strings.Contains(string(out), "password: s3cr3t-pw") {
-			t.Fatalf("expected resolved auth to survive a patch that only overrides the username:\n%s", out)
-		}
+		requireAll(t, string(out), "username: overridden-user", "password: s3cr3t-pw")
+		requireNone(t, string(out), "username: deploy")
 	})
 }
 

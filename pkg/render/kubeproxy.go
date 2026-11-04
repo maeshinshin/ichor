@@ -54,11 +54,12 @@ func kubeProxyOwned(cluster *ichorv1alpha1.TalosCluster) bool {
 // document, deep-copying only the patches that set it. The legacy block cannot coexist with the KubeProxyConfig
 // document a v1.14 contract renders, and the value is owned by injectKubeProxy now.
 func dropProxyDisabled(ordered []*ichorv1alpha1.TalosConfigPatch) []*ichorv1alpha1.TalosConfigPatch {
-	return rewriteClusterConfigs(ordered,
-		func(cc *typedconfig.ClusterConfig) bool {
-			return cc.ProxyConfig != nil && cc.ProxyConfig.Disabled != nil
+	return rewriteConfigs(ordered,
+		func(c *typedconfig.Config) bool {
+			return c.ClusterConfig != nil && c.ClusterConfig.ProxyConfig != nil && c.ClusterConfig.ProxyConfig.Disabled != nil
 		},
-		func(cc *typedconfig.ClusterConfig) {
+		func(c *typedconfig.Config) {
+			cc := c.ClusterConfig
 			cc.ProxyConfig.Disabled = nil
 
 			if reflect.DeepEqual(*cc.ProxyConfig, typedconfig.ProxyConfig{}) {

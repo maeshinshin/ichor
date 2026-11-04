@@ -63,27 +63,15 @@ func TestControlPlaneMetrics(t *testing.T) {
 		out := mustRender(t, metricsCluster(true, metricsCIDR, "192.168.1.0/24"), cp, bundle, nil)
 
 		for _, kind := range []string{"kind: KubeControllerManagerConfig", "kind: KubeSchedulerConfig"} {
-			if doc := section(out, kind); !strings.Contains(doc, metricsBindAll) {
-				t.Errorf("%s lacks %q:\n%s", kind, metricsBindAll, doc)
-			}
+			requireAll(t, section(out, kind), metricsBindAll)
 		}
 
-		if !strings.Contains(out, metricsEtcdArg) {
-			t.Errorf("etcd lacks %q:\n%s", metricsEtcdArg, out)
-		}
-
-		rule := section(out, metricsRuleKind)
-		for _, want := range []string{"protocol: tcp", "2381", "10257", "10259", metricsCIDR, "192.168.1.0/24"} {
-			if !strings.Contains(rule, want) {
-				t.Errorf("rule lacks %q:\n%s", want, rule)
-			}
-		}
+		requireAll(t, out, metricsEtcdArg)
+		requireAll(t, section(out, metricsRuleKind), "protocol: tcp", "2381", "10257", "10259", metricsCIDR, "192.168.1.0/24")
 
 		// The default action must stay Talos's own (accept): block would drop the API, etcd peers,
 		// kubelet and the Talos API.
-		if strings.Contains(out, metricsDefaultAct) {
-			t.Errorf("must not render a default action document:\n%s", out)
-		}
+		requireNone(t, out, metricsDefaultAct)
 
 		if strings.Count(out, metricsRuleKind) != 1 {
 			t.Errorf("want exactly one rule document, got %d", strings.Count(out, metricsRuleKind))
@@ -92,13 +80,7 @@ func TestControlPlaneMetrics(t *testing.T) {
 
 	t.Run("the rule names no port besides the three metrics ports", func(t *testing.T) {
 		out := mustRender(t, metricsCluster(true, metricsCIDR), cp, bundle, nil)
-		rule := section(out, metricsRuleKind)
-
-		for _, forbidden := range []string{"6443", "50000", "50001", "2379", "2380", "10250"} {
-			if strings.Contains(rule, forbidden) {
-				t.Errorf("rule must not mention port %s:\n%s", forbidden, rule)
-			}
-		}
+		requireNone(t, section(out, metricsRuleKind), "6443", "50000", "50001", "2379", "2380", "10250")
 	})
 
 	t.Run("a worker gets nothing", func(t *testing.T) {
@@ -118,11 +100,7 @@ func TestControlPlaneMetrics(t *testing.T) {
 			t.Fatal("enabled=false must not change the render")
 		}
 
-		for _, banned := range []string{metricsRuleKind, metricsBindAll, "listen-metrics-urls"} {
-			if strings.Contains(unset, banned) {
-				t.Errorf("default render contains %q", banned)
-			}
-		}
+		requireNone(t, unset, metricsRuleKind, metricsBindAll, "listen-metrics-urls")
 	})
 
 	t.Run("enabled without a CIDR is an error, never an open port", func(t *testing.T) {
@@ -135,12 +113,7 @@ func TestControlPlaneMetrics(t *testing.T) {
 		c := metricsCluster(true, metricsCIDR)
 		c.Spec.VersionContract = "v1.12"
 
-		out := mustRender(t, c, cp, bundle, nil)
-		for _, want := range []string{metricsBindAll, metricsEtcdArg, metricsRuleKind} {
-			if !strings.Contains(out, want) {
-				t.Errorf("v1.12 render lacks %q:\n%s", want, out)
-			}
-		}
+		requireAll(t, mustRender(t, c, cp, bundle, nil), metricsBindAll, metricsEtcdArg, metricsRuleKind)
 	})
 
 	t.Run("a Config patch can still override etcd's argument (system layer)", func(t *testing.T) {

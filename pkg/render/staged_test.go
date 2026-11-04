@@ -59,52 +59,30 @@ func TestStagedKubernetesPinsKubeletAndProxyBelowTheSpec(t *testing.T) {
 	t.Run("a control plane keeps its components at the target and its kubelet and proxy at the pin", func(t *testing.T) {
 		got := render(t, cp, &StagedKubernetes{KubeletVersion: old, KubeProxyVersion: old})
 
-		for _, want := range []string{
-			"kube-apiserver:" + target, "kube-controller-manager:" + target, "kube-scheduler:" + target,
-			"kubelet:" + old, "kube-proxy:" + old,
-		} {
-			if !strings.Contains(got, want) {
-				t.Errorf("want %q in the staged render", want)
-			}
-		}
-
-		for _, bad := range []string{"kubelet:" + target, "kube-proxy:" + target, "kube-apiserver:" + old} {
-			if strings.Contains(got, bad) {
-				t.Errorf("did not want %q in the staged render", bad)
-			}
-		}
+		requireAll(t, got, "kube-apiserver:"+target, "kube-controller-manager:"+target, "kube-scheduler:"+target,
+			"kubelet:"+old, "kube-proxy:"+old)
+		requireNone(t, got, "kubelet:"+target, "kube-proxy:"+target, "kube-apiserver:"+old)
 	})
 
 	t.Run("pinning only the kubelet leaves kube-proxy on the target", func(t *testing.T) {
-		got := render(t, cp, &StagedKubernetes{KubeletVersion: old})
-		if !strings.Contains(got, "kubelet:"+old) || !strings.Contains(got, "kube-proxy:"+target) {
-			t.Fatalf("want kubelet at %s and kube-proxy at %s", old, target)
-		}
+		requireAll(t, render(t, cp, &StagedKubernetes{KubeletVersion: old}), "kubelet:"+old, "kube-proxy:"+target)
 	})
 
 	t.Run("controller-manager and scheduler can be pinned below the apiserver", func(t *testing.T) {
 		got := render(t, cp, &StagedKubernetes{ControllerManagerVersion: old, SchedulerVersion: old})
 
-		for _, want := range []string{
-			"kube-apiserver:" + target, "kube-controller-manager:" + old, "kube-scheduler:" + old, "kubelet:" + target,
-		} {
-			if !strings.Contains(got, want) {
-				t.Errorf("want %q in the staged render", want)
-			}
-		}
+		requireAll(t, got,
+			"kube-apiserver:"+target, "kube-controller-manager:"+old, "kube-scheduler:"+old, "kubelet:"+target)
 	})
 
 	t.Run("a worker pins its kubelet and gets no kube-proxy document", func(t *testing.T) {
 		got := render(t, worker, &StagedKubernetes{KubeletVersion: old, KubeProxyVersion: old})
-		if !strings.Contains(got, "kubelet:"+old) || strings.Contains(got, "kube-proxy") {
-			t.Fatalf("want kubelet at %s and no kube-proxy, got a different render", old)
-		}
+
+		requireAll(t, got, "kubelet:"+old)
+		requireNone(t, got, "kube-proxy")
 	})
 
 	t.Run("the pin is the version without a leading v too", func(t *testing.T) {
-		got := render(t, cp, &StagedKubernetes{KubeletVersion: strings.TrimPrefix(old, "v")})
-		if !strings.Contains(got, "kubelet:"+old) {
-			t.Fatalf("want kubelet at %s", old)
-		}
+		requireAll(t, render(t, cp, &StagedKubernetes{KubeletVersion: strings.TrimPrefix(old, "v")}), "kubelet:"+old)
 	})
 }

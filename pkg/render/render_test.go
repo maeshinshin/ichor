@@ -189,15 +189,8 @@ func TestRenderLayerOrdering(t *testing.T) {
 
 	out := mustRender(t, cluster, m, bundle, patches)
 
-	if !strings.Contains(out, sysctlKey+": v-machine") {
-		t.Fatalf("rendered config does not have the machine-layer value (highest layer should win):\n%s", out)
-	}
-
-	for _, loser := range []string{"v-cluster", "v-role", "v-selector"} {
-		if strings.Contains(out, sysctlKey+": "+loser) {
-			t.Fatalf("rendered config still has %q, the machine layer should have overridden it:\n%s", loser, out)
-		}
-	}
+	requireAll(t, out, sysctlKey+": v-machine")
+	requireNone(t, out, sysctlKey+": v-cluster", sysctlKey+": v-role", sysctlKey+": v-selector")
 }
 
 // TestRenderPriorityOrdering checks that within one layer, the higher
@@ -214,13 +207,8 @@ func TestRenderPriorityOrdering(t *testing.T) {
 
 	out := mustRender(t, cluster, m, bundle, patches)
 
-	if !strings.Contains(out, sysctlKey+": v-high") {
-		t.Fatalf("rendered config does not have the higher-priority value:\n%s", out)
-	}
-
-	if strings.Contains(out, sysctlKey+": v-low") {
-		t.Fatalf("rendered config still has the lower-priority value:\n%s", out)
-	}
+	requireAll(t, out, sysctlKey+": v-high")
+	requireNone(t, out, sysctlKey+": v-low")
 }
 
 // TestRenderSelection checks step 3 (which patches apply to this machine):
@@ -257,10 +245,7 @@ func TestRenderSelection(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			out := mustRender(t, cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{tc.patch})
-			if strings.Contains(out, sysctlKey) {
-				t.Fatalf("patch should not have applied, but its value is present:\n%s", out)
-			}
+			requireNone(t, mustRender(t, cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{tc.patch}), sysctlKey)
 		})
 	}
 
@@ -268,10 +253,7 @@ func TestRenderSelection(t *testing.T) {
 		patch := sysctlPatch("p4", layerCluster, 0, nil, "v-other-cluster")
 		patch.Spec.ClusterRef.Name = "some-other-cluster"
 
-		out := mustRender(t, cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
-		if strings.Contains(out, sysctlKey) {
-			t.Fatalf("patch from another cluster should not have applied:\n%s", out)
-		}
+		requireNone(t, mustRender(t, cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}), sysctlKey)
 	})
 }
 
@@ -344,13 +326,8 @@ func TestKubernetesVersionRendersValidImages(t *testing.T) {
 
 	out := mustRender(t, cluster, testMachine("cp-a", roleControlPlane, nil), testBundle(t), nil)
 
-	if strings.Contains(out, ":vv") {
-		t.Fatalf("rendered a doubled v in an image tag:\n%s", out)
-	}
-
-	if !strings.Contains(out, "kube-apiserver:v1.36.1") {
-		t.Fatalf("expected kube-apiserver:v1.36.1 in:\n%s", out)
-	}
+	requireNone(t, out, ":vv")
+	requireAll(t, out, "kube-apiserver:v1.36.1")
 }
 
 func TestControlPlaneTaint(t *testing.T) {
@@ -360,17 +337,11 @@ func TestControlPlaneTaint(t *testing.T) {
 	const taint = "node-role.kubernetes.io/control-plane: NoSchedule"
 
 	t.Run("schedulable false gets tainted", func(t *testing.T) {
-		out := mustRender(t, testCluster("false"), m, bundle, nil)
-		if !strings.Contains(out, taint) {
-			t.Fatalf("expected control-plane taint, got:\n%s", out)
-		}
+		requireAll(t, mustRender(t, testCluster("false"), m, bundle, nil), taint)
 	})
 
 	t.Run("schedulable true is not tainted", func(t *testing.T) {
-		out := mustRender(t, testCluster("true"), m, bundle, nil)
-		if strings.Contains(out, taint) {
-			t.Fatalf("expected no control-plane taint, got:\n%s", out)
-		}
+		requireNone(t, mustRender(t, testCluster("true"), m, bundle, nil), taint)
 	})
 }
 
@@ -592,10 +563,7 @@ func TestCNIHandoverDropsInlineManifest(t *testing.T) {
 	)
 
 	t.Run("condition absent keeps the entry", func(t *testing.T) {
-		out := mustRender(t, testCluster("true"), m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
-		if !strings.Contains(out, cniManifest) {
-			t.Fatalf("expected the CNI inline manifest to still be rendered, got:\n%s", out)
-		}
+		requireAll(t, mustRender(t, testCluster("true"), m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}), cniManifest)
 	})
 
 	t.Run("condition false keeps the entry", func(t *testing.T) {
@@ -604,10 +572,7 @@ func TestCNIHandoverDropsInlineManifest(t *testing.T) {
 			Type: ConditionCNIHandover, Status: metav1.ConditionFalse, Reason: "WaitingForSync", Message: "not yet",
 		})
 
-		out := mustRender(t, cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
-		if !strings.Contains(out, cniManifest) {
-			t.Fatalf("expected the CNI inline manifest to still be rendered, got:\n%s", out)
-		}
+		requireAll(t, mustRender(t, cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}), cniManifest)
 	})
 
 	t.Run("condition true drops only the CNI entry", func(t *testing.T) {
@@ -618,13 +583,8 @@ func TestCNIHandoverDropsInlineManifest(t *testing.T) {
 		})
 
 		out := mustRender(t, cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
-		if strings.Contains(out, cniManifest) {
-			t.Fatalf("expected the CNI inline manifest to be dropped, got:\n%s", out)
-		}
-
-		if !strings.Contains(out, unrelatedManifest) {
-			t.Fatalf("expected the sibling extraManifests entry to survive untouched, got:\n%s", out)
-		}
+		requireNone(t, out, cniManifest)
+		requireAll(t, out, unrelatedManifest)
 	})
 
 	// The original patch object handed to Render must never be mutated: a

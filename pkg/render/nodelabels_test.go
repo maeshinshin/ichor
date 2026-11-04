@@ -44,30 +44,20 @@ func TestRenderNodeLabels(t *testing.T) {
 
 			m := testMachine("node-a", roleWorker, map[string]string{zoneKey: rackOne})
 
-			out, _, err := Render(cluster, m, bundle, nil, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if !strings.Contains(string(out), "zone: rack-1") {
-				t.Fatalf("spec.nodeLabels not rendered:\n%s", out)
-			}
+			requireAll(t, mustRender(t, cluster, m, bundle, nil), "zone: rack-1")
 
 			// Same key as the preset's label: the machine layer wins over the system layer.
 			st := testStorage("longhorn", map[string]string{zoneKey: rackOne})
 			sys := &SystemInputs{Storage: []ichorv1alpha1.TalosStorage{st}}
 			m = testMachine("node-a", roleWorker, map[string]string{zoneKey: rackOne, longhornDiskLabel: "false"})
 
-			out, _, err = Render(cluster, m, bundle, nil, sys)
+			out, _, err := Render(cluster, m, bundle, nil, sys)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if !strings.Contains(string(out), longhornDiskLabel+": \"false\"") ||
-				strings.Contains(string(out), longhornDiskLabel+": \"true\"") ||
-				strings.Contains(string(out), longhornDiskLabel+": true") {
-				t.Fatalf("machine label should beat the TalosStorage label:\n%s", out)
-			}
+			requireAll(t, string(out), longhornDiskLabel+": \"false\"")
+			requireNone(t, string(out), longhornDiskLabel+": \"true\"", longhornDiskLabel+": true")
 		})
 	}
 

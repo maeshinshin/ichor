@@ -29,6 +29,7 @@ limitations under the License.
 package render
 
 import (
+	"cmp"
 	"crypto/sha256"
 	"fmt"
 	"reflect"
@@ -322,15 +323,7 @@ func baseConfig(
 	machineType machine.Type,
 ) (coreconfig.Provider, error) {
 	schedulable := cluster.Spec.ControlPlane.Schedulable
-
-	var allowScheduling bool
-
-	switch schedulable {
-	case "true":
-		allowScheduling = true
-	case "false":
-		allowScheduling = false
-	default:
+	if schedulable != "true" && schedulable != "false" {
 		return nil, fmt.Errorf("render: controlPlane.schedulable %q is invalid: must be %q or %q",
 			schedulable, "true", "false")
 	}
@@ -343,7 +336,7 @@ func baseConfig(
 	input, err := generate.NewInput(cluster.Name, endpoint, strings.TrimPrefix(cluster.Spec.KubernetesVersion, "v"),
 		generate.WithVersionContract(contract),
 		generate.WithSecretsBundle(bundle),
-		generate.WithAllowSchedulingOnControlPlanes(allowScheduling),
+		generate.WithAllowSchedulingOnControlPlanes(schedulable == "true"),
 		generate.WithAdditionalSubjectAltNames(cluster.Spec.CertSANs),
 	)
 	if err != nil {
@@ -417,15 +410,7 @@ func SelectPatches(
 	}
 
 	slices.SortFunc(selected, func(a, b orderedPatch) int {
-		if a.layer != b.layer {
-			return a.layer - b.layer
-		}
-
-		if a.priority != b.priority {
-			return int(a.priority) - int(b.priority)
-		}
-
-		return strings.Compare(a.name, b.name)
+		return cmp.Or(cmp.Compare(a.layer, b.layer), cmp.Compare(a.priority, b.priority), cmp.Compare(a.name, b.name))
 	})
 
 	ordered := make([]*ichorv1alpha1.TalosConfigPatch, len(selected))
@@ -499,24 +484,15 @@ func dropHandedOverInlineManifest(
 ) []*ichorv1alpha1.TalosConfigPatch {
 	handedOver := func(name string) bool { return name == cni.InlineManifestName || (taken != "" && name == taken) }
 
-	return rewriteClusterConfigs(ordered,
-		func(cc *typedconfig.ClusterConfig) bool {
-			return slices.ContainsFunc(cc.ClusterInlineManifests, func(e *typedconfig.ClusterInlineManifest) bool {
-				return handedOver(e.InlineManifestName)
-			})
+	isHandedOver := func(e *typedconfig.ClusterInlineManifest) bool { return handedOver(e.InlineManifestName) }
+
+	return rewriteConfigs(ordered,
+		func(c *typedconfig.Config) bool {
+			return c.ClusterConfig != nil && slices.ContainsFunc(c.ClusterConfig.ClusterInlineManifests, isHandedOver)
 		},
-		func(cc *typedconfig.ClusterConfig) {
-			// A fresh slice, never the original's backing array: the caller still holds the
-			// unmodified patch.
-			var kept []*typedconfig.ClusterInlineManifest
-
-			for _, e := range cc.ClusterInlineManifests {
-				if !handedOver(e.InlineManifestName) {
-					kept = append(kept, e)
-				}
-			}
-
-			cc.ClusterInlineManifests = kept
+		func(c *typedconfig.Config) {
+			// c is rewriteConfigs's deep copy, so the caller's patch keeps its entries.
+			c.ClusterConfig.ClusterInlineManifests = slices.DeleteFunc(c.ClusterConfig.ClusterInlineManifests, isHandedOver)
 		})
 }
 
@@ -529,34 +505,20 @@ func dropTalosAPIAccess(
 		return ordered
 	}
 
-	out := make([]*ichorv1alpha1.TalosConfigPatch, len(ordered))
-
-	for i, p := range ordered {
-		out[i] = p
-
-		for di, doc := range p.Spec.Documents {
-			if doc.Config == nil || doc.Config.MachineConfig == nil || doc.Config.MachineConfig.MachineFeatures == nil ||
-				doc.Config.MachineConfig.MachineFeatures.KubernetesTalosAPIAccessConfig == nil {
-				continue
-			}
-
-			if out[i] == p {
-				out[i] = p.DeepCopy()
-			}
-
-			out[i].Spec.Documents[di].Config.MachineConfig.MachineFeatures.KubernetesTalosAPIAccessConfig = nil
-		}
-	}
-
-	return out
+	return rewriteConfigs(ordered,
+		func(c *typedconfig.Config) bool {
+			return c.MachineConfig != nil && c.MachineConfig.MachineFeatures != nil &&
+				c.MachineConfig.MachineFeatures.KubernetesTalosAPIAccessConfig != nil
+		},
+		func(c *typedconfig.Config) { c.MachineConfig.MachineFeatures.KubernetesTalosAPIAccessConfig = nil })
 }
 
-// rewriteClusterConfigs returns ordered with edit applied to the ClusterConfig of every Config
-// document for which needs is true. It deep-copies only the patches it edits; every other patch
-// passes through as the same pointer, and the caller's own objects are never mutated.
-func rewriteClusterConfigs(
+// rewriteConfigs returns ordered with edit applied to every Config document for which needs is
+// true. It deep-copies only the patches it edits; every other patch passes through as the same
+// pointer, and the caller's own objects are never mutated.
+func rewriteConfigs(
 	ordered []*ichorv1alpha1.TalosConfigPatch,
-	needs func(*typedconfig.ClusterConfig) bool, edit func(*typedconfig.ClusterConfig),
+	needs func(*typedconfig.Config) bool, edit func(*typedconfig.Config),
 ) []*ichorv1alpha1.TalosConfigPatch {
 	out := make([]*ichorv1alpha1.TalosConfigPatch, len(ordered))
 
@@ -564,7 +526,7 @@ func rewriteClusterConfigs(
 		out[i] = p
 
 		for di, doc := range p.Spec.Documents {
-			if doc.Config == nil || doc.Config.ClusterConfig == nil || !needs(doc.Config.ClusterConfig) {
+			if doc.Config == nil || !needs(doc.Config) {
 				continue
 			}
 
@@ -572,7 +534,7 @@ func rewriteClusterConfigs(
 				out[i] = p.DeepCopy()
 			}
 
-			edit(out[i].Spec.Documents[di].Config.ClusterConfig)
+			edit(out[i].Spec.Documents[di].Config)
 		}
 	}
 

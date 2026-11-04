@@ -79,52 +79,35 @@ func TestKubeProxyModeIsRenderedByIchor(t *testing.T) {
 	}
 
 	t.Run("spec replaced renders disabled with no patch", func(t *testing.T) {
-		if out := mustRender(t, clusterFor(cni.KubeProxyReplaced, ""), m, bundle, nil); !strings.Contains(out, proxyOff) {
-			t.Fatalf("want kube-proxy off, got:\n%s", out)
-		}
+		requireAll(t, mustRender(t, clusterFor(cni.KubeProxyReplaced, ""), m, bundle, nil), proxyOff)
 	})
 
 	t.Run("a legacy patch that disables it no longer breaks the v1.14 render", func(t *testing.T) {
-		if out := mustRender(t, clusterFor(cni.KubeProxyReplaced, ""), m, bundle, patches); !strings.Contains(out, proxyOff) {
-			t.Fatalf("want kube-proxy off, got:\n%s", out)
-		}
+		requireAll(t, mustRender(t, clusterFor(cni.KubeProxyReplaced, ""), m, bundle, patches), proxyOff)
 	})
 
 	t.Run("spec enabled and never switched renders Talos's default", func(t *testing.T) {
-		out := proxyDoc(mustRender(t, clusterFor(cni.KubeProxyEnabled, ""), m, bundle, nil))
-		if strings.Contains(out, proxyOff) || strings.Contains(out, proxyOn) {
-			t.Fatalf("an unswitched enabled cluster must not render the flag, got:\n%s", out)
-		}
+		requireNone(t, proxyDoc(mustRender(t, clusterFor(cni.KubeProxyEnabled, ""), m, bundle, nil)), proxyOff, proxyOn)
 	})
 
 	t.Run("spec enabled and never switched still honours a patch", func(t *testing.T) {
 		worker := testMachine("node-w", roleWorker, nil)
 
-		out := mustRender(t, clusterFor(cni.KubeProxyEnabled, ""), worker, bundle, patches)
-		if !strings.Contains(out, "disabled: true") {
-			t.Fatalf("an unswitched enabled cluster renders as before, got:\n%s", out)
-		}
+		requireAll(t, mustRender(t, clusterFor(cni.KubeProxyEnabled, ""), worker, bundle, patches), "disabled: true")
 	})
 
 	t.Run("a worker renders no KubeProxyConfig: Talos allows the document on control planes only", func(t *testing.T) {
 		worker := testMachine("node-w", roleWorker, nil)
 
-		out := mustRender(t, clusterFor(cni.KubeProxyReplaced, cni.KubeProxyReplaced), worker, bundle, nil)
-		if strings.Contains(out, "kind: KubeProxyConfig") {
-			t.Fatalf("a worker must not carry the document, got:\n%s", out)
-		}
+		requireNone(t, mustRender(t, clusterFor(cni.KubeProxyReplaced, cni.KubeProxyReplaced), worker, bundle, nil),
+			"kind: KubeProxyConfig")
 	})
 
 	t.Run("status wins over spec in both directions, and over a patch", func(t *testing.T) {
 		out := mustRender(t, clusterFor(cni.KubeProxyReplaced, cni.KubeProxyEnabled), m, bundle, patches)
-		if !strings.Contains(proxyDoc(out), proxyOn) {
-			t.Fatalf("status enabled must win over spec replaced, got:\n%s", out)
-		}
+		requireAll(t, proxyDoc(out), proxyOn)
 
-		out = mustRender(t, clusterFor(cni.KubeProxyEnabled, cni.KubeProxyReplaced), m, bundle, nil)
-		if !strings.Contains(out, proxyOff) {
-			t.Fatalf("status replaced must win over spec enabled, got:\n%s", out)
-		}
+		requireAll(t, mustRender(t, clusterFor(cni.KubeProxyEnabled, cni.KubeProxyReplaced), m, bundle, nil), proxyOff)
 	})
 
 	t.Run("does not mutate the caller's patch", func(t *testing.T) {

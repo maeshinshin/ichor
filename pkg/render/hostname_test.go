@@ -16,10 +16,7 @@ limitations under the License.
 
 package render
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
 // TestRenderHostname: TalosMachine.spec.hostname reaches the rendered config -- the controller
 // uses it as the Kubernetes node and etcd member name, so the node must carry it. From the
@@ -41,29 +38,13 @@ func TestRenderHostname(t *testing.T) {
 			m := testMachine("node-a", roleWorker, nil)
 			m.Spec.Hostname = "cp-1"
 
-			out, _, err := Render(cluster, m, bundle, nil, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if !strings.Contains(string(out), "hostname: cp-1") {
-				t.Fatalf("spec.hostname not rendered:\n%s", out)
-			}
-
-			if strings.Contains(string(out), "auto: stable") {
-				t.Fatalf("auto: stable must not coexist with a static hostname:\n%s", out)
-			}
+			out := mustRender(t, cluster, m, bundle, nil)
+			requireAll(t, out, "hostname: cp-1")
+			requireNone(t, out, "auto: stable")
 
 			m.Spec.Hostname = ""
 
-			out, _, err = Render(cluster, m, bundle, nil, nil)
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			if strings.Contains(string(out), "hostname: cp-1") {
-				t.Fatalf("empty spec.hostname must render no static hostname:\n%s", out)
-			}
+			requireNone(t, mustRender(t, cluster, m, bundle, nil), "hostname: cp-1")
 		})
 	}
 }

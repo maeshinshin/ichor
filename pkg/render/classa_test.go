@@ -17,7 +17,6 @@ limitations under the License.
 package render
 
 import (
-	"strings"
 	"testing"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -48,22 +47,14 @@ func TestRenderClassAValues(t *testing.T) {
 
 			got := string(out)
 
-			for _, want := range []string{
-				"- cp.example.test", "kind: RegistryMirrorConfig", "name: ghcr.io",
-				"skipFallback: true", "overridePath: true", "wipe: true",
-			} {
-				if !strings.Contains(got, want) {
-					t.Errorf("rendered config lacks %q:\n%s", want, got)
-				}
+			requireAll(t, got, "- cp.example.test", "kind: RegistryMirrorConfig", "name: ghcr.io",
+				"skipFallback: true", "overridePath: true", "wipe: true")
+
+			if contract == versionContract {
+				requireAll(t, got, "certExtraSANs")
 			}
 
-			if contract == versionContract && !strings.Contains(got, "certExtraSANs") {
-				t.Errorf("v1.14 lacks KubeAPIServerConfig.certExtraSANs:\n%s", got)
-			}
-
-			if strings.Contains(got, "machine.registries") || strings.Contains(got, "registries:\n        mirrors") {
-				t.Errorf("mirrors rendered in the legacy form:\n%s", got)
-			}
+			requireNone(t, got, "machine.registries", "registries:\n        mirrors")
 		})
 	}
 }

@@ -216,7 +216,6 @@ func injectDiskEncryption(
 	}
 
 	docs := make([]config.Document, 0, 2)
-	yes := true
 
 	for _, name := range []string{constants.StatePartitionLabel, constants.EphemeralPartitionLabel} {
 		key := block.EncryptionKey{KeySlot: 0}
@@ -233,7 +232,7 @@ func injectDiskEncryption(
 		}
 
 		if name == constants.EphemeralPartitionLabel {
-			key.KeyLockToSTATE = &yes
+			key.KeyLockToSTATE = new(true)
 		}
 
 		v := block.NewVolumeConfigV1Alpha1()

@@ -637,3 +637,7 @@ The wait polls on the existing pod diagnostics (`waitDiag`), so a cluster with n
 **Not covered.** The names are the manifest's and the chart's defaults (release `ichor`, namespace `ichor-system`). A Helm release with another name or namespace is not found by label and the wait times out with the message above. An operator who may not read EndpointSlices is judged on the Deployment alone.
 
 **Tests.** `internal/cli/webhook_ready_test.go`: ready, becoming ready after polls, four timeout shapes (no Deployment, no available replica, no endpoint, endpoint not ready), and no `Create` before the controller is ready.
+
+## Amendment: ADR 0128 (2026-11-04)
+
+[ADR 0128](0128-adopting-installed-talos-machines-and-clusters.md) maps this ADR against the cases a user has and closes four gaps: a machine that already carries an Ichor cluster's CAs but has no `TalosMachine` is registered with `ichor adopt --add-machine` (section 2, state iii, was not reachable before); reclaim no longer counts a stale pending `TalosMachine` as an Ichor machine and points a managed cluster's node at `--add-machine`; `--cilium-values` (planned in 1.2, step 3, "not built" above) now carries the operator's values into a takeover of a Cilium with no release record; the non-Cilium refusal says Ichor does not migrate a CNI.

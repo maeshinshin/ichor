@@ -613,6 +613,14 @@ but are listed, and encrypted ones are called out. Consent is the node's UUID,
 typed. After the reboot the machine answers in maintenance mode with the same
 UUID and the normal add-by-IP flow registers it as pending.
 
+A machine that already carries an Ichor cluster's own CAs (it joined with the
+user's tooling after an adoption, or its `TalosMachine` was deleted) needs no
+reset and is refused by reclaim. `ichor adopt --cluster NAME --add-machine
+ADDRESS` registers it: the adoption's read-only plan, three classes of drift,
+held `TalosMachine` and zero-drift release, for the listed addresses only, with
+a check that the machine's own configuration names this cluster's ID and Talos
+API CA (ADR 0128). The UI has no button for it yet.
+
 - CLI: `ichor machine reclaim ADDRESS --talosconfig FILE`. The CLI writes to
   the node itself, with the operator's own credential, which never leaves the
   operator's machine; like `init` and `adopt` it acts on a node that belongs

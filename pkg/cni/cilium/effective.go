@@ -149,6 +149,15 @@ func EffectiveValues(
 // controller applies the mode the cluster currently runs, and only a kube-proxy switch applies
 // the spec's (ADR 0066). An empty mode reads as enabled.
 func EffectiveValuesForMode(cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode) (map[string]any, error) {
+	return EffectiveValuesForNodes(cluster, mode, 0)
+}
+
+// EffectiveValuesForNodes is EffectiveValuesForMode for a cluster that has nodes Nodes right now (0
+// unknown). The operator holds host ports and wants one pod per node, so its replicas follow the nodes
+// that exist, not spec.controlPlane.count: an HA cluster is bootstrapped with one node and the others
+// join later (ADR 0113 amendment 2026-11-04). The caller must pass the same count to everything that
+// hashes or applies the values.
+func EffectiveValuesForNodes(cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, nodes int) (map[string]any, error) {
 	c := cluster.Spec.CNI
 
 	var user map[string]any
@@ -163,7 +172,12 @@ func EffectiveValuesForMode(cluster *ichorv1alpha1.TalosCluster, mode cni.KubePr
 		mode = cni.KubeProxyEnabled
 	}
 
-	eff, err := EffectiveValues(user, mode, c.Tunnel, int(cluster.Spec.ControlPlane.Count))
+	p, err := newPreset(mode, c.Tunnel, int(cluster.Spec.ControlPlane.Count))
+	if err != nil {
+		return nil, err
+	}
+
+	eff, err := p.WithNodes(nodes).WithValues(user).effective(mode)
 	if err != nil {
 		return nil, err
 	}

@@ -18,6 +18,8 @@ package uiapi
 
 import (
 	"context"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -137,7 +139,7 @@ func TestCollectResourcesLeavesSensitiveOnesOut(t *testing.T) {
 
 	got := files["resources/network/HostnameStatuses.net.talos.dev.yaml"]
 	if !strings.Contains(string(got), "node-1") {
-		t.Fatalf("a plain resource must be written, got files %v", keys(files))
+		t.Fatalf("a plain resource must be written, got files %v", slices.Collect(maps.Keys(files)))
 	}
 
 	for name, data := range files {
@@ -152,17 +154,8 @@ func TestCollectResourcesLeavesSensitiveOnesOut(t *testing.T) {
 	}
 
 	if len(files) != 0 {
-		t.Fatalf("a type Talos marks sensitive must be skipped, got %v", keys(files))
+		t.Fatalf("a type Talos marks sensitive must be skipped, got %v", slices.Collect(maps.Keys(files)))
 	}
-}
-
-func keys(m map[string][]byte) []string {
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-
-	return out
 }
 
 func TestTalosRolePerScope(t *testing.T) {

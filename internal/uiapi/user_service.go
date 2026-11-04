@@ -440,7 +440,7 @@ func (s *Server) GetMyKubeconfig(ctx context.Context, req *connect.Request[pb.Ge
 	}
 
 	if f := req.Msg.GetCaFile(); len(f) > maxCAFileLen || strings.ContainsFunc(f, unicode.IsControl) {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("ca_file is not a usable path"))
+		return nil, invalid("ca_file is not a usable path")
 	}
 
 	name, ok := strings.CutPrefix(id.User, IchorUserPrefix)
@@ -494,7 +494,7 @@ func userWriteError(what string, err error) error {
 	case apierrors.IsAlreadyExists(err):
 		return connect.NewError(connect.CodeAlreadyExists, fmt.Errorf("%s: %w", what, err))
 	case apierrors.IsInvalid(err), apierrors.IsBadRequest(err):
-		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("%s: %w", what, err))
+		return invalid("%s: %w", what, err)
 	case apierrors.IsConflict(err):
 		return connect.NewError(connect.CodeAborted, fmt.Errorf("%s: %w", what, err))
 	default:

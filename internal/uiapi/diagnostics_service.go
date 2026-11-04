@@ -108,7 +108,7 @@ func (s *Server) GetMyPermissions(
 
 	if m := req.Msg.GetMachine(); m != nil {
 		if m.GetNamespace() == "" || m.GetName() == "" {
-			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("machine needs a namespace and a name"))
+			return nil, invalid("machine needs a namespace and a name")
 		}
 
 		for scope, dst := range map[DownloadScope]*bool{
@@ -124,7 +124,7 @@ func (s *Server) GetMyPermissions(
 
 	if c := req.Msg.GetCluster(); c != nil {
 		if c.GetNamespace() == "" || c.GetName() == "" {
-			return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("cluster needs a namespace and a name"))
+			return nil, invalid("cluster needs a namespace and a name")
 		}
 
 		g.Go(func() (err error) {
@@ -342,8 +342,7 @@ func (s *Server) DownloadEtcdSnapshot(
 	}
 
 	if m.Spec.Role != opRoleControlPlane {
-		return connect.NewError(connect.CodeInvalidArgument,
-			fmt.Errorf("machine %q is not a control plane node; an etcd snapshot comes from a control plane node", m.Name))
+		return invalid("machine %q is not a control plane node; an etcd snapshot comes from a control plane node", m.Name)
 	}
 
 	release, err := s.acquireDownloadSlot()
@@ -400,14 +399,14 @@ func (s *Server) CapturePackets(
 	r := req.Msg
 
 	if !interfaceNameRE.MatchString(r.GetInterface()) {
-		return connect.NewError(connect.CodeInvalidArgument, errors.New("interface must be a link name such as eth0"))
+		return invalid("interface must be a link name such as eth0")
 	}
 
 	duration := time.Duration(r.GetDurationSeconds()) * time.Second
 
 	switch {
 	case duration < 0 || duration > MaxCaptureDuration:
-		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("duration_seconds must be between 1 and %d", int(MaxCaptureDuration.Seconds())))
+		return invalid("duration_seconds must be between 1 and %d", int(MaxCaptureDuration.Seconds()))
 	case duration == 0:
 		duration = DefaultCaptureDuration
 	}
@@ -416,7 +415,7 @@ func (s *Server) CapturePackets(
 
 	switch {
 	case maxBytes < 0 || maxBytes > MaxCaptureBytes:
-		return connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("max_bytes must be between 1 and %d", MaxCaptureBytes))
+		return invalid("max_bytes must be between 1 and %d", MaxCaptureBytes)
 	case maxBytes == 0:
 		maxBytes = MaxCaptureBytes
 	}
@@ -520,7 +519,7 @@ func (s *Server) DownloadSupportBundle(
 
 		cluster, name = c, c.Name
 	default:
-		return connect.NewError(connect.CodeInvalidArgument, errors.New("name a machine or a cluster"))
+		return invalid("name a machine or a cluster")
 	}
 
 	release, err := s.acquireDownloadSlot()

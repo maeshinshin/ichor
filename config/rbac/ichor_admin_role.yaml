@@ -139,6 +139,7 @@ rules:
   - ichor.maesh.dev
   resources:
   - talosclusters/credentials
+  - talosclusters/talosconfig-reader
   - talosmachines/etcd-snapshot
   - talosmachines/packet-capture
   - talosmachines/support-bundle
@@ -159,3 +160,4 @@ rules:
   - taloscredentialrequests
   verbs:
   - create
+  - get

@@ -59,3 +59,18 @@ rules:
   - talosmachines/approval
   verbs:
   - approve
+# A short-lived os:reader talosconfig for talosctl (ADR 0124): the webhook checks the download verb; the CLI
+# reads the answer of its own request. Not in ichor-viewer.
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - talosclusters/talosconfig-reader
+  verbs:
+  - download
+- apiGroups:
+  - ichor.maesh.dev
+  resources:
+  - taloscredentialrequests
+  verbs:
+  - create
+  - get

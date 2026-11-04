@@ -39,11 +39,7 @@ func MinorDistance(a, b string) (distance int, ok bool) {
 
 	var amaj, amin, bmaj, bmin int
 
-	if _, err := fmt.Sscanf(semver.MajorMinor(a), "v%d.%d", &amaj, &amin); err != nil {
-		return 0, false
-	}
-
-	if _, err := fmt.Sscanf(semver.MajorMinor(b), "v%d.%d", &bmaj, &bmin); err != nil {
+	if _, err := fmt.Sscanf(semver.MajorMinor(a)+semver.MajorMinor(b), "v%d.%dv%d.%d", &amaj, &amin, &bmaj, &bmin); err != nil {
 		return 0, false
 	}
 

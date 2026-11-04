@@ -190,13 +190,9 @@ func BuildConfig(
 		return nil, err
 	}
 
-	cfg, err = injectAcceptedCAs(cfg, accepted)
-	if err != nil {
-		return nil, err
-	}
-
-	// A key rotation in progress puts the new keys next to the old ones in the control planes' documents.
-	cfg, err = sys.KeyRotation.inject(cfg, bundle, machineType)
+	// The accepted CAs of a CA rotation and the new keys of a key rotation (which sit next to the old ones in
+	// the control planes' documents) go into the generated configuration.
+	cfg, err = injectRotations(cfg, accepted, sys.KeyRotation, bundle, machineType)
 	if err != nil {
 		return nil, err
 	}

@@ -30,6 +30,8 @@ import (
 
 var bothKeys = []string{secretsbundle.TargetServiceAccount, secretsbundle.TargetSecretbox}
 
+const legacyAESCBC = "legacy-aescbc-secret"
+
 // secretboxProviders returns, in order, the secret of the first key of every provider of the rendered
 // kube-apiserver EncryptionConfiguration.
 func secretboxProviders(t *testing.T, cfg coreconfig.Provider) []string {
@@ -44,7 +46,7 @@ func secretboxProviders(t *testing.T, cfg coreconfig.Provider) []string {
 
 	providers, _ := resources[0].(map[string]any)["providers"].([]any)
 
-	var out []string
+	out := make([]string, 0, len(providers))
 
 	for _, p := range providers {
 		box, _ := p.(map[string]any)["secretbox"].(map[string]any)
@@ -67,9 +69,10 @@ func secretboxProviders(t *testing.T, cfg coreconfig.Provider) []string {
 
 // publicKeys returns the service-account public keys the API server verifies with, in the order it is given them.
 func publicKeys(cfg coreconfig.Provider) []string {
-	var out []string
+	accepted := cfg.K8sServiceAccountConfig().AcceptedKeys()
+	out := make([]string, 0, len(accepted))
 
-	for _, k := range cfg.K8sServiceAccountConfig().AcceptedKeys() {
+	for _, k := range accepted {
 		out = append(out, string(k.Key))
 	}
 
@@ -155,7 +158,11 @@ func TestKeyRotationRespectsItsTargets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg, err := BuildConfig(cluster, m, old, nil, &SystemInputs{KeyRotation: &KeyRotation{Stage: ichorv1alpha1.KeyRotationStageIssuing, New: box}})
+	issuing := func(kr *secretsbundle.KeyRotation) *SystemInputs {
+		return &SystemInputs{KeyRotation: &KeyRotation{Stage: ichorv1alpha1.KeyRotationStageIssuing, New: kr}}
+	}
+
+	cfg, err := BuildConfig(cluster, m, old, nil, issuing(box))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +171,7 @@ func TestKeyRotationRespectsItsTargets(t *testing.T) {
 		t.Error("a secretbox rotation changed the service-account keys")
 	}
 
-	cfg, err = BuildConfig(cluster, m, old, nil, &SystemInputs{KeyRotation: &KeyRotation{Stage: ichorv1alpha1.KeyRotationStageIssuing, New: sa}})
+	cfg, err = BuildConfig(cluster, m, old, nil, issuing(sa))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +234,7 @@ func TestKeyRotationKeepsTheOtherProvidersInPlace(t *testing.T) {
 	cluster := testCluster("true")
 	old := *testBundle(t)
 	secs := *old.Secrets
-	secs.AESCBCEncryptionSecret = "legacy-aescbc-secret"
+	secs.AESCBCEncryptionSecret = legacyAESCBC
 	old.Secrets = &secs
 
 	next, err := secretsbundle.NewKeyRotation(&old, bothKeys)
@@ -238,9 +245,9 @@ func TestKeyRotationKeepsTheOtherProvidersInPlace(t *testing.T) {
 	m := testMachine("node-cp", roleControlPlane, nil)
 
 	for stage, want := range map[string][]string{
-		ichorv1alpha1.KeyRotationStageAccepting: {old.Secrets.SecretboxEncryptionSecret, next.Secretbox, "legacy-aescbc-secret"},
-		ichorv1alpha1.KeyRotationStageIssuing:   {next.Secretbox, old.Secrets.SecretboxEncryptionSecret, "legacy-aescbc-secret"},
-		ichorv1alpha1.KeyRotationStageDropping:  {next.Secretbox, "legacy-aescbc-secret"},
+		ichorv1alpha1.KeyRotationStageAccepting: {old.Secrets.SecretboxEncryptionSecret, next.Secretbox, legacyAESCBC},
+		ichorv1alpha1.KeyRotationStageIssuing:   {next.Secretbox, old.Secrets.SecretboxEncryptionSecret, legacyAESCBC},
+		ichorv1alpha1.KeyRotationStageDropping:  {next.Secretbox, legacyAESCBC},
 	} {
 		cfg, err := BuildConfig(cluster, m, &old, nil, &SystemInputs{KeyRotation: &KeyRotation{Stage: stage, New: next}})
 		if err != nil {
@@ -263,11 +270,15 @@ func TestKeyRotationRefusals(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, _, err := Render(cluster, m, old, nil, &SystemInputs{KeyRotation: &KeyRotation{Stage: "Done", New: next}}); err == nil {
+	rotation := func(stage string, kr *secretsbundle.KeyRotation) *SystemInputs {
+		return &SystemInputs{KeyRotation: &KeyRotation{Stage: stage, New: kr}}
+	}
+
+	if _, _, err := Render(cluster, m, old, nil, rotation("Done", next)); err == nil {
 		t.Error("a stage no configuration is rendered for must be an error")
 	}
 
-	if _, _, err := Render(cluster, m, old, nil, &SystemInputs{KeyRotation: &KeyRotation{Stage: ichorv1alpha1.KeyRotationStageAccepting}}); err == nil {
+	if _, _, err := Render(cluster, m, old, nil, rotation(ichorv1alpha1.KeyRotationStageAccepting, nil)); err == nil {
 		t.Error("a rotation without new keys must be an error")
 	}
 
@@ -277,7 +288,7 @@ func TestKeyRotationRefusals(t *testing.T) {
 	secs.SecretboxEncryptionSecret = ""
 	bare.Secrets = &secs
 
-	_, _, err = Render(cluster, m, &bare, nil, &SystemInputs{KeyRotation: &KeyRotation{Stage: ichorv1alpha1.KeyRotationStageAccepting, New: next}})
+	_, _, err = Render(cluster, m, &bare, nil, rotation(ichorv1alpha1.KeyRotationStageAccepting, next))
 	if err == nil || !strings.Contains(err.Error(), "secretbox") {
 		t.Errorf("a bundle with no secretbox secret must be refused, naming it: %v", err)
 	}
@@ -286,14 +297,16 @@ func TestKeyRotationRefusals(t *testing.T) {
 // The legacy contract keeps the keys in single fields that cannot hold two, so there is nothing to render.
 func TestKeyRotationNeedsTheMultiDocumentContract(t *testing.T) {
 	cluster := testCluster("true")
-	cluster.Spec.VersionContract = "v1.13"
+	cluster.Spec.VersionContract = contractV113
 
-	contract, err := coreconfig.ParseContractFromVersion("v1.13")
+	contract, err := coreconfig.ParseContractFromVersion(contractV113)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	old, err := secrets.NewBundle(secrets.NewFixedClock(testBundle(t).Clock.Now()), contract, secrets.WithECDSAServiceAccountKey())
+	clock := secrets.NewFixedClock(testBundle(t).Clock.Now())
+
+	old, err := secrets.NewBundle(clock, contract, secrets.WithECDSAServiceAccountKey())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -305,7 +318,9 @@ func TestKeyRotationNeedsTheMultiDocumentContract(t *testing.T) {
 
 	m := testMachine("node-cp", roleControlPlane, nil)
 
-	_, _, err = Render(cluster, m, old, nil, &SystemInputs{KeyRotation: &KeyRotation{Stage: ichorv1alpha1.KeyRotationStageAccepting, New: next}})
+	_, _, err = Render(cluster, m, old, nil, &SystemInputs{KeyRotation: &KeyRotation{
+		Stage: ichorv1alpha1.KeyRotationStageAccepting, New: next,
+	}})
 	if err == nil || !strings.Contains(err.Error(), "v1.14") {
 		t.Fatalf("a v1.13 contract must be refused, naming the contract that works: %v", err)
 	}

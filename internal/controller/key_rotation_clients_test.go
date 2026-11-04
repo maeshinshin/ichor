@@ -32,18 +32,19 @@ import (
 	"github.com/go-jose/go-jose/v4"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 )
 
+const (
+	secretsResource = "secrets"
+	tokenKey        = "token"
+)
+
 func secretIn(ns, name string, typ corev1.SecretType, data map[string][]byte) *corev1.Secret {
-	return &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name, ResourceVersion: "1"},
-		Type:       typ, Data: data,
-	}
+	return &corev1.Secret{Namespace: ns, Name: name, ResourceVersion: "1", Type: typ, Data: data}
 }
 
 // fakeStore makes the fake clientset behave like kube-apiserver in the one respect a re-encryption depends on:
@@ -53,7 +54,7 @@ func fakeStore(cs *fake.Clientset, stale map[string]bool, conflict map[string]bo
 		secret := action.(k8stesting.UpdateAction).GetObject().(*corev1.Secret)
 
 		if conflict[secret.Name] {
-			return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: "secrets"}, secret.Name, errors.New("changed"))
+			return true, nil, apierrors.NewConflict(schema.GroupResource{Resource: secretsResource}, secret.Name, errors.New("changed"))
 		}
 
 		if stale[secret.Name] {
@@ -120,7 +121,7 @@ func TestReencryptSweepLeavesConflictsAndNotFoundsToTheNextSweep(t *testing.T) {
 	fakeStore(cs, nil, map[string]bool{"busy": true})
 	cs.PrependReactor("update", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
 		if s := action.(k8stesting.UpdateAction).GetObject().(*corev1.Secret); s.Name == "gone" {
-			return true, nil, apierrors.NewNotFound(schema.GroupResource{Resource: "secrets"}, s.Name)
+			return true, nil, apierrors.NewNotFound(schema.GroupResource{Resource: secretsResource}, s.Name)
 		}
 
 		return false, nil, nil
@@ -148,7 +149,7 @@ func TestReencryptSweepLeavesConflictsAndNotFoundsToTheNextSweep(t *testing.T) {
 func TestReencryptSweepFailsOnAnError(t *testing.T) {
 	cs := fake.NewSimpleClientset(secretIn("a", "one", corev1.SecretTypeOpaque, nil))
 	cs.PrependReactor("update", "secrets", func(k8stesting.Action) (bool, runtime.Object, error) {
-		return true, nil, apierrors.NewForbidden(schema.GroupResource{Resource: "secrets"}, "one", errors.New("no"))
+		return true, nil, apierrors.NewForbidden(schema.GroupResource{Resource: secretsResource}, "one", errors.New("no"))
 	})
 
 	if _, err := reencryptSweep(context.Background(), cs); err == nil {
@@ -216,13 +217,13 @@ func TestLegacyTokensSignedByFindsOnlyTheOnesTheOldKeyVerifies(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			cs := fake.NewSimpleClientset(
-				secretIn("a", "signed-by-old", tokenType, map[string][]byte{"token": []byte(tc.signed)}),
-				secretIn("b", "also-old", tokenType, map[string][]byte{"token": []byte(tc.signed)}),
-				secretIn("a", "signed-by-new", tokenType, map[string][]byte{"token": []byte(mintToken(t, jose.ES256, newEC))}),
+				secretIn("a", "signed-by-old", tokenType, map[string][]byte{tokenKey: []byte(tc.signed)}),
+				secretIn("b", "also-old", tokenType, map[string][]byte{tokenKey: []byte(tc.signed)}),
+				secretIn("a", "signed-by-new", tokenType, map[string][]byte{tokenKey: []byte(mintToken(t, jose.ES256, newEC))}),
 				secretIn("a", "no-token-yet", tokenType, nil),
-				secretIn("a", "garbage", tokenType, map[string][]byte{"token": []byte("not.a.jwt")}),
+				secretIn("a", "garbage", tokenType, map[string][]byte{tokenKey: []byte("not.a.jwt")}),
 				// a Secret of another type is not a token whatever it holds
-				secretIn("a", "opaque", corev1.SecretTypeOpaque, map[string][]byte{"token": []byte(tc.signed)}),
+				secretIn("a", "opaque", corev1.SecretTypeOpaque, map[string][]byte{tokenKey: []byte(tc.signed)}),
 			)
 
 			got, err := legacyTokensSignedBy(context.Background(), cs, pemPublic(t, tc.oldPub))

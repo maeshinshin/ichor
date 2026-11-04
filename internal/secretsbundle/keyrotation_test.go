@@ -27,6 +27,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
+const (
+	secondSecret = "second"
+	oldSecret    = "old"
+)
+
 func TestKeyRotationRoundTripAndApply(t *testing.T) {
 	bundle := newTestBundle(t)
 
@@ -187,10 +192,10 @@ func TestRetiredKeysRoundTripOrderAndFingerprint(t *testing.T) {
 	}
 
 	r.Add(RetiredKey{RetiredAt: time.Unix(1000, 0).UTC(), Secretbox: "first"})
-	r.Add(RetiredKey{RetiredAt: time.Unix(2000, 0).UTC(), ServiceAccount: "fp", Secretbox: "second"})
+	r.Add(RetiredKey{RetiredAt: time.Unix(2000, 0).UTC(), ServiceAccount: "fp", Secretbox: secondSecret})
 	r.Add(RetiredKey{RetiredAt: time.Unix(3000, 0).UTC(), ServiceAccount: "only-sa"})
 
-	if got := r.Secretboxes(); len(got) != 2 || got[0] != "second" || got[1] != "first" {
+	if got := r.Secretboxes(); len(got) != 2 || got[0] != secondSecret || got[1] != "first" {
 		t.Fatalf("secretbox secrets must be newest first and skip entries without one: %v", got)
 	}
 
@@ -204,7 +209,7 @@ func TestRetiredKeysRoundTripOrderAndFingerprint(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(back.Keys) != 3 || back.Keys[1].Secretbox != "second" || !back.Keys[2].RetiredAt.Equal(time.Unix(3000, 0)) {
+	if len(back.Keys) != 3 || back.Keys[1].Secretbox != secondSecret || !back.Keys[2].RetiredAt.Equal(time.Unix(3000, 0)) {
 		t.Fatalf("retired keys did not survive the round trip: %+v", back)
 	}
 
@@ -246,11 +251,11 @@ func TestLoadRetiredAbsentAndPresent(t *testing.T) {
 
 	var r Retired
 
-	r.Add(RetiredKey{RetiredAt: time.Unix(1, 0).UTC(), Secretbox: "old"})
+	r.Add(RetiredKey{RetiredAt: time.Unix(1, 0).UTC(), Secretbox: oldSecret})
 	secret.Data[RetiredKeysKey], _ = r.Marshal()
 
 	got, err = LoadRetired(context.Background(), newFakeClient(secret), testNamespace, testName)
-	if err != nil || len(got.Keys) != 1 || got.Keys[0].Secretbox != "old" {
+	if err != nil || len(got.Keys) != 1 || got.Keys[0].Secretbox != oldSecret {
 		t.Fatalf("retired-keys.yaml was not read back: %v %v", got, err)
 	}
 }
@@ -272,7 +277,7 @@ func TestExportFingerprintUnchangedWithoutRetiredKeys(t *testing.T) {
 
 	var r Retired
 
-	r.Add(RetiredKey{RetiredAt: time.Unix(1, 0).UTC(), Secretbox: "old"})
+	r.Add(RetiredKey{RetiredAt: time.Unix(1, 0).UTC(), Secretbox: oldSecret})
 
 	got, err := ExportFingerprint(bundle, &r)
 	if err != nil || got == base || got == "" {

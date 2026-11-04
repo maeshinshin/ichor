@@ -452,3 +452,7 @@ Section 6 and the first follow-up row are resolved for the etcd CA and the Kuber
 ## Amendment 2026-11-04: kubelet serving-certificate bootstrap
 
 The kubelet serving-certificate bootstrap named under "Not modelled" is decided and built in [ADR 0125](0125-kubelet-serving-certificates-are-requested-by-the-kubelets-and-approved-by-the-controller.md): `spec.security.kubeletServingCertificates`, with the controller approving `kubernetes.io/kubelet-serving` requests itself. The follow-up row above for it is closed; the other items in that row remain.
+
+## Amendment 2026-11-04: service-account and secretbox key rotation
+
+The first follow-up row, for the service-account signing key and the secretbox key, is resolved by ADR 0121: a `key-rotation` operation with a dual-key period, a re-encryption sweep and a versioned etcd backup key (section 4 above now reads old backups through `etcdbackup.Key.Retired`). The etcd CA and the aggregator CA stay open (ADR 0120).

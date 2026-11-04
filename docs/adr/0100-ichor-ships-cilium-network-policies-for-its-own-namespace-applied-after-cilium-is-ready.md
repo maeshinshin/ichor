@@ -174,3 +174,7 @@ The controller pulls no Helm chart or OCI image in process (the Cilium Helm Job 
 4. `toServices` `k8sService` for an in-cluster MinIO.
 5. The UI demo path (outer LB, NodePort, pinned port) with default-deny ingress and `world` allowed on the serving port.
 6. Hubble shows no drops for controller and ichor-ui at steady state and while a newly added CIDR is discovered.
+
+## Amendment (2026-11-04): ichor-ui's OIDC issuer by name, and the metrics port closed by default
+
+ADR 0126 closes the two things this ADR left wide. The `world` 443 egress of ichor-ui is gone from the static policies; the controller writes `ichor-ui-oidc-egress` with a `toFQDNs` (or `toServices`, `toCIDRSet`) rule for the issuer the ichor-ui Deployment names. The `cluster` ingress to the controller's metrics port is gone as well; the chart opens it to `networkPolicy.cilium.metricsNamespaces` and an installer install adds a policy of its own. In the flow table above, the rows "controller ingress `cluster` 8443" and "ichor-ui egress `world` 443" are superseded.

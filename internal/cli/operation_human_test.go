@@ -200,9 +200,11 @@ func TestUpgradeTargetsHumanOutput(t *testing.T) {
 
 	var out bytes.Buffer
 
-	printUpgradeTargets(&out, pb.OperationKind_OPERATION_KIND_TALOS, &pb.ListUpgradeTargetsResponse{
+	if err := printUpgradeTargets(&out, pb.OperationKind_OPERATION_KIND_TALOS, &pb.ListUpgradeTargetsResponse{
 		Available: true, Recommended: []string{testTalosVersion}, Patch: []string{"v1.14.4", "v1.14.3"}, NextMinor: []string{"v1.15.0"}, Default: testTalosVersion,
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	want := "VERSION  KIND         DEFAULT\n" +
 		"v1.14.5  recommended  ✓\n" +
@@ -215,24 +217,38 @@ func TestUpgradeTargetsHumanOutput(t *testing.T) {
 
 	out.Reset()
 
-	printUpgradeTargets(&out, pb.OperationKind_OPERATION_KIND_KUBERNETES, &pb.ListUpgradeTargetsResponse{UnavailableReason: "the update check is off"})
+	if err := printUpgradeTargets(&out, pb.OperationKind_OPERATION_KIND_KUBERNETES, &pb.ListUpgradeTargetsResponse{UnavailableReason: "the update check is off"}); err != nil {
+		t.Fatal(err)
+	}
 
 	if want := "! no list of kubernetes versions: the update check is off\nno version to move to\n"; out.String() != want {
 		t.Errorf("unavailable:\n%s\nwant:\n%s", out.String(), want)
 	}
+
+	out.Reset()
+
+	if err := printUpgradeTargets(&out, pb.OperationKind_OPERATION_KIND_TALOS, &pb.ListUpgradeTargetsResponse{Available: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	if want := "✓ talos is on the newest release this Ichor allows\n"; out.String() != want {
+		t.Errorf("nothing to move to:\n%s\nwant:\n%s", out.String(), want)
+	}
 }
 
-// -o yaml and -o json print what they printed before: the groups for --list, the wire message for the rest.
+// -o yaml and -o json print the wire message, for --list too: machine output, not the human text.
 func TestMachineFormatsOfTheOperationCommandsAreUnchanged(t *testing.T) {
 	setHumanTestFlags(t, outputYAML)
 
 	var out bytes.Buffer
 
-	printUpgradeTargets(&out, pb.OperationKind_OPERATION_KIND_TALOS, &pb.ListUpgradeTargetsResponse{
+	if err := printUpgradeTargets(&out, pb.OperationKind_OPERATION_KIND_TALOS, &pb.ListUpgradeTargetsResponse{
 		Available: true, Recommended: []string{testTalosVersion}, Patch: []string{"v1.14.4"}, Default: testTalosVersion,
-	})
+	}); err != nil {
+		t.Fatal(err)
+	}
 
-	if want := "  recommended  v1.14.5  (default)\n  patch        v1.14.4\n"; out.String() != want {
+	if want := "available: true\ndefault: v1.14.5\npatch:\n- v1.14.4\nrecommended:\n- v1.14.5\n"; out.String() != want {
 		t.Errorf("upgrade --list -o yaml: %q, want %q", out.String(), want)
 	}
 

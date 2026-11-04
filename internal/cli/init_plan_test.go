@@ -120,7 +120,7 @@ func TestBuildInitPlan_NonVIPWarnsButSucceeds(t *testing.T) {
 		t.Fatalf("endpoint.type = %q, want node", cluster.Spec.Endpoint.Type)
 	}
 
-	if !strings.Contains(warn.String(), "vip") {
+	if !strings.Contains(warn.String(), "VIP") {
 		t.Fatalf("expected a vip recommendation warning, got: %s", warn.String())
 	}
 }

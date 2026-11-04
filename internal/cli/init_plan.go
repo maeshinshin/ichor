@@ -282,8 +282,7 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 
 	if in.EndpointType != "vip" {
 		_, _ = fmt.Fprintf(warn,
-			"warning: --endpoint-type %q is not \"vip\". A VIP is recommended even for a single node: "+
-				"changing the endpoint later means re-issuing every certificate in the cluster.\n",
+			"warning: endpoint type %q: a VIP is recommended — changing it later re-issues every certificate\n",
 			in.EndpointType)
 	}
 
@@ -293,8 +292,8 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 
 	if in.Namespace != ichorControllerNamespace {
 		_, _ = fmt.Fprintf(warn,
-			"warning: --namespace %q is not %q. Ichor's own install manifest always deploys the "+
-				"controller to %q; a Secret or CR created elsewhere will not be visible to it.\n",
+			"warning: --namespace %q is not %q: Ichor's controller always runs in %q, "+
+				"so a Secret or CR created elsewhere is not visible to it\n",
 			in.Namespace, ichorControllerNamespace, ichorControllerNamespace)
 	}
 

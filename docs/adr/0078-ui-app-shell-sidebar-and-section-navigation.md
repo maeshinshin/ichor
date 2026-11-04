@@ -51,3 +51,7 @@ The section was a row of seven buttons with no context. It is now `components/Op
 ## Amendment (2026-10-28): no section navigation
 
 The "On this page" scroll-spy (`SectionLayout`, `lib/sectionNav.ts`) is gone. Users found it highlighted the wrong entry, the node page now uses tabs, and the Overview is the cluster home (ADR 0097), so only the patch page still had it. Pages stack their `Section` blocks (`components/Section.tsx`); section ids stay, so `#anchor` links still work.
+
+## Amendment (2026-11-04): the Overview no longer switches its buttons off while an operation runs
+
+Item 3 changed for the "another operation is not finished" case. The buttons stay on and the card no longer says "Waiting for the current operation to finish." Starting anything on a cluster with an unfinished operation is still refused by the server (`unfinishedOperation`, used by `CreateOperation` and `StartCniUpgrade`), because every TalosOperation takes the cluster lock under one identity, so the lock would not keep two of them apart. The dialog now shows that refusal, which names the operation and its phase: the plan's "Blocked" alert for the operation dialogs, the error alert for the Cilium upgrade.

@@ -600,7 +600,6 @@ export const en = {
   'ops.installedUnknown': 'Installed version unknown',
   'ops.modeEnabled': 'Now: kube-proxy runs',
   'ops.modeReplaced': 'Now: replaced by the CNI',
-  'ops.disabledBusy': 'Waiting for the current operation to finish.',
   'ops.currentNodes': '{done} of {total} nodes done',
   'ops.recentNone': 'No operation has run on this cluster yet.',
   'ops.versionHint': 'Now {current}. Enter a newer version.',

@@ -17,7 +17,6 @@ limitations under the License.
 package render
 
 import (
-	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -63,25 +62,15 @@ func TestRenderStorage(t *testing.T) {
 		t.Fatalf("Render(selected): %v", err)
 	}
 
-	for _, want := range []string{
-		kindUserVolume, "name: longhorn", storageDiskSelector,
-		"/var/mnt/longhorn", longhornDiskLabel, "node.longhorn.io/default-disks-config",
-	} {
-		if !strings.Contains(string(out), want) {
-			t.Errorf("selected machine's config missing %q:\n%s", want, out)
-		}
-	}
+	requireAll(t, string(out), kindUserVolume, "name: longhorn", storageDiskSelector,
+		"/var/mnt/longhorn", longhornDiskLabel, "node.longhorn.io/default-disks-config")
 
 	out, _, err = Render(cluster, other, bundle, nil, sys)
 	if err != nil {
 		t.Fatalf("Render(other): %v", err)
 	}
 
-	for _, bad := range []string{kindUserVolume, "longhorn"} {
-		if strings.Contains(string(out), bad) {
-			t.Errorf("unselected machine's config contains %q:\n%s", bad, out)
-		}
-	}
+	requireNone(t, string(out), kindUserVolume, "longhorn")
 
 	t.Run("another cluster's TalosStorage never applies", func(t *testing.T) {
 		foreign := testStorage("foreign", map[string]string{storageSelectorKey: storageRoleLabel})
@@ -92,9 +81,7 @@ func TestRenderStorage(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if strings.Contains(string(out), kindUserVolume) {
-			t.Fatalf("a foreign cluster's TalosStorage rendered:\n%s", out)
-		}
+		requireNone(t, string(out), kindUserVolume)
 	})
 
 	t.Run("a patch overrides the system layer", func(t *testing.T) {
@@ -121,9 +108,8 @@ func TestRenderStorage(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if !strings.Contains(string(out), "maxSize: 50%") || strings.Contains(string(out), "maxSize: 100%") {
-			t.Fatalf("expected the patch to win over layer 1:\n%s", out)
-		}
+		requireAll(t, string(out), "maxSize: 50%")
+		requireNone(t, string(out), "maxSize: 100%")
 	})
 
 	// Under a pre-1.14 contract the base config uses the legacy machine.* blocks, so layer 1
@@ -138,10 +124,6 @@ func TestRenderStorage(t *testing.T) {
 			t.Fatalf("Render(v1.12): %v", err)
 		}
 
-		for _, want := range []string{"/var/mnt/longhorn", "rshared", longhornDiskLabel} {
-			if !strings.Contains(string(out), want) {
-				t.Errorf("v1.12 config missing %q:\n%s", want, out)
-			}
-		}
+		requireAll(t, string(out), "/var/mnt/longhorn", "rshared", longhornDiskLabel)
 	})
 }

@@ -94,11 +94,7 @@ func TestSecurityDefaultOff(t *testing.T) {
 			}
 		}
 
-		for _, banned := range []string{"NetworkDefaultActionConfig", "ichor-fw-", "omitStages", "luks2"} {
-			if strings.Contains(base, banned) {
-				t.Errorf("%s: default render contains %q", role, banned)
-			}
-		}
+		requireNone(t, base, "NetworkDefaultActionConfig", "ichor-fw-", "omitStages", "luks2")
 	}
 }
 
@@ -124,29 +120,14 @@ func TestFirewall(t *testing.T) {
 			t.Fatalf("rules = %v, want %v", got, want)
 		}
 
-		apid := ruleDoc(out, "ichor-fw-apid")
-		for _, s := range []string{fwController, fwNodes, "50000"} {
-			if !strings.Contains(apid, s) {
-				t.Errorf("apid rule lacks %s:\n%s", s, apid)
-			}
-		}
-
-		api := ruleDoc(out, "ichor-fw-kubernetes-api")
-		for _, s := range []string{fwController, fwNodes, "10.244.0.0/16", "10.96.0.0/12", "6443"} {
-			if !strings.Contains(api, s) {
-				t.Errorf("kubernetes-api rule lacks %s:\n%s", s, api)
-			}
-		}
+		requireAll(t, ruleDoc(out, "ichor-fw-apid"), fwController, fwNodes, "50000")
+		requireAll(t, ruleDoc(out, "ichor-fw-kubernetes-api"), fwController, fwNodes, "10.244.0.0/16", "10.96.0.0/12", "6443")
 
 		etcd := ruleDoc(out, "ichor-fw-etcd")
-		if !strings.Contains(etcd, "2379-2380") || strings.Contains(etcd, fwController) {
-			t.Errorf("etcd rule wrong:\n%s", etcd)
-		}
+		requireAll(t, etcd, "2379-2380")
+		requireNone(t, etcd, fwController)
 
-		tun := ruleDoc(out, "ichor-fw-cilium-tunnel")
-		if !strings.Contains(tun, "8472") || !strings.Contains(tun, "protocol: udp") {
-			t.Errorf("tunnel rule wrong:\n%s", tun)
-		}
+		requireAll(t, ruleDoc(out, "ichor-fw-cilium-tunnel"), "8472", "protocol: udp")
 	})
 
 	t.Run("a worker gets no etcd, trustd or apiserver rule", func(t *testing.T) {
@@ -160,9 +141,7 @@ func TestFirewall(t *testing.T) {
 		c := fwCluster(nil)
 		c.Spec.CNI.Tunnel = "geneve"
 
-		if tun := ruleDoc(mustRender(t, c, worker, bundle, nil), "ichor-fw-cilium-tunnel"); !strings.Contains(tun, "6081") {
-			t.Fatalf("no geneve port:\n%s", tun)
-		}
+		requireAll(t, ruleDoc(mustRender(t, c, worker, bundle, nil), "ichor-fw-cilium-tunnel"), "6081")
 	})
 
 	t.Run("control planes narrow etcd and kubelet", func(t *testing.T) {
@@ -171,9 +150,8 @@ func TestFirewall(t *testing.T) {
 		}), cp, bundle, nil)
 
 		etcd := ruleDoc(out, "ichor-fw-etcd")
-		if !strings.Contains(etcd, "10.0.0.10/32") || strings.Contains(etcd, fwNodes) {
-			t.Fatalf("etcd rule should name only the control plane:\n%s", etcd)
-		}
+		requireAll(t, etcd, "10.0.0.10/32")
+		requireNone(t, etcd, fwNodes)
 	})
 
 	t.Run("wireguard, kubespan, extra sources and allow rules", func(t *testing.T) {
@@ -194,9 +172,7 @@ func TestFirewall(t *testing.T) {
 			"ichor-fw-apid": "172.16.0.0/12", "ichor-fw-kubernetes-api": "203.0.113.0/24",
 			"ichor-fw-allow-ingress": "8000-8100",
 		} {
-			if d := ruleDoc(out, name); !strings.Contains(d, want) {
-				t.Errorf("%s lacks %s:\n%s", name, want, d)
-			}
+			requireAll(t, ruleDoc(out, name), want)
 		}
 	})
 
@@ -256,17 +232,9 @@ func TestPodSecurityAndAudit(t *testing.T) {
 
 	t.Run("pod security overrides only what is set and keeps kube-system", func(t *testing.T) {
 		doc := section(mustRender(t, ps, cp, bundle, nil), "kind: KubeAdmissionControlConfig")
-		for _, want := range []string{
-			"enforce: restricted", "audit: restricted", "warn: restricted", "- kube-system", "- monitoring", "- rook-ceph",
-		} {
-			if !strings.Contains(doc, want) {
-				t.Errorf("lacks %q:\n%s", want, doc)
-			}
-		}
-
-		if strings.Contains(doc, "enforce: baseline") {
-			t.Errorf("baseline survived:\n%s", doc)
-		}
+		requireAll(t, doc,
+			"enforce: restricted", "audit: restricted", "warn: restricted", "- kube-system", "- monitoring", "- rook-ceph")
+		requireNone(t, doc, "enforce: baseline")
 	})
 
 	t.Run("a worker is untouched", func(t *testing.T) {
@@ -290,17 +258,11 @@ func TestPodSecurityAndAudit(t *testing.T) {
 
 			switch policy {
 			case ichorv1alpha1.AuditPolicyMetadata:
-				if strings.Contains(doc, "level: Request") {
-					t.Errorf("metadata preset logs bodies:\n%s", doc)
-				}
+				requireNone(t, doc, "level: Request")
 			case ichorv1alpha1.AuditPolicyRBACChange:
-				if !strings.Contains(doc, "RequestResponse") || !strings.Contains(doc, "rbac.authorization.k8s.io") {
-					t.Errorf("rbac rule missing:\n%s", doc)
-				}
+				requireAll(t, doc, "RequestResponse", "rbac.authorization.k8s.io")
 			case ichorv1alpha1.AuditPolicyWrites:
-				if !strings.Contains(doc, "level: Request\n") {
-					t.Errorf("writes rule missing:\n%s", doc)
-				}
+				requireAll(t, doc, "level: Request\n")
 			}
 
 			// Secrets stay at Metadata and the rule comes first.
@@ -337,30 +299,20 @@ func TestDiskEncryption(t *testing.T) {
 
 		state, eph := section(out, "name: STATE\n"), section(out, "name: EPHEMERAL\n")
 
-		for name, doc := range map[string]string{"STATE": state, "EPHEMERAL": eph} {
-			for _, want := range []string{"provider: luks2", "tpm:", "checkSecurebootStatusOnEnroll: true"} {
-				if !strings.Contains(doc, want) {
-					t.Errorf("%s lacks %q:\n%s", name, want, doc)
-				}
-			}
+		for _, doc := range []string{state, eph} {
+			requireAll(t, doc, "provider: luks2", "tpm:", "checkSecurebootStatusOnEnroll: true")
 		}
 
-		if strings.Contains(state, "lockToState") || !strings.Contains(eph, "lockToState: true") {
-			t.Errorf("lockToState wrong:\nSTATE:\n%s\nEPHEMERAL:\n%s", state, eph)
-		}
+		requireNone(t, state, "lockToState")
+		requireAll(t, eph, "lockToState: true")
 	})
 
 	t.Run("nodeID and kms", func(t *testing.T) {
-		out := mustRender(t, enc(ichorv1alpha1.TalosClusterDiskEncryption{Type: "nodeID"}), cp, bundle, nil)
-		if !strings.Contains(out, "nodeID: {}") {
-			t.Errorf("no nodeID key:\n%s", out)
-		}
+		nodeID := ichorv1alpha1.TalosClusterDiskEncryption{Type: "nodeID"}
+		requireAll(t, mustRender(t, enc(nodeID), cp, bundle, nil), "nodeID: {}")
 
 		kms := ichorv1alpha1.TalosClusterDiskEncryption{Type: "kms", KMSEndpoint: "https://kms.example.com:4443"}
-		out = mustRender(t, enc(kms), cp, bundle, nil)
-		if !strings.Contains(out, "endpoint: https://kms.example.com:4443") {
-			t.Errorf("no kms endpoint:\n%s", out)
-		}
+		requireAll(t, mustRender(t, enc(kms), cp, bundle, nil), "endpoint: https://kms.example.com:4443")
 	})
 
 	t.Run("a plaintext KMS endpoint is refused", func(t *testing.T) {
@@ -401,14 +353,10 @@ func TestTalosAPIAccessRendersOnControlPlanesOnly(t *testing.T) {
 	patches := []ichorv1alpha1.TalosConfigPatch{patch}
 
 	cp := mustRender(t, testCluster("true"), testMachine("cp", roleControlPlane, nil), bundle, patches)
-	if !strings.Contains(cp, "kubernetesTalosAPIAccess") {
-		t.Errorf("control plane lacks the feature:\n%s", cp)
-	}
+	requireAll(t, cp, "kubernetesTalosAPIAccess")
 
-	w := mustRender(t, testCluster("true"), testMachine("w", roleWorker, nil), bundle, patches)
-	if strings.Contains(w, "kubernetesTalosAPIAccess") {
-		t.Errorf("worker got the feature:\n%s", w)
-	}
+	requireNone(t, mustRender(t, testCluster("true"), testMachine("w", roleWorker, nil), bundle, patches),
+		"kubernetesTalosAPIAccess")
 
 	if patches[0].Spec.Documents[0].Config.MachineConfig.MachineFeatures.KubernetesTalosAPIAccessConfig == nil {
 		t.Error("the caller's patch was modified")

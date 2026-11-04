@@ -58,7 +58,7 @@ func injectNetwork(
 	}
 
 	if !contract.MultidocNetworkConfigSupported() {
-		return injectLegacyNetwork(cfg, n)
+		return injectLegacyNetwork(cfg, n, routes)
 	}
 
 	match, err := cel.ParseBooleanExpression(
@@ -163,7 +163,9 @@ func networkRoutes(n *ichorv1alpha1.TalosMachineNetwork) ([]network.RouteConfig,
 // address, with the VLAN nested under it, and the DNS servers under machine.network.
 //
 //nolint:staticcheck // the legacy block is the only form a 1.11 or older contract accepts
-func injectLegacyNetwork(cfg coreconfig.Provider, n *ichorv1alpha1.TalosMachineNetwork) (coreconfig.Provider, error) {
+func injectLegacyNetwork(
+	cfg coreconfig.Provider, n *ichorv1alpha1.TalosMachineNetwork, gateway []network.RouteConfig,
+) (coreconfig.Provider, error) {
 	dev := &mv1alpha1.Device{
 		DeviceSelector: &mv1alpha1.NetworkDeviceSelector{NetworkDevicePermanentAddress: strings.ToLower(n.MAC)},
 	}
@@ -172,14 +174,10 @@ func injectLegacyNetwork(cfg coreconfig.Provider, n *ichorv1alpha1.TalosMachineN
 
 	var routes []*mv1alpha1.Route
 
-	if n.Gateway != "" {
-		gw, err := netip.ParseAddr(n.Gateway)
-		if err != nil {
-			return nil, fmt.Errorf("render: network.gateway %q: %w", n.Gateway, err)
-		}
-
+	// gateway came from networkRoutes, which already parsed (and refused a bad) spec.network.gateway.
+	if len(gateway) > 0 {
 		dest := "0.0.0.0/0"
-		if gw.Is6() {
+		if gateway[0].RouteGateway.Is6() {
 			dest = "::/0"
 		}
 

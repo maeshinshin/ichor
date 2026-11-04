@@ -121,7 +121,9 @@ func newPreset(kubeProxy cni.KubeProxyMode, tunnel string, controlPlanes int) (P
 // the owned keys, for showing the layers separately.
 // tunnel is "", "vxlan" or "geneve"; controlPlanes is the cluster's control-plane count and nodes how many Nodes it has
 // now (each 0 unknown; Preset.WithNodes).
-func Layers(kubeProxy cni.KubeProxyMode, tunnel string, controlPlanes, nodes int) (defaults, owned map[string]any, err error) {
+func Layers(
+	kubeProxy cni.KubeProxyMode, tunnel string, controlPlanes, nodes int,
+) (defaults, owned map[string]any, err error) {
 	p, err := newPreset(kubeProxy, tunnel, controlPlanes)
 	if err != nil {
 		return nil, nil, err

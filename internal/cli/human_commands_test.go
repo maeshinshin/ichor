@@ -246,7 +246,7 @@ func TestMachineListKeepsFullNamesWhenShortOnesClash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, want := range []string{cpUUID + "  initshow  control-plane", "fa70962a-ffff-ffff-ffff-ffffffffffff  elsewhere"} {
+	for _, want := range []string{cpUUID + "  initshow   control-plane", "fa70962a-ffff-ffff-ffff-ffffffffffff  elsewhere"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("missing %q in:\n%s", want, out.String())
 		}

@@ -8,6 +8,7 @@ syntax = "proto3";
 // turns those into Talos API calls"); this service never talks to a node.
 package ichor.v1alpha1;
 
+import "google/protobuf/timestamp.proto";
 import "ichor/v1alpha1/common.proto";
 import "ichor/v1alpha1/node.proto";
 
@@ -175,4 +176,6 @@ message Patch {
   // own CEL rule).
   PatchTarget target = 5;
   repeated PatchDocument documents = 6;
+  // created_at is the object's creation time; unset when talking to an older backend.
+  google.protobuf.Timestamp created_at = 7;
 }

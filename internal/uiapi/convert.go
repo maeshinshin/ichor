@@ -356,6 +356,7 @@ func patchToPB(p *ichorv1alpha1.TalosConfigPatch) (*pb.Patch, error) {
 		Priority:  p.Spec.Priority,
 		Target:    targetToPB(p.Spec.Target),
 		Documents: docs,
+		CreatedAt: createdAtToPB(p.CreationTimestamp),
 	}, nil
 }
 

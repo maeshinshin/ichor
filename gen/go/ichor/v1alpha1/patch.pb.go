@@ -16,6 +16,7 @@ package ichorv1alpha1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -943,8 +944,10 @@ type Patch struct {
 	Priority int32       `protobuf:"varint,4,opt,name=priority,proto3" json:"priority,omitempty"`
 	// target is required for every layer but "cluster" (TalosConfigPatchSpec's
 	// own CEL rule).
-	Target        *PatchTarget     `protobuf:"bytes,5,opt,name=target,proto3" json:"target,omitempty"`
-	Documents     []*PatchDocument `protobuf:"bytes,6,rep,name=documents,proto3" json:"documents,omitempty"`
+	Target    *PatchTarget     `protobuf:"bytes,5,opt,name=target,proto3" json:"target,omitempty"`
+	Documents []*PatchDocument `protobuf:"bytes,6,rep,name=documents,proto3" json:"documents,omitempty"`
+	// created_at is the object's creation time; unset when talking to an older backend.
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1021,11 +1024,18 @@ func (x *Patch) GetDocuments() []*PatchDocument {
 	return nil
 }
 
+func (x *Patch) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
 var File_ichor_v1alpha1_patch_proto protoreflect.FileDescriptor
 
 const file_ichor_v1alpha1_patch_proto_rawDesc = "" +
 	"\n" +
-	"\x1aichor/v1alpha1/patch.proto\x12\x0eichor.v1alpha1\x1a\x1bichor/v1alpha1/common.proto\x1a\x19ichor/v1alpha1/node.proto\"I\n" +
+	"\x1aichor/v1alpha1/patch.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\x1a\x19ichor/v1alpha1/node.proto\"I\n" +
 	"\x12ListPatchesRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"F\n" +
 	"\x13ListPatchesResponse\x12/\n" +
@@ -1077,14 +1087,16 @@ const file_ichor_v1alpha1_patch_proto_rawDesc = "" +
 	"machineRef\"?\n" +
 	"\rPatchDocument\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x1a\n" +
-	"\bdocument\x18\x02 \x01(\tR\bdocument\"\xaa\x02\n" +
+	"\bdocument\x18\x02 \x01(\tR\bdocument\"\xe5\x02\n" +
 	"\x05Patch\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x123\n" +
 	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
 	"\x05layer\x18\x03 \x01(\x0e2\x1b.ichor.v1alpha1.ConfigLayerR\x05layer\x12\x1a\n" +
 	"\bpriority\x18\x04 \x01(\x05R\bpriority\x123\n" +
 	"\x06target\x18\x05 \x01(\v2\x1b.ichor.v1alpha1.PatchTargetR\x06target\x12;\n" +
-	"\tdocuments\x18\x06 \x03(\v2\x1d.ichor.v1alpha1.PatchDocumentR\tdocuments2\x9b\x04\n" +
+	"\tdocuments\x18\x06 \x03(\v2\x1d.ichor.v1alpha1.PatchDocumentR\tdocuments\x129\n" +
+	"\n" +
+	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt2\x9b\x04\n" +
 	"\fPatchService\x12V\n" +
 	"\vListPatches\x12\".ichor.v1alpha1.ListPatchesRequest\x1a#.ichor.v1alpha1.ListPatchesResponse\x12M\n" +
 	"\bGetPatch\x12\x1f.ichor.v1alpha1.GetPatchRequest\x1a .ichor.v1alpha1.GetPatchResponse\x12V\n" +
@@ -1131,6 +1143,7 @@ var file_ichor_v1alpha1_patch_proto_goTypes = []any{
 	(*AuditRecord)(nil),              // 19: ichor.v1alpha1.AuditRecord
 	(*Override)(nil),                 // 20: ichor.v1alpha1.Override
 	(ConfigLayer)(0),                 // 21: ichor.v1alpha1.ConfigLayer
+	(*timestamppb.Timestamp)(nil),    // 22: google.protobuf.Timestamp
 }
 var file_ichor_v1alpha1_patch_proto_depIdxs = []int32{
 	18, // 0: ichor.v1alpha1.ListPatchesRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
@@ -1156,23 +1169,24 @@ var file_ichor_v1alpha1_patch_proto_depIdxs = []int32{
 	21, // 20: ichor.v1alpha1.Patch.layer:type_name -> ichor.v1alpha1.ConfigLayer
 	14, // 21: ichor.v1alpha1.Patch.target:type_name -> ichor.v1alpha1.PatchTarget
 	15, // 22: ichor.v1alpha1.Patch.documents:type_name -> ichor.v1alpha1.PatchDocument
-	0,  // 23: ichor.v1alpha1.PatchService.ListPatches:input_type -> ichor.v1alpha1.ListPatchesRequest
-	2,  // 24: ichor.v1alpha1.PatchService.GetPatch:input_type -> ichor.v1alpha1.GetPatchRequest
-	4,  // 25: ichor.v1alpha1.PatchService.CreatePatch:input_type -> ichor.v1alpha1.CreatePatchRequest
-	6,  // 26: ichor.v1alpha1.PatchService.UpdatePatch:input_type -> ichor.v1alpha1.UpdatePatchRequest
-	8,  // 27: ichor.v1alpha1.PatchService.DeletePatch:input_type -> ichor.v1alpha1.DeletePatchRequest
-	10, // 28: ichor.v1alpha1.PatchService.PreviewImpact:input_type -> ichor.v1alpha1.PreviewImpactRequest
-	1,  // 29: ichor.v1alpha1.PatchService.ListPatches:output_type -> ichor.v1alpha1.ListPatchesResponse
-	3,  // 30: ichor.v1alpha1.PatchService.GetPatch:output_type -> ichor.v1alpha1.GetPatchResponse
-	5,  // 31: ichor.v1alpha1.PatchService.CreatePatch:output_type -> ichor.v1alpha1.CreatePatchResponse
-	7,  // 32: ichor.v1alpha1.PatchService.UpdatePatch:output_type -> ichor.v1alpha1.UpdatePatchResponse
-	9,  // 33: ichor.v1alpha1.PatchService.DeletePatch:output_type -> ichor.v1alpha1.DeletePatchResponse
-	11, // 34: ichor.v1alpha1.PatchService.PreviewImpact:output_type -> ichor.v1alpha1.PreviewImpactResponse
-	29, // [29:35] is the sub-list for method output_type
-	23, // [23:29] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	22, // 23: ichor.v1alpha1.Patch.created_at:type_name -> google.protobuf.Timestamp
+	0,  // 24: ichor.v1alpha1.PatchService.ListPatches:input_type -> ichor.v1alpha1.ListPatchesRequest
+	2,  // 25: ichor.v1alpha1.PatchService.GetPatch:input_type -> ichor.v1alpha1.GetPatchRequest
+	4,  // 26: ichor.v1alpha1.PatchService.CreatePatch:input_type -> ichor.v1alpha1.CreatePatchRequest
+	6,  // 27: ichor.v1alpha1.PatchService.UpdatePatch:input_type -> ichor.v1alpha1.UpdatePatchRequest
+	8,  // 28: ichor.v1alpha1.PatchService.DeletePatch:input_type -> ichor.v1alpha1.DeletePatchRequest
+	10, // 29: ichor.v1alpha1.PatchService.PreviewImpact:input_type -> ichor.v1alpha1.PreviewImpactRequest
+	1,  // 30: ichor.v1alpha1.PatchService.ListPatches:output_type -> ichor.v1alpha1.ListPatchesResponse
+	3,  // 31: ichor.v1alpha1.PatchService.GetPatch:output_type -> ichor.v1alpha1.GetPatchResponse
+	5,  // 32: ichor.v1alpha1.PatchService.CreatePatch:output_type -> ichor.v1alpha1.CreatePatchResponse
+	7,  // 33: ichor.v1alpha1.PatchService.UpdatePatch:output_type -> ichor.v1alpha1.UpdatePatchResponse
+	9,  // 34: ichor.v1alpha1.PatchService.DeletePatch:output_type -> ichor.v1alpha1.DeletePatchResponse
+	11, // 35: ichor.v1alpha1.PatchService.PreviewImpact:output_type -> ichor.v1alpha1.PreviewImpactResponse
+	30, // [30:36] is the sub-list for method output_type
+	24, // [24:30] is the sub-list for method input_type
+	24, // [24:24] is the sub-list for extension type_name
+	24, // [24:24] is the sub-list for extension extendee
+	0,  // [0:24] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_patch_proto_init() }

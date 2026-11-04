@@ -100,7 +100,7 @@ func keyRotationTargets(only string) ([]string, error) {
 
 	var out []string
 
-	for _, name := range strings.Split(only, ",") {
+	for name := range strings.SplitSeq(only, ",") {
 		switch strings.TrimSpace(name) {
 		case "service-account", ichorv1alpha1.KeyRotationTargetServiceAccount:
 			out = append(out, ichorv1alpha1.KeyRotationTargetServiceAccount)

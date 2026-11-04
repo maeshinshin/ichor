@@ -609,12 +609,18 @@ networkPolicy:
     ## the controller and ichor-ui. While true the rules here stop allowing `world` to Talos nodes, API
     ## servers and S3. Set false to fall back to `world` (the pre-amendment behaviour).
     dynamicTalosEgress: true
-    ## Namespaces whose pods may scrape the controller's metrics port. Empty (default): any in-cluster
-    ## source (the `cluster` entity).
+    ## Namespaces whose pods may open the controller's metrics port. Empty (the default): none, the
+    ## port is closed to every pod. Name the namespace of your Prometheus. The endpoint stays behind
+    ## TokenReview and SubjectAccessReview as well. ichor-ui's /metrics shares its serving port with the UI,
+    ## so this does not cover it; `uiIngressCIDRs` narrows who reaches that port from outside the cluster.
     metricsNamespaces: []
-    ## TCP ports the controller (S3 for TalosEtcdBackup) and ichor-ui (the external OIDC issuer)
-    ## may reach outside the cluster. A store or issuer on
-    ## another port, or inside the cluster, needs a policy of your own: policies add up.
+    ## Pod labels that, with metricsNamespaces, narrow the scrapers to those pods of each namespace, for
+    ## example {app.kubernetes.io/name: prometheus}. Empty: every pod of the named namespaces.
+    metricsPodLabels: {}
+    ## TCP ports for the fallback rules below: the controller (S3 for TalosEtcdBackup) and ichor-ui (the
+    ## external OIDC issuer) outside the cluster. In the default dynamic mode the controller names the S3
+    ## stores from the TalosEtcdBackups and the issuer from the ichor-ui Deployment, on the port
+    ## of each URL, and these are not used.
     externalPorts:
       - 443
     ## Narrow the `world` egress and ingress. Empty (the default) keeps today's behaviour. Each

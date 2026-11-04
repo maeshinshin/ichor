@@ -133,7 +133,7 @@ func (u *UIEgress) Sync(ctx context.Context) (bool, error) {
 func (u *UIEgress) issuer(ctx context.Context, app string) (urlTarget, bool, error) {
 	var deployments appsv1.DeploymentList
 	if err := u.Reader.List(ctx, &deployments, client.InNamespace(u.Namespace),
-		client.MatchingLabels{"control-plane": uiPodLabelValue, nameLabel: app}); err != nil {
+		client.MatchingLabels{controlPlaneLabel: uiPodLabelValue, nameLabel: app}); err != nil {
 		return urlTarget{}, false, err
 	}
 
@@ -175,10 +175,10 @@ func oidcIssuerOf(dep *appsv1.Deployment) string {
 // controller never dials an IdP.
 func uiEgressSpec(app string, issuer urlTarget) map[string]any {
 	return map[string]any{
-		"description": "Egress of ichor-ui to its external OIDC issuer. Written by the controller from " +
+		keyDescription: "Egress of ichor-ui to its external OIDC issuer. Written by the controller from " +
 			"the ichor-ui Deployment's issuer; edits are overwritten.",
-		"endpointSelector": map[string]any{"matchLabels": map[string]any{
-			nameLabel: app, "control-plane": uiPodLabelValue,
+		keySelector: map[string]any{keyMatchLabels: map[string]any{
+			nameLabel: app, controlPlaneLabel: uiPodLabelValue,
 		}},
 		keyEgress: []any{issuer.rule()},
 	}

@@ -159,8 +159,8 @@ var _ = Describe("TalosEgress", Ordered, func() {
 		static := cnpGVK()
 		static.SetNamespace(egressNS)
 		static.SetName("ichor-controller-manager")
-		static.Object["spec"] = map[string]any{"endpointSelector": map[string]any{"matchLabels": map[string]any{
-			"control-plane": "controller-manager", "app.kubernetes.io/name": "ichor",
+		static.Object["spec"] = map[string]any{keySelector: map[string]any{keyMatchLabels: map[string]any{
+			controlPlaneLabel: "controller-manager", "app.kubernetes.io/name": "ichor",
 		}}, "egress": []any{map[string]any{}}}
 		Expect(k8sClient.Create(ctx, static)).To(Succeed())
 

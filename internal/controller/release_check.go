@@ -238,10 +238,10 @@ func releaseCheckSpec(app string, hosts []string) map[string]any {
 	}
 
 	return map[string]any{
-		"description": "Egress of the controller to the chart and image repositories, for the check of newer " +
+		keyDescription: "Egress of the controller to the chart and image repositories, for the check of newer " +
 			"Ichor, Talos and Kubernetes releases. Written by the controller; edits are overwritten.",
-		"endpointSelector": map[string]any{"matchLabels": map[string]any{
-			nameLabel: app, "control-plane": valueControllerMgr,
+		keySelector: map[string]any{keyMatchLabels: map[string]any{
+			nameLabel: app, controlPlaneLabel: valueControllerMgr,
 		}},
 		keyEgress: []any{rule},
 	}

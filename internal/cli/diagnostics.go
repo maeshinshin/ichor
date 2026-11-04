@@ -129,6 +129,17 @@ func (l *localDiagnostics) CapturePackets(
 	return c.CapturePackets(ctx, req)
 }
 
+func (l *localDiagnostics) DownloadReaderTalosconfig(
+	ctx context.Context, req *connect.Request[pb.DownloadReaderTalosconfigRequest],
+) (*connect.ServerStreamForClient[pb.DownloadReaderTalosconfigResponse], error) {
+	c, err := l.client()
+	if err != nil {
+		return nil, err
+	}
+
+	return c.DownloadReaderTalosconfig(ctx, req)
+}
+
 // chunk is one of the three streaming responses (each RPC has its own message
 // type, ADR 0016); they all carry the same fields.
 type chunk interface {

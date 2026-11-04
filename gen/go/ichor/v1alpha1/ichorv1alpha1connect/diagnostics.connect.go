@@ -51,6 +51,9 @@ const (
 	// DiagnosticsServiceCapturePacketsProcedure is the fully-qualified name of the DiagnosticsService's
 	// CapturePackets RPC.
 	DiagnosticsServiceCapturePacketsProcedure = "/ichor.v1alpha1.DiagnosticsService/CapturePackets"
+	// DiagnosticsServiceDownloadReaderTalosconfigProcedure is the fully-qualified name of the
+	// DiagnosticsService's DownloadReaderTalosconfig RPC.
+	DiagnosticsServiceDownloadReaderTalosconfigProcedure = "/ichor.v1alpha1.DiagnosticsService/DownloadReaderTalosconfig"
 )
 
 // DiagnosticsServiceClient is a client for the ichor.v1alpha1.DiagnosticsService service.
@@ -69,6 +72,12 @@ type DiagnosticsServiceClient interface {
 	// CapturePackets streams a pcap file captured on one node's interface, bounded
 	// by duration and size.
 	CapturePackets(context.Context, *connect.Request[v1alpha1.CapturePacketsRequest]) (*connect.ServerStreamForClient[v1alpha1.CapturePacketsResponse], error)
+	// DownloadReaderTalosconfig streams a talosconfig whose client certificate is
+	// Talos os:reader, for talosctl (docs/adr/0124). It lives one hour by default
+	// and twelve at most. The key is made here; the controller signs it as the
+	// caller, whose Kubernetes RBAC verb `download` on talosclusters/talosconfig-reader
+	// the admission webhook checks and records as an Event.
+	DownloadReaderTalosconfig(context.Context, *connect.Request[v1alpha1.DownloadReaderTalosconfigRequest]) (*connect.ServerStreamForClient[v1alpha1.DownloadReaderTalosconfigResponse], error)
 }
 
 // NewDiagnosticsServiceClient constructs a client for the ichor.v1alpha1.DiagnosticsService
@@ -106,15 +115,22 @@ func NewDiagnosticsServiceClient(httpClient connect.HTTPClient, baseURL string, 
 			connect.WithSchema(diagnosticsServiceMethods.ByName("CapturePackets")),
 			connect.WithClientOptions(opts...),
 		),
+		downloadReaderTalosconfig: connect.NewClient[v1alpha1.DownloadReaderTalosconfigRequest, v1alpha1.DownloadReaderTalosconfigResponse](
+			httpClient,
+			baseURL+DiagnosticsServiceDownloadReaderTalosconfigProcedure,
+			connect.WithSchema(diagnosticsServiceMethods.ByName("DownloadReaderTalosconfig")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
 // diagnosticsServiceClient implements DiagnosticsServiceClient.
 type diagnosticsServiceClient struct {
-	getMyPermissions      *connect.Client[v1alpha1.GetMyPermissionsRequest, v1alpha1.GetMyPermissionsResponse]
-	downloadSupportBundle *connect.Client[v1alpha1.DownloadSupportBundleRequest, v1alpha1.DownloadSupportBundleResponse]
-	downloadEtcdSnapshot  *connect.Client[v1alpha1.DownloadEtcdSnapshotRequest, v1alpha1.DownloadEtcdSnapshotResponse]
-	capturePackets        *connect.Client[v1alpha1.CapturePacketsRequest, v1alpha1.CapturePacketsResponse]
+	getMyPermissions          *connect.Client[v1alpha1.GetMyPermissionsRequest, v1alpha1.GetMyPermissionsResponse]
+	downloadSupportBundle     *connect.Client[v1alpha1.DownloadSupportBundleRequest, v1alpha1.DownloadSupportBundleResponse]
+	downloadEtcdSnapshot      *connect.Client[v1alpha1.DownloadEtcdSnapshotRequest, v1alpha1.DownloadEtcdSnapshotResponse]
+	capturePackets            *connect.Client[v1alpha1.CapturePacketsRequest, v1alpha1.CapturePacketsResponse]
+	downloadReaderTalosconfig *connect.Client[v1alpha1.DownloadReaderTalosconfigRequest, v1alpha1.DownloadReaderTalosconfigResponse]
 }
 
 // GetMyPermissions calls ichor.v1alpha1.DiagnosticsService.GetMyPermissions.
@@ -137,6 +153,11 @@ func (c *diagnosticsServiceClient) CapturePackets(ctx context.Context, req *conn
 	return c.capturePackets.CallServerStream(ctx, req)
 }
 
+// DownloadReaderTalosconfig calls ichor.v1alpha1.DiagnosticsService.DownloadReaderTalosconfig.
+func (c *diagnosticsServiceClient) DownloadReaderTalosconfig(ctx context.Context, req *connect.Request[v1alpha1.DownloadReaderTalosconfigRequest]) (*connect.ServerStreamForClient[v1alpha1.DownloadReaderTalosconfigResponse], error) {
+	return c.downloadReaderTalosconfig.CallServerStream(ctx, req)
+}
+
 // DiagnosticsServiceHandler is an implementation of the ichor.v1alpha1.DiagnosticsService service.
 type DiagnosticsServiceHandler interface {
 	// GetMyPermissions says which downloads the caller may start (the machine's
@@ -153,6 +174,12 @@ type DiagnosticsServiceHandler interface {
 	// CapturePackets streams a pcap file captured on one node's interface, bounded
 	// by duration and size.
 	CapturePackets(context.Context, *connect.Request[v1alpha1.CapturePacketsRequest], *connect.ServerStream[v1alpha1.CapturePacketsResponse]) error
+	// DownloadReaderTalosconfig streams a talosconfig whose client certificate is
+	// Talos os:reader, for talosctl (docs/adr/0124). It lives one hour by default
+	// and twelve at most. The key is made here; the controller signs it as the
+	// caller, whose Kubernetes RBAC verb `download` on talosclusters/talosconfig-reader
+	// the admission webhook checks and records as an Event.
+	DownloadReaderTalosconfig(context.Context, *connect.Request[v1alpha1.DownloadReaderTalosconfigRequest], *connect.ServerStream[v1alpha1.DownloadReaderTalosconfigResponse]) error
 }
 
 // NewDiagnosticsServiceHandler builds an HTTP handler from the service implementation. It returns
@@ -186,6 +213,12 @@ func NewDiagnosticsServiceHandler(svc DiagnosticsServiceHandler, opts ...connect
 		connect.WithSchema(diagnosticsServiceMethods.ByName("CapturePackets")),
 		connect.WithHandlerOptions(opts...),
 	)
+	diagnosticsServiceDownloadReaderTalosconfigHandler := connect.NewServerStreamHandler(
+		DiagnosticsServiceDownloadReaderTalosconfigProcedure,
+		svc.DownloadReaderTalosconfig,
+		connect.WithSchema(diagnosticsServiceMethods.ByName("DownloadReaderTalosconfig")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/ichor.v1alpha1.DiagnosticsService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case DiagnosticsServiceGetMyPermissionsProcedure:
@@ -196,6 +229,8 @@ func NewDiagnosticsServiceHandler(svc DiagnosticsServiceHandler, opts ...connect
 			diagnosticsServiceDownloadEtcdSnapshotHandler.ServeHTTP(w, r)
 		case DiagnosticsServiceCapturePacketsProcedure:
 			diagnosticsServiceCapturePacketsHandler.ServeHTTP(w, r)
+		case DiagnosticsServiceDownloadReaderTalosconfigProcedure:
+			diagnosticsServiceDownloadReaderTalosconfigHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -219,4 +254,8 @@ func (UnimplementedDiagnosticsServiceHandler) DownloadEtcdSnapshot(context.Conte
 
 func (UnimplementedDiagnosticsServiceHandler) CapturePackets(context.Context, *connect.Request[v1alpha1.CapturePacketsRequest], *connect.ServerStream[v1alpha1.CapturePacketsResponse]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.DiagnosticsService.CapturePackets is not implemented"))
+}
+
+func (UnimplementedDiagnosticsServiceHandler) DownloadReaderTalosconfig(context.Context, *connect.Request[v1alpha1.DownloadReaderTalosconfigRequest], *connect.ServerStream[v1alpha1.DownloadReaderTalosconfigResponse]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.DiagnosticsService.DownloadReaderTalosconfig is not implemented"))
 }

@@ -19,7 +19,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file ichor/v1alpha1/diagnostics.proto.
  */
 export const file_ichor_v1alpha1_diagnostics: GenFile = /*@__PURE__*/
-  fileDesc("CiBpY2hvci92MWFscGhhMS9kaWFnbm9zdGljcy5wcm90bxIOaWNob3IudjFhbHBoYTEicQoXR2V0TXlQZXJtaXNzaW9uc1JlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIqCgdjbHVzdGVyGAIgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIpYBChhHZXRNeVBlcm1pc3Npb25zUmVzcG9uc2USFgoOc3VwcG9ydF9idW5kbGUYASABKAgSFQoNZXRjZF9zbmFwc2hvdBgCIAEoCBIWCg5wYWNrZXRfY2FwdHVyZRgDIAEoCBIbChNjbHVzdGVyX2NyZWRlbnRpYWxzGAQgASgIEhYKDmNsdXN0ZXJfdXBkYXRlGAUgASgIIoQBChxEb3dubG9hZFN1cHBvcnRCdW5kbGVSZXF1ZXN0EiwKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWZIABIsCgdjbHVzdGVyGAIgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmSABCCAoGdGFyZ2V0IkkKG0Rvd25sb2FkRXRjZFNuYXBzaG90UmVxdWVzdBIqCgdtYWNoaW5lGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIpcBChVDYXB0dXJlUGFja2V0c1JlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIRCglpbnRlcmZhY2UYAiABKAkSEgoKYnBmX2ZpbHRlchgDIAEoCRIYChBkdXJhdGlvbl9zZWNvbmRzGAQgASgFEhEKCW1heF9ieXRlcxgFIAEoAyJVCh1Eb3dubG9hZFN1cHBvcnRCdW5kbGVSZXNwb25zZRIQCghmaWxlbmFtZRgBIAEoCRIUCgxjb250ZW50X3R5cGUYAiABKAkSDAoEZGF0YRgDIAEoDCJUChxEb3dubG9hZEV0Y2RTbmFwc2hvdFJlc3BvbnNlEhAKCGZpbGVuYW1lGAEgASgJEhQKDGNvbnRlbnRfdHlwZRgCIAEoCRIMCgRkYXRhGAMgASgMIk4KFkNhcHR1cmVQYWNrZXRzUmVzcG9uc2USEAoIZmlsZW5hbWUYASABKAkSFAoMY29udGVudF90eXBlGAIgASgJEgwKBGRhdGEYAyABKAwyywMKEkRpYWdub3N0aWNzU2VydmljZRJlChBHZXRNeVBlcm1pc3Npb25zEicuaWNob3IudjFhbHBoYTEuR2V0TXlQZXJtaXNzaW9uc1JlcXVlc3QaKC5pY2hvci52MWFscGhhMS5HZXRNeVBlcm1pc3Npb25zUmVzcG9uc2USdgoVRG93bmxvYWRTdXBwb3J0QnVuZGxlEiwuaWNob3IudjFhbHBoYTEuRG93bmxvYWRTdXBwb3J0QnVuZGxlUmVxdWVzdBotLmljaG9yLnYxYWxwaGExLkRvd25sb2FkU3VwcG9ydEJ1bmRsZVJlc3BvbnNlMAEScwoURG93bmxvYWRFdGNkU25hcHNob3QSKy5pY2hvci52MWFscGhhMS5Eb3dubG9hZEV0Y2RTbmFwc2hvdFJlcXVlc3QaLC5pY2hvci52MWFscGhhMS5Eb3dubG9hZEV0Y2RTbmFwc2hvdFJlc3BvbnNlMAESYQoOQ2FwdHVyZVBhY2tldHMSJS5pY2hvci52MWFscGhhMS5DYXB0dXJlUGFja2V0c1JlcXVlc3QaJi5pY2hvci52MWFscGhhMS5DYXB0dXJlUGFja2V0c1Jlc3BvbnNlMAFCwQEKEmNvbS5pY2hvci52MWFscGhhMUIQRGlhZ25vc3RpY3NQcm90b1ABWkBnaXRodWIuY29tL21hZXNoaW5zaGluL2ljaG9yL2dlbi9nby9pY2hvci92MWFscGhhMTtpY2hvcnYxYWxwaGExogIDSVhYqgIOSWNob3IuVjFhbHBoYTHKAg5JY2hvclxWMWFscGhhMeICGkljaG9yXFYxYWxwaGExXEdQQk1ldGFkYXRh6gIPSWNob3I6OlYxYWxwaGExYgZwcm90bzM", [file_ichor_v1alpha1_common]);
+  fileDesc("CiBpY2hvci92MWFscGhhMS9kaWFnbm9zdGljcy5wcm90bxIOaWNob3IudjFhbHBoYTEicQoXR2V0TXlQZXJtaXNzaW9uc1JlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIqCgdjbHVzdGVyGAIgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIrIBChhHZXRNeVBlcm1pc3Npb25zUmVzcG9uc2USFgoOc3VwcG9ydF9idW5kbGUYASABKAgSFQoNZXRjZF9zbmFwc2hvdBgCIAEoCBIWCg5wYWNrZXRfY2FwdHVyZRgDIAEoCBIbChNjbHVzdGVyX2NyZWRlbnRpYWxzGAQgASgIEhYKDmNsdXN0ZXJfdXBkYXRlGAUgASgIEhoKEnRhbG9zY29uZmlnX3JlYWRlchgGIAEoCCJoCiBEb3dubG9hZFJlYWRlclRhbG9zY29uZmlnUmVxdWVzdBIqCgdjbHVzdGVyGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEhgKEGxpZmV0aW1lX3NlY29uZHMYAiABKAMiWQohRG93bmxvYWRSZWFkZXJUYWxvc2NvbmZpZ1Jlc3BvbnNlEhAKCGZpbGVuYW1lGAEgASgJEhQKDGNvbnRlbnRfdHlwZRgCIAEoCRIMCgRkYXRhGAMgASgMIoQBChxEb3dubG9hZFN1cHBvcnRCdW5kbGVSZXF1ZXN0EiwKB21hY2hpbmUYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWZIABIsCgdjbHVzdGVyGAIgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmSABCCAoGdGFyZ2V0IkkKG0Rvd25sb2FkRXRjZFNuYXBzaG90UmVxdWVzdBIqCgdtYWNoaW5lGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIpcBChVDYXB0dXJlUGFja2V0c1JlcXVlc3QSKgoHbWFjaGluZRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIRCglpbnRlcmZhY2UYAiABKAkSEgoKYnBmX2ZpbHRlchgDIAEoCRIYChBkdXJhdGlvbl9zZWNvbmRzGAQgASgFEhEKCW1heF9ieXRlcxgFIAEoAyJVCh1Eb3dubG9hZFN1cHBvcnRCdW5kbGVSZXNwb25zZRIQCghmaWxlbmFtZRgBIAEoCRIUCgxjb250ZW50X3R5cGUYAiABKAkSDAoEZGF0YRgDIAEoDCJUChxEb3dubG9hZEV0Y2RTbmFwc2hvdFJlc3BvbnNlEhAKCGZpbGVuYW1lGAEgASgJEhQKDGNvbnRlbnRfdHlwZRgCIAEoCRIMCgRkYXRhGAMgASgMIk4KFkNhcHR1cmVQYWNrZXRzUmVzcG9uc2USEAoIZmlsZW5hbWUYASABKAkSFAoMY29udGVudF90eXBlGAIgASgJEgwKBGRhdGEYAyABKAwy0AQKEkRpYWdub3N0aWNzU2VydmljZRJlChBHZXRNeVBlcm1pc3Npb25zEicuaWNob3IudjFhbHBoYTEuR2V0TXlQZXJtaXNzaW9uc1JlcXVlc3QaKC5pY2hvci52MWFscGhhMS5HZXRNeVBlcm1pc3Npb25zUmVzcG9uc2USdgoVRG93bmxvYWRTdXBwb3J0QnVuZGxlEiwuaWNob3IudjFhbHBoYTEuRG93bmxvYWRTdXBwb3J0QnVuZGxlUmVxdWVzdBotLmljaG9yLnYxYWxwaGExLkRvd25sb2FkU3VwcG9ydEJ1bmRsZVJlc3BvbnNlMAEScwoURG93bmxvYWRFdGNkU25hcHNob3QSKy5pY2hvci52MWFscGhhMS5Eb3dubG9hZEV0Y2RTbmFwc2hvdFJlcXVlc3QaLC5pY2hvci52MWFscGhhMS5Eb3dubG9hZEV0Y2RTbmFwc2hvdFJlc3BvbnNlMAESYQoOQ2FwdHVyZVBhY2tldHMSJS5pY2hvci52MWFscGhhMS5DYXB0dXJlUGFja2V0c1JlcXVlc3QaJi5pY2hvci52MWFscGhhMS5DYXB0dXJlUGFja2V0c1Jlc3BvbnNlMAESggEKGURvd25sb2FkUmVhZGVyVGFsb3Njb25maWcSMC5pY2hvci52MWFscGhhMS5Eb3dubG9hZFJlYWRlclRhbG9zY29uZmlnUmVxdWVzdBoxLmljaG9yLnYxYWxwaGExLkRvd25sb2FkUmVhZGVyVGFsb3Njb25maWdSZXNwb25zZTABQsEBChJjb20uaWNob3IudjFhbHBoYTFCEERpYWdub3N0aWNzUHJvdG9QAVpAZ2l0aHViLmNvbS9tYWVzaGluc2hpbi9pY2hvci9nZW4vZ28vaWNob3IvdjFhbHBoYTE7aWNob3J2MWFscGhhMaICA0lYWKoCDkljaG9yLlYxYWxwaGExygIOSWNob3JcVjFhbHBoYTHiAhpJY2hvclxWMWFscGhhMVxHUEJNZXRhZGF0YeoCD0ljaG9yOjpWMWFscGhhMWIGcHJvdG8z", [file_ichor_v1alpha1_common]);
 
 /**
  * @generated from message ichor.v1alpha1.GetMyPermissionsRequest
@@ -80,6 +80,13 @@ export type GetMyPermissionsResponse = Message<"ichor.v1alpha1.GetMyPermissionsR
    * @generated from field: bool cluster_update = 5;
    */
   clusterUpdate: boolean;
+
+  /**
+   * talosconfig_reader is the "download" verb on talosclusters/talosconfig-reader.
+   *
+   * @generated from field: bool talosconfig_reader = 6;
+   */
+  talosconfigReader: boolean;
 };
 
 /**
@@ -88,6 +95,59 @@ export type GetMyPermissionsResponse = Message<"ichor.v1alpha1.GetMyPermissionsR
  */
 export const GetMyPermissionsResponseSchema: GenMessage<GetMyPermissionsResponse> = /*@__PURE__*/
   messageDesc(file_ichor_v1alpha1_diagnostics, 1);
+
+/**
+ * @generated from message ichor.v1alpha1.DownloadReaderTalosconfigRequest
+ */
+export type DownloadReaderTalosconfigRequest = Message<"ichor.v1alpha1.DownloadReaderTalosconfigRequest"> & {
+  /**
+   * @generated from field: ichor.v1alpha1.ObjectRef cluster = 1;
+   */
+  cluster?: ObjectRef | undefined;
+
+  /**
+   * lifetime_seconds is how long the certificate is valid. 0 means one hour; more than twelve hours is refused.
+   *
+   * @generated from field: int64 lifetime_seconds = 2;
+   */
+  lifetimeSeconds: bigint;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.DownloadReaderTalosconfigRequest.
+ * Use `create(DownloadReaderTalosconfigRequestSchema)` to create a new message.
+ */
+export const DownloadReaderTalosconfigRequestSchema: GenMessage<DownloadReaderTalosconfigRequest> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_diagnostics, 2);
+
+/**
+ * @generated from message ichor.v1alpha1.DownloadReaderTalosconfigResponse
+ */
+export type DownloadReaderTalosconfigResponse = Message<"ichor.v1alpha1.DownloadReaderTalosconfigResponse"> & {
+  /**
+   * filename and content_type are set on the first chunk only.
+   *
+   * @generated from field: string filename = 1;
+   */
+  filename: string;
+
+  /**
+   * @generated from field: string content_type = 2;
+   */
+  contentType: string;
+
+  /**
+   * @generated from field: bytes data = 3;
+   */
+  data: Uint8Array;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.DownloadReaderTalosconfigResponse.
+ * Use `create(DownloadReaderTalosconfigResponseSchema)` to create a new message.
+ */
+export const DownloadReaderTalosconfigResponseSchema: GenMessage<DownloadReaderTalosconfigResponse> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_diagnostics, 3);
 
 /**
  * @generated from message ichor.v1alpha1.DownloadSupportBundleRequest
@@ -118,7 +178,7 @@ export type DownloadSupportBundleRequest = Message<"ichor.v1alpha1.DownloadSuppo
  * Use `create(DownloadSupportBundleRequestSchema)` to create a new message.
  */
 export const DownloadSupportBundleRequestSchema: GenMessage<DownloadSupportBundleRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_diagnostics, 2);
+  messageDesc(file_ichor_v1alpha1_diagnostics, 4);
 
 /**
  * @generated from message ichor.v1alpha1.DownloadEtcdSnapshotRequest
@@ -137,7 +197,7 @@ export type DownloadEtcdSnapshotRequest = Message<"ichor.v1alpha1.DownloadEtcdSn
  * Use `create(DownloadEtcdSnapshotRequestSchema)` to create a new message.
  */
 export const DownloadEtcdSnapshotRequestSchema: GenMessage<DownloadEtcdSnapshotRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_diagnostics, 3);
+  messageDesc(file_ichor_v1alpha1_diagnostics, 5);
 
 /**
  * @generated from message ichor.v1alpha1.CapturePacketsRequest
@@ -184,7 +244,7 @@ export type CapturePacketsRequest = Message<"ichor.v1alpha1.CapturePacketsReques
  * Use `create(CapturePacketsRequestSchema)` to create a new message.
  */
 export const CapturePacketsRequestSchema: GenMessage<CapturePacketsRequest> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_diagnostics, 4);
+  messageDesc(file_ichor_v1alpha1_diagnostics, 6);
 
 /**
  * @generated from message ichor.v1alpha1.DownloadSupportBundleResponse
@@ -213,7 +273,7 @@ export type DownloadSupportBundleResponse = Message<"ichor.v1alpha1.DownloadSupp
  * Use `create(DownloadSupportBundleResponseSchema)` to create a new message.
  */
 export const DownloadSupportBundleResponseSchema: GenMessage<DownloadSupportBundleResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_diagnostics, 5);
+  messageDesc(file_ichor_v1alpha1_diagnostics, 7);
 
 /**
  * @generated from message ichor.v1alpha1.DownloadEtcdSnapshotResponse
@@ -242,7 +302,7 @@ export type DownloadEtcdSnapshotResponse = Message<"ichor.v1alpha1.DownloadEtcdS
  * Use `create(DownloadEtcdSnapshotResponseSchema)` to create a new message.
  */
 export const DownloadEtcdSnapshotResponseSchema: GenMessage<DownloadEtcdSnapshotResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_diagnostics, 6);
+  messageDesc(file_ichor_v1alpha1_diagnostics, 8);
 
 /**
  * @generated from message ichor.v1alpha1.CapturePacketsResponse
@@ -271,7 +331,7 @@ export type CapturePacketsResponse = Message<"ichor.v1alpha1.CapturePacketsRespo
  * Use `create(CapturePacketsResponseSchema)` to create a new message.
  */
 export const CapturePacketsResponseSchema: GenMessage<CapturePacketsResponse> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_diagnostics, 7);
+  messageDesc(file_ichor_v1alpha1_diagnostics, 9);
 
 /**
  * @generated from service ichor.v1alpha1.DiagnosticsService
@@ -322,6 +382,20 @@ export const DiagnosticsService: GenService<{
     methodKind: "server_streaming";
     input: typeof CapturePacketsRequestSchema;
     output: typeof CapturePacketsResponseSchema;
+  },
+  /**
+   * DownloadReaderTalosconfig streams a talosconfig whose client certificate is
+   * Talos os:reader, for talosctl (docs/adr/0124). It lives one hour by default
+   * and twelve at most. The key is made here; the controller signs it as the
+   * caller, whose Kubernetes RBAC verb `download` on talosclusters/talosconfig-reader
+   * the admission webhook checks and records as an Event.
+   *
+   * @generated from rpc ichor.v1alpha1.DiagnosticsService.DownloadReaderTalosconfig
+   */
+  downloadReaderTalosconfig: {
+    methodKind: "server_streaming";
+    input: typeof DownloadReaderTalosconfigRequestSchema;
+    output: typeof DownloadReaderTalosconfigResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_ichor_v1alpha1_diagnostics, 0);

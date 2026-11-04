@@ -113,6 +113,21 @@ func (s *Server) emitCredentialsEvent(ctx context.Context, cluster *ichorv1alpha
 	return s.Client.Create(ctx, ev)
 }
 
+// talosEndpoints are the Talos API endpoints a handed-out talosconfig names: the cluster's control planes, else
+// its declared endpoint.
+func (s *Server) talosEndpoints(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) ([]string, error) {
+	var machines ichorv1alpha1.TalosMachineList
+	if err := s.Client.List(ctx, &machines, client.InNamespace(cluster.Namespace)); err != nil {
+		return nil, fmt.Errorf("listing the cluster's machines: %w", err)
+	}
+
+	if endpoints := credentials.Endpoints(machines.Items, cluster.Name); len(endpoints) > 0 {
+		return endpoints, nil
+	}
+
+	return []string{cluster.Spec.Endpoint.Address}, nil
+}
+
 // buildCredentials makes the kubeconfig and talosconfig of cluster. The keys are made here and the controller,
 // which alone holds the CA keys, signs their public halves as the signed-in user (ADR 0108): during a
 // rotation with the new CAs, trusting the old and the new. ttl zero means a year; readOnly makes the
@@ -136,14 +151,9 @@ func (s *Server) buildCredentials(
 		return nil, nil, err
 	}
 
-	var machines ichorv1alpha1.TalosMachineList
-	if err := s.Client.List(ctx, &machines, client.InNamespace(cluster.Namespace)); err != nil {
-		return nil, nil, fmt.Errorf("listing the cluster's machines: %w", err)
-	}
-
-	endpoints := credentials.Endpoints(machines.Items, cluster.Name)
-	if len(endpoints) == 0 {
-		endpoints = []string{cluster.Spec.Endpoint.Address}
+	endpoints, err := s.talosEndpoints(ctx, cluster)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	server := "https://" + net.JoinHostPort(cluster.Spec.Endpoint.Address, strconv.Itoa(constants.DefaultControlPlanePort))

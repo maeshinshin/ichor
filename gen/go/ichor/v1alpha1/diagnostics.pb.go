@@ -92,8 +92,10 @@ type GetMyPermissionsResponse struct {
 	// cluster_update is the "update" verb on talosclusters/<name>, which is what
 	// changing the Cilium values (CniService.SetCiliumValues) needs.
 	ClusterUpdate bool `protobuf:"varint,5,opt,name=cluster_update,json=clusterUpdate,proto3" json:"cluster_update,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// talosconfig_reader is the "download" verb on talosclusters/talosconfig-reader.
+	TalosconfigReader bool `protobuf:"varint,6,opt,name=talosconfig_reader,json=talosconfigReader,proto3" json:"talosconfig_reader,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *GetMyPermissionsResponse) Reset() {
@@ -161,6 +163,127 @@ func (x *GetMyPermissionsResponse) GetClusterUpdate() bool {
 	return false
 }
 
+func (x *GetMyPermissionsResponse) GetTalosconfigReader() bool {
+	if x != nil {
+		return x.TalosconfigReader
+	}
+	return false
+}
+
+type DownloadReaderTalosconfigRequest struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Cluster *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	// lifetime_seconds is how long the certificate is valid. 0 means one hour; more than twelve hours is refused.
+	LifetimeSeconds int64 `protobuf:"varint,2,opt,name=lifetime_seconds,json=lifetimeSeconds,proto3" json:"lifetime_seconds,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *DownloadReaderTalosconfigRequest) Reset() {
+	*x = DownloadReaderTalosconfigRequest{}
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DownloadReaderTalosconfigRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DownloadReaderTalosconfigRequest) ProtoMessage() {}
+
+func (x *DownloadReaderTalosconfigRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DownloadReaderTalosconfigRequest.ProtoReflect.Descriptor instead.
+func (*DownloadReaderTalosconfigRequest) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *DownloadReaderTalosconfigRequest) GetCluster() *ObjectRef {
+	if x != nil {
+		return x.Cluster
+	}
+	return nil
+}
+
+func (x *DownloadReaderTalosconfigRequest) GetLifetimeSeconds() int64 {
+	if x != nil {
+		return x.LifetimeSeconds
+	}
+	return 0
+}
+
+type DownloadReaderTalosconfigResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// filename and content_type are set on the first chunk only.
+	Filename      string `protobuf:"bytes,1,opt,name=filename,proto3" json:"filename,omitempty"`
+	ContentType   string `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	Data          []byte `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DownloadReaderTalosconfigResponse) Reset() {
+	*x = DownloadReaderTalosconfigResponse{}
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DownloadReaderTalosconfigResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DownloadReaderTalosconfigResponse) ProtoMessage() {}
+
+func (x *DownloadReaderTalosconfigResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DownloadReaderTalosconfigResponse.ProtoReflect.Descriptor instead.
+func (*DownloadReaderTalosconfigResponse) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *DownloadReaderTalosconfigResponse) GetFilename() string {
+	if x != nil {
+		return x.Filename
+	}
+	return ""
+}
+
+func (x *DownloadReaderTalosconfigResponse) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+func (x *DownloadReaderTalosconfigResponse) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
 type DownloadSupportBundleRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Exactly one of machine and cluster. A cluster means every approved machine in it.
@@ -176,7 +299,7 @@ type DownloadSupportBundleRequest struct {
 
 func (x *DownloadSupportBundleRequest) Reset() {
 	*x = DownloadSupportBundleRequest{}
-	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[2]
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -188,7 +311,7 @@ func (x *DownloadSupportBundleRequest) String() string {
 func (*DownloadSupportBundleRequest) ProtoMessage() {}
 
 func (x *DownloadSupportBundleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[2]
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -201,7 +324,7 @@ func (x *DownloadSupportBundleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadSupportBundleRequest.ProtoReflect.Descriptor instead.
 func (*DownloadSupportBundleRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{2}
+	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *DownloadSupportBundleRequest) GetTarget() isDownloadSupportBundleRequest_Target {
@@ -255,7 +378,7 @@ type DownloadEtcdSnapshotRequest struct {
 
 func (x *DownloadEtcdSnapshotRequest) Reset() {
 	*x = DownloadEtcdSnapshotRequest{}
-	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[3]
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -267,7 +390,7 @@ func (x *DownloadEtcdSnapshotRequest) String() string {
 func (*DownloadEtcdSnapshotRequest) ProtoMessage() {}
 
 func (x *DownloadEtcdSnapshotRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[3]
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -280,7 +403,7 @@ func (x *DownloadEtcdSnapshotRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadEtcdSnapshotRequest.ProtoReflect.Descriptor instead.
 func (*DownloadEtcdSnapshotRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{3}
+	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *DownloadEtcdSnapshotRequest) GetMachine() *ObjectRef {
@@ -309,7 +432,7 @@ type CapturePacketsRequest struct {
 
 func (x *CapturePacketsRequest) Reset() {
 	*x = CapturePacketsRequest{}
-	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[4]
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -321,7 +444,7 @@ func (x *CapturePacketsRequest) String() string {
 func (*CapturePacketsRequest) ProtoMessage() {}
 
 func (x *CapturePacketsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[4]
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -334,7 +457,7 @@ func (x *CapturePacketsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CapturePacketsRequest.ProtoReflect.Descriptor instead.
 func (*CapturePacketsRequest) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{4}
+	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *CapturePacketsRequest) GetMachine() *ObjectRef {
@@ -384,7 +507,7 @@ type DownloadSupportBundleResponse struct {
 
 func (x *DownloadSupportBundleResponse) Reset() {
 	*x = DownloadSupportBundleResponse{}
-	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[5]
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -396,7 +519,7 @@ func (x *DownloadSupportBundleResponse) String() string {
 func (*DownloadSupportBundleResponse) ProtoMessage() {}
 
 func (x *DownloadSupportBundleResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[5]
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -409,7 +532,7 @@ func (x *DownloadSupportBundleResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadSupportBundleResponse.ProtoReflect.Descriptor instead.
 func (*DownloadSupportBundleResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{5}
+	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *DownloadSupportBundleResponse) GetFilename() string {
@@ -445,7 +568,7 @@ type DownloadEtcdSnapshotResponse struct {
 
 func (x *DownloadEtcdSnapshotResponse) Reset() {
 	*x = DownloadEtcdSnapshotResponse{}
-	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[6]
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -457,7 +580,7 @@ func (x *DownloadEtcdSnapshotResponse) String() string {
 func (*DownloadEtcdSnapshotResponse) ProtoMessage() {}
 
 func (x *DownloadEtcdSnapshotResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[6]
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -470,7 +593,7 @@ func (x *DownloadEtcdSnapshotResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadEtcdSnapshotResponse.ProtoReflect.Descriptor instead.
 func (*DownloadEtcdSnapshotResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{6}
+	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *DownloadEtcdSnapshotResponse) GetFilename() string {
@@ -506,7 +629,7 @@ type CapturePacketsResponse struct {
 
 func (x *CapturePacketsResponse) Reset() {
 	*x = CapturePacketsResponse{}
-	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[7]
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -518,7 +641,7 @@ func (x *CapturePacketsResponse) String() string {
 func (*CapturePacketsResponse) ProtoMessage() {}
 
 func (x *CapturePacketsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[7]
+	mi := &file_ichor_v1alpha1_diagnostics_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -531,7 +654,7 @@ func (x *CapturePacketsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CapturePacketsResponse.ProtoReflect.Descriptor instead.
 func (*CapturePacketsResponse) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{7}
+	return file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *CapturePacketsResponse) GetFilename() string {
@@ -562,13 +685,21 @@ const file_ichor_v1alpha1_diagnostics_proto_rawDesc = "" +
 	" ichor/v1alpha1/diagnostics.proto\x12\x0eichor.v1alpha1\x1a\x1bichor/v1alpha1/common.proto\"\x83\x01\n" +
 	"\x17GetMyPermissionsRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x123\n" +
-	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\xe5\x01\n" +
+	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\x94\x02\n" +
 	"\x18GetMyPermissionsResponse\x12%\n" +
 	"\x0esupport_bundle\x18\x01 \x01(\bR\rsupportBundle\x12#\n" +
 	"\retcd_snapshot\x18\x02 \x01(\bR\fetcdSnapshot\x12%\n" +
 	"\x0epacket_capture\x18\x03 \x01(\bR\rpacketCapture\x12/\n" +
 	"\x13cluster_credentials\x18\x04 \x01(\bR\x12clusterCredentials\x12%\n" +
-	"\x0ecluster_update\x18\x05 \x01(\bR\rclusterUpdate\"\x96\x01\n" +
+	"\x0ecluster_update\x18\x05 \x01(\bR\rclusterUpdate\x12-\n" +
+	"\x12talosconfig_reader\x18\x06 \x01(\bR\x11talosconfigReader\"\x82\x01\n" +
+	" DownloadReaderTalosconfigRequest\x123\n" +
+	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12)\n" +
+	"\x10lifetime_seconds\x18\x02 \x01(\x03R\x0flifetimeSeconds\"v\n" +
+	"!DownloadReaderTalosconfigResponse\x12\x1a\n" +
+	"\bfilename\x18\x01 \x01(\tR\bfilename\x12!\n" +
+	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x12\x12\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data\"\x96\x01\n" +
 	"\x1cDownloadSupportBundleRequest\x125\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefH\x00R\amachine\x125\n" +
 	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefH\x00R\aclusterB\b\n" +
@@ -593,12 +724,13 @@ const file_ichor_v1alpha1_diagnostics_proto_rawDesc = "" +
 	"\x16CapturePacketsResponse\x12\x1a\n" +
 	"\bfilename\x18\x01 \x01(\tR\bfilename\x12!\n" +
 	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x12\x12\n" +
-	"\x04data\x18\x03 \x01(\fR\x04data2\xcb\x03\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data2\xd0\x04\n" +
 	"\x12DiagnosticsService\x12e\n" +
 	"\x10GetMyPermissions\x12'.ichor.v1alpha1.GetMyPermissionsRequest\x1a(.ichor.v1alpha1.GetMyPermissionsResponse\x12v\n" +
 	"\x15DownloadSupportBundle\x12,.ichor.v1alpha1.DownloadSupportBundleRequest\x1a-.ichor.v1alpha1.DownloadSupportBundleResponse0\x01\x12s\n" +
 	"\x14DownloadEtcdSnapshot\x12+.ichor.v1alpha1.DownloadEtcdSnapshotRequest\x1a,.ichor.v1alpha1.DownloadEtcdSnapshotResponse0\x01\x12a\n" +
-	"\x0eCapturePackets\x12%.ichor.v1alpha1.CapturePacketsRequest\x1a&.ichor.v1alpha1.CapturePacketsResponse0\x01B\xc1\x01\n" +
+	"\x0eCapturePackets\x12%.ichor.v1alpha1.CapturePacketsRequest\x1a&.ichor.v1alpha1.CapturePacketsResponse0\x01\x12\x82\x01\n" +
+	"\x19DownloadReaderTalosconfig\x120.ichor.v1alpha1.DownloadReaderTalosconfigRequest\x1a1.ichor.v1alpha1.DownloadReaderTalosconfigResponse0\x01B\xc1\x01\n" +
 	"\x12com.ichor.v1alpha1B\x10DiagnosticsProtoP\x01Z@github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1;ichorv1alpha1\xa2\x02\x03IXX\xaa\x02\x0eIchor.V1alpha1\xca\x02\x0eIchor\\V1alpha1\xe2\x02\x1aIchor\\V1alpha1\\GPBMetadata\xea\x02\x0fIchor::V1alpha1b\x06proto3"
 
 var (
@@ -613,38 +745,43 @@ func file_ichor_v1alpha1_diagnostics_proto_rawDescGZIP() []byte {
 	return file_ichor_v1alpha1_diagnostics_proto_rawDescData
 }
 
-var file_ichor_v1alpha1_diagnostics_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_ichor_v1alpha1_diagnostics_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_ichor_v1alpha1_diagnostics_proto_goTypes = []any{
-	(*GetMyPermissionsRequest)(nil),       // 0: ichor.v1alpha1.GetMyPermissionsRequest
-	(*GetMyPermissionsResponse)(nil),      // 1: ichor.v1alpha1.GetMyPermissionsResponse
-	(*DownloadSupportBundleRequest)(nil),  // 2: ichor.v1alpha1.DownloadSupportBundleRequest
-	(*DownloadEtcdSnapshotRequest)(nil),   // 3: ichor.v1alpha1.DownloadEtcdSnapshotRequest
-	(*CapturePacketsRequest)(nil),         // 4: ichor.v1alpha1.CapturePacketsRequest
-	(*DownloadSupportBundleResponse)(nil), // 5: ichor.v1alpha1.DownloadSupportBundleResponse
-	(*DownloadEtcdSnapshotResponse)(nil),  // 6: ichor.v1alpha1.DownloadEtcdSnapshotResponse
-	(*CapturePacketsResponse)(nil),        // 7: ichor.v1alpha1.CapturePacketsResponse
-	(*ObjectRef)(nil),                     // 8: ichor.v1alpha1.ObjectRef
+	(*GetMyPermissionsRequest)(nil),           // 0: ichor.v1alpha1.GetMyPermissionsRequest
+	(*GetMyPermissionsResponse)(nil),          // 1: ichor.v1alpha1.GetMyPermissionsResponse
+	(*DownloadReaderTalosconfigRequest)(nil),  // 2: ichor.v1alpha1.DownloadReaderTalosconfigRequest
+	(*DownloadReaderTalosconfigResponse)(nil), // 3: ichor.v1alpha1.DownloadReaderTalosconfigResponse
+	(*DownloadSupportBundleRequest)(nil),      // 4: ichor.v1alpha1.DownloadSupportBundleRequest
+	(*DownloadEtcdSnapshotRequest)(nil),       // 5: ichor.v1alpha1.DownloadEtcdSnapshotRequest
+	(*CapturePacketsRequest)(nil),             // 6: ichor.v1alpha1.CapturePacketsRequest
+	(*DownloadSupportBundleResponse)(nil),     // 7: ichor.v1alpha1.DownloadSupportBundleResponse
+	(*DownloadEtcdSnapshotResponse)(nil),      // 8: ichor.v1alpha1.DownloadEtcdSnapshotResponse
+	(*CapturePacketsResponse)(nil),            // 9: ichor.v1alpha1.CapturePacketsResponse
+	(*ObjectRef)(nil),                         // 10: ichor.v1alpha1.ObjectRef
 }
 var file_ichor_v1alpha1_diagnostics_proto_depIdxs = []int32{
-	8,  // 0: ichor.v1alpha1.GetMyPermissionsRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	8,  // 1: ichor.v1alpha1.GetMyPermissionsRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	8,  // 2: ichor.v1alpha1.DownloadSupportBundleRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	8,  // 3: ichor.v1alpha1.DownloadSupportBundleRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	8,  // 4: ichor.v1alpha1.DownloadEtcdSnapshotRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	8,  // 5: ichor.v1alpha1.CapturePacketsRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	0,  // 6: ichor.v1alpha1.DiagnosticsService.GetMyPermissions:input_type -> ichor.v1alpha1.GetMyPermissionsRequest
-	2,  // 7: ichor.v1alpha1.DiagnosticsService.DownloadSupportBundle:input_type -> ichor.v1alpha1.DownloadSupportBundleRequest
-	3,  // 8: ichor.v1alpha1.DiagnosticsService.DownloadEtcdSnapshot:input_type -> ichor.v1alpha1.DownloadEtcdSnapshotRequest
-	4,  // 9: ichor.v1alpha1.DiagnosticsService.CapturePackets:input_type -> ichor.v1alpha1.CapturePacketsRequest
-	1,  // 10: ichor.v1alpha1.DiagnosticsService.GetMyPermissions:output_type -> ichor.v1alpha1.GetMyPermissionsResponse
-	5,  // 11: ichor.v1alpha1.DiagnosticsService.DownloadSupportBundle:output_type -> ichor.v1alpha1.DownloadSupportBundleResponse
-	6,  // 12: ichor.v1alpha1.DiagnosticsService.DownloadEtcdSnapshot:output_type -> ichor.v1alpha1.DownloadEtcdSnapshotResponse
-	7,  // 13: ichor.v1alpha1.DiagnosticsService.CapturePackets:output_type -> ichor.v1alpha1.CapturePacketsResponse
-	10, // [10:14] is the sub-list for method output_type
-	6,  // [6:10] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	10, // 0: ichor.v1alpha1.GetMyPermissionsRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	10, // 1: ichor.v1alpha1.GetMyPermissionsRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	10, // 2: ichor.v1alpha1.DownloadReaderTalosconfigRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	10, // 3: ichor.v1alpha1.DownloadSupportBundleRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	10, // 4: ichor.v1alpha1.DownloadSupportBundleRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	10, // 5: ichor.v1alpha1.DownloadEtcdSnapshotRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	10, // 6: ichor.v1alpha1.CapturePacketsRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
+	0,  // 7: ichor.v1alpha1.DiagnosticsService.GetMyPermissions:input_type -> ichor.v1alpha1.GetMyPermissionsRequest
+	4,  // 8: ichor.v1alpha1.DiagnosticsService.DownloadSupportBundle:input_type -> ichor.v1alpha1.DownloadSupportBundleRequest
+	5,  // 9: ichor.v1alpha1.DiagnosticsService.DownloadEtcdSnapshot:input_type -> ichor.v1alpha1.DownloadEtcdSnapshotRequest
+	6,  // 10: ichor.v1alpha1.DiagnosticsService.CapturePackets:input_type -> ichor.v1alpha1.CapturePacketsRequest
+	2,  // 11: ichor.v1alpha1.DiagnosticsService.DownloadReaderTalosconfig:input_type -> ichor.v1alpha1.DownloadReaderTalosconfigRequest
+	1,  // 12: ichor.v1alpha1.DiagnosticsService.GetMyPermissions:output_type -> ichor.v1alpha1.GetMyPermissionsResponse
+	7,  // 13: ichor.v1alpha1.DiagnosticsService.DownloadSupportBundle:output_type -> ichor.v1alpha1.DownloadSupportBundleResponse
+	8,  // 14: ichor.v1alpha1.DiagnosticsService.DownloadEtcdSnapshot:output_type -> ichor.v1alpha1.DownloadEtcdSnapshotResponse
+	9,  // 15: ichor.v1alpha1.DiagnosticsService.CapturePackets:output_type -> ichor.v1alpha1.CapturePacketsResponse
+	3,  // 16: ichor.v1alpha1.DiagnosticsService.DownloadReaderTalosconfig:output_type -> ichor.v1alpha1.DownloadReaderTalosconfigResponse
+	12, // [12:17] is the sub-list for method output_type
+	7,  // [7:12] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_diagnostics_proto_init() }
@@ -653,7 +790,7 @@ func file_ichor_v1alpha1_diagnostics_proto_init() {
 		return
 	}
 	file_ichor_v1alpha1_common_proto_init()
-	file_ichor_v1alpha1_diagnostics_proto_msgTypes[2].OneofWrappers = []any{
+	file_ichor_v1alpha1_diagnostics_proto_msgTypes[4].OneofWrappers = []any{
 		(*DownloadSupportBundleRequest_Machine)(nil),
 		(*DownloadSupportBundleRequest_Cluster)(nil),
 	}
@@ -663,7 +800,7 @@ func file_ichor_v1alpha1_diagnostics_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ichor_v1alpha1_diagnostics_proto_rawDesc), len(file_ichor_v1alpha1_diagnostics_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

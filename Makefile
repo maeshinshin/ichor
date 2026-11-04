@@ -349,7 +349,7 @@ helm-deploy: install-helm ## Deploy manager to the K8s cluster via Helm. Specify
 
 ## Chart version and appVersion for helm-package (a release tag vX.Y.Z gives CHART_VERSION=X.Y.Z, APP_VERSION=vX.Y.Z, the image tag).
 CHART_VERSION ?= $(shell sed -n 's/^version: //p' $(HELM_CHART_DIR)/Chart.yaml)
-APP_VERSION ?= $(CHART_VERSION)
+APP_VERSION ?= v$(CHART_VERSION)
 CHART_DIST ?= bin/chart
 
 .PHONY: helm-package

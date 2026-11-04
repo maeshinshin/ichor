@@ -33,6 +33,11 @@ install.
   have the new kubeconfig and talosconfig, from the CLI or the UI, before it
   stops trusting the old CAs, then restarts the in-cluster clients that keep
   the old one.
+- Rotates the service-account signing key and the secretbox (encryption at rest)
+  key in a dual-key period: both keys are accepted before either is dropped,
+  every Secret is rewritten under the new key, and backups sealed before stay
+  readable
+  ([guide](docs/guides/rotate-keys.md)).
 - Backs up etcd on a schedule or on demand (`ichor etcd backup now`, Back up now
   in the UI), restores a snapshot into a running cluster, and can rebuild a
   cluster from the secrets bundle and a snapshot alone.

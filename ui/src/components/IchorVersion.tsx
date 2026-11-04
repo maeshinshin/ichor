@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { operationClient } from '@/lib/connect'
-import { versionLabel } from '@/lib/ichorVersion'
+import { installerUnverified, versionLabel } from '@/lib/ichorVersion'
 import { useLoad } from '@/lib/useLoad'
 import { t } from '@/lib/i18n'
 
@@ -13,11 +13,25 @@ export function IchorVersion() {
 
   const label = versionLabel(info)
   if (!label) return null
+  // An installer image run without its signature checked is said on every page.
+  const unverified = installerUnverified(info)
   return (
     <div class="flex items-center gap-2">
       <Badge variant="outline" aria-label={t('version.installed', { version: label.version })}>
         {label.version}
       </Badge>
+      {unverified && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge variant="destructive">{t('version.unverified')}</Badge>
+          </TooltipTrigger>
+          <TooltipContent>
+            {unverified.digest !== '' ? t('version.unverifiedLast', { digest: unverified.digest, reason: unverified.reason }) : ''}
+            {unverified.digest !== '' && unverified.pending ? ' ' : ''}
+            {unverified.pending ? t('version.unverifiedNext') : ''}
+          </TooltipContent>
+        </Tooltip>
+      )}
       {label.update && (
         <Tooltip>
           <TooltipTrigger asChild>

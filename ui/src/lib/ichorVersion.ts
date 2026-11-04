@@ -30,3 +30,23 @@ export function releaseNotice(info: { latestVersion: string; releaseAvailable: b
   if (!info || !info.releaseAvailable || info.latestVersion === '') return null
   return info.latestVersion
 }
+
+// installerUnverified says when the installer image of an Ichor upgrade runs without its signature checked: the last upgrade did (verification Skipped), or the next one will (the spec says skip). It is
+// null when nothing was or will be skipped, so the UI stays quiet for the normal, verified case.
+export type InstallerUnverified = {
+  // reason is the reason the person gave, or '' when only the next upgrade is known to skip (an unrecorded older run).
+  reason: string
+  // digest is the installer image the last upgrade ran, or ''.
+  digest: string
+  // pending is true when the next upgrade will skip the check, whether or not the last one did.
+  pending: boolean
+}
+
+export function installerUnverified(
+  info: { installerVerification: string; installerSkipReason: string; installerDigest: string; installerSignatureSkip: boolean } | null,
+): InstallerUnverified | null {
+  if (!info) return null
+  const last = info.installerVerification === 'Skipped'
+  if (!last && !info.installerSignatureSkip) return null
+  return { reason: last ? info.installerSkipReason : '', digest: last ? info.installerDigest : '', pending: info.installerSignatureSkip }
+}

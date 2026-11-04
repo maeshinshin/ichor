@@ -54,7 +54,7 @@ import { machineDisplayName } from '@/lib/machineName'
 import { formatTimestamp } from '@/lib/format'
 import { kubernetesStageProgress, operationState, progressCounts } from '@/lib/operations'
 import { attentionItems, backupsValue, tileTargets, versionLabel, type TileTarget } from '@/lib/overview'
-import { releaseNotice } from '@/lib/ichorVersion'
+import { installerUnverified, releaseNotice } from '@/lib/ichorVersion'
 import { opStateTone, type Tone } from '@/lib/status'
 import { componentOf, stateKey, stateTone, versionPair } from '@/lib/versions'
 import { hasPatch, patchComponents, unavailableNotes, type TargetList } from '@/lib/upgradeTargets'
@@ -108,6 +108,8 @@ function Home({
   const [release, setRelease] = useState<string | null>(null)
   // Automatic patching: whether it is on, and the automatic operation that halted it.
   const [autoPatch, setAutoPatch] = useState<{ enabled: boolean; halted: string }>({ enabled: false, halted: '' })
+  // The reason the installer image's signature was not checked, or null when it was or nothing ran yet.
+  const [unverified, setUnverified] = useState<string | null>(null)
   // What Talos and Kubernetes can move to, for the patch hints; null when the list could not be read.
   const [candidates, setCandidates] = useState<{ talos: TargetList | null; kubernetes: TargetList | null }>({
     talos: null,
@@ -153,8 +155,11 @@ function Home({
       const info = await operationClient.getIchorInstallation({})
       setRelease(releaseNotice(info))
       setAutoPatch({ enabled: info.autoPatchEnabled, halted: info.autoPatchHaltedOperation })
+      const skipped = installerUnverified(info)
+      setUnverified(skipped ? skipped.reason : null)
     } catch {
       setRelease(null)
+      setUnverified(null)
       setAutoPatch({ enabled: false, halted: '' })
     }
   }
@@ -196,7 +201,7 @@ function Home({
     talos: candidates.talos,
     kubernetes: candidates.kubernetes,
   })
-  const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, opState: currentState, patches, release, autoPatchHalted: autoPatch.halted })
+  const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, opState: currentState, patches, release, autoPatchHalted: autoPatch.halted, installerUnverified: unverified })
   const recent = recentOperations(ops, 5)
   const targets = tileTargets(current?.op.ref?.name ?? null)
 
@@ -285,6 +290,12 @@ function Home({
                               <Link to="/settings">{t('nav.settings')}</Link>
                             </Button>
                           </AlertAction>
+                        </>
+                      )}
+                      {a.kind === 'installerUnverified' && (
+                        <>
+                          <AlertTitle>{t('home.attnInstallerUnverified')}</AlertTitle>
+                          <AlertDescription>{t('home.attnInstallerUnverifiedHint', { reason: a.reason || t('common.none') })}</AlertDescription>
                         </>
                       )}
                       {a.kind === 'release' && (

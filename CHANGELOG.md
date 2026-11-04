@@ -37,7 +37,9 @@ table accepts; a refusal passes only with the override verb.
 - A notice in the UI and in `ichor version` when a newer Ichor release is
   published; it can be switched off.
 - CA rotation for the Talos API and Kubernetes API CAs, in verified passes
-  that wait for your new credentials.
+  that wait for your new credentials. `--ca etcd` and
+  `--ca kubernetes-aggregator` (or `--all`) also replace the etcd CA, one member
+  restart at a time, and the aggregator CA.
 - etcd backups on a schedule or on demand, restore into a running cluster, and
   rebuild from the secrets bundle and a snapshot alone (`ichor restore`).
 - Adopt a running Talos cluster with zero drift, and reclaim a machine that

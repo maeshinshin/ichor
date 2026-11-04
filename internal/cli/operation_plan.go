@@ -17,10 +17,12 @@ limitations under the License.
 package cli
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strings"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
@@ -35,7 +37,7 @@ const credentialsStopWorking = "kubeconfig and talosconfig STOP WORKING from the
 // (empty) is the default pair, talos and kubernetes.
 func caPlanHas(targets []string, name string) bool {
 	if len(targets) == 0 {
-		targets = []string{"talos", "kubernetes"}
+		targets = ichorv1alpha1.DefaultCARotationTargets()
 	}
 
 	return slices.Contains(targets, name)
@@ -45,11 +47,18 @@ func caPlanHas(targets []string, name string) bool {
 func caPlanNames(targets []string) string {
 	var names []string
 
-	for _, n := range []struct{ target, words string }{
-		{"talos", "Talos API"}, {"kubernetes", "Kubernetes API"}, {"etcd", "etcd"}, {"kubernetes-aggregator", "Kubernetes aggregator"},
+	// etcd is its own name.
+	words := map[string]string{
+		ichorv1alpha1.CARotationTargetTalos: "Talos API", ichorv1alpha1.CARotationTargetKubernetes: "Kubernetes API",
+		ichorv1alpha1.CARotationTargetAggregator: "Kubernetes aggregator",
+	}
+
+	for _, target := range []string{
+		ichorv1alpha1.CARotationTargetTalos, ichorv1alpha1.CARotationTargetKubernetes,
+		ichorv1alpha1.CARotationTargetEtcd, ichorv1alpha1.CARotationTargetAggregator,
 	} {
-		if caPlanHas(targets, n.target) {
-			names = append(names, n.words)
+		if caPlanHas(targets, target) {
+			names = append(names, cmp.Or(words[target], target))
 		}
 	}
 
@@ -103,8 +112,8 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 		b.WriteString("No machine is touched; a Job applies the new install manifest.\n")
 	case pb.OperationEffect_OPERATION_EFFECT_CA_ROTATION:
 		targets := p.GetCaTargets()
-		kube := caPlanHas(targets, "kubernetes")
-		credentials := kube || caPlanHas(targets, "talos")
+		kube := caPlanHas(targets, ichorv1alpha1.CARotationTargetKubernetes)
+		credentials := kube || caPlanHas(targets, ichorv1alpha1.CARotationTargetTalos)
 
 		fmt.Fprintf(&b, "Every machine is reconfigured once per pass (%s), without a reboot.", strings.Join(p.GetStages(), ", "))
 

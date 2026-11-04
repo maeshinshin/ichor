@@ -107,9 +107,12 @@ resumes from where it left off.
 
 The secrets bundle (Talos, Kubernetes and etcd CA keys) is the root of trust.
 It is generated locally by `ichor init`, stored under `~/.ichor/clusters/<name>/`
-with 0600 permissions as the user's backup, and pushed into a Secret that
-becomes the source of truth from then on. CRs reference it; they never contain
-it.
+with 0600 permissions as the user's backup, encrypted as an age file under a
+passphrase, and pushed into a Secret that becomes the source of truth
+from then on. CRs reference it; they never contain it. The passphrase comes from
+a file, an environment variable or, on a terminal, a prompt or one generated and
+shown once; nothing stores it. A plaintext file from an earlier version still
+loads, with a warning, and `ichor secrets encrypt` migrates it.
 
 Only the controller holds a CA private key and so can make any Talos or
 Kubernetes identity. The UI backend holds none, and its Kubernetes

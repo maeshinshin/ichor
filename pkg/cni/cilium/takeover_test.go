@@ -431,6 +431,17 @@ func agentContainer(t *testing.T, ds map[string]any) map[string]any {
 	return nil
 }
 
+func diffLive(t *testing.T, vals map[string]any, live liveCluster) []Difference {
+	t.Helper()
+
+	got, err := DiffLive(t.Context(), vals, live.get)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return got
+}
+
 func diffPaths(ds []Difference) []string {
 	out := make([]string, 0, len(ds))
 
@@ -456,10 +467,7 @@ func TestDiffLive_IdenticalClusterIsEmpty(t *testing.T) {
 		}
 	}
 
-	got, err := DiffLive(t.Context(), vals, live.get)
-	if err != nil {
-		t.Fatal(err)
-	}
+	got := diffLive(t, vals, live)
 
 	if len(got) != 0 {
 		t.Fatalf("want no difference, got:\n%s", strings.Join(diffPaths(got), "\n"))
@@ -473,15 +481,7 @@ func TestDiffLive_ReportsLiveOnlyAnnotationAndArg(t *testing.T) {
 	live := newLiveCluster(t, vals)
 
 	ds := live.agent(t)
-	meta := ds["metadata"].(map[string]any)
-
-	ann, _ := meta["annotations"].(map[string]any)
-	if ann == nil {
-		ann = map[string]any{}
-		meta["annotations"] = ann
-	}
-
-	ann["example.com/owner"] = "someone"
+	mergeInto(ds["metadata"].(map[string]any), "annotations", "example.com/owner", "someone")
 
 	ctr := agentContainer(t, ds)
 	ctr["args"] = append(ctr["args"].([]any), "--debug")
@@ -489,10 +489,7 @@ func TestDiffLive_ReportsLiveOnlyAnnotationAndArg(t *testing.T) {
 	extra := ObjectRef{APIVersion: "v1", Kind: kindConfigMap, Namespace: kubeSystem, Name: "extra"}
 	live[extra] = map[string]any{"kind": kindConfigMap}
 
-	got, err := DiffLive(t.Context(), vals, live.get)
-	if err != nil {
-		t.Fatal(err)
-	}
+	got := diffLive(t, vals, live)
 
 	paths := strings.Join(diffPaths(got), "\n")
 	if len(got) != 2 ||
@@ -507,20 +504,10 @@ func TestDiffLive_IgnoresTalosOwningInventoryAnnotation(t *testing.T) {
 	live := newLiveCluster(t, vals)
 
 	meta := live.agent(t)["metadata"].(map[string]any)
+	mergeInto(meta, "annotations", "config.k8s.io/owning-inventory", "abc123")
+	mergeInto(meta, "annotations", "config.k8s.io/owning-inventory-other", "x")
 
-	ann, _ := meta["annotations"].(map[string]any)
-	if ann == nil {
-		ann = map[string]any{}
-		meta["annotations"] = ann
-	}
-
-	ann["config.k8s.io/owning-inventory"] = "abc123"
-	ann["config.k8s.io/owning-inventory-other"] = "x"
-
-	got, err := DiffLive(t.Context(), vals, live.get)
-	if err != nil {
-		t.Fatal(err)
-	}
+	got := diffLive(t, vals, live)
 
 	paths := strings.Join(diffPaths(got), "\n")
 	if len(got) != 1 || !strings.Contains(paths, "metadata.annotations.config.k8s.io/owning-inventory-other") {
@@ -544,10 +531,7 @@ func TestDiffLive_ChangedFieldAndMissingObject(t *testing.T) {
 
 	delete(live, gone)
 
-	got, err := DiffLive(t.Context(), vals, live.get)
-	if err != nil {
-		t.Fatal(err)
-	}
+	got := diffLive(t, vals, live)
 
 	var changed, missing bool
 
@@ -565,27 +549,19 @@ func TestDiffLive_SecretDataIsNeverCompared(t *testing.T) {
 	vals := effective(t, nil)
 	live := newLiveCluster(t, vals)
 
-	n := 0
-
 	for ref, o := range live {
 		if ref.Kind == "Secret" {
 			o["data"] = map[string]any{"tls.key": "TOP-SECRET"}
-			n++
 		}
 	}
 
-	got, err := DiffLive(t.Context(), vals, live.get)
-	if err != nil {
-		t.Fatal(err)
-	}
+	got := diffLive(t, vals, live)
 
 	for _, d := range got {
 		if strings.Contains(d.String(), "TOP-SECRET") {
 			t.Errorf("a Secret value leaked into %s", d)
 		}
 	}
-
-	t.Logf("%d Secrets rendered", n)
 }
 
 func TestDiffLive_ListHelpers(t *testing.T) {
@@ -751,22 +727,14 @@ func TestRetireForeignRecord_BackupFailureKeepsRecords(t *testing.T) {
 // A backup that is too big for one Secret refuses before deleting anything.
 func TestRetireForeignRecord_OversizeBackupKeepsRecords(t *testing.T) {
 	ctx := t.Context()
+	// The record is padded past the cap while it still decodes.
 	kube := fake.NewSimpleClientset(&corev1.Secret{
 		Name: recordV1, Namespace: kubeSystem,
 		Labels: map[string]string{"owner": ownerHelm, "name": ChartName},
 		Type:   helmReleaseSecretType,
-		Data:   map[string][]byte{"release": []byte(base64.StdEncoding.EncodeToString([]byte(`{"version":1}`)))},
+		Data: map[string][]byte{"release": []byte(base64.StdEncoding.EncodeToString([]byte(
+			`{"version":1,"config":{"p":"` + strings.Repeat("x", maxBackupBytes) + `"}}`)))},
 	})
-
-	// Pad the record past the cap while it still decodes.
-	s, _ := kube.CoreV1().Secrets(kubeSystem).Get(ctx, "sh.helm.release.v1.cilium.v1", metav1.GetOptions{})
-	s.Data["pad"] = nil
-	s.Data["release"] = []byte(base64.StdEncoding.EncodeToString([]byte(`{"version":1,"config":{"p":"` +
-		strings.Repeat("x", maxBackupBytes) + `"}}`)))
-
-	if _, err := kube.CoreV1().Secrets(kubeSystem).Update(ctx, s, metav1.UpdateOptions{}); err != nil {
-		t.Fatal(err)
-	}
 
 	_, err := RetireForeignRecord(ctx, kube, RetireOptions{IchorNamespace: ichorNS, RemoveForeignReleaseRecord: true})
 	if err == nil || !strings.Contains(err.Error(), "too big") {
@@ -795,10 +763,7 @@ func TestDiffLive_IgnoresServerDefaultedRollingUpdateAndServiceType(t *testing.T
 		}
 	}
 
-	got, err := DiffLive(t.Context(), vals, live.get)
-	if err != nil {
-		t.Fatal(err)
-	}
+	got := diffLive(t, vals, live)
 
 	if len(got) != 0 {
 		t.Fatalf("server defaults reported:\n%s", strings.Join(diffPaths(got), "\n"))
@@ -808,7 +773,7 @@ func TestDiffLive_IgnoresServerDefaultedRollingUpdateAndServiceType(t *testing.T
 	spec := live.agent(t)["spec"].(map[string]any)
 	spec["updateStrategy"].(map[string]any)["rollingUpdate"].(map[string]any)["maxSurge"] = int64(1)
 
-	got, _ = DiffLive(t.Context(), vals, live.get)
+	got = diffLive(t, vals, live)
 	if len(got) != 1 || got[0].Path != "spec.updateStrategy.rollingUpdate.maxSurge" {
 		t.Fatalf("got %v", diffPaths(got))
 	}

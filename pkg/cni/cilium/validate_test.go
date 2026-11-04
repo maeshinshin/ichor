@@ -36,6 +36,9 @@ const (
 	tunnelGeneve = "geneve"
 )
 
+// debugOn is a user value that every chart accepts.
+var debugOn = map[string]any{keyDebug: map[string]any{keyEnabled: true}}
+
 func TestValidateValues(t *testing.T) {
 	replaced := ValidationContext{KubeProxy: cni.KubeProxyReplaced}
 	enabled := ValidationContext{KubeProxy: cni.KubeProxyEnabled}
@@ -56,7 +59,7 @@ func TestValidateValues(t *testing.T) {
 		wantErr []string // substrings; none means success
 	}{
 		{name: "empty", ctx: replaced},
-		{name: "valid user value", ctx: enabled, user: map[string]any{keyDebug: map[string]any{keyEnabled: true}}},
+		{name: "valid user value", ctx: enabled, user: debugOn},
 		{name: "free-form map accepts any key", ctx: enabled,
 			user: map[string]any{"nodeSelector": map[string]any{"disk": "ssd"}}},
 		{name: "bad mode", ctx: ValidationContext{KubeProxy: "nope"}, wantErr: []string{"nope"}},
@@ -215,8 +218,6 @@ func TestBootstrapManifest_UserValuesAreApplied(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	debugOn := map[string]any{keyDebug: map[string]any{keyEnabled: true}}
 
 	got, err := New().WithValues(debugOn).BootstrapManifest(cni.KubeProxyEnabled)
 	if err != nil {

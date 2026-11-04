@@ -174,6 +174,40 @@ spec:
                 - reason
                 - snapshot
                 type: object
+              keyRotation:
+                description: 'keyRotation is the key-rotation kind''s request: which
+                  keys, and how long the old service-account key is kept.'
+                properties:
+                  ignoreLegacyTokens:
+                    default: false
+                    description: |-
+                      ignoreLegacyTokens lets the rotation drop the old service-account key although Secrets of type
+                      kubernetes.io/service-account-token that it signed still exist. Those tokens stop working when the key
+                      is dropped. By default the operation waits until none is left.
+                    type: boolean
+                  targets:
+                    description: |-
+                      targets names the keys to replace: serviceAccount (the key that signs ServiceAccount tokens),
+                      secretbox (the key Secrets are encrypted with in etcd), or both.
+                    items:
+                      enum:
+                      - serviceAccount
+                      - secretbox
+                      type: string
+                    maxItems: 2
+                    minItems: 1
+                    type: array
+                    x-kubernetes-list-type: set
+                  tokenSettle:
+                    description: |-
+                      tokenSettle is how long the old service-account key is kept after the new one signs, so that the
+                      projected tokens of running pods are re-issued under the new one. The default is 90 minutes. Raise it
+                      when workloads request projected tokens that live longer than an hour. Ignored without the
+                      serviceAccount target.
+                    type: string
+                required:
+                - targets
+                type: object
               kind:
                 description: |-
                   kind names which upgrade this is: talos (spec.talosVersion/schematic),
@@ -186,6 +220,7 @@ spec:
                   config applies the pending reboot-requiring configuration changes, one machine at a time
                   with a reboot each.
                   etcd-restore rewinds the cluster to a stored etcd snapshot.
+                  key-rotation replaces the service-account signing key and the secretbox key.
                 enum:
                 - talos
                 - kubernetes
@@ -196,6 +231,7 @@ spec:
                 - config
                 - node
                 - etcd-restore
+                - key-rotation
                 type: string
               maxUnavailable:
                 default: 1
@@ -318,6 +354,12 @@ spec:
             - message: cni cannot change after creation
               rule: has(self.cni) == has(oldSelf.cni) && (!has(self.cni) || self.cni
                 == oldSelf.cni)
+            - message: spec.keyRotation is required for the key-rotation kind and
+                only allowed there
+              rule: (self.kind == 'key-rotation') == has(self.keyRotation)
+            - message: keyRotation cannot change after creation
+              rule: has(self.keyRotation) == has(oldSelf.keyRotation) && (!has(self.keyRotation)
+                || self.keyRotation == oldSelf.keyRotation)
             - message: spec.etcdRestore is required for the etcd-restore kind and
                 only allowed there
               rule: (self.kind == 'etcd-restore') == has(self.etcdRestore)
@@ -522,6 +564,100 @@ spec:
                   now lives in the ichor.maesh.dev/from-version annotation (OperationFromVersionAnnotation).
                   The field stays so the CRD never drops a field an installed version has.
                 type: string
+              keyRotation:
+                description: |-
+                  keyRotation is the key-rotation kind's state machine: which stage every control plane is being taken to,
+                  which key signs or encrypts in it, and the progress of the re-encryption. Public identifiers only.
+                properties:
+                  keys:
+                    description: |-
+                      keys lists the rotated keys and, for the current stage, which one signs or encrypts and which are
+                      accepted. Public identifiers only; no key material.
+                    items:
+                      description: |-
+                        KeyRotationKey is one rotated key. Identifiers are public: the SHA-256 of the service-account public key's
+                        DER, or a salted hash prefix of the secretbox secret.
+                      properties:
+                        accepted:
+                          description: accepted lists the keys, besides the active
+                            one, that verify or decrypt in the current stage.
+                          items:
+                            type: string
+                          type: array
+                        active:
+                          description: active is the key that signs (serviceAccount)
+                            or encrypts (secretbox) in the current stage.
+                          type: string
+                        name:
+                          description: name is serviceAccount or secretbox.
+                          type: string
+                        next:
+                          description: next is the new key, held in the bundle Secret's
+                            keyrotation.yaml until the rotation is finalized.
+                          type: string
+                        previous:
+                          description: previous is the key the rotation started from.
+                          type: string
+                      required:
+                      - name
+                      - next
+                      - previous
+                      type: object
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - name
+                    x-kubernetes-list-type: map
+                  reencryption:
+                    description: reencryption is the progress of the Reencrypting
+                      stage.
+                    properties:
+                      rewritten:
+                        description: |-
+                          rewritten is how many Secrets the last complete sweep stored again under the new key. The stage ends
+                          after a sweep that rewrote none.
+                        format: int64
+                        type: integer
+                      scanned:
+                        description: scanned is how many Secrets the last complete
+                          sweep looked at.
+                        format: int64
+                        type: integer
+                      sweeps:
+                        description: sweeps is how many complete passes over every
+                          Secret have run.
+                        format: int32
+                        type: integer
+                    type: object
+                  restart:
+                    description: |-
+                      restart is the control plane whose kube-apiserver the current stage restarted last, and the container
+                      it ran before. The stage waits for another container and /readyz before it visits the next control plane.
+                    properties:
+                      instance:
+                        description: instance is the kube-apiserver container that
+                          ran before the restart.
+                        type: string
+                      machine:
+                        description: machine is the TalosMachine whose control plane
+                          was told to restart its kube-apiserver.
+                        type: string
+                    required:
+                    - machine
+                    type: object
+                  stage:
+                    description: |-
+                      stage is the stage every control plane is being taken to; see the KeyRotationStage* constants. Empty
+                      until the new keys have been generated and saved.
+                    enum:
+                    - Accepting
+                    - Issuing
+                    - Reencrypting
+                    - SettlingTokens
+                    - Dropping
+                    - Finalizing
+                    - Done
+                    type: string
+                type: object
               kubernetes:
                 description: |-
                   kubernetes is the kubernetes kind's state machine: which of the three stages the machines

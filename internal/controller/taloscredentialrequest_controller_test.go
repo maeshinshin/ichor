@@ -106,6 +106,40 @@ var _ = Describe("TalosCredentialRequest controller (ADR 0108)", func() {
 		}
 	})
 
+	It("signs an os:reader certificate for the talosconfig a person takes, one hour by default and twelve at most (ADR 0124)", func() {
+		csr, _, err := credentials.NewCSR(false)
+		Expect(err).NotTo(HaveOccurred())
+
+		// talosRole must not widen this purpose.
+		cr := request(ichorv1alpha1.TalosCredentialRequestSpec{
+			Purpose: ichorv1alpha1.CredentialPurposeTalosconfigReader, CSR: string(csr), TalosRole: "admin",
+		})
+		Expect(cr.Status.Phase).To(Equal(ichorv1alpha1.CredentialPhaseIssued), cr.Status.Message)
+
+		crt := parse(cr.Status.Certificate)
+		Expect(crt.Subject.Organization).To(ConsistOf("os:reader"))
+		Expect(crt.NotAfter).To(BeTemporally("~", time.Now().Add(credentials.TalosconfigLifetime), time.Minute))
+
+		pool := stdx509.NewCertPool()
+		Expect(pool.AppendCertsFromPEM([]byte(cr.Status.Trust))).To(BeTrue())
+		_, err = crt.Verify(stdx509.VerifyOptions{Roots: pool, KeyUsages: []stdx509.ExtKeyUsage{stdx509.ExtKeyUsageClientAuth}})
+		Expect(err).NotTo(HaveOccurred())
+
+		cr = request(ichorv1alpha1.TalosCredentialRequestSpec{
+			Purpose: ichorv1alpha1.CredentialPurposeTalosconfigReader, CSR: string(csr),
+			TTL: &metav1.Duration{Duration: credentials.MaxTalosconfigLifetime},
+		})
+		Expect(cr.Status.Phase).To(Equal(ichorv1alpha1.CredentialPhaseIssued), cr.Status.Message)
+		Expect(parse(cr.Status.Certificate).NotAfter).To(BeTemporally("~", time.Now().Add(credentials.MaxTalosconfigLifetime), time.Minute))
+
+		cr = request(ichorv1alpha1.TalosCredentialRequestSpec{
+			Purpose: ichorv1alpha1.CredentialPurposeTalosconfigReader, CSR: string(csr),
+			TTL: &metav1.Duration{Duration: credentials.MaxTalosconfigLifetime + time.Hour},
+		})
+		Expect(cr.Status.Phase).To(Equal(ichorv1alpha1.CredentialPhaseFailed))
+		Expect(cr.Status.Certificate).To(BeEmpty())
+	})
+
 	It("signs a Kubernetes administrator certificate for the credentials download", func() {
 		csr, _, err := credentials.NewCSR(true)
 		Expect(err).NotTo(HaveOccurred())

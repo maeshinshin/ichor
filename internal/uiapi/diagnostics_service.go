@@ -133,6 +133,11 @@ func (s *Server) GetMyPermissions(
 			return err
 		})
 		g.Go(func() (err error) {
+			out.TalosconfigReader, err = s.mayDownload(ctx, c.GetNamespace(), resourceTalosClusters, TalosconfigReaderScope, c.GetName())
+
+			return err
+		})
+		g.Go(func() (err error) {
 			out.ClusterUpdate, err = s.may(ctx, "update", c.GetNamespace(), resourceTalosClusters, "", c.GetName())
 
 			return err

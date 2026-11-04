@@ -541,11 +541,23 @@ func newAPIDepsFor(cmd *cobra.Command, cfg *rest.Config) (apiDeps, error) {
 	}, nil
 }
 
-// showAPI is runAPI for a read command whose whole job is one call and printing its response.
+// showAPI is runAPI for a read command whose whole job is one call and printing its response, as
+// YAML or JSON (a command without a human view prints YAML when -o is unset).
 func showAPI[T any, PT interface {
 	*T
 	proto.Message
 }](cmd *cobra.Command, requireBackend bool, call func(context.Context, *apiClients) (*connect.Response[T], error),
+) error {
+	return showAPIHuman[T, PT](cmd, requireBackend, call, nil)
+}
+
+// showAPIHuman is showAPI for a command with a human view: render prints the response when -o is
+// unset (see human.go); -o yaml|json print the wire message as ever.
+func showAPIHuman[T any, PT interface {
+	*T
+	proto.Message
+}](cmd *cobra.Command, requireBackend bool, call func(context.Context, *apiClients) (*connect.Response[T], error),
+	render func(*human, PT) error,
 ) error {
 	return runAPI(cmd, requireBackend, func(ctx context.Context, c *apiClients) error {
 		resp, err := call(ctx, c)
@@ -553,8 +565,18 @@ func showAPI[T any, PT interface {
 			return err
 		}
 
-		return writeMessage(cmd.OutOrStdout(), outputFormat, PT(resp.Msg))
+		return printAPI(cmd.OutOrStdout(), PT(resp.Msg), render)
 	})
+}
+
+// printAPI prints a response: through render when -o is unset and the command has a human view,
+// otherwise as the wire message in the requested format (YAML for an unset -o).
+func printAPI[T proto.Message](w io.Writer, msg T, render func(*human, T) error) error {
+	if render != nil && outputFormat == outputHuman {
+		return render(newHuman(w), msg)
+	}
+
+	return writeMessage(w, outputFormat, msg)
 }
 
 // runAPI is every command's shell: validate -o, connect, run, close.
@@ -606,7 +628,7 @@ func writeMessage(w io.Writer, format string, msg proto.Message) error {
 		return err
 	}
 
-	switch format {
+	switch machineFormat(format) {
 	case outputJSON:
 		var buf bytes.Buffer
 		if err := json.Indent(&buf, raw, "", "  "); err != nil {

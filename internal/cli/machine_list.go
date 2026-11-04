@@ -32,11 +32,11 @@ var machineListCmd = &cobra.Command{
 	Short: "List machines, pending ones included",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		return showAPI(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.ListMachinesResponse], error) {
+		return showAPIHuman(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.ListMachinesResponse], error) {
 			return c.Machine.ListMachines(ctx, connect.NewRequest(&pb.ListMachinesRequest{
 				Cluster: clusterFilter(apiOpts.Namespace, machineListCluster),
 			}))
-		})
+		}, renderMachineList)
 	},
 }
 

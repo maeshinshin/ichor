@@ -44,7 +44,7 @@ func TestCheckAdoptCompatWarnsOrRefuses(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	if err := checkAdoptCompat(&out, "v1.14.3", "v1.32.0", true); err != nil {
+	if err := checkAdoptCompat(adoptDeps{Stderr: &out}.say, "v1.14.3", "v1.32.0", true); err != nil {
 		t.Fatalf("an incompatible but known pair is refused: %v", err)
 	}
 
@@ -54,7 +54,7 @@ func TestCheckAdoptCompatWarnsOrRefuses(t *testing.T) {
 
 	out.Reset()
 
-	err := checkAdoptCompat(&out, "v1.15.0", release.Pinned.Kubernetes, true)
+	err := checkAdoptCompat(adoptDeps{Stderr: &out}.say, "v1.15.0", release.Pinned.Kubernetes, true)
 	if !errors.Is(err, release.ErrUnknownVersion) {
 		t.Fatalf("a Talos the table does not know: err = %v, want ErrUnknownVersion", err)
 	}
@@ -66,7 +66,7 @@ func TestCheckAdoptCompatJudgesNoCiliumOfAnUnmanagedAdopt(t *testing.T) {
 	t.Parallel()
 
 	var out bytes.Buffer
-	if err := checkAdoptCompat(&out, "v1.14.3", "v1.32.0", false); err != nil {
+	if err := checkAdoptCompat(adoptDeps{Stderr: &out}.say, "v1.14.3", "v1.32.0", false); err != nil {
 		t.Fatalf("an unmanaged adopt is refused: %v", err)
 	}
 

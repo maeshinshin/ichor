@@ -81,6 +81,8 @@ type adoptWriteInput struct {
 	WebhookWait, Interval time.Duration
 
 	Stderr io.Writer
+	// Note receives the findings (a policy not applied, and why); nil writes them to Stderr.
+	Note func(msg string)
 }
 
 // adoptWriteCluster is the TalosCluster's spec as adopt settled it.
@@ -195,6 +197,18 @@ type adoptWriter struct {
 	res *adoptWriteResult
 }
 
+// note reports a finding: through Note, or as an "adopt:" line on Stderr.
+func (w *adoptWriter) note(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	if w.in.Note != nil {
+		w.in.Note(msg)
+
+		return
+	}
+
+	_, _ = fmt.Fprintf(w.in.Stderr, "adopt: %s\n", msg)
+}
+
 // ensure creates obj unless an object of that name exists; an existing one must satisfy same.
 func (w *adoptWriter) ensure(ctx context.Context, obj client.Object, kind string, same func(have client.Object) bool) error {
 	have, ok := obj.DeepCopyObject().(client.Object)
@@ -258,7 +272,7 @@ func (w *adoptWriter) installIchor(ctx context.Context) error {
 
 	if !installer.IncludeCiliumPolicies(ichor.DetectedCNI, ichor.PolicyCRDPresent) {
 		if len(ichor.NetworkPolicies) > 0 {
-			_, _ = fmt.Fprintf(w.in.Stderr, "adopt: not applying Ichor's network policies: %s\n", policyGateReason(ichor))
+			w.note("not applying Ichor's network policies: %s", policyGateReason(ichor))
 		}
 
 		return nil
@@ -285,7 +299,7 @@ func (w *adoptWriter) skipInstall(present ichorPresence, ichor *adoptWriteIchor)
 
 	if !installer.IncludeCiliumPolicies(ichor.DetectedCNI, ichor.PolicyCRDPresent) {
 		if len(ichor.NetworkPolicies) > 0 {
-			_, _ = fmt.Fprintf(w.in.Stderr, "adopt: not applying Ichor's network policies: %s\n", policyGateReason(ichor))
+			w.note("not applying Ichor's network policies: %s", policyGateReason(ichor))
 		}
 
 		return
@@ -296,8 +310,8 @@ func (w *adoptWriter) skipInstall(present ichorPresence, ichor *adoptWriteIchor)
 	}
 
 	if v := present.CiliumPoliciesValue(); v == nil || !*v {
-		_, _ = fmt.Fprintf(w.in.Stderr, "adopt: Ichor's network policies are not applied to a Helm-owned namespace; "+
-			"set networkPolicy.cilium.enabled=true and run `%s --reuse-values --set networkPolicy.cilium.enabled=true`\n",
+		w.note("Ichor's network policies are not applied to a Helm-owned namespace; "+
+			"set networkPolicy.cilium.enabled=true and run `%s --reuse-values --set networkPolicy.cilium.enabled=true`",
 			present.helmUpgradeCommand(present.Version()))
 	}
 }

@@ -321,6 +321,21 @@ func (m *TalosMachine) DialEndpoint() string {
 	return m.Spec.Endpoint
 }
 
+// KubeletServingCertificateStatus records one issued kubelet serving certificate (ADR 0125).
+type KubeletServingCertificateStatus struct {
+	// request is the name of the CertificateSigningRequest Ichor approved.
+	// +optional
+	Request string `json:"request,omitempty"`
+
+	// issuedAt is when the Kubernetes CA signed it (the certificate's NotBefore).
+	// +optional
+	IssuedAt metav1.Time `json:"issuedAt,omitempty"`
+
+	// notAfter is when it expires; the kubelet asks for a new one before that.
+	// +optional
+	NotAfter metav1.Time `json:"notAfter,omitempty"`
+}
+
 // TalosMachineStatus defines the observed state of TalosMachine.
 type TalosMachineStatus struct {
 	// conditions represent the current state of the TalosMachine resource, kstatus-compatible.
@@ -381,6 +396,12 @@ type TalosMachineStatus struct {
 	// the node has been read.
 	// +optional
 	NodeName string `json:"nodeName,omitempty"`
+
+	// kubeletServingCertificate is the latest kubelet serving certificate Ichor approved for this
+	// machine's node and the Kubernetes CA issued (spec.security.kubeletServingCertificates, ADR
+	// 0125). Empty while the option is off or no request has been issued yet.
+	// +optional
+	KubeletServingCertificate *KubeletServingCertificateStatus `json:"kubeletServingCertificate,omitempty"`
 
 	// configStoredAt is when the node accepted its initial configuration over the insecure
 	// maintenance API. Once set, Ichor never applies to this node insecurely again; it only

@@ -739,3 +739,15 @@ func init() {
 // ConditionCertificatesExpiring is the TalosCluster condition that is True while any CA in the
 // secrets bundle expires within the controller's warning window, or has expired (ADR 0063).
 const ConditionCertificatesExpiring = "CertificatesExpiring"
+
+// ConditionKubeletServingCertificates is the TalosCluster condition reported while
+// spec.security.kubeletServingCertificates is enabled (ADR 0125): True when every machine has
+// been issued a kubelet serving certificate by the Kubernetes CA, False naming the machines that
+// have not. It is removed when the option is off.
+const ConditionKubeletServingCertificates = "KubeletServingCertificates"
+
+// ConditionKubeletServingVerified latches the kube-apiserver's --kubelet-certificate-authority on
+// (ADR 0125). Ichor sets it True once verifyFromAPIServer is set and KubeletServingCertificates
+// is True, and removes it when either is switched off. Render reads it, so a node that joins
+// later does not take the flag away again.
+const ConditionKubeletServingVerified = "KubeletServingVerified"

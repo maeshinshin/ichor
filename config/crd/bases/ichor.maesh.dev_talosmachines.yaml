@@ -560,6 +560,27 @@ spec:
                   type: object
                 type: array
                 x-kubernetes-list-type: atomic
+              kubeletServingCertificate:
+                description: |-
+                  kubeletServingCertificate is the latest kubelet serving certificate Ichor approved for this
+                  machine's node and the Kubernetes CA issued (spec.security.kubeletServingCertificates, ADR
+                  0125). Empty while the option is off or no request has been issued yet.
+                properties:
+                  issuedAt:
+                    description: issuedAt is when the Kubernetes CA signed it (the
+                      certificate's NotBefore).
+                    format: date-time
+                    type: string
+                  notAfter:
+                    description: notAfter is when it expires; the kubelet asks for
+                      a new one before that.
+                    format: date-time
+                    type: string
+                  request:
+                    description: request is the name of the CertificateSigningRequest
+                      Ichor approved.
+                    type: string
+                type: object
               maintenanceFingerprint:
                 description: |-
                   maintenanceFingerprint is the SPKI fingerprint (SHA-256, base64) of the

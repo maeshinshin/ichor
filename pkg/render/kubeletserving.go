@@ -45,9 +45,9 @@ func KubeletServingEnabled(c *ichorv1alpha1.TalosCluster) bool {
 		c.Spec.Security.KubeletServingCertificates.Enabled
 }
 
-// kubeletServingVerified is true when the apiserver is to verify the kubelets: asked for, and the
+// KubeletServingVerified is true when the apiserver is to verify the kubelets: asked for, and the
 // controller has latched KubeletServingVerified once every machine had a certificate.
-func kubeletServingVerified(c *ichorv1alpha1.TalosCluster) bool {
+func KubeletServingVerified(c *ichorv1alpha1.TalosCluster) bool {
 	return KubeletServingEnabled(c) && c.Spec.Security.KubeletServingCertificates.VerifyFromAPIServer &&
 		apimeta.IsStatusConditionTrue(c.Status.Conditions, ichorv1alpha1.ConditionKubeletServingVerified)
 }
@@ -82,7 +82,7 @@ func injectKubeletServing(
 	// certificates and verifies them.
 	var ca meta.Args
 
-	if kubeletServingVerified(cluster) && machineType == machine.TypeControlPlane {
+	if KubeletServingVerified(cluster) && machineType == machine.TypeControlPlane {
 		ca = meta.Args{kubeletCAFlag: meta.NewArgValue(filepath.Join(constants.KubernetesAPIServerSecretsDir, "ca.crt"), nil)}
 	}
 

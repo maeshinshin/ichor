@@ -27,13 +27,19 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
+const (
+	patchA = "v1.14.5"
+	patchB = "v1.14.4"
+	patchC = "v1.20.5"
+)
+
 // Each list records its own error, so one repository that cannot be listed does not make the other lists
 // look failed.
 func TestUpgradeTargetsOfRecordsTheErrorOfEachListOnItsOwn(t *testing.T) {
 	prev := &ichorv1alpha1.IchorUpgradeTargets{Talos: []string{"v1.14.3"}, TalosError: "old", CiliumError: "old"}
 
 	got := upgradeTargetsOf(prev, metav1.Now(),
-		listing{tags: []string{"v1.14.5", "v1.14.4"}}, listing{err: errors.New("ghcr unreachable")}, listing{tags: []string{"v1.20.5"}})
+		listing{tags: []string{patchA, patchB}}, listing{err: errors.New("ghcr unreachable")}, listing{tags: []string{patchC}})
 
 	if got.TalosError != "" || got.CiliumError != "" {
 		t.Fatalf("lists that listed fine kept errors: talos %q, cilium %q", got.TalosError, got.CiliumError)
@@ -43,7 +49,7 @@ func TestUpgradeTargetsOfRecordsTheErrorOfEachListOnItsOwn(t *testing.T) {
 		t.Fatalf("kubernetesError = %q, want the listing failure", got.KubernetesError)
 	}
 
-	if !slices.Equal(got.Talos, []string{"v1.14.5", "v1.14.4"}) || !slices.Equal(got.Cilium, []string{"v1.20.5"}) {
+	if !slices.Equal(got.Talos, []string{patchA, patchB}) || !slices.Equal(got.Cilium, []string{patchC}) {
 		t.Fatalf("a failing Kubernetes listing blanked the others: talos %v, cilium %v", got.Talos, got.Cilium)
 	}
 

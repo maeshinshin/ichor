@@ -4193,6 +4193,17 @@ spec:
                         when enabled: without them Ichor or the nodes would lose access'
                       rule: '!self.enabled || (has(self.controllerCIDRs) && self.controllerCIDRs.size()
                         > 0 && has(self.nodeCIDRs) && self.nodeCIDRs.size() > 0)'
+                  kernelLockdown:
+                    description: |-
+                      kernelLockdown is the kernel lockdown level the nodes are expected to run with. Ichor checks
+                      it and reports a node below it; it does not render it, because the kernel command line is
+                      embedded in the UKI (build it into the boot asset with an Image Factory schematic whose
+                      extraKernelArgs has lockdown=confidentiality, and set spec.schematic). SecureBoot images run
+                      at integrity by themselves in Talos v1.14.
+                    enum:
+                    - integrity
+                    - confidentiality
+                    type: string
                   podSecurity:
                     description: |-
                       podSecurity sets the Pod Security admission levels of the kube-apiserver. Restarts the
@@ -4230,6 +4241,28 @@ spec:
                         - baseline
                         - restricted
                         type: string
+                    type: object
+                  secureBoot:
+                    description: |-
+                      secureBoot asks for UEFI SecureBoot with Talos's UKI images. It picks the
+                      installer image variant and reports each node's actual state; it never changes an installed
+                      node, because Talos cannot convert a GRUB install and the firmware keys are not Talos's.
+                    properties:
+                      mode:
+                        description: |-
+                          mode is Off (the default: the stock installer, nothing reported), Preferred (Ichor uses the
+                          SecureBoot installer where it chooses one and reports nodes without SecureBoot) or Required
+                          (as Preferred, a TPM disk key must check SecureBoot, enabling it needs the confirm
+                          annotation while any approved machine lacks SecureBoot, and a machine in maintenance mode
+                          without SecureBoot is not given its first configuration). A node that already runs
+                          SecureBoot is upgraded with the SecureBoot installer whatever the mode.
+                        enum:
+                        - "Off"
+                        - Preferred
+                        - Required
+                        type: string
+                    required:
+                    - mode
                     type: object
                   wireGuard:
                     description: |-

@@ -19,7 +19,6 @@ package uiapi
 import (
 	"context"
 	"crypto/rand"
-	"errors"
 	"fmt"
 	"net/netip"
 	"slices"
@@ -153,7 +152,7 @@ func (s *Server) CreateReclaim(
 
 	address := strings.TrimSpace(m.GetAddress())
 	if address == "" || len(m.GetTalosconfig()) == 0 {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("address and talosconfig are required"))
+		return nil, invalid("address and talosconfig are required")
 	}
 
 	// Refuse before anything is written: registering the address is an update made as the caller, and failing it
@@ -393,7 +392,7 @@ func (s *Server) ConfirmReclaim(
 
 	uuid := strings.TrimSpace(req.Msg.GetUuid())
 	if uuid == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("uuid is required"))
+		return nil, invalid("uuid is required")
 	}
 
 	user, err := s.reclaimUser(ctx)

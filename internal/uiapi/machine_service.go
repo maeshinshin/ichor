@@ -139,8 +139,7 @@ func (s *Server) resolveMachine(ctx context.Context, ref *pb.ObjectRef) (*ichorv
 		names[i] = f.Name
 	}
 
-	return nil, connect.NewError(connect.CodeInvalidArgument,
-		fmt.Errorf("%q matches more than one machine (%s): use the machine's own name", ref.GetName(), strings.Join(names, ", ")))
+	return nil, invalid("%q matches more than one machine (%s): use the machine's own name", ref.GetName(), strings.Join(names, ", "))
 }
 
 // ApproveMachine is how a person decides a discovered machine joins the
@@ -195,14 +194,13 @@ func (s *Server) ApproveMachine(
 
 	role := req.Msg.GetRole()
 	if role == pb.MachineRole_MACHINE_ROLE_UNSPECIFIED {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("role is required to approve a machine"))
+		return nil, invalid("role is required to approve a machine")
 	}
 
 	// Checked here so the caller gets the reason, not a bare admission error (ADR 0077).
 	if h := req.Msg.GetHostname(); h != "" {
 		if errs := validation.IsDNS1123Subdomain(h); len(errs) > 0 {
-			return nil, connect.NewError(connect.CodeInvalidArgument,
-				fmt.Errorf("hostname %q is not a valid RFC 1123 name: %s", h, strings.Join(errs, "; ")))
+			return nil, invalid("hostname %q is not a valid RFC 1123 name: %s", h, strings.Join(errs, "; "))
 		}
 	}
 

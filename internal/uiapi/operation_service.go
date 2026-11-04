@@ -76,7 +76,7 @@ func kindToSpec(k pb.OperationKind) (string, error) {
 		}
 	}
 
-	return "", connect.NewError(connect.CodeInvalidArgument, errors.New("kind is required"))
+	return "", invalid("kind is required")
 }
 
 func kindToPB(k string) pb.OperationKind {
@@ -291,12 +291,11 @@ func normalizeTarget(kind, target string) (string, error) {
 	case ichorv1alpha1.TalosOperationKindShutdown, ichorv1alpha1.TalosOperationKindCARotation, ichorv1alpha1.TalosOperationKindConfig,
 		ichorv1alpha1.TalosOperationKindNode, ichorv1alpha1.TalosOperationKindEtcdRestore:
 		if target != "" {
-			return "", connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("a %s has no target", kind))
+			return "", invalid("a %s has no target", kind)
 		}
 	case ichorv1alpha1.TalosOperationKindCNI:
 		if target != "" && target != kubeProxyEnabled && target != kubeProxyReplaced {
-			return "", connect.NewError(connect.CodeInvalidArgument,
-				fmt.Errorf("kube-proxy mode %q is not %q or %q", target, kubeProxyEnabled, kubeProxyReplaced))
+			return "", invalid("kube-proxy mode %q is not %q or %q", target, kubeProxyEnabled, kubeProxyReplaced)
 		}
 	default:
 		if target == "" {
@@ -338,7 +337,7 @@ func (s *Server) planOperation(
 	}
 
 	if maxUnavailable < 0 {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("max_unavailable cannot be negative"))
+		return nil, invalid("max_unavailable cannot be negative")
 	}
 
 	// A CA rotation visits the machines one at a time, control planes first (ADR 0063).

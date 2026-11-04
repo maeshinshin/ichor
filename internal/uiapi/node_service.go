@@ -166,7 +166,7 @@ func (s *Server) StreamNodeLogs(
 
 	refs := req.Msg.GetMachines()
 	if len(refs) == 0 {
-		return connect.NewError(connect.CodeInvalidArgument, errors.New("machines is required"))
+		return invalid("machines is required")
 	}
 
 	service := req.Msg.GetService()

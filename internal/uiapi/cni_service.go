@@ -87,7 +87,7 @@ func (s *Server) getCiliumView(ctx context.Context, ref *pb.ObjectRef) (*ciliumV
 func parseUserYAML(text string) (map[string]any, error) {
 	var user map[string]any
 	if err := sigsyaml.Unmarshal([]byte(text), &user); err != nil {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("user_yaml is not a YAML mapping: %w", err))
+		return nil, invalid("user_yaml is not a YAML mapping: %w", err)
 	}
 
 	return user, nil
@@ -291,7 +291,7 @@ func (s *Server) DiffCiliumValues(
 
 	proposed, err := v.effective(user)
 	if err != nil {
-		return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("the proposed values do not give effective values: %w", err))
+		return nil, invalid("the proposed values do not give effective values: %w", err)
 	}
 
 	a, err := toYAML(current)
@@ -331,8 +331,7 @@ func (s *Server) SetCiliumValues(
 	}
 
 	if errs := flattenErrors(cilium.ValidateValues(user, s.validationContext(ctx, v))); len(errs) > 0 {
-		return nil, connect.NewError(connect.CodeInvalidArgument,
-			fmt.Errorf("the Cilium values are not valid:\n- %s", strings.Join(errs, "\n- ")))
+		return nil, invalid("the Cilium values are not valid:\n- %s", strings.Join(errs, "\n- "))
 	}
 
 	effective, err := v.effective(user)

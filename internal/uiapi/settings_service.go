@@ -26,6 +26,7 @@ import (
 	"connectrpc.com/connect"
 	authv1 "k8s.io/api/authorization/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -85,13 +86,11 @@ func specFieldsPB(spec *ichorv1alpha1.IchorInstallationSpec) *pb.SettingsFields 
 
 	if u := spec.Users; u != nil {
 		if u.TokenTTL != nil {
-			v := u.TokenTTL.Duration.String()
-			out.TokenTtl = &v
+			out.TokenTtl = ptr.To(u.TokenTTL.Duration.String())
 		}
 
 		if u.RefreshLifetime != nil {
-			v := u.RefreshLifetime.Duration.String()
-			out.RefreshLifetime = &v
+			out.RefreshLifetime = ptr.To(u.RefreshLifetime.Duration.String())
 		}
 	}
 
@@ -107,8 +106,7 @@ func specFieldsPB(spec *ichorv1alpha1.IchorInstallationSpec) *pb.SettingsFields 
 		out.AutoPatchEnabled = a.Enabled
 
 		if len(a.Components) > 0 {
-			v := strings.Join(a.Components, ",")
-			out.AutoPatchComponents = &v
+			out.AutoPatchComponents = ptr.To(strings.Join(a.Components, ","))
 		}
 
 		if a.Window != "" {

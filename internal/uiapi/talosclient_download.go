@@ -39,6 +39,7 @@ import (
 	yaml "go.yaml.in/yaml/v4"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"k8s.io/utils/ptr"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -288,8 +289,7 @@ func (t *machineryDownloadClient) serviceLogs(ctx context.Context, problems *[]s
 		for _, s := range msg.GetServices() {
 			item := svc{ID: s.GetId(), State: s.GetState()}
 			if h := s.GetHealth(); h != nil && !h.GetUnknown() {
-				v := h.GetHealthy()
-				item.Healthy = &v
+				item.Healthy = ptr.To(h.GetHealthy())
 			}
 
 			infos = append(infos, item)

@@ -38,6 +38,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -127,6 +128,9 @@ type CNIHandoverReconciler struct {
 
 	// Namespace is where the Helm release record lives (ichor-system); the Job runs in kube-system.
 	Namespace string
+
+	// Recorder records the Event of a Cilium patch an earlier Ichor ran (dropPatchImages); nil records none.
+	Recorder record.EventRecorder
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch

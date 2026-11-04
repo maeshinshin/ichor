@@ -427,38 +427,15 @@ func (s *Server) StartCniUpgrade(
 		return nil, err
 	}
 
-	// A patch is the one the server offers as a cni patch: its images
-	// verified and it is newer than the chart this Ichor embeds. The release moves to the embedded chart
-	// with the patch's images; the controller checks the signatures before the Job runs them.
-	version := req.Msg.GetVersion()
-	overridden := ""
+	// Cilium moves only to the chart this Ichor embeds, with that chart's images. The request's version was a patch to
+	// run on the embedded chart; it is no longer accepted.
+	if req.Msg.GetVersion() != "" {
+		return nil, invalid("Cilium moves only to the chart this Ichor embeds (%s); a newer Cilium arrives with a newer Ichor release, "+
+			"so version %q is not accepted", cilium.ChartVersion, req.Msg.GetVersion())
+	}
 
-	if version == "" {
-		if v.cluster.Status.CNI == nil || v.cluster.Status.CNI.AvailableChartVersion == "" {
-			return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no Cilium upgrade is available: status.cni.availableChartVersion is empty"))
-		}
-	} else {
-		offered, compat, reason, err := s.ciliumPatchOffer(ctx, v.cluster, version)
-		if err != nil {
-			return nil, err
-		}
-
-		if !offered {
-			// Only an incompatibility with the cluster's Kubernetes is overridable; an unverified patch never is.
-			overridden, err = s.ciliumCompatOverride(ctx, v.cluster, version, compat, req.Msg.GetOverride())
-			if err != nil {
-				return nil, err
-			}
-
-			if overridden == "" {
-				why := "it is not a verified newer patch of the running Cilium minor"
-				if reason != "" {
-					why = reason
-				}
-
-				return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("the Cilium patch %s is not offered: %s", version, why))
-			}
-		}
+	if v.cluster.Status.CNI == nil || v.cluster.Status.CNI.AvailableChartVersion == "" {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no Cilium upgrade is available: status.cni.availableChartVersion is empty"))
 	}
 
 	if errs := flattenErrors(cilium.ValidateValues(v.user, s.validationContext(ctx, v))); len(errs) > 0 {
@@ -472,18 +449,8 @@ func (s *Server) StartCniUpgrade(
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New(blocked))
 	}
 
-	// The chart the release moves to: the one the status says is available, or for a patch the embedded
-	// chart the patch rides on.
 	cluster := v.cluster
-	chart := cilium.ChartVersion
-	if version == "" {
-		chart = cluster.Status.CNI.AvailableChartVersion
-	}
-
-	to := version
-	if to == "" {
-		to = chart
-	}
+	chart := cluster.Status.CNI.AvailableChartVersion
 
 	op := &ichorv1alpha1.TalosOperation{
 		GenerateName: ichorv1alpha1.TalosOperationKindCNI + "-", Namespace: cluster.Namespace, Annotations: s.startedByAnnotation(ctx),
@@ -491,7 +458,7 @@ func (s *Server) StartCniUpgrade(
 			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
 			Kind:       ichorv1alpha1.TalosOperationKindCNI,
 			CNI: &ichorv1alpha1.TalosOperationCNISpec{
-				Action: ichorv1alpha1.TalosOperationCNIActionUpgrade, ChartVersion: chart, ImageVersion: version,
+				Action: ichorv1alpha1.TalosOperationCNIActionUpgrade, ChartVersion: chart,
 			},
 		},
 	}
@@ -500,15 +467,8 @@ func (s *Server) StartCniUpgrade(
 		return nil, err
 	}
 
-	// A patch that went through under the override verb is recorded in the cluster's Events.
-	if overridden != "" {
-		if err := s.emitWarningEvent(ctx, cluster, kindTalosCluster, "Override", overridden); err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
-	}
-
 	return connect.NewResponse(&pb.StartCniUpgradeResponse{
-		Operation: objectRef(op.Namespace, op.Name), ToVersion: to, Audit: s.opAudit(ctx, "create", objectRef(op.Namespace, op.Name)),
+		Operation: objectRef(op.Namespace, op.Name), ToVersion: chart, Audit: s.opAudit(ctx, "create", objectRef(op.Namespace, op.Name)),
 	}), nil
 }
 
@@ -525,25 +485,4 @@ func overridableRefusal(err error) *connect.Error {
 	ce.Meta().Set(overridableKey, overridableValue)
 
 	return ce
-}
-
-// ciliumCompatOverride handles a patch the server does not offer. With no overridable incompatibility (compat nil) it
-// returns "" and the caller refuses as before. With one, and without an override, it refuses with overridableKey set;
-// with an override it checks the caller holds the verb on the cluster and returns the text for the Event.
-func (s *Server) ciliumCompatOverride(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, version string, compat error, bg *pb.Override,
-) (string, error) {
-	if compat == nil {
-		return "", nil
-	}
-
-	if bg == nil {
-		return "", overridableRefusal(fmt.Errorf("the Cilium patch %s is incompatible: %w; the override verb can lift this", version, compat))
-	}
-
-	if err := s.authorizeOverride(ctx, cluster); err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("cilium %s is incompatible (%v), overridden under override: %s", version, compat, overrideReason(bg.GetReason())), nil
 }

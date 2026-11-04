@@ -463,6 +463,11 @@ func (s *Server) planOperation(
 		}
 		p.resp.ReplacesSecretsBundle = true
 		p.resp.Warning = caRotationWarning(p.caTargets)
+		p.resp.CaTargets = p.caTargets
+
+		if p.resp.CaTargets == nil {
+			p.resp.CaTargets = ichorv1alpha1.DefaultCARotationTargets()
+		}
 	case ichorv1alpha1.TalosOperationKindIchor:
 		p.resp.Effect = pb.OperationEffect_OPERATION_EFFECT_NONE
 		p.install = &ichorv1alpha1.IchorInstallation{}

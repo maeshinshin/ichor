@@ -570,6 +570,7 @@ export const en = {
   'ops.failureHint':
     'It does not retry by itself and nothing was rolled back. Fix the cause, then resume it to run the failed step again, or delete it.',
   'ops.maxUnavailable': 'Workers at once',
+  'ops.currently': 'Currently',
   'ops.caStage': 'Pass {n} of {total}: {stage}',
   'ops.kubeStage': 'Stage {n} of {total}: {stage}',
   'ops.kubeStageName.APIServers': 'API servers',

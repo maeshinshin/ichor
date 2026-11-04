@@ -15,10 +15,13 @@ version: 2
 dist: .goreleaser-dist
 
 # Produce what `make build-ichor-embed` embeds, naming the images of the tag being released, so the
-# released CLI's `ichor init` applies a real install manifest (-tags installembed below).
+# released CLI's `ichor init` applies a real install manifest (-tags installembed below). A release that
+# follows the release workflow sets ICHOR_IMAGE_DIGESTS to the workflow's digests.txt (the `release-image-digests`
+# artifact), so that manifest names the controller and ichor-ui images by digest as the installer image's
+# does (ADR 0122); a snapshot build without it names tags.
 before:
   hooks:
-    - make build-installer IMG=ghcr.io/maeshinshin/ichor-controller:{{ .Tag }} IMG_UI=ghcr.io/maeshinshin/ichor-ui:{{ .Tag }}
+    - make build-installer IMG=ghcr.io/maeshinshin/ichor-controller:{{ .Tag }} IMG_UI=ghcr.io/maeshinshin/ichor-ui:{{ .Tag }} IMAGE_DIGESTS={{ envOrDefault "ICHOR_IMAGE_DIGESTS" "" }}
     - cp dist/install.yaml internal/installmanifest/install.yaml
     - cp dist/network-policies.yaml internal/installmanifest/network-policies.yaml
 

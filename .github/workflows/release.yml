@@ -1,11 +1,15 @@
 name: Release
 
 # One workflow for the images and the chart (ADR 0108). A v* tag runs, in order:
-#   verify   the same checks as a PR (module drift, lint, tests, govulncheck, npm audit); contents: read
-#   build    compiles the three image binaries and packages the chart; contents: read, no registry token
-#   publish  pushes by digest, signs (cosign keyless), verifies the signatures with the controller's own verifier,
-#            attaches an SBOM and a provenance attestation;
-#            runs in the protected "release" environment and is the only job with a token
+#   verify        the same checks as a PR (module drift, lint, tests, govulncheck, npm audit); contents: read
+#   build         compiles the controller and ichor-ui binaries and the signature verifier; contents: read, no registry token
+#   publish-core  pushes the controller and ichor-ui images and records their digests; the only registry token so far
+#   installer     renders the install manifest and the chart with those digests, then compiles the installer image's
+#                 binary with that manifest embedded, so a signed installer never deploys a retagged controller or UI
+#                 (ADR 0122, follow-up); contents: read, no registry token, fetches Go modules
+#   publish       pushes the installer and the chart by digest, signs (cosign keyless), verifies the signatures with the
+#                 controller's own verifier, attaches an SBOM and a provenance attestation;
+#                 runs in the protected "release" environment, as publish-core does (a required reviewer approves both)
 on:
   push:
     tags: ["v*"]
@@ -47,7 +51,7 @@ jobs:
         run: nix develop --command bash -c "cd ui && npm audit --omit=dev --audit-level=high"
 
   build:
-    name: Build the image binaries and the chart
+    name: Build the controller and UI binaries
     needs: verify
     permissions:
       contents: read
@@ -63,17 +67,11 @@ jobs:
         uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
 
       # linux/amd64 only, as demo-images builds. The binaries are layered on the pinned distroless base in the
-      # publish job.
+      # publish-core job. The installer binary is built later, once the digests of these two images exist.
       - name: Build the image binaries
         env:
           TAG: ${{ github.ref_name }}
-        run: nix develop --command make demo-images-build VERSION="${TAG}"
-
-      # The chart version drops the leading v; appVersion keeps the tag, which is the image tag.
-      - name: Package the chart
-        env:
-          TAG: ${{ github.ref_name }}
-        run: nix develop --command make helm-package CHART_VERSION="${TAG#v}" APP_VERSION="${TAG}"
+        run: nix develop --command make images-build-core VERSION="${TAG}"
 
       # The verifier the controller runs before an Ichor upgrade (ADR 0122). It is built here, where Go modules may
       # be fetched, and run in the publish job, which fetches none.
@@ -86,14 +84,103 @@ jobs:
           name: release-build
           path: |
             bin/img/
-            bin/chart/
             bin/verifyimage
           retention-days: 1
           if-no-files-found: error
 
-  publish:
-    name: Push, sign and attest the images and the chart
+  publish-core:
+    name: Push the controller and UI images
     needs: build
+    # The "release" environment, as in publish: create it in the repository settings with required reviewers.
+    environment: release
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+
+      - name: Download the build output
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-build
+          path: bin
+
+      - name: Log in to GHCR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: echo "$GITHUB_TOKEN" | nix develop --command crane auth login ghcr.io --username "$ACTOR" --password-stdin
+
+      # ghcr.io/maeshinshin/{ichor-controller,ichor-ui}:<tag>. The digests land in bin/digests.txt as <repo>@<digest>.
+      - name: Push the controller and UI images
+        env:
+          TAG: ${{ github.ref_name }}
+        run: nix develop --command make images-push-core VERSION="${TAG}" REGISTRY=ghcr.io CRANE_INSECURE= DIGEST_FILE=bin/digests.txt
+
+      - name: Upload the digests
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-digests
+          path: bin/digests.txt
+          retention-days: 1
+          if-no-files-found: error
+
+  installer:
+    name: Build the installer and the chart with the image digests
+    needs: publish-core
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+
+      - name: Download the digests
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-digests
+          path: bin
+
+      # The install manifest names ichor-controller and ichor-ui as <repo>:<tag>@<digest>; images.sh refuses to embed
+      # a manifest that does not. The installer binary embeds it.
+      - name: Render the install manifest with the digests and build the installer
+        env:
+          TAG: ${{ github.ref_name }}
+        run: nix develop --command make images-build-installer VERSION="${TAG}" IMAGE_DIGESTS=bin/digests.txt
+
+      # The chart version drops the leading v; appVersion keeps the tag. The chart's default images carry the digests.
+      - name: Package the chart
+        env:
+          TAG: ${{ github.ref_name }}
+        run: nix develop --command make helm-package CHART_VERSION="${TAG#v}" APP_VERSION="${TAG}" IMAGE_DIGESTS=bin/digests.txt
+
+      - name: Upload the build output
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-installer
+          path: |
+            bin/img/ichor/
+            bin/chart/
+          retention-days: 1
+          if-no-files-found: error
+
+  publish:
+    name: Push, sign and attest the installer, the chart and the images
+    needs: [build, publish-core, installer]
     # Create the "release" environment in the repository settings with required reviewers (docs/design, Helm guide).
     environment: release
     permissions:
@@ -118,6 +205,18 @@ jobs:
           name: release-build
           path: bin
 
+      - name: Download the digests
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-digests
+          path: bin
+
+      - name: Download the installer and the chart
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-installer
+          path: bin
+
       - name: Log in to GHCR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -126,12 +225,12 @@ jobs:
           echo "$GITHUB_TOKEN" | nix develop --command crane auth login ghcr.io --username "$ACTOR" --password-stdin
           echo "$GITHUB_TOKEN" | nix develop --command helm registry login ghcr.io --username "$ACTOR" --password-stdin
 
-      # ghcr.io/maeshinshin/{ichor-controller,ichor-ui,ichor-installer}:<tag>, the names the chart and the install
-      # manifest carry. The digests land in bin/digests.txt as <repo>@<digest>.
-      - name: Push the images
+      # ghcr.io/maeshinshin/ichor-installer:<tag>; its digest is appended to bin/digests.txt, which already holds the
+      # controller's and the UI's.
+      - name: Push the installer
         env:
           TAG: ${{ github.ref_name }}
-        run: nix develop --command make demo-images-push VERSION="${TAG}" REGISTRY=ghcr.io CRANE_INSECURE= DIGEST_FILE=bin/digests.txt
+        run: nix develop --command make images-push-installer VERSION="${TAG}" REGISTRY=ghcr.io CRANE_INSECURE= DIGEST_FILE=bin/digests.txt
 
       - name: Push the chart
         env:
@@ -166,6 +265,16 @@ jobs:
           while read -r ref; do
             bin/verifyimage "${ref%@*}" "${ref#*@}" "${TAG}"
           done < bin/digests.txt
+
+      # The release's CLI is built outside this workflow (goreleaser, make release); its install manifest names the
+      # controller and ichor-ui images by the digests recorded here (ICHOR_IMAGE_DIGESTS).
+      - name: Upload the digests of the release
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-image-digests
+          path: bin/digests.txt
+          retention-days: 90
+          if-no-files-found: error
 
       - name: Generate the SBOMs
         run: |

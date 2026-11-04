@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"google.golang.org/grpc/codes"
@@ -105,7 +104,8 @@ const (
 	defaultBootstrapInterval = 5 * time.Second
 	// defaultWebhookWait covers a controller that takes a few minutes to become Ready on a
 	// first install: its image pull, then the webhook certificate being written and mounted.
-	defaultWebhookWait = 30 * time.Minute
+	// --wait-timeout changes it.
+	defaultWebhookWait = 5 * time.Minute
 )
 
 // notUpYet reports the two answers of a node that is still coming up: Unavailable (it serves
@@ -186,26 +186,19 @@ func waitForAPIServer(ctx context.Context, c ctrlclient.Client, timeout, interva
 	return err
 }
 
-// createWhenWebhooksUp creates obj, retrying while the API server cannot reach Ichor's
-// admission webhooks (failurePolicy Fail; the controller serving them was started moments
-// ago by the manifest init applied) for up to timeout.
+// createWhenWebhooksUp creates obj once the controller serves Ichor's admission webhooks
+// (failurePolicy Fail; the controller was started moments ago by the manifest): it waits up to
+// timeout for the controller to be Ready (waitForController), then creates through
+// createRetrying, which only rides out a refusal that is left (the webhook's certificate not
+// yet in the API server's configuration) for initRetryWindow.
 func createWhenWebhooksUp(
 	ctx context.Context, c ctrlclient.Client, obj ctrlclient.Object, timeout, interval time.Duration, progress io.Writer,
 ) error {
-	tries := 0
+	if err := waitForController(ctx, c, timeout, interval, progress); err != nil {
+		return err
+	}
 
-	return pollBounded(ctx, timeout, interval, progress, "Ichor's webhooks", newWaitDiag(c, progress), func(ctx context.Context) error {
-		tries++
-
-		// An earlier attempt that timed out may still have gone through.
-		if err := c.Create(ctx, obj); !apierrors.IsAlreadyExists(err) || tries == 1 {
-			return err
-		}
-
-		return nil
-	}, func(err error) bool {
-		return (apierrors.IsInternalError(err) && strings.Contains(err.Error(), "webhook")) || initRetryable(err)
-	})
+	return createRetrying(ctx, c, obj, progress)
 }
 
 // dialAdmin connects to endpoint using the bundle's admin identity, the

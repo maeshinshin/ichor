@@ -253,7 +253,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return fmt.Errorf("init: creating the secrets bundle Secret: %w", err)
 	}
 
-	created, err := createIchorInstallation(ctx, k8sClient, deps.Stderr, 0)
+	created, err := createIchorInstallation(ctx, k8sClient, deps.Stderr, deps.WebhookWait)
 	if err != nil {
 		return err
 	}

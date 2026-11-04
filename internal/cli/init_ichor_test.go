@@ -256,25 +256,28 @@ func TestCreateIchorInstallation_RetriesWhileTheWebhookIsDown(t *testing.T) {
 	}
 }
 
-// adopt passes its --wait-timeout: a webhook that never comes up ends the wait at that bound,
-// not at init's 30 minutes.
+// adopt passes its --wait-timeout: a controller that never becomes Ready ends the wait at that
+// bound, with nothing written.
 func TestCreateIchorInstallation_HonoursTheCallersWait(t *testing.T) {
 	old := version.Version
 	version.Version = testReleasedVersion
 
 	t.Cleanup(func() { version.Version = old })
-	shrinkInitRetry(t)
+	realWebhookWait(t)
 
 	var calls int
 
-	webhookDown := apierrors.NewInternalError(errors.New(`failed calling webhook "vichorinstallation.kb.io": connection refused`))
-	c := failingCreates(t, 1<<30, webhookDown, &calls)
+	c := failingCreates(t, 0, nil, &calls)
 
 	start := time.Now()
 	_, err := createIchorInstallation(context.Background(), c, io.Discard, 100*time.Millisecond)
 
-	if err == nil {
-		t.Fatal("createIchorInstallation succeeded against a webhook that never answers")
+	if err == nil || !strings.Contains(err.Error(), "ichor-controller-manager") {
+		t.Fatalf("createIchorInstallation = %v, want the not-Ready message", err)
+	}
+
+	if calls != 0 {
+		t.Errorf("Create called %d times before the controller was ready", calls)
 	}
 
 	if time.Since(start) > 30*time.Second {

@@ -37,6 +37,7 @@ var errWebhookDown = errors.New(`failed calling webhook "vtaloscluster-v1alpha1.
 // webhook" until it is up. init waits instead of failing.
 func TestRunInit_WaitsForTheControllersWebhooks(t *testing.T) {
 	withTempHome(t)
+	shrinkInitRetry(t)
 
 	failures := 3
 

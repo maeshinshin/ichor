@@ -19,8 +19,8 @@ const (
 	waitDiagEvery  = 30 * time.Second
 	waitDiagGiveUp = 2 * time.Minute
 
-	// Per-wait timeouts. The webhook wait of init keeps defaultWebhookWait (30 minutes).
-	defaultAdoptWebhookWait = 15 * time.Minute
+	// Per-wait timeouts. The webhook waits of init and adopt are 5 minutes (--wait-timeout).
+	defaultAdoptWebhookWait = 5 * time.Minute
 )
 
 // errNoPodNetwork ends a wait early: nothing can be scheduled because the cluster has no CNI.

@@ -20,6 +20,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -54,6 +55,11 @@ func cliScheme() (*runtime.Scheme, error) {
 
 	// apps/v1: init turns on users by editing the ichor-ui Deployment (ADR 0094).
 	if err := appsv1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+
+	// discovery/v1: init and adopt wait for the webhook Service's ready endpoint.
+	if err := discoveryv1.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 

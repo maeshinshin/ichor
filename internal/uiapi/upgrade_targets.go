@@ -69,7 +69,7 @@ func (s *Server) ListUpgradeTargets(
 		return nil, mapGetError("IchorInstallation \""+ichorv1alpha1.IchorInstallationName+"\"", err)
 	}
 
-	lists, reason := upgradeLists(&inst, found)
+	lists, reason := upgradeLists(&inst, found, kind)
 	choices := upgradeChoices(kind, cluster, lists)
 
 	return connect.NewResponse(&pb.ListUpgradeTargetsResponse{
@@ -85,7 +85,7 @@ func (s *Server) ListUpgradeTargets(
 // upgradeLists is the recorded list the server filters, and why it cannot be used ("" when it can).
 // A list with an error is still returned: its last good value is what the controller kept, and the
 // reason says it may be stale.
-func upgradeLists(inst *ichorv1alpha1.IchorInstallation, found bool) (*ichorv1alpha1.IchorUpgradeTargets, string) {
+func upgradeLists(inst *ichorv1alpha1.IchorInstallation, found bool, kind pb.OperationKind) (*ichorv1alpha1.IchorUpgradeTargets, string) {
 	if !found {
 		return nil, reasonNoListYet
 	}
@@ -99,11 +99,29 @@ func upgradeLists(inst *ichorv1alpha1.IchorInstallation, found bool) (*ichorv1al
 		return nil, reasonNoListYet
 	}
 
-	if ut.Error != "" {
-		return ut, fmt.Sprintf(reasonListFailedFm, ut.Error)
+	if e := listError(ut, kind); e != "" {
+		return ut, fmt.Sprintf(reasonListFailedFm, e)
 	}
 
 	return ut, ""
+}
+
+// listError is why the list of kind could not be listed, "" when it could. Each list has its own error, so a
+// failing repository does not make the others unavailable. A status written
+// by an earlier controller has only the joined Error; it counts against every list.
+func listError(ut *ichorv1alpha1.IchorUpgradeTargets, kind pb.OperationKind) string {
+	if ut.TalosError == "" && ut.KubernetesError == "" && ut.CiliumError == "" {
+		return ut.Error
+	}
+
+	switch kind {
+	case pb.OperationKind_OPERATION_KIND_TALOS:
+		return ut.TalosError
+	case pb.OperationKind_OPERATION_KIND_CNI:
+		return ut.CiliumError
+	}
+
+	return ut.KubernetesError
 }
 
 // upgradeChoices groups the recorded releases of kind against the cluster (release.TalosChoices,
@@ -154,7 +172,7 @@ func (s *Server) ciliumPatchOffer(
 		return false, nil, "", mapGetError("IchorInstallation \""+ichorv1alpha1.IchorInstallationName+"\"", err)
 	}
 
-	lists, reason := upgradeLists(&inst, found)
+	lists, reason := upgradeLists(&inst, found, pb.OperationKind_OPERATION_KIND_CNI)
 	choices := upgradeChoices(pb.OperationKind_OPERATION_KIND_CNI, cluster, lists)
 
 	if slices.Contains(append(slices.Clone(choices.Recommended), choices.Patch...), version) {

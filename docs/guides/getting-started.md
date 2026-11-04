@@ -127,8 +127,18 @@ certificate and key below) are relative to the file. The file never holds the
 key itself, only its path.
 
 Init first writes the secrets bundle to `~/.ichor/clusters/demo/secrets.yaml`
-(mode 0600). It is the cluster's root of trust: back it up before anything
-else. It then applies the configuration to the node (which installs Talos and
+(mode 0600), encrypted. It is the cluster's root of trust. On a terminal, init
+generates a passphrase, prints it once and waits for Enter: save it in a
+password manager, together with a copy of the file kept somewhere off this
+machine. Without the passphrase the file cannot be opened (it is an age file;
+`age -d` opens it too). To choose the passphrase instead, or to run init
+without a terminal, give it a file (`--bundle-passphrase-file ./pass`, which
+may be `/dev/fd/3`) or set `ICHOR_BUNDLE_PASSPHRASE` (at least 12 characters);
+with neither and no terminal, init refuses before it does anything.
+`--bundle-plaintext` stores the file unencrypted, with a warning; do it only
+for a throwaway cluster. [Users and login](users-and-login.md) and
+[Hardening](hardening.md) say how the file and the passphrase are used later.
+It then applies the configuration to the node (which installs Talos and
 reboots), bootstraps etcd, saves the kubeconfig next to the bundle, stores the
 bundle in the cluster, installs Ichor and waits for Ichor to take over Cilium.
 Expect several minutes.

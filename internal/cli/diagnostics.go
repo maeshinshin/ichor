@@ -297,7 +297,7 @@ func fetchDownload[M chunk](ctx context.Context, c *apiClients, output string, s
 	defer func() { _ = stream.Close() }()
 
 	if step != nil {
-		stream = &countingStream[M]{chunkStream: stream, report: func(n int64) { step.Update(byteSize(n)) }}
+		stream = &countingStream[M]{chunkStream: stream, last: time.Now(), report: func(n int64) { step.Update(byteSize(n)) }}
 	}
 
 	path, n, err := saveDownload(stream, output, stdout)
@@ -308,10 +308,16 @@ func fetchDownload[M chunk](ctx context.Context, c *apiClients, output string, s
 	return path, n, nil
 }
 
-// countingStream tells report how many bytes the stream has delivered.
+// downloadReportEvery is how often a running download tells its step the size so far: a log of a
+// large download stays short.
+const downloadReportEvery = time.Second
+
+// countingStream tells report how many bytes the stream has delivered, at most once per
+// downloadReportEvery.
 type countingStream[M chunk] struct {
 	chunkStream[M]
 	n      int64
+	last   time.Time
 	report func(int64)
 }
 
@@ -319,7 +325,11 @@ func (s *countingStream[M]) Receive() bool {
 	ok := s.chunkStream.Receive()
 	if ok {
 		s.n += int64(len(s.Msg().GetData()))
-		s.report(s.n)
+
+		if time.Since(s.last) >= downloadReportEvery {
+			s.last = time.Now()
+			s.report(s.n)
+		}
 	}
 
 	return ok

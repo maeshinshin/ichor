@@ -23,10 +23,10 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
-	"github.com/cosi-project/runtime/pkg/resource"
 	"github.com/cosi-project/runtime/pkg/safe"
 	"github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/siderolabs/talos/pkg/machinery/client"
@@ -84,9 +84,7 @@ func (n *machineryNode) Reset(ctx context.Context, graceful bool) error {
 func (n *machineryNode) Inspect(ctx context.Context) (Inspection, error) {
 	in := Inspection{Address: n.address}
 
-	cfgRes, err := safe.StateGet[*configres.MachineConfig](ctx, n.c.COSI,
-		resource.NewMetadata(configres.NamespaceName, configres.MachineConfigType, configres.ActiveID,
-			resource.VersionUndefined))
+	cfgRes, err := safe.StateGetByID[*configres.MachineConfig](ctx, n.c.COSI, configres.ActiveID)
 	if err != nil {
 		return in, fmt.Errorf("reading the machine configuration (configured node? admin credential?): %w", err)
 	}
@@ -109,14 +107,12 @@ func (n *machineryNode) Inspect(ctx context.Context) (Inspection, error) {
 		in.ClusterID = d.ClusterID()
 	}
 
-	if sys, err := safe.StateGet[*hardware.SystemInformation](ctx, n.c.COSI, resource.NewMetadata(
-		hardware.NamespaceName, hardware.SystemInformationType, hardware.SystemInformationID,
-		resource.VersionUndefined)); err == nil {
+	if sys, err := safe.StateGetByID[*hardware.SystemInformation](ctx, n.c.COSI,
+		hardware.SystemInformationID); err == nil {
 		in.UUID = sys.TypedSpec().UUID
 	}
 
-	if hn, err := safe.StateGet[*network.HostnameStatus](ctx, n.c.COSI, resource.NewMetadata(
-		network.NamespaceName, network.HostnameStatusType, network.HostnameID, resource.VersionUndefined)); err == nil {
+	if hn, err := safe.StateGetByID[*network.HostnameStatus](ctx, n.c.COSI, network.HostnameID); err == nil {
 		in.Hostname = hn.TypedSpec().Hostname
 	}
 
@@ -191,18 +187,11 @@ func memberReachable(ctx context.Context, peerURLs []string) bool {
 		return true
 	}
 
-	for _, raw := range peerURLs {
+	return slices.ContainsFunc(peerURLs, func(raw string) bool {
 		u, err := url.Parse(raw)
-		if err != nil || u.Host == "" {
-			continue
-		}
 
-		if tcpReachable(ctx, u.Host) {
-			return true
-		}
-	}
-
-	return false
+		return err == nil && u.Host != "" && tcpReachable(ctx, u.Host)
+	})
 }
 
 // volumes lists what the reset leaves behind: user volumes (by their "u-" ID),
@@ -232,12 +221,11 @@ func (n *machineryNode) volumes(ctx context.Context) ([]Volume, error) {
 		}
 
 		s := vs.TypedSpec()
-		loc := s.Location
 
-		seen[loc] = true
+		seen[s.Location] = true
 		out = append(out, Volume{
 			Name:      strings.TrimPrefix(vs.Metadata().ID(), constants.UserVolumePrefix),
-			Location:  loc,
+			Location:  s.Location,
 			Size:      s.Size,
 			Encrypted: s.EncryptionProvider != blockres.EncryptionProviderNone,
 		})
@@ -266,14 +254,10 @@ func (n *machineryNode) volumes(ctx context.Context) ([]Volume, error) {
 // orphanCandidate reports whether a probed device is data on a disk the reset
 // does not touch.
 func orphanCandidate(s *blockres.DiscoveredVolumeSpec, systemDisk string) bool {
-	if s.Type == "" || s.Type == "gpt" || s.Type == "dos" {
+	if s.Type == "" || s.Type == "gpt" || s.Type == "dos" ||
+		slices.ContainsFunc([]string{"/dev/loop", "/dev/sr", "/dev/zram", "/dev/ram", "/dev/dm-"},
+			func(p string) bool { return strings.HasPrefix(s.DevPath, p) }) {
 		return false
-	}
-
-	for _, p := range []string{"/dev/loop", "/dev/sr", "/dev/zram", "/dev/ram", "/dev/dm-"} {
-		if strings.HasPrefix(s.DevPath, p) {
-			return false
-		}
 	}
 
 	disk := cmp.Or(s.ParentDevPath, s.DevPath)
@@ -322,8 +306,7 @@ func MaintenanceUUID(ctx context.Context, address string) (string, error) {
 
 	defer c.Close() //nolint:errcheck
 
-	sys, err := safe.StateGet[*hardware.SystemInformation](ctx, c.COSI, resource.NewMetadata(
-		hardware.NamespaceName, hardware.SystemInformationType, hardware.SystemInformationID, resource.VersionUndefined))
+	sys, err := safe.StateGetByID[*hardware.SystemInformation](ctx, c.COSI, hardware.SystemInformationID)
 	if err != nil {
 		return "", err
 	}

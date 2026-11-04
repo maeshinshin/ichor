@@ -405,6 +405,11 @@ func clusterToPB(c *ichorv1alpha1.TalosCluster) *pb.Cluster {
 		detected, detectedVersion = st.Detected, st.DetectedVersion
 	}
 
+	var podSubnets, serviceSubnets []string
+	if n := c.Spec.Network; n != nil {
+		podSubnets, serviceSubnets = n.PodSubnets, n.ServiceSubnets
+	}
+
 	return &pb.Cluster{
 		CniPreset:               c.Spec.CNI.Preset,
 		CniDetected:             detected,
@@ -423,6 +428,10 @@ func clusterToPB(c *ichorv1alpha1.TalosCluster) *pb.Cluster {
 		Versions:                componentVersionsToPB(c),
 		ReleaseSet:              releaseSetToPB(),
 		CreatedAt:               createdAtToPB(c.CreationTimestamp),
+		EndpointType:            c.Spec.Endpoint.Type,
+		PodSubnets:              podSubnets,
+		ServiceSubnets:          serviceSubnets,
+		CniTunnel:               c.Spec.CNI.Tunnel,
 		// Rollout and Handovers stay unset: TalosClusterStatus carries
 		// neither a rollout nor a hand-over state yet (roadmap phases 6 and
 		// 4/8's controller-side work; see docs/adr/0018's note on this).

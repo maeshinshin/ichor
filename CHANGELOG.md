@@ -49,6 +49,10 @@ table accepts; a refusal passes only with the override verb.
   forced password change at first login.
 - Hardening of Ichor itself and typed, off-by-default hardening options for
   the clusters it creates.
+- `ichor cluster talosconfig` and a UI download give operators and admins a
+  short-lived (1 hour, at most 12) `os:reader` talosconfig for `talosctl`,
+  without access to the secrets bundle; each request is an Event with the
+  user's name.
 - Release artifacts are built with `make release VERSION=v0.1.0`.
 - `ichor init -f init.yaml` reads the init settings from an `InitConfig` file
   instead of a long flag line (a flag overrides the file;

@@ -29,6 +29,7 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/endpointguard"
+	"github.com/maeshinshin/ichor/pkg/secureboot"
 )
 
 // nolint:unused
@@ -82,7 +83,36 @@ func (v *TalosMachineCustomValidator) ValidateCreate(ctx context.Context, obj *i
 		return nil, err
 	}
 
-	return approvalWarnings(nil, obj), v.checkApprovalCap(ctx, nil, obj)
+	warns, err := v.secureBootInstallerWarnings(ctx, nil, obj)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(approvalWarnings(nil, obj), warns...), v.checkApprovalCap(ctx, nil, obj)
+}
+
+// secureBootInstallerWarnings warns when a cluster that requires SecureBoot meets an
+// approved machine whose install image is explicit and not the SecureBoot installer: the stock
+// one installs an unsigned UKI that a SecureBoot firmware refuses. Ichor cannot tell a mirror of a
+// custom-key installer from a stock one by name, so this only warns. Only a write that sets or
+// changes the image is judged.
+func (v *TalosMachineCustomValidator) secureBootInstallerWarnings(
+	ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosMachine,
+) (admission.Warnings, error) {
+	in := newObj.Spec.Install
+	if !newObj.Spec.IsApproved() || in == nil || in.Image == "" || secureboot.IsSecureBootInstaller(in.Image) ||
+		oldObj != nil && oldObj.Spec.Install != nil && oldObj.Spec.Install.Image == in.Image {
+		return nil, nil
+	}
+
+	cluster, err := v.getCluster(ctx, newObj)
+	if err != nil || cluster == nil || secureboot.Mode(cluster.Spec.Security) != ichorv1alpha1.SecureBootRequired {
+		return nil, err
+	}
+
+	return admission.Warnings{fmt.Sprintf("spec.install.image %q is not a SecureBoot installer but cluster %s requires SecureBoot: the stock "+
+		"installer writes an unsigned UKI that a SecureBoot firmware will not boot; use factory.talos.dev/metal-installer-secureboot/<schematic>:<version> "+
+		"(or leave the image unset to install from the SecureBoot ISO you booted)", in.Image, cluster.Name)}, nil
 }
 
 // approvalWarnings are the DiscoveryWarnings of an approval whose picks are being written: a machine
@@ -126,7 +156,12 @@ func (v *TalosMachineCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 		return approvalWarnings(oldObj, newObj), v.checkWorkerLeaves(ctx, oldObj)
 	}
 
-	return approvalWarnings(oldObj, newObj), nil
+	sbWarns, err := v.secureBootInstallerWarnings(ctx, oldObj, newObj)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(approvalWarnings(oldObj, newObj), sbWarns...), nil
 }
 
 const (

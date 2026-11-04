@@ -49,6 +49,7 @@ table accepts; a refusal passes only with the override verb.
   forced password change at first login.
 - Hardening of Ichor itself and typed, off-by-default hardening options for
   the clusters it creates.
+- Release artifacts are built with `make release VERSION=v0.1.0`.
 
 ### Not part of Ichor
 

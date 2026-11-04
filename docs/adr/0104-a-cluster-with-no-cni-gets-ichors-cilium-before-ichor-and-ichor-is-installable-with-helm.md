@@ -238,3 +238,7 @@ All three are resolved.
 3. Default timeouts: **kept as built** (15 minutes for the webhooks in adopt, 30 in `init`, 10 for Cilium Ready, 10 for hand-over). Hardware cases E6 and the first real runs tune them.
 
 Amendment 2026-10-29 (ADR 0105): a Helm install does get an `IchorInstallation`: the controller creates it once when absent (`--deployed-by helm`, set by the chart), with `spec.deployment.manager: helm`; the chart still never renders it. `ichorPresent` keeps its three signals, but `spec.deployment.manager` is authoritative once the object exists. Adopt skips the install step on `manager: helm` and does not wait for the object; installer-Job commands and a `TalosOperation` of kind `ichor` are refused on Helm. The chart adds `ichorUI.port` (8443), `ichorUI.plaintextPort` (opt-in, deprecated), `ichorUI.tls.caConfigMap/caSecret/caKey` and `settings.readOnly`.
+
+## Amendment (2026-11-04): release artifacts and the version stamp
+
+`appVersion` carries the leading v (`v0.1.0`) because the chart's default image tag is `.Chart.AppVersion` and images are tagged with the git tag; `version` stays without the v. `make release VERSION=vX.Y.Z` is the local equivalent of the release workflow's build job and writes the CLI, the install manifest and the chart to `bin/release/`. The goreleaser build uses `-tags installembed` with the install manifest generated in a `before` hook for the tag being released, and stamps `{{ .Tag }}` (not `{{ .Version }}`) so the version keeps its v and passes `semver.IsValid`.

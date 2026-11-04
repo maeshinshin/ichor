@@ -38,6 +38,8 @@ type adoptNode struct {
 	M *ichorv1alpha1.TalosMachine
 	// Skipped is why adopt did not read the node (not approved).
 	Skipped string
+	// added marks a machine --add-machine registers: its TalosMachine does not exist yet.
+	added bool
 
 	Current []byte
 	Facts   *TalosFacts

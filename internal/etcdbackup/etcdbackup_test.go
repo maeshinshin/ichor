@@ -134,8 +134,7 @@ func TestObjectNameRoundTrip(t *testing.T) {
 }
 
 func TestS3StoreAgainstFake(t *testing.T) {
-	f := newFakeS3()
-	defer f.srv.Close()
+	f := newFakeS3(t)
 
 	st := f.store(t)
 	ctx := context.Background()

@@ -263,6 +263,9 @@ message Operation {
   string etcd_restore_snapshot = 18;
   google.protobuf.Timestamp etcd_restore_snapshot_time = 19;
   string etcd_restore_message = 20;
+  // message is status.message: what an InProgress operation is doing or waiting for right now;
+  // empty in every other phase.
+  string message = 21;
 
   // --- operation detail page ---
   // summary is one human sentence built from the kind and the spec ("Reboot node talos-02").

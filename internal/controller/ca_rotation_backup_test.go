@@ -62,12 +62,12 @@ var _ = Describe("BundleBackupStale", func() {
 		Expect(stale()).To(BeTrue())
 
 		// The copy made before the rotation does not clear it.
-		oldFP, err := secretsbundle.BundleFingerprint(f.old)
+		oldFP, err := secretsbundle.ExportFingerprint(f.old)
 		Expect(err).NotTo(HaveOccurred())
 		setExported(oldFP)
 		Expect(stale()).To(BeTrue())
 
-		liveFP, err := secretsbundle.BundleFingerprint(f.storedBundle())
+		liveFP, err := secretsbundle.ExportFingerprint(f.storedBundle())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(liveFP).NotTo(Equal(oldFP))
 

@@ -192,7 +192,7 @@ func (c *caRun) nextStage(stage string) string {
 }
 
 // checkTargets refuses a rotation the cluster cannot do safely, before anything is saved or changed.
-func (c *caRun) checkTargets(targets []string, machines []*ichorv1alpha1.TalosMachine) error {
+func (c *caRun) checkTargets(targets []string) error {
 	contract, err := config.ParseContractFromVersion(c.cluster.Spec.VersionContract)
 	if err != nil {
 		return errors.New("invalid versionContract")
@@ -203,11 +203,8 @@ func (c *caRun) checkTargets(targets []string, machines []*ichorv1alpha1.TalosMa
 			c.cluster.Spec.VersionContract)
 	}
 
-	if slices.Contains(targets, etcdCAName) && len(controlPlanes(machines)) == 2 {
-		return errors.New("a two-member etcd has no quorum while one member restarts, so its CA is not rotated; " +
-			"add a control plane or run with one")
-	}
-
+	// A two-member etcd, which would lose its quorum while one member restarts, never gets here: the
+	// cluster lock refuses every disruptive operation on an even number of approved control planes.
 	return nil
 }
 

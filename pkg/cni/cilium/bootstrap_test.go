@@ -17,6 +17,7 @@ limitations under the License.
 package cilium
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -66,5 +67,27 @@ func TestBootstrap_NodeNeverReadyNamesIt(t *testing.T) {
 		50*time.Millisecond, 5*time.Millisecond)
 	if err == nil || !strings.Contains(err.Error(), "stuck") {
 		t.Fatalf("err = %v, want one naming the NotReady node", err)
+	}
+}
+
+// An HA cluster is bootstrapped with one node: the release is made for the nodes that exist, so its
+// operator runs one replica and can be rolled later.
+func TestBootstrap_OperatorFollowsTheNodesThatExist(t *testing.T) {
+	cfg := fakeConfig()
+	kube := kubefakeclient.NewSimpleClientset(readyNode("a", corev1.ConditionTrue))
+	cluster := &ichorv1alpha1.TalosCluster{}
+	cluster.Spec.ControlPlane.Count = 3
+
+	if _, err := bootstrap(t.Context(), kube, cfg, cluster, cni.KubeProxyEnabled, time.Second, time.Millisecond); err != nil {
+		t.Fatal(err)
+	}
+
+	rel, err := cfg.Releases.Last(ReleaseName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if op, _ := rel.Config["operator"].(map[string]any); fmt.Sprint(op["replicas"]) != "1" {
+		t.Errorf("operator = %v, want one replica for the one node", rel.Config["operator"])
 	}
 }

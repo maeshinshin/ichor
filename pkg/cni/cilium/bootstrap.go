@@ -49,12 +49,13 @@ const nodePollInterval = 5 * time.Second
 // ApplyForCluster runs Apply with the effective values of cluster in kube-proxy mode mode: the
 // one place that turns a TalosCluster into the release, for the ichor-cni Job and for Bootstrap
 // alike. exclusive is for a caller that is the only writer of the release (see
-// ApplyOptions.Exclusive), so what the CLI installs is what the controller expects to find.
+// ApplyOptions.Exclusive), so what the CLI installs is what the controller expects to find. nodes is
+// how many Nodes the cluster has now (0 unknown), as EffectiveValuesForNodes takes it.
 func ApplyForCluster(
 	ctx context.Context, cfg *action.Configuration, cluster *ichorv1alpha1.TalosCluster,
-	mode cni.KubeProxyMode, timeout time.Duration, exclusive bool,
+	mode cni.KubeProxyMode, nodes int, timeout time.Duration, exclusive bool,
 ) (ApplyResult, error) {
-	vals, err := EffectiveValuesForMode(cluster, mode)
+	vals, err := EffectiveValuesForNodes(cluster, mode, nodes)
 	if err != nil {
 		return ApplyResult{}, err
 	}
@@ -94,7 +95,12 @@ func bootstrap(
 		return ApplyResult{}, fmt.Errorf("cilium: creating namespace %s: %w", RecordNamespace, err)
 	}
 
-	res, err := ApplyForCluster(ctx, cfg, cluster, mode, timeout, true)
+	existing, err := kube.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return ApplyResult{}, fmt.Errorf("cilium: listing the nodes: %w", err)
+	}
+
+	res, err := ApplyForCluster(ctx, cfg, cluster, mode, len(existing.Items), timeout, true)
 	if err != nil {
 		return res, err
 	}

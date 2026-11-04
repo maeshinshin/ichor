@@ -58,33 +58,37 @@ export function PatchList() {
             <TableHeader>
               <TableRow>
                 <TableHead>{t('col.name')}</TableHead>
-                <TableHead>{t('patches.colLayer')}</TableHead>
-                <TableHead>{t('patches.colPriority')}</TableHead>
-                <TableHead>{t('patches.colTarget')}</TableHead>
-                <TableHead>{t('patches.colMachines')}</TableHead>
-                <TableHead>{t('patches.colDocuments')}</TableHead>
+                <TableHead className="hidden md:table-cell">{t('patches.colLayer')}</TableHead>
+                <TableHead className="hidden md:table-cell">{t('patches.colPriority')}</TableHead>
+                <TableHead className="hidden md:table-cell">{t('patches.colTarget')}</TableHead>
+                <TableHead className="hidden md:table-cell">{t('patches.colMachines')}</TableHead>
+                <TableHead className="hidden md:table-cell">{t('patches.colDocuments')}</TableHead>
                 <TableHead>{t('col.actions')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rows.map((p) => (
                 <LinkRow key={`${p.ref?.namespace}/${p.ref?.name}`} to={p.ref ? `/config/${p.ref.name}` : '/config'}>
-                  <TableCell>
+                  <TableCell className="max-md:whitespace-normal max-md:wrap-anywhere">
                     {p.ref ? (
-                      <Button asChild variant="link" size="sm">
+                      <Button asChild variant="link" size="sm" className="max-md:h-auto max-md:whitespace-normal">
                         <Link to={`/config/${p.ref.name}`}>{p.ref.name}</Link>
                       </Button>
                     ) : (
                       '-'
                     )}
+                    <div class="text-muted-foreground md:hidden">
+                      {enumLabel(ConfigLayer, p.layer)} · {t('patches.colPriority')} {p.priority}
+                    </div>
+                    <div class="text-muted-foreground md:hidden">{t('patches.docCount', { count: p.documents.length })}</div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">
                     <Badge variant="outline">{enumLabel(ConfigLayer, p.layer)}</Badge>
                   </TableCell>
-                  <TableCell>{p.priority}</TableCell>
-                  <TableCell>{targetSummary(p)}</TableCell>
-                  <TableCell>{machinesSummary(p)}</TableCell>
-                  <TableCell>
+                  <TableCell className="hidden md:table-cell">{p.priority}</TableCell>
+                  <TableCell className="hidden md:table-cell">{targetSummary(p)}</TableCell>
+                  <TableCell className="hidden md:table-cell">{machinesSummary(p)}</TableCell>
+                  <TableCell className="hidden md:table-cell">
                     {p.documents.length === 0 ? (
                       '-'
                     ) : (
@@ -99,7 +103,7 @@ export function PatchList() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <div class="flex gap-2">
+                    <div class="flex gap-2 max-md:flex-wrap">
                       <Button asChild size="sm" variant="outline">
                         <Link to={p.ref ? `/config/${p.ref.name}` : '/config'}>{t('patches.edit')}</Link>
                       </Button>

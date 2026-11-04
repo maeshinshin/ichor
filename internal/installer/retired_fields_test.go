@@ -81,13 +81,56 @@ func installOldCRD(t *testing.T, old *unstructured.Unstructured) {
 	})
 }
 
+// createWhenEstablished creates obj, retrying while the freshly installed CRD is still being
+// established asynchronously.
+func createWhenEstablished(t *testing.T, obj *unstructured.Unstructured) {
+	t.Helper()
+
+	var err error
+
+	for range 50 {
+		if err = k8sClient.Create(context.Background(), obj); err == nil {
+			return
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	t.Fatalf("creating the %s under the old schema: %v", obj.GetKind(), err)
+}
+
+// upgradeCRD replaces the installed old CRD with the one at targetPath, after checkAdditive
+// accepts the change.
+func upgradeCRD(t *testing.T, old *unstructured.Unstructured, targetPath string) {
+	t.Helper()
+
+	ctx := context.Background()
+
+	live := &unstructured.Unstructured{}
+	live.SetAPIVersion("apiextensions.k8s.io/v1")
+	live.SetKind(kindCRD)
+
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: old.GetName()}, live); err != nil {
+		t.Fatal(err)
+	}
+
+	target := loadCRD(t, targetPath)
+	if err := checkAdditive(live, target); err != nil {
+		t.Fatalf("the installer would refuse the upgrade: %v", err)
+	}
+
+	target.SetResourceVersion(live.GetResourceVersion())
+
+	if err := k8sClient.Update(ctx, target); err != nil {
+		t.Fatalf("installing the new CRD: %v", err)
+	}
+}
+
 // A TalosCluster stored under the schema that still had spec.gitops (and spec.cni.handover) must
 // stay writable once the current CRD, which no longer has them, is installed: the
 // installer's CRD check allows the removal, the API server prunes the retired fields and no
 // validation rejects the object for carrying them.
 func TestStoredTalosClusterWithRetiredFieldsSurvivesTheCRDUpgrade(t *testing.T) {
-	ctx := context.Background()
-
 	// testdata is the TalosCluster CRD as it was before the removal (git show c7902de:config/crd/bases/..., descriptions omitted).
 	old := loadCRD(t, "testdata/talosclusters-before-retirement.yaml")
 	installOldCRD(t, old)
@@ -116,43 +159,13 @@ func TestStoredTalosClusterWithRetiredFieldsSurvivesTheCRDUpgrade(t *testing.T) 
 		},
 	}}
 
-	// The CRD is established asynchronously.
-	var err error
-
-	for range 50 {
-		if err = k8sClient.Create(ctx, obj); err == nil {
-			break
-		}
-
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	if err != nil {
-		t.Fatalf("creating the TalosCluster under the old schema: %v", err)
-	}
+	createWhenEstablished(t, obj)
 
 	if _, found, _ := unstructured.NestedMap(obj.Object, kSpec, kGitops); !found {
 		t.Fatal("the old schema did not keep spec.gitops")
 	}
 
-	live := &unstructured.Unstructured{}
-	live.SetAPIVersion("apiextensions.k8s.io/v1")
-	live.SetKind(kindCRD)
-
-	if err := k8sClient.Get(ctx, types.NamespacedName{Name: old.GetName()}, live); err != nil {
-		t.Fatal(err)
-	}
-
-	target := loadCRD(t, "../../config/crd/bases/ichor.maesh.dev_talosclusters.yaml")
-	if err := checkAdditive(live, target); err != nil {
-		t.Fatalf("the installer would refuse the upgrade: %v", err)
-	}
-
-	target.SetResourceVersion(live.GetResourceVersion())
-
-	if err := k8sClient.Update(ctx, target); err != nil {
-		t.Fatalf("installing the new CRD: %v", err)
-	}
+	upgradeCRD(t, old, "../../config/crd/bases/ichor.maesh.dev_talosclusters.yaml")
 
 	updateUntilPruned(t, types.NamespacedName{Namespace: "default", Name: "old"}, obj,
 		[]string{kSpec, "endpoint", "address"}, "10.0.0.2",
@@ -227,19 +240,7 @@ func TestStoredIchorInstallationWithRetiredFieldsSurvivesTheCRDUpgrade(t *testin
 		},
 	}}
 
-	var err error
-
-	for range 50 {
-		if err = k8sClient.Create(ctx, obj); err == nil {
-			break
-		}
-
-		time.Sleep(100 * time.Millisecond)
-	}
-
-	if err != nil {
-		t.Fatalf("creating the IchorInstallation under the old schema: %v", err)
-	}
+	createWhenEstablished(t, obj)
 
 	if err := unstructured.SetNestedField(obj.Object, map[string]any{"argocd": map[string]any{"publishedTag": "x"}}, "status", kStack); err != nil {
 		t.Fatal(err)
@@ -249,24 +250,7 @@ func TestStoredIchorInstallationWithRetiredFieldsSurvivesTheCRDUpgrade(t *testin
 		t.Fatalf("writing status.stack under the old schema: %v", err)
 	}
 
-	live := &unstructured.Unstructured{}
-	live.SetAPIVersion("apiextensions.k8s.io/v1")
-	live.SetKind(kindCRD)
-
-	if err := k8sClient.Get(ctx, types.NamespacedName{Name: old.GetName()}, live); err != nil {
-		t.Fatal(err)
-	}
-
-	target := loadCRD(t, "../../config/crd/bases/ichor.maesh.dev_ichorinstallations.yaml")
-	if err := checkAdditive(live, target); err != nil {
-		t.Fatalf("the installer would refuse the upgrade: %v", err)
-	}
-
-	target.SetResourceVersion(live.GetResourceVersion())
-
-	if err := k8sClient.Update(ctx, target); err != nil {
-		t.Fatalf("installing the new CRD: %v", err)
-	}
+	upgradeCRD(t, old, "../../config/crd/bases/ichor.maesh.dev_ichorinstallations.yaml")
 
 	updateUntilPruned(t, types.NamespacedName{Name: "ichor"}, obj,
 		[]string{kSpec, "version"}, "v0.2.0",

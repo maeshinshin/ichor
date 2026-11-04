@@ -81,3 +81,6 @@ flows:
 - name: download the credentials after a CA rotation
   role: admin
   needs: [talosclusters/credentials download, taloscredentialrequests create]
+- name: take an os:reader talosconfig (ichor cluster talosconfig; the UI download needs the first two)
+  role: operator
+  needs: [talosclusters/talosconfig-reader download, taloscredentialrequests create, taloscredentialrequests get]

@@ -168,7 +168,7 @@ Roles are plain Kubernetes RBAC. Three built-in ClusterRoles, `ichor-viewer`,
 `ichor-operator` and `ichor-admin`, are bound to the groups `ichor:viewer`,
 `ichor:operator` and `ichor:admin`. None of them gets `secrets`,
 `impersonate` or `cluster-admin`. The destructive operation starts (shutdown,
-CA rotation, etcd restore, node reset and shutdown) need their own verb, held
+CA rotation, key rotation, etcd restore, node reset and shutdown) need their own verb, held
 by `ichor-admin` only. So does setting or changing a field that names a Secret
 (`update` on `talosclusters/secret-references` and the like): the
 controller reads those Secrets with its own privileges, so an operator who may
@@ -297,7 +297,7 @@ Group `ichor.maesh.dev`, version `v1alpha1`.
 | `TalosConfigPatch` | namespaced | A typed config patch with a layer, priority and target | yes |
 | `TalosStorage` | namespaced | Thin integration with a storage system: node selector, disk preset, evacuation settings | yes |
 | `TalosEtcdBackup` | namespaced | Backup schedule, destination, retention, encryption | yes |
-| `TalosOperation` | namespaced | A Job-style run of one action over the cluster or a node: a Talos, Kubernetes or Ichor upgrade, a kube-proxy switch or Cilium chart upgrade (`cni`), shutdown, CA rotation, config rollout, node action, etcd restore | no |
+| `TalosOperation` | namespaced | A Job-style run of one action over the cluster or a node: a Talos, Kubernetes or Ichor upgrade, a kube-proxy switch or Cilium chart upgrade (`cni`), shutdown, CA rotation, service-account and secretbox key rotation, config rollout, node action, etcd restore | no |
 | `IchorInstallation` | cluster, singleton | Ichor's own version | yes |
 | `IchorUser` | namespaced | One of Ichor's own users: display name, e-mail, roles, disabled flag | yes |
 
@@ -1044,7 +1044,7 @@ regularly.
 
 Ichor's own Talos client certificates are short-lived and renewed
 automatically; an expired one would lock Ichor out with no way back. CA
-rotation (Talos and Kubernetes by default, the etcd and aggregator CAs on request; the service-account key and the secretbox key are not rotated) follows the documented Talos procedure and
+rotation (Talos and Kubernetes by default, the etcd and aggregator CAs on request; the service-account key and the secretbox key by a separate key-rotation operation) follows the documented Talos procedure and
 runs through the same machinery as upgrades, except that it waits, after every
 node accepts the new CAs, until the operator has credentials that work with
 both CAs; otherwise the first stage that changes what the API

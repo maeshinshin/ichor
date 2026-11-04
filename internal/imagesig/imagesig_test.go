@@ -38,6 +38,12 @@ import (
 // release.yml on the tag v0.1.0.
 const certificateSAN = "https://github.com/maeshinshin/ichor/.github/workflows/release.yml@refs/tags/v0.1.0"
 
+const (
+	keyMediaType = "mediaType"
+	keyDigest    = "digest"
+	keySize      = "size"
+)
+
 const testDigest = "sha256:20fe92e4c86641233a450098c158d2d29085f3419931ab6bf681d2485dedf16e"
 
 func TestIchorIdentityMatchesOnlyItsTag(t *testing.T) {
@@ -175,7 +181,7 @@ func (f *fakeRegistry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/vnd.oci.image.index.v1+json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"schemaVersion": 2,
-			"mediaType":     "application/vnd.oci.image.index.v1+json",
+			keyMediaType:    "application/vnd.oci.image.index.v1+json",
 			"manifests":     f.referrers,
 		})
 	case strings.HasPrefix(r.URL.Path, "/v2/"+fakeRepo+"/manifests/") || strings.HasPrefix(r.URL.Path, "/v2/"+fakeRepo+"/blobs/"):
@@ -210,10 +216,10 @@ func signatureReferrer(t *testing.T, f *fakeRegistry, bundleBody []byte) map[str
 
 	manifest, err := json.Marshal(map[string]any{
 		"schemaVersion": 2,
-		"mediaType":     "application/vnd.oci.image.manifest.v1+json",
-		"config":        map[string]any{"mediaType": "application/vnd.oci.empty.v1+json", "size": 2, "digest": digestOf([]byte("{}"))},
+		keyMediaType:    "application/vnd.oci.image.manifest.v1+json",
+		"config":        map[string]any{keyMediaType: "application/vnd.oci.empty.v1+json", keySize: 2, keyDigest: digestOf([]byte("{}"))},
 		"layers": []any{map[string]any{
-			"mediaType": bundleMediaType, "size": len(bundleBody), "digest": layer,
+			keyMediaType: bundleMediaType, keySize: len(bundleBody), keyDigest: layer,
 		}},
 	})
 	if err != nil {
@@ -224,9 +230,9 @@ func signatureReferrer(t *testing.T, f *fakeRegistry, bundleBody []byte) map[str
 	f.blobs[md] = manifest
 
 	return map[string]any{
-		"mediaType":    "application/vnd.oci.image.manifest.v1+json",
-		"digest":       md,
-		"size":         len(manifest),
+		keyMediaType:   "application/vnd.oci.image.manifest.v1+json",
+		keyDigest:      md,
+		keySize:        len(manifest),
 		"artifactType": bundleMediaType,
 		"annotations":  map[string]any{predicateKey: signPredicate},
 	}
@@ -267,7 +273,7 @@ func TestVerifyRefusesAnImageWithoutASignature(t *testing.T) {
 
 func TestVerifyRefusesASignatureThatDoesNotVerify(t *testing.T) {
 	srv, f := newFakeRegistry(t)
-	f.referrers = []map[string]any{signatureReferrer(t, f, []byte(`{"mediaType":"not a bundle"}`))}
+	f.referrers = []map[string]any{signatureReferrer(t, f, []byte(`{keyMediaType:"not a bundle"}`))}
 
 	err := verifyAgainst(t, f, srv)
 	if err == nil || !strings.Contains(err.Error(), "is not signed by") {

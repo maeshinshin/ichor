@@ -47,7 +47,7 @@ func createInstallation(ver string) *ichorv1alpha1.IchorInstallation {
 	inst := &ichorv1alpha1.IchorInstallation{
 		Name: ichorv1alpha1.IchorInstallationName,
 		Spec: ichorv1alpha1.IchorInstallationSpec{
-			Version: ver, InstallerRepository: "registry.example/ichor-installer",
+			Version: ver, InstallerRepository: testInstallerRepo,
 		},
 	}
 	Expect(k8sClient.Create(ctx, inst)).To(Succeed())
@@ -187,7 +187,7 @@ var _ = Describe("IchorInstallation", func() {
 			var l batchv1.JobList
 			// Only installer Jobs: other reconcilers in this suite create Jobs in the same namespace.
 			Expect(k8sClient.List(ctx, &l, client.InNamespace(jobNs),
-				client.MatchingLabels{"app.kubernetes.io/name": "ichor-installer"})).To(Succeed())
+				client.MatchingLabels{nameLabel: IchorInstallerServiceAccount})).To(Succeed())
 
 			return l.Items
 		}
@@ -209,7 +209,7 @@ var _ = Describe("IchorInstallation", func() {
 			Expect(jobs()).To(HaveLen(1))
 
 			job := jobs()[0]
-			Expect(job.Spec.Template.Spec.Containers[0].Image).To(Equal("registry.example/ichor-installer@" + testInstallerDigest))
+			Expect(job.Spec.Template.Spec.Containers[0].Image).To(Equal(testInstallerRepo + "@" + testInstallerDigest))
 			Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(IchorInstallerServiceAccount))
 			// A finished Job is removed after a day: long enough to read its log, and the
 			// operation never needs it afterwards (the next test).

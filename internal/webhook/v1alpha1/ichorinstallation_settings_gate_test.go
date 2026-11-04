@@ -23,6 +23,8 @@ const (
 	gateAdmin     = "admin"
 	gateVersioner = "versioner"
 	gateSettings  = "settings"
+	// needVersionRight is what a refusal for a missing right on the version subresource says.
+	needVersionRight = "ichorinstallations/version"
 )
 
 func sarByUser(t *testing.T, table map[string][]string) client.Client {
@@ -93,11 +95,11 @@ func TestSettingsGate(t *testing.T) {
 		wantEv   string // substring of the Event; empty means none expected
 	}{
 		{name: "no spec change needs nothing", user: bgUnitPlain, old: inst(nil), new: inst(nil)},
-		{name: "version needs /version", user: bgUnitPlain, old: inst(nil), new: inst(bump), wantErr: "ichorinstallations/version"},
+		{name: "version needs /version", user: bgUnitPlain, old: inst(nil), new: inst(bump), wantErr: needVersionRight},
 		{name: "version by holder", user: gateVersioner, old: inst(nil), new: inst(bump), wantEv: "spec.version: v0.1.0 -> v0.2.0"},
-		{name: "skipping the signature check needs /version", user: gateSettings, old: inst(nil), new: inst(skipSig), wantErr: "ichorinstallations/version"},
+		{name: "skipping the signature check needs /version", user: gateSettings, old: inst(nil), new: inst(skipSig), wantErr: needVersionRight},
 		{name: "skipping the signature check is recorded with its reason", user: gateVersioner, old: inst(nil), new: inst(skipSig), wantEv: "spec.installerSignature.mode: <unset> -> skip"},
-		{name: "a digest pin needs /version", user: gateSettings, old: inst(nil), new: inst(pin), wantErr: "ichorinstallations/version"},
+		{name: "a digest pin needs /version", user: gateSettings, old: inst(nil), new: inst(pin), wantErr: needVersionRight},
 		{name: "a digest pin by holder", user: gateVersioner, old: inst(nil), new: inst(pin), wantEv: "spec.installerDigest: <unset> -> sha256:"},
 		{name: "users need /settings", user: gateVersioner, old: inst(nil), new: inst(ttl), wantErr: "ichorinstallations/settings"},
 		{name: "users by holder", user: gateSettings, old: inst(nil), new: inst(ttl), wantEv: "spec.users.tokenTTL: <unset> -> 10m0s"},
@@ -111,7 +113,7 @@ func TestSettingsGate(t *testing.T) {
 		{name: "clearing a halt still needs /settings", user: gateVersioner, old: inst(nil), new: inst(autoAck), readOnly: true, wantErr: "the \"update\" verb"},
 		{name: "the controller is exempt", user: testControllerUser, old: nil, new: inst(bump)},
 		{name: "dry run emits no Event", user: gateVersioner, old: inst(nil), new: inst(bump), dryRun: true},
-		{name: "create is checked as a change from empty", user: bgUnitPlain, old: nil, new: inst(nil), wantErr: "ichorinstallations/version"},
+		{name: "create is checked as a change from empty", user: bgUnitPlain, old: nil, new: inst(nil), wantErr: needVersionRight},
 	}
 
 	for _, tt := range tests {

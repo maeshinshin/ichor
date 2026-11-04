@@ -26,15 +26,24 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/imagesig"
+)
+
+const (
+	// testInstallerRepo is the installer repository createInstallation sets.
+	testInstallerRepo = "registry.example/ichor-installer"
+	testGHCR          = "ghcr.io"
+
+	keyEndpointSelector = "endpointSelector"
+	keyMatchLabels      = "matchLabels"
 )
 
 // testInstallerDigest is the digest the fake registry resolves every installer tag to.
@@ -80,7 +89,7 @@ var _ = Describe("kind: ichor executor, installer image (ADR 0122)", func() {
 	jobs := func() []batchv1.Job {
 		var l batchv1.JobList
 		Expect(k8sClient.List(ctx, &l, client.InNamespace(jobNs),
-			client.MatchingLabels{"app.kubernetes.io/name": "ichor-installer"})).To(Succeed())
+			client.MatchingLabels{nameLabel: IchorInstallerServiceAccount})).To(Succeed())
 
 		return l.Items
 	}
@@ -103,13 +112,13 @@ var _ = Describe("kind: ichor executor, installer image (ADR 0122)", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(done).To(BeFalse())
 
-		Expect(images.resolved).To(Equal([]string{"registry.example/ichor-installer:v0.2.0"}))
-		Expect(images.verified).To(Equal([]imagesig.Image{{Repository: "registry.example/ichor-installer", Digest: testInstallerDigest}}))
+		Expect(images.resolved).To(Equal([]string{testInstallerRepo + ":v0.2.0"}))
+		Expect(images.verified).To(Equal([]imagesig.Image{{Repository: testInstallerRepo, Digest: testInstallerDigest}}))
 		Expect(images.identity).To(Equal(imagesig.IchorIdentity("v0.2.0")))
 
 		Expect(jobs()).To(HaveLen(1))
 		job := jobs()[0]
-		Expect(job.Spec.Template.Spec.Containers[0].Image).To(Equal("registry.example/ichor-installer@" + testInstallerDigest))
+		Expect(job.Spec.Template.Spec.Containers[0].Image).To(Equal(testInstallerRepo + "@" + testInstallerDigest))
 		Expect(job.Annotations).To(HaveKeyWithValue(IchorInstallerDigestAnnotation, testInstallerDigest))
 
 		img := installation().Status.InstallerImage
@@ -141,9 +150,9 @@ var _ = Describe("kind: ichor executor, installer image (ADR 0122)", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(images.resolved).To(BeEmpty())
-		Expect(images.verified).To(Equal([]imagesig.Image{{Repository: "registry.example/ichor-installer", Digest: pin}}))
+		Expect(images.verified).To(Equal([]imagesig.Image{{Repository: testInstallerRepo, Digest: pin}}))
 		Expect(jobs()).To(HaveLen(1))
-		Expect(jobs()[0].Spec.Template.Spec.Containers[0].Image).To(Equal("registry.example/ichor-installer@" + pin))
+		Expect(jobs()[0].Spec.Template.Spec.Containers[0].Image).To(Equal(testInstallerRepo + "@" + pin))
 	})
 
 	It("pauses with InstallerImageUnresolved when the tag does not resolve, and creates no Job", func() {
@@ -199,7 +208,7 @@ var _ = Describe("kind: ichor executor, installer image (ADR 0122)", func() {
 
 		Expect(images.verified).To(BeEmpty())
 		Expect(jobs()).To(HaveLen(1))
-		Expect(jobs()[0].Spec.Template.Spec.Containers[0].Image).To(Equal("registry.example/ichor-installer@" + testInstallerDigest))
+		Expect(jobs()[0].Spec.Template.Spec.Containers[0].Image).To(Equal(testInstallerRepo + "@" + testInstallerDigest))
 
 		img := installation().Status.InstallerImage
 		Expect(img.Verification).To(Equal(ichorv1alpha1.InstallerImageSkipped))
@@ -226,7 +235,7 @@ var _ = Describe("kind: ichor executor, installer image (ADR 0122)", func() {
 
 	It("pauses when spec.installerDigest changes while the Job exists", func() {
 		withVersion("v0.1.0")
-		inst := createInstallation("v0.2.0")
+		createInstallation("v0.2.0")
 
 		images := &fakeInstallerImages{digest: testInstallerDigest}
 		advance := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false, images, nil)
@@ -234,7 +243,7 @@ var _ = Describe("kind: ichor executor, installer image (ADR 0122)", func() {
 		_, err := advance(ctx, nil, nil, op())
 		Expect(err).NotTo(HaveOccurred())
 
-		inst = installation()
+		inst := installation()
 		inst.Spec.InstallerDigest = "sha256:" + strings.Repeat("c", 64)
 		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
 
@@ -266,18 +275,18 @@ var _ = Describe("installer image registry egress (ADR 0122)", func() {
 		return u, k8sClient.Get(ctx, types.NamespacedName{Namespace: releaseCheckNS, Name: DefaultInstallerImagePolicyName}, u)
 	}
 
-	reconcile := func() {
+	reconcileNow := func() {
 		_, err := (&IchorInstallationReconciler{Client: k8sClient, Namespace: releaseCheckNS}).Reconcile(ctx,
-			ctrl.Request{NamespacedName: types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}})
+			reconcile.Request{Name: ichorv1alpha1.IchorInstallationName})
 		Expect(err).NotTo(HaveOccurred())
 	}
 
 	It("names the installer repository's host, and ghcr.io's blob host, only beside Ichor's controller policy", func() {
 		inst := createInstallation("v0.1.0")
-		inst.Spec.InstallerRepository = "ghcr.io/maeshinshin/ichor-installer"
+		inst.Spec.InstallerRepository = testGHCR + "/maeshinshin/ichor-installer"
 		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
 
-		reconcile()
+		reconcileNow()
 
 		_, err := rule()
 		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "no controller policy, so no rule")
@@ -285,13 +294,13 @@ var _ = Describe("installer image registry egress (ADR 0122)", func() {
 		static := cnpGVK()
 		static.SetNamespace(releaseCheckNS)
 		static.SetName("ichor-controller-manager")
-		static.Object[keySpec] = map[string]any{"endpointSelector": map[string]any{"matchLabels": map[string]any{
-			"control-plane": "controller-manager", nameLabel: releaseCheckApp,
+		static.Object[keySpec] = map[string]any{keyEndpointSelector: map[string]any{keyMatchLabels: map[string]any{
+			controlPlaneLabel: valueControllerMgr, nameLabel: releaseCheckApp,
 		}}, keyEgress: []any{map[string]any{}}}
 		Expect(k8sClient.Create(ctx, static)).To(Succeed())
 		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, static))).To(Succeed()) })
 
-		reconcile()
+		reconcileNow()
 
 		u, err := rule()
 		Expect(err).NotTo(HaveOccurred())
@@ -301,13 +310,13 @@ var _ = Describe("installer image registry egress (ADR 0122)", func() {
 
 		toFQDNs, _, _ := unstructured.NestedSlice(egress[0].(map[string]any), "toFQDNs")
 		Expect(toFQDNs).To(ConsistOf(
-			map[string]any{keyMatchName: "ghcr.io"}, map[string]any{keyMatchName: ghcrBlobHost}))
+			map[string]any{keyMatchName: testGHCR}, map[string]any{keyMatchName: ghcrBlobHost}))
 
 		// A mirror names its own host and nothing else; the controller's own policies do not keep each other alive.
 		inst = currentInstallation()
 		inst.Spec.InstallerRepository = "registry.example.org/ichor/installer"
 		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
-		reconcile()
+		reconcileNow()
 
 		u, err = rule()
 		Expect(err).NotTo(HaveOccurred())
@@ -317,7 +326,7 @@ var _ = Describe("installer image registry egress (ADR 0122)", func() {
 		Expect(toFQDNs).To(ConsistOf(map[string]any{keyMatchName: "registry.example.org"}))
 
 		Expect(k8sClient.Delete(ctx, static)).To(Succeed())
-		reconcile()
+		reconcileNow()
 
 		_, err = rule()
 		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "the rule goes when the controller policy does")

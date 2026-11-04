@@ -105,7 +105,7 @@ const (
 	// defaultWebhookWait covers a controller that takes a few minutes to become Ready on a
 	// first install: its image pull, then the webhook certificate being written and mounted.
 	// --wait-timeout changes it.
-	defaultWebhookWait = 5 * time.Minute
+	defaultWebhookWait = 30 * time.Minute
 )
 
 // notUpYet reports the two answers of a node that is still coming up: Unavailable (it serves

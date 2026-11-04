@@ -33,21 +33,19 @@ import (
 // server. It proves the real minio client works against the protocol shape;
 // internal/controller's tests use an in-memory Store instead.
 type fakeS3 struct {
-	mu       sync.Mutex
-	objects  map[string][]byte // "bucket/key" -> body
-	srv      *httptest.Server
-	seenAuth []string
+	mu      sync.Mutex
+	objects map[string][]byte // "bucket/key" -> body
+	srv     *httptest.Server
 }
 
-func newFakeS3() *fakeS3 {
+func newFakeS3(t *testing.T) *fakeS3 {
+	t.Helper()
+
 	f := &fakeS3{objects: map[string][]byte{}}
 	f.srv = httptest.NewTLSServer(f)
+	t.Cleanup(f.srv.Close)
 
 	return f
-}
-
-func (f *fakeS3) caPEM() []byte {
-	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: f.srv.Certificate().Raw})
 }
 
 // store is a Store on the minio client, pointed at f.
@@ -55,7 +53,7 @@ func (f *fakeS3) store(t *testing.T) Store {
 	t.Helper()
 
 	st, err := NewS3Store(S3Config{
-		Endpoint: f.srv.URL, Region: "us-east-1", Bucket: "bkt", AccessKeyID: "AK", SecretAccessKey: "SK", CAPEM: f.caPEM(),
+		Endpoint: f.srv.URL, Region: "us-east-1", Bucket: "bkt", AccessKeyID: "AK", SecretAccessKey: "SK", CAPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: f.srv.Certificate().Raw}),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -67,8 +65,6 @@ func (f *fakeS3) store(t *testing.T) Store {
 func (f *fakeS3) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-
-	f.seenAuth = append(f.seenAuth, r.Header.Get("Authorization"))
 
 	path := strings.TrimPrefix(r.URL.Path, "/")
 

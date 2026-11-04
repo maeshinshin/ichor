@@ -222,7 +222,7 @@ func GetMarker(ctx context.Context, store Store, prefix string, passphrase Key) 
 	// Signed with the current key, or with the v1 key by a release.
 	ok := false
 
-	for _, pass := range []string{passphrase.Current, passphrase.Legacy} {
+	for _, pass := range passphrase.Secrets() {
 		if pass == "" {
 			continue
 		}

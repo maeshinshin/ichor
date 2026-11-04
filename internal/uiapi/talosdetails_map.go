@@ -22,8 +22,10 @@ import (
 
 	"github.com/siderolabs/talos/pkg/machinery/resources/block"
 	"github.com/siderolabs/talos/pkg/machinery/resources/network"
+	"github.com/siderolabs/talos/pkg/machinery/resources/runtime"
 
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/secureboot"
 )
 
 // The functions below turn Talos resource specs into the wire messages of
@@ -33,6 +35,19 @@ import (
 // encryption keys) cannot reach the browser by accident.
 
 const redactedValue = "***"
+
+// securityFromSpec fills the boot security fields of the system section from the SecurityState
+// spec and the unredacted kernel command line. A node without a SecurityState (nil)
+// leaves the fields unset, so the view shows nothing rather than a false "no SecureBoot".
+func securityFromSpec(out *pb.TalosSystemSection, spec *runtime.SecurityStateSpec, cmdline string) {
+	if spec == nil {
+		return
+	}
+
+	out.SecureBoot, out.BootedWithUki, out.ModuleSignatureEnforced = spec.SecureBoot, spec.BootedWithUKI, spec.ModuleSignatureEnforced
+	out.UkiSigningKeyFingerprint = spec.UKISigningKeyFingerprint
+	out.KernelLockdown = secureboot.LockdownLevel(cmdline, spec.SecureBoot)
+}
 
 // sensitiveArgFragments mark a kernel argument whose value may be a
 // credential. Matching is on the lower-cased key.

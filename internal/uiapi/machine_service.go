@@ -25,11 +25,13 @@ import (
 	"connectrpc.com/connect"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/secureboot"
 )
 
 // actor is the AuditRecord actor when the caller has no authenticated identity
@@ -209,6 +211,8 @@ func (s *Server) ApproveMachine(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
+	install = s.withSecureBootInstaller(ctx, m, install)
+
 	network, err := networkFromPB(req.Msg.GetNetwork(), m.Spec.Identity)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
@@ -248,6 +252,28 @@ func (s *Server) ApproveMachine(
 	return connect.NewResponse(&pb.ApproveMachineResponse{
 		Machine: machineToPB(m), Audit: audit, Warnings: m.DiscoveryWarnings(),
 	}), nil
+}
+
+// withSecureBootInstaller names the SecureBoot installer of the cluster's schematic and Talos
+// version as the install image when the cluster asks for SecureBoot (mode Preferred or Required), a disk is given
+// and the caller named no image. An explicit image is never replaced; a
+// cluster that cannot be read leaves the image unset, as before.
+func (s *Server) withSecureBootInstaller(
+	ctx context.Context, m *ichorv1alpha1.TalosMachine, install *ichorv1alpha1.TalosMachineInstall,
+) *ichorv1alpha1.TalosMachineInstall {
+	if install == nil || install.Image != "" {
+		return install
+	}
+
+	var c ichorv1alpha1.TalosCluster
+	if err := s.Get(ctx, types.NamespacedName{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name}, &c); err != nil ||
+		secureboot.Mode(c.Spec.Security) == ichorv1alpha1.SecureBootOff {
+		return install
+	}
+
+	install.Image = secureboot.ClusterInstallerImage(&c, true)
+
+	return install
 }
 
 // installFromPB converts the wire install target to the spec field; nil means "none". Exactly

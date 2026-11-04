@@ -48,6 +48,11 @@ const (
 	// MaxLifetime caps a certificate handed to an operator; it is Lifetime, the long-standing default.
 	MaxLifetime = Lifetime
 
+	// TalosconfigLifetime is the default lifetime of the os:reader talosconfig a person takes, and
+	// MaxTalosconfigLifetime its cap.
+	TalosconfigLifetime    = time.Hour
+	MaxTalosconfigLifetime = 12 * time.Hour
+
 	// issueSkew backdates a certificate's start so a node whose clock is a little behind accepts it.
 	issueSkew = 5 * time.Minute
 )
@@ -73,6 +78,10 @@ func PurposeLifetime(p ichorv1alpha1.TalosCredentialPurpose, requested time.Dura
 		def, limit = DialLifetime, MaxDialLifetime
 	}
 
+	if p == ichorv1alpha1.CredentialPurposeTalosconfigReader {
+		def, limit = TalosconfigLifetime, MaxTalosconfigLifetime
+	}
+
 	switch {
 	case requested == 0:
 		return def, nil
@@ -89,7 +98,8 @@ func PurposeLifetime(p ichorv1alpha1.TalosCredentialPurpose, requested time.Dura
 // credentials-talos ("reader" or "admin", empty is admin).
 func TalosRoles(p ichorv1alpha1.TalosCredentialPurpose, talosRole string) (role.Set, error) {
 	switch p {
-	case ichorv1alpha1.CredentialPurposeNodeReader, ichorv1alpha1.CredentialPurposeSupportBundle:
+	case ichorv1alpha1.CredentialPurposeNodeReader, ichorv1alpha1.CredentialPurposeSupportBundle,
+		ichorv1alpha1.CredentialPurposeTalosconfigReader:
 		return role.MakeSet(role.Reader), nil
 	case ichorv1alpha1.CredentialPurposeEtcdSnapshot:
 		return role.MakeSet(role.EtcdBackup), nil

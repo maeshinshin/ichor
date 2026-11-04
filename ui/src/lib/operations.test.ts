@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   caStageProgress,
+  keyStageProgress,
   confirmMatches,
   kubernetesStageProgress,
   kindNeedsTypedName,
@@ -102,6 +103,11 @@ test('the CA rotation stage is a position in the stages; unknown or empty is not
   assert.deepEqual(caStageProgress('Dropping'), { name: 'Dropping', index: 4, total: 6 })
   assert.deepEqual(caStageProgress('Done'), { name: 'Done', index: 6, total: 6 })
   assert.equal(caStageProgress(''), null)
+  assert.deepEqual(keyStageProgress('Reencrypting'), { name: 'Reencrypting', index: 3, total: 7 })
+  assert.deepEqual(keyStageProgress('Done'), { name: 'Done', index: 7, total: 7 })
+  assert.equal(keyStageProgress(''), null)
+  assert.equal(targetError('key-rotation', ''), null)
+  assert.equal(kindNeedsTypedName('key-rotation'), true)
   assert.equal(caStageProgress('Nonsense'), null)
 })
 

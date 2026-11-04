@@ -487,6 +487,12 @@ func main() {
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "certexpiry")
 	must((&controller.BootSecurityReconciler{Client: mgr.GetClient()}).SetupWithManager(mgr),
 		"Failed to create controller", "controller", "bootsecurity")
+	must((&controller.KubeletServingReconciler{
+		Client:              mgr.GetClient(),
+		ControllerNamespace: ns,
+		Identity:            controller.NewMachineryServingIdentity,
+		Recorder:            mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck
+	}).SetupWithManager(mgr), "Failed to create controller", "controller", "kubeletserving")
 	must((&controller.IssuerTrustReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
 		Namespace: ns, UIServiceName: uiServiceName,

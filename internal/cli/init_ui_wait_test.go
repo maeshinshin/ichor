@@ -25,7 +25,6 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -33,10 +32,8 @@ import (
 
 func uiDeployment(available int32) *appsv1.Deployment {
 	return &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: ichorControllerNamespace, Name: "ichor-ichor-ui", Generation: 1,
-			Labels: map[string]string{uiComponentLabel: uiComponentValue},
-		},
+		Namespace: ichorControllerNamespace, Name: "ichor-ichor-ui", Generation: 1,
+		Labels: map[string]string{uiComponentLabel: uiComponentValue},
 		Spec:   appsv1.DeploymentSpec{Replicas: ptr.To(int32(1))},
 		Status: appsv1.DeploymentStatus{ObservedGeneration: 1, Replicas: 1, UpdatedReplicas: 1, AvailableReplicas: available},
 	}

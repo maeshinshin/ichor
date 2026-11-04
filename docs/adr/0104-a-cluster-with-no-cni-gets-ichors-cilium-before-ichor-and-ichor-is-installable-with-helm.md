@@ -23,7 +23,7 @@ Constraints that stay: Cilium is Ichor's only CNI and Ichor's own Helm release (
 - Effective values come from `cilium.EffectiveValuesForMode(cluster, mode)`; `k8sServiceHost`/`k8sServicePort` (localhost:7445), `kubeProxyReplacement` and `tunnelProtocol` are Ichor-owned (ADR 0099 decision 3).
 - The hand-over reconciler's signal is "Helm release `cilium` is `deployed` at the effective-values hash and the DaemonSet is Ready" (ADR 0099 decision 2), not "the Job ran". It sets `CNIHandover=True`, and render drops the inline `cni` entry (or the recorded `takenOverInlineManifest`) only then.
 - Talos enables KubePrism on 7445 by default (ADR 0099 relies on it); a no-CNI Talos cluster still has a working control plane, because the control-plane static pods, kubelet, kube-proxy (if enabled) and Cilium itself use the host network.
-- `dist/chart` is a hand-maintained chart (`Chart.yaml` `version: 0.1.0`, `appVersion: "0.1.0"`, `kubeVersion >=1.30.0-0`) with the CRDs under `templates/crd` (kept on uninstall: `crd.keep`, `helm.sh/resource-policy: keep`), the controller, webhook, UI, RBAC, `ichor-cni` RBAC (`cniHelm.enabled: true`), the optional installer identity (`installer.enabled: false`, "a chart-installed Ichor is upgraded through the chart") and the Cilium policies behind `networkPolicy.cilium.enabled` (null/true/false). It is **not published anywhere today**: no workflow pushes it, the only chart workflow is `helm lint`/a kind test (`.github/workflows/test-chart.yml`), and `values.yaml` image repositories are the placeholders `controller` and `ichor-ui`. The chart does not create the `IchorInstallation` object; `ichor init` and the adopt install step do (`createIchorInstallation`).
+- `dist/chart` is a hand-maintained chart (`Chart.yaml` `version: 0.1.0`, `appVersion: "v0.1.0"`, `kubeVersion >=1.30.0-0`) with the CRDs under `templates/crd` (kept on uninstall: `crd.keep`, `helm.sh/resource-policy: keep`), the controller, webhook, UI, RBAC, `ichor-cni` RBAC (`cniHelm.enabled: true`), the optional installer identity (`installer.enabled: false`, "a chart-installed Ichor is upgraded through the chart") and the Cilium policies behind `networkPolicy.cilium.enabled` (null/true/false). It is **not published anywhere today**: no workflow pushes it, the only chart workflow is `helm lint`/a kind test (`.github/workflows/test-chart.yml`), and `values.yaml` image repositories are the placeholders `controller` and `ichor-ui`. The chart does not create the `IchorInstallation` object; `ichor init` and the adopt install step do (`createIchorInstallation`).
 - Adopt's "Ichor is running" test is `ichorRunning`: whether the `IchorInstallation` singleton exists. A Helm-installed Ichor has none, so today `adopt` would apply the install manifest on top of the chart's objects.
 
 ## Decision
@@ -158,7 +158,7 @@ Parallelism: 1, 2, 3 and 7 start together (disjoint files except `adopt_run.go`,
 
 ## Hardware test plan
 
-**Status: pending.** Same harness, budget and recording rules as ADR 0103 (control plane 2560Mi-3Gi, worker 1536Mi, at most 10 VMs; fixtures built with `talosctl`, one run per integrated batch in its own worktree; failing test names recorded even when a rerun passes). This group **replaces D5** of ADR 0103.
+**Status: run (2026-10-30), see "Hardware results".** Same harness, budget and recording rules as ADR 0103 (control plane 2560Mi-3Gi, worker 1536Mi, at most 10 VMs; fixtures built with `talosctl`, one run per integrated batch in its own worktree; failing test names recorded even when a rerun passes). This group **replaces D5** of ADR 0103.
 
 **E. No-CNI adoption**
 - E1 (replaces D5) 1 control plane plus 1 worker, `cluster.network.cni.name: none`, KubePrism default, kube-proxy enabled. `ichor adopt` (managed): Cilium installed with its record in `ichor-system`, nodes Ready, Ichor pods Running, `CNIHandover=True` with no inline entry and no `ichor-cni` Job, CNI-relevant machine-config paths byte-identical before and after the first render, holds released, `ichor cluster status` says managed Cilium.
@@ -216,7 +216,7 @@ Record the exact refusal and wait texts and the time of each phase, and write do
 
 ## As built (2026-10-29)
 
-Units 1 to 7 are built; unit 9 (hardware cases) is pending. Where the build differs from the text above, the build is right:
+Units 1 to 7 are built; unit 9 (hardware cases) was run on 2026-10-30, see "Hardware results". Where the build differs from the text above, the build is right:
 
 - **The Cilium Helm Job uses `ApplyForCluster`, not `Bootstrap`.** `cilium.Bootstrap` is the CLI's entry (namespace, `Apply`, Ready wait); the `ichor-cni` Job and the CLI share `ApplyForCluster` underneath. The Job also runs without an `IchorInstallation`, which a Helm install does not have.
 - **`ichor cni bootstrap` cannot check KubePrism.** It has no Talos credential, so it states the requirement in its help and relies on adopt's later check (1.3.2). `--kube-proxy enabled|replaced` is required for the same reason.

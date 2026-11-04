@@ -4,8 +4,8 @@ This guide installs Ichor itself with `helm install` and then registers an
 existing Talos cluster with `ichor adopt`. The design and the reasons are in
 [ADR 0104](../adr/0104-a-cluster-with-no-cni-gets-ichors-cilium-before-ichor-and-ichor-is-installable-with-helm.md).
 
-Status: ADR 0104 is built. Its hardware tests have not been run, so treat this
-path as untested on real clusters until they have.
+Status: ADR 0104 is built and hardware-verified (cases E1 to E7 on Talos v1.14
+KubeVirt VMs, 2026-10-30; see the ADR's "Hardware results"). Not yet run on bare metal.
 
 The chart installs Ichor, not a cluster: CRDs (kept on uninstall), the
 controller and its RBAC, the webhooks, the UI and the optional Cilium policies.

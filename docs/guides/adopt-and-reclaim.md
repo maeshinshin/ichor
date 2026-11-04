@@ -6,8 +6,8 @@ resetting one machine that another cluster configured so it can join an Ichor
 cluster (`ichor machine reclaim`, or the UI). The design and the reasons are in
 [ADR 0103](../adr/0103-deploy-onto-machines-that-already-run-talos.md).
 
-Status: ADR 0103 and ADR 0104 are built. The hardware test plan in the ADR has not been run
-yet, so treat both features as untested on real clusters until it has.
+Status: ADR 0103 and ADR 0104 are built and hardware-verified on Talos v1.14
+KubeVirt VMs (2026-10-30; see the "Results" sections of both ADRs). Not yet run on bare metal.
 
 ## Adopt a running cluster
 

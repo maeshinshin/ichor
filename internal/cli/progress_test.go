@@ -83,7 +83,7 @@ func TestProgress_WarnFailAndNoticeLines(t *testing.T) {
 
 	failing := p.Start("Install Ichor")
 	clock.advance(36 * time.Second)
-	failing.Fail(errors.New("init: applying Ichor's own Deployment \"x\": boom\nsecond line"))
+	_ = failing.Fail(errors.New("init: applying Ichor's own Deployment \"x\": boom\nsecond line"))
 
 	want := "! endpoint type \"node\": a VIP is recommended\n" +
 		"… ichor-ui\n" +

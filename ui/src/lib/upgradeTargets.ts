@@ -58,6 +58,23 @@ export function hasPatch(list: TargetList | null): boolean {
   return list !== null && list.available && list.patch.length > 0
 }
 
+// unavailableNotes says why the Versions card has no patch hint for a component: the lists that could not be
+// given, grouped by reason so one cause (the check is off) is one note, in the order Talos, Kubernetes, Cilium.
+export function unavailableNotes(i: {
+  talos: TargetList | null
+  kubernetes: TargetList | null
+  cilium: TargetList | null
+}): { components: string[]; reason: string }[] {
+  const out: { components: string[]; reason: string }[] = []
+  for (const [name, list] of [['Talos', i.talos], ['Kubernetes', i.kubernetes], ['Cilium', i.cilium]] as const) {
+    if (list === null || list.available || list.unavailableReason === '') continue
+    const note = out.find((n) => n.reason === list.unavailableReason)
+    if (note) note.components.push(name)
+    else out.push({ components: [name], reason: list.unavailableReason })
+  }
+  return out
+}
+
 // patchComponents names the components that have a patch, in the order Talos, Kubernetes, Cilium. The attention
 // list announces them as one item. A Cilium patch is one whose images verified.
 export function patchComponents(i: {

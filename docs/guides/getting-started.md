@@ -239,11 +239,9 @@ every condition (with ✓, `!`, ✗ or … in front). Every machine should be Re
 (✓). `ichor version` shows the CLI and the installed Ichor version; they should
 both say `v0.1.0`.
 
-The CLI prints for people. In a script, add `-o yaml` or `-o json` to
-`cluster list|get`, `machine list|get` and `version` for the full response;
-the commands that have no table yet print YAML either way. A table never
-truncates a cell, and colour appears only on a terminal (set `NO_COLOR` to turn
-it off).
+The CLI prints for people. In a script, add `-o yaml` or `-o json` to any
+command for the full response. A table never truncates a cell, and colour
+appears only on a terminal (set `NO_COLOR` to turn it off).
 
 The same goes for the operations. `ichor operation list` shows each one with a
 glyph for its phase and what it is doing; `ichor operation get NAME` adds the

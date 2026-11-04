@@ -214,7 +214,7 @@ func New(cfg Config) (*Issuer, error) {
 		cfg.Now = time.Now
 	}
 	return &Issuer{
-		cfg: cfg, failures: NewBackoff(), srcFailures: newSourceBackoff(), ceiling: &userCeiling{},
+		cfg: cfg, failures: NewBackoff(), srcFailures: &Backoff{free: srcFreeFailures, max: srcMaxBackoff}, ceiling: &userCeiling{},
 		usedCodes: newJTISet(), usedTickets: newJTISet(),
 		authzRate: newBucket(20, 100), loginRate: newBucket(10, 50), tokenRate: newBucket(20, 100),
 	}, nil
@@ -275,8 +275,6 @@ func (i *Issuer) jwks(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Cache-Control", noCache)
 	writeJSON(w, http.StatusOK, jose.JSONWebKeySet{Keys: i.cfg.Keys.Public()}) // use and alg already set
 }
-
-const jwkUseSig = "sig"
 
 // noCache is deliberate for discovery and the JWKS: the kube-apiserver's
 // go-oidc (v2.5.0) keeps fetched keys until the response's own cache expiry

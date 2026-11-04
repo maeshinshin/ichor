@@ -2,6 +2,7 @@ package oidcissuer_test
 
 import (
 	"encoding/json"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -65,10 +66,7 @@ func TestAuthorizeRejectsBadRequests(t *testing.T) {
 	p := newPKCE()
 	base := authQuery(clientCLI, cliRedirect, scopeOpenID, p)
 	mut := func(f func(url.Values)) url.Values {
-		v := url.Values{}
-		for k, x := range base {
-			v[k] = slices.Clone(x)
-		}
+		v := maps.Clone(base) // f only Sets and Dels, never edits a value slice
 		f(v)
 		return v
 	}

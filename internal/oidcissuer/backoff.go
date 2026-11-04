@@ -81,19 +81,11 @@ func (t *failTable) evict(now time.Time) {
 	if len(t.m) < maxTrackedKeys {
 		return
 	}
-	type entry struct {
-		k string
-		s failState
-	}
-	all := make([]entry, 0, len(t.m))
-	for k, s := range t.m {
-		all = append(all, entry{k, s})
-	}
-	slices.SortFunc(all, func(a, b entry) int {
-		return cmp.Or(cmp.Compare(a.s.n, b.s.n), a.s.last.Compare(b.s.last))
+	keys := slices.SortedFunc(maps.Keys(t.m), func(a, b string) int {
+		return cmp.Or(cmp.Compare(t.m[a].n, t.m[b].n), t.m[a].last.Compare(t.m[b].last))
 	})
-	for _, e := range all[:len(all)/10+1] {
-		delete(t.m, e.k)
+	for _, k := range keys[:len(keys)/10+1] {
+		delete(t.m, k)
 	}
 }
 
@@ -110,8 +102,6 @@ type Backoff struct {
 
 // NewBackoff returns an empty Backoff with five free failures and a 15 minute ceiling.
 func NewBackoff() *Backoff { return &Backoff{free: freeFailures, max: maxBackoff} }
-
-func newSourceBackoff() *Backoff { return &Backoff{free: srcFreeFailures, max: srcMaxBackoff} }
 
 // Wait returns how long key must still wait; zero means it may try.
 func (b *Backoff) Wait(key string, now time.Time) time.Duration {

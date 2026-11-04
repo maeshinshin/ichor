@@ -230,8 +230,8 @@ func TestCNIRetryBackoffDoublesUpToACap(t *testing.T) {
 }
 
 func TestClusterNodeCountCountsEveryNode(t *testing.T) {
-	notReady := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "a"}}
-	ready := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "b"}, Status: corev1.NodeStatus{
+	notReady := &corev1.Node{Name: "a"}
+	ready := &corev1.Node{Name: "b", Status: corev1.NodeStatus{
 		Conditions: []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionTrue}}}}
 
 	got, err := clusterNodeCount(t.Context(), cniFakeClient(t, notReady, ready))

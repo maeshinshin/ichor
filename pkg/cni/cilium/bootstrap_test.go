@@ -78,7 +78,8 @@ func TestBootstrap_OperatorFollowsTheNodesThatExist(t *testing.T) {
 	cluster := &ichorv1alpha1.TalosCluster{}
 	cluster.Spec.ControlPlane.Count = 3
 
-	if _, err := bootstrap(t.Context(), kube, cfg, cluster, cni.KubeProxyEnabled, time.Second, time.Millisecond); err != nil {
+	_, err := bootstrap(t.Context(), kube, cfg, cluster, cni.KubeProxyEnabled, time.Second, time.Millisecond)
+	if err != nil {
 		t.Fatal(err)
 	}
 

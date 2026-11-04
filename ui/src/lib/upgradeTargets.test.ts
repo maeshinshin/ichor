@@ -68,18 +68,18 @@ test('a patch hint shows only for an available list with a newer patch', () => {
 
 test('the patch attention names the components that have a patch, in order, and nothing when the fetch failed', () => {
   const failed = null
-  assert.deepEqual(patchComponents({ talos: list, kubernetes: list, cilium: list }), ['Talos', 'Kubernetes', 'Cilium'])
-  assert.deepEqual(patchComponents({ talos: list, kubernetes: { ...list, patch: [] }, cilium: null }), ['Talos'])
-  assert.deepEqual(patchComponents({ talos: failed, kubernetes: failed, cilium: { ...list, patch: [] } }), [])
+  assert.deepEqual(patchComponents({ talos: list, kubernetes: list }), ['Talos', 'Kubernetes'])
+  assert.deepEqual(patchComponents({ talos: list, kubernetes: { ...list, patch: [] } }), ['Talos'])
+  assert.deepEqual(patchComponents({ talos: failed, kubernetes: failed }), [])
 })
 
 test('the unavailable lists are named with their reason, grouped by reason', () => {
   const off: TargetList = { ...list, patch: [], available: false, unavailableReason: 'check is off' }
-  const failed: TargetList = { ...list, patch: [], available: false, unavailableReason: 'quay unreachable' }
-  assert.deepEqual(unavailableNotes({ talos: list, kubernetes: list, cilium: list }), [])
-  assert.deepEqual(unavailableNotes({ talos: null, kubernetes: null, cilium: null }), [])
-  assert.deepEqual(unavailableNotes({ talos: off, kubernetes: off, cilium: failed }), [
-    { components: ['Talos', 'Kubernetes'], reason: 'check is off' },
-    { components: ['Cilium'], reason: 'quay unreachable' },
+  const failed: TargetList = { ...list, patch: [], available: false, unavailableReason: 'ghcr unreachable' }
+  assert.deepEqual(unavailableNotes({ talos: list, kubernetes: list }), [])
+  assert.deepEqual(unavailableNotes({ talos: null, kubernetes: null }), [])
+  assert.deepEqual(unavailableNotes({ talos: off, kubernetes: failed }), [
+    { components: ['Talos'], reason: 'check is off' },
+    { components: ['Kubernetes'], reason: 'ghcr unreachable' },
   ])
 })

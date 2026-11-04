@@ -25,6 +25,7 @@ const (
 	channelRecommended = "recommended"
 	channelPatch       = "patch"
 	channelNextMinor   = "next-minor"
+	upgradeColVersion  = "version"
 )
 
 // renderUpgradeTargets is the versions a cluster can move to as a table, newest first within each
@@ -57,7 +58,7 @@ func renderUpgradeTargets(h *human, kind pb.OperationKind, m *pb.ListUpgradeTarg
 		return h.Err()
 	}
 
-	h.Table([]string{"version", "kind", "default"}, rows)
+	h.Table([]string{upgradeColVersion, "kind", "default"}, rows)
 
 	return h.Err()
 }

@@ -88,6 +88,7 @@ func (s *stagesOps) GetOperation(_ context.Context, req *connect.Request[pb.GetO
 // skipped, between the ones it saw.
 func TestOperationWatchPrintsTheStagesAPollJumpedOver(t *testing.T) {
 	shrinkFollowTimers(t)
+	setAPITestFlags(t, true) // -o json: the progress lines of the machine formats
 
 	ops := &stagesOps{stages: []string{
 		ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDone,
@@ -116,6 +117,43 @@ func TestOperationWatchPrintsTheStagesAPollJumpedOver(t *testing.T) {
 	}
 }
 
+// The same in the human style: a stage is the detail of the one step, and the last stage is the end line.
+func TestOperationWatchHumanPrintsTheStagesAPollJumpedOver(t *testing.T) {
+	shrinkFollowTimers(t)
+	setHumanTestFlags(t, outputHuman)
+
+	ops := &stagesOps{stages: []string{
+		ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDone,
+	}}
+	c := &apiClients{Operation: ops, Close: func() {}}
+
+	var out, errw bytes.Buffer
+
+	if err := watchOperation(context.Background(), c, objectRef(testNamespace, "x"), &out, &errw); err != nil {
+		t.Fatalf("%v\n%s", err, errw.String())
+	}
+
+	at := 0
+
+	for _, stage := range []string{
+		ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageAwaitingCredentials,
+		ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDropping, ichorv1alpha1.CARotationStageFinalizing,
+	} {
+		i := strings.Index(errw.String()[at:], "· stage "+stage+"\n")
+		if i < 0 {
+			t.Fatalf("no line for stage %s after position %d:\n%s", stage, at, errw.String())
+		}
+
+		at += i
+	}
+
+	if !strings.HasSuffix(errw.String(), "✓ ca-rotation — Completed\n") {
+		t.Errorf("the rotation must end with its Completed line:\n%s", errw.String())
+	}
+}
+
+const installerRunning = "the installer Job is running"
+
 // messagesOps reports an InProgress operation with one message per poll, then Completed.
 type messagesOps struct {
 	ichorv1alpha1connect.OperationServiceClient
@@ -138,9 +176,10 @@ func (m *messagesOps) GetOperation(_ context.Context, req *connect.Request[pb.Ge
 // for, once per change.
 func TestWatchPrintsTheOperationMessageWhenItChanges(t *testing.T) {
 	shrinkFollowTimers(t)
+	setAPITestFlags(t, true)
 
 	ops := &messagesOps{messages: []string{
-		"the installer Job is running", "the installer Job is running",
+		installerRunning, installerRunning,
 		"waiting for the ichor-ui Deployment to finish rolling out (0 of 1 updated replicas are available)",
 	}}
 	c := &apiClients{Operation: ops, Close: func() {}}
@@ -154,6 +193,32 @@ func TestWatchPrintsTheOperationMessageWhenItChanges(t *testing.T) {
 	for _, want := range []string{
 		"phase InProgress: the installer Job is running",
 		"phase InProgress: waiting for the ichor-ui Deployment to finish rolling out",
+	} {
+		if n := strings.Count(errw.String(), want); n != 1 {
+			t.Fatalf("want %q printed once, got %d:\n%s", want, n, errw.String())
+		}
+	}
+}
+
+func TestWatchHumanPrintsTheOperationMessageWhenItChanges(t *testing.T) {
+	shrinkFollowTimers(t)
+	setHumanTestFlags(t, outputHuman)
+
+	ops := &messagesOps{messages: []string{
+		installerRunning, installerRunning,
+		"waiting for the ichor-ui Deployment to finish rolling out (0 of 1 updated replicas are available)",
+	}}
+	c := &apiClients{Operation: ops, Close: func() {}}
+
+	var out, errw bytes.Buffer
+
+	if err := watchOperation(context.Background(), c, objectRef(testNamespace, "x"), &out, &errw); err != nil {
+		t.Fatalf("%v\n%s", err, errw.String())
+	}
+
+	for _, want := range []string{
+		"… ichor — InProgress · " + installerRunning + "\n",
+		"… ichor — InProgress · waiting for the ichor-ui Deployment to finish rolling out",
 	} {
 		if n := strings.Count(errw.String(), want); n != 1 {
 			t.Fatalf("want %q printed once, got %d:\n%s", want, n, errw.String())

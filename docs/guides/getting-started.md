@@ -234,6 +234,31 @@ the commands that have no table yet print YAML either way. A table never
 truncates a cell, and colour appears only on a terminal (set `NO_COLOR` to turn
 it off).
 
+The same goes for the operations. `ichor operation list` shows each one with a
+glyph for its phase and what it is doing; `ichor operation get NAME` adds the
+state of every machine. `--follow` (on `upgrade`, `config apply` and the node
+actions) and `operation get NAME --watch` keep one live line with the phase and
+message, and end it with the time the operation took. In a pipe or CI log they
+print a line per change instead:
+
+```
+$ bin/ichor operation list
+NAME                 KIND    PHASE         TARGET  MESSAGE                       AGE
+upgrade-talos-x7k2p  talos   … InProgress  demo    upgrading talos-cp2 (2 of 3)  12m
+config-r2d9m         config  ✓ Completed   demo    -                             3d
+$ bin/ichor upgrade talos --follow --yes
+Upgrade Talos v1.14.3 → v1.14.5
+operation upgrade-talos-x7k2p · cluster demo
+… talos — InProgress · 0/3 machines · upgrading talos-cp1
+… talos — InProgress · 1/3 machines · upgrading talos-cp2
+✓ talos — Completed (11m52s)
+```
+
+A failed step ends the line with ✗ Failed, prints the reason and exits with an
+error that names `ichor operation resume NAME`. `ichor upgrade talos --list`
+(and `kubernetes`, `cni upgrade`) prints the versions on offer as a table; `-o yaml`
+and `-o json` of these commands print what they always printed.
+
 ## 5. Open the UI and sign in
 
 If you turned sign-in on, open the `--ui-url` in a browser. The certificate is

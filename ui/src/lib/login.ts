@@ -72,7 +72,7 @@ export async function passwordSignIn(cfg: AuthProvider, f: { username: string; p
   let ticket: unknown
   try {
     d = await discover(cfg.issuer)
-    const url = buildAuthUrl(d.authorization_endpoint, { clientId: cfg.clientId, redirectUri, state, nonce, challenge: await pkceChallenge(verifier) })
+    const url = buildAuthUrl(d.authorization_endpoint, { clientId: cfg.clientId, redirectUri, state, nonce, challenge: await pkceChallenge(verifier), offline: cfg.id === 'ichor' })
     const res = await fetch(url, { headers: { Accept: 'application/json' } })
     ticket = res.ok ? (await res.json()).ticket : ''
   } catch {

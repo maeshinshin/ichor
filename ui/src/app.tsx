@@ -4,7 +4,8 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import { MustChangePassword } from '@/components/ChangePassword'
 import type { WhoAmIResponse } from '@/gen/ichor/v1alpha1/user_pb'
 import { userClient } from '@/lib/connect'
-import { finishLogin, startLogin, storedToken, tokenUsable, type AuthConfig, type AuthProvider } from '@/lib/oidc'
+import { clearToken, finishLogin, signOut, startLogin, storedRefresh, storedToken, tokenUsable, type AuthConfig, type AuthProvider } from '@/lib/oidc'
+import { claimSession, refreshSession, startRefreshing } from '@/lib/session'
 import { t } from '@/lib/i18n'
 import { AddNode } from '@/pages/AddNode'
 import { MachineList } from '@/pages/MachineList'
@@ -49,7 +50,10 @@ function useLogin(): { state: LoginState; error: string; providers: AuthProvider
       setAnonymous(cfg.anonymous ?? 'open')
       if (list.length === 0) return setState('open')
       if (await finishLogin(list)) return setState('ready')
-      if (tokenUsable(storedToken(), Date.now())) return setState('ready')
+      // A tab copied from another one (same sessionStorage) must not share its refresh token.
+      if (!(await claimSession())) clearToken()
+      // A reload after the ID token ended (a slept laptop, a restored tab) signs in with the refresh token.
+      if (tokenUsable(storedToken(), Date.now()) || (storedRefresh() && (await refreshSession()) === 'ok')) return setState('ready')
       if (list.length === 1 && list[0].id === 'oidc') await startLogin(list[0])
       else setState('choose')
     })().catch((e) => {
@@ -99,6 +103,8 @@ function Authenticated({ path }: { path: string }) {
   const login = useLogin()
   const signedIn = login.state === 'ready'
   const who = useWhoAmI(signedIn)
+  // Keeps the ichor session going until its absolute lifetime; the end of it signs the tab out.
+  useEffect(() => (signedIn ? startRefreshing(signOut) : undefined), [signedIn])
   const usersEnabled = login.providers.some((p) => p.id === 'ichor')
 
   if (login.state === 'loading' || (signedIn && !who.loaded)) return <p class="p-8 text-sm text-muted-foreground">{t('app.signingIn')}</p>

@@ -1,5 +1,6 @@
 import { Code, ConnectError, createClient, type Interceptor } from '@connectrpc/connect'
-import { clearToken, storedToken } from '@/lib/oidc'
+import { clearToken, storedRefresh, storedToken } from '@/lib/oidc'
+import { ensureFresh, refreshSession } from '@/lib/session'
 import { createConnectTransport } from '@connectrpc/connect-web'
 import { ClusterService } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineService } from '@/gen/ichor/v1alpha1/machine_pb'
@@ -18,15 +19,24 @@ import { SettingsService } from '@/gen/ichor/v1alpha1/settings_pb'
 // mux that serves this SPA, so same-origin is also same-server.
 //
 // With OIDC on (docs/adr/0058) every call carries the signed-in user's ID token;
-// a rejected token is dropped and the page reloads, which starts a new login.
+// a rejected token is refreshed with the refresh token of the ichor sign-in (docs/adr/0094, 2026-11-04)
+// and a unary call is retried once; when the session is over (or there is no refresh token, as with an
+// external IdP) the token is dropped and the page reloads, which starts a new login.
 // With OIDC off there is no token and no header.
 const withToken: Interceptor = (next) => async (req) => {
+  await ensureFresh()
   const token = storedToken()
   if (token) req.header.set('Authorization', `Bearer ${token}`)
   try {
     return await next(req)
   } catch (e) {
-    if (token && ConnectError.from(e).code === Code.Unauthenticated) {
+    if (!token || ConnectError.from(e).code !== Code.Unauthenticated) throw e
+    const refreshed = storedRefresh() ? await refreshSession() : 'ended'
+    if (refreshed === 'ok' && !req.stream) {
+      req.header.set('Authorization', `Bearer ${storedToken()}`)
+      return await next(req)
+    }
+    if (refreshed === 'ended') {
       clearToken()
       window.location.reload()
     }

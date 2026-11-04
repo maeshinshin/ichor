@@ -134,12 +134,34 @@ test('signing in again after a password change reuses the user of the stored tok
       assert.deepEqual(JSON.parse(init!.body as string), { ticket: 't1', username: 'ann', password: 'new-pw' })
       return json({ redirect_uri: `https://ui.example/auth/callback?code=c1&state=${state}` })
     },
-    '/oidc/token': () => json({ id_token: idToken(nonce) }),
+    '/oidc/token': () => json({ id_token: idToken(nonce), refresh_token: 'new-refresh' }),
   })
   sessionStorage.setItem('ichor.idToken', old)
+  sessionStorage.setItem('ichor.refresh', JSON.stringify({ token: 'revoked', endpoint: 'e', clientId: 'ichor-ui' }))
   await signInAgain('new-pw')
   assert.deepEqual(calls, ['/auth/config', '/.well-known/openid-configuration', '/oidc/authorize', '/oidc/login', '/oidc/token'])
   assert.notEqual(storedToken(), old)
+  // The password change revoked the old refresh family; the new login brings its own.
+  assert.equal(JSON.parse(sessionStorage.getItem('ichor.refresh')!).token, 'new-refresh')
+})
+
+test('the in-page sign-in asks for offline_access and keeps the refresh token it gets', async () => {
+  let nonce = ''
+  let state = ''
+  stubSignIn({
+    '/.well-known/openid-configuration': discovery,
+    '/oidc/authorize': (_i, url) => {
+      const q = new URL(url!).searchParams
+      assert.ok(q.get('scope')!.split(' ').includes('offline_access'))
+      nonce = q.get('nonce')!
+      state = q.get('state')!
+      return json({ ticket: 't1' })
+    },
+    '/oidc/login': () => json({ redirect_uri: `https://ui.example/auth/callback?code=c1&state=${state}` }),
+    '/oidc/token': () => json({ id_token: idToken(nonce), refresh_token: 'r1' }),
+  })
+  await passwordSignIn(ichor, { username: 'ann', password: 'pw' })
+  assert.deepEqual(JSON.parse(sessionStorage.getItem('ichor.refresh')!), { token: 'r1', endpoint: 'https://ui.example/oidc/token', clientId: 'ichor-ui' })
 })
 
 test('signing in again fails, for the caller to sign out, without an ichor provider or a user', async () => {

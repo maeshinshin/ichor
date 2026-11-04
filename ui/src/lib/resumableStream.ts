@@ -19,6 +19,10 @@ import { Code, ConnectError } from '@connectrpc/connect'
 // the backend and the page forever (ADR 0079). `signal` ends the loop.
 export interface ResumeOptions {
   maxAttempts?: number
+  // reauth runs when the server ends the stream because the ID token it was opened with expired
+  // (Unauthenticated): true means a new token is stored, so the stream reconnects. It counts
+  // against maxAttempts like a reconnect.
+  reauth?: () => Promise<boolean>
   signal?: AbortSignal
   sleep?: (ms: number) => Promise<void>
 }
@@ -27,7 +31,7 @@ export async function* streamWithResume<T>(
   call: (resumeToken: string) => AsyncIterable<T>,
   getResumeToken: (message: T) => string,
   initialResumeToken = '',
-  { maxAttempts = 8, signal, sleep = defaultSleep }: ResumeOptions = {},
+  { maxAttempts = 8, reauth, signal, sleep = defaultSleep }: ResumeOptions = {},
 ): AsyncGenerator<T, void, unknown> {
   let token = initialResumeToken
   let attempts = 0
@@ -44,6 +48,11 @@ export async function* streamWithResume<T>(
       if (signal?.aborted) return
       if (err instanceof ConnectError && err.code === Code.Unavailable && attempts < maxAttempts) {
         await sleep(Math.min(500 * 2 ** attempts, 10_000))
+        attempts++
+        if (signal?.aborted) return
+        continue
+      }
+      if (err instanceof ConnectError && err.code === Code.Unauthenticated && reauth && attempts < maxAttempts && (await reauth())) {
         attempts++
         if (signal?.aborted) return
         continue

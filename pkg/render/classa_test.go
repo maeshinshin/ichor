@@ -40,12 +40,7 @@ func TestRenderClassAValues(t *testing.T) {
 				Disk: ichorv1alpha1.TalosMachineDisk{DevPath: "/dev/vda"}, Image: "example.test/installer:v1", Wipe: true,
 			}
 
-			out, _, err := Render(cluster, m, testBundle(t), nil, nil)
-			if err != nil {
-				t.Fatalf("Render: %v", err)
-			}
-
-			got := string(out)
+			got := mustRender(t, cluster, m, testBundle(t), nil)
 
 			requireAll(t, got, "- cp.example.test", "kind: RegistryMirrorConfig", "name: ghcr.io",
 				"skipFallback: true", "overridePath: true", "wipe: true")

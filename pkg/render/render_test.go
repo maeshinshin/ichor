@@ -160,7 +160,21 @@ func mustRender(
 ) string {
 	t.Helper()
 
-	out, _, err := Render(cluster, m, bundle, patches, nil)
+	return mustRenderSys(t, cluster, m, bundle, patches, nil)
+}
+
+// mustRenderSys is mustRender with the system-layer inputs.
+func mustRenderSys(
+	t *testing.T,
+	cluster *ichorv1alpha1.TalosCluster,
+	m *ichorv1alpha1.TalosMachine,
+	bundle *secrets.Bundle,
+	patches []ichorv1alpha1.TalosConfigPatch,
+	sys *SystemInputs,
+) string {
+	t.Helper()
+
+	out, _, err := Render(cluster, m, bundle, patches, sys)
 	if err != nil {
 		t.Fatalf("Render: %v", err)
 	}
@@ -272,45 +286,37 @@ func TestRenderHashStable(t *testing.T) {
 		sysctlPatch("p-b", layerRole, 0, roleTarget, "2"),
 	}
 
-	out1, hash1, err := Render(cluster, m, bundle, patches, nil)
-	if err != nil {
-		t.Fatalf("Render: %v", err)
+	render := func(p []ichorv1alpha1.TalosConfigPatch) (string, string) {
+		t.Helper()
+
+		out, hash, err := Render(cluster, m, bundle, p, nil)
+		if err != nil {
+			t.Fatalf("Render: %v", err)
+		}
+
+		return string(out), hash
 	}
 
-	out2, hash2, err := Render(cluster, m, bundle, patches, nil)
-	if err != nil {
-		t.Fatalf("Render: %v", err)
-	}
+	out1, hash1 := render(patches)
+	out2, hash2 := render(patches)
 
 	if hash1 != hash2 {
 		t.Fatalf("hash not stable across repeated renders: %s != %s", hash1, hash2)
 	}
 
-	if string(out1) != string(out2) {
+	if out1 != out2 {
 		t.Fatalf("rendered bytes not stable across repeated renders")
 	}
 
-	reordered := []ichorv1alpha1.TalosConfigPatch{patches[1], patches[0]}
-
-	_, hash3, err := Render(cluster, m, bundle, reordered, nil)
-	if err != nil {
-		t.Fatalf("Render: %v", err)
-	}
-
+	_, hash3 := render([]ichorv1alpha1.TalosConfigPatch{patches[1], patches[0]})
 	if hash3 != hash1 {
 		t.Fatalf("hash changed when candidates were reordered but the layering did not: %s != %s", hash3, hash1)
 	}
 
-	changed := []ichorv1alpha1.TalosConfigPatch{
+	_, hash4 := render([]ichorv1alpha1.TalosConfigPatch{
 		patches[0],
 		sysctlPatch("p-b", layerRole, 0, roleTarget, "different"),
-	}
-
-	_, hash4, err := Render(cluster, m, bundle, changed, nil)
-	if err != nil {
-		t.Fatalf("Render: %v", err)
-	}
-
+	})
 	if hash4 == hash1 {
 		t.Fatalf("hash did not change when a patch's value changed")
 	}

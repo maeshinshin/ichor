@@ -18,6 +18,7 @@ package render
 
 import (
 	"bytes"
+	"slices"
 	"testing"
 	"time"
 
@@ -27,23 +28,26 @@ import (
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
-func acceptedCrts(list []*x509.PEMEncodedCertificate) [][]byte {
-	out := make([][]byte, 0, len(list))
+// requireAcceptedCAs fails unless list holds exactly the certificates in want, in any order.
+func requireAcceptedCAs(t *testing.T, what string, list []*x509.PEMEncodedCertificate, want [][]byte) {
+	t.Helper()
+
+	got := make([]string, 0, len(list))
 	for _, c := range list {
-		out = append(out, c.Crt)
+		got = append(got, string(c.Crt))
 	}
 
-	return out
-}
-
-func containsCrt(list [][]byte, crt []byte) bool {
-	for _, c := range list {
-		if bytes.Equal(c, crt) {
-			return true
-		}
+	wantStr := make([]string, 0, len(want))
+	for _, c := range want {
+		wantStr = append(wantStr, string(c))
 	}
 
-	return false
+	slices.Sort(got)
+	slices.Sort(wantStr)
+
+	if !slices.Equal(got, wantStr) {
+		t.Errorf("%s: accepted CAs differ from the expected ones (got %d, want %d)", what, len(got), len(wantStr))
+	}
 }
 
 // TestCARotationStagesRenderTheRightIssuerAndAcceptedCAs pins, for both roles, which CA issues and
@@ -99,32 +103,14 @@ func TestCARotationStagesRenderTheRightIssuerAndAcceptedCAs(t *testing.T) {
 				t.Errorf("%s %s: a worker must carry the issuing certificate only", role, stage)
 			}
 
-			got := acceptedCrts(sec.AcceptedCAs())
-			if len(got) != len(w.talosAccepted) {
-				t.Errorf("%s %s: Talos accepted CAs: got %d, want %d", role, stage, len(got), len(w.talosAccepted))
-			}
-
-			for _, c := range w.talosAccepted {
-				if !containsCrt(got, c) {
-					t.Errorf("%s %s: Talos accepted CAs miss an expected CA", role, stage)
-				}
-			}
+			requireAcceptedCAs(t, role+" "+stage+": Talos", sec.AcceptedCAs(), w.talosAccepted)
 
 			k8s := cfg.K8sAPIServerCAConfig()
 			if k8s == nil {
 				t.Fatalf("%s %s: no Kubernetes CA document", role, stage)
 			}
 
-			gotK8s := acceptedCrts(k8s.AcceptedCAs())
-			for _, c := range w.k8sAccepted {
-				if !containsCrt(gotK8s, c) {
-					t.Errorf("%s %s: Kubernetes accepted CAs miss an expected CA", role, stage)
-				}
-			}
-
-			if len(gotK8s) != len(w.k8sAccepted) {
-				t.Errorf("%s %s: Kubernetes accepted CAs: got %d, want %d", role, stage, len(gotK8s), len(w.k8sAccepted))
-			}
+			requireAcceptedCAs(t, role+" "+stage+": Kubernetes", k8s.AcceptedCAs(), w.k8sAccepted)
 
 			if role == roleControlPlane && !bytes.Equal(k8s.IssuingCA().Crt, w.k8sIssuer) {
 				t.Errorf("%s %s: wrong Kubernetes issuing CA", role, stage)

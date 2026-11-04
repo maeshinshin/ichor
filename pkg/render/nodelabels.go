@@ -18,6 +18,7 @@ package render
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
@@ -54,13 +55,8 @@ func validateNodeLabels(nodeLabels map[string]string) error {
 			continue
 		}
 
-		restricted := inDomain(prefix, "kubernetes.io") || inDomain(prefix, "k8s.io")
-
-		for _, ns := range kubeletLabelNamespaces {
-			if inDomain(prefix, ns) {
-				restricted = false
-			}
-		}
+		restricted := (inDomain(prefix, "kubernetes.io") || inDomain(prefix, "k8s.io")) &&
+			!slices.ContainsFunc(kubeletLabelNamespaces, func(ns string) bool { return inDomain(prefix, ns) })
 
 		if restricted {
 			return fmt.Errorf("render: spec.nodeLabels %q is in a reserved kubernetes.io / k8s.io namespace "+

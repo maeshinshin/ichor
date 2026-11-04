@@ -287,7 +287,7 @@ var (
 	}
 	progressWhenTrue = map[string]bool{
 		"Transitioning": true, "VerifyingNewSide": true, "ConfigRollout": true, "KubernetesUpgrade": true,
-		"TalosUpgrade": true, "CARotation": true, "Removal": true, "Shutdown": true,
+		"TalosUpgrade": true, "CARotation": true, "KeyRotation": true, "Removal": true, "Shutdown": true,
 	}
 )
 

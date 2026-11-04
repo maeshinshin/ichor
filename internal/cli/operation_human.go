@@ -111,7 +111,7 @@ func renderOperationList(h *human, resp *pb.ListOperationsResponse) error {
 
 // opStage is the stage or step an operation is in: a CA rotation or Kubernetes stage, an etcd restore step.
 func opStage(op *pb.Operation) string {
-	return cmp.Or(op.GetCaRotationStage(), op.GetKubernetesStage(), op.GetEtcdRestoreStep())
+	return cmp.Or(op.GetCaRotationStage(), op.GetKeyRotationStage(), op.GetKubernetesStage(), op.GetEtcdRestoreStep())
 }
 
 // opNote is what a running operation says it is doing: its message, else its node action's or etcd restore's.
@@ -301,7 +301,7 @@ func (w *opWatch) show(op *pb.Operation) {
 		w.began(op)
 	}
 
-	stage := op.GetCaRotationStage()
+	stage := cmp.Or(op.GetCaRotationStage(), op.GetKeyRotationStage())
 	for _, s := range passedStages(w.stage, stage) {
 		w.st.Update(w.detailIn(op, s, ichorv1alpha1.TalosOperationPhaseInProgress))
 	}
@@ -400,7 +400,7 @@ func (r *opReporter) show(op *pb.Operation) {
 		return
 	}
 
-	r.lines.show(op.GetCaRotationStage(), func(stage string) string { return progressLineAt(op, stage) })
+	r.lines.show(cmp.Or(op.GetCaRotationStage(), op.GetKeyRotationStage()), func(stage string) string { return progressLineAt(op, stage) })
 }
 
 func (r *opReporter) end(op *pb.Operation) {

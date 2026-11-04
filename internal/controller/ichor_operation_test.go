@@ -40,7 +40,7 @@ var _ = Describe("TalosOperationReconciler, kind ichor", func() {
 
 		var failure error
 
-		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: func(
+		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: testIchorNamespace, Advance: func(
 			_ context.Context, _ *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, _ *ichorv1alpha1.TalosOperation,
 		) (bool, error) {
 			Expect(m).To(BeNil())

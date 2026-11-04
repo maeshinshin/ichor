@@ -17,6 +17,8 @@ limitations under the License.
 package cilium
 
 import (
+	"maps"
+	"slices"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
@@ -149,13 +151,7 @@ func TestConfigMapValuesAreHelmPaths(t *testing.T) {
 			continue // read from the DaemonSet
 		}
 
-		found := false
-
-		for _, p := range ConfigMapValues {
-			found = found || p == path
-		}
-
-		if !found {
+		if !slices.Contains(slices.Collect(maps.Values(ConfigMapValues)), path) {
 			t.Errorf("owned key %s is read from neither cilium-config nor the DaemonSet", path)
 		}
 	}

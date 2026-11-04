@@ -19,6 +19,7 @@ package cilium
 import (
 	_ "embed" // the pinned chart archive
 	"fmt"
+	"maps"
 	"strings"
 
 	"helm.sh/helm/v3/pkg/chartutil"
@@ -77,11 +78,7 @@ func renderChart(values any) ([]byte, error) {
 		return nil, fmt.Errorf("cilium: rendering chart: %w", err)
 	}
 
-	for name := range files {
-		if strings.HasSuffix(name, "NOTES.txt") {
-			delete(files, name)
-		}
-	}
+	maps.DeleteFunc(files, func(name, _ string) bool { return strings.HasSuffix(name, "NOTES.txt") })
 
 	// Hooks come back separately and are dropped.
 	_, manifests, err := releaseutil.SortManifests(files, nil, releaseutil.InstallOrder)

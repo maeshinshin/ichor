@@ -79,8 +79,6 @@ func TestApply_AdoptsThenUpgrades(t *testing.T) {
 		t.Errorf("release is %s/%s, want %s/%s", first.Release.Namespace, first.Release.Name, ReleaseNamespace, ReleaseName)
 	}
 
-	debugOn := map[string]any{keyDebug: map[string]any{keyEnabled: true}}
-
 	second, err := Apply(t.Context(), cfg, effective(t, debugOn), ApplyOptions{})
 	if err != nil {
 		t.Fatalf("second Apply: %v", err)
@@ -167,7 +165,6 @@ func TestApply_RepairsPendingUpgradeAndRollback(t *testing.T) {
 	for _, st := range []release.Status{release.StatusPendingUpgrade, release.StatusPendingRollback} {
 		t.Run(string(st), func(t *testing.T) {
 			cfg := fakeConfig()
-			debugOn := map[string]any{keyDebug: map[string]any{keyEnabled: true}}
 
 			for _, v := range []map[string]any{nil, debugOn} {
 				if _, err := Apply(t.Context(), cfg, effective(t, v), ApplyOptions{}); err != nil {
@@ -212,7 +209,6 @@ func TestApply_LeavesAFreshPendingRecordAlone(t *testing.T) {
 // values are not inherited.
 func TestApply_UpgradeDoesNotInheritRemovedValues(t *testing.T) {
 	cfg := fakeConfig()
-	debugOn := map[string]any{keyDebug: map[string]any{keyEnabled: true}}
 
 	if _, err := Apply(t.Context(), cfg, effective(t, debugOn), ApplyOptions{}); err != nil {
 		t.Fatal(err)

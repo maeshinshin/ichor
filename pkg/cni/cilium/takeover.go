@@ -593,8 +593,8 @@ func DiffLive(ctx context.Context, vals map[string]any, get LiveGetter) ([]Diffe
 			return nil, fmt.Errorf("cilium: reading live %s: %w", ref, err)
 		}
 
-		if ref.Namespace != "" {
-			setPath(want, "metadata", "namespace", ref.Namespace)
+		if _, set := values.Get(want, "metadata.namespace"); !set && ref.Namespace != "" {
+			values.Set(want, "metadata.namespace", ref.Namespace)
 		}
 
 		out = append(out, diffMaps(ref, "", normalizeObject(want), normalizeObject(live))...)
@@ -659,18 +659,6 @@ func str(v any) string {
 	s, _ := v.(string)
 
 	return s
-}
-
-func setPath(o map[string]any, parent, key string, v any) {
-	m, ok := o[parent].(map[string]any)
-	if !ok {
-		m = map[string]any{}
-		o[parent] = m
-	}
-
-	if _, set := m[key]; !set {
-		m[key] = v
-	}
 }
 
 // volatileMeta are metadata fields the API server owns.
@@ -761,10 +749,7 @@ func serverDefaultValue(ref ObjectRef, path string, live any) bool {
 }
 
 func diffMaps(ref ObjectRef, path string, want, have map[string]any) []Difference {
-	keys := make([]string, 0, len(want)+len(have))
-	for k := range want {
-		keys = append(keys, k)
-	}
+	keys := slices.Collect(maps.Keys(want))
 
 	for k := range have {
 		if _, ok := want[k]; !ok {
@@ -1117,8 +1102,6 @@ type recordMeta struct {
 	Annotations map[string]string `json:"annotations,omitempty"`
 }
 
-func backupKey(s corev1.Secret) string { return s.Namespace + "." + s.Name }
-
 func writeBackup(ctx context.Context, kube kubernetes.Interface, ns string, f *Foreign) error {
 	data := map[string][]byte{}
 	total := 0
@@ -1132,7 +1115,7 @@ func writeBackup(ctx context.Context, kube kubernetes.Interface, ns string, f *F
 			return fmt.Errorf("cilium: encoding record metadata: %w", err)
 		}
 
-		key := backupKey(r.Secret)
+		key := r.Secret.Namespace + "." + r.Secret.Name
 		data[key+backupMetaSuffix] = meta
 		data[key+backupReleaseSuffix] = r.Secret.Data["release"]
 		total += len(meta) + len(r.Secret.Data["release"])
@@ -1201,9 +1184,7 @@ func deleteRecord(ctx context.Context, kube kubernetes.Interface, rec corev1.Sec
 			rec.Namespace, rec.Name)
 	}
 
-	uid := cur.UID
-
-	err = secrets.Delete(ctx, rec.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid}})
+	err = secrets.Delete(ctx, rec.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &cur.UID}})
 	if err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("cilium: deleting record %s/%s: %w", rec.Namespace, rec.Name, err)
 	}

@@ -33,8 +33,9 @@ import (
 //
 // On a terminal the running step is one live line redrawn in place; when it ends it is replaced by
 // its final line. Anywhere else (a pipe, CI, TERM=dumb) there are no escape sequences and no
-// spinner: a line is printed when a step starts, when its detail changes (never the same detail
-// twice in a row) and when it ends, so a log stays short and grep-able.
+// spinner: a line is printed when a step's detail changes (never the same detail twice in a row,
+// and the newest one is held back for plainHold, so that a detail the end line repeats is not
+// printed twice) and when it ends, so a log stays short and grep-able.
 //
 //	steps := newProgress(os.Stderr)
 //	s := steps.Start("Install Ichor")
@@ -61,6 +62,7 @@ const (
 	progressTick        = 100 * time.Millisecond
 	progressNoteTTL     = 45 * time.Second // a pod reason older than this is stale (waitDiagEvery is 30s)
 	progressNoteMax     = 100              // longest pod reason shown, in runes
+	plainHold           = 2 * time.Second  // how long plain mode holds back the newest detail
 )
 
 const (
@@ -214,6 +216,9 @@ type step struct {
 
 	detail  string
 	printed string // what the non-terminal mode last printed, to print a change only
+	pending string // the newest detail, not printed yet (non-terminal mode)
+	pendAt  time.Time
+	updated bool   // an Update came, so there is no bare start line at the end
 	note    string // a pod reason, shown after the detail while fresh
 	noteAt  time.Time
 	attn    string // shown after the final detail in yellow, e.g. "back this up now"
@@ -236,8 +241,6 @@ func (p *progress) Start(name string) *step {
 	p.cur = s
 
 	if !p.tty {
-		p.out(markRun + " " + name + "\n")
-
 		return s
 	}
 
@@ -332,10 +335,34 @@ func (s *step) showLocked() {
 		return
 	}
 
-	if d := s.composedLocked(); d != s.printed {
-		s.printed = d
-		p.out(markRun + " " + s.name + " — " + d + "\n")
+	s.updated = true
+
+	d := s.composedLocked()
+
+	if d == s.pending {
+		if p.now().Sub(s.pendAt) >= plainHold {
+			s.flushLocked()
+		}
+
+		return
 	}
+
+	// A new text: the held one has been superseded, so it is printed now.
+	s.flushLocked()
+
+	if d != s.printed {
+		s.pending, s.pendAt = d, p.now()
+	}
+}
+
+// flushLocked prints the held-back detail (non-terminal mode).
+func (s *step) flushLocked() {
+	if s.pending != "" && s.pending != s.printed {
+		s.printed = s.pending
+		s.p.out(markRun + " " + s.name + " — " + s.pending + "\n")
+	}
+
+	s.pending = ""
 }
 
 // composedLocked is the detail followed by the pod reason, when there is a fresh one.
@@ -453,6 +480,16 @@ func (p *progress) endLocked(s *step, mark, style, detail, errMsg string) {
 
 	if p.cur == s {
 		p.cur = nil
+	}
+
+	if !p.tty {
+		if s.pending != detail {
+			s.flushLocked()
+		}
+
+		if !s.updated {
+			p.out(markRun + " " + s.name + "\n")
+		}
 	}
 
 	elapsed := ""

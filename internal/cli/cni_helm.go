@@ -53,7 +53,7 @@ var cniHelmApplyOpts struct {
 	// Nodes is how many Nodes the cluster has, as the controller counted them for the values hash
 	// (0 unknown: the desired control-plane count stands in).
 	Nodes   int
-	Timeout         time.Duration
+	Timeout time.Duration
 	// ImageVersion and ImageOverrides are a Cilium patch's images, as the
 	// controller passes them: each override is key=reference.
 	ImageVersion   string

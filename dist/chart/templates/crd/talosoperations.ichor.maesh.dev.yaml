@@ -644,6 +644,12 @@ spec:
                     required:
                     - machine
                     type: object
+                  settlingSince:
+                    description: |-
+                      settlingSince is when the SettlingTokens stage started waiting for the projected tokens signed by the old
+                      service-account key to be re-issued. The wait ends spec.keyRotation.tokenSettle after it.
+                    format: date-time
+                    type: string
                   stage:
                     description: |-
                       stage is the stage every control plane is being taken to; see the KeyRotationStage* constants. Empty

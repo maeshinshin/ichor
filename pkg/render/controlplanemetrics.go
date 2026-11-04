@@ -116,9 +116,7 @@ func metricsRule(subnets []netip.Prefix) *network.RuleConfigV1Alpha1 {
 	r.MetaName = ruleNameControlPlaneMetrics
 	r.PortSelector.Protocol = nethelpers.ProtocolTCP
 	r.PortSelector.Ports = network.PortRanges{
-		{Lo: portEtcdMetrics, Hi: portEtcdMetrics},
-		{Lo: portControllerManagerMetrics, Hi: portControllerManagerMetrics},
-		{Lo: portSchedulerMetrics, Hi: portSchedulerMetrics},
+		single(portEtcdMetrics), single(portControllerManagerMetrics), single(portSchedulerMetrics),
 	}
 
 	for _, s := range subnets {

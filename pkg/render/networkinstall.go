@@ -108,10 +108,8 @@ func injectInstall(
 		return mergeDocument(cfg, "install", doc)
 	}
 
-	legacy := &mv1alpha1.InstallConfig{InstallImage: install.Image} //nolint:staticcheck // see below
-	if install.Wipe {
-		legacy.InstallWipe = new(true) //nolint:staticcheck // see below
-	}
+	//nolint:staticcheck // see below
+	legacy := &mv1alpha1.InstallConfig{InstallImage: install.Image, InstallWipe: trueOrNil(install.Wipe)}
 
 	switch d := install.Disk; {
 	case d.WWID != "":

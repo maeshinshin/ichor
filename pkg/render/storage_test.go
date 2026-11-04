@@ -57,31 +57,17 @@ func TestRenderStorage(t *testing.T) {
 	selected := testMachine("node-a", roleWorker, map[string]string{storageSelectorKey: storageRoleLabel})
 	other := testMachine("node-b", roleWorker, map[string]string{storageSelectorKey: "compute"})
 
-	out, _, err := Render(cluster, selected, bundle, nil, sys)
-	if err != nil {
-		t.Fatalf("Render(selected): %v", err)
-	}
+	requireAll(t, mustRenderSys(t, cluster, selected, bundle, nil, sys), kindUserVolume, "name: longhorn",
+		storageDiskSelector, "/var/mnt/longhorn", longhornDiskLabel, "node.longhorn.io/default-disks-config")
 
-	requireAll(t, string(out), kindUserVolume, "name: longhorn", storageDiskSelector,
-		"/var/mnt/longhorn", longhornDiskLabel, "node.longhorn.io/default-disks-config")
-
-	out, _, err = Render(cluster, other, bundle, nil, sys)
-	if err != nil {
-		t.Fatalf("Render(other): %v", err)
-	}
-
-	requireNone(t, string(out), kindUserVolume, "longhorn")
+	requireNone(t, mustRenderSys(t, cluster, other, bundle, nil, sys), kindUserVolume, "longhorn")
 
 	t.Run("another cluster's TalosStorage never applies", func(t *testing.T) {
 		foreign := testStorage("foreign", map[string]string{storageSelectorKey: storageRoleLabel})
 		foreign.Spec.ClusterRef.Name = "someone-else"
 
-		out, _, err := Render(cluster, selected, bundle, nil, &SystemInputs{Storage: []ichorv1alpha1.TalosStorage{foreign}})
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		requireNone(t, string(out), kindUserVolume)
+		requireNone(t, mustRenderSys(t, cluster, selected, bundle, nil,
+			&SystemInputs{Storage: []ichorv1alpha1.TalosStorage{foreign}}), kindUserVolume)
 	})
 
 	t.Run("a patch overrides the system layer", func(t *testing.T) {
@@ -103,13 +89,10 @@ func TestRenderStorage(t *testing.T) {
 			},
 		}
 
-		out, _, err := Render(cluster, selected, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, sys)
-		if err != nil {
-			t.Fatal(err)
-		}
+		out := mustRenderSys(t, cluster, selected, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, sys)
 
-		requireAll(t, string(out), "maxSize: 50%")
-		requireNone(t, string(out), "maxSize: 100%")
+		requireAll(t, out, "maxSize: 50%")
+		requireNone(t, out, "maxSize: 100%")
 	})
 
 	// Under a pre-1.14 contract the base config uses the legacy machine.* blocks, so layer 1
@@ -119,11 +102,6 @@ func TestRenderStorage(t *testing.T) {
 		legacy := testCluster("true")
 		legacy.Spec.VersionContract = contractV112
 
-		out, _, err := Render(legacy, selected, bundle, nil, sys)
-		if err != nil {
-			t.Fatalf("Render(v1.12): %v", err)
-		}
-
-		requireAll(t, string(out), "/var/mnt/longhorn", "rshared", longhornDiskLabel)
+		requireAll(t, mustRenderSys(t, legacy, selected, bundle, nil, sys), "/var/mnt/longhorn", "rshared", longhornDiskLabel)
 	})
 }

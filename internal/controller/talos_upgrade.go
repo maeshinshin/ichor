@@ -36,17 +36,15 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/secureboot"
 	"github.com/maeshinshin/ichor/pkg/storage"
 	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
-// Installer image reference parts, the shape github.com/siderolabs/talos/pkg/images.
+// The installer image reference is built by pkg/secureboot (the shape github.com/siderolabs/talos/pkg/images.
 // NewInstallerImage builds; reimplemented because that package lives in the top-level talos
-// module, not the pkg/machinery submodule (ADR 0022 declined the same for go-kubernetes).
+// module, not the pkg/machinery submodule, ADR 0022 declined the same for go-kubernetes).
 const (
-	imageFactoryHost  = "factory.talos.dev"
-	installerPlatform = "metal"
-
 	// conditionTalosUpgrade is a TalosMachine resumability marker (like removal.go's
 	// conditionRemoval), True from the moment the Upgrade API call is acknowledged until the node
 	// is confirmed on the target version. Message carries the boot ID recorded just before the
@@ -237,7 +235,7 @@ func (a *talosUpgradeAdvancer) beginUpgrade(
 	upgradeCtx, cancelUpgrade := context.WithTimeout(ctx, upgradeCallTimeout)
 	defer cancelUpgrade()
 
-	if err := talos.Upgrade(upgradeCtx, installerImage(cluster)); err != nil {
+	if err := talos.Upgrade(upgradeCtx, installerImage(cluster, a.secureBootInstaller(ctx, talos, cluster, m))); err != nil {
 		return false, fmt.Errorf("upgrade API call to %q failed: %w", m.Name, err)
 	}
 
@@ -342,8 +340,26 @@ func (a *talosUpgradeAdvancer) finish(
 // factory.talos.dev/metal-installer/<schematic>:<talosVersion>, Image
 // Factory's own documented URL shape (also used, independently, by
 // test/harness/kubevirt/config.go's installImage).
-func installerImage(cluster *ichorv1alpha1.TalosCluster) string {
-	return fmt.Sprintf("%s/%s-installer/%s:%s", imageFactoryHost, installerPlatform, targetSchematic(cluster), cluster.Spec.TalosVersion)
+//
+// secureBoot selects the signed UKI variant, metal-installer-secureboot (ADR 0123).
+func installerImage(cluster *ichorv1alpha1.TalosCluster, secureBoot bool) string {
+	return secureboot.InstallerImage(targetSchematic(cluster), cluster.Spec.TalosVersion, secureBoot)
+}
+
+// secureBootInstaller decides the installer variant for m (secureboot.UseSecureBootInstaller): from
+// what the node says now, else from what was last recorded of it.
+func (a *talosUpgradeAdvancer) secureBootInstaller(
+	ctx context.Context, talos TalosClient, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
+) bool {
+	callCtx, cancel := dialBound(ctx)
+	defer cancel()
+
+	node := m.Status.Security
+	if ss, err := talos.SecurityState(callCtx); err == nil {
+		node = ss.status()
+	}
+
+	return secureboot.UseSecureBootInstaller(cluster.Spec.Security, node)
 }
 
 // targetSchematic is the Image Factory schematic cluster's nodes should run: spec.schematic.id, or

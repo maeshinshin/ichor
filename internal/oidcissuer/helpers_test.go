@@ -287,13 +287,16 @@ func (e *env) tokens(client, redirect, aud string) tokenResp {
 	return tr
 }
 
-func claimsOf(t *testing.T, jws string) map[string]any {
+func claimsOf(t *testing.T, jws string) map[string]any { return jwsPart(t, jws, 1) }
+
+// jwsPart decodes part i (0 header, 1 payload) of a compact JWS as a JSON object.
+func jwsPart(t *testing.T, jws string, i int) map[string]any {
 	t.Helper()
 	parts := strings.Split(jws, ".")
 	if len(parts) != 3 {
 		t.Fatalf("not a JWS: %d parts", len(parts))
 	}
-	b, err := base64.RawURLEncoding.DecodeString(parts[1])
+	b, err := base64.RawURLEncoding.DecodeString(parts[i])
 	if err != nil {
 		t.Fatal(err)
 	}

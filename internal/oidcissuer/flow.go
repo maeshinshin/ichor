@@ -99,13 +99,6 @@ func hasContentType(r *http.Request, want string) bool {
 
 func hasScope(scope, want string) bool { return slices.Contains(strings.Fields(scope), want) }
 
-// wantsJSON reports whether the caller asked for the in-page flow: the SPA sends "Accept: application/json" and gets
-// the ticket as
-// JSON instead of a redirect to the login page.
-func wantsJSON(r *http.Request) bool {
-	return strings.Contains(r.Header.Get("Accept"), "application/json")
-}
-
 // authorize validates the request and hands the browser to the login route
 // with a signed ticket (or, for Accept: application/json, answers the ticket
 // as JSON). Until client and redirect_uri are proven, errors are shown, not
@@ -124,7 +117,9 @@ func (i *Issuer) authorize(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unknown client or redirect_uri", http.StatusBadRequest)
 		return
 	}
-	asJSON := wantsJSON(r)
+	// The in-page flow: the SPA sends "Accept: application/json" and gets the
+	// ticket as JSON instead of a redirect to the login page.
+	asJSON := strings.Contains(r.Header.Get("Accept"), "application/json")
 	fail := func(code string) {
 		if asJSON {
 			oauthError(w, http.StatusBadRequest, code, "")

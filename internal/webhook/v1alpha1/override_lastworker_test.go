@@ -40,10 +40,7 @@ import (
 func lastWorkerFixture(t *testing.T) (*TalosClusterCustomValidator, *TalosMachineCustomValidator, *ichorv1alpha1.TalosMachine) {
 	t.Helper()
 
-	scheme := runtime.NewScheme()
-	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
+	scheme := schemeOf(t)
 
 	cluster := &ichorv1alpha1.TalosCluster{Name: lwCluster, Namespace: testNamespace}
 	cluster.Spec.ControlPlane.Schedulable = "false"

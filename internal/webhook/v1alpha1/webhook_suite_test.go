@@ -29,10 +29,14 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	authzv1 "k8s.io/api/authorization/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -176,4 +180,37 @@ func getFirstFoundEnvTestBinaryDir() string {
 		}
 	}
 	return ""
+}
+
+// schemeOf is a fresh scheme with the Ichor types and those of any adders named.
+func schemeOf(t *testing.T, add ...func(*runtime.Scheme) error) *runtime.Scheme {
+	t.Helper()
+
+	s := runtime.NewScheme()
+	for _, f := range append(add, ichorv1alpha1.AddToScheme) {
+		if err := f(s); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	return s
+}
+
+// sarClient is a fake client holding objs that answers every SubjectAccessReview with answer(sar)
+// and creates anything else as usual.
+func sarClient(t *testing.T, answer func(*authzv1.SubjectAccessReview) bool, objs ...client.Object) client.Client {
+	t.Helper()
+
+	return fake.NewClientBuilder().WithScheme(schemeOf(t, scheme.AddToScheme)).WithObjects(objs...).WithInterceptorFuncs(interceptor.Funcs{
+		Create: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+			sar, ok := obj.(*authzv1.SubjectAccessReview)
+			if !ok {
+				return cl.Create(ctx, obj, opts...)
+			}
+
+			sar.Status.Allowed = answer(sar)
+
+			return nil
+		},
+	}).Build()
 }

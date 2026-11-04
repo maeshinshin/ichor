@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -128,14 +129,8 @@ func (v *TalosConfigPatchCustomValidator) dryRender(ctx context.Context, p *icho
 		return err
 	}
 
-	base := make([]ichorv1alpha1.TalosConfigPatch, 0, len(others.Items))
-	for _, o := range others.Items {
-		if o.Name != p.Name {
-			base = append(base, o)
-		}
-	}
-
-	with := append(append([]ichorv1alpha1.TalosConfigPatch{}, base...), *p)
+	base := slices.DeleteFunc(others.Items, func(o ichorv1alpha1.TalosConfigPatch) bool { return o.Name == p.Name })
+	with := append(slices.Clone(base), *p)
 
 	for i := range machines {
 		m := &machines[i]

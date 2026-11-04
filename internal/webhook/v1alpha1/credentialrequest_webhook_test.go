@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"testing"
 
 	admissionv1 "k8s.io/api/admission/v1"
@@ -26,10 +27,6 @@ import (
 	authzv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -39,15 +36,6 @@ import (
 // is asked as the requester, on the permission of the purpose.
 func TestCredentialRequestWebhook(t *testing.T) {
 	t.Parallel()
-
-	scheme := runtime.NewScheme()
-	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
 
 	machine := &ichorv1alpha1.TalosMachine{
 		Name: "m1", Namespace: "ns",
@@ -63,26 +51,13 @@ func TestCredentialRequestWebhook(t *testing.T) {
 
 	var asked []string
 
-	c := fake.NewClientBuilder().WithScheme(scheme).WithObjects(machine).WithInterceptorFuncs(interceptor.Funcs{
-		Create: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
-			sar, ok := obj.(*authzv1.SubjectAccessReview)
-			if !ok {
-				return cl.Create(ctx, obj, opts...)
-			}
+	c := sarClient(t, func(sar *authzv1.SubjectAccessReview) bool {
+		ra := sar.Spec.ResourceAttributes
+		want := ra.Verb + " " + ra.Resource + "/" + ra.Subresource
+		asked = append(asked, sar.Spec.User+": "+want+" "+ra.Name)
 
-			ra := sar.Spec.ResourceAttributes
-			want := ra.Verb + " " + ra.Resource + "/" + ra.Subresource
-			asked = append(asked, sar.Spec.User+": "+want+" "+ra.Name)
-
-			for _, g := range grants[sar.Spec.User] {
-				if g == want {
-					sar.Status.Allowed = true
-				}
-			}
-
-			return nil
-		},
-	}).Build()
+		return slices.Contains(grants[sar.Spec.User], want)
+	}, machine)
 
 	h := &CredentialRequestHandler{Client: c}
 

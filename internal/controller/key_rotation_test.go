@@ -48,6 +48,8 @@ import (
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
+const keyOpPrefix = "key-op-"
+
 var (
 	bothTargets = []string{ichorv1alpha1.KeyRotationTargetServiceAccount, ichorv1alpha1.KeyRotationTargetSecretbox}
 	saOnly      = []string{ichorv1alpha1.KeyRotationTargetServiceAccount}
@@ -77,9 +79,9 @@ type keyNode struct {
 	// controlPlane is false for a worker, whose configuration carries neither document.
 	controlPlane bool
 	cfg          []byte
-	down     bool
-	instance int
-	notReady int
+	down         bool
+	instance     int
+	notReady     int
 }
 
 type keyWorld struct {
@@ -357,7 +359,7 @@ func (f *keyRotFixture) newReconciler() *TalosOperationReconciler {
 
 func (f *keyRotFixture) newOp(targets []string) *ichorv1alpha1.TalosOperation {
 	op := &ichorv1alpha1.TalosOperation{}
-	op.GenerateName, op.Namespace = "key-op-", tmNamespace
+	op.GenerateName, op.Namespace = keyOpPrefix, tmNamespace
 	op.Spec.ClusterRef.Name, op.Spec.Kind = f.cluster.Name, ichorv1alpha1.TalosOperationKindKeyRotation
 	op.Spec.KeyRotation = &ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: targets, TokenSettle: &metav1.Duration{}}
 	Expect(k8sClient.Create(ctx, op)).To(Succeed())
@@ -641,7 +643,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 	It("rotates only the service-account key, skipping the re-encryption", func() {
 		f := newKeyRotFixture(fastBundle())
 		op := f.newOp(saOnly)
-		op, stages := f.runUntil(op, completed)
+		_, stages := f.runUntil(op, completed)
 
 		Expect(stages).To(Equal([]string{
 			ichorv1alpha1.KeyRotationStageAccepting, ichorv1alpha1.KeyRotationStageIssuing, ichorv1alpha1.KeyRotationStageSettlingTokens,
@@ -752,13 +754,15 @@ var _ = Describe("TalosOperation key-rotation", func() {
 				return nil
 			}
 
-			op, _ = f.runUntil(op, func(o *ichorv1alpha1.TalosOperation) bool { return o.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused })
+			op, _ = f.runUntil(op, func(o *ichorv1alpha1.TalosOperation) bool {
+				return o.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused
+			})
 			Expect(keyStageOf(op)).To(Equal(stage), "the stage must not advance on a half-done pass")
 			Expect(op.Status.KeyRotation.Restart).NotTo(BeNil(), "the restart is recorded before the apply, so a dead controller finds it")
 
 			// A brand-new controller picks the stage up from status.
 			f.world.failApply = nil
-			op, _ = f.runUntil(op, completed)
+			f.runUntil(op, completed)
 
 			for rec, n := range f.applyCountPerNodeAndHash() {
 				Expect(n).To(Equal(1), "%s received the same configuration twice across the restart", rec.node)
@@ -843,7 +847,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		// A fresh operation with a real wait: tokenSettle is immutable, so create it that way.
 		Expect(k8sClient.Delete(ctx, op)).To(Succeed())
 		op = &ichorv1alpha1.TalosOperation{}
-		op.GenerateName, op.Namespace = "key-op-", tmNamespace
+		op.GenerateName, op.Namespace = keyOpPrefix, tmNamespace
 		op.Spec.ClusterRef.Name, op.Spec.Kind = f.cluster.Name, ichorv1alpha1.TalosOperationKindKeyRotation
 		op.Spec.KeyRotation = &ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: saOnly, TokenSettle: &metav1.Duration{Duration: 2 * time.Hour}}
 		Expect(k8sClient.Create(ctx, op)).To(Succeed())
@@ -899,7 +903,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		f.world.legacy = []string{"a/old-robot"}
 
 		op := &ichorv1alpha1.TalosOperation{}
-		op.GenerateName, op.Namespace = "key-op-", tmNamespace
+		op.GenerateName, op.Namespace = keyOpPrefix, tmNamespace
 		op.Spec.ClusterRef.Name, op.Spec.Kind = f.cluster.Name, ichorv1alpha1.TalosOperationKindKeyRotation
 		op.Spec.KeyRotation = &ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: saOnly, TokenSettle: &metav1.Duration{}, IgnoreLegacyTokens: true}
 		Expect(k8sClient.Create(ctx, op)).To(Succeed())
@@ -936,14 +940,14 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		op := f.newOp(saOnly)
 		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageDropping))
 
-		f.world.notReady = []string{"worker-1"}
+		f.world.notReady = []string{"some-worker"}
 
 		for range 4 {
 			op = f.step(op)
 		}
 
 		Expect(keyStageOf(op)).To(Equal(ichorv1alpha1.KeyRotationStageDropping))
-		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Message).To(ContainSubstring("worker-1"))
+		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Message).To(ContainSubstring("some-worker"))
 
 		f.world.notReady = nil
 		f.runUntil(op, completed)

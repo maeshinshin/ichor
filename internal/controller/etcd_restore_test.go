@@ -641,6 +641,26 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			expectRefused(f, f.newOp(nil), "rotated the cluster's CAs")
 		})
 
+		It("refuses a snapshot taken before a key rotation of the cluster finished", func() {
+			f := newRestoreFixture("")
+			rot := &ichorv1alpha1.TalosOperation{
+				GenerateName: "keys-", Namespace: tmNamespace,
+				Spec: ichorv1alpha1.TalosOperationSpec{
+					ClusterRef: corev1.LocalObjectReference{Name: f.backup.cluster.Name}, Kind: ichorv1alpha1.TalosOperationKindKeyRotation,
+					KeyRotation: &ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: []string{ichorv1alpha1.KeyRotationTargetSecretbox}},
+				},
+			}
+			Expect(k8sClient.Create(ctx, rot)).To(Succeed())
+
+			// Finished after the snapshot (taken 2026-06-01) was.
+			finished := metav1.Now()
+			rot.Status.Phase, rot.Status.FinishedAt = ichorv1alpha1.TalosOperationPhaseCompleted, &finished
+			rot.Status.KeyRotation = &ichorv1alpha1.TalosOperationKeyRotationStatus{Stage: ichorv1alpha1.KeyRotationStageDone}
+			Expect(k8sClient.Status().Update(ctx, rot)).To(Succeed())
+
+			expectRefused(f, f.newOp(nil), "service-account or secretbox key")
+		})
+
 		It("refuses while another restore is recorded in the storage", func() {
 			f := newRestoreFixture("")
 			Expect(etcdbackup.PutMarker(ctx, f.backup.store, testBackupBase, mustPass(f.backup.bundle), &etcdbackup.RestoreMarker{

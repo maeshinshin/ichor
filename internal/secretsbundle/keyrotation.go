@@ -277,7 +277,7 @@ func (r *Retired) Fingerprint() string {
 	h := sha256.New()
 
 	for _, k := range r.Keys {
-		fmt.Fprintf(h, "%d|%s|%s\n", k.RetiredAt.UTC().Unix(), SecretboxID(k.Secretbox), k.ServiceAccount)
+		_, _ = fmt.Fprintf(h, "%d|%s|%s\n", k.RetiredAt.UTC().Unix(), SecretboxID(k.Secretbox), k.ServiceAccount)
 	}
 
 	return hex.EncodeToString(h.Sum(nil))

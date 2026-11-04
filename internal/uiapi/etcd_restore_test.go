@@ -194,6 +194,24 @@ func TestEtcdRestorePlanRefusals(t *testing.T) {
 		}
 	})
 
+	t.Run("a key rotation that finished after the snapshot", func(t *testing.T) {
+		finished := metav1.NewTime(restoreSnapTime.Add(time.Hour))
+		rot := &ichorv1alpha1.TalosOperation{
+			Name: "key-rotation", Namespace: opNS,
+			Spec: ichorv1alpha1.TalosOperationSpec{
+				ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindKeyRotation,
+				KeyRotation: &ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: []string{ichorv1alpha1.KeyRotationTargetSecretbox}},
+			},
+			Status: ichorv1alpha1.TalosOperationStatus{Phase: ichorv1alpha1.TalosOperationPhaseCompleted, FinishedAt: &finished},
+		}
+		s, _ := opServer(t, append(restoreObjects(), rot)...)
+
+		res, err := s.PlanOperation(ctx, restorePlanReq(restoreReq(restoreSnap, "", "")))
+		if err != nil || !strings.Contains(res.Msg.GetBlocked(), "service-account or secretbox key") {
+			t.Fatalf("blocked = %q, %v", res.Msg.GetBlocked(), err)
+		}
+	})
+
 	t.Run("a CA rotation after the snapshot", func(t *testing.T) {
 		rot := &ichorv1alpha1.TalosOperation{
 			Name: "rotation", Namespace: opNS, CreationTimestamp: metav1.NewTime(restoreSnapTime.Add(time.Hour)),

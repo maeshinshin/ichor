@@ -158,6 +158,20 @@ type TalosOperationReconciler struct {
 	launchTail func(*restoreJob)
 }
 
+// finalizerSteps runs the finalizer logic of the kinds that hold one: the two rotations and the etcd restore.
+// handled is true when the reconcile has nothing more to do.
+func (r *TalosOperationReconciler) finalizerSteps(ctx context.Context, op *ichorv1alpha1.TalosOperation) (handled bool, err error) {
+	for _, step := range []func(context.Context, *ichorv1alpha1.TalosOperation) (bool, error){
+		r.caRotationFinalizerStep, r.keyRotationFinalizerStep, r.etcdRestoreFinalizerStep,
+	} {
+		if handled, err := step(ctx, op); handled || err != nil {
+			return handled, err
+		}
+	}
+
+	return false, nil
+}
+
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosoperations,verbs=get;list;watch;create;update;patch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=patch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosetcdbackups,verbs=get;list;watch
@@ -183,15 +197,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if handled, err := r.caRotationFinalizerStep(ctx, &op); handled || err != nil {
-		return ctrl.Result{}, err
-	}
-
-	if handled, err := r.keyRotationFinalizerStep(ctx, &op); handled || err != nil {
-		return ctrl.Result{}, err
-	}
-
-	if handled, err := r.etcdRestoreFinalizerStep(ctx, &op); handled || err != nil {
+	if handled, err := r.finalizerSteps(ctx, &op); handled || err != nil {
 		return ctrl.Result{}, err
 	}
 

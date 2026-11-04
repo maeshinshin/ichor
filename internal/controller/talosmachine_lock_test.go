@@ -18,11 +18,13 @@ package controller
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -186,5 +188,85 @@ var _ = Describe("two control-plane TalosMachines of one cluster at a step that 
 		_, err := reconcileMachine(r, joiner)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(ran).To(BeTrue(), "the join reached its apply")
+	})
+
+	Describe("a lease whose holder will never renew it", func() {
+		var lock *clusterlock.Lock
+
+		BeforeEach(func() {
+			lock = clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+		})
+
+		// join reconciles joiner once (its locked step) and reports whether it applied.
+		join := func(joiner *ichorv1alpha1.TalosMachine) bool {
+			_, err := reconcileMachine(r, joiner)
+			Expect(err).NotTo(HaveOccurred())
+
+			return len(maint[joiner.Spec.Endpoint].applyCalls) > 0
+		}
+
+		It("is taken over from a machine that is gone, and from one whose configuration is already stored", func() {
+			gone := newTestControlPlane(cluster.Name, "61") // never reconciled: no finalizer, so deleting removes it
+			Expect(lock.Acquire(ctx, machineLockIdentity(gone))).To(Succeed())
+			Expect(k8sClient.Delete(ctx, gone)).To(Succeed())
+
+			Expect(join(controlPlane("62"))).To(BeTrue(), "the lease of a deleted machine is not waited for")
+			Expect(lock.Release(ctx, machineLockIdentity(gone))).To(Succeed())
+
+			stored := newTestControlPlane(cluster.Name, "63")
+			got := fetchMachine(stored)
+			now := metav1.Now()
+			got.Status.ConfigStoredAt = &now
+			Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
+			Expect(lock.Acquire(ctx, machineLockIdentity(stored))).To(Succeed())
+
+			Expect(join(controlPlane("64"))).To(BeTrue(), "a join that stored its configuration has nothing left under the lock")
+		})
+
+		It("is taken over from a TalosOperation that is gone or completed, and kept by one that is running", func() {
+			gone := newOpTestOperation(cluster.Name)
+			Expect(lock.Acquire(ctx, operationLockIdentity(gone))).To(Succeed())
+			Expect(k8sClient.Delete(ctx, gone)).To(Succeed())
+
+			Expect(join(controlPlane("65"))).To(BeTrue(), "the lease of a deleted operation is not waited for")
+
+			running := newOpTestOperation(cluster.Name)
+			Expect(lock.Acquire(ctx, operationLockIdentity(running))).To(Succeed())
+
+			waiting := controlPlane("66")
+			Expect(join(waiting)).To(BeFalse(), "an operation that has not finished may still be working")
+			cond := readyCondition(fetchMachine(waiting))
+			Expect(cond.Reason).To(Equal(reasonClusterLockHeld))
+			Expect(cond.Message).To(ContainSubstring("TalosOperation"))
+			Expect(cond.Message).To(ContainSubstring(running.Name))
+
+			got := fetchOperation(running)
+			got.Status.Phase = ichorv1alpha1.TalosOperationPhaseCompleted
+			Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
+
+			Expect(join(waiting)).To(BeTrue(), "a completed operation holds nothing")
+		})
+
+		It("is kept by a machine whose removal is still running", func() {
+			removing := controlPlane("67")
+			Expect(lock.Acquire(ctx, machineLockIdentity(removing))).To(Succeed())
+			Expect(k8sClient.Delete(ctx, removing)).To(Succeed())
+
+			waiting := controlPlane("68")
+			Expect(join(waiting)).To(BeFalse(), "the removal is the holder's locked step and runs until its finalizer goes")
+			Expect(readyCondition(fetchMachine(waiting)).Message).To(ContainSubstring(removing.Name))
+		})
+
+		It("is left by the previous build under the shared identity: a join waits, and it ages out", func() {
+			legacy := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, time.Second)
+			Expect(legacy.Acquire(ctx, controllerIdentity)).To(Succeed())
+
+			joiner := controlPlane("69")
+			Expect(join(joiner)).To(BeFalse(), "nothing says the old lease is dead")
+			Expect(readyCondition(fetchMachine(joiner)).Reason).To(Equal(reasonClusterLockHeld))
+
+			Eventually(func() bool { return join(joiner) }, 5*time.Second, 200*time.Millisecond).Should(BeTrue(),
+				"nothing renews it any more, so it expires on its own")
+		})
 	})
 })

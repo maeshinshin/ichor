@@ -58,7 +58,7 @@ func renderUserList(h *human, resp *pb.ListUsersResponse) error {
 		rows[i] = []string{u.GetName(), u.GetDisplayName(), u.GetEmail(), strings.Join(u.GetRoles(), ", "), userState(u), humanAge(u.GetCreatedAt())}
 	}
 
-	h.Table([]string{nameColumn, "display name", "email", "roles", "state", ageColumn}, rows)
+	h.Table([]string{colName, "display name", "email", "roles", "state", colAge}, rows)
 
 	return h.Err()
 }
@@ -66,7 +66,7 @@ func renderUserList(h *human, resp *pb.ListUsersResponse) error {
 func renderUserGet(h *human, resp *pb.GetUserResponse) error {
 	u := resp.GetUser()
 	h.Block(u.GetName(), kv{"Display name", u.GetDisplayName()}, kv{"E-mail", u.GetEmail()}, kv{"Roles", strings.Join(u.GetRoles(), ", ")},
-		kv{"State", userState(u)}, kv{createdLabel, agoOrEmpty(u.GetCreatedAt())})
+		kv{"State", userState(u)}, kv{labelCreated, agoOrEmpty(u.GetCreatedAt())})
 	h.Conditions("Conditions", conditionsOf(u.GetConditions()))
 
 	return h.Err()

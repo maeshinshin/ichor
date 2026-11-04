@@ -541,18 +541,9 @@ func newAPIDepsFor(cmd *cobra.Command, cfg *rest.Config) (apiDeps, error) {
 	}, nil
 }
 
-// showAPI is runAPI for a read command whose whole job is one call and printing its response, as
-// YAML or JSON (a command without a human view prints YAML when -o is unset).
-func showAPI[T any, PT interface {
-	*T
-	proto.Message
-}](cmd *cobra.Command, requireBackend bool, call func(context.Context, *apiClients) (*connect.Response[T], error),
-) error {
-	return showAPIHuman[T, PT](cmd, requireBackend, call, nil)
-}
-
-// showAPIHuman is showAPI for a command with a human view: render prints the response when -o is
-// unset (see human.go); -o yaml|json print the wire message as ever.
+// showAPIHuman is runAPI for a read command whose whole job is one call and printing its response:
+// render prints it when -o is unset (see human.go; nil prints YAML); -o yaml|json print the wire
+// message as ever.
 func showAPIHuman[T any, PT interface {
 	*T
 	proto.Message

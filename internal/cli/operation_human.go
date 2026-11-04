@@ -32,15 +32,8 @@ import (
 // resume and delete, and the live view of --follow and get --watch.
 
 const (
-	opColName      = "name"
-	opColMachine   = "machine"
-	opColAge       = "age"
-	opLabelCreated = "Created"
 	// opGoneMessage is said once when a live etcd restore's operation vanishes with the rolled-back API.
 	opGoneMessage  = "the operation is gone from the API (the cluster was rolled back to the snapshot); waiting for the restore to resume…"
-	opLabelPhase   = "Phase"
-	opLabelKind    = "Kind"
-	opLabelCluster = "Cluster"
 	opPhaseWaiting = ichorv1alpha1.TalosOperationPhasePending
 )
 
@@ -94,7 +87,7 @@ func renderOperationList(h *human, resp *pb.ListOperationsResponse) error {
 		namespaces[op.GetRef().GetNamespace()] = true
 	}
 
-	header := []string{opColName, "kind", "phase", "target", "message", opColAge}
+	header := []string{colName, colKind, "phase", "target", "message", colAge}
 	if len(namespaces) > 1 {
 		header = slices.Insert(header, 0, "namespace")
 	}
@@ -128,8 +121,8 @@ func opNote(op *pb.Operation) string {
 
 func opHead(h *human, op *pb.Operation) []kv {
 	return []kv{
-		{opLabelKind, kindName(op.GetKind())}, {"Summary", op.GetSummary()}, {opLabelCluster, op.GetCluster().GetName()},
-		{opLabelPhase, h.phase(op)}, {"Stage", opStage(op)}, {"Message", opNote(op)}, {"Failure", op.GetFailureReason()},
+		{labelKind, kindName(op.GetKind())}, {"Summary", op.GetSummary()}, {labelCluster, op.GetCluster().GetName()},
+		{labelPhase, h.phase(op)}, {"Stage", opStage(op)}, {"Message", opNote(op)}, {"Failure", op.GetFailureReason()},
 		{condPaused, yesIf(op.GetPaused() && op.GetPhase() != condPaused)},
 	}
 }
@@ -138,14 +131,14 @@ func renderOperationGet(h *human, resp *pb.GetOperationResponse) error {
 	op := resp.GetOperation()
 
 	rows := opHead(h, op)
-	rows = append(rows, kv{"Started by", op.GetStartedBy()}, kv{opLabelCreated, agoOrEmpty(op.GetCreatedAt())},
+	rows = append(rows, kv{"Started by", op.GetStartedBy()}, kv{labelCreated, agoOrEmpty(op.GetCreatedAt())},
 		kv{"Finished", agoOrEmpty(op.GetFinishedAt())})
 	h.Block(nsName(op.GetRef()), rows...)
 
 	details := make([]kv, 0, len(op.GetDetails()))
 
 	for _, d := range op.GetDetails() {
-		if d.GetKey() != opLabelCluster && d.GetKey() != opLabelKind { // shown above
+		if d.GetKey() != labelCluster && d.GetKey() != labelKind { // shown above
 			details = append(details, kv{d.GetKey(), d.GetValue()})
 		}
 	}
@@ -164,7 +157,7 @@ func renderOperationMachines(h *human, op *pb.Operation) {
 	}
 
 	named := slices.ContainsFunc(ms, func(m *pb.OperationMachine) bool { return m.GetDisplayName() != "" })
-	header := []string{opColMachine, "phase", "step", "time", "message"}
+	header := []string{colMachine, "phase", "step", "time", "message"}
 
 	if named {
 		header = slices.Insert(header, 1, colNode)

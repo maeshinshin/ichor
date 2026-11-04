@@ -21,6 +21,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"connectrpc.com/connect"
@@ -39,6 +40,25 @@ import (
 // eventSlack lets an Event recorded just after the operation finished (the completion Event is
 // written after the status) still belong to it.
 const eventSlack = time.Minute
+
+// caRotationTargets are the CAs a rotation replaces: what its status recorded when it started, else
+// what the spec asks for, else the default pair.
+func caRotationTargets(op *ichorv1alpha1.TalosOperation) []string {
+	if rs := op.Status.CARotation; rs != nil && len(rs.Certificates) > 0 {
+		names := make([]string, 0, len(rs.Certificates))
+		for _, c := range rs.Certificates {
+			names = append(names, c.Name)
+		}
+
+		return names
+	}
+
+	if s := op.Spec.CARotation; s != nil && len(s.Targets) > 0 {
+		return s.Targets
+	}
+
+	return ichorv1alpha1.DefaultCARotationTargets()
+}
 
 func (s *Server) startedByAnnotation(ctx context.Context) map[string]string {
 	return map[string]string{ichorv1alpha1.OperationStartedByAnnotation: s.actorName(ctx)}
@@ -210,6 +230,12 @@ func describeOperation(out *pb.Operation, op *ichorv1alpha1.TalosOperation, clus
 		out.Summary = "Shut down the cluster"
 	case ichorv1alpha1.TalosOperationKindCARotation:
 		out.Summary = "Rotate the cluster CAs"
+
+		add("CAs", strings.Join(caRotationTargets(op), ", "))
+
+		if rs := op.Status.CARotation; rs != nil && len(rs.EtcdRestarted) > 0 {
+			add("etcd restarted in this stage", strings.Join(rs.EtcdRestarted, ", "))
+		}
 	case ichorv1alpha1.TalosOperationKindConfig:
 		out.Summary = "Apply configuration to the machines with pending changes"
 		if machines > 0 {

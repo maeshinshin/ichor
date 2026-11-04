@@ -76,6 +76,11 @@ export function StartOperationDialog({
   // overridable is set when the server refused the plan for an incompatibility the override lifts; no plan exists then.
   const [overridable, setOverridable] = useState(false)
   const [reason, setReason] = useState('')
+  // An Ichor upgrade can skip the check of the installer image's signature, with a recorded reason (ADR 0122).
+  const [skipSignature, setSkipSignature] = useState(false)
+  const [skipReason, setSkipReason] = useState('')
+  const skipProblem = kind === 'ichor' && skipSignature && skipReason.trim() === ''
+  const ichorInstaller = kind === 'ichor' ? { digest: '', skipSignatureReason: skipSignature ? skipReason.trim() : '' } : undefined
 
   const needsName = kindNeedsTypedName(kind)
   const needsTarget = !needsName
@@ -115,6 +120,8 @@ export function StartOperationDialog({
       setOverridden(false)
       setOverridable(false)
       setReason('')
+      setSkipSignature(false)
+      setSkipReason('')
     }
   }
 
@@ -128,6 +135,7 @@ export function StartOperationDialog({
           kind: wireKindOf(kind),
           target: needsTarget ? target.trim() : '',
           override: withOverride ? { reason: reason.trim() } : undefined,
+          ichorInstaller,
         }),
       )
     } catch (err) {
@@ -147,6 +155,7 @@ export function StartOperationDialog({
         kind: wireKindOf(kind),
         target: needsTarget ? target.trim() : '',
         override: overridden ? { reason: reason.trim() } : undefined,
+        ichorInstaller,
       })
       reset(false)
       notifyDone(t('toast.opStarted', { action: t(`ops.start.${kind}`) }))
@@ -190,7 +199,7 @@ export function StartOperationDialog({
               {busy ? t('ops.dialog.starting') : t('ops.dialog.start')}
             </Button>
           ) : (
-            <Button disabled={busy || (needsTarget && targetProblem !== null) || (overridable && !overridden)} onClick={() => review()}>
+            <Button disabled={busy || (needsTarget && targetProblem !== null) || (overridable && !overridden) || skipProblem} onClick={() => review()}>
               {busy ? t('ops.dialog.reviewing') : t('ops.dialog.review')}
             </Button>
           )}
@@ -243,6 +252,22 @@ export function StartOperationDialog({
           {current !== '' && <FieldDescription>{t(kind === 'cni' ? 'ops.modeHint' : 'ops.versionHint', { current })}</FieldDescription>}
           {touched && targetProblem && <FieldError>{problemText(kind, targetProblem, current)}</FieldError>}
         </Field>
+      )}
+
+      {!plan && kind === 'ichor' && (
+        <div class="space-y-3">
+          <div class="flex items-center gap-2 text-sm">
+            <Checkbox id="op-skip-signature" checked={skipSignature} onCheckedChange={(on: boolean | 'indeterminate') => setSkipSignature(on === true)} />
+            <Label htmlFor="op-skip-signature">{t('ops.dialog.skipSignature')}</Label>
+          </div>
+          {skipSignature && (
+            <Field>
+              <FieldLabel htmlFor="op-skip-signature-reason">{t('ops.dialog.skipSignatureReason')}</FieldLabel>
+              <Input id="op-skip-signature-reason" value={skipReason} onInput={(e) => setSkipReason((e.currentTarget as HTMLInputElement).value)} />
+              <FieldDescription>{t('ops.dialog.skipSignatureHint')}</FieldDescription>
+            </Field>
+          )}
+        </div>
       )}
 
       {(!plan || plan.blocked === '') && (

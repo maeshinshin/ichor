@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -36,22 +35,19 @@ const (
 	registryMirrorEndpoint  = "https://mirror.example.com"
 )
 
-func registryTestScheme(t *testing.T) *runtime.Scheme {
-	t.Helper()
-
-	s := runtime.NewScheme()
-	if err := corev1.AddToScheme(s); err != nil {
-		t.Fatalf("adding corev1 to scheme: %v", err)
-	}
-
-	return s
-}
-
 func registryCluster(entries ...ichorv1alpha1.TalosClusterRegistry) *ichorv1alpha1.TalosCluster {
 	c := testCluster("true")
 	c.Spec.Registries = entries
 
 	return c
+}
+
+// authRegistryCluster is registryCluster with one mirror whose credentials are in a Secret.
+func authRegistryCluster() *ichorv1alpha1.TalosCluster {
+	return registryCluster(ichorv1alpha1.TalosClusterRegistry{
+		Host: registryHost, Endpoints: []string{registryMirrorEndpoint},
+		AuthSecretRef: &corev1.LocalObjectReference{Name: registrySecretName},
+	})
 }
 
 // TestResolveRegistryAuth checks every outcome ResolveRegistryAuth's own doc comment promises:
@@ -63,7 +59,7 @@ func TestResolveRegistryAuth(t *testing.T) {
 
 	t.Run("no registries at all resolves to an empty map", func(t *testing.T) {
 		c := registryCluster()
-		k8sClient := fake.NewClientBuilder().WithScheme(registryTestScheme(t)).Build()
+		k8sClient := fake.NewClientBuilder().Build()
 
 		got, err := ResolveRegistryAuth(ctx, k8sClient, registrySecretNamespace, c)
 		if err != nil {
@@ -79,7 +75,7 @@ func TestResolveRegistryAuth(t *testing.T) {
 		c := registryCluster(ichorv1alpha1.TalosClusterRegistry{
 			Host: registryHost, Endpoints: []string{registryMirrorEndpoint},
 		})
-		k8sClient := fake.NewClientBuilder().WithScheme(registryTestScheme(t)).Build()
+		k8sClient := fake.NewClientBuilder().Build()
 
 		got, err := ResolveRegistryAuth(ctx, k8sClient, registrySecretNamespace, c)
 		if err != nil {
@@ -108,11 +104,8 @@ func TestResolveRegistryAuth(t *testing.T) {
 					Namespace: registrySecretNamespace, Name: registrySecretName,
 					Data: tc.data,
 				}
-				c := registryCluster(ichorv1alpha1.TalosClusterRegistry{
-					Host: registryHost, Endpoints: []string{registryMirrorEndpoint},
-					AuthSecretRef: &corev1.LocalObjectReference{Name: registrySecretName},
-				})
-				k8sClient := fake.NewClientBuilder().WithScheme(registryTestScheme(t)).WithObjects(secret).Build()
+				c := authRegistryCluster()
+				k8sClient := fake.NewClientBuilder().WithObjects(secret).Build()
 
 				got, err := ResolveRegistryAuth(ctx, k8sClient, registrySecretNamespace, c)
 				if err != nil {
@@ -127,11 +120,8 @@ func TestResolveRegistryAuth(t *testing.T) {
 	})
 
 	t.Run("fails explicitly when the Secret is missing", func(t *testing.T) {
-		c := registryCluster(ichorv1alpha1.TalosClusterRegistry{
-			Host: registryHost, Endpoints: []string{registryMirrorEndpoint},
-			AuthSecretRef: &corev1.LocalObjectReference{Name: registrySecretName},
-		})
-		k8sClient := fake.NewClientBuilder().WithScheme(registryTestScheme(t)).Build()
+		c := authRegistryCluster()
+		k8sClient := fake.NewClientBuilder().Build()
 
 		_, err := ResolveRegistryAuth(ctx, k8sClient, registrySecretNamespace, c)
 		if err == nil {
@@ -148,11 +138,8 @@ func TestResolveRegistryAuth(t *testing.T) {
 			Namespace: registrySecretNamespace, Name: registrySecretName,
 			Data: map[string][]byte{"not-a-recognized-key": []byte("whatever")},
 		}
-		c := registryCluster(ichorv1alpha1.TalosClusterRegistry{
-			Host: registryHost, Endpoints: []string{registryMirrorEndpoint},
-			AuthSecretRef: &corev1.LocalObjectReference{Name: registrySecretName},
-		})
-		k8sClient := fake.NewClientBuilder().WithScheme(registryTestScheme(t)).WithObjects(secret).Build()
+		c := authRegistryCluster()
+		k8sClient := fake.NewClientBuilder().WithObjects(secret).Build()
 
 		_, err := ResolveRegistryAuth(ctx, k8sClient, registrySecretNamespace, c)
 		if err == nil {
@@ -165,11 +152,8 @@ func TestResolveRegistryAuth(t *testing.T) {
 	})
 
 	t.Run("fails explicitly, without touching the API, when the controller namespace is empty", func(t *testing.T) {
-		c := registryCluster(ichorv1alpha1.TalosClusterRegistry{
-			Host: registryHost, Endpoints: []string{registryMirrorEndpoint},
-			AuthSecretRef: &corev1.LocalObjectReference{Name: registrySecretName},
-		})
-		k8sClient := fake.NewClientBuilder().WithScheme(registryTestScheme(t)).Build()
+		c := authRegistryCluster()
+		k8sClient := fake.NewClientBuilder().Build()
 
 		_, err := ResolveRegistryAuth(ctx, k8sClient, "", c)
 		if err == nil {
@@ -254,7 +238,7 @@ func TestResolveRegistryAuthNoRegistries(t *testing.T) {
 	m := testMachine("node-a", roleWorker, nil)
 	bundle := testBundle(t)
 
-	k8sClient := fake.NewClientBuilder().WithScheme(registryTestScheme(t)).Build()
+	k8sClient := fake.NewClientBuilder().Build()
 
 	auth, err := ResolveRegistryAuth(context.Background(), k8sClient, "", cluster)
 	if err != nil {
@@ -287,10 +271,7 @@ func TestRegistryAuthLeak(t *testing.T) {
 	const secretValue = "leak-canary-s3cr3t-pw-should-never-appear"
 
 	ctx := context.Background()
-	cluster := registryCluster(ichorv1alpha1.TalosClusterRegistry{
-		Host: registryHost, Endpoints: []string{registryMirrorEndpoint},
-		AuthSecretRef: &corev1.LocalObjectReference{Name: registrySecretName},
-	})
+	cluster := authRegistryCluster()
 
 	assertNoLeak := func(t *testing.T, err error) {
 		t.Helper()
@@ -305,7 +286,7 @@ func TestRegistryAuthLeak(t *testing.T) {
 	}
 
 	t.Run("Secret missing", func(t *testing.T) {
-		k8sClient := fake.NewClientBuilder().WithScheme(registryTestScheme(t)).Build()
+		k8sClient := fake.NewClientBuilder().Build()
 		_, err := ResolveRegistryAuth(ctx, k8sClient, registrySecretNamespace, cluster)
 		assertNoLeak(t, err)
 	})
@@ -315,7 +296,7 @@ func TestRegistryAuthLeak(t *testing.T) {
 			Namespace: registrySecretNamespace, Name: registrySecretName,
 			Data: map[string][]byte{"wrong-key": []byte(secretValue)},
 		}
-		k8sClient := fake.NewClientBuilder().WithScheme(registryTestScheme(t)).WithObjects(secret).Build()
+		k8sClient := fake.NewClientBuilder().WithObjects(secret).Build()
 		_, err := ResolveRegistryAuth(ctx, k8sClient, registrySecretNamespace, cluster)
 		assertNoLeak(t, err)
 	})

@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"net/netip"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -88,11 +89,8 @@ func ControllerSourceAllowed(c *ichorv1alpha1.TalosCluster, src netip.Addr) erro
 	}
 
 	src = src.Unmap()
-
-	for _, p := range prefixes {
-		if p.Contains(src) {
-			return nil
-		}
+	if slices.ContainsFunc(prefixes, func(p netip.Prefix) bool { return p.Contains(src) }) {
+		return nil
 	}
 
 	return fmt.Errorf("spec.security.firewall.controllerCIDRs %v does not contain %s, the address Ichor's controller "+
@@ -134,12 +132,9 @@ func parsePortRange(s string) (network.PortRange, error) {
 func concat(lists ...[]netip.Prefix) []netip.Prefix {
 	var out []netip.Prefix
 
-	seen := map[netip.Prefix]bool{}
-
 	for _, l := range lists {
 		for _, p := range l {
-			if !seen[p] {
-				seen[p] = true
+			if !slices.Contains(out, p) {
 				out = append(out, p)
 			}
 		}

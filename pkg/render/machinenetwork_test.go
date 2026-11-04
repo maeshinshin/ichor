@@ -40,12 +40,7 @@ func renderWith(t *testing.T, contract string, mutate func(m *ichorv1alpha1.Talo
 	m := testMachine("node-a", roleWorker, nil)
 	mutate(m)
 
-	out, _, err := Render(cluster, m, testBundle(t), nil, nil)
-	if err != nil {
-		t.Fatalf("Render at %q: %v", contract, err)
-	}
-
-	return string(out)
+	return mustRender(t, cluster, m, testBundle(t), nil)
 }
 
 // TestRenderNetwork: spec.network picks the primary link by permanent MAC through a

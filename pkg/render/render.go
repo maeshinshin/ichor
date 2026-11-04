@@ -363,15 +363,6 @@ func baseConfig(
 	return cfg, nil
 }
 
-// orderedPatch is a TalosConfigPatch that applies to the machine being
-// rendered, carrying the sort key SelectPatches computes for it.
-type orderedPatch struct {
-	layer    int
-	priority int32
-	name     string
-	patch    *ichorv1alpha1.TalosConfigPatch
-}
-
 // SelectPatches implements Configuration reconcile step 3 (which patches
 // apply to this machine) and the layer/priority half of step 2: it filters
 // candidates down to the ones that apply to m, then returns them in the
@@ -387,7 +378,7 @@ func SelectPatches(
 	m *ichorv1alpha1.TalosMachine,
 	candidates []ichorv1alpha1.TalosConfigPatch,
 ) ([]*ichorv1alpha1.TalosConfigPatch, error) {
-	selected := make([]orderedPatch, 0, len(candidates))
+	ordered := make([]*ichorv1alpha1.TalosConfigPatch, 0, len(candidates))
 
 	for i := range candidates {
 		p := &candidates[i]
@@ -397,26 +388,15 @@ func SelectPatches(
 			return nil, err
 		}
 
-		if !ok {
-			continue
+		if ok {
+			ordered = append(ordered, p)
 		}
-
-		selected = append(selected, orderedPatch{
-			layer:    layerOrder[p.Spec.Layer],
-			priority: p.Spec.Priority,
-			name:     p.Name,
-			patch:    p,
-		})
 	}
 
-	slices.SortFunc(selected, func(a, b orderedPatch) int {
-		return cmp.Or(cmp.Compare(a.layer, b.layer), cmp.Compare(a.priority, b.priority), cmp.Compare(a.name, b.name))
+	slices.SortFunc(ordered, func(a, b *ichorv1alpha1.TalosConfigPatch) int {
+		return cmp.Or(cmp.Compare(layerOrder[a.Spec.Layer], layerOrder[b.Spec.Layer]),
+			cmp.Compare(a.Spec.Priority, b.Spec.Priority), cmp.Compare(a.Name, b.Name))
 	})
-
-	ordered := make([]*ichorv1alpha1.TalosConfigPatch, len(selected))
-	for i, sp := range selected {
-		ordered[i] = sp.patch
-	}
 
 	return ordered, nil
 }
@@ -472,9 +452,8 @@ func takenOverInlineManifest(cluster *ichorv1alpha1.TalosCluster) string {
 }
 
 // dropHandedOverInlineManifest returns ordered with the CNI's
-// cni.InlineManifestName entry, and the entry named taken (an adopted cluster's own), removed from every
-// Config document's
-// ClusterConfig.ClusterInlineManifests. It never mutates the caller's own
+// cni.InlineManifestName entry, and the entry named taken (an adopted cluster's own), removed from
+// every Config document's ClusterConfig.ClusterInlineManifests. It never mutates the caller's own
 // TalosConfigPatch objects (principle 5: the controller renders from
 // ingredients, it does not rewrite them) -- a patch is only ever
 // deep-copied if it actually carries the entry; every other patch passes
@@ -482,9 +461,9 @@ func takenOverInlineManifest(cluster *ichorv1alpha1.TalosCluster) string {
 func dropHandedOverInlineManifest(
 	ordered []*ichorv1alpha1.TalosConfigPatch, taken string,
 ) []*ichorv1alpha1.TalosConfigPatch {
-	handedOver := func(name string) bool { return name == cni.InlineManifestName || (taken != "" && name == taken) }
-
-	isHandedOver := func(e *typedconfig.ClusterInlineManifest) bool { return handedOver(e.InlineManifestName) }
+	isHandedOver := func(e *typedconfig.ClusterInlineManifest) bool {
+		return e.InlineManifestName == cni.InlineManifestName || (taken != "" && e.InlineManifestName == taken)
+	}
 
 	return rewriteConfigs(ordered,
 		func(c *typedconfig.Config) bool {

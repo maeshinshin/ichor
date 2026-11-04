@@ -241,3 +241,36 @@ func TestGetOperationNamesMachinesByHostnameThenNodeName(t *testing.T) {
 		t.Fatalf("machines = %v, want %v", got, want)
 	}
 }
+
+// "Installed Ichor version" is the version before the upgrade (the stamped from-version); once the
+// operation has Completed it is the old one, so the row goes (the summary keeps from → to).
+func TestIchorDetailsDropTheInstalledVersionOnceCompleted(t *testing.T) {
+	install := &ichorv1alpha1.IchorInstallation{
+		Spec: ichorv1alpha1.IchorInstallationSpec{Version: ichorV3}, Status: ichorv1alpha1.IchorInstallationStatus{InstalledVersion: ichorV3},
+	}
+	detail := func(phase string) string {
+		op := &ichorv1alpha1.TalosOperation{
+			Annotations: map[string]string{ichorv1alpha1.OperationFromVersionAnnotation: "v0.2.0"},
+			Spec:        ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindIchor},
+			Status:      ichorv1alpha1.TalosOperationStatus{Phase: phase},
+		}
+		out := &pb.Operation{}
+		describeOperation(out, op, nil, install)
+
+		for _, d := range out.GetDetails() {
+			if d.GetKey() == "Installed Ichor version" {
+				return d.GetValue()
+			}
+		}
+
+		return ""
+	}
+
+	if got := detail(ichorv1alpha1.TalosOperationPhaseInProgress); got != "v0.2.0" {
+		t.Errorf("in progress: installed = %q, want v0.2.0", got)
+	}
+
+	if got := detail(ichorv1alpha1.TalosOperationPhaseCompleted); got != "" {
+		t.Errorf("completed: installed = %q, want no row", got)
+	}
+}

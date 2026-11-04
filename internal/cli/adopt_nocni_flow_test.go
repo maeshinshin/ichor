@@ -23,6 +23,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -62,6 +63,11 @@ type noCNIFlow struct {
 
 	mu        sync.Mutex
 	bootstrap []bootstrapCall
+
+	// polled is set once adopt has read the TalosCluster after it exists: from then on the stand-in
+	// may set CNIHandover, so the hand-over poll always finds it pending first (its "waiting for the
+	// controller" line does not depend on how fast the goroutines run).
+	polled atomic.Bool
 }
 
 type bootstrapCall struct {
@@ -145,6 +151,12 @@ func newNoCNIFlow(t *testing.T) *noCNIFlow {
 		return nil
 	}
 
+	env.afterGet = func(o client.Object) {
+		if _, ok := o.(*ichorv1alpha1.TalosCluster); ok {
+			f.polled.Store(true)
+		}
+	}
+
 	f.startController(t)
 
 	return f
@@ -175,7 +187,7 @@ func (f *noCNIFlow) reconcileOnce(ctx context.Context) {
 	if f.env.k8s.List(ctx, &clusters) == nil {
 		for i := range clusters.Items {
 			c := &clusters.Items[i]
-			if !apimeta.IsStatusConditionTrue(c.Status.Conditions, render.ConditionCNIHandover) {
+			if f.polled.Load() && !apimeta.IsStatusConditionTrue(c.Status.Conditions, render.ConditionCNIHandover) {
 				apimeta.SetStatusCondition(&c.Status.Conditions, metav1.Condition{
 					Type: render.ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: fakeReason,
 				})

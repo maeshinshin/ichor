@@ -113,10 +113,10 @@ func (e *TalosEgress) name() string {
 type egressTargets struct {
 	cidrs []string // machine, discovery and reclaim addresses: "10.0.0.1/32", "10.1.0.0/24"
 	names []string // host names of machines and cluster endpoints
-	s3    []s3Target
+	s3    []urlTarget
 }
 
-type s3Target struct {
+type urlTarget struct {
 	host string
 	port int
 }
@@ -209,16 +209,16 @@ func collectTargets(ctx context.Context, c client.Reader) (egressTargets, error)
 		return egressTargets{}, fmt.Errorf("listing TalosEtcdBackups: %w", err)
 	}
 
-	seen := map[s3Target]bool{}
+	seen := map[urlTarget]bool{}
 
 	for i := range backups.Items {
-		if st, ok := parseS3Endpoint(backups.Items[i].Spec.Destination.S3.Endpoint); ok && !seen[st] {
+		if st, ok := parseURLTarget(backups.Items[i].Spec.Destination.S3.Endpoint); ok && !seen[st] {
 			seen[st] = true
 			t.s3 = append(t.s3, st)
 		}
 	}
 
-	slices.SortFunc(t.s3, func(a, b s3Target) int {
+	slices.SortFunc(t.s3, func(a, b urlTarget) int {
 		return cmp.Or(cmp.Compare(a.host, b.host), cmp.Compare(a.port, b.port))
 	})
 
@@ -227,11 +227,12 @@ func collectTargets(ctx context.Context, c client.Reader) (egressTargets, error)
 
 func keys(m map[string]bool) []string { return slices.Sorted(maps.Keys(m)) }
 
-// parseS3Endpoint is the host and TCP port of "http(s)://host[:port]" (443 and 80 by scheme).
-func parseS3Endpoint(endpoint string) (s3Target, bool) {
+// parseURLTarget is the host and TCP port of "http(s)://host[:port]" (443 and 80 by scheme): an S3 endpoint or
+// an OIDC issuer.
+func parseURLTarget(endpoint string) (urlTarget, bool) {
 	u, err := url.Parse(endpoint)
 	if err != nil || u.Hostname() == "" {
-		return s3Target{}, false
+		return urlTarget{}, false
 	}
 
 	port := 443
@@ -242,7 +243,7 @@ func parseS3Endpoint(endpoint string) (s3Target, bool) {
 	if p := u.Port(); p != "" {
 		n, err := strconv.Atoi(p)
 		if err != nil || n < 1 || n > 65535 {
-			return s3Target{}, false
+			return urlTarget{}, false
 		}
 
 		port = n
@@ -250,10 +251,36 @@ func parseS3Endpoint(endpoint string) (s3Target, bool) {
 
 	h := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
 	if _, err := netip.ParseAddr(h); err != nil && !fqdnRE.MatchString(h) {
-		return s3Target{}, false
+		return urlTarget{}, false
 	}
 
-	return s3Target{host: h, port: port}, true
+	return urlTarget{host: h, port: port}, true
+}
+
+// rule is the egress rule to the target on its port: toServices for a cluster-local Service name, toCIDRSet
+// for an address and toFQDNs for any other name (which needs the DNS proxy rule beside it, ADR 0126).
+func (u urlTarget) rule() map[string]any {
+	ports := []any{map[string]any{keyPorts: portList(u.port)}}
+
+	addr, ipErr := netip.ParseAddr(u.host)
+
+	switch name, ns, local := clusterLocalService(u.host); {
+	case local:
+		return map[string]any{
+			"toServices": []any{map[string]any{"k8sService": map[string]any{"serviceName": name, keyNamespace: ns}}},
+			keyToPorts:   ports,
+		}
+	case ipErr == nil:
+		return map[string]any{
+			"toCIDRSet": []any{map[string]any{keyCIDR: netip.PrefixFrom(addr, addr.BitLen()).String()}},
+			keyToPorts:  ports,
+		}
+	default:
+		return map[string]any{
+			"toFQDNs":  []any{map[string]any{keyMatchName: u.host}},
+			keyToPorts: ports,
+		}
+	}
 }
 
 func portList(ports ...int) []any {
@@ -306,27 +333,7 @@ func buildEgress(t egressTargets) []any {
 	}
 
 	for _, s := range t.s3 {
-		ports := []any{map[string]any{keyPorts: portList(s.port)}}
-
-		addr, ipErr := netip.ParseAddr(s.host)
-
-		switch name, ns, local := clusterLocalService(s.host); {
-		case local:
-			rules = append(rules, map[string]any{
-				"toServices": []any{map[string]any{"k8sService": map[string]any{"serviceName": name, keyNamespace: ns}}},
-				keyToPorts:   ports,
-			})
-		case ipErr == nil:
-			rules = append(rules, map[string]any{
-				"toCIDRSet": []any{map[string]any{keyCIDR: netip.PrefixFrom(addr, addr.BitLen()).String()}},
-				keyToPorts:  ports,
-			})
-		default:
-			rules = append(rules, map[string]any{
-				"toFQDNs":  []any{map[string]any{keyMatchName: s.host}},
-				keyToPorts: ports,
-			})
-		}
+		rules = append(rules, s.rule())
 	}
 
 	if len(rules) == 0 {

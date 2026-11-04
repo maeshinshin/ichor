@@ -460,6 +460,11 @@ func main() {
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "talosmachine")
 	egress := &controller.TalosEgress{Client: mgr.GetClient(), Namespace: ns, Name: talosEgressPolicy, Disabled: noCiliumPolicies || !talosEgressManage, Settle: 3 * time.Second}
 	must(egress.SetupWithManager(mgr), "Failed to create controller", "controller", "talosegress")
+	// ichor-ui's egress to its external OIDC issuer, from the issuer the ichor-ui Deployment names (ADR 0126).
+	must(mgr.Add(&controller.UIEgress{
+		Client: mgr.GetClient(), Reader: mgr.GetAPIReader(), Namespace: ns,
+		Disabled: noCiliumPolicies || !talosEgressManage, Settle: 3 * time.Second,
+	}), "Failed to add the ichor-ui egress policy")
 	must((&controller.TalosClusterReconciler{
 		Client: mgr.GetClient(),
 		Egress: egress,

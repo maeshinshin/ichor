@@ -86,9 +86,7 @@ func TestProgress_WarnFailAndNoticeLines(t *testing.T) {
 	_ = failing.Fail(errors.New("init: applying Ichor's own Deployment \"x\": boom\nsecond line"))
 
 	want := "! endpoint type \"node\": a VIP is recommended\n" +
-		"… ichor-ui\n" +
 		"! ichor-ui — not ready after 30m0s\n" +
-		"… Install Ichor\n" +
 		"✗ Install Ichor — failed (36s)\n" +
 		"    init: applying Ichor's own Deployment \"x\": boom\n" +
 		"    second line\n"
@@ -196,8 +194,8 @@ func TestProgress_StepWriterTurnsHelperMessagesIntoDetail(t *testing.T) {
 	}
 }
 
-// A detail that the end line repeats is not printed twice, and a step with no update at all gets
-// its bare start line next to the end line.
+// A detail that the end line repeats is not printed twice, and a step with no update prints its
+// end line alone.
 func TestProgress_PlainDoesNotRepeatTheFinalDetailOrPrintABareStart(t *testing.T) {
 	p, buf, _ := newTestProgress(false, false, 80)
 
@@ -215,7 +213,6 @@ func TestProgress_PlainDoesNotRepeatTheFinalDetailOrPrintABareStart(t *testing.T
 	want := "… Install Ichor — applying Ichor's install manifest\n" +
 		"✓ Install Ichor — 2 objects\n" +
 		"! Ichor controller — not creating IchorInstallation\n" +
-		"… Secrets bundle\n" +
 		"✓ Secrets bundle — ~/s.yaml\n"
 	if buf.String() != want {
 		t.Errorf("got:\n%s\nwant:\n%s", buf.String(), want)

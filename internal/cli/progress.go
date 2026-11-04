@@ -218,7 +218,6 @@ type step struct {
 	printed string // what the non-terminal mode last printed, to print a change only
 	pending string // the newest detail, not printed yet (non-terminal mode)
 	pendAt  time.Time
-	updated bool   // an Update came, so there is no bare start line at the end
 	note    string // a pod reason, shown after the detail while fresh
 	noteAt  time.Time
 	attn    string // shown after the final detail in yellow, e.g. "back this up now"
@@ -334,8 +333,6 @@ func (s *step) showLocked() {
 
 		return
 	}
-
-	s.updated = true
 
 	d := s.composedLocked()
 
@@ -487,9 +484,6 @@ func (p *progress) endLocked(s *step, mark, style, detail, errMsg string) {
 			s.flushLocked()
 		}
 
-		if !s.updated {
-			p.out(markRun + " " + s.name + "\n")
-		}
 	}
 
 	elapsed := ""

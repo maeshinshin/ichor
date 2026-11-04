@@ -85,7 +85,7 @@ func TestEncryptRoundTripAndKeyBinding(t *testing.T) {
 	}
 
 	again, _ := DeriveKey(testBundle(t, "s3cr3t-one"))
-	if pass != again {
+	if pass.Current != again.Current || pass.Legacy != again.Legacy {
 		t.Fatal("passphrase derivation is not deterministic: a restore could not re-derive it")
 	}
 
@@ -220,7 +220,7 @@ func TestPassphraseSurvivesCARotation(t *testing.T) {
 	a, _ := DeriveKey(before)
 
 	b, _ := DeriveKey(after)
-	if a != b {
+	if a.Current != b.Current || a.Legacy != b.Legacy {
 		t.Fatal("rotating the CAs changed the backup key: older snapshots would no longer decrypt")
 	}
 }

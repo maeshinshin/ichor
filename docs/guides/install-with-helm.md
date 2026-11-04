@@ -150,14 +150,69 @@ cosign verify ghcr.io/maeshinshin/ichor-controller:vX.Y.Z \
 The same command verifies `ichor-ui`, `ichor-installer` and the chart
 (`ghcr.io/maeshinshin/charts/ichor:X.Y.Z`). The provenance attestation is
 checked with `gh attestation verify oci://ghcr.io/maeshinshin/ichor-controller:vX.Y.Z --repo maeshinshin/ichor`.
-Ichor does not check signatures itself before it runs the installer Job (the
-Job's image is `installerRepository:version`, resolved by tag; resolving it to a
-digest is not built). Verify the image yourself, or enforce signatures with an
-admission policy of your own. The base image of each release is pinned by
-digest and named in the image's `org.opencontainers.image.base.digest`
-annotation. The images are reproducible from the tag: the same commit and the
-same Nix shell build the same binaries (`-trimpath`, stripped, no build
-timestamps).
+An Ichor upgrade made by the installer Job (`ichor upgrade ichor`) checks the
+installer image's signature itself; see
+[The installer image on an upgrade](#the-installer-image-on-an-upgrade). A Helm
+install is upgraded with `helm upgrade`, so there verify the chart and images
+yourself as above, or enforce signatures with an admission policy of your own.
+The base image of each release is pinned by digest and named in the image's
+`org.opencontainers.image.base.digest` annotation. The images are reproducible
+from the tag: the same commit and the same Nix shell build the same binaries
+(`-trimpath`, stripped, no build timestamps).
+
+## The installer image on an upgrade
+
+`ichor upgrade ichor VERSION` makes the controller run a one-shot installer Job
+whose ServiceAccount holds nearly cluster-admin rights, so the image it runs is
+checked first (ADR 0122). Before it creates the Job the controller:
+
+1. resolves `<installerRepository>:VERSION` to a digest (or takes
+   `spec.installerDigest`, a pin you set with `--installer-digest sha256:...`),
+2. verifies that digest's keyless cosign signature, offline against a Sigstore
+   trusted root built into the controller, for the identity
+   `https://github.com/maeshinshin/ichor/.github/workflows/release.yml@refs/tags/VERSION`
+   issued by GitHub Actions (the identity of the `cosign verify` command above),
+3. runs the Job with the image `<installerRepository>@sha256:...`, so what was
+   verified is what runs. The API server refuses an installer Job that names a tag.
+
+If the tag does not resolve or the signature does not verify, the operation is
+paused with the reason `InstallerImageUnresolved` or `InstallerImageUnverified`,
+no Job is created and nothing is applied. `ichor operation get` shows why.
+After you fix the registry or the mirror, `ichor operation resume NAME` runs the check
+again. The digest and the result are in `ichor version` and in
+`IchorInstallation` `status.installerImage`.
+
+**Mirrors and air gaps.** The signature belongs to the digest, not to a
+registry, so a mirror verifies as long as it holds the image under the same
+digest and the image's OCI referrers (copy with a tool that copies referrers,
+for example `oras copy --recursive`; `crane copy` and `docker push` do not).
+The controller reads `installerRepository` anonymously, over an egress rule it
+maintains for that host (for `ghcr.io` also `pkg-containers.githubusercontent.com`,
+where GHCR redirects blobs). No other service is contacted. A registry that
+needs credentials or redirects blobs to a host that is not allowed has no way
+through except the pin plus the recorded skip below.
+
+**Builds nobody signs.** Development and demo images (`v0.0.N-gSHA`) carry no
+signature. Skip the check with a reason, which Ichor records:
+
+```
+ichor upgrade ichor v0.0.1900000001-g1a2b3c4 --skip-signature-check "demo build, not signed"
+```
+
+The plan prints a warning before you confirm, the controller emits a Warning
+Event `InstallerSignatureSkipped`, `status.installerImage.verification` becomes
+`Skipped` with the reason, `ichor version` says "signature NOT checked", and the
+UI shows an "Installer not verified" badge on every page and an alert on the
+cluster page. The skip is never inherited: the next `ichor upgrade ichor`
+without the flag checks again (the CLI and the UI write the setting exactly as
+given). There is no controller flag or chart value that turns the check off.
+A fork that signs its own images has no way to name its own signer yet; it
+skips the check the same way.
+
+This protects the upgrade after the one that installs it: the first upgrade onto
+a release with this check is made by the previous controller, which creates the
+Job by tag. The controller and UI images that the installer then applies are
+still tags, not digests (ADR 0122, residual risk).
 
 ## Hardening the install
 

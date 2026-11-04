@@ -31,8 +31,6 @@ import (
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
-// nolint:unused
-// log is for logging in this package.
 var ichorinstallationlog = logf.Log.WithName("ichorinstallation-resource")
 
 // SetupIchorInstallationWebhookWithManager registers the webhook for IchorInstallation in the manager.

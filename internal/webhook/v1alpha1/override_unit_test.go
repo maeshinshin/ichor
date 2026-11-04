@@ -27,10 +27,6 @@ import (
 	authzv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -49,22 +45,7 @@ var bgUnitResources = []string{bgUnitMachines, "talosconfigpatches"}
 func bgUnitHandler(t *testing.T) *OverrideHandler {
 	t.Helper()
 
-	scheme := runtime.NewScheme()
-	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
-
-	c := fake.NewClientBuilder().WithScheme(scheme).WithInterceptorFuncs(interceptor.Funcs{
-		Create: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
-			if sar, ok := obj.(*authzv1.SubjectAccessReview); ok {
-				sar.Status.Allowed = sar.Spec.User == bgUnitHolder
-
-				return nil
-			}
-
-			return cl.Create(ctx, obj, opts...)
-		},
-	}).Build()
+	c := sarClient(t, func(sar *authzv1.SubjectAccessReview) bool { return sar.Spec.User == bgUnitHolder })
 
 	return &OverrideHandler{Client: c, ExemptUsers: DefaultExemptUsers("ichor-system", "ichor-controller")}
 }

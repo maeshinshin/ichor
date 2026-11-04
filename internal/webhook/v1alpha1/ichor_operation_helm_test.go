@@ -39,10 +39,7 @@ import (
 func TestIchorOperationIsRefusedWhenInstalledByHelm(t *testing.T) {
 	t.Parallel()
 
-	scheme := runtime.NewScheme()
-	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
+	scheme := schemeOf(t)
 
 	installation := func(manager string) *ichorv1alpha1.IchorInstallation {
 		return &ichorv1alpha1.IchorInstallation{

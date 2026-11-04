@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -9,12 +10,8 @@ import (
 	authnv1 "k8s.io/api/authentication/v1"
 	authzv1 "k8s.io/api/authorization/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -31,28 +28,11 @@ const (
 func sarByUser(t *testing.T, table map[string][]string) client.Client {
 	t.Helper()
 
-	scheme := runtime.NewScheme()
-	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
+	return sarClient(t, func(sar *authzv1.SubjectAccessReview) bool {
+		ra := sar.Spec.ResourceAttributes
 
-	return fake.NewClientBuilder().WithScheme(scheme).WithInterceptorFuncs(interceptor.Funcs{
-		Create: func(ctx context.Context, cl client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
-			sar, ok := obj.(*authzv1.SubjectAccessReview)
-			if !ok {
-				return cl.Create(ctx, obj, opts...)
-			}
-
-			ra := sar.Spec.ResourceAttributes
-			for _, sub := range table[sar.Spec.User] {
-				if ra.Resource == "ichorinstallations" && ra.Verb == "update" && ra.Subresource == sub {
-					sar.Status.Allowed = true
-				}
-			}
-
-			return nil
-		},
-	}).Build()
+		return ra.Resource == "ichorinstallations" && ra.Verb == "update" && slices.Contains(table[sar.Spec.User], ra.Subresource)
+	})
 }
 
 func settingsCtx(user string, dryRun bool) context.Context {

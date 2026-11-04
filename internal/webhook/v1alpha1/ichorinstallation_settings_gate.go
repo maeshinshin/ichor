@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -79,39 +80,13 @@ func durOf(d *metav1.Duration) string {
 
 // settingChanges lists the changed fields of the spec, in a fixed order. old may be nil (a create).
 func settingChanges(oldSpec, newSpec *ichorv1alpha1.IchorInstallationSpec) []settingChange {
-	if oldSpec == nil {
-		oldSpec = &ichorv1alpha1.IchorInstallationSpec{}
-	}
+	oldSpec = cmp.Or(oldSpec, &ichorv1alpha1.IchorInstallationSpec{})
 
 	var (
-		oU, nU     = oldSpec.Users, newSpec.Users
-		oD, nD     = oldSpec.Defaults, newSpec.Defaults
-		oDep, nDep = oldSpec.Deployment, newSpec.Deployment
+		oU, nU     = cmp.Or(oldSpec.Users, &ichorv1alpha1.IchorUserSettings{}), cmp.Or(newSpec.Users, &ichorv1alpha1.IchorUserSettings{})
+		oD, nD     = cmp.Or(oldSpec.Defaults, &ichorv1alpha1.IchorDefaultSettings{}), cmp.Or(newSpec.Defaults, &ichorv1alpha1.IchorDefaultSettings{})
+		oDep, nDep = cmp.Or(oldSpec.Deployment, &ichorv1alpha1.IchorDeploymentSpec{}), cmp.Or(newSpec.Deployment, &ichorv1alpha1.IchorDeploymentSpec{})
 	)
-
-	if oU == nil {
-		oU = &ichorv1alpha1.IchorUserSettings{}
-	}
-
-	if nU == nil {
-		nU = &ichorv1alpha1.IchorUserSettings{}
-	}
-
-	if oD == nil {
-		oD = &ichorv1alpha1.IchorDefaultSettings{}
-	}
-
-	if nD == nil {
-		nD = &ichorv1alpha1.IchorDefaultSettings{}
-	}
-
-	if oDep == nil {
-		oDep = &ichorv1alpha1.IchorDeploymentSpec{}
-	}
-
-	if nDep == nil {
-		nDep = &ichorv1alpha1.IchorDeploymentSpec{}
-	}
 
 	oAE, oAC, oAW, oAK := autoPatchOf(oldSpec.AutoPatch)
 	nAE, nAC, nAW, nAK := autoPatchOf(newSpec.AutoPatch)

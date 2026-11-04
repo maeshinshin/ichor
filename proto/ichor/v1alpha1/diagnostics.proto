@@ -25,6 +25,12 @@ service DiagnosticsService {
   // CapturePackets streams a pcap file captured on one node's interface, bounded
   // by duration and size.
   rpc CapturePackets(CapturePacketsRequest) returns (stream CapturePacketsResponse);
+  // DownloadReaderTalosconfig streams a talosconfig whose client certificate is
+  // Talos os:reader, for talosctl. It lives one hour by default
+  // and twelve at most. The key is made here; the controller signs it as the
+  // caller, whose Kubernetes RBAC verb `download` on talosclusters/talosconfig-reader
+  // the admission webhook checks and records as an Event.
+  rpc DownloadReaderTalosconfig(DownloadReaderTalosconfigRequest) returns (stream DownloadReaderTalosconfigResponse);
 }
 
 message GetMyPermissionsRequest {
@@ -43,6 +49,21 @@ message GetMyPermissionsResponse {
   // cluster_update is the "update" verb on talosclusters/<name>, which is what
   // changing the Cilium values (CniService.SetCiliumValues) needs.
   bool cluster_update = 5;
+  // talosconfig_reader is the "download" verb on talosclusters/talosconfig-reader.
+  bool talosconfig_reader = 6;
+}
+
+message DownloadReaderTalosconfigRequest {
+  ObjectRef cluster = 1;
+  // lifetime_seconds is how long the certificate is valid. 0 means one hour; more than twelve hours is refused.
+  int64 lifetime_seconds = 2;
+}
+
+message DownloadReaderTalosconfigResponse {
+  // filename and content_type are set on the first chunk only.
+  string filename = 1;
+  string content_type = 2;
+  bytes data = 3;
 }
 
 message DownloadSupportBundleRequest {

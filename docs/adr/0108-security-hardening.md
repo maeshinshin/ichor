@@ -443,3 +443,7 @@ Amendment (2026-11-04, ADR 0122): the follow-up "Resolving the installer image b
 ## Amendment 2026-11-04: SecureBoot, UKI and kernel lockdown
 
 The follow-up row "SecureBoot and UKI, kernel lockdown, an `os:reader` talosconfig role, kubelet serving-certificate bootstrap" is resolved for SecureBoot, UKI and kernel lockdown by ADR 0123: `spec.security.secureBoot` and `spec.security.kernelLockdown`, the installer variant, the per-node `SecureBoot` and `KernelLockdown` conditions, and the reinstall path. The `os:reader` role and kubelet serving-certificate bootstrap are ADR 0124 and 0125.
+
+## Amendment 2026-11-04: etcd CA and aggregator CA rotation (ADR 0120)
+
+Section 6 and the first follow-up row are resolved for the etcd CA and the Kubernetes aggregator CA: ADR 0120 adds them to the `ca-rotation` operation as the optional targets `etcd` and `kubernetes-aggregator`. The service-account signing key and the secretbox key are still not rotated (ADR 0121).

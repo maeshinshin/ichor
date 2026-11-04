@@ -425,9 +425,10 @@ ichor init --preset standard [--cni-tunnel vxlan|geneve] [--ui-url URL]
    Ichor's install manifest.
 5. Create the CRs and the `IchorInstallation`, then apply
    Ichor's NetworkPolicies once Cilium is Ready (ADR 0100).
-6. Wait for the `CNIHandover` condition on the `TalosCluster`. `init` prints an
-   `init: waiting for ...` line per poll, and the last reason when the wait runs
-   out; the controller keeps working either way.
+6. Wait for the `CNIHandover` condition on the `TalosCluster`. `init` shows its
+   steps as a short list with a spinner on a terminal (one line per change in a
+   pipe or a log), and the last reason when the wait runs out; the controller
+   keeps working either way.
 
 There are no flags to choose a CNI (ADR 0099).
 Adding later nodes goes through the normal approval flow; `init` is the

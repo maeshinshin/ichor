@@ -278,25 +278,31 @@ func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.W
 	return password, nil
 }
 
-// initUsersEpilogue is what the operator has to do next. It prints the
-// generated password, once, to stderr.
-func initUsersEpilogue(errw io.Writer, opts initOptions, password string) {
-	if opts.UIURL == "" {
-		_, _ = fmt.Fprintln(errw, "init: WARNING: ichor-ui has no sign-in and runs with --allow-unauthenticated: anyone who can reach it "+
-			"can make changes with its ServiceAccount's permissions. Turn on Ichor users with --ui-url or OIDC "+
-			"(docs/guides/users-and-login.md), then drop the flag")
-
-		return
+// initEpilogue ends init's output: on success how long it took, then what the operator has to do
+// (a warning when ichor-ui has no sign-in; with --ui-url the steps that follow, and the generated
+// password, once, verbatim), then the commands to run next. A failed run prints no total and no
+// next steps, but still the password: by then the user exists and nothing else could show it.
+func initEpilogue(p *progress, opts initOptions, password string, ok bool) {
+	if ok {
+		p.Done()
 	}
 
-	_, _ = fmt.Fprintf(errw, "init: Helm equivalent: ichorUI.users.enabled=true, ichorUI.users.externalURL=%s\n", opts.UIURL)
-	_, _ = fmt.Fprintf(errw, "init: make ichor-ui reachable at %s over https (an Ingress, Gateway or LoadBalancer in front of "+
-		"the ichor-ui Service (label %s=%s), or ichorUI.tls.secretName); Ichor installs none\n", opts.UIURL, uiComponentLabel, uiComponentValue)
-	_, _ = fmt.Fprintln(errw, "init: spec.authentication.ichor is set; the controller renders the kube-apiserver authentication "+
-		"config next. Applying it restarts kube-apiserver on each control plane, so machines report APIServerRestartRequired "+
-		"until you run `ichor config apply` (or Apply in the Overview page's attention list), which rolls one control plane at a time")
+	if opts.UIURL == "" {
+		p.Warn("ichor-ui has no sign-in (--allow-unauthenticated). Turn on users with --ui-url.")
+	} else {
+		p.Info(fmt.Sprintf("Helm equivalent: ichorUI.users.enabled=true, ichorUI.users.externalURL=%s", opts.UIURL))
+		p.Warn(fmt.Sprintf("make ichor-ui reachable at %s over https (an Ingress, Gateway or LoadBalancer in front of "+
+			"the ichor-ui Service (label %s=%s), or ichorUI.tls.secretName); Ichor installs none", opts.UIURL, uiComponentLabel, uiComponentValue))
+		p.Warn("spec.authentication.ichor is set; the controller renders the kube-apiserver authentication " +
+			"config next. Applying it restarts kube-apiserver on each control plane, so machines report APIServerRestartRequired " +
+			"until you run `ichor config apply` (or Apply in the Overview page's attention list), which rolls one control plane at a time")
 
-	if password != "" {
-		printGeneratedPassword(errw, opts.AdminUser, password)
+		if password != "" {
+			printGeneratedPassword(p, opts.AdminUser, password)
+		}
+	}
+
+	if ok {
+		p.Next("ichor cluster status "+opts.Cluster, "ichor machine list", "ichor ui")
 	}
 }

@@ -47,7 +47,7 @@ func TestInitStartsIchorUIWithAnExplicitAllowUnauthenticated(t *testing.T) {
 
 	var out bytes.Buffer
 
-	initUsersEpilogue(&out, initOptions{}, "")
+	initEpilogue(newProgress(&out), initOptions{}, "", true)
 
 	if !bytes.Contains(out.Bytes(), []byte("--allow-unauthenticated")) {
 		t.Fatalf("init prints no warning without --ui-url: %q", out.String())

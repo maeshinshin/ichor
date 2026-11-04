@@ -59,9 +59,13 @@ table accepts; a refusal passes only with the override verb
 - `ichor init -f init.yaml` reads the init settings from an `InitConfig` file
   instead of a long flag line (a flag overrides the file;
   `--print-config-template` prints an example; ADR 0117). `ichor init` also
-  prints one line per created object unless `-o yaml|json` is given, waits
-  for ichor-ui to roll out before it returns, and no longer requires the
+  waits for ichor-ui to roll out before it returns, and no longer requires the
   hidden `--cni` flag.
+- `ichor init` shows its steps as a short list: a live spinner line with the
+  elapsed time and the reason a pod is pending on a terminal, one line per
+  change in a pipe or CI log. It honours `NO_COLOR` and `TERM=dumb`, prints a
+  total and the next commands at the end, and keeps `-o yaml|json` on stdout
+  free of progress lines.
 
 ### Not part of Ichor
 

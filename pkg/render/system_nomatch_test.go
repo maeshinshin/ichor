@@ -30,7 +30,7 @@ import (
 // Before Ichor is installed (a first adopt) the API server does not serve TalosStorage: that is
 // no storage, not an error.
 func TestResolveSystemInputsUnservedStorageKind(t *testing.T) {
-	c := fake.NewClientBuilder().WithScheme(registryTestScheme(t)).WithInterceptorFuncs(interceptor.Funcs{
+	c := fake.NewClientBuilder().WithInterceptorFuncs(interceptor.Funcs{
 		List: func(context.Context, client.WithWatch, client.ObjectList, ...client.ListOption) error {
 			return &meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: "ichor.maesh.dev", Kind: "TalosStorage"}}
 		},

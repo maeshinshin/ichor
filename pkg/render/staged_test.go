@@ -42,12 +42,7 @@ func TestStagedKubernetesPinsKubeletAndProxyBelowTheSpec(t *testing.T) {
 	render := func(t *testing.T, m *ichorv1alpha1.TalosMachine, staged *StagedKubernetes) string {
 		t.Helper()
 
-		out, _, err := Render(cluster, m, bundle, nil, &SystemInputs{Staged: staged})
-		if err != nil {
-			t.Fatalf("Render: %v", err)
-		}
-
-		return string(out)
+		return mustRenderSys(t, cluster, m, bundle, nil, &SystemInputs{Staged: staged})
 	}
 
 	t.Run("an empty pin changes nothing", func(t *testing.T) {

@@ -91,12 +91,9 @@ func TestAuthenticationRender(t *testing.T) {
 	}
 
 	t.Run("both issuers render as two jwt entries with anonymous kept", func(t *testing.T) {
-		out, _, err := Render(authCluster(versionContract, both), cp, bundle, nil, sys)
-		if err != nil {
-			t.Fatalf("Render: %v", err)
-		}
+		out := mustRenderSys(t, authCluster(versionContract, both), cp, bundle, nil, sys)
 
-		doc := section(string(out), authKind)
+		doc := section(out, authKind)
 		if doc == "" {
 			t.Fatalf("no KubeAuthenticationConfig document:\n%s", out)
 		}
@@ -112,12 +109,7 @@ func TestAuthenticationRender(t *testing.T) {
 	})
 
 	t.Run("a worker gets no document", func(t *testing.T) {
-		out, _, err := Render(authCluster(versionContract, both), worker, bundle, nil, sys)
-		if err != nil {
-			t.Fatalf("Render: %v", err)
-		}
-
-		requireNone(t, string(out), authKind)
+		requireNone(t, mustRenderSys(t, authCluster(versionContract, both), worker, bundle, nil, sys), authKind)
 	})
 
 	t.Run("unset leaves Talos's default: no jwt entry", func(t *testing.T) {

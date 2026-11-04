@@ -51,13 +51,10 @@ func TestRenderNodeLabels(t *testing.T) {
 			sys := &SystemInputs{Storage: []ichorv1alpha1.TalosStorage{st}}
 			m = testMachine("node-a", roleWorker, map[string]string{zoneKey: rackOne, longhornDiskLabel: "false"})
 
-			out, _, err := Render(cluster, m, bundle, nil, sys)
-			if err != nil {
-				t.Fatal(err)
-			}
+			out := mustRenderSys(t, cluster, m, bundle, nil, sys)
 
-			requireAll(t, string(out), longhornDiskLabel+": \"false\"")
-			requireNone(t, string(out), longhornDiskLabel+": \"true\"", longhornDiskLabel+": true")
+			requireAll(t, out, longhornDiskLabel+": \"false\"")
+			requireNone(t, out, longhornDiskLabel+": \"true\"", longhornDiskLabel+": true")
 		})
 	}
 

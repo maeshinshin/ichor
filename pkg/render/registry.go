@@ -205,17 +205,10 @@ func registryMirrors(
 		mirrors := make(map[string]*mv1alpha1.RegistryMirrorConfig, len(cluster.Spec.Registries))
 
 		for _, reg := range cluster.Spec.Registries {
-			m := &mv1alpha1.RegistryMirrorConfig{MirrorEndpoints: reg.Endpoints} //nolint:staticcheck // the pre-v1.12 form
-
-			if reg.OverridePath {
-				m.MirrorOverridePath = new(true)
+			mirrors[reg.Host] = &mv1alpha1.RegistryMirrorConfig{ //nolint:staticcheck // the pre-v1.12 form
+				MirrorEndpoints: reg.Endpoints, MirrorOverridePath: trueOrNil(reg.OverridePath),
+				MirrorSkipFallback: trueOrNil(reg.SkipFallback),
 			}
-
-			if reg.SkipFallback {
-				m.MirrorSkipFallback = new(true)
-			}
-
-			mirrors[reg.Host] = m
 		}
 
 		return nil, mirrors, nil
@@ -232,20 +225,22 @@ func registryMirrors(
 				return nil, nil, fmt.Errorf("render: registry %q: endpoint %q: %w", reg.Host, ep, err)
 			}
 
-			e := cri.RegistryEndpoint{EndpointURL: meta.URL{URL: u}}
-			if reg.OverridePath {
-				e.EndpointOverridePath = new(true)
-			}
-
-			doc.RegistryEndpoints = append(doc.RegistryEndpoints, e)
+			doc.RegistryEndpoints = append(doc.RegistryEndpoints,
+				cri.RegistryEndpoint{EndpointURL: meta.URL{URL: u}, EndpointOverridePath: trueOrNil(reg.OverridePath)})
 		}
 
-		if reg.SkipFallback {
-			doc.RegistrySkipFallback = new(true)
-		}
-
+		doc.RegistrySkipFallback = trueOrNil(reg.SkipFallback)
 		docs = append(docs, doc)
 	}
 
 	return docs, nil, nil
+}
+
+// trueOrNil is &true for b and nil otherwise: Talos reads an absent flag as its default.
+func trueOrNil(b bool) *bool {
+	if b {
+		return new(true)
+	}
+
+	return nil
 }

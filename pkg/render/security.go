@@ -231,9 +231,7 @@ func injectDiskEncryption(
 			return nil, fmt.Errorf("render: unknown disk encryption type %q", d.Type)
 		}
 
-		if name == constants.EphemeralPartitionLabel {
-			key.KeyLockToSTATE = new(true)
-		}
+		key.KeyLockToSTATE = trueOrNil(name == constants.EphemeralPartitionLabel)
 
 		v := block.NewVolumeConfigV1Alpha1()
 		v.MetaName = name

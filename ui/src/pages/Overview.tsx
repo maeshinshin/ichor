@@ -41,6 +41,7 @@ import { ErrorAlert } from '@/components/ErrorAlert'
 import { OperationControls } from '@/components/OperationControls'
 import { Field, Fields } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
+import { ReaderTalosconfigDialog } from '@/components/ReaderTalosconfigDialog'
 import { StartOperationDialog } from '@/components/StartOperationDialog'
 import { HandoverPhase, RolloutKind, type Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
@@ -59,6 +60,7 @@ import { componentOf, stateKey, stateTone, versionPair } from '@/lib/versions'
 import { hasPatch, patchComponents, unavailableNotes, type TargetList } from '@/lib/upgradeTargets'
 import { conditionTone } from '@/lib/conditions'
 import { useCluster } from '@/lib/useCluster'
+import { useMyPermissions } from '@/lib/useMyPermissions'
 import { t } from '@/lib/i18n'
 import { Link } from '@/router'
 
@@ -111,7 +113,9 @@ function Home({
     talos: null,
     kubernetes: null,
   })
-  const [dialog, setDialog] = useState<'ca-rotation' | 'shutdown' | null>(null)
+  const [dialog, setDialog] = useState<'ca-rotation' | 'shutdown' | 'reader-talosconfig' | null>(null)
+  // The caller's "download" verb on talosclusters/talosconfig-reader (docs/adr/0124); undefined offers nothing.
+  const perms = useMyPermissions(undefined, ref)
   const wasBusy = useRef(false)
 
   async function loadCandidates() {
@@ -223,6 +227,9 @@ function Home({
               <DropdownMenuItem onSelect={() => setDialog('ca-rotation')}>
                 {t('overview.rotateCAs')}
               </DropdownMenuItem>
+              {perms?.talosconfigReader && (
+                <DropdownMenuItem onSelect={() => setDialog('reader-talosconfig')}>{t('readerTalosconfig.menu')}</DropdownMenuItem>
+              )}
               <DropdownMenuItem variant="destructive" onSelect={() => setDialog('shutdown')}>
                 {t('overview.shutdownCluster')}
               </DropdownMenuItem>
@@ -230,6 +237,7 @@ function Home({
           </DropdownMenu>
           <StartOperationDialog kind="ca-rotation" cluster={ref} open={dialog === 'ca-rotation'} onOpenChange={(o) => !o && setDialog(null)} />
           <StartOperationDialog kind="shutdown" cluster={ref} open={dialog === 'shutdown'} onOpenChange={(o) => !o && setDialog(null)} />
+          <ReaderTalosconfigDialog cluster={ref} open={dialog === 'reader-talosconfig'} onOpenChange={(o) => !o && setDialog(null)} />
         </div>
       </header>
       {opsError && <ErrorAlert {...opsError} />}

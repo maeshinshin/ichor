@@ -7,7 +7,7 @@ export type DownloadKind = 'support-bundle' | 'etcd-snapshot' | 'packet-capture'
 
 // What the caller may download (DiagnosticsService.GetMyPermissions): the machine's three downloads and
 // the cluster's CA rotation credentials (docs/adr/0084, 0093).
-export type Permissions = { supportBundle: boolean; etcdSnapshot: boolean; packetCapture: boolean; clusterCredentials: boolean; clusterUpdate: boolean }
+export type Permissions = { supportBundle: boolean; etcdSnapshot: boolean; packetCapture: boolean; clusterCredentials: boolean; clusterUpdate: boolean; talosconfigReader: boolean }
 
 // toPermissions copies the response's flags; a missing response (not answered yet, or the probe failed)
 // stays undefined, which offers nothing.
@@ -18,6 +18,7 @@ export function toPermissions(res: Permissions | undefined): Permissions | undef
     packetCapture: res.packetCapture,
     clusterCredentials: res.clusterCredentials,
     clusterUpdate: res.clusterUpdate,
+    talosconfigReader: res.talosconfigReader,
   }
 }
 
@@ -116,7 +117,7 @@ export async function collect(stream: AsyncIterable<Chunk>, maxBytes: number = m
 }
 
 // fallbackName is used if the server sent none (it always does).
-export function fileNameOf(c: Collected, kind: DownloadKind | 'ca-credentials'): string {
+export function fileNameOf(c: Collected, kind: DownloadKind | 'ca-credentials' | 'reader-talosconfig'): string {
   if (c.filename) return c.filename
-  return { 'support-bundle': 'support-bundle.zip', 'etcd-snapshot': 'etcd.snapshot.db', 'packet-capture': 'capture.pcap', 'ca-credentials': 'credentials.zip' }[kind]
+  return { 'support-bundle': 'support-bundle.zip', 'etcd-snapshot': 'etcd.snapshot.db', 'packet-capture': 'capture.pcap', 'ca-credentials': 'credentials.zip', 'reader-talosconfig': 'talosconfig-reader.yaml' }[kind]
 }

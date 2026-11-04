@@ -360,6 +360,8 @@ type startSpec struct {
 	Follow         bool
 	// Override is the ADR 0110 override the plan and the create carry; nil when off.
 	Override *pb.Override
+	// Installer is the installer image settings of an Ichor upgrade (ADR 0122); nil for the other kinds.
+	Installer *pb.IchorInstallerOptions
 
 	// AfterCreate, when set, takes over once the operation exists: it gets the operation's ref and
 	// the create response and does the output and any follow itself (ca-rotation's credential
@@ -432,7 +434,7 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 	}
 
 	plan, err := c.Operation.PlanOperation(ctx, connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: cluster, Kind: s.Kind, Target: s.Target, MaxUnavailable: s.MaxUnavailable, Override: s.Override,
+		Cluster: cluster, Kind: s.Kind, Target: s.Target, MaxUnavailable: s.MaxUnavailable, Override: s.Override, IchorInstaller: s.Installer,
 	}))
 	if err != nil {
 		return err
@@ -447,7 +449,7 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 	}
 
 	resp, err := c.Operation.CreateOperation(ctx, connect.NewRequest(&pb.CreateOperationRequest{
-		Cluster: cluster, Kind: s.Kind, Target: s.Target, MaxUnavailable: s.MaxUnavailable, Override: s.Override,
+		Cluster: cluster, Kind: s.Kind, Target: s.Target, MaxUnavailable: s.MaxUnavailable, Override: s.Override, IchorInstaller: s.Installer,
 	}))
 	if err != nil {
 		return err

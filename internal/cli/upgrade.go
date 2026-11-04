@@ -18,8 +18,10 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 
 	"connectrpc.com/connect"
@@ -53,7 +55,9 @@ first install, and any valid target is allowed after that.
 ` + "`ichor upgrade talos`" + ` and ` + "`ichor upgrade kubernetes`" + ` offer the versions the cluster can
 move to (` + "`--list`" + `). Without a VERSION they use the recommended one, the release set's version
 when it is a valid upgrade, else the newest patch of the running minor. With a VERSION they move to it.
-` + "`ichor upgrade ichor`" + ` moves Ichor itself.
+` + "`ichor upgrade ichor`" + ` moves Ichor itself. Before the installer Job runs, the controller pins the
+installer image to a digest and checks its signature (ADR 0122); --skip-signature-check REASON is the recorded
+opt-out for images nobody signs.
 
 Each upgrade changes the version in the spec that names it and then starts the
 operation that rolls it out machine by machine: control planes one at a time,
@@ -94,6 +98,10 @@ and in which order, and asks for confirmation unless --yes.`,
 			}
 
 			if kind == pb.OperationKind_OPERATION_KIND_ICHOR {
+				if err := checkInstallerFlags(cmd.Flags().Changed("skip-signature-check")); err != nil {
+					return err
+				}
+
 				if err := refuseHelmManagedInstall(cmd.Context(), cmd.ErrOrStderr()); err != nil {
 					return err
 				}
@@ -120,7 +128,7 @@ and in which order, and asks for confirmation unless --yes.`,
 					target = t
 				}
 
-				return runStartOperation(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), startSpec{Kind: kind, Cluster: upgradeFlags.Cluster, Target: target, MaxUnavailable: upgradeFlags.MaxUnavailable, Follow: upgradeFlags.Follow, Override: overrideOf(apiOpts)})
+				return runStartOperation(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), startSpec{Kind: kind, Cluster: upgradeFlags.Cluster, Target: target, MaxUnavailable: upgradeFlags.MaxUnavailable, Follow: upgradeFlags.Follow, Override: overrideOf(apiOpts), Installer: installerOptionsFor(kind)})
 			})
 		},
 	}
@@ -191,11 +199,41 @@ func checkUpgradeTarget(target string) error {
 	return version.CheckSemver("v" + strings.TrimPrefix(target, "v"))
 }
 
+// upgradeInstallerDigest and upgradeSkipSignature are the installer image flags of `ichor upgrade ichor`.
+var upgradeInstallerDigest, upgradeSkipSignature string
+
 var (
 	upgradeTalosCmd      = newUpgradeCmd("talos", "Upgrade Talos on every machine of a cluster (each machine reboots)", pb.OperationKind_OPERATION_KIND_TALOS)
 	upgradeKubernetesCmd = newUpgradeCmd("kubernetes", "Upgrade Kubernetes on a cluster (no reboot)", pb.OperationKind_OPERATION_KIND_KUBERNETES)
 	upgradeIchorCmd      = newUpgradeCmd("ichor", "Upgrade Ichor itself (IchorInstallation.spec.version)", pb.OperationKind_OPERATION_KIND_ICHOR)
 )
+
+var installerDigestPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
+
+// checkInstallerFlags refuses installer image flags the server would refuse, before anything is reached. A skip
+// needs a reason: it is recorded, and a bare flag would be a silent bypass (ADR 0122).
+func checkInstallerFlags(skipGiven bool) error {
+	if skipGiven && strings.TrimSpace(upgradeSkipSignature) == "" {
+		return errors.New("--skip-signature-check needs a reason, which Ichor records with the digest it ran: " +
+			"--skip-signature-check \"demo build, not signed\"")
+	}
+
+	if upgradeInstallerDigest != "" && !installerDigestPattern.MatchString(upgradeInstallerDigest) {
+		return fmt.Errorf("--installer-digest %q is not sha256: followed by 64 lowercase hex characters", upgradeInstallerDigest)
+	}
+
+	return nil
+}
+
+// installerOptionsFor is the installer image settings of an `ichor upgrade ichor` (ADR 0122), nil for the other kinds.
+// An Ichor upgrade always sends them, so a pin or a skip from an earlier upgrade is cleared unless it is given again.
+func installerOptionsFor(kind pb.OperationKind) *pb.IchorInstallerOptions {
+	if kind != pb.OperationKind_OPERATION_KIND_ICHOR {
+		return nil
+	}
+
+	return &pb.IchorInstallerOptions{Digest: upgradeInstallerDigest, SkipSignatureReason: upgradeSkipSignature}
+}
 
 func addStartFlags(cmd *cobra.Command, f *startFlags) {
 	fl := cmd.Flags()
@@ -216,6 +254,11 @@ func init() {
 	for _, c := range []*cobra.Command{upgradeTalosCmd, upgradeKubernetesCmd} {
 		c.Flags().BoolVar(&upgradeList, "list", false, "print the versions the cluster can move to, the recommended one first, and exit")
 	}
+
+	upgradeIchorCmd.Flags().StringVar(&upgradeInstallerDigest, "installer-digest", "",
+		"pin the installer image to this digest (sha256:...) instead of resolving the version's tag")
+	upgradeIchorCmd.Flags().StringVar(&upgradeSkipSignature, "skip-signature-check", "",
+		"run the installer image WITHOUT checking its signature, and record this reason (for builds nobody signs: development and demo images)")
 
 	markWrites(upgradeTalosCmd, upgradeKubernetesCmd, upgradeIchorCmd)
 }

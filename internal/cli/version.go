@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -85,6 +86,18 @@ type versionServer struct {
 	SpecVersion string `json:"specVersion,omitempty"`
 	// LatestRelease is the newer Ichor release the cluster's controller found (docs/adr/0114); empty when none is newer.
 	LatestRelease string `json:"latestRelease,omitempty"`
+	// InstallerImage is the installer image the last Ichor upgrade ran and whether its signature was checked (ADR 0122).
+	InstallerImage *versionInstaller `json:"installerImage,omitempty"`
+}
+
+// versionInstaller is IchorInstallation.status.installerImage, plus whether the next upgrade will skip the check.
+type versionInstaller struct {
+	Digest       string `json:"digest,omitempty"`
+	Verification string `json:"verification,omitempty"`
+	// SkipReason is why the check was skipped; empty when it was not.
+	SkipReason string `json:"skipReason,omitempty"`
+	// SkipNext is true while spec.installerSignature says skip: the next upgrade will not check the signature.
+	SkipNext bool `json:"skipNext,omitempty"`
 }
 
 // collectVersion reads the IchorInstallation through c (nil means --client). The returned note is
@@ -114,6 +127,13 @@ func collectVersion(ctx context.Context, c client.Reader, cliVersion string) (in
 		info.Server.LatestRelease = rel.Version
 	}
 
+	skipNext := inst.Spec.InstallerSignature != nil && inst.Spec.InstallerSignature.Mode == ichorv1alpha1.InstallerSignatureSkip
+	if img := inst.Status.InstallerImage; img != nil {
+		info.Server.InstallerImage = &versionInstaller{Digest: img.Digest, Verification: img.Verification, SkipReason: img.Reason, SkipNext: skipNext}
+	} else if skipNext {
+		info.Server.InstallerImage = &versionInstaller{SkipNext: true}
+	}
+
 	return info, ""
 }
 
@@ -131,6 +151,10 @@ func writeVersionHuman(w io.Writer, info versionInfo) error {
 		if s.LatestRelease != "" {
 			rows = append(rows, kv{"latest", s.LatestRelease + " available"})
 		}
+
+		if img := s.InstallerImage; img != nil {
+			rows = append(rows, kv{"installer image", installerImageText(img)})
+		}
 	}
 
 	if r := info.Release; r != nil {
@@ -142,6 +166,28 @@ func writeVersionHuman(w io.Writer, info versionInfo) error {
 	h.Block("", rows...)
 
 	return h.Err()
+}
+
+// installerImageText says what `ichor version` shows about the installer image: verified, or loudly not (ADR 0122).
+func installerImageText(img *versionInstaller) string {
+	var text string
+
+	switch {
+	case img.Verification == ichorv1alpha1.InstallerImageSkipped:
+		text = "signature NOT checked (" + img.SkipReason + ")"
+	case img.Verification != "":
+		text = "signature verified"
+	}
+
+	if img.Digest != "" {
+		text += " " + img.Digest
+	}
+
+	if img.SkipNext {
+		text = strings.TrimSpace(text + "; the next upgrade will NOT check the signature")
+	}
+
+	return strings.TrimSpace(text)
 }
 
 func writeVersion(w io.Writer, format string, info versionInfo) error {

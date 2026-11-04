@@ -18,7 +18,9 @@ package uiapi
 
 import (
 	"context"
+	"regexp"
 	"strconv"
+	"strings"
 
 	"connectrpc.com/connect"
 	"golang.org/x/mod/semver"
@@ -79,6 +81,13 @@ func (s *Server) GetIchorInstallation(
 		resp.AutoPatchHaltedOperation = a.HaltedOperation
 	}
 
+	// The installer image of the last upgrade and whether anything was checked (ADR 0122).
+	if img := inst.Status.InstallerImage; img != nil {
+		resp.InstallerDigest, resp.InstallerVerification, resp.InstallerSkipReason = img.Digest, img.Verification, img.Reason
+	}
+
+	resp.InstallerSignatureSkip = inst.Spec.InstallerSignature != nil && inst.Spec.InstallerSignature.Mode == ichorv1alpha1.InstallerSignatureSkip
+
 	// What the controller's release check last found (ADR 0114); the Upgrade flow does not use it.
 	if rel := inst.Status.LatestRelease; rel != nil {
 		resp.LatestVersion = rel.Version
@@ -91,4 +100,54 @@ func (s *Server) GetIchorInstallation(
 	}
 
 	return connect.NewResponse(resp), nil
+}
+
+var installerDigestPattern = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
+
+// maxSkipReason is the CRD's limit on spec.installerSignature.reason.
+const maxSkipReason = 512
+
+// checkInstallerOptions refuses installer settings the CRD would refuse, before anything is written.
+func checkInstallerOptions(o *pb.IchorInstallerOptions) error {
+	if d := o.GetDigest(); d != "" && !installerDigestPattern.MatchString(d) {
+		return invalid("the installer digest %q is not sha256: followed by 64 lowercase hex characters", d)
+	}
+
+	if r := o.GetSkipSignatureReason(); r != "" && (strings.TrimSpace(r) == "" || len(r) > maxSkipReason) {
+		return invalid("the reason for skipping the signature check must say something and be at most %d bytes", maxSkipReason)
+	}
+
+	return nil
+}
+
+// installerOptionsOf is the installer settings the IchorInstallation spec holds, in the request's form.
+func installerOptionsOf(spec *ichorv1alpha1.IchorInstallationSpec) (pin, skipReason string) {
+	if sig := spec.InstallerSignature; sig != nil && sig.Mode == ichorv1alpha1.InstallerSignatureSkip {
+		skipReason = sig.Reason
+	}
+
+	return spec.InstallerDigest, skipReason
+}
+
+// installerOptionsChange is true when writing o would change the spec.
+func installerOptionsChange(inst *ichorv1alpha1.IchorInstallation, o *pb.IchorInstallerOptions) bool {
+	pin, reason := installerOptionsOf(&inst.Spec)
+
+	return pin != o.GetDigest() || reason != o.GetSkipSignatureReason()
+}
+
+// applyInstallerOptions writes o to the spec exactly: an empty field clears the setting, so a pin or a
+// skip never carries over from an earlier upgrade (ADR 0122).
+func applyInstallerOptions(spec *ichorv1alpha1.IchorInstallationSpec, o *pb.IchorInstallerOptions) {
+	spec.InstallerDigest = o.GetDigest()
+	spec.InstallerSignature = nil
+
+	if r := o.GetSkipSignatureReason(); r != "" {
+		spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip, Reason: r}
+	}
+}
+
+// installerSkipWarning is what the plan says about a skipped signature check.
+func installerSkipWarning(reason string) string {
+	return "The signature of the installer image is NOT checked, and the installer Job holds nearly cluster-admin rights: " + reason + "."
 }

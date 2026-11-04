@@ -90,6 +90,26 @@ message GetIchorInstallationResponse {
   // auto_patch_halted_operation is the automatic operation (namespace/name) that stopped automatic
   // patching; empty when it is not halted.
   string auto_patch_halted_operation = 11;
+  // installer_digest is the installer image digest the last Ichor upgrade ran (status.installerImage, ADR 0122).
+  string installer_digest = 12;
+  // installer_verification is "Verified" when that image's signature was checked, "Skipped" when it was not;
+  // empty before any upgrade has run.
+  string installer_verification = 13;
+  // installer_skip_reason is why the check was skipped; empty when it was not.
+  string installer_skip_reason = 14;
+  // installer_signature_skip is true while spec.installerSignature.mode is skip: the next Ichor upgrade
+  // will not check the installer image's signature.
+  bool installer_signature_skip = 15;
+}
+
+// IchorInstallerOptions are the installer image settings of an Ichor upgrade (ADR 0122). They are written
+// to the IchorInstallation exactly as given: a field left empty clears the setting, so a pin or a skip
+// never carries over from an earlier upgrade.
+message IchorInstallerOptions {
+  // digest pins the installer image ("sha256:" and 64 hex digits); empty lets the controller resolve the tag.
+  string digest = 1;
+  // skip_signature_reason, when not empty, skips the signature check of the installer image and records why.
+  string skip_signature_reason = 2;
 }
 
 message ListEtcdBackupsRequest {
@@ -364,6 +384,8 @@ message PlanOperationRequest {
   EtcdRestoreRequest etcd_restore = 6;
   // override carries the override verb (ADR 0110) for the kinds that have a safety check it lifts.
   Override override = 7;
+  // ichor_installer is for kind ICHOR only (ADR 0122).
+  IchorInstallerOptions ichor_installer = 8;
 }
 
 message PlanOperationResponse {
@@ -423,6 +445,8 @@ message CreateOperationRequest {
   EtcdRestoreRequest etcd_restore = 6;
   // override carries the override verb (ADR 0110) for the kinds that have a safety check it lifts.
   Override override = 7;
+  // ichor_installer is for kind ICHOR only (ADR 0122).
+  IchorInstallerOptions ichor_installer = 8;
 }
 
 message CreateOperationResponse {

@@ -85,7 +85,7 @@ kubectl --context $C -n ichor-e2e run $P-tools --image=busybox:1.37 --restart=Ne
 kubectl --context $C -n ichor-e2e cp bin/ichor-static $P-tools:/tmp/ichor
 kubectl --context $C -n ichor-e2e cp bin/ui-demo.crt $P-tools:/tmp/ui.crt
 kubectl --context $C -n ichor-e2e cp bin/ui-demo.key $P-tools:/tmp/ui.key
-kubectl --context $C -n ichor-e2e exec $P-tools -- env HOME=/tmp/home /tmp/ichor init --yes \
+kubectl --context $C -n ichor-e2e exec $P-tools -- env HOME=/tmp/home /tmp/ichor init --yes --bundle-plaintext \
   --cluster $P --preset single --cni cilium --cni-tunnel geneve --endpoint-type node --endpoint-address $CP_IP \
   --node-endpoint $CP_IP:50000 --talos-version v1.14.5 --version-contract v1.14 --install-disk /dev/vda \
   --pod-subnets 10.248.0.0/16 --service-subnets 10.249.0.0/16 --registry-mirror ghcr.io=http://$REG:5000 \

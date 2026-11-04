@@ -157,3 +157,7 @@ delete` and `operation resume` also ran. See ADRs 0057, 0066 and 0067 for what e
 
 - `--follow` / `--watch` (one shared helper, `retryTransient`) retry transient API errors (connection refused/reset, Unavailable, EOF, timeouts) with backoff for up to 10 minutes, printing `API unreachable, retrying`, and re-open a dead ichor-ui tunnel. NotFound, PermissionDenied and the like still end the command.
 - `PlanOperation` blocks a version target older than the current one (Talos, Kubernetes, Ichor), so `CreateOperation` never writes a downgrade into the spec before the executor refuses it.
+
+## Amendment (2026-11-04): the service refuses early, the controller serializes
+
+`blockedReason` / `unfinishedOperation` (Decision 2, point 1) only guard operations created through `OperationService`. The controller now keeps operations apart by itself: each takes the cluster lock under its own identity, a second one waits with `ClusterLockHeld` naming the holder, and a lease held by an operation that is gone, `Completed` or paused on a failed step is taken over at once (ADR 0026, amendment 2026-11-04). The service's refusal stays, since it stops the spec from being written for an operation that cannot start. The admission webhook deliberately does not reject a second operation, so operations created by `kubectl` or GitOps queue instead of failing.

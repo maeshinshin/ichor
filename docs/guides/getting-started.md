@@ -41,8 +41,13 @@ linux/amd64 binaries into `bin/img/`. `demo-images-push` layers each on a
 pinned distroless base and pushes `ichor-controller`, `ichor-ui` and
 `ichor-installer` to `192.168.1.10:5000/maeshinshin/` with `crane`, printing
 each digest. It talks plain HTTP to the registry by default; set
-`CRANE_INSECURE=` (empty) for one with TLS. `make demo-images VERSION=...
-REGISTRY=...` does both steps in one go.
+`CRANE_INSECURE=` (empty) for one with TLS. These two steps leave the install
+manifest naming the images by tag. `make demo-images VERSION=... REGISTRY=...`
+does both in one go the way a release does: it pushes `ichor-controller` and
+`ichor-ui` first, writes their digests to `bin/digests.txt`, renders the install
+manifest with `ichor-controller:VERSION@sha256:...` and
+`ichor-ui:VERSION@sha256:...`, and only then builds and pushes the installer
+image that embeds it.
 
 The same build leaves the CLI at `bin/img/ichor/ichor`. It carries the
 install manifest for that version inside it (the `installembed` build), which

@@ -154,6 +154,11 @@ installer image's signature itself; see
 [The installer image on an upgrade](#the-installer-image-on-an-upgrade). A Helm
 install is upgraded with `helm upgrade`, so there verify the chart and images
 yourself as above, or enforce signatures with an admission policy of your own.
+The install manifest embedded in the release's installer image names
+`ichor-controller` and `ichor-ui` by digest (`ghcr.io/maeshinshin/ichor-controller:vX.Y.Z@sha256:...`),
+and the chart's default images carry their digests the same way, so the
+installer a verified signature covers deploys exactly the images the release
+built, not what a tag points at later.
 The base image of each release is pinned by digest and named in the image's
 `org.opencontainers.image.base.digest` annotation. The images are reproducible
 from the tag: the same commit and the same Nix shell build the same binaries

@@ -50,7 +50,10 @@ var cniHelmApplyOpts struct {
 	KubeProxy        string
 	Takeover         bool
 	Exclusive        bool
-	Timeout          time.Duration
+	// Nodes is how many Nodes the cluster has, as the controller counted them for the values hash
+	// (0 unknown: the desired control-plane count stands in).
+	Nodes   int
+	Timeout         time.Duration
 	// ImageVersion and ImageOverrides are a Cilium patch's images (ADR 0115, amendment 2026-11-03), as the
 	// controller passes them: each override is key=reference.
 	ImageVersion   string
@@ -111,7 +114,8 @@ namespace, read back, and only then deleted (the record Secrets only, never helm
 
 		return runCNIHelmApply(cmd.Context(), c, cfg, types.NamespacedName{
 			Namespace: apiOpts.Namespace, Name: cniHelmApplyOpts.Cluster,
-		}, cniHelmApplyOpts.KubeProxy, cniHelmApplyOpts.Timeout, cniHelmApplyOpts.Exclusive, tk, image, cmd.OutOrStdout())
+		}, cniHelmApplyOpts.KubeProxy, cniHelmApplyOpts.Timeout, cniHelmApplyOpts.Exclusive,
+			cniHelmApplyOpts.Nodes, tk, image, cmd.OutOrStdout())
 	},
 }
 
@@ -154,7 +158,7 @@ type takeoverOptions struct {
 // Helm configuration over the memory driver. takeover is nil unless --takeover.
 func runCNIHelmApply(
 	ctx context.Context, c client.Client, cfg *action.Configuration, key types.NamespacedName,
-	kubeProxy string, timeout time.Duration, exclusive bool, takeover *takeoverOptions,
+	kubeProxy string, timeout time.Duration, exclusive bool, nodes int, takeover *takeoverOptions,
 	image *ichorv1alpha1.TalosCiliumImageOverride, out io.Writer,
 ) error {
 	var cluster ichorv1alpha1.TalosCluster
@@ -177,7 +181,7 @@ func runCNIHelmApply(
 		kubeProxy = cluster.Spec.CNI.KubeProxy
 	}
 
-	res, err := cilium.ApplyForCluster(ctx, cfg, &cluster, cni.KubeProxyMode(kubeProxy), timeout, exclusive)
+	res, err := cilium.ApplyForCluster(ctx, cfg, &cluster, cni.KubeProxyMode(kubeProxy), nodes, timeout, exclusive)
 	if err != nil {
 		return err
 	}
@@ -238,6 +242,7 @@ func init() {
 	f.StringVar(&cniHelmApplyOpts.KubeProxy, "kube-proxy", "", "kube-proxy mode to apply (enabled or replaced); default the cluster's spec.cni.kubeProxy")
 	f.BoolVar(&cniHelmApplyOpts.Takeover, "takeover", false, "the Cilium being installed over was installed by someone else (an adopted cluster): retire its Helm release record after the rollout")
 	f.BoolVar(&cniHelmApplyOpts.Exclusive, "exclusive", false, "no other Helm operation on the release can be running (the controller runs one ichor-cni Job per cluster): repair a pending-* record at once instead of after the timeout")
+	f.IntVar(&cniHelmApplyOpts.Nodes, "nodes", 0, "how many Nodes the cluster has (the controller counts them, so the Job applies the values it hashed); 0 uses spec.controlPlane.count")
 	f.DurationVar(&cniHelmApplyOpts.Timeout, "timeout", cilium.DefaultApplyTimeout, "how long to wait for Cilium's workloads to roll out")
 	f.StringVar(&cniHelmApplyOpts.ImageVersion, "image-version", "", "the Cilium patch (vX.Y.Z) whose images --image-override names; empty for the chart's own images")
 	f.StringArrayVar(&cniHelmApplyOpts.ImageOverrides, "image-override", nil, "an image of the Cilium patch as key=repository:tag@sha256:digest (keys: agent, operator, hubble-relay)")

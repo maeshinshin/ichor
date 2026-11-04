@@ -19,6 +19,7 @@ package render
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/siderolabs/talos/pkg/machinery/cel"
 	"github.com/siderolabs/talos/pkg/machinery/cel/celenv"
@@ -61,13 +62,9 @@ func checkCNISupported(cluster *ichorv1alpha1.TalosCluster) error {
 // contract, and cluster.network.cni.name: none before it.
 func injectCNI(cfg coreconfig.Provider, contract *coreconfig.VersionContract) (coreconfig.Provider, error) {
 	if contract.MultidocKubernetesConfigSupported() {
-		docs := make([]config.Document, 0, len(cfg.Documents()))
-
-		for _, d := range cfg.Documents() {
-			if d.Kind() != k8s.KubeFlannelCNIConfig {
-				docs = append(docs, d)
-			}
-		}
+		docs := slices.DeleteFunc(slices.Clone(cfg.Documents()), func(d config.Document) bool {
+			return d.Kind() == k8s.KubeFlannelCNIConfig
+		})
 
 		out, err := container.New(docs...)
 		if err != nil {

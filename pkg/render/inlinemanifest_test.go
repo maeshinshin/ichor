@@ -17,7 +17,6 @@ limitations under the License.
 package render
 
 import (
-	"strings"
 	"testing"
 
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
@@ -78,20 +77,13 @@ func TestInlineManifestForm(t *testing.T) {
 
 				out := mustRender(t, cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch})
 
-				if !strings.Contains(out, tc.wantForm) {
-					t.Errorf("want %q in the render:\n%s", tc.wantForm, out)
-				}
+				requireAll(t, out, tc.wantForm, otherName, sibling)
+				requireNone(t, out, tc.absentForm)
 
-				if strings.Contains(out, tc.absentForm) {
-					t.Errorf("%q must not appear on contract %s:\n%s", tc.absentForm, tc.contract, out)
-				}
-
-				if !strings.Contains(out, otherName) || !strings.Contains(out, sibling) {
-					t.Errorf("the other entry and extraManifests must survive:\n%s", out)
-				}
-
-				if got := strings.Contains(out, cniName); got == handover {
-					t.Errorf("cni entry present = %t with handover = %t:\n%s", got, handover, out)
+				if handover {
+					requireNone(t, out, cniName)
+				} else {
+					requireAll(t, out, cniName)
 				}
 			})
 		}

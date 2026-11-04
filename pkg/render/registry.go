@@ -167,8 +167,6 @@ func injectRegistries(
 	}
 
 	if len(docs) > 0 {
-		var err error
-
 		if cfg, err = mergeDocument(cfg, "registry mirrors", docs...); err != nil {
 			return nil, err
 		}

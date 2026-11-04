@@ -23,11 +23,11 @@ const OperationStartVerb = "start"
 
 // StartSubresource returns the talosoperations subresource whose `start` verb starting this
 // operation needs, or "" for a kind that needs none. The destructive starts are a shutdown, a CA
-// rotation, an etcd restore, and the node actions reset and shutdown, named shutdown,
-// ca-rotation, etcd-restore, node-reset and node-shutdown.
+// rotation, a key rotation, an etcd restore, and the node actions reset and shutdown, named shutdown,
+// ca-rotation, key-rotation, etcd-restore, node-reset and node-shutdown.
 func (s *TalosOperationSpec) StartSubresource() string {
 	switch s.Kind {
-	case TalosOperationKindShutdown, TalosOperationKindCARotation, TalosOperationKindEtcdRestore:
+	case TalosOperationKindShutdown, TalosOperationKindCARotation, TalosOperationKindKeyRotation, TalosOperationKindEtcdRestore:
 		return s.Kind
 	case TalosOperationKindNode:
 		if s.Node != nil && (s.Node.Action == NodeActionReset || s.Node.Action == NodeActionShutdown) {

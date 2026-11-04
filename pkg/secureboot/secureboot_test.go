@@ -29,7 +29,15 @@ import (
 const (
 	schematic = "376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba"
 	reasonOff = "SecureBootOff"
+
+	lkNone      = ichorv1alpha1.KernelLockdownNone
+	lkIntegrity = ichorv1alpha1.KernelLockdownIntegrity
+	lkConf      = ichorv1alpha1.KernelLockdownConfidentiality
+	condSB      = ichorv1alpha1.ConditionSecureBoot
+	condKL      = ichorv1alpha1.ConditionKernelLockdown
 )
+
+type nodeSec = ichorv1alpha1.TalosMachineSecurity
 
 func TestInstallerImage(t *testing.T) {
 	t.Parallel()
@@ -54,14 +62,14 @@ func TestLockdownLevel(t *testing.T) {
 		secureBoot bool
 		want       string
 	}{
-		{"nothing, no secureboot", "talos.platform=metal", false, "none"},
-		{"secureboot is integrity by itself", "talos.platform=metal", true, "integrity"},
-		{"explicit confidentiality", "talos.platform=metal lockdown=confidentiality", true, "confidentiality"},
-		{"explicit without secureboot", "lockdown=integrity talos.platform=metal", false, "integrity"},
-		{"the last word wins", "lockdown=confidentiality lockdown=integrity", false, "integrity"},
-		{"an unknown value is ignored", "lockdown=banana", true, "integrity"},
-		{"explicit none", "lockdown=none", false, "none"},
-		{"not a prefix match", "xlockdown=confidentiality", false, "none"},
+		{"nothing, no secureboot", "talos.platform=metal", false, lkNone},
+		{"secureboot is integrity by itself", "talos.platform=metal", true, lkIntegrity},
+		{"explicit confidentiality", "talos.platform=metal lockdown=confidentiality", true, lkConf},
+		{"explicit without secureboot", "lockdown=integrity talos.platform=metal", false, lkIntegrity},
+		{"the last word wins", "lockdown=confidentiality lockdown=integrity", false, lkIntegrity},
+		{"an unknown value is ignored", "lockdown=banana", true, lkIntegrity},
+		{"explicit none", "lockdown=none", false, lkNone},
+		{"not a prefix match", "xlockdown=confidentiality", false, lkNone},
 	} {
 		if got := secureboot.LockdownLevel(tc.cmdline, tc.secureBoot); got != tc.want {
 			t.Errorf("%s: LockdownLevel(%q, %v) = %q, want %q", tc.name, tc.cmdline, tc.secureBoot, got, tc.want)
@@ -76,12 +84,12 @@ func TestLockdownMeets(t *testing.T) {
 		observed, expected string
 		want               bool
 	}{
-		{"none", "integrity", false},
-		{"integrity", "integrity", true},
-		{"confidentiality", "integrity", true},
-		{"integrity", "confidentiality", false},
-		{"confidentiality", "confidentiality", true},
-		{"", "integrity", false},
+		{lkNone, lkIntegrity, false},
+		{lkIntegrity, lkIntegrity, true},
+		{lkConf, lkIntegrity, true},
+		{lkIntegrity, lkConf, false},
+		{lkConf, lkConf, true},
+		{"", lkIntegrity, false},
 	} {
 		if got := secureboot.LockdownMeets(tc.observed, tc.expected); got != tc.want {
 			t.Errorf("LockdownMeets(%q, %q) = %v, want %v", tc.observed, tc.expected, got, tc.want)
@@ -117,14 +125,14 @@ func TestMode(t *testing.T) {
 func TestUseSecureBootInstaller(t *testing.T) {
 	t.Parallel()
 
-	uki := &ichorv1alpha1.TalosMachineSecurity{BootedWithUKI: true}
-	grub := &ichorv1alpha1.TalosMachineSecurity{}
-	running := &ichorv1alpha1.TalosMachineSecurity{BootedWithUKI: true, SecureBoot: true}
+	uki := &nodeSec{BootedWithUKI: true}
+	grub := &nodeSec{}
+	running := &nodeSec{BootedWithUKI: true, SecureBoot: true}
 
 	for _, tc := range []struct {
 		name string
 		sec  *ichorv1alpha1.TalosClusterSecurity
-		node *ichorv1alpha1.TalosMachineSecurity
+		node *nodeSec
 		want bool
 	}{
 		{"off, uki node", security("Off", ""), uki, false},
@@ -158,7 +166,7 @@ func TestMachineConditions(t *testing.T) {
 	t.Run("nothing set, no conditions", func(t *testing.T) {
 		t.Parallel()
 
-		if got := secureboot.MachineConditions(nil, &ichorv1alpha1.TalosMachineSecurity{SecureBoot: true}); len(got) != 0 {
+		if got := secureboot.MachineConditions(nil, &nodeSec{SecureBoot: true}); len(got) != 0 {
 			t.Errorf("got %v", got)
 		}
 
@@ -170,12 +178,12 @@ func TestMachineConditions(t *testing.T) {
 	t.Run("unread is Unknown", func(t *testing.T) {
 		t.Parallel()
 
-		got := secureboot.MachineConditions(security("Preferred", "integrity"), nil)
-		if c := cond(got, "SecureBoot"); c == nil || c.Status != metav1.ConditionUnknown {
+		got := secureboot.MachineConditions(security("Preferred", lkIntegrity), nil)
+		if c := cond(got, condSB); c == nil || c.Status != metav1.ConditionUnknown {
 			t.Errorf("SecureBoot = %+v", c)
 		}
 
-		if c := cond(got, "KernelLockdown"); c == nil || c.Status != metav1.ConditionUnknown {
+		if c := cond(got, condKL); c == nil || c.Status != metav1.ConditionUnknown {
 			t.Errorf("KernelLockdown = %+v", c)
 		}
 	})
@@ -183,12 +191,12 @@ func TestMachineConditions(t *testing.T) {
 	t.Run("secureboot on", func(t *testing.T) {
 		t.Parallel()
 
-		got := secureboot.MachineConditions(security("Required", ""), &ichorv1alpha1.TalosMachineSecurity{SecureBoot: true, BootedWithUKI: true})
-		if c := cond(got, "SecureBoot"); c == nil || c.Status != metav1.ConditionTrue || c.Reason != "SecureBootOn" {
+		got := secureboot.MachineConditions(security("Required", ""), &nodeSec{SecureBoot: true, BootedWithUKI: true})
+		if c := cond(got, condSB); c == nil || c.Status != metav1.ConditionTrue || c.Reason != "SecureBootOn" {
 			t.Errorf("SecureBoot = %+v", c)
 		}
 
-		if cond(got, "KernelLockdown") != nil {
+		if cond(got, condKL) != nil {
 			t.Error("KernelLockdown set without the option")
 		}
 	})
@@ -196,8 +204,8 @@ func TestMachineConditions(t *testing.T) {
 	t.Run("a GRUB install needs a reinstall", func(t *testing.T) {
 		t.Parallel()
 
-		got := secureboot.MachineConditions(security("Preferred", ""), &ichorv1alpha1.TalosMachineSecurity{})
-		c := cond(got, "SecureBoot")
+		got := secureboot.MachineConditions(security("Preferred", ""), &nodeSec{})
+		c := cond(got, condSB)
 		if c == nil || c.Status != metav1.ConditionFalse || c.Reason != "NotUKI" {
 			t.Fatalf("SecureBoot = %+v", c)
 		}
@@ -206,8 +214,8 @@ func TestMachineConditions(t *testing.T) {
 	t.Run("a UKI node with firmware SecureBoot off", func(t *testing.T) {
 		t.Parallel()
 
-		got := secureboot.MachineConditions(security("Required", ""), &ichorv1alpha1.TalosMachineSecurity{BootedWithUKI: true})
-		c := cond(got, "SecureBoot")
+		got := secureboot.MachineConditions(security("Required", ""), &nodeSec{BootedWithUKI: true})
+		c := cond(got, condSB)
 		if c == nil || c.Status != metav1.ConditionFalse || c.Reason != reasonOff {
 			t.Fatalf("SecureBoot = %+v", c)
 		}
@@ -216,14 +224,14 @@ func TestMachineConditions(t *testing.T) {
 	t.Run("mode Off but the node runs SecureBoot", func(t *testing.T) {
 		t.Parallel()
 
-		got := secureboot.MachineConditions(security("Off", "integrity"), &ichorv1alpha1.TalosMachineSecurity{
-			SecureBoot: true, BootedWithUKI: true, KernelLockdown: "integrity",
+		got := secureboot.MachineConditions(security("Off", lkIntegrity), &nodeSec{
+			SecureBoot: true, BootedWithUKI: true, KernelLockdown: lkIntegrity,
 		})
-		if c := cond(got, "SecureBoot"); c == nil || c.Status != metav1.ConditionFalse || c.Reason != "ModeOffButSecureBoot" {
+		if c := cond(got, condSB); c == nil || c.Status != metav1.ConditionFalse || c.Reason != "ModeOffButSecureBoot" {
 			t.Errorf("SecureBoot = %+v", c)
 		}
 
-		if c := cond(got, "KernelLockdown"); c == nil || c.Status != metav1.ConditionTrue {
+		if c := cond(got, condKL); c == nil || c.Status != metav1.ConditionTrue {
 			t.Errorf("KernelLockdown = %+v", c)
 		}
 	})
@@ -231,16 +239,16 @@ func TestMachineConditions(t *testing.T) {
 	t.Run("lockdown below the expected level", func(t *testing.T) {
 		t.Parallel()
 
-		got := secureboot.MachineConditions(security("", "confidentiality"), &ichorv1alpha1.TalosMachineSecurity{
-			SecureBoot: true, KernelLockdown: "integrity",
+		got := secureboot.MachineConditions(security("", lkConf), &nodeSec{
+			SecureBoot: true, KernelLockdown: lkIntegrity,
 		})
 
-		c := cond(got, "KernelLockdown")
+		c := cond(got, condKL)
 		if c == nil || c.Status != metav1.ConditionFalse || c.Reason != "LockdownBelowExpected" {
 			t.Fatalf("KernelLockdown = %+v", c)
 		}
 
-		if cond(got, "SecureBoot") != nil {
+		if cond(got, condSB) != nil {
 			t.Error("SecureBoot set without the option")
 		}
 	})
@@ -250,12 +258,12 @@ func TestClusterCondition(t *testing.T) {
 	t.Parallel()
 
 	machines := map[string][]metav1.Condition{
-		"cp1": {{Type: "SecureBoot", Status: metav1.ConditionTrue}},
-		"w1":  {{Type: "SecureBoot", Status: metav1.ConditionFalse, Reason: reasonOff}},
-		"w2":  {{Type: "SecureBoot", Status: metav1.ConditionUnknown}},
+		"cp1": {{Type: condSB, Status: metav1.ConditionTrue}},
+		"w1":  {{Type: condSB, Status: metav1.ConditionFalse, Reason: reasonOff}},
+		"w2":  {{Type: condSB, Status: metav1.ConditionUnknown}},
 	}
 
-	c := secureboot.ClusterCondition("SecureBoot", machines)
+	c := secureboot.ClusterCondition(condSB, machines)
 	if c.Status != metav1.ConditionFalse || c.Reason != "NodesNotConformant" {
 		t.Fatalf("got %+v", c)
 	}
@@ -270,18 +278,18 @@ func TestClusterCondition(t *testing.T) {
 
 	delete(machines, "w1")
 
-	if c := secureboot.ClusterCondition("SecureBoot", machines); c.Status != metav1.ConditionUnknown {
+	if c := secureboot.ClusterCondition(condSB, machines); c.Status != metav1.ConditionUnknown {
 		t.Errorf("one unread machine: %+v", c)
 	}
 
 	delete(machines, "w2")
 
-	if c := secureboot.ClusterCondition("SecureBoot", machines); c.Status != metav1.ConditionTrue || c.Reason != "AllNodesConformant" {
+	c = secureboot.ClusterCondition(condSB, machines)
+	if c.Status != metav1.ConditionTrue || c.Reason != "AllNodesConformant" {
 		t.Errorf("all conformant: %+v", c)
 	}
 
-	if c := secureboot.ClusterCondition("SecureBoot", nil); c.Status != metav1.ConditionUnknown {
+	if c := secureboot.ClusterCondition(condSB, nil); c.Status != metav1.ConditionUnknown {
 		t.Errorf("no machines: %+v", c)
 	}
 }
-

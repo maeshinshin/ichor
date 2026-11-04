@@ -203,10 +203,36 @@ bin/ichor version
 kubectl get nodes
 ```
 
-`cluster status` prints versions, endpoint and CNI in a few lines;
-`cluster get` adds conditions, rollout and the Cilium hand-over state. Every
-machine should be Ready. `ichor version` shows the CLI and the installed
-Ichor version; they should both say `v0.1.0`.
+```
+$ bin/ichor cluster status demo
+demo · ichor-system
+  Talos        v1.14.5
+  Kubernetes   v1.36.6
+  Cilium       1.20.4
+  Endpoint     192.168.1.50 (node)
+  Health       ✓ ready
+
+$ bin/ichor machine list --cluster demo
+NAME      ROLE           APPROVAL  READY  ENDPOINT            NODE     AGE
+fa70962a  control-plane  approved  ✓      192.168.1.50:50000  demo-cp  5m
+
+$ bin/ichor version
+ichor        v0.1.0
+installed    v0.1.0
+new installs Talos v1.14.5 · Kubernetes v1.36.6 · Cilium 1.20.4 (contract v1.14)
+```
+
+`cluster status` prints versions, endpoint and health in a few lines;
+`cluster get` adds the network, CNI, control plane, certificate expiry and
+every condition (with ✓, `!`, ✗ or … in front). Every machine should be Ready
+(✓). `ichor version` shows the CLI and the installed Ichor version; they should
+both say `v0.1.0`.
+
+The CLI prints for people. In a script, add `-o yaml` or `-o json` to
+`cluster list|get`, `machine list|get` and `version` for the full response;
+the commands that have no table yet print YAML either way. A table never
+truncates a cell, and colour appears only on a terminal (set `NO_COLOR` to turn
+it off).
 
 ## 5. Open the UI and sign in
 
@@ -224,8 +250,13 @@ changes. Open it through a port-forward:
 bin/ichor ui
 ```
 
-It opens `https://localhost:PORT` in your default browser (`--open-browser=false`
-only prints the address) and keeps the tunnel up until you press Ctrl-C. The
+```
+✓ ichor-ui  https://localhost:8443/
+  port-forward to ichor-system/ichor-ichor-ui-7d9c5b6f4-x2k8q · Ctrl-C to stop
+```
+
+It opens that address in your default browser (`--open-browser=false`
+only prints it) and keeps the tunnel up until you press Ctrl-C. The
 certificate comes from the Ichor serving CA, which a browser does not trust, so
 it warns.
 

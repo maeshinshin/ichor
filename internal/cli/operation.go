@@ -112,7 +112,7 @@ func runSetPaused(ctx context.Context, c *apiClients, out, errw io.Writer, name 
 	}
 
 	// Resuming an operation that failed also asks for its failed step to run again.
-	if op := resp.Msg.GetOperation(); !paused && op.GetPhase() == "Paused" && op.GetFailureReason() != "" {
+	if op := resp.Msg.GetOperation(); !paused && op.GetPhase() == condPaused && op.GetFailureReason() != "" {
 		_, _ = fmt.Fprintf(errw, "ichor: re-running the step that failed: %s\n", op.GetFailureReason())
 	}
 
@@ -324,7 +324,7 @@ func watchOperationUntil(ctx context.Context, c *apiClients, ref *pb.ObjectRef, 
 
 		progress.show(op.GetCaRotationStage(), func(stage string) string { return progressLineAt(op, stage) })
 
-		failed := op.GetPhase() == "Paused" && op.GetFailureReason() != ""
+		failed := op.GetPhase() == condPaused && op.GetFailureReason() != ""
 		if op.GetPhase() == "Completed" || op.GetPhase() == "ShutDown" || failed {
 			if err := writeMessage(out, outputFormat, resp.Msg); err != nil {
 				return err

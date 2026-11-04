@@ -89,7 +89,7 @@ func runClusterStatus(ctx context.Context, c *apiClients, out io.Writer, name st
 // cniStatusLine is the cni line of `ichor cluster status -o yaml`.
 func cniStatusLine(cl *pb.Cluster) string {
 	if cl.GetCniPreset() != ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
-		return "cilium"
+		return string(detectedCilium)
 	}
 
 	detected := cl.GetCniDetected()

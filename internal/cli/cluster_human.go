@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strings"
@@ -40,8 +41,8 @@ func conditionsOf(conds []*pb.Condition) []conditionRow {
 // readyMark is the glyph of the Ready condition, "" when there is none yet.
 func (h *human) readyMark(conds []*pb.Condition) string {
 	for _, c := range conds {
-		if c.GetType() == "Ready" {
-			return h.Mark(conditionMark("Ready", c.GetStatus()))
+		if c.GetType() == conditionReady {
+			return h.Mark(conditionMark(conditionReady, c.GetStatus()))
 		}
 	}
 
@@ -51,14 +52,14 @@ func (h *human) readyMark(conds []*pb.Condition) string {
 // health is "✓ ready", "✗ not ready (reason)" or "… waiting" from the Ready condition.
 func (h *human) health(conds []*pb.Condition) string {
 	for _, c := range conds {
-		if c.GetType() != "Ready" {
+		if c.GetType() != conditionReady {
 			continue
 		}
 
 		switch c.GetStatus() {
-		case "True":
+		case condTrue:
 			return h.Mark(markOK) + " ready"
-		case "False":
+		case condFalse:
 			return h.Mark(markFailed) + " not ready" + parenthesized(c.GetReason())
 		}
 	}
@@ -77,7 +78,7 @@ func parenthesized(s string) string {
 // cniColumn is the CNI of a cluster for a table: "cilium", or "unmanaged (flannel)".
 func cniColumn(cl *pb.Cluster) string {
 	if cl.GetCniPreset() != ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
-		return "cilium"
+		return string(detectedCilium)
 	}
 
 	if d := cl.GetCniDetected(); d != "" {
@@ -146,18 +147,18 @@ func endpointWithType(cl *pb.Cluster) string {
 }
 
 func renderClusterStatus(h *human, cl *pb.Cluster) error {
-	rows := []kv{{"Talos", cl.GetTalosVersion()}, {"Kubernetes", cl.GetKubernetesVersion()}}
+	rows := []kv{{labelTalos, cl.GetTalosVersion()}, {labelKubernetes, cl.GetKubernetesVersion()}}
 
-	switch cilium := versionOf(cl, "cilium"); {
+	switch cilium := versionOf(cl, string(detectedCilium)); {
 	case cl.GetCniPreset() == ichorv1alpha1.TalosClusterCNIPresetUnmanaged:
 		rows = append(rows, kv{"CNI", cniColumn(cl) + ", not managed by Ichor"})
 	case cilium.GetCurrent() != "":
 		rows = append(rows, kv{"Cilium", cilium.GetCurrent()})
 	default:
-		rows = append(rows, kv{"CNI", "cilium"})
+		rows = append(rows, kv{"CNI", string(detectedCilium)})
 	}
 
-	rows = append(rows, kv{"Endpoint", endpointWithType(cl)}, kv{"Health", h.health(cl.GetConditions())})
+	rows = append(rows, kv{"Endpoint", endpointWithType(cl)}, kv{labelHealth, h.health(cl.GetConditions())})
 	h.Block(nsName(cl.GetRef()), rows...)
 
 	return h.Err()
@@ -170,21 +171,31 @@ func versionRow(v *pb.ComponentVersion) string {
 		cur = "unknown"
 	}
 
-	if v.GetState() == "up-to-date" || v.GetTarget() == "" {
+	if v.GetState() == stateUpToDate || v.GetTarget() == "" {
 		return cur
 	}
 
 	return fmt.Sprintf("%s (%s: this Ichor ships %s)", cur, v.GetState(), v.GetTarget())
 }
 
-var componentLabels = map[string]string{"talos": "Talos", "kubernetes": "Kubernetes", "cilium": "Cilium", "version-contract": "Contract"}
+// Release-set component names (ComponentVersion.name) and the labels they get.
+const (
+	stateUpToDate   = "up-to-date"
+	compTalos       = "talos"
+	labelTalos      = "Talos"
+	compKubernetes  = "kubernetes"
+	labelKubernetes = "Kubernetes"
+	labelHealth     = "Health"
+)
+
+var componentLabels = map[string]string{compTalos: labelTalos, compKubernetes: labelKubernetes, string(detectedCilium): "Cilium", "version-contract": "Contract"}
 
 func date(ts *timestamppb.Timestamp) string { return ts.AsTime().UTC().Format("2006-01-02") }
 
 func renderClusterGet(h *human, cl *pb.Cluster) error {
-	h.Block(nsName(cl.GetRef()), kv{"Health", h.health(cl.GetConditions())}, kv{"Created", agoOrEmpty(cl.GetCreatedAt())})
+	h.Block(nsName(cl.GetRef()), kv{labelHealth, h.health(cl.GetConditions())}, kv{"Created", agoOrEmpty(cl.GetCreatedAt())})
 
-	var vers []kv
+	vers := make([]kv, 0, len(cl.GetVersions()))
 
 	for _, v := range cl.GetVersions() {
 		label := componentLabels[v.GetName()]
@@ -196,7 +207,7 @@ func renderClusterGet(h *human, cl *pb.Cluster) error {
 	}
 
 	if len(vers) == 0 { // an older backend sends no comparison
-		vers = []kv{{"Talos", cl.GetTalosVersion()}, {"Kubernetes", cl.GetKubernetesVersion()}}
+		vers = []kv{{labelTalos, cl.GetTalosVersion()}, {labelKubernetes, cl.GetKubernetesVersion()}}
 	}
 
 	h.Block("Versions", vers...)
@@ -211,17 +222,17 @@ func renderClusterGet(h *human, cl *pb.Cluster) error {
 	if r := cl.GetRollout(); r != nil {
 		h.Block("Rollout", kv{"Kind", humanEnum(r.GetKind().String())}, kv{"Target", r.GetTargetVersion()},
 			kv{"Progress", fmt.Sprintf("%d/%d nodes", r.GetNodesDone(), r.GetNodesTotal())}, kv{"Phase", r.GetCurrentPhase()},
-			kv{"Paused", map[bool]string{true: "yes"}[r.GetPaused()]})
+			kv{condPaused, yesIf(r.GetPaused())})
 	}
 
-	var handovers []kv
+	handovers := make([]kv, 0, len(cl.GetHandovers()))
 	for _, s := range cl.GetHandovers() {
 		handovers = append(handovers, kv{s.GetComponent(), humanEnum(s.GetPhase().String()) + agoSuffix(s.GetLastTransitionTime())})
 	}
 
 	h.Block("Hand-over", handovers...)
 
-	var certs []kv
+	certs := make([]kv, 0, len(cl.GetCertificates()))
 	for _, c := range cl.GetCertificates() {
 		certs = append(certs, kv{c.GetName(), date(c.GetNotAfter()) + " (" + humanUntil(c.GetNotAfter()) + ")"})
 	}
@@ -232,13 +243,15 @@ func renderClusterGet(h *human, cl *pb.Cluster) error {
 	return h.Err()
 }
 
-func yesNo(b bool) string {
+func yesIf(b bool) string {
 	if b {
 		return "yes"
 	}
 
-	return "no"
+	return ""
 }
+
+func yesNo(b bool) string { return cmp.Or(yesIf(b), "no") }
 
 // agoOrEmpty is "5m ago", "" when ts is unset.
 func agoOrEmpty(ts *timestamppb.Timestamp) string {

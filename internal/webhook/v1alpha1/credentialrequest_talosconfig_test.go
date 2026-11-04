@@ -71,10 +71,10 @@ func TestTalosconfigReaderRequest(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		return h.Handle(context.Background(), admission.Request{AdmissionRequest: admissionv1.AdmissionRequest{
+		return h.Handle(context.Background(), admission.Request{
 			Operation: admissionv1.Create, Namespace: "ns", UserInfo: authnv1.UserInfo{Username: user}, DryRun: &dryRun,
 			Object: runtime.RawExtension{Raw: raw},
-		}})
+		})
 	}
 
 	events := func(c client.Client) []corev1.Event {
@@ -124,7 +124,7 @@ func TestTalosconfigReaderRequest(t *testing.T) {
 	t.Run("anyone else is refused and nothing is recorded", func(t *testing.T) {
 		t.Parallel()
 
-		for _, user := range []string{"ichor:rot", "sa", "nobody"} {
+		for _, user := range []string{"ichor:rot", "sa", "stranger"} {
 			c := sarClient(t, answer)
 			if got := handle(&CredentialRequestHandler{Client: c}, user, time.Hour, false); got.Allowed {
 				t.Errorf("%s was admitted", user)

@@ -397,6 +397,32 @@ The login cache is a credential on your machine. It is stored in
 After a Kubernetes CA rotation, a kubeconfig downloaded earlier fails TLS. Get
 a new one.
 
+### A read-only talosconfig for `talosctl`
+
+`operator` and `admin` can take a talosconfig whose client certificate has the
+Talos role `os:reader`: `talosctl` can read a node (`get members`, `logs`,
+`dmesg`, `processes`) and the node refuses everything that changes it
+(`reboot`, `upgrade`, `reset`). It needs no access to the secrets bundle.
+
+```
+ichor cluster talosconfig my-cluster --ttl 4h
+TALOSCONFIG=~/.talos/config.ichor-reader talosctl get members
+```
+
+It lives one hour by default and at most twelve; there is no way to ask for
+longer, and it cannot be revoked before it expires, so ask for what you need.
+The key is made on your machine. The UI offers the same under the cluster's
+"More actions" menu. Each request leaves an Event on the TalosCluster that
+names you (`kubectl get events --field-selector reason=TalosconfigReader`).
+
+The permission is the Kubernetes verb `download` on
+`talosclusters/talosconfig-reader`. `viewer` does not hold it, because a
+talosconfig is the node's own API, without the filtering and masking of the UI.
+To give it to a group, bind a ClusterRole with that rule to it. Ichor offers no
+`os:operator` talosconfig: it could reboot and upgrade nodes outside the
+operations Ichor plans and records. For admin access to the node API use
+`ichor cluster credentials`.
+
 ## What a sign-in is, and what ends it
 
 - An ID token lasts 5 minutes by default (1 minute to 1 hour). ichor-ui checks

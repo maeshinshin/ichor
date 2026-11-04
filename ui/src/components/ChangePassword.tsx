@@ -9,13 +9,12 @@ import { userClient } from '@/lib/connect'
 import { signOut } from '@/lib/oidc'
 import { minPasswordLength, passwordError, passwordOk } from '@/lib/users'
 import type { ErrorShape } from '@/lib/errors'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 // The change-own-password form (docs/adr/0094), used in the account menu's dialog and, with nothing
 // else on the screen, when the account must change its password. Neither password is kept anywhere
 // but in these fields, and they are cleared once the call succeeds.
 export function ChangePasswordForm({ onCancel }: { onCancel?: () => void }) {
-  const t = useT()
   const [oldPassword, setOld] = useState('')
   const [next, setNext] = useState('')
   const [again, setAgain] = useState('')
@@ -79,7 +78,6 @@ export function ChangePasswordForm({ onCancel }: { onCancel?: () => void }) {
 }
 
 export function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const t = useT()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -95,7 +93,6 @@ export function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; on
 
 // MustChangePassword blocks the whole app until the password is changed.
 export function MustChangePassword() {
-  const t = useT()
   return (
     <main class="mx-auto flex min-h-dvh max-w-md flex-col justify-center p-6">
       <Card>

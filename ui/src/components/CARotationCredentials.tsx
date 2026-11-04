@@ -14,7 +14,7 @@ import { canContinue, canDownload, credentialLifetimes, lifetimeSeconds, type Cr
 import { download } from '@/lib/download'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { notifyDone, notifyFailed } from '@/lib/notify'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 // The buttons of the CA rotation credential hand-off (docs/adr/0093): download the new kubeconfig and
 // talosconfig, and continue the rotation. The download needs the Kubernetes RBAC verb "download" on
@@ -32,7 +32,6 @@ export function CARotationCredentials({
   permitted: boolean | undefined
   onChanged: (next: Operation) => void
 }) {
-  const t = useT()
   const ref = op.ref
   const [confirmDownload, setConfirmDownload] = useState(false)
   const [confirmContinue, setConfirmContinue] = useState(false)

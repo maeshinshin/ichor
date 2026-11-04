@@ -18,7 +18,7 @@ import { matchesQuery } from '@/lib/filter'
 import { targetKindOf } from '@/lib/patchTarget'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { useList } from '@/lib/useList'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 import { Link } from '@/router'
 
 // Patch list: every TalosConfigPatch the backend can see, across clusters
@@ -27,7 +27,6 @@ import { Link } from '@/router'
 // machines). Create/edit/delete all live here and on PatchDetail
 // (architecture.md, "CLI and UI": "config editing by layer").
 export function PatchList() {
-  const t = useT()
   const { items: patches, error, reload } = useList(async () => (await patchClient.listPatches({})).patches)
   const [query, setQuery] = useState('')
 
@@ -83,8 +82,8 @@ export function PatchList() {
                     <Badge variant="outline">{enumLabel(ConfigLayer, p.layer)}</Badge>
                   </TableCell>
                   <TableCell>{p.priority}</TableCell>
-                  <TableCell>{targetSummary(p, t)}</TableCell>
-                  <TableCell>{machinesSummary(p, t)}</TableCell>
+                  <TableCell>{targetSummary(p)}</TableCell>
+                  <TableCell>{machinesSummary(p)}</TableCell>
                   <TableCell>
                     {p.documents.length === 0 ? (
                       '-'
@@ -119,13 +118,13 @@ export function PatchList() {
 
 // The patch's target as written, not the machines it resolves to: the
 // controller owns that selection (docs/adr/0072).
-function machinesSummary(p: Patch, t: ReturnType<typeof useT>): string {
+function machinesSummary(p: Patch): string {
   if (p.layer === ConfigLayer.CLUSTER) return t('patches.machinesEvery')
   if (targetKindOf(p.target) === 'labelSelector') return t('patches.machinesSelector')
-  return targetSummary(p, t)
+  return targetSummary(p)
 }
 
-function targetSummary(p: Patch, t: ReturnType<typeof useT>): string {
+function targetSummary(p: Patch): string {
   if (p.layer === ConfigLayer.CLUSTER) return '-'
   switch (targetKindOf(p.target)) {
     case 'role':
@@ -140,7 +139,6 @@ function targetSummary(p: Patch, t: ReturnType<typeof useT>): string {
 }
 
 function DeleteDialog({ patch, onDeleted }: { patch: Patch; onDeleted: () => void }) {
-  const t = useT()
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)

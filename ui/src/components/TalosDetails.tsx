@@ -17,7 +17,7 @@ import { nodeClient } from '@/lib/connect'
 import { display, formatBytes } from '@/lib/format'
 import { formatSpeed, serviceStatus, sortServices, visibleVolumes } from '@/lib/talosDetails'
 import { useLoad } from '@/lib/useLoad'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 // Read-only Talos details of one machine (docs/adr/0073, 0083): one call, five
 // independently failing parts. The node page's "Storage & network" tab renders
@@ -25,7 +25,6 @@ import { useT } from '@/lib/useT'
 // services, extensions); each tab makes its own call. A part that failed shows its error
 // inline and the rest still render. Tables scroll inside their own container.
 export function TalosDetails({ namespace, name, part }: { namespace: string; name: string; part: 'storage' | 'talos' }) {
-  const t = useT()
   const { data, error } = useLoad(() => nodeClient.getNodeTalosDetails({ machine: { namespace, name } }), [namespace, name])
 
   if (error) return <ErrorAlert {...error} />
@@ -48,7 +47,6 @@ export function TalosDetails({ namespace, name, part }: { namespace: string; nam
 }
 
 function Failed({ error, children }: { error: string; children: ComponentChildren }) {
-  const t = useT()
   if (!error) return <>{children}</>
   return (
     <Alert variant="destructive">
@@ -64,7 +62,6 @@ function list(items: string[]): string {
 }
 
 function SystemSection({ data }: { data: GetNodeTalosDetailsResponse }) {
-  const t = useT()
   const s = data.system
   return (
     <SectionCard id="talos" title={t('talos.system')}>
@@ -119,7 +116,6 @@ function SystemSection({ data }: { data: GetNodeTalosDetailsResponse }) {
 }
 
 function NetworkSection({ data }: { data: GetNodeTalosDetailsResponse }) {
-  const t = useT()
   const n = data.network
   if (!n) return null
   return (
@@ -168,7 +164,6 @@ function NetworkSection({ data }: { data: GetNodeTalosDetailsResponse }) {
 }
 
 function StorageSection({ data }: { data: GetNodeTalosDetailsResponse }) {
-  const t = useT()
   const [showAll, setShowAll] = useState(false)
   const s = data.storage
   if (!s) return null
@@ -269,7 +264,6 @@ function StorageSection({ data }: { data: GetNodeTalosDetailsResponse }) {
 }
 
 function ServicesSection({ data }: { data: GetNodeTalosDetailsResponse }) {
-  const t = useT()
   const s = data.services
   if (!s) return null
   return (
@@ -307,7 +301,6 @@ function ServicesSection({ data }: { data: GetNodeTalosDetailsResponse }) {
 }
 
 function ExtensionsSection({ data }: { data: GetNodeTalosDetailsResponse }) {
-  const t = useT()
   const e = data.extensions
   if (!e) return null
   return (

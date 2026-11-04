@@ -17,7 +17,7 @@ import { machineClient } from '@/lib/connect'
 import { notifyWrite } from '@/lib/notify'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { diskSelector, installChoice } from '@/lib/installDisk'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 // Sets spec.install of an approved machine that is waiting for an install disk (Ready reason
 // InstallDiskUnknown, ADR 0076). The disks come from the machine page's own GetNode read.
@@ -30,7 +30,6 @@ export function SetInstallDialog({
   disks: Disk[]
   onDone: () => void
 }) {
-  const t = useT()
   const [open, setOpen] = useState(false)
   const [key, setKey] = useState('')
   const [typed, setTyped] = useState('')

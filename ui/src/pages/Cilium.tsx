@@ -24,7 +24,7 @@ import { useCluster } from '@/lib/useCluster'
 import { useLoad } from '@/lib/useLoad'
 import { useMyPermissions } from '@/lib/useMyPermissions'
 import type { TargetList } from '@/lib/upgradeTargets'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 type Reviewed = { text: string; valid: boolean; errors: string[]; diff: string }
 
@@ -41,7 +41,6 @@ const diffVariant: Record<DiffKind, 'added' | 'removed' | 'highlighted' | 'defau
 // defaults, the user layer edited on this page, and the keys Ichor owns. A write goes through
 // SetCiliumValues, which sets spec.cni.cilium.values; the controller applies it.
 export function Cilium() {
-  const t = useT()
   const { cluster, loading, error: clusterError } = useCluster()
   const ref = cluster?.ref
   const unmanaged = !!cluster && isCniUnmanaged(cluster.cniPreset)
@@ -107,7 +106,6 @@ export function Cilium() {
 }
 
 function OwnedKeys({ owned }: { owned: GetCiliumValuesResponse['owned'] }) {
-  const t = useT()
   return (
     <Card id="owned" className="scroll-mt-section">
       <CardHeader>
@@ -162,7 +160,6 @@ function UserValues({
   editable: boolean
   onApplied: () => void
 }) {
-  const t = useT()
   const [text, setText] = useState(data.userYaml)
   const [reviewed, setReviewed] = useState<Reviewed | null>(null)
   const [busy, setBusy] = useState<'validate' | 'preview' | 'apply' | null>(null)
@@ -302,7 +299,6 @@ function UserValues({
 // (docs/adr/0115, amendment 2026-11-03), and shows the upgrade when the embedded chart is newer or a patch is
 // on offer. Nothing is shown to a viewer who may not upgrade.
 function CiliumUpgrade({ cluster, chart, editable }: { cluster: ObjectRef; chart: string; editable: boolean }) {
-  const t = useT()
   const [list, setList] = useState<TargetList | null>(null)
 
   useEffect(() => {

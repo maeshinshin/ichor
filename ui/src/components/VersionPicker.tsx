@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import { Combobox, ComboboxCollection, ComboboxContent, ComboboxEmpty, ComboboxGroup, ComboboxInput, ComboboxItem, ComboboxLabel, ComboboxList, ComboboxSeparator } from '@/components/ui/combobox'
-import type { Key } from '@/lib/i18n'
-import { useT } from '@/lib/useT'
+import { t, type Key } from '@/lib/i18n'
 import { pickerOptions, type PickerGroup, type TargetList } from '@/lib/upgradeTargets'
 
 const groupLabel: Record<Exclude<PickerGroup['key'], 'typed'>, Key> = {
@@ -26,7 +25,6 @@ export function VersionPicker({
   // list is null while the candidates are read.
   list: TargetList | null
 }) {
-  const t = useT()
   const [typed, setTyped] = useState(value)
   // A version chosen or preselected from outside is what the input shows, and it does not filter the list.
   useEffect(() => setTyped(value), [value])

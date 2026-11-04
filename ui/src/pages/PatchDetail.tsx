@@ -21,8 +21,7 @@ import { enumLabel } from '@/lib/enum'
 import { notifyDone, notifyWrite } from '@/lib/notify'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { useCluster } from '@/lib/useCluster'
-import { useT } from '@/lib/useT'
-import type { Key } from '@/lib/i18n'
+import { t, type Key } from '@/lib/i18n'
 import { PatchDocumentCard, type DocItem } from '@/components/PatchDocumentCard'
 import { defaultDocument, previewKey } from '@/lib/patchDocs'
 import type { Machine } from '@/gen/ichor/v1alpha1/machine_pb'
@@ -72,7 +71,6 @@ let nextDocId = 1
 // documents a patch carries are edited as opaque JSON per document, not
 // through a generic schema-driven renderer - see that ADR for why).
 export function PatchDetail({ name }: { name?: string }) {
-  const t = useT()
   const { cluster: current, error: clusterError } = useCluster()
   const namespace = current?.ref?.namespace
   const cluster = current?.ref ? { namespace: current.ref.namespace, name: current.ref.name } : undefined
@@ -509,7 +507,6 @@ export function PatchDetail({ name }: { name?: string }) {
 }
 
 function DeleteButton({ namespace, name }: { namespace: string; name: string }) {
-  const t = useT()
   const [open, setOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)

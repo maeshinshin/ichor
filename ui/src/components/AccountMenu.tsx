@@ -16,12 +16,11 @@ import { downloadKubeconfig } from '@/lib/download'
 import { notifyDone, notifyFailed } from '@/lib/notify'
 import { signOut } from '@/lib/oidc'
 import { rolesOf, sourceLabel, userError } from '@/lib/users'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 // The account menu next to the theme switch (docs/adr/0094): who the backend sees, change password
 // (Ichor users only; an external IdP owns its own passwords), the caller's kubeconfig and sign out.
 export function AccountMenu({ me }: { me: WhoAmIResponse }) {
-  const t = useT()
   const [passwordOpen, setPasswordOpen] = useState(false)
   const roles = rolesOf(me.groups)
   const name = me.displayName || me.username

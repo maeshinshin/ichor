@@ -23,14 +23,13 @@ import { formatTimestamp } from '@/lib/format'
 import { useCanReclaim } from '@/lib/useCanReclaim'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { useList } from '@/lib/useList'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 import { Link } from '@/router'
 
 // Machine list, pending approvals included unconditionally
 // (architecture.md, "CLI and UI"; machine.proto's own doc comment), with
 // the approve/reject actions.
 export function MachineList() {
-  const t = useT()
   const { items: machines, setItems: setMachines, error, reload } = useList(async () => (await machineClient.listMachines({})).machines)
   const [query, setQuery] = useState('')
   const canReclaim = useCanReclaim()
@@ -197,7 +196,6 @@ function RejectDialog({
   machine: Machine
   onRejected: () => void
 }) {
-  const t = useT()
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')
   const [submitting, setSubmitting] = useState(false)

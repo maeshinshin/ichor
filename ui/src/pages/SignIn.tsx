@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { LoginError, loginReady } from '@/lib/login'
 import { startLogin, type AuthProvider } from '@/lib/oidc'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 // The one sign-in card (docs/adr/0094): the user name / password form of ichor-ui's own issuer,
 // and below it, when configured, the button for the external identity provider of ADR 0058 (the
@@ -16,7 +16,6 @@ import { useT } from '@/lib/useT'
 // the CLI's browser flow lands on; `signIn` is what differs. The password lives only in this form's
 // state and the request body: never in a URL, storage or a log, and a failed attempt clears it.
 export function SignIn({ ichor, oidc, signIn }: { ichor: boolean; oidc: AuthProvider | null; signIn: (f: { username: string; password: string }) => Promise<void> }) {
-  const t = useT()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)

@@ -13,10 +13,9 @@ import { userClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
 import { minPasswordLength, passwordOk, roleNames, toggleRole, userError, userNameOk } from '@/lib/users'
 import type { ErrorShape } from '@/lib/errors'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 function RolePicker({ id, roles, onChange }: { id: string; roles: string[]; onChange: (roles: string[]) => void }) {
-  const t = useT()
   return (
     <FieldSet>
       <FieldLegend variant="label">{t('users.roles')}</FieldLegend>
@@ -36,7 +35,6 @@ function RolePicker({ id, roles, onChange }: { id: string; roles: string[]; onCh
 type ProfileProps = { id: string; displayName: string; email: string; setDisplayName: (v: string) => void; setEmail: (v: string) => void }
 
 function ProfileFields({ id, displayName, email, setDisplayName, setEmail }: ProfileProps) {
-  const t = useT()
   return (
     <>
       <Field>
@@ -53,7 +51,6 @@ function ProfileFields({ id, displayName, email, setDisplayName, setEmail }: Pro
 
 // GeneratedPassword shows a password the server made, once, with a copy button.
 function GeneratedPassword({ password }: { password: string }) {
-  const t = useT()
   const [copied, setCopied] = useState(false)
   return (
     <Field>
@@ -80,7 +77,6 @@ function GeneratedPassword({ password }: { password: string }) {
 // returns it once). SetPassword always marks the password must-change, so the dialog says so
 // instead of offering a switch that would do nothing.
 export function CreateUserDialog({ onDone }: { onDone: () => void }) {
-  const t = useT()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [displayName, setDisplayName] = useState('')
@@ -203,7 +199,6 @@ export function CreateUserDialog({ onDone }: { onDone: () => void }) {
 }
 
 export function EditUserDialog({ user, open, onOpenChange, onDone }: { user: User; open: boolean; onOpenChange: (o: boolean) => void; onDone: () => void }) {
-  const t = useT()
   const [displayName, setDisplayName] = useState(user.displayName)
   const [email, setEmail] = useState(user.email)
   const [roles, setRoles] = useState<string[]>(user.roles)
@@ -256,7 +251,6 @@ export function EditUserDialog({ user, open, onOpenChange, onDone }: { user: Use
 }
 
 export function SetPasswordDialog({ user, open, onOpenChange }: { user: User; open: boolean; onOpenChange: (o: boolean) => void }) {
-  const t = useT()
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
@@ -325,7 +319,6 @@ export function SetPasswordDialog({ user, open, onOpenChange }: { user: User; op
 // Revoke sessions and delete go through the alert dialog; the server's refusal (the last enabled
 // admin, a missing permission) is shown inside it.
 export function RevokeUserDialog({ user, open, onOpenChange }: { user: User; open: boolean; onOpenChange: (o: boolean) => void }) {
-  const t = useT()
   return (
     <UserConfirm
       open={open}
@@ -342,7 +335,6 @@ export function RevokeUserDialog({ user, open, onOpenChange }: { user: User; ope
 }
 
 export function DeleteUserDialog({ user, open, onOpenChange, onDone }: { user: User; open: boolean; onOpenChange: (o: boolean) => void; onDone: () => void }) {
-  const t = useT()
   return (
     <UserConfirm
       open={open}

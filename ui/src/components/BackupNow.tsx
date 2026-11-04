@@ -7,12 +7,11 @@ import { backNowBlock } from '@/lib/backups'
 import { operationClient } from '@/lib/connect'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { notifyDone } from '@/lib/notify'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 // BackupNow asks for one snapshot outside the schedule (docs/adr/0047). The UI only sets the request;
 // the controller takes the snapshot. onChanged gets the backup as it now stands (request pending).
 export function BackupNow({ backup, onChanged }: { backup: EtcdBackup; onChanged: (next: EtcdBackup) => void }) {
-  const t = useT()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)

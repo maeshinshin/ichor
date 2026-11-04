@@ -13,7 +13,7 @@ import type { Reclaim } from '@/gen/ichor/v1alpha1/reclaim_pb'
 import { reclaimClient } from '@/lib/connect'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { reclaimSettled, uuidMatches } from '@/lib/reclaim'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 const POLL_MS = 2000
 
@@ -29,7 +29,6 @@ export function ReclaimDialog({
   cluster?: { namespace: string; name: string }
   label?: string
 }) {
-  const t = useT()
   const [open, setOpen] = useState(false)
   const [address, setAddress] = useState(initialAddress)
   const [talosconfig, setTalosconfig] = useState('')

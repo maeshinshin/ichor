@@ -7,7 +7,7 @@ import { operationClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { operationState, pauseAction } from '@/lib/operations'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 // OperationControls: pause or resume (resuming a failed operation runs the failed step again), and delete. Deleting asks first; pausing
 // changes nothing already done and can be undone, so it does not.
@@ -23,7 +23,6 @@ export function OperationControls({
   // showDelete is false where only pause and resume belong (the cluster page).
   showDelete?: boolean
 }) {
-  const t = useT()
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
   const [open, setOpen] = useState(false)

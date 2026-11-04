@@ -33,14 +33,13 @@ import { setPageTitle, titleKey } from '@/lib/pageTitle'
 import { useCluster } from '@/lib/useCluster'
 import { useLoad } from '@/lib/useLoad'
 import { useMyPermissions } from '@/lib/useMyPermissions'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 import { Link } from '@/router'
 
 // Node detail: hardware, disks, network, live resource usage, Kubernetes
 // state, effective config (origin-annotated, secrets masked) and logs
 // (architecture.md, "CLI and UI").
 export function NodeDetail({ name }: { name: string }) {
-  const t = useT()
   const { cluster: ichorCluster } = useCluster()
   const namespace = ichorCluster?.ref?.namespace
   if (!namespace) return <PageSkeleton label={t('node.loading')} />
@@ -65,7 +64,6 @@ function useNodeTab(): [NodeTab, (tab: NodeTab) => void] {
 }
 
 function NodePage({ namespace, name }: { namespace: string; name: string }) {
-  const t = useT()
   const [tab, setTab] = useNodeTab()
   const [machine, setMachine] = useState<Machine | null>(null)
   const [cluster, setCluster] = useState<Cluster | null>(null)
@@ -247,7 +245,6 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
 }
 
 function EffectiveConfigSection({ namespace, name }: { namespace: string; name: string }) {
-  const t = useT()
   const { data: values, error } = useLoad(
     () => nodeClient.getEffectiveConfig({ machine: { namespace, name } }).then((res) => res.config?.values ?? []),
     [namespace, name],

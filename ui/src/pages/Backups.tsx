@@ -19,7 +19,7 @@ import { operationClient } from '@/lib/connect'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { formatBytes, formatTimestamp } from '@/lib/format'
 import { useCluster } from '@/lib/useCluster'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 const adrUrl = 'https://github.com/maeshinshin/ichor/blob/main/docs/adr/0047-etcd-backup-format-and-controller.md'
 
@@ -27,7 +27,6 @@ const adrUrl = 'https://github.com/maeshinshin/ichor/blob/main/docs/adr/0047-etc
 // A backup is created by applying a TalosEtcdBackup, and the controller takes the snapshots; Back up now only
 // sets a request on it (docs/adr/0047).
 export function Backups() {
-  const t = useT()
   const { cluster, loading, error: clusterError } = useCluster()
   const [backups, setBackups] = useState<EtcdBackup[] | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)

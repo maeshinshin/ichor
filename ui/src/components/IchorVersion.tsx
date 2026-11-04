@@ -3,13 +3,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { operationClient } from '@/lib/connect'
 import { versionLabel } from '@/lib/ichorVersion'
 import { useLoad } from '@/lib/useLoad'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 // The installed Ichor version in the top bar, with a second badge only when the cluster
 // already knows a newer target (ADR 0059). It reads once per page load; a failed read just
 // shows nothing, because the label is information, not a control.
 export function IchorVersion() {
-  const t = useT()
   const info = useLoad(() => operationClient.getIchorInstallation({}), []).data
 
   const label = versionLabel(info)

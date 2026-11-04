@@ -29,7 +29,7 @@ import {
   sortProcesses,
   type ProcessSort,
 } from '@/lib/talosRuntime'
-import { useT } from '@/lib/useT'
+import { t } from '@/lib/i18n'
 
 // Read-only live state of one machine (docs/adr/0082): etcd, top processes,
 // containers, the Kubernetes view of the node, routes/discovery/KubeSpan/time
@@ -40,7 +40,6 @@ import { useT } from '@/lib/useT'
 // part="talos" renders processes, containers and kernel (the Talos tab);
 // part="kubernetes" renders the k8s node, etcd and network state.
 export function TalosRuntime({ namespace, name, part }: { namespace: string; name: string; part: 'talos' | 'kubernetes' }) {
-  const t = useT()
   const [data, setData] = useState<GetNodeTalosRuntimeResponse | null>(null)
   const [error, setError] = useState<{ title: string; detail: string } | null>(null)
 
@@ -99,7 +98,6 @@ function Panel({
   maintenance: boolean
   children: ComponentChildren
 }) {
-  const t = useT()
   return (
     <SectionCard id={id} title={title} description={description} actions={actions}>
       {error ? (
@@ -120,7 +118,6 @@ function Panel({
 }
 
 function Empty() {
-  const t = useT()
   return <EmptyNote icon={InboxIcon}>{t('talos.none')}</EmptyNote>
 }
 
@@ -142,7 +139,6 @@ function Grid({ heads, empty, children }: { heads: string[]; empty?: boolean; ch
 }
 
 function EtcdCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; maintenance: boolean }) {
-  const t = useT()
   const e = data.etcd
   if (!e) return null
   const pct = dbInUsePercent(e)
@@ -198,7 +194,6 @@ function EtcdCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; ma
 }
 
 function ProcessesCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; maintenance: boolean }) {
-  const t = useT()
   const [by, setBy] = useState<ProcessSort>('memory')
   const p = data.processes
   if (!p) return null
@@ -237,7 +232,6 @@ function ProcessesCard({ data, maintenance }: { data: GetNodeTalosRuntimeRespons
 }
 
 function ContainersCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; maintenance: boolean }) {
-  const t = useT()
   const c = data.containers
   if (!c) return null
   return (
@@ -261,7 +255,6 @@ function ContainersCard({ data, maintenance }: { data: GetNodeTalosRuntimeRespon
 }
 
 function KubernetesCard({ data }: { data: GetNodeTalosRuntimeResponse }) {
-  const t = useT()
   const k = data.kubernetes
   if (!k) return null
   return (
@@ -326,7 +319,6 @@ function KubernetesCard({ data }: { data: GetNodeTalosRuntimeResponse }) {
 }
 
 function NetworkStateCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; maintenance: boolean }) {
-  const t = useT()
   const n = data.networkState
   if (!n) return null
   return (
@@ -387,7 +379,6 @@ function NetworkStateCard({ data, maintenance }: { data: GetNodeTalosRuntimeResp
 }
 
 function KernelCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; maintenance: boolean }) {
-  const t = useT()
   const k = data.kernelModules
   if (!k) return null
   return (

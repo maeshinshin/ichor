@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/maeshinshin/ichor/internal/oidctrust"
@@ -250,8 +251,6 @@ func usersVolumes(dep *appsv1.Deployment, c *corev1.Container) {
 	}
 
 	// Written by the controller; optional so ichor-ui starts before it has made them.
-	optional := true
-
 	for _, v := range []struct{ name, secret, path string }{
 		{"oidc-signing", ichorauth.SigningSecretName, "/etc/ichor/oidc-signing"},
 		{"oidc-tls", "ichor-oidc-tls", "/etc/ichor/oidc-tls"},
@@ -259,7 +258,7 @@ func usersVolumes(dep *appsv1.Deployment, c *corev1.Container) {
 		if !slices.ContainsFunc(dep.Spec.Template.Spec.Volumes, func(x corev1.Volume) bool { return x.Name == v.name }) {
 			dep.Spec.Template.Spec.Volumes = append(dep.Spec.Template.Spec.Volumes, corev1.Volume{
 				Name:   v.name,
-				Secret: &corev1.SecretVolumeSource{SecretName: v.secret, Optional: &optional},
+				Secret: &corev1.SecretVolumeSource{SecretName: v.secret, Optional: ptr.To(true)},
 			})
 		}
 
@@ -315,11 +314,12 @@ func tlsOnUI(dep *appsv1.Deployment, c *corev1.Container, secret string) error {
 // addrPort reads the port of a listen address such as ":8080".
 func addrPort(addr string) (int32, error) {
 	_, p, err := net.SplitHostPort(addr)
-	if err != nil {
-		return 0, fmt.Errorf("cannot read the port from %q: %w", addr, err)
+
+	var n int64
+	if err == nil {
+		n, err = strconv.ParseInt(p, 10, 32)
 	}
 
-	n, err := strconv.ParseInt(p, 10, 32)
 	if err != nil {
 		return 0, fmt.Errorf("cannot read the port from %q: %w", addr, err)
 	}

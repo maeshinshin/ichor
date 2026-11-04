@@ -125,10 +125,6 @@ type pruneCandidate struct {
 	renamedTo string
 }
 
-func (r ref) candidate(renamedTo string) pruneCandidate {
-	return pruneCandidate{ref: r, renamedTo: renamedTo}
-}
-
 // pruneCandidates returns what a run in namespace ns may delete: the objects of the previous
 // inventory that the bundle no longer ships, and the renamed objects the bundle does not ship.
 // Each is of a prunable kind, is cluster-scoped or in ns, and is not one of the installer's own
@@ -242,14 +238,9 @@ func writeInventory(ctx context.Context, c client.Client, ns string, refs []ref)
 // prune deletes the candidates that are still present and owned, once the new bundle is in
 // place. It snapshots them first, so a rollback restores them, and returns that snapshot.
 func prune(ctx context.Context, c client.Client, opts Options, candidates []pruneCandidate) ([]entry, error) {
-	type doomed struct {
-		obj    *unstructured.Unstructured
-		reason string
-	}
-
 	var (
-		list []doomed
-		objs []*unstructured.Unstructured
+		doomed []pruneCandidate
+		objs   []*unstructured.Unstructured
 	)
 
 	for _, cand := range candidates {
@@ -273,16 +264,11 @@ func prune(ctx context.Context, c client.Client, opts Options, candidates []prun
 			continue
 		}
 
-		reason := "the new manifest does not ship it"
-		if cand.renamedTo != "" {
-			reason = "renamed to " + cand.renamedTo
-		}
-
-		list = append(list, doomed{obj: o, reason: reason})
+		doomed = append(doomed, cand)
 		objs = append(objs, o)
 	}
 
-	if len(list) == 0 {
+	if len(objs) == 0 {
 		return nil, nil
 	}
 
@@ -291,11 +277,16 @@ func prune(ctx context.Context, c client.Client, opts Options, candidates []prun
 		return nil, err
 	}
 
-	for _, d := range list {
-		logf(opts.Log, "pruning %s %s: %s", d.obj.GetKind(), d.obj.GetName(), d.reason)
+	for i, o := range objs {
+		reason := "the new manifest does not ship it"
+		if doomed[i].renamedTo != "" {
+			reason = "renamed to " + doomed[i].renamedTo
+		}
 
-		if err := c.Delete(ctx, d.obj); err != nil && !apierrors.IsNotFound(err) {
-			return snap, fmt.Errorf("pruning %s %s: %w", d.obj.GetKind(), d.obj.GetName(), err)
+		logf(opts.Log, "pruning %s %s: %s", o.GetKind(), o.GetName(), reason)
+
+		if err := c.Delete(ctx, o); err != nil && !apierrors.IsNotFound(err) {
+			return snap, fmt.Errorf("pruning %s %s: %w", o.GetKind(), o.GetName(), err)
 		}
 	}
 
@@ -322,7 +313,7 @@ func PendingRenames(ctx context.Context, c client.Reader) ([]string, error) {
 			return nil, err
 		}
 
-		if owned(o, ref{APIVersion: rn.APIVersion, Kind: rn.Kind, Name: rn.Name}.candidate(rn.To)) {
+		if owned(o, pruneCandidate{renamedTo: rn.To}) {
 			out = append(out, fmt.Sprintf("%s %s (renamed to %s)", rn.Kind, rn.Name, rn.To))
 		}
 	}

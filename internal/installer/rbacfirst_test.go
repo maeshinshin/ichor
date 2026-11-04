@@ -222,7 +222,7 @@ func TestRunUpgradesUnderAnOldInstallerRoleWithoutTheNewKindsRule(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	if len(snap) == 0 || snap[0].Kind != kindRoleName || strings.Contains(fmt.Sprint(snap[0].Object["rules"]), "gizmos") {
+	if len(snap) == 0 || snap[0].Kind != kindRole || strings.Contains(fmt.Sprint(snap[0].Object["rules"]), "gizmos") {
 		t.Errorf("the snapshot must start with the old role, got %+v", snap)
 	}
 

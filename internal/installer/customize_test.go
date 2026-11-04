@@ -147,16 +147,15 @@ func TestUpgradeKeepsInitsCustomizationsOverALiveUIDeployment(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
 		settings  UISettings
-		wantHTTP  bool
 		staleHTTP bool
 	}{
-		{"stale httpGet probe, no TLS setting", UISettings{ExternalURL: testExternalURL}, true, true},
+		{"stale httpGet probe, no TLS setting", UISettings{ExternalURL: testExternalURL}, true},
 		{"users on with TLS", UISettings{
 			ExternalURL: testExternalURL, TLSSecretName: "ichor-ui-tls",
 			KubeAPIServerURL: "https://k8s.example.com:443", KubeAPITLSServerName: "k8s.example.com", RefreshLifetime: "24h",
-		}, true, false},
-		{"users on without TLS", UISettings{ExternalURL: testExternalURL}, true, false},
-		{"users off", UISettings{}, true, false},
+		}, false},
+		{"users on without TLS", UISettings{ExternalURL: testExternalURL}, false},
+		{"users off", UISettings{}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t)
@@ -177,14 +176,7 @@ func TestUpgradeKeepsInitsCustomizationsOverALiveUIDeployment(t *testing.T) {
 				must(t, k8sClient.Update(ctx, &live, client.FieldOwner("ichor-init")))
 			}
 
-			var order []string
-
-			err := Run(ctx, k8sClient, Options{
-				Namespace: f.ns, RunID: f.run, Manifest: []byte(rendered(f.ns)), Ready: noWait(&order),
-			})
-			if err != nil {
-				t.Fatalf("Run: %v", err)
-			}
+			runInstaller(t, f, f.run, []byte(rendered(f.ns)))
 
 			var ui, ctrl appsv1.Deployment
 
@@ -200,10 +192,8 @@ func TestUpgradeKeepsInitsCustomizationsOverALiveUIDeployment(t *testing.T) {
 				t.Errorf("liveness must be a lone tcpSocket on a TLS install: %+v", c.LivenessProbe)
 			}
 
-			for _, p := range []*corev1.Probe{c.ReadinessProbe} {
-				if probeHandlers(p) != 1 || (p.HTTPGet != nil) != tc.wantHTTP {
-					t.Errorf("probe has %d handlers, httpGet=%v, want exactly one (httpGet=%v): %+v", probeHandlers(p), p.HTTPGet != nil, tc.wantHTTP, p)
-				}
+			if p := c.ReadinessProbe; probeHandlers(p) != 1 || p.HTTPGet == nil {
+				t.Errorf("readiness probe must be exactly one httpGet handler: %+v", p)
 			}
 
 			// Every customization, compared against the pure function over the new manifest.

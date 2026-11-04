@@ -81,42 +81,59 @@ function ClusterBar() {
   )
 }
 
-// Top-level nav. Node, operation and config detail pages are reached from a list row, not from
-// here. There is no Clusters entry: the Overview is the cluster (docs/adr/0097).
-const navRoutes = [
-  { path: '/', label: 'nav.overview', Icon: LayoutDashboardIcon, section: '' },
-  { path: '/nodes', label: 'nav.machines', Icon: ServerIcon, section: '/nodes/' },
-  { path: '/operations', label: 'nav.operations', Icon: ListChecksIcon, section: '/operations/' },
-  { path: '/backups', label: 'nav.backups', Icon: ArchiveIcon, section: '' },
-  { path: '/config', label: 'nav.config', Icon: LayersIcon, section: '/config/' },
-  { path: '/cilium', label: 'nav.cilium', Icon: NetworkIcon, section: '' },
-  { path: '/settings', label: 'nav.settings', Icon: SettingsIcon, section: '' },
-] satisfies { path: string; label: Key; Icon: typeof BoxesIcon; section: string }[]
+// Top-level nav, in labelled groups. Node, operation and config detail pages are reached from a
+// list row, not from here. There is no Clusters entry: the Overview is the cluster (docs/adr/0097).
+type NavRoute = { path: string; label: Key; Icon: typeof BoxesIcon; section: string }
 
-// Shown only when ichor-ui has its own users (docs/adr/0094).
-const usersRoute: { path: string; label: Key; Icon: typeof BoxesIcon; section: string } = { path: '/users', label: 'nav.users', Icon: UsersIcon, section: '' }
+const overviewRoute: NavRoute = { path: '/', label: 'nav.overview', Icon: LayoutDashboardIcon, section: '' }
+const nodesRoute: NavRoute = { path: '/nodes', label: 'nav.machines', Icon: ServerIcon, section: '/nodes/' }
+const configRoute: NavRoute = { path: '/config', label: 'nav.config', Icon: LayersIcon, section: '/config/' }
+const ciliumRoute: NavRoute = { path: '/cilium', label: 'nav.cilium', Icon: NetworkIcon, section: '' }
+const operationsRoute: NavRoute = { path: '/operations', label: 'nav.operations', Icon: ListChecksIcon, section: '/operations/' }
+const backupsRoute: NavRoute = { path: '/backups', label: 'nav.backups', Icon: ArchiveIcon, section: '' }
+// Users is shown only when ichor-ui has its own users (docs/adr/0094).
+const usersRoute: NavRoute = { path: '/users', label: 'nav.users', Icon: UsersIcon, section: '' }
+const settingsRoute: NavRoute = { path: '/settings', label: 'nav.settings', Icon: SettingsIcon, section: '' }
+
+function navGroups(usersEnabled: boolean): { label: Key; routes: NavRoute[] }[] {
+  const groups: { label: Key; routes: NavRoute[] }[] = [
+    { label: 'nav.group.cluster', routes: [overviewRoute, nodesRoute, configRoute, ciliumRoute] },
+    { label: 'nav.group.activity', routes: [operationsRoute, backupsRoute] },
+    { label: 'nav.group.admin', routes: [...(usersEnabled ? [usersRoute] : []), settingsRoute] },
+  ]
+  return groups.filter((g) => g.routes.length > 0)
+}
 
 // The nav entry is current on its list page and on the detail pages under it.
 function isCurrent(r: { path: string; section: string }, path: string): boolean {
   return path === r.path || (r.section !== '' && path.startsWith(r.section))
 }
 
-function NavItems({ path, usersEnabled }: { path: string; usersEnabled: boolean }) {
+function NavGroups({ path, usersEnabled }: { path: string; usersEnabled: boolean }) {
   const t = useT()
   const { setOpenMobile } = useSidebar()
   return (
-    <SidebarMenu>
-      {[...navRoutes, ...(usersEnabled ? [usersRoute] : [])].map((r) => (
-        <SidebarMenuItem key={r.path}>
-          <SidebarMenuButton asChild isActive={isCurrent(r, path)} tooltip={t(r.label)}>
-            <Link to={r.path} onClick={() => setOpenMobile(false)}>
-              <r.Icon />
-              <span>{t(r.label)}</span>
-            </Link>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
+    <>
+      {navGroups(usersEnabled).map((g) => (
+        <SidebarGroup key={g.label}>
+          <SidebarGroupLabel>{t(g.label)}</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {g.routes.map((r) => (
+                <SidebarMenuItem key={r.path}>
+                  <SidebarMenuButton asChild isActive={isCurrent(r, path)} tooltip={t(r.label)}>
+                    <Link to={r.path} onClick={() => setOpenMobile(false)}>
+                      <r.Icon />
+                      <span>{t(r.label)}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       ))}
-    </SidebarMenu>
+    </>
   )
 }
 
@@ -185,12 +202,7 @@ export function AppShell({
             </SidebarMenu>
           </SidebarHeader>
           <SidebarContent>
-            <SidebarGroup>
-              <SidebarGroupLabel>{t('nav.menu')}</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <NavItems path={path} usersEnabled={usersEnabled} />
-              </SidebarGroupContent>
-            </SidebarGroup>
+            <NavGroups path={path} usersEnabled={usersEnabled} />
           </SidebarContent>
           <SidebarFooter>
             <SidebarMenu>

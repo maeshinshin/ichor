@@ -25,7 +25,7 @@ import (
 // config/cilium-network-policy selects the installer's pod by this label: without it
 // the default deny would cut the Job off from the API server.
 func TestInstallerJobPodCarriesTheLabelItsNetworkPolicySelects(t *testing.T) {
-	job := newInstallerJob("ichor-system", "ichor-installer-x", &ichorv1alpha1.TalosOperation{}, &ichorv1alpha1.IchorInstallation{}, "cilium", false)
+	job := newInstallerJob("ichor-system", "ichor-installer-x", &ichorv1alpha1.TalosOperation{}, &ichorv1alpha1.IchorInstallation{}, testInstallerDigest, "cilium", false)
 
 	if got := job.Spec.Template.Labels["app.kubernetes.io/name"]; got != "ichor-installer" {
 		t.Errorf("installer pod label app.kubernetes.io/name = %q, want ichor-installer", got)

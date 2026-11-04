@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -26,7 +27,9 @@ import (
 var _ = Describe("controller Job policy", Ordered, func() {
 	const (
 		controllerUser = "system:serviceaccount:ichor-system:ichor-controller-manager"
-		installerImage = "registry.example.org/ichor-installer:v0.0.1"
+		installerRepo  = "registry.example.org/ichor-installer"
+		installerImage = installerRepo + "@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		cniImage       = installerRepo + ":v0.0.1"
 		nsInstaller    = "ichor-system"
 		nsCNI          = "kube-system"
 		cniSub         = "cni"
@@ -75,7 +78,7 @@ var _ = Describe("controller Job policy", Ordered, func() {
 
 	cniJob := func() *batchv1.Job {
 		j := job(nsCNI, "ichor-cni", corev1.Container{
-			Name: cniSub, Image: installerImage, Args: []string{cniSub, "helm", "apply", "--cluster=c"},
+			Name: cniSub, Image: cniImage, Args: []string{cniSub, "helm", "apply", "--cluster=c"},
 			Env:          []corev1.EnvVar{{Name: "KUBERNETES_SERVICE_HOST", Value: "localhost"}, {Name: "HOME", Value: "/tmp"}},
 			VolumeMounts: []corev1.VolumeMount{{Name: "tmp", MountPath: "/tmp"}},
 		}, 1500)
@@ -192,29 +195,65 @@ var _ = Describe("controller Job policy", Ordered, func() {
 
 	// The image follows IchorInstallation.spec (a mirror or private registry is a documented setting
 	// that needs ichorinstallations/version); without one the structural rules above still hold.
+	// The installer Job runs by digest; the Cilium Job keeps repository:version.
 	Context("with an IchorInstallation", func() {
+		var inst *IchorInstallation
+
 		BeforeAll(func() {
-			inst := &IchorInstallation{Spec: IchorInstallationSpec{Version: "v0.0.1", InstallerRepository: "registry.example.org/ichor-installer"}}
+			inst = &IchorInstallation{Spec: IchorInstallationSpec{Version: "v0.0.1", InstallerRepository: installerRepo}}
 			inst.Name = IchorInstallationName
 			Expect(k8sClient.Create(context.Background(), inst)).To(Succeed())
 			DeferCleanup(func() { _ = k8sClient.Delete(context.Background(), inst) })
 
 			Eventually(func() error {
 				j := installer()
-				j.Spec.Template.Spec.Containers[0].Image = "evil.example/x:v0.0.1"
+				j.Spec.Template.Spec.Containers[0].Image = "evil.example/x@sha256:" + strings.Repeat("a", 64)
 
 				return controller.Create(context.Background(), j)
 			}, "30s", "100ms").ShouldNot(Succeed())
 		})
 
-		It("admits the configured repository and version only", func() {
+		It("admits the configured repository by digest, for the installer", func() {
 			Expect(controller.Create(context.Background(), installer())).To(Succeed())
 
-			for _, image := range []string{"evil.example/x:v0.0.1", "registry.example.org/ichor-installer:v9.9.9", "registry.example.org/ichor-installer"} {
+			for _, image := range []string{
+				"evil.example/x@sha256:" + strings.Repeat("a", 64),
+				installerRepo + ":v0.0.1", // a tag, even the right one, can move
+				installerRepo + ":v9.9.9",
+				installerRepo,
+				installerRepo + "@sha256:abc",
+				installerRepo + "@sha256:" + strings.Repeat("a", 64) + "x",
+			} {
 				j := installer()
 				j.Spec.Template.Spec.Containers[0].Image = image
 				Expect(controller.Create(context.Background(), j)).NotTo(Succeed(), image)
 			}
+		})
+
+		It("admits the Cilium Job at repository:version only", func() {
+			Expect(controller.Create(context.Background(), cniJob())).To(Succeed())
+
+			for _, image := range []string{"evil.example/x:v0.0.1", installerRepo + ":v9.9.9", installerRepo} {
+				j := cniJob()
+				j.Spec.Template.Spec.Containers[0].Image = image
+				Expect(controller.Create(context.Background(), j)).NotTo(Succeed(), image)
+			}
+		})
+
+		It("admits only spec.installerDigest once it is set", func() {
+			pin := "sha256:" + strings.Repeat("b", 64)
+
+			Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(inst), inst)).To(Succeed())
+			inst.Spec.InstallerDigest = pin
+			Expect(k8sClient.Update(context.Background(), inst)).To(Succeed())
+
+			Eventually(func() error {
+				return controller.Create(context.Background(), installer())
+			}, "30s", "100ms").ShouldNot(Succeed())
+
+			j := installer()
+			j.Spec.Template.Spec.Containers[0].Image = installerRepo + "@" + pin
+			Expect(controller.Create(context.Background(), j)).To(Succeed())
 		})
 	})
 })

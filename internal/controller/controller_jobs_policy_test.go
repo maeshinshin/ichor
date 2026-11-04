@@ -86,7 +86,7 @@ var _ = Describe("the controller Job policy against the real Job builders", Orde
 
 		// The policy is bound asynchronously: wait until it denies a Job under another ServiceAccount.
 		Eventually(func() error {
-			j := newInstallerJob("ichor-system", "probe-installer", &ichorv1alpha1.TalosOperation{}, inst, "cilium", false)
+			j := newInstallerJob("ichor-system", "probe-installer", &ichorv1alpha1.TalosOperation{}, inst, testInstallerDigest, "cilium", false)
 			j.Name, j.Spec.Template.Spec.ServiceAccountName = "", "other"
 			j.GenerateName = "probe-"
 
@@ -102,10 +102,10 @@ var _ = Describe("the controller Job policy against the real Job builders", Orde
 	}
 
 	It("admits the installer Job as built", func() {
-		j := newInstallerJob("ichor-system", "ichor-installer-policy", &ichorv1alpha1.TalosOperation{}, inst, "cilium", false)
+		j := newInstallerJob("ichor-system", "ichor-installer-policy", &ichorv1alpha1.TalosOperation{}, inst, testInstallerDigest, "cilium", false)
 		create(j)
 
-		j = newInstallerJob("ichor-system", "ichor-installer-policy-2", &ichorv1alpha1.TalosOperation{}, inst, "cilium", true)
+		j = newInstallerJob("ichor-system", "ichor-installer-policy-2", &ichorv1alpha1.TalosOperation{}, inst, testInstallerDigest, "cilium", true)
 		create(j)
 	})
 

@@ -370,7 +370,9 @@ func controllerPolicyApp(ctx context.Context, c client.Client, ns, skip string) 
 
 	for i := range list.Items {
 		o := &list.Items[i]
-		if o.GetName() == skip {
+		// Policies the controller wrote itself are not Ichor's installed policy: with the base policy gone
+		// they would otherwise keep each other alive.
+		if o.GetName() == skip || o.GetLabels()["app.kubernetes.io/managed-by"] == "ichor-controller" {
 			continue
 		}
 

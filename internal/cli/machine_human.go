@@ -26,6 +26,9 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
+// colNode is the column of a machine's Kubernetes node name.
+const colNode = "node"
+
 // machineNode is the name the machine has as a Kubernetes node, else its hostname.
 func machineNode(m *pb.Machine) string { return cmp.Or(m.GetNodeName(), m.GetHostname()) }
 
@@ -47,7 +50,7 @@ func renderMachineList(h *human, resp *pb.ListMachinesResponse) error {
 
 	names = shortNames(names)
 	withCluster := len(clusters) > 1
-	header := []string{"name", "role", "approval", "ready", "endpoint", "node", "age"}
+	header := []string{"name", "role", "approval", "ready", "endpoint", colNode, "age"}
 
 	if withCluster {
 		header = slices.Insert(header, 1, "cluster")
@@ -112,9 +115,9 @@ func approvalRow(m *pb.Machine) string {
 
 func renderMachineGet(h *human, m *pb.Machine) error {
 	h.Block(nsName(m.GetRef()), kv{"Cluster", m.GetCluster().GetName()}, kv{"Role", humanEnum(m.GetRole().String())},
-		kv{"Approval", approvalRow(m)}, kv{"Health", machineHealth(h, m)}, kv{"Node", m.GetNodeName()},
+		kv{"Approval", approvalRow(m)}, kv{labelHealth, machineHealth(h, m)}, kv{"Node", m.GetNodeName()},
 		kv{"Hostname", m.GetHostname()}, kv{"Endpoint", m.GetEndpoint()}, kv{"Stage", m.GetStage()},
-		kv{"Deleting", map[bool]string{true: "yes"}[m.GetDeleting()]}, kv{"Created", agoOrEmpty(m.GetCreatedAt())})
+		kv{"Deleting", yesIf(m.GetDeleting())}, kv{"Created", agoOrEmpty(m.GetCreatedAt())})
 
 	id := m.GetIdentity()
 	h.Block("Identity", kv{"UUID", id.GetUuid()}, kv{"Serial", id.GetSerial()}, kv{"MACs", strings.Join(id.GetMacAddresses(), ", ")})
@@ -133,14 +136,14 @@ func renderMachineGet(h *human, m *pb.Machine) error {
 			kv{"Gateway", n.GetGateway()}, kv{"DNS", strings.Join(n.GetDnsServers(), ", ")}, kv{"VLAN", vlan})
 	}
 
-	var disks []kv
+	disks := make([]kv, 0, len(m.GetDisks()))
 	for _, d := range m.GetDisks() {
 		disks = append(disks, kv{cmp.Or(d.GetName(), d.GetRole()), diskDesc(d.GetDisk())})
 	}
 
 	h.Block("Disks", disks...)
 
-	var labels []kv
+	labels := make([]kv, 0, len(m.GetNodeLabels()))
 	for _, k := range slices.Sorted(maps.Keys(m.GetNodeLabels())) {
 		labels = append(labels, kv{k, m.GetNodeLabels()[k]})
 	}
@@ -148,7 +151,7 @@ func renderMachineGet(h *human, m *pb.Machine) error {
 	h.Block("Node labels", labels...)
 	h.Block("Needs a reboot", kv{"Fields", strings.Join(m.GetRebootPaths(), ", ")})
 
-	var found []kv
+	found := make([]kv, 0, len(m.GetDiscoveredDisks()))
 	for _, d := range m.GetDiscoveredDisks() {
 		found = append(found, kv{diskDesc(&pb.MachineDisk{DevPath: d.GetDevPath(), ByIdPath: d.GetByIdPath(), Wwid: d.GetWwid(), Serial: d.GetSerial()}),
 			strings.Join(nonEmpty(humanBytes(d.GetSizeBytes()), d.GetModel(), d.GetTransport()), " · ")})
@@ -156,7 +159,7 @@ func renderMachineGet(h *human, m *pb.Machine) error {
 
 	h.Block("Discovered disks", found...)
 
-	var links []kv
+	links := make([]kv, 0, len(m.GetDiscoveredLinks()))
 
 	for _, l := range m.GetDiscoveredLinks() {
 		up := "down"

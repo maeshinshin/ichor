@@ -26,6 +26,18 @@ import (
 )
 
 // humanTestNow is the fixed clock of the human output tests.
+// Values the human output tests repeat.
+const (
+	humanControlPlane = "control-plane"
+	humanK8s          = "v1.36.6"
+	humanUpToDate     = "up-to-date"
+	humanCluster      = "initshow"
+	humanSvcCIDR      = "10.96.0.0/12"
+	humanLatest       = "v0.3.0"
+	humanEtcd         = "etcd"
+	humanElsewhere    = "elsewhere"
+)
+
 var humanTestNow = time.Date(2026, 11, 4, 3, 13, 39, 0, time.UTC)
 
 // fixedHumanClock pins the clock the ages are taken against.
@@ -53,12 +65,12 @@ func plainHuman() (*human, *bytes.Buffer) {
 
 func TestHumanTableAlignsColumnsAndLeavesNoTrailingSpaces(t *testing.T) {
 	h, buf := plainHuman()
-	h.Table([]string{"name", "ready", "age"}, [][]string{
+	h.Table([]string{"id", "ready", "age"}, [][]string{
 		{"alpha", h.Mark(markOK), "5m"},
 		{"a-much-longer-name", "", "2h"},
 	})
 
-	want := "NAME                READY  AGE\n" +
+	want := "ID                  READY  AGE\n" +
 		"alpha               ✓      5m\n" +
 		"a-much-longer-name  -      2h\n"
 	if buf.String() != want {
@@ -68,10 +80,10 @@ func TestHumanTableAlignsColumnsAndLeavesNoTrailingSpaces(t *testing.T) {
 
 func TestHumanTableOnATerminalAlignsPastTheColourCodes(t *testing.T) {
 	h, buf := ttyHuman()
-	h.Table([]string{"name", "ready", "age"}, [][]string{{"a", h.Mark(markOK), "1m"}, {"bb", h.Mark(markFailed), "2m"}})
+	h.Table([]string{"id", "ready", "age"}, [][]string{{"a", h.Mark(markOK), "1m"}, {"bb", h.Mark(markFailed), "2m"}})
 
 	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
-	if !strings.HasPrefix(lines[0], "\x1b[2mNAME\x1b[0m") {
+	if !strings.HasPrefix(lines[0], "\x1b[2mID\x1b[0m") {
 		t.Errorf("header is not dim: %q", lines[0])
 	}
 
@@ -85,7 +97,7 @@ func TestHumanPlainOutputHasNoEscapeSequences(t *testing.T) {
 	h, buf := plainHuman()
 	h.Table([]string{"a"}, [][]string{{h.Mark(markWarning)}})
 	h.Block("Title", kv{"Key", h.Mark(markFailed) + " v"})
-	h.Conditions("Conditions", []conditionRow{{Mark: markPending, Type: "Ready", Reason: "R", Message: "m"}})
+	h.Conditions("Conditions", []conditionRow{{Mark: markPending, Type: conditionReady, Reason: "R", Message: "m"}})
 
 	if strings.Contains(buf.String(), "\x1b") {
 		t.Errorf("escape sequence in plain output: %q", buf.String())
@@ -94,16 +106,16 @@ func TestHumanPlainOutputHasNoEscapeSequences(t *testing.T) {
 
 func TestHumanBlockAlignsLabelsAndSkipsEmptyValues(t *testing.T) {
 	h, buf := plainHuman()
-	h.Block("initshow · ichor-system", kv{"Talos", "v1.14.5"}, kv{"Kubernetes", "v1.36.6"}, kv{"Unset", ""}, kv{"Endpoint", "10.0.0.1 (node)"})
+	h.Block("initshow · ichor-system", kv{"Talos", testTalosVersion}, kv{labelKubernetes, humanK8s}, kv{"Unset", ""}, kv{"Endpoint", "10.0.0.1 (node)"})
 	h.Block("Empty", kv{"Nothing", ""})
-	h.Block("", kv{"ichor", "v0.1.0"}, kv{"new installs", "Talos v1.14.5"})
+	h.Block("", kv{"cli", testSettingsVersion}, kv{"new installs", "Talos v1.14.5"})
 
 	want := "initshow · ichor-system\n" +
 		"  Talos        v1.14.5\n" +
 		"  Kubernetes   v1.36.6\n" +
 		"  Endpoint     10.0.0.1 (node)\n" +
 		"\n" +
-		"ichor        v0.1.0\n" +
+		"cli          v0.1.0\n" +
 		"new installs Talos v1.14.5\n"
 	if buf.String() != want {
 		t.Errorf("got:\n%s\nwant:\n%s", buf.String(), want)
@@ -139,15 +151,15 @@ func TestNewHumanOnAPipeIsPlain(t *testing.T) {
 
 func TestHumanEnumStripsTheTypePrefix(t *testing.T) {
 	for in, want := range map[string]string{
-		"MACHINE_ROLE_CONTROL_PLANE":       "control-plane",
-		"MACHINE_ROLE_WORKER":              "worker",
-		"MACHINE_APPROVAL_STATE_APPROVED":  "approved",
-		"MACHINE_APPROVAL_STATE_PENDING":   "pending",
-		"HANDOVER_PHASE_HANDED_OVER":       "handed-over",
-		"ROLLOUT_KIND_KUBERNETES":          "kubernetes",
-		"MACHINE_ROLE_UNSPECIFIED":         "",
-		"NOT_AN_ENUM_AT_ALL":               "not-an-enum-at-all",
-		"":                                 "",
+		"MACHINE_ROLE_CONTROL_PLANE":      humanControlPlane,
+		"MACHINE_ROLE_WORKER":             "worker",
+		"MACHINE_APPROVAL_STATE_APPROVED": "approved",
+		"MACHINE_APPROVAL_STATE_PENDING":  "pending",
+		"HANDOVER_PHASE_HANDED_OVER":      "handed-over",
+		"ROLLOUT_KIND_KUBERNETES":         compKubernetes,
+		"MACHINE_ROLE_UNSPECIFIED":        "",
+		"NOT_AN_ENUM_AT_ALL":              "not-an-enum-at-all",
+		"":                                "",
 	} {
 		if got := humanEnum(in); got != want {
 			t.Errorf("humanEnum(%q) = %q, want %q", in, got, want)
@@ -186,15 +198,15 @@ func TestConditionMarkKnowsWhichWayAConditionReads(t *testing.T) {
 		typ, status string
 		want        mark
 	}{
-		{"Ready", "True", markOK},
-		{"Ready", "False", markFailed},
-		{"Ready", "Unknown", markPending},
-		{"ConfigWarnings", "False", markOK},
-		{"ConfigWarnings", "True", markWarning},
-		{"CertificatesExpiring", "True", markWarning},
-		{"Transitioning", "True", markPending},
-		{"Transitioning", "False", markOK},
-		{"NetworkPoliciesApplied", "False", markWarning},
+		{conditionReady, condTrue, markOK},
+		{conditionReady, condFalse, markFailed},
+		{conditionReady, "Unknown", markPending},
+		{"ConfigWarnings", condFalse, markOK},
+		{"ConfigWarnings", condTrue, markWarning},
+		{"CertificatesExpiring", condTrue, markWarning},
+		{"Transitioning", condTrue, markPending},
+		{"Transitioning", condFalse, markOK},
+		{"NetworkPoliciesApplied", condFalse, markWarning},
 	} {
 		if got := conditionMark(tc.typ, tc.status); got != tc.want {
 			t.Errorf("conditionMark(%s, %s) = %d, want %d", tc.typ, tc.status, got, tc.want)
@@ -203,7 +215,7 @@ func TestConditionMarkKnowsWhichWayAConditionReads(t *testing.T) {
 }
 
 func TestShortNamesShortenOnlyWhatStaysUnique(t *testing.T) {
-	got := shortNames([]string{"fa70962a-4fd9-4d01-88c5-f9966adcda99", "0b1c2d3e-aaaa-bbbb-cccc-111122223333", "node-a"})
+	got := shortNames([]string{"fa70962a-4fd9-4d01-88c5-f9966adcda99", "0b1c2d3e-aaaa-bbbb-cccc-111122223333", testMachineName})
 	if want := []string{"fa70962a", "0b1c2d3e", "node-a"}; strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("got %v, want %v", got, want)
 	}

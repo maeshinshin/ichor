@@ -31,7 +31,7 @@ func TestPrintUpgradeTargetsMarksTheDefault(t *testing.T) {
 
 	var b bytes.Buffer
 
-	printUpgradeTargets(&b, pb.OperationKind_OPERATION_KIND_TALOS, &pb.ListUpgradeTargetsResponse{
+	printUpgradeTargetsText(&b, pb.OperationKind_OPERATION_KIND_TALOS, &pb.ListUpgradeTargetsResponse{
 		Available: true, Recommended: []string{ver1143}, Patch: []string{"v1.12.4"}, NextMinor: []string{"v1.13.2"},
 		Default: ver1143,
 	})
@@ -44,7 +44,7 @@ func TestPrintUpgradeTargetsMarksTheDefault(t *testing.T) {
 	}
 
 	b.Reset()
-	printUpgradeTargets(&b, pb.OperationKind_OPERATION_KIND_KUBERNETES, &pb.ListUpgradeTargetsResponse{
+	printUpgradeTargetsText(&b, pb.OperationKind_OPERATION_KIND_KUBERNETES, &pb.ListUpgradeTargetsResponse{
 		UnavailableReason: "The release check is off: turn on the update check in Settings to list versions.",
 	})
 

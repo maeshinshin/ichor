@@ -159,12 +159,11 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 			return err
 		}
 
-		if err := writeMessage(out, outputFormat, resp.Msg); err != nil {
+		if err := printAPI(out, resp.Msg, renderMachineRemoved(s.Machine)); err != nil {
 			return err
 		}
 
-		_, _ = fmt.Fprintf(errw, "Next: the Kubernetes Node stays while the machine runs (its kubelet keeps the cluster's credentials).\n"+
-			"Power it off or reset it (`ichor node reset`, override), then delete the Node: `kubectl delete node %s`.\n", s.Machine)
+		nodeRemoveNext(errw, s.Machine)
 
 		return nil
 	}
@@ -177,10 +176,10 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 	}
 
 	if !s.Follow {
-		return writeMessage(out, outputFormat, resp.Msg)
+		return printAPI(out, resp.Msg, renderOperationCreated)
 	}
 
-	_, _ = fmt.Fprintf(errw, "created operation %s\n", resp.Msg.GetOperation().GetRef().GetName())
+	announceCreated(errw, resp.Msg.GetOperation().GetRef().GetName())
 
 	return watchOperation(ctx, c, resp.Msg.GetOperation().GetRef(), out, errw)
 }

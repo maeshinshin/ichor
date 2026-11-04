@@ -132,13 +132,11 @@ func takeSnapshot(ctx context.Context, c client.Client, ns, runID string, stage 
 		return nil, err
 	}
 
-	data := buf.Bytes()
 	taken := time.Now().UTC().Format(time.RFC3339Nano)
-	parts := (len(data) + snapshotChunkBytes - 1) / snapshotChunkBytes
+	chunks := slices.Collect(slices.Chunk(buf.Bytes(), snapshotChunkBytes))
+	parts := len(chunks)
 
-	for i := range parts {
-		chunk := data[i*snapshotChunkBytes : min((i+1)*snapshotChunkBytes, len(data))]
-
+	for i, chunk := range chunks {
 		cm := &corev1.ConfigMap{
 			Namespace: ns,
 			Name:      snapshotName(runID, stage, i),

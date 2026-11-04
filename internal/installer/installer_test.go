@@ -43,8 +43,6 @@ import (
 // handling and the restore-by-update are the behaviour under test, which a fake client
 // would only pretend to have.
 
-const kindRoleName = "Role"
-
 var (
 	testEnv   *envtest.Environment
 	k8sClient client.Client
@@ -290,18 +288,12 @@ func TestApplyOneRetriesADeploymentUpdateConflict(t *testing.T) {
 func TestRunRefusesACRDThatWouldDropAField(t *testing.T) {
 	f := newFixture(t)
 
-	var order []string
-
 	// The cluster already runs the newer CRD (with "color")...
-	if err := Run(context.Background(), k8sClient, Options{
-		Namespace: f.ns, RunID: f.run + "-new", Manifest: f.manifest("ctrl:v2", "color"), Ready: noWait(&order),
-	}); err != nil {
-		t.Fatalf("installing the newer manifest: %v", err)
-	}
+	runInstaller(t, f, f.run+"-new", f.manifest("ctrl:v2", "color"))
 
 	// ...and an installer carrying the older manifest (no "color") must be refused before any write.
 	err := Run(context.Background(), k8sClient, Options{
-		Namespace: f.ns, RunID: f.run + "-old", Manifest: f.manifest("ctrl:v1", ""), Ready: noWait(&order),
+		Namespace: f.ns, RunID: f.run + "-old", Manifest: f.manifest("ctrl:v1", ""), Ready: noWait(new([]string)),
 	})
 	if err == nil || !strings.Contains(err.Error(), "color would be removed") {
 		t.Fatalf("Run error = %v, want a refusal naming the dropped field", err)
@@ -323,14 +315,8 @@ func TestRunRefusesACRDThatWouldDropAField(t *testing.T) {
 func TestRunRollsBackWhenAPostCheckFails(t *testing.T) {
 	f := newFixture(t)
 
-	var order []string
-
 	// Version 1 is installed.
-	if err := Run(context.Background(), k8sClient, Options{
-		Namespace: f.ns, RunID: f.run + "-v1", Manifest: f.manifest("ctrl:v1", ""), Ready: noWait(&order),
-	}); err != nil {
-		t.Fatalf("installing v1: %v", err)
-	}
+	runInstaller(t, f, f.run+"-v1", f.manifest("ctrl:v1", ""))
 
 	// Remove the UI so the failed upgrade has something it created to delete again.
 	ui := &unstructured.Unstructured{}
@@ -379,8 +365,6 @@ func TestRunRollsBackWhenAPostCheckFails(t *testing.T) {
 func TestSnapshotIsKeptWhenARunIsRepeated(t *testing.T) {
 	f := newFixture(t)
 
-	var order []string
-
 	// A first run that fails after the snapshot leaves the original in place...
 	failCtrl := func(_ context.Context, _ client.Client, obj *unstructured.Unstructured) error {
 		if obj.GetName() == "ichor-controller-manager" {
@@ -398,11 +382,7 @@ func TestSnapshotIsKeptWhenARunIsRepeated(t *testing.T) {
 	}
 
 	// ...and a second run with the same id reuses it rather than snapshotting the mid-upgrade state.
-	if err := Run(context.Background(), k8sClient, Options{
-		Namespace: f.ns, RunID: f.run, Manifest: f.manifest("ctrl:v2", ""), Ready: noWait(&order),
-	}); err != nil {
-		t.Fatalf("second run: %v", err)
-	}
+	runInstaller(t, f, f.run, f.manifest("ctrl:v2", ""))
 
 	second, _ := loadSnapshot(context.Background(), k8sClient, f.ns, f.run)
 	if len(second) != len(first) {
@@ -435,14 +415,8 @@ func snapshotRuns(t *testing.T, ns string) map[string]int {
 func TestRunKeepsOnlyTheNewestSnapshots(t *testing.T) {
 	f := newFixture(t)
 
-	var order []string
-
 	for i := range SnapshotsKept + 2 {
-		if err := Run(context.Background(), k8sClient, Options{
-			Namespace: f.ns, RunID: fmt.Sprintf("%s-%d", f.run, i), Manifest: f.manifest("ctrl:v2", ""), Ready: noWait(&order),
-		}); err != nil {
-			t.Fatalf("run %d: %v", i, err)
-		}
+		runInstaller(t, f, fmt.Sprintf("%s-%d", f.run, i), f.manifest("ctrl:v2", ""))
 	}
 
 	got := snapshotRuns(t, f.ns)
@@ -526,7 +500,7 @@ subjects: [{kind: ServiceAccount, name: ichor-installer, namespace: %[1]s}]
 		t.Fatalf("loadSnapshot: %v", err)
 	}
 
-	if len(snap) == 0 || snap[0].Kind != kindRoleName {
+	if len(snap) == 0 || snap[0].Kind != kindRole {
 		t.Errorf("the snapshot must start with the installer RBAC so a rollback restores it last, got %+v", snap)
 	}
 }

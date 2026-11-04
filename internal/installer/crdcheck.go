@@ -72,16 +72,15 @@ func checkAdditive(live, target *unstructured.Unstructured) error {
 		return fmt.Errorf("CRD %s: scope would change from %s to %s", l.Name, l.Spec.Scope, t.Spec.Scope)
 	}
 
-	targetVersions := map[string]apiextensionsv1.CustomResourceDefinitionVersion{}
-	for _, v := range t.Spec.Versions {
-		targetVersions[v.Name] = v
-	}
-
 	for _, lv := range l.Spec.Versions {
-		tv, ok := targetVersions[lv.Name]
-		if !ok {
+		i := slices.IndexFunc(t.Spec.Versions, func(v apiextensionsv1.CustomResourceDefinitionVersion) bool {
+			return v.Name == lv.Name
+		})
+		if i < 0 {
 			return fmt.Errorf("CRD %s: version %s would be removed (the target is older than what is installed)", l.Name, lv.Name)
 		}
+
+		tv := t.Spec.Versions[i]
 
 		if lv.Schema == nil || lv.Schema.OpenAPIV3Schema == nil {
 			continue

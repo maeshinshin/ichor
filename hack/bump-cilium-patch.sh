@@ -10,7 +10,7 @@
 # SAME minor in the Cilium Helm index, and never crosses a minor. Before it writes anything it
 #   - checks the chart archive against the digest in the index,
 #   - verifies, with cosign, that the agent, operator-generic and hubble-relay images the chart pins are
-#     signed by the Cilium release workflow of that tag (the identity internal/imagesig uses), and
+#     signed by the Cilium release workflow of that tag (the identity docs.cilium.io names for verifying Cilium images), and
 #   - checks that the Kubernetes versions Cilium tests that tag with are the ones pkg/release/compat.go
 #     states for the minor.
 # Then it moves every version pin (listed below), fetches the chart with `make cilium-chart` (which

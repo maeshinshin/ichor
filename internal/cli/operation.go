@@ -253,6 +253,8 @@ func progressLineAt(op *pb.Operation, caStage string) string {
 
 	if op.GetFailureReason() != "" {
 		line += ": " + op.GetFailureReason()
+	} else if op.GetPhase() == "InProgress" && op.GetMessage() != "" {
+		line += ": " + op.GetMessage()
 	}
 
 	return line

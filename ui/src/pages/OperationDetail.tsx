@@ -179,6 +179,7 @@ export function OperationDetail({ name }: { name: string }) {
               ) : (
                 <Field label={t('ops.maxUnavailable')} value={String(op.maxUnavailable || 1)} />
               )}
+              {op.message && <Field label={t('ops.currently')} value={op.message} />}
             </Fields>
           </CardContent>
         </Card>

@@ -46,7 +46,24 @@ ichor settings set users.tokenTTL=15m defaults.driftPolicy=autoCorrect
 
 `ichor settings get` shows each setting, the value in force and its source
 (`spec` or `deployment`); `-o yaml` or `-o json` print the full response.
-`ichor settings set` writes only the keys you name:
+
+```
+$ ichor settings get
+SETTING                VALUE        SOURCE
+version                v0.4.0       spec
+installedVersion       v0.4.0       status
+deployment.manager     helm         spec
+users.tokenTTL         15m          spec
+users.refreshLifetime  168h         deployment
+defaults.driftPolicy   autoCorrect  spec
+updateCheck.enabled    true         deployment
+autoPatch.enabled      false        deployment
+autoPatch.components   -            -
+autoPatch.window       -            -
+```
+
+`ichor settings set` writes only the keys you name, and prints the table again
+with the new values:
 
 ```
   users.tokenTTL=15m           token lifetime, 1m to 1h

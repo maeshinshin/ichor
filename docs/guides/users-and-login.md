@@ -316,8 +316,8 @@ They talk to ichor-ui directly at the issuer URL over https, with your login (a
 token for ichor-ui, from the browser sign-in; the first command opens it). They
 do not use a port-forward and need no kubeconfig, so they work from a laptop.
 Give the URL with `--issuer` or `ICHOR_ISSUER`, and `--ca-file` (or
-`ICHOR_CA_FILE`) when a private CA signed ichor-ui's certificate. Output is
-`-o yaml|json`.
+`ICHOR_CA_FILE`) when a private CA signed ichor-ui's certificate. The commands
+print for people; `-o yaml` or `-o json` print the full response for scripts.
 
 ```
 ichor user list
@@ -330,10 +330,29 @@ ichor user revoke-sessions alice
 ichor user delete alice                        # asks; --yes skips
 ```
 
+`list` is a table, and a write prints one line naming what it did:
+
+```
+$ ichor user list
+NAME   DISPLAY NAME  EMAIL  ROLES   STATE        AGE
+admin  -             -      admin   active       2d
+alice  Alice         -      viewer  no password  4s
+
+$ ichor user create bob --role viewer --generate
+✓ created user bob (viewer)
+! Password for bob (shown once, stored nowhere; they must change it at the first sign-in): Zq3x...
+
+$ ichor user update bob --role operator
+✓ updated user bob
+```
+
+The state is `active`, `no password` (nobody can sign in as the user yet) or
+`disabled`.
+
 `create` and `set-password` take the password from a prompt with no echo (asked
 twice), from the first line of stdin with `--password-stdin`, or generate one
-with `--generate`; a generated password is printed once to stderr. A password is
-never a flag value. The password set by an admin is marked must-change.
+with `--generate`; a generated password is printed once to stderr, under the
+result line, and nowhere else. A password is never a flag value. The password set by an admin is marked must-change.
 Kubernetes RBAC decides who may do what: the admin role for everything,
 `update` on `ichorusers/password` for `set-password` and `revoke-sessions`.
 

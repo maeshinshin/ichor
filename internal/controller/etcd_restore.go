@@ -351,7 +351,7 @@ func (r *TalosOperationReconciler) beginEtcdRestore(
 		return r.restoreRefused(ctx, op, run, fmt.Errorf("snapshot %q does not pass its check: %w", snap.Name, err))
 	}
 
-	if err := lock.Renew(ctx, controllerIdentity); err != nil {
+	if err := lock.Renew(ctx, operationLockIdentity(op)); err != nil {
 		return renewRefusal(ctx, err)
 	}
 
@@ -941,7 +941,7 @@ func (run *restoreRun) finish(ctx context.Context, lock *clusterlock.Lock) (ctrl
 	}
 
 	if lock != nil {
-		if err := lock.Release(ctx, controllerIdentity); err != nil {
+		if err := lock.Release(ctx, operationLockIdentity(run.op)); err != nil {
 			return ctrl.Result{}, err
 		}
 	}

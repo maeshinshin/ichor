@@ -113,7 +113,7 @@ func (r *TalosOperationReconciler) advanceNode(
 		return r.nodeFailed(ctx, op, fmt.Errorf("machine %q is not an approved machine of cluster %q", m.Name, cluster.Name))
 	}
 
-	if err := lock.Renew(ctx, controllerIdentity); err != nil {
+	if err := lock.Renew(ctx, operationLockIdentity(op)); err != nil {
 		return renewRefusal(ctx, err)
 	}
 
@@ -280,7 +280,7 @@ func (n *nodeRun) complete(ctx context.Context, message string) (ctrl.Result, er
 
 	n.op.Status.Node.Message = message
 
-	if err := n.lock.Release(ctx, controllerIdentity); err != nil {
+	if err := n.lock.Release(ctx, operationLockIdentity(n.op)); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -513,7 +513,7 @@ func (n *nodeRun) awaitShutdown(ctx context.Context) (ctrl.Result, error) {
 // powers it on. The lock is released; the operation completes when the node answers on a new
 // boot (awaitPowerOn, shared with the cluster shutdown).
 func (n *nodeRun) shutDown(ctx context.Context) (ctrl.Result, error) {
-	if err := n.lock.Release(ctx, controllerIdentity); err != nil {
+	if err := n.lock.Release(ctx, operationLockIdentity(n.op)); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -609,7 +609,7 @@ func (n *nodeRun) beginDefrag(ctx context.Context) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	stop := renewWhile(ctx, n.lock, controllerIdentity, removalRenewInterval)
+	stop := renewWhile(ctx, n.lock, operationLockIdentity(n.op), removalRenewInterval)
 	defer stop()
 
 	callCtx, cancel := context.WithTimeout(ctx, defragTimeout)
@@ -720,7 +720,7 @@ func (n *nodeRun) beginReset(ctx context.Context) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	if err := n.lock.Release(ctx, controllerIdentity); err != nil {
+	if err := n.lock.Release(ctx, operationLockIdentity(n.op)); err != nil {
 		return ctrl.Result{}, err
 	}
 

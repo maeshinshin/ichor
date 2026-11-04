@@ -35,10 +35,12 @@ import (
 
 // rotate-keys goes through OperationService like every other start.
 
+const keyTestContract = "v1.14"
+
 // keyTestObjects is opTestObjects on a contract the key rotation can run under.
 func keyTestObjects() []client.Object {
 	objs := opTestObjects()
-	objs[0].(*ichorv1alpha1.TalosCluster).Spec.VersionContract = "v1.14"
+	objs[0].(*ichorv1alpha1.TalosCluster).Spec.VersionContract = keyTestContract
 
 	return objs
 }
@@ -58,7 +60,7 @@ func TestRotateKeysPromptSaysWhatHappensToTheKeysAndDeclineWritesNothing(t *test
 	}
 
 	for _, want := range []string{
-		"service-account", "secretbox", "Accepting, Issuing, Reencrypting, SettlingTokens, Dropping",
+		"service-account", ichorv1alpha1.KeyRotationTargetSecretbox, "Accepting, Issuing, Reencrypting, SettlingTokens, Dropping",
 		"kube-apiserver", "one at a time", "1. " + opCP + " (controlplane)", "ichor cluster bundle-export " + opTestCluster,
 		"every Secret", "legacy", "90 minutes",
 	} {
@@ -93,7 +95,7 @@ func TestRotateKeysWithTheFlagsCreatesTheOperationTheyDescribe(t *testing.T) {
 	})
 	c := localClients(apiOpts, apiDeps{K8s: k8s})
 
-	spec, err := keyRotationStart(opTestCluster, []string{"secretbox"}, "2h", true)
+	spec, err := keyRotationStart(opTestCluster, []string{ichorv1alpha1.KeyRotationTargetSecretbox}, "2h", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +110,7 @@ func TestRotateKeysWithTheFlagsCreatesTheOperationTheyDescribe(t *testing.T) {
 	}
 
 	kr := ops[0].Spec.KeyRotation
-	if kr == nil || !slices.Equal(kr.Targets, []string{"secretbox"}) || kr.TokenSettle == nil || kr.TokenSettle.Duration != 2*time.Hour || !kr.IgnoreLegacyTokens {
+	if kr == nil || !slices.Equal(kr.Targets, []string{ichorv1alpha1.KeyRotationTargetSecretbox}) || kr.TokenSettle == nil || kr.TokenSettle.Duration != 2*time.Hour || !kr.IgnoreLegacyTokens {
 		t.Fatalf("spec.keyRotation = %+v", kr)
 	}
 }
@@ -116,10 +118,10 @@ func TestRotateKeysWithTheFlagsCreatesTheOperationTheyDescribe(t *testing.T) {
 func TestRotateKeysOnlyAcceptsTheKeysItKnows(t *testing.T) {
 	for only, want := range map[string][]string{
 		"":                          nil,
-		"service-account":           {"serviceAccount"},
-		"serviceAccount":            {"serviceAccount"},
-		"secretbox":                 {"secretbox"},
-		"secretbox,service-account": {"secretbox", "serviceAccount"},
+		"service-account":           {ichorv1alpha1.KeyRotationTargetServiceAccount},
+		"serviceAccount":            {ichorv1alpha1.KeyRotationTargetServiceAccount},
+		"secretbox":                 {ichorv1alpha1.KeyRotationTargetSecretbox},
+		"secretbox,service-account": {ichorv1alpha1.KeyRotationTargetSecretbox, ichorv1alpha1.KeyRotationTargetServiceAccount},
 	} {
 		got, err := keyRotationTargets(only)
 		if err != nil || !slices.Equal(got, want) {
@@ -146,7 +148,7 @@ func TestRotateKeysIsOneCommandThroughTheEntryPoint(t *testing.T) {
 	}
 
 	line := progressLine(&pb.Operation{
-		Ref: objectRef(testNamespace, "x"), Kind: pb.OperationKind_OPERATION_KIND_KEY_ROTATION, Phase: "InProgress", KeyRotationStage: "Reencrypting",
+		Ref: objectRef(testNamespace, "x"), Kind: pb.OperationKind_OPERATION_KIND_KEY_ROTATION, Phase: ichorv1alpha1.TalosOperationPhaseInProgress, KeyRotationStage: "Reencrypting",
 	})
 	if !strings.Contains(line, "stage Reencrypting") {
 		t.Errorf("progress line lacks the stage: %q", line)

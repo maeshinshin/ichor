@@ -194,6 +194,11 @@ func (t *machineryTalosClient) Schematic(ctx context.Context) (string, error) {
 	return res.TypedSpec().SchematicID, nil
 }
 
+// SecurityState reads the node's boot security; see ReadSecurityState.
+func (t *machineryTalosClient) SecurityState(ctx context.Context) (SecurityState, error) {
+	return ReadSecurityState(ctx, t.c.COSI)
+}
+
 // DryRunApply validates cfg without applying it and collects every
 // message's warnings (ValidateAtRuntime's warnings, not
 // Mode/ModeDetails, are what's worth reading from this call).

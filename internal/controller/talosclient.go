@@ -222,6 +222,10 @@ type TalosClient interface {
 	// change is told apart from "already up to date".
 	Schematic(ctx context.Context) (string, error)
 
+	// SecurityState reports the node's boot security: SecureBoot, UKI, signed modules and the
+	// kernel command line (the SecurityState and KernelCmdline resources).
+	SecurityState(ctx context.Context) (SecurityState, error)
+
 	// APIServerInstance identifies this control plane's running kube-apiserver container (the
 	// container ID in the kube-apiserver static pod's status, from Talos's StaticPodStatus
 	// resource). It changes when the pod is recreated, which is how the config rollout tells "the

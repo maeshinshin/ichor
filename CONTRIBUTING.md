@@ -143,6 +143,30 @@ lint failures are not yours.
 - `make ui-shots` takes desktop and phone screenshots of the UI in light and dark;
   look at them before calling a UI change done.
 
+## Cilium patch bumps
+
+Ichor pins the Cilium chart it embeds, and a cluster's Cilium only moves to the
+chart of the Ichor that runs it, so a Cilium patch reaches users in an Ichor
+release.
+
+1. `.github/workflows/cilium-patch.yml` runs daily (and from the Actions tab).
+   `make bump-cilium-patch` looks for a newer final patch of the pinned minor,
+   verifies the cosign signatures of its images, moves every version pin and
+   regenerates the goldens. Up to date means "no newer patch" and exit 0.
+2. If the bump passes `make test` and `make lint`, the workflow opens the pull
+   request `chore(cni): bump the embedded Cilium chart to X.Y.Z`, linking the
+   upstream release notes. A red run (an unsigned image, a changed Kubernetes
+   matrix, a test that pinned the old patch) opens nothing: do the bump by hand
+   from the failure. Set the repository secret `CILIUM_PATCH_PR_TOKEN` so the
+   pull request also gets the Tests, Lint and PR Title checks.
+3. Read the release notes and merge. This moves no cluster.
+4. Cut a patch release of Ichor (push a `v*` tag, which runs the release
+   workflow; `make release VERSION=vX.Y.Z` builds the same artifacts locally); users get the new chart when they upgrade Ichor and run
+   `ichor cni upgrade`.
+
+A new Cilium minor is never bumped by the script: change the pin and the values
+by hand.
+
 ## Licensing
 
 Apache-2.0, copyright maeshinshin. Files copied from Talos (MPL-2.0) keep

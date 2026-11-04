@@ -3,7 +3,8 @@ name: Release
 # One workflow for the images and the chart (ADR 0108). A v* tag runs, in order:
 #   verify   the same checks as a PR (module drift, lint, tests, govulncheck, npm audit); contents: read
 #   build    compiles the three image binaries and packages the chart; contents: read, no registry token
-#   publish  pushes by digest, signs (cosign keyless), attaches an SBOM and a provenance attestation;
+#   publish  pushes by digest, signs (cosign keyless), verifies the signatures with the controller's own verifier,
+#            attaches an SBOM and a provenance attestation;
 #            runs in the protected "release" environment and is the only job with a token
 on:
   push:
@@ -74,6 +75,11 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: nix develop --command make helm-package CHART_VERSION="${TAG#v}" APP_VERSION="${TAG}"
 
+      # The verifier the controller runs before an Ichor upgrade (ADR 0122). It is built here, where Go modules may
+      # be fetched, and run in the publish job, which fetches none.
+      - name: Build the signature verifier
+        run: nix develop --command env CGO_ENABLED=0 go build -trimpath -o bin/verifyimage ./internal/tools/verifyimage
+
       - name: Upload the build output
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -81,6 +87,7 @@ jobs:
           path: |
             bin/img/
             bin/chart/
+            bin/verifyimage
           retention-days: 1
           if-no-files-found: error
 
@@ -147,6 +154,17 @@ jobs:
         run: |
           while read -r ref; do
             nix develop --command cosign sign --yes "$ref"
+          done < bin/digests.txt
+
+      # The same code and trusted root the controller uses before it creates the installer Job: a signature it
+      # would refuse fails the release now, not the first upgrade (ADR 0122).
+      - name: Verify the signatures as the controller does
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          chmod +x bin/verifyimage
+          while read -r ref; do
+            bin/verifyimage "${ref%@*}" "${ref#*@}" "${TAG}"
           done < bin/digests.txt
 
       - name: Generate the SBOMs

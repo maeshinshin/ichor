@@ -28,8 +28,6 @@ import (
 	"fmt"
 	"io"
 	"time"
-
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // ErrNotFound is what Store.Get returns, wrapped, for a key that does not exist.
@@ -153,7 +151,7 @@ func PinnedKey(prefix string) string { return prefix + "/" + PinnedName }
 const markerInfo = "ichor.maesh.dev/etcd-backup/marker/v1"
 
 // signedMarker is the marker object as stored: the marker's JSON and its HMAC. An object without Marker
-// is a legacy unsigned one (a bare RestoreMarker).
+// is unsigned and refused.
 type signedMarker struct {
 	Marker json.RawMessage `json:"marker"`
 	MAC    string          `json:"mac"`
@@ -193,9 +191,7 @@ func PutMarker(ctx context.Context, store Store, prefix string, passphrase Key, 
 }
 
 // GetMarker reads and verifies the marker; it returns (nil, nil) when there is none. A marker whose HMAC
-// does not match is an error. A legacy unsigned marker (written before signing) is accepted with a
-// warning, because refusing it would strand a restore that is half done across an upgrade; every later
-// PutMarker signs it. ponytail: refuse unsigned markers one release after signing ships.
+// does not match, or that is unsigned, is an error (ErrMarkerSignature).
 func GetMarker(ctx context.Context, store Store, prefix string, passphrase Key) (*RestoreMarker, error) {
 	rc, err := store.Get(ctx, prefix+"/"+MarkerName)
 	if err != nil {
@@ -219,31 +215,28 @@ func GetMarker(ctx context.Context, store Store, prefix string, passphrase Key) 
 	}
 
 	body := []byte(env.Marker)
-
 	if len(body) == 0 {
-		logf.FromContext(ctx).Info("the restore marker is not signed (written by an older release); accepting it once, the next write signs it")
+		return nil, fmt.Errorf("%w: the marker is unsigned (written by a build that never shipped); take a new backup with this version", ErrMarkerSignature)
+	}
 
-		body = raw
-	} else {
-		// Signed with the current key, or with the v1 key by a release before ADR 0108.
-		ok := false
+	// Signed with the current key, or with the v1 key by a release before ADR 0108.
+	ok := false
 
-		for _, pass := range []string{passphrase.Current, passphrase.Legacy} {
-			if pass == "" {
-				continue
-			}
-
-			want, err := markerMAC(pass, body)
-			if err != nil {
-				return nil, err
-			}
-
-			ok = ok || hmac.Equal([]byte(want), []byte(env.MAC))
+	for _, pass := range []string{passphrase.Current, passphrase.Legacy} {
+		if pass == "" {
+			continue
 		}
 
-		if !ok {
-			return nil, ErrMarkerSignature
+		want, err := markerMAC(pass, body)
+		if err != nil {
+			return nil, err
 		}
+
+		ok = ok || hmac.Equal([]byte(want), []byte(env.MAC))
+	}
+
+	if !ok {
+		return nil, ErrMarkerSignature
 	}
 
 	var m RestoreMarker
@@ -254,9 +247,9 @@ func GetMarker(ctx context.Context, store Store, prefix string, passphrase Key) 
 	return &m, nil
 }
 
-// ErrMarkerSignature is returned by GetMarker for a marker that no key of this cluster signed. No
+// ErrMarkerSignature is returned by GetMarker for a marker that is unsigned or that no key of this cluster signed. No
 // retry fixes it, so callers that poll must not wait for it to go away.
-var ErrMarkerSignature = errors.New("the restore marker's signature does not match: it was not written by this cluster's controller")
+var ErrMarkerSignature = errors.New("the restore marker's signature is missing or does not match: it was not written by this cluster's controller")
 
 // DeleteMarker removes the marker.
 func DeleteMarker(ctx context.Context, store Store, prefix string) error {

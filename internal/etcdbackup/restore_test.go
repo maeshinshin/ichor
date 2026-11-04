@@ -23,6 +23,7 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -218,13 +219,13 @@ func TestMarkerSignature(t *testing.T) {
 		t.Fatal("an edited marker must be refused")
 	}
 
-	// A legacy unsigned marker is accepted (an upgrade must not strand a restore in flight).
-	legacy, _ := json.Marshal(m)
-	st["p/"+MarkerName] = legacy
+	// An unsigned marker is refused with advice, and as ErrMarkerSignature so the controller treats it as unusable.
+	unsigned, _ := json.Marshal(m)
+	st["p/"+MarkerName] = unsigned
 
 	got, err := GetMarker(ctx, st, "p", Key{Current: "pw"})
-	if err != nil || got == nil || got.Step != wipingStep {
-		t.Fatalf("legacy marker: %+v, %v", got, err)
+	if got != nil || !errors.Is(err, ErrMarkerSignature) || !strings.Contains(err.Error(), "take a new backup") {
+		t.Fatalf("unsigned marker: %+v, %v", got, err)
 	}
 }
 

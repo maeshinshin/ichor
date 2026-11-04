@@ -430,14 +430,16 @@ func TestAdoptNoCNI_CiliumValuesRefusals(t *testing.T) {
 		}
 	})
 
-	t.Run("a cluster that is not a no-CNI cluster", func(t *testing.T) {
+	// The TalosCluster exists, so there is no spec adopt creates to put the values in (ADR 0128 3 lets a
+	// takeover carry them only into a cluster adopt creates).
+	t.Run("a TalosCluster that exists", func(t *testing.T) {
 		env := newFlowEnv(t, cniCilium, nil)
 		deps := env.deps(t)
 		deps.Target = fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(testDS("cilium", ciliumImage), ciliumCM("false")).Build()
 		deps.CiliumValues = debugValues()
 
 		err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps)
-		if err == nil || !strings.Contains(err.Error(), "--cilium-values only applies") {
+		if err == nil || !strings.Contains(err.Error(), "--cilium-values applies to the TalosCluster adopt creates") {
 			t.Fatalf("runAdopt = %v, want the refusal", err)
 		}
 	})

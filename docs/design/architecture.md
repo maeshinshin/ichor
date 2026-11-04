@@ -1067,9 +1067,10 @@ that a mirror is reachable before an upgrade.
 The rule is parity. Both write CRs; both share the same Go packages for
 rendering, planning (diff, impact, pre-checks, upgrade paths) and
 dangerous-operation checks; both use the same Connect API, the CLI falling
-back to local computation when it can't reach the backend. The CLI offers
-`-o yaml|json`, `--follow`/`--watch`, and interactive confirmation with
-`--yes`. The exceptions are `init`, `adopt` and full-loss recovery, which
+back to local computation when it can't reach the backend. The CLI prints for
+people by default (tables and aligned blocks) and offers
+`-o yaml|json` for scripts, `--follow`/`--watch`, and interactive confirmation
+with `--yes`. The exceptions are `init`, `adopt` and full-loss recovery, which
 predate the cluster.
 
 The UI is a Vite + Preact + TypeScript SPA built with preactcn, embedded in

@@ -56,7 +56,7 @@ import { attentionItems, backupsValue, tileTargets, versionLabel, type TileTarge
 import { releaseNotice } from '@/lib/ichorVersion'
 import { opStateTone, type Tone } from '@/lib/status'
 import { componentOf, stateKey, stateTone, versionPair } from '@/lib/versions'
-import { hasPatch, patchComponents, type TargetList } from '@/lib/upgradeTargets'
+import { hasPatch, patchComponents, unavailableNotes, type TargetList } from '@/lib/upgradeTargets'
 import { conditionTone } from '@/lib/conditions'
 import { useCluster } from '@/lib/useCluster'
 import { useT } from '@/lib/useT'
@@ -191,6 +191,7 @@ function Home({
   const kubeProxy = cluster.kubeProxyMode || 'enabled'
   const versionOf = (name: string) => componentOf(cluster.versions, name)
   const cilium = versionOf('cilium')
+  const notes = unavailableNotes(candidates)
   const patches = patchComponents({
     talos: candidates.talos,
     kubernetes: candidates.kubernetes,
@@ -474,9 +475,12 @@ function Home({
                     )}
                 </ItemGroup>
               </CardContent>
-              {busyReason && (
-                <CardFooter>
-                  <CardDescription>{busyReason}</CardDescription>
+              {(busyReason || notes.length > 0) && (
+                <CardFooter className="flex-col items-start gap-1">
+                  {busyReason && <CardDescription>{busyReason}</CardDescription>}
+                  {notes.map((n) => (
+                    <CardDescription key={n.reason}>{t('versions.checkFailed', { components: n.components.join(', '), reason: n.reason })}</CardDescription>
+                  ))}
                 </CardFooter>
               )}
             </Card>

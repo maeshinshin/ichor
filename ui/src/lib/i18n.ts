@@ -1153,6 +1153,7 @@ export const en = {
   'versions.state.ahead': 'Ahead',
   'versions.state.unknown': 'Unknown',
   'versions.patchAvailable': 'Patch available',
+  'versions.checkFailed': "Couldn't check for {components} patches: {reason}",
   'home.attnPatch': 'Patch updates are available for {components}',
   'ops.picker.placeholder': 'Choose or type a version',
   'ops.picker.loading': 'Loading the versions this cluster can move to',

@@ -49,6 +49,14 @@ message TalosSystemSection {
   // kernel_args are the kernel command line arguments with the value of any
   // argument that could carry a credential replaced by "***".
   repeated string kernel_args = 12;
+  // secure_boot, booted_with_uki, module_signature_enforced and uki_signing_key_fingerprint are the
+  // fields of Talos's SecurityState resource (ADR 0123). kernel_lockdown is the level in effect:
+  // none, integrity or confidentiality, derived from the kernel command line and SecureBoot.
+  bool secure_boot = 13;
+  bool booted_with_uki = 14;
+  bool module_signature_enforced = 15;
+  string uki_signing_key_fingerprint = 16;
+  string kernel_lockdown = 17;
 }
 
 message TalosLink {

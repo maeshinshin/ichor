@@ -229,9 +229,17 @@ type TalosSystemSection struct {
 	KubernetesNodename string `protobuf:"bytes,11,opt,name=kubernetes_nodename,json=kubernetesNodename,proto3" json:"kubernetes_nodename,omitempty"`
 	// kernel_args are the kernel command line arguments with the value of any
 	// argument that could carry a credential replaced by "***".
-	KernelArgs    []string `protobuf:"bytes,12,rep,name=kernel_args,json=kernelArgs,proto3" json:"kernel_args,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	KernelArgs []string `protobuf:"bytes,12,rep,name=kernel_args,json=kernelArgs,proto3" json:"kernel_args,omitempty"`
+	// secure_boot, booted_with_uki, module_signature_enforced and uki_signing_key_fingerprint are the
+	// fields of Talos's SecurityState resource (ADR 0123). kernel_lockdown is the level in effect:
+	// none, integrity or confidentiality, derived from the kernel command line and SecureBoot.
+	SecureBoot               bool   `protobuf:"varint,13,opt,name=secure_boot,json=secureBoot,proto3" json:"secure_boot,omitempty"`
+	BootedWithUki            bool   `protobuf:"varint,14,opt,name=booted_with_uki,json=bootedWithUki,proto3" json:"booted_with_uki,omitempty"`
+	ModuleSignatureEnforced  bool   `protobuf:"varint,15,opt,name=module_signature_enforced,json=moduleSignatureEnforced,proto3" json:"module_signature_enforced,omitempty"`
+	UkiSigningKeyFingerprint string `protobuf:"bytes,16,opt,name=uki_signing_key_fingerprint,json=ukiSigningKeyFingerprint,proto3" json:"uki_signing_key_fingerprint,omitempty"`
+	KernelLockdown           string `protobuf:"bytes,17,opt,name=kernel_lockdown,json=kernelLockdown,proto3" json:"kernel_lockdown,omitempty"`
+	unknownFields            protoimpl.UnknownFields
+	sizeCache                protoimpl.SizeCache
 }
 
 func (x *TalosSystemSection) Reset() {
@@ -346,6 +354,41 @@ func (x *TalosSystemSection) GetKernelArgs() []string {
 		return x.KernelArgs
 	}
 	return nil
+}
+
+func (x *TalosSystemSection) GetSecureBoot() bool {
+	if x != nil {
+		return x.SecureBoot
+	}
+	return false
+}
+
+func (x *TalosSystemSection) GetBootedWithUki() bool {
+	if x != nil {
+		return x.BootedWithUki
+	}
+	return false
+}
+
+func (x *TalosSystemSection) GetModuleSignatureEnforced() bool {
+	if x != nil {
+		return x.ModuleSignatureEnforced
+	}
+	return false
+}
+
+func (x *TalosSystemSection) GetUkiSigningKeyFingerprint() string {
+	if x != nil {
+		return x.UkiSigningKeyFingerprint
+	}
+	return ""
+}
+
+func (x *TalosSystemSection) GetKernelLockdown() string {
+	if x != nil {
+		return x.KernelLockdown
+	}
+	return ""
 }
 
 type TalosLink struct {
@@ -1104,7 +1147,7 @@ const file_ichor_v1alpha1_talosdetails_proto_rawDesc = "" +
 	"extensions\"A\n" +
 	"\x13TalosUnmetCondition\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xa3\x03\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"\x90\x05\n" +
 	"\x12TalosSystemSection\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\x12\n" +
@@ -1121,7 +1164,13 @@ const file_ichor_v1alpha1_talosdetails_proto_rawDesc = "" +
 	" \x03(\v2#.ichor.v1alpha1.TalosUnmetConditionR\x0funmetConditions\x12/\n" +
 	"\x13kubernetes_nodename\x18\v \x01(\tR\x12kubernetesNodename\x12\x1f\n" +
 	"\vkernel_args\x18\f \x03(\tR\n" +
-	"kernelArgs\"\xf9\x01\n" +
+	"kernelArgs\x12\x1f\n" +
+	"\vsecure_boot\x18\r \x01(\bR\n" +
+	"secureBoot\x12&\n" +
+	"\x0fbooted_with_uki\x18\x0e \x01(\bR\rbootedWithUki\x12:\n" +
+	"\x19module_signature_enforced\x18\x0f \x01(\bR\x17moduleSignatureEnforced\x12=\n" +
+	"\x1buki_signing_key_fingerprint\x18\x10 \x01(\tR\x18ukiSigningKeyFingerprint\x12'\n" +
+	"\x0fkernel_lockdown\x18\x11 \x01(\tR\x0ekernelLockdown\"\xf9\x01\n" +
 	"\tTalosLink\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
 	"\x03mac\x18\x02 \x01(\tR\x03mac\x12+\n" +

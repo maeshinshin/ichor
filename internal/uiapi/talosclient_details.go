@@ -102,10 +102,23 @@ func (t *machineryNodeTalosClient) TalosSystem(ctx context.Context) (*pb.TalosSy
 		return nil, fmt.Errorf("reading kernel command line: %w", err)
 	}
 
+	cmdline := ""
+
 	if cmd != nil {
 		// Unredacted here: GetNodeTalosDetails masks credential-shaped
 		// arguments for every NodeTalosClient.
-		out.KernelArgs = strings.Fields(cmd.TypedSpec().Cmdline)
+		cmdline = cmd.TypedSpec().Cmdline
+		out.KernelArgs = strings.Fields(cmdline)
+	}
+
+	// The boot security state (ADR 0123); a node without one leaves the fields unset.
+	ss, err := optional(safe.StateGetByID[*runtime.SecurityState](ctx, t.c.COSI, runtime.SecurityStateID))
+	if err != nil {
+		return nil, fmt.Errorf("reading security state: %w", err)
+	}
+
+	if ss != nil {
+		securityFromSpec(out, ss.TypedSpec(), cmdline)
 	}
 
 	return out, nil

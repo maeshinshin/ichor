@@ -147,7 +147,7 @@ func init() {
 	f.StringVar(&machineApproveOpts.Hostname, "hostname", "", "hostname to set")
 	f.StringVar(&machineApproveOpts.Reason, "reason", "", "recorded with the approval")
 	f.StringVar(&machineApproveOpts.InstallDisk, "install-disk", "", "system disk Talos installs onto: "+installDiskUsage)
-	f.StringVar(&machineApproveOpts.InstallImage, "install-image", "", "installer image (default: the booted schematic's)")
+	f.StringVar(&machineApproveOpts.InstallImage, "install-image", "", "installer image (default: the booted schematic's; the cluster's SecureBoot installer when spec.security.secureBoot.mode is Preferred or Required)")
 	f.StringVar(&machineApproveOpts.NIC, "nic", "", "primary network link, by its permanent MAC (aa:bb:cc:dd:ee:ff); alone it means DHCP")
 	f.StringSliceVar(&machineApproveOpts.Addresses, "address", nil, "static address with prefix length, 192.168.1.10/24 (repeatable; needs --nic)")
 	f.StringVar(&machineApproveOpts.Gateway, "gateway", "", "default gateway for the static address")

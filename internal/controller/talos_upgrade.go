@@ -343,7 +343,7 @@ func (a *talosUpgradeAdvancer) finish(
 //
 // secureBoot selects the signed UKI variant, metal-installer-secureboot (ADR 0123).
 func installerImage(cluster *ichorv1alpha1.TalosCluster, secureBoot bool) string {
-	return secureboot.InstallerImage(targetSchematic(cluster), cluster.Spec.TalosVersion, secureBoot)
+	return secureboot.ClusterInstallerImage(cluster, secureBoot)
 }
 
 // secureBootInstaller decides the installer variant for m (secureboot.UseSecureBootInstaller): from

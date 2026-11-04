@@ -41,7 +41,8 @@ const (
 	// Completed every other disruptive operation on the cluster is refused.
 	TalosOperationKindShutdown = "shutdown"
 
-	// TalosOperationKindCARotation replaces the Talos API CA and the Kubernetes API CA in the three
+	// TalosOperationKindCARotation replaces the Talos API CA and the Kubernetes API CA, and with
+	// spec.caRotation the etcd CA and the aggregator CA (ADR 0120), in the three
 	// passes of ADR 0063 (accept the new CA, make it the issuer, drop the old one). Like shutdown it
 	// runs its own state machine, held in status.caRotation, instead of the per-machine rollout.
 	TalosOperationKindCARotation = "ca-rotation"
@@ -263,6 +264,8 @@ const TalosMachineUpgradeOrderLabel = "ichor.maesh.dev/upgrade-order"
 // +kubebuilder:validation:XValidation:rule="!has(self.etcdRestore) || self.etcdRestore.confirm == self.clusterRef.name",message="an etcd restore needs spec.etcdRestore.confirm equal to the cluster name"
 // +kubebuilder:validation:XValidation:rule="has(self.etcdRestore) == has(oldSelf.etcdRestore) && (!has(self.etcdRestore) || self.etcdRestore == oldSelf.etcdRestore)",message="etcdRestore cannot change after creation"
 // +kubebuilder:validation:XValidation:rule="has(self.node) == has(oldSelf.node) && (!has(self.node) || self.node == oldSelf.node)",message="node cannot change after creation"
+// +kubebuilder:validation:XValidation:rule="!has(self.caRotation) || self.kind == 'ca-rotation'",message="spec.caRotation is only allowed for the ca-rotation kind"
+// +kubebuilder:validation:XValidation:rule="has(self.caRotation) == has(oldSelf.caRotation) && (!has(self.caRotation) || self.caRotation == oldSelf.caRotation)",message="caRotation cannot change after creation"
 type TalosOperationSpec struct {
 	// clusterRef names the TalosCluster this operation acts on.
 	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="clusterRef.name is required"
@@ -286,6 +289,11 @@ type TalosOperationSpec struct {
 	// etcdRestore is the snapshot of an etcd-restore-kind operation.
 	// +optional
 	EtcdRestore *TalosOperationEtcdRestoreSpec `json:"etcdRestore,omitempty"`
+
+	// caRotation chooses which CAs a ca-rotation-kind operation replaces (ADR 0120). Absent means the
+	// Talos API CA and the Kubernetes API CA, as before.
+	// +optional
+	CARotation *TalosOperationCARotationSpec `json:"caRotation,omitempty"`
 
 	// cni says which cni-kind operation this is. Absent means the kube-proxy switch (ADR 0066);
 	// action upgrade is a Cilium chart upgrade (ADR 0099, decision 11).
@@ -311,6 +319,32 @@ type TalosOperationSpec struct {
 	// +kubebuilder:default=1
 	// +optional
 	MaxUnavailable int32 `json:"maxUnavailable,omitempty"`
+}
+
+// Names of the CAs a ca-rotation can replace (spec.caRotation.targets). They are the names the cluster's
+// status.certificates uses for the same CAs (ADR 0063).
+const (
+	CARotationTargetTalos      = "talos"
+	CARotationTargetKubernetes = "kubernetes"
+	CARotationTargetEtcd       = "etcd"
+	CARotationTargetAggregator = "kubernetes-aggregator"
+)
+
+// DefaultCARotationTargets are the CAs a rotation replaces when spec.caRotation is absent.
+func DefaultCARotationTargets() []string {
+	return []string{CARotationTargetTalos, CARotationTargetKubernetes}
+}
+
+// TalosOperationCARotationSpec is the choice of CAs of a ca-rotation operation (ADR 0120).
+type TalosOperationCARotationSpec struct {
+	// targets lists the CAs to replace: talos, kubernetes, etcd, kubernetes-aggregator. Empty means
+	// talos and kubernetes. The set is fixed when the rotation starts; the new CAs saved in the bundle
+	// Secret are what a restarted controller follows.
+	// +kubebuilder:validation:MaxItems=4
+	// +kubebuilder:validation:items:Enum=talos;kubernetes;etcd;kubernetes-aggregator
+	// +listType=set
+	// +optional
+	Targets []string `json:"targets,omitempty"`
 }
 
 // TalosOperationCNIAction values.
@@ -616,12 +650,23 @@ type TalosOperationCARotationStatus struct {
 	// +listMapKey=name
 	// +optional
 	Certificates []CARotationCertificate `json:"certificates,omitempty"`
+
+	// etcdRestarted names the control planes whose etcd was restarted in the current stage, in the order
+	// they were restarted (ADR 0120). Emptied when the stage changes.
+	// +listType=set
+	// +optional
+	EtcdRestarted []string `json:"etcdRestarted,omitempty"`
+
+	// etcdRestartedAt is when the last etcd member was restarted; the next one waits after it.
+	// +optional
+	EtcdRestartedAt *metav1.Time `json:"etcdRestartedAt,omitempty"`
 }
 
 // CARotationCertificate is one rotated CA. Fingerprints are the SHA-256 of the certificate's DER,
 // hex encoded; none of this is secret.
 type CARotationCertificate struct {
-	// name is talos (the Talos API CA) or kubernetes (the Kubernetes API CA).
+	// name is talos (the Talos API CA), kubernetes (the Kubernetes API CA), etcd (the etcd CA) or
+	// kubernetes-aggregator (the aggregator, or front-proxy, CA).
 	// +required
 	Name string `json:"name"`
 

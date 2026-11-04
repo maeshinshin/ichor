@@ -65,6 +65,10 @@ func ValidateSecurity(c *ichorv1alpha1.TalosCluster) error {
 		errs = append(errs, errors.New("spec.security.audit needs versionContract v1.14 or later"))
 	}
 
+	if err := validateKubeletServing(c); err != nil {
+		errs = append(errs, err)
+	}
+
 	if d := s.DiskEncryption; d != nil {
 		if !contract.VolumeConfigEncryptionSupported() {
 			errs = append(errs, errors.New("spec.security.diskEncryption needs a versionContract "+
@@ -255,7 +259,8 @@ func injectDiskEncryption(
 // injectSecurity runs the opt-in hardening steps in order; each returns cfg
 // untouched when its option is unset.
 func injectSecurity(
-	cfg coreconfig.Provider, cluster *ichorv1alpha1.TalosCluster, machineType machine.Type,
+	cfg coreconfig.Provider, contract *coreconfig.VersionContract, cluster *ichorv1alpha1.TalosCluster,
+	machineType machine.Type,
 ) (coreconfig.Provider, error) {
 	if err := ValidateSecurity(cluster); err != nil {
 		return nil, fmt.Errorf("render: spec.security: %w", err)
@@ -272,6 +277,10 @@ func injectSecurity(
 	}
 
 	if cfg, err = injectAudit(cfg, cluster, machineType); err != nil {
+		return nil, err
+	}
+
+	if cfg, err = injectKubeletServing(cfg, contract, cluster, machineType); err != nil {
 		return nil, err
 	}
 

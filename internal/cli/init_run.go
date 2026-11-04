@@ -56,6 +56,12 @@ type initOptions struct {
 	// kubeconfig's server, passed to ichor-ui.
 	UITLSSecret, UITLSCert, UITLSKey       string
 	KubeAPIServerURL, KubeAPITLSServerName string
+
+	// BundlePassphrase seals the local secrets bundle; BundlePlaintext (--bundle-plaintext)
+	// stores it unencrypted instead. One of them is required: init never picks plaintext on its own.
+	// The passphrase is secret material and is never printed.
+	BundlePassphrase string
+	BundlePlaintext  bool
 }
 
 // initDeps bundles init's side effects -- hardware identity, the Talos
@@ -114,6 +120,11 @@ func (d initDeps) progress() *progress {
 // waits for the Cilium hand-over, a
 // reconciliation the CLI only watches.
 func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
+	// Refuse before any step: the bundle is never stored unencrypted unless asked for.
+	if opts.BundlePassphrase == "" && !opts.BundlePlaintext {
+		return errNoSealPassphrase
+	}
+
 	// One maintenance pin for the whole run: the node that answered the identity read is the node
 	// that receives the configuration.
 	ctx = controller.WithMaintenancePin(ctx, &controller.MaintenancePin{})
@@ -200,14 +211,18 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 			return "", fmt.Errorf("init: generating the secrets bundle: %w", err)
 		}
 
-		bundlePath, err := saveBundleFile(cluster.Name, bundle)
+		bundlePath, err := saveBundleFile(cluster.Name, bundle, opts.BundlePassphrase)
 		if err != nil {
 			return "", fmt.Errorf("init: saving the secrets bundle: %w", err)
 		}
 
 		// The cluster's only root of trust: without it and the Secret in the cluster, nothing can
 		// be recovered. The call to action stays on the line, in yellow on a terminal.
-		s.Attn("back this up now")
+		if opts.BundlePassphrase == "" {
+			s.Attn("back this up now; stored UNENCRYPTED (--bundle-plaintext)")
+		} else {
+			s.Attn("back this up now, with its passphrase")
+		}
 
 		return tildePath(bundlePath), nil
 	})

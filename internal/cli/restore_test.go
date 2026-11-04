@@ -166,7 +166,7 @@ func newRestoreHarness(t *testing.T) *restoreHarness {
 		store: &memStore{objs: map[string][]byte{}}, talos: &fakeRecover{}, bundle: newTestBundle(t),
 	}
 
-	if _, err := saveBundleFile("lost", h.bundle); err != nil {
+	if _, err := saveBundleFile("lost", h.bundle, ""); err != nil {
 		t.Fatal(err)
 	}
 

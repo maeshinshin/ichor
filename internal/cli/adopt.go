@@ -36,22 +36,23 @@ import (
 )
 
 var (
-	adoptCluster       string
-	adoptNamespace     string
-	adoptSecretsBundle string
-	adoptRecover       bool
-	adoptRecoverFrom   string
-	adoptContext       string
-	adoptCNIUnmanaged  bool
-	adoptTunnel        string
-	adoptCiliumValues  string
-	adoptPlanOnly      bool
-	adoptRequireIchor  bool
-	adoptSeed          string
-	adoptContract      string
-	adoptAcceptChanges bool
-	adoptAcceptDiff    bool
-	adoptWaitTimeout   time.Duration
+	adoptCluster         string
+	adoptNamespace       string
+	adoptSecretsBundle   string
+	adoptBundlePlaintext bool
+	adoptRecover         bool
+	adoptRecoverFrom     string
+	adoptContext         string
+	adoptCNIUnmanaged    bool
+	adoptTunnel          string
+	adoptCiliumValues    string
+	adoptPlanOnly        bool
+	adoptRequireIchor    bool
+	adoptSeed            string
+	adoptContract        string
+	adoptAcceptChanges   bool
+	adoptAcceptDiff      bool
+	adoptWaitTimeout     time.Duration
 )
 
 // adoptCmd implements `ichor adopt` (docs/design/architecture.md,
@@ -135,7 +136,7 @@ clusters keep the old CAs, but never starts one.`,
 
 		bundle, saveBundle, err := resolveAdoptBundle(cmd.Context(), adoptSecretsOptions{
 			File: adoptSecretsBundle, Recover: adoptRecover, RecoverFrom: adoptRecoverFrom,
-			Cluster:  adoptCluster,
+			Cluster: adoptCluster, Plaintext: adoptBundlePlaintext, Announce: cmd.ErrOrStderr(),
 			Contract: clusterVersionContract(cmd.Context(), k8sClient, adoptNamespace, adoptCluster),
 		}, dial, nagWriter)
 		if err != nil {
@@ -219,6 +220,8 @@ func init() {
 		"path to the cluster's existing secrets bundle (the file produced by 'talosctl gen secrets'); give this or --recover-secrets")
 	adoptCmd.Flags().BoolVar(&adoptRecover, "recover-secrets", false,
 		"rebuild the secrets bundle from a control plane's machine config (read-only) and store it under ~/.ichor/clusters/<cluster>/ with mode 0600")
+	adoptCmd.Flags().BoolVar(&adoptBundlePlaintext, bundlePlaintextFlag, false,
+		"store the recovered secrets bundle unencrypted (default: encrypted with --bundle-passphrase-file, $"+bundlePassphraseEnv+", or a generated passphrase)")
 	adoptCmd.Flags().StringVar(&adoptRecoverFrom, "recover-from", "",
 		"address of the control plane --recover-secrets reads the machine config from")
 	adoptCmd.Flags().StringVar(&adoptContext, "context", "",

@@ -328,4 +328,14 @@ var _ = Describe("CniService", func() {
 		Expect(connect.CodeOf(err)).To(Equal(connect.CodeFailedPrecondition))
 		Expect(cniOperations(cluster)).To(HaveLen(1))
 	})
+
+	It("refuses a version: Cilium moves only to the chart this Ichor embeds", func() {
+		cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{AvailableChartVersion: "1.19.1"}
+		Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
+
+		_, err := s.StartCniUpgrade(asCniUser(cniOperatorUser), connect.NewRequest(&pb.StartCniUpgradeRequest{Cluster: ref, Version: "v1.20.5"}))
+		Expect(connect.CodeOf(err)).To(Equal(connect.CodeInvalidArgument))
+		Expect(err.Error()).To(ContainSubstring("newer Ichor release"))
+		Expect(cniOperations(cluster)).To(BeEmpty())
+	})
 })

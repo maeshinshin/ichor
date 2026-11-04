@@ -65,7 +65,8 @@ spec:
                   components:
                     description: |-
                       components are the components whose patches are applied automatically: talos, kubernetes, cilium.
-                      Unset or empty means all three.
+                      Unset or empty means all three. cilium is accepted and does nothing: Cilium moves only to the chart the
+                      running Ichor embeds, which a person starts (ADR 0115, amendment 2026-11-04 (3)).
                     items:
                       enum:
                       - talos
@@ -456,15 +457,16 @@ spec:
                     type: string
                   cilium:
                     description: |-
-                      cilium are the newer patches of the embedded Cilium minor whose agent, operator and hubble-relay
-                      images verify against the Cilium release signature (ADR 0115, amendment 2026-11-03), newest first,
-                      with a leading v. A patch whose signature does not verify is not listed.
+                      cilium is deprecated and unused. It held the Cilium patches whose images verified (ADR 0115, amendment
+                      2026-11-03); Cilium now moves only to the chart the running Ichor embeds (amendment 2026-11-04 (3)), so
+                      the controller no longer writes it and clears what an earlier controller wrote. Kept so the schema does
+                      not lose a field an installed build had.
                     items:
                       type: string
                     type: array
                   ciliumError:
-                    description: ciliumError is why the last listing of the Cilium
-                      releases failed; empty when it succeeded.
+                    description: 'ciliumError is deprecated and unused, like cilium:
+                      the controller no longer lists Cilium releases.'
                     type: string
                   error:
                     description: error is the failure of the last listing; a list

@@ -544,13 +544,11 @@ func (x *SetCiliumValuesResponse) GetEffectiveYaml() string {
 type StartCniUpgradeRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Cluster *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
-	// version is a Cilium patch (vX.Y.Z, newer than the chart this Ichor embeds) the list of
-	// ListUpgradeTargets offers as a cni patch; empty upgrades the release to the embedded chart.
-	// The controller verifies the patch's images before it runs them (ADR 0115, amendment 2026-11-03).
+	// version is deprecated and unused: it named a Cilium patch to run on the embedded chart (ADR 0115,
+	// amendment 2026-11-03). Cilium moves only to the chart this Ichor embeds (amendment 2026-11-04 (3)), so
+	// the server refuses a request that sets it. Kept so the wire format does not break.
 	Version string `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
-	// override lifts the compatibility refusal of a patch (the Cilium minor is not tested with the
-	// cluster's Kubernetes, ADR 0110, ADR 0115). The caller must hold the override verb on the TalosCluster;
-	// the reason is optional. A patch whose images are not verified is never overridable.
+	// override is deprecated and unused: it lifted the compatibility refusal of a patch. The server ignores it.
 	Override      *Override `protobuf:"bytes,3,opt,name=override,proto3" json:"override,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

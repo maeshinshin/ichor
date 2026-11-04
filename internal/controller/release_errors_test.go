@@ -30,27 +30,26 @@ import (
 const (
 	patchA = "v1.14.5"
 	patchB = "v1.14.4"
-	patchC = "v1.20.5"
 )
 
 // Each list records its own error, so one repository that cannot be listed does not make the other lists
 // look failed (ADR 0115, amendment 2026-11-04).
 func TestUpgradeTargetsOfRecordsTheErrorOfEachListOnItsOwn(t *testing.T) {
-	prev := &ichorv1alpha1.IchorUpgradeTargets{Talos: []string{"v1.14.3"}, TalosError: "old", CiliumError: "old"}
+	prev := &ichorv1alpha1.IchorUpgradeTargets{Talos: []string{"v1.14.3"}, TalosError: "old"}
 
 	got := upgradeTargetsOf(prev, metav1.Now(),
-		listing{tags: []string{patchA, patchB}}, listing{err: errors.New("ghcr unreachable")}, listing{tags: []string{patchC}})
+		listing{tags: []string{patchA, patchB}}, listing{err: errors.New("ghcr unreachable")})
 
-	if got.TalosError != "" || got.CiliumError != "" {
-		t.Fatalf("lists that listed fine kept errors: talos %q, cilium %q", got.TalosError, got.CiliumError)
+	if got.TalosError != "" {
+		t.Fatalf("lists that listed fine kept errors: talos %q", got.TalosError)
 	}
 
 	if !strings.Contains(got.KubernetesError, "ghcr unreachable") {
 		t.Fatalf("kubernetesError = %q, want the listing failure", got.KubernetesError)
 	}
 
-	if !slices.Equal(got.Talos, []string{patchA, patchB}) || !slices.Equal(got.Cilium, []string{patchC}) {
-		t.Fatalf("a failing Kubernetes listing blanked the others: talos %v, cilium %v", got.Talos, got.Cilium)
+	if !slices.Equal(got.Talos, []string{patchA, patchB}) {
+		t.Fatalf("a failing Kubernetes listing blanked the others: talos %v", got.Talos)
 	}
 
 	if !strings.Contains(got.Error, "ghcr unreachable") {

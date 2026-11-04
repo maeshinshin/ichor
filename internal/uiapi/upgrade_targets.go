@@ -18,18 +18,14 @@ package uiapi
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"slices"
 
 	"connectrpc.com/connect"
-	"golang.org/x/mod/semver"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/release"
 )
 
@@ -47,9 +43,8 @@ func (s *Server) ListUpgradeTargets(
 	ctx context.Context, req *connect.Request[pb.ListUpgradeTargetsRequest],
 ) (*connect.Response[pb.ListUpgradeTargetsResponse], error) {
 	kind := req.Msg.GetKind()
-	if kind != pb.OperationKind_OPERATION_KIND_TALOS && kind != pb.OperationKind_OPERATION_KIND_KUBERNETES &&
-		kind != pb.OperationKind_OPERATION_KIND_CNI {
-		return nil, invalid("ListUpgradeTargets lists the talos, kubernetes or cni kind, not %s", kind)
+	if kind != pb.OperationKind_OPERATION_KIND_TALOS && kind != pb.OperationKind_OPERATION_KIND_KUBERNETES {
+		return nil, invalid("ListUpgradeTargets lists the talos or kubernetes kind, not %s", kind)
 	}
 
 	cluster, err := s.loadCluster(ctx, namespacedName(req.Msg.GetCluster()))
@@ -109,23 +104,19 @@ func upgradeLists(inst *ichorv1alpha1.IchorInstallation, found bool, kind pb.Ope
 // failing repository does not make the others unavailable (ADR 0115, amendment 2026-11-04). A status written
 // by an earlier controller has only the joined Error; it counts against every list.
 func listError(ut *ichorv1alpha1.IchorUpgradeTargets, kind pb.OperationKind) string {
-	if ut.TalosError == "" && ut.KubernetesError == "" && ut.CiliumError == "" {
+	if ut.TalosError == "" && ut.KubernetesError == "" {
 		return ut.Error
 	}
 
-	switch kind {
-	case pb.OperationKind_OPERATION_KIND_TALOS:
+	if kind == pb.OperationKind_OPERATION_KIND_TALOS {
 		return ut.TalosError
-	case pb.OperationKind_OPERATION_KIND_CNI:
-		return ut.CiliumError
 	}
 
 	return ut.KubernetesError
 }
 
 // upgradeChoices groups the recorded releases of kind against the cluster (release.TalosChoices,
-// release.KubernetesChoices and, for the cni kind, the Cilium patches of release.CiliumChoices). Without a
-// list there is nothing to group.
+// release.KubernetesChoices). Without a list there is nothing to group.
 func upgradeChoices(kind pb.OperationKind, cluster *ichorv1alpha1.TalosCluster, lists *ichorv1alpha1.IchorUpgradeTargets) release.Choices {
 	if lists == nil {
 		return release.Choices{}
@@ -134,13 +125,6 @@ func upgradeChoices(kind pb.OperationKind, cluster *ichorv1alpha1.TalosCluster, 
 	switch kind {
 	case pb.OperationKind_OPERATION_KIND_TALOS:
 		return release.TalosChoices(cluster.Spec.TalosVersion, cluster.Spec.KubernetesVersion, release.Pinned.Talos, lists.Talos)
-	case pb.OperationKind_OPERATION_KIND_CNI:
-		installed, _ := ciliumVersion(cluster)
-		if installed == "" {
-			return release.Choices{}
-		}
-
-		return release.CiliumChoices("v"+installed, cilium.ChartVersion, cluster.Spec.KubernetesVersion, lists.Cilium)
 	}
 
 	installed, _ := ciliumVersion(cluster)
@@ -151,47 +135,4 @@ func upgradeChoices(kind pb.OperationKind, cluster *ichorv1alpha1.TalosCluster, 
 
 	return release.KubernetesChoices(cluster.Spec.KubernetesVersion, cluster.Spec.TalosVersion, installed, release.Pinned.Kubernetes,
 		ciliumConstrains, lists.Kubernetes)
-}
-
-// ciliumPatchOffer says whether the cluster can take the Cilium patch now. When it is not offered only because the
-// patch's Cilium minor is not tested with the cluster's Kubernetes, compat is that incompatibility: the one refusal the
-// override verb lifts (ADR 0115, amendment). An unverified, not newer or unknown patch is never overridable. reason is
-// why the list cannot be used ("" when it can).
-func (s *Server) ciliumPatchOffer(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, version string,
-) (offered bool, compat error, reason string, err error) {
-	var inst ichorv1alpha1.IchorInstallation
-
-	found := true
-
-	switch err := s.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); {
-	case apierrors.IsNotFound(err):
-		found = false
-	case err != nil:
-		return false, nil, "", mapGetError("IchorInstallation \""+ichorv1alpha1.IchorInstallationName+"\"", err)
-	}
-
-	lists, reason := upgradeLists(&inst, found, pb.OperationKind_OPERATION_KIND_CNI)
-	choices := upgradeChoices(pb.OperationKind_OPERATION_KIND_CNI, cluster, lists)
-
-	if slices.Contains(append(slices.Clone(choices.Recommended), choices.Patch...), version) {
-		return true, nil, reason, nil
-	}
-
-	installed, _ := ciliumVersion(cluster)
-	if lists == nil || installed == "" {
-		return false, nil, reason, nil
-	}
-
-	// The same verified, newer patches of the running minor, without the Kubernetes check.
-	relaxed := release.Choose("v"+installed, "", lists.Cilium, func(to string) bool { return semver.Compare("v"+cilium.ChartVersion, to) < 0 })
-	if !slices.Contains(append(slices.Clone(relaxed.Recommended), relaxed.Patch...), version) {
-		return false, nil, reason, nil
-	}
-
-	if err := release.CiliumKubernetesError(version, cluster.Spec.KubernetesVersion); err != nil && !errors.Is(err, release.ErrUnknownVersion) {
-		return false, err, reason, nil
-	}
-
-	return false, nil, reason, nil
 }

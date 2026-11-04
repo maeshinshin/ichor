@@ -23,10 +23,12 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"golang.org/x/mod/semver"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -54,6 +56,19 @@ func TestCheckChartStep(t *testing.T) {
 		case tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)):
 			t.Errorf("%s -> %s: error %v, want it to contain %q", tc.deployed, tc.target, err, tc.wantErr)
 		}
+	}
+}
+
+// An operation an earlier Ichor created for a Cilium patch is refused, not run as the embedded chart (ADR 0115,
+// amendment 2026-11-04 (3)).
+func TestUpgradeChartRefusesAnOperationThatNamesAPatch(t *testing.T) {
+	op := &ichorv1alpha1.TalosOperation{Spec: ichorv1alpha1.TalosOperationSpec{CNI: &ichorv1alpha1.TalosOperationCNISpec{
+		Action: ichorv1alpha1.TalosOperationCNIActionUpgrade, ChartVersion: cilium.ChartVersion, ImageVersion: "v1.20.99",
+	}}}
+
+	done, err := (&cniKubeProxyAdvancer{}).upgradeChart(t.Context(), &ichorv1alpha1.TalosCluster{}, op)
+	if done || err == nil || !strings.Contains(err.Error(), "no longer runs") {
+		t.Fatalf("done = %v, err = %v", done, err)
 	}
 }
 
@@ -120,6 +135,36 @@ var _ = Describe("Cilium chart upgrade", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(getCluster(cluster).Status.CNI.AvailableChartVersion).To(BeEmpty())
 			Expect(conditionOf(cluster, ichorv1alpha1.ConditionCiliumUpgradeAvailable).Status).To(Equal(metav1.ConditionFalse))
+		})
+	})
+
+	Describe("a Cilium patch an earlier Ichor recorded", func() {
+		It("is dropped, and the cluster's Events say why when it was newer than the embedded chart", func() {
+			ciliumDaemonSet()(true)
+
+			// The patch is a newer one than any this chart reaches; the hash was applied with its images.
+			patch := "v" + semver.MajorMinor("v" + cilium.ChartVersion)[1:] + ".999"
+			cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{
+				AppliedValuesHash: "applied-with-the-patch-images",
+				ImageOverride: &ichorv1alpha1.TalosCiliumImageOverride{
+					Version: patch,
+					Images:  map[string]string{"agent": "quay.io/cilium/cilium:" + patch + "@sha256:" + strings.Repeat("1", 64)},
+				},
+			}
+			apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+				Type: render.ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: reasonHandoverComplete,
+			})
+			Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
+
+			rec := record.NewFakeRecorder(4)
+			r := &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace, Recorder: rec}
+
+			_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(getCluster(cluster).Status.CNI.ImageOverride).To(BeNil())
+
+			Expect(rec.Events).To(Receive(And(
+				ContainSubstring(reasonCiliumPatchDropped), ContainSubstring(patch), ContainSubstring(cilium.ChartVersion))))
 		})
 	})
 

@@ -20,21 +20,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path"
 	"strconv"
+	"strings"
 
 	"golang.org/x/mod/semver"
-	"k8s.io/apimachinery/pkg/api/equality"
+	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/internal/imagesig"
-	"github.com/maeshinshin/ichor/internal/releasecheck"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
-	"github.com/maeshinshin/ichor/pkg/release"
 )
 
 // The Cilium chart upgrade (ADR 0099, decisions 11 and 14). Ichor embeds one chart per release.
@@ -47,6 +44,7 @@ import (
 const (
 	reasonCiliumUpgradeAvailable = "UpgradeAvailable"
 	reasonCiliumUpToDate         = "UpToDate"
+	reasonCiliumPatchDropped     = "CiliumPatchDropped"
 )
 
 // isCNIUpgrade reports whether op is a Cilium chart upgrade rather than a kube-proxy switch.
@@ -87,13 +85,8 @@ func minorOf(v string) int {
 // deployed release's chart version. It writes only when something changes. A cluster with no
 // deployed release record is left alone.
 func (r *CNIHandoverReconciler) syncUpgradeAvailable(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) error {
-	// A patch's images stop applying once the embedded chart reaches it (ADR 0115, amendment 2026-11-03):
-	// the chart carries them now, so the status no longer needs them.
-	if cluster.Status.CNI != nil && cluster.Status.CNI.ImageOverride != nil && cilium.ImageOverrideActive(cluster) == nil {
-		orig := cluster.DeepCopy()
-		cluster.Status.CNI.ImageOverride = nil
-
-		return r.Status().Patch(ctx, cluster, client.MergeFrom(orig))
+	if err := r.dropPatchImages(ctx, cluster); err != nil {
+		return err
 	}
 
 	rel, err := readCiliumRelease(ctx, r.reader(), r.Namespace)
@@ -137,6 +130,34 @@ func (r *CNIHandoverReconciler) syncUpgradeAvailable(ctx context.Context, cluste
 	return r.Status().Update(ctx, cluster)
 }
 
+// dropPatchImages clears status.cni.imageOverride, the Cilium patch an earlier build recorded (ADR 0115,
+// amendment 2026-11-04 (3)). Ichor renders only the images of the chart it embeds now, so the next Helm Job
+// returns the release to them. When the patch is newer than the embedded chart that is a step back within the
+// minor, and the cluster's Events say so, because nothing else would: the Job runs on its own once the values
+// hash moves.
+func (r *CNIHandoverReconciler) dropPatchImages(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) error {
+	if cluster.Status.CNI == nil || cluster.Status.CNI.ImageOverride == nil {
+		return nil
+	}
+
+	o := cluster.Status.CNI.ImageOverride
+	orig := cluster.DeepCopy()
+	cluster.Status.CNI.ImageOverride = nil
+
+	if err := r.Status().Patch(ctx, cluster, client.MergeFrom(orig)); err != nil {
+		return err
+	}
+
+	if r.Recorder != nil && semver.Compare(o.Version, "v"+cilium.ChartVersion) > 0 {
+		r.Recorder.Eventf(cluster, corev1.EventTypeWarning, reasonCiliumPatchDropped,
+			"Cilium %s ran on this cluster from an earlier Ichor. This Ichor embeds chart %s and runs only its images, "+
+				"so the Cilium Helm Job returns the release to them. Upgrade Ichor to a release that embeds Cilium %s or newer to keep that version.",
+			o.Version, cilium.ChartVersion, strings.TrimPrefix(o.Version, "v"))
+	}
+
+	return nil
+}
+
 // cniUpgradeOperationClusters maps a cni-kind operation to its cluster, so the end of an upgrade
 // clears the available version without waiting for another event.
 func cniUpgradeOperationClusters(_ context.Context, obj client.Object) []reconcile.Request {
@@ -165,46 +186,13 @@ func machineless(op *ichorv1alpha1.TalosOperation) bool {
 func (a *cniKubeProxyAdvancer) upgradeChart(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, op *ichorv1alpha1.TalosOperation,
 ) (bool, error) {
-	// A patch (ADR 0115, amendment 2026-11-03) runs this chart with the patch's verified images. The
-	// Job gets them from a copy of the cluster, so the spec is untouched; the status records them once
-	// the rollout has finished, and every later Job keeps them.
-	var override *ichorv1alpha1.TalosCiliumImageOverride
-
-	job := cluster
-
+	// An operation of an earlier build may name a Cilium patch: Ichor runs only the chart it embeds now
+	// (ADR 0115, amendment 2026-11-04 (3)), so such an operation is refused rather than run as the chart.
 	if op.Spec.CNI.ImageVersion != "" {
-		var err error
-
-		if override, err = a.patchOverride(ctx, cluster, op.Spec.CNI.ImageVersion); err != nil {
-			return false, err
-		}
-
-		job = cluster.DeepCopy()
-		if job.Status.CNI == nil {
-			job.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{}
-		}
-
-		job.Status.CNI.ImageOverride = override
+		return false, fmt.Errorf("the operation names the Cilium patch %s, which Ichor no longer runs: Cilium moves only to the chart "+
+			"this Ichor embeds (%s); delete the operation and run `ichor cni upgrade` again", op.Spec.CNI.ImageVersion, cilium.ChartVersion)
 	}
 
-	done, err := a.upgradeChartRelease(ctx, job, op, override != nil)
-	if err != nil || !done {
-		return false, err
-	}
-
-	if override == nil {
-		return true, nil
-	}
-
-	return true, a.recordImageOverride(ctx, cluster, override)
-}
-
-// upgradeChartRelease runs the Helm Job that moves the release to the embedded chart, with the cluster's
-// current Cilium values (which carry a patch's images when job has one), and waits for the rollout. With
-// patch set, a deployed release counts as done only when its values are the ones the Job would apply.
-func (a *cniKubeProxyAdvancer) upgradeChartRelease(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, op *ichorv1alpha1.TalosOperation, patch bool,
-) (bool, error) {
 	target := op.Spec.CNI.ChartVersion
 	if target != cilium.ChartVersion {
 		return false, fmt.Errorf("the operation upgrades to Cilium chart %s but this controller embeds %s (Ichor was changed "+
@@ -227,19 +215,7 @@ func (a *cniKubeProxyAdvancer) upgradeChartRelease(
 	}
 
 	if rel.Status == helmStatusDeployed && rel.ChartVersion == target {
-		nodes, err := clusterNodeCount(ctx, a.Reader)
-		if err != nil {
-			return false, err
-		}
-
-		hash, err := CNIValuesHash(cluster, mode, nodes)
-		if err != nil {
-			return false, err
-		}
-
-		if !patch || rel.ValuesHash == hash {
-			return a.ciliumRolledOut(ctx, op)
-		}
+		return a.ciliumRolledOut(ctx, op)
 	}
 
 	if rel.ChartVersion != "" {
@@ -266,70 +242,4 @@ func (a *cniKubeProxyAdvancer) upgradeChartRelease(
 	}
 
 	return a.ciliumRolledOut(ctx, op)
-}
-
-// patchOverride is the verified image set of a Cilium patch the operation names (ADR 0115, amendment
-// 2026-11-03). The patch must be newer than the embedded chart, compatible with the cluster's Kubernetes,
-// and every image it runs must verify against the Cilium release workflow of its tag; otherwise nothing runs.
-func (a *cniKubeProxyAdvancer) patchOverride(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, version string,
-) (*ichorv1alpha1.TalosCiliumImageOverride, error) {
-	if a.Images == nil {
-		return nil, errors.New("this controller has no image verifier, so it runs no Cilium patch")
-	}
-
-	if !semver.IsValid(version) || semver.Compare("v"+cilium.ChartVersion, version) >= 0 {
-		return nil, fmt.Errorf("the Cilium patch %s is not newer than the chart %s this Ichor embeds", version, cilium.ChartVersion)
-	}
-
-	if err := release.CiliumKubernetesError(version, cluster.Spec.KubernetesVersion); err != nil {
-		return nil, fmt.Errorf("the Cilium patch %s does not run the cluster's Kubernetes: %w", version, err)
-	}
-
-	base := path.Dir(releasecheck.DefaultCiliumRepository)
-	repos := map[string]string{
-		cilium.ImageAgent:       releasecheck.DefaultCiliumRepository,
-		cilium.ImageOperator:    base + "/operator-generic",
-		cilium.ImageHubbleRelay: base + "/hubble-relay",
-	}
-
-	images := make(map[string]string, len(repos))
-
-	for key, repo := range repos {
-		digest, err := a.Images.Digest(ctx, repo, version)
-		if err != nil {
-			return nil, fmt.Errorf("resolving the %s image of Cilium %s: %w", key, version, err)
-		}
-
-		if err := a.Images.Verify(ctx, imagesig.Image{Repository: repo, Digest: digest}, imagesig.CiliumIdentity(version)); err != nil {
-			return nil, fmt.Errorf("the %s image of Cilium %s is not signed by its release workflow, so it is not run: %w", key, version, err)
-		}
-
-		images[key] = repo + ":" + version + "@" + digest
-	}
-
-	return &ichorv1alpha1.TalosCiliumImageOverride{Version: version, Images: images}, nil
-}
-
-// recordImageOverride writes the patch the rollout ran to status.cni.imageOverride (controller-written
-// status; the spec is unchanged).
-func (a *cniKubeProxyAdvancer) recordImageOverride(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, override *ichorv1alpha1.TalosCiliumImageOverride,
-) error {
-	if cluster.Status.CNI != nil && equality.Semantic.DeepEqual(cluster.Status.CNI.ImageOverride, override) {
-		return nil
-	}
-
-	orig := cluster.DeepCopy()
-	if cluster.Status.CNI == nil {
-		cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{}
-	}
-
-	cluster.Status.CNI.ImageOverride = override
-
-	if err := a.Client.Status().Patch(ctx, cluster, client.MergeFrom(orig)); err != nil {
-		return fmt.Errorf("recording the Cilium patch %s in the status: %w", override.Version, err)
-	}
-
-	return nil
 }

@@ -1539,8 +1539,8 @@ export type ListUpgradeTargetsRequest = Message<"ichor.v1alpha1.ListUpgradeTarge
   cluster?: ObjectRef | undefined;
 
   /**
-   * kind is OPERATION_KIND_TALOS or OPERATION_KIND_KUBERNETES, or OPERATION_KIND_CNI for the Cilium patches
-   * (the patch group only, ADR 0115 amendment 2026-11-03); any other kind is refused.
+   * kind is OPERATION_KIND_TALOS or OPERATION_KIND_KUBERNETES; any other kind is refused. Cilium has no list:
+   * it moves only to the chart this Ichor embeds (ADR 0115, amendment 2026-11-04 (3)).
    *
    * @generated from field: ichor.v1alpha1.OperationKind kind = 2;
    */

@@ -36,7 +36,6 @@ import (
 	"github.com/maeshinshin/ichor/internal/autopatch"
 	"github.com/maeshinshin/ichor/internal/settings"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
-	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
@@ -292,7 +291,7 @@ func (p *AutoPatcher) passCluster(
 		Now: p.now(), Setting: setting, Enabled: true, IchorUpgrading: ichorUpgrading, Targets: inst.Status.UpgradeTargets,
 		Cluster: autopatch.Cluster{
 			Talos: cluster.Spec.TalosVersion, Kubernetes: cluster.Spec.KubernetesVersion,
-			CNIUnmanaged: cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged, CiliumChart: cilium.ChartVersion,
+			CNIUnmanaged: cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged,
 		},
 	}
 
@@ -376,11 +375,6 @@ func (p *AutoPatcher) start(ctx context.Context, inst *ichorv1alpha1.IchorInstal
 		from = cluster.Spec.TalosVersion
 	case ichorv1alpha1.AutoPatchKubernetes:
 		from = cluster.Spec.KubernetesVersion
-	case ichorv1alpha1.AutoPatchCilium:
-		from = "v" + strings.TrimPrefix(cluster.Status.CNI.DetectedVersion, "v")
-		op.Spec.CNI = &ichorv1alpha1.TalosOperationCNISpec{
-			Action: ichorv1alpha1.TalosOperationCNIActionUpgrade, ChartVersion: cilium.ChartVersion, ImageVersion: d.Target,
-		}
 	}
 
 	op.Annotations[ichorv1alpha1.OperationFromVersionAnnotation] = from
@@ -389,10 +383,8 @@ func (p *AutoPatcher) start(ctx context.Context, inst *ichorv1alpha1.IchorInstal
 		return fmt.Errorf("the %s operation could not be created: %w", op.Spec.Kind, err)
 	}
 
-	if d.Component != ichorv1alpha1.AutoPatchCilium {
-		if err := p.writeVersion(ctx, cluster, d); err != nil {
-			return fmt.Errorf("writing the %s version %s: %w", d.Component, d.Target, err)
-		}
+	if err := p.writeVersion(ctx, cluster, d); err != nil {
+		return fmt.Errorf("writing the %s version %s: %w", d.Component, d.Target, err)
 	}
 
 	if err := retry.OnError(retry.DefaultBackoff, func(error) bool { return true }, func() error { return p.Actor.Create(ctx, op) }); err != nil {
@@ -427,8 +419,6 @@ func autoPatchKind(component string) string {
 	switch component {
 	case ichorv1alpha1.AutoPatchKubernetes:
 		return ichorv1alpha1.TalosOperationKindKubernetes
-	case ichorv1alpha1.AutoPatchCilium:
-		return ichorv1alpha1.TalosOperationKindCNI
 	default:
 		return ichorv1alpha1.TalosOperationKindTalos
 	}

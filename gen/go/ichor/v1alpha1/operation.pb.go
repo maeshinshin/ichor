@@ -3065,8 +3065,8 @@ func (x *StartClusterUpgradeResponse) GetAudit() *AuditRecord {
 type ListUpgradeTargetsRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Cluster *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
-	// kind is OPERATION_KIND_TALOS or OPERATION_KIND_KUBERNETES, or OPERATION_KIND_CNI for the Cilium patches
-	// (the patch group only, ADR 0115 amendment 2026-11-03); any other kind is refused.
+	// kind is OPERATION_KIND_TALOS or OPERATION_KIND_KUBERNETES; any other kind is refused. Cilium has no list:
+	// it moves only to the chart this Ichor embeds (ADR 0115, amendment 2026-11-04 (3)).
 	Kind          OperationKind `protobuf:"varint,2,opt,name=kind,proto3,enum=ichor.v1alpha1.OperationKind" json:"kind,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

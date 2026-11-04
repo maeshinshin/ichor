@@ -87,7 +87,8 @@ type IchorAutoPatchSettings struct {
 	Enabled *bool `json:"enabled,omitempty"`
 
 	// components are the components whose patches are applied automatically: talos, kubernetes, cilium.
-	// Unset or empty means all three.
+	// Unset or empty means all three. cilium is accepted and does nothing: Cilium moves only to the chart the
+	// running Ichor embeds, which a person starts (ADR 0115, amendment 2026-11-04 (3)).
 	// +kubebuilder:validation:items:Enum=talos;kubernetes;cilium
 	// +listType=set
 	// +optional
@@ -238,9 +239,10 @@ type IchorUpgradeTargets struct {
 	// kubernetes are the final Kubernetes releases, newest first, with a leading v.
 	// +optional
 	Kubernetes []string `json:"kubernetes,omitempty"`
-	// cilium are the newer patches of the embedded Cilium minor whose agent, operator and hubble-relay
-	// images verify against the Cilium release signature (ADR 0115, amendment 2026-11-03), newest first,
-	// with a leading v. A patch whose signature does not verify is not listed.
+	// cilium is deprecated and unused. It held the Cilium patches whose images verified (ADR 0115, amendment
+	// 2026-11-03); Cilium now moves only to the chart the running Ichor embeds (amendment 2026-11-04 (3)), so
+	// the controller no longer writes it and clears what an earlier controller wrote. Kept so the schema does
+	// not lose a field an installed build had.
 	// +optional
 	Cilium []string `json:"cilium,omitempty"`
 	// error is the failure of the last listing; a list that failed keeps its last good value.
@@ -253,7 +255,7 @@ type IchorUpgradeTargets struct {
 	// kubernetesError is why the last listing of the Kubernetes releases failed; empty when it succeeded.
 	// +optional
 	KubernetesError string `json:"kubernetesError,omitempty"`
-	// ciliumError is why the last listing of the Cilium releases failed; empty when it succeeded.
+	// ciliumError is deprecated and unused, like cilium: the controller no longer lists Cilium releases.
 	// +optional
 	CiliumError string `json:"ciliumError,omitempty"`
 }

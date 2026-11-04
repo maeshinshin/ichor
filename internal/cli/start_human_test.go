@@ -262,34 +262,3 @@ func TestRestoreLiveFollowUsesTheSharedWatchAndYAMLKeepsTheAnnouncement(t *testi
 		t.Errorf("-o yaml stderr:\n%s\nstdout:\n%s", errw.String(), out.String())
 	}
 }
-
-func TestCniUpgradeListPrintsATableAndYAMLTheWireMessage(t *testing.T) {
-	setHumanTestFlags(t, outputHuman)
-
-	m := &pb.ListUpgradeTargetsResponse{Available: true, Recommended: []string{"v1.20.4"}, Patch: []string{"v1.20.5"}, Default: "v1.20.4"}
-
-	var out bytes.Buffer
-
-	if err := printUpgradeTargets(&out, pb.OperationKind_OPERATION_KIND_CNI, m); err != nil {
-		t.Fatal(err)
-	}
-
-	want := "VERSION  KIND         DEFAULT\n" +
-		"v1.20.4  recommended  ✓\n" +
-		"v1.20.5  patch        -\n"
-	if out.String() != want {
-		t.Errorf("human:\n%s\nwant:\n%s", out.String(), want)
-	}
-
-	outputFormat = outputYAML
-
-	out.Reset()
-
-	if err := printUpgradeTargets(&out, pb.OperationKind_OPERATION_KIND_CNI, m); err != nil {
-		t.Fatal(err)
-	}
-
-	if want := "available: true\ndefault: v1.20.4\npatch:\n- v1.20.5\nrecommended:\n- v1.20.4\n"; out.String() != want {
-		t.Errorf("-o yaml: %q, want %q", out.String(), want)
-	}
-}

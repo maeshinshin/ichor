@@ -77,7 +77,7 @@ func TestCNIHelmApplyAdoptsThenUpgrades(t *testing.T) {
 
 		var out bytes.Buffer
 
-		err := runCNIHelmApply(t.Context(), k8s, cfg, key, "", 0, false, 0, nil, nil, &out)
+		err := runCNIHelmApply(t.Context(), k8s, cfg, key, "", 0, false, 0, nil, &out)
 
 		return out.String(), err
 	}
@@ -112,7 +112,7 @@ func TestCNIHelmApplyOperatorFollowsTheNodes(t *testing.T) {
 	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster).Build()
 
 	err := runCNIHelmApply(t.Context(), k8s, cfg,
-		types.NamespacedName{Namespace: ichorControllerNamespace, Name: cniHelmTestCluster}, "", 0, false, 1, nil, nil, io.Discard)
+		types.NamespacedName{Namespace: ichorControllerNamespace, Name: cniHelmTestCluster}, "", 0, false, 1, nil, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestCNIHelmApplyRefusesOwnedKeys(t *testing.T) {
 	cfg := memoryHelmConfig()
 	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(ciliumTestCluster(`{"ipam":{"mode":"cluster-pool"}}`)).Build()
 
-	err := runCNIHelmApply(t.Context(), k8s, cfg, types.NamespacedName{Namespace: ichorControllerNamespace, Name: "home"}, "", 0, false, 0, nil, nil, io.Discard)
+	err := runCNIHelmApply(t.Context(), k8s, cfg, types.NamespacedName{Namespace: ichorControllerNamespace, Name: "home"}, "", 0, false, 0, nil, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "ipam.mode") {
 		t.Fatalf("error = %v, want one naming ipam.mode", err)
 	}
@@ -163,7 +163,7 @@ func TestCNIHelmApplyTakeoverRetiresTheForeignRecord(t *testing.T) {
 
 	err := runCNIHelmApply(t.Context(), k8s, memoryHelmConfig(),
 		types.NamespacedName{Namespace: ichorControllerNamespace, Name: cniHelmTestCluster}, "", 0, false, 0,
-		&takeoverOptions{Kube: kube, IchorNamespace: ichorControllerNamespace}, nil, &out)
+		&takeoverOptions{Kube: kube, IchorNamespace: ichorControllerNamespace}, &out)
 	if err != nil {
 		t.Fatalf("runCNIHelmApply: %v", err)
 	}

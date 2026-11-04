@@ -131,16 +131,6 @@ func KubernetesChoices(
 	})
 }
 
-// CiliumChoices groups the Cilium patches a release running at running can move to (ADR 0115, amendment
-// 2026-11-03). tags are the patches whose images verified. A patch is offered only when the embedded chart
-// does not reach it yet (chart is the version without its v; a newer Ichor's chart makes the patch a
-// no-op, so it is no longer offered) and when the cluster's Kubernetes runs the patch's minor.
-func CiliumChoices(running, chart, kubernetesRunning string, tags []string) Choices {
-	return Choose(running, "", tags, func(to string) bool {
-		return semver.Compare("v"+chart, to) < 0 && CiliumKubernetesError(to, kubernetesRunning) == nil
-	})
-}
-
 // AtLeast keeps the versions that are not older than floor, in their order.
 func AtLeast(versions []string, floor string) []string {
 	var out []string

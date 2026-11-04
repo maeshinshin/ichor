@@ -55,7 +55,7 @@ func runConfigEffective(ctx context.Context, c *apiClients, out io.Writer, machi
 		return err
 	}
 
-	return writeMessage(out, outputFormat, resp.Msg)
+	return printAPI(out, resp.Msg, renderEffectiveConfig)
 }
 
 var configApplyFlags startFlags

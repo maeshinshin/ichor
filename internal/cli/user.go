@@ -115,7 +115,7 @@ var userListCmd = &cobra.Command{
 				return err
 			}
 
-			return writeMessage(cmd.OutOrStdout(), outputFormat, resp.Msg)
+			return printAPI(cmd.OutOrStdout(), resp.Msg, renderUserList)
 		})
 	},
 }
@@ -131,7 +131,7 @@ var userGetCmd = &cobra.Command{
 				return err
 			}
 
-			return writeMessage(cmd.OutOrStdout(), outputFormat, resp.Msg)
+			return printAPI(cmd.OutOrStdout(), resp.Msg, renderUserGet)
 		})
 	},
 }
@@ -165,11 +165,17 @@ func runUserCreate(ctx context.Context, u ichorv1alpha1connect.UserServiceClient
 		return err
 	}
 
-	if err := setPassword(ctx, u, cmd.ErrOrStderr(), name, password); err != nil {
+	generated, err := setPassword(ctx, u, name, password)
+	if err != nil {
 		return fmt.Errorf("user %s was created but has no password yet: %w (run `ichor user set-password %s`)", name, err, name)
 	}
 
-	return writeMessage(cmd.OutOrStdout(), outputFormat, resp.Msg)
+	// The generated password comes last, under the result, and is printed even when that cannot be written.
+	err = printAPI(cmd.OutOrStdout(), resp.Msg, renderUserCreated)
+
+	showGeneratedPassword(cmd.ErrOrStderr(), name, generated)
+
+	return err
 }
 
 var userUpdateCmd = &cobra.Command{
@@ -222,7 +228,9 @@ func runUserUpdate(ctx context.Context, u ichorv1alpha1connect.UserServiceClient
 		return err
 	}
 
-	return writeMessage(cmd.OutOrStdout(), outputFormat, resp.Msg)
+	return printAPI(cmd.OutOrStdout(), resp.Msg, func(h *human, _ *pb.UpdateUserResponse) error {
+		return userDone(h, verbUpdate+" "+kindUser, name)
+	})
 }
 
 var userDeleteCmd = &cobra.Command{
@@ -242,7 +250,9 @@ var userDeleteCmd = &cobra.Command{
 				return err
 			}
 
-			return writeMessage(cmd.OutOrStdout(), outputFormat, resp.Msg)
+			return printAPI(cmd.OutOrStdout(), resp.Msg, func(h *human, _ *pb.DeleteUserResponse) error {
+				return userDone(h, verbDelete+" "+kindUser, args[0])
+			})
 		})
 	},
 }
@@ -258,7 +268,18 @@ var userSetPasswordCmd = &cobra.Command{
 				return err
 			}
 
-			return setPassword(ctx, u, cmd.ErrOrStderr(), args[0], password)
+			generated, err := setPassword(ctx, u, args[0], password)
+			if err != nil {
+				return err
+			}
+
+			if outputFormat == outputHuman {
+				err = userDone(newHuman(cmd.OutOrStdout()), "set the password of", args[0]+" (they must change it at the next sign-in)")
+			}
+
+			showGeneratedPassword(cmd.ErrOrStderr(), args[0], generated)
+
+			return err
 		})
 	},
 }
@@ -274,28 +295,30 @@ var userRevokeCmd = &cobra.Command{
 				return err
 			}
 
-			return writeMessage(cmd.OutOrStdout(), outputFormat, resp.Msg)
+			return printAPI(cmd.OutOrStdout(), resp.Msg, func(h *human, _ *pb.RevokeSessionsResponse) error {
+				return userDone(h, "revoked the sessions of", args[0])
+			})
 		})
 	},
 }
 
-// setPassword calls SetPassword and, for a generated password, prints it once
-// to stderr. password == "" means "generate".
-func setPassword(ctx context.Context, u ichorv1alpha1connect.UserServiceClient, errw io.Writer, name, password string) error {
+// setPassword calls SetPassword and returns the password the server generated, "" when the caller
+// gave one. password == "" means "generate". The caller prints a generated password, once.
+func setPassword(ctx context.Context, u ichorv1alpha1connect.UserServiceClient, name, password string) (string, error) {
 	resp, err := u.SetPassword(ctx, connect.NewRequest(&pb.SetPasswordRequest{Name: name, Password: password}))
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	if g := resp.Msg.GetGeneratedPassword(); g != "" {
-		printGeneratedPassword(errw, name, g)
-	}
+	return resp.Msg.GetGeneratedPassword(), nil
+}
 
-	return nil
+func generatedPasswordLine(name, password string) string {
+	return fmt.Sprintf("Password for %s (shown once, stored nowhere; they must change it at the first sign-in): %s", name, password)
 }
 
 func printGeneratedPassword(errw io.Writer, name, password string) {
-	_, _ = fmt.Fprintf(errw, "Password for %s (shown once, stored nowhere; they must change it at the first sign-in): %s\n", name, password)
+	_, _ = fmt.Fprintln(errw, generatedPasswordLine(name, password))
 }
 
 // readPasswordFn reads a line without echo from the terminal; a test replaces it.

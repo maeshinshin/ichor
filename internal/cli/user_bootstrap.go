@@ -63,14 +63,21 @@ func runUserBootstrap(cmd *cobra.Command, name string) error {
 		return err
 	}
 
-	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Created user %s with the password hash in %s/%s (must be changed at the first sign-in).\n",
-		name, ichorControllerNamespace, ichorauth.CredentialsSecretName)
+	where := fmt.Sprintf("%s/%s", ichorControllerNamespace, ichorauth.CredentialsSecretName)
 
-	if userOpts.generate {
-		printGeneratedPassword(cmd.ErrOrStderr(), name, password)
+	var werr error
+
+	if outputFormat == outputHuman {
+		werr = doneLine(newHuman(cmd.OutOrStdout()), "%s %s %s (password hash in %s; it must be changed at the first sign-in)", verbCreate, kindUser, name, where)
+	} else {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Created user %s with the password hash in %s (must be changed at the first sign-in).\n", name, where)
 	}
 
-	return nil
+	if userOpts.generate {
+		showGeneratedPassword(cmd.ErrOrStderr(), name, password)
+	}
+
+	return werr
 }
 
 // bootstrapPassword is resolvePassword for a path that hashes locally: a

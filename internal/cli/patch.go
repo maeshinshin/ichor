@@ -74,9 +74,9 @@ var patchListCmd = &cobra.Command{
 var patchGetCmd = &cobra.Command{
 	Use: useGetName, Short: "Show one patch", Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return showAPI(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.GetPatchResponse], error) {
+		return showAPIHuman(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.GetPatchResponse], error) {
 			return c.Patch.GetPatch(ctx, connect.NewRequest(&pb.GetPatchRequest{Patch: objectRef(apiOpts.Namespace, args[0])}))
-		})
+		}, renderPatchGet)
 	},
 }
 
@@ -149,7 +149,7 @@ func runPatchList(ctx context.Context, c *apiClients, out io.Writer, cluster str
 		return err
 	}
 
-	return writeMessage(out, outputFormat, resp.Msg)
+	return printAPI(out, resp.Msg, renderPatchList)
 }
 
 func runPatchDelete(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, name string) error {
@@ -164,7 +164,9 @@ func runPatchDelete(ctx context.Context, c *apiClients, in io.Reader, out, errw 
 		return err
 	}
 
-	return writeMessage(out, outputFormat, resp.Msg)
+	return printAPI(out, resp.Msg, func(h *human, _ *pb.DeletePatchResponse) error {
+		return doneLine(h, "%s %s %s", verbDelete, kindPatch, nsName(objectRef(apiOpts.Namespace, name)))
+	})
 }
 
 func runPatchPreview(ctx context.Context, c *apiClients, out io.Writer, p *ichorv1alpha1.TalosConfigPatch) error {
@@ -178,7 +180,7 @@ func runPatchPreview(ctx context.Context, c *apiClients, out io.Writer, p *ichor
 		return err
 	}
 
-	return writeMessage(out, outputFormat, resp.Msg)
+	return printAPI(out, resp.Msg, renderPatchImpact)
 }
 
 // runPatchWrite is create (update=false) or update (update=true). It
@@ -215,7 +217,9 @@ func runPatchWrite(
 			return err
 		}
 
-		return writeMessage(out, outputFormat, resp.Msg)
+		return printAPI(out, resp.Msg, func(h *human, _ *pb.UpdatePatchResponse) error {
+			return doneLine(h, "%s %s %s", verbUpdate, kindPatch, nsName(wire.GetRef()))
+		})
 	}
 
 	resp, err := c.Patch.CreatePatch(ctx, connect.NewRequest(&pb.CreatePatchRequest{Patch: wire}))
@@ -223,7 +227,9 @@ func runPatchWrite(
 		return err
 	}
 
-	return writeMessage(out, outputFormat, resp.Msg)
+	return printAPI(out, resp.Msg, func(h *human, _ *pb.CreatePatchResponse) error {
+		return doneLine(h, "%s %s %s", verbCreate, kindPatch, nsName(wire.GetRef()))
+	})
 }
 
 // impactWarning is "" when the patch needs nothing special.

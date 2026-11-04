@@ -18,10 +18,8 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"strings"
-	"text/tabwriter"
 
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
@@ -126,7 +124,7 @@ func settingsUpdateRequest(args []string) (*pb.UpdateSettingsRequest, error) {
 }
 
 func writeSettings(cmd *cobra.Command, r *pb.GetSettingsResponse) error {
-	if cmd.Flags().Changed("output") {
+	if outputFormat != outputHuman {
 		return writeMessage(cmd.OutOrStdout(), outputFormat, r)
 	}
 
@@ -188,25 +186,21 @@ func settingRows(r *pb.GetSettingsResponse) []settingRow {
 }
 
 func writeSettingsTable(w io.Writer, r *pb.GetSettingsResponse) error {
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+	h := newHuman(w)
 
-	_, _ = fmt.Fprintln(tw, "SETTING\tVALUE\tSOURCE")
-
+	rows := [][]string{}
 	for _, row := range settingRows(r) {
-		_, _ = fmt.Fprintf(tw, "%s\t%s\t%s\n", row.key, row.value, row.source)
+		rows = append(rows, []string{row.key, row.value, row.source})
 	}
 
-	if err := tw.Flush(); err != nil {
-		return err
-	}
+	h.Table([]string{"setting", "value", "source"}, rows)
 
 	if r.GetReadOnly() {
-		_, err := fmt.Fprintln(w, "\nThe settings are managed by the deployment (--settings-read-only); change them there.")
-
-		return err
+		h.Note("")
+		h.Note(h.Mark(markWarning) + " The settings are managed by the deployment (--settings-read-only); change them there.")
 	}
 
-	return nil
+	return h.Err()
 }
 
 // The source column of the table: where a row's value is read from.

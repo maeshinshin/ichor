@@ -57,9 +57,13 @@ func runEtcdBackupNow(ctx context.Context, c *apiClients, out, errw io.Writer, n
 		return err
 	}
 
-	_, _ = fmt.Fprintf(errw, "ichor: requested a snapshot of %s; the controller takes it shortly\n", name)
+	if outputFormat != outputHuman {
+		_, _ = fmt.Fprintf(errw, "ichor: requested a snapshot of %s; the controller takes it shortly\n", name)
+	}
 
-	return writeMessage(out, outputFormat, resp.Msg)
+	return printAPI(out, resp.Msg, func(h *human, _ *pb.RequestEtcdBackupResponse) error {
+		return doneLine(h, "requested a snapshot of backup %s; the controller takes it shortly", nsName(objectRef(apiOpts.Namespace, name)))
+	})
 }
 
 func init() {

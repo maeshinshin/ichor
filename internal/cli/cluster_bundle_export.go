@@ -40,7 +40,9 @@ var clusterBundleExportCmd = &cobra.Command{
 	Use:   "bundle-export NAME",
 	Short: "Save the cluster's current secrets bundle locally and acknowledge it after a CA rotation",
 	Long: `bundle-export reads the secrets bundle the cluster is running with from its Secret and
-writes it to ~/.ichor/clusters/<name>/secrets.yaml (mode 0600). A CA rotation replaces the bundle, and a
+writes it to ~/.ichor/clusters/<name>/secrets.yaml (mode 0600, encrypted with the passphrase of the file it
+replaces, or a new one: --bundle-passphrase-file, $ICHOR_BUNDLE_PASSPHRASE, or generated on a terminal and shown
+once). A CA rotation replaces the bundle, and a
 copy saved before it no longer matches any node, so recovering a lost cluster (ichor restore
 --recover-cluster) needs this one.
 
@@ -54,7 +56,11 @@ It refuses while a CA rotation is still under way, because the bundle is about t
 			return err
 		}
 
-		return runBundleExport(cmd.Context(), bundleExportDeps{K8s: k8s, Save: saveBundleFile, Load: loadBundleFile, Stdout: cmd.OutOrStdout()},
+		save := func(cluster string, bundle *secrets.Bundle) (string, error) {
+			return saveSealedBundle(cluster, bundle, bundleExportPlaintext, true, cmd.ErrOrStderr())
+		}
+
+		return runBundleExport(cmd.Context(), bundleExportDeps{K8s: k8s, Save: save, Load: loadBundleFile, Stdout: cmd.OutOrStdout()},
 			apiOpts.Namespace, apiOpts.IchorNamespace, args[0])
 	},
 }
@@ -126,7 +132,12 @@ func runBundleExport(ctx context.Context, d bundleExportDeps, namespace, ichorNa
 	return err
 }
 
+// bundleExportPlaintext is --bundle-plaintext.
+var bundleExportPlaintext bool
+
 func init() {
 	clusterCmd.AddCommand(clusterBundleExportCmd)
+	clusterBundleExportCmd.Flags().BoolVar(&bundleExportPlaintext, bundlePlaintextFlag, false,
+		"store the bundle unencrypted (default: encrypted; an existing encrypted file keeps its passphrase)")
 	markWrites(clusterBundleExportCmd)
 }

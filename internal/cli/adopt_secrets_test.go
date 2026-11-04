@@ -108,7 +108,7 @@ func TestResolveAdoptBundle_RecoverStoresPrivately(t *testing.T) {
 
 	var stderr bytes.Buffer
 
-	opts := adoptSecretsOptions{Recover: true, RecoverFrom: "10.0.0.1:50000", Cluster: "c1", Contract: testVersionContract}
+	opts := adoptSecretsOptions{Recover: true, RecoverFrom: "10.0.0.1:50000", Cluster: "c1", Contract: testVersionContract, Plaintext: true}
 
 	bundle, save, err := resolveAdoptBundle(context.Background(), opts, dialerFor(reader, nil), &stderr)
 	if err != nil || bundle == nil {

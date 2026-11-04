@@ -58,8 +58,10 @@ func bundleDir(cluster string) (string, error) {
 
 // saveBundleFile writes bundle to ~/.ichor/clusters/<cluster>/secrets.yaml
 // with the permissions the Trust section requires, creating the directory
-// if necessary. It returns the path written, for the backup nag to name.
-func saveBundleFile(cluster string, bundle *secrets.Bundle) (string, error) {
+// if necessary. A non-empty pass seals it as an age file; ""
+// writes plaintext, which only a caller that was asked for it may do. It
+// returns the path written, for the backup nag to name.
+func saveBundleFile(cluster string, bundle *secrets.Bundle, pass string) (string, error) {
 	dir, err := bundleDir(cluster)
 	if err != nil {
 		return "", err
@@ -79,6 +81,12 @@ func saveBundleFile(cluster string, bundle *secrets.Bundle) (string, error) {
 	out, err := yaml.Marshal(bundle)
 	if err != nil {
 		return "", fmt.Errorf("encoding secrets bundle: %w", err)
+	}
+
+	if pass != "" {
+		if out, err = sealBundleBytes(out, pass); err != nil {
+			return "", err
+		}
 	}
 
 	path := filepath.Join(dir, secretsbundle.SecretKey)
@@ -257,28 +265,57 @@ func nagBackup(w backupNagWriter, path string) {
 		path)
 }
 
+// readBundlePlain reads the bundle file at path and returns its YAML, decrypting an age file with the
+// passphrase from the sources. encrypted says which it was. Errors name the path only.
+func readBundlePlain(path string) (plain []byte, encrypted bool, err error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, false, fmt.Errorf("reading secrets bundle %q: %w", path, err)
+	}
+
+	if !isEncryptedBundle(raw) {
+		return raw, false, nil
+	}
+
+	pass, err := readBundlePassphrase(path)
+	if err != nil {
+		return nil, true, err
+	}
+
+	if plain, err = openBundleBytes(raw, pass); err != nil {
+		return nil, true, fmt.Errorf("opening secrets bundle %q: %w", path, err)
+	}
+
+	return plain, true, nil
+}
+
 // loadBundleFile reads the cluster's secrets bundle from a local file,
 // encoded the same way `talosctl gen secrets` writes it and the way
 // internal/controller/bundle.go reads it back out of a Secret (the key
-// "secrets.yaml" that convention describes). adopt predates Ichor's own
+// "secrets.yaml" that convention describes), or sealed as an age file. adopt predates Ichor's own
 // management of the cluster: there is no Secret to read it from
 // yet, so it comes from wherever the operator already keeps it, the same
 // file `ichor init` would have written to ~/.ichor/clusters/<name>/.
+//
+// A plaintext file still loads, with a warning that names the migration.
 //
 // Never wrap a decoding error with the raw bytes or the decoded value --
 // only path and structural detail -- so a malformed bundle file can't put
 // its own secret material into an error message (pkg/render's leak test
 // follows the same rule).
 func loadBundleFile(path string) (*secrets.Bundle, error) {
-	raw, err := os.ReadFile(path)
+	raw, encrypted, err := readBundlePlain(path)
 	if err != nil {
-		return nil, fmt.Errorf("reading secrets bundle %q: %w", path, err)
+		return nil, err
 	}
 
-	// The file is the cluster's root of trust and is stored in plaintext (ponytail: no passphrase or age
-	// encryption yet); at least say so when other users can read it.
+	if !encrypted {
+		_, _ = fmt.Fprintf(bundleWarnings, "ichor: warning: %s is a plaintext secrets bundle (every CA key of the cluster); run: ichor secrets encrypt --file %s\n", path, path)
+	}
+
+	// The mode of the file matters most for plaintext, but a loose mode is worth a word for any bundle.
 	if st, err := os.Stat(path); err == nil && st.Mode().Perm()&0o077 != 0 {
-		_, _ = fmt.Fprintf(os.Stderr, "ichor: warning: %s is accessible to other users (mode %04o); run: chmod 600 %s\n", path, st.Mode().Perm(), path)
+		_, _ = fmt.Fprintf(bundleWarnings, "ichor: warning: %s is accessible to other users (mode %04o); run: chmod 600 %s\n", path, st.Mode().Perm(), path)
 	}
 
 	bundle, err := secretsbundle.Decode(raw)

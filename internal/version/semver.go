@@ -109,31 +109,9 @@ func identifiersProblem(kind, s string, noLeadingZero bool) string {
 	return ""
 }
 
-func isDigits(s string) bool {
-	if s == "" {
-		return false
-	}
+func isDigits(s string) bool { return s != "" && strings.Trim(s, "0123456789") == "" }
 
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-
-	return true
-}
-
+// isAlnumHyphen is only called with a non-empty identifier.
 func isAlnumHyphen(s string) bool {
-	if s == "" {
-		return false
-	}
-
-	for _, r := range s {
-		ok := r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r == '-'
-		if !ok {
-			return false
-		}
-	}
-
-	return true
+	return strings.Trim(s, "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-") == ""
 }

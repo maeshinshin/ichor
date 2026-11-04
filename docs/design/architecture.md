@@ -252,7 +252,12 @@ applies Ichor's after Cilium is Ready, the installer Job re-applies them on
 every upgrade when the CRD exists, and the chart renders them behind
 `networkPolicy.cilium.enabled`. The webhook and OIDC ingress rules also admit `remote-node`,
 because the apiserver's calls to a pod on another node arrive from the
-control plane's `cilium_host` address (ADR 0100 amendment).
+control plane's `cilium_host` address (ADR 0100 amendment). No policy allows
+`world` egress: what lies outside the cluster (Talos nodes, S3 stores, registries,
+ichor-ui's OIDC issuer) is allowed by policies the controller writes from the
+objects and the Deployment that name it, with `toFQDNs` for names (ADR 0100
+amendment, ADR 0126), and the controller's metrics port is open to a namespace
+only when the operator names one.
 
 Verified on hardware (ADR 0094): a host-network kube-apiserver reaches a
 Service ClusterIP; Talos applies the issuer document without a reboot but the

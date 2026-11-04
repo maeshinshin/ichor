@@ -50,7 +50,8 @@ Values worth knowing (see `dist/chart/values.yaml` for all of them):
 
 | Value | Default | Meaning |
 |---|---|---|
-| `networkPolicy.cilium.enabled` | `null` | Ichor's `CiliumNetworkPolicy` objects. Needs Cilium's CRD, so turn it on only once Cilium runs. `null` renders none (nothing else applies them on a Helm install), `true` renders them, `false` says so explicitly. |
+| `networkPolicy.cilium.enabled` | `null` | Ichor's `CiliumNetworkPolicy` objects (see [Network policies](#network-policies)). `null` renders them when the cluster serves Cilium's `CiliumNetworkPolicy` API, `true` renders them regardless (Cilium's CRD must exist), `false` renders none. |
+| `networkPolicy.cilium.metricsNamespaces`, `metricsPodLabels` | `[]`, `{}` | Who may open the controller's metrics port. Empty: nobody. Name your Prometheus's namespace, and optionally its pod labels. |
 | `preflight.cni` | `true` | Refuse to install when every node is NotReady with the network-plugin message. Skipped by `helm template` and `--dry-run`. |
 | `installer.enabled` | `false` | Leave off: a Helm install is upgraded by Helm. |
 | `ichorUI.port` | `8443` | The HTTPS port of ichor-ui. |
@@ -66,6 +67,72 @@ it tells you to run:
 helm upgrade ichor oci://ghcr.io/maeshinshin/charts/ichor --version X.Y.Z \
   --namespace ichor-system --reuse-values --set networkPolicy.cilium.enabled=true
 ```
+
+## Network policies
+
+On a cluster whose CNI is Cilium, Ichor's namespace is default-deny in both
+directions with one allow per flow (ADR 0100, ADR 0126). The chart renders them
+(`networkPolicy.cilium.enabled`), and `ichor init` and the installer Job apply
+the same set on any other install. Nothing outside the cluster is allowed by a
+fixed rule. What Ichor reaches is named by the controller, which keeps three
+policies of its own from the objects that name them:
+
+| Policy | Allows | Taken from |
+|---|---|---|
+| `ichor-controller-talos-egress` | the controller and ichor-ui to Talos nodes and cluster endpoints, and the controller to S3 stores | the endpoints and addresses of `TalosCluster`, `TalosMachine`, `MachineReclaim` and `TalosEtcdBackup` |
+| `ichor-controller-release-check` | the controller to the chart and image registries of the release check | the repositories the controller is configured with; absent while `updateCheck` is off |
+| `ichor-ui-oidc-egress` | ichor-ui to its external OIDC issuer | `ICHOR_OIDC_ISSUER` or `--oidc-issuer` of the ichor-ui Deployment; absent without one |
+
+Names are matched with Cilium's `toFQDNs`, which needs the DNS proxy: Cilium's
+`enable-l7-proxy` must be on (it is in the Cilium Ichor installs) and the pods'
+DNS goes through the rule to `kube-dns` that Ichor's policies carry. On a Cilium
+you manage yourself with the L7 proxy off, a name is never allowed: set
+`networkPolicy.cilium.dynamicTalosEgress=false` to fall back to `world` rules, or
+turn Ichor's policies off with `networkPolicy.cilium.enabled=false`.
+`externalCIDRs` and `talosCIDRs` add fixed addresses next to the named ones.
+
+A new issuer on the ichor-ui Deployment reaches ichor-ui within about a minute.
+
+**Metrics.** The controller's metrics port (8443) is closed to every pod until
+you name a scraper. With the chart, set
+`networkPolicy.cilium.metricsNamespaces` (and `metricsPodLabels`):
+
+```
+helm upgrade ichor oci://ghcr.io/maeshinshin/charts/ichor --version X.Y.Z \
+  --namespace ichor-system --reuse-values \
+  --set 'networkPolicy.cilium.metricsNamespaces={monitoring}' \
+  --set 'networkPolicy.cilium.metricsPodLabels.app\.kubernetes\.io/name=prometheus'
+```
+
+With `ichor init` or the installer Job there is no value to carry the
+namespace; add a policy of your own, which adds to Ichor's (change the
+namespace and labels to your Prometheus's, and the port if you changed it):
+
+```
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: allow-metrics-scrape
+  namespace: ichor-system
+spec:
+  endpointSelector:
+    matchLabels:
+      control-plane: controller-manager
+      app.kubernetes.io/name: ichor
+  ingress:
+  - fromEndpoints:
+    - matchLabels:
+        k8s:io.kubernetes.pod.namespace: monitoring
+        k8s:app.kubernetes.io/name: prometheus
+    toPorts:
+    - ports:
+      - port: "8443"
+        protocol: TCP
+```
+
+The scraper also needs the `metrics-reader` ClusterRole. ichor-ui's `/metrics`
+shares the port the UI is served on, so no network policy can separate it; it
+answers only a caller whose token may `get` `/metrics`.
 
 ## Verify a release
 
@@ -111,15 +178,8 @@ timestamps).
 - Replicas: the raw install manifest runs one replica of each pod and has no
   PodDisruptionBudget (a budget of `minAvailable: 1` on one replica would block
   every node drain). The chart runs two replicas and ships the budgets.
-- Network: `networkPolicy.cilium.enabled: true` renders default-deny plus one
-  allow per flow. Egress to the outside is `world` by default because Talos
-  nodes that have not joined yet are outside the cluster. To narrow it, set
-  `networkPolicy.cilium.externalCIDRs` (the S3 endpoint and the OIDC issuer, on
-  `externalPorts`), `talosCIDRs` (apid on 50000 and the API server on 6443; include
-  the subnet of machines that have not joined) and `uiIngressCIDRs` (who may
-  reach ichor-ui from outside the cluster; in-cluster callers stay allowed). These
-  values apply to the chart's policies; the copy the installer applies keeps
-  `world`.
+- Network: see [Network policies](#network-policies): default-deny plus one
+  allow per flow, with no `world` egress left.
 - Releases are published only after the verify job passes, from a protected
   `release` GitHub environment. Maintainers: create the environment with
   required reviewers and a tag ruleset for `v*` in the repository settings.

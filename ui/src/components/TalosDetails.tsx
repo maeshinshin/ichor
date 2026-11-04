@@ -82,6 +82,23 @@ function SystemSection({ data }: { data: GetNodeTalosDetailsResponse }) {
               <ToneBadge tone={s.ready ? 'good' : 'neutral'}>{s.ready ? t('common.yes') : t('common.no')}</ToneBadge>
             </Field>
             <Field label={t('talos.hostname')} value={[s.hostname, s.domainname].filter(Boolean).join('.')} />
+            {s.kernelLockdown !== '' && (
+              <>
+                <Field label={t('talos.secureBoot')}>
+                  <ToneBadge tone={s.secureBoot ? 'good' : 'neutral'}>{s.secureBoot ? t('common.yes') : t('common.no')}</ToneBadge>
+                </Field>
+                <Field label={t('talos.uki')}>
+                  <ToneBadge tone={s.bootedWithUki ? 'good' : 'neutral'}>{s.bootedWithUki ? t('common.yes') : t('common.no')}</ToneBadge>
+                </Field>
+                <Field label={t('talos.signedModules')}>
+                  <ToneBadge tone={s.moduleSignatureEnforced ? 'good' : 'neutral'}>
+                    {s.moduleSignatureEnforced ? t('common.yes') : t('common.no')}
+                  </ToneBadge>
+                </Field>
+                <Field label={t('talos.lockdown')} value={s.kernelLockdown} />
+                <Field label={t('talos.ukiKey')} value={s.ukiSigningKeyFingerprint} />
+              </>
+            )}
           </Fields>
           {s.unmetConditions.length > 0 && (
             <SectionCard size="sm" title={t('talos.unmet')}>

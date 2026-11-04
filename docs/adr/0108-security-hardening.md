@@ -447,3 +447,7 @@ The follow-up row "SecureBoot and UKI, kernel lockdown, an `os:reader` talosconf
 ## Amendment 2026-11-04: etcd CA and aggregator CA rotation (ADR 0120)
 
 Section 6 and the first follow-up row are resolved for the etcd CA and the Kubernetes aggregator CA: ADR 0120 adds them to the `ca-rotation` operation as the optional targets `etcd` and `kubernetes-aggregator`. The service-account signing key and the secretbox key are still not rotated (ADR 0121).
+
+## Amendment 2026-11-04: kubelet serving-certificate bootstrap
+
+The kubelet serving-certificate bootstrap named under "Not modelled" is decided and built in [ADR 0125](0125-kubelet-serving-certificates-are-requested-by-the-kubelets-and-approved-by-the-controller.md): `spec.security.kubeletServingCertificates`, with the controller approving `kubernetes.io/kubelet-serving` requests itself. The follow-up row above for it is closed; the other items in that row remain.

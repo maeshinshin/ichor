@@ -168,9 +168,21 @@ func chooseUpgradeTarget(ctx context.Context, c *apiClients, errw io.Writer, kin
 		kindName(kind), kindName(kind))
 }
 
-// printUpgradeTargets writes the groups of versions, newest first, and marks the default. A list that
-// cannot be given says why.
+// printUpgradeTargets writes the versions the cluster can move to: a table for a person, the
+// groups below for -o yaml|json.
 func printUpgradeTargets(w io.Writer, kind pb.OperationKind, m *pb.ListUpgradeTargetsResponse) {
+	if outputFormat == outputHuman {
+		_ = renderUpgradeTargets(newHuman(w), kind, m)
+
+		return
+	}
+
+	printUpgradeTargetsText(w, kind, m)
+}
+
+// printUpgradeTargetsText writes the groups of versions, newest first, and marks the default. A list that
+// cannot be given says why.
+func printUpgradeTargetsText(w io.Writer, kind pb.OperationKind, m *pb.ListUpgradeTargetsResponse) {
 	if !m.GetAvailable() {
 		_, _ = fmt.Fprintf(w, "no list of %s versions: %s\n", kindName(kind), m.GetUnavailableReason())
 	}

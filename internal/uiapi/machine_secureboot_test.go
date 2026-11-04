@@ -44,7 +44,7 @@ var _ = Describe("ApproveMachine installer default", func() {
 
 		_, err := s.ApproveMachine(ctx, connect.NewRequest(&pb.ApproveMachineRequest{
 			Machine: objectRef(m.Namespace, m.Name), Role: pb.MachineRole_MACHINE_ROLE_WORKER,
-			Install: &pb.MachineInstall{Disk: &pb.MachineDisk{DevPath: "/dev/vda"}, Image: image},
+			Install: &pb.MachineInstall{Disk: &pb.MachineDisk{DevPath: "/dev/sdz"}, Image: image},
 		}))
 		Expect(err).NotTo(HaveOccurred())
 

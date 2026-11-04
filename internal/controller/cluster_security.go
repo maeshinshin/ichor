@@ -110,7 +110,11 @@ func machineCluster(_ context.Context, obj client.Object) []reconcile.Request {
 		return nil
 	}
 
-	return []reconcile.Request{{NamespacedName: client.ObjectKey{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name}}}
+	var req reconcile.Request
+
+	req.Namespace, req.Name = m.Namespace, m.Spec.ClusterRef.Name
+
+	return []reconcile.Request{req}
 }
 
 // SetupWithManager sets up the controller with the Manager.

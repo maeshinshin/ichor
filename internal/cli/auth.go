@@ -97,7 +97,7 @@ interactive (KUBERNETES_EXEC_INFO).`,
 
 var authLogoutCmd = &cobra.Command{
 	Use:   "logout",
-	Short: "Delete every cached login for the issuer (all audiences), or only --audience's",
+	Short: "Revoke and delete every cached login for the issuer (all audiences), or only --audience's",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		f, err := newAuthFlow(cmd, false)
@@ -110,7 +110,7 @@ var authLogoutCmd = &cobra.Command{
 			audience = authOpts.audience
 		}
 
-		if _, err := deleteAuthCacheIssuer(f.Dir, f.Issuer, audience); err != nil {
+		if _, err := runAuthLogout(cmd.Context(), f, audience); err != nil {
 			return err
 		}
 

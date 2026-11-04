@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { canContinue, canDownload, credentialLifetimes, credentialsPanel, lifetimeSeconds } from './credentials.ts'
+import { canContinue, canDownload, credentialLifetimes, credentialsPanel, lifetimeSeconds, readerLifetimeSeconds, readerLifetimes } from './credentials.ts'
 
 const ca = true
 
@@ -38,4 +38,11 @@ test('the lifetime choices default to a year, the server maximum, and none is sh
   assert.equal(lifetimeSeconds('nonsense'), 365 * 24 * 3600)
   assert.equal(credentialLifetimes[0].key, 'year')
   assert.ok(credentialLifetimes.every((l) => l.seconds >= 24 * 3600 && l.seconds <= 365 * 24 * 3600))
+})
+
+test('the reader talosconfig choices default to an hour and none is longer than the server maximum of twelve hours', () => {
+  assert.equal(readerLifetimeSeconds('hour'), 3600)
+  assert.equal(readerLifetimeSeconds('nonsense'), 3600)
+  assert.equal(readerLifetimes[0].key, 'hour')
+  assert.ok(readerLifetimes.every((l) => l.seconds >= 3600 && l.seconds <= 12 * 3600))
 })

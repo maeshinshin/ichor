@@ -77,8 +77,8 @@ func TestRotationForEtcdAndAggregatorOnly(t *testing.T) {
 		t.Fatal("BundleFingerprint is about the CAs credentials come from and must not move for etcd and the aggregator")
 	}
 
-	exportBefore, _ := ExportFingerprint(bundle)
-	exportAfter, _ := ExportFingerprint(applied)
+	exportBefore, _ := ExportFingerprint(bundle, nil)
+	exportAfter, _ := ExportFingerprint(applied, nil)
 
 	if exportBefore == "" || exportBefore == exportAfter {
 		t.Fatalf("a saved copy with the old etcd CA is stale: %q %q", exportBefore, exportAfter)

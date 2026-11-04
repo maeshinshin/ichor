@@ -467,11 +467,11 @@ var _ = Describe("TalosOperation ca-rotation of the etcd CA and the aggregator C
 			return apimeta.IsStatusConditionTrue(got.Status.Conditions, ichorv1alpha1.ConditionBundleBackupStale)
 		}
 
-		before, err := secretsbundle.ExportFingerprint(f.old)
+		before, err := secretsbundle.ExportFingerprint(f.old, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(export(before)).To(BeTrue(), "a copy with the old etcd CA is stale although the Talos and Kubernetes CAs did not change")
 
-		live, err := secretsbundle.ExportFingerprint(f.storedBundle())
+		live, err := secretsbundle.ExportFingerprint(f.storedBundle(), nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(export(live)).To(BeFalse())
 	})

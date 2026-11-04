@@ -22,6 +22,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/values"
 )
 
 const patchDigest = "sha256:" + "0000000000000000000000000000000000000000000000000000000000000001"
@@ -41,15 +42,15 @@ func TestWithImageOverridesSetsTheChartPathsAndRefusesATagWithoutADigest(t *test
 		t.Fatalf("WithImageOverrides: %v", err)
 	}
 
-	if got := overrideAt(vals, "image", "override"); got != patchImages()[ImageAgent] {
+	if got, _ := values.Get(vals, "image.override"); got != patchImages()[ImageAgent] {
 		t.Errorf("image.override = %v", got)
 	}
 
-	if got := overrideAt(vals, "operator", "image", "override"); got != patchImages()[ImageOperator] {
+	if got, _ := values.Get(vals, "operator.image.override"); got != patchImages()[ImageOperator] {
 		t.Errorf("operator.image.override = %v", got)
 	}
 
-	if got := overrideAt(vals, "hubble", "relay", "image", "override"); got != patchImages()[ImageHubbleRelay] {
+	if got, _ := values.Get(vals, "hubble.relay.image.override"); got != patchImages()[ImageHubbleRelay] {
 		t.Errorf("hubble.relay.image.override = %v", got)
 	}
 
@@ -62,22 +63,6 @@ func TestWithImageOverridesSetsTheChartPathsAndRefusesATagWithoutADigest(t *test
 	if err := WithImageOverrides(map[string]any{}, other); err == nil {
 		t.Error("an image key that is not a Cilium patch image was accepted")
 	}
-}
-
-// overrideAt reads the values at path, nil when a key on the way is missing.
-func overrideAt(vals map[string]any, path ...string) any {
-	var cur any = vals
-
-	for _, p := range path {
-		m, ok := cur.(map[string]any)
-		if !ok {
-			return nil
-		}
-
-		cur = m[p]
-	}
-
-	return cur
 }
 
 // patchCluster is a cluster on the embedded chart whose status records the override.

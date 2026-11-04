@@ -116,6 +116,51 @@ func TestOperationWatchPrintsTheStagesAPollJumpedOver(t *testing.T) {
 	}
 }
 
+// messagesOps reports an InProgress operation with one message per poll, then Completed.
+type messagesOps struct {
+	ichorv1alpha1connect.OperationServiceClient
+	messages []string
+	calls    int
+}
+
+func (m *messagesOps) GetOperation(_ context.Context, req *connect.Request[pb.GetOperationRequest]) (*connect.Response[pb.GetOperationResponse], error) {
+	op := &pb.Operation{Ref: req.Msg.GetOperation(), Kind: pb.OperationKind_OPERATION_KIND_ICHOR, Phase: opPhaseDone}
+	if m.calls < len(m.messages) {
+		op.Phase, op.Message = ichorv1alpha1.TalosOperationPhaseInProgress, m.messages[m.calls]
+	}
+
+	m.calls++
+
+	return connect.NewResponse(&pb.GetOperationResponse{Operation: op}), nil
+}
+
+// TestWatchPrintsTheOperationMessageWhenItChanges: --follow shows what an InProgress operation waits
+// for, once per change.
+func TestWatchPrintsTheOperationMessageWhenItChanges(t *testing.T) {
+	shrinkFollowTimers(t)
+
+	ops := &messagesOps{messages: []string{
+		"the installer Job is running", "the installer Job is running",
+		"waiting for the ichor-ui Deployment to finish rolling out (0 of 1 updated replicas are available)",
+	}}
+	c := &apiClients{Operation: ops, Close: func() {}}
+
+	var out, errw bytes.Buffer
+
+	if err := watchOperation(context.Background(), c, objectRef(testNamespace, "x"), &out, &errw); err != nil {
+		t.Fatalf("%v\n%s", err, errw.String())
+	}
+
+	for _, want := range []string{
+		"phase InProgress: the installer Job is running",
+		"phase InProgress: waiting for the ichor-ui Deployment to finish rolling out",
+	} {
+		if n := strings.Count(errw.String(), want); n != 1 {
+			t.Fatalf("want %q printed once, got %d:\n%s", want, n, errw.String())
+		}
+	}
+}
+
 func TestWatchRetriesTransientErrors(t *testing.T) {
 	shrinkFollowTimers(t)
 	setAPITestFlags(t, true)

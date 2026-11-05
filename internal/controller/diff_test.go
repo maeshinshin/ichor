@@ -72,90 +72,60 @@ func diffTestFixtures(t *testing.T, versionContract string) (*ichorv1alpha1.Talo
 	return cluster, m, bundle
 }
 
-func TestChangedPaths_NoDifference(t *testing.T) {
+func TestChangedPaths_PatchedConfig(t *testing.T) {
 	cluster, m, bundle := diffTestFixtures(t, "v1.14")
 
-	cfg, _, err := render.Render(cluster, m, bundle, nil, nil)
-	if err != nil {
-		t.Fatalf("Render: %v", err)
+	renderWith := func(doc *ichorv1alpha1.TalosConfigPatchDocument) []byte {
+		t.Helper()
+
+		var patches []ichorv1alpha1.TalosConfigPatch
+		if doc != nil {
+			patches = []ichorv1alpha1.TalosConfigPatch{{
+				Namespace: tmNamespace, Name: "p",
+				Spec: ichorv1alpha1.TalosConfigPatchSpec{
+					ClusterRef: corev1.LocalObjectReference{Name: "c"}, Layer: layerCluster,
+					Documents: []ichorv1alpha1.TalosConfigPatchDocument{*doc},
+				},
+			}}
+		}
+
+		cfg, _, err := render.Render(cluster, m, bundle, patches, nil)
+		if err != nil {
+			t.Fatalf("Render: %v", err)
+		}
+
+		return cfg
 	}
 
-	paths, err := ChangedPaths(cfg, cfg)
-	if err != nil {
-		t.Fatalf("changedPaths: %v", err)
-	}
+	before := renderWith(nil)
 
-	if len(paths) != 0 {
-		t.Fatalf("ChangedPaths(identical configs) = %v, want none", paths)
-	}
-}
-
-func TestChangedPaths_LegacyFieldChange(t *testing.T) {
-	cluster, m, bundle := diffTestFixtures(t, "v1.14")
-
-	before, _, err := render.Render(cluster, m, bundle, nil, nil)
-	if err != nil {
-		t.Fatalf("Render(before): %v", err)
-	}
-
-	patch := ichorv1alpha1.TalosConfigPatch{
-		Namespace: tmNamespace, Name: "p",
-		Spec: ichorv1alpha1.TalosConfigPatchSpec{
-			ClusterRef: corev1.LocalObjectReference{Name: "c"},
-			Layer:      layerCluster,
-			Documents:  []ichorv1alpha1.TalosConfigPatchDocument{{Kind: kindConfig, Config: extraArgsConfig()}},
+	for name, tc := range map[string]struct {
+		doc  *ichorv1alpha1.TalosConfigPatchDocument
+		want string // "" means no difference
+	}{
+		"no difference": {nil, ""},
+		// ExtraArgsConfig is a map, so the diff is reported per key rather than at "extraArgs"
+		// itself -- fieldmeta's prefix match still covers it.
+		"legacy field change": {
+			&ichorv1alpha1.TalosConfigPatchDocument{Kind: kindConfig, Config: extraArgsConfig()},
+			"cluster.apiServer.extraArgs.foo",
 		},
-	}
-
-	after, _, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, nil)
-	if err != nil {
-		t.Fatalf("Render(after): %v", err)
-	}
-
-	paths, err := ChangedPaths(before, after)
-	if err != nil {
-		t.Fatalf("changedPaths: %v", err)
-	}
-
-	// ExtraArgsConfig is a map, so the diff is reported per key rather than
-	// at "extraArgs" itself -- fieldmeta's prefix match still covers it.
-	if !slices.Contains(paths, "cluster.apiServer.extraArgs.foo") {
-		t.Fatalf("changedPaths = %v, want it to contain cluster.apiServer.extraArgs.foo", paths)
-	}
-}
-
-func TestChangedPaths_StandaloneDocumentAdded(t *testing.T) {
-	cluster, m, bundle := diffTestFixtures(t, "v1.14")
-
-	before, _, err := render.Render(cluster, m, bundle, nil, nil)
-	if err != nil {
-		t.Fatalf("Render(before): %v", err)
-	}
-
-	patch := ichorv1alpha1.TalosConfigPatch{
-		Namespace: tmNamespace, Name: "p",
-		Spec: ichorv1alpha1.TalosConfigPatchSpec{
-			ClusterRef: corev1.LocalObjectReference{Name: "c"},
-			Layer:      layerCluster,
-			Documents: []ichorv1alpha1.TalosConfigPatchDocument{{
+		"standalone document added": {
+			&ichorv1alpha1.TalosConfigPatchDocument{
 				Kind:         "SysctlConfig",
 				SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.ipv4.ip_forward": "1"}},
-			}},
+			},
+			"SysctlConfig.params.net.ipv4.ip_forward",
 		},
-	}
+	} {
+		paths, err := ChangedPaths(before, renderWith(tc.doc))
+		if err != nil {
+			t.Fatalf("%s: ChangedPaths: %v", name, err)
+		}
 
-	after, _, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, nil)
-	if err != nil {
-		t.Fatalf("Render(after): %v", err)
-	}
-
-	paths, err := ChangedPaths(before, after)
-	if err != nil {
-		t.Fatalf("changedPaths: %v", err)
-	}
-
-	if !slices.Contains(paths, "SysctlConfig.params.net.ipv4.ip_forward") {
-		t.Fatalf("changedPaths = %v, want it to contain SysctlConfig.params.net.ipv4.ip_forward", paths)
+		if tc.want == "" && len(paths) != 0 || tc.want != "" && !slices.Contains(paths, tc.want) {
+			t.Fatalf("%s: ChangedPaths = %v, want %q", name, paths, tc.want)
+		}
 	}
 }
 
@@ -167,41 +137,35 @@ func TestChangedPaths_MalformedYAML(t *testing.T) {
 
 const kernelModuleDoc = "apiVersion: v1alpha1\nkind: KernelModuleConfig\nname: br_netfilter\n"
 
-func TestCollapseDocumentPaths_AddedDocumentIsReportedAsTheDocument(t *testing.T) {
-	current := []byte("version: v1alpha1\nmachine:\n  type: worker\n")
-	rendered := []byte("version: v1alpha1\nmachine:\n  type: worker\n---\n" + kernelModuleDoc)
+func TestCollapseDocumentPaths(t *testing.T) {
+	const worker = "version: v1alpha1\nmachine:\n  type: worker\n"
 
-	paths, err := ChangedPaths(current, rendered)
-	if err != nil {
-		t.Fatalf("ChangedPaths: %v", err)
-	}
+	for name, tc := range map[string]struct {
+		current, rendered string
+		want              []string
+	}{
+		"an added document is reported as the document": {
+			worker, worker + "---\n" + kernelModuleDoc, []string{"KernelModuleConfig br_netfilter (added)"},
+		},
+		"a removed document and untouched fields": {
+			worker + "---\n" + kernelModuleDoc, "version: v1alpha1\nmachine:\n  type: controlplane\n",
+			[]string{"KernelModuleConfig br_netfilter (removed)", "machine.type"},
+		},
+	} {
+		current, rendered := []byte(tc.current), []byte(tc.rendered)
 
-	got, err := collapseDocumentPaths(current, rendered, paths)
-	if err != nil {
-		t.Fatalf("collapseDocumentPaths: %v", err)
-	}
+		paths, err := ChangedPaths(current, rendered)
+		if err != nil {
+			t.Fatalf("%s: ChangedPaths: %v", name, err)
+		}
 
-	if want := []string{"KernelModuleConfig br_netfilter (added)"}; !slices.Equal(got, want) {
-		t.Fatalf("collapseDocumentPaths = %v, want %v (raw paths %v)", got, want, paths)
-	}
-}
+		got, err := collapseDocumentPaths(current, rendered, paths)
+		if err != nil {
+			t.Fatalf("%s: collapseDocumentPaths: %v", name, err)
+		}
 
-func TestCollapseDocumentPaths_RemovedDocumentAndUntouchedFields(t *testing.T) {
-	current := []byte("version: v1alpha1\nmachine:\n  type: worker\n---\n" + kernelModuleDoc)
-	rendered := []byte("version: v1alpha1\nmachine:\n  type: controlplane\n")
-
-	paths, err := ChangedPaths(current, rendered)
-	if err != nil {
-		t.Fatalf("ChangedPaths: %v", err)
-	}
-
-	got, err := collapseDocumentPaths(current, rendered, paths)
-	if err != nil {
-		t.Fatalf("collapseDocumentPaths: %v", err)
-	}
-
-	want := []string{"KernelModuleConfig br_netfilter (removed)", "machine.type"}
-	if !slices.Equal(got, want) {
-		t.Fatalf("collapseDocumentPaths = %v, want %v", got, want)
+		if !slices.Equal(got, tc.want) {
+			t.Fatalf("%s: collapseDocumentPaths = %v, want %v (raw paths %v)", name, got, tc.want, paths)
+		}
 	}
 }

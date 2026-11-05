@@ -110,7 +110,7 @@ func needsTypedName(a pb.NodeAction) bool {
 }
 
 // runNodeAction plans, confirms and starts one node action. --yes skips the y/N question; reset
-// and remove still need the node's name, typed here or given with --confirm.
+// and remove need the node's name instead, typed here or given with --confirm, which replaces the question.
 func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, s nodeActionSpec) error {
 	bg := overrideOf(apiOpts)
 
@@ -133,7 +133,12 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 
 	text := nodePlanText(s, plan.Msg)
 
-	if !assumeYes && needsTypedName(s.Action) && s.Confirm == "" {
+	// The typed name is the consent for reset and remove: typed at the prompt or given as --confirm
+	// (as restore --live and machine reclaim do), it replaces the y/N question; --yes alone does not.
+	switch {
+	case needsTypedName(s.Action) && s.Confirm != "":
+		_, _ = fmt.Fprint(errw, text)
+	case !assumeYes && needsTypedName(s.Action):
 		_, _ = fmt.Fprint(errw, text)
 
 		typed, err := readLine(in, errw, fmt.Sprintf("Type the node name %q to confirm: ", s.Machine))
@@ -146,8 +151,10 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 		}
 
 		s.Confirm = typed
-	} else if err := confirmPlan(in, errw, "node "+name, text); err != nil {
-		return err
+	default:
+		if err := confirmPlan(in, errw, "node "+name, text); err != nil {
+			return err
+		}
 	}
 
 	if needsTypedName(s.Action) && s.Confirm != s.Machine {
@@ -205,7 +212,8 @@ func newNodeActionCmd(use, short string, action pb.NodeAction, args cobra.Positi
 		Short: short,
 		Long: short + `.
 
-It shows the plan and asks for confirmation unless --yes. The CLI only writes the operation
+It shows the plan and asks for confirmation unless --yes. For reset and remove the typed node name
+(or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
 (or deletes the machine); the controller does the work. Follow it with --follow.`,
 		Args: args,
 		RunE: func(cmd *cobra.Command, a []string) error {

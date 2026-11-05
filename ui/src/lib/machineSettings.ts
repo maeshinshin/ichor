@@ -1,5 +1,6 @@
 import type { Key } from './i18n.ts'
 import type { DiskSelector } from './installDisk.ts'
+import { formatSpeed } from './talosDetails.ts'
 
 // The checks below repeat the CRD's rules (TalosMachine.spec.network and spec.disks, ADR 0092) and
 // the backend's, so a form says what is wrong before it is sent.
@@ -42,14 +43,9 @@ export type NicOption = { name: string; permanentMac: string; linkUp: boolean; s
 
 export type LinkChoice = { mac: string; label: string; up: boolean }
 
-function speedLabel(mbit: number): string {
-  if (mbit <= 0) return 'speed unknown'
-  if (mbit < 1000) return `${mbit} Mbit/s`
-  return `${mbit / 1000} Gbit/s`
-}
-
 export function linkLabel(l: NicOption): string {
-  return [l.name, l.permanentMac, speedLabel(l.speedMbit), ...(l.linkUp ? [] : ['no link'])].join(' - ')
+  const speed = formatSpeed(l.speedMbit)
+  return [l.name, l.permanentMac, speed === '-' ? 'speed unknown' : speed, ...(l.linkUp ? [] : ['no link'])].join(' - ')
 }
 
 // selectableLinks are the physical links that can be picked: virtual ones have no permanent MAC to

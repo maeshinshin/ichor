@@ -1,7 +1,7 @@
 // Pure helpers for "Restore from backup" (docs/adr/0089). No import from "@/gen": these run directly
 // under `node --test` (docs/adr/0045).
 
-import { stageProgress } from './operations.ts'
+import { confirmMatches, stageProgress } from './operations.ts'
 
 export type Ref = { namespace: string; name: string }
 
@@ -53,9 +53,7 @@ export function canRestore(o: {
   overridden: boolean
   busy: boolean
 }): boolean {
-  if (!o.planned || o.blocked !== '' || o.busy) return false
-  if (o.clusterName === '' || o.typed.trim() !== o.clusterName) return false
-  return o.overridden
+  return o.planned && o.blocked === '' && !o.busy && confirmMatches(o.typed, o.clusterName) && o.overridden
 }
 
 // The steps status.etcdRestore.step goes through, in order (ADR 0089).

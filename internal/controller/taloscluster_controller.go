@@ -23,9 +23,13 @@ import (
 	"sync"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -105,7 +109,7 @@ func (r *TalosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		r.Egress.SettleAfter(ctx)
 	}
 
-	fresh := r.freshAddress(&cluster)
+	fresh := r.freshAddress(&cluster) || r.freshResetNode(ctx)
 
 	found, err := r.Discovery.DiscoverAll(ctx, &cluster)
 	if err != nil {
@@ -117,6 +121,53 @@ func (r *TalosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	return ctrl.Result{RequeueAfter: discoveryRequeueInterval}, nil
+}
+
+// freshResetNode reports whether Ichor reset a node less than discoveryFreshWindow ago (the marker
+// on its Node holds the time). The wiped machine is back in maintenance mode about a minute after
+// the reset, after the pass that saw its Node still Ready and so counted its address as a member;
+// without this the next pass is discoveryRequeueInterval away.
+func (r *TalosClusterReconciler) freshResetNode(ctx context.Context) bool {
+	now := time.Now()
+	if r.now != nil {
+		now = r.now()
+	}
+
+	var nodes corev1.NodeList
+	if err := r.List(ctx, &nodes); err != nil {
+		return false
+	}
+
+	for i := range nodes.Items {
+		at, err := time.Parse(time.RFC3339, nodes.Items[i].Annotations[nodeResetByIchorAnnotation])
+		if err == nil && now.Sub(at) < discoveryFreshWindow {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isResetNode is the predicate of the Node watch: only a Node Ichor marked as reset is of interest.
+func isResetNode(o client.Object) bool {
+	_, ok := o.GetAnnotations()[nodeResetByIchorAnnotation]
+
+	return ok
+}
+
+// allDiscoveryClusters enqueues every TalosCluster; one without spec.discovery returns at once.
+func (r *TalosClusterReconciler) allDiscoveryClusters(ctx context.Context, _ client.Object) []reconcile.Request {
+	var clusters ichorv1alpha1.TalosClusterList
+	if err := r.List(ctx, &clusters); err != nil {
+		return nil
+	}
+
+	reqs := make([]reconcile.Request, 0, len(clusters.Items))
+	for i := range clusters.Items {
+		reqs = append(reqs, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&clusters.Items[i])})
+	}
+
+	return reqs
 }
 
 // freshAddress records when each discovery address and CIDR of cluster was first seen by this
@@ -169,6 +220,10 @@ func (r *TalosClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&ichorv1alpha1.TalosCluster{}).
 		Watches(&ichorv1alpha1.TalosOperation{}, handler.EnqueueRequestsFromMapFunc(caRotationOperationClusters)).
 		Watches(&ichorv1alpha1.MachineReclaim{}, handler.EnqueueRequestsFromMapFunc(reclaimDoneClusters)).
+		// A Node Ichor marked as reset (when it is marked, and when it stops being Ready) starts a pass
+		// at once instead of waiting for the requeue.
+		Watches(&corev1.Node{}, handler.EnqueueRequestsFromMapFunc(r.allDiscoveryClusters),
+			builder.WithPredicates(predicate.NewPredicateFuncs(isResetNode))).
 		Named("taloscluster").
 		Complete(r)
 }

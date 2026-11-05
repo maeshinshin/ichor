@@ -22,10 +22,13 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -122,5 +125,65 @@ var _ = Describe("TalosClusterReconciler", func() {
 		Expect(dialed).To(HaveLen(4))
 		Expect(strings.Join(dialed, " ")).NotTo(ContainSubstring("10.9.8."))
 		mu.Unlock()
+	})
+
+	// A node Ichor reset is found again within seconds, not at the next five-minute pass: the
+	// wiped machine answers a minute after the reset, long after the pass that saw it (hardware
+	// lane C of ADR 0123, 2026-11-05).
+	Context("after a node was reset by Ichor", func() {
+		// resetCluster is a cluster whose discovery range has been known for longer than the fresh
+		// window, so only the reset Node can make the pass short.
+		resetCluster := func() (*TalosClusterReconciler, *ichorv1alpha1.TalosCluster, *time.Time) {
+			cluster := newTestCluster("does-not-exist", "v1.14")
+			cluster.Spec.Discovery = &ichorv1alpha1.TalosClusterDiscovery{CIDRs: []string{"10.9.7.0/30"}}
+			Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
+
+			clock := time.Now()
+			factory := func(context.Context, string) (MaintenanceClient, error) { return nil, errFactoryMustNotBeCalled }
+			r := &TalosClusterReconciler{
+				Client:    k8sClient,
+				Discovery: &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: factory},
+				now:       func() time.Time { return clock },
+			}
+
+			_, err := reconcileCluster(r, cluster)
+			Expect(err).NotTo(HaveOccurred())
+
+			clock = clock.Add(2 * discoveryFreshWindow)
+
+			return r, cluster, &clock
+		}
+
+		resetNode := func(resetAt time.Time) {
+			node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{
+				GenerateName: "reset-node-", Annotations: map[string]string{nodeResetByIchorAnnotation: resetAt.UTC().Format(time.RFC3339)},
+			}}
+			Expect(k8sClient.Create(ctx, node)).To(Succeed())
+			DeferCleanup(func() { Expect(k8sClient.Delete(ctx, node)).To(Succeed()) })
+		}
+
+		It("looks again every discoveryFreshInterval for discoveryFreshWindow after the reset", func() {
+			r, cluster, clock := resetCluster()
+			resetNode(clock.Add(-discoveryFreshWindow / 2))
+
+			result, err := reconcileCluster(r, cluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(Equal(discoveryFreshInterval))
+		})
+
+		It("goes back to discoveryRequeueInterval once the window has passed", func() {
+			r, cluster, clock := resetCluster()
+			resetNode(clock.Add(-2 * discoveryFreshWindow))
+
+			result, err := reconcileCluster(r, cluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(Equal(discoveryRequeueInterval))
+		})
+
+		It("watches only the Nodes that carry the reset marker", func() {
+			marked := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{nodeResetByIchorAnnotation: "x"}}}
+			Expect(isResetNode(marked)).To(BeTrue())
+			Expect(isResetNode(&corev1.Node{})).To(BeFalse())
+		})
 	})
 })

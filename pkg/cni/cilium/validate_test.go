@@ -28,12 +28,13 @@ import (
 )
 
 const (
-	keyBPF       = "bpf"
-	keyEnabled   = "enabled"
-	keyDebug     = "debug"
-	keyIPAM      = "ipam"
-	keyMode      = "mode"
-	tunnelGeneve = "geneve"
+	keyBPF        = "bpf"
+	keyGatewayAPI = "gatewayAPI"
+	keyEnabled    = "enabled"
+	keyDebug      = "debug"
+	keyIPAM       = "ipam"
+	keyMode       = "mode"
+	tunnelGeneve  = "geneve"
 )
 
 // debugOn is a user value that every chart accepts.
@@ -50,7 +51,7 @@ func TestValidateValues(t *testing.T) {
 	}
 
 	masq := map[string]any{keyBPF: map[string]any{"masquerade": true}}
-	gw := map[string]any{"gatewayAPI": map[string]any{keyEnabled: true}}
+	gw := map[string]any{keyGatewayAPI: map[string]any{keyEnabled: true}}
 
 	// mesh is clustermesh.useAPIServer with the given clustermesh.apiserver.tls.auto (nil: the chart's).
 	mesh := func(auto map[string]any) map[string]any {
@@ -116,7 +117,7 @@ func TestValidateValues(t *testing.T) {
 		{name: "gateway API while kube-proxy runs", ctx: enabled, user: gw,
 			wantErr: []string{"gatewayAPI.enabled=true needs kube-proxy replacement", "spec.cni.kubeProxy=replaced"}},
 		{name: "gateway API explicitly off while kube-proxy runs", ctx: enabled,
-			user: map[string]any{"gatewayAPI": map[string]any{keyEnabled: false}}},
+			user: map[string]any{keyGatewayAPI: map[string]any{keyEnabled: false}}},
 
 		{name: "clustermesh API server with the default helm certificates", ctx: enabled, user: mesh(nil),
 			wantErr: []string{"clustermesh.apiserver.tls.auto.method=cronJob", "which Ichor's Helm Job may not manage"}},

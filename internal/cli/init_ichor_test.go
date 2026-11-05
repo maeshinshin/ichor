@@ -99,10 +99,7 @@ func newIchorInstallationFake(t *testing.T) client.Client {
 }
 
 func TestCreateIchorInstallation_RecordsTheBinarysVersion(t *testing.T) {
-	old := version.Version
-	version.Version = testReleasedVersion
-
-	t.Cleanup(func() { version.Version = old })
+	setVersion(t, testReleasedVersion)
 
 	c := newIchorInstallationFake(t)
 
@@ -123,10 +120,7 @@ func TestCreateIchorInstallation_RecordsTheBinarysVersion(t *testing.T) {
 }
 
 func TestCreateIchorInstallation_SkipsADevBuild(t *testing.T) {
-	old := version.Version
-	version.Version = "dev"
-
-	t.Cleanup(func() { version.Version = old })
+	setVersion(t, "dev")
 
 	c := newIchorInstallationFake(t)
 
@@ -146,6 +140,16 @@ func TestCreateIchorInstallation_SkipsADevBuild(t *testing.T) {
 }
 
 // shrinkInitRetry makes init's apply retries fast.
+// setVersion makes the binary report v until the test ends.
+func setVersion(t *testing.T, v string) {
+	t.Helper()
+
+	old := version.Version
+	version.Version = v
+
+	t.Cleanup(func() { version.Version = old })
+}
+
 func shrinkInitRetry(t *testing.T) {
 	t.Helper()
 
@@ -269,10 +273,7 @@ func TestIsTransient_WebhookCallFailures(t *testing.T) {
 
 // adopt's install step creates the IchorInstallation through the same bounded webhook wait as init.
 func TestCreateIchorInstallation_RetriesWhileTheWebhookIsDown(t *testing.T) {
-	old := version.Version
-	version.Version = testReleasedVersion
-
-	t.Cleanup(func() { version.Version = old })
+	setVersion(t, testReleasedVersion)
 	shrinkInitRetry(t)
 
 	var calls int
@@ -293,10 +294,7 @@ func TestCreateIchorInstallation_RetriesWhileTheWebhookIsDown(t *testing.T) {
 // adopt passes its --wait-timeout: a controller that never becomes Ready ends the wait at that
 // bound, with nothing written.
 func TestCreateIchorInstallation_HonoursTheCallersWait(t *testing.T) {
-	old := version.Version
-	version.Version = testReleasedVersion
-
-	t.Cleanup(func() { version.Version = old })
+	setVersion(t, testReleasedVersion)
 	realWebhookWait(t)
 
 	var calls int

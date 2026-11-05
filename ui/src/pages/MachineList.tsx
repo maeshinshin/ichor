@@ -13,6 +13,7 @@ import { PageTitle } from '@/components/PageTitle'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ReadyCell } from '@/components/ReadyCell'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { useAction } from '@/hooks/use-action'
 import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { machineClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
@@ -21,7 +22,6 @@ import { notifyWrite } from '@/lib/notify'
 import { matchesQuery } from '@/lib/filter'
 import { formatTimestamp } from '@/lib/format'
 import { useCanReclaim } from '@/lib/useCanReclaim'
-import { describeError, type ErrorShape } from '@/lib/errors'
 import { useList } from '@/lib/useList'
 import { t } from '@/lib/i18n'
 import { Link } from '@/router'
@@ -205,23 +205,17 @@ function RejectDialog({
 }) {
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState<ErrorShape | null>(null)
+  const { busy: submitting, error: submitError, run } = useAction()
 
   async function submit() {
-    if (!machine.ref) return
-    setSubmitting(true)
-    setSubmitError(null)
-    try {
-      await machineClient.rejectMachine({ machine: machine.ref, reason })
-      notifyWrite('toast.rejected', { name: machine.ref.name })
+    const ref = machine.ref
+    if (!ref) return
+    await run(async () => {
+      await machineClient.rejectMachine({ machine: ref, reason })
+      notifyWrite('toast.rejected', { name: ref.name })
       setOpen(false)
       onRejected()
-    } catch (err) {
-      setSubmitError(describeError(err))
-    } finally {
-      setSubmitting(false)
-    }
+    })
   }
 
   return (

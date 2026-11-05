@@ -1,5 +1,6 @@
 import { useState } from 'preact/hooks'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { useAction } from '@/hooks/use-action'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,7 +10,6 @@ import { userClient } from '@/lib/connect'
 import { signInAgain } from '@/lib/login'
 import { clearToken } from '@/lib/oidc'
 import { minPasswordLength, passwordError, passwordOk } from '@/lib/users'
-import type { ErrorShape } from '@/lib/errors'
 import { t } from '@/lib/i18n'
 
 // The change-own-password form (docs/adr/0094), used in the account menu's dialog and, with nothing
@@ -19,8 +19,7 @@ export function ChangePasswordForm({ onCancel }: { onCancel?: () => void }) {
   const [oldPassword, setOld] = useState('')
   const [next, setNext] = useState('')
   const [again, setAgain] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { busy, error, run } = useAction(passwordError)
 
   const mismatch = again !== '' && again !== next
   const ready = oldPassword !== '' && passwordOk(next) && next === again
@@ -28,9 +27,7 @@ export function ChangePasswordForm({ onCancel }: { onCancel?: () => void }) {
   async function submit(e: Event) {
     e.preventDefault()
     if (!ready || busy) return
-    setBusy(true)
-    setError(null)
-    try {
+    await run(async () => {
       await userClient.changeOwnPassword({ oldPassword, newPassword: next })
       // The change ended every token issued before it, this tab's included (docs/adr/0108), so sign
       // this tab in again with the new password (docs/adr/0094 amendment); other sessions stay
@@ -40,11 +37,7 @@ export function ChangePasswordForm({ onCancel }: { onCancel?: () => void }) {
       setNext('')
       setAgain('')
       window.location.assign('/')
-    } catch (err) {
-      setError(passwordError(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   return (

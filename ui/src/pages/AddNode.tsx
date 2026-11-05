@@ -12,6 +12,7 @@ import { ApproveDialog } from '@/components/ApproveDialog'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ReclaimDialog } from '@/components/ReclaimDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { useAction } from '@/hooks/use-action'
 import { Field, Fields } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { SectionCard } from '@/components/SectionCard'
@@ -20,7 +21,7 @@ import type { Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { clusterClient, machineClient } from '@/lib/connect'
 import { checkDiscoveryTarget, discoveryOn, maskCidr } from '@/lib/discovery'
-import { describeError, type ErrorShape } from '@/lib/errors'
+import { describeError } from '@/lib/errors'
 import { notifyWrite } from '@/lib/notify'
 import { useCluster } from '@/lib/useCluster'
 import { useCanReclaim } from '@/lib/useCanReclaim'
@@ -190,8 +191,7 @@ function Discovery({
   onAdded: (c: Cluster | undefined) => void
 }) {
   const [address, setAddress] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { busy: submitting, error, setError, run } = useAction()
   const canReclaim = useCanReclaim()
 
   // One input takes an address or a range; a slash means a range.
@@ -202,9 +202,7 @@ function Discovery({
   async function submit() {
     if (check !== 'ok') return
     const value = address.trim()
-    setSubmitting(true)
-    setError(null)
-    try {
+    await run(async () => {
       if (kind === 'cidr') {
         const res = await clusterClient.addDiscoveryCidr({ cluster: cluster.ref, cidr: value })
         onAdded(res.cluster)
@@ -215,11 +213,7 @@ function Discovery({
         notifyWrite('toast.discoveryAdded', { address: value })
       }
       setAddress('')
-    } catch (err) {
-      setError(describeError(err))
-    } finally {
-      setSubmitting(false)
-    }
+    })
   }
 
   async function remove(target: string, isCidr: boolean) {

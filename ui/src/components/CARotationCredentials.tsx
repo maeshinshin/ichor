@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { useAction } from '@/hooks/use-action'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -12,7 +13,7 @@ import type { Operation } from '@/gen/ichor/v1alpha1/operation_pb'
 import { operationClient } from '@/lib/connect'
 import { canContinue, canDownload, credentialLifetimes, lifetimeSeconds, type CredentialsPanel } from '@/lib/credentials'
 import { download } from '@/lib/download'
-import { describeError, type ErrorShape } from '@/lib/errors'
+import { describeError } from '@/lib/errors'
 import { notifyDone, notifyFailed } from '@/lib/notify'
 import { t } from '@/lib/i18n'
 
@@ -35,11 +36,10 @@ export function CARotationCredentials({
   const ref = op.ref
   const [confirmDownload, setConfirmDownload] = useState(false)
   const [confirmContinue, setConfirmContinue] = useState(false)
-  const [busy, setBusy] = useState(false)
   const [lifetime, setLifetime] = useState<string>(credentialLifetimes[0].key)
   const [readOnly, setReadOnly] = useState(false)
   const [acknowledged, setAcknowledged] = useState(false)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { busy, error, setError, run } = useAction()
   const abort = useRef<AbortController | null>(null)
 
   useEffect(() => () => abort.current?.abort(), [])
@@ -61,19 +61,13 @@ export function CARotationCredentials({
 
   async function runContinue() {
     if (!ref) return
-    setBusy(true)
-    setError(null)
-    try {
+    await run(async () => {
       const res = await operationClient.acknowledgeCARotationCredentials({ operation: ref })
       if (res.operation) onChanged(res.operation)
       setAcknowledged(true)
       setConfirmContinue(false)
       notifyDone(t('creds.continued'))
-    } catch (err) {
-      setError(describeError(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   const showDownload = canDownload(panel, permitted)

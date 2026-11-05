@@ -9,6 +9,7 @@ import { PageTitle } from '@/components/PageTitle'
 import { SectionCard } from '@/components/SectionCard'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { useAction } from '@/hooks/use-action'
 import { ConfigLayer } from '@/gen/ichor/v1alpha1/node_pb'
 import type { Patch } from '@/gen/ichor/v1alpha1/patch_pb'
 import { patchClient } from '@/lib/connect'
@@ -16,7 +17,6 @@ import { enumLabel } from '@/lib/enum'
 import { notifyDone } from '@/lib/notify'
 import { matchesQuery } from '@/lib/filter'
 import { targetKindOf } from '@/lib/patchTarget'
-import { describeError, type ErrorShape } from '@/lib/errors'
 import { useList } from '@/lib/useList'
 import { t } from '@/lib/i18n'
 import { Link } from '@/router'
@@ -144,23 +144,17 @@ function targetSummary(p: Patch): string {
 
 function DeleteDialog({ patch, onDeleted }: { patch: Patch; onDeleted: () => void }) {
   const [open, setOpen] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { busy: submitting, error, run } = useAction()
 
   async function submit() {
-    if (!patch.ref) return
-    setSubmitting(true)
-    setError(null)
-    try {
-      await patchClient.deletePatch({ patch: patch.ref })
+    const ref = patch.ref
+    if (!ref) return
+    await run(async () => {
+      await patchClient.deletePatch({ patch: ref })
       setOpen(false)
-      notifyDone(t('toast.patchDeleted', { name: patch.ref.name }))
+      notifyDone(t('toast.patchDeleted', { name: ref.name }))
       onDeleted()
-    } catch (err) {
-      setError(describeError(err))
-    } finally {
-      setSubmitting(false)
-    }
+    })
   }
 
   return (

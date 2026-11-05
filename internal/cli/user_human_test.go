@@ -60,9 +60,7 @@ func TestUserListHumanOutput(t *testing.T) {
 		"alice  Alice         alice@example.com  admin             active       2d\n" +
 		"bob    -             -                  viewer, operator  disabled     3h\n" +
 		"carol  Carol         -                  viewer            no password  30s\n"
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 
 	out.Reset()
 
@@ -91,9 +89,7 @@ func TestUserGetHumanOutput(t *testing.T) {
 		"\n" +
 		"Conditions\n" +
 		"  ✓ PasswordSet  Set  the password is set\n"
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 }
 
 // humanUserService answers the calls the write commands make.

@@ -19,8 +19,8 @@ package controller
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -91,20 +91,48 @@ func (c *rotClient) EtcdMemberList(context.Context) ([]EtcdMember, error) {
 }
 
 func (c *rotClient) EtcdStatus(context.Context) (EtcdStatus, error) {
+	if c.w.leader[c.name] {
+		return EtcdStatus{MemberID: 1, LeaderID: 1}, nil
+	}
+
 	return EtcdStatus{MemberID: 1, LeaderID: 2}, nil
+}
+
+func (c *rotClient) EtcdForfeitLeadership(context.Context) error {
+	c.w.calls = append(c.w.calls, "forfeit:"+c.name)
+	c.w.leader[c.name] = false
+
+	return nil
 }
 
 func (c *rotClient) ServiceState(context.Context, string) (string, bool, bool, error) {
 	return talosServiceRunning, true, !c.w.etcdUnhealthy[c.name], nil
 }
 
+// ServiceRestart must never be called: Talos v1.14's etcd service has no restart operation through the
+// API (hardware, ADR 0120 amendment); a member loads a new CA with a node reboot.
 func (c *rotClient) ServiceRestart(_ context.Context, id string) error {
-	Expect(id).To(Equal(serviceEtcd), "a CA rotation restarts etcd and nothing else")
+	Fail("a CA rotation restarted the service " + id + " through the API; etcd can only be reloaded by a reboot")
 
+	return nil
+}
+
+func (c *rotClient) NodeName(context.Context) (string, error) { return c.w.nodeNames[c.name], nil }
+
+func (c *rotClient) BootID(context.Context) (string, error) {
+	return fmt.Sprintf("boot-%d", c.w.bootCount[c.name]), nil
+}
+
+func (c *rotClient) Reboot(context.Context) error {
 	pki, err := c.node.pki()
 	Expect(err).NotTo(HaveOccurred())
 
 	c.w.restarts = append(c.w.restarts, etcdRestart{node: c.name, trusted: pki.CAs, signer: pki.ServerSignedBy})
+	c.w.calls = append(c.w.calls, "reboot:"+c.name)
+
+	if !c.w.frozenBoot[c.name] {
+		c.w.bootCount[c.name]++
+	}
 
 	if c.w.afterRestart != nil {
 		c.w.afterRestart(c.name)
@@ -164,18 +192,12 @@ func (n *rotNode) aggregatorOf() (issuing []byte, trusted [][]byte) {
 }
 
 var _ = Describe("TalosOperation ca-rotation of the etcd CA and the aggregator CA", func() {
-	BeforeEach(func() {
-		DeferCleanup(func(old time.Duration) { etcdRestartSettle = old }, etcdRestartSettle)
-
-		etcdRestartSettle = 0
-	})
-
 	stagesOfEtcdOnly := []string{
 		ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDropping,
 		ichorv1alpha1.CARotationStageFinalizing, ichorv1alpha1.CARotationStageDone,
 	}
 
-	It("rotates the etcd CA alone through the three stages, restarting each member once per stage and nothing else", func() {
+	It("rotates the etcd CA alone through the three stages, rebooting each control plane once per stage and restarting no service", func() {
 		f := newCARotFixture()
 		f.targets = []string{ichorv1alpha1.CARotationTargetEtcd}
 		op := f.newOp()
@@ -189,6 +211,7 @@ var _ = Describe("TalosOperation ca-rotation of the etcd CA and the aggregator C
 		op, stages := f.runUntil(op, completed)
 		Expect(stages).To(Equal(stagesOfEtcdOnly), "no credential hand-off: nothing the operator holds changes")
 		Expect(op.Status.CARotation.EtcdRestarted).To(BeEmpty())
+		Expect(op.Status.CARotation.EtcdRebooting).To(BeEmpty())
 
 		oldFP, newFP := fp(f.old.Certs.Etcd.Crt), fp(rot.Etcd.Crt)
 		cps := f.controlPlaneNames()
@@ -201,7 +224,7 @@ var _ = Describe("TalosOperation ca-rotation of the etcd CA and the aggregator C
 		} {
 			for i, name := range cps {
 				got := f.world.restarts[stage*len(cps)+i]
-				Expect(got.node).To(Equal(name), "members are restarted one at a time, in order")
+				Expect(got.node).To(Equal(name), "control planes are rebooted one at a time, in order")
 				Expect(got.trusted).To(Equal(want.trusted), "stage %d: the member loads the stage's trust", stage)
 				Expect(got.signer).To(Equal(want.signer), "stage %d: the member loads the stage's signer", stage)
 			}
@@ -243,35 +266,7 @@ var _ = Describe("TalosOperation ca-rotation of the etcd CA and the aggregator C
 		Expect(cond.Message).To(ContainSubstring("the etcd CAs are replaced"))
 	})
 
-	It("restarts nothing while a member is unhealthy, and goes on by itself once it is healthy", func() {
-		f := newCARotFixture()
-		f.targets = []string{ichorv1alpha1.CARotationTargetEtcd}
-		f.world.afterRestart = func(node string) {
-			if len(f.world.restarts) == 1 {
-				f.world.etcdUnhealthy[node] = true
-			}
-		}
-
-		op := f.newOp()
-
-		for range 12 {
-			op = f.step(op)
-		}
-
-		Expect(f.world.restarts).To(HaveLen(1), "no second member is restarted while the first is not healthy")
-		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
-
-		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation)
-		Expect(cond.Reason).To(Equal(reasonCARotationBlocked))
-		Expect(cond.Message).To(ContainSubstring("no member is restarted"))
-
-		f.world.etcdUnhealthy = map[string]bool{}
-
-		f.runUntil(op, completed)
-		Expect(f.world.restarts).To(HaveLen(9))
-	})
-
-	It("restarts no member before the node holds the etcd PKI of the stage", func() {
+	It("reboots no control plane before the node holds the etcd PKI of the stage", func() {
 		f := newCARotFixture()
 		f.targets = []string{ichorv1alpha1.CARotationTargetEtcd}
 		f.world.pkiStale[f.controlPlaneNames()[0]] = true

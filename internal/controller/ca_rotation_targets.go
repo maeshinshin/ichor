@@ -35,16 +35,18 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
+	"github.com/maeshinshin/ichor/pkg/storage"
 )
 
 const (
 	// serviceEtcd is the Talos service id of etcd.
 	serviceEtcd = "etcd"
 
-	reasonCARotationRestartingEtcd     = "RestartingEtcd"
+	reasonCARotationRebootingEtcd      = "RebootingEtcd"
 	reasonCARotationSettlingAggregator = "SettlingAggregator"
 
 	// extensionAuthConfigMap is where kube-apiserver publishes the CAs extension API servers must accept
@@ -53,9 +55,10 @@ const (
 	extensionAuthCAKey     = "requestheader-client-ca-file"
 )
 
-// etcdRestartSettle is how long after one etcd member was restarted the next health check waits:
-// Talos reports the old process healthy until it has stopped. A variable so tests need not wait.
-var etcdRestartSettle = 15 * time.Second
+// etcdRebootRetry is how long a control plane may keep reporting the boot it was asked to leave before the
+// reboot request is made again: a controller killed between recording the request and sending it would
+// otherwise wait for ever. A variable so tests need not wait.
+var etcdRebootRetry = 5 * time.Minute
 
 // AggregatorCAPublishedFunc reports whether kube-apiserver already publishes the CA with the given
 // fingerprint to extension API servers (the ConfigMap kube-system/extension-apiserver-authentication).
@@ -320,10 +323,14 @@ func sameSet(a, b []string) bool {
 	return slices.Equal(x, y)
 }
 
-// rollEtcd restarts the etcd member of each control plane, once and one at a time, after a pass has
-// put the stage's etcd CA field on every machine, so that each member loads the trust and the
-// certificates of the stage (ADR 0120). wait is true while a member is being waited for or the roll
-// is blocked; it is false once every member has been restarted and etcd is healthy again.
+// rollEtcd reboots each control plane, once and one at a time, after a pass has put the stage's etcd CA
+// field on every machine, so that each member loads the trust and the certificates of the stage (ADR 0120).
+// Talos v1.14 neither restarts etcd on a configuration change nor lets an API call restart the service
+// (`service "etcd" doesn't support restart operation via API`); its documentation says to reboot the node.
+// The reboot is gated like the node action: etcd whole and the stage's PKI on every node before, the node
+// back on a new boot, Ready, its etcd healthy and its PKI the stage's after. wait is true while a node is
+// being waited for or the roll is blocked; it is false once every control plane has been rebooted and etcd is
+// healthy again.
 func (c *caRun) rollEtcd(
 	ctx context.Context, stage string, machines []*ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
 ) (res ctrl.Result, wait bool, err error) {
@@ -334,58 +341,244 @@ func (c *caRun) rollEtcd(
 	cps := controlPlanes(machines)
 	rs := c.op.Status.CARotation
 
-	if at := rs.EtcdRestartedAt; at != nil {
-		if left := etcdRestartSettle - time.Since(at.Time); left > 0 {
-			return ctrl.Result{RequeueAfter: left}, true, nil
-		}
+	if rs.EtcdRebooting != "" {
+		res, err = c.awaitEtcdReboot(ctx, stage, cps, machines[0], bundle)
+
+		return res, true, err
 	}
 
 	if err := c.etcdHealthy(ctx, cps, bundle, c.etcdExpected()); err != nil {
-		res, rerr := c.retry(ctx, fmt.Sprintf("stage %s: etcd is not ready for the next step, so no member is restarted: %v", stage, err))
+		res, rerr := c.retry(ctx, fmt.Sprintf("stage %s: etcd is not ready for the next step, so no control plane is rebooted: %v", stage, err))
 
 		return res, true, rerr
 	}
 
-	var next *ichorv1alpha1.TalosMachine
+	if err := c.nodesReady(ctx, machines[0], bundle); err != nil {
+		res, rerr := c.retry(ctx, fmt.Sprintf("stage %s: no control plane is rebooted: %v", stage, err))
 
-	for _, m := range cps {
-		if !slices.Contains(rs.EtcdRestarted, m.Name) {
-			next = m
-
-			break
-		}
+		return res, true, rerr
 	}
 
-	if next == nil {
+	i := slices.IndexFunc(cps, func(m *ichorv1alpha1.TalosMachine) bool { return !slices.Contains(rs.EtcdRestarted, m.Name) })
+	if i < 0 {
 		return ctrl.Result{}, false, nil
 	}
 
-	err = c.withNode(ctx, next, bundle, func(ctx context.Context, talos TalosClient) error {
-		// A leader that restarts costs an election; handing it over first makes it shorter. Best effort:
-		// the restart is safe without it.
-		if st, serr := talos.EtcdStatus(ctx); serr == nil && st.IsLeader() && len(cps) > 1 {
+	res, err = c.rebootEtcdMember(ctx, stage, cps[i], len(cps), bundle)
+
+	return res, true, err
+}
+
+// rebootEtcdMember cordons and drains m's node, records the boot it leaves in the status and only then hands
+// etcd leadership over and asks it to reboot, so a controller killed in between waits for the boot to change
+// instead of rebooting the node twice.
+func (c *caRun) rebootEtcdMember(
+	ctx context.Context, stage string, m *ichorv1alpha1.TalosMachine, total int, bundle *secrets.Bundle,
+) (ctrl.Result, error) {
+	rs := c.op.Status.CARotation
+
+	var bootID, node string
+
+	err := c.withNode(ctx, m, bundle, func(ctx context.Context, talos TalosClient) error {
+		var err error
+
+		if bootID, err = talos.BootID(ctx); err != nil {
+			return fmt.Errorf("reading the boot ID before the reboot: %w", err)
+		}
+
+		node, err = c.nodeNameOf(ctx, talos, m)
+
+		return err
+	})
+	if err != nil {
+		return c.retry(ctx, fmt.Sprintf("stage %s: rebooting %q did not start: %v", stage, m.Name, err))
+	}
+
+	// The drain and the storage hook can take longer than a dial, so they get the reconcile's own context.
+	pending, err := c.evacuateAndDrain(ctx, m, node)
+	if err != nil {
+		return c.retry(ctx, fmt.Sprintf("stage %s: rebooting %q did not start: %v", stage, m.Name, err))
+	}
+
+	if pending != "" {
+		return ctrl.Result{RequeueAfter: operationRequeueInterval}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress,
+			metav1.ConditionTrue, reasonCARotationRebootingEtcd, fmt.Sprintf("stage %s: %s", stage, pending))
+	}
+
+	now := metav1.Now()
+	rs.EtcdRebooting, rs.EtcdRebootBootID, rs.EtcdRestartedAt = m.Name, bootID, &now
+
+	if err := c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue, reasonCARotationRebootingEtcd,
+		fmt.Sprintf("stage %s: rebooting control plane %q (%d of %d) to load the etcd CA", stage, m.Name, len(rs.EtcdRestarted)+1, total)); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	err = c.withNode(ctx, m, bundle, func(ctx context.Context, talos TalosClient) error {
+		// A leader that reboots costs an election; handing it over first makes it shorter. Best effort: the
+		// reboot is safe without it.
+		if st, serr := talos.EtcdStatus(ctx); serr == nil && st.IsLeader() && total > 1 {
 			_ = talos.EtcdForfeitLeadership(ctx)
 		}
 
 		callCtx, cancel := context.WithTimeout(ctx, rebootCallTimeout)
 		defer cancel()
 
-		return talos.ServiceRestart(callCtx, serviceEtcd)
+		return talos.Reboot(callCtx)
 	})
 	if err != nil {
-		res, rerr := c.retry(ctx, fmt.Sprintf("stage %s: restarting etcd on %q failed: %v", stage, next.Name, err))
+		// Nothing was rebooted: forget the request so the next reconcile makes it again, and let the node schedule pods.
+		rs.EtcdRebooting, rs.EtcdRebootBootID = "", ""
+		_ = c.uncordon(ctx, m, node)
 
-		return res, true, rerr
+		return c.retry(ctx, fmt.Sprintf("stage %s: the reboot request to %q failed: %v", stage, m.Name, err))
 	}
 
-	now := metav1.Now()
-	rs.EtcdRestarted = append(rs.EtcdRestarted, next.Name)
-	rs.EtcdRestartedAt = &now
+	return ctrl.Result{RequeueAfter: operationRequeueInterval}, nil
+}
 
-	return ctrl.Result{RequeueAfter: etcdRestartSettle}, true, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress,
-		metav1.ConditionTrue, reasonCARotationRestartingEtcd,
-		fmt.Sprintf("stage %s: restarted etcd on %q (%d of %d); the next member is restarted once etcd is healthy again",
-			stage, next.Name, len(rs.EtcdRestarted), len(cps)))
+// awaitEtcdReboot waits for the control plane in status.etcdRebooting to come back on a new boot, with its
+// Node Ready and etcd healthy on the PKI of the stage on every control plane, then lets the next one go.
+func (c *caRun) awaitEtcdReboot(
+	ctx context.Context, stage string, cps []*ichorv1alpha1.TalosMachine, first *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
+) (ctrl.Result, error) {
+	rs := c.op.Status.CARotation
+
+	i := slices.IndexFunc(cps, func(m *ichorv1alpha1.TalosMachine) bool { return m.Name == rs.EtcdRebooting })
+	if i < 0 {
+		rs.EtcdRebooting, rs.EtcdRebootBootID = "", ""
+
+		return c.retry(ctx, fmt.Sprintf("stage %s: the control plane being rebooted is no longer a machine of the cluster", stage))
+	}
+
+	m := cps[i]
+
+	// waiting keeps the operation InProgress while the node's effect has not shown, and pauses it past the
+	// node action timeout, like a reboot node action.
+	waiting := func(why string) (ctrl.Result, error) {
+		if rs.EtcdRestartedAt != nil && time.Since(rs.EtcdRestartedAt.Time) > nodeActionTimeout {
+			return c.retry(ctx, fmt.Sprintf("stage %s: %q did not come back within %s: %s", stage, m.Name, nodeActionTimeout, why))
+		}
+
+		return ctrl.Result{RequeueAfter: operationRequeueInterval}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress,
+			metav1.ConditionTrue, reasonCARotationRebootingEtcd, fmt.Sprintf("stage %s: %q: %s", stage, m.Name, why))
+	}
+
+	var (
+		bootID, node string
+	)
+
+	if err := c.withNode(ctx, m, bundle, func(ctx context.Context, talos TalosClient) error {
+		var err error
+
+		if bootID, err = talos.BootID(ctx); err != nil {
+			return err
+		}
+
+		node, err = c.nodeNameOf(ctx, talos, m)
+
+		return err
+	}); err != nil {
+		return waiting("the node does not answer yet: " + err.Error())
+	}
+
+	if bootID == rs.EtcdRebootBootID {
+		// Still on the boot it was asked to leave. A request that was recorded but never sent (the controller
+		// died in between) would wait for ever, so after etcdRebootRetry it is made again.
+		if rs.EtcdRestartedAt != nil && time.Since(rs.EtcdRestartedAt.Time) > etcdRebootRetry {
+			rs.EtcdRebooting, rs.EtcdRebootBootID = "", ""
+
+			return ctrl.Result{RequeueAfter: caRotationNextStage}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress,
+				metav1.ConditionTrue, reasonCARotationRebootingEtcd,
+				fmt.Sprintf("stage %s: %q has not rebooted after %s; asking again", stage, m.Name, etcdRebootRetry))
+		}
+
+		return waiting("the node has not rebooted yet")
+	}
+
+	if err := c.nodesReady(ctx, first, bundle); err != nil {
+		return waiting("the node is back but " + err.Error())
+	}
+
+	if err := c.etcdHealthy(ctx, cps, bundle, c.etcdExpected()); err != nil {
+		return waiting("the node is back but etcd is not healthy yet: " + err.Error())
+	}
+
+	if err := c.uncordon(ctx, m, node); err != nil {
+		return waiting("uncordoning the node: " + err.Error())
+	}
+
+	rs.EtcdRestarted = append(rs.EtcdRestarted, m.Name)
+	rs.EtcdRebooting, rs.EtcdRebootBootID = "", ""
+
+	return ctrl.Result{RequeueAfter: caRotationNextStage}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress,
+		metav1.ConditionTrue, reasonCARotationRebootingEtcd,
+		fmt.Sprintf("stage %s: rebooted %q (%d of %d); etcd is healthy again", stage, m.Name, len(rs.EtcdRestarted), len(cps)))
+}
+
+// nodeNameOf is the Kubernetes Node of m, or "" when neither a drain nor a storage hook is wired and the
+// name is not needed.
+func (c *caRun) nodeNameOf(ctx context.Context, talos TalosClient, m *ichorv1alpha1.TalosMachine) (string, error) {
+	if c.r.KubeClient == nil && c.r.Evacuator == nil {
+		return "", nil
+	}
+
+	return resolveNodeName(ctx, c.r.Client, talos, m)
+}
+
+// evacuateAndDrain runs, before the node is rebooted, what a reboot node action runs: the storage hook, then
+// cordon and drain. pending is a non-empty explanation while either is still going.
+func (c *caRun) evacuateAndDrain(ctx context.Context, m *ichorv1alpha1.TalosMachine, node string) (pending string, err error) {
+	if node == "" {
+		return "", nil
+	}
+
+	progress, err := evacuateMachine(ctx, c.r.Client, c.r.Evacuator, c.cluster, m, node, "rebooting")
+	if err != nil {
+		return "", err
+	}
+
+	switch progress {
+	case storage.EvacuationWaiting:
+		return fmt.Sprintf("waiting for storage replicas to move off node %q", node), nil
+	case storage.EvacuationPaused:
+		return "", fmt.Errorf("evacuating %q timed out with storage replicas still remaining", node)
+	}
+
+	if c.r.KubeClient != nil {
+		drained, err := drainForReboot(ctx, c.r.KubeClient, node)
+		if err != nil {
+			_ = c.uncordon(ctx, m, node)
+
+			return "", err
+		}
+
+		if !drained {
+			return fmt.Sprintf("draining node %q (a PodDisruptionBudget may be holding pods back)", node), nil
+		}
+	}
+
+	return "", nil
+}
+
+// uncordon undoes evacuateAndDrain for the node: pods may schedule on it again and the storage evacuation
+// ends. An empty node name has nothing to undo.
+func (c *caRun) uncordon(ctx context.Context, m *ichorv1alpha1.TalosMachine, node string) error {
+	if node == "" {
+		return nil
+	}
+
+	var uncordonErr error
+	if c.r.KubeClient != nil {
+		uncordonErr = uncordonAfterReboot(ctx, c.r.KubeClient, node)
+	}
+
+	// Decide from the machine as it is stored now, not the copy this reconcile read before the evacuation began.
+	fresh := &ichorv1alpha1.TalosMachine{}
+	if err := readerOrClient(c.r.APIReader, c.r.Client).Get(ctx, client.ObjectKeyFromObject(m), fresh); err != nil {
+		return errors.Join(uncordonErr, err)
+	}
+
+	return errors.Join(uncordonErr, endMachineEvacuation(ctx, c.r.Client, c.r.Evacuator, c.cluster, fresh, node))
 }
 
 // awaitAggregator holds the rotation, after Accepting, until kube-apiserver publishes the new aggregator

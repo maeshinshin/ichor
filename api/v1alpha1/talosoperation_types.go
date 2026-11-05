@@ -688,15 +688,27 @@ type TalosOperationCARotationStatus struct {
 	// +optional
 	Certificates []CARotationCertificate `json:"certificates,omitempty"`
 
-	// etcdRestarted names the control planes whose etcd was restarted in the current stage, in the order
-	// they were restarted (ADR 0120). Emptied when the stage changes.
+	// etcdRestarted names the control planes that were rebooted, and are healthy again, in the current
+	// stage, in the order they were rebooted (ADR 0120: Talos does not restart etcd on a configuration
+	// change and its etcd service has no restart API, so a member loads the stage's CA with a node
+	// reboot). Emptied when the stage changes.
 	// +listType=set
 	// +optional
 	EtcdRestarted []string `json:"etcdRestarted,omitempty"`
 
-	// etcdRestartedAt is when the last etcd member was restarted; the next one waits after it.
+	// etcdRestartedAt is when the reboot of the control plane in etcdRebooting, or the last one, was requested.
 	// +optional
 	EtcdRestartedAt *metav1.Time `json:"etcdRestartedAt,omitempty"`
+
+	// etcdRebooting is the control plane whose reboot was requested and is not yet over; empty between
+	// two reboots.
+	// +optional
+	EtcdRebooting string `json:"etcdRebooting,omitempty"`
+
+	// etcdRebootBootID is the boot ID etcdRebooting had when its reboot was requested; the reboot has
+	// happened once the node reports another one. Not a secret.
+	// +optional
+	EtcdRebootBootID string `json:"etcdRebootBootID,omitempty"`
 }
 
 // CARotationCertificate is one rotated CA. Fingerprints are the SHA-256 of the certificate's DER,

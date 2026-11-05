@@ -92,6 +92,14 @@ type rotWorld struct {
 	pkiStale      map[string]bool
 	// memberCount is how many etcd members every node's member list reports.
 	memberCount int
+	// bootCount is each node's boot number (its boot ID is "boot-<n>"); frozenBoot keeps a node's boot ID
+	// from changing when it is rebooted, as a reboot that has not happened yet; leader marks the node
+	// that leads etcd; calls is every forfeit and reboot in order ("forfeit:<node>", "reboot:<node>").
+	bootCount  map[string]int
+	frozenBoot map[string]bool
+	leader     map[string]bool
+	nodeNames  map[string]string
+	calls      []string
 }
 
 func parseCerts(crt []byte) []*stdx509.Certificate {
@@ -268,6 +276,7 @@ func newCARotFixtureCPs(controlPlanes int) *caRotFixture {
 	f.world = &rotWorld{
 		nodes: map[string]*rotNode{}, secretName: f.secret.Name, versionErr: map[string]error{},
 		etcdUnhealthy: map[string]bool{}, pkiStale: map[string]bool{}, memberCount: controlPlanes,
+		bootCount: map[string]int{}, frozenBoot: map[string]bool{}, leader: map[string]bool{}, nodeNames: map[string]string{},
 	}
 
 	for i := 1; i <= controlPlanes; i++ {

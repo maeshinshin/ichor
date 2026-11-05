@@ -193,7 +193,9 @@ func (p Preset) valuesFor(kubeProxy cni.KubeProxyMode) Values {
 		},
 	}
 
-	pinned := []*secretsNamespaceOf{&v.IngressController, &v.GatewayAPI, &v.EnvoyConfig, &v.BGPControlPlane, &v.TLS.secretsNamespaceOf}
+	pinned := []*secretsNamespaceOf{
+		&v.IngressController, &v.GatewayAPI, &v.EnvoyConfig, &v.BGPControlPlane, &v.TLS.secretsNamespaceOf,
+	}
 
 	for _, b := range pinned {
 		b.SecretsNamespace.Name = ciliumSecretsNamespace

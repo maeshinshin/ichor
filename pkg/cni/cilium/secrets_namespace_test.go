@@ -38,6 +38,11 @@ var secretsNamespaceKeys = []string{
 	"tls.secretsNamespace.name",
 }
 
+// secretsFeatures are the chart features whose Roles read Secrets.
+var secretsFeatures = []string{"ingressController", featureGatewayAPI, "envoyConfig", "bgpControlPlane"}
+
+const featureGatewayAPI = "gatewayAPI"
+
 // A user value for a secretsNamespace name is refused, whatever it is, so the Roles named
 // cilium-*-secrets can only land in Cilium's own namespace.
 func TestValidateValues_SecretsNamespacesArePinned(t *testing.T) {
@@ -106,7 +111,7 @@ func TestOwnedKeyConflicts_SecretsNamespaceOfAFeatureThatIsOn(t *testing.T) {
 // outside cilium-secrets.
 func TestBootstrapManifest_SecretsRolesStayInCiliumsNamespace(t *testing.T) {
 	user := map[string]any{}
-	for _, f := range []string{"ingressController", keyGatewayAPI, "envoyConfig", "bgpControlPlane"} {
+	for _, f := range secretsFeatures {
 		user[f] = map[string]any{keyEnabled: true}
 	}
 
@@ -166,7 +171,7 @@ func TestEffectiveValues_ReadSecretsOnlyFromSecretsNamespace(t *testing.T) {
 // The rendered agent ClusterRole holds no get, list or watch on Secrets, with or without the features
 // whose own Roles read Secrets.
 func TestBootstrapManifest_AgentClusterRoleHasNoClusterWideSecrets(t *testing.T) {
-	for _, features := range [][]string{nil, {"ingressController", "gatewayAPI", "envoyConfig", "bgpControlPlane"}} {
+	for _, features := range [][]string{nil, secretsFeatures} {
 		user := map[string]any{}
 		for _, f := range features {
 			user[f] = map[string]any{keyEnabled: true}

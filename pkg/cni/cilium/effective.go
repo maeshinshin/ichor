@@ -54,7 +54,8 @@ var OwnedKeys = map[string]string{
 	keySecretsBackend:  clusterWideSecretsReason,
 }
 
-const clusterWideSecretsReason = "the Cilium agent runs on every node and may read Secrets only in cilium-secrets, not cluster-wide"
+const clusterWideSecretsReason = "the Cilium agent, a privileged pod on every node, may read Secrets only in " +
+	"cilium-secrets, not cluster-wide"
 
 const secretsNamespaceReason = "Cilium may read Secrets only in its own namespace, cilium-secrets"
 

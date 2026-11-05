@@ -39,6 +39,7 @@ import (
 const (
 	provSerial = "serial-1"
 	provMAC    = "aa:bb:cc:dd:ee:01"
+	provDisk   = "/dev/vda"
 )
 
 var errUnauthenticated = errors.New("x509: certificate signed by unknown authority")
@@ -60,7 +61,7 @@ var _ = Describe("TalosMachineReconciler provisioning a node in maintenance mode
 		wipe := false
 		cfg := minimalConfigSkeleton()
 		cfg.MachineConfig.MachineType = role
-		cfg.MachineConfig.MachineInstall = &typedconfig.InstallConfig{InstallDisk: "/dev/vda", InstallWipe: &wipe}
+		cfg.MachineConfig.MachineInstall = &typedconfig.InstallConfig{InstallDisk: provDisk, InstallWipe: &wipe}
 		patch = newTestPatch(cluster.Name, layerCluster, nil, cfg)
 	}
 
@@ -291,7 +292,9 @@ var _ = Describe("TalosMachineReconciler provisioning a node in maintenance mode
 		Expect(readyCondition(got).Reason).To(Equal(reasonCurrentConfigUnavailable))
 	})
 
-	It("never probes the insecure API for a machine that has already converged", func() {
+	// A machine that has converged and then answers in maintenance mode lost its disk: it is sent its
+	// configuration again (talosmachine_reprovision_test.go); only an unanswering node is just reported.
+	It("only reports a machine that has already converged when neither API answers", func() {
 		setup(roleWorker)
 		installDiskPatch(roleWorker)
 
@@ -299,6 +302,7 @@ var _ = Describe("TalosMachineReconciler provisioning a node in maintenance mode
 		got.Status.AppliedConfigHash = "something"
 		Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
 
+		maint.err = errors.New("connection refused")
 		got = reconcileOnce()
 		Expect(maint.applyCalls).To(BeEmpty())
 		Expect(readyCondition(got).Reason).To(Equal(reasonCurrentConfigUnavailable))

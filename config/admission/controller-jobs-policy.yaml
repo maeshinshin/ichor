@@ -5,7 +5,7 @@
 # lives in, one hardened container with the subcommand it runs, no hostPath, a bounded run time.
 # Enforced by the apiserver, independent of the webhook and of the controller.
 #
-# Two policies: the first is structural and needs no parameter; the second ties the image to
+# Two policies: the first is structural and needs no parameter; the second ties the image of both Jobs to
 # IchorInstallation.spec (installerRepository@digest, ADR 0122; the setting that needs the
 # ichorinstallations/version right), and does nothing while there is no IchorInstallation.
 #
@@ -108,28 +108,18 @@ spec:
     - name: from-controller
       expression: request.userInfo.username == 'system:serviceaccount:ichor-system:ichor-controller-manager'
   variables:
-    - name: sa
-      expression: >-
-        has(object.spec.template.spec.serviceAccountName) ? object.spec.template.spec.serviceAccountName : ''
     - name: repo
       expression: params.spec.installerRepository
   validations:
-    # The installer Job runs by digest (ADR 0122): the controller verified the signature of that digest
-    # before it created the Job, so a tag, which can move, is refused. A pin in spec.installerDigest is
-    # the only digest then.
+    # Both Jobs run by digest (ADR 0122): the controller verified the signature of that digest before it
+    # created the Job (the installer's, and the Cilium Helm Job's since the amendment of 2026-11-05), so a
+    # tag, which can move, is refused. A pin in spec.installerDigest is the only digest then.
     - expression: >-
-        variables.sa != 'ichor-installer' || object.spec.template.spec.containers.all(c,
+        object.spec.template.spec.containers.all(c,
           (has(params.spec.installerDigest) && size(params.spec.installerDigest) > 0)
             ? c.image == variables.repo + '@' + params.spec.installerDigest
             : (c.image.startsWith(variables.repo + '@sha256:') && size(c.image) == size(variables.repo) + 72))
-      message: the installer Job image must be IchorInstallation spec.installerRepository@digest (spec.installerDigest when set)
-      reason: Forbidden
-    # The Cilium Helm Job runs the installer image of the installed version (ADR 0122, residual risk).
-    - expression: >-
-        variables.sa != 'ichor-cni' || object.spec.template.spec.containers.all(c,
-          c.image == variables.repo + ':' + params.spec.version ||
-          c.image.startsWith(variables.repo + '@sha256:'))
-      message: the Cilium Job image must be IchorInstallation spec.installerRepository:spec.version
+      message: the Job image must be IchorInstallation spec.installerRepository@digest (spec.installerDigest when set)
       reason: Forbidden
 ---
 apiVersion: admissionregistration.k8s.io/v1

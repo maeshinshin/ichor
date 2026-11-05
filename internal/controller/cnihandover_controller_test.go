@@ -237,7 +237,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 	var r *CNIHandoverReconciler
 
 	BeforeEach(func() {
-		r = &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace}
+		r = &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace, Images: &fakeInstallerImages{digest: testInstallerDigest}}
 		createInstallation("v0.2.0")
 	})
 

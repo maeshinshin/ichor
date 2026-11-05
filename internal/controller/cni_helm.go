@@ -240,10 +240,11 @@ func cniHelmJobName(cluster *ichorv1alpha1.TalosCluster, valuesHash string) stri
 // run. It is deleted and the next call starts a new one. A zero since takes any Job as it is.
 //
 // check (nil: none) runs before a Job is created, never for one that exists; its error is returned as a
-// *CNIInvalidValuesError and no Job is started (ADR 0099, decision 4).
+// *CNIInvalidValuesError and no Job is started (ADR 0099, decision 4). The installer image is then pinned to
+// a verified digest by images (cniJobImage); a refusal is an *installerImageError and no Job is started.
 func AdvanceCNIHelmJob(
 	ctx context.Context, c client.Client, ns string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, nodes int,
-	inst *ichorv1alpha1.IchorInstallation, check func(context.Context) error, salt string, since time.Time,
+	inst *ichorv1alpha1.IchorInstallation, images InstallerImages, check func(context.Context) error, salt string, since time.Time,
 ) (bool, error) {
 	if mode == "" {
 		mode = cni.KubeProxyEnabled
@@ -268,8 +269,15 @@ func AdvanceCNIHelmJob(
 			}
 		}
 
+		// The image is resolved and verified before anything is created: a refusal is an *installerImageError
+		// and no Job starts.
+		image, err := cniJobImage(ctx, images, inst)
+		if err != nil {
+			return false, err
+		}
+
 		// AlreadyExists: the cache has not seen the Job just created.
-		return false, client.IgnoreAlreadyExists(c.Create(ctx, newCNIHelmJob(ns, name, cluster, mode, inst, hash, takeoverJob(cluster), nodes)))
+		return false, client.IgnoreAlreadyExists(c.Create(ctx, newCNIHelmJob(ns, name, cluster, mode, image, hash, takeoverJob(cluster), nodes)))
 	case err != nil:
 		return false, err
 	}
@@ -333,7 +341,7 @@ func takeoverJob(cluster *ichorv1alpha1.TalosCluster) bool {
 // its API access while Cilium restarts.
 func newCNIHelmJob(
 	storageNS, name string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode,
-	inst *ichorv1alpha1.IchorInstallation, valuesHash string, takeover bool, nodes int,
+	image, valuesHash string, takeover bool, nodes int,
 ) *batchv1.Job {
 	// One attempt, as for the installer: an upgrade that failed has been rolled back, and
 	// running it again without anyone looking at why would only repeat it. The caller
@@ -363,7 +371,7 @@ func newCNIHelmJob(
 		map[string]string{CNIValuesHashAnnotation: valuesHash},
 		corev1.Container{
 			Name:  "cni",
-			Image: cniJobImage(inst),
+			Image: image,
 			Args:  args,
 			Env: []corev1.EnvVar{
 				{Name: "KUBERNETES_SERVICE_HOST", Value: kubePrismHost},
@@ -386,18 +394,29 @@ func newCNIHelmJob(
 	return job
 }
 
-// cniJobImage is the installer image the Cilium Helm Job runs: the digest the last Ichor upgrade pinned (and
-// verified, or recorded as skipped) when that record is for the installed version and repository, so this Job
-// runs the very image the installer did and not whatever the tag points at now (ADR 0122 follow-up). Without
-// such a record (a fresh install, a Helm-only install, a hand-edited version) it is the tag, as the apiserver's
-// Job-image policy also allows.
-func cniJobImage(inst *ichorv1alpha1.IchorInstallation) string {
+// cniJobImage is the installer image the Cilium Helm Job runs, always repository@digest and always one the
+// controller has checked (ADR 0122, amendment 2026-11-05): the digest the last Ichor upgrade pinned (and
+// verified, or recorded as skipped) when that record is for the installed version and repository (and is the
+// pin, when one is set), so this Job runs the very image the installer did. Without such a record (a fresh
+// install, a Helm-only install, a hand-edited version) the tag is resolved and verified here exactly as an
+// upgrade does (pinInstallerImage: the installation's signature mode, skip included). The Job's
+// ServiceAccount is near cluster-admin, so a tag, which can move, is never run; the apiserver's Job-image
+// policy refuses one as well.
+func cniJobImage(ctx context.Context, images InstallerImages, inst *ichorv1alpha1.IchorInstallation) (string, error) {
 	if rec := inst.Status.InstallerImage; rec != nil && rec.Digest != "" &&
-		rec.Version == inst.Spec.Version && rec.Repository == inst.Spec.InstallerRepository {
-		return inst.Spec.InstallerRepository + "@" + rec.Digest
+		rec.Version == inst.Spec.Version && rec.Repository == inst.Spec.InstallerRepository &&
+		(inst.Spec.InstallerDigest == "" || inst.Spec.InstallerDigest == rec.Digest) {
+		return inst.Spec.InstallerRepository + "@" + rec.Digest, nil
 	}
 
-	return inst.Spec.InstallerRepository + ":" + inst.Spec.Version
+	// ponytail: not recorded in status.installerImage (a Helm-only install has no IchorInstallation to
+	// record in); each new Job verifies again.
+	img, err := pinInstallerImage(ctx, images, inst)
+	if err != nil {
+		return "", err
+	}
+
+	return inst.Spec.InstallerRepository + "@" + img.Digest, nil
 }
 
 // defaultInstallerRepository is the API default of IchorInstallation.spec.installerRepository.

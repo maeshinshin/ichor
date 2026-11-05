@@ -545,7 +545,7 @@ admission:
   enabled: true
   ## The repository the controller's Jobs (the installer and the Cilium Helm run) may pull their
   ## image from, when there is no IchorInstallation to say (a chart-only install; ADR 0108). With
-  ## an IchorInstallation, the image must be its spec.installerRepository:spec.version instead.
+  ## an IchorInstallation, the image must be its spec.installerRepository@digest instead.
   ## Set it to your mirror if you mirror the installer image; empty turns this rule off.
   jobImageRepository: ghcr.io/maeshinshin/ichor-installer
 

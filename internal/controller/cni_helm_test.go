@@ -75,7 +75,7 @@ func TestCNIHelmJobShape(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	job := newCNIHelmJob("ichor-system", cniHelmJobName(cluster, hash), cluster, cni.KubeProxyEnabled, cniTestInstallation(), hash, false, 0)
+	job := newCNIHelmJob("ichor-system", cniHelmJobName(cluster, hash), cluster, cni.KubeProxyEnabled, testCNIImage, hash, false, 0)
 	pod := job.Spec.Template.Spec
 
 	// kube-system: hostNetwork is refused by Talos's default Pod Security admission (baseline) in
@@ -189,7 +189,7 @@ func TestCNIValuesHashFollowsTheNodeCount(t *testing.T) {
 	}
 
 	job := func(nodes int) string {
-		j := newCNIHelmJob("ichor-system", "j", ha, cni.KubeProxyEnabled, cniTestInstallation(), "h", false, nodes)
+		j := newCNIHelmJob("ichor-system", "j", ha, cni.KubeProxyEnabled, testCNIImage, "h", false, nodes)
 
 		return strings.Join(j.Spec.Template.Spec.Containers[0].Args, " ")
 	}
@@ -288,7 +288,7 @@ func setCNIJobCondition(t *testing.T, c client.Client, ns, name string, ct batch
 
 // advanceTestJob is one AdvanceCNIHelmJob call for cluster's spec mode, with no node count, salt or since.
 func advanceTestJob(c client.Client, cluster *ichorv1alpha1.TalosCluster) (bool, error) {
-	return AdvanceCNIHelmJob(context.Background(), c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), nil, "", time.Time{})
+	return AdvanceCNIHelmJob(context.Background(), c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), &fakeInstallerImages{digest: testInstallerDigest}, nil, "", time.Time{})
 }
 
 // First call creates the Job, later calls report it, and a values change is a new Job.
@@ -405,9 +405,13 @@ func TestInstallerSourceWithoutAnIchorInstallation(t *testing.T) {
 		t.Fatalf("stand-in = %+v; want the default repository at version %q", got.Spec, version.Version)
 	}
 
-	job := newCNIHelmJob("ichor-system", "j", cniTestCluster(""), cni.KubeProxyEnabled, got, "h", false, 0)
-	if img := job.Spec.Template.Spec.Containers[0].Image; img != defaultInstallerRepository+":"+version.Version {
-		t.Fatalf("Job image = %q", img)
+	// The stand-in's tag is resolved and verified before the Job: the image is that digest.
+	images := &fakeInstallerImages{digest: testInstallerDigest}
+
+	img, err := cniJobImage(ctx, images, got)
+	if err != nil || img != defaultInstallerRepository+"@"+testInstallerDigest ||
+		len(images.resolved) != 1 || images.resolved[0] != defaultInstallerRepository+":"+version.Version {
+		t.Fatalf("Job image = %q, %v (resolved %v)", img, err, images.resolved)
 	}
 
 	real := cniTestInstallation()

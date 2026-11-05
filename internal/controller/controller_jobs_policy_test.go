@@ -113,7 +113,7 @@ var _ = Describe("the controller Job policy against the real Job builders", Orde
 		cluster := &ichorv1alpha1.TalosCluster{Name: "c", Namespace: testIchorNamespace}
 
 		for i, takeover := range []bool{false, true} {
-			j := newCNIHelmJob("ichor-system", "ichor-cni-policy-"+string(rune('a'+i)), cluster, cni.KubeProxyReplaced, inst, "hash", takeover, 0)
+			j := newCNIHelmJob("ichor-system", "ichor-cni-policy-"+string(rune('a'+i)), cluster, cni.KubeProxyReplaced, inst.Spec.InstallerRepository+"@"+testInstallerDigest, "hash", takeover, 0)
 			create(j)
 		}
 	})

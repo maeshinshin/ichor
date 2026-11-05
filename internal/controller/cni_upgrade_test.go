@@ -104,7 +104,7 @@ var _ = Describe("Cilium chart upgrade", func() {
 			})
 			Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
 
-			r := &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace}
+			r := &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace, Images: &fakeInstallerImages{digest: testInstallerDigest}}
 
 			// No release record: nothing is claimed.
 			reconcileHandoverOK(r, cluster)
@@ -166,7 +166,7 @@ var _ = Describe("Cilium chart upgrade", func() {
 			hash := recorded(patch)
 			helmReleaseAt(1, "deployed", cilium.ChartVersion, effectiveValues(cluster))
 
-			r := &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace}
+			r := &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace, Images: &fakeInstallerImages{digest: testInstallerDigest}}
 
 			reconcileHandoverOK(r, cluster)
 
@@ -191,7 +191,7 @@ var _ = Describe("Cilium chart upgrade", func() {
 			recorded("v" + cilium.ChartVersion)
 			helmReleaseAt(1, "deployed", cilium.ChartVersion, effectiveValues(cluster))
 
-			r := &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace}
+			r := &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace, Images: &fakeInstallerImages{digest: testInstallerDigest}}
 
 			reconcileHandoverOK(r, cluster)
 			Expect(getCluster(cluster).Status.CNI.ImageOverride).To(BeNil())
@@ -240,7 +240,7 @@ var _ = Describe("Cilium chart upgrade", func() {
 			setReady = ciliumDaemonSet()
 			setReady(true)
 
-			adv := &cniKubeProxyAdvancer{Client: k8sClient, Reader: k8sClient, ControllerNamespace: testIchorNamespace}
+			adv := &cniKubeProxyAdvancer{Client: k8sClient, Reader: k8sClient, ControllerNamespace: testIchorNamespace, Images: &fakeInstallerImages{digest: testInstallerDigest}}
 			r = &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: adv.Advance}
 		})
 
@@ -331,7 +331,7 @@ func finishCNIJobAt(cluster *ichorv1alpha1.TalosCluster) {
 	var inst ichorv1alpha1.IchorInstallation
 	Expect(k8sClient.Get(ctx, client.ObjectKey{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
 
-	_, err := AdvanceCNIHelmJob(ctx, k8sClient, testIchorNamespace, cluster, specMode(cluster), liveNodes(), &inst, nil, "", time.Time{})
+	_, err := AdvanceCNIHelmJob(ctx, k8sClient, testIchorNamespace, cluster, specMode(cluster), liveNodes(), &inst, &fakeInstallerImages{digest: testInstallerDigest}, nil, "", time.Time{})
 	Expect(err).NotTo(HaveOccurred())
 
 	hash, err := CNIValuesHash(cluster, specMode(cluster), liveNodes())

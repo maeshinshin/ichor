@@ -494,9 +494,14 @@ func main() {
 		Namespace: ns, UIServiceName: uiServiceName,
 		RefreshLifetime: refreshLifetime, Settings: settingsReader, UserIssuer: userIssuer, ExternalURL: externalURL,
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "issuertrust")
+	// The installer image is pinned to a digest and its signature verified before the Job exists (ADR 0122); the
+	// installer Job and the Cilium Helm Job both.
+	installerImages, err := imagesig.New()
+	must(err, "Failed to create the installer image verifier")
+
 	must((&controller.CNIHandoverReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(), Kube: kubeClient,
-		Namespace: ns,
+		Namespace: ns, Images: installerImages,
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "cnihandover")
 	must((&controller.CNIDetectReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
@@ -524,15 +529,11 @@ func main() {
 		evac, kubeClient,
 	)
 
-	// The installer image is pinned to a digest and its signature verified before the Job exists (ADR 0122).
-	installerImages, err := imagesig.New()
-	must(err, "Failed to create the installer image verifier")
-
 	ichorUpgradeAdvance := controller.NewIchorUpgradeAdvancer(mgr.GetClient(), mgr.GetAPIReader(), ns, noCiliumPolicies,
 		installerImages, mgr.GetEventRecorderFor("ichor-controller")) //nolint:staticcheck // typed against record.EventRecorder, as above
 	cniKubeProxyAdvance := controller.NewCNIKubeProxyAdvancer(
 		mgr.GetClient(), mgr.GetAPIReader(), ns, controller.NewMachineryTalosClient,
-		controller.NewKubeProxyAdmin(),
+		controller.NewKubeProxyAdmin(), installerImages,
 	)
 
 	// The shutdown kind (ADR 0067) is not a rollout and has no Advance entry: the backbone

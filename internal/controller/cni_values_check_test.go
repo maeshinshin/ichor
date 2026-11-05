@@ -83,7 +83,7 @@ var _ = Describe("The Cilium values re-check before a Helm Job", func() {
 				client.PropagationPolicy(metav1.DeletePropagationBackground))).To(Succeed())
 		})
 
-		r = &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace}
+		r = &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace, Images: &fakeInstallerImages{digest: testInstallerDigest}}
 	})
 
 	It("starts no Job for bpf.masquerade with forwardKubeDNSToHost, reports InvalidValues, and runs once the values are fixed", func() {
@@ -217,7 +217,7 @@ var _ = Describe("The Cilium values re-check before a Helm Job", func() {
 		}
 		Expect(k8sClient.Create(ctx, op)).To(Succeed())
 
-		adv := &cniKubeProxyAdvancer{Client: k8sClient, Reader: k8sClient, ControllerNamespace: testIchorNamespace}
+		adv := &cniKubeProxyAdvancer{Client: k8sClient, Reader: k8sClient, ControllerNamespace: testIchorNamespace, Images: &fakeInstallerImages{digest: testInstallerDigest}}
 		or := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: adv.Advance}
 
 		mustReconcileOperation(or, op)
@@ -235,7 +235,7 @@ func TestAdvanceCNIHelmJobRunsTheCheckOnlyBeforeCreatingTheJob(t *testing.T) {
 	cluster := cniTestCluster("")
 	problem := errors.New("bpf.masquerade=true needs forwardKubeDNSToHost=false")
 	advance := func(check func(context.Context) error) (bool, error) {
-		return AdvanceCNIHelmJob(t.Context(), c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), check, "", time.Time{})
+		return AdvanceCNIHelmJob(t.Context(), c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), &fakeInstallerImages{digest: testInstallerDigest}, check, "", time.Time{})
 	}
 
 	_, err := advance(func(context.Context) error { return problem })

@@ -29,7 +29,7 @@ var _ = Describe("controller Job policy", Ordered, func() {
 		controllerUser = "system:serviceaccount:ichor-system:ichor-controller-manager"
 		installerRepo  = "registry.example.org/ichor-installer"
 		installerImage = installerRepo + "@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-		cniImage       = installerRepo + ":v0.0.1"
+		cniImage       = installerImage
 		nsInstaller    = "ichor-system"
 		nsCNI          = "kube-system"
 		cniSub         = "cni"
@@ -195,7 +195,7 @@ var _ = Describe("controller Job policy", Ordered, func() {
 
 	// The image follows IchorInstallation.spec (a mirror or private registry is a documented setting
 	// that needs ichorinstallations/version); without one the structural rules above still hold.
-	// The installer Job runs by digest (ADR 0122); the Cilium Job keeps repository:version.
+	// Both Jobs run by digest (ADR 0122; the Cilium Job since its amendment of 2026-11-05).
 	Context("with an IchorInstallation", func() {
 		var inst *IchorInstallation
 
@@ -230,10 +230,17 @@ var _ = Describe("controller Job policy", Ordered, func() {
 			}
 		})
 
-		It("admits the Cilium Job at repository:version only", func() {
+		It("admits the Cilium Job at repository@digest only", func() {
 			Expect(controller.Create(context.Background(), cniJob())).To(Succeed())
 
-			for _, image := range []string{"evil.example/x:v0.0.1", installerRepo + ":v9.9.9", installerRepo} {
+			for _, image := range []string{
+				"evil.example/x@sha256:" + strings.Repeat("a", 64),
+				installerRepo + ":v0.0.1", // a tag, even the right one, can move
+				installerRepo + ":v9.9.9",
+				installerRepo,
+				installerRepo + "@sha256:abc",
+				installerRepo + "@sha256:" + strings.Repeat("a", 64) + "x",
+			} {
 				j := cniJob()
 				j.Spec.Template.Spec.Containers[0].Image = image
 				Expect(controller.Create(context.Background(), j)).NotTo(Succeed(), image)
@@ -252,6 +259,13 @@ var _ = Describe("controller Job policy", Ordered, func() {
 			}, "30s", "100ms").ShouldNot(Succeed())
 
 			j := installer()
+			j.Spec.Template.Spec.Containers[0].Image = installerRepo + "@" + pin
+			Expect(controller.Create(context.Background(), j)).To(Succeed())
+
+			// The Cilium Job follows the same pin.
+			Expect(controller.Create(context.Background(), cniJob())).NotTo(Succeed())
+
+			j = cniJob()
 			j.Spec.Template.Spec.Containers[0].Image = installerRepo + "@" + pin
 			Expect(controller.Create(context.Background(), j)).To(Succeed())
 		})

@@ -19,11 +19,9 @@ package cilium
 import "github.com/maeshinshin/ichor/pkg/cni"
 
 // Chart coordinates for the upstream Cilium Helm chart. The bootstrap renders
-// the copy embedded at chart/cilium-<ChartVersion>.tgz (render.go); Argo CD
-// pulls the same version from the repo.
+// the copy embedded at chart/cilium-<ChartVersion>.tgz (render.go).
 const (
-	ChartRepoURL = "https://helm.cilium.io/"
-	ChartName    = "cilium"
+	ChartName = "cilium"
 
 	// ChartVersion is the Cilium release the values below were written
 	// against. Bump it alongside the values when moving to a newer Cilium.

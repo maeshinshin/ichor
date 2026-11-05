@@ -74,7 +74,7 @@ var _ = Describe("CniService", func() {
 		for user, rules := range map[string][]rbacv1.PolicyRule{
 			cniViewerUser:   {read, {APIGroups: createOps.APIGroups, Resources: createOps.Resources, Verbs: []string{cniVerbList}}},
 			cniOperatorUser: {read, write, createOps},
-			cniAdminUser:    {read, write, createOps, {APIGroups: createOps.APIGroups, Resources: []string{"talosclusters/cilium-values"}, Verbs: []string{"update"}}},
+			cniAdminUser:    {read, write, createOps, {APIGroups: createOps.APIGroups, Resources: []string{"talosclusters/cilium-values"}, Verbs: []string{verbUpdate}}},
 		} {
 			name := "cni-test-" + user
 			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRole{Name: name, Rules: rules}))).To(Succeed())

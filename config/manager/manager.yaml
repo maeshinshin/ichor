@@ -101,6 +101,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.serviceAccountName
+        - name: GOMEMLIMIT
+          value: 400MiB
         ports:
         - containerPort: 8081
           name: health
@@ -125,21 +127,28 @@ spec:
             port: 8081
           initialDelaySeconds: 15
           periodSeconds: 20
+          # The probe itself is trivial; a 1 s timeout only fails when the pod is CPU-starved (hardware run
+          # I), and a liveness restart takes the fail-closed admission webhook down. 3 x 20 s tolerates it.
+          timeoutSeconds: 5
+          failureThreshold: 3
         readinessProbe:
           httpGet:
             path: /readyz
             port: 8081
           initialDelaySeconds: 5
           periodSeconds: 10
-        # TODO(user): Configure the resources accordingly based on the project requirements.
-        # More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+          timeoutSeconds: 5
+        # Hardware run I: OOMKilled at 256Mi on a 3 CP + 1 W cluster. Informer caches, the machine-config
+        # renders and the Cilium values validation (about 15 MB of garbage per call) leave the Go heap near
+        # 100 MB before it grows toward the limit; 512Mi keeps the headroom, and GOMEMLIMIT makes the GC work
+        # before the kernel does. Keep GOMEMLIMIT at about 80% of the limit.
         resources:
           limits:
-            cpu: 500m
-            memory: 256Mi
+            cpu: "1"
+            memory: 512Mi
           requests:
-            cpu: 10m
-            memory: 128Mi
+            cpu: 100m
+            memory: 256Mi
         volumeMounts:
         - name: backup-spool
           mountPath: /var/spool/ichor

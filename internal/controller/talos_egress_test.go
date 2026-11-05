@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -87,11 +89,11 @@ func TestHostParsing(t *testing.T) {
 
 	s.cidr("10.9.9.7/24")
 
-	if got := keys(s.cidrs); len(got) != 3 || got[0] != "10.0.0.5/32" || got[1] != "10.9.9.0/24" || got[2] != "fd00::1/128" {
+	if got := slices.Sorted(maps.Keys(s.cidrs)); len(got) != 3 || got[0] != "10.0.0.5/32" || got[1] != "10.9.9.0/24" || got[2] != "fd00::1/128" {
 		t.Errorf("cidrs: %v", got)
 	}
 
-	if got := keys(s.names); len(got) != 1 || got[0] != "node.example.com" {
+	if got := slices.Sorted(maps.Keys(s.names)); len(got) != 1 || got[0] != "node.example.com" {
 		t.Errorf("names: %v", got)
 	}
 
@@ -111,6 +113,19 @@ func metaOf(name string) metav1.ObjectMeta { return metav1.ObjectMeta{Name: name
 func cnpGVK() *unstructured.Unstructured {
 	u := &unstructured.Unstructured{}
 	u.SetGroupVersionKind(ciliumPolicyGVK)
+
+	return u
+}
+
+// staticControllerPolicy stands in for the installer's static policy of the controller pods, without
+// which the egress policies write nothing.
+func staticControllerPolicy(ns, app string) *unstructured.Unstructured {
+	u := cnpGVK()
+	u.SetNamespace(ns)
+	u.SetName("ichor-controller-manager")
+	u.Object[keySpec] = map[string]any{keySelector: map[string]any{keyMatchLabels: map[string]any{
+		controlPlaneLabel: valueControllerMgr, nameLabel: app,
+	}}, keyEgress: []any{map[string]any{}}}
 
 	return u
 }
@@ -155,16 +170,9 @@ var _ = Describe("TalosEgress", Ordered, func() {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
-	// installStatic stands in for the installer's static policy, without which Sync writes nothing.
-	// Every spec that needs it calls this, so none depends on an earlier spec having created it.
+	// Every spec that needs the static policy calls this, so none depends on an earlier spec having created it.
 	installStatic := func() {
-		static := cnpGVK()
-		static.SetNamespace(egressNS)
-		static.SetName("ichor-controller-manager")
-		static.Object["spec"] = map[string]any{keySelector: map[string]any{keyMatchLabels: map[string]any{
-			controlPlaneLabel: "controller-manager", "app.kubernetes.io/name": "ichor",
-		}}, "egress": []any{map[string]any{}}}
-		Expect(k8sClient.Create(ctx, static)).To(Or(Succeed(), MatchError(apierrors.IsAlreadyExists, "already exists")))
+		Expect(k8sClient.Create(ctx, staticControllerPolicy(egressNS, "ichor"))).To(Or(Succeed(), MatchError(apierrors.IsAlreadyExists, "already exists")))
 	}
 
 	It("does nothing when disabled even with static policies", func() {

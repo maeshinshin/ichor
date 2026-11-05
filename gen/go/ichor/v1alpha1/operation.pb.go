@@ -1124,7 +1124,11 @@ type NodeActionRequest struct {
 	// override is required for reset, and for reboot or shutdown it overrides the last-worker
 	// guard. Its reason is optional, and the caller must hold the override verb on the machine
 	// (ADR 0065, ADR 0110).
-	Override      *Override `protobuf:"bytes,6,opt,name=override,proto3" json:"override,omitempty"`
+	Override *Override `protobuf:"bytes,6,opt,name=override,proto3" json:"override,omitempty"`
+	// wipe_mode is for reset only: system-disk wipes the whole system disk (boot and EFI included, so the
+	// node boots a boot image again instead of its installed UKI), all also wipes every user disk. Empty
+	// wipes STATE and EPHEMERAL only.
+	WipeMode      string `protobuf:"bytes,7,opt,name=wipe_mode,json=wipeMode,proto3" json:"wipe_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1199,6 +1203,13 @@ func (x *NodeActionRequest) GetOverride() *Override {
 		return x.Override
 	}
 	return nil
+}
+
+func (x *NodeActionRequest) GetWipeMode() string {
+	if x != nil {
+		return x.WipeMode
+	}
+	return ""
 }
 
 // OperationMachine is TalosOperation.status.machines[] as it is: a machine
@@ -3530,14 +3541,15 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\x06backup\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x06backup\x12\x1a\n" +
 	"\bsnapshot\x18\x02 \x01(\tR\bsnapshot\x12\x18\n" +
 	"\aconfirm\x18\x03 \x01(\tR\aconfirm\x124\n" +
-	"\boverride\x18\x04 \x01(\v2\x18.ichor.v1alpha1.OverrideR\boverride\"\x89\x02\n" +
+	"\boverride\x18\x04 \x01(\v2\x18.ichor.v1alpha1.OverrideR\boverride\"\xa6\x02\n" +
 	"\x11NodeActionRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x122\n" +
 	"\x06action\x18\x02 \x01(\x0e2\x1a.ichor.v1alpha1.NodeActionR\x06action\x12\x18\n" +
 	"\aservice\x18\x03 \x01(\tR\aservice\x12!\n" +
 	"\fallow_leader\x18\x04 \x01(\bR\vallowLeader\x12\x18\n" +
 	"\aconfirm\x18\x05 \x01(\tR\aconfirm\x124\n" +
-	"\boverride\x18\x06 \x01(\v2\x18.ichor.v1alpha1.OverrideR\boverride\"\x85\x02\n" +
+	"\boverride\x18\x06 \x01(\v2\x18.ichor.v1alpha1.OverrideR\boverride\x12\x1b\n" +
+	"\twipe_mode\x18\a \x01(\tR\bwipeMode\"\x85\x02\n" +
 	"\x10OperationMachine\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05phase\x18\x02 \x01(\tR\x05phase\x12\x12\n" +

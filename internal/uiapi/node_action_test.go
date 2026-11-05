@@ -375,3 +375,49 @@ func TestNodeResetByHostnameStoresTheMachineNameAsConfirm(t *testing.T) {
 		t.Fatalf("operations = %+v", ops)
 	}
 }
+
+// A wipe mode is for reset only, must be one Ichor knows, shows in the plan and reaches the spec.
+func TestNodeResetWipeMode(t *testing.T) {
+	s, k8s := opServer(t, opObjects()...)
+
+	plan := func(action pb.NodeAction, mode string) *connect.Request[pb.PlanOperationRequest] {
+		r := nodePlanReq("w1", action)
+		r.Msg.Node.WipeMode = mode
+
+		return r
+	}
+
+	p := planNodeOK(t, s, plan(pb.NodeAction_NODE_ACTION_RESET, ichorv1alpha1.WipeModeSystemDisk))
+	if steps := strings.Join(p.GetSteps(), "\n"); !strings.Contains(steps, "whole system disk") || strings.Contains(steps, "STATE and EPHEMERAL") {
+		t.Fatalf("a system-disk reset must say it wipes the whole disk: %q", steps)
+	}
+
+	if steps := strings.Join(planNodeOK(t, s, plan(pb.NodeAction_NODE_ACTION_RESET, "")).GetSteps(), "\n"); !strings.Contains(steps, "STATE and EPHEMERAL") {
+		t.Fatalf("the default reset keeps its text: %q", steps)
+	}
+
+	for _, bad := range []*connect.Request[pb.PlanOperationRequest]{
+		plan(pb.NodeAction_NODE_ACTION_REBOOT, ichorv1alpha1.WipeModeAll),
+		plan(pb.NodeAction_NODE_ACTION_RESET, "everything"),
+	} {
+		if _, err := s.PlanOperation(context.Background(), bad); connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Fatalf("%+v: %v", bad.Msg.GetNode(), err)
+		}
+	}
+
+	var asked []authv1.ResourceAttributes
+
+	s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, true, &asked), nil }
+	user := context.WithValue(context.Background(), identityKey{}, Identity{User: bgUser})
+
+	if _, err := s.CreateOperation(user, nodeCreateReq(&pb.NodeActionRequest{
+		Machine: objectRef(opNS, "w1"), Action: pb.NodeAction_NODE_ACTION_RESET, Confirm: "w1", Override: &pb.Override{},
+		WipeMode: ichorv1alpha1.WipeModeAll,
+	})); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	if ops := listOps(t, k8s); len(ops) != 1 || ops[0].Spec.Node.WipeMode != ichorv1alpha1.WipeModeAll {
+		t.Fatalf("operations = %+v", ops)
+	}
+}

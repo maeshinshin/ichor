@@ -244,6 +244,10 @@ message NodeActionRequest {
   // guard. Its reason is optional, and the caller must hold the override verb on the machine
   // (ADR 0065, ADR 0110).
   Override override = 6;
+  // wipe_mode is for reset only: system-disk wipes the whole system disk (boot and EFI included, so the
+  // node boots a boot image again instead of its installed UKI), all also wipes every user disk. Empty
+  // wipes STATE and EPHEMERAL only.
+  string wipe_mode = 7;
 }
 
 // OperationMachine is TalosOperation.status.machines[] as it is: a machine

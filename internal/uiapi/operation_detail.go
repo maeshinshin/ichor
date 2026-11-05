@@ -306,6 +306,7 @@ func describeNodeOp(out *pb.Operation, op *ichorv1alpha1.TalosOperation, add fun
 	add("Action", n.Action)
 	add("Machine", m)
 	add("Service", n.Service)
+	add("Wipe mode", n.WipeMode)
 
 	if n.AllowLeader {
 		add("Allow leader", "true")

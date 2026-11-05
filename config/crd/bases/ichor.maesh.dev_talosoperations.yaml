@@ -198,9 +198,10 @@ spec:
                   tokenSettle:
                     description: |-
                       tokenSettle is how long the old service-account key is kept after the new one signs, so that the
-                      projected tokens of running pods are re-issued under the new one. The default is 90 minutes. Raise it
-                      when workloads request projected tokens that live longer than an hour. Ignored without the
-                      serviceAccount target.
+                      projected tokens of running pods are re-issued under the new one. The default is 90 minutes and the
+                      shortest accepted is 75 minutes (a shorter one makes pods that still hold an old token fail until the
+                      kubelet refreshes it). Raise it when workloads request projected tokens that live longer than an hour.
+                      Ignored without the serviceAccount target.
                     type: string
                 required:
                 - targets

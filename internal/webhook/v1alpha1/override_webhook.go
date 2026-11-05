@@ -206,6 +206,12 @@ func (h *OverrideHandler) handleOperation(ctx context.Context, req admission.Req
 		}
 	}
 
+	// Dropping the old service-account key before pods have refreshed their projected tokens locks out Ichor's
+	// own controller and the CNI (hardware amendment), for any user.
+	if why := op.Spec.KeyRotation.TokenSettleRefusal(); why != "" {
+		return admission.Denied(why)
+	}
+
 	if slices.Contains(h.ExemptUsers, req.UserInfo.Username) {
 		return admission.Allowed("")
 	}

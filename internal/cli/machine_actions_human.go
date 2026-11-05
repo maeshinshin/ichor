@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"cmp"
 	"fmt"
 	"strings"
 
@@ -69,7 +70,7 @@ func renderMachineApproved(h, warnings *human, resp *pb.ApproveMachineResponse) 
 		warnings.warn(w)
 	}
 
-	return errFirst(h.Err(), warnings.Err())
+	return cmp.Or(h.Err(), warnings.Err())
 }
 
 // renderMachineRejected prints "✓ rejected fa70962a: reason".
@@ -82,16 +83,6 @@ func renderMachineRejected(h *human, name, reason string) error {
 	h.done("%s", line)
 
 	return h.Err()
-}
-
-func errFirst(errs ...error) error {
-	for _, err := range errs {
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // renderInspection prints what reclaim found on the node and what the reset would do, as a block,

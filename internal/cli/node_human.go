@@ -20,7 +20,6 @@ import (
 	"cmp"
 	"fmt"
 	"io"
-	"strings"
 
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
@@ -135,5 +134,5 @@ func logsReconnectNotice(errw io.Writer, err error) {
 	}
 
 	h := newHuman(errw)
-	h.Note(h.Mark(markWarning) + " " + strings.TrimSpace(fmt.Sprintf("log stream ended (%v); reconnecting…", err)))
+	h.Note(h.Mark(markWarning) + fmt.Sprintf(" log stream ended (%v); reconnecting…", err))
 }

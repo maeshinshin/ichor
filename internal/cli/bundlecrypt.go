@@ -56,9 +56,12 @@ const (
 var (
 	errWrongBundlePassphrase = errors.New("wrong passphrase, or the file is damaged")
 	errNoBundlePassphrase    = errors.New("no passphrase available")
-	errNoSealPassphrase      = errors.New("a new secrets bundle is encrypted, and no passphrase was given: pass " +
+	// errNoSealPassphraseOnly is the refusal of a command with no plaintext opt-out (secrets encrypt).
+	errNoSealPassphraseOnly = errors.New("a new secrets bundle is encrypted, and no passphrase was given: pass " +
 		"--bundle-passphrase-file PATH (or /dev/fd/N), set $" + bundlePassphraseEnv + ", or run on a terminal " +
-		"to have one generated; --bundle-plaintext stores it unencrypted instead")
+		"to have one generated")
+	// errNoSealPassphrase is the same for the commands that have --bundle-plaintext.
+	errNoSealPassphrase = fmt.Errorf("%w; --bundle-plaintext stores it unencrypted instead", errNoSealPassphraseOnly)
 )
 
 // bundlePassphraseFile is --bundle-passphrase-file.
@@ -85,6 +88,22 @@ var bundleTerminal = func() bool { return term.IsTerminal(int(os.Stdin.Fd())) } 
 
 // bundleWarnings receives the warnings about the local files; a test replaces it.
 var bundleWarnings io.Writer = os.Stderr
+
+// warnedThisRun holds the warnings already written to bundleWarnings, so a command that reads the
+// same file twice (a check, then the work) warns once.
+var warnedThisRun = map[string]bool{}
+
+// warnBundle writes a warning about a local file to bundleWarnings, once per distinct message.
+func warnBundle(format string, args ...any) {
+	msg := fmt.Sprintf(format, args...)
+	if warnedThisRun[msg] {
+		return
+	}
+
+	warnedThisRun[msg] = true
+
+	_, _ = fmt.Fprint(bundleWarnings, msg)
+}
 
 // isEncryptedBundle reports whether raw is an age file (armored or binary), by its first line.
 func isEncryptedBundle(raw []byte) bool {
@@ -168,7 +187,7 @@ func passphraseFromSources() (pass string, ok bool, err error) {
 		}
 
 		if st, err := os.Stat(bundlePassphraseFile); err == nil && st.Mode().IsRegular() && st.Mode().Perm()&0o077 != 0 {
-			_, _ = fmt.Fprintf(bundleWarnings, "ichor: warning: %s is accessible to other users (mode %04o); run: chmod 600 %s\n",
+			warnBundle("ichor: warning: %s is accessible to other users (mode %04o); run: chmod 600 %s\n",
 				bundlePassphraseFile, st.Mode().Perm(), bundlePassphraseFile)
 		}
 

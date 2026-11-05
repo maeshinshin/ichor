@@ -93,8 +93,8 @@ func TestCNIHelmJobShape(t *testing.T) {
 	}
 
 	c := pod.Containers[0]
-	if c.Image != "ghcr.io/maeshinshin/ichor-installer:v0.9.0" {
-		t.Errorf("image = %q, want the installer image at spec.version", c.Image)
+	if c.Image != testCNIImage {
+		t.Errorf("image = %q, want the installer image by digest", c.Image)
 	}
 
 	if want := []string{"cni", "helm", "apply", "--cluster=home", "--namespace=clusters", "--kube-proxy=enabled", "--storage-namespace=ichor-system", "--exclusive"}; !slices.Equal(c.Args, want) {

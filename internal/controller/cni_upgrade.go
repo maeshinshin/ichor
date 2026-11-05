@@ -131,11 +131,7 @@ func (r *CNIHandoverReconciler) syncUpgradeAvailable(ctx context.Context, cluste
 		return nil
 	}
 
-	if cluster.Status.CNI == nil {
-		cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{}
-	}
-
-	cluster.Status.CNI.AvailableChartVersion = available
+	cniStatus(cluster).AvailableChartVersion = available
 	apimeta.SetStatusCondition(&cluster.Status.Conditions, cond)
 
 	return r.Status().Update(ctx, cluster)

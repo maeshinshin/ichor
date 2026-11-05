@@ -66,7 +66,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 
@@ -142,58 +141,18 @@ type NodesReadyFunc func(ctx context.Context, talos TalosClient) (notReady []str
 // not finished: the cluster's nodes are not in one settled state. Used by the lock gates and by the
 // machine controller, which must not render or apply for a cluster in this state.
 func caRotationUnderway(op *ichorv1alpha1.TalosOperation) bool {
-	if op.Spec.Kind != ichorv1alpha1.TalosOperationKindCARotation || op.Status.CARotation == nil {
-		return false
-	}
-
-	switch op.Status.CARotation.Stage {
-	case "", ichorv1alpha1.CARotationStageDone:
-		return false
-	}
-
-	return op.Status.Phase != ichorv1alpha1.TalosOperationPhaseCompleted
+	return rotationUnderway(op, ichorv1alpha1.TalosOperationKindCARotation)
 }
 
 // activeCARotation returns the name of the cluster's CA rotation that is under way, or "".
 func activeCARotation(ctx context.Context, reader client.Reader, namespace, cluster string) (string, error) {
-	var ops ichorv1alpha1.TalosOperationList
-	if err := reader.List(ctx, &ops, client.InNamespace(namespace)); err != nil {
-		return "", err
-	}
-
-	for i := range ops.Items {
-		if ops.Items[i].Spec.ClusterRef.Name == cluster && caRotationUnderway(&ops.Items[i]) {
-			return ops.Items[i].Name, nil
-		}
-	}
-
-	return "", nil
+	return activeRotation(ctx, reader, namespace, cluster, ichorv1alpha1.TalosOperationKindCARotation)
 }
 
 // caRotationFinalizerStep adds the finalizer to a rotation's operation and removes it once the
 // rotation has settled. handled is true when the reconcile has nothing more to do.
 func (r *TalosOperationReconciler) caRotationFinalizerStep(ctx context.Context, op *ichorv1alpha1.TalosOperation) (handled bool, err error) {
-	if op.Spec.Kind != ichorv1alpha1.TalosOperationKindCARotation {
-		return false, nil
-	}
-
-	has := controllerutil.ContainsFinalizer(op, caRotationFinalizer)
-	settled := !caRotationUnderway(op)
-
-	switch {
-	case has && !settled && !op.DeletionTimestamp.IsZero():
-		return r.rotationDeletion(ctx, op, caRotationFinalizer, secretsbundle.RotationKey)
-	case has && settled && (!op.DeletionTimestamp.IsZero() || op.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted):
-		controllerutil.RemoveFinalizer(op, caRotationFinalizer)
-
-		return true, client.IgnoreNotFound(r.Update(ctx, op))
-	case !has && op.DeletionTimestamp.IsZero() && op.Status.Phase != ichorv1alpha1.TalosOperationPhaseCompleted:
-		controllerutil.AddFinalizer(op, caRotationFinalizer)
-
-		return false, r.Update(ctx, op)
-	}
-
-	return false, nil
+	return r.rotationFinalizerStep(ctx, op, ichorv1alpha1.TalosOperationKindCARotation, caRotationFinalizer, secretsbundle.RotationKey)
 }
 
 // caRun is one reconcile of a rotation: what was read, and what must never be written anywhere.

@@ -24,7 +24,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -35,9 +34,7 @@ func nodeActionClients(t *testing.T, yes bool) (*apiClients, client.Client) {
 
 	setAPITestFlags(t, yes)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(opTestObjects()...).Build()
-
-	return localClients(apiOpts, apiDeps{K8s: k8s}), k8s
+	return freshClients(t, opTestObjects())
 }
 
 // present reports whether the machine is still there.

@@ -446,7 +446,7 @@ func settleVolumeFailures(failed string, storedAt *metav1.Time) string {
 
 	var kept []string
 
-	for _, f := range strings.Split(failed, "; ") {
+	for f := range strings.SplitSeq(failed, "; ") {
 		if !strings.HasSuffix(f, transientVolumeFailure) {
 			kept = append(kept, f)
 		}

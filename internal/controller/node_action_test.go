@@ -628,13 +628,12 @@ var _ = Describe("TalosOperation node actions", func() {
 			Expect(k8sClient.Update(ctx, &old)).To(Succeed())
 			Eventually(func() bool { return apierrors.IsNotFound(k8sClient.Get(ctx, name, &ichorv1alpha1.TalosMachine{})) }, 5*time.Second).Should(BeTrue())
 
-			pending := &ichorv1alpha1.TalosMachine{
-				ObjectMeta: metav1.ObjectMeta{Namespace: name.Namespace, Name: name.Name},
-				Spec: ichorv1alpha1.TalosMachineSpec{
-					ClusterRef: corev1.LocalObjectReference{Name: f.cluster.Name},
-					Identity:   ichorv1alpha1.TalosMachineIdentity{UUID: "uuid-" + hostW1},
-					Endpoint:   "10.0.0.30:50000", ApprovalState: ichorv1alpha1.MachineApprovalStatePending,
-				},
+			pending := &ichorv1alpha1.TalosMachine{}
+			pending.Namespace, pending.Name = name.Namespace, name.Name
+			pending.Spec = ichorv1alpha1.TalosMachineSpec{
+				ClusterRef: corev1.LocalObjectReference{Name: f.cluster.Name},
+				Identity:   ichorv1alpha1.TalosMachineIdentity{UUID: "uuid-" + hostW1},
+				Endpoint:   "10.0.0.31:50000", ApprovalState: ichorv1alpha1.MachineApprovalStatePending,
 			}
 			Expect(k8sClient.Create(ctx, pending)).To(Succeed())
 

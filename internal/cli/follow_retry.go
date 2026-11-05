@@ -85,6 +85,16 @@ func isTransient(err error) bool {
 		strings.Contains(msg, "unexpected EOF") || strings.HasSuffix(msg, ": EOF") || strings.Contains(msg, "i/o timeout")
 }
 
+// sleepCtx waits d, or returns ctx.Err() as soon as ctx ends.
+func sleepCtx(ctx context.Context, d time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(d):
+		return nil
+	}
+}
+
 // retryTransient runs call, retrying transient errors with backoff for up to
 // followRetryWindow and printing one "API unreachable, retrying" line per
 // attempt. A dead ichor-ui tunnel is re-opened through c.Reconnect. It returns
@@ -112,10 +122,8 @@ func retryTransient(ctx context.Context, c *apiClients, errw io.Writer, call fun
 
 		_, _ = fmt.Fprintf(errw, "ichor: API unreachable, retrying (%v)\n", err)
 
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(delay):
+		if err := sleepCtx(ctx, delay); err != nil {
+			return err
 		}
 
 		delay = min(delay*2, followRetryMax)

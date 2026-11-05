@@ -148,10 +148,8 @@ func runNodeLogs(
 
 		logsReconnectNotice(errw, err)
 
-		select {
-		case <-ctx.Done():
+		if sleepCtx(ctx, logsReconnectDelay) != nil {
 			return nil
-		case <-time.After(logsReconnectDelay):
 		}
 	}
 }

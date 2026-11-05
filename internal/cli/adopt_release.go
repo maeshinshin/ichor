@@ -187,11 +187,9 @@ func waitMachineReleased(ctx context.Context, deps adoptDeps, key types.Namespac
 			return nil
 		}
 
-		select {
-		case <-ctx.Done():
+		if sleepCtx(ctx, interval) != nil {
 			return fmt.Errorf("adopt: machine %q did not become Ready within %s after its hold was released; "+
 				"the machines after it stay held", key.Name, wait)
-		case <-time.After(interval):
 		}
 	}
 }

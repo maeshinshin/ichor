@@ -24,7 +24,6 @@ import (
 	"io"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -322,10 +321,8 @@ func waitForCredentialsStage(ctx context.Context, d handoffDeps, namespace, name
 			return fmt.Errorf("operation %s is already in stage %s, past the hand-off", name, stage)
 		}
 
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(d.Poll):
+		if err := sleepCtx(ctx, d.Poll); err != nil {
+			return err
 		}
 	}
 }
@@ -377,10 +374,8 @@ func watchCARotation(ctx context.Context, k8s ctrlclient.Client, namespace, name
 			return fmt.Errorf("operation %s paused after a failure: %s", name, op.Status.FailureReason)
 		}
 
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(opWatchInterval):
+		if err := sleepCtx(ctx, opWatchInterval); err != nil {
+			return err
 		}
 	}
 }

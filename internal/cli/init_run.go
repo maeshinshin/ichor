@@ -62,6 +62,17 @@ type initOptions struct {
 	// The passphrase is secret material and is never printed.
 	BundlePassphrase string
 	BundlePlaintext  bool
+
+	// InstallerDigest and SkipSignatureCheck are recorded in the IchorInstallation (spec.installerDigest,
+	// spec.installerSignature.mode skip; ADR 0122) so the controller can run the Cilium Job without resolving
+	// the installer's tag: a build nobody signs, served by a mirror the controller cannot reach (a demo).
+	InstallerDigest    string
+	SkipSignatureCheck bool
+}
+
+// installerPin is the installer image settings init writes into the IchorInstallation.
+func (o initOptions) installerPin() installerPin {
+	return installerPin{Digest: o.InstallerDigest, SkipSignature: o.SkipSignatureCheck}
 }
 
 // initDeps bundles init's side effects -- hardware identity, the Talos
@@ -131,6 +142,10 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 
 	opts, err = prepareInitUsers(opts)
 	if err != nil {
+		return err
+	}
+
+	if err := validateInitInstaller(opts); err != nil {
 		return err
 	}
 
@@ -335,7 +350,7 @@ func initInstall(
 		s.Update("waiting for the controller to roll out")
 
 		var err error
-		if created, err = createIchorInstallation(ctx, k8sClient, s.Rewrite(initDetail), deps.WebhookWait); err != nil {
+		if created, err = createIchorInstallation(ctx, k8sClient, s.Rewrite(initDetail), deps.WebhookWait, opts.installerPin()); err != nil {
 			return "", err
 		}
 

@@ -43,6 +43,12 @@ func TestCNIJobImageIsADigestTheControllerChecked(t *testing.T) {
 	skipped := cniTestInstallation()
 	skipped.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip, Reason: "air-gapped"}
 
+	// What `ichor init --installer-digest D --skip-signature-check` writes: a fresh install with no status
+	// record, on a cluster that cannot reach the registry.
+	initPinned := cniTestInstallation()
+	initPinned.Spec.InstallerDigest = digest
+	initPinned.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip}
+
 	for name, tc := range map[string]struct {
 		inst       *ichorv1alpha1.IchorInstallation
 		images     *fakeInstallerImages
@@ -70,6 +76,9 @@ func TestCNIJobImageIsADigestTheControllerChecked(t *testing.T) {
 		},
 		"skip mode runs the digest without a check": {
 			inst: skipped, images: &fakeInstallerImages{digest: digest}, want: repo + "@" + digest,
+		},
+		"pinned by init with skip: no record and no registry needed": {
+			inst: initPinned, images: &fakeInstallerImages{resolveErr: errors.New("no route")}, want: repo + "@" + digest,
 		},
 		"unresolvable tag": {
 			inst: cniTestInstallation(), images: &fakeInstallerImages{resolveErr: errors.New("no route")}, wantErr: reasonInstallerImageUnresolved,

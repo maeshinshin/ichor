@@ -25,6 +25,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -416,6 +417,25 @@ func TestWatchHumanOnATerminalRedrawsOneLine(t *testing.T) {
 	}
 }
 
+// setWatchInterval polls an operation every d for the rest of the test.
+func setWatchInterval(t *testing.T, d time.Duration) {
+	t.Helper()
+
+	old := opWatchInterval
+	opWatchInterval = d
+
+	t.Cleanup(func() { opWatchInterval = old })
+}
+
+// watchClients is the in-process server over op and objs; op's status is kept.
+func watchClients(t *testing.T, op *ichorv1alpha1.TalosOperation, objs ...client.Object) (*apiClients, client.Client) {
+	t.Helper()
+
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(objs, op)...).WithStatusSubresource(op).Build()
+
+	return localClients(apiOpts, apiDeps{K8s: k8s}), k8s
+}
+
 func watchOpFixture(phase, failure string) *ichorv1alpha1.TalosOperation {
 	op := &ichorv1alpha1.TalosOperation{}
 	op.Name, op.Namespace = "x", testNamespace
@@ -435,14 +455,10 @@ func TestWatchHumanFailedOperationReturnsTheResumeHintAndPrintsTheBlock(t *testi
 	setHumanTestFlags(t, outputHuman)
 	useWatchClock(t)
 
-	old := opWatchInterval
-	opWatchInterval = time.Millisecond
-
-	t.Cleanup(func() { opWatchInterval = old })
+	setWatchInterval(t, time.Millisecond)
 
 	op := watchOpFixture(condPaused, "boom")
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(op).WithStatusSubresource(op).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, _ := watchClients(t, op)
 
 	var out, errw bytes.Buffer
 
@@ -471,8 +487,7 @@ func TestWatchHumanCompletedOperationExitsCleanly(t *testing.T) {
 	useWatchClock(t)
 
 	op := watchOpFixture(ichorv1alpha1.TalosOperationPhaseCompleted, "")
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(op).WithStatusSubresource(op).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, _ := watchClients(t, op)
 
 	var out, errw bytes.Buffer
 
@@ -489,14 +504,10 @@ func TestWatchHumanInterruptedLeavesTheOperationRunning(t *testing.T) {
 	setHumanTestFlags(t, outputHuman)
 	useWatchClock(t)
 
-	old := opWatchInterval
-	opWatchInterval = time.Hour
-
-	t.Cleanup(func() { opWatchInterval = old })
+	setWatchInterval(t, time.Hour)
 
 	op := watchOpFixture(ichorv1alpha1.TalosOperationPhaseInProgress, "")
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(op).WithStatusSubresource(op).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, _ := watchClients(t, op)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(50*time.Millisecond, cancel)

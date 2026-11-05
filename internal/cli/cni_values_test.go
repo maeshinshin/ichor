@@ -26,7 +26,6 @@ import (
 	"connectrpc.com/connect"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -45,9 +44,8 @@ func cniTestClient(t *testing.T, yes bool) (*apiClients, client.Client) {
 
 	cl := newTestCluster()
 	cl.Spec.CNI.KubeProxy = cniTestEnabled
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cl).Build()
 
-	return localClients(apiOpts, apiDeps{K8s: k8s}), k8s
+	return freshClients(t, []client.Object{cl})
 }
 
 func cniStoredValues(t *testing.T, k8s client.Client) string {

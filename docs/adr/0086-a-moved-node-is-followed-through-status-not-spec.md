@@ -21,3 +21,7 @@ On hardware, a power-cycled KubeVirt node came back with a new pod IP. `spec.end
 - A machine with no `spec.hostname` is not followed through its Kubernetes Node (asking the node is what just failed); it is still found again by discovery when it is in maintenance mode. Recording the node name in status would close that gap.
 - When every control plane moves at once the Kubernetes API is down and nothing can be read from it; the operator edits `spec.endpoint`.
 - Not verified on hardware: the KubeVirt power-cycle itself. Tests use fakes and envtest.
+
+## Amendment 2026-11-05: discovery no longer moves an approved machine
+
+The "Who writes it" rule (1) is narrowed: a maintenance-mode node answering with a machine's UUID, serial and MACs is self-reported, so `Discover` records its address only for a machine that is not approved, or that is approved but not yet sent its configuration and has a pinned maintenance certificate. For any other approved machine the address changes only through rule (2) (the Kubernetes Node), the authenticated reads or `spec.endpoint`. Without this, a twin on another discovery address redirected a converged machine's dial endpoint and, after a failed read, received its configuration (CA keys). See the amendment to [ADR 0076](0076-approved-machines-are-provisioned-through-the-maintenance-api.md). Consequence: a converged machine that is wiped and returns at a new address needs `spec.hostname` (followed through its Node) or an edited `spec.endpoint`; discovery alone no longer finds it.

@@ -30,15 +30,11 @@ import (
 
 func TestSecretsEncryptMigratesAPlaintextBundle(t *testing.T) {
 	useBundleCrypto(t)
-	t.Setenv("HOME", t.TempDir())
 	t.Setenv(bundlePassphraseEnv, testBundlePass)
 
 	bundle := newTestBundle(t)
 
-	path, err := saveBundleFile("old", bundle, "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := saveTestBundle(t, "old", bundle, "")
 
 	var stdout, stderr bytes.Buffer
 
@@ -82,13 +78,9 @@ func TestSecretsEncryptMigratesAPlaintextBundle(t *testing.T) {
 
 func TestSecretsEncryptRefusesAndLeavesTheFile(t *testing.T) {
 	useBundleCrypto(t)
-	t.Setenv("HOME", t.TempDir())
 
 	t.Run("no passphrase source", func(t *testing.T) {
-		path, err := saveBundleFile("old", newTestBundle(t), "")
-		if err != nil {
-			t.Fatal(err)
-		}
+		path := saveTestBundle(t, "old", newTestBundle(t), "")
 
 		before, _ := os.ReadFile(path)
 
@@ -121,14 +113,10 @@ func TestSecretsEncryptRefusesAndLeavesTheFile(t *testing.T) {
 
 func TestSecretsEncryptOnATerminalGeneratesAndShowsOnce(t *testing.T) {
 	useBundleCrypto(t)
-	t.Setenv("HOME", t.TempDir())
 
 	bundleTerminal = func() bool { return true }
 
-	path, err := saveBundleFile("old", newTestBundle(t), "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := saveTestBundle(t, "old", newTestBundle(t), "")
 
 	var stdout, stderr bytes.Buffer
 
@@ -149,13 +137,9 @@ func TestSecretsEncryptOnATerminalGeneratesAndShowsOnce(t *testing.T) {
 
 func TestSecretsEncryptCommandArguments(t *testing.T) {
 	useBundleCrypto(t)
-	t.Setenv("HOME", t.TempDir())
 	t.Setenv(bundlePassphraseEnv, testBundlePass)
 
-	path, err := saveBundleFile("named", newTestBundle(t), "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := saveTestBundle(t, "named", newTestBundle(t), "")
 
 	old := secretsEncryptFile
 
@@ -258,7 +242,6 @@ func TestInitBundleProtection(t *testing.T) {
 func TestChooseInitBundleProtection(t *testing.T) {
 	t.Run("a terminal gets a generated passphrase shown once, then waits for Enter", func(t *testing.T) {
 		useBundleCrypto(t)
-		t.Setenv("HOME", t.TempDir())
 
 		bundleTerminal = func() bool { return true }
 

@@ -131,15 +131,7 @@ func resetUserOpts(t *testing.T) {
 	t.Helper()
 
 	old, oldFmt := userOpts, outputFormat
-	userOpts, outputFormat = struct {
-		displayName   string
-		email         string
-		roles         []string
-		disabled      bool
-		passwordStdin bool
-		generate      bool
-		bootstrap     bool
-	}{}, outputJSON
+	userOpts, outputFormat = userFlags{}, outputJSON
 
 	t.Cleanup(func() { userOpts, outputFormat = old, oldFmt })
 }

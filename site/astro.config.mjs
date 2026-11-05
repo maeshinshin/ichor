@@ -18,7 +18,8 @@ export default defineConfig({
   integrations: [preact()],
   vite: { plugins: [tailwindcss()] },
   markdown: {
-    processor: unified({ remarkPlugins: [[remarkDocsLinks, { base: baseSlash }], remarkDropTitle, remarkCallouts] }),
+    // Plain typography like GitHub's: smartypants would turn `--flag` into an em dash.
+    processor: unified({ smartypants: false, remarkPlugins: [[remarkDocsLinks, { base: baseSlash }], remarkDropTitle, remarkCallouts] }),
     shikiConfig: { themes: { light: 'github-light', dark: 'github-dark' }, defaultColor: false },
   },
 })

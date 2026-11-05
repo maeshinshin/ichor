@@ -86,7 +86,7 @@ function Section({ node, current }: { node: NavNode; current: string }) {
   if (!node.collapsed) {
     return (
       <SidebarGroup>
-        <SidebarGroupLabel>{node.label}</SidebarGroupLabel>
+        {node.label && <SidebarGroupLabel>{node.label}</SidebarGroupLabel>}
         {items}
       </SidebarGroup>
     )

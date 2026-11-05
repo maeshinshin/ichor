@@ -1,3 +1,7 @@
+---
+sidebar_order: 1
+---
+
 # Getting started
 
 This guide takes you from a checkout to a running one-node cluster managed by

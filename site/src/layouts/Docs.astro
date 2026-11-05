@@ -16,8 +16,9 @@ interface Props {
   current: string
   headings?: Heading[]
   editUrl?: string
+  description?: string
 }
-const { title, current, headings = [], editUrl } = Astro.props
+const { title, current, headings = [], editUrl, description } = Astro.props
 
 const docs = await getDocs()
 const nav = buildNav(docs)
@@ -35,6 +36,7 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3)
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
+    {description && <meta name="description" content={description} />}
     <title>{current === base ? 'Ichor documentation' : `${title} - Ichor`}</title>
     <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
     <script is:inline>
@@ -50,10 +52,10 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3)
     <DocsShell client:load nav={nav} current={current} base={base} version={docsVersion()} repoUrl={repoUrl}>
       <div class="mx-auto grid w-full max-w-6xl gap-10 p-4 md:p-8 xl:grid-cols-[minmax(0,1fr)_14rem]">
         <article class="flex min-w-0 flex-col gap-6" data-pagefind-body>
-          <Breadcrumb>
+          <Breadcrumb data-pagefind-ignore>
             <BreadcrumbList>
               <BreadcrumbItem><BreadcrumbLink href={base}>Docs</BreadcrumbLink></BreadcrumbItem>
-              {trail.slice(0, -1).filter((c) => c.href !== base).map((c) => (
+              {trail.slice(0, -1).filter((c) => c.label && c.href !== base).map((c) => (
                 <>
                   <BreadcrumbSeparator />
                   <BreadcrumbItem>{c.href ? <BreadcrumbLink href={c.href}>{c.label}</BreadcrumbLink> : c.label}</BreadcrumbItem>
@@ -67,12 +69,12 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3)
               )}
             </BreadcrumbList>
           </Breadcrumb>
-          <h1 class="text-3xl font-semibold tracking-tight">{title}</h1>
-          {toc.length > 0 && <TocCollapsible client:idle headings={toc} />}
+          <h1 class="text-3xl font-semibold tracking-tight" data-pagefind-weight="10">{title}</h1>
+          {toc.length > 0 && <div data-pagefind-ignore><TocCollapsible client:idle headings={toc} /></div>}
           <slot />
           <CodeCopy client:idle />
           <Separator />
-          <div class="flex flex-col gap-4">
+          <div class="flex flex-col gap-4" data-pagefind-ignore>
             {editUrl && (
               <div>
                 <Button asChild variant="ghost" size="sm">

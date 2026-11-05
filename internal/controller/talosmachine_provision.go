@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/configloader"
@@ -74,13 +75,22 @@ const (
 	provisionRecheck        = 15 * time.Second
 )
 
-// provision handles an approved machine that has never converged and that the authenticated
-// client could not read. It decides "in maintenance" by asking the insecure API for the node's
-// identity: only a node actually in maintenance mode answers that, so no error text is parsed.
+// provision handles an approved machine that the authenticated client could not read and that may
+// be in maintenance mode: one that has never converged (its first configuration), or one that has
+// (readErr is then the failed read) and whose disk was wiped or replaced, which is sent its
+// configuration again on its own (reprovision.go, ADR 0076). It decides "in maintenance" by asking
+// the insecure API for the node's identity: only a node actually in maintenance mode answers that,
+// so no error text is parsed.
 func (r *TalosMachineReconciler) provision(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, rendered []byte, hash string,
+	readErr error,
 ) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
+
+	// converged: Ichor configured this node before (or adopted it), so the node being in maintenance
+	// mode means it lost its disk. Sending its configuration clears the applied hash, so this
+	// happens once per wipe; the node is then followed like a first provisioning.
+	converged := m.Status.AppliedConfigHash != ""
 
 	// Defence in depth behind the admission webhook (ADR 0108): the rendered configuration carries
 	// the cluster's CA keys, so it is never sent to the controller's own network position.
@@ -91,8 +101,14 @@ func (r *TalosMachineReconciler) provision(
 
 	// The first configuration carries the CA keys, so it only goes to the node whose maintenance
 	// certificate was pinned at discovery (ADR 0108). Without a pin the first handshake is trusted
-	// and recorded below.
-	want := m.Status.MaintenanceFingerprint
+	// and recorded below. A node whose disk was wiped has a new certificate, so the old pin is not
+	// held against it: the first handshake is trusted again (as at the first provisioning), unless
+	// the operator accepted a fingerprint.
+	want := ""
+	if !converged {
+		want = m.Status.MaintenanceFingerprint
+	}
+
 	if v := m.Annotations[ichorv1alpha1.TalosMachineTrustMaintenanceFingerprintAnnotation]; v != "" {
 		want = v
 	}
@@ -102,9 +118,16 @@ func (r *TalosMachineReconciler) provision(
 		return r.retryLater(ctx, m, reasonMaintenanceChanged, perr.Error())
 	}
 
-	hw, mc, err := r.probeMaintenance(WithMaintenancePin(ctx, pin), m.DialEndpoint())
+	// A converged node is probed every round it does not answer; most of the time it is down, not
+	// wiped, so that probe is kept short.
+	probeTimeout := talosCallTimeout
+	if converged {
+		probeTimeout = reprovisionProbeTimeout
+	}
+
+	hw, mc, err := r.probeMaintenance(WithMaintenancePin(ctx, pin), m.DialEndpoint(), probeTimeout)
 	if err != nil {
-		if IsMaintenancePinMismatch(err) && m.Status.ConfigStoredAt == nil {
+		if IsMaintenancePinMismatch(err) && (m.Status.ConfigStoredAt == nil || converged) {
 			return r.retryLater(ctx, m, reasonMaintenanceChanged,
 				fmt.Sprintf("the node at %s presents a different maintenance certificate (%s) than the one pinned (%s), so the "+
 					"configuration, which carries the cluster's CA keys, was not sent; if you have checked that this is the "+
@@ -113,6 +136,13 @@ func (r *TalosMachineReconciler) provision(
 		}
 
 		log.V(1).Info("node is not answering the maintenance API", "error", err.Error())
+
+		if converged {
+			// Not in maintenance mode, just not answering: the ordinary report.
+			log.Error(readErr, "reading current machine configuration")
+
+			return r.readFailed(ctx, m, readErr, time.Now())
+		}
 
 		if m.Status.ConfigStoredAt != nil {
 			// Stored, and now neither API answers: it is installing or rebooting.
@@ -130,15 +160,20 @@ func (r *TalosMachineReconciler) provision(
 		defer closer.Close() //nolint:errcheck
 	}
 
-	if pf, ok := mc.(PeerFingerprinter); ok && want == "" && pf.PeerFingerprint() != "" {
-		m.Status.MaintenanceFingerprint = pf.PeerFingerprint()
+	fingerprint := pin.Seen()
+	if pf, ok := mc.(PeerFingerprinter); ok && pf.PeerFingerprint() != "" {
+		fingerprint = pf.PeerFingerprint()
+	}
+
+	if want == "" && fingerprint != "" {
+		m.Status.MaintenanceFingerprint = fingerprint
 	}
 
 	// Answering insecurely means maintenance mode. After a store that is the stage before the
 	// node begins to install; it is never a reason to apply again.
 	m.Status.Stage = stageMaintenance
 
-	if m.Status.ConfigStoredAt != nil {
+	if m.Status.ConfigStoredAt != nil && !converged {
 		return r.following(ctx, m, reasonAwaitingInstall,
 			"the configuration was stored but the node is still in maintenance mode; waiting for it to start installing")
 	}
@@ -148,6 +183,24 @@ func (r *TalosMachineReconciler) provision(
 			fmt.Sprintf("the node at %s reports UUID %q, serial %q and MAC addresses %v, which do not match this machine's "+
 				"recorded identity; nothing was applied", m.Spec.Endpoint, hw.UUID, hw.Serial, hw.MACAddresses))
 	}
+
+	if converged && m.Annotations[ichorv1alpha1.TalosMachineHoldApplyAnnotation] == strconv.FormatBool(true) {
+		return r.retryLater(ctx, m, reasonReprovisionBlocked, fmt.Sprintf("the node at %s is in maintenance mode with this machine's "+
+			"recorded identity, but the annotation %s is set, so nothing was sent; remove it to have the node reinstalled",
+			m.DialEndpoint(), ichorv1alpha1.TalosMachineHoldApplyAnnotation))
+	}
+
+	return r.storeConfiguration(ctx, cluster, m, mc, rendered, hash, converged)
+}
+
+// storeConfiguration sends the rendered configuration to the node in maintenance mode that passed
+// the identity check and records that it was stored. redo is true for a node that had been
+// configured before (reprovision.go): a control plane's stale etcd member is then removed first.
+func (r *TalosMachineReconciler) storeConfiguration(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, mc MaintenanceClient,
+	rendered []byte, hash string, redo bool,
+) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
 
 	// SecureBoot Required (ADR 0123): the controller cannot make a node boot with SecureBoot, but it
 	// can decline to install onto one that did not, before the first configuration is sent.
@@ -181,6 +234,14 @@ func (r *TalosMachineReconciler) provision(
 				log.Error(err, "releasing cluster lock")
 			}
 		}()
+
+		// A wiped control plane that etcd still lists would try to join as itself: its member is
+		// removed first, under the same lock (reprovision.go).
+		if redo {
+			if reason, message := r.removeStaleEtcdMember(ctx, cluster, m); reason != "" {
+				return r.retryLater(ctx, m, reason, message)
+			}
+		}
 	}
 
 	applyCtx, cancel := context.WithTimeout(ctx, maintenanceApplyTimeout)
@@ -196,6 +257,10 @@ func (r *TalosMachineReconciler) provision(
 	m.Status.ConfigStoredAt = &now
 	m.Status.Stage = stageInstalling
 
+	if redo {
+		return r.reprovisioned(ctx, m, hash)
+	}
+
 	r.event(m, corev1.EventTypeNormal, "ConfigApplied",
 		"initial configuration "+hash[:12]+" stored on the node in maintenance mode; following it through install and reboot")
 
@@ -205,8 +270,10 @@ func (r *TalosMachineReconciler) provision(
 
 // probeMaintenance dials the insecure API and reads the node's identity, each under its own
 // timeout. The connection is returned open for the caller to apply over.
-func (r *TalosMachineReconciler) probeMaintenance(ctx context.Context, endpoint string) (HardwareIdentity, MaintenanceClient, error) {
-	dialCtx, cancel := context.WithTimeout(ctx, talosCallTimeout)
+func (r *TalosMachineReconciler) probeMaintenance(
+	ctx context.Context, endpoint string, timeout time.Duration,
+) (HardwareIdentity, MaintenanceClient, error) {
+	dialCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	mc, err := r.MaintenanceClient(dialCtx, endpoint)

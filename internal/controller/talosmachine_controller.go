@@ -552,15 +552,16 @@ func (r *TalosMachineReconciler) readNode(
 			return nil, ctrl.Result{RequeueAfter: time.Second}, true, nil
 		}
 
-		// A machine that has never converged and cannot be read with the bundle's identity may
-		// still be in maintenance mode: provision finds out by asking the insecure API, not by
-		// interpreting this error.
-		if r.MaintenanceClient != nil && m.Status.AppliedConfigHash == "" {
+		// A machine that cannot be read with the bundle's identity may be in maintenance mode: one
+		// that never converged awaits its first configuration, one that did lost its disk
+		// (reprovision.go). provision finds out by asking the insecure API, not by interpreting
+		// this error.
+		if r.MaintenanceClient != nil {
 			// Expected while the node is in maintenance mode (ADR 0076): not an error, no stack.
-			logf.FromContext(ctx).V(1).Info("authenticated read failed on a never-converged machine; trying the maintenance API",
+			logf.FromContext(ctx).V(1).Info("authenticated read failed; trying the maintenance API",
 				"reason", err.Error())
 
-			res, err = r.provision(ctx, cluster, m, rendered, hash)
+			res, err = r.provision(ctx, cluster, m, rendered, hash, err)
 
 			return nil, res, true, err
 		}

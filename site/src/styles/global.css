@@ -133,6 +133,15 @@
   }
 }
 
+/* The desktop sidebar hidden by the reader. The head script (Docs.astro) and the island (DocsShell.tsx) set
+   <html data-sidebar>, so the first paint matches the preactcn offcanvas state (gap width 0, container off-screen). */
+html[data-sidebar='closed'] [data-slot='sidebar-gap'] {
+  width: 0;
+}
+html[data-sidebar='closed'] [data-slot='sidebar-container'] {
+  left: calc(var(--sidebar-width) * -1);
+}
+
 /* Astro's Shiki output with both themes as variables (https://docs.astro.build/en/guides/syntax-highlighting/). */
 .astro-code,
 .astro-code span {

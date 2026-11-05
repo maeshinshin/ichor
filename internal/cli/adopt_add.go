@@ -19,9 +19,11 @@ package cli
 import (
 	"bytes"
 	"context"
+	"crypto/x509"
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/configloader"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -156,9 +158,7 @@ func (st *adoptState) loadAdded(
 		}
 
 		if !trusts {
-			return fmt.Errorf("adopt: the machine at %[1]q belongs to a different Talos cluster (id %[2]q) than %[3]q: it does not carry this cluster's CAs, "+
-				"so it cannot join without a reset. To reset it and add it, run `ichor machine reclaim %[1]s --talosconfig FILE --cluster %[3]s` "+
-				"(this wipes its STATE and EPHEMERAL partitions)", m.Spec.Endpoint, clusterIDOf(n.Current), cluster.Name)
+			return otherClusterRefusal(m.Spec.Endpoint, clusterIDOf(n.Current), cluster.Name)
 		}
 
 		st.nodes = append(st.nodes, n)
@@ -179,6 +179,31 @@ func (st *adoptState) loadAdded(
 	return nil
 }
 
+// otherClusterRefusal is the refusal for a machine that does not carry the cluster's CAs: it
+// cannot join without a reset, and the reset is `ichor machine reclaim`. id is the machine's cluster
+// ID when its configuration could be read, "" when the dial itself failed.
+func otherClusterRefusal(addr, id, cluster string) error {
+	what := "belongs to a different Talos cluster"
+	if id != "" {
+		what += fmt.Sprintf(" (id %q)", id)
+	} else {
+		what += " (its Talos API certificate is not signed by a CA your talosconfig trusts; if the machine should be in this cluster, check --talosconfig)"
+	}
+
+	return fmt.Errorf("adopt: the machine at %[1]q %[2]s than %[3]q: it does not carry this cluster's CAs, "+
+		"so it cannot join without a reset. To reset it and add it, run `ichor machine reclaim %[1]s --talosconfig FILE --cluster %[3]s` "+
+		"(this wipes its STATE and EPHEMERAL partitions)", addr, what, cluster)
+}
+
+// unknownAuthority reports whether a Talos dial failed because the node's certificate is not signed by
+// a CA the talosconfig trusts. gRPC flattens the x509 error into text, so the type check is backed by
+// the message.
+func unknownAuthority(err error) bool {
+	var ua x509.UnknownAuthorityError
+
+	return errors.As(err, &ua) || strings.Contains(err.Error(), "certificate signed by unknown authority")
+}
+
 // registrations builds the in-memory TalosMachine of each address that is not one already. A machine
 // whose UUID is a TalosMachine of this cluster is reported and left alone; one of another cluster, or
 // one that is not approved yet, is an error.
@@ -193,6 +218,10 @@ func (st *adoptState) registrations(
 	for _, addr := range deps.AddMachines {
 		id, err := deps.ReadIdentity(ctx, addr)
 		if err != nil {
+			if unknownAuthority(err) {
+				return nil, otherClusterRefusal(addr, "", cluster.Name)
+			}
+
 			return nil, fmt.Errorf("adopt: reading the hardware identity of %q: %w", addr, err)
 		}
 

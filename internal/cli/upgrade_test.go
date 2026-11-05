@@ -16,9 +16,7 @@ limitations under the License.
 
 package cli
 
-import (
-	"testing"
-)
+import "testing"
 
 // The version reported in the bug (ichor upgrade ichor v0.0.1814000000-02357186) was accepted
 // and turned into an operation the controller then paused. It must fail here, before any

@@ -80,8 +80,7 @@ func opTestVersion(t *testing.T, k8s client.Client) string {
 func TestUpgradeTalosAsksWhichMachinesRebootInWhichOrderAndDeclineWritesNothing(t *testing.T) {
 	setAPITestFlags(t, false)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(opTestObjects()...).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, k8s := freshClients(t, opTestObjects())
 
 	var prompt bytes.Buffer
 
@@ -105,8 +104,7 @@ func TestUpgradeTalosAsksWhichMachinesRebootInWhichOrderAndDeclineWritesNothing(
 func TestUpgradeTalosWithYesPrintsThePlanSkipsThePromptAndWritesSpecThenOperation(t *testing.T) {
 	setAPITestFlags(t, true)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(opTestObjects()...).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, k8s := freshClients(t, opTestObjects())
 
 	var out, prompt bytes.Buffer
 	if err := runStartOperation(context.Background(), c, strings.NewReader(""), &out, &prompt,
@@ -172,8 +170,7 @@ func TestStartThroughTheBackendAndWithoutItDoTheSame(t *testing.T) {
 func TestShutdownPromptSaysEveryMachineIsPoweredOff(t *testing.T) {
 	setAPITestFlags(t, false)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(opTestObjects()...).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, _ := freshClients(t, opTestObjects())
 
 	var prompt bytes.Buffer
 
@@ -192,8 +189,7 @@ func TestStartNeedsAClusterNameWhenThereIsNotExactlyOne(t *testing.T) {
 
 	second := newTestCluster()
 	second.Name = "other"
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(opTestObjects(), second)...).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, _ := freshClients(t, append(opTestObjects(), second))
 
 	err := runStartOperation(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{},
 		startSpec{Kind: pb.OperationKind_OPERATION_KIND_TALOS, Target: opNewVersion})
@@ -205,12 +201,7 @@ func TestStartNeedsAClusterNameWhenThereIsNotExactlyOne(t *testing.T) {
 func TestOperationDeleteAsksUnlessYes(t *testing.T) {
 	setAPITestFlags(t, false)
 
-	op := &ichorv1alpha1.TalosOperation{}
-	op.Name, op.Namespace = "x", testNamespace
-	op.Spec.ClusterRef.Name, op.Spec.Kind = opTestCluster, ichorv1alpha1.TalosOperationKindTalos
-
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(opTestObjects(), op)...).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, k8s := freshClients(t, append(opTestObjects(), watchOpFixture("", "")))
 
 	if err := runOperationDelete(context.Background(), c, strings.NewReader("n\n"), &bytes.Buffer{}, &bytes.Buffer{}, "x"); err == nil || len(opTestOps(t, k8s)) != 1 {
 		t.Fatalf("declined delete: err=%v", err)
@@ -224,21 +215,9 @@ func TestOperationDeleteAsksUnlessYes(t *testing.T) {
 func TestWatchEndsWithAnErrorWhenAMachineFailedAndPrintsProgress(t *testing.T) {
 	setAPITestFlags(t, true)
 
-	old := opWatchInterval
-	opWatchInterval = time.Millisecond
+	setWatchInterval(t, time.Millisecond)
 
-	t.Cleanup(func() { opWatchInterval = old })
-
-	op := &ichorv1alpha1.TalosOperation{}
-	op.Name, op.Namespace = "x", testNamespace
-	op.Spec.ClusterRef.Name, op.Spec.Kind = opTestCluster, ichorv1alpha1.TalosOperationKindTalos
-	op.Status = ichorv1alpha1.TalosOperationStatus{
-		Phase: "Paused", FailureReason: "boom",
-		Machines: []ichorv1alpha1.TalosOperationMachineStatus{{Name: "cp1", Phase: "Completed"}, {Name: "w", Phase: "InProgress"}},
-	}
-
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(op).WithStatusSubresource(op).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, _ := watchClients(t, watchOpFixture(condPaused, "boom"))
 
 	var out, errw bytes.Buffer
 
@@ -381,14 +360,7 @@ func failedOpClients(t *testing.T) (*apiClients, client.Client) {
 	t.Helper()
 	setAPITestFlags(t, true)
 
-	op := &ichorv1alpha1.TalosOperation{}
-	op.Name, op.Namespace = "x", testNamespace
-	op.Spec.ClusterRef.Name, op.Spec.Kind = opTestCluster, ichorv1alpha1.TalosOperationKindTalos
-	op.Status = ichorv1alpha1.TalosOperationStatus{Phase: "Paused", FailureReason: "drain blocked"}
-
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(opTestObjects(), op)...).WithStatusSubresource(op).Build()
-
-	return localClients(apiOpts, apiDeps{K8s: k8s}), k8s
+	return watchClients(t, watchOpFixture(condPaused, "drain blocked"), opTestObjects()...)
 }
 
 func TestResumeOfAFailedOperationReRunsTheStep(t *testing.T) {

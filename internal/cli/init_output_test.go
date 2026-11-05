@@ -27,6 +27,21 @@ import (
 	"github.com/maeshinshin/ichor/internal/installmanifest"
 )
 
+// assertInOrder fails unless every want appears in text, each after the one before it.
+func assertInOrder(t *testing.T, text string, want []string) {
+	t.Helper()
+
+	rest := text
+	for _, w := range want {
+		i := strings.Index(rest, w)
+		if i < 0 {
+			t.Fatalf("%q is missing, or out of order, in:\n%s", w, text)
+		}
+
+		rest = rest[i+len(w):]
+	}
+}
+
 func runInitForOutput(t *testing.T, output string) (stdout, stderr string) {
 	t.Helper()
 	withTempHome(t)
@@ -112,15 +127,7 @@ func TestRunInit_StepsOnAPlainWriter(t *testing.T) {
 		"ichor cluster status " + testInitClusterName,
 	}
 
-	rest := progress
-	for _, w := range want {
-		i := strings.Index(rest, w)
-		if i < 0 {
-			t.Fatalf("%q is missing, or out of order, in:\n%s", w, progress)
-		}
-
-		rest = rest[i+len(w):]
-	}
+	assertInOrder(t, progress, want)
 }
 
 // A failed step is a ✗ line with the error below it, and the run prints no total.

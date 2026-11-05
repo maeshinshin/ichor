@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
 
@@ -1347,6 +1348,8 @@ func reportPlans(say adoptSay, plans []*adoptPlan) []*adoptPlan {
 	return toCreate
 }
 
+type specFieldHint struct{ prefix, hint string }
+
 // specFieldHints say which spec field carries a value adopt cannot put in a patch (ADR 0077).
 // The v1.14 documents and the legacy fields they replaced both map, because the same value
 // reaches Ichor through the same field whichever contract the node was generated for. First
@@ -1366,7 +1369,7 @@ const (
 		"the same kube-apiserver SANs"
 )
 
-var specFieldHints = []struct{ prefix, hint string }{
+var specFieldHints = []specFieldHint{
 	{"KubeNetworkConfig.podSubnets", "set TalosCluster spec.network.podSubnets to the node's value (it cannot change once set)"},
 	{"cluster.network.podSubnets", "set TalosCluster spec.network.podSubnets to the node's value (it cannot change once set)"},
 	{"KubeNetworkConfig.serviceSubnets", "set TalosCluster spec.network.serviceSubnets to the node's value (it cannot change once set)"},
@@ -1397,21 +1400,14 @@ func explainUnrepresentable(paths []string) []string {
 	)
 
 	for _, p := range paths {
-		hint := ""
-
-		for _, h := range specFieldHints {
-			if p == h.prefix || strings.HasPrefix(p, h.prefix+".") || strings.HasPrefix(p, h.prefix+"[") {
-				hint = h.hint
-
-				break
-			}
-		}
-
-		if hint == "" {
+		i := slices.IndexFunc(specFieldHints, func(h specFieldHint) bool { return underPath(p, h.prefix) })
+		if i < 0 {
 			manual = true
 
 			continue
 		}
+
+		hint := specFieldHints[i].hint
 
 		if _, seen := byHint[hint]; !seen {
 			hints = append(hints, hint)

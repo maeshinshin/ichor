@@ -18,6 +18,7 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/configloader"
@@ -72,14 +73,13 @@ var (
 	ownedInlineManifestPf = []string{"cluster.inlineManifests", "KubeInlineManifestConfig"}
 )
 
-func hasPathPrefix(p string, prefixes []string) bool {
-	for _, pf := range prefixes {
-		if p == pf || strings.HasPrefix(p, pf+".") || strings.HasPrefix(p, pf+"[") {
-			return true
-		}
-	}
+// underPath reports whether p is pf or a path below it.
+func underPath(p, pf string) bool {
+	return p == pf || strings.HasPrefix(p, pf+".") || strings.HasPrefix(p, pf+"[")
+}
 
-	return false
+func hasPathPrefix(p string, prefixes []string) bool {
+	return slices.ContainsFunc(prefixes, func(pf string) bool { return underPath(p, pf) })
 }
 
 // owned reports whether path is a class B path.

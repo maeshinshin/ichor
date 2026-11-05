@@ -86,15 +86,7 @@ func TestRunAdopt_StepsOnAPlainWriter(t *testing.T) {
 		"ichor machine list -n " + testNamespace,
 	}
 
-	rest := out
-	for _, w := range want {
-		i := strings.Index(rest, w)
-		if i < 0 {
-			t.Fatalf("%q is missing, or out of order, in:\n%s", w, out)
-		}
-
-		rest = rest[i+len(w):]
-	}
+	assertInOrder(t, out, want)
 
 	if strings.Contains(out, "adopt: ") {
 		t.Errorf("a legacy line in the human output:\n%s", out)

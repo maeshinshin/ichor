@@ -19,9 +19,10 @@ import { InstallDiskPicker } from '@/components/InstallDiskPicker'
 import { NetworkFields } from '@/components/NetworkFields'
 import type { NodeDetail } from '@/gen/ichor/v1alpha1/node_pb'
 import { MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
+import { useAction } from '@/hooks/use-action'
 import { machineClient, nodeClient } from '@/lib/connect'
 import { notifyWarning, notifyWrite } from '@/lib/notify'
-import { describeError, type ErrorShape } from '@/lib/errors'
+import { describeError } from '@/lib/errors'
 import { canApprove, isStrongIdentity } from '@/lib/identity'
 import {
   defaultInstallDisk,
@@ -73,8 +74,7 @@ export function ApproveDialog({
   const [networkForm, setNetworkForm] = useState<NetworkForm | null>(null)
   const [rolesForm, setRolesForm] = useState<DiskRolesForm>(emptyRoles)
   const [reason, setReason] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState<ErrorShape | null>(null)
+  const { busy: submitting, error: submitError, setError: setSubmitError, run } = useAction()
 
   const strong = isStrongIdentity(machine.identity)
   const hostnameOk = isValidHostname(hostname)
@@ -122,13 +122,12 @@ export function ApproveDialog({
   }, [open])
 
 
-  async function submit() {
-    if (!machine.ref || !canSubmit) return
-    setSubmitting(true)
-    setSubmitError(null)
-    try {
+  function submit() {
+    const ref = machine.ref
+    if (!ref || !canSubmit) return
+    return run(async () => {
       const res = await machineClient.approveMachine({
-        machine: machine.ref,
+        machine: ref,
         role,
         hostname,
         install,
@@ -138,15 +137,11 @@ export function ApproveDialog({
         reason,
       })
       if (res.machine) onApproved(res.machine)
-      notifyWrite('toast.approved', { name: hostname || machine.ref.name })
+      notifyWrite('toast.approved', { name: hostname || ref.name })
       // Approved anyway: a pick discovery did not see is only worth a note.
       for (const w of res.warnings) notifyWarning(w)
       setOpen(false)
-    } catch (err) {
-      setSubmitError(describeError(err))
-    } finally {
-      setSubmitting(false)
-    }
+    })
   }
 
   return (

@@ -151,7 +151,7 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 			op = f.step(op)
 		}
 
-		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageFinalizing))
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageFinalizing))
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).To(ContainSubstring("cilium"))
 		Expect(patchCount(kc)["daemonsets/cilium"]).To(Equal(1), "waiting must not restart again")
 		Expect(patchCount(kc)).NotTo(HaveKey(corednsPatchKey), "CoreDNS waits for the CNI to be available: it stays Pending on the agent-not-ready taint")

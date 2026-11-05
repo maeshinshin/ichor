@@ -191,7 +191,7 @@ var _ = Describe("Deleting a rotation operation", func() {
 		It("abandons a rotation in Accepting: the new keys leave the bundle and the lock is released", func() {
 			f := newKeyRotFixture(fastBundle())
 			op := f.newOp(bothTargets)
-			op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageAccepting))
+			op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageAccepting))
 			Expect(f.storedKeys()).NotTo(BeNil())
 
 			Expect(k8sClient.Delete(ctx, op)).To(Succeed())
@@ -213,7 +213,7 @@ var _ = Describe("Deleting a rotation operation", func() {
 		It("keeps a rotation whose new keys already sign and encrypt, and says so", func() {
 			f := newKeyRotFixture(fastBundle())
 			op := f.newOp(bothTargets)
-			op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageIssuing))
+			op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageIssuing))
 
 			Expect(k8sClient.Delete(ctx, op)).To(Succeed())
 			op = f.step(op)

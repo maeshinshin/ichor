@@ -1,11 +1,7 @@
 package v1alpha1
 
 import (
-	"bytes"
 	"context"
-	"errors"
-	"io"
-	"os"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -13,10 +9,6 @@ import (
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -37,16 +29,6 @@ var _ = Describe("controller Job policy", Ordered, func() {
 	)
 
 	var admin, controller, other client.Client
-
-	as := func(user string) client.Client {
-		cfg := rest.CopyConfig(testEnv.Config)
-		cfg.Impersonate = rest.ImpersonationConfig{UserName: user, Groups: []string{"system:masters", "system:authenticated"}}
-
-		c, err := client.New(cfg, client.Options{Scheme: clientgoscheme.Scheme})
-		Expect(err).NotTo(HaveOccurred())
-
-		return c
-	}
 
 	hardened := func() *corev1.SecurityContext {
 		return &corev1.SecurityContext{
@@ -90,33 +72,16 @@ var _ = Describe("controller Job policy", Ordered, func() {
 
 	BeforeAll(func() {
 		ctx := context.Background()
-		admin = as("admin")
+		admin = asUser("admin")
 
 		for _, ns := range []string{nsInstaller} {
 			Expect(client.IgnoreAlreadyExists(admin.Create(ctx, &corev1.Namespace{Name: ns}))).To(Succeed())
 		}
 
-		data, err := os.ReadFile("../../config/admission/controller-jobs-policy.yaml")
-		Expect(err).NotTo(HaveOccurred())
+		installAdmissionPolicy(admin, "../../config/admission/controller-jobs-policy.yaml")
 
-		dec := k8syaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
-		for {
-			var obj map[string]any
-			if err := dec.Decode(&obj); err != nil {
-				if errors.Is(err, io.EOF) {
-					break
-				}
-
-				Expect(err).NotTo(HaveOccurred())
-			}
-
-			if obj != nil {
-				Expect(admin.Create(ctx, &unstructured.Unstructured{Object: obj})).To(Succeed())
-			}
-		}
-
-		controller = as(controllerUser)
-		other = as("system:serviceaccount:ichor-system:someone-else")
+		controller = asUser(controllerUser)
+		other = asUser("system:serviceaccount:ichor-system:someone-else")
 
 		// The policy is bound asynchronously: wait until it denies.
 		Eventually(func() error {

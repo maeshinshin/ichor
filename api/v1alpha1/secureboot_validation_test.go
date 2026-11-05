@@ -20,7 +20,6 @@ import (
 	"context"
 
 	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -39,11 +38,7 @@ var _ = Describe("TalosCluster spec.security.secureBoot and kernelLockdown", fun
 
 	DescribeTable("modes and levels",
 		func(s *TalosClusterSecurity, accepted bool) {
-			if accepted {
-				Expect(create(s)).To(Succeed())
-			} else {
-				Expect(create(s)).NotTo(Succeed())
-			}
+			expectAdmitted(create(s), accepted)
 		},
 		Entry("Off", sb(SecureBootOff), true),
 		Entry("Preferred", sb(SecureBootPreferred), true),

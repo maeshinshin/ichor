@@ -1,20 +1,12 @@
 package v1alpha1
 
 import (
-	"bytes"
 	"context"
-	"errors"
-	"io"
-	"os"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
-	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -34,48 +26,21 @@ var _ = Describe("ichor-ui reclaim credential policy", Ordered, func() {
 		return s
 	}
 
-	as := func(user string) client.Client {
-		cfg := rest.CopyConfig(testEnv.Config)
-		cfg.Impersonate = rest.ImpersonationConfig{UserName: user, Groups: []string{"system:masters", "system:authenticated"}}
-
-		c, err := client.New(cfg, client.Options{Scheme: clientgoscheme.Scheme})
-		Expect(err).NotTo(HaveOccurred())
-
-		return c
-	}
-
 	const credType = corev1.SecretType("ichor.maesh.dev/foreign-talosconfig")
 
 	good := map[string][]byte{"talosconfig": []byte("x")}
 
 	BeforeAll(func() {
 		ctx := context.Background()
-		admin = as("admin")
+		admin = asUser("admin")
 		Expect(client.IgnoreAlreadyExists(admin.Create(ctx, &corev1.Namespace{
 			Name: ns,
 		}))).To(Succeed())
 
-		data, err := os.ReadFile("../../config/admission/reclaim-credential-policy.yaml")
-		Expect(err).NotTo(HaveOccurred())
+		installAdmissionPolicy(admin, "../../config/admission/reclaim-credential-policy.yaml")
 
-		dec := k8syaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
-		for {
-			var obj map[string]any
-			if err := dec.Decode(&obj); err != nil {
-				if errors.Is(err, io.EOF) {
-					break
-				}
-
-				Expect(err).NotTo(HaveOccurred())
-			}
-
-			if obj != nil {
-				Expect(admin.Create(ctx, &unstructured.Unstructured{Object: obj})).To(Succeed())
-			}
-		}
-
-		ui = as("system:serviceaccount:ichor-system:ichor-ui")
-		other = as("system:serviceaccount:ichor-system:someone-else")
+		ui = asUser("system:serviceaccount:ichor-system:ichor-ui")
+		other = asUser("system:serviceaccount:ichor-system:someone-else")
 
 		// The policy is bound asynchronously: wait until it denies.
 		Eventually(func() error {

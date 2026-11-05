@@ -31,6 +31,8 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
+	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -53,13 +55,35 @@ var (
 // suite and a real deploy enforce the same rule.
 const admissionPolicyPath = "../../config/admission/kubeproxy-switch-policy.yaml"
 
-// installAdmissionPolicies creates every object in admissionPolicyPath directly against the
+// asUser is a client that acts as user, in the groups the admission policies' tests need.
+func asUser(user string) client.Client {
+	cfg := rest.CopyConfig(testEnv.Config)
+	cfg.Impersonate = rest.ImpersonationConfig{UserName: user, Groups: []string{"system:masters", "system:authenticated"}}
+
+	c, err := client.New(cfg, client.Options{Scheme: clientgoscheme.Scheme})
+	Expect(err).NotTo(HaveOccurred())
+
+	return c
+}
+
+// expectAdmitted asserts that err is nil when accepted, and an error when not.
+func expectAdmitted(err error, accepted bool) {
+	GinkgoHelper()
+
+	if accepted {
+		Expect(err).NotTo(HaveOccurred())
+	} else {
+		Expect(err).To(HaveOccurred())
+	}
+}
+
+// installAdmissionPolicy creates every object in the file at path through c against the
 // test apiserver. ValidatingAdmissionPolicy and ValidatingAdmissionPolicyBinding are built-in
 // API types, not CRDs, so -- unlike config/crd/bases -- there is no envtest option to install
 // them from a directory; creating them is enough, no scheme registration required since the
 // client talks to them as unstructured.
-func installAdmissionPolicies() {
-	data, err := os.ReadFile(admissionPolicyPath)
+func installAdmissionPolicy(c client.Client, path string) {
+	data, err := os.ReadFile(path)
 	Expect(err).NotTo(HaveOccurred())
 
 	dec := k8syaml.NewYAMLOrJSONDecoder(bytes.NewReader(data), 4096)
@@ -74,7 +98,7 @@ func installAdmissionPolicies() {
 		if obj == nil {
 			continue
 		}
-		Expect(k8sClient.Create(context.Background(), &unstructured.Unstructured{Object: obj})).To(Succeed())
+		Expect(c.Create(context.Background(), &unstructured.Unstructured{Object: obj})).To(Succeed())
 	}
 }
 
@@ -124,7 +148,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
-	installAdmissionPolicies()
+	installAdmissionPolicy(k8sClient, admissionPolicyPath)
 	awaitKubeProxyPolicyEnforced()
 })
 

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -243,19 +242,7 @@ func TestBackupKeyV2NeedsAControlPlaneSecret(t *testing.T) {
 
 	seal := func(pass string) []byte { return sealed(t, plain, Key{Current: pass}) }
 
-	open := func(enc []byte, k Key) error {
-		r, err := Decrypt(bytes.NewReader(enc), k)
-		if err != nil {
-			return err
-		}
-
-		got, err := io.ReadAll(r)
-		if err == nil && !bytes.Equal(got, plain) {
-			err = errors.New("plaintext differs")
-		}
-
-		return err
-	}
+	open := func(enc []byte, k Key) error { return opens(enc, k, plain) }
 
 	if err := open(seal(key.Current), key); err != nil {
 		t.Fatalf("v2 backup: %v", err)

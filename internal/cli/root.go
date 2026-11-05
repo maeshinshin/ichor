@@ -84,7 +84,7 @@ func executeRoot(errw io.Writer) (*cobra.Command, error) {
 
 	cmd, err := rootCmd.ExecuteC()
 	if err != nil && !errorShown(err) {
-		fmt.Fprintln(errw, err)
+		_, _ = fmt.Fprintln(errw, err)
 	}
 
 	return cmd, err

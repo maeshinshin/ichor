@@ -4,9 +4,11 @@
 # with its binding; with ingressController.enabled: the IngressClass and an EndpointSlice); Helm keeps the release records in Secrets (the Role below).
 #
 # Not narrowable further: the clusterroles rule with escalate and bind.
-# The chart's ClusterRoles grant more than this identity holds, so applying them needs
-# escalate, and bind is needed for the ClusterRoleBindings; together they are as strong as
-# cluster-admin. That is why the ServiceAccount exists only for the Job (the controller can
+# The base Cilium ClusterRoles and Roles (cilium, cilium-operator, cilium-config-agent, ...) grant more
+# than this identity holds, so updating them needs escalate, and bind is needed for their bindings;
+# together they are as strong as cluster-admin. What an optional feature adds (hubble-ui, clustermesh-apiserver,
+# the Roles in cilium-secrets and kube-system) is held by this identity itself instead, because the
+# apiserver sees no name on a create and so never honours escalate by resourceNames there. That is why the ServiceAccount exists only for the Job (the controller can
 # create the Job but holds none of this). No wildcard verbs or resources, and nothing for
 # Ichor's own CRDs beyond reading the TalosCluster. A chart value that makes Cilium's chart itself
 # create Secrets (hubble.tls.auto.method=helm, and clustermesh.apiserver.tls.auto.method=helm, the
@@ -180,17 +182,61 @@ rules:
   - list
   - patch
   - update
-# bind and escalate, by name: Helm's escalation check lets the Job create a ClusterRole or
-# Role it does not fully hold when it holds bind or escalate on that name. The names are the ones the
-# embedded Cilium chart renders under Ichor's values, one list per kind; TestCNIEscalationNamesOnlyCiliumsRoles
-# (dist/chart/admission_hardening_test.go) fails when the chart and these lists differ, in either direction.
+# What the chart's ClusterRoles hubble-ui (hubble.ui.enabled) and clustermesh-apiserver (clustermesh.useAPIServer)
+# grant, held by this identity itself rule for rule: the apiserver refuses to
+# create a ClusterRole whose rules the creator does not hold, and `escalate` by name does not authorize a create.
+# Read-only; most of it is already held above, the new part is nodes, componentstatuses, watch on namespaces and
+# services, CustomResourceDefinitions, the cilium.io resources and EndpointSlice get.
+# TestCNIJobHoldsWhatTheCiliumRolesItCreatesGrant renders the chart per feature and keeps this equal to what it needs.
+- apiGroups:
+  - ""
+  resources:
+  - componentstatuses
+  - namespaces
+  - nodes
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cilium.io
+  resources:
+  - ciliumendpoints
+  - ciliumendpointslices
+  - ciliumidentities
+  - ciliumnodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - watch
+# bind and escalate, by name, for the base objects only: the Roles and ClusterRoles the chart renders with no
+# optional feature, which the bootstrap or the takeover already created and Helm only updates (the apiserver
+# sees the name on an update, not on a create, so this works for an update). They hold many rules this identity
+# does not. Everything an optional feature adds is held above or in the namespaced Roles (features_role.yaml), because
+# `escalate` by name cannot authorize a create. The names are the ones the embedded
+# Cilium chart renders under Ichor's values that this identity does not hold; TestCNIJobHoldsWhatTheCiliumRolesItCreatesGrant
+# (dist/chart/cni_coverage_test.go) fails when the chart and these lists differ, in either direction.
 - apiGroups:
   - rbac.authorization.k8s.io
   resourceNames:
   - cilium
   - cilium-operator
-  - clustermesh-apiserver
-  - hubble-ui
   resources:
   - clusterroles
   verbs:
@@ -199,18 +245,8 @@ rules:
 - apiGroups:
   - rbac.authorization.k8s.io
   resourceNames:
-  - cilium-bgp-control-plane-secrets
   - cilium-config-agent
-  - cilium-envoy-config-secrets
-  - cilium-gateway-secrets
-  - cilium-ingress-secrets
-  - cilium-operator-gateway-secrets
-  - cilium-operator-ingress-secrets
-  - cilium-operator-tlsinterception-secrets
   - cilium-operator-ztunnel
-  - cilium-tlsinterception-secrets
-  - clustermesh-apiserver-generate-certs
-  - hubble-generate-certs
   resources:
   - roles
   verbs:

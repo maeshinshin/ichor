@@ -184,6 +184,14 @@ installer:
 cniHelm:
   enabled: true
 
+  ## Whether to render the Role and RoleBinding that let the Job hold what Cilium's own Roles in the
+  ## namespace cilium-secrets grant (gatewayAPI, ingressController and envoyConfig need them). That
+  ## namespace exists only where Cilium runs, and a RoleBinding into a missing namespace fails the
+  ## install. "auto" renders them when `helm install` or `helm upgrade` finds the namespace (a plain
+  ## `helm template`, as Argo CD runs it, cannot look and leaves them out); "true" always renders them
+  ## (the cluster runs Cilium); "false" never does.
+  ciliumSecretsRoles: auto
+
 ## Configure the ichor-ui deployment. It holds a read-only Kubernetes
 ## identity, separate from the controller's own ServiceAccount (architecture.md "Trust"):
 ## see config/rbac/ichor-ui/ and templates/rbac/ichor-ui-*.yaml.

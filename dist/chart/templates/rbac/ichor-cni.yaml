@@ -183,17 +183,61 @@ rules:
   - list
   - patch
   - update
-# bind and escalate, by name: Helm's escalation check lets the Job create a ClusterRole or
-# Role it does not fully hold when it holds bind or escalate on that name. The names are the ones the
-# embedded Cilium chart renders under Ichor's values, one list per kind; TestCNIEscalationNamesOnlyCiliumsRoles
-# (dist/chart/admission_hardening_test.go) fails when the chart and these lists differ, in either direction.
+# What the chart's ClusterRoles hubble-ui (hubble.ui.enabled) and clustermesh-apiserver (clustermesh.useAPIServer)
+# grant, held by this identity itself rule for rule: the apiserver refuses to
+# create a ClusterRole whose rules the creator does not hold, and `escalate` by name does not authorize a create.
+# Read-only; most of it is already held above, the new part is nodes, componentstatuses, watch on namespaces and
+# services, CustomResourceDefinitions, the cilium.io resources and EndpointSlice get.
+# TestCNIJobHoldsWhatTheCiliumRolesItCreatesGrant renders the chart per feature and keeps this equal to what it needs.
+- apiGroups:
+  - ""
+  resources:
+  - componentstatuses
+  - namespaces
+  - nodes
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - cilium.io
+  resources:
+  - ciliumendpoints
+  - ciliumendpointslices
+  - ciliumidentities
+  - ciliumnodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - watch
+# bind and escalate, by name, for the base objects only: the Roles and ClusterRoles the chart renders with no
+# optional feature, which the bootstrap or the takeover already created and Helm only updates (the apiserver
+# sees the name on an update, not on a create, so this works for an update). They hold many rules this identity
+# does not. Everything an optional feature adds is held above or in the namespaced Roles (features_role.yaml), because
+# `escalate` by name cannot authorize a create. The names are the ones the embedded
+# Cilium chart renders under Ichor's values that this identity does not hold; TestCNIJobHoldsWhatTheCiliumRolesItCreatesGrant
+# (dist/chart/cni_coverage_test.go) fails when the chart and these lists differ, in either direction.
 - apiGroups:
   - rbac.authorization.k8s.io
   resourceNames:
   - cilium
   - cilium-operator
-  - clustermesh-apiserver
-  - hubble-ui
   resources:
   - clusterroles
   verbs:
@@ -202,18 +246,8 @@ rules:
 - apiGroups:
   - rbac.authorization.k8s.io
   resourceNames:
-  - cilium-bgp-control-plane-secrets
   - cilium-config-agent
-  - cilium-envoy-config-secrets
-  - cilium-gateway-secrets
-  - cilium-ingress-secrets
-  - cilium-operator-gateway-secrets
-  - cilium-operator-ingress-secrets
-  - cilium-operator-tlsinterception-secrets
   - cilium-operator-ztunnel
-  - cilium-tlsinterception-secrets
-  - clustermesh-apiserver-generate-certs
-  - hubble-generate-certs
   resources:
   - roles
   verbs:
@@ -416,4 +450,92 @@ subjects:
 - kind: ServiceAccount
   name: ichor-cni
   namespace: kube-system
+---
+# What the Cilium chart's own Roles grant for its optional features, held by the Job itself, rule for rule, because
+# `escalate` by name cannot authorize a create (config/rbac/ichor-cni/features_role.yaml).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: ichor-cni-features-role
+  namespace: kube-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  resourceNames:
+  - clustermesh-apiserver-server-cert
+  - clustermesh-apiserver-admin-cert
+  - clustermesh-apiserver-remote-cert
+  - clustermesh-apiserver-local-cert
+  verbs:
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: ichor-cni-features-rolebinding
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ichor-cni-features-role
+subjects:
+- kind: ServiceAccount
+  name: ichor-cni
+  namespace: kube-system
+{{- $secrets := toString .Values.cniHelm.ciliumSecretsRoles }}
+{{- if or (eq $secrets "true") (and (eq $secrets "auto") (lookup "v1" "Namespace" "" "cilium-secrets")) }}
+---
+# The same for cilium-secrets, the Cilium chart's own secrets namespace, which exists only where Cilium runs
+# (cniHelm.ciliumSecretsRoles, see values.yaml).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: ichor-cni-secrets-role
+  namespace: cilium-secrets
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    {{- include "ichor.labels" . | nindent 4 }}
+  name: ichor-cni-secrets-rolebinding
+  namespace: cilium-secrets
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ichor-cni-secrets-role
+subjects:
+- kind: ServiceAccount
+  name: ichor-cni
+  namespace: kube-system
+{{- end }}
 {{- end }}

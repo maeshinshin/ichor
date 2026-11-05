@@ -133,10 +133,7 @@ func (r *KubeletServingReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, fmt.Errorf("listing machines: %w", err)
 	}
 
-	owned := make([]*ichorv1alpha1.TalosMachine, len(items))
-	for i := range items {
-		owned[i] = &items[i]
-	}
+	owned := ptrs(items)
 
 	var csrs certv1.CertificateSigningRequestList
 	if err := r.List(ctx, &csrs); err != nil {

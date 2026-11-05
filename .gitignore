@@ -55,3 +55,4 @@ internal/installmanifest/network-policies.yaml
 /manager
 
 gate.done
+remote-gate-out/

@@ -881,11 +881,7 @@ func (r *TalosMachineReconciler) drainNode(ctx context.Context, hostname string)
 	// administrator cordoned is left alone).
 	if !node.Spec.Unschedulable {
 		patch := client.MergeFrom(node.DeepCopy())
-		if node.Annotations == nil {
-			node.Annotations = map[string]string{}
-		}
-
-		node.Annotations[cordonedByIchorAnnotation] = "removal"
+		metav1.SetMetaDataAnnotation(&node.ObjectMeta, cordonedByIchorAnnotation, "removal")
 
 		if err := r.Patch(ctx, &node, patch); err != nil {
 			return fmt.Errorf("marking the cordon of node %q: %w", hostname, err)
@@ -943,12 +939,7 @@ func (r *TalosMachineReconciler) markNodeReset(ctx context.Context, nodeName str
 	}
 
 	patch := client.MergeFrom(node.DeepCopy())
-
-	if node.Annotations == nil {
-		node.Annotations = map[string]string{}
-	}
-
-	node.Annotations[nodeResetByIchorAnnotation] = time.Now().UTC().Format(time.RFC3339)
+	metav1.SetMetaDataAnnotation(&node.ObjectMeta, nodeResetByIchorAnnotation, time.Now().UTC().Format(time.RFC3339))
 
 	if err := r.Patch(ctx, node, patch); err != nil {
 		logf.FromContext(ctx).Error(err, "marking the reset node", "node", nodeName)

@@ -143,10 +143,7 @@ func (f *nodeFixture) barePodOn(host string) {
 }
 
 func (f *nodeFixture) reconcile(op *ichorv1alpha1.TalosOperation) *ichorv1alpha1.TalosOperation {
-	_, err := reconcileOperation(f.r, op)
-	Expect(err).NotTo(HaveOccurred())
-
-	return fetchOperation(op)
+	return reconcileFetch(f.r, op)
 }
 
 func (f *nodeFixture) fake(host string) *fakeTalosClient { return f.fakes[f.machines[host].Name] }

@@ -105,10 +105,7 @@ func (f *shutdownFixture) newOp(kind string) *ichorv1alpha1.TalosOperation {
 }
 
 func (f *shutdownFixture) reconcile(op *ichorv1alpha1.TalosOperation) *ichorv1alpha1.TalosOperation {
-	_, err := reconcileOperation(f.r, op)
-	Expect(err).NotTo(HaveOccurred())
-
-	return fetchOperation(op)
+	return reconcileFetch(f.r, op)
 }
 
 // halt makes the named machines unreachable, as a stopped node is.

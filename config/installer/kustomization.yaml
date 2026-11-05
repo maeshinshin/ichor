@@ -44,6 +44,20 @@ patches:
   patch: |-
     - {op: replace, path: /metadata/namespace, value: kube-system}
     - {op: replace, path: /subjects/0/namespace, value: kube-system}
+- target: {group: rbac.authorization.k8s.io, version: v1, kind: Role, name: ichor-cni-features-role}
+  patch: |-
+    - {op: replace, path: /metadata/namespace, value: kube-system}
+- target: {group: rbac.authorization.k8s.io, version: v1, kind: RoleBinding, name: ichor-cni-features-rolebinding}
+  patch: |-
+    - {op: replace, path: /metadata/namespace, value: kube-system}
+    - {op: replace, path: /subjects/0/namespace, value: kube-system}
+- target: {group: rbac.authorization.k8s.io, version: v1, kind: Role, name: ichor-cni-secrets-role}
+  patch: |-
+    - {op: replace, path: /metadata/namespace, value: cilium-secrets}
+- target: {group: rbac.authorization.k8s.io, version: v1, kind: RoleBinding, name: ichor-cni-secrets-rolebinding}
+  patch: |-
+    - {op: replace, path: /metadata/namespace, value: cilium-secrets}
+    - {op: replace, path: /subjects/0/namespace, value: kube-system}
 - target: {group: rbac.authorization.k8s.io, version: v1, kind: Role, name: ichor-pod-restart-role}
   patch: |-
     - {op: replace, path: /metadata/namespace, value: kube-system}

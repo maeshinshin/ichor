@@ -190,9 +190,6 @@ func TestCredentialRoundTrip(t *testing.T) {
 	if ok, _, err := got.Verify(goodPassword); err != nil || !ok {
 		t.Fatalf("Verify after round trip: %v %v", ok, err)
 	}
-	if !got.SessionValid(now.Truncate(time.Second)) || got.SessionValid(now.Add(-time.Second)) {
-		t.Fatal("SessionValid does not follow NotBefore")
-	}
 	for _, bad := range []string{`{}`, `{"v":2,"hash":"x"}`, `{"v":1}`, `nope`} {
 		if _, err := ParseCredential([]byte(bad)); err == nil {
 			t.Errorf("ParseCredential(%q) accepted", bad)
@@ -220,25 +217,5 @@ func TestNamesAndRoles(t *testing.T) {
 		if ValidateRole(r) == nil {
 			t.Errorf("ValidateRole(%q) accepted", r)
 		}
-	}
-	if KubeUser("alice") != "ichor:alice" || GroupAdmin != "ichor:admin" {
-		t.Error("prefix constants changed")
-	}
-	if g := KubeGroups([]string{"viewer", "ops"}); g[0] != GroupViewer || g[1] != "ichor:ops" {
-		t.Errorf("KubeGroups = %v", g)
-	}
-	if !IsBuiltinRole("operator") || IsBuiltinRole("ops") {
-		t.Error("IsBuiltinRole")
-	}
-	if !HasSystemPrefix("system:masters") || HasSystemPrefix("ichor:system") {
-		t.Error("HasSystemPrefix")
-	}
-	for _, p := range []string{"", "ichor:", "ichor:x:"} {
-		if ValidateExternalPrefix(p) == nil {
-			t.Errorf("ValidateExternalPrefix(%q) accepted", p)
-		}
-	}
-	if ValidateExternalPrefix("oidc:") != nil || ValidateExternalPrefix(ExternalPrefix) != nil {
-		t.Error("oidc: must be accepted")
 	}
 }

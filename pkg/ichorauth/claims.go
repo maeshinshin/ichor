@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strings"
 	"time"
 )
 
@@ -32,22 +31,10 @@ const (
 	// SigningSecretName holds the issuer's signing keys; the controller writes it.
 	SigningSecretName = "ichor-oidc-signing"
 
-	// UserPrefix is the Kubernetes username prefix of an Ichor user (ichor:<name>); GroupPrefix
-	// is the group prefix (ichor:<role>). ExternalPrefix is the default for an external IdP.
-	UserPrefix     = "ichor:"
-	GroupPrefix    = "ichor:"
-	ExternalPrefix = "oidc:"
-	// SystemPrefix is blocked for users and groups on every issuer.
-	SystemPrefix = "system:"
-
-	// Built-in role names; they are reserved, and map to the groups below.
+	// Built-in role names; they are reserved.
 	RoleViewer   = "viewer"
 	RoleOperator = "operator"
 	RoleAdmin    = "admin"
-
-	GroupViewer   = GroupPrefix + RoleViewer
-	GroupOperator = GroupPrefix + RoleOperator
-	GroupAdmin    = GroupPrefix + RoleAdmin
 
 	// ClientUI and ClientCLI are the two fixed public OAuth clients.
 	ClientUI  = "ichor-ui"
@@ -114,39 +101,6 @@ func ValidateRoles(roles []string) error {
 		errs[i] = ValidateRole(r)
 	}
 	return errors.Join(errs...)
-}
-
-// IsBuiltinRole reports whether the role is one of the reserved built-in names.
-func IsBuiltinRole(role string) bool {
-	return role == RoleViewer || role == RoleOperator || role == RoleAdmin
-}
-
-// KubeUser is the Kubernetes username the apiserver derives for an Ichor user.
-func KubeUser(name string) string { return UserPrefix + name }
-
-// KubeGroups maps roles to the Kubernetes groups the token's groups claim yields after the
-// apiserver adds its prefix; the claim itself carries the bare role names (see GroupsClaim).
-func KubeGroups(roles []string) []string {
-	out := make([]string, len(roles))
-	for i, r := range roles {
-		out[i] = GroupPrefix + r
-	}
-	return out
-}
-
-// HasSystemPrefix reports whether a user or group name starts with the blocked system: prefix.
-func HasSystemPrefix(s string) bool { return strings.HasPrefix(s, SystemPrefix) }
-
-// ValidateExternalPrefix is the webhook rule for an external IdP's prefix: it must not be empty,
-// and must not equal or start with the Ichor prefix, so the two sources cannot collide.
-func ValidateExternalPrefix(prefix string) error {
-	if prefix == "" {
-		return errors.New("external prefix must not be empty")
-	}
-	if strings.HasPrefix(prefix, UserPrefix) {
-		return fmt.Errorf("external prefix %q must not equal or start with %q", prefix, UserPrefix)
-	}
-	return nil
 }
 
 // CredentialVersion is the current schema version of Credential.
@@ -219,6 +173,3 @@ func ParseCredential(data []byte) (Credential, error) {
 func (c Credential) Verify(password string) (match, needsRehash bool, err error) {
 	return Verify(password, c.Hash)
 }
-
-// SessionValid reports whether a session that started at iat is still allowed by NotBefore.
-func (c Credential) SessionValid(iat time.Time) bool { return !iat.Before(c.NotBefore) }

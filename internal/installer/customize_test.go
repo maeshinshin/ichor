@@ -115,14 +115,8 @@ func oldLive(t *testing.T, c client.Client, ns string, s UISettings) {
 		Spec:       corev1.ServiceSpec{Selector: map[string]string{appKey: uiName}, Ports: []corev1.ServicePort{{Name: "http", Port: 8080}}},
 	}
 
-	if err := CustomizeUI(ui, s); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := CustomizeController(ctrl, s); err != nil {
-		t.Fatal(err)
-	}
-
+	must(t, CustomizeUI(ui, s))
+	must(t, CustomizeController(ctrl, s))
 	CustomizeService(svc, s)
 
 	for _, o := range []client.Object{ui, ctrl, svc} {

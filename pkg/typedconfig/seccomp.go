@@ -78,8 +78,7 @@ func deepCopyLinuxSeccomp(in *specs.LinuxSeccomp) *specs.LinuxSeccomp {
 	out := *in
 
 	if in.DefaultErrnoRet != nil {
-		v := *in.DefaultErrnoRet
-		out.DefaultErrnoRet = &v
+		out.DefaultErrnoRet = new(*in.DefaultErrnoRet)
 	}
 
 	out.Architectures = slices.Clone(in.Architectures)
@@ -101,8 +100,7 @@ func deepCopyLinuxSyscall(in specs.LinuxSyscall) specs.LinuxSyscall {
 	out.Names = slices.Clone(in.Names)
 
 	if in.ErrnoRet != nil {
-		v := *in.ErrnoRet
-		out.ErrnoRet = &v
+		out.ErrnoRet = new(*in.ErrnoRet)
 	}
 
 	// LinuxSeccompArg (specs-go) is all value fields (uint/uint64/named string), so

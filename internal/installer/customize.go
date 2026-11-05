@@ -291,13 +291,13 @@ func tlsOnUI(dep *appsv1.Deployment, c *corev1.Container, secret string) error {
 	// Whole probes are replaced: the handler is a oneof, and a tcpSocket left beside an httpGet is invalid.
 	c.LivenessProbe = &corev1.Probe{
 		TCPSocket:           &corev1.TCPSocketAction{Port: intstr.FromInt32(port)},
-		InitialDelaySeconds: 5, PeriodSeconds: 20,
+		InitialDelaySeconds: 5, PeriodSeconds: 20, TimeoutSeconds: 5,
 	}
 	c.ReadinessProbe = &corev1.Probe{
 		HTTPGet: &corev1.HTTPGetAction{
 			Path: "/auth/config", Port: intstr.FromInt32(port), Scheme: corev1.URISchemeHTTPS,
 		},
-		InitialDelaySeconds: 5, PeriodSeconds: 10,
+		InitialDelaySeconds: 5, PeriodSeconds: 10, TimeoutSeconds: 5,
 	}
 
 	vols := slices.DeleteFunc(dep.Spec.Template.Spec.Volumes, func(v corev1.Volume) bool { return v.Name == UITLSVolume })

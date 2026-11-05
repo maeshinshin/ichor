@@ -22,13 +22,9 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// MaintenanceClient is the maintenance-mode Talos API surface discovery
-// needs: just enough to read a node's hardware identity over the
-// unauthenticated connection maintenance mode offers
-// (docs/design/architecture.md "Nodes": "reads hardware identity, disks and
-// NICs over an insecure connection"). Disks and the rest of "Nodes" are later
-// phases' concern (disk roles, topology); this interface carries only what
-// identity strength needs.
+// MaintenanceClient is the maintenance-mode Talos API surface discovery and the first apply need,
+// over the unauthenticated connection maintenance mode offers (docs/design/architecture.md "Nodes":
+// "reads hardware identity, disks and NICs over an insecure connection").
 type MaintenanceClient interface {
 	// Identity reads the node's SMBIOS UUID, serial number and permanent MAC
 	// addresses -- the identity tuple architecture.md's "Nodes" section

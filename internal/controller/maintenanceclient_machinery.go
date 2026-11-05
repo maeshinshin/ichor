@@ -36,11 +36,9 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// NewMachineryMaintenanceClient dials endpoint's Talos API in maintenance
-// mode -- unauthenticated, which is all a node with no configuration yet can
-// offer (docs/design/architecture.md "Nodes") -- and adapts the connection
-// to MaintenanceClient. It is what cmd/main.go wires into
-// DiscoveryReconciler.MaintenanceClient.
+// NewMachineryMaintenanceClient dials endpoint's Talos API in maintenance mode (unauthenticated, all a
+// node with no configuration offers) and adapts the connection to MaintenanceClient. cmd/main.go wires
+// it into DiscoveryReconciler.MaintenanceClient.
 //
 // The connection is held to the MaintenancePin of ctx (WithMaintenancePin), or to the certificate of
 // its own first handshake: a node that answers with another certificate halfway is refused (ADR 0108).
@@ -65,11 +63,8 @@ type machineryMaintenanceClient struct {
 // PeerFingerprint is the SPKI fingerprint of the certificate the node presented.
 func (m *machineryMaintenanceClient) PeerFingerprint() string { return m.pin.Seen() }
 
-// Close releases the gRPC connection, through the same io.Closer convention
-// talosclient_machinery.go uses.
-func (m *machineryMaintenanceClient) Close() error {
-	return m.c.Close()
-}
+// Close releases the gRPC connection (the io.Closer convention talosclient_machinery.go uses).
+func (m *machineryMaintenanceClient) Close() error { return m.c.Close() }
 
 // ApplyConfiguration sends cfg over the insecure connection with mode AUTO, the mode `talosctl
 // apply-config --insecure` uses: in maintenance mode the node installs and reboots as the
@@ -117,13 +112,10 @@ func (m *machineryMaintenanceClient) Identity(ctx context.Context) (HardwareIden
 	return id, err
 }
 
-// ReadHardwareIdentity reads hardware.SystemInformation for the SMBIOS UUID, serial
-// number and manufacturer, and network.LinkStatus for the permanent MAC
-// address of every physical link. A missing SystemInformation resource (not
-// every platform reports SMBIOS data) is not an error here: it leaves the
-// identity's UUID and serial empty, which DiscoveryReconciler's
-// strongIdentity treats as a weak key, exactly as architecture.md's "Nodes"
-// requires. Errors wrap the underlying gRPC error so callers can classify them.
+// ReadHardwareIdentity reads hardware.SystemInformation for the SMBIOS UUID, serial number and
+// manufacturer, and network.LinkStatus for the permanent MAC of every physical link. A missing
+// SystemInformation (not every platform reports SMBIOS data) is not an error: UUID and serial stay empty,
+// which strongIdentity treats as a weak key. Errors wrap the underlying gRPC error so callers can classify them.
 func ReadHardwareIdentity(ctx context.Context, cosi state.State) (HardwareIdentity, error) {
 	var id HardwareIdentity
 
@@ -136,8 +128,7 @@ func ReadHardwareIdentity(ctx context.Context, cosi state.State) (HardwareIdenti
 		spec := sysInfo.TypedSpec()
 		id.UUID, id.Serial, id.Manufacturer = spec.UUID, spec.SerialNumber, spec.Manufacturer
 	case state.IsNotFoundError(err):
-		// No SMBIOS data on this platform (e.g. virtio-blk-style virtualized
-		// nodes); id stays empty, which is correctly a weak key.
+		// No SMBIOS data on this platform; id stays empty, a weak key.
 	default:
 		return id, fmt.Errorf("reading system information: %w", err)
 	}

@@ -121,7 +121,7 @@ func (r *DiscoveryReconciler) Discover(
 	log := logf.FromContext(ctx)
 
 	if r.MaintenanceClient == nil {
-		return nil, fmt.Errorf("no maintenance Talos API connectivity is configured for this controller")
+		return nil, errors.New("no maintenance Talos API connectivity is configured for this controller")
 	}
 
 	mc, err := r.MaintenanceClient(ctx, endpoint)
@@ -346,27 +346,17 @@ func (r *DiscoveryReconciler) reportWeak(
 		why, endpoint, hw.UUID, hw.Serial, hw.MACAddresses, hw.Manufacturer)
 }
 
-// strongIdentity reports whether hw has every element of
-// docs/design/architecture.md's "Nodes" identity tuple, via
-// ichorv1alpha1.TalosMachineIdentity.IsStrongIdentity -- the one place
-// that rule is written (ADR 0033), shared with internal/uiapi's own,
-// separate call site on the TalosMachine's already-recorded identity.
-// HardwareIdentity, not TalosMachineIdentity, is what Discover has in
-// hand at this point (the CRD type is only built once a strong identity
-// clears this check, a few lines below), so this converts rather than
-// calling the method on a type this package doesn't have yet.
+// strongIdentity reports whether hw has every element of architecture.md's "Nodes" identity tuple,
+// through TalosMachineIdentity.IsStrongIdentity, the one place that rule is written (ADR 0033).
 func strongIdentity(hw HardwareIdentity) bool {
 	return ichorv1alpha1.TalosMachineIdentity{
 		UUID: hw.UUID, Serial: hw.Serial, MACAddresses: hw.MACAddresses,
 	}.IsStrongIdentity()
 }
 
-// sameIdentity reports whether existing and hw describe the same physical
-// machine: equal serial numbers and the same set of permanent MAC
-// addresses. UUID is deliberately not compared here -- the caller already
-// looked existing up by hw.UUID -- which is exactly how Discover tells "the
-// same machine returning" apart from "a different machine whose UUID
-// collided": only the rest of the tuple can decide it.
+// sameIdentity reports whether existing and hw describe the same physical machine: equal serial
+// numbers and the same set of permanent MAC addresses. UUID is not compared; the caller looked existing
+// up by it, so only the rest of the tuple tells "the same machine returning" from a UUID collision.
 func sameIdentity(existing ichorv1alpha1.TalosMachineIdentity, hw HardwareIdentity) bool {
 	if existing.Serial != hw.Serial {
 		return false
@@ -379,17 +369,12 @@ func sameIdentity(existing ichorv1alpha1.TalosMachineIdentity, hw HardwareIdenti
 	return slices.Equal(a, b)
 }
 
-// discoveryConcurrency and discoveryDialTimeout bound one DiscoverAll call's
-// worst case. The CRD caps spec.discovery at 64 addresses plus four /24
-// CIDRs (256 addresses each), so at most 64+4*256=1088 candidates exist to
-// probe. The per-candidate deadline covers the whole of Discover -- the
-// insecure maintenance-mode dial and identity read *and* the Kubernetes API
-// calls that follow for a strong identity -- so it has to be generous
-// enough that ordinary API latency never gets mistaken for an unreachable
-// node; 2s does that while still keeping the worst case (1088 candidates /
-// 32 workers * 2s ≈ 68s) well short of "hangs." Neither number is
-// configurable -- nobody asked for that knob, and a fixed worst case is the
-// property that matters.
+// discoveryConcurrency and discoveryDialTimeout bound one DiscoverAll call's worst case. The CRD caps
+// spec.discovery at 64 addresses plus four /24 CIDRs, so at most 64+4*256=1088 candidates exist. The
+// per-candidate deadline covers the whole of Discover (the maintenance-mode dial and identity read and
+// the Kubernetes API calls after it), so it must be generous enough that API latency is never mistaken
+// for an unreachable node; 2s keeps the worst case (1088 / 32 workers * 2s, about 68s) short of a hang.
+// Neither is configurable.
 const (
 	discoveryConcurrency = 32
 	discoveryDialTimeout = 2 * time.Second

@@ -175,6 +175,28 @@ func TestNodeRemoveWithYesStillNeedsConfirm(t *testing.T) {
 	}
 }
 
+// --confirm NAME is the typed name given up front: like typing it at the prompt it is the
+// consent, so it does not also ask "Proceed? [y/N]" (restore --live and machine reclaim treat it alike).
+func TestNodeResetAndRemoveWithConfirmDoNotAskAgain(t *testing.T) {
+	for _, action := range []pb.NodeAction{pb.NodeAction_NODE_ACTION_RESET, pb.NodeAction_NODE_ACTION_REMOVE} {
+		c, _ := nodeActionClients(t, false)
+		apiOpts.Override = true
+
+		var errw bytes.Buffer
+
+		err := runNodeAction(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &errw,
+			nodeActionSpec{Machine: testMachineName, Action: action, Confirm: testMachineName})
+		// The fake API cannot answer reset's SelfSubjectAccessReview, so only the question matters here.
+		if err != nil && (strings.Contains(err.Error(), "aborted") || strings.Contains(err.Error(), "reading confirmation")) {
+			t.Fatalf("%v: --confirm alone must be enough: %v\n%s", action, err, errw.String())
+		}
+
+		if strings.Contains(errw.String(), "Proceed?") || errw.Len() == 0 {
+			t.Fatalf("%v: the plan is shown and nothing is asked:\n%s", action, errw.String())
+		}
+	}
+}
+
 // --wipe-mode belongs to reset alone and reaches the request.
 func TestNodeResetWipeModeFlag(t *testing.T) {
 	if nodeResetCmd.Flags().Lookup("wipe-mode") == nil {

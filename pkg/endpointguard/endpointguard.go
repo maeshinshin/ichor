@@ -32,8 +32,8 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// hostOf drops the port of endpoint, if it has one.
-func hostOf(endpoint string) string {
+// HostOf drops the port of endpoint, if it has one.
+func HostOf(endpoint string) string {
 	if h, _, err := net.SplitHostPort(endpoint); err == nil {
 		return h
 	}
@@ -56,7 +56,7 @@ func parseHost(host string) (netip.Addr, bool) {
 // the ranges of an outer cluster that hosts the machines). A hostname is not judged here: see
 // ForbiddenResolved.
 func Forbidden(endpoint string, cluster *ichorv1alpha1.TalosCluster) error {
-	host := hostOf(endpoint)
+	host := HostOf(endpoint)
 	if host == "" {
 		return fmt.Errorf("the endpoint %q has no host", endpoint)
 	}
@@ -98,7 +98,7 @@ func ForbiddenResolved(ctx context.Context, endpoint string, cluster *ichorv1alp
 		return err
 	}
 
-	host := hostOf(endpoint)
+	host := HostOf(endpoint)
 	if _, ok := parseHost(host); ok {
 		return nil
 	}
@@ -128,7 +128,7 @@ func InDiscovery(endpoint string, cluster *ichorv1alpha1.TalosCluster) bool {
 		return false
 	}
 
-	a, ok := parseHost(hostOf(endpoint))
+	a, ok := parseHost(HostOf(endpoint))
 	if !ok {
 		return false
 	}

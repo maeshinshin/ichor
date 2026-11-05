@@ -37,6 +37,8 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/resources/hardware"
 	"github.com/siderolabs/talos/pkg/machinery/resources/network"
 	"google.golang.org/grpc"
+
+	"github.com/maeshinshin/ichor/pkg/endpointguard"
 )
 
 // clusterProbeTimeout bounds the worker's "can its cluster endpoint be reached" check.
@@ -328,13 +330,7 @@ func orphanCandidate(s *blockres.DiscoveredVolumeSpec, systemDisk string) bool {
 }
 
 // HostOnly drops the port of address, if it has one.
-func HostOnly(address string) string {
-	if h, _, err := net.SplitHostPort(address); err == nil {
-		return h
-	}
-
-	return address
-}
+var HostOnly = endpointguard.HostOf
 
 func tcpReachable(ctx context.Context, hostport string) bool {
 	if _, _, err := net.SplitHostPort(hostport); err != nil {

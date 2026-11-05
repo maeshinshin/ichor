@@ -266,7 +266,13 @@ func runRotateCAHandoff(ctx context.Context, d handoffDeps, req credentialReques
 		return nil, err
 	}
 
-	files, err := writeCredentials(ctx, d.K8s, req)
+	var files *credentialFiles
+
+	err := retryHandoff(ctx, errw, "reading the cluster's secrets bundle", func() (err error) {
+		files, err = writeCredentials(ctx, d.K8s, req)
+
+		return err
+	})
 	if err != nil {
 		return nil, fmt.Errorf("writing the new credentials: %w", err)
 	}

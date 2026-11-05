@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"cmp"
 	"context"
 	"time"
 
@@ -48,12 +49,7 @@ func (s *CATrustSync) NeedLeaderElection() bool { return false }
 
 // Start runs until ctx ends. Passes run only in this loop, so the tick and the event trigger never race.
 func (s *CATrustSync) Start(ctx context.Context) error {
-	interval := s.Interval
-	if interval == 0 {
-		interval = caTrustSyncInterval
-	}
-
-	t := time.NewTicker(interval)
+	t := time.NewTicker(cmp.Or(s.Interval, caTrustSyncInterval))
 	defer t.Stop()
 
 	trigger := make(chan struct{}, 1)

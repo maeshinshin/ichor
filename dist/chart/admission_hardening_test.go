@@ -550,13 +550,13 @@ func TestCNIRoleChangesOnlyTheObjectsCiliumRenders(t *testing.T) {
 				names := stringsOf(rm["resourceNames"])
 				for _, v := range stringsOf(rm["verbs"]) {
 					switch v {
-					case "create", "list", "watch":
+					case verbCreateController, verbList, verbWatch:
 						if len(names) != 0 {
 							t.Errorf("%s: %s on %s carries resourceNames, which RBAC cannot apply to it", label, v, gr[1])
 						}
 					default:
 						if len(names) == 0 {
-							t.Errorf("%s: the CNI role grants %s on every %s; it must be limited to the names Cilium renders", label, v, gr[1])
+							t.Errorf("%s: the CNI role grants %s on every %s; limit it to the names Cilium renders", label, v, gr[1])
 						}
 
 					}
@@ -577,14 +577,15 @@ func TestCNIRoleChangesOnlyTheObjectsCiliumRenders(t *testing.T) {
 				}
 			}
 
-			for v := range strings.FieldsSeq("create list") {
+			for _, v := range []string{verbCreateController, verbList} {
 				if !cniHolds(allRules(role), gr[0], gr[1], v, "") {
 					t.Errorf("%s: the CNI role cannot %s %s without a name, which Helm needs", label, v, gr[1])
 				}
 			}
 
 			// The Job's own confinement is never among the names it may change.
-			for _, protected := range []string{"ichor-controller-jobs", "ichor-controller-job-image", "ichor-controller-jobs-binding", "ichor-controller-job-image-binding"} {
+			for protected := range strings.FieldsSeq("ichor-controller-jobs ichor-controller-job-image " +
+				"ichor-controller-jobs-binding ichor-controller-job-image-binding") {
 				for v := range strings.FieldsSeq("get update patch delete") {
 					if cniHolds(allRules(role), gr[0], gr[1], v, protected) {
 						t.Errorf("%s: the CNI role can %s %s %q, one of the policies that confine it", label, v, gr[1], protected)

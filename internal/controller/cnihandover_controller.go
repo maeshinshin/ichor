@@ -184,6 +184,13 @@ func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	if handedOver && cluster.Status.CNI != nil && cluster.Status.CNI.AppliedValuesHash == hash {
+		// Cilium already runs these values, so an earlier refused or failed edit that was reverted to
+		// them is over: report the values applied again and forget the failures of that attempt. Status
+		// is written only when it changes.
+		if recordApplied(&cluster) {
+			return ctrl.Result{}, r.Status().Update(ctx, &cluster)
+		}
+
 		return ctrl.Result{}, nil
 	}
 
@@ -450,7 +457,8 @@ func (r *CNIHandoverReconciler) finish(
 	}
 
 	st := cniStatus(cluster)
-	st.AppliedValuesHash, st.JobFailures, st.JobFailuresHash = hash, 0, ""
+	st.AppliedValuesHash = hash
+	recordApplied(cluster)
 
 	// An adopted cluster's own Cilium inline manifest entry (named by `ichor adopt` in an
 	// annotation) is recorded in the same update that sets CNIHandover, so render drops it exactly
@@ -460,16 +468,28 @@ func (r *CNIHandoverReconciler) finish(
 	}
 
 	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
-		Type: ichorv1alpha1.ConditionCNIValuesApplied, Status: metav1.ConditionTrue, Reason: reasonCNIApplied,
-		Message: "the Cilium Helm release is deployed at the cluster's values and the DaemonSet is ready",
-	})
-	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 		Type: render.ConditionCNIHandover, Status: metav1.ConditionTrue, Reason: reasonHandoverComplete,
 		Message: fmt.Sprintf("Helm release %s is deployed and Cilium is ready; no longer rendering its cluster.inlineManifests entry",
 			cilium.ReleaseName),
 	})
 
 	return ctrl.Result{}, r.Status().Update(ctx, cluster)
+}
+
+// recordApplied sets CNIValuesApplied to True and clears the failure count of the last attempt, for
+// the values the status records as applied, and reports whether anything changed.
+func recordApplied(cluster *ichorv1alpha1.TalosCluster) bool {
+	changed := apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
+		Type: ichorv1alpha1.ConditionCNIValuesApplied, Status: metav1.ConditionTrue, Reason: reasonCNIApplied,
+		Message: "the Cilium Helm release is deployed at the cluster's values and the DaemonSet is ready",
+	})
+
+	if st := cluster.Status.CNI; st != nil && (st.JobFailures != 0 || st.JobFailuresHash != "") {
+		st.JobFailures, st.JobFailuresHash = 0, ""
+		changed = true
+	}
+
+	return changed
 }
 
 // setProgress records a not-yet-done state. Before the hand-over it is the CNIHandover condition

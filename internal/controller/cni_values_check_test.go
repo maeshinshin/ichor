@@ -30,6 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -133,6 +134,54 @@ var _ = Describe("The Cilium values re-check before a Helm Job", func() {
 		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
 		Expect(cond.Reason).To(Equal(reasonCNIInvalidValues))
 		Expect(cond.Message).To(ContainSubstring("forwardKubeDNSToHost"))
+	})
+
+	// Found on hardware (lane H): reverting a refused or failed edit to exactly the applied values left
+	// CNIValuesApplied False for good, although Cilium runs those values.
+	It("reports the values applied again when a refused edit is reverted to the applied values, and starts no Job", func() {
+		cluster := newValuesCluster(nil)
+		ciliumDaemonSet()(true)
+		helmRelease(1, "deployed", effectiveValues(cluster))
+
+		reconcileHandoverOK(r, cluster)
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Status).To(Equal(metav1.ConditionTrue))
+
+		setValues(cluster, masquerade)
+		reconcileHandoverOK(r, cluster)
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Reason).To(Equal(reasonCNIInvalidValues))
+
+		setValues(cluster, nil)
+		result := reconcileHandoverOK(r, cluster)
+		Expect(result).To(Equal(ctrl.Result{}))
+
+		cond := conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied)
+		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+		Expect(cond.Reason).To(Equal(reasonCNIApplied))
+		Expect(cniJobCount(cluster)).To(BeZero())
+	})
+
+	It("reports the values applied again and clears the failure count when a failed edit is reverted to the applied values", func() {
+		cluster := newValuesCluster(nil)
+		ciliumDaemonSet()(true)
+		helmRelease(1, "deployed", effectiveValues(cluster))
+		r.JobRetryInterval = time.Nanosecond
+
+		reconcileHandoverOK(r, cluster)
+
+		setValues(cluster, debug)
+		reconcileHandoverOK(r, cluster)
+		failJobJustNow(cniJob(getCluster(cluster)), "Job has reached the specified backoff limit")
+
+		reconcileHandoverOK(r, cluster) // retires the failed Job and counts it
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Reason).To(Equal("JobFailed"))
+		Expect(getCluster(cluster).Status.CNI.JobFailures).To(Equal(int32(1)))
+
+		setValues(cluster, nil)
+		reconcileHandoverOK(r, cluster)
+
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Status).To(Equal(metav1.ConditionTrue))
+		Expect(getCluster(cluster).Status.CNI.JobFailures).To(BeZero())
+		Expect(getCluster(cluster).Status.CNI.JobFailuresHash).To(BeEmpty())
 	})
 
 	It("does not touch valid values on a cluster with a control plane", func() {

@@ -160,10 +160,20 @@ func emitConvert(b *strings.Builder, m *typeMapping, src, dst string, toMachiner
 		fmt.Fprintf(b, "\t%s = %s(%s)\n", dst, target, src)
 
 	case kSubstScalar:
-		emitSubstScalar(b, m, src, dst, toMachinery, depth, fieldPath)
+		call := "machineryToMirrorScalar(" + src + ")"
+		if toMachinery {
+			call = fmt.Sprintf("mirrorToMachineryScalar[%s](%s)", m.machExpr, src)
+		}
+
+		emitTryAssign(b, call, depth, dst, fieldPath)
 
 	case kSubstArgValue:
-		emitSubstArgValue(b, src, dst, toMachinery, depth, fieldPath)
+		call := "argValueFromMachinery(" + src + ")"
+		if toMachinery {
+			call = "argValueToMachinery(" + src + ")"
+		}
+
+		emitTryAssign(b, call, depth, dst, fieldPath)
 
 	case kOverride:
 		emitOverrideConvert(b, m, src, dst, toMachinery, depth, fieldPath)
@@ -188,29 +198,17 @@ func emitConvert(b *strings.Builder, m *typeMapping, src, dst string, toMachiner
 	}
 }
 
-func emitSubstScalar(b *strings.Builder, m *typeMapping, src, dst string, toMachinery bool, depth int, fieldPath string) {
-	v := fmt.Sprintf("v%d", depth)
-
-	if toMachinery {
-		fmt.Fprintf(b, "\t%s, err := mirrorToMachineryScalar[%s](%s)\n", v, m.machExpr, src)
-	} else {
-		fmt.Fprintf(b, "\t%s, err := machineryToMirrorScalar(%s)\n", v, src)
-	}
-
-	fmt.Fprintf(b, "\tif err != nil {\n\t\treturn nil, fmt.Errorf(%q+\": %%w\", err)\n\t}\n", fieldPath)
-	fmt.Fprintf(b, "\t%s = %s\n", dst, v)
+// emitErrCheck emits the error return that wraps err with fieldPath, indented by indent.
+func emitErrCheck(b *strings.Builder, indent, fieldPath string) {
+	fmt.Fprintf(b, "%sif err != nil {\n%s\treturn nil, fmt.Errorf(%q+\": %%w\", err)\n%s}\n", indent, indent, fieldPath, indent)
 }
 
-func emitSubstArgValue(b *strings.Builder, src, dst string, toMachinery bool, depth int, fieldPath string) {
+// emitTryAssign emits `v<depth>, err := call`, the error return, and dst = v<depth>.
+func emitTryAssign(b *strings.Builder, call string, depth int, dst, fieldPath string) {
 	v := fmt.Sprintf("v%d", depth)
 
-	if toMachinery {
-		fmt.Fprintf(b, "\t%s, err := argValueToMachinery(%s)\n", v, src)
-	} else {
-		fmt.Fprintf(b, "\t%s, err := argValueFromMachinery(%s)\n", v, src)
-	}
-
-	fmt.Fprintf(b, "\tif err != nil {\n\t\treturn nil, fmt.Errorf(%q+\": %%w\", err)\n\t}\n", fieldPath)
+	fmt.Fprintf(b, "\t%s, err := %s\n", v, call)
+	emitErrCheck(b, "\t", fieldPath)
 	fmt.Fprintf(b, "\t%s = %s\n", dst, v)
 }
 
@@ -227,14 +225,12 @@ func emitOverrideConvert(b *strings.Builder, m *typeMapping, src, dst string, to
 	v := fmt.Sprintf("v%d", depth)
 
 	if !m.overridePtr {
+		call := fmt.Sprintf("machineryToMirrorUnstructured[%s](%s)", m.mirrorExpr, src)
 		if toMachinery {
-			fmt.Fprintf(b, "\t%s, err := mirrorToMachineryUnstructured(%s)\n", v, src)
-		} else {
-			fmt.Fprintf(b, "\t%s, err := machineryToMirrorUnstructured[%s](%s)\n", v, m.mirrorExpr, src)
+			call = "mirrorToMachineryUnstructured(" + src + ")"
 		}
 
-		fmt.Fprintf(b, "\tif err != nil {\n\t\treturn nil, fmt.Errorf(%q+\": %%w\", err)\n\t}\n", fieldPath)
-		fmt.Fprintf(b, "\t%s = %s\n", dst, v)
+		emitTryAssign(b, call, depth, dst, fieldPath)
 
 		return
 	}
@@ -242,7 +238,7 @@ func emitOverrideConvert(b *strings.Builder, m *typeMapping, src, dst string, to
 	if toMachinery {
 		fmt.Fprintf(b, "\tif %s != nil {\n", src)
 		fmt.Fprintf(b, "\t\t%s, err := mirrorToMachineryUnstructured(*%s)\n", v, src)
-		fmt.Fprintf(b, "\t\tif err != nil {\n\t\t\treturn nil, fmt.Errorf(%q+\": %%w\", err)\n\t\t}\n", fieldPath)
+		emitErrCheck(b, "\t\t", fieldPath)
 		fmt.Fprintf(b, "\t\t%s = %s\n", dst, v)
 		fmt.Fprintf(b, "\t}\n")
 
@@ -251,7 +247,7 @@ func emitOverrideConvert(b *strings.Builder, m *typeMapping, src, dst string, to
 
 	fmt.Fprintf(b, "\tif len(%s.Object) > 0 {\n", src)
 	fmt.Fprintf(b, "\t\t%s, err := machineryToMirrorUnstructured[%s](%s)\n", v, m.mirrorExpr, src)
-	fmt.Fprintf(b, "\t\tif err != nil {\n\t\t\treturn nil, fmt.Errorf(%q+\": %%w\", err)\n\t\t}\n", fieldPath)
+	emitErrCheck(b, "\t\t", fieldPath)
 	fmt.Fprintf(b, "\t\t%s = &%s\n", dst, v)
 	fmt.Fprintf(b, "\t}\n")
 }
@@ -266,7 +262,7 @@ func emitStructConvert(b *strings.Builder, m *typeMapping, src, dst string, toMa
 
 	if toMachinery {
 		fmt.Fprintf(b, "\t%s, err := (%s).ToMachinery()\n", t, src)
-		fmt.Fprintf(b, "\tif err != nil {\n\t\treturn nil, fmt.Errorf(%q+\": %%w\", err)\n\t}\n", fieldPath)
+		emitErrCheck(b, "\t", fieldPath)
 
 		if valueMachinery {
 			fmt.Fprintf(b, "\tif %s != nil {\n\t\t%s = *%s\n\t}\n", t, dst, t)
@@ -283,7 +279,7 @@ func emitStructConvert(b *strings.Builder, m *typeMapping, src, dst string, toMa
 	}
 
 	fmt.Fprintf(b, "\t%s, err := %sFromMachinery(%s)\n", t, m.structDef.name, srcAddr)
-	fmt.Fprintf(b, "\tif err != nil {\n\t\treturn nil, fmt.Errorf(%q+\": %%w\", err)\n\t}\n", fieldPath)
+	emitErrCheck(b, "\t", fieldPath)
 	fmt.Fprintf(b, "\t%s = %s\n", dst, t)
 }
 

@@ -33,11 +33,6 @@ import (
 // broadest layer, since neither applies to just one machine.
 const cniPatchLayer = "cluster"
 
-// cniKey names the CNI consistently wherever init refers to it by a
-// short key rather than a full flag name: the "--cni" flag itself, the
-// cluster.inlineManifests entry's name.
-const cniKey = "cni"
-
 // defaultPreset is the preset architecture.md's "Nodes" section marks
 // "recommended" and the one `--preset`'s flag default uses.
 const defaultPreset = "standard"

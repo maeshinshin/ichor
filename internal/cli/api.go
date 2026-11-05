@@ -78,8 +78,6 @@ type apiOptions struct {
 	// Override asks for an emergency override of a safety check. Setting it
 	// implies Local: override is decided by the caller's own RBAC, never by the backend's ServiceAccount.
 	Override bool
-	// OverrideReason is the optional reason recorded with the override; it needs Override.
-	OverrideReason string
 	// CAFile is a PEM bundle trusted, besides the system roots, when ichor-ui
 	// serves TLS on its main port (chart ichorUI.tls.secretName).
 	CAFile string
@@ -88,14 +86,14 @@ type apiOptions struct {
 	TLSServerName string
 }
 
-// overrideOf is the request field the --override flag fills; nil when off. The reason is optional:
-// the field's presence is the override, and an empty reason is recorded as none given.
+// overrideOf is the request field the --override flag fills; nil when off. The field's presence is the
+// override; no reason is asked for.
 func overrideOf(opts apiOptions) *pb.Override {
 	if !opts.Override {
 		return nil
 	}
 
-	return &pb.Override{Reason: opts.OverrideReason}
+	return &pb.Override{}
 }
 
 // addAPIFlags registers the shared flags on a command group.
@@ -112,8 +110,6 @@ func addAPIFlags(cmd *cobra.Command) {
 	f.BoolVar(&apiOpts.Override, "override", false,
 		"incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker, an upgrade the compatibility table refuses); "+
 			"needs the override RBAC verb on the resource; implies --local")
-	f.StringVar(&apiOpts.OverrideReason, "override-reason", "",
-		"optional, with --override: why, recorded in the audit record and an Event (without it the record says no reason given)")
 }
 
 // apiDeps is connectAPI's dependencies. Forward and FreePort are the seams
@@ -205,10 +201,6 @@ var errTLSVerify = errors.New("ichor-ui's TLS certificate cannot be verified")
 // requireBackend turns the fallback into errBackendRequired, for the
 // commands that need the backend's Talos identity.
 func connectAPI(ctx context.Context, opts apiOptions, deps apiDeps, requireBackend bool) (*apiClients, error) {
-	if opts.OverrideReason != "" && !opts.Override {
-		return nil, errors.New("--override-reason needs --override: the reason is recorded only with an override")
-	}
-
 	if opts.Override {
 		if requireBackend {
 			return nil, fmt.Errorf("--override applies to writes, which never need the backend: %w", errBackendRequired)

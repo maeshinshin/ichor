@@ -18,6 +18,7 @@ package cli
 
 import (
 	"bytes"
+	"io"
 	"strings"
 	"testing"
 )
@@ -125,29 +126,18 @@ func TestBuildInitPlan_NonVIPWarnsButSucceeds(t *testing.T) {
 	}
 }
 
-func TestBuildInitPlan_CNITunnelLandsOnTheCR(t *testing.T) {
-	in := validInitPlanInput()
-	in.CNITunnel = tunnelGeneve
-
-	cluster, err := buildInitPlan(in, &bytes.Buffer{})
-	if err != nil {
-		t.Fatalf("buildInitPlan: %v", err)
-	}
-
-	if got := cluster.Spec.CNI.Tunnel; got != tunnelGeneve {
-		t.Errorf("spec.cni.tunnel = %q, want geneve", got)
-	}
-}
-
-func TestBuildInitPlan_CNITunnelAcceptedWithCilium(t *testing.T) {
+func TestBuildInitPlan_CNITunnel(t *testing.T) {
 	for _, tunnel := range []string{"", ciliumTunnelVxlan, tunnelGeneve} {
 		in := validInitPlanInput()
 		in.CNITunnel = tunnel
 
-		var warn bytes.Buffer
+		cluster, err := buildInitPlan(in, io.Discard)
+		if err != nil {
+			t.Fatalf("buildInitPlan with cilium and tunnel %q: %v", tunnel, err)
+		}
 
-		if _, err := buildInitPlan(in, &warn); err != nil {
-			t.Errorf("buildInitPlan with cilium and tunnel %q: %v", tunnel, err)
+		if got := cluster.Spec.CNI.Tunnel; got != tunnel {
+			t.Errorf("spec.cni.tunnel = %q, want %q", got, tunnel)
 		}
 	}
 }
@@ -165,6 +155,19 @@ func TestBuildInitPlan_Errors(t *testing.T) {
 		{"invalid endpoint type", func(in *initPlanInput) { in.EndpointType = "carrier-pigeon" }},
 		{"empty endpoint address", func(in *initPlanInput) { in.EndpointAddress = "" }},
 		{"empty install disk", func(in *initPlanInput) { in.InstallDisk = "" }},
+		{"pod subnet is not a CIDR", func(in *initPlanInput) { in.PodSubnets = []string{"10.248.0.0"} }},
+		{"too many service subnets", func(in *initPlanInput) {
+			in.ServiceSubnets = []string{"10.1.0.0/16", "fd00::/64", "10.2.0.0/16"}
+		}},
+		{"service subnet is not a CIDR", func(in *initPlanInput) { in.ServiceSubnets = []string{"nope"} }},
+		{"discover address is not an address", func(in *initPlanInput) { in.DiscoverAddresses = []string{"nope"} }},
+		{"discover address is IPv6", func(in *initPlanInput) { in.DiscoverAddresses = []string{"fd00::1"} }},
+		{"discover CIDR is not a CIDR", func(in *initPlanInput) { in.DiscoverCIDRs = []string{"192.168.2.0"} }},
+		{"discover CIDR is IPv6", func(in *initPlanInput) { in.DiscoverCIDRs = []string{"fd00::/120"} }},
+		{"discover CIDR is wider than /24", func(in *initPlanInput) { in.DiscoverCIDRs = []string{"10.0.0.0/16"} }},
+		{"too many discover CIDRs", func(in *initPlanInput) {
+			in.DiscoverCIDRs = []string{"10.0.0.0/24", "10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24", "10.0.4.0/24"}
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			in := validInitPlanInput()

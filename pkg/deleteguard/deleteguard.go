@@ -53,19 +53,14 @@ func CheckDelete(annotations map[string]string) error {
 // CheckControlPlaneQuorum refuses deleting a control-plane TalosMachine when
 // doing so would leave etcd without quorum or without any control plane at
 // all. currentControlPlanes counts every control-plane TalosMachine the
-// cluster has right now, including the one being deleted; the caller (the
-// webhook today, a UI backend later -- design principle 10) does the
-// counting and passes only the number in, so this stays a pure function like
-// CheckDelete. Talos itself enforces neither rule (docs/design/architecture.md,
-// "Nodes"), and this check is stronger than CheckDelete: the allow-delete
-// annotation does not override it.
+// cluster has right now, including the one being deleted; the caller does the
+// counting, so this stays a pure function like CheckDelete. Talos enforces
+// neither rule (docs/design/architecture.md, "Nodes"), and the allow-delete
+// annotation does not override this check.
 //
-// etcd quorum for n members is (n/2)+1. Removing one member from n leaves
-// n-1, which only fails to keep that quorum when n is 1 or 2 -- from n=3
-// upward, n-1 always meets (n/2)+1. n=1 is deliberately not special-cased:
-// the result (n-1=0) always triggers "last control plane" below, so a
-// single-node cluster's only control plane cannot be deleted this way either;
-// removing the whole cluster goes through deleting the TalosCluster instead.
+// etcd quorum for n members is (n/2)+1; removing one member only breaks it
+// when n is 1 or 2. n=1 is not special-cased: n-1=0 triggers "last control
+// plane", so a single-node cluster goes through deleting the TalosCluster.
 func CheckControlPlaneQuorum(currentControlPlanes int) error {
 	after := currentControlPlanes - 1
 	if after < 1 {
@@ -111,26 +106,17 @@ func CheckControlPlaneCount(currentControlPlanes int, desiredCount int) error {
 // in through ApprovedMachines' KeepDeleting.
 //
 // reader must be a direct, uncached read -- a manager's APIReader
-// (mgr.GetAPIReader()), never its cached Client (mgr.GetClient()). This
-// count gates two independent delete paths (the webhook's admission check
-// and removal.go's own recount under the cluster lock), and both used the
-// cached client until a load-dependent test failure traced back to it: a
-// cached read can still report a control plane that was deleted moments
-// ago, drifting the count *high*. High is the dangerous direction here --
-// it is what lets a second, concurrent deletion look safe when it would
-// actually break quorum -- unlike undercounting, which only over-refuses.
-// See's appendix.
+// (mgr.GetAPIReader()), never its cached Client. This count gates two
+// independent delete paths (the webhook's admission check and removal.go's
+// recount under the cluster lock): a cached read can still report a control
+// plane deleted moments ago, drifting the count *high*, which is the dangerous
+// direction (a second, concurrent deletion looks safe when it would break
+// quorum). Undercounting only over-refuses.'s appendix.
 //
-// This is meant to be the only place in the codebase that lists
-// TalosMachines to count control planes; enforced not here (this package
-// structurally has only one List call site after the fix, so a guard
-// scanning only it could never observe a regression) but in the two
-// packages a second count could actually reappear in --
-// internal/controller.TestTalosMachineListCountingStaysCentralized, which
-// also scans internal/webhook/v1alpha1. If a
-// quorum/removal test ever flakes, suspect this function's read path
-// before the environment -- that is exactly how the cached-read bug above
-// was found.
+// This is meant to be the only place that lists TalosMachines to count control
+// planes; internal/controller.TestTalosMachineListCountingStaysCentralized
+// enforces that. If a quorum/removal test ever flakes,
+// suspect this read path before the environment.
 func CountApprovedControlPlanes(ctx context.Context, reader client.Reader, namespace, clusterName string) (int, error) {
 	return countApproved(ctx, reader, namespace, clusterName, "controlplane")
 }

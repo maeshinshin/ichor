@@ -166,9 +166,7 @@ func newRestoreHarness(t *testing.T) *restoreHarness {
 		store: &memStore{objs: map[string][]byte{}}, talos: &fakeRecover{}, bundle: newTestBundle(t),
 	}
 
-	if _, err := saveBundleFile("lost", h.bundle, ""); err != nil {
-		t.Fatal(err)
-	}
+	saveTestBundle(t, "lost", h.bundle, "")
 
 	env := map[string]string{"ICHOR_S3_ACCESS_KEY_ID": testS3AccessKey, "ICHOR_S3_SECRET_ACCESS_KEY": testS3SecretKey}
 	h.opts = restoreOptions{

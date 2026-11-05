@@ -36,10 +36,30 @@ import (
 	configres "github.com/siderolabs/talos/pkg/machinery/resources/config"
 	"github.com/siderolabs/talos/pkg/machinery/resources/hardware"
 	"github.com/siderolabs/talos/pkg/machinery/resources/network"
+	"google.golang.org/grpc"
 )
 
 // clusterProbeTimeout bounds the worker's "can its cluster endpoint be reached" check.
 const clusterProbeTimeout = 5 * time.Second
+
+// NodeCallTimeout bounds every call the inspection makes to the node's Talos API. A control plane
+// whose etcd is not running answers some calls never (`talosctl etcd members` hangs against it), and
+// an inspection that waits forever is worse than one that says the call did not answer.
+const NodeCallTimeout = 20 * time.Second
+
+// bounded runs call under a context that ends after d. A call that is cut off returns an error that
+// says it did not answer within d, instead of a bare "context deadline exceeded".
+func bounded[T any](ctx context.Context, d time.Duration, what string, call func(context.Context) (T, error)) (T, error) {
+	cctx, cancel := context.WithTimeout(ctx, d)
+	defer cancel()
+
+	v, err := call(cctx)
+	if err != nil && cctx.Err() != nil && ctx.Err() == nil {
+		return v, fmt.Errorf("%s did not answer within %s", what, d)
+	}
+
+	return v, err
+}
 
 // Dial connects to the single node at address with the operator's credential.
 //
@@ -64,12 +84,14 @@ func Dial(ctx context.Context, cred Credential, address, contextName string) (No
 		return nil, fmt.Errorf("dialing the Talos API at %q: %w", address, err)
 	}
 
-	return &machineryNode{c: c, address: address}, nil
+	return &machineryNode{c: c, address: address, timeout: NodeCallTimeout}, nil
 }
 
 type machineryNode struct {
 	c       *client.Client
 	address string
+	// timeout bounds each call to the node.
+	timeout time.Duration
 }
 
 func (n *machineryNode) Close() error { return n.c.Close() }
@@ -84,7 +106,9 @@ func (n *machineryNode) Reset(ctx context.Context, graceful bool) error {
 func (n *machineryNode) Inspect(ctx context.Context) (Inspection, error) {
 	in := Inspection{Address: n.address}
 
-	cfgRes, err := safe.StateGetByID[*configres.MachineConfig](ctx, n.c.COSI, configres.ActiveID)
+	cfgRes, err := bounded(ctx, n.timeout, "the node's machine configuration", func(c context.Context) (*configres.MachineConfig, error) {
+		return safe.StateGetByID[*configres.MachineConfig](c, n.c.COSI, configres.ActiveID)
+	})
 	if err != nil {
 		return in, fmt.Errorf("reading the machine configuration (configured node? admin credential?): %w", err)
 	}
@@ -107,16 +131,21 @@ func (n *machineryNode) Inspect(ctx context.Context) (Inspection, error) {
 		in.ClusterID = d.ClusterID()
 	}
 
-	if sys, err := safe.StateGetByID[*hardware.SystemInformation](ctx, n.c.COSI,
-		hardware.SystemInformationID); err == nil {
+	if sys, err := bounded(ctx, n.timeout, "the node's hardware identity", func(c context.Context) (*hardware.SystemInformation, error) {
+		return safe.StateGetByID[*hardware.SystemInformation](c, n.c.COSI, hardware.SystemInformationID)
+	}); err == nil {
 		in.UUID = sys.TypedSpec().UUID
 	}
 
-	if hn, err := safe.StateGetByID[*network.HostnameStatus](ctx, n.c.COSI, network.HostnameID); err == nil {
+	if hn, err := bounded(ctx, n.timeout, "the node's hostname", func(c context.Context) (*network.HostnameStatus, error) {
+		return safe.StateGetByID[*network.HostnameStatus](c, n.c.COSI, network.HostnameID)
+	}); err == nil {
 		in.Hostname = hn.TypedSpec().Hostname
 	}
 
-	if v, err := n.c.Version(ctx); err == nil {
+	if v, err := bounded(ctx, n.timeout, "the node's version", func(c context.Context) (*machine.VersionResponse, error) {
+		return n.c.Version(c)
+	}); err == nil {
 		for _, msg := range v.GetMessages() {
 			if tag := msg.GetVersion().GetTag(); tag != "" {
 				in.Version = tag
@@ -127,28 +156,52 @@ func (n *machineryNode) Inspect(ctx context.Context) (Inspection, error) {
 	}
 
 	if in.ControlPlane {
-		resp, err := n.c.EtcdMemberList(ctx, &machine.EtcdMemberListRequest{QueryLocal: true})
-		if err == nil {
-			for _, msg := range resp.GetMessages() {
-				for _, m := range msg.GetMembers() {
-					in.EtcdMembers = append(in.EtcdMembers, EtcdMember{
-						ID: m.GetId(), Hostname: m.GetHostname(), Unhealthy: !memberReachable(ctx, m.GetPeerUrls()),
-					})
-				}
-			}
-
-			n.markLocalMember(ctx, &in)
-
-			in.EtcdKnown = len(in.EtcdMembers) > 0
-			in.ClusterReachable = in.EtcdKnown
-		}
+		inspectEtcd(ctx, n.c, n.timeout, &in)
 	} else if endpoint != "" {
 		in.ClusterReachable = tcpReachable(ctx, endpoint)
 	}
 
-	in.Volumes, err = n.volumes(ctx)
+	in.Volumes, err = bounded(ctx, n.timeout, "the node's volume list", n.volumes)
 
 	return in, err
+}
+
+// etcdAPI is the part of the Talos client the etcd inspection uses; a test supplies its own.
+type etcdAPI interface {
+	EtcdMemberList(ctx context.Context, req *machine.EtcdMemberListRequest, opts ...grpc.CallOption) (*machine.EtcdMemberListResponse, error)
+	EtcdStatus(ctx context.Context, opts ...grpc.CallOption) (*machine.EtcdStatusResponse, error)
+}
+
+// inspectEtcd reads a control plane's etcd membership into in, each call bounded by timeout. When the
+// list cannot be read (etcd is not running, or does not answer) it sets in.EtcdProblem and nothing
+// else: the cluster counts as not reachable, which Assess turns into a refusal of a graceful reset
+// and, with --force-ungraceful, a warning.
+func inspectEtcd(ctx context.Context, api etcdAPI, timeout time.Duration, in *Inspection) {
+	resp, err := bounded(ctx, timeout, "etcd member list", func(c context.Context) (*machine.EtcdMemberListResponse, error) {
+		return api.EtcdMemberList(c, &machine.EtcdMemberListRequest{QueryLocal: true})
+	})
+	if err != nil {
+		in.EtcdProblem = err.Error()
+
+		return
+	}
+
+	for _, msg := range resp.GetMessages() {
+		for _, m := range msg.GetMembers() {
+			in.EtcdMembers = append(in.EtcdMembers, EtcdMember{
+				ID: m.GetId(), Hostname: m.GetHostname(), Unhealthy: !memberReachable(ctx, m.GetPeerUrls()),
+			})
+		}
+	}
+
+	markLocalMember(ctx, api, timeout, in)
+
+	in.EtcdKnown = len(in.EtcdMembers) > 0
+	in.ClusterReachable = in.EtcdKnown
+
+	if !in.EtcdKnown {
+		in.EtcdProblem = "etcd reports no members"
+	}
 }
 
 // markLocalMember records the dialled node's own member ID and judges its
@@ -156,8 +209,10 @@ func (n *machineryNode) Inspect(ctx context.Context) (Inspection, error) {
 // sent to). Other members are judged by whether their peer port answers, set
 // by the caller. ponytail: a member whose peer port is firewalled from the
 // controller counts as unhealthy, which errs toward refusing; --force overrides.
-func (n *machineryNode) markLocalMember(ctx context.Context, in *Inspection) {
-	resp, err := n.c.EtcdStatus(ctx)
+func markLocalMember(ctx context.Context, api etcdAPI, timeout time.Duration, in *Inspection) {
+	resp, err := bounded(ctx, timeout, "etcd status", func(c context.Context) (*machine.EtcdStatusResponse, error) {
+		return api.EtcdStatus(c)
+	})
 	if err != nil {
 		return
 	}

@@ -132,9 +132,25 @@ func runMachineReclaim(ctx context.Context, d reclaimDeps, address string, f rec
 	}
 	defer node.Close() //nolint:errcheck
 
-	in, err := node.Inspect(ctx)
+	steps := newProgress(d.Out)
+
+	var in reclaim.Inspection
+
+	// Every call to the node is bounded (reclaim.NodeCallTimeout), so a node whose etcd does not
+	// run cannot hang this step; the line says so before the first call is made.
+	err = steps.Run("Inspect", func(s *step) (string, error) {
+		s.Update(fmt.Sprintf("reading %s (each call gives up after %s)", address, reclaim.NodeCallTimeout))
+
+		var ierr error
+
+		if in, ierr = node.Inspect(ctx); ierr != nil {
+			return "", fmt.Errorf("machine reclaim: inspecting %s: %w", address, ierr)
+		}
+
+		return "read " + address, nil
+	})
 	if err != nil {
-		return fmt.Errorf("machine reclaim: inspecting %s: %w", address, err)
+		return err
 	}
 
 	opt := reclaim.Options{Force: f.Force, ForceUngraceful: f.ForceUngraceful}
@@ -165,8 +181,6 @@ func runMachineReclaim(ctx context.Context, d reclaimDeps, address string, f rec
 		}
 	}
 	// Execute inspects once more, so a node swapped after the report is caught.
-	steps := newProgress(d.Out)
-
 	err = steps.Run("Reset", func(*step) (string, error) {
 		if _, err := reclaim.Execute(ctx, node, known, opt, c); err != nil {
 			return "", fmt.Errorf("machine reclaim: %w", err)

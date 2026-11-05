@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -150,11 +151,8 @@ func currentKubeProxyMode(ctx context.Context, reader client.Reader, cluster *ic
 	}
 
 	mode, _ := render.KubeProxyMode(cluster)
-	if mode == "" {
-		mode = cni.KubeProxyEnabled
-	}
 
-	return mode, nil
+	return cmp.Or(mode, cni.KubeProxyEnabled), nil
 }
 
 // hashCiliumValues hashes a values map; the same function reads a release record's config back
@@ -246,9 +244,7 @@ func AdvanceCNIHelmJob(
 	ctx context.Context, c client.Client, ns string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, nodes int,
 	inst *ichorv1alpha1.IchorInstallation, images InstallerImages, check func(context.Context) error, salt string, since time.Time,
 ) (bool, error) {
-	if mode == "" {
-		mode = cni.KubeProxyEnabled
-	}
+	mode = cmp.Or(mode, cni.KubeProxyEnabled)
 
 	hash, err := CNIValuesHash(cluster, mode, nodes)
 	if err != nil {

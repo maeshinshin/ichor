@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -87,14 +88,6 @@ type MachineReclaimReconciler struct {
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=get;list;watch;update;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
-func orDuration(d, def time.Duration) time.Duration {
-	if d > 0 {
-		return d
-	}
-
-	return def
-}
-
 // Reconcile advances one MachineReclaim. A panic is turned into a plain error: its value could
 // quote what the code was holding, and nothing about a credential may reach a log.
 func (r *MachineReclaimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (res ctrl.Result, err error) {
@@ -104,7 +97,7 @@ func (r *MachineReclaimReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 	}()
 
-	ctx, stop := context.WithTimeout(ctx, orDuration(r.ReconcileTimeout, reclaimReconcileTimeout))
+	ctx, stop := context.WithTimeout(ctx, cmp.Or(r.ReconcileTimeout, reclaimReconcileTimeout))
 	defer stop()
 
 	var mr ichorv1alpha1.MachineReclaim
@@ -133,7 +126,7 @@ func (r *MachineReclaimReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 
 		r.audit(&mr, corev1.EventTypeNormal, "ReclaimRequested",
-			fmt.Sprintf("reclaim of %s requested by %s", mr.Spec.Address, orNoneStr(mr.Status.Audit.RequestedBy)))
+			fmt.Sprintf("reclaim of %s requested by %s", mr.Spec.Address, cmp.Or(mr.Status.Audit.RequestedBy, "(unknown)")))
 	}
 
 	logf.FromContext(ctx).Info("reconciling a reclaim", "phase", mr.Status.Phase)
@@ -249,7 +242,7 @@ func (r *MachineReclaimReconciler) reset(
 	confirmedBy := mr.Annotations[ichorv1alpha1.ReclaimConfirmedByAnnotation]
 
 	r.audit(mr, corev1.EventTypeNormal, "ReclaimConfirmed",
-		fmt.Sprintf("%s confirmed UUID %s", orNoneStr(confirmedBy), mr.Spec.ConfirmUUID))
+		fmt.Sprintf("%s confirmed UUID %s", cmp.Or(confirmedBy, "(unknown)"), mr.Spec.ConfirmUUID))
 
 	rec := &resetRecorder{Node: node}
 	rec.before = func() error {
@@ -309,7 +302,7 @@ func (r *MachineReclaimReconciler) waitForMaintenance(ctx context.Context, mr *i
 
 	// The deadline counts from the reset, not from the TTL: once the reset is sent the request
 	// lives until the machine is back or this deadline passes (ADR 0107).
-	deadline := sent.Add(orDuration(r.MaintenanceWait, reclaimMaintenanceWait))
+	deadline := sent.Add(cmp.Or(r.MaintenanceWait, reclaimMaintenanceWait))
 
 	failed := func() (ctrl.Result, error) {
 		return r.fail(ctx, mr, fmt.Sprintf("%s did not return to maintenance mode with UUID %s. It may have taken a new "+
@@ -322,10 +315,10 @@ func (r *MachineReclaimReconciler) waitForMaintenance(ctx context.Context, mr *i
 	}
 
 	// Never probe past the deadline.
-	wctx, cancel := context.WithTimeout(ctx, min(orDuration(r.WaitWindow, reclaimWaitWindow), remaining))
+	wctx, cancel := context.WithTimeout(ctx, min(cmp.Or(r.WaitWindow, reclaimWaitWindow), remaining))
 	defer cancel()
 
-	err := reclaim.WaitMaintenance(wctx, host, uuid, orDuration(r.WaitInterval, reclaimWaitInterval), probe)
+	err := reclaim.WaitMaintenance(wctx, host, uuid, cmp.Or(r.WaitInterval, reclaimWaitInterval), probe)
 
 	switch {
 	case err == nil:
@@ -574,14 +567,6 @@ func inspectionStatus(in reclaim.Inspection, plan reclaim.Plan) *ichorv1alpha1.M
 	}
 
 	return out
-}
-
-func orNoneStr(s string) string {
-	if s == "" {
-		return "(unknown)"
-	}
-
-	return s
 }
 
 // SetupWithManager sets up the controller and the credential sweeper with the Manager.

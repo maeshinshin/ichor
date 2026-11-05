@@ -153,8 +153,11 @@ type GetCiliumValuesResponse struct {
 	// available_chart_version is status.cni.availableChartVersion; empty when
 	// Cilium is up to date.
 	AvailableChartVersion string `protobuf:"bytes,6,opt,name=available_chart_version,json=availableChartVersion,proto3" json:"available_chart_version,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// can_edit is whether the caller may change the user layer: the verb update on
+	// talosclusters/cilium-values, which ichor-admin holds.
+	CanEdit       bool `protobuf:"varint,7,opt,name=can_edit,json=canEdit,proto3" json:"can_edit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetCiliumValuesResponse) Reset() {
@@ -228,6 +231,13 @@ func (x *GetCiliumValuesResponse) GetAvailableChartVersion() string {
 		return x.AvailableChartVersion
 	}
 	return ""
+}
+
+func (x *GetCiliumValuesResponse) GetCanEdit() bool {
+	if x != nil {
+		return x.CanEdit
+	}
+	return false
 }
 
 type ValidateCiliumValuesRequest struct {
@@ -685,7 +695,7 @@ const file_ichor_v1alpha1_cni_proto_rawDesc = "" +
 	"\n" +
 	"value_yaml\x18\x03 \x01(\tR\tvalueYaml\"M\n" +
 	"\x16GetCiliumValuesRequest\x123\n" +
-	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\x8d\x02\n" +
+	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\xa8\x02\n" +
 	"\x17GetCiliumValuesResponse\x12#\n" +
 	"\rdefaults_yaml\x18\x01 \x01(\tR\fdefaultsYaml\x12\x1b\n" +
 	"\tuser_yaml\x18\x02 \x01(\tR\buserYaml\x12.\n" +
@@ -693,7 +703,8 @@ const file_ichor_v1alpha1_cni_proto_rawDesc = "" +
 	"\x0eeffective_yaml\x18\x04 \x01(\tR\reffectiveYaml\x12!\n" +
 	"\n" +
 	"tracked_by\x18\x05 \x01(\tB\x02\x18\x01R\ttrackedBy\x126\n" +
-	"\x17available_chart_version\x18\x06 \x01(\tR\x15availableChartVersion\"o\n" +
+	"\x17available_chart_version\x18\x06 \x01(\tR\x15availableChartVersion\x12\x19\n" +
+	"\bcan_edit\x18\a \x01(\bR\acanEdit\"o\n" +
 	"\x1bValidateCiliumValuesRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12\x1b\n" +
 	"\tuser_yaml\x18\x02 \x01(\tR\buserYaml\"L\n" +

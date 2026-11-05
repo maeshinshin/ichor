@@ -1,6 +1,6 @@
 # 0119. A daily CI run turns a new Cilium patch into a pull request
 
-Status: Accepted · Date: 2026-11-04 · Design section: Upgrades, Cilium · Touches: 0098, 0108, 0113, 0115
+Status: Accepted; built · Date: 2026-11-04 · Design section: Upgrades, Cilium · Touches: 0098, 0108, 0113, 0115
 
 Decided: Ichor pins the Cilium version, and the pin moves to a new upstream patch of the same minor through a pull request that CI opens: `.github/workflows/cilium-patch.yml` runs daily (and on demand) `hack/bump-cilium-patch.sh` (`make bump-cilium-patch`), which takes the newest final patch of the pinned minor from the Cilium Helm index, verifies the cosign signatures of the agent, operator-generic and hubble-relay images that chart pins against the Cilium release workflow of that tag (the identity `internal/imagesig` uses), checks that Cilium tests the minor with the same Kubernetes versions, and only then moves the pins (Makefile version and SHA-256, the `go:embed` line, `ChartVersion`, the chart archive, the bootstrap goldens, the version named in the README, the guides and the foreign hardware tests, the `compat.go` citation); the workflow runs `make test` and `make lint` and opens the pull request `chore(cni): bump the embedded Cilium chart to X.Y.Z` with `peter-evans/create-pull-request`. A merged bump reaches clusters only with the next Ichor release. The script never crosses a minor; a new minor is a person's decision.
 

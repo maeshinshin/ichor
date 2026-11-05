@@ -128,6 +128,30 @@ func TestAcquire_SecondFailsWhileFirstHolds(t *testing.T) {
 	}
 }
 
+func TestAcquire_HeldErrorReportsWhenTheHolderTookTheLockNotItsLastRenewal(t *testing.T) {
+	ctx, lock := newTestLock(t, time.Minute)
+
+	before := time.Now().Add(-time.Second)
+	if err := lock.Acquire(ctx, identityA); err != nil {
+		t.Fatalf("first Acquire: %v", err)
+	}
+	time.Sleep(20 * time.Millisecond)
+	if err := lock.Renew(ctx, identityA); err != nil {
+		t.Fatalf("Renew: %v", err)
+	}
+
+	var held *HeldError
+	if err := lock.Acquire(ctx, identityB); !errors.As(err, &held) {
+		t.Fatalf("second Acquire = %v, want *HeldError", err)
+	}
+	if held.Acquired.Before(before) || time.Since(held.Acquired) > 15*time.Second {
+		t.Fatalf("HeldError.Acquired = %v, want the time of the first Acquire", held.Acquired)
+	}
+	if time.Since(held.Acquired) < 20*time.Millisecond {
+		t.Fatalf("HeldError.Acquired = %v moved with the renewal", held.Acquired)
+	}
+}
+
 func TestAcquire_DifferentClustersBothSucceed(t *testing.T) {
 	ns := newTestNamespace(t)
 	ctx := context.Background()

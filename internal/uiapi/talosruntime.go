@@ -18,7 +18,6 @@ package uiapi
 
 import (
 	"context"
-	"sync"
 
 	"connectrpc.com/connect"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -50,42 +49,30 @@ func (s *Server) GetNodeTalosRuntime(
 
 	resp := &pb.GetNodeTalosRuntimeResponse{MaintenanceMode: maintenance}
 
-	var wg sync.WaitGroup
+	runSections(ctx,
+		func(c context.Context) {
+			if m.Spec.Role == roleWorkerName {
+				resp.Etcd = &pb.TalosEtcdSection{NotApplicable: true}
+				return
+			}
 
-	run := func(read func(context.Context)) {
-		wg.Go(func() {
-			cctx, cancel := context.WithTimeout(ctx, talosDetailsTimeout)
-			defer cancel()
-
-			read(cctx)
-		})
-	}
-
-	run(func(c context.Context) {
-		if m.Spec.Role == roleWorkerName {
-			resp.Etcd = &pb.TalosEtcdSection{NotApplicable: true}
-
-			return
-		}
-
-		resp.Etcd = section(c, tc.TalosEtcd, func(e string) *pb.TalosEtcdSection { return &pb.TalosEtcdSection{Error: e} })
-	})
-	run(func(c context.Context) {
-		resp.Processes = section(c, tc.TalosProcesses, func(e string) *pb.TalosProcessesSection { return &pb.TalosProcessesSection{Error: e} })
-	})
-	run(func(c context.Context) {
-		resp.Containers = section(c, tc.TalosContainers, func(e string) *pb.TalosContainersSection { return &pb.TalosContainersSection{Error: e} })
-		resp.Containers.Containers = sanitizeContainers(resp.Containers.Containers)
-	})
-	run(func(c context.Context) {
-		resp.NetworkState = section(c, tc.TalosNetworkState, func(e string) *pb.TalosNetworkStateSection { return &pb.TalosNetworkStateSection{Error: e} })
-	})
-	run(func(c context.Context) {
-		resp.KernelModules = section(c, tc.TalosKernelModules, func(e string) *pb.TalosKernelModulesSection { return &pb.TalosKernelModulesSection{Error: e} })
-	})
-	run(func(c context.Context) { resp.Kubernetes = s.kubernetesSection(c, m) })
-
-	wg.Wait()
+			resp.Etcd = section(c, tc.TalosEtcd, func(e string) *pb.TalosEtcdSection { return &pb.TalosEtcdSection{Error: e} })
+		},
+		func(c context.Context) {
+			resp.Processes = section(c, tc.TalosProcesses, func(e string) *pb.TalosProcessesSection { return &pb.TalosProcessesSection{Error: e} })
+		},
+		func(c context.Context) {
+			resp.Containers = section(c, tc.TalosContainers, func(e string) *pb.TalosContainersSection { return &pb.TalosContainersSection{Error: e} })
+			resp.Containers.Containers = sanitizeContainers(resp.Containers.Containers)
+		},
+		func(c context.Context) {
+			resp.NetworkState = section(c, tc.TalosNetworkState, func(e string) *pb.TalosNetworkStateSection { return &pb.TalosNetworkStateSection{Error: e} })
+		},
+		func(c context.Context) {
+			resp.KernelModules = section(c, tc.TalosKernelModules, func(e string) *pb.TalosKernelModulesSection { return &pb.TalosKernelModulesSection{Error: e} })
+		},
+		func(c context.Context) { resp.Kubernetes = s.kubernetesSection(c, m) },
+	)
 
 	return connect.NewResponse(resp), nil
 }

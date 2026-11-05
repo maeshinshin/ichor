@@ -225,10 +225,10 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 	return nil
 }
 
-// ciliumSecretsNamespace is the Cilium chart's own secrets namespace. It exists only where Cilium
+// CiliumSecretsNamespace is the Cilium chart's own secrets namespace (`ichor init` creates it itself on Cilium). It exists only where Cilium
 // runs, so the manifest's Role and RoleBinding there are skipped
 // on another CNI instead of failing the run.
-const ciliumSecretsNamespace = "cilium-secrets"
+const CiliumSecretsNamespace = "cilium-secrets"
 
 // ciliumPolicyCRD is the CRD the network policies need: it exists once Cilium runs, which an
 // upgrade can assume and a cluster on another CNI cannot.
@@ -318,8 +318,8 @@ func applyStep(ctx context.Context, c client.Client, opts Options, name string, 
 		u.SetManagedFields(nil)
 
 		if err := applyWithSettle(ctx, c, u, opts.RBACSettle); err != nil {
-			if apierrors.IsNotFound(err) && o.GetNamespace() == ciliumSecretsNamespace {
-				logf(opts.Log, "skipping %s %s: namespace %s does not exist, Cilium does not run here", o.GetKind(), o.GetName(), ciliumSecretsNamespace)
+			if apierrors.IsNotFound(err) && o.GetNamespace() == CiliumSecretsNamespace {
+				logf(opts.Log, "skipping %s %s: namespace %s does not exist, Cilium does not run here", o.GetKind(), o.GetName(), CiliumSecretsNamespace)
 
 				continue
 			}

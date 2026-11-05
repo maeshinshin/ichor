@@ -32,7 +32,7 @@ spec:
 func TestInitStartsIchorUIWithAnExplicitAllowUnauthenticated(t *testing.T) {
 	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
 
-	if err := applyIchorManifest(context.Background(), k8sClient, []byte(uiManifest), &bytes.Buffer{}); err != nil {
+	if err := applyIchorManifest(context.Background(), k8sClient, []byte(uiManifest), &bytes.Buffer{}, false); err != nil {
 		t.Fatal(err)
 	}
 

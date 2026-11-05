@@ -94,7 +94,6 @@ func settingChanges(oldSpec, newSpec *ichorv1alpha1.IchorInstallationSpec) []set
 		{"spec.installerRepository", oldSpec.InstallerRepository, newSpec.InstallerRepository, ver},
 		{"spec.installerDigest", oldSpec.InstallerDigest, newSpec.InstallerDigest, ver},
 		{"spec.installerSignature.mode", oSig.Mode, nSig.Mode, ver},
-		{"spec.installerSignature.reason", oSig.Reason, nSig.Reason, ver},
 		{"spec.deployment.manager", oDep.Manager, nDep.Manager, ver},
 		{"spec.users.tokenTTL", durOf(oU.TokenTTL), durOf(nU.TokenTTL), set},
 		{"spec.users.refreshLifetime", durOf(oU.RefreshLifetime), durOf(nU.RefreshLifetime), set},

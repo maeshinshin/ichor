@@ -89,19 +89,14 @@ func (n *nodeRun) lastWorkerGuard(ctx context.Context, node, doing string) error
 	}
 
 	// Override: the creator held the verb on the machine when the webhook
-	// admitted spec.node.override, so the guard is waived and the override recorded, with its reason if given.
+	// admitted spec.node.override, so the guard is waived and the override recorded (no reason is asked for).
 	if n.spec.Overrides() {
-		reason := n.spec.EffectiveOverrideReason()
-		if reason == "" {
-			reason = "no reason given"
-		}
-
 		n.r.operationEvent(n.op, corev1.EventTypeWarning, "Override",
-			fmt.Sprintf("%s of %q goes ahead though it is the last schedulable Ready worker, under override: %s", doing, n.m.Name, reason))
+			fmt.Sprintf("%s of %q goes ahead though it is the last schedulable Ready worker, under override", doing, n.m.Name))
 
 		return nil
 	}
 
 	return fmt.Errorf("refusing to %s %q: it is the last schedulable Ready worker, and no workload could run without it; "+
-		"override with --override (needs the override verb on the machine; --override-reason records why)", doing, n.m.Name)
+		"override with --override (needs the override verb on the machine)", doing, n.m.Name)
 }

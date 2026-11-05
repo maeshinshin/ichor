@@ -31,7 +31,9 @@ import (
 // waits until its context ends (as `talosctl etcd members` does against such a node).
 type blockingEtcd struct{ calls int }
 
-func (b *blockingEtcd) EtcdMemberList(ctx context.Context, _ *machine.EtcdMemberListRequest, _ ...grpc.CallOption) (*machine.EtcdMemberListResponse, error) {
+func (b *blockingEtcd) EtcdMemberList(
+	ctx context.Context, _ *machine.EtcdMemberListRequest, _ ...grpc.CallOption,
+) (*machine.EtcdMemberListResponse, error) {
 	b.calls++
 
 	<-ctx.Done()
@@ -50,7 +52,9 @@ func (b *blockingEtcd) EtcdStatus(ctx context.Context, _ ...grpc.CallOption) (*m
 // refusingEtcd answers at once with an error, as a node whose etcd service is stopped may.
 type refusingEtcd struct{ blockingEtcd }
 
-func (*refusingEtcd) EtcdMemberList(context.Context, *machine.EtcdMemberListRequest, ...grpc.CallOption) (*machine.EtcdMemberListResponse, error) {
+func (*refusingEtcd) EtcdMemberList(
+	context.Context, *machine.EtcdMemberListRequest, ...grpc.CallOption,
+) (*machine.EtcdMemberListResponse, error) {
 	return nil, errors.New("etcd is not running")
 }
 
@@ -101,7 +105,7 @@ func TestInspectEtcdRecordsAnImmediateError(t *testing.T) {
 
 func etcdDownInspection() Inspection {
 	return Inspection{
-		Address: "10.0.0.5", UUID: testUUID, ClusterName: "old", ClusterID: "cid", ControlPlane: true,
+		Address: "10.0.0.5", UUID: testUUID, ClusterName: "foreign", ClusterID: "cid", ControlPlane: true,
 		EtcdProblem: "etcd member list did not answer within 20s",
 	}
 }
@@ -123,7 +127,8 @@ func TestAssessEtcdDownProceedsWithForceUngraceful(t *testing.T) {
 		t.Fatal("--force is for a quorum break; there is no membership to break")
 	}
 
-	if len(p.Warnings) != 1 || !strings.Contains(p.Warnings[0], "etcd") || !strings.Contains(p.Warnings[0], "did not answer within 20s") {
+	if len(p.Warnings) != 1 || !strings.Contains(p.Warnings[0], "etcd") ||
+		!strings.Contains(p.Warnings[0], "did not answer within 20s") {
 		t.Fatalf("want one warning that names etcd and why, got %v", p.Warnings)
 	}
 }

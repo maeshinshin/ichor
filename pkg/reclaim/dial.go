@@ -49,7 +49,9 @@ const NodeCallTimeout = 20 * time.Second
 
 // bounded runs call under a context that ends after d. A call that is cut off returns an error that
 // says it did not answer within d, instead of a bare "context deadline exceeded".
-func bounded[T any](ctx context.Context, d time.Duration, what string, call func(context.Context) (T, error)) (T, error) {
+func bounded[T any](
+	ctx context.Context, d time.Duration, what string, call func(context.Context) (T, error),
+) (T, error) {
 	cctx, cancel := context.WithTimeout(ctx, d)
 	defer cancel()
 
@@ -106,9 +108,10 @@ func (n *machineryNode) Reset(ctx context.Context, graceful bool) error {
 func (n *machineryNode) Inspect(ctx context.Context) (Inspection, error) {
 	in := Inspection{Address: n.address}
 
-	cfgRes, err := bounded(ctx, n.timeout, "the node's machine configuration", func(c context.Context) (*configres.MachineConfig, error) {
-		return safe.StateGetByID[*configres.MachineConfig](c, n.c.COSI, configres.ActiveID)
-	})
+	cfgRes, err := bounded(ctx, n.timeout, "the node's machine configuration",
+		func(c context.Context) (*configres.MachineConfig, error) {
+			return safe.StateGetByID[*configres.MachineConfig](c, n.c.COSI, configres.ActiveID)
+		})
 	if err != nil {
 		return in, fmt.Errorf("reading the machine configuration (configured node? admin credential?): %w", err)
 	}
@@ -131,9 +134,10 @@ func (n *machineryNode) Inspect(ctx context.Context) (Inspection, error) {
 		in.ClusterID = d.ClusterID()
 	}
 
-	if sys, err := bounded(ctx, n.timeout, "the node's hardware identity", func(c context.Context) (*hardware.SystemInformation, error) {
-		return safe.StateGetByID[*hardware.SystemInformation](c, n.c.COSI, hardware.SystemInformationID)
-	}); err == nil {
+	if sys, err := bounded(ctx, n.timeout, "the node's hardware identity",
+		func(c context.Context) (*hardware.SystemInformation, error) {
+			return safe.StateGetByID[*hardware.SystemInformation](c, n.c.COSI, hardware.SystemInformationID)
+		}); err == nil {
 		in.UUID = sys.TypedSpec().UUID
 	}
 
@@ -168,7 +172,9 @@ func (n *machineryNode) Inspect(ctx context.Context) (Inspection, error) {
 
 // etcdAPI is the part of the Talos client the etcd inspection uses; a test supplies its own.
 type etcdAPI interface {
-	EtcdMemberList(ctx context.Context, req *machine.EtcdMemberListRequest, opts ...grpc.CallOption) (*machine.EtcdMemberListResponse, error)
+	EtcdMemberList(
+		ctx context.Context, req *machine.EtcdMemberListRequest, opts ...grpc.CallOption,
+	) (*machine.EtcdMemberListResponse, error)
 	EtcdStatus(ctx context.Context, opts ...grpc.CallOption) (*machine.EtcdStatusResponse, error)
 }
 
@@ -177,9 +183,10 @@ type etcdAPI interface {
 // else: the cluster counts as not reachable, which Assess turns into a refusal of a graceful reset
 // and, with --force-ungraceful, a warning.
 func inspectEtcd(ctx context.Context, api etcdAPI, timeout time.Duration, in *Inspection) {
-	resp, err := bounded(ctx, timeout, "etcd member list", func(c context.Context) (*machine.EtcdMemberListResponse, error) {
-		return api.EtcdMemberList(c, &machine.EtcdMemberListRequest{QueryLocal: true})
-	})
+	resp, err := bounded(ctx, timeout, "etcd member list",
+		func(c context.Context) (*machine.EtcdMemberListResponse, error) {
+			return api.EtcdMemberList(c, &machine.EtcdMemberListRequest{QueryLocal: true})
+		})
 	if err != nil {
 		in.EtcdProblem = err.Error()
 

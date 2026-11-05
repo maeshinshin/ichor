@@ -65,7 +65,7 @@ func buildCNIBootstrap(preset cilium.Preset, clusterName, namespace string) (*cn
 
 	if len(manifest) > 0 {
 		out.InlineManifest = &typedconfig.ClusterInlineManifest{
-			InlineManifestName:     cniKey,
+			InlineManifestName:     cni.InlineManifestName,
 			InlineManifestContents: string(manifest),
 		}
 	}

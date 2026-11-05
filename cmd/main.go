@@ -236,11 +236,7 @@ func main() {
 		tlsOpts = append(tlsOpts, disableHTTP2)
 	}
 
-	// Initial webhook TLS options
-	webhookTLSOpts := tlsOpts
-	webhookServerOptions := webhook.Options{
-		TLSOpts: webhookTLSOpts,
-	}
+	webhookServerOptions := webhook.Options{TLSOpts: tlsOpts}
 
 	if len(webhookCertPath) > 0 {
 		setupLog.Info("Initializing webhook certificate watcher using provided certificates",
@@ -331,9 +327,8 @@ func main() {
 	}
 
 	if autoPatch.Window != "" {
-		if _, _, err := settings.ParseWindow(autoPatch.Window); err != nil {
-			must(err, "Invalid --auto-patch-window")
-		}
+		_, _, err = settings.ParseWindow(autoPatch.Window)
+		must(err, "Invalid --auto-patch-window")
 	}
 
 	settingsFallback := settings.Fallback{RefreshLifetime: refreshLifetime, UpdateCheck: updateCheck, AutoPatch: autoPatch}

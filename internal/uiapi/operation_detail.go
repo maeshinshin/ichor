@@ -60,8 +60,14 @@ func caRotationTargets(op *ichorv1alpha1.TalosOperation) []string {
 	return ichorv1alpha1.DefaultCARotationTargets()
 }
 
-func (s *Server) startedByAnnotation(ctx context.Context) map[string]string {
-	return map[string]string{ichorv1alpha1.OperationStartedByAnnotation: s.actorName(ctx)}
+// newOperation is the TalosOperation of spec (its kind named, its cluster filled in) that cluster's caller starts.
+func (s *Server) newOperation(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, spec ichorv1alpha1.TalosOperationSpec) *ichorv1alpha1.TalosOperation {
+	spec.ClusterRef = corev1.LocalObjectReference{Name: cluster.Name}
+
+	return &ichorv1alpha1.TalosOperation{
+		GenerateName: spec.Kind + "-", Namespace: cluster.Namespace, Spec: spec,
+		Annotations: map[string]string{ichorv1alpha1.OperationStartedByAnnotation: s.actorName(ctx)},
+	}
 }
 
 func operationMachineToPB(op *ichorv1alpha1.TalosOperation, m ichorv1alpha1.TalosOperationMachineStatus) *pb.OperationMachine {

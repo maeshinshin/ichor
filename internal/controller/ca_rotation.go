@@ -622,6 +622,14 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 
 	rotation := &render.CARotation{Stage: stage, New: c.rot}
 
+	// A control plane that is rebooting cannot be dialed to read its configuration: while one is, the pass is
+	// the wait for it, not another round of applies (the roll starts only when every machine runs the stage).
+	if c.op.Status.CARotation.EtcdRebooting != "" {
+		if res, wait, err := c.rollEtcd(ctx, stage, machines, verifyBundle); wait {
+			return res, err
+		}
+	}
+
 	applied := 0
 
 	for _, m := range machines {
@@ -676,8 +684,8 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 			fmt.Sprintf("stage %s: applied to %d of %d machine(s); verifying on the next pass", stage, applied, len(machines)))
 	}
 
-	// Every machine runs the stage's configuration. etcd loads its CA field only at start, so its members
-	// are restarted now, one at a time.
+	// Every machine runs the stage's configuration. etcd loads its CA field only at start and Talos cannot restart
+	// it, so the control planes are rebooted now, one at a time.
 	if res, wait, err := c.rollEtcd(ctx, stage, machines, verifyBundle); wait {
 		return res, err
 	}
@@ -716,6 +724,7 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 	// status.machines shows the stage under way: the next one starts empty.
 	c.op.Status.Machines = nil
 	c.op.Status.CARotation.EtcdRestarted, c.op.Status.CARotation.EtcdRestartedAt = nil, nil
+	c.op.Status.CARotation.EtcdRebooting, c.op.Status.CARotation.EtcdRebootBootID = "", ""
 	c.op.Status.CARotation.Stage = c.nextStage(stage)
 	setStageCertificates(c.op.Status.CARotation)
 

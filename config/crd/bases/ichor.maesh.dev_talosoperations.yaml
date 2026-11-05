@@ -436,17 +436,29 @@ spec:
                     x-kubernetes-list-map-keys:
                     - name
                     x-kubernetes-list-type: map
+                  etcdRebootBootID:
+                    description: |-
+                      etcdRebootBootID is the boot ID etcdRebooting had when its reboot was requested; the reboot has
+                      happened once the node reports another one. Not a secret.
+                    type: string
+                  etcdRebooting:
+                    description: |-
+                      etcdRebooting is the control plane whose reboot was requested and is not yet over; empty between
+                      two reboots.
+                    type: string
                   etcdRestarted:
                     description: |-
-                      etcdRestarted names the control planes whose etcd was restarted in the current stage, in the order
-                      they were restarted. Emptied when the stage changes.
+                      etcdRestarted names the control planes that were rebooted, and are healthy again, in the current
+                      stage, in the order they were rebooted (Talos does not restart etcd on a configuration
+                      change and its etcd service has no restart API, so a member loads the stage's CA with a node
+                      reboot). Emptied when the stage changes.
                     items:
                       type: string
                     type: array
                     x-kubernetes-list-type: set
                   etcdRestartedAt:
-                    description: etcdRestartedAt is when the last etcd member was
-                      restarted; the next one waits after it.
+                    description: etcdRestartedAt is when the reboot of the control
+                      plane in etcdRebooting, or the last one, was requested.
                     format: date-time
                     type: string
                   stage:

@@ -559,3 +559,52 @@ func TestRolloutDone(t *testing.T) {
 		t.Error("a rollout with an old replica still around was reported as finished")
 	}
 }
+
+// The Cilium Job's Role and RoleBinding in cilium-secrets are part of
+// the install manifest, but that namespace exists only where Cilium runs: on another CNI the apply
+// of them is skipped, not an upgrade that fails. A missing namespace anywhere else still fails.
+func TestRunSkipsObjectsInTheCiliumSecretsNamespaceWhereItDoesNotExist(t *testing.T) {
+	role := func(ns string) []byte {
+		return []byte(fmt.Sprintf(`---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ichor-cni-secrets-role
+  namespace: %s
+rules:
+- apiGroups: [""]
+  resources: [secrets]
+  verbs: [get]
+`, ns))
+	}
+
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{Name: ciliumSecretsNamespace}, &corev1.Namespace{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("this test needs envtest without a %s namespace, Get error = %v", ciliumSecretsNamespace, err)
+	}
+
+	f := newFixture(t)
+
+	var order []string
+
+	err := Run(context.Background(), k8sClient, Options{
+		Namespace: f.ns, RunID: f.run, Manifest: append(f.manifest("ctrl:v2", ""), role(ciliumSecretsNamespace)...), Ready: noWait(&order),
+	})
+	if err != nil {
+		t.Fatalf("Run with a Role in a missing %s: %v", ciliumSecretsNamespace, err)
+	}
+
+	for _, o := range order {
+		if strings.HasPrefix(o, "Role/") {
+			t.Errorf("post-check ran for %s, which was not applied", o)
+		}
+	}
+
+	f = newFixture(t)
+
+	err = Run(context.Background(), k8sClient, Options{
+		Namespace: f.ns, RunID: f.run, Manifest: append(f.manifest("ctrl:v2", ""), role("no-such-namespace")...), Ready: noWait(&order),
+	})
+	if err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Errorf("Run with a Role in another missing namespace = %v, want a not found error", err)
+	}
+}

@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -67,6 +68,16 @@ func NewMachineryNodeTalosClient(
 		return &machineryNodeTalosClient{c: c}, nil
 	}
 
+	c, err := dialTalos(ctx, cluster, m, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &machineryNodeTalosClient{c: c}, nil
+}
+
+// dialTalos opens the Talos API of m with the certificate id.
+func dialTalos(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, id *TalosIdentity) (*client.Client, error) {
 	cfg := clientconfig.NewConfig(cluster.Name, []string{m.DialEndpoint()}, id.CA, &x509.PEMEncodedCertificateAndKey{Crt: id.Crt, Key: id.Key})
 
 	c, err := client.New(ctx, client.WithConfig(cfg))
@@ -74,7 +85,7 @@ func NewMachineryNodeTalosClient(
 		return nil, fmt.Errorf("dialing Talos API: %w", err)
 	}
 
-	return &machineryNodeTalosClient{c: c}, nil
+	return c, nil
 }
 
 // machineryNodeTalosClient adapts a real *client.Client to NodeTalosClient.
@@ -162,13 +173,8 @@ func installableDisks(specs []*block.DiskSpec) []*pb.Disk {
 		}
 
 		var byIDPath string
-
-		for _, s := range spec.Symlinks {
-			if strings.Contains(s, "/by-id/") {
-				byIDPath = s
-
-				break
-			}
+		if i := slices.IndexFunc(spec.Symlinks, func(s string) bool { return strings.Contains(s, "/by-id/") }); i >= 0 {
+			byIDPath = spec.Symlinks[i]
 		}
 
 		out = append(out, &pb.Disk{

@@ -492,6 +492,109 @@ func TestCNIRoleCoversTheOptionalFeatureObjects(t *testing.T) {
 	}
 }
 
+// cniNamedObjects are the cluster-scoped and infrastructure kinds the CNI role may change only by name (ADR 0099
+// amendment 2026-11-05): a Cilium Job that can update or delete any ValidatingAdmissionPolicy could remove the
+// ichor-controller-jobs policies that confine it. Create cannot be limited by name in RBAC and stays.
+var cniNamedObjects = map[string][2]string{ // kind: apiGroup, resource
+	"ValidatingAdmissionPolicy":        {"admissionregistration.k8s.io", "validatingadmissionpolicies"},
+	"ValidatingAdmissionPolicyBinding": {"admissionregistration.k8s.io", "validatingadmissionpolicybindings"},
+	"GatewayClass":                     {"gateway.networking.k8s.io", "gatewayclasses"},
+	"IngressClass":                     {"networking.k8s.io", "ingressclasses"},
+	"EndpointSlice":                    {"discovery.k8s.io", "endpointslices"},
+}
+
+// TestCNIRoleChangesOnlyTheObjectsCiliumRenders: get, update, patch and delete on the kinds above are granted
+// by resourceNames, and the names are exactly those the pinned Cilium chart renders with every optional feature
+// on, so a chart bump that renames one fails here and the Job cannot touch the Ichor Job policies, in config/rbac
+// and in the chart alike.
+func TestCNIRoleChangesOnlyTheObjectsCiliumRenders(t *testing.T) {
+	rendered := map[string]map[string]bool{} // resource: names
+
+	for _, f := range optionalCiliumFeatures {
+		manifest, err := cilium.New().WithValues(f.values).BootstrapManifest(cni.KubeProxyEnabled)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for _, d := range decodeYAMLDocs(t, manifest, "cilium bootstrap") {
+			if gr, ok := cniNamedObjects[kindOf(d)]; ok {
+				if rendered[gr[1]] == nil {
+					rendered[gr[1]] = map[string]bool{}
+				}
+
+				rendered[gr[1]][nameOf(d)] = true
+			}
+		}
+	}
+
+	for kind, gr := range cniNamedObjects {
+		if len(rendered[gr[1]]) == 0 {
+			t.Fatalf("the Cilium chart renders no %s under any optional feature; the check would pass for nothing", kind)
+		}
+	}
+
+	cfgDocs := loadYAMLDocs(t, "../../config/rbac/ichor-cni/role.yaml")
+	chartDocs := renderChartWithValues(t, "ichor", "cniHelm.enabled=true")
+
+	for label, role := range map[string]map[string]any{
+		labelConfig: find(cfgDocs, kindClusterRole, "cni-role"),
+		labelChart:  find(chartDocs, kindClusterRole, "ichor-cni-role"),
+	} {
+		for _, gr := range cniNamedObjects {
+			for _, r := range allRules(role) {
+				rm, _ := r.(map[string]any)
+				if !slices.Contains(stringsOf(rm["apiGroups"]), gr[0]) || !slices.Contains(stringsOf(rm["resources"]), gr[1]) {
+					continue
+				}
+
+				names := stringsOf(rm["resourceNames"])
+				for _, v := range stringsOf(rm["verbs"]) {
+					switch v {
+					case "create", "list", "watch":
+						if len(names) != 0 {
+							t.Errorf("%s: %s on %s carries resourceNames, which RBAC cannot apply to it", label, v, gr[1])
+						}
+					default:
+						if len(names) == 0 {
+							t.Errorf("%s: the CNI role grants %s on every %s; it must be limited to the names Cilium renders", label, v, gr[1])
+						}
+
+					}
+				}
+
+				for _, n := range names {
+					if !rendered[gr[1]][n] {
+						t.Errorf("%s: resourceNames of %s lists %q, which the Cilium chart does not render", label, gr[1], n)
+					}
+				}
+			}
+
+			for name := range rendered[gr[1]] {
+				for v := range strings.FieldsSeq("get update patch delete") {
+					if !cniHolds(allRules(role), gr[0], gr[1], v, name) {
+						t.Errorf("%s: the CNI role cannot %s %s %q, which the Cilium chart renders", label, v, gr[1], name)
+					}
+				}
+			}
+
+			for v := range strings.FieldsSeq("create list") {
+				if !cniHolds(allRules(role), gr[0], gr[1], v, "") {
+					t.Errorf("%s: the CNI role cannot %s %s without a name, which Helm needs", label, v, gr[1])
+				}
+			}
+
+			// The Job's own confinement is never among the names it may change.
+			for _, protected := range []string{"ichor-controller-jobs", "ichor-controller-job-image", "ichor-controller-jobs-binding", "ichor-controller-job-image-binding"} {
+				for v := range strings.FieldsSeq("get update patch delete") {
+					if cniHolds(allRules(role), gr[0], gr[1], v, protected) {
+						t.Errorf("%s: the CNI role can %s %s %q, one of the policies that confine it", label, v, gr[1], protected)
+					}
+				}
+			}
+		}
+	}
+}
+
 // TestCNIRoleHoldsEveryRuleTheCiliumChartGrants guards ADR 0108 and ADR 0103 (the 1.19.10 takeover
 // failure): Helm refuses to create a Role that grants a rule its caller does not hold. The Cilium
 // chart's hubble-generate-certs Role, which the Job creates on a takeover, must have every one of its

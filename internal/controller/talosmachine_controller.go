@@ -14,37 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package controller holds Ichor's controllers. TalosMachineReconciler
-// implements "Configuration reconcile" (docs/design/architecture.md 5.6):
-// it renders a machine's configuration (pkg/render), compares it with what
-// the node is currently running, and -- depending on what pkg/fieldmeta
-// says the difference means -- applies it, refuses with a clear reason, or
-// does nothing. It never writes TalosMachine.spec (principle 5); status
-// holds only hashes and condition state (principle 3), never the rendered
-// configuration itself.
+// Package controller holds Ichor's controllers. TalosMachineReconciler implements "Configuration reconcile"
+// (docs/design/architecture.md 5.6): it renders a machine's configuration (pkg/render), compares it with what
+// the node runs, and, by what pkg/fieldmeta says the difference means, applies it, refuses with a reason, or
+// does nothing. It never writes TalosMachine.spec (principle 5); status holds only hashes and condition
+// state (principle 3), never the rendered configuration.
 //
-// A hash mismatch alone cannot tell a desired-state change (the user edited
-// a TalosConfigPatch) apart from drift (someone changed the node): both
-// produce one. Reconcile tells them apart with desiredInputsHash, a
-// fingerprint of the generations of TalosCluster, this TalosMachine and
-// every applicable TalosConfigPatch, recorded in
-// TalosMachine.status.observedInputsHash only when the node is confirmed to
-// match what was rendered. If the current fingerprint still matches the
-// recorded one, nothing that feeds the render has moved, so the mismatch
-// must be the node; otherwise the desired state moved, and the usual apply
-// path runs regardless of drift policy. An empty recorded fingerprint (a
-// machine's first reconcile) is never treated as drift, for the same
-// reason: there is nothing to have converged against yet.
+// A hash mismatch alone cannot tell a desired-state change (a TalosConfigPatch was edited) from drift (the
+// node was changed). desiredInputsHash, a fingerprint of the generations of TalosCluster, this TalosMachine
+// and every applicable TalosConfigPatch, is recorded in status.observedInputsHash only when the node is
+// confirmed to match the render. If the current fingerprint still matches it, nothing that feeds the render
+// moved, so the mismatch is the node; otherwise the desired state moved and the usual apply path runs
+// regardless of drift policy. An empty recorded fingerprint (a first reconcile) is never drift.
 //
-// One sharp edge of using the whole object's metadata.generation: it
-// advances on *any* spec change, including TalosCluster.spec.driftPolicy
-// itself, which does not feed the render at all. Flipping driftPolicy (or
-// editing any other cluster field) on the same reconcile cycle as a
-// pre-existing, unrelated node drift makes that one cycle look like a
-// desired-state change instead, so it applies once instead of warning.
-// Subsequent reconciles see a stable fingerprint again and behave
-// correctly. This is a known coarseness of generation-based tracking, not a
-// heuristic bolted on to paper over it.
+// Sharp edge of whole-object generation: it advances on any spec change, including driftPolicy, which does
+// not feed the render. Flipping it in the same cycle as an unrelated node drift makes that cycle look like a
+// desired-state change, so it applies once instead of warning; later reconciles are stable again.
 package controller
 
 import (
@@ -83,33 +68,24 @@ import (
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
-// controllerIdentity is this component's stable logical name: the
-// clusterlock.Acquire identity (clusterlock's own doc comment: it must be
-// stable across restarts, not a pod name) and the naming convention's field
-// manager for this component (cmd/main.go uses the same literal for the
+// controllerIdentity is this component's stable logical name: the clusterlock.Acquire identity (stable
+// across restarts, not a pod name) and its field manager (cmd/main.go uses the same literal for the
 // webhook cert rotator's FieldOwner).
 const controllerIdentity = "ichor-controller"
 
-// roleControlPlane is TalosMachineSpec.Role's control-plane value, shared
-// across this package's own uses of it (talosoperation_controller.go and
-// removal.go) rather than each repeating the literal.
+// roleControlPlane is TalosMachineSpec.Role's control-plane value.
 const roleControlPlane = "controlplane"
 
-// conditionReady and conditionConfigWarnings are the two condition types
-// this reconciler writes to TalosMachine.status.conditions. Ready mirrors
-// the CRD's own printcolumn; ConfigWarnings carries ValidateAtRuntime's
-// dry-run warnings (ADR 0009), separately, since they are informational and
-// not always a reason the machine is un-Ready.
+// conditionReady and conditionConfigWarnings are the two condition types this reconciler writes. Ready
+// mirrors the CRD's printcolumn; ConfigWarnings carries ValidateAtRuntime's dry-run warnings (ADR 0009),
+// informational and not always a reason the machine is un-Ready.
 const (
 	conditionReady          = "Ready"
 	conditionConfigWarnings = "ConfigWarnings"
 )
 
-// Condition reasons. Every one of these is a terminal outcome for one
-// reconcile: the next reconcile always starts over from TalosCluster,
-// TalosConfigPatch and the node's live state (principle 7), never from
-// these strings, so there is nothing else to resume beyond calling
-// Reconcile again.
+// Condition reasons. Each is the outcome of one reconcile: the next starts over from TalosCluster,
+// TalosConfigPatch and the node's live state (principle 7), never from these strings.
 const (
 	reasonClusterNotFound          = "ClusterNotFound"
 	reasonSecretsBundleUnavailable = "SecretsBundleUnavailable"
@@ -206,74 +182,49 @@ const transientRecheck = 30 * time.Second
 // without it Ready stays True for a machine nobody can reach.
 const reachabilityRecheck = 2 * time.Minute
 
-// driftPolicyAutoCorrect is the one TalosCluster.spec.driftPolicy value that
-// allows the reconciler to re-apply on drift. Anything else -- including the
-// zero value, for a cluster the CRD default hasn't reached yet -- is
-// treated as warnOnly, the safe side (design 5.6 step 5).
+// driftPolicyAutoCorrect is the one TalosCluster.spec.driftPolicy value that lets the reconciler re-apply on
+// drift. Anything else, the zero value included, is treated as warnOnly, the safe side (design 5.6 step 5).
 const driftPolicyAutoCorrect = "autoCorrect"
 
 // TalosMachineReconciler reconciles a TalosMachine object.
 type TalosMachineReconciler struct {
 	client.Client
 
-	// ControllerNamespace is the namespace loadBundle reads the secrets
-	// bundle Secret from -- the controller's own namespace (POD_NAMESPACE in
-	// cmd/main.go), not the TalosCluster's (ADR 0011). Required: loadBundle
-	// fails explicitly rather than guessing if this is empty.
+	// ControllerNamespace is the namespace loadBundle reads the secrets bundle Secret from: the controller's
+	// own (POD_NAMESPACE in cmd/main.go), not the TalosCluster's (ADR 0011). Required.
 	ControllerNamespace string
 
-	// TalosClient opens the Talos API boundary for m, using cluster and the
-	// already-loaded bundle (NewMachineryTalosClient is the real
-	// implementation cmd/main.go wires in). nil means node connectivity
-	// isn't wired up at all: Reconcile reports that plainly in status
-	// (reasonTalosClientNotConfigured) instead of panicking -- the same is
-	// true if bundle itself failed to load, since that's checked first and
-	// this field is never reached in that case.
+	// TalosClient opens the Talos API boundary for m, using cluster and the loaded bundle
+	// (NewMachineryTalosClient is wired in by cmd/main.go). nil means node connectivity is not wired up:
+	// Reconcile says so in status (reasonTalosClientNotConfigured).
 	//
-	// This is the authenticated credential: it works once the node trusts
-	// the bundle's CA. A node still in maintenance mode does not, and is
-	// provisioned through MaintenanceClient below (talosmachine_provision.go,
-	// ADR 0076).
+	// This is the authenticated credential: it works once the node trusts the bundle's CA. A node still in
+	// maintenance mode is provisioned through MaintenanceClient below (talosmachine_provision.go, ADR 0076).
 	TalosClient func(
 		ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
 	) (TalosClient, error)
 
-	// MaintenanceClient opens the insecure maintenance-mode connection used
-	// to give an approved machine its first configuration
-	// (NewMachineryMaintenanceClient is the real implementation). nil turns
-	// provisioning off: a machine the authenticated client cannot reach then
-	// just reports CurrentConfigUnavailable.
+	// MaintenanceClient opens the insecure maintenance-mode connection that gives an approved machine its
+	// first configuration (NewMachineryMaintenanceClient). nil turns provisioning off: a machine the
+	// authenticated client cannot reach then reports CurrentConfigUnavailable.
 	MaintenanceClient func(ctx context.Context, endpoint string) (MaintenanceClient, error)
 
-	// KubeClient drains a control-plane TalosMachine's Node during removal
-	// (removal.go). nil skips draining rather than failing the reconcile:
-	// the quorum/last-control-plane/count checks that actually gate removal
-	// never touch this field, so a cluster without it wired up still gets
-	// the safety guarantee, just without the drain step.
+	// KubeClient drains a control plane's Node during removal (removal.go). nil skips the drain, not the
+	// quorum/last-control-plane/count checks that gate removal.
 	KubeClient kubernetes.Interface
 
-	// Evacuator moves storage replicas off a control plane's node before
-	// removal.go drains it (the same StorageEvacuator the Talos upgrade
-	// uses). nil skips evacuation: a cluster with no storage system has
-	// nothing to coordinate.
+	// Evacuator moves storage replicas off a control plane's node before removal.go drains it (the
+	// StorageEvacuator the Talos upgrade uses). nil skips evacuation: no storage system, nothing to move.
 	Evacuator StorageEvacuator
 
-	// APIReader counts approved control planes for the quorum checks in
-	// removal.go, bypassing the manager's cache that Client (above) reads
-	// through everywhere else. A cached read can lag the deletion of a
-	// control plane that just committed, drifting the count high -- the
-	// dangerous direction here, since it is what lets a second, concurrent
-	// deletion look safe when it is not (ADR 0010's appendix, amended: this
-	// was found from a flake that failed in the permissive direction, not
-	// the usual environment-noise direction). Wired from
-	// mgr.GetAPIReader() in cmd/main.go.
+	// APIReader counts approved control planes for the quorum checks in removal.go, bypassing the manager's
+	// cache: a cached read can lag a control plane's deletion and count high, which lets a second,
+	// concurrent deletion look safe (ADR 0010's appendix, amended). Wired from mgr.GetAPIReader().
 	APIReader client.Reader
 
-	// Recorder emits the Event removal.go's completeRemoval raises in the
-	// same breath as clearing machineRemovalFinalizer -- the only record
-	// that survives the TalosMachine's own disappearance to tell an
-	// operator its physical node still holds this cluster's PKI (ADR
-	// 0032). nil skips the Event, not the removal itself.
+	// Recorder emits the Event completeRemoval raises as it clears machineRemovalFinalizer, the only record
+	// that outlives the TalosMachine to say its physical node still holds the cluster's PKI (ADR 0032).
+	// nil skips the Event, not the removal.
 	Recorder record.EventRecorder
 }
 
@@ -293,10 +244,8 @@ type TalosMachineReconciler struct {
 // +kubebuilder:rbac:groups="",resources=pods/eviction,verbs=create
 // +kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list
 
-// Reconcile implements design 5.6's five numbered steps for one
-// TalosMachine. A machine that isn't approved is left untouched entirely --
-// no status write, nothing -- since rendering and applying configuration to
-// it is exactly what approval authorizes.
+// Reconcile implements design 5.6's five numbered steps for one TalosMachine. A machine that is not
+// approved is left untouched: rendering and applying configuration is what approval authorizes.
 func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -313,10 +262,8 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, nil
 	}
 
-	// Only an approved control plane needs removal.go's ordered removal
-	// operation (it's the only role ADR 0010's quorum/last-control-plane/
-	// count checks apply to); a worker or an unapproved machine gets no
-	// finalizer and deletes exactly as before.
+	// Only an approved control plane needs removal.go's ordered removal (the only role ADR 0010's quorum
+	// checks apply to); a worker or an unapproved machine gets no finalizer.
 	if added, err := r.ensureRemovalFinalizer(ctx, &m); added {
 		return ctrl.Result{}, err
 	}
@@ -349,10 +296,8 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return res, err
 	}
 
-	// Step 1: load the bundle and gather this cluster's patches, then
-	// render. Neither the bundle nor the rendered bytes are ever logged,
-	// returned in an error string, or written to status below (principle
-	// 3; pkg/render's own leak-test discipline).
+	// Step 1: load the bundle and gather this cluster's patches, then render. Neither the bundle nor the
+	// rendered bytes are logged, returned in an error string or written to status (principle 3).
 	bundle, err := loadBundle(ctx, r.Client, r.ControllerNamespace, &cluster)
 	if err != nil {
 		log.Error(err, "loading secrets bundle")
@@ -378,13 +323,8 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			"rendering machine configuration failed")
 	}
 
-	// inputsHash fingerprints every object that just fed Render: this
-	// TalosCluster, this TalosMachine, and whichever TalosConfigPatches
-	// render.SelectPatches decided apply to it -- the same decision Render
-	// itself just made, not a second guess at it. previousInputsHash is
-	// whatever was recorded the last time the node was confirmed to match
-	// what was rendered; empty on a machine's first reconcile, since there
-	// is no previous convergence yet.
+	// inputsHash fingerprints every object that just fed Render. previousInputsHash is what was recorded the
+	// last time the node was confirmed to match the render; empty on a first reconcile.
 	inputsHash, err := desiredInputsHash(&cluster, &m, patches.Items, sys.Storage, registryAuthFingerprint(sys.RegistryAuth))
 	if err != nil {
 		log.Error(err, "hashing render inputs")
@@ -436,13 +376,9 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			"node configuration matches the rendered configuration")
 	}
 
-	// drifted is true only when nothing that feeds the render has changed
-	// since Ichor last confirmed the node matched it: the mismatch just
-	// found above then has only one explanation left, the node moved on its
-	// own (design 5.6 step 5). previousInputsHash is empty on a machine's
-	// first reconcile, which is deliberately not drift -- there is no prior
-	// convergence to compare against, so a first-time mismatch is treated
-	// the same as any other desired-state change, below.
+	// drifted is true only when nothing that feeds the render changed since Ichor last confirmed the node
+	// matched it, so the node moved on its own (design 5.6 step 5). An empty previousInputsHash (a first
+	// reconcile) is deliberately not drift: a first-time mismatch is an ordinary desired-state change.
 	drifted := previousInputsHash != "" && previousInputsHash == inputsHash
 
 	contract, err := coreconfig.ParseContractFromVersion(cluster.Spec.VersionContract)
@@ -453,10 +389,9 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	impact := assessChange(ctx, talos, m.Spec.Hostname, paths, contract)
 
-	// Step 4: dry run first, always -- side-effect free, and its warnings
-	// are worth surfacing regardless of which way step 5 goes (ADR 0009).
-	// Mode/ModeDetails on the response are never read: AUTO is a hardcoded
-	// alias for NO_REBOOT and never inspects the diff.
+	// Step 4: dry run first, always: side-effect free, and its warnings are worth surfacing whichever way
+	// step 5 goes (ADR 0009). The response's Mode/ModeDetails are never read (AUTO is a hardcoded alias for
+	// NO_REBOOT).
 	warnings, err := talos.DryRunApply(ctx, rendered)
 	if err != nil {
 		log.Error(err, "dry-run applying rendered configuration")
@@ -467,14 +402,10 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	r.setWarnings(&m, bundle, warnings)
 
-	// Step 5: apply, refuse, or stop, depending on what step 3 found -- and,
-	// now, on whether this is drift. A reboot-requiring, install-time-only
-	// or unsupported change is always just reported, never applied,
-	// regardless of drift or driftPolicy: those paths already do the right
-	// thing, drift only changes what their message says. The one new
-	// outcome is a safe drift left alone because driftPolicy is warnOnly
-	// (the default): design 5.6 step 5 wants drift visible, not silently
-	// corrected.
+	// Step 5: apply, refuse, or stop, by what step 3 found and whether this is drift. A reboot-requiring,
+	// install-time-only or unsupported change is only reported, never applied, whatever the drift policy;
+	// drift only changes the message. A safe drift under warnOnly (the default) is left alone: design 5.6
+	// step 5 wants drift visible, not silently corrected.
 	driftNote := ""
 	if drifted {
 		driftNote = "node configuration has drifted from the rendered configuration; "
@@ -658,13 +589,9 @@ func (r *TalosMachineReconciler) holdUntilEligible(
 // renderVersion is render.Version; a variable only so tests can simulate an Ichor upgrade.
 var renderVersion = render.Version
 
-// desiredInputsHash fingerprints the generation of every object that fed
-// this reconcile's render: cluster, m, and whichever of candidates
-// render.SelectPatches decides apply to m -- the same question Render
-// itself just answered, asked again rather than guessed at separately, so
-// a patch unrelated to m never perturbs the fingerprint. The result is a
-// hash only (principle 3): generations are not secret, but a plain join of
-// them is unnecessary detail no caller needs to parse back out.
+// desiredInputsHash fingerprints the generation of every object that fed this reconcile's render: cluster,
+// m, and whichever of candidates render.SelectPatches says apply to m (the question Render just answered),
+// so a patch unrelated to m never perturbs it. The result is a hash only (principle 3).
 func desiredInputsHash(
 	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, candidates []ichorv1alpha1.TalosConfigPatch,
 	storages []ichorv1alpha1.TalosStorage, registryAuth string,
@@ -872,9 +799,7 @@ func (r *TalosMachineReconciler) waitForChange(
 	return ctrl.Result{}, r.ready(ctx, m, metav1.ConditionFalse, reason, message)
 }
 
-// ready sets the Ready condition, keeps observedGeneration honest
-// (principle 7: every reconcile attempt, successful or not, is recorded),
-// and persists status in one write.
+// ready sets the Ready condition, records observedGeneration (principle 7) and persists status in one write.
 func (r *TalosMachineReconciler) ready(
 	ctx context.Context, m *ichorv1alpha1.TalosMachine, status metav1.ConditionStatus, reason, message string,
 ) error {
@@ -887,18 +812,12 @@ func (r *TalosMachineReconciler) ready(
 	return r.Status().Update(ctx, m)
 }
 
-// setWarnings records dry-run's warnings as the ConfigWarnings condition,
-// mutating m in place; the caller persists it together with the Ready
-// condition in the same status write. It is only called once a dry run has
-// actually happened this reconcile, so a reconcile that fails before that
-// point leaves a previous ConfigWarnings condition alone rather than
-// erasing it.
+// setWarnings records dry-run's warnings as the ConfigWarnings condition, mutating m in place; the caller
+// persists it with the Ready condition. It is only called after a dry run, so a reconcile that fails earlier
+// leaves the previous ConfigWarnings alone.
 //
-// warnings is free-form text from Talos (machined's ValidateAtRuntime),
-// never validated as safe to surface as-is -- the scrubber strips
-// anything matching bundle's own secret-shaped scalars before it reaches
-// this Condition, which internal/uiapi and anyone with talosmachines:get
-// can read, a far wider readership than Secret RBAC allows (ADR 0041).
+// warnings is free-form text from Talos, so the scrubber strips anything matching the bundle's secret-shaped
+// scalars before it reaches a Condition that anyone with talosmachines:get can read (ADR 0041).
 func (r *TalosMachineReconciler) setWarnings(m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle, warnings []string) {
 	status := metav1.ConditionFalse
 	message := "dry run reported no warnings"

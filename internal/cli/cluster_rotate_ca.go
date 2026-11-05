@@ -91,9 +91,13 @@ Kubernetes CA.
 
 --ca chooses the CAs (talos, kubernetes, etcd, kubernetes-aggregator; repeat the flag or separate
 with commas), --all takes the four. Without either, the Talos API and Kubernetes API CAs are
-replaced. The etcd CA is replaced by restarting the etcd of every control plane, one member at a
-time, after each pass, and only while etcd is healthy; with one control plane the Kubernetes API is
-unavailable during each restart. Take an etcd snapshot first ('ichor etcd backup now NAME'). The
+replaced. The etcd CA is replaced by rebooting every control plane, one at a time, after each of the
+three passes (Talos neither restarts etcd on a configuration change nor lets an API call do it): each
+node is cordoned and drained, hands etcd leadership over, reboots, and the next one waits until it is
+back, Ready and etcd is healthy; with one control plane the Kubernetes API is unavailable during each
+reboot. That is three reboots of every control plane. Take an etcd snapshot first ('ichor etcd backup
+now NAME'). Deleting the operation before the new CA issues abandons the rotation (the old
+configuration is rendered again); 'ichor config apply' then drops what the nodes still accept. The
 aggregator CA needs the extension API servers (metrics-server, for one) to load the new CA: Ichor
 waits for kube-apiserver to publish it and restarts none of them. A rotation of etcd and the
 aggregator CA alone changes nothing your kubeconfig or talosconfig depends on, so it has no

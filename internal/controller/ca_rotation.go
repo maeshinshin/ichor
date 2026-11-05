@@ -36,8 +36,13 @@ limitations under the License.
 //	Issuing ... new CA issues, old is accepted                                 -> Dropping
 //	Dropping .. old CA removed from the accepted CAs                           -> Finalizing
 //	Finalizing  Secret replaced, BundleBackupStale raised, Ichor's dial and the machines'
-//	            configuration checked against the replaced bundle, CoreDNS, kube-proxy, the
+//	            configuration checked against the replaced bundle, the aggregator ConfigMap
+//	            recreated with the new CA alone, CoreDNS, kube-proxy, the
 //	            CNI and ichor-ui restarted once to load the new CA             -> Done
+//
+// With the etcd CA among the targets each pass is followed by a rolling reboot of the control planes
+// (ca_rotation_targets.go): Talos does not restart etcd on a configuration change. Deleting the operation
+// before the point of no return abandons the rotation (rotation_abandon.go).
 //
 // A step that cannot be verified (a machine does not answer Ichor, a Node is not Ready, an apply
 // is refused) never advances the stage: the operation is Paused with the reason and tried again

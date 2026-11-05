@@ -236,7 +236,11 @@ func describeOperation(out *pb.Operation, op *ichorv1alpha1.TalosOperation, clus
 		add("CAs", strings.Join(caRotationTargets(op), ", "))
 
 		if rs := op.Status.CARotation; rs != nil && len(rs.EtcdRestarted) > 0 {
-			add("etcd restarted in this stage", strings.Join(rs.EtcdRestarted, ", "))
+			add("control planes rebooted in this stage", strings.Join(rs.EtcdRestarted, ", "))
+		}
+
+		if rs := op.Status.CARotation; rs != nil && rs.EtcdRebooting != "" {
+			add("control plane rebooting now", rs.EtcdRebooting)
 		}
 
 	case ichorv1alpha1.TalosOperationKindKeyRotation:

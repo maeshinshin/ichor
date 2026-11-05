@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1/ichorv1alpha1connect"
+	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
 // Identity is who an authenticated request is acting as, already in the form
@@ -60,8 +61,8 @@ const (
 // its own prefix (default "oidc:"), and the process refuses one that could
 // collide with these.
 const (
-	IchorUserPrefix  = "ichor:"
-	IchorGroupPrefix = "ichor:"
+	IchorUserPrefix  = ichorauth.UserPrefix
+	IchorGroupPrefix = ichorauth.GroupPrefix
 )
 
 // LocalVerifier verifies an ID token minted by Ichor's own issuer, in process,

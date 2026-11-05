@@ -15,9 +15,8 @@ limitations under the License.
 */
 
 // Package cni holds the types shared by the CNI code (docs/design/architecture.md,
-// "CNI"); Cilium is the only CNI (ADR 0099). Ichor bootstraps a CNI once and hands it over to Argo CD; it never
-// installs, upgrades or otherwise operates one afterwards, which is why nothing here
-// reaches into a running cluster on its own.
+// "CNI"); Cilium is the only CNI (ADR 0099). Ichor bootstraps it from an inline manifest and then owns it as a
+// Helm release run by the ichor-cni Job (ADR 0101); nothing here reaches into a running cluster on its own.
 package cni
 
 import (
@@ -30,7 +29,7 @@ import (
 // one's callers -- pkg/render, internal/controller -- have no shared home
 // below internal/cli that isn't a layering violation). The hand-over
 // reconciler (ADR 0024) matches on this exact name to know which
-// inlineManifests entry to stop rendering once Argo CD has adopted it.
+// inlineManifests entry to stop rendering once the Helm release owns it.
 const InlineManifestName = "cni"
 
 // KubeProxyMode is TalosCluster.spec.cni.kubeProxy: kube-proxy stays Talos's
@@ -43,7 +42,7 @@ const (
 
 	// KubeProxyReplaced means the CNI takes over kube-proxy's job. The
 	// setting then has two owners -- Talos (cluster.proxy.disabled, written
-	// by Ichor) and the CNI (written by Argo CD) -- which is exactly what
+	// by Ichor) and the CNI (written by its Helm release) -- which is exactly what
 	// cilium.Preset.CheckConsistency exists to keep honest.
 	KubeProxyReplaced KubeProxyMode = "replaced"
 )

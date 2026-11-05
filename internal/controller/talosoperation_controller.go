@@ -42,12 +42,9 @@ import (
 	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
-// operationRequeueInterval is how often TalosOperationReconciler re-checks
-// an in-progress machine step, or retries acquiring a held/transitioning
-// lock. Thirty seconds, the same cadence CNIHandoverReconciler polls Argo
-// CD at: an upgrade step is expected to finish in minutes, not seconds, so
-// this is "come back soon enough that status doesn't look stalled," not a
-// tight poll.
+// operationRequeueInterval is how often TalosOperationReconciler re-checks an in-progress machine
+// step, or retries acquiring a held/transitioning lock: steps take minutes, so this is "soon enough
+// that status doesn't look stalled," not a tight poll.
 const operationRequeueInterval = 30 * time.Second
 
 // conditionOperationPaused is the TalosOperation condition that says why setPhase paused it.
@@ -598,31 +595,17 @@ func (r *TalosOperationReconciler) phaseEvent(op *ichorv1alpha1.TalosOperation, 
 	}
 }
 
-// candidateMachines lists every approved, not-being-deleted TalosMachine belonging to cluster
-// (deleteguard.ApprovedMachines),
-// excluding any carrying ichorv1alpha1.TalosMachineUpgradeHoldAnnotation
-// (the design's "per-machine hold annotation" -- held means permanently
-// excluded from this operation, not merely deferred), split by role and
-// ordered within each tier by ichorv1alpha1.TalosMachineUpgradeOrderLabel
-// (the design's "label-based ordering"; a missing label sorts last), with
-// name as the deterministic tiebreak.
+// candidateMachines lists every approved, not-being-deleted TalosMachine of cluster
+// (deleteguard.ApprovedMachines) without TalosMachineUpgradeHoldAnnotation (held means permanently
+// excluded from this operation, not merely deferred), split by role and ordered within each tier by
+// TalosMachineUpgradeOrderLabel (a missing label sorts last), with name as the tiebreak.
 //
-// Reads through r.Client (the manager's cache), not r.APIReader, on
-// purpose: unlike acquireDisruptiveLock's control-plane count, nothing
-// here gates whether a disruptive action is allowed at all -- it only
-// picks which already-authorized machine goes next. A cache lag has two
-// possible failure shapes, neither one of them the quorum problem's "an
-// action proceeds that should have been refused": a machine deleted a
-// moment ago can still appear here, which just means Advance is called on
-// a machine that no longer exists (a visible, reportable error, not a
-// silent wrong one -- the existing pause-on-failure path handles it the
-// same as any other Advance failure); a machine approved a moment ago can
-// be briefly absent, which only defers it to the next reconcile this
-// level-triggered loop will run regardless. Either way nothing here can
-// make "one control plane at a time" or "maxUnavailable workers" actually
-// be violated, since Reconcile truncates the slice this returns itself --
-// a stale or incomplete candidate list changes which machine is picked,
-// never how many.
+// Reads through r.Client (the cache), not r.APIReader, on purpose: unlike acquireDisruptiveLock's
+// control-plane count, nothing here gates whether a disruptive action is allowed; it only picks which
+// already-authorized machine goes next. A machine deleted a moment ago can still appear (Advance fails
+// on it and the operation pauses, visibly); one approved a moment ago can be briefly absent (deferred
+// to the next reconcile). A stale list changes which machine is picked, never how many, so "one
+// control plane at a time" and maxUnavailable hold.
 func (r *TalosOperationReconciler) candidateMachines(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster,
 ) (controlPlanes, workers []*ichorv1alpha1.TalosMachine, err error) {
@@ -763,16 +746,11 @@ func pendingMachines(
 	})
 }
 
-// acquireDisruptiveLock is the only place in this file that calls
-// clusterlock.Lock.Acquire -- TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite
-// checks every function with this exact name across the package, not just
-// TalosMachineReconciler's own (internal/controller/removal.go), so this
-// satisfies it the same way that one does. An upgrade must not start, or
-// continue, while the cluster's live control-plane count is even -- a
-// replacement is in progress -- which is exactly the generic gate every
-// other disruptive operation already goes through; TalosOperation has no
-// analogue of removal's own completesTransition exception, so this never
-// bypasses the check.
+// acquireDisruptiveLock is the only place in this file that calls clusterlock.Lock.Acquire
+// (TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite checks every function of this name in the
+// package). An upgrade must not start or continue while the live control-plane count is even (a
+// replacement is in progress), the generic gate every disruptive operation goes through; unlike
+// removal there is no completesTransition exception.
 func (r *TalosOperationReconciler) acquireDisruptiveLock(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, op *ichorv1alpha1.TalosOperation,
 ) (*clusterlock.Lock, error) {

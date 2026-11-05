@@ -250,8 +250,7 @@ var _ = Describe("Cilium chart upgrade", func() {
 			// A Job from the hand-over for the same values must not count as this upgrade's.
 			finishCNIJobAt(cluster)
 
-			_, err := reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(r, op)
 			Expect(fetchOperation(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
 			Expect(fetchOperation(op).Status.Machines).To(BeEmpty())
 
@@ -264,20 +263,17 @@ var _ = Describe("Cilium chart upgrade", func() {
 
 			// The Job finishes; the release is still at the old chart, so the operation keeps waiting.
 			setJobCondition(job, batchv1.JobComplete, "")
-			_, err = reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(r, op)
 			Expect(fetchOperation(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
 
 			// Deployed at the new chart, but the agents have not rolled out.
 			helmReleaseAt(2, "deployed", cilium.ChartVersion, effectiveValues(cluster))
 			setReady(false)
-			_, err = reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(r, op)
 			Expect(fetchOperation(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
 
 			setReady(true)
-			_, err = reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(r, op)
 			Expect(fetchOperation(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
 
 			_, held = cniLockHolder(cluster)
@@ -288,14 +284,12 @@ var _ = Describe("Cilium chart upgrade", func() {
 			helmReleaseAt(1, "deployed", olderMinor, effectiveValues(cluster))
 			start(cilium.ChartVersion)
 
-			_, err := reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(r, op)
 
 			op = fetchOperation(op)
 			setJobCondition(jobFor(op), batchv1.JobFailed, "rollout did not become ready")
 
-			_, err = reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(r, op)
 
 			got := fetchOperation(op)
 			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
@@ -307,8 +301,7 @@ var _ = Describe("Cilium chart upgrade", func() {
 			helmReleaseAt(1, "deployed", skipMinor, effectiveValues(cluster))
 			start(cilium.ChartVersion)
 
-			_, err := reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(r, op)
 
 			got := fetchOperation(op)
 			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
@@ -320,8 +313,7 @@ var _ = Describe("Cilium chart upgrade", func() {
 			helmReleaseAt(1, "deployed", olderMinor, effectiveValues(cluster))
 			start("9.9.9")
 
-			_, err := reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(r, op)
 
 			got := fetchOperation(op)
 			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))

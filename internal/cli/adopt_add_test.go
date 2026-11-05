@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -190,6 +191,53 @@ func TestAdoptAddMachineRefusesAMachineOfAnotherCluster(t *testing.T) {
 
 	if len(*env.writes) != 0 {
 		t.Fatalf("a refused machine caused writes: %v", *env.writes)
+	}
+}
+
+// A machine of another Talos cluster cannot even be dialled with this cluster's talosconfig: the TLS
+// handshake fails with an unknown authority. That is the same refusal, naming the reset command, not a
+// raw certificate error (hardware finding E3).
+func TestAdoptAddMachineUnknownAuthorityNamesReclaim(t *testing.T) {
+	env := newUnmanagedAddEnv(t)
+
+	d := env.addDeps(t)
+	d.ReadIdentity = func(context.Context, string) (controller.HardwareIdentity, error) {
+		return controller.HardwareIdentity{}, errors.New(
+			"rpc error: code = Unavailable desc = connection error: tls: failed to verify certificate: x509: certificate signed by unknown authority")
+	}
+
+	err := runAdopt(context.Background(), env.cluster.Name, testNamespace, d)
+	if err == nil {
+		t.Fatal("runAdopt succeeded for a machine whose certificate is not trusted")
+	}
+
+	for _, want := range []string{addAddr, "different Talos cluster", "ichor machine reclaim " + addAddr, "--cluster " + env.cluster.Name} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not contain %q", err, want)
+		}
+	}
+
+	if strings.Contains(err.Error(), "failed to verify certificate") {
+		t.Errorf("the raw TLS error is shown: %v", err)
+	}
+
+	if len(*env.writes) != 0 {
+		t.Fatalf("a refused machine caused writes: %v", *env.writes)
+	}
+}
+
+// Any other dial failure stays as it is.
+func TestAdoptAddMachineOtherDialErrorsStay(t *testing.T) {
+	env := newUnmanagedAddEnv(t)
+
+	d := env.addDeps(t)
+	d.ReadIdentity = func(context.Context, string) (controller.HardwareIdentity, error) {
+		return controller.HardwareIdentity{}, errors.New("connection refused")
+	}
+
+	err := runAdopt(context.Background(), env.cluster.Name, testNamespace, d)
+	if err == nil || !strings.Contains(err.Error(), "connection refused") || strings.Contains(err.Error(), "reclaim") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 

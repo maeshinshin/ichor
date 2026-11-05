@@ -217,7 +217,7 @@ func (r *TalosClusterReconciler) freshAddress(cluster *ichorv1alpha1.TalosCluste
 func (r *TalosClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.TalosCluster{}).
-		Watches(&ichorv1alpha1.TalosOperation{}, handler.EnqueueRequestsFromMapFunc(caRotationOperationClusters)).
+		Watches(&ichorv1alpha1.TalosOperation{}, handler.EnqueueRequestsFromMapFunc(operationClusters(ichorv1alpha1.TalosOperationKindCARotation))).
 		Watches(&ichorv1alpha1.MachineReclaim{}, handler.EnqueueRequestsFromMapFunc(reclaimDoneClusters)).
 		// A Node Ichor marked as reset (when it is marked, and when it stops being Ready) starts a pass
 		// at once instead of waiting for the requeue.

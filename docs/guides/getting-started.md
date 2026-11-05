@@ -76,7 +76,11 @@ the images.
 
 Images you build yourself carry no signature. A cluster installed from them can
 be upgraded later with `ichor upgrade ichor VERSION --skip-signature-check`,
-which Ichor records; see
+which Ichor records. `ichor init` takes the same two flags, `--installer-digest sha256:...`
+(the digest of the installer image you pushed, from `DIGEST_FILE`) and
+`--skip-signature-check`; give them when the cluster's controller cannot reach the
+registry the installer image comes from, or the Cilium hand-over finds no digest to
+run its Job with (`CNIHandover` `InstallerImageUnresolved`). See
 [The installer image on an upgrade](install-with-helm.md#the-installer-image-on-an-upgrade)
 (ADR 0122).
 

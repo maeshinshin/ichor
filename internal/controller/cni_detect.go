@@ -188,7 +188,7 @@ func (r *CNIDetectReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.TalosCluster{}, builder.WithPredicates(predicate.Or(
 			predicate.GenerationChangedPredicate{}, cniDetectTriggerPredicate()))).
-		Watches(&ichorv1alpha1.TalosOperation{}, handler.EnqueueRequestsFromMapFunc(cniUpgradeOperationClusters),
+		Watches(&ichorv1alpha1.TalosOperation{}, handler.EnqueueRequestsFromMapFunc(operationClusters(ichorv1alpha1.TalosOperationKindCNI)),
 			builder.WithPredicates(cniDetectTriggerPredicate())).
 		Named("cnidetect").
 		Complete(r)

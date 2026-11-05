@@ -768,7 +768,7 @@ func (r *CNIHandoverReconciler) markCNIUnsupported(ctx context.Context, cluster 
 func (r *CNIHandoverReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.TalosCluster{}).
-		Watches(&ichorv1alpha1.TalosOperation{}, handler.EnqueueRequestsFromMapFunc(cniUpgradeOperationClusters)).
+		Watches(&ichorv1alpha1.TalosOperation{}, handler.EnqueueRequestsFromMapFunc(operationClusters(ichorv1alpha1.TalosOperationKindCNI))).
 		// Only a Node coming or going counts; its heartbeats and status updates do not. The Cilium values
 		// follow the number of Nodes (CNIValuesHash) and nothing else would look again once they were applied.
 		Watches(&corev1.Node{}, handler.EnqueueRequestsFromMapFunc(clusterRequests(r.Client, nil)), builder.WithPredicates(predicate.Funcs{

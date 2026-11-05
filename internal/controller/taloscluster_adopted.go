@@ -23,7 +23,9 @@ import (
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -88,19 +90,25 @@ func caRotationCompleted(ctx context.Context, c client.Client, cluster *ichorv1a
 	}), nil
 }
 
-// caRotationOperationClusters maps a ca-rotation operation to its cluster, so a completed rotation
-// lowers the advice without waiting for another event.
-func caRotationOperationClusters(_ context.Context, obj client.Object) []reconcile.Request {
-	op, ok := obj.(*ichorv1alpha1.TalosOperation)
-	if !ok || op.Spec.Kind != ichorv1alpha1.TalosOperationKindCARotation {
+// clusterRequest enqueues the cluster name in namespace; no name, nothing.
+func clusterRequest(namespace, name string) []reconcile.Request {
+	if name == "" {
 		return nil
 	}
 
-	var req reconcile.Request
+	return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: namespace, Name: name}}}
+}
 
-	req.Namespace, req.Name = op.Namespace, op.Spec.ClusterRef.Name
+// operationClusters maps an operation of the given kind to its cluster, so the end of a ca-rotation
+// or a Cilium upgrade lowers the advice or clears the available version without waiting for another event.
+func operationClusters(kind string) handler.MapFunc {
+	return func(_ context.Context, obj client.Object) []reconcile.Request {
+		if op, ok := obj.(*ichorv1alpha1.TalosOperation); ok && op.Spec.Kind == kind {
+			return clusterRequest(op.Namespace, op.Spec.ClusterRef.Name)
+		}
 
-	return []reconcile.Request{req}
+		return nil
+	}
 }
 
 // reclaimDoneClusters maps a MachineReclaim that ended Done to its target cluster, so discovery
@@ -108,13 +116,9 @@ func caRotationOperationClusters(_ context.Context, obj client.Object) []reconci
 // Nothing is written: the cluster is only enqueued.
 func reclaimDoneClusters(_ context.Context, obj client.Object) []reconcile.Request {
 	mr, ok := obj.(*ichorv1alpha1.MachineReclaim)
-	if !ok || mr.Status.Phase != ichorv1alpha1.MachineReclaimDone || mr.Spec.ClusterRef == nil || mr.Spec.ClusterRef.Name == "" {
+	if !ok || mr.Status.Phase != ichorv1alpha1.MachineReclaimDone || mr.Spec.ClusterRef == nil {
 		return nil
 	}
 
-	var req reconcile.Request
-
-	req.Namespace, req.Name = mr.Namespace, mr.Spec.ClusterRef.Name
-
-	return []reconcile.Request{req}
+	return clusterRequest(mr.Namespace, mr.Spec.ClusterRef.Name)
 }

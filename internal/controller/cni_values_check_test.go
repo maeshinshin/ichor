@@ -200,7 +200,7 @@ var _ = Describe("The Cilium values re-check before a Helm Job", func() {
 		reconcileHandoverOK(r, cluster)
 
 		Expect(cniJobCount(cluster)).To(BeZero())
-		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Message).To(ContainSubstring("Gateway API"))
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Message).To(ContainSubstring("Gateway API CRDs"))
 	})
 
 	It("pauses a chart upgrade operation instead of starting its Job", func() {
@@ -224,7 +224,7 @@ var _ = Describe("The Cilium values re-check before a Helm Job", func() {
 
 		got := fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
-		Expect(got.Status.FailureReason).To(ContainSubstring("Gateway API"))
+		Expect(got.Status.FailureReason).To(ContainSubstring("Gateway API CRDs"))
 		Expect(cniJobCount(cluster)).To(BeZero())
 	})
 })

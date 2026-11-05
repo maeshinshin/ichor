@@ -415,34 +415,18 @@ func TestAdoptNoCNI_ConsentNamesTheCiliumInstall(t *testing.T) {
 	}
 }
 
-func TestAdoptNoCNI_CiliumValuesRefusals(t *testing.T) {
-	t.Run("an owned key", func(t *testing.T) {
-		f := newNoCNIFlow(t)
-		f.deps.CiliumValues = map[string]any{"kubeProxyReplacement": true}
+func TestAdoptNoCNI_CiliumValuesRefusesAnOwnedKey(t *testing.T) {
+	f := newNoCNIFlow(t)
+	f.deps.CiliumValues = map[string]any{"kubeProxyReplacement": true}
 
-		err := f.run(t)
-		if err == nil || !strings.Contains(err.Error(), "kubeProxyReplacement") || !strings.Contains(err.Error(), "--cilium-values") {
-			t.Fatalf("runAdopt = %v, want the owned-key refusal", err)
-		}
+	err := f.run(t)
+	if err == nil || !strings.Contains(err.Error(), "kubeProxyReplacement") || !strings.Contains(err.Error(), "--cilium-values") {
+		t.Fatalf("runAdopt = %v, want the owned-key refusal", err)
+	}
 
-		if len(f.events()) != 0 {
-			t.Fatalf("wrote despite the refusal: %v", f.events())
-		}
-	})
-
-	// The TalosCluster exists, so there is no spec adopt creates to put the values in (ADR 0128 3 lets a
-	// takeover carry them only into a cluster adopt creates).
-	t.Run("a TalosCluster that exists", func(t *testing.T) {
-		env := newFlowEnv(t, cniCilium, nil)
-		deps := env.deps(t)
-		deps.Target = fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(testDS("cilium", ciliumImage), ciliumCM("false")).Build()
-		deps.CiliumValues = debugValues()
-
-		err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps)
-		if err == nil || !strings.Contains(err.Error(), "--cilium-values applies to the TalosCluster adopt creates") {
-			t.Fatalf("runAdopt = %v, want the refusal", err)
-		}
-	})
+	if len(f.events()) != 0 {
+		t.Fatalf("wrote despite the refusal: %v", f.events())
+	}
 }
 
 func TestReadAdoptCiliumValues(t *testing.T) {

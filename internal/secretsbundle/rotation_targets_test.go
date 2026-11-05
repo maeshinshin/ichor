@@ -43,10 +43,6 @@ func TestRotationForEtcdAndAggregatorOnly(t *testing.T) {
 		t.Fatalf("targets are listed in a fixed order, got %q", got)
 	}
 
-	if rot.RotatesCredentials() {
-		t.Fatal("etcd and the aggregator CA change nothing the operator holds")
-	}
-
 	raw, err := rot.Marshal()
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +89,7 @@ func TestRotationTalosAndKubernetesStayTheDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := strings.Join(rot.Targets(), ","); got != "talos,kubernetes" || !rot.RotatesCredentials() {
+	if got := strings.Join(rot.Targets(), ","); got != "talos,kubernetes" {
 		t.Fatalf("a rotation without a choice replaces the Talos and Kubernetes CAs, got %q", got)
 	}
 

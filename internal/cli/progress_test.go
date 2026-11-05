@@ -66,9 +66,7 @@ func TestProgress_PlainDeduplicatesTheDetailAndShowsElapsed(t *testing.T) {
 		"… Ichor controller — rolling out (1/1 available)\n" +
 		"… Ichor controller — rolling out (0/1 available)\n" +
 		"✓ Ichor controller — serving Ichor's webhooks (1m12s)\n"
-	if buf.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", buf.String(), want)
-	}
+	wantText(t, buf.String(), want)
 
 	if strings.Contains(buf.String(), "\x1b") || strings.Contains(buf.String(), "\r") {
 		t.Errorf("plain output has terminal control characters: %q", buf.String())
@@ -90,9 +88,7 @@ func TestProgress_WarnFailAndNoticeLines(t *testing.T) {
 		"✗ Install Ichor — failed (36s)\n" +
 		"    init: applying Ichor's own Deployment \"x\": boom\n" +
 		"    second line\n"
-	if buf.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", buf.String(), want)
-	}
+	wantText(t, buf.String(), want)
 }
 
 func TestProgress_FailReturnsTheErrorMarkedAsShown(t *testing.T) {
@@ -189,9 +185,7 @@ func TestProgress_StepWriterTurnsHelperMessagesIntoDetail(t *testing.T) {
 		"… Ichor controller — rolling out (0/1 available) · pod Pending: 0/1 nodes are available: 1 node(s) had untolerated taint(s).\n" +
 		"… Ichor controller — rolling out (1/1 available)\n" +
 		"✓ Ichor controller — ready (49s)\n"
-	if buf.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", buf.String(), want)
-	}
+	wantText(t, buf.String(), want)
 }
 
 // A detail that the end line repeats is not printed twice, and a step with no update prints its
@@ -214,9 +208,7 @@ func TestProgress_PlainDoesNotRepeatTheFinalDetailOrPrintABareStart(t *testing.T
 		"✓ Install Ichor — 2 objects\n" +
 		"! Ichor controller — not creating IchorInstallation\n" +
 		"✓ Secrets bundle — ~/s.yaml\n"
-	if buf.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", buf.String(), want)
-	}
+	wantText(t, buf.String(), want)
 }
 
 // A detail that stays for a while is printed while the step runs, not only at its end.

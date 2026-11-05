@@ -90,9 +90,7 @@ func TestPatchListHumanOutput(t *testing.T) {
 		"cp-modules     role control-plane                            10        KernelModuleConfig, SysctlConfig  3h\n" +
 		"one-node       machine " + cpUUID + "  0         SysctlConfig                      5m\n" +
 		"db-tier        selector tier=db, zone in (a,b)               0         SysctlConfig                      40s\n"
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 
 	out.Reset()
 
@@ -138,9 +136,7 @@ func TestPatchGetHumanOutput(t *testing.T) {
 		"  SysctlConfig\n" +
 		"    params:\n" +
 		"      net.core.somaxconn: \"1024\"\n"
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 }
 
 func TestPatchImpactHumanOutput(t *testing.T) {

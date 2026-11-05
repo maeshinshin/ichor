@@ -62,24 +62,17 @@ func TestReadUISettingsMigrationCases(t *testing.T) {
 }
 
 func TestCustomizePoliciesOpensTheMigratedPort(t *testing.T) {
-	mk := func() []*unstructured.Unstructured {
-		return []*unstructured.Unstructured{{Object: map[string]any{
-			"apiVersion": "cilium.io/v2", "kind": "CiliumNetworkPolicy", "metadata": map[string]any{"name": "prefixed-ui"},
-			"spec": map[string]any{"endpointSelector": map[string]any{"matchLabels": map[string]any{"control-plane": "ui-backend"}}, "ingress": []any{map[string]any{"toPorts": []any{map[string]any{
-				"ports": []any{map[string]any{"port": "8443", "protocol": "TCP"}},
-			}}}}},
-		}}}
-	}
-	ports := func(o *unstructured.Unstructured) []any {
-		ing, _, _ := unstructured.NestedSlice(o.Object, "spec", "ingress")
+	plain := []*unstructured.Unstructured{{Object: map[string]any{
+		"apiVersion": "cilium.io/v2", "kind": "CiliumNetworkPolicy", "metadata": map[string]any{"name": "prefixed-ui"},
+		"spec": map[string]any{"endpointSelector": map[string]any{"matchLabels": map[string]any{"control-plane": "ui-backend"}}, "ingress": []any{map[string]any{"toPorts": []any{map[string]any{
+			"ports": []any{map[string]any{"port": "8443", "protocol": "TCP"}},
+		}}}}},
+	}}}
 
-		return ing[0].(map[string]any)["toPorts"].([]any)[0].(map[string]any)["ports"].([]any)
-	}
-
-	plain := mk()
 	CustomizePolicies(plain, UISettings{WasPlaintext: plainAddr})
 
-	if got := ports(plain[0]); len(got) != 1 {
+	ing, _, _ := unstructured.NestedSlice(plain[0].Object, "spec", "ingress")
+	if got := ing[0].(map[string]any)["toPorts"].([]any)[0].(map[string]any)["ports"].([]any); len(got) != 1 {
 		t.Errorf("a plaintext install opens %v, want 8443 only", got)
 	}
 }

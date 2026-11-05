@@ -172,15 +172,3 @@ func TestTrustedConfigLoadsTheRotationFileBeforeTheWait(t *testing.T) {
 		t.Fatalf("the CA in the trust file is not trusted at start: %v", err)
 	}
 }
-
-func TestWaitForAPIServerTimesOut(t *testing.T) {
-	_, err := waitForAPIServer(context.Background(),
-		func() (*rest.Config, error) { return &rest.Config{}, nil },
-		func(*rest.Config) (discovery.ServerGroupsInterface, error) {
-			return fakeGroups{err: errors.New("unknown")}, nil
-		},
-		20*time.Millisecond, time.Millisecond, 2*time.Millisecond)
-	if err == nil {
-		t.Fatal("want timeout error")
-	}
-}

@@ -15,19 +15,16 @@ limitations under the License.
 */
 
 // Package storage defines what a storage-system disk preset is
-// (docs/design/architecture.md, "Storage"). The work splits into four
-// layers; Ichor owns the first (Talos-side preparation) and the fourth
-// (node-operation coordination: evacuate before drain). Preset is layer 1:
-// given a preset name and a disk selector, what Talos-side config does the
-// storage system need, and does the node's installer image already have
-// what that preset requires. EvacuationHook (evacuation.go) is layer 4's
-// storage-system side: what to write to evacuate a node or disk, and
-// whether it is safe to proceed to drain. Installing or operating the
-// storage system itself (layers 2 and 3) is Argo CD's and the storage
-// system's own controller's job, never Ichor's -- this package makes no
-// cluster call of its own, the same shape pkg/cni.Preset already
-// established for the CNI hand-over: it returns data and decisions for a
-// caller (internal/controller) to act on.
+// (docs/design/architecture.md, "Storage"). Ichor owns layer 1 (Talos-side
+// preparation) and layer 4 (node-operation coordination: evacuate before
+// drain). Preset is layer 1: given a preset name and a disk selector, what
+// Talos-side config does the storage system need, and does the node's
+// installer image already have what that preset requires. EvacuationHook
+// (evacuation.go) is layer 4's storage-system side: what to write to evacuate
+// a node or disk, and whether it is safe to proceed to drain. Installing or
+// operating the storage system is never Ichor's job. This package
+// makes no cluster call: it returns data and decisions for a caller
+// (internal/controller) to act on.
 package storage
 
 import (

@@ -1,7 +1,7 @@
 # Built-in role for the Ichor users group ichor:admin: everything
 # ichor-operator has, plus deleting machines and clusters, user management and the explicit
 # verbs: `start` on the destructive TalosOperation kinds, `update` on the trust configuration
-# and on user passwords, `override`, `reclaim` on machinereclaims and `download`. It does
+# and on user passwords, `update` on talosclusters/cilium-values (the Cilium Helm values), `override`, `reclaim` on machinereclaims and `download`. It does
 # not hold secrets, impersonate or cluster-admin. Bound by ichor_roles_binding.yaml.
 
 apiVersion: rbac.authorization.k8s.io/v1
@@ -91,6 +91,7 @@ rules:
   resources:
   - ichorusers/password
   - talosclusters/authentication
+  - talosclusters/cilium-values
   - talosclusters/secret-references
   - talosetcdbackups/secret-references
   verbs:

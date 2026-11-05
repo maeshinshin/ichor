@@ -109,6 +109,7 @@ func TestBuiltinUserRoles(t *testing.T) {
 		{ichorGroup, "talosoperations/node-reset", verbStart, ""},
 		{ichorGroup, "talosoperations/node-shutdown", verbStart, ""},
 		{ichorGroup, "talosclusters/authentication", verbUpdate, ""},
+		{ichorGroup, "talosclusters/cilium-values", verbUpdate, ""},
 		{ichorGroup, "talosclusters/secret-references", verbUpdate, ""},
 		{ichorGroup, "talosetcdbackups/secret-references", verbUpdate, ""},
 		{ichorGroup, "ichorusers/password", verbUpdate, ""},

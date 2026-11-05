@@ -119,7 +119,26 @@ type Values struct {
 	Certgen              certgen         `json:"certgen"`
 	// Operator is omitted for more than one control plane: the chart's default replica count applies.
 	Operator *operator `json:"operator,omitempty"`
+	// The five secretsNamespace names are pinned to Cilium's own namespace.
+	IngressController secretsNamespaceOf `json:"ingressController"`
+	GatewayAPI        secretsNamespaceOf `json:"gatewayAPI"`
+	EnvoyConfig       secretsNamespaceOf `json:"envoyConfig"`
+	BGPControlPlane   secretsNamespaceOf `json:"bgpControlPlane"`
+	TLS               secretsNamespaceOf `json:"tls"`
 }
+
+// secretsNamespaceOf is a chart block's secretsNamespace.name. The chart renders a Role and a
+// RoleBinding named cilium-*-secrets in that namespace, and the Helm Job may create them by name
+// (escalate and bind): a user choice of the namespace would give the Cilium ServiceAccounts read access
+// to the Secrets of any namespace, ichor-system's included.
+type secretsNamespaceOf struct {
+	SecretsNamespace struct {
+		Name string `json:"name"`
+	} `json:"secretsNamespace"`
+}
+
+// ciliumSecretsNamespace is the chart's own namespace for the Secrets Cilium reads; the chart creates it.
+const ciliumSecretsNamespace = "cilium-secrets"
 
 // operator is cilium.operator: the Cilium operator's replica count. The chart defaults to two, with a
 // required pod anti-affinity per node, so on a one-node cluster the second replica never schedules and
@@ -164,6 +183,10 @@ func (p Preset) valuesFor(kubeProxy cni.KubeProxyMode) Values {
 			Enabled: true,
 			TLS:     hubbleTLS{Auto: hubbleTLSAuto{Enabled: true, Method: "cronJob"}},
 		},
+	}
+
+	for _, b := range []*secretsNamespaceOf{&v.IngressController, &v.GatewayAPI, &v.EnvoyConfig, &v.BGPControlPlane, &v.TLS} {
+		b.SecretsNamespace.Name = ciliumSecretsNamespace
 	}
 
 	if kubeProxy == cni.KubeProxyReplaced {

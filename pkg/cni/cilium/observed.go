@@ -57,6 +57,17 @@ var ConfigMapValues = map[string]string{
 	"routing-mode":           "routingMode",
 	"kube-proxy-replacement": keyKubeProxyReplacement,
 	"cgroup-root":            keyHostRoot,
+
+	// The pinned secretsNamespace names. Each is in the ConfigMap only while its feature is on,
+	// and the feature switch is read with it so that a feature that is off is not reported as a conflict.
+	"ingress-secrets-namespace":     "ingressController.secretsNamespace.name",
+	"enable-ingress-controller":     "ingressController.enabled",
+	"gateway-api-secrets-namespace": "gatewayAPI.secretsNamespace.name",
+	"enable-gateway-api":            "gatewayAPI.enabled",
+	"envoy-secrets-namespace":       "envoyConfig.secretsNamespace.name",
+	"bgp-secrets-namespace":         "bgpControlPlane.secretsNamespace.name",
+	"enable-bgp-control-plane":      "bgpControlPlane.enabled",
+	"policy-secrets-namespace":      "tls.secretsNamespace.name",
 }
 
 // LiveValuesFromCluster is LiveValuesFromUser with the Ichor-owned keys replaced by what the

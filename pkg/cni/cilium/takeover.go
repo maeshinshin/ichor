@@ -400,7 +400,7 @@ func OwnedKeyConflicts(live map[string]any, kubeProxy cni.KubeProxyMode, tunnel 
 		want, _ := values.Get(owned, path)
 		have, _ := values.Get(live, path)
 
-		if sameOwned(path, have, want) {
+		if sameOwned(path, have, want) || secretsNamespaceOfFeatureOff(live, path) {
 			continue
 		}
 
@@ -417,6 +417,22 @@ func OwnedKeyConflicts(live map[string]any, kubeProxy cni.KubeProxyMode, tunnel 
 	slices.SortFunc(out, func(a, b Conflict) int { return strings.Compare(a.Key, b.Key) })
 
 	return out, nil
+}
+
+// secretsNamespaceOfFeatureOff reports whether path is the secretsNamespace name of a Cilium feature
+// (ingress, Gateway API, Envoy config, BGP) that is off in live: the chart's default for an unused
+// feature (BGP's is kube-system) is no conflict. The TLS namespace has no switch.
+// ponytail: Envoy config's switch is not read back from a Talos inline manifest (its ConfigMap key is
+// also set by ingress and Gateway API), so it counts as off there; its chart default is Cilium's own namespace.
+func secretsNamespaceOfFeatureOff(live map[string]any, path string) bool {
+	block, _, ok := strings.Cut(path, ".secretsNamespace.")
+	if !ok || block == "tls" {
+		return false
+	}
+
+	on, _ := values.Get(live, block+".enabled")
+
+	return fmt.Sprint(on) != "true"
 }
 
 func ownedLevel(path string) Level {

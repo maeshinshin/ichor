@@ -46,6 +46,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -329,12 +330,8 @@ func (r *TalosMachineReconciler) updateTransitioning(ctx context.Context, cluste
 	return r.Status().Update(ctx, cluster)
 }
 
-// refreshTransitioning counts cluster's approved control planes (the same
-// List countApprovedControlPlanes always does) and updates its
-// Transitioning condition from the result. Pulled out of Reconcile's main
-// path as its own call, rather than inlined, purely to keep that
-// function's branching down -- it has no other reason to exist separately
-// from updateTransitioning.
+// refreshTransitioning recomputes cluster's Transitioning condition from a fresh count of its approved
+// control planes. Split out of Reconcile only to keep that function's complexity down.
 func (r *TalosMachineReconciler) refreshTransitioning(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) error {
@@ -775,10 +772,8 @@ func (r *TalosMachineReconciler) findEtcdSurvivor(
 		return nil, err
 	}
 
-	for i := range siblings {
-		if siblings[i].Name != m.Name {
-			return &siblings[i], nil
-		}
+	if i := slices.IndexFunc(siblings, func(s ichorv1alpha1.TalosMachine) bool { return s.Name != m.Name }); i >= 0 {
+		return &siblings[i], nil
 	}
 
 	return nil, fmt.Errorf("no surviving control plane found to remove %q from etcd", m.Name)
@@ -802,10 +797,8 @@ func etcdMemberID(members []EtcdMember, hostname string) (uint64, bool) {
 		return 0, false
 	}
 
-	for _, member := range members {
-		if member.Hostname == hostname {
-			return member.ID, true
-		}
+	if i := slices.IndexFunc(members, func(e EtcdMember) bool { return e.Hostname == hostname }); i >= 0 {
+		return members[i].ID, true
 	}
 
 	return 0, false

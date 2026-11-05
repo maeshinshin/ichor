@@ -365,12 +365,10 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		r := &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace}
 
 		// Hand over at kubeProxy=enabled.
-		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 		setJobCondition(cniJob(cluster), batchv1.JobComplete, "")
 		helmRelease(1, "deployed", effectiveValues(cluster))
-		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 
 		before := fetchCluster(cluster).Status.CNI.AppliedValuesHash
 		Expect(before).NotTo(BeEmpty())
@@ -385,8 +383,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		cmVersion := ciliumConfigVersion()
 
 		for range 2 {
-			result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-			Expect(err).NotTo(HaveOccurred())
+			result := reconcileHandoverOK(r, cluster)
 			Expect(result).To(Equal(ctrl.Result{}))
 		}
 
@@ -424,8 +421,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		replaced := fetchCluster(cluster)
 		helmRelease(2, "deployed", effectiveValues(replaced))
 
-		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 
 		hash, err := CNIValuesHash(replaced, cni.KubeProxyReplaced, liveNodes())
 		Expect(err).NotTo(HaveOccurred())

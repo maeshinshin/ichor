@@ -371,7 +371,7 @@ function PlanView({ kind, plan, clusterName }: { kind: OpKind; plan: PlanOperati
           {plan.specChanges && <CardDescription>{t('ops.plan.specChanges', { to })}</CardDescription>}
         </CardHeader>
         <CardContent className="space-y-3">
-          <p>{effectText(plan.effect, kind)}</p>
+          <p>{effectText(plan.effect, kind, plan.caTargets)}</p>
           {kind === 'kubernetes' && plan.stages.length > 0 && <KubernetesStages names={plan.stages} />}
           {kind === 'ca-rotation' && plan.stages.length > 0 && <p>{t('ops.plan.stages', { stages: plan.stages.join(', ') })}</p>}
           {kind === 'key-rotation' && plan.stages.length > 0 && <p>{t('ops.plan.keyStages', { stages: plan.stages.join(', ') })}</p>}
@@ -490,7 +490,7 @@ function roleText(role: string): string {
   return role === 'controlplane' ? t('ops.plan.role.controlplane') : t('ops.plan.role.worker')
 }
 
-function effectText(effect: number, kind: OpKind): string {
+function effectText(effect: number, kind: OpKind, caTargets: string[]): string {
   switch (effect) {
     case OperationEffect.REBOOT:
       return t(kind === 'config' ? 'ops.plan.effectConfigReboot' : 'ops.plan.effectReboot')
@@ -499,7 +499,7 @@ function effectText(effect: number, kind: OpKind): string {
     case OperationEffect.STOP:
       return t('ops.plan.effectStop')
     case OperationEffect.CA_ROTATION:
-      return t('ops.plan.effectCARotation')
+      return t(caTargets.includes('etcd') ? 'ops.plan.effectCARotationEtcd' : 'ops.plan.effectCARotation')
     case OperationEffect.KEY_ROTATION:
       return t('ops.plan.effectKeyRotation')
     default:

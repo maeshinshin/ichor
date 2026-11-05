@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"cmp"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -487,10 +488,7 @@ func (n *TalosOperationNodeSpec) Overrides() bool {
 // EffectiveOverrideReason is overrideReason, or the deprecated breakGlassReason when that is empty. It is
 // empty when no reason was given; that is not the same as not overriding (see Overrides).
 func (n *TalosOperationNodeSpec) EffectiveOverrideReason() string {
-	if n.OverrideReason != "" {
-		return n.OverrideReason
-	}
-	return n.BreakGlassReason
+	return cmp.Or(n.OverrideReason, n.BreakGlassReason)
 }
 
 // TalosOperationNodeStatus is the state of a node-kind operation. The machine's own entry in

@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -129,10 +130,8 @@ func (m *TalosMachine) DiscoveryWarnings() []string {
 
 	if len(m.Status.DiscoveredDisks) > 0 {
 		check := func(what string, sel TalosMachineDisk) {
-			for _, d := range m.Status.DiscoveredDisks {
-				if diskSelectorMatches(sel, d) {
-					return
-				}
+			if slices.ContainsFunc(m.Status.DiscoveredDisks, func(d TalosMachineDiscoveredDisk) bool { return diskSelectorMatches(sel, d) }) {
+				return
 			}
 
 			warns = append(warns, fmt.Sprintf(
@@ -150,13 +149,7 @@ func (m *TalosMachine) DiscoveryWarnings() []string {
 	}
 
 	if n := m.Spec.Network; n != nil && len(m.Status.DiscoveredLinks) > 0 {
-		found := false
-
-		for _, l := range m.Status.DiscoveredLinks {
-			found = found || strings.EqualFold(l.PermanentMAC, n.MAC)
-		}
-
-		if !found {
+		if !slices.ContainsFunc(m.Status.DiscoveredLinks, func(l TalosMachineDiscoveredLink) bool { return strings.EqualFold(l.PermanentMAC, n.MAC) }) {
 			warns = append(warns, fmt.Sprintf(
 				"network MAC %s is not the permanent address of any of the %d NICs the node reported when it was discovered",
 				n.MAC, len(m.Status.DiscoveredLinks)))

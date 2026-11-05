@@ -107,14 +107,12 @@ var _ = Describe("Cilium chart upgrade", func() {
 			r := &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace}
 
 			// No release record: nothing is claimed.
-			_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileHandoverOK(r, cluster)
 			Expect(getCluster(cluster).Status.CNI.AvailableChartVersion).To(BeEmpty())
 			Expect(apimeta.FindStatusCondition(getCluster(cluster).Status.Conditions, ichorv1alpha1.ConditionCiliumUpgradeAvailable)).To(BeNil())
 
 			helmReleaseAt(1, "deployed", olderMinor, effectiveValues(cluster))
-			_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileHandoverOK(r, cluster)
 			Expect(getCluster(cluster).Status.CNI.AvailableChartVersion).To(Equal(cilium.ChartVersion))
 			Expect(getCluster(cluster).Status.CNI.AppliedValuesHash).To(Equal(hash), "the other CNI status fields stay")
 
@@ -124,14 +122,12 @@ var _ = Describe("Cilium chart upgrade", func() {
 
 			// A release two minors behind is flagged as not applicable in one step.
 			helmReleaseAt(2, "deployed", skipMinor, effectiveValues(cluster))
-			_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileHandoverOK(r, cluster)
 			Expect(conditionOf(cluster, ichorv1alpha1.ConditionCiliumUpgradeAvailable).Message).To(ContainSubstring("one step"))
 
 			// The release is upgraded.
 			helmReleaseAt(3, "deployed", cilium.ChartVersion, effectiveValues(cluster))
-			_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileHandoverOK(r, cluster)
 			Expect(getCluster(cluster).Status.CNI.AvailableChartVersion).To(BeEmpty())
 			Expect(conditionOf(cluster, ichorv1alpha1.ConditionCiliumUpgradeAvailable).Status).To(Equal(metav1.ConditionFalse))
 		})
@@ -172,8 +168,7 @@ var _ = Describe("Cilium chart upgrade", func() {
 
 			r := &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace}
 
-			_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileHandoverOK(r, cluster)
 
 			got := getCluster(cluster).Status.CNI
 			Expect(got.ImageOverride).NotTo(BeNil(), "the patch is frozen, not dropped")
@@ -198,13 +193,11 @@ var _ = Describe("Cilium chart upgrade", func() {
 
 			r := &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace}
 
-			_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileHandoverOK(r, cluster)
 			Expect(getCluster(cluster).Status.CNI.ImageOverride).To(BeNil())
 
 			// The patch was cleared in this pass; the next one computes the availability.
-			_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileHandoverOK(r, cluster)
 			Expect(conditionOf(cluster, ichorv1alpha1.ConditionCiliumUpgradeAvailable).Message).NotTo(ContainSubstring("earlier Ichor"))
 		})
 	})

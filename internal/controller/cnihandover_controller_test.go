@@ -27,7 +27,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/siderolabs/talos/pkg/machinery/constants"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -56,11 +55,24 @@ func reconcileHandover(r *CNIHandoverReconciler, namespace, name string) (ctrl.R
 	return r.Reconcile(ctx, ctrl.Request{Namespace: namespace, Name: name})
 }
 
+// reconcileHandoverOK reconciles cluster once and requires that it succeeds.
+func reconcileHandoverOK(r *CNIHandoverReconciler, cluster *ichorv1alpha1.TalosCluster) ctrl.Result {
+	GinkgoHelper()
+
+	result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
+	Expect(err).NotTo(HaveOccurred())
+
+	return result
+}
+
 // newTestCiliumCluster is newTestCluster with the CNI preset set to cilium before Create --
 // spec.cni.preset is immutable once a TalosCluster exists (the CEL rule on TalosClusterCNI).
-func newTestCiliumCluster() *ichorv1alpha1.TalosCluster {
+func newTestCiliumCluster() *ichorv1alpha1.TalosCluster { return newTestPresetCluster(ciliumName) }
+
+// newTestPresetCluster creates a TalosCluster with the given CNI preset.
+func newTestPresetCluster(preset string) *ichorv1alpha1.TalosCluster {
 	spec := newClusterSpec(missingSecretName, testK8sContract)
-	spec.CNI = ichorv1alpha1.TalosClusterCNI{Preset: ciliumName}
+	spec.CNI = ichorv1alpha1.TalosClusterCNI{Preset: preset}
 
 	cluster := &ichorv1alpha1.TalosCluster{GenerateName: testClusterGenerate, Namespace: tmNamespace, Spec: spec}
 	Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
@@ -231,22 +243,9 @@ var _ = Describe("CNIHandoverReconciler", func() {
 	})
 
 	It("sets CNIUnsupported on a flannel cluster and leaves the hand-over condition alone", func() {
-		cluster := &ichorv1alpha1.TalosCluster{
-			GenerateName: testClusterGenerate, Namespace: tmNamespace,
-			Spec: ichorv1alpha1.TalosClusterSpec{
-				Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: testClusterAddress},
-				TalosVersion:      testTalosVersion,
-				KubernetesVersion: "v" + constants.DefaultKubernetesVersion,
-				VersionContract:   "v1.14",
-				SecretsRef:        corev1.LocalObjectReference{Name: missingSecretName},
-				ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
-				CNI:               ichorv1alpha1.TalosClusterCNI{Preset: "flannel"},
-			},
-		}
-		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+		cluster := newTestPresetCluster("flannel")
 
-		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		result := reconcileHandoverOK(r, cluster)
 		Expect(result.RequeueAfter).To(BeZero())
 
 		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIUnsupported).Status).To(Equal(metav1.ConditionTrue))
@@ -254,23 +253,11 @@ var _ = Describe("CNIHandoverReconciler", func() {
 	})
 
 	It("does nothing for an unmanaged cluster: no conditions, no Job, and not CNIUnsupported", func() {
-		cluster := &ichorv1alpha1.TalosCluster{
-			GenerateName: testClusterGenerate, Namespace: tmNamespace,
-			Spec: ichorv1alpha1.TalosClusterSpec{
-				Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: testEndpointType, Address: testClusterAddress},
-				TalosVersion:      testTalosVersion,
-				KubernetesVersion: "v" + constants.DefaultKubernetesVersion,
-				VersionContract:   "v1.14",
-				SecretsRef:        corev1.LocalObjectReference{Name: missingSecretName},
-				ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: 1, Schedulable: testSchedulable},
-				CNI:               ichorv1alpha1.TalosClusterCNI{Preset: ichorv1alpha1.TalosClusterCNIPresetUnmanaged},
-			},
-		}
+		cluster := newTestPresetCluster(ichorv1alpha1.TalosClusterCNIPresetUnmanaged)
 		cluster.Annotations = map[string]string{ichorv1alpha1.TalosClusterAdoptedAnnotation: resetOnDeleteValue}
-		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
+		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
 
-		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		result := reconcileHandoverOK(r, cluster)
 		Expect(result.RequeueAfter).To(BeZero())
 
 		got := getCluster(cluster)
@@ -290,8 +277,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 	It("waits for the bootstrapped Cilium before it starts a Job", func() {
 		cluster := newTestCiliumCluster()
 
-		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		result := reconcileHandoverOK(r, cluster)
 		Expect(result.RequeueAfter).To(Equal(handoverRequeueInterval))
 
 		cond := conditionOf(cluster, render.ConditionCNIHandover)
@@ -307,8 +293,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		setReady(true)
 
 		// The Job is created and the cluster lock is held while it runs.
-		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		result := reconcileHandoverOK(r, cluster)
 		Expect(result.RequeueAfter).To(Equal(cniJobPollInterval))
 		job := cniJob(cluster)
 
@@ -321,15 +306,13 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(cond.Reason).To(Equal("AdoptingCilium"))
 
 		// Still running: nothing changes, the lock stays.
-		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 		_, held = cniLockHolder(cluster)
 		Expect(held).To(BeTrue())
 
 		// The Job succeeded but no release record exists: not handed over, lock released.
 		setJobCondition(job, batchv1.JobComplete, "")
-		result, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		result = reconcileHandoverOK(r, cluster)
 		Expect(result.RequeueAfter).To(Equal(handoverRequeueInterval))
 		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionFalse))
 		Expect(conditionOf(cluster, render.ConditionCNIHandover).Reason).To(Equal("WaitingForRelease"))
@@ -338,22 +321,19 @@ var _ = Describe("CNIHandoverReconciler", func() {
 
 		// A release that is not deployed does not count either.
 		helmRelease(1, "pending-install", effectiveValues(cluster))
-		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionFalse))
 
 		// Deployed at the cluster's values, but the DaemonSet is not ready.
 		helmRelease(2, "deployed", effectiveValues(cluster))
 		setReady(false)
-		result, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		result = reconcileHandoverOK(r, cluster)
 		Expect(result.RequeueAfter).To(Equal(handoverRequeueInterval))
 		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionFalse))
 
 		// All three: done.
 		setReady(true)
-		result, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		result = reconcileHandoverOK(r, cluster)
 		Expect(result.RequeueAfter).To(BeZero())
 
 		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionTrue))
@@ -365,8 +345,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(getCluster(cluster).Status.CNI.AppliedValuesHash).To(Equal(hash))
 
 		// Steady state: nothing more to do.
-		result, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		result = reconcileHandoverOK(r, cluster)
 		Expect(result).To(Equal(ctrl.Result{}))
 	})
 
@@ -379,8 +358,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
 		ciliumDaemonSet()(true)
 
-		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 
 		job := cniJob(cluster)
 		Expect(job.Spec.Template.Spec.Containers[0].Args).To(ContainElement("--takeover"))
@@ -388,8 +366,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 
 		setJobCondition(job, batchv1.JobComplete, "")
 		helmRelease(1, "deployed", effectiveValues(cluster))
-		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 
 		got := getCluster(cluster)
 		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionTrue))
@@ -403,8 +380,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		ciliumDaemonSet()(true)
 		helmRelease(1, "deployed", effectiveValues(cluster))
 
-		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		result := reconcileHandoverOK(r, cluster)
 		Expect(result).To(Equal(ctrl.Result{}))
 
 		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionTrue))
@@ -425,8 +401,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		cm.Data["tunnel-protocol"] = "geneve"
 		Expect(k8sClient.Update(ctx, &cm)).To(Succeed())
 
-		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 
 		c := conditionOf(cluster, render.ConditionCNIHandover)
 		Expect(c.Status).To(Equal(metav1.ConditionFalse))
@@ -440,8 +415,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		ciliumDaemonSet()(true)
 		helmRelease(1, "deployed", map[string]any{"debug": map[string]any{"enabled": true}})
 
-		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 		Expect(cniJobCount(cluster)).To(Equal(1))
 		cniJob(cluster)
 	})
@@ -450,8 +424,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		cluster := newTestCiliumCluster()
 		ciliumDaemonSet()(true)
 
-		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 		Expect(cniJob(cluster).Spec.Template.Spec.Containers[0].Args).NotTo(ContainElement("--takeover"))
 	})
 
@@ -459,12 +432,10 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		cluster := newTestCiliumCluster()
 		ciliumDaemonSet()(true)
 
-		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 		setJobCondition(cniJob(cluster), batchv1.JobComplete, "")
 		helmRelease(1, "deployed", effectiveValues(cluster))
-		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 		Expect(conditionOf(cluster, render.ConditionCNIHandover).Status).To(Equal(metav1.ConditionTrue))
 
 		first, err := CNIValuesHash(cluster, specMode(cluster), liveNodes())
@@ -477,8 +448,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		}
 		Expect(k8sClient.Update(ctx, edited)).To(Succeed())
 
-		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		result := reconcileHandoverOK(r, cluster)
 		Expect(result.RequeueAfter).To(Equal(cniJobPollInterval))
 
 		second, err := CNIValuesHash(getCluster(cluster), specMode(cluster), liveNodes())
@@ -501,8 +471,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		// Done at the new values: recorded, lock released.
 		setJobCondition(job, batchv1.JobComplete, "")
 		helmRelease(2, "deployed", effectiveValues(getCluster(cluster)))
-		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 		Expect(getCluster(cluster).Status.CNI.AppliedValuesHash).To(Equal(second))
 		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Status).To(Equal(metav1.ConditionTrue))
 		_, held = cniLockHolder(cluster)
@@ -513,14 +482,12 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		cluster := newTestCiliumCluster()
 		ciliumDaemonSet()(true)
 
-		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 
 		job := cniJob(cluster)
 		setJobCondition(job, batchv1.JobFailed, "Job has reached the specified backoff limit")
 
-		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		result := reconcileHandoverOK(r, cluster)
 		Expect(result.RequeueAfter).To(BeNumerically(">", 0), "a failed Job is retried, not waited on forever")
 
 		cond := conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied)
@@ -538,15 +505,13 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		ciliumDaemonSet()(true)
 		r.JobRetryInterval = time.Nanosecond
 
-		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 
 		failedJob := cniJob(cluster)
 		setJobCondition(failedJob, batchv1.JobFailed, "another operation (install/upgrade/rollback) is in progress")
 
 		// The failure is reported and the failed Job removed.
-		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Reason).To(Equal("JobFailed"))
 
 		// The next pass starts a new Job under the same name.
@@ -571,8 +536,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 			ciliumDaemonSet()(true)
 			r.JobRetryInterval = time.Minute
 
-			_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileHandoverOK(r, cluster)
 
 			hash, err := CNIValuesHash(cluster, specMode(cluster), liveNodes())
 			Expect(err).NotTo(HaveOccurred())
@@ -583,8 +547,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 
 			failJobJustNow(cniJob(cluster), "Job has reached the specified backoff limit")
 
-			result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-			Expect(err).NotTo(HaveOccurred())
+			result := reconcileHandoverOK(r, cluster)
 			Expect(result.RequeueAfter).To(BeNumerically("~", wantWait, 10*time.Second))
 			Expect(cniJobCount(cluster)).To(Equal(1), "the failed Job stays until its wait is over")
 			Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Message).To(ContainSubstring(wantMessage))
@@ -607,18 +570,15 @@ var _ = Describe("CNIHandoverReconciler", func() {
 			return 0
 		}
 
-		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 
 		for want := int32(1); want <= 2; want++ {
 			failJobJustNow(cniJob(cluster), "Job has reached the specified backoff limit")
 
-			_, err = reconcileHandover(r, cluster.Namespace, cluster.Name) // retires the failed Job
-			Expect(err).NotTo(HaveOccurred())
+			reconcileHandoverOK(r, cluster) // retires the failed Job
 			Expect(failures()).To(Equal(want))
 
-			_, err = reconcileHandover(r, cluster.Namespace, cluster.Name) // starts the next one
-			Expect(err).NotTo(HaveOccurred())
+			reconcileHandoverOK(r, cluster) // starts the next one
 		}
 
 		// Other values are another Job at once, and the count starts again for them.
@@ -628,22 +588,18 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		}
 		Expect(k8sClient.Update(ctx, edited)).To(Succeed())
 
-		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 		failJobJustNow(cniJob(edited), "Job has reached the specified backoff limit")
 
-		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 		Expect(failures()).To(Equal(int32(1)))
 
 		// A Job that works clears the count.
-		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 		setJobCondition(cniJob(edited), batchv1.JobComplete, "")
 		helmRelease(1, "deployed", effectiveValues(getCluster(cluster)))
 
-		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 		Expect(failures()).To(BeZero())
 		Expect(getCluster(cluster).Status.CNI.JobFailuresHash).To(BeEmpty())
 	})
@@ -652,8 +608,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		cluster := newTestCiliumCluster()
 		ciliumDaemonSet()(true)
 
-		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 
 		job := cniJob(cluster)
 		pod := &corev1.Pod{
@@ -667,8 +622,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		r.Kube = kubefake.NewSimpleClientset()
 		setJobCondition(job, batchv1.JobFailed, "Job has reached the specified backoff limit")
 
-		_, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Message).To(ContainSubstring("fake logs"))
 	})
 
@@ -676,8 +630,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		cluster := newTestCiliumCluster()
 		ciliumDaemonSet()(true)
 
-		_, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileHandoverOK(r, cluster)
 
 		job := cniJob(cluster)
 		_, held := cniLockHolder(cluster)
@@ -698,8 +651,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		cniPodGrace = -time.Second
 		DeferCleanup(func() { cniPodGrace = grace })
 
-		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		result := reconcileHandoverOK(r, cluster)
 		Expect(result.RequeueAfter).To(Equal(handoverRequeueInterval))
 
 		cond := conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied)
@@ -720,8 +672,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		Expect(rollout.Acquire(ctx, controllerIdentity)).To(Succeed())
 		DeferCleanup(func() { Expect(rollout.Release(ctx, controllerIdentity)).To(Succeed()) })
 
-		result, err := reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		result := reconcileHandoverOK(r, cluster)
 		Expect(result.RequeueAfter).To(Equal(handoverRequeueInterval))
 		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Reason).To(Equal("WaitingForLock"))
 
@@ -729,8 +680,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 
 		Expect(rollout.Release(ctx, controllerIdentity)).To(Succeed())
 
-		result, err = reconcileHandover(r, cluster.Namespace, cluster.Name)
-		Expect(err).NotTo(HaveOccurred())
+		result = reconcileHandoverOK(r, cluster)
 		Expect(result.RequeueAfter).To(Equal(cniJobPollInterval))
 		cniJob(cluster)
 	})

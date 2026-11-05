@@ -197,3 +197,36 @@ func TestMachineReclaimAddressChangeGivesHint(t *testing.T) {
 		t.Fatalf("want the DHCP hint and no registration:\n%s", h.out.String())
 	}
 }
+
+// A control plane whose etcd is not running (ADR 0103's "foreign cluster does not exist" case) is
+// reset with --force-ungraceful, and the report says why there is no etcd membership.
+func TestMachineReclaimEtcdDownProceedsWithForceUngraceful(t *testing.T) {
+	h := newReclaimHarness("", reclaim.Known{})
+	h.node.in.ControlPlane, h.node.in.ClusterReachable = true, false
+	h.node.in.EtcdProblem = "etcd member list did not answer within 20s"
+
+	if err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Confirm: testUUID, ForceUngraceful: true}); err != nil {
+		t.Fatalf("%v\n%s", err, h.out.String())
+	}
+
+	if len(h.node.resets) != 1 || h.node.resets[0] {
+		t.Fatalf("want one ungraceful reset, got %v", h.node.resets)
+	}
+
+	for _, want := range []string{"Inspect", "gives up after", "not running or not answering", "treated as not existing"} {
+		if !strings.Contains(h.out.String(), want) {
+			t.Errorf("output lacks %q:\n%s", want, h.out.String())
+		}
+	}
+}
+
+func TestMachineReclaimEtcdDownRefusesWithoutForceUngraceful(t *testing.T) {
+	h := newReclaimHarness("", reclaim.Known{})
+	h.node.in.ControlPlane, h.node.in.ClusterReachable = true, false
+	h.node.in.EtcdProblem = "etcd member list did not answer within 20s"
+
+	err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Confirm: testUUID})
+	if err == nil || !strings.Contains(err.Error(), "--force-ungraceful") || len(h.node.resets) != 0 {
+		t.Fatalf("err = %v, resets = %v", err, h.node.resets)
+	}
+}

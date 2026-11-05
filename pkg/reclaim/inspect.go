@@ -67,6 +67,11 @@ type Inspection struct {
 	// whose list could be read (EtcdKnown).
 	EtcdMembers []EtcdMember
 	EtcdKnown   bool
+	// EtcdProblem is why a control plane's etcd membership could not be read: etcd is not
+	// running, or did not answer within the call timeout. It is empty for a worker and for a
+	// control plane whose list was read. It is the "foreign cluster does not exist" case of
+	// ADR 0103: no quorum can be judged and no graceful leave is possible.
+	EtcdProblem string
 	// LocalMemberID is the etcd member ID of the dialled node itself.
 	LocalMemberID uint64
 	// Volumes are the orphaned volumes: not wiped by the reset, possibly

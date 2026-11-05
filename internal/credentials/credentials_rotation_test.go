@@ -27,10 +27,9 @@ import (
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
-// A rotation of the etcd or aggregator CA alone changes nothing an operator credential depends on:
-// the sources stay the live bundle's, and are not "dual".
-func TestNewSourcesIgnoresARotationOfEtcdAndAggregatorOnly(t *testing.T) {
-	t.Parallel()
+// sourcesWithRotation is the live bundle, a rotation of targets and the sources made from them.
+func sourcesWithRotation(t *testing.T, targets ...string) (*secrets.Bundle, *secretsbundle.Rotation, *Sources) {
+	t.Helper()
 
 	contract, _ := coreconfig.ParseContractFromVersion("v1.14")
 
@@ -39,7 +38,7 @@ func TestNewSourcesIgnoresARotationOfEtcdAndAggregatorOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rot, err := secretsbundle.NewRotationFor(time.Now(), contract, []string{"etcd", "kubernetes-aggregator"})
+	rot, err := secretsbundle.NewRotationFor(time.Now(), contract, targets)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,6 +47,16 @@ func TestNewSourcesIgnoresARotationOfEtcdAndAggregatorOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	return bundle, rot, src
+}
+
+// A rotation of the etcd or aggregator CA alone changes nothing an operator credential depends on:
+// the sources stay the live bundle's, and are not "dual".
+func TestNewSourcesIgnoresARotationOfEtcdAndAggregatorOnly(t *testing.T) {
+	t.Parallel()
+
+	bundle, _, src := sourcesWithRotation(t, "etcd", "kubernetes-aggregator")
 
 	if src.Dual {
 		t.Fatal("no CA of a credential is being replaced, so the trust lists are not dual")
@@ -62,22 +71,7 @@ func TestNewSourcesIgnoresARotationOfEtcdAndAggregatorOnly(t *testing.T) {
 func TestNewSourcesRotatesOnlyTheCAsTheRotationHolds(t *testing.T) {
 	t.Parallel()
 
-	contract, _ := coreconfig.ParseContractFromVersion("v1.14")
-
-	bundle, err := secrets.NewBundle(secrets.NewFixedClock(time.Now()), contract)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	rot, err := secretsbundle.NewRotationFor(time.Now(), contract, []string{"talos"})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	src, err := NewSources(bundle, rot)
-	if err != nil {
-		t.Fatal(err)
-	}
+	bundle, rot, src := sourcesWithRotation(t, "talos")
 
 	if !src.Dual || !bytes.Equal(src.TalosSigner.Crt, rot.Talos.Crt) {
 		t.Fatal("the Talos credentials are signed by the new CA and trust both")

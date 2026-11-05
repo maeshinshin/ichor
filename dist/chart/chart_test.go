@@ -1699,100 +1699,67 @@ func bindingsTo(docs []map[string]any, roleName string) []map[string]any {
 	return out
 }
 
-// TestUICredentialsDownloadVerb guards: the download verb on talosclusters/credentials is
-// granted to nobody by default, not to ichor-ui-role, and only bound when the values say so.
-func TestUICredentialsDownloadVerb(t *testing.T) {
-	const roleName = "ichor-credentials-role"
-
-	off := renderChartWithValues(t, "ichor")
-	if find(off, kindClusterRole, roleName) != nil {
-		t.Errorf("ClusterRole %q rendered by default; it is a helper role (rbac.helpers.enabled)", roleName)
-	}
-	const subresource = "talosclusters/credentials"
-
-	ui := find(off, kindClusterRole, ichorUIRoleName)
-	if ui == nil || strings.Contains(fmt.Sprint(ui["rules"]), subresource) {
-		t.Errorf("ichor-ui-role must not hold the credentials download verb")
-	}
-
-	helpers := renderChartWithValues(t, "ichor", "rbac.helpers.enabled=true")
-	role := find(helpers, kindClusterRole, roleName)
-	rules := fmt.Sprint(role["rules"])
-	if role == nil || !strings.Contains(rules, subresource) || !strings.Contains(rules, "download") {
-		t.Fatalf("expected ClusterRole %q granting download on talosclusters/credentials; got %v", roleName, role)
-	}
-	if b := bindingsTo(helpers, roleName); len(b) != 0 {
-		t.Errorf("the credentials verb is bound by default: %v", b)
-	}
-
-	groups := renderChartWithValues(t, "ichor", "ichorUI.credentials.groups={oidc:platform-admins}")
-	bs := bindingsTo(groups, roleName)
-	if len(bs) != 1 || !strings.Contains(fmt.Sprint(bs[0]["subjects"]), "oidc:platform-admins") ||
-		strings.Contains(fmt.Sprint(bs[0]["subjects"]), "ServiceAccount") {
-		t.Errorf("ichorUI.credentials.groups must bind only those groups, got %v", bs)
-	}
-	if find(groups, kindClusterRole, roleName) == nil {
-		t.Errorf("a bound credentials role must render without the helper roles")
-	}
-
-	sa := renderChartWithValues(t, "ichor", "ichorUI.credentials.serviceAccount=true")
-	bs = bindingsTo(sa, roleName)
-	if len(bs) != 1 || !strings.Contains(fmt.Sprint(bs[0]["subjects"]), ichorUIServiceAccountName) {
-		t.Errorf("ichorUI.credentials.serviceAccount must bind the ichor-ui ServiceAccount, got %v", bs)
-	}
-}
-
-// TestUIDiagnosticsDownloadVerb guards: the download verb on talosmachines'
-// support-bundle, etcd-snapshot and packet-capture subresources is granted to nobody by
-// default, not to the ichor-ui ServiceAccount's own role, and only bound when the values say so.
-func TestUIDiagnosticsDownloadVerb(t *testing.T) {
-	const roleName = "ichor-diagnostics-role"
-
-	grants := func(role map[string]any) bool {
-		return strings.Contains(fmt.Sprint(role["rules"]), "download")
-	}
-
-	off := renderChartWithValues(t, "ichor")
-	if find(off, kindClusterRole, roleName) != nil {
-		t.Errorf("ClusterRole %q rendered by default; it is a helper role (rbac.helpers.enabled)", roleName)
-	}
-
-	helpers := renderChartWithValues(t, "ichor", "rbac.helpers.enabled=true")
-	role := find(helpers, kindClusterRole, roleName)
-	if role == nil || !grants(role) {
-		t.Fatalf("expected ClusterRole %q granting the download verb; got %v", roleName, role)
-	}
-	for _, sub := range []string{
-		"talosmachines/support-bundle", "talosmachines/etcd-snapshot", "talosmachines/packet-capture",
+// TestUIDownloadVerbs guards the download verb (talosclusters/credentials; talosmachines'
+// support-bundle, etcd-snapshot and packet-capture): the download verb is granted to nobody by default,
+// not to ichor-ui-role, and only bound when the values (ichorUI.<key>.groups or .serviceAccount) say so.
+func TestUIDownloadVerbs(t *testing.T) {
+	for _, c := range []struct {
+		key, roleName string
+		subresources  []string
+	}{
+		{"credentials", "ichor-credentials-role", []string{"talosclusters/credentials"}},
+		{"diagnostics", "ichor-diagnostics-role",
+			[]string{"talosmachines/support-bundle", "talosmachines/etcd-snapshot", "talosmachines/packet-capture"}},
 	} {
-		if !strings.Contains(fmt.Sprint(role["rules"]), sub) {
-			t.Errorf("ClusterRole %q lacks %s", roleName, sub)
-		}
-	}
-	if b := bindingsTo(helpers, roleName); len(b) != 0 {
-		t.Errorf("the download verb is bound by default: %v", b)
-	}
-	if ui := find(off, kindClusterRole, ichorUIRoleName); ui == nil || grants(ui) {
-		t.Errorf("ichor-ui-role must not hold the download verb")
-	}
+		t.Run(c.key, func(t *testing.T) {
+			off := renderChartWithValues(t, "ichor")
+			if find(off, kindClusterRole, c.roleName) != nil {
+				t.Errorf("ClusterRole %q rendered by default; it is a helper role (rbac.helpers.enabled)", c.roleName)
+			}
 
-	groups := renderChartWithValues(t, "ichor", "ichorUI.diagnostics.groups={oidc:platform-admins}")
-	bs := bindingsTo(groups, roleName)
-	if len(bs) != 1 || !strings.Contains(fmt.Sprint(bs[0]["subjects"]), "oidc:platform-admins") ||
-		strings.Contains(fmt.Sprint(bs[0]["subjects"]), "ServiceAccount") {
-		t.Errorf("ichorUI.diagnostics.groups must bind only those groups, got %v", bs)
-	}
+			ui := find(off, kindClusterRole, ichorUIRoleName)
+			if ui == nil || strings.Contains(fmt.Sprint(ui["rules"]), "download") {
+				t.Errorf("ichor-ui-role must not hold the download verb")
+			}
 
-	sa := renderChartWithValues(t, "ichor", "ichorUI.diagnostics.serviceAccount=true")
-	bs = bindingsTo(sa, roleName)
-	if len(bs) != 1 || !strings.Contains(fmt.Sprint(bs[0]["subjects"]), ichorUIServiceAccountName) {
-		t.Errorf("ichorUI.diagnostics.serviceAccount must bind the ichor-ui ServiceAccount, got %v", bs)
-	}
+			helpers := renderChartWithValues(t, "ichor", "rbac.helpers.enabled=true")
+			role := find(helpers, kindClusterRole, c.roleName)
 
-	// The role is rendered, and bound, even when the RBAC helper roles are off.
-	noHelpers := renderChartWithValues(t, "ichor", "ichorUI.diagnostics.groups={oidc:platform-admins}")
-	if find(noHelpers, kindClusterRole, roleName) == nil || len(bindingsTo(noHelpers, roleName)) != 1 {
-		t.Errorf("a bound diagnostics role must render without the helper roles")
+			rules := fmt.Sprint(role["rules"])
+			if role == nil || !strings.Contains(rules, "download") {
+				t.Fatalf("expected ClusterRole %q granting the download verb; got %v", c.roleName, role)
+			}
+
+			for _, sub := range c.subresources {
+				if !strings.Contains(rules, sub) {
+					t.Errorf("ClusterRole %q lacks %s", c.roleName, sub)
+				}
+			}
+
+			if b := bindingsTo(helpers, c.roleName); len(b) != 0 {
+				t.Errorf("the download verb is bound by default: %v", b)
+			}
+
+			// Bound, the role renders without the helper roles.
+			groups := renderChartWithValues(t, "ichor", "ichorUI."+c.key+".groups={oidc:platform-admins}")
+
+			bs := bindingsTo(groups, c.roleName)
+			if len(bs) != 1 || !strings.Contains(fmt.Sprint(bs[0]["subjects"]), "oidc:platform-admins") ||
+				strings.Contains(fmt.Sprint(bs[0]["subjects"]), "ServiceAccount") {
+				t.Errorf("ichorUI.%s.groups must bind only those groups, got %v", c.key, bs)
+			}
+
+			if find(groups, kindClusterRole, c.roleName) == nil {
+				t.Errorf("a bound %s role must render without the helper roles", c.key)
+			}
+
+			sa := renderChartWithValues(t, "ichor", "ichorUI."+c.key+".serviceAccount=true")
+
+			bs = bindingsTo(sa, c.roleName)
+			if len(bs) != 1 || !strings.Contains(fmt.Sprint(bs[0]["subjects"]), ichorUIServiceAccountName) {
+				t.Errorf("ichorUI.%s.serviceAccount must bind the ichor-ui ServiceAccount, got %v", c.key, bs)
+			}
+		})
 	}
 }
 

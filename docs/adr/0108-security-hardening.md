@@ -468,3 +468,7 @@ Amendment (2026-11-05, hardware lane D): three findings of the run that verified
 - **A stale `AdoptionHeld=True` condition showed for one poll after `hold-apply` was removed.** Only the running-node path (`reportHold`) removed it, and a node in maintenance mode never reaches it. The reconcile now drops the condition as soon as it sees the annotation gone, before any path runs; the status write of that path persists it.
 
 Amendment 2026-11-05 (ADR 0129): the role-grant guard of `UserService` now also runs in a validating webhook on `ichorusers`, so a user who may `update` `ichorusers` cannot grant roles they do not hold with `kubectl` either.
+
+## Amendment 2026-11-05: a spoofed maintenance node cannot take over an approved machine
+
+The maintenance-certificate pin of section 3 is dropped for a converged machine (ADR 0076, amendment of 2026-11-05), and discovery could write a twin's address into `status.observedEndpoint` of an approved machine, so a node that merely claimed an approved machine's UUID, serial and MACs could receive its configuration. `Discover` now follows a discovery match only for unapproved machines and for approved ones that are not yet configured and have a pinned certificate; the cluster lock's stopped-holder rule no longer treats a re-provisioning control plane as finished. See the amendments to [ADR 0076](0076-approved-machines-are-provisioned-through-the-maintenance-api.md) and [ADR 0086](0086-a-moved-node-is-followed-through-status-not-spec.md).

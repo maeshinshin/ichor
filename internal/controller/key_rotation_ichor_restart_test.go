@@ -55,11 +55,11 @@ var _ = Describe("TalosOperation key-rotation, Ichor's own pods", func() {
 		f := newKeyRotFixture(fastBundle())
 		op := f.newOp(saOnly)
 
-		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageIssuing))
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageIssuing))
 		Expect(marker(controllerDep)).To(BeEmpty(), "Ichor's pods are restarted when the new key signs, not before")
 		Expect(marker(uiDep)).To(BeEmpty())
 
-		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageSettlingTokens))
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageSettlingTokens))
 		Expect(marker(controllerDep)).To(Equal(string(op.UID)))
 		Expect(marker(uiDep)).To(Equal(string(op.UID)))
 
@@ -71,7 +71,7 @@ var _ = Describe("TalosOperation key-rotation, Ichor's own pods", func() {
 			op = f.step(op)
 		}
 
-		Expect(keyStageOf(op)).To(Equal(ichorv1alpha1.KeyRotationStageSettlingTokens), "the old key was dropped under pods that still hold its tokens")
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.KeyRotationStageSettlingTokens), "the old key was dropped under pods that still hold its tokens")
 		Expect(f.world.applies).To(HaveLen(applied))
 		Expect(op.Status.Message + apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Message).To(ContainSubstring("controller Deployment"))
 
@@ -81,7 +81,7 @@ var _ = Describe("TalosOperation key-rotation, Ichor's own pods", func() {
 		setRollout(fresh(controllerDep), true)
 
 		op = f.step(op)
-		Expect(keyStageOf(op)).To(Equal(ichorv1alpha1.KeyRotationStageSettlingTokens), "ichor-ui has not rolled out yet")
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.KeyRotationStageSettlingTokens), "ichor-ui has not rolled out yet")
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Message).To(ContainSubstring("ichor-ui"))
 
 		setRollout(fresh(uiDep), true)

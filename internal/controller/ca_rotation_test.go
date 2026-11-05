@@ -394,7 +394,7 @@ func (f *caRotFixture) step(op *ichorv1alpha1.TalosOperation) *ichorv1alpha1.Tal
 // hand-off annotation on the operation, if the operation is waiting for it.
 func (f *caRotFixture) acknowledge(op *ichorv1alpha1.TalosOperation) {
 	cur := fetchOperation(op)
-	if stageOf(cur) != ichorv1alpha1.CARotationStageAwaitingCredentials {
+	if rotationStage(cur) != ichorv1alpha1.CARotationStageAwaitingCredentials {
 		return
 	}
 
@@ -407,22 +407,23 @@ func (f *caRotFixture) acknowledge(op *ichorv1alpha1.TalosOperation) {
 	Expect(k8sClient.Patch(ctx, cur, ctrlclient.MergeFrom(base))).To(Succeed())
 }
 
-func stageOf(op *ichorv1alpha1.TalosOperation) string {
-	if op.Status.CARotation == nil {
-		return ""
-	}
-
-	return op.Status.CARotation.Stage
+// runUntil steps until done(op), at most 200 times, and returns every distinct stage seen in order.
+func (f *caRotFixture) runUntil(op *ichorv1alpha1.TalosOperation, done func(*ichorv1alpha1.TalosOperation) bool) (*ichorv1alpha1.TalosOperation, []string) {
+	return runRotationUntil(f.step, op, done)
 }
 
-// runUntil steps until done(op), at most 80 times, and returns every distinct stage seen in order.
-func (f *caRotFixture) runUntil(op *ichorv1alpha1.TalosOperation, done func(*ichorv1alpha1.TalosOperation) bool) (*ichorv1alpha1.TalosOperation, []string) {
+// runRotationUntil steps a ca-rotation or key-rotation operation until done(op), at most 200 times, and returns
+// every distinct stage seen in order.
+func runRotationUntil(
+	step func(*ichorv1alpha1.TalosOperation) *ichorv1alpha1.TalosOperation, op *ichorv1alpha1.TalosOperation,
+	done func(*ichorv1alpha1.TalosOperation) bool,
+) (*ichorv1alpha1.TalosOperation, []string) {
 	var stages []string
 
-	for range 80 {
-		op = f.step(op)
+	for range 200 {
+		op = step(op)
 
-		if s := stageOf(op); s != "" && (len(stages) == 0 || stages[len(stages)-1] != s) {
+		if s := rotationStage(op); s != "" && (len(stages) == 0 || stages[len(stages)-1] != s) {
 			stages = append(stages, s)
 		}
 
@@ -431,14 +432,14 @@ func (f *caRotFixture) runUntil(op *ichorv1alpha1.TalosOperation, done func(*ich
 		}
 	}
 
-	Fail(fmt.Sprintf("the rotation did not reach the wanted state; stage %q phase %q, condition %v",
-		stageOf(op), op.Status.Phase, apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation)))
+	Fail(fmt.Sprintf("the rotation did not reach the wanted state; stage %q phase %q, conditions %v",
+		rotationStage(op), op.Status.Phase, op.Status.Conditions))
 
 	return op, stages
 }
 
 func atStage(stage string) func(*ichorv1alpha1.TalosOperation) bool {
-	return func(op *ichorv1alpha1.TalosOperation) bool { return stageOf(op) == stage }
+	return func(op *ichorv1alpha1.TalosOperation) bool { return rotationStage(op) == stage }
 }
 
 func completed(op *ichorv1alpha1.TalosOperation) bool {
@@ -509,7 +510,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 
 		// The first reconcile does the preflight and saves the new CAs; no node has been touched.
 		op = f.step(op)
-		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageAccepting))
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageAccepting))
 		Expect(f.world.applies).To(BeEmpty(), "no node may be told anything in the reconcile that saves the CAs")
 
 		rot := f.storedRotation()
@@ -579,7 +580,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		// Many reconciles later, nothing has moved: the old CA still issues and nothing else was applied.
 		for range 6 {
 			op = f.step(op)
-			Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageAwaitingCredentials))
+			Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageAwaitingCredentials))
 			Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		}
 
@@ -597,17 +598,17 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		Expect(k8sClient.Patch(ctx, op, ctrlclient.MergeFrom(base))).To(Succeed())
 
 		op = f.step(op)
-		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageAwaitingCredentials))
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageAwaitingCredentials))
 
 		// The right one does.
 		f.holdHandoff = false
 		op = f.step(op)
 		op = f.step(op)
-		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageIssuing))
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageIssuing))
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
 
 		op, _ = f.runUntil(op, completed)
-		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageDone))
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageDone))
 	})
 
 	It("keeps waiting across a controller restart, with the acknowledgement read from the operation", func() {
@@ -620,7 +621,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 
 		op = f.step(op)
 		Expect(f.reconcilers).To(BeNumerically(">", before), "every step is a fresh reconciler")
-		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageAwaitingCredentials))
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageAwaitingCredentials))
 	})
 
 	It("rotates through every stage, and each stage's status names the issuing and the accepted CA", func() {
@@ -683,7 +684,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 
 		// The reconcile that reaches Done completes the operation too: nothing waits for a later one.
 		op = f.step(op)
-		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageDone))
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageDone))
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
 
 		// The Secret now holds the new CAs and nothing else of the rotation.
@@ -749,7 +750,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 			op, _ = f.runUntil(op, func(o *ichorv1alpha1.TalosOperation) bool {
 				return len(f.world.applies) == before+2
 			})
-			Expect(stageOf(op)).To(Equal(stage), "the stage must not advance on a half-done pass")
+			Expect(rotationStage(op)).To(Equal(stage), "the stage must not advance on a half-done pass")
 			Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 
 			// A brand-new controller (every step builds one) picks the stage up from status.
@@ -816,7 +817,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 
 		op = repeatStep(f.step, op, 5)
 
-		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageIssuing), "an unverified stage must not advance")
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageIssuing), "an unverified stage must not advance")
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 
 		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation)
@@ -837,7 +838,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		op, _ = f.runUntil(op, atStage(ichorv1alpha1.CARotationStageIssuing))
 		op = repeatStep(f.step, op, 8)
 
-		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageIssuing), "Dropping started while pods lack the new CA")
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageIssuing), "Dropping started while pods lack the new CA")
 		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation)
 		Expect(cond.Message).To(ContainSubstring("kube-root-ca.crt"))
 		Expect(cond.Message).To(ContainSubstring("argocd"))
@@ -846,11 +847,11 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 
 		f.rootCAStale = nil
 		op = f.step(op)
-		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageIssuing), "the settle time must pass before Dropping")
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageIssuing), "the settle time must pass before Dropping")
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Reason).To(Equal(reasonCARotationSettling))
 
 		op, _ = f.runUntil(op, completed)
-		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageDone))
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageDone))
 	})
 
 	It("does not advance while a Kubernetes Node is not Ready", func() {
@@ -862,7 +863,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 
 		op = repeatStep(f.step, op, 4)
 
-		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageDropping))
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageDropping))
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).To(ContainSubstring("worker-1"))
 
 		f.world.notReady = nil
@@ -876,7 +877,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		op := f.newOp()
 		op = repeatStep(f.step, op, 3)
 
-		Expect(stageOf(op)).To(BeEmpty())
+		Expect(rotationStage(op)).To(BeEmpty())
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		Expect(f.secretData()).NotTo(HaveKey(secretsbundle.RotationKey), "no CA may be generated for a rotation that cannot start")
 		Expect(f.world.applies).To(BeEmpty())
@@ -894,7 +895,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		op := f.newOp()
 		op = f.step(op)
 
-		Expect(stageOf(op)).To(BeEmpty())
+		Expect(rotationStage(op)).To(BeEmpty())
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).To(ContainSubstring("converge"))
 		Expect(f.secretData()).NotTo(HaveKey(secretsbundle.RotationKey))
 	})
@@ -959,7 +960,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 
 		op = f.step(op)
 		Expect(op.DeletionTimestamp.IsZero()).To(BeFalse())
-		Expect(stageOf(op)).NotTo(BeEmpty(), "the stage is the only record of the nodes' state and must survive a delete")
+		Expect(rotationStage(op)).NotTo(BeEmpty(), "the stage is the only record of the nodes' state and must survive a delete")
 
 		for range 80 {
 			_, err := reconcileOperation(f.newReconciler(), op)

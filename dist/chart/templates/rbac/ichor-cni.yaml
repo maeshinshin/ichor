@@ -48,6 +48,29 @@ rules:
   - list
   - watch
 - apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - validatingadmissionpolicies
+  - validatingadmissionpolicybindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gatewayclasses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
   - apps
   resources:
   - daemonsets
@@ -124,6 +147,8 @@ rules:
   - rbac.authorization.k8s.io
   resourceNames:
   - cilium-config-agent
+  - cilium-gateway-secrets
+  - cilium-operator-gateway-secrets
   - cilium-operator-tlsinterception-secrets
   - cilium-operator-ztunnel
   - cilium-tlsinterception-secrets

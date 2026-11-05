@@ -126,6 +126,13 @@
     @apply font-sans;
     }
 }
+@layer components {
+  /* Inline code in prose: a muted chip with the theme tokens, not the code blocks (pre > code). */
+  .prose :not(pre) > code {
+    @apply rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[0.875em] font-normal;
+  }
+}
+
 /* Astro's Shiki output with both themes as variables (https://docs.astro.build/en/guides/syntax-highlighting/). */
 .astro-code,
 .astro-code span {

@@ -442,7 +442,7 @@ func (w *adoptWriter) machines(ctx context.Context, clusterName string) error {
 		var install *ichorv1alpha1.TalosMachineInstall
 
 		if m.InstallDisk != "" {
-			disk, err := parseInstallDisk(m.InstallDisk)
+			disk, err := parseDiskSelector("--install-disk", m.InstallDisk)
 			if err != nil {
 				return fmt.Errorf("adopt: node %q: %w", m.Address, err)
 			}

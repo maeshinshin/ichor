@@ -174,7 +174,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 			opts.NodeEndpoint)
 	}
 
-	installDisk, err := parseInstallDisk(opts.InstallDisk)
+	installDisk, err := parseDiskSelector("--install-disk", opts.InstallDisk)
 	if err != nil {
 		return fmt.Errorf("init: %w", err)
 	}

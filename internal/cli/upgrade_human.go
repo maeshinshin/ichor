@@ -16,9 +16,7 @@ limitations under the License.
 
 package cli
 
-import (
-	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
-)
+import pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 
 // The kind column of the upgrade targets.
 const (

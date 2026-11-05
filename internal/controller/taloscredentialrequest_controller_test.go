@@ -68,6 +68,21 @@ var _ = Describe("TalosCredentialRequest controller", func() {
 		return c
 	}
 
+	// expectReader checks that cr's certificate carries the os:reader role and lives for life, and that
+	// it verifies against the CA in status.trust.
+	expectReader := func(cr *ichorv1alpha1.TalosCredentialRequest, life time.Duration) {
+		GinkgoHelper()
+
+		crt := parse(cr.Status.Certificate)
+		Expect(crt.Subject.Organization).To(ConsistOf("os:reader"))
+		Expect(crt.NotAfter).To(BeTemporally("~", time.Now().Add(life), time.Minute))
+
+		pool := stdx509.NewCertPool()
+		Expect(pool.AppendCertsFromPEM([]byte(cr.Status.Trust))).To(BeTrue())
+		_, err := crt.Verify(stdx509.VerifyOptions{Roots: pool, KeyUsages: []stdx509.ExtKeyUsage{stdx509.ExtKeyUsageClientAuth}})
+		Expect(err).NotTo(HaveOccurred(), "the certificate must verify against the CA in status.trust")
+	}
+
 	It("signs a reader certificate for the requester's key, with the role and the lifetime of the purpose", func() {
 		csr, _, err := credentials.NewCSR(false)
 		Expect(err).NotTo(HaveOccurred())
@@ -75,14 +90,7 @@ var _ = Describe("TalosCredentialRequest controller", func() {
 		cr := request(ichorv1alpha1.TalosCredentialRequestSpec{Purpose: ichorv1alpha1.CredentialPurposeNodeReader, CSR: string(csr)})
 		Expect(cr.Status.Phase).To(Equal(ichorv1alpha1.CredentialPhaseIssued), cr.Status.Message)
 
-		crt := parse(cr.Status.Certificate)
-		Expect(crt.Subject.Organization).To(ConsistOf("os:reader"))
-		Expect(crt.NotAfter).To(BeTemporally("~", time.Now().Add(credentials.DialLifetime), time.Minute))
-
-		pool := stdx509.NewCertPool()
-		Expect(pool.AppendCertsFromPEM([]byte(cr.Status.Trust))).To(BeTrue())
-		_, err = crt.Verify(stdx509.VerifyOptions{Roots: pool, KeyUsages: []stdx509.ExtKeyUsage{stdx509.ExtKeyUsageClientAuth}})
-		Expect(err).NotTo(HaveOccurred(), "the certificate must verify against the CA in status.trust")
+		expectReader(cr, credentials.DialLifetime)
 	})
 
 	It("gives each download purpose the least Talos role and the operator credentials the admin ones", func() {
@@ -116,14 +124,7 @@ var _ = Describe("TalosCredentialRequest controller", func() {
 		})
 		Expect(cr.Status.Phase).To(Equal(ichorv1alpha1.CredentialPhaseIssued), cr.Status.Message)
 
-		crt := parse(cr.Status.Certificate)
-		Expect(crt.Subject.Organization).To(ConsistOf("os:reader"))
-		Expect(crt.NotAfter).To(BeTemporally("~", time.Now().Add(credentials.TalosconfigLifetime), time.Minute))
-
-		pool := stdx509.NewCertPool()
-		Expect(pool.AppendCertsFromPEM([]byte(cr.Status.Trust))).To(BeTrue())
-		_, err = crt.Verify(stdx509.VerifyOptions{Roots: pool, KeyUsages: []stdx509.ExtKeyUsage{stdx509.ExtKeyUsageClientAuth}})
-		Expect(err).NotTo(HaveOccurred())
+		expectReader(cr, credentials.TalosconfigLifetime)
 
 		cr = request(ichorv1alpha1.TalosCredentialRequestSpec{
 			Purpose: ichorv1alpha1.CredentialPurposeTalosconfigReader, CSR: string(csr),

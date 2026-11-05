@@ -50,12 +50,22 @@ Options:
 - `--token-settle 2h` keeps the old service-account key longer. Pods' projected
   tokens live one hour by default and the kubelet re-requests them after 48
   minutes, so 90 minutes covers them; raise it if your workloads ask for longer
-  lifetimes.
+  lifetimes. **Less than 75 minutes is refused** (by the CLI, the UI and the
+  admission webhook): a pod that still holds a token signed by the old key is
+  refused by the API server the moment the key is dropped, and Ichor's own
+  controller, the CNI and CoreDNS are such pods until the kubelet refreshes their
+  tokens.
 - `--ignore-legacy-tokens` drops the old key although Secrets of type
   `kubernetes.io/service-account-token` that it signed still exist. By default the
   operation waits and names them. Deleting the `token` key of such a Secret makes
   kube-controller-manager write a new one under the new key.
 - `--follow` reports progress until it ends.
+
+When the new service-account key signs, Ichor rolls its own controller and
+ichor-ui Deployments once (a restart of the controller running the rotation: it
+resumes by itself), and it does not drop the old key before they have rolled out.
+The pods of other software that hold a token signed by the old key are refreshed
+by the kubelet; the old key is kept for `--token-settle` for that.
 
 Tokens kept **outside** the cluster, or requested with a lifetime longer than
 `--token-settle`, cannot be found; they stop working when the old key is dropped.

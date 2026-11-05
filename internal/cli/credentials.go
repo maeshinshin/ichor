@@ -282,8 +282,8 @@ func retryHandoff(ctx context.Context, errw io.Writer, what string, call func() 
 // setting the hand-off annotation on the cluster's ca-rotation operation that is waiting for it. name
 // may be empty: then the one waiting operation of the cluster is used. A transient API error (the
 // API server restarting) does not fail it outright: the patch only sets one annotation to a fixed
-// token, so it is sent again with backoff, through redial's client when it is set. It does not use
-// retryTransient, which drives the gRPC apiClients, not a controller-runtime client.
+// token, so it is sent again with backoff, through redial's client when it is set (retryTransient
+// cannot swap a controller-runtime client).
 func acknowledgeHandoff(ctx context.Context, k8s client.Client, namespace, cluster, name string, errw io.Writer,
 	redial func() (client.Client, error)) (string, error) {
 	var ops ichorv1alpha1.TalosOperationList

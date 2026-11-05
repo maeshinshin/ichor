@@ -18,6 +18,7 @@ package cli
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/x509"
 	"errors"
@@ -290,19 +291,11 @@ func checkControlPlaneCount(cluster *ichorv1alpha1.TalosCluster, existing []*ich
 // TalosCluster, and a managed cluster still needs KubePrism on the new nodes (ADR 0103 1.6).
 func (st *adoptState) inspectAdded(deps adoptDeps) error {
 	st.unmanaged = st.cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged
-	st.kubeProxy = kubeProxyOf(st.cluster)
+	st.kubeProxy = cmp.Or(st.cluster.Spec.CNI.KubeProxy, kubeProxyEnabled)
 
 	if st.unmanaged {
 		return nil
 	}
 
 	return st.checkKubePrism(deps)
-}
-
-func kubeProxyOf(c *ichorv1alpha1.TalosCluster) string {
-	if c.Spec.CNI.KubeProxy == "" {
-		return kubeProxyEnabled
-	}
-
-	return c.Spec.CNI.KubeProxy
 }

@@ -41,6 +41,7 @@ var _ = Describe("TalosMachineReconciler re-provisioning a node that fell back t
 		oldFingerprint = "OJ+e3lINvDPSrrxIkkatieIh0ewV9pPDSMWLCCGTZ6o="
 		newFingerprint = "q3Nf3cKzv2rYxN0m8l1uZJ0cZ6wq8uYV1m3m1k9m1WE="
 		hostname       = "cp-wiped"
+		otherMember    = "cp-other"
 	)
 
 	var (
@@ -243,7 +244,7 @@ var _ = Describe("TalosMachineReconciler re-provisioning a node that fell back t
 		It("is not followed to the twin, sends it nothing and removes no etcd member; a wipe at the real address still re-provisions", func() {
 			setup(roleControlPlane)
 			siblingControlPlane()
-			talos.etcdMembers = []EtcdMember{{ID: 1, Hostname: "cp-other"}, {ID: 2, Hostname: hostname}}
+			talos.etcdMembers = []EtcdMember{{ID: 1, Hostname: otherMember}, {ID: 2, Hostname: hostname}}
 
 			// Discover finds a machine by the name the UUID gives it.
 			got := fetchMachine(machine)
@@ -284,7 +285,7 @@ var _ = Describe("TalosMachineReconciler re-provisioning a node that fell back t
 		It("removes the stale etcd member through a surviving control plane, then sends the configuration", func() {
 			setup(roleControlPlane)
 			siblingControlPlane()
-			talos.etcdMembers = []EtcdMember{{ID: 1, Hostname: "cp-other"}, {ID: 2, Hostname: hostname}}
+			talos.etcdMembers = []EtcdMember{{ID: 1, Hostname: otherMember}, {ID: 2, Hostname: hostname}}
 
 			reconcileOnce() // adds the removal finalizer if it is missing
 			got := reconcileOnce()
@@ -333,7 +334,7 @@ var _ = Describe("TalosMachineReconciler re-provisioning a node that fell back t
 		It("sends the configuration when etcd no longer lists the member, under the cluster lock", func() {
 			setup(roleControlPlane)
 			siblingControlPlane()
-			talos.etcdMembers = []EtcdMember{{ID: 1, Hostname: "cp-other"}}
+			talos.etcdMembers = []EtcdMember{{ID: 1, Hostname: otherMember}}
 
 			lock := opTestLock(cluster)
 			Expect(lock.Acquire(ctx, "someone-else")).To(Succeed())

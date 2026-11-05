@@ -62,6 +62,17 @@ func newTestNode(name string, ready bool) {
 	Expect(k8sClient.Status().Update(ctx, n)).To(Succeed())
 }
 
+// newUpgradeNode is a cluster with its secrets bundle and one control plane whose Kubernetes node
+// (Ready or not) is named node-<suffix>.
+func newUpgradeNode(suffix string, ready bool) (*ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine) {
+	cluster := newTestCluster(newTestSecret(newTestBundle("v1.14")).Name, "v1.14")
+	cp := newTestControlPlane(cluster.Name, suffix)
+	setHostname(cp, "node-"+suffix)
+	newTestNode("node-"+suffix, ready)
+
+	return cluster, cp
+}
+
 // newUpgradeAdvancer wires fake as the one Talos API connection every
 // machine dials (talosmachine_controller_test.go's clientFactory, reused
 // as-is) and evacuator as the storage coordinator, nil meaning "no storage
@@ -120,12 +131,8 @@ var _ = Describe("talosUpgradeAdvancer schematic", func() {
 	)
 
 	It("upgrades a machine whose version matches but whose running schematic differs, and finishes on the new one", func() {
-		secret := newTestSecret(newTestBundle("v1.14"))
-		cluster := newTestCluster(secret.Name, "v1.14")
+		cluster, cp := newUpgradeNode("sc1", true)
 		cluster.Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: newSchematic}
-		cp := newTestControlPlane(cluster.Name, "sc1")
-		setHostname(cp, "node-sc1")
-		newTestNode("node-sc1", true)
 
 		fake := &fakeTalosClient{version: cluster.Spec.TalosVersion, schematic: oldSchematic, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, nil)
@@ -145,12 +152,8 @@ var _ = Describe("talosUpgradeAdvancer schematic", func() {
 	})
 
 	It("fails when the node reboots onto the right version but still the old schematic", func() {
-		secret := newTestSecret(newTestBundle("v1.14"))
-		cluster := newTestCluster(secret.Name, "v1.14")
+		cluster, cp := newUpgradeNode("sc2", true)
 		cluster.Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: newSchematic}
-		cp := newTestControlPlane(cluster.Name, "sc2")
-		setHostname(cp, "node-sc2")
-		newTestNode("node-sc2", true)
 
 		fake := &fakeTalosClient{version: cluster.Spec.TalosVersion, schematic: oldSchematic, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, nil)
@@ -165,12 +168,8 @@ var _ = Describe("talosUpgradeAdvancer schematic", func() {
 	})
 
 	It("does nothing for a machine already on the target version and schematic", func() {
-		secret := newTestSecret(newTestBundle("v1.14"))
-		cluster := newTestCluster(secret.Name, "v1.14")
+		cluster, cp := newUpgradeNode("sc3", true)
 		cluster.Spec.Schematic = &ichorv1alpha1.TalosClusterSchematic{ID: newSchematic}
-		cp := newTestControlPlane(cluster.Name, "sc3")
-		setHostname(cp, "node-sc3")
-		newTestNode("node-sc3", true)
 
 		fake := &fakeTalosClient{
 			version: cluster.Spec.TalosVersion, schematic: newSchematic, bootID: testBootIDBefore,
@@ -184,11 +183,7 @@ var _ = Describe("talosUpgradeAdvancer schematic", func() {
 	})
 
 	It("treats a node that booted no Image Factory asset as running the stock schematic", func() {
-		secret := newTestSecret(newTestBundle("v1.14"))
-		cluster := newTestCluster(secret.Name, "v1.14")
-		cp := newTestControlPlane(cluster.Name, "sc4")
-		setHostname(cp, "node-sc4")
-		newTestNode("node-sc4", true)
+		cluster, cp := newUpgradeNode("sc4", true)
 
 		fake := &fakeTalosClient{
 			version: cluster.Spec.TalosVersion, bootID: testBootIDBefore,
@@ -234,11 +229,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 	})
 
 	It("gives the Upgrade RPC far more time than the 15s dial bound, since it blocks while the node pulls the installer", func() {
-		secret := newTestSecret(newTestBundle("v1.14"))
-		cluster := newTestCluster(secret.Name, "v1.14")
-		cp := newTestControlPlane(cluster.Name, "to1")
-		setHostname(cp, "node-to1")
-		newTestNode("node-to1", true)
+		cluster, cp := newUpgradeNode("to1", true)
 
 		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, nil)
@@ -255,11 +246,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 
 		etcdDialTimeout = 200 * time.Millisecond
 
-		secret := newTestSecret(newTestBundle("v1.14"))
-		cluster := newTestCluster(secret.Name, "v1.14")
-		cp := newTestControlPlane(cluster.Name, "slow1")
-		setHostname(cp, "node-slow1")
-		newTestNode("node-slow1", true)
+		cluster, cp := newUpgradeNode("slow1", true)
 
 		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, &fakeStorageEvacuator{resolveDelay: 2 * etcdDialTimeout})
@@ -270,11 +257,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 	})
 
 	It("fails (never succeeds) when the node reboots but is still running its previous version -- an A/B slot rollback", func() {
-		secret := newTestSecret(newTestBundle("v1.14"))
-		cluster := newTestCluster(secret.Name, "v1.14")
-		cp := newTestControlPlane(cluster.Name, "ab1")
-		setHostname(cp, "node-ab1")
-		newTestNode("node-ab1", true)
+		cluster, cp := newUpgradeNode("ab1", true)
 
 		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, nil)
@@ -295,11 +278,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 	})
 
 	It("succeeds once the node reboots onto the target version, is Ready, and is back in etcd", func() {
-		secret := newTestSecret(newTestBundle("v1.14"))
-		cluster := newTestCluster(secret.Name, "v1.14")
-		cp := newTestControlPlane(cluster.Name, "ok1")
-		setHostname(cp, "node-ok1")
-		newTestNode("node-ok1", true)
+		cluster, cp := newUpgradeNode("ok1", true)
 
 		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, nil)
@@ -323,11 +302,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 	})
 
 	It("waits for a node that has not become Ready or rejoined etcd yet after rebooting, without failing", func() {
-		secret := newTestSecret(newTestBundle("v1.14"))
-		cluster := newTestCluster(secret.Name, "v1.14")
-		cp := newTestControlPlane(cluster.Name, "wait1")
-		setHostname(cp, "node-wait1")
-		newTestNode("node-wait1", true)
+		cluster, cp := newUpgradeNode("wait1", true)
 
 		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, nil)
@@ -346,11 +321,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 	})
 
 	It("refuses to start an upgrade on a node that is not Ready", func() {
-		secret := newTestSecret(newTestBundle("v1.14"))
-		cluster := newTestCluster(secret.Name, "v1.14")
-		cp := newTestControlPlane(cluster.Name, "nr1")
-		setHostname(cp, "node-nr1")
-		newTestNode("node-nr1", false)
+		cluster, cp := newUpgradeNode("nr1", false)
 
 		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, nil)
@@ -363,11 +334,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 	})
 
 	It("refuses an unsupported Talos upgrade path without ever calling the Upgrade API", func() {
-		secret := newTestSecret(newTestBundle("v1.14"))
-		cluster := newTestCluster(secret.Name, "v1.14")
-		cp := newTestControlPlane(cluster.Name, "path1")
-		setHostname(cp, "node-path1")
-		newTestNode("node-path1", true)
+		cluster, cp := newUpgradeNode("path1", true)
 
 		// v1.9.0 predates 1.14's MinimumHostUpgradeVersion (1.12.0): unsupported.
 		fake := &fakeTalosClient{version: "v1.9.0", bootID: testBootIDBefore}
@@ -380,11 +347,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 	})
 
 	It("pauses (never proceeds to the Upgrade API) once evacuation times out with replicas still remaining, and re-enables scheduling", func() {
-		secret := newTestSecret(newTestBundle("v1.14"))
-		cluster := newTestCluster(secret.Name, "v1.14")
-		cp := newTestControlPlane(cluster.Name, "evac1")
-		setHostname(cp, "node-evac1")
-		newTestNode("node-evac1", true)
+		cluster, cp := newUpgradeNode("evac1", true)
 
 		hook, err := storage.NewEvacuationHook(storage.LonghornV1)
 		Expect(err).NotTo(HaveOccurred())
@@ -421,11 +384,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 	})
 
 	It("proceeds to the Upgrade API once evacuation reports done, without re-enabling scheduling yet", func() {
-		secret := newTestSecret(newTestBundle("v1.14"))
-		cluster := newTestCluster(secret.Name, "v1.14")
-		cp := newTestControlPlane(cluster.Name, "evac2")
-		setHostname(cp, "node-evac2")
-		newTestNode("node-evac2", true)
+		cluster, cp := newUpgradeNode("evac2", true)
 
 		hook, err := storage.NewEvacuationHook(storage.LonghornV1)
 		Expect(err).NotTo(HaveOccurred())

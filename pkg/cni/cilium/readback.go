@@ -24,6 +24,7 @@ import (
 	"helm.sh/helm/v3/pkg/release"
 
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/values"
 )
 
 // ReadBack is what an Ichor-owned Cilium release was installed with, in the terms of the
@@ -49,7 +50,7 @@ func ReadBackRelease(rel *release.Release) (ReadBack, error) {
 		return ReadBack{}, errors.New("cilium: no release record to read")
 	}
 
-	cfg := deepCopy(rel.Config)
+	cfg := values.Clone(rel.Config)
 
 	rb := ReadBack{KubeProxy: cni.KubeProxyEnabled, Pending: rel.Info != nil && rel.Info.Status.IsPending()}
 	if v, _ := cfg["kubeProxyReplacement"].(bool); v {

@@ -248,7 +248,7 @@ func LiveValuesFromUser(user map[string]any) (map[string]any, error) {
 // modified. Pass a record's Config (not LiveValues), which holds only what the
 // user set.
 func UserValues(vals map[string]any) map[string]any {
-	out := deepCopy(vals)
+	out := values.Clone(vals)
 	for path := range OwnedKeys {
 		values.Delete(out, path)
 	}
@@ -679,7 +679,7 @@ var volatileAnnotations = []string{
 // normalizeObject returns a copy of o without the fields that are never a user
 // difference. Secret payloads are dropped entirely.
 func normalizeObject(o map[string]any) map[string]any {
-	o = deepCopy(o)
+	o = values.Clone(o)
 
 	delete(o, "status")
 
@@ -968,33 +968,7 @@ func diffScalars(ref ObjectRef, path string, want, have []any) []Difference {
 	return out
 }
 
-func deepCopy(m map[string]any) map[string]any {
-	if m == nil {
-		return map[string]any{}
-	}
-
-	var out map[string]any
-
-	raw, _ := json.Marshal(m)
-	_ = json.Unmarshal(raw, &out)
-
-	return out
-}
-
 // --- chart crds/ -----------------------------------------------------------
-
-// ChartCRDs lists the files under crds/ in the pinned chart (and its
-// subcharts). Helm's Install applies them before the release (installCRDs,
-// tolerating AlreadyExists), which would hand the CRDs of a running Cilium to
-// a release that the Cilium operator manages itself.
-func ChartCRDs() ([]string, error) {
-	ch, err := loadChart()
-	if err != nil {
-		return nil, err
-	}
-
-	return crdNames(ch), nil
-}
 
 func crdNames(ch *chart.Chart) []string {
 	crds := ch.CRDObjects()
@@ -1007,16 +981,17 @@ func crdNames(ch *chart.Chart) []string {
 	return names
 }
 
-// CheckChartCRDs is an error when the pinned chart ships a crds/ directory. The
-// takeover design relies on there being none; a chart bump that adds
-// one needs a decision, not a silent CRD install.
+// CheckChartCRDs is an error when the pinned chart ships a crds/ directory (and subcharts). The
+// takeover design relies on there being none: Helm's Install applies crds/ before the
+// release, which would hand the CRDs of a running Cilium to a release that the Cilium operator
+// manages itself. A chart bump that adds one needs a decision, not a silent CRD install.
 func CheckChartCRDs() error {
-	names, err := ChartCRDs()
+	ch, err := loadChart()
 	if err != nil {
 		return err
 	}
 
-	if len(names) > 0 {
+	if names := crdNames(ch); len(names) > 0 {
 		return fmt.Errorf("cilium: chart %s ships crds/ (%s); taking over a running Cilium would install them "+
 			"through Helm", ChartVersion, strings.Join(names, ", "))
 	}

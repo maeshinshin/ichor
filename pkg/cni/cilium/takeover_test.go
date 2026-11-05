@@ -39,6 +39,7 @@ import (
 	clienttesting "k8s.io/client-go/testing"
 
 	"github.com/maeshinshin/ichor/pkg/cni"
+	"github.com/maeshinshin/ichor/pkg/values"
 )
 
 const (
@@ -352,7 +353,7 @@ func (c liveCluster) get(_ context.Context, ref ObjectRef) (map[string]any, erro
 		return nil, apierrors.NewNotFound(schema.GroupResource{Resource: strings.ToLower(ref.Kind)}, ref.Name)
 	}
 
-	return deepCopy(o), nil
+	return values.Clone(o), nil
 }
 
 func newLiveCluster(t *testing.T, vals map[string]any) liveCluster {

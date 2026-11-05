@@ -636,6 +636,43 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageAwaitingCredentials))
 	})
 
+	// The fingerprints the token is made of are visible from Accepting, so an acknowledgement could be set
+	// before the operator has anything to acknowledge; it must not skip the gate (ADR 0120 amendment).
+	It("ignores an acknowledgement given before the stage AwaitingCredentials", func() {
+		f := newCARotFixture()
+		f.holdHandoff = true
+		op := f.newOp()
+
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.CARotationStageAccepting))
+
+		token := ichorv1alpha1.CARotationHandoffToken(op.Status.CARotation)
+		Expect(token).NotTo(BeEmpty())
+
+		base := op.DeepCopy()
+		if op.Annotations == nil {
+			op.Annotations = map[string]string{}
+		}
+
+		op.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation] = token
+		Expect(k8sClient.Patch(ctx, op, ctrlclient.MergeFrom(base))).To(Succeed())
+
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.CARotationStageAwaitingCredentials))
+
+		for range 6 {
+			op = f.step(op)
+			Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageAwaitingCredentials), "the early acknowledgement released the gate")
+			Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		}
+
+		Expect(op.Annotations).NotTo(HaveKey(ichorv1alpha1.CredentialsHandoffAnnotation), "the early acknowledgement is dropped, not kept")
+
+		// One given while the operation waits releases it, as before.
+		f.holdHandoff = false
+		op = f.step(op)
+		op = f.step(op)
+		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageIssuing))
+	})
+
 	It("rotates through every stage, and each stage's status names the issuing and the accepted CA", func() {
 		f := newCARotFixture()
 		op := f.newOp()

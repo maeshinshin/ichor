@@ -713,6 +713,24 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 		}
 	}
 
+	// The hand-off token is made of fingerprints visible from Accepting on, so an acknowledgement set before
+	// the operation waits for it would match the moment it does and skip the gate (ADR 0120 amendment).
+	// Whatever is there when the stage is entered is dropped; one set after it is honoured. The patch goes
+	// through a copy (its response would replace c.op's status) and only the resource version is taken over,
+	// so a change of the annotation after the drop fails the status update below and the next pass drops it.
+	if _, early := c.op.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation]; early &&
+		c.nextStage(stage) == ichorv1alpha1.CARotationStageAwaitingCredentials {
+		patched := c.op.DeepCopy()
+		drop := fmt.Sprintf(`{"metadata":{"annotations":{%q:null}}}`, ichorv1alpha1.CredentialsHandoffAnnotation)
+
+		if err := c.r.Patch(ctx, patched, client.RawPatch(types.MergePatchType, []byte(drop))); err != nil {
+			return ctrl.Result{}, fmt.Errorf("dropping an acknowledgement given before the credentials were awaited: %w", err)
+		}
+
+		delete(c.op.Annotations, ichorv1alpha1.CredentialsHandoffAnnotation)
+		c.op.ResourceVersion = patched.ResourceVersion
+	}
+
 	// status.machines shows the stage under way: the next one starts empty.
 	c.op.Status.Machines = nil
 	c.op.Status.CARotation.EtcdRestarted, c.op.Status.CARotation.EtcdRestartedAt = nil, nil

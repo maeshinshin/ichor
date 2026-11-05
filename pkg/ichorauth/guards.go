@@ -16,7 +16,10 @@ limitations under the License.
 
 package ichorauth
 
-import "slices"
+import (
+	"slices"
+	"strings"
+)
 
 // The prefixes the kube-apiserver gives Ichor's own identities: user ichor:<name>, group ichor:<role>
 // (ADR 0094). The external IdP cannot map to them.
@@ -25,16 +28,28 @@ const (
 	GroupPrefix = "ichor:"
 )
 
+// builtinRank orders the built-in roles: each one's ClusterRole includes the ones below it (ADR 0094).
+var builtinRank = map[string]int{RoleViewer: 1, RoleOperator: 2, RoleAdmin: 3}
+
 // UngrantedRole returns the first role in wanted that a requester in groups may not put on a user who
-// holds current, or "" when there is none: an Ichor user may add only roles they hold, and an admin may
-// add any (ADR 0108). The UI backend and the IchorUser webhook (ADR 0129) share this rule.
+// holds current, or "" when there is none: an Ichor user may add the roles they hold and the built-in
+// roles below their highest built-in one, a custom role only by a literal match, and an admin may add
+// any (ADR 0108, ADR 0129). The UI backend and the IchorUser webhook share this rule.
 func UngrantedRole(groups, current, wanted []string) string {
-	if slices.Contains(groups, GroupPrefix+RoleAdmin) {
+	top := 0
+	for _, g := range groups {
+		if r, ok := strings.CutPrefix(g, GroupPrefix); ok {
+			top = max(top, builtinRank[r])
+		}
+	}
+
+	if top == builtinRank[RoleAdmin] {
 		return ""
 	}
 
 	for _, r := range wanted {
-		if !slices.Contains(current, r) && !slices.Contains(groups, GroupPrefix+r) {
+		below := builtinRank[r] > 0 && builtinRank[r] <= top
+		if !below && !slices.Contains(current, r) && !slices.Contains(groups, GroupPrefix+r) {
 			return r
 		}
 	}

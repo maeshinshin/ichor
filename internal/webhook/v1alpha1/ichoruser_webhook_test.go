@@ -100,7 +100,8 @@ func TestIchorUserGrant(t *testing.T) {
 	}{
 		{name: "an operator creates an operator", user: userAlice, groups: alice, new: iuser("bob", false, "operator")},
 		{name: "an operator cannot create an admin", user: userAlice, groups: alice, new: iuser("bob", false, "admin"), want: `role "admin"`},
-		{name: "an operator cannot create a role it lacks", user: userAlice, groups: alice, new: iuser("bob", false, "operator", "viewer"), want: `role "viewer"`},
+		{name: "an operator creates a viewer", user: userAlice, groups: alice, new: iuser("bob", false, "viewer")},
+		{name: "an operator cannot create a custom role it lacks", user: userAlice, groups: alice, new: iuser("bob", false, "custom"), want: `role "custom"`},
 		{name: "an admin creates any role", user: userBoss, groups: boss, new: iuser("bob", false, "admin", "custom")},
 		{name: "an operator cannot make an admin of a viewer", user: userAlice, groups: alice,
 			old: iuser("bob", false, "viewer"), new: iuser("bob", false, "viewer", "admin"), want: `role "admin"`},

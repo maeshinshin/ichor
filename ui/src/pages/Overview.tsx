@@ -177,16 +177,15 @@ function Home({
   useEffect(reloadAll, [ref.namespace, ref.name])
 
   const current = blockingOperation(ops)
-  const busy = blockingOperation(ops)
   // When an operation of this cluster finishes, read the versions, nodes and backups again.
   useEffect(() => {
-    if (busy) {
+    if (current) {
       wasBusy.current = true
     } else if (wasBusy.current) {
       wasBusy.current = false
       reloadAll()
     }
-  }, [busy !== null])
+  }, [current !== null])
 
   const approved = (machines ?? []).filter((m) => m.approvalState === MachineApprovalState.APPROVED)
   const pending = (machines ?? []).filter((m) => m.approvalState !== MachineApprovalState.APPROVED && m.approvalState !== MachineApprovalState.REJECTED)
@@ -197,10 +196,7 @@ function Home({
   const versionOf = (name: string) => componentOf(cluster.versions, name)
   const cilium = versionOf('cilium')
   const notes = unavailableNotes(candidates)
-  const patches = patchComponents({
-    talos: candidates.talos,
-    kubernetes: candidates.kubernetes,
-  })
+  const patches = patchComponents(candidates)
   const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, opState: currentState, patches, release, autoPatchHalted: autoPatch.halted, installerUnverified: unverified })
   const recent = recentOperations(ops, 5)
   const targets = tileTargets(current?.op.ref?.name ?? null)

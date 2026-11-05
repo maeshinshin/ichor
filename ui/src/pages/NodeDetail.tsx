@@ -175,7 +175,6 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
                 machine={machine}
                 disks={node.disks}
                 onDone={loadMachine}
-
               />
             </div>
           </AlertDescription>
@@ -319,12 +318,7 @@ function groupByLayer(values: EffectiveConfigValue[]): [number, EffectiveConfigV
   const byLayer = new Map<number, EffectiveConfigValue[]>()
   for (const v of values) {
     const layer = v.origin?.layer ?? ConfigLayer.UNSPECIFIED
-    const group = byLayer.get(layer)
-    if (group) {
-      group.push(v)
-    } else {
-      byLayer.set(layer, [v])
-    }
+    byLayer.set(layer, [...(byLayer.get(layer) ?? []), v])
   }
   return [...byLayer.entries()].sort((a, b) => a[0] - b[0])
 }

@@ -1,5 +1,4 @@
-// A minimal client-side router: no dependency earns its keep for a handful
-// of placeholder routes. History API + a popstate listener is enough.
+// A minimal client-side router: the History API and a popstate listener are enough.
 import type { JSX } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 
@@ -28,9 +27,7 @@ export function navigate(to: string) {
   }
 }
 
-// matchRoute supports one thing beyond the phase-5 skeleton's exact-path
-// table: a ":param" segment (cluster/node detail pages need a namespace and
-// name out of the URL). Still no dependency - it's a split and a loop.
+// matchRoute matches a path against a pattern with ":param" segments.
 export function matchRoute(pattern: string, path: string): Record<string, string> | null {
   const patternParts = pattern.split('/').filter(Boolean)
   const pathParts = path.split('/').filter(Boolean)

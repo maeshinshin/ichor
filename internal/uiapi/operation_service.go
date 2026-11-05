@@ -26,7 +26,6 @@ import (
 	"connectrpc.com/connect"
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"golang.org/x/mod/semver"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -924,13 +923,7 @@ func (s *Server) CreateOperation(
 	}
 
 	cluster := p.cluster
-	op := &ichorv1alpha1.TalosOperation{
-		GenerateName: p.kind + "-", Namespace: cluster.Namespace, Annotations: s.startedByAnnotation(ctx),
-		Spec: ichorv1alpha1.TalosOperationSpec{
-			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name}, Kind: p.kind, MaxUnavailable: m.GetMaxUnavailable(),
-			KeyRotation: p.keys,
-		},
-	}
+	op := s.newOperation(ctx, cluster, ichorv1alpha1.TalosOperationSpec{Kind: p.kind, MaxUnavailable: m.GetMaxUnavailable(), KeyRotation: p.keys})
 	if len(p.caTargets) > 0 {
 		op.Spec.CARotation = &ichorv1alpha1.TalosOperationCARotationSpec{Targets: p.caTargets}
 	}

@@ -413,12 +413,7 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 	}
 
 	cluster := p.cluster
-	op := &ichorv1alpha1.TalosOperation{
-		GenerateName: p.kind + "-", Namespace: cluster.Namespace, Annotations: s.startedByAnnotation(ctx),
-		Spec: ichorv1alpha1.TalosOperationSpec{
-			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name}, Kind: p.kind, Node: &np.spec,
-		},
-	}
+	op := s.newOperation(ctx, cluster, ichorv1alpha1.TalosOperationSpec{Kind: p.kind, Node: &np.spec})
 
 	if err := s.createOperation(ctx, cluster, op); err != nil {
 		return nil, err

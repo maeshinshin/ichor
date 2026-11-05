@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/reclaim"
 )
 
@@ -71,7 +72,9 @@ does not satisfy it.
 
 Afterwards the machine comes back in maintenance mode with the same UUID. With
 --cluster NAME its address is added to that cluster's spec.discovery.addresses
-so that Ichor registers it as a pending machine.`,
+so that Ichor registers it as a pending machine. A pending TalosMachine of the same
+UUID that an earlier reclaim left is deleted after the reset (it pinned the old
+maintenance certificate); discovery creates it again with the new one.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if talosconfigPath == "" {
@@ -98,6 +101,9 @@ so that Ichor registers it as a pending machine.`,
 				return reclaim.LoadKnown(ctx, k8s, apiOpts.IchorNamespace)
 			},
 			Probe: reclaim.MaintenanceUUID,
+			ClearStale: func(ctx context.Context, uuid string) ([]string, error) {
+				return clearStalePending(ctx, k8s, apiOpts.Namespace, uuid)
+			},
 			Register: func(ctx context.Context, address string) error {
 				return registerDiscoveryAddress(ctx, k8s, apiOpts.Namespace, f.Cluster, address)
 			},
@@ -115,6 +121,9 @@ type reclaimDeps struct {
 	Known      func(ctx context.Context) (reclaim.Known, error)
 	Probe      func(ctx context.Context, address string) (string, error)
 	Register   func(ctx context.Context, address string) error
+	// ClearStale deletes the pending TalosMachines of the reset node's UUID and returns their names.
+	// Nil means none is cleared.
+	ClearStale func(ctx context.Context, uuid string) ([]string, error)
 	In         io.Reader
 	Out        io.Writer
 	Poll       time.Duration
@@ -192,7 +201,76 @@ func runMachineReclaim(ctx context.Context, d reclaimDeps, address string, f rec
 		return err
 	}
 
+	clearStaleMachines(ctx, d, steps, in.UUID)
+
 	return finishReclaim(ctx, d, steps, address, in.UUID, f)
+}
+
+// clearStaleMachines removes the pending TalosMachine of the node that was just reset. It pinned the
+// maintenance certificate the node presented before the reset; the reset gives it a new one, so the
+// machine would stick at MaintenanceIdentityChanged after approval. Deleting it is safe: a pending
+// machine holds nothing the operator typed, and the cluster's discovery creates it again, pinned to
+// the new certificate. The reset is done by now, so a failure here is a warning with the commands.
+func clearStaleMachines(ctx context.Context, d reclaimDeps, steps *progress, uuid string) {
+	if d.ClearStale == nil {
+		return
+	}
+
+	names, err := d.ClearStale(ctx, uuid)
+
+	switch {
+	case err != nil:
+		steps.Warn(fmt.Sprintf("could not remove the stale pending TalosMachine of %s: %v. Its pinned maintenance certificate is "+
+			"out of date, so remove it before approving: "+
+			"kubectl -n %[3]s annotate talosmachines.ichor.maesh.dev %[1]s ichor.maesh.dev/allow-delete=true && "+
+			"kubectl -n %[3]s delete talosmachines.ichor.maesh.dev %[1]s", uuid, err, apiOpts.Namespace))
+	case len(names) > 0:
+		steps.Info(fmt.Sprintf("removed the stale pending TalosMachine %s: it pinned the node's old maintenance certificate, "+
+			"and discovery creates it again with the new one", strings.Join(names, ", ")))
+	}
+}
+
+// clearStalePending deletes the pending TalosMachines in namespace whose identity UUID is uuid
+// (compared case-insensitively) and returns their names. An approved machine is never touched (the
+// reclaim refused it before the reset), nor a rejected one, which is an operator's decision. The
+// allow-delete annotation, which guards against a prune, is set on the machine first.
+func clearStalePending(ctx context.Context, c client.Client, namespace, uuid string) ([]string, error) {
+	var list ichorv1alpha1.TalosMachineList
+	if err := c.List(ctx, &list, client.InNamespace(namespace)); err != nil {
+		return nil, fmt.Errorf("listing TalosMachines in %s: %w", namespace, err)
+	}
+
+	var names []string
+
+	for i := range list.Items {
+		m := &list.Items[i]
+
+		if !strings.EqualFold(m.Spec.Identity.UUID, uuid) || m.Spec.IsApproved() ||
+			m.Spec.ApprovalState == ichorv1alpha1.MachineApprovalStateRejected {
+			continue
+		}
+
+		if m.Annotations[deleteguard.AllowDeleteAnnotation] != deleteguard.AllowDeleteValue {
+			base := m.DeepCopy()
+			if m.Annotations == nil {
+				m.Annotations = map[string]string{}
+			}
+
+			m.Annotations[deleteguard.AllowDeleteAnnotation] = deleteguard.AllowDeleteValue
+
+			if err := c.Patch(ctx, m, client.MergeFrom(base)); err != nil {
+				return names, fmt.Errorf("allowing the deletion of TalosMachine %s: %w", m.Name, err)
+			}
+		}
+
+		if err := c.Delete(ctx, m); client.IgnoreNotFound(err) != nil {
+			return names, fmt.Errorf("deleting TalosMachine %s: %w", m.Name, err)
+		}
+
+		names = append(names, m.Name)
+	}
+
+	return names, nil
 }
 
 // finishReclaim waits for the machine to answer in maintenance mode with the

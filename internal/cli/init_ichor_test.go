@@ -233,6 +233,40 @@ func TestIsTransient_EtcdTimeout(t *testing.T) {
 	}
 }
 
+// A webhook that cannot be called (its pod restarting with the control plane) comes back as a 500
+// InternalError whatever the cause (refused, timed out, no endpoints); a webhook that answered "no"
+// is a Forbidden or Invalid refusal and must fail at once, even if its reason quotes such text.
+func TestIsTransient_WebhookCallFailures(t *testing.T) {
+	gr := schema.GroupResource{Group: "ichor.maesh.dev", Resource: "talosoperations"}
+	call := func(cause string) error {
+		return apierrors.NewInternalError(errors.New("failed calling webhook \"voverrideop-v1alpha1.kb.io\": " +
+			"failed to call webhook: Post \"https://ichor-webhook-service.ichor-system.svc:443/validate\": " + cause))
+	}
+
+	for name, err := range map[string]error{
+		"refused":        call("dial tcp 10.249.23.203:443: connect: connection refused"),
+		"deadline":       call("context deadline exceeded"),
+		"client timeout": call("net/http: request canceled (Client.Timeout exceeded while awaiting headers)"),
+		"no endpoints":   call("no endpoints available for service \"ichor-webhook-service\""),
+		"unavailable":    apierrors.NewServiceUnavailable("failed calling webhook: no endpoints"),
+	} {
+		if !isTransient(err) {
+			t.Errorf("%s: %v should be transient", name, err)
+		}
+	}
+
+	for name, err := range map[string]error{
+		"denied": apierrors.NewForbidden(gr, "x", errors.New("admission webhook \"voverrideop-v1alpha1.kb.io\" denied the request: tokenSettle is too short")),
+		"denied quoting a call failure": apierrors.NewForbidden(gr, "x",
+			errors.New("denied: earlier failed calling webhook text: context deadline exceeded")),
+		"invalid": apierrors.NewInvalid(schema.GroupKind{Group: gr.Group, Kind: "TalosOperation"}, "x", nil),
+	} {
+		if isTransient(err) {
+			t.Errorf("%s: %v must fail fast", name, err)
+		}
+	}
+}
+
 // adopt's install step creates the IchorInstallation through the same bounded webhook wait as init.
 func TestCreateIchorInstallation_RetriesWhileTheWebhookIsDown(t *testing.T) {
 	old := version.Version

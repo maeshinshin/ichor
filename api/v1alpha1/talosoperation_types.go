@@ -22,6 +22,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 // Values for TalosOperationSpec.Kind. Each names which later, separate unit
@@ -508,6 +509,13 @@ type TalosOperationNodeStatus struct {
 	// message is a plain-English line about what the operation is doing or waiting for.
 	// +optional
 	Message string `json:"message,omitempty"`
+
+	// machineUID is the UID of the TalosMachine a reset started on. The wait for the removal
+	// flow ends when that object is gone or replaced by one with another UID: discovery may
+	// recreate a pending machine with the same name within seconds, and that one is never the
+	// operation's to delete.
+	// +optional
+	MachineUID types.UID `json:"machineUID,omitempty"`
 }
 
 // TalosOperationEtcdRestoreStatus is the visible state of an etcd restore. The state that survives the

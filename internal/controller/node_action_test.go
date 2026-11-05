@@ -26,6 +26,7 @@ import (
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -606,6 +607,43 @@ var _ = Describe("TalosOperation node actions", func() {
 			Eventually(func() bool {
 				return f.reconcile(op).Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted
 			}, 5*time.Second).Should(BeTrue())
+		})
+
+		It("completes when discovery re-creates a pending machine of the same name, and never deletes it", func() {
+			f := newNodeFixture(map[string]string{hostW1: roleWorker})
+			spec := nodeSpec(ichorv1alpha1.NodeActionReset)
+			spec.Confirm = f.machines[hostW1].Name
+			op := f.newOp(hostW1, spec)
+			f.reconcile(op)
+
+			name := types.NamespacedName{Namespace: tmNamespace, Name: f.machines[hostW1].Name}
+
+			var old ichorv1alpha1.TalosMachine
+			Expect(k8sClient.Get(ctx, name, &old)).To(Succeed())
+			Expect(fetchOperation(op).Status.Node.MachineUID).To(Equal(old.UID), "the machine the reset started on is recorded by UID")
+
+			// The removal flow is done and, 15 s later at the latest, discovery recreated the machine
+			// (a pending one, with the same name: the node's UUID) before the operation looked again.
+			controllerutil.RemoveFinalizer(&old, machineRemovalFinalizer)
+			Expect(k8sClient.Update(ctx, &old)).To(Succeed())
+			Eventually(func() bool { return apierrors.IsNotFound(k8sClient.Get(ctx, name, &ichorv1alpha1.TalosMachine{})) }, 5*time.Second).Should(BeTrue())
+
+			pending := &ichorv1alpha1.TalosMachine{
+				ObjectMeta: metav1.ObjectMeta{Namespace: name.Namespace, Name: name.Name},
+				Spec: ichorv1alpha1.TalosMachineSpec{
+					ClusterRef: corev1.LocalObjectReference{Name: f.cluster.Name},
+					Identity:   ichorv1alpha1.TalosMachineIdentity{UUID: "uuid-" + hostW1},
+					Endpoint:   "10.0.0.30:50000", ApprovalState: ichorv1alpha1.MachineApprovalStatePending,
+				},
+			}
+			Expect(k8sClient.Create(ctx, pending)).To(Succeed())
+
+			Expect(f.reconcile(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
+
+			var got ichorv1alpha1.TalosMachine
+			Expect(k8sClient.Get(ctx, name, &got)).To(Succeed())
+			Expect(got.UID).To(Equal(pending.UID))
+			Expect(got.DeletionTimestamp.IsZero()).To(BeTrue(), "the new pending machine is not the operation's to delete")
 		})
 
 		It("passes the wipe mode on to the removal flow", func() {

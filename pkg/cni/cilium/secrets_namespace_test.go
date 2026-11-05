@@ -102,7 +102,7 @@ func TestOwnedKeyConflicts_SecretsNamespaceOfAFeatureThatIsOn(t *testing.T) {
 // outside cilium-secrets.
 func TestBootstrapManifest_SecretsRolesStayInCiliumsNamespace(t *testing.T) {
 	user := map[string]any{}
-	for _, f := range []string{"ingressController", "gatewayAPI", "envoyConfig", "bgpControlPlane"} {
+	for _, f := range []string{"ingressController", keyGatewayAPI, "envoyConfig", "bgpControlPlane"} {
 		user[f] = map[string]any{keyEnabled: true}
 	}
 

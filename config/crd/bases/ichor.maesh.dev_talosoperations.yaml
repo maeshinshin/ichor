@@ -347,6 +347,9 @@ spec:
                   paused stops the operation from advancing any further machine. It
                   does not undo a machine already advanced, and it does not release
                   the cluster lock -- the operation is not finished, only halted.
+                  It has no effect on an etcd restore that has started: the
+                  restore takes the Kubernetes API away and the controller drives it to the
+                  end, or to a failed step that pauses it, whatever this field says.
                 type: boolean
             required:
             - clusterRef

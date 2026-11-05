@@ -167,17 +167,9 @@ func (d *waitDiag) nodesNoNetwork(ctx context.Context) bool {
 	return true
 }
 
-// pollBounded is pollWhile for a wait on Ichor's own pods: it prints why they are not running,
-// stops early when the cluster has no pod network, and on timeout names what is left. d may be nil.
-func pollBounded(
-	ctx context.Context, timeout, interval time.Duration, progress io.Writer, what string, d *waitDiag,
-	attempt func(context.Context) error, retryable func(error) bool,
-) error {
-	return pollDiag(ctx, timeout, interval, progress, what, d, attempt, retryable, what+" did not finish within "+timeout.String())
-}
-
-// pollDiag is pollBounded with the start of the timeout message given: timedOut, then what is left
-// in brackets, then the last error.
+// pollDiag is pollWhile for a wait on Ichor's own pods: it prints why they are not running, stops
+// early when the cluster has no pod network, and on timeout names what is left: timedOut, then what
+// is left in brackets, then the last error. d may be nil.
 func pollDiag(
 	ctx context.Context, timeout, interval time.Duration, progress io.Writer, what string, d *waitDiag,
 	attempt func(context.Context) error, retryable func(error) bool, timedOut string,

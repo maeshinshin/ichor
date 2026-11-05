@@ -83,6 +83,29 @@ func Load(ctx context.Context, c client.Reader, namespace, name string) (*secret
 	return bundle, nil
 }
 
+// loadKey reads data key dataKey from the Secret named name in namespace and parses it. It returns nil, nil
+// when the key is absent.
+func loadKey[T any](ctx context.Context, c client.Reader, namespace, name, dataKey string, parse func([]byte) (*T, error)) (*T, error) {
+	var secret corev1.Secret
+
+	key := types.NamespacedName{Namespace: namespace, Name: name}
+	if err := c.Get(ctx, key, &secret); err != nil {
+		return nil, fmt.Errorf("getting secrets bundle Secret %q: %w", key, err)
+	}
+
+	raw, ok := secret.Data[dataKey]
+	if !ok {
+		return nil, nil //nolint:nilnil // absence is the answer
+	}
+
+	v, err := parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("reading %q from Secret %q: %w", dataKey, key, err)
+	}
+
+	return v, nil
+}
+
 // Decode parses a secrets bundle in the "secrets.yaml" encoding and fills in what the encoding cannot carry.
 // Every loader (the Secret, a local file) goes through it so none can forget the Clock.
 func Decode(raw []byte) (*secrets.Bundle, error) {

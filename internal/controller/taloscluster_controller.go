@@ -128,10 +128,7 @@ func (r *TalosClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request
 // the reset, after the pass that saw its Node still Ready and so counted its address as a member;
 // without this the next pass is discoveryRequeueInterval away.
 func (r *TalosClusterReconciler) freshResetNode(ctx context.Context) bool {
-	now := time.Now()
-	if r.now != nil {
-		now = r.now()
-	}
+	now := nowFrom(r.now)
 
 	var nodes corev1.NodeList
 	if err := r.List(ctx, &nodes); err != nil {
@@ -155,19 +152,24 @@ func isResetNode(o client.Object) bool {
 	return ok
 }
 
-// allDiscoveryClusters enqueues every TalosCluster; one without spec.discovery returns at once.
-func (r *TalosClusterReconciler) allDiscoveryClusters(ctx context.Context, _ client.Object) []reconcile.Request {
-	var clusters ichorv1alpha1.TalosClusterList
-	if err := r.List(ctx, &clusters); err != nil {
-		return nil
-	}
+// clusterRequests maps any event to every TalosCluster keep accepts (nil: all of them).
+func clusterRequests(c client.Reader, keep func(*ichorv1alpha1.TalosCluster) bool) handler.MapFunc {
+	return func(ctx context.Context, _ client.Object) []reconcile.Request {
+		var clusters ichorv1alpha1.TalosClusterList
+		if err := c.List(ctx, &clusters); err != nil {
+			return nil
+		}
 
-	reqs := make([]reconcile.Request, 0, len(clusters.Items))
-	for i := range clusters.Items {
-		reqs = append(reqs, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&clusters.Items[i])})
-	}
+		var reqs []reconcile.Request
 
-	return reqs
+		for i := range clusters.Items {
+			if cl := &clusters.Items[i]; keep == nil || keep(cl) {
+				reqs = append(reqs, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(cl)})
+			}
+		}
+
+		return reqs
+	}
 }
 
 // freshAddress records when each discovery address and CIDR of cluster was first seen by this
@@ -176,10 +178,7 @@ func (r *TalosClusterReconciler) allDiscoveryClusters(ctx context.Context, _ cli
 // every discoveryFreshInterval for a bounded time beats waiting a full discoveryRequeueInterval.
 // After a controller restart every entry counts as new once, which costs at most the same window.
 func (r *TalosClusterReconciler) freshAddress(cluster *ichorv1alpha1.TalosCluster) bool {
-	now := time.Now()
-	if r.now != nil {
-		now = r.now()
-	}
+	now := nowFrom(r.now)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -222,7 +221,7 @@ func (r *TalosClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(&ichorv1alpha1.MachineReclaim{}, handler.EnqueueRequestsFromMapFunc(reclaimDoneClusters)).
 		// A Node Ichor marked as reset (when it is marked, and when it stops being Ready) starts a pass
 		// at once instead of waiting for the requeue.
-		Watches(&corev1.Node{}, handler.EnqueueRequestsFromMapFunc(r.allDiscoveryClusters),
+		Watches(&corev1.Node{}, handler.EnqueueRequestsFromMapFunc(clusterRequests(r.Client, nil)),
 			builder.WithPredicates(predicate.NewPredicateFuncs(isResetNode))).
 		Named("taloscluster").
 		Complete(r)

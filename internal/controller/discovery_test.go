@@ -566,13 +566,15 @@ var _ = Describe("DiscoveryReconciler.DiscoverAll known addresses", func() {
 			},
 		}}
 
-		// .10 is a machine's spec.endpoint, .11 only its status.observedEndpoint.
+		// .10 is an approved machine's spec.endpoint, .11 only its status.observedEndpoint. (A pending
+		// machine's addresses are probed, to refresh it: see "DiscoverAll pending machines".)
 		m := &ichorv1alpha1.TalosMachine{
 			Name: "skip-known-machine", Namespace: tmNamespace,
 			Spec: ichorv1alpha1.TalosMachineSpec{
-				ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
-				Identity:   ichorv1alpha1.TalosMachineIdentity{UUID: "skip-known-machine", Serial: "S1", MACAddresses: []string{testMAC}},
-				Endpoint:   "198.51.100.10:50000",
+				ClusterRef:    corev1.LocalObjectReference{Name: cluster.Name},
+				Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: "skip-known-machine", Serial: "S1", MACAddresses: []string{testMAC}},
+				Endpoint:      "198.51.100.10:50000",
+				ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
 			},
 		}
 		Expect(k8sClient.Create(ctx, m)).To(Succeed())

@@ -91,7 +91,10 @@ func TestMaintenancePin(t *testing.T) {
 	}
 }
 
-func selfSigned(t *testing.T) tls.Certificate {
+func selfSigned(t interface {
+	Helper()
+	Fatal(args ...any)
+}) tls.Certificate {
 	t.Helper()
 
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

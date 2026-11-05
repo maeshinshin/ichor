@@ -48,6 +48,10 @@ const (
 	reasonWeakIdentity      = "WeakIdentity"
 	reasonIdentityCollision = "IdentityCollision"
 
+	// reasonMaintenanceRefreshed is the Event reason on a pending TalosMachine whose pinned maintenance
+	// certificate was replaced because the same node came back with a new one (ADR 0128, amendment).
+	reasonMaintenanceRefreshed = "MaintenanceIdentityRefreshed"
+
 	// ReasonAlreadyConfigured is the Event reason for a Talos node that already has a configuration
 	// (ADR 0103 section 2); internal/uiapi lists these.
 	ReasonAlreadyConfigured = "AlreadyConfigured"
@@ -200,13 +204,7 @@ func (r *DiscoveryReconciler) Discover(
 		}
 
 		if !existing.Spec.IsApproved() {
-			r.pinMaintenance(ctx, mc, &existing)
-
-			if inv, ok := r.readInventory(ctx, mc, &existing); ok {
-				if err := recordDiscoveredHardware(ctx, r.Client, r.Client, &existing, inv); err != nil {
-					logf.FromContext(ctx).Error(err, "recording the disks and NICs of a pending TalosMachine", "machine", existing.Name)
-				}
-			}
+			r.refreshUnapproved(ctx, mc, &existing)
 		}
 
 		return &existing, nil
@@ -221,6 +219,71 @@ func (r *DiscoveryReconciler) Discover(
 
 		return nil, nil
 	}
+}
+
+// refreshUnapproved re-records what a maintenance-mode probe of m's node showed: the certificate
+// fingerprint (ADR 0108) and the disks and NICs (ADR 0112). m must be unapproved, and the node must
+// have answered with m's identity. A changed fingerprint is reported on m, because it means the node
+// was reset or rebooted since the last probe.
+func (r *DiscoveryReconciler) refreshUnapproved(ctx context.Context, mc MaintenanceClient, m *ichorv1alpha1.TalosMachine) {
+	old := m.Status.MaintenanceFingerprint
+
+	r.pinMaintenance(ctx, mc, m)
+
+	if inv, ok := r.readInventory(ctx, mc, m); ok {
+		if err := recordDiscoveredHardware(ctx, r.Client, r.Client, m, inv); err != nil {
+			logf.FromContext(ctx).Error(err, "recording the disks and NICs of a pending TalosMachine", "machine", m.Name)
+		}
+	}
+
+	if r.Recorder != nil && old != "" && m.Status.MaintenanceFingerprint != old {
+		r.Recorder.Eventf(m, corev1.EventTypeNormal, reasonMaintenanceRefreshed,
+			"the node answers in maintenance mode with the same identity and a new certificate (%s, was %s), so the "+
+				"pinned fingerprint and the disk and NIC lists were refreshed; the machine was not approved, so no "+
+				"configuration was ever sent against the old one", m.Status.MaintenanceFingerprint, old)
+	}
+}
+
+// refreshPendingAt probes endpoint, the address of a pending machine of cluster, and refreshes that machine
+// (refreshUnapproved) when the node answers in maintenance mode with its recorded identity. Every other
+// outcome -- no answer, a configured node, a weak identity, a UUID that is not a pending machine of the
+// cluster, or the same UUID with another serial or MACs -- changes nothing and reports nothing, as when
+// these addresses were not probed at all; creating a second machine at a known address is Discover's
+// decision for unknown addresses, not this path's.
+func (r *DiscoveryReconciler) refreshPendingAt(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, endpoint string) {
+	if r.MaintenanceClient == nil {
+		return
+	}
+
+	mc, err := r.MaintenanceClient(ctx, endpoint)
+	if err != nil {
+		return
+	}
+
+	if closer, ok := mc.(io.Closer); ok {
+		defer closer.Close() //nolint:errcheck
+	}
+
+	hw, err := mc.Identity(ctx)
+	if err != nil || !strongIdentity(hw) {
+		return
+	}
+
+	var m ichorv1alpha1.TalosMachine
+	if err := r.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: hw.UUID}, &m); err != nil {
+		return
+	}
+
+	if m.Spec.ClusterRef.Name != cluster.Name || !isPendingMachine(&m) || !sameIdentity(m.Spec.Identity, hw) {
+		return
+	}
+
+	r.refreshUnapproved(ctx, mc, &m)
+}
+
+// isPendingMachine reports whether m awaits an operator's decision: neither approved nor rejected.
+func isPendingMachine(m *ichorv1alpha1.TalosMachine) bool {
+	return !m.Spec.IsApproved() && m.Spec.ApprovalState != ichorv1alpha1.MachineApprovalStateRejected
 }
 
 // readInventory reads the node's disks and NICs for m's status (ADR 0112). A failed read is not a
@@ -379,7 +442,7 @@ func (r *DiscoveryReconciler) DiscoverAll(
 		return nil, nil
 	}
 
-	known, err := r.knownHosts(ctx, cluster)
+	known, pending, err := r.knownHosts(ctx, cluster)
 	if err != nil {
 		return nil, err
 	}
@@ -396,6 +459,14 @@ func (r *DiscoveryReconciler) DiscoverAll(
 		g.Go(func() error {
 			cctx, cancel := context.WithTimeout(ctx, discoveryDialTimeout)
 			defer cancel()
+
+			// The address of a pending machine is probed only to refresh that machine, never to
+			// register another one.
+			if pending[hostOf(endpoint)] {
+				r.refreshPendingAt(cctx, cluster, endpoint)
+
+				return nil
+			}
 
 			// A failed probe is a miss, not an error for the pass (see above).
 			if m, err := r.Discover(cctx, cluster, endpoint); err == nil {
@@ -424,15 +495,19 @@ func hostOf(endpoint string) string {
 // spec.endpoint and status.observedEndpoint, and every Node's InternalIP (a member whose machine
 // endpoint is stale). They are not probed: a configured member is not a discovery candidate, and
 // probing it would only record AlreadyConfigured for it. spec.discovery is left as the user wrote it.
+//
+// The hosts of pending machines (neither approved nor rejected) are returned apart, as pending: they
+// were never configured, and the node may have been reset since, so DiscoverAll probes them to refresh
+// the machine. A host that an approved or rejected machine or a Node also has is only known.
 func (r *DiscoveryReconciler) knownHosts(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster,
-) (map[string]bool, error) {
+) (known, pending map[string]bool, err error) {
 	var machines ichorv1alpha1.TalosMachineList
 	if err := r.List(ctx, &machines, client.InNamespace(cluster.Namespace)); err != nil {
-		return nil, fmt.Errorf("listing TalosMachines: %w", err)
+		return nil, nil, fmt.Errorf("listing TalosMachines: %w", err)
 	}
 
-	known := map[string]bool{}
+	known, pending = map[string]bool{}, map[string]bool{}
 
 	for i := range machines.Items {
 		m := &machines.Items[i]
@@ -440,13 +515,18 @@ func (r *DiscoveryReconciler) knownHosts(
 			continue
 		}
 
-		known[hostOf(m.Spec.Endpoint)] = true
-		known[hostOf(m.Status.ObservedEndpoint)] = true
+		set := known
+		if isPendingMachine(m) {
+			set = pending
+		}
+
+		set[hostOf(m.Spec.Endpoint)] = true
+		set[hostOf(m.Status.ObservedEndpoint)] = true
 	}
 
 	var nodes corev1.NodeList
 	if err := r.List(ctx, &nodes); err != nil {
-		return nil, fmt.Errorf("listing Nodes: %w", err)
+		return nil, nil, fmt.Errorf("listing Nodes: %w", err)
 	}
 
 	for i := range nodes.Items {
@@ -460,6 +540,11 @@ func (r *DiscoveryReconciler) knownHosts(
 	}
 
 	delete(known, "")
+	delete(pending, "")
 
-	return known, nil
+	for h := range known {
+		delete(pending, h)
+	}
+
+	return known, pending, nil
 }

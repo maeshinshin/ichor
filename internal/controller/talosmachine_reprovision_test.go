@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -229,6 +230,54 @@ var _ = Describe("TalosMachineReconciler re-provisioning a node that fell back t
 		got = reconcileOnce()
 		Expect(maint.applyCalls).To(BeEmpty())
 		Expect(readyCondition(got).Reason).To(Equal(reasonEndpointRefused))
+	})
+
+	// The identity a node reports on the insecure maintenance API is self-reported. A twin that
+	// reports an approved, converged machine's UUID, serial and MACs from another address inside a
+	// discovery range must not become where that machine is dialled, or it would be sent the
+	// configuration (the CA keys) and the live node's etcd member would be removed. Only the node
+	// at the machine's own address that fell back to maintenance mode (a real wipe) is re-provisioned.
+	Describe("with a twin answering the maintenance API at another address", func() {
+		const twin = "10.0.9.9:50000"
+
+		It("is not followed to the twin, sends it nothing and removes no etcd member; a wipe at the real address still re-provisions", func() {
+			setup(roleControlPlane)
+			siblingControlPlane()
+			talos.etcdMembers = []EtcdMember{{ID: 1, Hostname: "cp-other"}, {ID: 2, Hostname: hostname}}
+
+			// Discover finds a machine by the name the UUID gives it.
+			got := fetchMachine(machine)
+			got.Spec.Identity.UUID = machine.Name
+			Expect(k8sClient.Update(ctx, got)).To(Succeed())
+			maint.identity.UUID = machine.Name
+
+			realNodeWiped := false
+			r.MaintenanceClient = func(_ context.Context, endpoint string) (MaintenanceClient, error) {
+				if endpoint == twin || realNodeWiped {
+					return maint, nil
+				}
+
+				return nil, errors.New("connection refused")
+			}
+
+			d := &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: r.MaintenanceClient}
+			_, err := d.Discover(ctx, cluster, twin)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fetchMachine(machine).Status.ObservedEndpoint).To(BeEmpty(), "discovery must not redirect an approved machine")
+
+			reconcileOnce() // adds the removal finalizer if it is missing
+			got = reconcileOnce()
+			Expect(maint.applyCalls).To(BeEmpty(), "the twin is not sent the configuration")
+			Expect(talos.etcdRemoveIDs).To(BeEmpty(), "the live member is not removed")
+			Expect(got.DialEndpoint()).To(Equal(got.Spec.Endpoint))
+			Expect(readyCondition(got).Reason).To(Equal(reasonCurrentConfigUnavailable))
+
+			realNodeWiped = true
+			got = reconcileOnce()
+			Expect(maint.applyCalls).To(HaveLen(1), "the wiped node at the machine's own address is re-provisioned")
+			Expect(talos.etcdRemoveIDs).To(Equal([]uint64{2}))
+			Expect(readyCondition(got).Reason).To(Equal(reasonConfigStored))
+		})
 	})
 
 	Describe("for a control plane", func() {

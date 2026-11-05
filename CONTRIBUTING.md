@@ -142,7 +142,8 @@ lint failures are not yours.
   the failing tests, and the Jobs are deleted by name at the end. It needs
   `bin/k8s/1.36.2-linux-amd64` (`make setup-envtest`; `ENVTEST_SRC` points at another
   `bin/k8s`). `GATE_SHARDS="ctl:10 cli:4 uiapi:2 rest:3"`, `GATE_CPU` and `GATE_MEM`
-  resize it.
+  resize it. `GATE_ONLY="cli0 uiapi1"` re-runs just the named shards (e.g. the
+  `INFRA` ones; `NOT RUN (queued)` means the cluster never scheduled the pod).
 - End-to-end tests run against a Talos cluster from one of two harnesses: nodes
   on a host cluster, or `talosctl cluster create qemu` on CI runners (`make
   setup-test-e2e`). A full cluster built by `ichor init` is described in

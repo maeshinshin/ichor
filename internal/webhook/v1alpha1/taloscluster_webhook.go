@@ -192,7 +192,7 @@ func (v *TalosClusterCustomValidator) validateCreateVersions(ctx context.Context
 		return err
 	}
 
-	return v.Can.checkCompat(ctx, release.CheckTalosStep(c.Spec.TalosVersion, c.Spec.KubernetesVersion),
+	return v.Can.checkCompat(ctx, release.TalosKubernetesError(c.Spec.TalosVersion, c.Spec.KubernetesVersion),
 		"talosclusters", c.Name, c.Namespace)
 }
 
@@ -342,7 +342,7 @@ func (v *TalosClusterCustomValidator) validateChangedVersions(ctx context.Contex
 		if k8sChanged {
 			stepErr = release.CheckKubernetesStep(newObj.Spec.TalosVersion, newObj.Spec.KubernetesVersion, ciliumDetected)
 		} else {
-			stepErr = release.CheckTalosStep(newObj.Spec.TalosVersion, newObj.Spec.KubernetesVersion)
+			stepErr = release.TalosKubernetesError(newObj.Spec.TalosVersion, newObj.Spec.KubernetesVersion)
 		}
 
 		if err := v.Can.checkCompat(ctx, stepErr, "talosclusters", newObj.Name, newObj.Namespace); err != nil {

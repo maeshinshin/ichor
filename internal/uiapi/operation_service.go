@@ -578,7 +578,7 @@ func (s *Server) checkCompatibility(
 
 	switch kind {
 	case ichorv1alpha1.TalosOperationKindTalos:
-		err = release.CheckTalosStep(target, cluster.Spec.KubernetesVersion)
+		err = release.TalosKubernetesError(target, cluster.Spec.KubernetesVersion)
 	case ichorv1alpha1.TalosOperationKindKubernetes:
 		err = release.CheckKubernetesStep(cluster.Spec.TalosVersion, target, installedCilium(cluster))
 	default:

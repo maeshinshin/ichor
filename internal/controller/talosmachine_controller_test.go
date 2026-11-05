@@ -193,40 +193,39 @@ func (f *fakeTalosClient) CurrentConfig(context.Context) ([]byte, error) {
 	return f.current, f.currentErr
 }
 
+// recordBudget stores how much time ctx has left, when it has a deadline.
+func recordBudget(ctx context.Context, into *time.Duration) {
+	if dl, ok := ctx.Deadline(); ok {
+		*into = time.Until(dl)
+	}
+}
+
 func (f *fakeTalosClient) DryRunApply(ctx context.Context, _ []byte) ([]string, error) {
 	f.dryRunCalls++
 	if f.dryRunHook != nil {
 		f.dryRunHook()
 	}
-	if dl, ok := ctx.Deadline(); ok {
-		f.dryRunBudget = time.Until(dl)
-	}
+	recordBudget(ctx, &f.dryRunBudget)
 
 	return f.warnings, f.dryRunErr
 }
 
 func (f *fakeTalosClient) ApplyNoReboot(ctx context.Context, cfg []byte) error {
-	if dl, ok := ctx.Deadline(); ok {
-		f.applyBudget = time.Until(dl)
-	}
+	recordBudget(ctx, &f.applyBudget)
 	f.applyCalls = append(f.applyCalls, cfg)
 
 	return f.applyErr
 }
 
 func (f *fakeTalosClient) ApplyStaged(ctx context.Context, cfg []byte) error {
-	if dl, ok := ctx.Deadline(); ok {
-		f.stagedBudget = time.Until(dl)
-	}
+	recordBudget(ctx, &f.stagedBudget)
 	f.stagedCalls = append(f.stagedCalls, cfg)
 
 	return f.stagedErr
 }
 
 func (f *fakeTalosClient) Reboot(ctx context.Context) error {
-	if dl, ok := ctx.Deadline(); ok {
-		f.rebootBudget = time.Until(dl)
-	}
+	recordBudget(ctx, &f.rebootBudget)
 	f.rebootCalls++
 
 	return f.rebootErr
@@ -313,9 +312,7 @@ func (f *fakeTalosClient) BootID(ctx context.Context) (string, error) {
 }
 
 func (f *fakeTalosClient) Upgrade(ctx context.Context, image string) error {
-	if dl, ok := ctx.Deadline(); ok {
-		f.upgradeBudget = time.Until(dl)
-	}
+	recordBudget(ctx, &f.upgradeBudget)
 	f.upgradeCalls = append(f.upgradeCalls, image)
 
 	return f.upgradeErr

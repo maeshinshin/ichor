@@ -357,12 +357,7 @@ var _ = Describe("TalosCluster", func() {
 
 	DescribeTable("controlPlane.count",
 		func(count int32, accepted bool) {
-			err := k8sClient.Create(context.Background(), newCluster(corev1.LocalObjectReference{Name: literalSecrets}, count, "true"))
-			if accepted {
-				Expect(err).NotTo(HaveOccurred())
-			} else {
-				Expect(err).To(HaveOccurred())
-			}
+			expectAdmitted(k8sClient.Create(context.Background(), newCluster(corev1.LocalObjectReference{Name: literalSecrets}, count, "true")), accepted)
 		},
 		Entry("1 is accepted", int32(1), true),
 		Entry("3 is accepted", int32(3), true),
@@ -376,12 +371,7 @@ var _ = Describe("TalosCluster", func() {
 	// true/false, and any other value (including empty) is refused.
 	DescribeTable("controlPlane.schedulable",
 		func(schedulable string, accepted bool) {
-			err := k8sClient.Create(context.Background(), newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, schedulable))
-			if accepted {
-				Expect(err).NotTo(HaveOccurred())
-			} else {
-				Expect(err).To(HaveOccurred())
-			}
+			expectAdmitted(k8sClient.Create(context.Background(), newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, schedulable)), accepted)
 		},
 		Entry("true is accepted", "true", true),
 		Entry("false is accepted", "false", true),
@@ -423,12 +413,7 @@ var _ = Describe("TalosCluster", func() {
 			c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
 			c.Spec.Discovery = &TalosClusterDiscovery{Addresses: addresses}
 
-			err := k8sClient.Create(context.Background(), c)
-			if accepted {
-				Expect(err).NotTo(HaveOccurred())
-			} else {
-				Expect(err).To(HaveOccurred())
-			}
+			expectAdmitted(k8sClient.Create(context.Background(), c), accepted)
 		},
 		Entry("a bare IPv4 address is accepted", []string{"192.0.2.10"}, true),
 		Entry("several IPv4 addresses are accepted", []string{"192.0.2.10", "192.0.2.11"}, true),
@@ -443,12 +428,7 @@ var _ = Describe("TalosCluster", func() {
 			c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
 			c.Spec.Discovery = &TalosClusterDiscovery{CIDRs: cidrs}
 
-			err := k8sClient.Create(context.Background(), c)
-			if accepted {
-				Expect(err).NotTo(HaveOccurred())
-			} else {
-				Expect(err).To(HaveOccurred())
-			}
+			expectAdmitted(k8sClient.Create(context.Background(), c), accepted)
 		},
 		Entry("a /24 is accepted", []string{testCIDR}, true),
 		Entry("a /32 is accepted", []string{"192.0.2.10/32"}, true),
@@ -473,12 +453,7 @@ var _ = Describe("TalosCluster", func() {
 			c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
 			c.Spec.ControlPlaneMetrics = &TalosClusterControlPlaneMetrics{Enabled: enabled, AllowedCIDRs: cidrs}
 
-			err := k8sClient.Create(context.Background(), c)
-			if accepted {
-				Expect(err).NotTo(HaveOccurred())
-			} else {
-				Expect(err).To(HaveOccurred())
-			}
+			expectAdmitted(k8sClient.Create(context.Background(), c), accepted)
 		},
 		Entry("enabled with an IPv4 CIDR is accepted", true, []string{metricsAllowedCIDR}, true),
 		Entry("enabled with an IPv6 CIDR is accepted", true, []string{"2001:db8::/32"}, true),
@@ -602,12 +577,7 @@ var _ = Describe("TalosCluster.spec.cni", func() {
 
 	DescribeTable("preset/kubeProxy/custom combinations at creation",
 		func(cniSpec TalosClusterCNI, accepted bool) {
-			err := k8sClient.Create(context.Background(), newClusterWithCNI(cniSpec))
-			if accepted {
-				Expect(err).NotTo(HaveOccurred())
-			} else {
-				Expect(err).To(HaveOccurred())
-			}
+			expectAdmitted(k8sClient.Create(context.Background(), newClusterWithCNI(cniSpec)), accepted)
 		},
 		Entry("flannel with kubeProxy enabled", TalosClusterCNI{Preset: cniPresetFlannel, KubeProxy: kubeProxyEnabled}, true),
 		Entry("flannel with kubeProxy replaced is rejected: flannel has no kube-proxy-free mode",
@@ -727,12 +697,7 @@ var _ = Describe("TalosCluster.spec.cni unmanaged preset", func() {
 			Expect(k8sClient.Create(context.Background(), created)).To(Succeed())
 
 			created.Status.CNI = &TalosClusterCNIStatus{Detected: detected, DetectedVersion: "v1.0.0"}
-			err := k8sClient.Status().Update(context.Background(), created)
-			if accepted {
-				Expect(err).NotTo(HaveOccurred())
-			} else {
-				Expect(err).To(HaveOccurred())
-			}
+			expectAdmitted(k8sClient.Status().Update(context.Background(), created), accepted)
 		},
 		Entry("cilium", "cilium", true),
 		Entry("flannel", "flannel", true),
@@ -748,12 +713,7 @@ var _ = Describe("TalosCluster.spec.cni unmanaged preset", func() {
 var _ = Describe("TalosCluster.spec.cni.tunnel", func() {
 	DescribeTable("tunnel at creation",
 		func(cniSpec TalosClusterCNI, accepted bool) {
-			err := k8sClient.Create(context.Background(), newClusterWithCNI(cniSpec))
-			if accepted {
-				Expect(err).NotTo(HaveOccurred())
-			} else {
-				Expect(err).To(HaveOccurred())
-			}
+			expectAdmitted(k8sClient.Create(context.Background(), newClusterWithCNI(cniSpec)), accepted)
 		},
 		Entry("cilium with geneve", TalosClusterCNI{Preset: cniPresetCilium, KubeProxy: kubeProxyEnabled, Tunnel: tunnelGeneve}, true),
 		Entry("flannel with geneve is rejected: tunnel only applies to cilium",
@@ -825,12 +785,7 @@ var _ = Describe("TalosCluster.spec.network", func() {
 
 	DescribeTable("subnet lists at creation",
 		func(pods, svcs []string, accepted bool) {
-			err := k8sClient.Create(context.Background(), newNet(pods, svcs))
-			if accepted {
-				Expect(err).NotTo(HaveOccurred())
-			} else {
-				Expect(err).To(HaveOccurred())
-			}
+			expectAdmitted(k8sClient.Create(context.Background(), newNet(pods, svcs)), accepted)
 		},
 		Entry("both ranges", []string{testPodCIDR}, []string{"10.201.0.0/16"}, true),
 		Entry("only pods", []string{testPodCIDR}, nil, true),
@@ -875,12 +830,7 @@ var _ = Describe("TalosMachine", func() {
 			m := newMachine()
 			m.Spec.Hostname = hostname
 
-			err := k8sClient.Create(context.Background(), m)
-			if accepted {
-				Expect(err).NotTo(HaveOccurred())
-			} else {
-				Expect(err).To(HaveOccurred())
-			}
+			expectAdmitted(k8sClient.Create(context.Background(), m), accepted)
 		},
 		Entry("a label", "node-1", true),
 		Entry("a subdomain", "node-1.lab.example.com", true),
@@ -898,12 +848,7 @@ var _ = Describe("TalosMachine", func() {
 			m := newMachine()
 			m.Spec.Install = &TalosMachineInstall{Disk: *disk}
 
-			err := k8sClient.Create(context.Background(), m)
-			if accepted {
-				Expect(err).NotTo(HaveOccurred())
-			} else {
-				Expect(err).To(HaveOccurred())
-			}
+			expectAdmitted(k8sClient.Create(context.Background(), m), accepted)
 		},
 		Entry("by WWID", &TalosMachineDisk{WWID: "naa.5000c500a1b2c3d4"}, true),
 		Entry("by serial", &TalosMachineDisk{Serial: "S3Z9NX0M"}, true),
@@ -927,12 +872,7 @@ var _ = Describe("TalosMachine", func() {
 			m := newMachine()
 			m.Spec.Network = n
 
-			err := k8sClient.Create(context.Background(), m)
-			if accepted {
-				Expect(err).NotTo(HaveOccurred())
-			} else {
-				Expect(err).To(HaveOccurred())
-			}
+			expectAdmitted(k8sClient.Create(context.Background(), m), accepted)
 		},
 		Entry("dhcp by default", &TalosMachineNetwork{MAC: nicMAC}, true),
 		Entry("dhcp with DNS servers", &TalosMachineNetwork{MAC: nicMAC, DNSServers: []string{"1.1.1.1"}}, true),
@@ -967,12 +907,7 @@ var _ = Describe("TalosMachine", func() {
 			m := newMachine()
 			m.Spec.Disks = disks
 
-			err := k8sClient.Create(context.Background(), m)
-			if accepted {
-				Expect(err).NotTo(HaveOccurred())
-			} else {
-				Expect(err).To(HaveOccurred())
-			}
+			expectAdmitted(k8sClient.Create(context.Background(), m), accepted)
 		},
 		Entry("ephemeral", []TalosMachineDiskRole{{Role: MachineDiskRoleEphemeral, Disk: TalosMachineDisk{Serial: "E1"}}}, true),
 		Entry("a user volume", []TalosMachineDiskRole{

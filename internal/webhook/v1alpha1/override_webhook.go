@@ -336,6 +336,28 @@ const (
 	AuthenticationSubresource = "authentication"
 )
 
+// CiliumValuesVerb and CiliumValuesSubresource are the RBAC right that gates a change to
+// TalosCluster.spec.cni.cilium.values (ADR 0131): verb update on talosclusters/cilium-values. The
+// chart behind the values can run privileged host-path pods on every node, so the right is ichor-admin's.
+const (
+	CiliumValuesVerb        = "update"
+	CiliumValuesSubresource = "cilium-values"
+)
+
+// ciliumValuesChanged reports whether updated carries Cilium values that differ from old's (the
+// zero value on create). Values are compared as decoded JSON, so spacing and key order are no
+// change. A layer that does not decode is compared by its bytes.
+func ciliumValuesChanged(old, updated *ichorv1alpha1.TalosCluster) bool {
+	a, errA := ciliumUserValues(old)
+	b, errB := ciliumUserValues(updated)
+
+	if errA != nil || errB != nil {
+		return !reflect.DeepEqual(old.Spec.CNI.Cilium, updated.Spec.CNI.Cilium)
+	}
+
+	return (len(a) != 0 || len(b) != 0) && !reflect.DeepEqual(a, b)
+}
+
 // handleCluster gates a change to spec.authentication. An operator who could repoint the IdP could
 // break sign-in for everyone, so the change needs `update` on talosclusters/authentication (asked as
 // the requesting user, so a hand-written CR obeys it too), and the new value must be one the
@@ -366,6 +388,16 @@ func (h *OverrideHandler) handleCluster(ctx context.Context, req admission.Reque
 
 	if resp := h.gateSecretReferences(ctx, req, "talosclusters", clusterSecretRefChanges(&old, &updated)); resp != nil {
 		return *resp
+	}
+
+	if ciliumValuesChanged(&old, &updated) {
+		if r := h.require(ctx, req, CiliumValuesVerb, "talosclusters", CiliumValuesSubresource, req.Name,
+			fmt.Sprintf("changing spec.cni.cilium.values needs the %q verb on talosclusters/%s (ichor-admin holds it): "+
+				"the chart can run privileged pods on every node (ADR 0131)", CiliumValuesVerb, CiliumValuesSubresource)); r != nil {
+			return *r
+		}
+
+		overridelog.Info("spec.cni.cilium.values changed", "user", req.UserInfo.Username, "cluster", req.Name)
 	}
 
 	if reflect.DeepEqual(old.Spec.Authentication, updated.Spec.Authentication) {

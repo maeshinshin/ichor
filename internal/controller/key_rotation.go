@@ -946,9 +946,12 @@ func (c *keyRun) settleTokens(ctx context.Context) (ctrl.Result, error) {
 	}
 
 	// Ichor's own pods hold tokens of the new key only once their Deployments have rolled out (restartIchorWorkloads).
-	waiting, err := c.ichorRolloutPending(ctx)
-	if err != nil {
-		return c.retry(ctx, "reading Ichor's own Deployments failed, so the old service-account key stays: "+err.Error())
+	var waiting string
+
+	if ns := c.r.ControllerNamespace; ns != "" {
+		if waiting, err = ichorRolloutWaiting(ctx, readerOrClient(c.r.APIReader, c.r.Client), ns); err != nil {
+			return c.retry(ctx, "reading Ichor's own Deployments failed, so the old service-account key stays: "+err.Error())
+		}
 	}
 
 	if waiting != "" {

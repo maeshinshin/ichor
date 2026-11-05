@@ -81,13 +81,3 @@ func (c *keyRun) restartIchorWorkloads(ctx context.Context) error {
 
 	return nil
 }
-
-// ichorRolloutPending is what the controller and ichor-ui Deployments still wait for before the old key may be
-// dropped, or "".
-func (c *keyRun) ichorRolloutPending(ctx context.Context) (string, error) {
-	if c.r.ControllerNamespace == "" {
-		return "", nil
-	}
-
-	return ichorRolloutWaiting(ctx, readerOrClient(c.r.APIReader, c.r.Client), c.r.ControllerNamespace)
-}

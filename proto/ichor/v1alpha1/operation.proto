@@ -94,8 +94,8 @@ message GetIchorInstallationResponse {
   // installer_verification is "Verified" when that image's signature was checked, "Skipped" when it was not;
   // empty before any upgrade has run.
   string installer_verification = 13;
-  // installer_skip_reason is why the check was skipped; empty when it was not.
-  string installer_skip_reason = 14;
+  // Deprecated: no reason is asked for any more. No longer sent; kept so the wire format is unchanged.
+  string installer_skip_reason = 14 [deprecated = true];
   // installer_signature_skip is true while spec.installerSignature.mode is skip: the next Ichor upgrade
   // will not check the installer image's signature.
   bool installer_signature_skip = 15;
@@ -107,8 +107,10 @@ message GetIchorInstallationResponse {
 message IchorInstallerOptions {
   // digest pins the installer image ("sha256:" and 64 hex digits); empty lets the controller resolve the tag.
   string digest = 1;
-  // skip_signature_reason, when not empty, skips the signature check of the installer image and records why.
-  string skip_signature_reason = 2;
+  // Deprecated: use skip_signature. A non-empty value still means skip; its text is not read.
+  string skip_signature_reason = 2 [deprecated = true];
+  // skip_signature skips the signature check of the installer image (spec.installerSignature.mode skip).
+  bool skip_signature = 3;
 }
 
 message ListEtcdBackupsRequest {
@@ -209,8 +211,7 @@ message EtcdRestoreRequest {
   string snapshot = 2;
   // confirm is the cluster's name, typed.
   string confirm = 3;
-  // override is required; its reason is optional and goes to the audit record and the Event on the
-  // cluster, and the caller must hold the override verb on the TalosCluster.
+  // override is required, and the caller must hold the override verb on the TalosCluster; no reason is asked for.
   Override override = 4;
 }
 
@@ -240,7 +241,8 @@ message NodeActionRequest {
   // confirm is the machine's name, typed, for reset (and remove).
   string confirm = 5;
   // override is required for reset, and for reboot or shutdown it overrides the last-worker
-  // guard. Its reason is optional, and the caller must hold the override verb on the machine.
+  // guard. The caller must hold the override verb on the machine; no reason
+  // is asked for.
   Override override = 6;
   // wipe_mode is for reset only: system-disk wipes the whole system disk (boot and EFI included, so the
   // node boots a boot image again instead of its installed UKI), all also wipes every user disk. Empty

@@ -321,10 +321,9 @@ type ApproveMachineRequest struct {
 	Role       MachineRole            `protobuf:"varint,2,opt,name=role,proto3,enum=ichor.v1alpha1.MachineRole" json:"role,omitempty"`
 	NodeLabels map[string]string      `protobuf:"bytes,3,rep,name=node_labels,json=nodeLabels,proto3" json:"node_labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Hostname   string                 `protobuf:"bytes,4,opt,name=hostname,proto3" json:"hostname,omitempty"`
-	// reason is optional free text, symmetric with RejectMachineRequest.reason
-	// below -- AuditRecord.reason already documents itself as "mainly used
-	// for rejections," not exclusive to them, so a caller that does have a
-	// reason to approve (e.g. "replacing node-3, same role") can record it.
+	// Deprecated: no reason is asked for any more. Never read or set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 	Reason string `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
 	// Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
 	//
@@ -400,6 +399,7 @@ func (x *ApproveMachineRequest) GetHostname() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 func (x *ApproveMachineRequest) GetReason() string {
 	if x != nil {
 		return x.Reason
@@ -822,7 +822,10 @@ func (x *ApproveMachineResponse) GetWarnings() []string {
 type RejectMachineRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Machine *ObjectRef             `protobuf:"bytes,1,opt,name=machine,proto3" json:"machine,omitempty"`
-	Reason  string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	// Deprecated: no reason is asked for any more. Never read or set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
+	Reason string `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
 	// Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
 	//
 	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
@@ -868,6 +871,7 @@ func (x *RejectMachineRequest) GetMachine() *ObjectRef {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 func (x *RejectMachineRequest) GetReason() string {
 	if x != nil {
 		return x.Reason
@@ -888,7 +892,10 @@ type SetMachineInstallRequest struct {
 	Machine *ObjectRef             `protobuf:"bytes,1,opt,name=machine,proto3" json:"machine,omitempty"`
 	// install is required: the system disk and optionally the installer image.
 	Install *MachineInstall `protobuf:"bytes,2,opt,name=install,proto3" json:"install,omitempty"`
-	Reason  string          `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	// Deprecated: no reason is asked for any more. Never read or set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
+	Reason string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
 	// Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
 	//
 	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
@@ -941,6 +948,7 @@ func (x *SetMachineInstallRequest) GetInstall() *MachineInstall {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 func (x *SetMachineInstallRequest) GetReason() string {
 	if x != nil {
 		return x.Reason
@@ -1165,15 +1173,18 @@ func (x *MachineIdentity) GetMacAddresses() []string {
 	return nil
 }
 
-// MachineApprovalDecision records who decided approval_state, when, and
-// why -- kept beside approval_state rather than folded into it, so
+// MachineApprovalDecision records who decided approval_state and when
+// -- kept beside approval_state rather than folded into it, so
 // approval_state alone stays the single source of truth for status; this
 // message asserts no approved/rejected state of its own. actor is the
 // backend's own fixed identity until OIDC login lands; unset
 // (nil) on a machine nobody has approved or rejected yet.
 type MachineApprovalDecision struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Actor         string                 `protobuf:"bytes,1,opt,name=actor,proto3" json:"actor,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Actor string                 `protobuf:"bytes,1,opt,name=actor,proto3" json:"actor,omitempty"`
+	// Deprecated: no reason is asked for any more. No longer sent; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
 	At            *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=at,proto3" json:"at,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -1217,6 +1228,7 @@ func (x *MachineApprovalDecision) GetActor() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/machine.proto.
 func (x *MachineApprovalDecision) GetReason() string {
 	if x != nil {
 		return x.Reason
@@ -1736,14 +1748,14 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\x11GetMachineRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\"G\n" +
 	"\x12GetMachineResponse\x121\n" +
-	"\amachine\x18\x01 \x01(\v2\x17.ichor.v1alpha1.MachineR\amachine\"\xad\x04\n" +
+	"\amachine\x18\x01 \x01(\v2\x17.ichor.v1alpha1.MachineR\amachine\"\xb1\x04\n" +
 	"\x15ApproveMachineRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x12/\n" +
 	"\x04role\x18\x02 \x01(\x0e2\x1b.ichor.v1alpha1.MachineRoleR\x04role\x12V\n" +
 	"\vnode_labels\x18\x03 \x03(\v25.ichor.v1alpha1.ApproveMachineRequest.NodeLabelsEntryR\n" +
 	"nodeLabels\x12\x1a\n" +
-	"\bhostname\x18\x04 \x01(\tR\bhostname\x12\x16\n" +
-	"\x06reason\x18\x05 \x01(\tR\x06reason\x128\n" +
+	"\bhostname\x18\x04 \x01(\tR\bhostname\x12\x1a\n" +
+	"\x06reason\x18\x05 \x01(\tB\x02\x18\x01R\x06reason\x128\n" +
 	"\boverride\x18\x06 \x01(\v2\x18.ichor.v1alpha1.OverrideB\x02\x18\x01R\boverride\x128\n" +
 	"\ainstall\x18\a \x01(\v2\x1e.ichor.v1alpha1.MachineInstallR\ainstall\x128\n" +
 	"\anetwork\x18\b \x01(\v2\x1e.ichor.v1alpha1.MachineNetworkR\anetwork\x125\n" +
@@ -1781,15 +1793,15 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\x12,\n" +
 	"\x10pull_request_url\x18\x03 \x01(\tB\x02\x18\x01R\x0epullRequestUrl\x12\x1a\n" +
 	"\x06notice\x18\x04 \x01(\tB\x02\x18\x01R\x06notice\x12\x1a\n" +
-	"\bwarnings\x18\x05 \x03(\tR\bwarnings\"\x9d\x01\n" +
+	"\bwarnings\x18\x05 \x03(\tR\bwarnings\"\xa1\x01\n" +
 	"\x14RejectMachineRequest\x123\n" +
-	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\x128\n" +
-	"\boverride\x18\x03 \x01(\v2\x18.ichor.v1alpha1.OverrideB\x02\x18\x01R\boverride\"\xdb\x01\n" +
+	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x12\x1a\n" +
+	"\x06reason\x18\x02 \x01(\tB\x02\x18\x01R\x06reason\x128\n" +
+	"\boverride\x18\x03 \x01(\v2\x18.ichor.v1alpha1.OverrideB\x02\x18\x01R\boverride\"\xdf\x01\n" +
 	"\x18SetMachineInstallRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x128\n" +
-	"\ainstall\x18\x02 \x01(\v2\x1e.ichor.v1alpha1.MachineInstallR\ainstall\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\x128\n" +
+	"\ainstall\x18\x02 \x01(\v2\x1e.ichor.v1alpha1.MachineInstallR\ainstall\x12\x1a\n" +
+	"\x06reason\x18\x03 \x01(\tB\x02\x18\x01R\x06reason\x128\n" +
 	"\boverride\x18\x04 \x01(\v2\x18.ichor.v1alpha1.OverrideB\x02\x18\x01R\boverride\"\xcb\x01\n" +
 	"\x19SetMachineInstallResponse\x121\n" +
 	"\amachine\x18\x01 \x01(\v2\x17.ichor.v1alpha1.MachineR\amachine\x121\n" +
@@ -1803,10 +1815,10 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\x0fMachineIdentity\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\x12\x16\n" +
 	"\x06serial\x18\x02 \x01(\tR\x06serial\x12#\n" +
-	"\rmac_addresses\x18\x03 \x03(\tR\fmacAddresses\"s\n" +
+	"\rmac_addresses\x18\x03 \x03(\tR\fmacAddresses\"w\n" +
 	"\x17MachineApprovalDecision\x12\x14\n" +
-	"\x05actor\x18\x01 \x01(\tR\x05actor\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\x12*\n" +
+	"\x05actor\x18\x01 \x01(\tR\x05actor\x12\x1a\n" +
+	"\x06reason\x18\x02 \x01(\tB\x02\x18\x01R\x06reason\x12*\n" +
 	"\x02at\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\"\xf6\b\n" +
 	"\aMachine\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x123\n" +

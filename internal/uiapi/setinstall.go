@@ -66,7 +66,6 @@ func (s *Server) SetMachineInstall(
 	}
 
 	audit := s.opAudit(ctx, "set-install", objectRef(m.Namespace, m.Name))
-	audit.Reason = req.Msg.GetReason()
 
 	return connect.NewResponse(&pb.SetMachineInstallResponse{Machine: machineToPB(m), Audit: audit}), nil
 }

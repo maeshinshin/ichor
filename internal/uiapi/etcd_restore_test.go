@@ -65,10 +65,10 @@ func restoreObjects() []client.Object {
 	return append(opObjects(), restoreBackupObject(), opMachine("cp2", "controlplane", nil, nil), opMachine("cp3", "controlplane", nil, nil))
 }
 
-func restoreReq(snapshot, confirm, reason string) *pb.EtcdRestoreRequest {
+func restoreReq(snapshot, confirm string, override bool) *pb.EtcdRestoreRequest {
 	r := &pb.EtcdRestoreRequest{Backup: objectRef(opNS, restoreBackup), Snapshot: snapshot, Confirm: confirm}
-	if reason != "" {
-		r.Override = &pb.Override{Reason: reason}
+	if override {
+		r.Override = &pb.Override{}
 	}
 
 	return r
@@ -89,7 +89,7 @@ func restoreCreateReq(r *pb.EtcdRestoreRequest) *connect.Request[pb.CreateOperat
 func TestEtcdRestorePlanSaysWhatIsLost(t *testing.T) {
 	s, _ := opServer(t, restoreObjects()...)
 
-	res, err := s.PlanOperation(context.Background(), restorePlanReq(restoreReq(restoreSnap, "", "")))
+	res, err := s.PlanOperation(context.Background(), restorePlanReq(restoreReq(restoreSnap, "", false)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestEtcdRestorePlanNamesTheControllersNodeWhateverTheAppNameIs(t *testing.T
 		s, _ := opServer(t, objs...)
 		s.ControllerNamespace = opNS
 
-		res, err := s.PlanOperation(context.Background(), restorePlanReq(restoreReq(restoreSnap, "", "")))
+		res, err := s.PlanOperation(context.Background(), restorePlanReq(restoreReq(restoreSnap, "", false)))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -221,13 +221,13 @@ func TestEtcdRestorePlanRefusals(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s, _ := opServer(t, tc.objs...)
 
-			res, err := s.PlanOperation(ctx, restorePlanReq(restoreReq(tc.snapshot, "", "")))
+			res, err := s.PlanOperation(ctx, restorePlanReq(restoreReq(tc.snapshot, "", false)))
 			if err != nil || !strings.Contains(res.Msg.GetBlocked(), tc.want) {
 				t.Fatalf("blocked = %q, %v", res.Msg.GetBlocked(), err)
 			}
 
 			if tc.createRefused {
-				if _, err := s.CreateOperation(ctx, restoreCreateReq(restoreReq(restoreSnap, opCluster, bgReason))); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+				if _, err := s.CreateOperation(ctx, restoreCreateReq(restoreReq(restoreSnap, opCluster, true))); connect.CodeOf(err) != connect.CodeFailedPrecondition {
 					t.Fatalf("create: %v", err)
 				}
 			}
@@ -247,46 +247,20 @@ func TestEtcdRestorePlanRefusals(t *testing.T) {
 	})
 }
 
-// An override with no reason is allowed: the CRD's reason, which the restore records, says no reason was
-// given.
-func TestEtcdRestoreOverrideWithoutAReason(t *testing.T) {
-	s, k8s := opServer(t, restoreObjects()...)
-	var asked []authv1.ResourceAttributes
-	s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, true, &asked), nil }
-	user := context.WithValue(context.Background(), identityKey{}, Identity{User: bgUser})
-
-	req := restoreReq(restoreSnap, opCluster, "")
-	req.Override = &pb.Override{}
-
-	res, err := s.CreateOperation(user, restoreCreateReq(req))
-	if err != nil {
-		t.Fatalf("override without a reason: %v", err)
-	}
-
-	if a := res.Msg.GetAudit(); a.GetAction() != createOverrideAction || a.GetReason() != noReasonGiven {
-		t.Fatalf("audit = %+v", a)
-	}
-
-	ops := listOps(t, k8s)
-	if len(ops) != 1 || ops[0].Spec.EtcdRestore == nil || ops[0].Spec.EtcdRestore.Reason != noReasonGiven {
-		t.Fatalf("operations = %+v", ops)
-	}
-}
-
 func TestEtcdRestoreNeedsTheClusterNameAndOverride(t *testing.T) {
 	s, k8s := opServer(t, restoreObjects()...)
 	bg := context.Background()
 
-	if _, err := s.CreateOperation(bg, restoreCreateReq(restoreReq(restoreSnap, "not-the-name", bgReason))); connect.CodeOf(err) != connect.CodeInvalidArgument {
+	if _, err := s.CreateOperation(bg, restoreCreateReq(restoreReq(restoreSnap, "not-the-name", true))); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("wrong name: %v", err)
 	}
 
-	if _, err := s.CreateOperation(bg, restoreCreateReq(restoreReq(restoreSnap, opCluster, ""))); connect.CodeOf(err) != connect.CodeInvalidArgument {
+	if _, err := s.CreateOperation(bg, restoreCreateReq(restoreReq(restoreSnap, opCluster, false))); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("no override: %v", err)
 	}
 
 	// With no signed-in user nobody can be asked whether they may override.
-	if _, err := s.CreateOperation(bg, restoreCreateReq(restoreReq(restoreSnap, opCluster, bgReason))); connect.CodeOf(err) != connect.CodePermissionDenied {
+	if _, err := s.CreateOperation(bg, restoreCreateReq(restoreReq(restoreSnap, opCluster, true))); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("no user: %v", err)
 	}
 
@@ -295,7 +269,7 @@ func TestEtcdRestoreNeedsTheClusterNameAndOverride(t *testing.T) {
 	s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, false, &asked), nil }
 	user := context.WithValue(bg, identityKey{}, Identity{User: bgUser})
 
-	if _, err := s.CreateOperation(user, restoreCreateReq(restoreReq(restoreSnap, opCluster, bgReason))); connect.CodeOf(err) != connect.CodePermissionDenied {
+	if _, err := s.CreateOperation(user, restoreCreateReq(restoreReq(restoreSnap, opCluster, true))); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("RBAC says no: %v", err)
 	}
 
@@ -310,12 +284,12 @@ func TestEtcdRestoreNeedsTheClusterNameAndOverride(t *testing.T) {
 
 	s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, true, &asked), nil }
 
-	res, err := s.CreateOperation(user, restoreCreateReq(restoreReq(restoreSnap, opCluster, bgReason)))
+	res, err := s.CreateOperation(user, restoreCreateReq(restoreReq(restoreSnap, opCluster, true)))
 	if err != nil {
 		t.Fatalf("allowed: %v", err)
 	}
 
-	if a := res.Msg.GetAudit(); a.GetAction() != createOverrideAction || a.GetReason() != bgReason {
+	if a := res.Msg.GetAudit(); a.GetAction() != createOverrideAction || a.GetReason() != "" {
 		t.Fatalf("audit = %+v", a)
 	}
 
@@ -325,7 +299,7 @@ func TestEtcdRestoreNeedsTheClusterNameAndOverride(t *testing.T) {
 	}
 
 	e := ops[0].Spec.EtcdRestore
-	if e == nil || e.BackupRef.Name != restoreBackup || e.Snapshot != restoreSnap || e.Confirm != opCluster || e.Reason != bgReason {
+	if e == nil || e.BackupRef.Name != restoreBackup || e.Snapshot != restoreSnap || e.Confirm != opCluster || e.Reason != "" {
 		t.Fatalf("spec.etcdRestore = %+v", e)
 	}
 
@@ -335,7 +309,7 @@ func TestEtcdRestoreNeedsTheClusterNameAndOverride(t *testing.T) {
 	}
 
 	// A second restore is refused while the first has not finished.
-	if _, err := s.CreateOperation(user, restoreCreateReq(restoreReq(restoreOlder, opCluster, bgReason))); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+	if _, err := s.CreateOperation(user, restoreCreateReq(restoreReq(restoreOlder, opCluster, true))); connect.CodeOf(err) != connect.CodeFailedPrecondition {
 		t.Fatalf("second restore: %v", err)
 	}
 }
@@ -343,7 +317,7 @@ func TestEtcdRestoreNeedsTheClusterNameAndOverride(t *testing.T) {
 func TestEtcdRestoreRefusedPlanWritesNothing(t *testing.T) {
 	s, k8s := opServer(t, restoreObjects()...)
 
-	if _, err := s.CreateOperation(context.Background(), restoreCreateReq(restoreReq("etcd-20200101T000000Z.snapshot.age", opCluster, bgReason))); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+	if _, err := s.CreateOperation(context.Background(), restoreCreateReq(restoreReq("etcd-20200101T000000Z.snapshot.age", opCluster, true))); connect.CodeOf(err) != connect.CodeFailedPrecondition {
 		t.Fatalf("unlisted snapshot: %v", err)
 	}
 
@@ -431,7 +405,7 @@ func TestEtcdRestorePlanFindsTheControllerWithoutItsNamespaceOrAMatchingSpecEndp
 	s, _ := opServer(t, objs...)
 	s.ControllerNamespace = ""
 
-	res, err := s.PlanOperation(context.Background(), restorePlanReq(restoreReq(restoreSnap, "", "")))
+	res, err := s.PlanOperation(context.Background(), restorePlanReq(restoreReq(restoreSnap, "", false)))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -48,11 +48,8 @@ message ApproveMachineRequest {
   MachineRole role = 2;
   map<string, string> node_labels = 3;
   string hostname = 4;
-  // reason is optional free text, symmetric with RejectMachineRequest.reason
-  // below -- AuditRecord.reason already documents itself as "mainly used
-  // for rejections," not exclusive to them, so a caller that does have a
-  // reason to approve (e.g. "replacing node-3, same role") can record it.
-  string reason = 5;
+  // Deprecated: no reason is asked for any more. Never read or set; kept so the wire format is unchanged.
+  string reason = 5 [deprecated = true];
   // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
   Override override = 6 [deprecated = true];
   // install is the system disk (TalosMachine.spec.install). Unset
@@ -124,7 +121,8 @@ message ApproveMachineResponse {
 
 message RejectMachineRequest {
   ObjectRef machine = 1;
-  string reason = 2;
+  // Deprecated: no reason is asked for any more. Never read or set; kept so the wire format is unchanged.
+  string reason = 2 [deprecated = true];
   // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
   Override override = 3 [deprecated = true];
 }
@@ -133,7 +131,8 @@ message SetMachineInstallRequest {
   ObjectRef machine = 1;
   // install is required: the system disk and optionally the installer image.
   MachineInstall install = 2;
-  string reason = 3;
+  // Deprecated: no reason is asked for any more. Never read or set; kept so the wire format is unchanged.
+  string reason = 3 [deprecated = true];
   // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
   Override override = 4 [deprecated = true];
 }
@@ -187,15 +186,16 @@ message MachineIdentity {
   repeated string mac_addresses = 3;
 }
 
-// MachineApprovalDecision records who decided approval_state, when, and
-// why -- kept beside approval_state rather than folded into it, so
+// MachineApprovalDecision records who decided approval_state and when
+// -- kept beside approval_state rather than folded into it, so
 // approval_state alone stays the single source of truth for status; this
 // message asserts no approved/rejected state of its own. actor is the
 // backend's own fixed identity until OIDC login lands; unset
 // (nil) on a machine nobody has approved or rejected yet.
 message MachineApprovalDecision {
   string actor = 1;
-  string reason = 2;
+  // Deprecated: no reason is asked for any more. No longer sent; kept so the wire format is unchanged.
+  string reason = 2 [deprecated = true];
   google.protobuf.Timestamp at = 3;
 }
 

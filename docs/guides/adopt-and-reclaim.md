@@ -198,7 +198,7 @@ no CNI that Ichor has never seen looks like this:
 
 ```
 Ichor adopt · prod
-namespace default · discovering from 10.0.0.11
+namespace ichor-system · discovering from 10.0.0.11
 ✓ Read cluster — Talos v1.14.5 · Kubernetes v1.36.6 · 2 read · no TalosCluster yet
   no CNI found: Cilium will be installed by adopt (Cilium 1.20.4, tunnel the default, kube-proxy enabled) as Ichor's own Helm release, then Ichor is installed, then the cluster is adopted with the managed cilium preset
 ✓ Inspect CNI — CNI: none (no CNI installed, every node NotReady)
@@ -318,7 +318,8 @@ ichor adopt --cluster prod --add-machine 10.0.0.21 --talosconfig ./talosconfig.i
 ichor adopt --cluster prod --add-machine 10.0.0.21 --talosconfig ./talosconfig.ichor
 ```
 
-`--add-machine` is repeatable. It needs the `TalosCluster` to exist. The secrets bundle
+`--add-machine` is repeatable. It needs the `TalosCluster` to exist, in the namespace given
+by `-n` (default `ichor-system`, where `ichor init` creates it, like every other command). The secrets bundle
 is read from the cluster's own Secret (your kubeconfig must be allowed to read it), unless
 you give `--secrets-bundle` or `--recover-secrets`; while a CA rotation is under way it
 refuses. What it does, in order:

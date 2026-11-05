@@ -246,7 +246,7 @@ func init() {
 	rootCmd.AddCommand(adoptCmd)
 
 	adoptCmd.Flags().StringVar(&adoptCluster, flagCluster, "", "name of the TalosCluster to adopt (required)")
-	adoptCmd.Flags().StringVarP(&adoptNamespace, "namespace", "n", "default", "namespace the TalosCluster and its TalosMachines live in")
+	adoptCmd.Flags().StringVarP(&adoptNamespace, "namespace", "n", ichorControllerNamespace, "namespace the TalosCluster and its TalosMachines live in")
 	adoptCmd.Flags().StringVar(&adoptSecretsBundle, "secrets-bundle", "",
 		"path to the cluster's existing secrets bundle (the file produced by 'talosctl gen secrets'); give this or --recover-secrets (not needed with --add-machine)")
 	adoptCmd.Flags().BoolVar(&adoptRecover, "recover-secrets", false,

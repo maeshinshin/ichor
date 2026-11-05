@@ -113,6 +113,19 @@ func sleepCtx(ctx context.Context, d time.Duration) error {
 // the last error once the window is spent, or at once for a non-transient one.
 // It is the one retry used by every --follow/--watch path.
 func retryTransient(ctx context.Context, c *apiClients, errw io.Writer, call func() error) error {
+	return retryTransientOr(ctx, c, errw, nil, call)
+}
+
+// isImpersonationDenied is ichor-ui answering that its own ServiceAccount may not impersonate the
+// caller: what a request meets while an Ichor upgrade replaces ichor-ui's RBAC and ServiceAccount.
+func isImpersonationDenied(err error) bool {
+	return connect.CodeOf(err) == connect.CodePermissionDenied && strings.Contains(err.Error(), "cannot impersonate")
+}
+
+// retryTransientOr is retryTransient that also retries the errors orElse accepts, within the same
+// window; a nil orElse accepts none.
+func retryTransientOr(ctx context.Context, c *apiClients, errw io.Writer, orElse func(error) bool, call func() error) error {
+	retryable := func(err error) bool { return isTransient(err) || orElse != nil && orElse(err) }
 	deadline := time.Now().Add(followRetryWindow)
 	delay := followRetryDelay
 
@@ -120,8 +133,8 @@ func retryTransient(ctx context.Context, c *apiClients, errw io.Writer, call fun
 
 	for {
 		err := call()
-		if !isTransient(err) || ctx.Err() != nil {
-			if movedTo != "" && (err == nil || !isTransient(err)) {
+		if !retryable(err) || ctx.Err() != nil {
+			if movedTo != "" && (err == nil || !retryable(err)) {
 				_, _ = fmt.Fprintf(errw, "ichor: API server %s answered\n", movedTo)
 			}
 

@@ -173,6 +173,10 @@ const (
 // PKI.
 const resetOnDeleteAnnotation = "ichor.maesh.dev/reset-on-delete"
 
+// resetWipeModeAnnotation carries TalosOperation.spec.node.wipeMode of a reset to the removal flow,
+// which does the wipe: system-disk or all. Absent, the reset wipes STATE and EPHEMERAL.
+const resetWipeModeAnnotation = "ichor.maesh.dev/reset-wipe-mode"
+
 // resetOnDeleteValue is the only resetOnDeleteAnnotation value that opts in.
 const resetOnDeleteValue = "true"
 
@@ -643,7 +647,7 @@ func (r *TalosMachineReconciler) resetNode(
 	}
 	defer closeTalosClient(talos)
 
-	if err := talos.Reset(resetCtx); err != nil {
+	if err := talos.Reset(resetCtx, m.Annotations[resetWipeModeAnnotation]); err != nil {
 		return fmt.Errorf("reset request to %q failed: %w", m.Name, err)
 	}
 

@@ -608,6 +608,31 @@ var _ = Describe("TalosOperation node actions", func() {
 			}, 5*time.Second).Should(BeTrue())
 		})
 
+		It("passes the wipe mode on to the removal flow", func() {
+			f := newNodeFixture(map[string]string{hostW1: roleWorker})
+			spec := nodeSpec(ichorv1alpha1.NodeActionReset)
+			spec.Confirm = f.machines[hostW1].Name
+			spec.WipeMode = ichorv1alpha1.WipeModeSystemDisk
+
+			f.reconcile(f.newOp(hostW1, spec))
+
+			var m ichorv1alpha1.TalosMachine
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.machines[hostW1].Name}, &m)).To(Succeed())
+			Expect(m.Annotations).To(HaveKeyWithValue(resetWipeModeAnnotation, ichorv1alpha1.WipeModeSystemDisk))
+		})
+
+		It("is not creatable with a wipe mode on any other action", func() {
+			f := newNodeFixture(map[string]string{hostW1: roleWorker})
+			spec := nodeSpec(ichorv1alpha1.NodeActionReboot)
+			spec.MachineRef.Name = f.machines[hostW1].Name
+			spec.WipeMode = ichorv1alpha1.WipeModeAll
+
+			op := &ichorv1alpha1.TalosOperation{}
+			op.GenerateName, op.Namespace = nodeOpPrefix, tmNamespace
+			op.Spec.ClusterRef.Name, op.Spec.Kind, op.Spec.Node = f.cluster.Name, ichorv1alpha1.TalosOperationKindNode, &spec
+			Expect(k8sClient.Create(ctx, op)).NotTo(Succeed())
+		})
+
 		It("refuses to reset a control plane the cluster cannot do without", func() {
 			f := newNodeFixture(threeControlPlanes())
 			f.cluster.Spec.ControlPlane.Count = 3

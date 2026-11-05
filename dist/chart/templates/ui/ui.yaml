@@ -143,6 +143,7 @@ spec:
             port: {{ .Values.ichorUI.port }}
           initialDelaySeconds: 5
           periodSeconds: 20
+          timeoutSeconds: 5
         readinessProbe:
           httpGet:
             path: /auth/config
@@ -150,6 +151,7 @@ spec:
             scheme: HTTPS
           initialDelaySeconds: 5
           periodSeconds: 10
+          timeoutSeconds: 5
         name: ichor-ui
         ports:
         - containerPort: {{ .Values.ichorUI.port }}

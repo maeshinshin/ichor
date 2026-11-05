@@ -48,6 +48,9 @@ manager:
       valueFrom:
         fieldRef:
           fieldPath: spec.serviceAccountName
+    # A soft Go heap limit below the container's memory limit: the GC works before the kernel OOM-kills.
+    - name: GOMEMLIMIT
+      value: 400MiB
 
   ## Env overrides (--set manager.envOverrides.VAR=value)
   ## Same name in env above: this value takes precedence.
@@ -79,13 +82,16 @@ manager:
 
   ## Resource limits and requests
   ##
+  ## 256Mi was OOM-killed on a 3 CP + 1 W cluster (hardware run I). Keep the GOMEMLIMIT env above at about
+  ## 80% of the memory limit.
+  ##
   resources:
     limits:
-      cpu: 500m
-      memory: 256Mi
+      cpu: "1"
+      memory: 512Mi
     requests:
-      cpu: 10m
-      memory: 128Mi
+      cpu: 100m
+      memory: 256Mi
 
   ## Manager pod's affinity. The default prefers a control plane: after an etcd restore the nodes that were not
   ## wiped keep a stale kube-proxy, and a controller on one cannot reach the kubernetes Service to repair that.

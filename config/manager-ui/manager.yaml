@@ -67,6 +67,7 @@ spec:
             port: 8443
           initialDelaySeconds: 5
           periodSeconds: 20
+          timeoutSeconds: 5
         readinessProbe:
           httpGet:
             path: /auth/config
@@ -74,6 +75,7 @@ spec:
             scheme: HTTPS
           initialDelaySeconds: 5
           periodSeconds: 10
+          timeoutSeconds: 5
         resources:
           limits:
             cpu: 500m

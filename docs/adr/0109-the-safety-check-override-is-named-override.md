@@ -31,3 +31,5 @@ Renames, all in one change:
 - A user who scripted the old flag or verb must change both once. There is no alias, on purpose.
 - Amended by ADR 0110: the flag no longer takes the reason. `--override` is a boolean and `--override-reason` carries the optional reason; `spec.node.override` is added, and a reason alone still counts as an override. Where this record says `--override "<reason>"`, read `--override` with `--override-reason`.
 - During a rolling upgrade the webhook configuration and the controller image change together; a request made in that window can be refused and succeeds when repeated.
+
+Amendment 2026-11-05 (ADR 0130): `--override-reason` is removed along with every other reason input; `--override` is a bare boolean, and `spec.node.overrideReason` and `breakGlassReason` are deprecated and unused (a value an older build wrote still counts as an override).

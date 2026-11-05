@@ -135,13 +135,13 @@ make demo-images VERSION=$V REGISTRY=localhost:5000 DIGEST_FILE=bin/demo-digests
 kill $PF   # stop the port-forward once the images are pushed
 D=$(sed -n 's/.*ichor-installer@//p' bin/demo-digests.txt)   # the installer image's digest
 bin/img/ichor/ichor upgrade ichor $V --cluster $P -n ichor-system --kubeconfig bin/ui-demo.kubeconfig --yes --follow \
-  --installer-digest $D --skip-signature-check "demo build, not signed"
+  --installer-digest $D --skip-signature-check
 ```
 
 The controller pins the installer image to a digest and checks its signature before it runs the Job.
 A demo image is not signed, and the controller cannot resolve its tag: the Talos nodes reach the demo registry
 through a containerd mirror for `ghcr.io`, the controller does not. So the upgrade names the digest
-(`--installer-digest`, from `DIGEST_FILE`) and skips the signature check with a recorded reason
+(`--installer-digest`, from `DIGEST_FILE`) and skips the signature check
 (`--skip-signature-check`); the Job then pulls `ghcr.io/maeshinshin/ichor-installer@$D` through the mirror. The CLI,
 `ichor version` and the UI say loudly that the check was skipped.
 

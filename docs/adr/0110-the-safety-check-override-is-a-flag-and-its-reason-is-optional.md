@@ -38,3 +38,5 @@ The reason was never the gate. The gate is the Kubernetes verb `override`, check
 - The reason stays available for an incident that needs one, and is recorded whenever it is typed.
 - The etcd restore keeps a required `reason` in its spec, now filled with "no reason given" when none was typed, so the restore record always has a value.
 - The Connect messages keep their names; the proto comments and the generated code change only where their text does.
+
+Amendment 2026-11-05 (ADR 0130): the optional reason is gone too. Decisions 2, 4 and 5 no longer hold: there is no `--override-reason`, `Override.reason` and `overrideReason` are deprecated and unused, the audit record and the Event no longer say `no reason given` (they say nothing about a reason), the etcd restore's `spec.etcdRestore.reason` is optional and not written, and the UI's override checkbox has no reason box. Decisions 1 and 3 (the flag, and the verb as the only gate) stand.

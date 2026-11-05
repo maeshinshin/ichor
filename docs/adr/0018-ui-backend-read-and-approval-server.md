@@ -705,3 +705,5 @@ found no other gap: Secrets are `get` in the controller namespace, `argocd-cm` a
 enforces RBAC) and runs `GetEffectiveConfig` as a client impersonating `system:serviceaccount:ichor-system:ichor-ui`,
 so a read the generated role does not grant fails the suite with Forbidden. A new render input needs a marker, and
 a handler added to that spec is covered.
+
+Amendment 2026-11-05 (ADR 0130): no reason is asked for on approve or reject. `reason` on `RejectMachineRequest`, `ApproveMachineRequest` and `AuditRecord`'s typed use is deprecated and never read; a rejection records the actor and the time only, and a rejected machine that is rejected again simply records the newest decision.

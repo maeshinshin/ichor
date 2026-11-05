@@ -24,6 +24,7 @@ const (
 	kubernetes1340 = "v1.34.0"
 	kubernetes1330 = "v1.33.0"
 	kubernetes1334 = "v1.33.4"
+	notAVersion    = "not-a-version"
 )
 
 // TestTalosPath exercises pkg/machinery/compatibility's own rule through
@@ -42,6 +43,8 @@ func TestTalosPath(t *testing.T) {
 		{name: "supported multi-minor jump", from: "v1.12.0", to: talos1143, wantErr: false},
 		{name: "host too old for the target minor", from: "v1.0.0", to: talos1143, wantErr: true},
 		{name: "downgrade", from: talos1143, to: "v1.12.0", wantErr: true},
+		{name: "invalid current version", from: notAVersion, to: talos1143, wantErr: true},
+		{name: "invalid target version", from: talos1143, to: notAVersion, wantErr: true},
 	}
 
 	for _, tc := range cases {
@@ -51,16 +54,6 @@ func TestTalosPath(t *testing.T) {
 				t.Fatalf("TalosPath(%q, %q) = %v, want error = %v", tc.from, tc.to, err, tc.wantErr)
 			}
 		})
-	}
-}
-
-func TestTalosPath_InvalidVersion(t *testing.T) {
-	if err := TalosPath("not-a-version", talos1143); err == nil {
-		t.Fatal("TalosPath with an invalid current version = nil, want error")
-	}
-
-	if err := TalosPath(talos1143, "not-a-version"); err == nil {
-		t.Fatal("TalosPath with an invalid target version = nil, want error")
 	}
 }
 
@@ -76,6 +69,8 @@ func TestKubernetesPairing(t *testing.T) {
 		{name: "in range for Talos 1.14", kubernetes: kubernetes1340, talos: talos1143, wantErr: false},
 		{name: "too old for Talos 1.14", kubernetes: "v1.20.0", talos: talos1143, wantErr: true},
 		{name: "too new for Talos 1.14", kubernetes: "v1.99.0", talos: talos1143, wantErr: true},
+		{name: "invalid Kubernetes version", kubernetes: notAVersion, talos: talos1143, wantErr: true},
+		{name: "invalid Talos version", kubernetes: kubernetes1340, talos: notAVersion, wantErr: true},
 	}
 
 	for _, tc := range cases {
@@ -85,16 +80,6 @@ func TestKubernetesPairing(t *testing.T) {
 				t.Fatalf("KubernetesPairing(%q, %q) = %v, want error = %v", tc.kubernetes, tc.talos, err, tc.wantErr)
 			}
 		})
-	}
-}
-
-func TestKubernetesPairing_InvalidVersion(t *testing.T) {
-	if err := KubernetesPairing("not-a-version", talos1143); err == nil {
-		t.Fatal("KubernetesPairing with an invalid Kubernetes version = nil, want error")
-	}
-
-	if err := KubernetesPairing(kubernetes1340, "not-a-version"); err == nil {
-		t.Fatal("KubernetesPairing with an invalid Talos version = nil, want error")
 	}
 }
 
@@ -116,6 +101,8 @@ func TestKubernetesSkew(t *testing.T) {
 		{name: "major version change", from: kubernetes1330, to: "v2.0.0", wantErr: true},
 		{name: "downgrade across a minor", from: kubernetes1340, to: kubernetes1330, wantErr: true},
 		{name: "downgrade within a minor", from: kubernetes1334, to: kubernetes1330, wantErr: true},
+		{name: "invalid current version", from: notAVersion, to: kubernetes1330, wantErr: true},
+		{name: "invalid target version", from: kubernetes1330, to: notAVersion, wantErr: true},
 	}
 
 	for _, tc := range cases {
@@ -125,15 +112,5 @@ func TestKubernetesSkew(t *testing.T) {
 				t.Fatalf("KubernetesSkew(%q, %q) = %v, want error = %v", tc.from, tc.to, err, tc.wantErr)
 			}
 		})
-	}
-}
-
-func TestKubernetesSkew_InvalidVersion(t *testing.T) {
-	if err := KubernetesSkew("not-a-version", kubernetes1330); err == nil {
-		t.Fatal("KubernetesSkew with an invalid current version = nil, want error")
-	}
-
-	if err := KubernetesSkew(kubernetes1330, "not-a-version"); err == nil {
-		t.Fatal("KubernetesSkew with an invalid target version = nil, want error")
 	}
 }

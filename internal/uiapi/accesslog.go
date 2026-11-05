@@ -51,17 +51,12 @@ func (a accessLog) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 		start := time.Now()
 		res, err := next(ctx, req)
 
-		code := "ok"
-		if err != nil {
-			code = connect.CodeOf(err).String()
-		}
-
 		body := ""
 		if m, ok := req.Any().(proto.Message); ok && a.bodies && !strings.HasPrefix(req.Spec().Procedure, reclaimPrefix) {
 			body = " body=" + prototext.MarshalOptions{}.Format(m)
 		}
 
-		a.l.Printf("rpc %s code=%s dur=%s%s", req.Spec().Procedure, code, time.Since(start).Round(time.Millisecond), body)
+		a.l.Printf("rpc %s code=%s dur=%s%s", req.Spec().Procedure, rpcCode(err), time.Since(start).Round(time.Millisecond), body)
 
 		return res, err
 	}
@@ -71,12 +66,7 @@ func (a accessLog) WrapStreamingHandler(next connect.StreamingHandlerFunc) conne
 	return func(ctx context.Context, conn connect.StreamingHandlerConn) error {
 		err := next(ctx, conn)
 
-		code := "ok"
-		if err != nil {
-			code = connect.CodeOf(err).String()
-		}
-
-		a.l.Printf("rpc %s code=%s", conn.Spec().Procedure, code)
+		a.l.Printf("rpc %s code=%s", conn.Spec().Procedure, rpcCode(err))
 
 		return err
 	}

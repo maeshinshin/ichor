@@ -44,10 +44,6 @@ import (
 // Ichor's own users and issuer. Everything here is off unless
 // --users-enabled is set.
 
-// uiClientID is the public client of the SPA and the audience of the token
-// ichor-ui itself accepts.
-const uiClientID = ichorauth.ClientUI
-
 // usersFlags are the flags that turn Ichor's own users on.
 type usersFlags struct {
 	enabled bool
@@ -214,13 +210,6 @@ func newIssuer(ctx context.Context, f usersFlags, live *settings.Reader, backend
 	return iss, localVerifier{keys: keys, issuer: f.externalURL}, err
 }
 
-// mountIssuer serves the issuer's external endpoints on mux.
-func mountIssuer(mux *http.ServeMux, iss *oidcissuer.Issuer) {
-	h := iss.Handler()
-	mux.Handle("/.well-known/openid-configuration", h)
-	mux.Handle("/oidc/", h)
-}
-
 // internalServer is the HTTPS listener for the kube-apiserver: discovery and
 // JWKS only. The certificate files are watched, so a leaf the controller or
 // cert-manager renews is picked up without a restart; a bad new pair keeps the old one.
@@ -251,7 +240,7 @@ func authConfig(oidcIssuer, oidcClientID string, users usersFlags, allowAnonymou
 	}
 
 	if users.enabled {
-		providers = append(providers, authProvider{ID: uiapi.SourceIchor, Issuer: users.externalURL, ClientID: uiClientID})
+		providers = append(providers, authProvider{ID: uiapi.SourceIchor, Issuer: users.externalURL, ClientID: ichorauth.ClientUI})
 	}
 
 	out := map[string]any{"enabled": len(providers) > 0, "providers": providers}

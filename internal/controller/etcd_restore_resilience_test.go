@@ -57,8 +57,7 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 		op := f.newOp(nil)
 		f.reconcile(op)
 
-		_, err := f.run(f.lastJob(), 5)
-		Expect(err).NotTo(HaveOccurred())
+		f.runOK(f.lastJob(), 5)
 		dropOperation(op)
 
 		var creates atomic.Int32
@@ -283,8 +282,7 @@ var _ = Describe("TalosOperation etcd-restore failures", func() {
 		f.targetFake().recoverErr = errors.Join(ErrRecoveryNotReady, errors.New("etcd service is not ready"))
 
 		job := f.lastJob()
-		_, err := f.run(job, 4)
-		Expect(err).NotTo(HaveOccurred())
+		f.runOK(job, 4)
 		job.recordNote(ctx)
 
 		Expect(f.marker().LastNote).To(ContainSubstring("not ready for recovery"))

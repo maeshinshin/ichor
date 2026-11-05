@@ -1090,8 +1090,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		Expect(rotationStage(op)).NotTo(BeEmpty(), "the stage is the only record of the nodes' state and must survive a delete")
 
 		for range 200 {
-			_, err := reconcileOperation(f.newReconciler(), op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(f.newReconciler(), op)
 
 			var got ichorv1alpha1.TalosOperation
 

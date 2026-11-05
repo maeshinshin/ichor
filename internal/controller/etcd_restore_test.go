@@ -357,8 +357,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			op := f.newOp(nil)
 			f.reconcile(op)
 
-			_, err := f.run(f.lastJob(), 5)
-			Expect(err).NotTo(HaveOccurred())
+			f.runOK(f.lastJob(), 5)
 
 			f.members(f.hosts()...)
 			got := f.reconcile(op)
@@ -386,8 +385,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			op := f.newOp(nil)
 			f.reconcile(op)
 
-			_, err := f.run(f.lastJob(), 5)
-			Expect(err).NotTo(HaveOccurred())
+			f.runOK(f.lastJob(), 5)
 
 			// etcd went back to the snapshot, which predates the operation, and the controller restarted.
 			dropOperation(op)
@@ -457,8 +455,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 
 			dropOperation(op)
 
-			_, err = reconcileOperation(f.r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(f.r, op)
 			Expect(fetchOperation(op).Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRejoining))
 		})
 	})
@@ -481,8 +478,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			Expect(f.jobs[0]).NotTo(BeIdenticalTo(first))
 			Expect(f.marker()).To(Equal(before), "the marker was not rewritten")
 
-			_, err := f.jobs[0].step(ctx)
-			Expect(err).NotTo(HaveOccurred())
+			f.runOK(f.jobs[0], 1)
 
 			for _, fk := range f.fakes {
 				Expect(fk.resetEtcdCalls).To(Equal(1), "wiped by the new job, once")
@@ -537,8 +533,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			f.wipeHooks()
 			op := f.newOp(nil)
 			f.reconcile(op)
-			_, err := f.run(f.lastJob(), 5)
-			Expect(err).NotTo(HaveOccurred())
+			f.runOK(f.lastJob(), 5)
 
 			f.members(f.hosts()...)
 			Expect(f.reconcile(op).Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepReconciling))
@@ -556,8 +551,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			f.wipeHooks()
 			op := f.newOp(nil)
 			f.reconcile(op)
-			_, err := f.run(f.lastJob(), 5)
-			Expect(err).NotTo(HaveOccurred())
+			f.runOK(f.lastJob(), 5)
 			f.members(f.hosts()...)
 			got := f.reconcile(op)
 
@@ -715,8 +709,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			f.targetFake().recoverErr = errors.Join(ErrRecoveryNotReady, errors.New("etcd service is not ready for recovery yet"))
 
 			job := f.lastJob()
-			_, err := f.run(job, 4)
-			Expect(err).NotTo(HaveOccurred())
+			f.runOK(job, 4)
 			Expect(f.marker().Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRecovering))
 			Expect(f.marker().Failure).To(BeEmpty())
 
@@ -851,8 +844,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 
 			// An hour later nothing happened and it still has data: ask again.
 			job.now = func() time.Time { return time.Now().Add(time.Hour) }
-			_, err = job.step(ctx)
-			Expect(err).NotTo(HaveOccurred())
+			f.runOK(job, 1)
 			Expect(f.fake(restoreHostA).resetEtcdCalls).To(Equal(1))
 
 			// Unreachable while it reboots: wait; back and wiped: done.
@@ -931,8 +923,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			Expect(f.reconcile(op).Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRejoining))
 
 			Expect(k8sClient.Delete(ctx, op)).To(Succeed())
-			_, err = reconcileOperation(f.r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(f.r, op)
 
 			Eventually(func() bool {
 				return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKeyFromObject(op), &ichorv1alpha1.TalosOperation{}))
@@ -950,8 +941,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			op := f.newOp(nil)
 			f.reconcile(op)
 			Expect(k8sClient.Delete(ctx, op)).To(Succeed())
-			_, err := reconcileOperation(f.r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(f.r, op)
 
 			Eventually(func() bool {
 				return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKeyFromObject(op), &ichorv1alpha1.TalosOperation{}))

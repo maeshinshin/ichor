@@ -90,10 +90,15 @@ const (
 // after the request. It is how the restore knows each machine looked at the restored state.
 const EtcdRestoreReconcileAnnotation = "ichor.maesh.dev/reconcile-requested"
 
-// OperationRetryAnnotation, set by `ichor operation resume` (or the UI) to an RFC 3339 time when it
-// resumes an operation paused by a failed step, asks the controller to run the failed step again. The controller never changes spec, so the request is an
-// annotation; it acts once the time is newer than status.lastRetry (ADR 0095).
+// OperationRetryAnnotation, set to OperationRetryRequested (`kubectl annotate talosoperation NAME
+// ichor.maesh.dev/retry=true`, or `ichor operation resume`, or the UI) on an operation paused by a failed
+// step, asks the controller to run the failed step again. The controller never changes spec, so the
+// request is an annotation; it acts once and removes it, so the next "true" is a new request (ADR 0095).
+// Any other value is ignored.
 const OperationRetryAnnotation = "ichor.maesh.dev/retry"
+
+// OperationRetryRequested is the one value of OperationRetryAnnotation the controller acts on.
+const OperationRetryRequested = "true"
 
 // OperationStartedByAnnotation records who created the operation through the UI backend (the signed-in
 // user, or the backend's own name). Informational only: the audit trail is the Events and the Kubernetes

@@ -184,7 +184,7 @@ var _ = Describe("two control-plane TalosMachines of one cluster at a step that 
 		var lock *clusterlock.Lock
 
 		BeforeEach(func() {
-			lock = clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+			lock = opTestLock(cluster)
 		})
 
 		// join reconciles joiner once (its locked step) and reports whether it applied.

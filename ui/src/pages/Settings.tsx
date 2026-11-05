@@ -111,7 +111,7 @@ function Fact({ label, value }: { label: string; value: string }) {
 function useSave(onSaved: (r: GetSettingsResponse) => void) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
-  async function save(changes: Fields): Promise<boolean> {
+  async function save(changes: Fields & { updateCheckEnabled?: boolean }): Promise<boolean> {
     setBusy(true)
     setError(null)
     try {
@@ -257,25 +257,10 @@ function UpdatesCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: 
   const effective = res.effective?.updateCheck
   const start = effective?.value === 'false' ? 'off' : 'on'
   const [choice, setChoice] = useState<string>(start)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { busy, error, save } = useSave(onSaved)
   const locked = lockedReason(res) !== null
   const source: Source = effective?.source === 'spec' ? 'spec' : 'deployment'
   const checkedAt = info?.releaseCheckedAt
-
-  async function save() {
-    setBusy(true)
-    setError(null)
-    try {
-      const out = await settingsClient.updateSettings({ changes: { updateCheckEnabled: choice === 'on' } })
-      if (out.settings) onSaved(out.settings)
-      notifyWrite('settings.saved')
-    } catch (err) {
-      setError(describeError(err))
-    } finally {
-      setBusy(false)
-    }
-  }
 
   return (
     <SectionCard title={t('settings.updates')} description={t('settings.updatesDesc')}>
@@ -298,7 +283,7 @@ function UpdatesCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: 
       {info?.releaseCheckError && <p className="text-sm text-muted-foreground">{t('settings.updateCheckFailed', { error: info.releaseCheckError })}</p>}
       {checkedAt && <p className="text-sm text-muted-foreground">{t('settings.updateCheckedAt', { time: new Date(Number(checkedAt.seconds) * 1000).toLocaleString() })}</p>}
       {error && <ErrorAlert {...error} />}
-      <Button disabled={locked || busy || choice === start} onClick={save}>
+      <Button disabled={locked || busy || choice === start} onClick={() => save({ updateCheckEnabled: choice === 'on' })}>
         {busy ? t('settings.saving') : t('settings.save')}
       </Button>
     </SectionCard>
@@ -324,14 +309,14 @@ function AutoPatchCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r
     <SectionCard title={t('settings.autoPatch')} description={t('settings.autoPatchDesc')}>
       <Locked res={res} />
       {halted && (
-        <Alert variant="destructive">
-          <AlertDescription>{t('settings.autoPatchHalted', { operation: halted })}</AlertDescription>
-        </Alert>
-      )}
-      {halted && (
-        <Button variant="outline" disabled={busy || !mayClear} onClick={() => save({ autoPatchAcknowledgedHalt: halted })}>
-          {t('settings.autoPatchClear')}
-        </Button>
+        <>
+          <Alert variant="destructive">
+            <AlertDescription>{t('settings.autoPatchHalted', { operation: halted })}</AlertDescription>
+          </Alert>
+          <Button variant="outline" disabled={busy || !mayClear} onClick={() => save({ autoPatchAcknowledgedHalt: halted })}>
+            {t('settings.autoPatchClear')}
+          </Button>
+        </>
       )}
       <FieldGroup>
         <Field orientation="horizontal">

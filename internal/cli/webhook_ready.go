@@ -72,30 +72,14 @@ func webhookServerNotReady(ctx context.Context, c client.Reader) error {
 // prints what is missing at each poll and why the pods are not running, and it ends early on a
 // cluster with no pod network.
 func waitForWebhookServer(ctx context.Context, c client.Reader, timeout, interval time.Duration, progress io.Writer) error {
-	d := newWaitDiag(c, progress)
-
-	err := pollWhile(ctx, timeout, interval, progress, "the controller to serve Ichor's webhooks", func(ctx context.Context) error {
-		err := webhookServerNotReady(ctx, c)
-		if err == nil {
-			return nil
-		}
-
-		if fatal := d.tick(ctx); fatal != nil {
-			return fatal
-		}
-
-		return err
-	}, func(err error) bool { return !errors.Is(err, errNoPodNetwork) })
+	err := pollDiag(ctx, timeout, interval, progress, "the controller to serve Ichor's webhooks", newWaitDiag(c, progress),
+		func(ctx context.Context) error { return webhookServerNotReady(ctx, c) }, func(error) bool { return true },
+		fmt.Sprintf("the controller Deployment %s in %s is not Ready after %s", controllerDeploymentName, ichorControllerNamespace, timeout))
 	if err == nil || ctx.Err() != nil || errors.Is(err, errNoPodNetwork) {
 		return err
 	}
 
-	msg := fmt.Sprintf("the controller Deployment %s in %s is not Ready after %s", controllerDeploymentName, ichorControllerNamespace, timeout)
-	if s := d.summary(ctx); s != "" {
-		msg += " (" + s + ")"
-	}
-
-	return fmt.Errorf("%s: %w; check `kubectl -n %s get pods`", msg, err, ichorControllerNamespace)
+	return fmt.Errorf("%w; check `kubectl -n %s get pods`", err, ichorControllerNamespace)
 }
 
 // deploymentNotRolledOut says why d is not rolled out with an available replica, or returns nil.

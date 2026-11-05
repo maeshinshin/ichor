@@ -432,7 +432,7 @@ func secretsNamespaceOfFeatureOff(live map[string]any, path string) bool {
 
 	on, _ := values.Get(live, block+".enabled")
 
-	return fmt.Sprint(on) != "true"
+	return fmt.Sprint(on) != valueTrue
 }
 
 func ownedLevel(path string) Level {
@@ -460,7 +460,7 @@ func normOwned(path string, v any) any {
 
 		return s == "true" || s == "strict"
 	case keyReadSecretsOnly:
-		return v == nil || fmt.Sprint(v) == "true" // the chart reads an unset flag as true
+		return v == nil || fmt.Sprint(v) == valueTrue // the chart reads an unset flag as true
 	case keySecretsBackend:
 		if v == "local" {
 			return "" // the alias of true, the same as unset

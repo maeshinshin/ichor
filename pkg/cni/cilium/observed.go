@@ -50,6 +50,8 @@ const (
 	keySecretsBackend  = "tls.secretsBackend"
 	// cmReadSecretsOnly is the cilium-config key the chart writes, as "true", only while the flag is true.
 	cmReadSecretsOnly = "policy-secrets-only-from-secrets-namespace"
+
+	valueTrue = "true"
 )
 
 // ConfigMapValues maps the keys of the cilium-config ConfigMap to the Helm value they render

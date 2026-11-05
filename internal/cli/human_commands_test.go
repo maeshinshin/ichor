@@ -88,9 +88,7 @@ func TestClusterStatusHumanOutput(t *testing.T) {
 		"  Cilium       1.20.4\n" +
 		"  Endpoint     10.244.1.136 (node)\n" +
 		"  Health       ✓ ready\n"
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 }
 
 func TestClusterStatusHumanOutputForAnUnmanagedAndAnUnreadyCluster(t *testing.T) {
@@ -156,9 +154,7 @@ Conditions
   ✓ CertificatesExpiring    NoneExpiring  no CA expires within 30 days
   ! NetworkPoliciesApplied  CNINotCilium  the detected CNI is not Cilium
 `
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 }
 
 func TestClusterListHumanOutput(t *testing.T) {
@@ -177,9 +173,7 @@ func TestClusterListHumanOutput(t *testing.T) {
 	want := "NAME      TALOS    KUBERNETES  CNI                  ENDPOINT      READY  AGE\n" +
 		"initshow  v1.14.5  v1.36.6     cilium               10.244.1.136  ✓      5m\n" +
 		"second    v1.14.5  v1.36.6     unmanaged (flannel)  10.244.1.136  …      3d\n"
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 
 	out.Reset()
 
@@ -230,9 +224,7 @@ func TestMachineListHumanOutput(t *testing.T) {
 	want := "NAME      ROLE           APPROVAL  READY  ENDPOINT            NODE                   AGE\n" +
 		"fa70962a  control-plane  approved  ✓      10.244.1.136:50000  ichor-e2e-initshow-cp  5m\n" +
 		"0b1c2d3e  -              pending   -      10.244.1.150:50000  -                      30s\n"
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 }
 
 func TestMachineListKeepsFullNamesWhenShortOnesClash(t *testing.T) {
@@ -287,9 +279,7 @@ Conditions
   ✓ Ready           Converged       node configuration matches the rendered configuration
   ✓ ConfigWarnings  DryRunWarnings  dry run reported no warnings
 `
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 }
 
 func TestMachineGetHumanOutputForAPendingMachineShowsWhatDiscoveryFound(t *testing.T) {
@@ -327,9 +317,7 @@ func TestVersionHumanOutput(t *testing.T) {
 	want := "ichor        v0.1.0\n" +
 		"installed    v0.1.0\n" +
 		"new installs Talos v1.14.5 · Kubernetes v1.36.6 · Cilium 1.20.4 (contract v1.14)\n"
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 
 	info.Server.SpecVersion, info.Server.LatestRelease = "v0.2.0", humanLatest
 	out.Reset()
@@ -361,9 +349,7 @@ func TestUIHumanOutput(t *testing.T) {
 		"  port-forward to " + uiTestNamespace + "/pod-a · Ctrl-C to stop\n" +
 		"! the port-forward to pod/pod-a ended; looking for another pod\n" +
 		"✓ re-established the port-forward -> pod/pod-a\n"
-	if stderr != want {
-		t.Errorf("got:\n%s\nwant:\n%s", stderr, want)
-	}
+	wantText(t, stderr, want)
 }
 
 // The machine formats print what they printed before human output became the default.
@@ -484,9 +470,7 @@ func TestHumanOutputThroughTheInProcessAPI(t *testing.T) {
 
 	want := "NAME      ROLE    APPROVAL  READY  ENDPOINT         NODE  AGE\n" +
 		"fa70962a  worker  approved  ✓      10.0.0.10:50000  -     2h\n"
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 
 	out.Reset()
 

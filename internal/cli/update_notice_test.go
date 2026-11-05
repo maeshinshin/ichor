@@ -123,32 +123,39 @@ func TestUpdateNoticeShownOnATerminal(t *testing.T) {
 	}
 }
 
-func TestUpdateNoticeNotShownWithoutATerminal(t *testing.T) {
-	noticeHome(t)
-
-	target := noticeTargetWith(t, noticeHostA, noticeOlder, latestRelease(noticeNewer))
-	if got := updateNoticeFor(plainCmd(), target, noticeNewer, false, noticeNow); got != nil {
-		t.Fatalf("lines = %q, want none without a terminal", got)
+func TestUpdateNoticeStaysSilent(t *testing.T) {
+	shown := func(t *testing.T) noticeTarget {
+		return noticeTargetWith(t, noticeHostA, noticeOlder, latestRelease(noticeNewer))
 	}
-}
 
-func TestUpdateNoticeSwitchedOffByEnvironment(t *testing.T) {
-	noticeHome(t)
-	t.Setenv(updateNoticeEnv, "1")
+	for name, run := range map[string]func(t *testing.T) []string{
+		"without a terminal": func(t *testing.T) []string {
+			return updateNoticeFor(plainCmd(), shown(t), noticeNewer, false, noticeNow)
+		},
+		"with " + updateNoticeEnv + " set": func(t *testing.T) []string {
+			t.Setenv(updateNoticeEnv, "1")
 
-	target := noticeTargetWith(t, noticeHostA, noticeOlder, latestRelease(noticeNewer))
-	if got := updateNoticeFor(plainCmd(), target, noticeNewer, true, noticeNow); got != nil {
-		t.Fatalf("lines = %q, want none with %s set", got, updateNoticeEnv)
-	}
-}
+			return updateNoticeFor(plainCmd(), shown(t), noticeNewer, true, noticeNow)
+		},
+		"when -o is given": func(t *testing.T) []string {
+			markOutputFlag(t)
 
-func TestUpdateNoticeNotShownForMachineOutput(t *testing.T) {
-	noticeHome(t)
-	markOutputFlag(t)
+			return updateNoticeFor(plainCmd(), shown(t), noticeNewer, true, noticeNow)
+		},
+		"when the command never reached a cluster": func(*testing.T) []string {
+			return updateNoticeFor(plainCmd(), noticeTarget{}, noticeNewer, true, noticeNow)
+		},
+		"when the IchorInstallation cannot be read": func(t *testing.T) []string {
+			return updateNoticeFor(plainCmd(), unreadableTarget(t), noticeNewer, true, noticeNow)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			noticeHome(t)
 
-	target := noticeTargetWith(t, noticeHostA, noticeOlder, latestRelease(noticeNewer))
-	if got := updateNoticeFor(plainCmd(), target, noticeNewer, true, noticeNow); got != nil {
-		t.Fatalf("lines = %q, want none when -o is given", got)
+			if got := run(t); got != nil {
+				t.Fatalf("lines = %q, want none", got)
+			}
+		})
 	}
 }
 
@@ -171,22 +178,6 @@ func TestUpdateNoticeNotShownForHelpOrCompletion(t *testing.T) {
 		if got := updateNoticeFor(cmd, target, noticeNewer, true, noticeNow); got != nil {
 			t.Fatalf("%s: lines = %q, want none", name, got)
 		}
-	}
-}
-
-func TestUpdateNoticeNotShownWithoutACluster(t *testing.T) {
-	noticeHome(t)
-
-	if got := updateNoticeFor(plainCmd(), noticeTarget{}, noticeNewer, true, noticeNow); got != nil {
-		t.Fatalf("lines = %q, want none when the command never reached a cluster", got)
-	}
-}
-
-func TestUpdateNoticeNotShownWhenTheGetFails(t *testing.T) {
-	noticeHome(t)
-
-	if got := updateNoticeFor(plainCmd(), unreadableTarget(t), noticeNewer, true, noticeNow); got != nil {
-		t.Fatalf("lines = %q, want none when the IchorInstallation cannot be read", got)
 	}
 }
 

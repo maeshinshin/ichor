@@ -26,12 +26,10 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/clusterlock"
 	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
@@ -335,7 +333,7 @@ var _ = Describe("TalosMachineReconciler provisioning a node in maintenance mode
 		setup(roleControlPlane)
 		installDiskPatch(roleControlPlane)
 
-		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+		lock := opTestLock(cluster)
 		Expect(lock.Acquire(ctx, "someone-else")).To(Succeed())
 
 		reconcileOnce() // adds the removal finalizer
@@ -356,7 +354,7 @@ var _ = Describe("TalosMachineReconciler provisioning a node in maintenance mode
 		setup(roleWorker)
 		installDiskPatch(roleWorker)
 
-		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+		lock := opTestLock(cluster)
 		Expect(lock.Acquire(ctx, "someone-else")).To(Succeed())
 		DeferCleanup(func() { Expect(lock.Release(ctx, "someone-else")).To(Succeed()) })
 

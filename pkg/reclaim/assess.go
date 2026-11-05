@@ -87,10 +87,22 @@ func Assess(in Inspection, known Known, opt Options) Plan {
 
 	p.Graceful = in.ClusterReachable && !opt.ForceUngraceful
 
-	if !in.ClusterReachable && !opt.ForceUngraceful {
+	etcdDown := in.ControlPlane && in.EtcdProblem != ""
+
+	switch {
+	case !in.ClusterReachable && !opt.ForceUngraceful:
+		why := ""
+		if etcdDown {
+			why = " (etcd on this control plane: " + in.EtcdProblem + ")"
+		}
+
 		p.Refusals = append(p.Refusals, fmt.Sprintf(
-			"cluster %q is not reachable from the node, so a graceful reset (cordon, drain, leave etcd) would hang; "+
-				"if that cluster is dead, pass --force-ungraceful", in.ClusterName))
+			"cluster %q is not reachable from the node%s, so a graceful reset (cordon, drain, leave etcd) would hang; "+
+				"if that cluster is dead, pass --force-ungraceful", in.ClusterName, why))
+	case etcdDown:
+		p.Warnings = append(p.Warnings, fmt.Sprintf(
+			"etcd on this control plane is not running or does not answer (%s): cluster %q is treated as not existing, "+
+				"so its quorum cannot be checked and the reset is not graceful (--force-ungraceful given)", in.EtcdProblem, in.ClusterName))
 	}
 
 	if in.ControlPlane && in.EtcdKnown {

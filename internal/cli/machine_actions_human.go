@@ -110,8 +110,11 @@ func renderInspection(h *human, in reclaim.Inspection, p reclaim.Plan) {
 	}
 
 	etcd := ""
-	if in.EtcdKnown {
+	switch {
+	case in.EtcdKnown:
 		etcd = fmt.Sprintf("%d members", len(in.EtcdMembers))
+	case in.ControlPlane && in.EtcdProblem != "":
+		etcd = "not running or not answering (" + in.EtcdProblem + ")"
 	}
 
 	graceful := "not graceful"

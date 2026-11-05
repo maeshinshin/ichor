@@ -48,10 +48,6 @@ func renderValuesDiff(h *human, diff string) error {
 	return h.Err()
 }
 
-func renderValuesSet(h *human, cluster *pb.ObjectRef) error {
-	return doneLine(h, "%s the Cilium values of %s", verbUpdate, nsName(cluster))
-}
-
 func renderCniUpgradeStarted(h *human, resp *pb.StartCniUpgradeResponse) error {
 	versions := ""
 	if resp.GetFromVersion() != "" || resp.GetToVersion() != "" {

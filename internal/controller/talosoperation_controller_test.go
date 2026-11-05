@@ -472,62 +472,73 @@ var _ = Describe("TalosOperationReconciler", func() {
 			return op, fake, r, cp2
 		}
 
-		requestRetry := func(op *ichorv1alpha1.TalosOperation, at time.Time) {
+		requestRetry := func(op *ichorv1alpha1.TalosOperation, value string) {
 			got := fetchOperation(op)
-			got.Annotations = map[string]string{ichorv1alpha1.OperationRetryAnnotation: at.UTC().Format(time.RFC3339)}
+			got.Annotations = map[string]string{ichorv1alpha1.OperationRetryAnnotation: value}
 			Expect(k8sClient.Update(ctx, got)).To(Succeed())
 		}
 
-		It("clears the failure, records lastRetry and runs the failed machine's step again", func() {
+		It("clears the failure, records lastRetry, runs the failed machine's step again and removes the annotation", func() {
 			op, fake, r, cp2 := failedOperation("retry")
-			at := time.Now().Truncate(time.Second)
 
 			fake.outcomes[cp2.Name] = advanceOutcome{done: true}
 			callsBefore := len(fake.calls)
 
-			requestRetry(op, at)
+			requestRetry(op, "true")
 
 			mustReconcileOperation(r, op)
 
 			got := fetchOperation(op)
 			Expect(got.Status.FailureReason).To(BeEmpty())
 			Expect(got.Status.LastRetry).NotTo(BeNil())
-			Expect(got.Status.LastRetry.Unix()).To(Equal(at.Unix()))
+			Expect(got.Annotations).NotTo(HaveKey(ichorv1alpha1.OperationRetryAnnotation), "the request is consumed")
 			Expect(fake.calls[callsBefore:]).To(ContainElement(cp2.Name), "the failed machine's step must run again")
 		})
 
-		It("ignores a request that is not newer than lastRetry", func() {
-			op, fake, r, _ := failedOperation("stale")
-			at := time.Now().Truncate(time.Second)
+		It("treats a second true as a new request", func() {
+			op, fake, r, _ := failedOperation("again")
 
-			requestRetry(op, at)
-
+			requestRetry(op, "true")
 			mustReconcileOperation(r, op) // the retry fails again, same outcome
 			Expect(fetchOperation(op).Status.FailureReason).To(ContainSubstring("drain blocked"))
-			Expect(fetchOperation(op).Status.LastRetry).NotTo(BeNil())
+			Expect(fetchOperation(op).Annotations).NotTo(HaveKey(ichorv1alpha1.OperationRetryAnnotation))
 
 			callsBefore := len(fake.calls)
 
-			requestRetry(op, at.Add(-time.Minute)) // older than lastRetry
 			mustReconcileOperation(r, op)
-			Expect(fake.calls).To(HaveLen(callsBefore), "a stale request must not run the step again")
-			Expect(fetchOperation(op).Status.FailureReason).NotTo(BeEmpty())
+			Expect(fake.calls).To(HaveLen(callsBefore), "no request, no rerun")
 
-			requestRetry(op, at) // the same one again
+			requestRetry(op, "true")
 			mustReconcileOperation(r, op)
-			Expect(fake.calls).To(HaveLen(callsBefore))
+			Expect(len(fake.calls)).To(BeNumerically(">", callsBefore), "the second true runs the step again")
 		})
 
-		It("does nothing for a request on an operation that is not paused after a failure", func() {
+		It("ignores any other value, a time included, and leaves it in place", func() {
+			op, fake, r, _ := failedOperation("garbage")
+			callsBefore := len(fake.calls)
+
+			for _, value := range []string{"yes", time.Now().UTC().Format(time.RFC3339)} {
+				requestRetry(op, value)
+				mustReconcileOperation(r, op)
+				Expect(fake.calls).To(HaveLen(callsBefore), "%q must not run the step again", value)
+				Expect(fetchOperation(op).Status.FailureReason).NotTo(BeEmpty())
+				Expect(fetchOperation(op).Annotations).To(HaveKeyWithValue(ichorv1alpha1.OperationRetryAnnotation, value))
+			}
+		})
+
+		It("removes a stale true from an operation that is not paused after a failure, without running anything", func() {
 			cluster := newOpTestCluster()
 			newOpTestMachine(cluster.Name, "controlplane", "norequest-cp1")
 			op := newOpTestOperation(cluster.Name)
 			r, _ := newOpTestReconciler(nil)
 
-			requestRetry(op, time.Now())
+			requestRetry(op, "true")
 
 			mustReconcileOperation(r, op)
-			Expect(fetchOperation(op).Status.LastRetry).To(BeNil(), "no failure, so the request is not acted on")
+
+			got := fetchOperation(op)
+			Expect(got.Status.LastRetry).To(BeNil(), "no failure, so the request is not acted on")
+			Expect(got.Annotations).NotTo(HaveKey(ichorv1alpha1.OperationRetryAnnotation))
 		})
 	})
 

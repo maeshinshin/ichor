@@ -19,6 +19,7 @@ package chart
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -65,10 +66,7 @@ func TestLeaderElectionRoleIsLeasesOnly(t *testing.T) {
 func TestWebhooksFailFastAndCoverFinalizersAndDeletes(t *testing.T) {
 	docs := renderChart(t, "ichor")
 
-	sets := map[string][]map[string]any{labelChart: docs}
-	for _, f := range []string{"../../config/webhook/manifests.yaml"} {
-		sets["config/webhook"] = loadYAMLDocs(t, f)
-	}
+	sets := map[string][]map[string]any{labelChart: docs, "config/webhook": loadYAMLDocs(t, "../../config/webhook/manifests.yaml")}
 
 	for label, set := range sets {
 		hooks := map[string]map[string]any{}
@@ -194,20 +192,6 @@ func setOf(names []string) map[string]bool {
 	return m
 }
 
-func sameSet(a, b map[string]bool) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	for k := range a {
-		if !b[k] {
-			return false
-		}
-	}
-
-	return true
-}
-
 // TestInstallerEscalationNamesEveryRoleOfTheInstallManifest guards: the installer's bind
 // and escalate rights are limited to the ClusterRoles and Roles its own install manifest contains
 // (so it cannot bind cluster-admin to anything), in config/rbac and in the chart, and the lists do
@@ -237,18 +221,18 @@ func TestInstallerEscalationNamesEveryRoleOfTheInstallManifest(t *testing.T) {
 		}
 
 		clusterLevel := escalationNames(t, label, find(docs, kindClusterRole, cr))
-		if !sameSet(clusterLevel[resClusterRoles], setOf(clusterRoles)) {
+		if !maps.Equal(clusterLevel[resClusterRoles], setOf(clusterRoles)) {
 			t.Errorf("%s: installer ClusterRole bind/escalate on clusterroles names %v, install.yaml has %v",
 				label, clusterLevel[resClusterRoles], clusterRoles)
 		}
 
-		if !sameSet(clusterLevel["roles"], setOf(allRoles)) {
+		if !maps.Equal(clusterLevel["roles"], setOf(allRoles)) {
 			t.Errorf("%s: installer ClusterRole bind/escalate on roles names %v, install.yaml has %v",
 				label, clusterLevel["roles"], allRoles)
 		}
 
 		nsLevel := escalationNames(t, label, find(docs, kindRole, rl))
-		if !sameSet(nsLevel["roles"], setOf(nsRoles)) {
+		if !maps.Equal(nsLevel["roles"], setOf(nsRoles)) {
 			t.Errorf("%s: installer Role bind/escalate on roles names %v, install.yaml has %v in ichor-system",
 				label, nsLevel["roles"], nsRoles)
 		}
@@ -276,13 +260,24 @@ var gatewayAPIValues = userValues(`{"gatewayAPI":{"enabled":true,"gatewayClass":
 var optionalCiliumFeatures = []struct {
 	name   string
 	values map[string]any
+	kind   string // a kind the chart must render with the feature on, so the test cannot pass for nothing
 }{
-	{"gatewayAPI", gatewayAPIValues},
-	{"ingressController", userValues(`{"ingressController":{"enabled":true}}`)},
-	{"hubbleUI", userValues(`{"hubble":{"relay":{"enabled":true},"ui":{"enabled":true}}}`)},
-	{"clustermesh", userValues(`{"clustermesh":{"useAPIServer":true,"apiserver":{"tls":{"auto":{"method":"cronJob"}}}}}`)},
-	{"bgpControlPlane", userValues(`{"bgpControlPlane":{"enabled":true}}`)},
-	{"envoyConfig", userValues(`{"envoyConfig":{"enabled":true}}`)},
+	{"gatewayAPI", gatewayAPIValues, "GatewayClass"},
+	{"ingressController", userValues(`{"ingressController":{"enabled":true}}`), "IngressClass"},
+	{"hubbleUI", userValues(`{"hubble":{"relay":{"enabled":true},"ui":{"enabled":true}}}`), ""},
+	{"clustermesh", userValues(`{"clustermesh":{"useAPIServer":true,"apiserver":{"tls":{"auto":{"method":"cronJob"}}}}}`), ""},
+	{"bgpControlPlane", userValues(`{"bgpControlPlane":{"enabled":true}}`), ""},
+	{"envoyConfig", userValues(`{"envoyConfig":{"enabled":true}}`), ""},
+}
+
+// cniClusterRoles is the Cilium Job's ClusterRole as config/rbac and the chart carry it.
+func cniClusterRoles(t *testing.T) map[string]map[string]any {
+	t.Helper()
+
+	return map[string]map[string]any{
+		labelConfig: find(loadYAMLDocs(t, "../../config/rbac/ichor-cni/role.yaml"), kindClusterRole, "cni-role"),
+		labelChart:  find(renderChartWithValues(t, "ichor", "cniHelm.enabled=true"), kindClusterRole, "ichor-cni-role"),
+	}
 }
 
 // TestCNIEscalationNamesOnlyCiliumsRoles guards: the Cilium Job may bind and escalate only
@@ -324,13 +319,7 @@ func TestCNIEscalationNamesOnlyCiliumsRoles(t *testing.T) {
 		}
 	}
 
-	cfgDocs := loadYAMLDocs(t, "../../config/rbac/ichor-cni/role.yaml")
-	chartDocs := renderChartWithValues(t, "ichor", "cniHelm.enabled=true")
-
-	for label, role := range map[string]map[string]any{
-		labelConfig: find(cfgDocs, kindClusterRole, "cni-role"),
-		labelChart:  find(chartDocs, kindClusterRole, "ichor-cni-role"),
-	} {
+	for label, role := range cniClusterRoles(t) {
 		got := escalationNames(t, label, role)
 		for res, names := range rendered {
 			for n := range names {
@@ -345,69 +334,6 @@ func TestCNIEscalationNamesOnlyCiliumsRoles(t *testing.T) {
 			for n := range names {
 				if !rendered[res][n] {
 					t.Errorf("%s: the CNI role binds or escalates %s %q, which the Cilium chart does not render", label, res, n)
-				}
-			}
-		}
-	}
-}
-
-// TestCNIRoleCoversTheGatewayAPIObjects: with gatewayAPI.enabled the Cilium chart renders a GatewayClass
-// and a ValidatingAdmissionPolicy with its binding, which Helm reads, creates and updates as the Job's
-// ServiceAccount. Without a rule for them the upgrade fails on the first get (found on hardware). The role in
-// config/rbac and in the chart must grant Helm's verbs on each.
-func TestCNIRoleCoversTheGatewayAPIObjects(t *testing.T) {
-	manifest, err := cilium.New().WithValues(gatewayAPIValues).BootstrapManifest(cni.KubeProxyEnabled)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	plural := map[string]string{
-		"GatewayClass":                     "gatewayclasses",
-		"ValidatingAdmissionPolicy":        "validatingadmissionpolicies",
-		"ValidatingAdmissionPolicyBinding": "validatingadmissionpolicybindings",
-	}
-
-	var objs [][2]string // apiGroup, resource
-
-	for _, d := range decodeYAMLDocs(t, manifest, "cilium bootstrap") {
-		res, ok := plural[kindOf(d)]
-		if !ok {
-			continue
-		}
-
-		group, _, _ := strings.Cut(d["apiVersion"].(string), "/")
-		objs = append(objs, [2]string{group, res})
-	}
-
-	if len(objs) != len(plural) {
-		t.Fatalf("the Cilium chart renders %v with gatewayAPI.enabled, want one of each of %v", objs, plural)
-	}
-
-	cfgDocs := loadYAMLDocs(t, "../../config/rbac/ichor-cni/role.yaml")
-	chartDocs := renderChartWithValues(t, "ichor", "cniHelm.enabled=true")
-
-	for label, role := range map[string]map[string]any{
-		labelConfig: find(cfgDocs, kindClusterRole, "cni-role"),
-		labelChart:  find(chartDocs, kindClusterRole, "ichor-cni-role"),
-	} {
-		for _, o := range objs {
-			held := map[string]bool{}
-
-			for _, r := range allRules(role) {
-				rm, _ := r.(map[string]any)
-				if !slices.Contains(stringsOf(rm["apiGroups"]), o[0]) || !slices.Contains(stringsOf(rm["resources"]), o[1]) {
-					continue
-				}
-
-				for _, v := range stringsOf(rm["verbs"]) {
-					held[v] = true
-				}
-			}
-
-			for v := range strings.FieldsSeq("get list create update patch delete") {
-				if !held[v] {
-					t.Errorf("%s: the CNI role cannot %s %s.%s, which the Cilium chart renders with gatewayAPI.enabled",
-						label, v, o[1], o[0])
 				}
 			}
 		}
@@ -432,12 +358,7 @@ func TestCNIRoleCoversTheOptionalFeatureObjects(t *testing.T) {
 		resource[kind] = res
 	}
 
-	cfgDocs := loadYAMLDocs(t, "../../config/rbac/ichor-cni/role.yaml")
-	chartDocs := renderChartWithValues(t, "ichor", "cniHelm.enabled=true")
-	roles := map[string]map[string]any{
-		labelConfig: find(cfgDocs, kindClusterRole, "cni-role"),
-		labelChart:  find(chartDocs, kindClusterRole, "ichor-cni-role"),
-	}
+	roles := cniClusterRoles(t)
 
 	for _, f := range optionalCiliumFeatures {
 		t.Run(f.name, func(t *testing.T) {
@@ -455,6 +376,10 @@ func TestCNIRoleCoversTheOptionalFeatureObjects(t *testing.T) {
 				}
 
 				kinds[[2]string{group, kindOf(d)}] = true
+			}
+
+			if f.kind != "" && !slices.ContainsFunc(slices.Collect(maps.Keys(kinds)), func(k [2]string) bool { return k[1] == f.kind }) {
+				t.Fatalf("the Cilium chart renders no %s with %s on", f.kind, f.name)
 			}
 
 			for label, role := range roles {

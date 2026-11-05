@@ -196,15 +196,7 @@ func setCertificatesExpiring(
 			"--ca kubernetes-aggregator for those) before they expire."
 	}
 
-	before := apimeta.FindStatusCondition(cluster.Status.Conditions, cond.Type)
-	if before != nil && before.Status == cond.Status && before.Reason == cond.Reason &&
-		before.Message == cond.Message && before.ObservedGeneration == cond.ObservedGeneration {
-		return false
-	}
-
-	apimeta.SetStatusCondition(&cluster.Status.Conditions, cond)
-
-	return true
+	return apimeta.SetStatusCondition(&cluster.Status.Conditions, cond)
 }
 
 // clearBundleBackupStale lowers BundleBackupStale once the user has exported the live bundle: the
@@ -261,18 +253,18 @@ func certificateExpiries(bundle *secrets.Bundle) ([]ichorv1alpha1.CertificateExp
 
 	for _, ca := range []struct {
 		name string
-		crt  []byte
+		ca   *talosx509.PEMEncodedCertificateAndKey
 	}{
-		{"talos", pemOf(bundle.Certs.OS)},
-		{"kubernetes", pemOf(bundle.Certs.K8s)},
-		{"kubernetes-aggregator", pemOf(bundle.Certs.K8sAggregator)},
-		{"etcd", pemOf(bundle.Certs.Etcd)},
+		{"talos", bundle.Certs.OS},
+		{"kubernetes", bundle.Certs.K8s},
+		{"kubernetes-aggregator", bundle.Certs.K8sAggregator},
+		{"etcd", bundle.Certs.Etcd},
 	} {
-		if ca.crt == nil {
+		if ca.ca == nil || len(ca.ca.Crt) == 0 {
 			continue
 		}
 
-		block, _ := pem.Decode(ca.crt)
+		block, _ := pem.Decode(ca.ca.Crt)
 		if block == nil {
 			return nil, fmt.Errorf("the %s CA is not PEM", ca.name)
 		}
@@ -290,13 +282,4 @@ func certificateExpiries(bundle *secrets.Bundle) ([]ichorv1alpha1.CertificateExp
 	}
 
 	return out, nil
-}
-
-// pemOf returns the certificate half of a CA, or nil when the bundle has none.
-func pemOf(ca *talosx509.PEMEncodedCertificateAndKey) []byte {
-	if ca == nil || len(ca.Crt) == 0 {
-		return nil
-	}
-
-	return ca.Crt
 }

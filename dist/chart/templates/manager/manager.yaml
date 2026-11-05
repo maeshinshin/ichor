@@ -161,6 +161,10 @@ spec:
             port: 8081
           initialDelaySeconds: 15
           periodSeconds: 20
+          # A 1 s timeout only fails on a CPU-starved pod, and a liveness restart takes the fail-closed
+          # admission webhook down with it (hardware run I).
+          timeoutSeconds: 5
+          failureThreshold: 3
         name: manager
         ports:
         - containerPort: 8081
@@ -175,6 +179,7 @@ spec:
             port: 8081
           initialDelaySeconds: 5
           periodSeconds: 10
+          timeoutSeconds: 5
         resources:
           {{- if .Values.manager.resources }}
           {{- toYaml .Values.manager.resources | nindent 10 }}

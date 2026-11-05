@@ -197,14 +197,28 @@ func TestAdoptNoCNI_Refusals(t *testing.T) {
 	}
 }
 
-// --tunnel means nothing when adopt does not install Cilium.
-func TestAdoptTunnelRefusedWhenCiliumIsNotInstalled(t *testing.T) {
-	env := newFlowEnv(t, cniCilium, nil)
-	deps := env.deps(t)
-	deps.Target = fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(testDS("cilium", ciliumImage), ciliumCM("false")).Build()
-	deps.Tunnel = ciliumTunnelVxlan
+// --tunnel and --cilium-values mean nothing when adopt installs no Cilium: the cluster already runs one,
+// and an existing TalosCluster has no spec adopt creates to put the values in.
+func TestAdoptCiliumFlagsRefusedWhenCiliumIsNotInstalled(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*adoptDeps)
+		want   string
+	}{
+		{"tunnel flag", func(d *adoptDeps) { d.Tunnel = ciliumTunnelVxlan }, "--tunnel only applies"},
+		{"cilium-values flag", func(d *adoptDeps) { d.CiliumValues = debugValues() }, "--cilium-values applies to the TalosCluster adopt creates"},
+	}
 
-	if err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps); err == nil || !strings.Contains(err.Error(), "--tunnel only applies") {
-		t.Fatalf("runAdopt = %v, want the --tunnel refusal", err)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newFlowEnv(t, cniCilium, nil)
+			deps := env.deps(t)
+			deps.Target = fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(testDS("cilium", ciliumImage), ciliumCM("false")).Build()
+			tc.mutate(&deps)
+
+			if err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps); err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("runAdopt = %v, want %q", err, tc.want)
+			}
+		})
 	}
 }

@@ -69,14 +69,18 @@ func (metricsInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc
 	}
 }
 
-// observeRPC records one RPC's outcome. code is "ok" on success, otherwise the
-// connect.Code name (e.g. "unavailable", "not_found") -- NodeService.StreamNodeLogs's
-// own CodeUnavailable on shutdown (cmd/ichor-ui/main.go's "draining" channel) lands
-// here the same way any other RPC's outcome does.
-func observeRPC(procedure string, err error, d time.Duration) {
-	code := "ok"
-	if err != nil {
-		code = connect.CodeOf(err).String()
+// rpcCode is "ok" on success, otherwise the connect.Code name (e.g. "unavailable", "not_found"):
+// NodeService.StreamNodeLogs's own CodeUnavailable on shutdown (cmd/ichor-ui/main.go's "draining"
+// channel) lands here the same way any other RPC's outcome does.
+func rpcCode(err error) string {
+	if err == nil {
+		return "ok"
 	}
-	rpcDuration.WithLabelValues(procedure, code).Observe(d.Seconds())
+
+	return connect.CodeOf(err).String()
+}
+
+// observeRPC records one RPC's outcome.
+func observeRPC(procedure string, err error, d time.Duration) {
+	rpcDuration.WithLabelValues(procedure, rpcCode(err)).Observe(d.Seconds())
 }

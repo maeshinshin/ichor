@@ -240,6 +240,10 @@ func (s *Server) ApproveMachine(
 	}
 
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
+		if hint := approveRightHint(ctx, err); hint != "" {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("approving machine %q: %w; %s", namespacedName(ref), err, hint))
+		}
+
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("approving machine %q: %w", namespacedName(ref), err))
 	}
 
@@ -252,6 +256,25 @@ func (s *Server) ApproveMachine(
 	return connect.NewResponse(&pb.ApproveMachineResponse{
 		Machine: machineToPB(m), Audit: audit, Warnings: m.DiscoveryWarnings(),
 	}), nil
+}
+
+// approveRightHint says what to do when the TalosMachine webhook refused an approval for want of the
+// approve right; it is empty for any other error. Without a sign-in the writer is ichor-ui's
+// ServiceAccount, which does not hold the right on purpose: an open ichor-ui must not hand a cluster's
+// configuration to a machine on anyone's say-so.
+func approveRightHint(ctx context.Context, err error) string {
+	verb := fmt.Sprintf("%q verb on talosmachines/%s", ichorv1alpha1.MachineApproveVerb, ichorv1alpha1.MachineApprovalSubresource)
+	if !strings.Contains(err.Error(), verb) {
+		return ""
+	}
+
+	if _, signedIn := IdentityFrom(ctx); signedIn {
+		return "bind your user to the ichor-operator or ichor-admin role, or to a role that holds it"
+	}
+
+	return "ichor-ui is not asking who you are, so it acts as its own ServiceAccount, which does not hold this right by design: " +
+		"run the command with --local (it uses your kubeconfig, whose user needs the ichor-operator or ichor-admin role), " +
+		"or turn on Ichor users or OIDC and sign in"
 }
 
 // withSecureBootInstaller names the SecureBoot installer of the cluster's schematic and Talos

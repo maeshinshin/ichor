@@ -182,7 +182,14 @@ func installerImageText(img *versionInstaller) string {
 	}
 
 	if img.SkipNext {
-		text = strings.TrimSpace(text + "; the next upgrade will NOT check the signature")
+		const skip = "the next upgrade will NOT check the signature"
+
+		// With no installer Job run yet there is no image to describe: say only the warning.
+		if text = strings.TrimSpace(text); text != "" {
+			text += "; "
+		}
+
+		text += skip
 	}
 
 	return strings.TrimSpace(text)

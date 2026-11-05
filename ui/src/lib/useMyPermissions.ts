@@ -1,5 +1,5 @@
 import { diagnosticsClient } from '@/lib/connect'
-import { toPermissions, type Permissions } from '@/lib/diagnostics'
+import type { Permissions } from '@/lib/diagnostics'
 import { useLoad } from '@/lib/useLoad'
 
 type Ref = { namespace: string; name: string }
@@ -12,5 +12,5 @@ export function useMyPermissions(machine?: Ref, cluster?: Ref): Permissions | un
     machine || cluster ? () => diagnosticsClient.getMyPermissions({ machine, cluster }) : undefined,
     [machine?.namespace, machine?.name, cluster?.namespace, cluster?.name],
   )
-  return data ? toPermissions(data) : undefined
+  return data ?? undefined
 }

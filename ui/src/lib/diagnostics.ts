@@ -9,19 +9,6 @@ export type DownloadKind = 'support-bundle' | 'etcd-snapshot' | 'packet-capture'
 // the cluster's CA rotation credentials (docs/adr/0084, 0093).
 export type Permissions = { supportBundle: boolean; etcdSnapshot: boolean; packetCapture: boolean; clusterCredentials: boolean; clusterUpdate: boolean; talosconfigReader: boolean }
 
-// toPermissions copies the response's flags; a missing response (not answered yet, or the probe failed)
-// stays undefined, which offers nothing.
-export function toPermissions(res: Permissions | undefined): Permissions | undefined {
-  return res && {
-    supportBundle: res.supportBundle,
-    etcdSnapshot: res.etcdSnapshot,
-    packetCapture: res.packetCapture,
-    clusterCredentials: res.clusterCredentials,
-    clusterUpdate: res.clusterUpdate,
-    talosconfigReader: res.talosconfigReader,
-  }
-}
-
 // The server enforces these too; the form says so before the call.
 export const maxCaptureSeconds = 300
 export const defaultCaptureSeconds = 30

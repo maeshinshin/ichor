@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	"connectrpc.com/connect"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -55,8 +55,7 @@ func TestParseInstallDisk(t *testing.T) {
 func TestApproveWritesTheInstallDisk(t *testing.T) {
 	setAPITestFlags(t, true)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(strongMachine()).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, k8s := freshClients(t, []client.Object{strongMachine()})
 
 	// A flag the CLI cannot parse is refused before anything is written.
 	err := runMachineApprove(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, "strong",
@@ -98,8 +97,7 @@ func TestApproveWarnsAboutAnUndiscoveredDisk(t *testing.T) {
 	m := strongMachine()
 	m.Status.DiscoveredDisks = []ichorv1alpha1.TalosMachineDiscoveredDisk{{WWID: "naa.2"}}
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(m).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, k8s := freshClients(t, []client.Object{m})
 
 	var errw bytes.Buffer
 	if err := runMachineApprove(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &errw, "strong",

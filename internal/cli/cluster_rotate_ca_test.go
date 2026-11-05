@@ -22,8 +22,6 @@ import (
 	"strings"
 	"testing"
 
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
@@ -34,8 +32,7 @@ import (
 func TestRotateCAPromptSaysKubeletRestartsAndTheBundleGoesStaleAndDeclineWritesNothing(t *testing.T) {
 	setAPITestFlags(t, false)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(opTestObjects()...).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, k8s := freshClients(t, opTestObjects())
 
 	var prompt bytes.Buffer
 

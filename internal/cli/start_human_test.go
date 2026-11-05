@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	authv1 "k8s.io/api/authorization/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -51,23 +50,14 @@ func freshClients(t *testing.T, objs []client.Object) (*apiClients, client.Clien
 func completingClients(t *testing.T, objs []client.Object) *apiClients {
 	t.Helper()
 
-	old := opWatchInterval
-	opWatchInterval = time.Millisecond
-
-	t.Cleanup(func() { opWatchInterval = old })
+	setWatchInterval(t, time.Millisecond)
 
 	useWatchClock(t)
 
 	base := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(objs...).
 		WithStatusSubresource(&ichorv1alpha1.TalosOperation{}).Build()
-	k8s := interceptor.NewClient(base, interceptor.Funcs{
+	k8s := interceptor.NewClient(reviewAs(true, base), interceptor.Funcs{
 		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
-			if sar, ok := obj.(*authv1.SelfSubjectAccessReview); ok {
-				sar.Status.Allowed = true // the override review
-
-				return nil
-			}
-
 			if err := c.Create(ctx, obj, opts...); err != nil {
 				return err
 			}

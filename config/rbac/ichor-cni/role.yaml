@@ -44,6 +44,9 @@ rules:
   - get
   - list
   - watch
+# Create and list cannot be limited by name in RBAC, so they stay for these kinds; get, update, patch and
+# delete are limited to the names Cilium's chart renders, so this identity cannot change the
+# ichor-controller-jobs policies that confine it (TestCNIRoleChangesOnlyTheObjectsCiliumRenders keeps the names equal to what the chart renders).
 - apiGroups:
   - admissionregistration.k8s.io
   resources:
@@ -51,9 +54,17 @@ rules:
   - validatingadmissionpolicybindings
   verbs:
   - create
+  - list
+- apiGroups:
+  - admissionregistration.k8s.io
+  resourceNames:
+  - gateway.cilium.io
+  resources:
+  - validatingadmissionpolicies
+  - validatingadmissionpolicybindings
+  verbs:
   - delete
   - get
-  - list
   - patch
   - update
 - apiGroups:
@@ -62,9 +73,16 @@ rules:
   - gatewayclasses
   verbs:
   - create
+  - list
+- apiGroups:
+  - gateway.networking.k8s.io
+  resourceNames:
+  - cilium
+  resources:
+  - gatewayclasses
+  verbs:
   - delete
   - get
-  - list
   - patch
   - update
 - apiGroups:
@@ -73,9 +91,16 @@ rules:
   - endpointslices
   verbs:
   - create
+  - list
+- apiGroups:
+  - discovery.k8s.io
+  resourceNames:
+  - cilium-ingress
+  resources:
+  - endpointslices
+  verbs:
   - delete
   - get
-  - list
   - patch
   - update
 - apiGroups:
@@ -84,9 +109,16 @@ rules:
   - ingressclasses
   verbs:
   - create
+  - list
+- apiGroups:
+  - networking.k8s.io
+  resourceNames:
+  - cilium
+  resources:
+  - ingressclasses
+  verbs:
   - delete
   - get
-  - list
   - patch
   - update
 - apiGroups:

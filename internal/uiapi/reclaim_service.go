@@ -52,23 +52,7 @@ func (s *Server) mayAll(ctx context.Context, attrs ...authv1.ResourceAttributes)
 		return true, nil
 	}
 
-	c, err := s.cl(ctx)
-	if err != nil {
-		return false, connect.NewError(connect.CodeUnavailable, fmt.Errorf("reclaim: acting as the user: %w", err))
-	}
-
-	for i := range attrs {
-		review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &attrs[i]}}
-		if err := c.Create(ctx, review); err != nil {
-			return false, connect.NewError(connect.CodeUnavailable, fmt.Errorf("reclaim: asking Kubernetes whether you may: %w", err))
-		}
-
-		if !review.Status.Allowed {
-			return false, nil
-		}
-	}
-
-	return true, nil
+	return s.askAll(ctx, "reclaim: ", attrs...)
 }
 
 // reclaimAllowed: does the caller hold the verb reclaim on machinereclaims?

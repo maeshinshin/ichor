@@ -53,7 +53,11 @@ func applyTrustBase(pool *kubetrust.Pool, base string) {
 
 // A replica that does not run the rotation must still trust the new Kubernetes CA while a rotation is
 // under way and drop it once it is over and the projected ca.crt carries it (ADR 0063).
-func TestCATrustSyncFollowsARotationOnAnyReplica(t *testing.T) {
+// rotatingTrustClient is a fake client holding a cluster, its rotation bundle Secret and a ca-rotation
+// operation, in progress (Issuing) when inProgress; it returns the rotation and the operation too.
+func rotatingTrustClient(t *testing.T, inProgress bool) (client.Client, *secretsbundle.Rotation, *ichorv1alpha1.TalosOperation) {
+	t.Helper()
+
 	scheme := runtime.NewScheme()
 	if err := clientgoscheme.AddToScheme(scheme); err != nil {
 		t.Fatal(err)
@@ -78,20 +82,27 @@ func TestCATrustSyncFollowsARotationOnAnyReplica(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	const ns = trustNamespace
-
 	cluster := &ichorv1alpha1.TalosCluster{Namespace: testIchorNamespace, Name: "c"}
 	cluster.Spec.SecretsRef.Name = trustBundleName
 	secret := &corev1.Secret{
-		Namespace: ns, Name: trustBundleName,
+		Namespace: trustNamespace, Name: trustBundleName,
 		Data: map[string][]byte{secretsbundle.RotationKey: raw},
 	}
 	op := &ichorv1alpha1.TalosOperation{Namespace: testIchorNamespace, Name: "rot"}
 	op.Spec.ClusterRef.Name, op.Spec.Kind = "c", ichorv1alpha1.TalosOperationKindCARotation
-	op.Status.CARotation = &ichorv1alpha1.TalosOperationCARotationStatus{Stage: ichorv1alpha1.CARotationStageIssuing}
-	op.Status.Phase = ichorv1alpha1.TalosOperationPhaseInProgress
 
-	cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, secret, op).Build()
+	if inProgress {
+		op.Status.CARotation = &ichorv1alpha1.TalosOperationCARotationStatus{Stage: ichorv1alpha1.CARotationStageIssuing}
+		op.Status.Phase = ichorv1alpha1.TalosOperationPhaseInProgress
+	}
+
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, secret, op).Build(), rot, op
+}
+
+func TestCATrustSyncFollowsARotationOnAnyReplica(t *testing.T) {
+	const ns = trustNamespace
+
+	cl, rot, op := rotatingTrustClient(t, true)
 
 	dir := t.TempDir()
 	base, file := filepath.Join(dir, "ca.crt"), filepath.Join(dir, "trust", "kubernetes-ca.crt")
@@ -166,39 +177,7 @@ func (f *fakeInformers) AddEventHandler(h toolscache.ResourceEventHandler) (tool
 // A rotation that appears must be published at once, not at the next tick: Accepting to Issuing
 // takes only a few seconds (ADR 0063).
 func TestCATrustSyncPublishesOnAnOperationEventWithoutWaitingForATick(t *testing.T) {
-	scheme := runtime.NewScheme()
-	if err := clientgoscheme.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
-		t.Fatal(err)
-	}
-
-	contract, err := coreconfig.ParseContractFromVersion("v1.14")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	rot, err := secretsbundle.NewRotation(time.Now(), contract)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	raw, err := rot.Marshal()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cluster := &ichorv1alpha1.TalosCluster{Namespace: testIchorNamespace, Name: "c"}
-	cluster.Spec.SecretsRef.Name = trustBundleName
-	secret := &corev1.Secret{
-		Namespace: trustNamespace, Name: trustBundleName,
-		Data: map[string][]byte{secretsbundle.RotationKey: raw},
-	}
-	op := &ichorv1alpha1.TalosOperation{Namespace: testIchorNamespace, Name: "rot"}
-	op.Spec.ClusterRef.Name, op.Spec.Kind = "c", ichorv1alpha1.TalosOperationKindCARotation
-	cl := fake.NewClientBuilder().WithScheme(scheme).WithObjects(cluster, secret, op).Build()
+	cl, rot, op := rotatingTrustClient(t, false)
 
 	dir := t.TempDir()
 	file := filepath.Join(dir, "trust", "kubernetes-ca.crt")

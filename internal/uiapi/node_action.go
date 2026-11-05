@@ -485,7 +485,7 @@ func (s *Server) RemoveMachine(
 		return nil, mapOperationWriteError("allowing the removal of", namespacedName(ref), err)
 	}
 
-	if err := s.Delete(ctx, m); err != nil {
+	if err := s.Delete(ctx, m, client.Preconditions{UID: &m.UID}); err != nil {
 		return nil, mapOperationWriteError("removing machine", namespacedName(ref), err)
 	}
 

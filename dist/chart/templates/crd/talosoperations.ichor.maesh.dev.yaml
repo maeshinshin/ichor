@@ -761,6 +761,13 @@ spec:
               node:
                 description: node is the node kind's state machine.
                 properties:
+                  machineUID:
+                    description: |-
+                      machineUID is the UID of the TalosMachine a reset started on. The wait for the removal
+                      flow ends when that object is gone or replaced by one with another UID: discovery may
+                      recreate a pending machine with the same name within seconds, and that one is never the
+                      operation's to delete.
+                    type: string
                   message:
                     description: message is a plain-English line about what the operation
                       is doing or waiting for.

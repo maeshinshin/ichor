@@ -27,9 +27,6 @@ import (
 	authnv1 "k8s.io/api/authentication/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -222,16 +219,6 @@ func TestIchorUserWithoutARequest(t *testing.T) {
 // and puts them in the groups ichor:<role> (ADR 0094).
 var _ = Describe("IchorUser Webhook through the API server (ADR 0129)", func() {
 
-	as := func(user string, groups ...string) client.Client {
-		c := rest.CopyConfig(cfg)
-		c.Impersonate = rest.ImpersonationConfig{UserName: user, Groups: groups}
-
-		cl, err := client.New(c, client.Options{Scheme: scheme.Scheme})
-		Expect(err).NotTo(HaveOccurred())
-
-		return cl
-	}
-
 	user := func(name string, roles ...string) *ichorv1alpha1.IchorUser {
 		return &ichorv1alpha1.IchorUser{
 			Namespace: testNamespace, Name: name,
@@ -246,15 +233,15 @@ var _ = Describe("IchorUser Webhook through the API server (ADR 0129)", func() {
 	})
 
 	It("refuses a grant above the requester's own and admits one within it", func() {
-		err := as(userAlice, "ichor:operator").Create(ctx, user("grant-admin", "admin"))
+		err := asUser(userAlice, "ichor:operator").Create(ctx, user("grant-admin", "admin"))
 		Expect(err).To(MatchError(ContainSubstring(`you cannot grant the role "admin"`)))
 
 		ok := user("grant-operator", "operator")
-		Expect(as(userAlice, "ichor:operator").Create(ctx, ok)).To(Succeed())
+		Expect(asUser(userAlice, "ichor:operator").Create(ctx, ok)).To(Succeed())
 		Expect(k8sClient.Delete(ctx, ok)).To(Succeed())
 
 		anything := user("grant-anything", "admin", "custom")
-		Expect(as(userBoss, "ichor:admin").Create(ctx, anything)).To(Succeed())
+		Expect(asUser(userBoss, "ichor:admin").Create(ctx, anything)).To(Succeed())
 		Expect(k8sClient.Delete(ctx, anything)).To(Succeed())
 	})
 
@@ -262,7 +249,7 @@ var _ = Describe("IchorUser Webhook through the API server (ADR 0129)", func() {
 		root := user("last-admin", "admin")
 		Expect(k8sClient.Create(ctx, root)).To(Succeed())
 
-		asBoss := as(userBoss, "ichor:admin")
+		asBoss := asUser(userBoss, "ichor:admin")
 
 		Expect(asBoss.Delete(ctx, root.DeepCopy())).To(MatchError(ContainSubstring("last enabled admin")))
 

@@ -32,8 +32,6 @@ import (
 	"github.com/maeshinshin/ichor/pkg/secureboot"
 )
 
-// nolint:unused
-// log is for logging in this package.
 var talosmachinelog = logf.Log.WithName("talosmachine-resource")
 
 // SetupTalosMachineWebhookWithManager registers the webhook for TalosMachine in the manager.

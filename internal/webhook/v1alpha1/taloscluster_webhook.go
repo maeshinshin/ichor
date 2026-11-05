@@ -37,8 +37,6 @@ import (
 	"github.com/maeshinshin/ichor/pkg/release"
 )
 
-// nolint:unused
-// log is for logging in this package.
 var talosclusterlog = logf.Log.WithName("taloscluster-resource")
 
 // SetupTalosClusterWebhookWithManager registers the webhook for TalosCluster in the manager.

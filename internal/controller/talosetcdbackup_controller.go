@@ -382,18 +382,13 @@ func loadBackupStore(
 		return nil, etcdbackup.Key{}, nil, err
 	}
 
-	store, err := openStore(newStore, s3cfg)
-
-	return bundle, passphrase, store, err
-}
-
-// openStore builds the object store; a nil newStore means S3.
-func openStore(newStore func(etcdbackup.S3Config) (etcdbackup.Store, error), cfg etcdbackup.S3Config) (etcdbackup.Store, error) {
 	if newStore == nil {
 		newStore = etcdbackup.NewS3Store
 	}
 
-	return newStore(cfg)
+	store, err := newStore(s3cfg)
+
+	return bundle, passphrase, store, err
 }
 
 // loadS3ConfigFrom reads the credentials Secret from the controller's namespace

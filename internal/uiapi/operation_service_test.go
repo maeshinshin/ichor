@@ -88,6 +88,12 @@ func opCreate(kind pb.OperationKind, target string) *connect.Request[pb.CreateOp
 	return connect.NewRequest(&pb.CreateOperationRequest{Cluster: objectRef(opNS, opCluster), Kind: kind, Target: target})
 }
 
+func planOp(srv *Server, kind pb.OperationKind, target string) (*connect.Response[pb.PlanOperationResponse], error) {
+	return srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
+		Cluster: objectRef(opNS, opCluster), Kind: kind, Target: target,
+	}))
+}
+
 func getCluster(t *testing.T, k8s client.Client) *ichorv1alpha1.TalosCluster {
 	t.Helper()
 
@@ -356,9 +362,7 @@ func TestShutdownCreatesAnOperationWithoutTouchingTheSpec(t *testing.T) {
 func TestPlanTalosListsControlPlanesFirstThenWorkersByOrderLabelAndSkipsHeld(t *testing.T) {
 	srv, _ := opServer(t, opObjects()...)
 
-	res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_TALOS, Target: opNewTalos,
-	}))
+	res, err := planOp(srv, pb.OperationKind_OPERATION_KIND_TALOS, opNewTalos)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -393,9 +397,7 @@ func TestPlanTalosNamesASchematicOnlyChange(t *testing.T) {
 
 		srv, _ := opServer(t, objs...)
 
-		res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-			Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_TALOS,
-		}))
+		res, err := planOp(srv, pb.OperationKind_OPERATION_KIND_TALOS, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -422,9 +424,7 @@ func TestPlanTalosNamesASchematicOnlyChange(t *testing.T) {
 func TestPlanShutdownIsWorkersThenControlPlanesAndStops(t *testing.T) {
 	srv, _ := opServer(t, opObjects()...)
 
-	res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_SHUTDOWN,
-	}))
+	res, err := planOp(srv, pb.OperationKind_OPERATION_KIND_SHUTDOWN, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -447,9 +447,7 @@ func TestPlanSaysWhyCreateWouldBeRefused(t *testing.T) {
 	}
 	srv, _ := opServer(t, append(opObjects(), running)...)
 
-	res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_TALOS, Target: opNewTalos,
-	}))
+	res, err := planOp(srv, pb.OperationKind_OPERATION_KIND_TALOS, opNewTalos)
 	if err != nil || !strings.Contains(res.Msg.GetBlocked(), `"x"`) {
 		t.Fatalf("err=%v plan=%v", err, res.Msg)
 	}
@@ -479,9 +477,7 @@ func configObjects() []client.Object {
 func TestPlanConfigListsOnlyMachinesWithAPendingRebootAndTheirFields(t *testing.T) {
 	srv, _ := opServer(t, configObjects()...)
 
-	res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CONFIG,
-	}))
+	res, err := planOp(srv, pb.OperationKind_OPERATION_KIND_CONFIG, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -521,9 +517,7 @@ func TestPlanConfigSelectsAPIServerRestartMachinesAndSaysNoReboot(t *testing.T) 
 	plan := func(objs ...client.Object) *pb.PlanOperationResponse {
 		srv, _ := opServer(t, objs...)
 
-		res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-			Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CONFIG,
-		}))
+		res, err := planOp(srv, pb.OperationKind_OPERATION_KIND_CONFIG, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -561,9 +555,7 @@ func TestPlanConfigListsTheControllersOwnMachineLast(t *testing.T) {
 
 	srv, _ := opServer(t, append(objs, node, pod)...)
 
-	res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CONFIG,
-	}))
+	res, err := planOp(srv, pb.OperationKind_OPERATION_KIND_CONFIG, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -583,9 +575,7 @@ func TestPlanSaysTheKubernetesAPIGoesDownWhenTheOnlyControlPlaneReboots(t *testi
 	plan := func(objs ...client.Object) *pb.PlanOperationResponse {
 		srv, _ := opServer(t, objs...)
 
-		res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-			Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CONFIG,
-		}))
+		res, err := planOp(srv, pb.OperationKind_OPERATION_KIND_CONFIG, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -615,9 +605,7 @@ func TestPlanSaysTheKubernetesAPIGoesDownWhenTheOnlyControlPlaneReboots(t *testi
 func TestPlanConfigIsBlockedWhenNothingNeedsAReboot(t *testing.T) {
 	srv, _ := opServer(t, opObjects()...)
 
-	res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CONFIG,
-	}))
+	res, err := planOp(srv, pb.OperationKind_OPERATION_KIND_CONFIG, "")
 	if err != nil || !strings.Contains(res.Msg.GetBlocked(), "needs a reboot") {
 		t.Fatalf("err=%v plan=%v", err, res.Msg)
 	}

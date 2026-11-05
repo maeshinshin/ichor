@@ -100,9 +100,7 @@ func TestIchorPlanWarnsWhenTheSignatureCheckIsSkipped(t *testing.T) {
 		t.Fatalf("warning = %q", w)
 	}
 
-	plan, err = srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_ICHOR, Target: ichorNew,
-	}))
+	plan, err = planOp(srv, pb.OperationKind_OPERATION_KIND_ICHOR, ichorNew)
 	if err != nil {
 		t.Fatal(err)
 	}

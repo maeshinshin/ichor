@@ -17,11 +17,8 @@ limitations under the License.
 package uiapi
 
 import (
-	"context"
 	"strings"
 	"testing"
-
-	"connectrpc.com/connect"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -42,9 +39,7 @@ func planKubernetes(t *testing.T, endpointType string, controlPlanes int, target
 
 	srv, _ := opServer(t, objs...)
 
-	res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_KUBERNETES, Target: target,
-	}))
+	res, err := planOp(srv, pb.OperationKind_OPERATION_KIND_KUBERNETES, target)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,9 +102,7 @@ func TestPlanKubernetesSkipsTheCiliumConstraintOfAnUnmanagedFlannel(t *testing.T
 
 	srv, _ := opServer(t, objs...)
 
-	if _, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_KUBERNETES, Target: flannelTargetK8s,
-	})); err != nil {
+	if _, err := planOp(srv, pb.OperationKind_OPERATION_KIND_KUBERNETES, flannelTargetK8s); err != nil {
 		t.Fatalf("the Kubernetes plan of a flannel cluster was refused by Cilium's table: %v", err)
 	}
 }

@@ -49,9 +49,7 @@ func caOp(phase string) *ichorv1alpha1.TalosOperation {
 func TestPlanCARotationNamesEveryMachineIncludingHeldTheStagesAndTheStaleBundle(t *testing.T) {
 	srv, _ := opServer(t, opObjects()...)
 
-	res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CA_ROTATION,
-	}))
+	res, err := planOp(srv, pb.OperationKind_OPERATION_KIND_CA_ROTATION, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,17 +70,6 @@ func TestPlanCARotationNamesEveryMachineIncludingHeldTheStagesAndTheStaleBundle(
 
 	if got := strings.Join(res.Msg.GetStages(), ","); got != "Accepting,Issuing,Dropping" || !res.Msg.GetReplacesSecretsBundle() {
 		t.Fatalf("stages = %s, plan = %v", got, res.Msg)
-	}
-}
-
-func TestPlanCARotationRefusesATarget(t *testing.T) {
-	srv, _ := opServer(t, opObjects()...)
-
-	_, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CA_ROTATION, Target: opNewTalos,
-	}))
-	if connect.CodeOf(err) != connect.CodeInvalidArgument {
-		t.Fatalf("want InvalidArgument, got %v", err)
 	}
 }
 

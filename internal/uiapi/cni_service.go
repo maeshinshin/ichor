@@ -22,12 +22,14 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"reflect"
 	"slices"
 	"strings"
 
 	"connectrpc.com/connect"
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -183,6 +185,14 @@ func (s *Server) countNodes(ctx context.Context) int {
 	return len(nodes.Items)
 }
 
+// mayEditCiliumValues asks, as the caller, for update on talosclusters/cilium-values.
+func (s *Server) mayEditCiliumValues(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) (bool, error) {
+	return s.mayAll(ctx, authv1.ResourceAttributes{
+		Namespace: cluster.Namespace, Name: cluster.Name, Group: ichorv1alpha1.GroupVersion.Group, Resource: "talosclusters",
+		Verb: ichorv1alpha1.CiliumValuesVerb, Subresource: ichorv1alpha1.CiliumValuesSubresource,
+	})
+}
+
 // GetCiliumValues returns the layers of a cluster's Cilium values separately.
 func (s *Server) GetCiliumValues(
 	ctx context.Context, req *connect.Request[pb.GetCiliumValuesRequest],
@@ -230,6 +240,10 @@ func (s *Server) GetCiliumValues(
 
 	if v.cluster.Status.CNI != nil {
 		resp.AvailableChartVersion = v.cluster.Status.CNI.AvailableChartVersion
+	}
+
+	if resp.CanEdit, err = s.mayEditCiliumValues(ctx, v.cluster); err != nil {
+		return nil, err
 	}
 
 	return connect.NewResponse(resp), nil
@@ -312,6 +326,21 @@ func (s *Server) SetCiliumValues(
 	user, err := parseUserYAML(req.Msg.GetUserYaml())
 	if err != nil {
 		return nil, err
+	}
+
+	// Changing the layer needs the admin's right; the webhook asks the same for a hand-written CR.
+	if (len(user) != 0 || len(v.user) != 0) && !reflect.DeepEqual(user, v.user) {
+		may, err := s.mayEditCiliumValues(ctx, v.cluster)
+		if err != nil {
+			return nil, err
+		}
+
+		if !may {
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf(
+				"you may not change the Cilium values: Kubernetes RBAC does not grant you the %q verb on talosclusters/%s (ichor-admin holds it): "+
+					"the chart can run privileged pods on every node",
+				ichorv1alpha1.CiliumValuesVerb, ichorv1alpha1.CiliumValuesSubresource))
+		}
 	}
 
 	if errs := s.validate(ctx, v, user); len(errs) > 0 {

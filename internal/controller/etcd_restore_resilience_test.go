@@ -106,8 +106,8 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 
 	// restoreWithWorker runs the restore up to the point where the API is back and the control planes
 	// are members again, with one worker that was not wiped.
-	restoreWithWorker := func(kc *kubefake.Clientset) (f *restoreFixture, op *ichorv1alpha1.TalosOperation, r *TalosOperationReconciler, worker *fakeTalosClient) {
-		f = newRestoreFixture("")
+	restoreWithWorker := func(kc *kubefake.Clientset) (op *ichorv1alpha1.TalosOperation, r *TalosOperationReconciler, worker *fakeTalosClient) {
+		f := newRestoreFixture("")
 		f.wipeHooks()
 
 		w := newOpTestMachine(f.backup.cluster.Name, roleWorker, "rs-w1")
@@ -127,7 +127,7 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 		Expect(r.ResumeEtcdRestores(ctx)).To(Succeed())
 		f.members(f.hosts()...)
 
-		return f, op, r, worker
+		return op, r, worker
 	}
 
 	kubeProxyCluster := func() *kubefake.Clientset {
@@ -168,7 +168,7 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 
 	It("restarts the kubelet of a node that was not wiped, then its kube-proxy pod, and moves on only when the new pod is Ready", func() {
 		kc := kubeProxyCluster()
-		_, op, r, worker := restoreWithWorker(kc)
+		op, r, worker := restoreWithWorker(kc)
 
 		got := reconcileFetch(r, op)
 		Expect(worker.serviceRestarts).To(Equal([]string{compKubelet}), "the kubelet is restarted through Talos first")
@@ -208,7 +208,7 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 		}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		_, op, r, _ := restoreWithWorker(kc)
+		op, r, _ := restoreWithWorker(kc)
 
 		reconcileFetch(r, op)
 		reconcileFetch(r, op)
@@ -223,7 +223,7 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 		DeferCleanup(func() { agentsBound = old })
 
 		kc := kubeProxyCluster()
-		_, op, r, _ := restoreWithWorker(kc)
+		op, r, _ := restoreWithWorker(kc)
 
 		reconcileFetch(r, op)
 		time.Sleep(5 * time.Millisecond)

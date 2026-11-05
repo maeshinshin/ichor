@@ -175,8 +175,9 @@ func (r *DiscoveryReconciler) Discover(
 	case sameIdentity(existing.Spec.Identity, hw):
 		// The same machine, possibly somewhere new (a fresh DHCP lease or pod IP). spec.endpoint
 		// is the operator's and never edited here; the address it answers at is recorded in
-		// status and dialed first.
-		if existing.DialEndpoint() != endpoint {
+		// status and dialed first, unless the machine is one whose address a
+		// self-reported identity must not move (followsDiscoveredAddress).
+		if existing.DialEndpoint() != endpoint && followsDiscoveredAddress(&existing) {
 			if err := recordObservedEndpoint(ctx, r.Client, r.Client, &existing, endpoint); err != nil {
 				return nil, fmt.Errorf("recording %q's new address: %w", existing.Name, err)
 			}
@@ -198,6 +199,23 @@ func (r *DiscoveryReconciler) Discover(
 
 		return nil, nil
 	}
+}
+
+// followsDiscoveredAddress reports whether a node that answers the insecure maintenance API with m's
+// identity at another address is where m is dialled from now on.
+// That identity is self-reported, so for an approved machine it must not choose where the cluster's
+// configuration (its CA keys) goes: a converged machine's address changes only through its
+// authenticated reads, the Kubernetes Node (followNodeAddress) or spec.endpoint. The exception is
+// an approved machine that has not been sent its configuration yet and has a pinned maintenance
+// certificate: provisioning refuses a node with another certificate, so following a
+// redirect cannot hand the configuration to a twin, and a machine that moved before its first
+// provisioning is not left dialling a stale address.
+func followsDiscoveredAddress(m *ichorv1alpha1.TalosMachine) bool {
+	if !m.Spec.IsApproved() {
+		return true
+	}
+
+	return m.Status.ConfigStoredAt == nil && m.Status.AppliedConfigHash == "" && m.Status.MaintenanceFingerprint != ""
 }
 
 // refreshUnapproved re-records what a maintenance-mode probe of m's node showed: the certificate

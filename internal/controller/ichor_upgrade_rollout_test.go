@@ -44,24 +44,8 @@ var _ = Describe("kind: ichor executor, completion", func() {
 		op      *ichorv1alpha1.TalosOperation
 	)
 
-	// deployment creates a one-replica Deployment; its status says whether the rollout is finished.
 	deployment := func(name string, labels map[string]string, rolledOut bool) *appsv1.Deployment {
-		d := &appsv1.Deployment{
-			Name: name, Namespace: ns, Labels: labels,
-			Spec: appsv1.DeploymentSpec{
-				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"rollout-test": name}},
-				Template: corev1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"rollout-test": name}},
-					Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "registry.example/c:v1"}}},
-				},
-			},
-		}
-		Expect(k8sClient.Create(ctx, d)).To(Succeed())
-		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, d))).To(Succeed()) })
-
-		setRollout(d, rolledOut)
-
-		return d
+		return createDeployment(ns, name, labels, rolledOut)
 	}
 
 	// The Job is created by the first call, as in production, while the old controller runs.
@@ -200,6 +184,28 @@ var _ = Describe("kind: ichor executor, completion", func() {
 		Expect(err).To(MatchError(ContainSubstring("pod log")))
 	})
 })
+
+// createDeployment creates a one-replica Deployment; its status says whether the rollout is finished.
+func createDeployment(ns, name string, labels map[string]string, rolledOut bool) *appsv1.Deployment {
+	GinkgoHelper()
+
+	d := &appsv1.Deployment{
+		Name: name, Namespace: ns, Labels: labels,
+		Spec: appsv1.DeploymentSpec{
+			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"rollout-test": name}},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"rollout-test": name}},
+				Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "registry.example/c:v1"}}},
+			},
+		},
+	}
+	Expect(k8sClient.Create(ctx, d)).To(Succeed())
+	DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, d))).To(Succeed()) })
+
+	setRollout(d, rolledOut)
+
+	return d
+}
 
 // setRollout writes the status the Deployment controller would (envtest runs none): finished, or
 // a rollout that has made no progress.

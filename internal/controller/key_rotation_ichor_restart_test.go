@@ -21,11 +21,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -35,26 +32,6 @@ import (
 // and ichor-ui are restarted once the new key signs, and the old key is not dropped before they have rolled out.
 var _ = Describe("TalosOperation key-rotation, Ichor's own pods", func() {
 	var controllerDep, uiDep *appsv1.Deployment
-
-	// deployment creates a one-replica Deployment in the controller's namespace whose rollout is finished.
-	deployment := func(name string, labels map[string]string) *appsv1.Deployment {
-		d := &appsv1.Deployment{
-			Name: name, Namespace: tmNamespace, Labels: labels,
-			Spec: appsv1.DeploymentSpec{
-				Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"key-rot-test": name}},
-				Template: corev1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"key-rot-test": name}},
-					Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "c", Image: "registry.example/key-rotation:v1"}}},
-				},
-			},
-		}
-		Expect(k8sClient.Create(ctx, d)).To(Succeed())
-		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, d))).To(Succeed()) })
-
-		setRollout(d, true)
-
-		return d
-	}
 
 	fresh := func(d *appsv1.Deployment) *appsv1.Deployment {
 		GinkgoHelper()
@@ -70,8 +47,8 @@ var _ = Describe("TalosOperation key-rotation, Ichor's own pods", func() {
 	}
 
 	BeforeEach(func() {
-		controllerDep = deployment("key-rot-controller", map[string]string{controlPlaneLabel: valueControllerMgr})
-		uiDep = deployment("key-rot-ui", map[string]string{"app.kubernetes.io/component": "ui"})
+		controllerDep = createDeployment(tmNamespace, "key-rot-controller", map[string]string{controlPlaneLabel: valueControllerMgr}, true)
+		uiDep = createDeployment(tmNamespace, "key-rot-ui", map[string]string{"app.kubernetes.io/component": "ui"}, true)
 	})
 
 	It("restarts the controller and ichor-ui once the new key signs, and keeps the old key until they have rolled out", func() {

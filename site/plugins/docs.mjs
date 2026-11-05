@@ -35,21 +35,52 @@ export function remarkDocsLinks({ base }) {
     const from = dirname(file.path)
     visit(tree, ['link', 'definition'], (node) => {
       if (external.test(node.url)) return
-      const [path, hash = ''] = node.url.split('#')
-      const target = resolve(from, decodeURI(path))
-      if (!existsSync(target)) {
-        file.fail(`broken link "${node.url}" (no such file)`, node)
+      try {
+        node.url = resolveLink(node.url, from, base)
+      } catch (e) {
+        file.fail(e.message, node)
       }
-      const inDocs = !relative(docsRoot, target).startsWith('..')
-      if (inDocs && target.endsWith('.md')) {
-        node.url = urlOf(base, routeOf(relative(docsRoot, target))) + (hash && `#${hash}`)
-        return
-      }
-      const repoPath = relative(repoRoot, target).split(sep).join('/')
-      const kind = statSync(target).isDirectory() ? 'tree' : 'blob'
-      node.url = `${repoUrl}/${kind}/main/${repoPath}${hash && `#${hash}`}`
     })
   }
+}
+
+/**
+ * Where a relative link in a docs file points: the site path of another docs page, or a
+ * GitHub URL for anything else in the repository. Throws if the target does not exist.
+ */
+export function resolveLink(url, fromDir, base) {
+  const [path, hash = ''] = url.split('#')
+  const target = resolve(fromDir, decodeURI(path))
+  if (!existsSync(target)) throw new Error(`broken link "${url}" (no such file)`)
+  if (!relative(docsRoot, target).startsWith('..') && target.endsWith('.md')) {
+    return urlOf(base, routeOf(relative(docsRoot, target))) + (hash && `#${hash}`)
+  }
+  const kind = statSync(target).isDirectory() ? 'tree' : 'blob'
+  return `${repoUrl}/${kind}/main/${relative(repoRoot, target).split(sep).join('/')}${hash && `#${hash}`}`
+}
+
+/**
+ * A docs file's Markdown with every link made absolute, so a copy of it works outside the
+ * site: links to other pages are site URLs, links out of docs/ are GitHub URLs, `#anchors`
+ * point at `pageUrl`. Fenced code is left alone.
+ */
+export function absoluteMarkdown(markdown, filePath, base, origin, pageUrl) {
+  const from = dirname(filePath)
+  const fix = (u) => (u.startsWith('#') ? pageUrl + u : external.test(u) ? u : new URL(resolveLink(u, from, base), origin).href)
+  let fence = ''
+  return markdown
+    .split('\n')
+    .map((line) => {
+      const m = /^\s*(`{3,}|~{3,})/.exec(line)
+      if (m) {
+        if (!fence) fence = m[1]
+        else if (m[1][0] === fence[0] && m[1].length >= fence.length) fence = ''
+        return line
+      }
+      if (fence) return line
+      return line.replace(/(`+).*?\1|(\]\()([^)\s]+)/g, (m, tick, a, u) => (tick ? m : a + fix(u))).replace(/^(\s*\[[^\]]+\]:\s*)(\S+)/, (_, a, u) => a + fix(u))
+    })
+    .join('\n')
 }
 
 /**

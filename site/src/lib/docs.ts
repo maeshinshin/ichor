@@ -1,7 +1,7 @@
 import { getCollection } from 'astro:content'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { repoUrl } from '../../plugins/docs.mjs'
+import { absoluteMarkdown, repoUrl } from '../../plugins/docs.mjs'
 
 export { repoUrl }
 
@@ -20,6 +20,8 @@ export function docsVersion(): string {
 export type Doc = {
   route: string
   url: string
+  /** Site path of the page's Markdown: <route>.md, or index.md for the home page. */
+  mdUrl: string
   title: string
   label: string
   order?: number
@@ -58,6 +60,7 @@ export async function getDocs(): Promise<Doc[]> {
     return {
       route,
       url: route ? `${base}${route}/` : base,
+      mdUrl: `${base}${route || 'index'}.md`,
       title,
       label: entry.data.sidebar_label ?? title,
       order: entry.data.sidebar_order,
@@ -129,4 +132,45 @@ export function crumbs(nav: NavNode[], href: string): NavNode[] {
     if (sub) return [n, ...sub]
   }
   return []
+}
+
+/** Absolute URL of a site path. */
+export const absolute = (path: string) => new URL(path, import.meta.env.SITE).href
+
+/**
+ * The page's source Markdown for the .md routes and the copy button: front matter stripped,
+ * relative links made absolute, and always starting with the page's `#` heading.
+ */
+export function pageMarkdown(d: Doc): string {
+  const file = resolve(process.cwd(), d.entry.filePath!)
+  const md = absoluteMarkdown(d.body.trim(), file, base, import.meta.env.SITE, absolute(d.url))
+  const first = /^(#{1,6}) (.*)$/m.exec(md.split('\n', 1)[0])
+  if (first?.[1] === '#') return `${md}\n`
+  // The generated CLI pages open with `## ichor adopt`, the title again: promote it.
+  if (first && plain(first[2]) === d.title) return `# ${md.slice(first[1].length + 1)}\n`
+  return `# ${d.title}\n\n${md}\n`
+}
+
+/** /llms.txt: the page list with titles, descriptions and links to the Markdown, grouped as the sidebar is. */
+export function llmsIndex(docs: Doc[]): string {
+  const item = (n: NavNode) => {
+    const d = docs.find((x) => x.url === n.href)!
+    return `- [${d.title}](${absolute(d.mdUrl)})${d.description ? `: ${d.description}` : ''}`
+  }
+  const home = docs.find((d) => d.route === '')
+  return [
+    '# Ichor',
+    home?.description && `> ${home.description}`,
+    ...buildNav(docs).map((s) => `## ${s.label || 'Overview'}\n\n${flatten(s.children ?? []).map(item).join('\n')}`),
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+    .concat('\n')
+}
+
+/** /llms-full.txt: every page's Markdown, in sidebar order. */
+export function llmsFull(docs: Doc[]): string {
+  return flatten(buildNav(docs))
+    .map((n) => pageMarkdown(docs.find((d) => d.url === n.href)!))
+    .join('\n---\n\n')
 }

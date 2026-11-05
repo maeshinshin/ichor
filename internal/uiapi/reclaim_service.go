@@ -248,12 +248,8 @@ func (s *Server) registerReclaimAddress(ctx context.Context, ref *pb.ObjectRef, 
 	c.Spec.Discovery.Addresses = append(c.Spec.Discovery.Addresses, host)
 
 	// Remember that Ichor, not the user, added it, so a request that fails can take it back out.
-	if c.Annotations == nil {
-		c.Annotations = map[string]string{}
-	}
-
-	c.Annotations[ichorv1alpha1.ReclaimAddedAddressesAnnotation] = strings.Join(
-		append(splitAddresses(c.Annotations[ichorv1alpha1.ReclaimAddedAddressesAnnotation]), host), ",")
+	metav1.SetMetaDataAnnotation(&c.ObjectMeta, ichorv1alpha1.ReclaimAddedAddressesAnnotation, strings.Join(
+		append(splitAddresses(c.Annotations[ichorv1alpha1.ReclaimAddedAddressesAnnotation]), host), ","))
 
 	if err := s.Update(ctx, c, strictFieldValidation); err != nil {
 		return mapOperationWriteError("adding the reclaim address to", key, err)
@@ -400,11 +396,8 @@ func (s *Server) ConfirmReclaim(
 		return nil, err
 	}
 
-	if mr.Annotations == nil {
-		mr.Annotations = map[string]string{}
-	}
+	metav1.SetMetaDataAnnotation(&mr.ObjectMeta, ichorv1alpha1.ReclaimConfirmedByAnnotation, user)
 
-	mr.Annotations[ichorv1alpha1.ReclaimConfirmedByAnnotation] = user
 	mr.Spec.ConfirmUUID = uuid
 	if n := strings.TrimSpace(req.Msg.GetClusterName()); n != "" {
 		mr.Spec.ConfirmClusterName = n

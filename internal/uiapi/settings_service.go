@@ -215,11 +215,9 @@ func changesOf(f *pb.SettingsFields) (settings.Changes, error) {
 func (s *Server) UpdateSettings(
 	ctx context.Context, req *connect.Request[pb.UpdateSettingsRequest],
 ) (*connect.Response[pb.UpdateSettingsResponse], error) {
-	bad := func(err error) error { return connect.NewError(connect.CodeInvalidArgument, err) }
-
 	changes, err := changesOf(req.Msg.GetChanges())
 	if err != nil {
-		return nil, bad(err)
+		return nil, invalidArg(err)
 	}
 
 	// Clearing an automatic patch halt is an action, not a setting: a read-only deployment still allows it (ADR 0116).
@@ -229,11 +227,11 @@ func (s *Server) UpdateSettings(
 	}
 
 	if changes.Empty() {
-		return nil, bad(errors.New("no setting to change"))
+		return nil, invalid("no setting to change")
 	}
 
 	if err := changes.Validate(); err != nil {
-		return nil, bad(err)
+		return nil, invalidArg(err)
 	}
 
 	// RBAC is judged before the write, so the message names the verb; the webhook repeats the check.

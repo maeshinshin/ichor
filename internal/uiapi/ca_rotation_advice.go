@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"connectrpc.com/connect"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -37,11 +38,7 @@ func (s *Server) DismissCARotationAdvice(
 		return nil, err
 	}
 
-	if c.Annotations == nil {
-		c.Annotations = map[string]string{}
-	}
-
-	c.Annotations[ichorv1alpha1.TalosClusterCARotationAdviceDismissedAnnotation] = "true"
+	metav1.SetMetaDataAnnotation(&c.ObjectMeta, ichorv1alpha1.TalosClusterCARotationAdviceDismissedAnnotation, "true")
 
 	if err := s.Update(ctx, c, strictFieldValidation); err != nil {
 		return nil, mapOperationWriteError("dismissing the CA rotation advice of", key, err)

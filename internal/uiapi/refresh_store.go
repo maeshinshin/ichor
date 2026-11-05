@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"time"
 
@@ -44,11 +45,7 @@ const refreshWriteAttempts = 6
 // Start implements oidcissuer.RefreshStore.
 func (b *IssuerBackend) Start(ctx context.Context, user, family, jti string, exp time.Time) error {
 	return b.updateCredential(ctx, user, func(c *ichorauth.Credential, now time.Time) error {
-		for id, f := range c.Families {
-			if f.Exp <= now.Unix() {
-				delete(c.Families, id)
-			}
-		}
+		maps.DeleteFunc(c.Families, func(_ string, f ichorauth.RefreshFamily) bool { return f.Exp <= now.Unix() })
 
 		if c.Families == nil {
 			c.Families = map[string]ichorauth.RefreshFamily{}
@@ -57,11 +54,7 @@ func (b *IssuerBackend) Start(ctx context.Context, user, family, jti string, exp
 		c.Families[family] = ichorauth.RefreshFamily{JTI: jti, Exp: exp.Unix()}
 
 		if len(c.Families) > ichorauth.MaxRefreshFamilies {
-			ids := make([]string, 0, len(c.Families))
-			for id := range c.Families {
-				ids = append(ids, id)
-			}
-
+			ids := slices.Collect(maps.Keys(c.Families))
 			slices.SortFunc(ids, func(a, b string) int { return cmp.Compare(c.Families[a].Exp, c.Families[b].Exp) })
 
 			for _, id := range ids[:len(c.Families)-ichorauth.MaxRefreshFamilies] {

@@ -5,13 +5,12 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { CircleXIcon } from 'lucide-preact'
 import { Badge } from '@/components/ui/badge'
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
+import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Item, ItemContent, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
@@ -38,7 +37,6 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
   const [plan, setPlan] = useState<PlanOperationResponse | null>(null)
   const [typed, setTyped] = useState('')
   const [overridden, setOverridden] = useState(false)
-  const [reason, setReason] = useState('')
   const { busy, error, setError, run } = useAction()
 
   const choice = choices?.find((c) => c.key === chosen)
@@ -72,7 +70,6 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
       setError(null)
       setTyped('')
       setOverridden(false)
-      setReason('')
     }
   }
 
@@ -83,7 +80,7 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
       backup: choice?.backup,
       snapshot: choice?.name ?? '',
       confirm,
-      override: overridden ? { reason: reason.trim() } : undefined,
+      override: overridden ? {} : undefined,
     },
   })
 
@@ -227,11 +224,6 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
             <Checkbox id="restore-override" checked={overridden} onCheckedChange={(on: boolean | 'indeterminate') => setOverridden(on === true)} />
             <Label htmlFor="restore-override">{t('restore.override')}</Label>
           </div>
-          <Field>
-            <FieldLabel htmlFor="restore-reason">{t('node.action.reason')}</FieldLabel>
-            <Textarea id="restore-reason" value={reason} onInput={(e) => setReason((e.currentTarget as HTMLTextAreaElement).value)} />
-            <FieldDescription>{t('restore.reasonHint')}</FieldDescription>
-          </Field>
         </div>
       )}
 

@@ -2,9 +2,7 @@ import { useState } from 'preact/hooks'
 import { InboxIcon, PlusIcon } from 'lucide-preact'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Textarea } from '@/components/ui/textarea'
 import { ApproveDialog } from '@/components/ApproveDialog'
 import { ReclaimDialog } from '@/components/ReclaimDialog'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
@@ -110,7 +108,6 @@ export function MachineList() {
               <TableHeader>
                 <TableRow>
                   <TableHead>{t('col.identity')}</TableHead>
-                  <TableHead className="hidden sm:table-cell">{t('machines.colReason')}</TableHead>
                   <TableHead className="hidden sm:table-cell">{t('machines.colWhen')}</TableHead>
                   <TableHead>{t('col.actions')}</TableHead>
                 </TableRow>
@@ -120,12 +117,10 @@ export function MachineList() {
                   <TableRow key={refKey(m)}>
                     <TableCell className="max-sm:whitespace-normal max-sm:wrap-anywhere">
                       {identitySummary(m, t('machines.unknown'))}
-                      <div class="text-muted-foreground sm:hidden">{m.approvalDecision?.reason || '-'}</div>
                     </TableCell>
                     {/* The decision record: recorded on the CR
                         itself, not just a one-shot RPC response, so it's still here the
                         next time anyone loads this list. */}
-                    <TableCell className="hidden sm:table-cell">{m.approvalDecision?.reason || '-'}</TableCell>
                     <TableCell className="hidden sm:table-cell">{formatTimestamp(m.approvalDecision?.at)}</TableCell>
                     <TableCell>
                       <div class="flex gap-2 max-sm:flex-wrap">
@@ -204,14 +199,13 @@ function RejectDialog({
   onRejected: () => void
 }) {
   const [open, setOpen] = useState(false)
-  const [reason, setReason] = useState('')
   const { busy: submitting, error: submitError, run } = useAction()
 
   async function submit() {
     const ref = machine.ref
     if (!ref) return
     await run(async () => {
-      await machineClient.rejectMachine({ machine: ref, reason })
+      await machineClient.rejectMachine({ machine: ref })
       notifyWrite('toast.rejected', { name: ref.name })
       setOpen(false)
       onRejected()
@@ -231,16 +225,6 @@ function RejectDialog({
       description={t('reject.description')}
       confirm={{ label: submitting ? t('reject.submitting') : t('reject.button'), disabled: submitting, onClick: submit }}
     >
-      <div class="space-y-1">
-        <Label htmlFor="reject-reason">{t('reject.reason')}</Label>
-        <Textarea
-          id="reject-reason"
-          value={reason}
-          onInput={(e) => setReason((e.target as HTMLTextAreaElement).value)}
-          placeholder={t('reject.reasonPlaceholder')}
-        />
-      </div>
-
       {submitError && <ErrorAlert {...submitError} />}
     </ConfirmDialog>
   )

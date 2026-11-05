@@ -49,7 +49,7 @@ func MetricsInterceptor() connect.Interceptor {
 	return metricsInterceptor{}
 }
 
-type metricsInterceptor struct{}
+type metricsInterceptor struct{ serverOnly }
 
 func (metricsInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 	return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
@@ -58,12 +58,6 @@ func (metricsInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 		observeRPC(req.Spec().Procedure, err, time.Since(start))
 		return res, err
 	}
-}
-
-// WrapStreamingClient is a no-op: ichor-ui only serves RPCs, it never places
-// outgoing Connect calls of its own, so there is nothing here to time.
-func (metricsInterceptor) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
-	return next
 }
 
 func (metricsInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {

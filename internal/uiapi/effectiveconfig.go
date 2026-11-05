@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/container"
@@ -93,12 +94,7 @@ func effectiveConfigValues(
 		return nil, err
 	}
 
-	paths := make([]string, 0, len(plain))
-	for p := range plain {
-		paths = append(paths, p)
-	}
-
-	slices.Sort(paths)
+	paths := slices.Sorted(maps.Keys(plain))
 
 	values := make([]*pb.EffectiveConfigValue, 0, len(paths))
 

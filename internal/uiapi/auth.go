@@ -277,7 +277,17 @@ func AuthInterceptor(a *Authenticator, allowAnonymous bool) connect.Interceptor 
 	return authInterceptor{a: a, anonymous: allowAnonymous}
 }
 
+// serverOnly is the WrapStreamingClient every interceptor here shares: ichor-ui only serves RPCs, it
+// places no outgoing Connect calls, so there is nothing to wrap.
+type serverOnly struct{}
+
+func (serverOnly) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
+	return next
+}
+
 type authInterceptor struct {
+	serverOnly
+
 	a         *Authenticator
 	anonymous bool
 }
@@ -308,7 +318,7 @@ func (i authInterceptor) auth(ctx context.Context, authz, procedure string) (con
 		return ctx, connect.NewError(connect.CodePermissionDenied, errors.New("change your password first"))
 	}
 
-	return context.WithValue(ctx, identityKey{}, id), nil
+	return ContextWithIdentity(ctx, id), nil
 }
 
 func (i authInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
@@ -320,10 +330,6 @@ func (i authInterceptor) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 
 		return next(ctx, req)
 	}
-}
-
-func (i authInterceptor) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
-	return next
 }
 
 func (i authInterceptor) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {

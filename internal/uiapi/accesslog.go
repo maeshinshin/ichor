@@ -40,6 +40,8 @@ func AccessLogInterceptor(l *log.Logger, logBodies bool) connect.Interceptor {
 }
 
 type accessLog struct {
+	serverOnly
+
 	l      *log.Logger
 	bodies bool
 }
@@ -63,10 +65,6 @@ func (a accessLog) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 
 		return res, err
 	}
-}
-
-func (accessLog) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
-	return next
 }
 
 func (a accessLog) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {

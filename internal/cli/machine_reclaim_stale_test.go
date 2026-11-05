@@ -24,7 +24,6 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -33,7 +32,7 @@ import (
 
 func staleMachine(name, uuid, state string) *ichorv1alpha1.TalosMachine {
 	return &ichorv1alpha1.TalosMachine{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: testNamespace},
+		Name: name, Namespace: testNamespace,
 		Spec: ichorv1alpha1.TalosMachineSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: "c"}, Identity: ichorv1alpha1.TalosMachineIdentity{UUID: uuid},
 			ApprovalState: state,

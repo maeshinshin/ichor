@@ -102,7 +102,8 @@ func Assess(in Inspection, known Known, opt Options) Plan {
 	case etcdDown:
 		p.Warnings = append(p.Warnings, fmt.Sprintf(
 			"etcd on this control plane is not running or does not answer (%s): cluster %q is treated as not existing, "+
-				"so its quorum cannot be checked and the reset is not graceful (--force-ungraceful given)", in.EtcdProblem, in.ClusterName))
+				"so its quorum cannot be checked and the reset is not graceful (--force-ungraceful given)",
+			in.EtcdProblem, in.ClusterName))
 	}
 
 	if in.ControlPlane && in.EtcdKnown {

@@ -525,9 +525,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			Expect(target.bootstrapRecoverCalls).To(Equal(1))
 
 			target.etcdStatusErr = nil
-			done, err = next.step(ctx)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(done).To(BeTrue())
+			Expect(next.step(ctx)).To(BeTrue())
 
 			for name, fk := range f.fakes {
 				Expect(fk.resetEtcdCalls).To(Equal(resets[name]), "no wipe after the recovery began")

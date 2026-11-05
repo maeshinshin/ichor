@@ -1084,9 +1084,7 @@ func parseRotationCrt(f *caRotFixture, op *ichorv1alpha1.TalosOperation) []byte 
 		}
 	}
 
-	got, err := secretsbundle.Fingerprint(f.storedBundle().Certs.OS.Crt)
-	Expect(err).NotTo(HaveOccurred())
-	Expect(got).To(Equal(want))
+	Expect(secretsbundle.Fingerprint(f.storedBundle().Certs.OS.Crt)).To(Equal(want))
 
 	return f.storedBundle().Certs.OS.Crt
 }

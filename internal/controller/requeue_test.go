@@ -128,9 +128,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 	It("asks to be looked at again when the node's current configuration cannot be read", func() {
 		_, m, _ := newBundledMachine()
 		fake := &fakeTalosClient{currentErr: errors.New("read failed")}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		res, err := reconcileMachine(r, m)
+		res, err := reconcileMachine(newTestReconciler(fake), m)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.RequeueAfter).To(Equal(transientRecheck))
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonCurrentConfigUnavailable))
@@ -142,7 +140,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+		r := newTestReconciler(fake)
 
 		reconcileOK(r, m)
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonConverged))
@@ -211,7 +209,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: current, identity: HardwareIdentity{UUID: m.Spec.Identity.UUID}}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+		r := newTestReconciler(fake)
 
 		reconcileOK(r, m)
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonConverged))
@@ -244,7 +242,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+		r := newTestReconciler(fake)
 
 		reconcileOK(r, m)
 
@@ -278,7 +276,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		newTestPatch(cluster.Name, layerCluster, nil, extraArgsConfig())
 
 		fake := &fakeTalosClient{current: current, applyErr: errors.New("node busy")}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+		r := newTestReconciler(fake)
 
 		res, err := reconcileMachine(r, m)
 		Expect(err).NotTo(HaveOccurred())
@@ -301,9 +299,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		newTestPatch(cluster.Name, layerCluster, nil, desired)
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		res, err := reconcileMachine(r, m)
+		res, err := reconcileMachine(newTestReconciler(fake), m)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.RequeueAfter).To(BeZero())
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonRebootRequired))
@@ -319,9 +315,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		newTestPatch(cluster.Name, "machine", target, desired)
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		res, err := reconcileMachine(r, m)
+		res, err := reconcileMachine(newTestReconciler(fake), m)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.RequeueAfter).To(BeZero())
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonInstallTimeOnlyChange))
@@ -334,7 +328,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: rendered}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+		r := newTestReconciler(fake)
 		reconcileOK(r, m)
 
 		drifted := extraArgsConfig()

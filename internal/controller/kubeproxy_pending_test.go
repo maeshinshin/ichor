@@ -84,7 +84,7 @@ var _ = Describe("a kube-proxy mode committed to spec ahead of the switch", func
 				f := setup(d.from, d.to)
 				Expect(k8sClient.Update(ctx, f.cluster)).To(Succeed())
 
-				r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(f.fake)}
+				r := newTestReconciler(f.fake)
 				_, err := reconcileMachine(r, f.m) // adds the removal finalizer of an approved control plane
 				Expect(err).NotTo(HaveOccurred())
 

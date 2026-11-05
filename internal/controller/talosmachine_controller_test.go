@@ -343,6 +343,13 @@ func clientFactory(fake *fakeTalosClient) func(
 	}
 }
 
+// newTestReconciler is a TalosMachineReconciler against the envtest API whose every dial answers with fake.
+func newTestReconciler(fake *fakeTalosClient) *TalosMachineReconciler {
+	return &TalosMachineReconciler{
+		Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake),
+	}
+}
+
 var (
 	testBundleMu    sync.Mutex
 	testBundleCache = map[string]*secrets.Bundle{}
@@ -635,9 +642,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileOK(r, m)
+		reconcileOK(newTestReconciler(fake), m)
 
 		Expect(fake.dryRunCalls).To(Equal(0))
 		Expect(fake.applyCalls).To(BeEmpty())
@@ -656,9 +661,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: current, nodeName: "ichor-cp-1"}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileOK(r, m)
+		reconcileOK(newTestReconciler(fake), m)
 		Expect(fetchMachine(m).Status.NodeName).To(Equal("ichor-cp-1"))
 	})
 
@@ -690,9 +693,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileOK(r, m)
+		reconcileOK(newTestReconciler(fake), m)
 
 		got := fetchMachine(m)
 		cond := readyCondition(got)
@@ -720,9 +721,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(string(fake.current)).To(ContainSubstring("mirrors:"))
 		Expect(string(fake.current)).NotTo(ContainSubstring("RegistryMirrorConfig"))
 
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileOK(r, m)
+		reconcileOK(newTestReconciler(fake), m)
 
 		got := fetchMachine(m)
 		cond := readyCondition(got)
@@ -743,9 +742,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileOK(r, m)
+		reconcileOK(newTestReconciler(fake), m)
 
 		Expect(fake.dryRunCalls).To(Equal(1))
 		Expect(fake.applyCalls).To(HaveLen(1))
@@ -777,9 +774,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 			}
 
 			fake := &fakeTalosClient{current: current}
-			r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-			reconcileOK(r, m)
+			reconcileOK(newTestReconciler(fake), m)
 
 			Expect(fake.applyCalls).To(BeEmpty())
 			Expect(fake.stagedCalls).To(BeEmpty(), "no operation, so nothing is staged")
@@ -818,9 +813,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		newTestPatch(cluster.Name, "machine", target, desired)
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileOK(r, m)
+		reconcileOK(newTestReconciler(fake), m)
 
 		Expect(fake.applyCalls).To(BeEmpty())
 
@@ -843,9 +836,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		newTestSysctlPatch(cluster.Name, map[string]string{"net.ipv4.ip_forward": "1"})
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileOK(r, m)
+		reconcileOK(newTestReconciler(fake), m)
 
 		Expect(fake.applyCalls).To(BeEmpty())
 
@@ -863,9 +854,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		newTestPatch(cluster.Name, layerCluster, nil, desired)
 
 		fake := &fakeTalosClient{current: current, warnings: []string{"deprecated field migrated: example"}}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileOK(r, m)
+		reconcileOK(newTestReconciler(fake), m)
 
 		got := fetchMachine(m)
 		warn := warningsCondition(got)
@@ -894,9 +883,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileOK(r, m)
+		reconcileOK(newTestReconciler(fake), m)
 
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(fake.applyCalls[0]).To(Equal(wantRendered))
@@ -916,7 +903,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: wantRendered}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+		r := newTestReconciler(fake)
 
 		// First reconcile converges: nothing to apply, but it records the
 		// fingerprint of what fed this render (cluster, machine, patch).
@@ -959,7 +946,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		other.ClusterConfig.APIServerConfig.ExtraArgsConfig["foo"] = []string{"c"}
 
 		fake := &fakeTalosClient{current: renderWithConfig(cluster, m, bundle, layerCluster, nil, other)}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+		r := newTestReconciler(fake)
 
 		reconcileOK(r, m)
 		Expect(fake.applyCalls).To(BeEmpty())
@@ -1003,9 +990,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: legacyMirrorForm(rendered)}
 		Expect(string(fake.current)).NotTo(ContainSubstring("RegistryMirrorConfig"))
 
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileOK(r, m)
+		reconcileOK(newTestReconciler(fake), m)
 		Expect(fake.applyCalls).To(BeEmpty())
 
 		got := fetchMachine(m)
@@ -1025,7 +1010,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: wantRendered}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+		r := newTestReconciler(fake)
 
 		reconcileOK(r, m)
 		Expect(fetchMachine(m).Status.AppliedConfigHash).To(Equal(wantHash))
@@ -1074,7 +1059,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: before}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+		r := newTestReconciler(fake)
 
 		reconcileOK(r, m)
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonConverged))
@@ -1117,7 +1102,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: wantRendered}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+		r := newTestReconciler(fake)
 
 		reconcileOK(r, m)
 		Expect(fetchMachine(m).Status.AppliedConfigHash).To(Equal(wantHash))
@@ -1150,7 +1135,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: baseline}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+		r := newTestReconciler(fake)
 
 		reconcileOK(r, m)
 		Expect(fetchMachine(m).Status.AppliedConfigHash).To(Equal(baseHash))
@@ -1185,9 +1170,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		wantPatchSpec := patch.Spec.DeepCopy()
 
 		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileOK(r, m)
+		reconcileOK(newTestReconciler(fake), m)
 
 		gotMachine := fetchMachine(m)
 		Expect(reflect.DeepEqual(&gotMachine.Spec, wantMachineSpec)).To(BeTrue(), "TalosMachine.spec was modified")

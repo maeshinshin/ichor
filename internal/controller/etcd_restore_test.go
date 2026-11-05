@@ -135,13 +135,7 @@ func (f *restoreFixture) newOp(mutate func(*ichorv1alpha1.TalosOperation)) *icho
 }
 
 func (f *restoreFixture) reconcile(op *ichorv1alpha1.TalosOperation) *ichorv1alpha1.TalosOperation {
-	return f.reconcileWith(f.r, op)
-}
-
-func (f *restoreFixture) reconcileWith(r *TalosOperationReconciler, op *ichorv1alpha1.TalosOperation) *ichorv1alpha1.TalosOperation {
-	mustReconcileOperation(r, op)
-
-	return fetchOperation(op)
+	return reconcileFetch(f.r, op)
 }
 
 func (f *restoreFixture) fake(host string) *fakeTalosClient { return f.fakes[f.cps[host].Name] }
@@ -402,11 +396,11 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			Expect(got.UID).NotTo(Equal(op.UID))
 
 			f.members(f.hosts()...)
-			got = f.reconcileWith(restarted, op)
+			got = reconcileFetch(restarted, op)
 			Expect(got.Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepReconciling))
 
 			f.converged(got.Status.EtcdRestore.ReconcileRequest)
-			Expect(f.reconcileWith(restarted, op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
+			Expect(reconcileFetch(restarted, op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
 			Expect(f.marker()).To(BeNil())
 		})
 
@@ -472,7 +466,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			restarted := f.reconciler("")
 			f.jobs = nil
 
-			got := f.reconcileWith(restarted, op)
+			got := reconcileFetch(restarted, op)
 			Expect(got.Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepWiping))
 			Expect(f.jobs).To(HaveLen(1))
 			Expect(f.jobs[0]).NotTo(BeIdenticalTo(first))
@@ -510,7 +504,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			restarted := f.reconciler("")
 			f.jobs = nil
 
-			got := f.reconcileWith(restarted, op)
+			got := reconcileFetch(restarted, op)
 			Expect(got.Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRecovering), "the status catches up with the marker")
 
 			next := f.lastJob()
@@ -542,7 +536,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			f.jobs = nil
 
 			f.converged(fetchOperation(op).Status.EtcdRestore.ReconcileRequest)
-			Expect(f.reconcileWith(restarted, op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
+			Expect(reconcileFetch(restarted, op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
 			Expect(f.jobs).To(BeEmpty())
 		})
 
@@ -833,7 +827,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 
 			f.jobs = nil
 			r2 := f.reconciler(restoreHostB) // the replacement runs elsewhere; the marker still names the own node
-			f.reconcileWith(r2, op)
+			reconcileFetch(r2, op)
 
 			job := f.lastJob()
 			Expect(job.own).NotTo(BeNil())

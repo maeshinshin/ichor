@@ -384,10 +384,7 @@ func (f *caRotFixture) step(op *ichorv1alpha1.TalosOperation) *ichorv1alpha1.Tal
 		f.acknowledge(op)
 	}
 
-	_, err := reconcileOperation(f.newReconciler(), op)
-	Expect(err).NotTo(HaveOccurred())
-
-	return fetchOperation(op)
+	return reconcileFetch(f.newReconciler(), op)
 }
 
 // acknowledge does what the CLI does once it has written the operator's credentials: it sets the

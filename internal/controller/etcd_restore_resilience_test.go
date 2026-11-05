@@ -168,14 +168,14 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 
 	It("restarts the kubelet of a node that was not wiped, then its kube-proxy pod, and moves on only when the new pod is Ready", func() {
 		kc := kubeProxyCluster()
-		f, op, r, worker := restoreWithWorker(kc)
+		_, op, r, worker := restoreWithWorker(kc)
 
-		got := f.reconcileWith(r, op)
+		got := reconcileFetch(r, op)
 		Expect(worker.serviceRestarts).To(Equal([]string{compKubelet}), "the kubelet is restarted through Talos first")
 		Expect(podNames(kc, "kube-system")).To(ContainElement("kube-proxy-w"), "the pod is not deleted before the kubelet is back")
 		Expect(got.Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRejoining))
 
-		got = f.reconcileWith(r, op)
+		got = reconcileFetch(r, op)
 		Expect(worker.serviceRestarts).To(HaveLen(1), "the kubelet is restarted once")
 		Expect(podNames(kc, "kube-system")).To(ConsistOf("kube-proxy-a", "coredns-w"), "only the worker's kube-proxy pod went")
 		Expect(podNames(kc, "other")).To(ConsistOf("kube-proxy-other"))
@@ -189,7 +189,7 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 		}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		got = f.reconcileWith(r, op)
+		got = reconcileFetch(r, op)
 		Expect(got.Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepReconciling))
 	})
 
@@ -208,10 +208,10 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 		}, metav1.CreateOptions{})
 		Expect(err).NotTo(HaveOccurred())
 
-		f, op, r, _ := restoreWithWorker(kc)
+		_, op, r, _ := restoreWithWorker(kc)
 
-		f.reconcileWith(r, op)
-		f.reconcileWith(r, op)
+		reconcileFetch(r, op)
+		reconcileFetch(r, op)
 		Expect(podNames(kc, "kube-system")).NotTo(ContainElement("cilium-w"), "the CNI pod of the worker went with kube-proxy's")
 		Expect(podNames(kc, "kube-system")).To(ContainElement("coredns-w"))
 	})
@@ -223,12 +223,12 @@ var _ = Describe("TalosOperation etcd-restore after a restart of the controller"
 		DeferCleanup(func() { agentsBound = old })
 
 		kc := kubeProxyCluster()
-		f, op, r, _ := restoreWithWorker(kc)
+		_, op, r, _ := restoreWithWorker(kc)
 
-		f.reconcileWith(r, op)
+		reconcileFetch(r, op)
 		time.Sleep(5 * time.Millisecond)
 
-		got := f.reconcileWith(r, op)
+		got := reconcileFetch(r, op)
 		Expect(got.Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepReconciling))
 		Expect(got.Status.EtcdRestore.Message).To(ContainSubstring("wk-1"))
 		Expect(got.Status.EtcdRestore.Message).To(ContainSubstring("kube-proxy"))

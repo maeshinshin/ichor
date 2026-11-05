@@ -19,10 +19,11 @@ package cli
 import (
 	"context"
 	"fmt"
-
 	"os/signal"
+	"slices"
 	"syscall"
 
+	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -67,13 +68,7 @@ const (
 // caller holds) is used over HTTPS; an older cluster has
 // neither, and keeps the first port (the old 8080 path).
 func uiEndpoint(ctx context.Context, c client.Client, svc *corev1.Service, haveCAFile bool) (int32, []byte) {
-	has8443 := false
-
-	for _, p := range svc.Spec.Ports {
-		has8443 = has8443 || p.Port == uiHTTPSPort
-	}
-
-	if !has8443 {
+	if !slices.ContainsFunc(svc.Spec.Ports, func(p corev1.ServicePort) bool { return p.Port == uiHTTPSPort }) {
 		return svc.Spec.Ports[0].Port, nil
 	}
 
@@ -133,7 +128,7 @@ silently. Press Ctrl-C to stop.`,
 		deps := uiDeps{
 			K8s:         k8sClient,
 			Forward:     portForwardToPod(cfg, clientset),
-			OpenBrowser: openBrowser,
+			OpenBrowser: browser.OpenURL,
 			Stdout:      cmd.OutOrStdout(),
 			Stderr:      cmd.ErrOrStderr(),
 		}

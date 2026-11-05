@@ -65,21 +65,10 @@ type uiDeps struct {
 // podReady reports whether pod is a forwarding target: running, marked
 // Ready, and not already on its way out.
 func podReady(pod *corev1.Pod) bool {
-	if pod.DeletionTimestamp != nil {
-		return false
-	}
-
-	if pod.Status.Phase != corev1.PodRunning {
-		return false
-	}
-
-	for _, c := range pod.Status.Conditions {
-		if c.Type == corev1.PodReady {
-			return c.Status == corev1.ConditionTrue
-		}
-	}
-
-	return false
+	return pod.DeletionTimestamp == nil && pod.Status.Phase == corev1.PodRunning &&
+		slices.ContainsFunc(pod.Status.Conditions, func(c corev1.PodCondition) bool {
+			return c.Type == corev1.PodReady && c.Status == corev1.ConditionTrue
+		})
 }
 
 // selectPod is the re-forward decision itself, kept pure and separate

@@ -52,7 +52,7 @@ which needs no login: it writes the user with your kubeconfig's own rights.`,
 
 const useUserDelete = "delete NAME"
 
-var userOpts struct {
+type userFlags struct {
 	displayName   string
 	email         string
 	roles         []string
@@ -61,6 +61,8 @@ var userOpts struct {
 	generate      bool
 	bootstrap     bool
 }
+
+var userOpts userFlags
 
 func init() {
 	pf := userCmd.PersistentFlags()

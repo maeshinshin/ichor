@@ -232,10 +232,7 @@ func TestFsyncDir_ErrorsOnMissingDir(t *testing.T) {
 func TestLoadBundleFileFillsClock(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
-	path, err := saveBundleFile("my-cluster", newTestBundle(t), "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := saveTestBundle(t, "my-cluster", newTestBundle(t), "")
 
 	got, err := loadBundleFile(path)
 	if err != nil {

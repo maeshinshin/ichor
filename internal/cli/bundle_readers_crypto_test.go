@@ -76,10 +76,7 @@ func TestCredentialsFromAnEncryptedBundleFileWorkOffline(t *testing.T) {
 	f := newCredFixture(t, false, "")
 	t.Setenv("HOME", t.TempDir())
 
-	path, err := saveBundleFile("offline", f.old, testBundlePass)
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := saveTestBundle(t, "offline", f.old, testBundlePass)
 
 	req := f.request()
 	req.BundleFile = path

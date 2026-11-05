@@ -22,6 +22,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -265,13 +266,7 @@ func newTestFlow(t *testing.T, iss *fakeIssuer, opened *int) (*authFlow, *bytes.
 	}, &stderr
 }
 
-func interactiveInfo(b bool) string {
-	if b {
-		return strings.Replace(execInfoV1, "%t", "true", 1)
-	}
-
-	return strings.Replace(execInfoV1, "%t", "false", 1)
-}
+func interactiveInfo(b bool) string { return fmt.Sprintf(execInfoV1, b) }
 
 func TestAuthLoginLoopbackPKCE(t *testing.T) {
 	iss := newFakeIssuer(t)

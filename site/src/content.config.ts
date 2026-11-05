@@ -13,6 +13,7 @@ const docs = defineCollection({
   }),
   schema: z.object({
     title: z.string().optional(),
+    description: z.string().optional(),
     sidebar_label: z.string().optional(),
     sidebar_order: z.number().optional(),
   }),

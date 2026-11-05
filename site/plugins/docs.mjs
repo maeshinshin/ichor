@@ -52,11 +52,18 @@ export function remarkDocsLinks({ base }) {
   }
 }
 
-/** The page layout prints the title as an h1, so the Markdown's own is dropped. */
+/**
+ * The page layout prints the title as an h1, so the Markdown's own is dropped:
+ * a `# ` heading, or a first heading that repeats the front matter title
+ * (the generated CLI pages start with `## ichor adopt`).
+ */
 export function remarkDropTitle() {
-  return (tree) => {
-    const i = tree.children.findIndex((n) => n.type === 'heading' && n.depth === 1)
-    if (i >= 0) tree.children.splice(i, 1)
+  return (tree, file) => {
+    const title = file.data.astro?.frontmatter?.title
+    const text = (n) => (n.children ?? []).map((c) => c.value ?? text(c)).join('')
+    const i = tree.children.findIndex((n) => n.type === 'heading')
+    const h = tree.children[i]
+    if (h && (h.depth === 1 || text(h) === title)) tree.children.splice(i, 1)
   }
 }
 

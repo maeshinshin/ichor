@@ -660,7 +660,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 
 		for range 6 {
 			op = f.step(op)
-			Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageAwaitingCredentials), "the early acknowledgement released the gate")
+			Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageAwaitingCredentials), "the early acknowledgement released the gate")
 			Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		}
 
@@ -670,7 +670,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		f.holdHandoff = false
 		op = f.step(op)
 		op = f.step(op)
-		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageIssuing))
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageIssuing))
 	})
 
 	It("rotates through every stage, and each stage's status names the issuing and the accepted CA", func() {

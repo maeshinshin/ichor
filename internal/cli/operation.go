@@ -303,7 +303,8 @@ func watchOperationUntil(ctx context.Context, c *apiClients, ref *pb.ObjectRef, 
 
 			return err
 		})
-		if goneWindow > 0 && connect.CodeOf(err) == connect.CodeNotFound {
+		switch {
+		case goneWindow > 0 && connect.CodeOf(err) == connect.CodeNotFound:
 			if goneSince.IsZero() {
 				goneSince = time.Now()
 
@@ -313,39 +314,29 @@ func watchOperationUntil(ctx context.Context, c *apiClients, ref *pb.ObjectRef, 
 			if time.Since(goneSince) > goneWindow {
 				return rep.abort(err, false)
 			}
-
-			select {
-			case <-ctx.Done():
-				return rep.abort(ctx.Err(), true)
-			case <-time.After(opWatchInterval):
-			}
-
-			continue
-		}
-
-		if err != nil {
+		case err != nil:
 			return rep.abort(err, ctx.Err() != nil)
-		}
+		default:
+			goneSince = time.Time{}
 
-		goneSince = time.Time{}
+			op := resp.Msg.GetOperation()
 
-		op := resp.Msg.GetOperation()
+			rep.show(op)
 
-		rep.show(op)
+			failed := opFailed(op)
+			if opFinished(op) || failed {
+				rep.end(op)
 
-		failed := opFailed(op)
-		if opFinished(op) || failed {
-			rep.end(op)
+				if err := printAPI(out, resp.Msg, renderOperationGet); err != nil {
+					return err
+				}
 
-			if err := printAPI(out, resp.Msg, renderOperationGet); err != nil {
-				return err
+				if failed {
+					return fmt.Errorf("operation %s paused after a failure: %s (fix the cause, then `ichor operation resume %[1]s`)", ref.GetName(), op.GetFailureReason())
+				}
+
+				return nil
 			}
-
-			if failed {
-				return fmt.Errorf("operation %s paused after a failure: %s (fix the cause, then `ichor operation resume %[1]s`)", ref.GetName(), op.GetFailureReason())
-			}
-
-			return nil
 		}
 
 		select {

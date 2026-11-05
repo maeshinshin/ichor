@@ -17,11 +17,8 @@ limitations under the License.
 package controller
 
 import (
-	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"sync"
-	"sync/atomic"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -165,24 +162,12 @@ var _ = Describe("DiscoveryReconciler.DiscoverAll pending machines", func() {
 		machineAt(cluster, "refresh-approved", "198.51.100.33", "S-approved", ichorv1alpha1.MachineApprovalStateApproved)
 		machineAt(cluster, "refresh-rejected", "198.51.100.34", "S-rejected2", ichorv1alpha1.MachineApprovalStateRejected)
 
-		var (
-			mu     sync.Mutex
-			probed []string
-		)
-
-		factory := func(_ context.Context, endpoint string) (MaintenanceClient, error) {
-			mu.Lock()
-			probed = append(probed, endpoint)
-			mu.Unlock()
-
-			return node("refresh-approved", "S-approved"), nil
-		}
-
-		r := &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: factory}
+		probes := &probeRecorder{client: node("refresh-approved", "S-approved")}
+		r := &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: probes.factory}
 
 		_, err := r.DiscoverAll(ctx, cluster)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(probed).To(BeEmpty())
+		Expect(probes.endpoints).To(BeEmpty())
 		Expect(getMachine(tmNamespace, "refresh-approved").Status.MaintenanceFingerprint).To(Equal(oldFP))
 		Expect(getMachine(tmNamespace, "refresh-rejected").Status.MaintenanceFingerprint).To(Equal(oldFP))
 	})
@@ -191,27 +176,14 @@ var _ = Describe("DiscoveryReconciler.DiscoverAll pending machines", func() {
 		cluster := clusterAt("refresh-node-cluster", "198.51.100.35")
 		machineAt(cluster, "refresh-member", "198.51.100.35", "S-member", ichorv1alpha1.MachineApprovalStatePending)
 
-		n := &corev1.Node{}
-		n.Name = "refresh-member-node"
-		Expect(k8sClient.Create(ctx, n)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, n) })
+		createNode("refresh-member-node", "198.51.100.35", nil)
 
-		n.Status.Addresses = []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "198.51.100.35"}}
-		Expect(k8sClient.Status().Update(ctx, n)).To(Succeed())
-
-		var probed atomic.Int32
-
-		factory := func(context.Context, string) (MaintenanceClient, error) {
-			probed.Add(1)
-
-			return node("refresh-member", "S-member"), nil
-		}
-
-		r := &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: factory}
+		probes := &probeRecorder{client: node("refresh-member", "S-member")}
+		r := &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: probes.factory}
 
 		_, err := r.DiscoverAll(ctx, cluster)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(probed.Load()).To(BeZero())
+		Expect(probes.endpoints).To(BeEmpty())
 	})
 
 	It("writes nothing and records no Event when the pending machine answers with the certificate it pinned", func() {

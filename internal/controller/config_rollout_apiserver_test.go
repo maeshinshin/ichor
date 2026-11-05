@@ -93,8 +93,7 @@ var _ = Describe("the API server restart class", func() {
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
 		for range 2 { // the first reconcile of a control plane only adds its removal finalizer
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, cp)
 		}
 
 		Expect(fake.applyCalls).To(BeEmpty(), "applying it from here would restart every control plane's API server at once")
@@ -122,8 +121,7 @@ var _ = Describe("the API server restart class", func() {
 		fake := &fakeTalosClient{current: renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 		Expect(fake.applyCalls).To(HaveLen(1))
 	})
 
@@ -287,8 +285,7 @@ var _ = Describe("the API server restart class", func() {
 		fake1.apiReadyErr = errors.New("connection refused")
 
 		for range 6 {
-			_, err := reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(r, op)
 			restart(fake1, cp1)
 		}
 
@@ -298,8 +295,7 @@ var _ = Describe("the API server restart class", func() {
 		fake1.apiReadyErr = nil
 
 		for range 8 {
-			_, err := reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(r, op)
 			restart(fake2, cp2)
 		}
 

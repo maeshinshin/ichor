@@ -421,8 +421,7 @@ var _ = Describe("DiscoveryReconciler.Discover", func() {
 		talosFake := &fakeTalosClient{}
 		cr := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(talosFake)}
 
-		_, err = reconcileMachine(cr, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(cr, m)
 
 		Expect(talosFake.dryRunCalls).To(BeZero())
 		Expect(talosFake.applyCalls).To(BeEmpty())

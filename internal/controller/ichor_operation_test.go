@@ -61,8 +61,7 @@ var _ = Describe("TalosOperationReconciler, kind ichor", func() {
 		Expect(got.Status.Machines).To(BeEmpty())
 
 		failure = errors.New("job failed")
-		_, err = reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 
 		got = fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
@@ -80,8 +79,7 @@ var _ = Describe("TalosOperationReconciler, kind ichor", func() {
 			return false, refusal
 		}}
 
-		_, err := reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 
 		got := fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
@@ -91,8 +89,7 @@ var _ = Describe("TalosOperationReconciler, kind ichor", func() {
 
 		// Reconciled again without a retry request, it stays paused and runs nothing.
 		refusal.err = errors.New("must not run")
-		_, err = reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 		Expect(fetchOperation(op).Status.FailureReason).To(ContainSubstring("has no cosign signature"))
 	})
 
@@ -104,8 +101,7 @@ var _ = Describe("TalosOperationReconciler, kind ichor", func() {
 			return true, nil
 		}}
 
-		_, err := reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 
 		got := fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
@@ -137,8 +133,7 @@ var _ = Describe("TalosOperationReconciler, kind ichor", func() {
 			return done, nil
 		}}
 
-		_, err := reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 
 		got := fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
@@ -146,13 +141,11 @@ var _ = Describe("TalosOperationReconciler, kind ichor", func() {
 
 		// An unchanged message is not written again.
 		version := got.ResourceVersion
-		_, err = reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 		Expect(fetchOperation(op).ResourceVersion).To(Equal(version))
 
 		done = true
-		_, err = reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 
 		got = fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))

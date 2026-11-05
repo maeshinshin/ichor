@@ -1109,8 +1109,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		}
 
 		for range 2 {
-			_, err := reconcileMachine(mr, f.machines[0])
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(mr, f.machines[0])
 		}
 
 		Expect(dials).To(BeZero())
@@ -1125,8 +1124,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		r := f.newReconciler()
 		r.Advance = advancer.Advance
 
-		_, err := reconcileOperation(r, other)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, other)
 		Expect(fetchOperation(other).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		expectPausedBecause(fetchOperation(other), reasonOperationKeyRotating)
 		Expect(advancer.calls).To(BeEmpty())
@@ -1139,8 +1137,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		}
 
 		applied := len(f.world.applies)
-		_, err = reconcileMachine(mr, f.machines[0])
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(mr, f.machines[0])
 		Expect(f.world.applies).To(HaveLen(applied), "the machine controller applied something after the rotation")
 		Expect(readyCondition(fetchMachine(f.machines[0])).Status).To(Equal(metav1.ConditionTrue))
 	})

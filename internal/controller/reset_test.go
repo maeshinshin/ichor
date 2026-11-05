@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
@@ -71,15 +70,12 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 		Expect(k8sClient.Status().Update(ctx, &live)).To(Succeed())
 
 		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
-		_, err := reconcileMachine(r, cp1)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, cp1)
 
 		Expect(fake.resetCalls).To(Equal(0))
 		Eventually(recorder.Events).Should(Receive(And(ContainSubstring(reasonNodeStillHasClusterCredentials), ContainSubstring("kubectl delete node "+resetTestNode))))
 
-		var gone ichorv1alpha1.TalosMachine
-		err = k8sClient.Get(ctx, client.ObjectKeyFromObject(cp1), &gone)
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		Expect(machineGone(cp1)).To(BeTrue())
 	})
 
 	It("resets the node when the removal opts in, clears the finalizer, and does not warn about credentials", func() {
@@ -95,15 +91,12 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 		reconcileEach(r, cps)
 
 		optIntoReset(cp1)
-		_, err := reconcileMachine(r, cp1)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, cp1)
 
 		Expect(fake.resetCalls).To(Equal(1))
 		Consistently(recorder.Events).ShouldNot(Receive())
 
-		var gone ichorv1alpha1.TalosMachine
-		err = k8sClient.Get(ctx, client.ObjectKeyFromObject(cp1), &gone)
-		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "a successful opt-in reset must still let the removal complete")
+		Expect(machineGone(cp1)).To(BeTrue(), "a successful opt-in reset must still let the removal complete")
 	})
 
 	It("wipes the whole system disk when the removal asks for a wipe mode", func() {
@@ -122,8 +115,7 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 		Expect(k8sClient.Update(ctx, got)).To(Succeed())
 		optIntoReset(cp1)
 
-		_, err := reconcileMachine(r, cp1)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, cp1)
 		Expect(fake.resetModes).To(Equal([]string{ichorv1alpha1.WipeModeSystemDisk}))
 	})
 
@@ -139,8 +131,7 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 		reconcileEach(r, cps)
 
 		optIntoReset(cp1)
-		_, err := reconcileMachine(r, cp1)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, cp1)
 
 		got := fetchMachine(cp1)
 		cond := apimeta.FindStatusCondition(got.Status.Conditions, conditionRemoval)
@@ -175,13 +166,10 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 		}}
 		Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
 
-		_, err := reconcileMachine(r, cp1)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, cp1)
 
 		Expect(fake.resetCalls).To(Equal(0), "already requested -- a fire-and-forget RPC has nothing left to retry")
 
-		var gone ichorv1alpha1.TalosMachine
-		err = k8sClient.Get(ctx, client.ObjectKeyFromObject(cp1), &gone)
-		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "the resumed reconcile must still complete the removal")
+		Expect(machineGone(cp1)).To(BeTrue(), "the resumed reconcile must still complete the removal")
 	})
 })

@@ -1,6 +1,6 @@
 # 0125. Kubelet serving certificates are requested by the kubelets and approved by the controller
 
-Status: Accepted · Date: 2026-11-04 · Design section: Security · Touches: 0101, 0108
+Status: Accepted; built; hardware verification pending · Date: 2026-11-04 · Design section: Security · Touches: 0101, 0108
 
 Decided: `TalosCluster.spec.security.kubeletServingCertificates` (`enabled`, `verifyFromAPIServer`, both off by default, for new and existing clusters) makes every kubelet request its serving certificate from the `kubernetes.io/kubelet-serving` signer (`serverTLSBootstrap`), and Ichor's controller approves those requests itself, with a narrow rule, instead of asking the user to install a third-party approver. With `verifyFromAPIServer` the kube-apiserver also verifies the kubelets against the Kubernetes CA (`--kubelet-certificate-authority`), but only after every machine has been issued a certificate, and it stays on once on.
 

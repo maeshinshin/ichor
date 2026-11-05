@@ -1,6 +1,6 @@
 # 0127. The local secrets bundle is encrypted with an age passphrase
 
-Status: Accepted · Date: 2026-11-04 · Design section: Trust · Touches: 0014, 0053, 0063, 0094, 0103, 0108
+Status: Accepted; built; hardware lane B passed 2026-11-05 (restore --recover-cluster from the encrypted file not run) · Date: 2026-11-04 · Design section: Trust · Touches: 0014, 0053, 0063, 0094, 0103, 0108
 
 Decided: `~/.ichor/clusters/<name>/secrets.yaml` is written as an age file (armored, one scrypt passphrase recipient, `filippo.io/age`, already a dependency of the etcd backup format) instead of plaintext. `ichor init`, `ichor adopt --recover-secrets` and `ichor cluster bundle-export` seal new files by default; a passphrase comes from `--bundle-passphrase-file PATH` (any readable path, so `/dev/fd/3` and `/dev/stdin` work), then `$ICHOR_BUNDLE_PASSPHRASE`, and on a terminal with neither Ichor generates one and prints it once; with neither on a non-terminal the command refuses before it writes anything, and `--bundle-plaintext` is the explicit, warned opt-out. Every reader (`restore`, `adopt --secrets-bundle`, `cluster credentials --bundle`, `bundle-export`'s read-back, adopt's stored-bundle comparison) recognises an encrypted file by its header and takes the passphrase from the same two sources, then a no-echo prompt. A plaintext file keeps working and warns on every read; `ichor secrets encrypt` migrates one. The file name and path do not change, the in-cluster Secret is untouched, and the local kubeconfig stays plaintext (decision 6).
 

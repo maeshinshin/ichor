@@ -1,6 +1,6 @@
 # 0126. FQDN rules for ichor-ui's external endpoint and no metrics scraping unless a namespace is named
 
-Status: Accepted · Date: 2026-11-04 · Design section: Upgrades (Ichor), Security · Touches: 0100, 0105, 0108, 0114
+Status: Accepted; built; hardware verification pending (FQDN rules and metrics policy) · Date: 2026-11-04 · Design section: Upgrades (Ichor), Security · Touches: 0100, 0105, 0108, 0114
 
 Decided: the last `world` egress rule of Ichor's own policies, ichor-ui to its external OIDC issuer on 443, is replaced by an FQDN rule that the controller derives from the issuer the live ichor-ui Deployment is configured with (`--oidc-issuer` or `ICHOR_OIDC_ISSUER`) and writes as the CiliumNetworkPolicy `ichor-ui-oidc-egress`; the static install copy (`config/cilium-network-policy`, used by `ichor init` and the installer Job) therefore carries no `world` egress rule, and the chart renders one only as a fallback (`networkPolicy.cilium.dynamicTalosEgress=false` or `externalCIDRs`) and only while `ichorUI.oidc.enabled`; the controller's `/metrics` port is no longer open to the whole `cluster` entity: neither the static copy nor the chart opens it unless the chart's `networkPolicy.cilium.metricsNamespaces` names a namespace (optionally narrowed by pod labels, `metricsPodLabels`), and an installer or `ichor init` install allows a scraper with a policy of the operator's own, which the guide gives.
 

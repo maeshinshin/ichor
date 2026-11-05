@@ -283,7 +283,7 @@ func acknowledgeWithChecks(
 			"run this while a CA rotation waits for credentials")
 	}
 
-	if err := checks.Kube(ctx, files.Kubeconfig); err != nil {
+	if err := retryHandoff(ctx, errw, "checking the new kubeconfig", func() error { return checks.Kube(ctx, files.Kubeconfig) }); err != nil {
 		return fmt.Errorf("the new kubeconfig %s does not authenticate to the cluster (%w); NOT acknowledging, so the rotation keeps "+
 			"waiting and your current credentials keep working", files.Kubeconfig, err)
 	}

@@ -141,6 +141,12 @@ try {
         await key('b', 2)
         await until(`document.querySelector('[data-slot=sidebar]')?.dataset.state === 'expanded'`, 'Ctrl-B', 3000)
         check(await ev(`document.querySelector('[data-slot=sidebar]')?.dataset.state === 'expanded'`), `${tag}: Ctrl-B shows the sidebar again`)
+        // Code blocks get a copy button and GitHub alerts render as the preactcn Alert.
+        await open('contributing-docs/')
+        await until(`!!document.querySelector('article pre + div [aria-label="Copy code"]')`, 'the copy button', 3000)
+        check(await ev(`!!document.querySelector('article pre + div [aria-label="Copy code"]')`), `${tag}: code blocks have a copy button`)
+        check(await ev(`!!document.querySelector('article [data-slot=alert]')`), `${tag}: a GitHub alert renders as an Alert`)
+        await shot(`${tag}-contributing`)
         for (const [name, path] of [['home', ''], ['concept', 'concepts/cni/'], ['cli', 'reference/cli/ichor_adopt/'], ['crd', 'reference/crds/taloscluster/'], ['adr-index', 'adr/']]) {
           await open(path)
           await shot(`${tag}-${name}`)

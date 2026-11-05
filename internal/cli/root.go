@@ -18,6 +18,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -59,23 +60,34 @@ cluster knows of a newer Ichor release, or when this binary is older than that
 release. The check is made by the cluster's controller, not by ichor. The line is
 shown on a terminal only, at most once a day per cluster, and never with -o or for
 help and completion. Set ICHOR_NO_UPDATE_NOTICE=1 to turn it off.`,
-	SilenceUsage: true,
+	SilenceUsage:  true,
+	SilenceErrors: true, // executeRoot prints the error once
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	// PersistentPostRun does not run after a failed command, and the notice should show then too.
-	cmd, err := rootCmd.ExecuteC()
-	if err != nil && !errorShown(err) {
-		fmt.Fprintln(os.Stderr, err)
-	}
+	cmd, err := executeRoot(os.Stderr)
 
 	printUpdateNotice(cmd)
 
 	if err != nil {
 		os.Exit(1)
 	}
+}
+
+// executeRoot runs the root command and prints its error once, on errw, unless a failed step showed
+// it already. Cobra's own "Error: ..." line is off (SilenceErrors), or every error would appear twice.
+func executeRoot(errw io.Writer) (*cobra.Command, error) {
+	rootCmd.SetErr(errw)
+
+	cmd, err := rootCmd.ExecuteC()
+	if err != nil && !errorShown(err) {
+		fmt.Fprintln(errw, err)
+	}
+
+	return cmd, err
 }
 
 func init() {

@@ -98,7 +98,7 @@ func loadRetiredFile(bundlePath string) (*secretsbundle.Retired, error) {
 	}
 
 	if st, err := os.Stat(path); err == nil && st.Mode().Perm()&0o077 != 0 {
-		_, _ = fmt.Fprintf(bundleWarnings, "ichor: warning: %s is accessible to other users (mode %04o); run: chmod 600 %s\n", path, st.Mode().Perm(), path)
+		warnBundle("ichor: warning: %s is accessible to other users (mode %04o); run: chmod 600 %s\n", path, st.Mode().Perm(), path)
 	}
 
 	if isEncryptedBundle(raw) {
@@ -117,7 +117,7 @@ func loadRetiredFile(bundlePath string) (*secretsbundle.Retired, error) {
 			return nil, fmt.Errorf("opening the retired keys %q: %w", path, err)
 		}
 	} else {
-		_, _ = fmt.Fprintf(bundleWarnings, "ichor: warning: %s is a plaintext file of retired keys; run: ichor secrets encrypt for the cluster's bundle\n", path)
+		warnBundle("ichor: warning: %s is a plaintext file of retired keys; run: ichor secrets encrypt for the cluster's bundle\n", path)
 	}
 
 	retired, err := secretsbundle.ParseRetired(raw)

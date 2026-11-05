@@ -314,12 +314,12 @@ func loadBundleFile(path string) (*secrets.Bundle, error) {
 	}
 
 	if !encrypted {
-		_, _ = fmt.Fprintf(bundleWarnings, "ichor: warning: %s is a plaintext secrets bundle (every CA key of the cluster); run: ichor secrets encrypt --file %s\n", path, path)
+		warnBundle("ichor: warning: %s is a plaintext secrets bundle (every CA key of the cluster); run: ichor secrets encrypt --file %s\n", path, path)
 	}
 
 	// The mode of the file matters most for plaintext, but a loose mode is worth a word for any bundle.
 	if st, err := os.Stat(path); err == nil && st.Mode().Perm()&0o077 != 0 {
-		_, _ = fmt.Fprintf(bundleWarnings, "ichor: warning: %s is accessible to other users (mode %04o); run: chmod 600 %s\n", path, st.Mode().Perm(), path)
+		warnBundle("ichor: warning: %s is accessible to other users (mode %04o); run: chmod 600 %s\n", path, st.Mode().Perm(), path)
 	}
 
 	bundle, err := secretsbundle.Decode(raw)

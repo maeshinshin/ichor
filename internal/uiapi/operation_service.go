@@ -353,9 +353,9 @@ func caRotationWarning(targets []string) string {
 	var parts []string
 
 	if slices.Contains(targets, ichorv1alpha1.CARotationTargetEtcd) {
-		parts = append(parts, "The etcd of every control plane is restarted once in each of the three stages, one member at a time and only "+
-			"while etcd is healthy; with one control plane the Kubernetes API is unavailable while its etcd restarts. "+
-			"Take an etcd snapshot first (ichor etcd backup now).")
+		parts = append(parts, "Every control plane is rebooted once in each of the three stages (three reboots each), one at a time and only "+
+			"while etcd is healthy, because Talos does not restart etcd on a configuration change; with one control plane the Kubernetes "+
+			"API is unavailable during each reboot. Take an etcd snapshot first (ichor etcd backup now).")
 	}
 
 	if slices.Contains(targets, ichorv1alpha1.CARotationTargetAggregator) {
@@ -658,8 +658,8 @@ func configEffect(machines []*ichorv1alpha1.TalosMachine) pb.OperationEffect {
 }
 
 // apiGoesDown reports whether the plan's own step takes a lone control plane's API server away:
-// a reboot, or a config change (which reboots or restarts it), or an etcd CA rotation, which restarts
-// the etcd member the API server of that control plane depends on.
+// a reboot, or a config change (which reboots or restarts it), or an etcd CA rotation, which reboots
+// the control plane whose etcd member its API server depends on.
 func apiGoesDown(p *opPlan) bool {
 	return p.resp.Effect == pb.OperationEffect_OPERATION_EFFECT_REBOOT || p.kind == ichorv1alpha1.TalosOperationKindConfig ||
 		(p.kind == ichorv1alpha1.TalosOperationKindCARotation && slices.Contains(p.caTargets, ichorv1alpha1.CARotationTargetEtcd)) ||

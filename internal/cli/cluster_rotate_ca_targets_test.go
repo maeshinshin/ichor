@@ -118,7 +118,7 @@ func TestRotateCAPlanOfEtcdAloneHasNoHandoffAndWarnsAboutRestartsAndTheSnapshot(
 	}
 
 	for _, want := range []string{
-		"Rotate the etcd certificate authorities", "no credential hand-off", "restarted once in each of the three stages",
+		"Rotate the etcd certificate authorities", "no credential hand-off", "rebooted once in each of the three stages",
 		"ichor etcd backup now", "ichor cluster bundle-export " + opTestCluster,
 	} {
 		if !strings.Contains(prompt.String(), want) {

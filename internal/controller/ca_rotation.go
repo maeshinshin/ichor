@@ -713,22 +713,8 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 		}
 	}
 
-	// The hand-off token is made of fingerprints visible from Accepting on, so an acknowledgement set before
-	// the operation waits for it would match the moment it does and skip the gate.
-	// Whatever is there when the stage is entered is dropped; one set after it is honoured. The patch goes
-	// through a copy (its response would replace c.op's status) and only the resource version is taken over,
-	// so a change of the annotation after the drop fails the status update below and the next pass drops it.
-	if _, early := c.op.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation]; early &&
-		c.nextStage(stage) == ichorv1alpha1.CARotationStageAwaitingCredentials {
-		patched := c.op.DeepCopy()
-		drop := fmt.Sprintf(`{"metadata":{"annotations":{%q:null}}}`, ichorv1alpha1.CredentialsHandoffAnnotation)
-
-		if err := c.r.Patch(ctx, patched, client.RawPatch(types.MergePatchType, []byte(drop))); err != nil {
-			return ctrl.Result{}, fmt.Errorf("dropping an acknowledgement given before the credentials were awaited: %w", err)
-		}
-
-		delete(c.op.Annotations, ichorv1alpha1.CredentialsHandoffAnnotation)
-		c.op.ResourceVersion = patched.ResourceVersion
+	if err := c.dropEarlyHandoff(ctx, stage); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	// status.machines shows the stage under way: the next one starts empty.
@@ -741,6 +727,31 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 
 	return ctrl.Result{RequeueAfter: caRotationNextStage}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue,
 		reasonCARotationVerifying, fmt.Sprintf("stage %s verified on %d machine(s)", stage, len(machines)))
+}
+
+// dropEarlyHandoff removes the credentials hand-off annotation when the verified stage is the one that
+// leads into AwaitingCredentials. The token is made of fingerprints visible from Accepting on, so an
+// acknowledgement set before the operation waits for it would match the moment it does and skip the gate; one set
+// after it is honoured. The patch goes through a copy (its response would
+// replace c.op's status) and only the resource version is taken over, so a change of the annotation after
+// the drop fails the status update that follows and the next pass drops it.
+func (c *caRun) dropEarlyHandoff(ctx context.Context, stage string) error {
+	if _, early := c.op.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation]; !early ||
+		c.nextStage(stage) != ichorv1alpha1.CARotationStageAwaitingCredentials {
+		return nil
+	}
+
+	patched := c.op.DeepCopy()
+	drop := fmt.Sprintf(`{"metadata":{"annotations":{%q:null}}}`, ichorv1alpha1.CredentialsHandoffAnnotation)
+
+	if err := c.r.Patch(ctx, patched, client.RawPatch(types.MergePatchType, []byte(drop))); err != nil {
+		return fmt.Errorf("dropping an acknowledgement given before the credentials were awaited: %w", err)
+	}
+
+	delete(c.op.Annotations, ichorv1alpha1.CredentialsHandoffAnnotation)
+	c.op.ResourceVersion = patched.ResourceVersion
+
+	return nil
 }
 
 // awaitClients holds the rotation between Issuing and Dropping until in-cluster clients can have

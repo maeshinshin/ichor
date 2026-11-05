@@ -34,7 +34,7 @@ type machineApproveOptions struct {
 	Labels   map[string]string
 	Hostname string
 	Reason   string
-	// InstallDisk is the system disk (see parseInstallDisk); InstallImage the installer image.
+	// InstallDisk is the system disk (see parseDiskSelector); InstallImage the installer image.
 	InstallDisk  string
 	InstallImage string
 
@@ -79,7 +79,7 @@ func runMachineApprove(
 
 	switch {
 	case opts.InstallDisk != "":
-		disk, err := parseInstallDisk(opts.InstallDisk)
+		disk, err := parseDiskSelector("--install-disk", opts.InstallDisk)
 		if err != nil {
 			return err
 		}

@@ -183,7 +183,7 @@ func completeNode(n *adoptNode) error {
 		return nil
 	}
 
-	disk, err := parseInstallDisk(diskArg)
+	disk, err := parseDiskSelector("--install-disk", diskArg)
 	if err != nil {
 		return fmt.Errorf("adopt: node %q: %w", n.M.Spec.Endpoint, err)
 	}

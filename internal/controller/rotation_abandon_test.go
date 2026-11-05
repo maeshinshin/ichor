@@ -57,8 +57,7 @@ var _ = Describe("Deleting a rotation operation", func() {
 				return
 			}
 
-			_, err := reconcileOperation(newReconciler(), op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(newReconciler(), op)
 		}
 
 		Expect(operationGone(op)).To(BeTrue(), "the operation was not released")

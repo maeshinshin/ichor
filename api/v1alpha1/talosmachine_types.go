@@ -291,9 +291,8 @@ type TalosMachineApprovalDecision struct {
 	// +optional
 	Actor string `json:"actor,omitempty"`
 
-	// reason is optional free text, symmetric between approve and reject --
-	// AuditRecord's own wire comment already documents "reason" as "mainly
-	// used for rejections," not exclusive to them.
+	// reason is deprecated: unused, kept so the schema never drops a field. It is no longer
+	// asked for or written; decisions made before it carry the text they were given.
 	// +optional
 	Reason string `json:"reason,omitempty"`
 

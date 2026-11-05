@@ -196,11 +196,9 @@ var _ = Describe("kind: ichor executor, installer image", func() {
 		Expect(jobs()).To(BeEmpty())
 	})
 
-	It("runs an unsigned image under skip, records Skipped with the reason, and warns", func() {
+	It("runs an unsigned image under skip, records Skipped, and warns", func() {
 		inst := startUpgrade()
-		inst.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{
-			Mode: ichorv1alpha1.InstallerSignatureSkip, Reason: "demo build",
-		}
+		inst.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip}
 		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
 
 		images := &fakeInstallerImages{digest: testInstallerDigest, verifyErr: errors.New("must not be called")}
@@ -215,18 +213,18 @@ var _ = Describe("kind: ichor executor, installer image", func() {
 
 		img := currentInstallation().Status.InstallerImage
 		Expect(img.Verification).To(Equal(ichorv1alpha1.InstallerImageSkipped))
-		Expect(img.Reason).To(Equal("demo build"))
+		Expect(img.Reason).To(BeEmpty())
 		Expect(img.Signer).To(BeEmpty())
 		Expect(img.Digest).To(Equal(testInstallerDigest))
 
 		Expect(rec.Events).To(Receive(And(
 			ContainSubstring("Warning "+reasonInstallerSignatureSkipped),
-			ContainSubstring("NOT checked"), ContainSubstring("demo build"), ContainSubstring(testInstallerDigest))))
+			ContainSubstring("NOT checked"), ContainSubstring(testInstallerDigest))))
 	})
 
 	It("still pauses when the tag does not resolve under skip", func() {
 		inst := startUpgrade()
-		inst.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip, Reason: "x"}
+		inst.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip}
 		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
 
 		_, err := upgrade(&fakeInstallerImages{resolveErr: errors.New("no such tag")}, nil)
@@ -251,7 +249,7 @@ var _ = Describe("kind: ichor executor, installer image", func() {
 		Expect(err).To(MatchError(ContainSubstring("spec.installerDigest is now")))
 	})
 
-	It("refuses a digest that is not sha256 and a skip without a reason (the CRD)", func() {
+	It("refuses a digest that is not sha256 and accepts a skip without a reason (the CRD)", func() {
 		inst := createInstallation("v0.2.0")
 
 		inst.Spec.InstallerDigest = "sha512:abc"
@@ -259,7 +257,7 @@ var _ = Describe("kind: ichor executor, installer image", func() {
 
 		inst = currentInstallation()
 		inst.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip}
-		Expect(k8sClient.Update(ctx, inst)).To(MatchError(ContainSubstring("reason is required when mode is skip")))
+		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
 	})
 })
 

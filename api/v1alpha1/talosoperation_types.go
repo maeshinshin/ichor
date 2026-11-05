@@ -17,7 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"cmp"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -419,11 +418,10 @@ type TalosOperationEtcdRestoreSpec struct {
 	// +required
 	Confirm string `json:"confirm"`
 
-	// reason is the override reason the restore was started under. It is part of the record that
-	// survives the rollback.
-	// +kubebuilder:validation:MinLength=1
-	// +required
-	Reason string `json:"reason"`
+	// reason is deprecated: unused, kept so the schema never drops a field. It was the
+	// override reason the restore was started under; it is no longer required, asked for or read.
+	// +optional
+	Reason string `json:"reason,omitempty"`
 }
 
 // TalosOperationNodeSpec is one action on one machine. One action per operation.
@@ -462,13 +460,14 @@ type TalosOperationNodeSpec struct {
 
 	// override asks to override a safety check: the last-worker guard for reboot and shutdown, or the
 	// reset's own gate. It is only honoured when the creator holds the
-	// override verb on the machine (the override webhook checks), with or without a reason, and it goes
-	// into the audit record and an Event.
+	// override verb on the machine (the override webhook checks), and it goes into the audit record and
+	// an Event.
 	// +optional
 	Override bool `json:"override,omitempty"`
 
-	// overrideReason is the optional reason the operator gives for the override. It goes into
-	// the audit record and an Event; without one, the record says no reason was given.
+	// overrideReason is deprecated: unused, kept so the schema never drops a field. It was the
+	// optional reason for an override; no client sets it and nothing reads it. A value written
+	// by an older build still counts as an override (see Overrides).
 	// +kubebuilder:validation:MinLength=1
 	// +optional
 	OverrideReason string `json:"overrideReason,omitempty"`
@@ -482,8 +481,9 @@ type TalosOperationNodeSpec struct {
 	WipeMode string `json:"wipeMode,omitempty"`
 
 	// breakGlassReason is the earlier name of overrideReason, kept because CRD fields are append-only
-	// and operations written by older builds carry it. Deprecated: use override and overrideReason.
-	// Ichor's own CLI and UI never set it; it is read, and gated by the same verb, as an override.
+	// and operations written by older builds carry it. Deprecated: use override.
+	// Ichor's own CLI and UI never set it; its text is not read, but a value still counts, and is gated
+	// by the same verb, as an override.
 	// +kubebuilder:validation:MinLength=1
 	// +optional
 	BreakGlassReason string `json:"breakGlassReason,omitempty"`
@@ -494,12 +494,6 @@ type TalosOperationNodeSpec struct {
 // written before override was a flag keep their gate.
 func (n *TalosOperationNodeSpec) Overrides() bool {
 	return n.Override || n.OverrideReason != "" || n.BreakGlassReason != ""
-}
-
-// EffectiveOverrideReason is overrideReason, or the deprecated breakGlassReason when that is empty. It is
-// empty when no reason was given; that is not the same as not overriding (see Overrides).
-func (n *TalosOperationNodeSpec) EffectiveOverrideReason() string {
-	return cmp.Or(n.OverrideReason, n.BreakGlassReason)
 }
 
 // TalosOperationNodeStatus is the state of a node-kind operation. The machine's own entry in

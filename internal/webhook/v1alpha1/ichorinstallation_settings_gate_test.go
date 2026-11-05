@@ -75,7 +75,7 @@ func TestSettingsGate(t *testing.T) {
 	}
 	bump := func(s *ichorv1alpha1.IchorInstallationSpec) { s.Version = "v0.2.0" }
 	skipSig := func(s *ichorv1alpha1.IchorInstallationSpec) {
-		s.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: "skip", Reason: "demo build"}
+		s.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: "skip"}
 	}
 	pin := func(s *ichorv1alpha1.IchorInstallationSpec) { s.InstallerDigest = "sha256:" + strings.Repeat("a", 64) }
 	table := map[string][]string{
@@ -98,7 +98,7 @@ func TestSettingsGate(t *testing.T) {
 		{name: "version needs /version", user: bgUnitPlain, old: inst(nil), new: inst(bump), wantErr: needVersionRight},
 		{name: "version by holder", user: gateVersioner, old: inst(nil), new: inst(bump), wantEv: "spec.version: v0.1.0 -> v0.2.0"},
 		{name: "skipping the signature check needs /version", user: gateSettings, old: inst(nil), new: inst(skipSig), wantErr: needVersionRight},
-		{name: "skipping the signature check is recorded with its reason", user: gateVersioner, old: inst(nil), new: inst(skipSig), wantEv: "spec.installerSignature.mode: <unset> -> skip"},
+		{name: "skipping the signature check is recorded", user: gateVersioner, old: inst(nil), new: inst(skipSig), wantEv: "spec.installerSignature.mode: <unset> -> skip"},
 		{name: "a digest pin needs /version", user: gateSettings, old: inst(nil), new: inst(pin), wantErr: needVersionRight},
 		{name: "a digest pin by holder", user: gateVersioner, old: inst(nil), new: inst(pin), wantEv: "spec.installerDigest: <unset> -> sha256:"},
 		{name: "users need /settings", user: gateVersioner, old: inst(nil), new: inst(ttl), wantErr: "ichorinstallations/settings"},

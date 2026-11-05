@@ -175,6 +175,8 @@ func (r *TalosOperationReconciler) caRotationFinalizerStep(ctx context.Context, 
 	settled := !caRotationUnderway(op)
 
 	switch {
+	case has && !settled && !op.DeletionTimestamp.IsZero():
+		return r.rotationDeletion(ctx, op, caRotationFinalizer, secretsbundle.RotationKey)
 	case has && settled && (!op.DeletionTimestamp.IsZero() || op.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted):
 		controllerutil.RemoveFinalizer(op, caRotationFinalizer)
 

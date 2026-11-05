@@ -268,6 +268,14 @@ func (s *Server) DeleteOperation(
 		return nil, err
 	}
 
+	// A rotation deleted before its point of no return is abandoned by the controller; past it the delete would
+	// only wait for the end of the rotation, so say so instead of leaving a half-deleted operation.
+	if !ichorv1alpha1.RotationAbandonable(op) {
+		return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf(
+			"the %s operation is in stage %s, past the point it can be taken back from: deleting it now would leave the nodes between "+
+				"two states. Let it finish (or continue it), then delete the record", op.Spec.Kind, rotationStageOf(op)))
+	}
+
 	if err := s.Delete(ctx, op); err != nil {
 		return nil, mapOperationWriteError("deleting operation", namespacedName(ref), err)
 	}
@@ -1122,4 +1130,16 @@ func targetSchematic(cluster *ichorv1alpha1.TalosCluster) string {
 	}
 
 	return upgrade.DefaultSchematic
+}
+
+// rotationStageOf names the stage of a ca-rotation or key-rotation operation, for a message.
+func rotationStageOf(op *ichorv1alpha1.TalosOperation) string {
+	switch {
+	case op.Status.CARotation != nil:
+		return op.Status.CARotation.Stage
+	case op.Status.KeyRotation != nil:
+		return op.Status.KeyRotation.Stage
+	}
+
+	return ""
 }

@@ -23,8 +23,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -34,6 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/cnifacts"
 	"github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
@@ -186,6 +189,30 @@ func (e *CNIHelmJobFailedError) Error() string {
 		"see the Job's pod log", e.JobName, e.Reason, e.Message)
 }
 
+// CNIInvalidValuesError is what AdvanceCNIHelmJob returns, without starting a Job, for Cilium values
+// that fail the check the caller passed (ADR 0099 decision 4).
+type CNIInvalidValuesError struct{ Err error }
+
+func (e *CNIInvalidValuesError) Error() string {
+	return "the Cilium values are not valid, no Helm Job was started: " + strings.ReplaceAll(e.Err.Error(), "\n", "; ")
+}
+
+func (e *CNIInvalidValuesError) Unwrap() error { return e.Err }
+
+// cniValuesCheck is the check a caller of AdvanceCNIHelmJob passes: cilium.ValidateValues on the cluster's
+// values with the same facts the UI reads (cnifacts), the machine configuration rendered from the real
+// secrets bundle in ns.
+func cniValuesCheck(
+	c client.Client, crds client.Reader, ns string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode,
+) func(context.Context) error {
+	src := cnifacts.Source{
+		Client: c, CRDs: crds, Namespace: ns,
+		Bundle: func(ctx context.Context) (*secrets.Bundle, error) { return loadBundle(ctx, c, ns, cluster) },
+	}
+
+	return func(ctx context.Context) error { return src.Validate(ctx, cluster, mode) }
+}
+
 func cniHelmClusterHash(cluster *ichorv1alpha1.TalosCluster) string {
 	sum := sha256.Sum256([]byte(cluster.Namespace + "/" + cluster.Name))
 
@@ -211,9 +238,12 @@ func cniHelmJobName(cluster *ichorv1alpha1.TalosCluster, valuesHash string) stri
 // A caller that needs a run of its own passes since: the Job name is a hash of the values, so a Job
 // that ended before since (the install's, or an earlier switch's, within its 24 h TTL) is not its
 // run. It is deleted and the next call starts a new one. A zero since takes any Job as it is.
+//
+// check (nil: none) runs before a Job is created, never for one that exists; its error is returned as a
+// *CNIInvalidValuesError and no Job is started (ADR 0099, decision 4).
 func AdvanceCNIHelmJob(
 	ctx context.Context, c client.Client, ns string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, nodes int,
-	inst *ichorv1alpha1.IchorInstallation, salt string, since time.Time,
+	inst *ichorv1alpha1.IchorInstallation, check func(context.Context) error, salt string, since time.Time,
 ) (bool, error) {
 	if mode == "" {
 		mode = cni.KubeProxyEnabled
@@ -232,6 +262,12 @@ func AdvanceCNIHelmJob(
 
 	switch {
 	case apierrors.IsNotFound(err):
+		if check != nil {
+			if err := check(ctx); err != nil {
+				return false, &CNIInvalidValuesError{Err: err}
+			}
+		}
+
 		// AlreadyExists: the cache has not seen the Job just created.
 		return false, client.IgnoreAlreadyExists(c.Create(ctx, newCNIHelmJob(ns, name, cluster, mode, inst, hash, takeoverJob(cluster), nodes)))
 	case err != nil:

@@ -32,8 +32,9 @@ type KubePrism struct {
 }
 
 // ValidationContext carries what the caller knows. A nil fact is unknown and
-// its guard passes: the webhook cannot see the cluster. ADR 0099, decision 4,
-// has the controller re-check with live facts before every Job; that is open.
+// its guard passes: the webhook cannot see the cluster. The controller
+// re-checks with live facts before every Job (ADR 0099, decision 4; ADR 0129
+// amendment 2026-11-05); internal/cnifacts builds them.
 type ValidationContext struct {
 	// KubeProxy and Tunnel select Ichor's own values (Tunnel: "", "vxlan",
 	// "geneve").
@@ -53,8 +54,8 @@ type ValidationContext struct {
 // decision 4). The TalosCluster webhook runs it with no facts, so only the
 // chart schema, owned keys, unknown keys and the size cap apply there (ADR
 // 0129); the Connect service adds the facts it can read for the three guards from
-// the Talos guide (`ichor adopt` passes none). The controller does not call it yet.
-// It joins every problem it finds.
+// the Talos guide (`ichor adopt` passes none), and so does the controller before
+// every Helm Job (internal/cnifacts). It joins every problem it finds.
 func ValidateValues(user map[string]any, c ValidationContext) error {
 	// The control-plane count only sets a default (operator.replicas), which validation does not read.
 	p, err := newPreset(c.KubeProxy, c.Tunnel, 0)

@@ -542,7 +542,8 @@ func (a *cniKubeProxyAdvancer) runCiliumJob(
 		return false, err
 	}
 
-	done, err := AdvanceCNIHelmJob(ctx, a.Client, a.ControllerNamespace, cluster, mode, nodes, inst, salt, op.CreationTimestamp.Time)
+	done, err := AdvanceCNIHelmJob(ctx, a.Client, a.ControllerNamespace, cluster, mode, nodes, inst,
+		cniValuesCheck(a.Client, a.Reader, a.ControllerNamespace, cluster, mode), salt, op.CreationTimestamp.Time)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", doing, err)
 	}

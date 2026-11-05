@@ -132,6 +132,8 @@ type CNIHandoverReconciler struct {
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;list;watch
+// The values re-check before a Helm Job reads whether the Gateway API CRDs exist, one CRD by name (ADR 0099, decision 4).
+// +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,resourceNames=gateways.gateway.networking.k8s.io,verbs=get
 
 // The Helm Job runs in kube-system (cniJobNamespace); the controller's namespaced Role there is
 // hand-written (config/rbac/ichor-cni/controller_role.yaml): controller-gen's shared
@@ -307,11 +309,22 @@ func (r *CNIHandoverReconciler) runJob(
 		return ctrl.Result{}, err
 	}
 
-	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, mode, nodes, inst, "", time.Time{})
+	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, mode, nodes, inst,
+		cniValuesCheck(r.Client, r.reader(), r.Namespace, cluster, mode), "", time.Time{})
 
 	var failed *CNIHelmJobFailedError
 
+	var invalid *CNIInvalidValuesError
+
 	switch {
+	case errors.As(err, &invalid):
+		// Nothing was started: let go of the lock and wait for an edit (of the values or of what they are
+		// checked against) to make them valid. The spec is not touched.
+		if err := lock.Release(ctx, cniHelmLockIdentity); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setProgress(ctx, cluster, handedOver, reasonCNIInvalidValues, invalid.Error())
 	case errors.As(err, &failed):
 		_ = lock.Release(ctx, cniHelmLockIdentity)
 

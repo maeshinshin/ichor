@@ -39,10 +39,13 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	yaml "go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
@@ -606,9 +609,9 @@ func TestAcknowledgeNeedsAWaitingRotation(t *testing.T) {
 	}
 }
 
-// flakyAckClient is the fixture's cluster behind a client whose first patch fails with EOF, as when
+// flakyAckClient is the fixture's cluster behind a client whose first patch fails with firstErr, as when
 // the API server restarts under it. patches counts the patch calls.
-func flakyAckClient(t *testing.T, f *credFixture) (client.Client, *int) {
+func flakyAckClient(t *testing.T, f *credFixture, firstErr error) (client.Client, *int) {
 	t.Helper()
 
 	var op ichorv1alpha1.TalosOperation
@@ -624,7 +627,7 @@ func flakyAckClient(t *testing.T, f *credFixture) (client.Client, *int) {
 		Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
 			*patches++
 			if *patches == 1 {
-				return io.ErrUnexpectedEOF
+				return firstErr
 			}
 
 			return c.Patch(ctx, obj, patch, opts...)
@@ -638,7 +641,7 @@ func TestAcknowledgeRetriesAPatchThatDidNotLandWithTheNewClient(t *testing.T) {
 	shrinkFollowTimers(t)
 
 	f := newCredFixture(t, true, ichorv1alpha1.CARotationStageAwaitingCredentials)
-	c, patches := flakyAckClient(t, f)
+	c, patches := flakyAckClient(t, f, io.ErrUnexpectedEOF)
 
 	redials := 0
 	redial := func() (client.Client, error) {
@@ -668,6 +671,27 @@ func TestAcknowledgeRetriesAPatchThatDidNotLandWithTheNewClient(t *testing.T) {
 
 	if got := op.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation]; got != credHandoffToken {
 		t.Fatalf("hand-off annotation %q", got)
+	}
+}
+
+// The REST mapper failing to discover the ichor group while the API server comes back is retried with
+// the same client, which is not cached into failing.
+func TestAcknowledgeRetriesADiscoveryFailureWithTheSameClient(t *testing.T) {
+	shrinkFollowTimers(t)
+
+	f := newCredFixture(t, true, ichorv1alpha1.CARotationStageAwaitingCredentials)
+	gv := ichorv1alpha1.GroupVersion
+	discoveryFailed := apiutil.ErrResourceDiscoveryFailed{gv: apierrors.NewNotFound(schema.GroupResource{}, "")}
+	c, patches := flakyAckClient(t, f, &discoveryFailed)
+
+	var errw bytes.Buffer
+
+	if _, err := acknowledgeHandoff(context.Background(), c, testNamespace, f.name, "", &errw, nil); err != nil {
+		t.Fatalf("a discovery failure ended the hand-off: %v\n%s", err, errw.String())
+	}
+
+	if *patches != 2 {
+		t.Fatalf("patches = %d, want 2", *patches)
 	}
 }
 

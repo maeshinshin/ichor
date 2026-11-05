@@ -155,14 +155,20 @@ var _ = Describe("TalosEgress", Ordered, func() {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
-	It("does nothing when disabled even with static policies", func() {
+	// installStatic stands in for the installer's static policy, without which Sync writes nothing.
+	// Every spec that needs it calls this, so none depends on an earlier spec having created it.
+	installStatic := func() {
 		static := cnpGVK()
 		static.SetNamespace(egressNS)
 		static.SetName("ichor-controller-manager")
 		static.Object["spec"] = map[string]any{keySelector: map[string]any{keyMatchLabels: map[string]any{
 			controlPlaneLabel: "controller-manager", "app.kubernetes.io/name": "ichor",
 		}}, "egress": []any{map[string]any{}}}
-		Expect(k8sClient.Create(ctx, static)).To(Succeed())
+		Expect(k8sClient.Create(ctx, static)).To(Or(Succeed(), MatchError(apierrors.IsAlreadyExists, "already exists")))
+	}
+
+	It("does nothing when disabled even with static policies", func() {
+		installStatic()
 
 		off := &TalosEgress{Client: k8sClient, Namespace: egressNS, Disabled: true}
 		changed, err := off.Sync(ctx)
@@ -171,6 +177,8 @@ var _ = Describe("TalosEgress", Ordered, func() {
 	})
 
 	It("writes exactly what the CRs name, and only rewrites on a change", func() {
+		installStatic()
+
 		cluster := newTestCluster("does-not-exist", "v1.14")
 		cluster.Spec.Endpoint = ichorv1alpha1.TalosClusterEndpoint{Type: "dns", Address: "egress-k8s.example.test"}
 		cluster.Spec.Discovery = &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{"198.51.100.7"}, CIDRs: []string{"203.0.113.0/24"}}
@@ -218,6 +226,8 @@ var _ = Describe("TalosEgress", Ordered, func() {
 	})
 
 	It("lets a newly added discovery address through before the first probe", func() {
+		installStatic()
+
 		cluster := newTestCluster("does-not-exist", "v1.14")
 		cluster.Spec.Discovery = &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{"192.0.2.77"}, CIDRs: []string{"192.0.2.128/30"}}
 		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
@@ -265,6 +275,12 @@ var _ = Describe("TalosEgress", Ordered, func() {
 	})
 
 	It("retries a write that conflicts with the other reconciler's", func() {
+		installStatic()
+
+		// The write under test is an Update, so the policy must already exist.
+		_, err := egress.Sync(ctx)
+		Expect(err).NotTo(HaveOccurred())
+
 		cluster := newTestCluster("does-not-exist", "v1.14")
 		cluster.Spec.Discovery = &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{"192.0.2.201"}}
 		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
@@ -280,6 +296,8 @@ var _ = Describe("TalosEgress", Ordered, func() {
 	})
 
 	It("requeues soon while a new address finds nothing, and at the normal interval after the window", func() {
+		installStatic()
+
 		cluster := newTestCluster("does-not-exist", "v1.14")
 		cluster.Spec.Discovery = &ichorv1alpha1.TalosClusterDiscovery{Addresses: []string{"192.0.2.202"}}
 		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())

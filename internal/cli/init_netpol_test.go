@@ -122,11 +122,7 @@ func TestApplyNetworkPolicies_WaitsForCiliumReady(t *testing.T) {
 		t.Errorf("no wait was reported:\n%s", out.String())
 	}
 
-	got := &unstructured.Unstructured{}
-	got.SetAPIVersion("cilium.io/v2")
-	got.SetKind("CiliumNetworkPolicy")
-
-	if err := wrapped.Get(ctx, client.ObjectKey{Namespace: ichorControllerNamespace, Name: "ichor-default-deny"}, got); err != nil {
+	if err := getDenyPolicy(ctx, wrapped); err != nil {
 		t.Fatalf("the policy was not created: %v", err)
 	}
 }
@@ -197,11 +193,7 @@ func TestRunInit_AppliesNetworkPoliciesAfterCiliumIsReady(t *testing.T) {
 		t.Fatalf("runInit: %v", err)
 	}
 
-	got := &unstructured.Unstructured{}
-	got.SetAPIVersion("cilium.io/v2")
-	got.SetKind("CiliumNetworkPolicy")
-
-	if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ichorControllerNamespace, Name: "ichor-default-deny"}, got); err != nil {
+	if err := getDenyPolicy(context.Background(), k8sClient); err != nil {
 		t.Fatalf("runInit did not apply the network policies: %v", err)
 	}
 }

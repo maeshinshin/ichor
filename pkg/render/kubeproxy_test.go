@@ -21,8 +21,6 @@ import (
 	"strings"
 	"testing"
 
-	corev1 "k8s.io/api/core/v1"
-
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
@@ -33,20 +31,10 @@ import (
 func proxyDisabledPatch() ichorv1alpha1.TalosConfigPatch {
 	disabled := true
 
-	return ichorv1alpha1.TalosConfigPatch{
-		Namespace: testNamespace, Name: "cni-proxy",
-		Spec: ichorv1alpha1.TalosConfigPatchSpec{
-			ClusterRef: corev1.LocalObjectReference{Name: testClusterName},
-			Layer:      layerCluster,
-			Documents: []ichorv1alpha1.TalosConfigPatchDocument{{
-				Kind: kindConfig,
-				Config: &typedconfig.Config{
-					ConfigVersion: configVersionV1Alpha1,
-					ClusterConfig: &typedconfig.ClusterConfig{ProxyConfig: &typedconfig.ProxyConfig{Disabled: &disabled}},
-				},
-			}},
-		},
-	}
+	return configPatch("cni-proxy", &typedconfig.Config{
+		ConfigVersion: configVersionV1Alpha1,
+		ClusterConfig: &typedconfig.ClusterConfig{ProxyConfig: &typedconfig.ProxyConfig{Disabled: &disabled}},
+	})
 }
 
 // TestKubeProxyModeIsRenderedByIchor checks ADR 0066: the Talos side follows status.cni.kubeProxy

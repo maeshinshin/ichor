@@ -151,6 +151,18 @@ func sysctlPatch(
 	}
 }
 
+// configPatch is a cluster-layer TalosConfigPatch carrying one Config document.
+func configPatch(name string, cfg *typedconfig.Config) ichorv1alpha1.TalosConfigPatch {
+	return ichorv1alpha1.TalosConfigPatch{
+		Namespace: testNamespace, Name: name,
+		Spec: ichorv1alpha1.TalosConfigPatchSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: testClusterName},
+			Layer:      layerCluster,
+			Documents:  []ichorv1alpha1.TalosConfigPatchDocument{{Kind: kindConfig, Config: cfg}},
+		},
+	}
+}
+
 func mustRender(
 	t *testing.T,
 	cluster *ichorv1alpha1.TalosCluster,
@@ -415,111 +427,62 @@ func TestRenderBundleLeak(t *testing.T) {
 	cluster := testCluster("true")
 	m := testMachine("node-a", roleWorker, nil)
 
-	t.Run("nil bundle", func(t *testing.T) {
-		_, _, err := Render(cluster, m, nil, nil, nil)
-		assertNoLeak(t, err)
+	badContract := testCluster("true")
+	badContract.Spec.VersionContract = "not-a-version"
+
+	noKubernetes := testCluster("true")
+	noKubernetes.Spec.KubernetesVersion = ""
+
+	badSelector := sysctlPatch("p1", layerSelector, 0, &ichorv1alpha1.TalosConfigPatchTarget{
+		LabelSelector: &metav1.LabelSelector{
+			MatchExpressions: []metav1.LabelSelectorRequirement{{Key: labelEnv, Operator: "NotAnOperator"}},
+		},
+	}, "x")
+
+	unknownKind := configPatch("p2", nil)
+	unknownKind.Spec.Documents[0].Kind = "NotARealKind"
+
+	doc := configPatch("p3", &typedconfig.Config{ConfigVersion: configVersionV1Alpha1})
+	doc.Spec.Documents = append(doc.Spec.Documents, doc.Spec.Documents[0])
+
+	// m is a worker; etcd config is only valid on control plane machines.
+	etcdOnWorker := configPatch("p4", &typedconfig.Config{
+		ConfigVersion: configVersionV1Alpha1,
+		ClusterConfig: &typedconfig.ClusterConfig{EtcdConfig: &typedconfig.EtcdConfig{}},
 	})
 
-	t.Run("invalid version contract", func(t *testing.T) {
-		bad := testCluster("true")
-		bad.Spec.VersionContract = "not-a-version"
-		_, _, err := Render(bad, m, bundle, nil, nil)
-		assertNoLeak(t, err)
-	})
+	for _, tc := range []struct {
+		name    string
+		cluster *ichorv1alpha1.TalosCluster
+		bundle  *secrets.Bundle
+		machine *ichorv1alpha1.TalosMachine
+		patch   *ichorv1alpha1.TalosConfigPatch
+	}{
+		{"nil bundle", cluster, nil, m, nil},
+		{"invalid version contract", badContract, bundle, m, nil},
+		{"unparseable role", cluster, bundle, testMachine("node-a", "not-a-role", nil), nil},
+		// machine.ParseType("") is TypeWorker, not an error -- a config document's absent
+		// machineType has always meant worker. Render must not inherit that for
+		// TalosMachineSpec.Role: discovery creates a machine with no role (ADR 0011), and rendering
+		// one before approval sets it must fail explicitly rather than silently produce a worker.
+		{"empty role", cluster, bundle, testMachine("node-a", "", nil), nil},
+		{"unknown machine type", cluster, bundle, testMachine("node-a", "unknown", nil), nil},
+		{"empty kubernetes version", noKubernetes, bundle, m, nil},
+		{"invalid label selector", cluster, bundle, m, &badSelector},
+		{"unknown document kind", cluster, bundle, m, &unknownKind},
+		{"duplicate v1alpha1.Config document in one patch", cluster, bundle, m, &doc},
+		{"etcd config on a worker fails validation", cluster, bundle, m, &etcdOnWorker},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var patches []ichorv1alpha1.TalosConfigPatch
+			if tc.patch != nil {
+				patches = []ichorv1alpha1.TalosConfigPatch{*tc.patch}
+			}
 
-	t.Run("unparseable role", func(t *testing.T) {
-		bad := testMachine("node-a", "not-a-role", nil)
-		_, _, err := Render(cluster, bad, bundle, nil, nil)
-		assertNoLeak(t, err)
-	})
-
-	// machine.ParseType("") is TypeWorker, not an error -- a config
-	// document's absent machineType has always meant worker. Render must
-	// not inherit that for TalosMachineSpec.Role: discovery creates a
-	// machine with no role (ADR 0011), and rendering one before approval
-	// sets it must fail explicitly rather than silently produce a worker
-	// configuration.
-	t.Run("empty role", func(t *testing.T) {
-		bad := testMachine("node-a", "", nil)
-		_, _, err := Render(cluster, bad, bundle, nil, nil)
-		assertNoLeak(t, err)
-	})
-
-	t.Run("unknown machine type", func(t *testing.T) {
-		bad := testMachine("node-a", "unknown", nil)
-		_, _, err := Render(cluster, bad, bundle, nil, nil)
-		assertNoLeak(t, err)
-	})
-
-	t.Run("empty kubernetes version", func(t *testing.T) {
-		bad := testCluster("true")
-		bad.Spec.KubernetesVersion = ""
-		_, _, err := Render(bad, m, bundle, nil, nil)
-		assertNoLeak(t, err)
-	})
-
-	t.Run("invalid label selector", func(t *testing.T) {
-		patch := sysctlPatch("p1", layerSelector, 0, &ichorv1alpha1.TalosConfigPatchTarget{
-			LabelSelector: &metav1.LabelSelector{
-				MatchExpressions: []metav1.LabelSelectorRequirement{{Key: labelEnv, Operator: "NotAnOperator"}},
-			},
-		}, "x")
-		_, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, nil)
-		assertNoLeak(t, err)
-	})
-
-	t.Run("unknown document kind", func(t *testing.T) {
-		patch := ichorv1alpha1.TalosConfigPatch{
-			Namespace: testNamespace, Name: "p2",
-			Spec: ichorv1alpha1.TalosConfigPatchSpec{
-				ClusterRef: corev1.LocalObjectReference{Name: testClusterName},
-				Layer:      layerCluster,
-				Documents:  []ichorv1alpha1.TalosConfigPatchDocument{{Kind: "NotARealKind"}},
-			},
-		}
-		_, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, nil)
-		assertNoLeak(t, err)
-	})
-
-	t.Run("duplicate v1alpha1.Config document in one patch", func(t *testing.T) {
-		doc := ichorv1alpha1.TalosConfigPatchDocument{
-			Kind:   kindConfig,
-			Config: &typedconfig.Config{ConfigVersion: configVersionV1Alpha1},
-		}
-		patch := ichorv1alpha1.TalosConfigPatch{
-			Namespace: testNamespace, Name: "p3",
-			Spec: ichorv1alpha1.TalosConfigPatchSpec{
-				ClusterRef: corev1.LocalObjectReference{Name: testClusterName},
-				Layer:      layerCluster,
-				Documents:  []ichorv1alpha1.TalosConfigPatchDocument{doc, doc},
-			},
-		}
-		_, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, nil)
-		assertNoLeak(t, err)
-	})
-
-	t.Run("etcd config on a worker fails validation", func(t *testing.T) {
-		doc := ichorv1alpha1.TalosConfigPatchDocument{
-			Kind: kindConfig,
-			Config: &typedconfig.Config{
-				ConfigVersion: configVersionV1Alpha1,
-				ClusterConfig: &typedconfig.ClusterConfig{
-					EtcdConfig: &typedconfig.EtcdConfig{},
-				},
-			},
-		}
-		patch := ichorv1alpha1.TalosConfigPatch{
-			Namespace: testNamespace, Name: "p4",
-			Spec: ichorv1alpha1.TalosConfigPatchSpec{
-				ClusterRef: corev1.LocalObjectReference{Name: testClusterName},
-				Layer:      layerCluster,
-				Documents:  []ichorv1alpha1.TalosConfigPatchDocument{doc},
-			},
-		}
-		// m is a worker; etcd config is only valid on control plane machines.
-		_, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, nil)
-		assertNoLeak(t, err)
-	})
+			_, _, err := Render(tc.cluster, tc.machine, tc.bundle, patches, nil)
+			assertNoLeak(t, err)
+		})
+	}
 }
 
 // inlineManifestPatch builds a TalosConfigPatch carrying a single Config
@@ -528,27 +491,15 @@ func TestRenderBundleLeak(t *testing.T) {
 // that dropping the inline manifest entry never disturbs a sibling document
 // in the same patch.
 func inlineManifestPatch(patchName, manifestName string) ichorv1alpha1.TalosConfigPatch {
-	return ichorv1alpha1.TalosConfigPatch{
-		Namespace: testNamespace, Name: patchName,
-		Spec: ichorv1alpha1.TalosConfigPatchSpec{
-			ClusterRef: corev1.LocalObjectReference{Name: testClusterName},
-			Layer:      layerCluster,
-			Documents: []ichorv1alpha1.TalosConfigPatchDocument{
-				{
-					Kind: kindConfig,
-					Config: &typedconfig.Config{
-						ConfigVersion: configVersionV1Alpha1,
-						ClusterConfig: &typedconfig.ClusterConfig{
-							ClusterInlineManifests: []*typedconfig.ClusterInlineManifest{
-								{InlineManifestName: manifestName, InlineManifestContents: "kind: Nothing\n"},
-							},
-							ExtraManifests: []string{"https://example.invalid/unrelated.yaml"},
-						},
-					},
-				},
+	return configPatch(patchName, &typedconfig.Config{
+		ConfigVersion: configVersionV1Alpha1,
+		ClusterConfig: &typedconfig.ClusterConfig{
+			ClusterInlineManifests: []*typedconfig.ClusterInlineManifest{
+				{InlineManifestName: manifestName, InlineManifestContents: "kind: Nothing\n"},
 			},
+			ExtraManifests: []string{"https://example.invalid/unrelated.yaml"},
 		},
-	}
+	})
 }
 
 // TestCNIHandoverDropsInlineManifest checks that Render stops emitting the

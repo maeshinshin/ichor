@@ -55,115 +55,67 @@ func authRegistryCluster() *ichorv1alpha1.TalosCluster {
 // that names a Secret fails loudly -- never silently -- when that Secret is missing or carries
 // none of the three recognized keys.
 func TestResolveRegistryAuth(t *testing.T) {
-	ctx := context.Background()
-
-	t.Run("no registries at all resolves to an empty map", func(t *testing.T) {
-		c := registryCluster()
-		k8sClient := fake.NewClientBuilder().Build()
-
-		got, err := ResolveRegistryAuth(ctx, k8sClient, registrySecretNamespace, c)
-		if err != nil {
-			t.Fatalf("ResolveRegistryAuth: %v", err)
-		}
-
-		if len(got) != 0 {
-			t.Fatalf("expected an empty map, got %v", got)
-		}
+	anonymous := registryCluster(ichorv1alpha1.TalosClusterRegistry{
+		Host: registryHost, Endpoints: []string{registryMirrorEndpoint},
 	})
 
-	t.Run("a registry with no authSecretRef is anonymous, not an error", func(t *testing.T) {
-		c := registryCluster(ichorv1alpha1.TalosClusterRegistry{
-			Host: registryHost, Endpoints: []string{registryMirrorEndpoint},
+	for _, tc := range []struct {
+		name      string
+		cluster   *ichorv1alpha1.TalosCluster
+		namespace string
+		data      map[string][]byte // the Secret's data; nil means there is no Secret
+		want      RegistryAuth      // zero means no entry for the registry
+		wantErr   []string
+	}{
+		{"no registries at all resolves to an empty map", registryCluster(), registrySecretNamespace, nil, RegistryAuth{}, nil},
+		{"a registry with no authSecretRef is anonymous, not an error", anonymous, registrySecretNamespace, nil, RegistryAuth{}, nil},
+		{"password", authRegistryCluster(), registrySecretNamespace,
+			map[string][]byte{"password": []byte("s3cr3t-pw")}, RegistryAuth{Password: "s3cr3t-pw"}, nil},
+		{"auth", authRegistryCluster(), registrySecretNamespace,
+			map[string][]byte{"auth": []byte("dXNlcjpwYXNz")}, RegistryAuth{Auth: "dXNlcjpwYXNz"}, nil},
+		{"identityToken", authRegistryCluster(), registrySecretNamespace,
+			map[string][]byte{"identityToken": []byte("tok-abc")}, RegistryAuth{IdentityToken: "tok-abc"}, nil},
+		{"fails explicitly when the Secret is missing", authRegistryCluster(), registrySecretNamespace, nil,
+			RegistryAuth{}, []string{registryHost, registrySecretName}},
+		{"fails explicitly when the Secret has none of the recognized keys", authRegistryCluster(),
+			registrySecretNamespace, map[string][]byte{"not-a-recognized-key": []byte("whatever")}, RegistryAuth{},
+			[]string{registryHost}},
+		{"fails explicitly, without touching the API, when the controller namespace is empty", authRegistryCluster(),
+			"", nil, RegistryAuth{}, []string{"controller namespace is empty"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := fake.NewClientBuilder()
+			if tc.data != nil {
+				b = b.WithObjects(&corev1.Secret{
+					Namespace: registrySecretNamespace, Name: registrySecretName, Data: tc.data,
+				})
+			}
+
+			got, err := ResolveRegistryAuth(context.Background(), b.Build(), tc.namespace, tc.cluster)
+
+			if tc.wantErr != nil {
+				if err == nil {
+					t.Fatal("expected an error, got nil")
+				}
+
+				for _, s := range tc.wantErr {
+					if !strings.Contains(err.Error(), s) {
+						t.Fatalf("expected the error to mention %q, got: %v", s, err)
+					}
+				}
+
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("ResolveRegistryAuth: %v", err)
+			}
+
+			if got[registryHost] != tc.want || (tc.want == RegistryAuth{} && len(got) != 0) {
+				t.Fatalf("got %+v, want %+v", got, tc.want)
+			}
 		})
-		k8sClient := fake.NewClientBuilder().Build()
-
-		got, err := ResolveRegistryAuth(ctx, k8sClient, registrySecretNamespace, c)
-		if err != nil {
-			t.Fatalf("ResolveRegistryAuth: %v", err)
-		}
-
-		if _, ok := got[registryHost]; ok {
-			t.Fatalf("expected no entry for an anonymous registry, got %v", got[registryHost])
-		}
-	})
-
-	t.Run("resolves password, auth and identityToken independently", func(t *testing.T) {
-		cases := []struct {
-			name string
-			data map[string][]byte
-			want RegistryAuth
-		}{
-			{"password", map[string][]byte{"password": []byte("s3cr3t-pw")}, RegistryAuth{Password: "s3cr3t-pw"}},
-			{"auth", map[string][]byte{"auth": []byte("dXNlcjpwYXNz")}, RegistryAuth{Auth: "dXNlcjpwYXNz"}},
-			{"identityToken", map[string][]byte{"identityToken": []byte("tok-abc")}, RegistryAuth{IdentityToken: "tok-abc"}},
-		}
-
-		for _, tc := range cases {
-			t.Run(tc.name, func(t *testing.T) {
-				secret := &corev1.Secret{
-					Namespace: registrySecretNamespace, Name: registrySecretName,
-					Data: tc.data,
-				}
-				c := authRegistryCluster()
-				k8sClient := fake.NewClientBuilder().WithObjects(secret).Build()
-
-				got, err := ResolveRegistryAuth(ctx, k8sClient, registrySecretNamespace, c)
-				if err != nil {
-					t.Fatalf("ResolveRegistryAuth: %v", err)
-				}
-
-				if got[registryHost] != tc.want {
-					t.Fatalf("got %+v, want %+v", got[registryHost], tc.want)
-				}
-			})
-		}
-	})
-
-	t.Run("fails explicitly when the Secret is missing", func(t *testing.T) {
-		c := authRegistryCluster()
-		k8sClient := fake.NewClientBuilder().Build()
-
-		_, err := ResolveRegistryAuth(ctx, k8sClient, registrySecretNamespace, c)
-		if err == nil {
-			t.Fatal("expected an error, got nil")
-		}
-
-		if !strings.Contains(err.Error(), registryHost) || !strings.Contains(err.Error(), registrySecretName) {
-			t.Fatalf("expected the error to name the registry and the Secret, got: %v", err)
-		}
-	})
-
-	t.Run("fails explicitly when the Secret has none of the recognized keys", func(t *testing.T) {
-		secret := &corev1.Secret{
-			Namespace: registrySecretNamespace, Name: registrySecretName,
-			Data: map[string][]byte{"not-a-recognized-key": []byte("whatever")},
-		}
-		c := authRegistryCluster()
-		k8sClient := fake.NewClientBuilder().WithObjects(secret).Build()
-
-		_, err := ResolveRegistryAuth(ctx, k8sClient, registrySecretNamespace, c)
-		if err == nil {
-			t.Fatal("expected an error, got nil")
-		}
-
-		if !strings.Contains(err.Error(), registryHost) {
-			t.Fatalf("expected the error to name the registry, got: %v", err)
-		}
-	})
-
-	t.Run("fails explicitly, without touching the API, when the controller namespace is empty", func(t *testing.T) {
-		c := authRegistryCluster()
-		k8sClient := fake.NewClientBuilder().Build()
-
-		_, err := ResolveRegistryAuth(ctx, k8sClient, "", c)
-		if err == nil {
-			t.Fatal("expected an error, got nil")
-		}
-
-		if !strings.Contains(err.Error(), "controller namespace is empty") {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	})
+	}
 }
 
 // TestRenderRegistries checks that Render actually injects what
@@ -196,28 +148,16 @@ func TestRenderRegistries(t *testing.T) {
 	// list-typed config field, not something this feature changes, so it is not what this test
 	// exercises.
 	t.Run("a cluster-layer patch overrides the system layer's username", func(t *testing.T) {
-		patch := ichorv1alpha1.TalosConfigPatch{
-			Namespace: testNamespace, Name: "override-username",
-			Spec: ichorv1alpha1.TalosConfigPatchSpec{
-				ClusterRef: corev1.LocalObjectReference{Name: testClusterName},
-				Layer:      layerCluster,
-				Documents: []ichorv1alpha1.TalosConfigPatchDocument{
-					{
-						Kind: kindConfig,
-						Config: &typedconfig.Config{
-							ConfigVersion: configVersionV1Alpha1,
-							MachineConfig: &typedconfig.MachineConfig{
-								MachineRegistries: &typedconfig.RegistriesConfig{
-									RegistryConfig: map[string]*typedconfig.RegistryConfig{
-										registryHost: {RegistryAuth: &typedconfig.RegistryAuthConfig{RegistryUsername: "overridden-user"}},
-									},
-								},
-							},
-						},
+		patch := configPatch("override-username", &typedconfig.Config{
+			ConfigVersion: configVersionV1Alpha1,
+			MachineConfig: &typedconfig.MachineConfig{
+				MachineRegistries: &typedconfig.RegistriesConfig{
+					RegistryConfig: map[string]*typedconfig.RegistryConfig{
+						registryHost: {RegistryAuth: &typedconfig.RegistryAuthConfig{RegistryUsername: "overridden-user"}},
 					},
 				},
 			},
-		}
+		})
 
 		out, _, err := Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{patch}, &SystemInputs{RegistryAuth: auth})
 		if err != nil {

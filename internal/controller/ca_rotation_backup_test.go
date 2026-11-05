@@ -29,49 +29,55 @@ import (
 )
 
 var _ = Describe("BundleBackupStale", func() {
-	It("stays up until the exported bundle is the live one, then goes down", func() {
-		f := newCARotFixture()
-		op := f.newOp()
-		f.runUntil(op, completed)
+	// An export that holds only the CAs from before the rotation is stale whichever CA was replaced: with the etcd CA
+	// alone, the Talos and Kubernetes CAs did not change.
+	for name, targets := range map[string][]string{
+		"the Talos and Kubernetes CAs": nil, "the etcd CA": {ichorv1alpha1.CARotationTargetEtcd},
+	} {
+		It("stays up after a rotation of "+name+" until the exported bundle is the live one, then goes down", func() {
+			f := newCARotFixture()
+			f.targets = targets
+			f.runUntil(f.newOp(), completed)
 
-		key := types.NamespacedName{Namespace: tmNamespace, Name: f.cluster.Name}
-		r := &CertExpiryReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
+			key := types.NamespacedName{Namespace: tmNamespace, Name: f.cluster.Name}
+			r := &CertExpiryReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
 
-		stale := func() bool {
-			var got ichorv1alpha1.TalosCluster
-			Expect(k8sClient.Get(ctx, key, &got)).To(Succeed())
+			stale := func() bool {
+				var got ichorv1alpha1.TalosCluster
+				Expect(k8sClient.Get(ctx, key, &got)).To(Succeed())
 
-			return apimeta.IsStatusConditionTrue(got.Status.Conditions, ichorv1alpha1.ConditionBundleBackupStale)
-		}
-
-		setExported := func(fingerprint string) {
-			var got ichorv1alpha1.TalosCluster
-			Expect(k8sClient.Get(ctx, key, &got)).To(Succeed())
-
-			if got.Annotations == nil {
-				got.Annotations = map[string]string{}
+				return apimeta.IsStatusConditionTrue(got.Status.Conditions, ichorv1alpha1.ConditionBundleBackupStale)
 			}
 
-			got.Annotations[ichorv1alpha1.BundleExportedAnnotation] = fingerprint
-			Expect(k8sClient.Update(ctx, &got)).To(Succeed())
+			setExported := func(fingerprint string) {
+				var got ichorv1alpha1.TalosCluster
+				Expect(k8sClient.Get(ctx, key, &got)).To(Succeed())
 
-			_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: key})
+				if got.Annotations == nil {
+					got.Annotations = map[string]string{}
+				}
+
+				got.Annotations[ichorv1alpha1.BundleExportedAnnotation] = fingerprint
+				Expect(k8sClient.Update(ctx, &got)).To(Succeed())
+
+				_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: key})
+				Expect(err).NotTo(HaveOccurred())
+			}
+
+			Expect(stale()).To(BeTrue())
+
+			// The copy made before the rotation does not clear it.
+			oldFP, err := secretsbundle.ExportFingerprint(f.old, nil)
 			Expect(err).NotTo(HaveOccurred())
-		}
+			setExported(oldFP)
+			Expect(stale()).To(BeTrue())
 
-		Expect(stale()).To(BeTrue())
+			liveFP, err := secretsbundle.ExportFingerprint(f.storedBundle(), nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(liveFP).NotTo(Equal(oldFP))
 
-		// The copy made before the rotation does not clear it.
-		oldFP, err := secretsbundle.ExportFingerprint(f.old, nil)
-		Expect(err).NotTo(HaveOccurred())
-		setExported(oldFP)
-		Expect(stale()).To(BeTrue())
-
-		liveFP, err := secretsbundle.ExportFingerprint(f.storedBundle(), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(liveFP).NotTo(Equal(oldFP))
-
-		setExported(liveFP)
-		Expect(stale()).To(BeFalse())
-	})
+			setExported(liveFP)
+			Expect(stale()).To(BeFalse())
+		})
+	}
 })

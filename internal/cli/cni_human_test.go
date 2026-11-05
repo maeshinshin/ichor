@@ -137,9 +137,7 @@ func TestEffectiveConfigHumanOutput(t *testing.T) {
 		"machine.network.hostname  \"cp-1\"                         system\n" +
 		"machine.sysctls           {\"net.core.somaxconn\":\"1024\"}  role/cp-modules\n" +
 		"machine.token             \"***\"                          cluster\n"
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 
 	out.Reset()
 

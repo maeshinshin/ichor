@@ -87,9 +87,7 @@ func TestOperationListHumanOutput(t *testing.T) {
 		"node-reboot-m2        node      ✓ Completed   talos-cp2  -                                                          3d\n" +
 		"config-by-hand        config    ! Paused      initshow   -                                                          40s\n" +
 		"shutdown-new          shutdown  … Pending     initshow   -                                                          -\n"
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 
 	out.Reset()
 
@@ -132,9 +130,7 @@ w1       -          …             -     -      -
 Conditions
   ! Paused  StepFailed  drain of cp2 timed out: pod etcd-backup cannot be evicted
 `
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 }
 
 func TestOperationGetHumanOutputOfARunningOperation(t *testing.T) {
@@ -178,9 +174,7 @@ func TestOperationCreatedPausedAndDeletedHumanOutput(t *testing.T) {
   Spec         changed to the target first
   Follow       ichor operation get upgrade-talos-x7k2p --watch
 `
-	if out.String() != want {
-		t.Errorf("created:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 
 	out.Reset()
 
@@ -212,9 +206,7 @@ func TestUpgradeTargetsHumanOutput(t *testing.T) {
 		"v1.14.4  patch        -\n" +
 		"v1.14.3  patch        -\n" +
 		"v1.15.0  next-minor   -\n"
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 
 	out.Reset()
 
@@ -222,9 +214,7 @@ func TestUpgradeTargetsHumanOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if want := "! no list of kubernetes versions: the update check is off\nno version to move to\n"; out.String() != want {
-		t.Errorf("unavailable:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), "! no list of kubernetes versions: the update check is off\nno version to move to\n")
 
 	out.Reset()
 
@@ -232,9 +222,7 @@ func TestUpgradeTargetsHumanOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if want := "✓ talos is on the newest release this Ichor allows\n"; out.String() != want {
-		t.Errorf("nothing to move to:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), "✓ talos is on the newest release this Ichor allows\n")
 }
 
 // -o yaml and -o json print the wire message, for --list too: machine output, not the human text.
@@ -334,9 +322,7 @@ func TestWatchHumanShowsOneStepAndEndsItWithTheTime(t *testing.T) {
 		"… talos — InProgress · 0/1 machines · upgrading cp1\n" +
 		"… talos — InProgress · 1/1 machines · upgrading cp2\n" +
 		"✓ talos — Completed (5m03s)\n"
-	if errw.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", errw.String(), want)
-	}
+	wantText(t, errw.String(), want)
 }
 
 func TestWatchHumanEndsFailedAndPausedByTheOperator(t *testing.T) {
@@ -359,9 +345,7 @@ func TestWatchHumanEndsFailedAndPausedByTheOperator(t *testing.T) {
 		"operation upgrade-talos-x7k2p · cluster initshow\n" +
 		"… talos — Paused · resume with `ichor operation resume upgrade-talos-x7k2p`\n" +
 		"✗ talos — Failed\n"
-	if errw.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", errw.String(), want)
-	}
+	wantText(t, errw.String(), want)
 }
 
 func TestWatchHumanShowsTheCARotationStagesAPollJumpedOver(t *testing.T) {
@@ -471,9 +455,7 @@ func TestWatchHumanFailedOperationReturnsTheResumeHintAndPrintsTheBlock(t *testi
 		t.Errorf("the hint must be printed by Execute: %v", err)
 	}
 
-	if want := "Upgrade Talos\noperation x · cluster adopt-cluster\n✗ talos — Failed (5m00s)\n"; errw.String() != want {
-		t.Errorf("stderr:\n%s\nwant:\n%s", errw.String(), want)
-	}
+	wantText(t, errw.String(), "Upgrade Talos\noperation x · cluster adopt-cluster\n✗ talos — Failed (5m00s)\n")
 
 	for _, want := range []string{"x · default\n", "  Failure      boom\n", "cp1      ", "w        "} {
 		if !strings.Contains(out.String(), want) {
@@ -563,9 +545,7 @@ DISK      ROLE    SIZE       ID
 /dev/vda  system  40.0 GiB   disk-1
 /dev/vdb  unused  500.0 GiB  -
 `
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 
 	out.Reset()
 
@@ -610,9 +590,7 @@ func TestNodeActionHumanOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if want := "✓ removing node " + testMachineName + ": the controller drains it and, for a control plane, removes its etcd member\n"; out.String() != want {
-		t.Errorf("remove stdout:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), "✓ removing node "+testMachineName+": the controller drains it and, for a control plane, removes its etcd member\n")
 
 	for _, want := range []string{"Next\n", "kubectl delete node " + testMachineName} {
 		if !strings.Contains(errw.String(), want) {

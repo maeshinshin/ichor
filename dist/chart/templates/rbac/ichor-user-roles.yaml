@@ -221,6 +221,7 @@ rules:
   resources:
   - ichorusers/password
   - talosclusters/authentication
+  - talosclusters/cilium-values
   - talosclusters/secret-references
   - talosetcdbackups/secret-references
   verbs:

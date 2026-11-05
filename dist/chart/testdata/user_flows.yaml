@@ -54,6 +54,9 @@ flows:
 - name: change the authentication configuration
   role: admin
   needs: [talosclusters/authentication update, talosclusters/secret-references update]
+- name: change the Cilium Helm values (ichor cni values set, the Cilium page; ADR 0131)
+  role: admin
+  needs: [talosclusters update, talosclusters/cilium-values update]
 - name: rotate the CA (ichor cluster rotate-ca)
   role: admin
   needs: [talosoperations create, talosoperations/ca-rotation start]

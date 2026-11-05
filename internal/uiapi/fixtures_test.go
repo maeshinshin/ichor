@@ -131,7 +131,7 @@ func newTestMachine(clusterName string, identity ichorv1alpha1.TalosMachineIdent
 }
 
 func minimalConfigSkeleton(role string) *typedconfig.Config {
-	cfg := &typedconfig.Config{
+	return &typedconfig.Config{
 		ConfigVersion: "v1alpha1",
 		MachineConfig: &typedconfig.MachineConfig{
 			MachineType:     role,
@@ -139,8 +139,6 @@ func minimalConfigSkeleton(role string) *typedconfig.Config {
 		},
 		ClusterConfig: &typedconfig.ClusterConfig{},
 	}
-
-	return cfg
 }
 
 // extraArgsConfig is minimalConfigSkeleton with one extra, cluster-layer

@@ -639,6 +639,15 @@ the stored config asynchronously. The approval flow therefore watches
 to running, and treats the RPC returning as nothing more than "the config was
 stored".
 
+An approved machine that has converged and whose node then answers only in
+maintenance mode with the approved identity (its disk was wiped or replaced) is
+sent its configuration again, on its own, with a Warning Event and a Ready
+message saying it re-installed the node. The identity checks, the SecureBoot
+requirement, the install disk and the control plane's cluster lock are the
+first provisioning's; a control plane's stale etcd member is removed through a
+surviving control plane first, and with no surviving control plane nothing is
+sent and the message points to `ichor restore --recover-cluster`.
+
 Disks are identified by WWID, serial or by-id path, not `/dev/sdX` — but all
 three can be absent. Talos fills WWID and serial from sysfs, with a udev
 fallback only for `ata` and `scsi` transports, so NVMe is reliable while a plain

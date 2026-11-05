@@ -31,7 +31,6 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/clusterlock"
 )
 
 func operationGone(op *ichorv1alpha1.TalosOperation) bool {
@@ -41,7 +40,7 @@ func operationGone(op *ichorv1alpha1.TalosOperation) bool {
 }
 
 func lockHolder(cluster *ichorv1alpha1.TalosCluster) (string, bool) {
-	holder, held, err := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0).Holder(ctx)
+	holder, held, err := opTestLock(cluster).Holder(ctx)
 	Expect(err).NotTo(HaveOccurred())
 
 	return holder, held

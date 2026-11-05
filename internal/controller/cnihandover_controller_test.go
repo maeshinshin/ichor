@@ -39,7 +39,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/clusterlock"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
@@ -228,7 +227,7 @@ func cniJobCount(cluster *ichorv1alpha1.TalosCluster) int {
 func cniLockHolder(cluster *ichorv1alpha1.TalosCluster) (string, bool) {
 	GinkgoHelper()
 
-	holder, held, err := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0).Holder(ctx)
+	holder, held, err := opTestLock(cluster).Holder(ctx)
 	Expect(err).NotTo(HaveOccurred())
 
 	return holder, held
@@ -668,7 +667,7 @@ var _ = Describe("CNIHandoverReconciler", func() {
 		cluster := newTestCiliumCluster()
 		ciliumDaemonSet()(true)
 
-		rollout := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+		rollout := opTestLock(cluster)
 		Expect(rollout.Acquire(ctx, controllerIdentity)).To(Succeed())
 		DeferCleanup(func() { Expect(rollout.Release(ctx, controllerIdentity)).To(Succeed()) })
 

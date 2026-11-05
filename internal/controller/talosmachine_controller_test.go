@@ -35,12 +35,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 	"github.com/maeshinshin/ichor/internal/settings"
-	"github.com/maeshinshin/ichor/pkg/clusterlock"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
@@ -576,7 +574,7 @@ func expectReady(m *ichorv1alpha1.TalosMachine, status metav1.ConditionStatus, r
 func expectLockFree(cluster *ichorv1alpha1.TalosCluster, msg string) {
 	GinkgoHelper()
 
-	_, held, err := clusterlock.New(k8sClient, client.ObjectKeyFromObject(cluster), 0).Holder(ctx)
+	_, held, err := opTestLock(cluster).Holder(ctx)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(held).To(BeFalse(), msg)
 }
@@ -773,7 +771,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 			current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
 			newTestPatch(cluster.Name, layerCluster, nil, proxyDisabledConfig())
 
-			lock := clusterlock.New(k8sClient, client.ObjectKeyFromObject(cluster), 0)
+			lock := opTestLock(cluster)
 			if holder != "" {
 				Expect(lock.Acquire(ctx, holder)).To(Succeed())
 			}

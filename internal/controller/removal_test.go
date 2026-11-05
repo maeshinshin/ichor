@@ -25,19 +25,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
 )
-
-// clusterKeyOf returns the NamespacedName clusterlock.New keys its Lease by
-// for m's cluster: same namespace, cluster's own name.
-func clusterKeyOf(m *ichorv1alpha1.TalosMachine) types.NamespacedName {
-	return types.NamespacedName{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name}
-}
 
 // newTestControlPlane creates an approved control-plane TalosMachine in
 // clusterName, distinct per suffix so several can coexist in one test and
@@ -177,7 +170,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 			// "restart" as a brand new reconciler instance (r2) with no
 			// memory of r1 at all, same identity (clusterlock's own
 			// contract: identity, not process, is what resumption keys on).
-			lock := clusterlock.New(k8sClient, clusterKeyOf(cp1), 0)
+			lock := opTestLock(cluster)
 			Expect(lock.Acquire(ctx, machineLockIdentity(cp1))).To(Succeed())
 
 			r2 := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
@@ -286,7 +279,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 		reconcileOK(r, cp)
 
-		lock := clusterlock.New(k8sClient, clusterKeyOf(cp), 0)
+		lock := opTestLock(cluster)
 		Expect(lock.Acquire(ctx, "someone-else")).To(Succeed())
 
 		Expect(k8sClient.Delete(ctx, cp)).To(Succeed())
@@ -303,13 +296,12 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 var _ = Describe("renewWhile", func() {
 	It("keeps a short-lived lock alive past its own duration, then lets it expire once stopped", func() {
 		cluster := newTestClusterWithCount(1, "does-not-exist")
-		cp := newTestControlPlane(cluster.Name, "14")
 
 		// A duration shorter than the test itself: without renewal, this
 		// lock would expire well within the window below on its own.
 		const shortDuration = 150 * time.Millisecond
 
-		lock := clusterlock.New(k8sClient, clusterKeyOf(cp), shortDuration)
+		lock := clusterlock.New(k8sClient, client.ObjectKeyFromObject(cluster), shortDuration)
 		Expect(lock.Acquire(ctx, controllerIdentity)).To(Succeed())
 
 		stop := renewWhile(ctx, lock, controllerIdentity, 40*time.Millisecond)

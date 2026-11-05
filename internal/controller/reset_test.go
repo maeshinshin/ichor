@@ -26,6 +26,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -65,7 +66,7 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 		reconcileEach(r, cps)
 
 		var live ichorv1alpha1.TalosMachine
-		Expect(k8sClient.Get(ctx, machineKeyOf(cp1), &live)).To(Succeed())
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(cp1), &live)).To(Succeed())
 		live.Status.NodeName = resetTestNode
 		Expect(k8sClient.Status().Update(ctx, &live)).To(Succeed())
 
@@ -77,7 +78,7 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 		Eventually(recorder.Events).Should(Receive(And(ContainSubstring(reasonNodeStillHasClusterCredentials), ContainSubstring("kubectl delete node "+resetTestNode))))
 
 		var gone ichorv1alpha1.TalosMachine
-		err = k8sClient.Get(ctx, machineKeyOf(cp1), &gone)
+		err = k8sClient.Get(ctx, client.ObjectKeyFromObject(cp1), &gone)
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
@@ -101,7 +102,7 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 		Consistently(recorder.Events).ShouldNot(Receive())
 
 		var gone ichorv1alpha1.TalosMachine
-		err = k8sClient.Get(ctx, machineKeyOf(cp1), &gone)
+		err = k8sClient.Get(ctx, client.ObjectKeyFromObject(cp1), &gone)
 		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "a successful opt-in reset must still let the removal complete")
 	})
 
@@ -180,7 +181,7 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 		Expect(fake.resetCalls).To(Equal(0), "already requested -- a fire-and-forget RPC has nothing left to retry")
 
 		var gone ichorv1alpha1.TalosMachine
-		err = k8sClient.Get(ctx, machineKeyOf(cp1), &gone)
+		err = k8sClient.Get(ctx, client.ObjectKeyFromObject(cp1), &gone)
 		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "the resumed reconcile must still complete the removal")
 	})
 })

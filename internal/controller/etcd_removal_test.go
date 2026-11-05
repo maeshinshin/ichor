@@ -27,8 +27,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -117,7 +117,7 @@ var _ = Describe("removeEtcdMember", func() {
 		Expect(self.etcdRemoveIDs).To(BeEmpty())
 
 		var gone ichorv1alpha1.TalosMachine
-		err = k8sClient.Get(ctx, machineKeyOf(cp1), &gone)
+		err = k8sClient.Get(ctx, client.ObjectKeyFromObject(cp1), &gone)
 		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "the finalizer must be cleared once EtcdLeaveCluster succeeds")
 	})
 
@@ -131,7 +131,7 @@ var _ = Describe("removeEtcdMember", func() {
 		Expect(survivor.etcdLeaveCalls).To(Equal(0))
 
 		var gone ichorv1alpha1.TalosMachine
-		err = k8sClient.Get(ctx, machineKeyOf(cp1), &gone)
+		err = k8sClient.Get(ctx, client.ObjectKeyFromObject(cp1), &gone)
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
@@ -146,7 +146,7 @@ var _ = Describe("removeEtcdMember", func() {
 		Expect(self.etcdLeaveCalls).To(Equal(0), "already gone: leaving again is not idempotency, it's a wasted call")
 
 		var gone ichorv1alpha1.TalosMachine
-		err = k8sClient.Get(ctx, machineKeyOf(cp1), &gone)
+		err = k8sClient.Get(ctx, client.ObjectKeyFromObject(cp1), &gone)
 		Expect(apierrors.IsNotFound(err)).To(BeTrue())
 	})
 
@@ -187,9 +187,3 @@ var _ = Describe("removal of a control plane with an empty spec.hostname", func(
 		Expect(recorder.Events).To(BeEmpty(), "no event may claim an etcd removal that did not happen")
 	})
 })
-
-// machineKeyOf is a name/namespace key to re-Get m after a removal that
-// should have let the object actually disappear.
-func machineKeyOf(m *ichorv1alpha1.TalosMachine) types.NamespacedName {
-	return types.NamespacedName{Namespace: m.Namespace, Name: m.Name}
-}

@@ -52,8 +52,7 @@ import (
 )
 
 const (
-	reasonNodeActionWaiting = "WaitingForNode"
-	reasonNodeActionDone    = "NodeActionDone"
+	reasonNodeActionDone = "NodeActionDone"
 
 	// nodeActionTimeout bounds the wait for an action's effect (a reboot to finish, a node to stop,
 	// a leader to change). Past it the step fails and the operation pauses (ADR 0026).

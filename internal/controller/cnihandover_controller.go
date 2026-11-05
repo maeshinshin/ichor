@@ -127,6 +127,9 @@ type CNIHandoverReconciler struct {
 
 	// Namespace is where the Helm release record lives (ichor-system); the Job runs in kube-system.
 	Namespace string
+
+	// Images pins the Cilium Job's installer image to a verified digest; nil refuses to start any Job.
+	Images InstallerImages
 }
 
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosclusters,verbs=get;list;watch
@@ -316,14 +319,24 @@ func (r *CNIHandoverReconciler) runJob(
 		return ctrl.Result{}, err
 	}
 
-	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, mode, nodes, inst,
+	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, mode, nodes, inst, r.Images,
 		cniValuesCheck(r.Client, r.reader(), r.Namespace, cluster, mode), "", time.Time{})
 
 	var failed *CNIHelmJobFailedError
 
 	var invalid *CNIInvalidValuesError
 
+	var image *installerImageError
+
 	switch {
+	case errors.As(err, &image):
+		// The installer image was not resolved or verified, so no Job was started: let go of the lock
+		// and try again later, the registry or a pin may have been fixed.
+		if err := lock.Release(ctx, cniHelmLockIdentity); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setProgress(ctx, cluster, handedOver, image.reason, image.Error())
 	case errors.As(err, &invalid):
 		// Nothing was started: let go of the lock and wait for an edit (of the values or of what they are
 		// checked against) to make them valid. The spec is not touched.

@@ -167,7 +167,7 @@ func kubeProxyExists() bool {
 func newKubeProxyAdvancer(clients map[string]*fakeTalosClient, admin KubeProxyAdmin) *cniKubeProxyAdvancer {
 	return &cniKubeProxyAdvancer{
 		Client: k8sClient, Reader: k8sClient, ControllerNamespace: tmNamespace,
-		TalosClient: perMachineClientFactory(clients), Admin: admin,
+		TalosClient: perMachineClientFactory(clients), Admin: admin, Images: &fakeInstallerImages{digest: testInstallerDigest},
 	}
 }
 
@@ -215,7 +215,7 @@ func finishCNIJob(cluster *ichorv1alpha1.TalosCluster) {
 	var inst ichorv1alpha1.IchorInstallation
 	Expect(k8sClient.Get(ctx, client.ObjectKey{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
 
-	_, err := AdvanceCNIHelmJob(ctx, k8sClient, tmNamespace, cluster, specMode(cluster), liveNodes(), &inst, nil, "", time.Time{})
+	_, err := AdvanceCNIHelmJob(ctx, k8sClient, tmNamespace, cluster, specMode(cluster), liveNodes(), &inst, &fakeInstallerImages{digest: testInstallerDigest}, nil, "", time.Time{})
 	Expect(err).NotTo(HaveOccurred())
 
 	setJobCondition(cniJob(cluster), batchv1.JobComplete, "")
@@ -362,7 +362,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		newKubeProxyDaemonSet(testK8sOld, 2, 2)
 
 		cluster := cniSwitchCluster(modeEnabled)
-		r := &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace}
+		r := &CNIHandoverReconciler{Client: k8sClient, APIReader: k8sClient, Namespace: testIchorNamespace, Images: &fakeInstallerImages{digest: testInstallerDigest}}
 
 		// Hand over at kubeProxy=enabled.
 		reconcileHandoverOK(r, cluster)
@@ -645,7 +645,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 
 		var inst ichorv1alpha1.IchorInstallation
 		Expect(k8sClient.Get(ctx, client.ObjectKey{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
-		_, err := AdvanceCNIHelmJob(ctx, k8sClient, tmNamespace, cluster, specMode(cluster), liveNodes(), &inst, nil, "", time.Time{})
+		_, err := AdvanceCNIHelmJob(ctx, k8sClient, tmNamespace, cluster, specMode(cluster), liveNodes(), &inst, &fakeInstallerImages{digest: testInstallerDigest}, nil, "", time.Time{})
 		Expect(err).NotTo(HaveOccurred())
 
 		old := cniJob(cluster)

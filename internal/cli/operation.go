@@ -127,7 +127,12 @@ var operationDeleteCmd = &cobra.Command{
 	Short: "Delete an operation record",
 	Long: `delete removes the record and, when it has not finished, lets the controller release
 the cluster lock. It does not stop a step already sent to a machine and it does not
-roll anything back. It asks for confirmation unless --yes.`,
+roll anything back. It asks for confirmation unless --yes.
+
+A ca-rotation or key-rotation deleted before it made the new CA or key issue is abandoned: the
+new material leaves the bundle, the lock is released and the machines are rendered from the old
+material again (the nodes then report a pending change; 'ichor config apply' drops what they
+still accept). Later in the rotation the delete is refused: let it finish.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {

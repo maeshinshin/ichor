@@ -686,6 +686,34 @@ func TestPauseResumeAndDeleteAreMadeAsTheCaller(t *testing.T) {
 	}
 }
 
+func TestDeleteRefusesARotationPastThePointOfNoReturn(t *testing.T) {
+	rotation := func(name, stage string) *ichorv1alpha1.TalosOperation {
+		return &ichorv1alpha1.TalosOperation{
+			Name: name, Namespace: opNS,
+			Spec: ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindCARotation},
+			Status: ichorv1alpha1.TalosOperationStatus{
+				Phase: ichorv1alpha1.TalosOperationPhasePaused, CARotation: &ichorv1alpha1.TalosOperationCARotationStatus{Stage: stage},
+			},
+		}
+	}
+
+	srv, k8s := opServer(t, append(opObjects(), rotation("late", ichorv1alpha1.CARotationStageDropping), rotation("early", ichorv1alpha1.CARotationStageAccepting))...)
+	ctx := context.Background()
+
+	_, err := srv.DeleteOperation(ctx, connect.NewRequest(&pb.DeleteOperationRequest{Operation: objectRef(opNS, "late")}))
+	if connect.CodeOf(err) != connect.CodeFailedPrecondition || !strings.Contains(err.Error(), "Dropping") {
+		t.Fatalf("a rotation in Dropping: err = %v, want FailedPrecondition naming the stage", err)
+	}
+
+	if len(listOps(t, k8s)) != 2 {
+		t.Fatalf("the refused operation was deleted")
+	}
+
+	if _, err := srv.DeleteOperation(ctx, connect.NewRequest(&pb.DeleteOperationRequest{Operation: objectRef(opNS, "early")})); err != nil {
+		t.Fatalf("a rotation in Accepting is abandoned by a delete: %v", err)
+	}
+}
+
 func TestListAndGetReturnStatusMachinesAsTheyAre(t *testing.T) {
 	op := &ichorv1alpha1.TalosOperation{
 		Name: "x", Namespace: opNS,

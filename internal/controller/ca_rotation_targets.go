@@ -522,6 +522,10 @@ func (c *caRun) nodeNameOf(ctx context.Context, talos TalosClient, m *ichorv1alp
 		return "", nil
 	}
 
+	if talos == nil {
+		return nodeNameFromMachine(m), nil
+	}
+
 	return resolveNodeName(ctx, c.r.Client, talos, m)
 }
 

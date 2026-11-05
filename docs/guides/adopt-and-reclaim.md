@@ -402,9 +402,15 @@ Both paths refuse:
 - a machine that is already an approved Ichor machine, or one that belongs to a
   cluster Ichor manages (it does not need a reset: use
   `ichor adopt --add-machine`). A stale pending `TalosMachine` for the same UUID, left
-  by an earlier reclaim, does not count;
+  by an earlier reclaim, does not count (the CLI deletes it after the reset, because it
+  pinned the old maintenance certificate; discovery creates it again with the new one);
 - a control plane whose removal would leave its cluster's etcd without quorum,
   or that is the last control plane of a reachable cluster.
+
+Every call the CLI makes to the machine while inspecting it gives up after 20 seconds. A
+control plane whose etcd is not running (a foreign cluster that never bootstrapped, or a dead
+one) is reported as "not running or not answering", and `--force-ungraceful` resets it: there is
+no quorum to protect and no graceful leave to wait for.
 
 Both require you to type the machine's UUID. The wrong UUID sends nothing.
 

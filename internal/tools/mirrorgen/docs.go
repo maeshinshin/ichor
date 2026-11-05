@@ -3,6 +3,7 @@ package main
 import (
 	"go/ast"
 	"go/types"
+	"slices"
 	"strings"
 )
 
@@ -163,17 +164,7 @@ func extractDoc(raw string) string {
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 
-		isKey := false
-
-		for _, k := range docgenKeys {
-			if strings.HasPrefix(trimmed, k) {
-				isKey = true
-
-				break
-			}
-		}
-
-		if isKey {
+		if slices.ContainsFunc(docgenKeys, func(k string) bool { return strings.HasPrefix(trimmed, k) }) {
 			break
 		}
 
@@ -185,11 +176,4 @@ func extractDoc(raw string) string {
 	return strings.TrimSpace(strings.Join(prose, " "))
 }
 
-func leadingSpaces(s string) int {
-	n := 0
-	for n < len(s) && (s[n] == ' ' || s[n] == '\t') {
-		n++
-	}
-
-	return n
-}
+func leadingSpaces(s string) int { return len(s) - len(strings.TrimLeft(s, " \t")) }

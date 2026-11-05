@@ -58,6 +58,15 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		}
 	}
 
+	// reconcileNoLeak reconciles m once and asserts that none of bundle's material reached its Ready condition.
+	reconcileNoLeak := func(r *TalosMachineReconciler, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle) {
+		GinkgoHelper()
+
+		_, err := reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+		assertNoLeak(fetchMachine(m), bundleSecretMaterial(bundle))
+	}
+
 	It("secrets bundle YAML malformed", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)
@@ -79,23 +88,14 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 	})
 
 	It("Talos client not configured", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		_, m, bundle := newBundledMachine()
 
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
-
-		assertNoLeak(fetchMachine(m), bundleSecretMaterial(bundle))
+		reconcileNoLeak(r, m, bundle)
 	})
 
 	It("Talos connect failed", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		_, m, bundle := newBundledMachine()
 
 		r := &TalosMachineReconciler{
 			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
@@ -103,47 +103,29 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 				return nil, errors.New("dial refused")
 			},
 		}
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
-
-		assertNoLeak(fetchMachine(m), bundleSecretMaterial(bundle))
+		reconcileNoLeak(r, m, bundle)
 	})
 
 	It("current config unavailable", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		_, m, bundle := newBundledMachine()
 
 		fake := &fakeTalosClient{currentErr: errors.New("read failed")}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
-
-		assertNoLeak(fetchMachine(m), bundleSecretMaterial(bundle))
+		reconcileNoLeak(r, m, bundle)
 	})
 
 	It("config diff failed", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		_, m, bundle := newBundledMachine()
 
 		fake := &fakeTalosClient{current: []byte("{{{not valid yaml")}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
-
-		assertNoLeak(fetchMachine(m), bundleSecretMaterial(bundle))
+		reconcileNoLeak(r, m, bundle)
 	})
 
 	It("dry run failed", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		cluster, m, bundle := newBundledMachine()
 
 		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
 
@@ -153,17 +135,11 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		fake := &fakeTalosClient{current: current, dryRunErr: errors.New("dry run failed")}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
-
-		assertNoLeak(fetchMachine(m), bundleSecretMaterial(bundle))
+		reconcileNoLeak(r, m, bundle)
 	})
 
 	It("apply failed", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		cluster, m, bundle := newBundledMachine()
 
 		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
 
@@ -173,10 +149,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		fake := &fakeTalosClient{current: current, applyErr: errors.New("apply failed")}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
-
-		assertNoLeak(fetchMachine(m), bundleSecretMaterial(bundle))
+		reconcileNoLeak(r, m, bundle)
 	})
 
 	// TestTalosMachineBundleLeak's own routes above all force an error; none
@@ -190,10 +163,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 	// future Talos version might start echoing) and asserts
 	// the scrubber still caught it.
 	It("dry run warnings echo bundle material", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		cluster, m, bundle := newBundledMachine()
 
 		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
 

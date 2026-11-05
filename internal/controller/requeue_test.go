@@ -35,18 +35,19 @@ import (
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
+// newBundledMachine is a cluster with its secrets bundle and one approved machine of it.
+func newBundledMachine() (*ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle) {
+	bundle := newTestBundle("v1.14")
+	secret := newTestSecret(bundle)
+	cluster := newTestCluster(secret.Name, "v1.14")
+
+	return cluster, newTestMachine(cluster.Name, true), bundle
+}
+
 // A False Ready that time can fix must come back by itself; one that waits for an operator must not.
 var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
-	setup := func() (*ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle) {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-
-		return cluster, newTestMachine(cluster.Name, true), bundle
-	}
-
 	It("retries on its own once the node answers again, without another event", func() {
-		cluster, m, bundle := setup()
+		cluster, m, bundle := newBundledMachine()
 		current, hash, err := render.Render(cluster, m, bundle, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -79,7 +80,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 	})
 
 	It("follows a node whose address changed: records the Kubernetes Node's address in status, never in spec", func() {
-		_, m, _ := setup()
+		_, m, _ := newBundledMachine()
 		setHostname(m, "node-moved-1")
 
 		m = fetchMachine(m)
@@ -126,7 +127,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 	})
 
 	It("asks to be looked at again when the node's current configuration cannot be read", func() {
-		_, m, _ := setup()
+		_, m, _ := newBundledMachine()
 		fake := &fakeTalosClient{currentErr: errors.New("read failed")}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
@@ -137,7 +138,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 	})
 
 	It("reports NodeUnreachable with the endpoint and the dial error once reads fail past the grace, and suggests the Node's new address", func() {
-		cluster, m, bundle := setup()
+		cluster, m, bundle := newBundledMachine()
 		current, _, err := render.Render(cluster, m, bundle, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -208,7 +209,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 	})
 
 	It("reports a worker whose endpoint answers as another machine as EndpointIdentityMismatch with both UUIDs", func() {
-		cluster, m, bundle := setup()
+		cluster, m, bundle := newBundledMachine()
 		Expect(m.Spec.Role).To(Equal(roleWorker))
 
 		current, _, err := render.Render(cluster, m, bundle, nil, nil)
@@ -243,7 +244,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 	})
 
 	It("reports a worker that cannot be dialed as NodeUnreachable once the grace has passed", func() {
-		cluster, m, bundle := setup()
+		cluster, m, bundle := newBundledMachine()
 		Expect(m.Spec.Role).To(Equal(roleWorker))
 
 		current, _, err := render.Render(cluster, m, bundle, nil, nil)
@@ -282,7 +283,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 	})
 
 	It("retries a failed apply, and applies once the node accepts it", func() {
-		cluster, m, bundle := setup()
+		cluster, m, bundle := newBundledMachine()
 		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
 		newTestPatch(cluster.Name, layerCluster, nil, extraArgsConfig())
 
@@ -302,7 +303,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 	})
 
 	It("does not poll for a change that needs a reboot", func() {
-		cluster, m, bundle := setup()
+		cluster, m, bundle := newBundledMachine()
 		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
 		disabled := true
 		desired := minimalConfigSkeleton()
@@ -319,7 +320,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 	})
 
 	It("does not poll for an install-time-only change", func() {
-		cluster, m, bundle := setup()
+		cluster, m, bundle := newBundledMachine()
 		target := &ichorv1alpha1.TalosConfigPatchTarget{MachineRef: &corev1.LocalObjectReference{Name: m.Name}}
 		current := renderWithConfig(cluster, m, bundle, "machine", target, minimalConfigSkeleton())
 		desired := minimalConfigSkeleton()
@@ -337,7 +338,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 	})
 
 	It("does not poll for drift under driftPolicy warnOnly", func() {
-		cluster, m, bundle := setup()
+		cluster, m, bundle := newBundledMachine()
 		patch := newTestPatch(cluster.Name, layerCluster, nil, extraArgsConfig())
 		rendered, _, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch}, nil)
 		Expect(err).NotTo(HaveOccurred())

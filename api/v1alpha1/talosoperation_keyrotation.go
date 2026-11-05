@@ -17,6 +17,8 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"fmt"
+	"slices"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -70,6 +72,30 @@ const (
 // re-requests it after 80% of that, so every token of a running pod is re-issued within 48 minutes.
 const DefaultKeyRotationTokenSettle = 90 * time.Minute
 
+// MinKeyRotationTokenSettle is the shortest spec.keyRotation.tokenSettle a key rotation accepts (ADR 0121,
+// hardware amendment). The tokens kube-apiserver puts in a pod's projected volume are asked for with
+// expirationSeconds 3607 and the kubelet re-requests one at 80% of that (48 minutes) plus up to ten seconds of
+// jitter, so a pod that is running holds a token signed by the new key within about 49 minutes of the
+// new key signing. Dropping the old key earlier makes the tokens still held, those of Ichor's own controller
+// and of the CNI among them, fail with 401. One hour for the token plus 15 minutes for a slow kubelet.
+const MinKeyRotationTokenSettle = 75 * time.Minute
+
+// TokenSettleRefusal is why spec.keyRotation.tokenSettle is too short, or "". It applies only when the
+// service-account key is rotated; an unset tokenSettle takes the default and is never refused.
+func (s *TalosOperationKeyRotationSpec) TokenSettleRefusal() string {
+	if s == nil || s.TokenSettle == nil || s.TokenSettle.Duration >= MinKeyRotationTokenSettle ||
+		!slices.Contains(s.Targets, KeyRotationTargetServiceAccount) {
+		return ""
+	}
+
+	return fmt.Sprintf("tokenSettle %s is shorter than the %s a key rotation needs: pods hold projected ServiceAccount tokens "+
+		"signed by the old key for up to 48 minutes (the kubelet re-requests a one-hour token at 80%% of its life), and "+
+		"dropping the old key before that makes Ichor's own controller, the CNI and every other pod that still holds one fail "+
+		"with 'the server has asked for the client to provide credentials' until the kubelet refreshes it. "+
+		"Use %s or longer (the default is %s); raise it further when workloads request projected tokens that live longer than an hour",
+		s.TokenSettle.Duration, MinKeyRotationTokenSettle, MinKeyRotationTokenSettle, DefaultKeyRotationTokenSettle)
+}
+
 // TalosOperationKeyRotationSpec says which keys a key-rotation operation replaces and how patient it is.
 type TalosOperationKeyRotationSpec struct {
 	// targets names the keys to replace: serviceAccount (the key that signs ServiceAccount tokens),
@@ -82,9 +108,10 @@ type TalosOperationKeyRotationSpec struct {
 	Targets []string `json:"targets"`
 
 	// tokenSettle is how long the old service-account key is kept after the new one signs, so that the
-	// projected tokens of running pods are re-issued under the new one. The default is 90 minutes. Raise it
-	// when workloads request projected tokens that live longer than an hour. Ignored without the
-	// serviceAccount target.
+	// projected tokens of running pods are re-issued under the new one. The default is 90 minutes and the
+	// shortest accepted is 75 minutes (a shorter one makes pods that still hold an old token fail until the
+	// kubelet refreshes it). Raise it when workloads request projected tokens that live longer than an hour.
+	// Ignored without the serviceAccount target.
 	// +optional
 	TokenSettle *metav1.Duration `json:"tokenSettle,omitempty"`
 

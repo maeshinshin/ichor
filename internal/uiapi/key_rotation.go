@@ -65,6 +65,10 @@ func keyRotationSpec(req *pb.KeyRotationRequest) (*ichorv1alpha1.TalosOperationK
 		spec.TokenSettle = &metav1.Duration{Duration: d}
 	}
 
+	if why := spec.TokenSettleRefusal(); why != "" {
+		return nil, invalid("%s", why)
+	}
+
 	return spec, nil
 }
 

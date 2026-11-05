@@ -29,10 +29,6 @@ const (
 	DefaultKubernetesRepository = "ghcr.io/siderolabs/kubelet"
 )
 
-// DefaultCiliumRepository is the image repository whose tags are the Cilium releases (ADR 0115,
-// amendment 2026-11-03). Its sibling images (operator-generic, hubble-relay) sit beside it in quay.io/cilium.
-const DefaultCiliumRepository = "quay.io/cilium/cilium"
-
 // Lister returns the tags of a repository. RegistryLister is the production one.
 type Lister func(repository string) ([]string, error)
 

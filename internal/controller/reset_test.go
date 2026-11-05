@@ -53,12 +53,8 @@ const resetTestNode = "reset-node"
 
 var _ = Describe("resetNode (ADR 0042)", func() {
 	It("does not reset, and still warns about lingering credentials, when the removal did not opt in", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestClusterWithCount(1, secret.Name)
-		cp1 := newTestControlPlane(cluster.Name, "r1")
-		cp2 := newTestControlPlane(cluster.Name, "r2")
-		cp3 := newTestControlPlane(cluster.Name, "r3")
+		cps := newThreeControlPlanes()
+		cp1 := cps[0]
 
 		fake := &fakeTalosClient{nodeName: resetTestNode}
 		recorder := record.NewFakeRecorder(10)
@@ -66,10 +62,7 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
 			TalosClient: clientFactory(fake), Recorder: recorder,
 		}
-		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
-		}
+		reconcileEach(r, cps)
 
 		var live ichorv1alpha1.TalosMachine
 		Expect(k8sClient.Get(ctx, machineKeyOf(cp1), &live)).To(Succeed())
@@ -89,12 +82,8 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 	})
 
 	It("resets the node when the removal opts in, clears the finalizer, and does not warn about credentials", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestClusterWithCount(1, secret.Name)
-		cp1 := newTestControlPlane(cluster.Name, "r4")
-		cp2 := newTestControlPlane(cluster.Name, "r5")
-		cp3 := newTestControlPlane(cluster.Name, "r6")
+		cps := newThreeControlPlanes()
+		cp1 := cps[0]
 
 		fake := &fakeTalosClient{nodeName: resetTestNode}
 		recorder := record.NewFakeRecorder(10)
@@ -102,10 +91,7 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
 			TalosClient: clientFactory(fake), Recorder: recorder,
 		}
-		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
-		}
+		reconcileEach(r, cps)
 
 		optIntoReset(cp1)
 		_, err := reconcileMachine(r, cp1)
@@ -120,22 +106,15 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 	})
 
 	It("wipes the whole system disk when the removal asks for a wipe mode", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestClusterWithCount(1, secret.Name)
-		cp1 := newTestControlPlane(cluster.Name, "r4w")
-		cp2 := newTestControlPlane(cluster.Name, "r5w")
-		cp3 := newTestControlPlane(cluster.Name, "r6w")
+		cps := newThreeControlPlanes()
+		cp1 := cps[0]
 
 		fake := &fakeTalosClient{nodeName: resetTestNode}
 		r := &TalosMachineReconciler{
 			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
 			TalosClient: clientFactory(fake), Recorder: record.NewFakeRecorder(10),
 		}
-		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
-		}
+		reconcileEach(r, cps)
 
 		got := fetchMachine(cp1)
 		got.Annotations = map[string]string{resetWipeModeAnnotation: ichorv1alpha1.WipeModeSystemDisk}
@@ -148,22 +127,15 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 	})
 
 	It("holds the finalizer and does not clear it when Reset fails", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestClusterWithCount(1, secret.Name)
-		cp1 := newTestControlPlane(cluster.Name, "r7")
-		cp2 := newTestControlPlane(cluster.Name, "r8")
-		cp3 := newTestControlPlane(cluster.Name, "r9")
+		cps := newThreeControlPlanes()
+		cp1 := cps[0]
 
 		fake := &fakeTalosClient{nodeName: resetTestNode, resetErr: fmt.Errorf("reset failed")}
 		r := &TalosMachineReconciler{
 			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
 			TalosClient: clientFactory(fake),
 		}
-		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
-		}
+		reconcileEach(r, cps)
 
 		optIntoReset(cp1)
 		_, err := reconcileMachine(r, cp1)
@@ -177,22 +149,15 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 	})
 
 	It("does not ask Talos to reset twice: a resumed reconcile that already recorded the request skips it", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestClusterWithCount(1, secret.Name)
-		cp1 := newTestControlPlane(cluster.Name, "r10")
-		cp2 := newTestControlPlane(cluster.Name, "r11")
-		cp3 := newTestControlPlane(cluster.Name, "r12")
+		cps := newThreeControlPlanes()
+		cp1 := cps[0]
 
 		fake := &fakeTalosClient{nodeName: resetTestNode}
 		r := &TalosMachineReconciler{
 			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
 			TalosClient: clientFactory(fake),
 		}
-		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
-		}
+		reconcileEach(r, cps)
 
 		optIntoReset(cp1)
 

@@ -12,7 +12,7 @@ import type { User } from '@/gen/ichor/v1alpha1/user_pb'
 import { userClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
 import { minPasswordLength, passwordOk, roleNames, toggleRole, userError, userNameOk } from '@/lib/users'
-import type { ErrorShape } from '@/lib/errors'
+import { useAction } from '@/hooks/use-action'
 import { t } from '@/lib/i18n'
 
 function RolePicker({ id, roles, onChange }: { id: string; roles: string[]; onChange: (roles: string[]) => void }) {
@@ -84,8 +84,7 @@ export function CreateUserDialog({ onDone }: { onDone: () => void }) {
   const [roles, setRoles] = useState<string[]>(['viewer'])
   const [typePassword, setTypePassword] = useState(false)
   const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { busy, error, setError, run } = useAction(userError)
   const [generated, setGenerated] = useState<{ name: string; password: string } | null>(null)
 
   const nameBad = name !== '' && !userNameOk(name)
@@ -107,29 +106,25 @@ export function CreateUserDialog({ onDone }: { onDone: () => void }) {
     if (!next) reset()
   }
 
-  async function submit() {
-    setBusy(true)
-    setError(null)
+  function submit() {
     let created = false
-    try {
-      await userClient.createUser({ name, displayName, email, roles })
-      created = true
-      const res = await userClient.setPassword({ name, password: typePassword ? password : '' })
-      onDone()
-      if (res.generatedPassword) return setGenerated({ name, password: res.generatedPassword })
-      notifyDone(t('users.created', { name }))
-      change(false)
-    } catch (err) {
-      const e = userError(err)
-      if (created) {
+    return run(
+      async () => {
+        await userClient.createUser({ name, displayName, email, roles })
+        created = true
+        const res = await userClient.setPassword({ name, password: typePassword ? password : '' })
+        onDone()
+        if (res.generatedPassword) return setGenerated({ name, password: res.generatedPassword })
+        notifyDone(t('users.created', { name }))
+        change(false)
+      },
+      (err) => {
+        if (!created) return
+        const e = userError(err)
         onDone()
         setError({ title: e.title, detail: `${t('users.createdNoPassword', { name })} ${e.detail}` })
-      } else {
-        setError(e)
-      }
-    } finally {
-      setBusy(false)
-    }
+      },
+    )
   }
 
   return (
@@ -203,23 +198,15 @@ export function EditUserDialog({ user, open, onOpenChange, onDone }: { user: Use
   const [email, setEmail] = useState(user.email)
   const [roles, setRoles] = useState<string[]>(user.roles)
   const [disabled, setDisabled] = useState(user.disabled)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { busy, error, run } = useAction(userError)
 
-  async function submit() {
-    setBusy(true)
-    setError(null)
-    try {
+  const submit = () =>
+    run(async () => {
       await userClient.updateUser({ name: user.name, displayName, email, roles, disabled })
       notifyDone(t('users.updated', { name: user.name }))
       onOpenChange(false)
       onDone()
-    } catch (err) {
-      setError(userError(err))
-    } finally {
-      setBusy(false)
-    }
-  }
+    })
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -252,8 +239,7 @@ export function EditUserDialog({ user, open, onOpenChange, onDone }: { user: Use
 
 export function SetPasswordDialog({ user, open, onOpenChange }: { user: User; open: boolean; onOpenChange: (o: boolean) => void }) {
   const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { busy, error, setError, run } = useAction(userError)
   const [generated, setGenerated] = useState('')
 
   function change(next: boolean) {
@@ -265,20 +251,13 @@ export function SetPasswordDialog({ user, open, onOpenChange }: { user: User; op
     }
   }
 
-  async function submit() {
-    setBusy(true)
-    setError(null)
-    try {
+  const submit = () =>
+    run(async () => {
       const res = await userClient.setPassword({ name: user.name, password })
       if (res.generatedPassword) return setGenerated(res.generatedPassword)
       notifyDone(t('users.passwordSet', { name: user.name }))
       change(false)
-    } catch (err) {
-      setError(userError(err))
-    } finally {
-      setBusy(false)
-    }
-  }
+    })
 
   return (
     <Dialog open={open} onOpenChange={change}>
@@ -366,21 +345,13 @@ function UserConfirm({
   label: string
   run: () => Promise<void>
 }) {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { busy, error, setError, run: act } = useAction(userError)
 
-  async function go() {
-    setBusy(true)
-    setError(null)
-    try {
+  const go = () =>
+    act(async () => {
       await run()
       onOpenChange(false)
-    } catch (err) {
-      setError(userError(err))
-    } finally {
-      setBusy(false)
-    }
-  }
+    })
 
   return (
     <ConfirmDialog

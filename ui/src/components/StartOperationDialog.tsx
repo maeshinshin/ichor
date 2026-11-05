@@ -16,9 +16,10 @@ import { AlertDialogCancel, AlertDialogFooter } from '@/components/ui/alert-dial
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { wireKindOf } from '@/components/opkind'
 import { OperationEffect, type PlanOperationResponse } from '@/gen/ichor/v1alpha1/operation_pb'
+import { useAction } from '@/hooks/use-action'
 import { operationClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
-import { describeError, isOverridable, type ErrorShape } from '@/lib/errors'
+import { describeError, isOverridable } from '@/lib/errors'
 import { versionProblem } from '@/lib/clusterOps'
 import { confirmMatches, kindNeedsTypedName, kubernetesStages, planCounts, planSteps, targetError, type OpKind } from '@/lib/operations'
 import { caNeedsCredentials, caTargetChoices, defaultCATargets, toggleCATarget, type CATarget } from '@/lib/caTargets'
@@ -68,8 +69,7 @@ export function StartOperationDialog({
   const [touched, setTouched] = useState(false)
   const [typed, setTyped] = useState('')
   const [plan, setPlan] = useState<PlanOperationResponse | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { busy, error, setError, run } = useAction()
   // list is the candidates for the picker, read when the dialog opens; null while they are read.
   const [list, setList] = useState<TargetList | null>(null)
   // The override lifts a compatibility refusal the plan names; the reason is optional.
@@ -138,33 +138,19 @@ export function StartOperationDialog({
     caTargets: kind === 'ca-rotation' ? caTargets : [],
   })
 
-  async function review(withOverride = overridden) {
-    setBusy(true)
-    setError(null)
-    try {
-      setPlan(await operationClient.planOperation(request(withOverride)))
-    } catch (err) {
-      setError(describeError(err))
-      setOverridable(withOverride || isOverridable(err))
-    } finally {
-      setBusy(false)
-    }
-  }
+  const review = (withOverride = overridden) =>
+    run(
+      async () => setPlan(await operationClient.planOperation(request(withOverride))),
+      (err) => setOverridable(withOverride || isOverridable(err)),
+    )
 
-  async function start() {
-    setBusy(true)
-    setError(null)
-    try {
+  const start = () =>
+    run(async () => {
       const res = await operationClient.createOperation(request(overridden))
       reset(false)
       notifyDone(t('toast.opStarted', { action: t(`ops.start.${kind}`) }))
       if (res.operation?.ref) navigate(`/operations/${encodeURIComponent(res.operation.ref.name)}`)
-    } catch (err) {
-      setError(describeError(err))
-    } finally {
-      setBusy(false)
-    }
-  }
+    })
 
   return (
     <ConfirmDialog

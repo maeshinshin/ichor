@@ -32,8 +32,8 @@ type KubePrism struct {
 }
 
 // ValidationContext carries what the caller knows. A nil fact is unknown and
-// its guard passes: the webhook cannot see the cluster, the controller
-// re-checks with live facts before every Job.
+// its guard passes: the webhook cannot see the cluster., decision 4,
+// has the controller re-check with live facts before every Job; that is open.
 type ValidationContext struct {
 	// KubeProxy and Tunnel select Ichor's own values (Tunnel: "", "vxlan",
 	// "geneve").
@@ -49,10 +49,12 @@ type ValidationContext struct {
 	KubePrism *KubePrism
 }
 
-// ValidateValues is the one validation of user Cilium values, shared by the webhook, the Connect service and the
-// controller.
-// It checks the chart schema, owned keys, unknown keys, the size cap and the
-// three guards from the Talos guide, and joins every problem it finds.
+// ValidateValues is the one validation of user Cilium values. The TalosCluster webhook runs it with no facts, so
+// only the
+// chart schema, owned keys, unknown keys and the size cap apply there; the Connect service adds the facts it can
+// read for the three guards from
+// the Talos guide (`ichor adopt` passes none). The controller does not call it yet.
+// It joins every problem it finds.
 func ValidateValues(user map[string]any, c ValidationContext) error {
 	// The control-plane count only sets a default (operator.replicas), which validation does not read.
 	p, err := newPreset(c.KubeProxy, c.Tunnel, 0)

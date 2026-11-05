@@ -163,6 +163,10 @@ func (v *TalosClusterCustomValidator) ValidateCreate(ctx context.Context, obj *i
 		return nil, err
 	}
 
+	if err := validateCiliumValues(nil, obj); err != nil {
+		return nil, err
+	}
+
 	warns, err := v.validateSecurityCreate(ctx, obj)
 	if err != nil {
 		return nil, err
@@ -282,6 +286,11 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 	// controllers refuse to render it, so a spec edit could never take effect.
 	if (removedPreset(oldObj) || removedPreset(newObj)) && !apiequality.Semantic.DeepEqual(oldObj.Spec, newObj.Spec) {
 		return nil, fmt.Errorf(presetRemovedMessage, cmp.Or(newObj.Spec.CNI.Preset, oldObj.Spec.CNI.Preset))
+	}
+
+	// The Cilium values are checked as the UI checks them, when this update changes what that check reads.
+	if err := validateCiliumValues(oldObj, newObj); err != nil {
+		return nil, err
 	}
 
 	// A version is checked when this update changes it, so a stored object that predates the

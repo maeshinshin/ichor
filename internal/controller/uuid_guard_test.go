@@ -21,10 +21,12 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"maps"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -94,25 +96,11 @@ func TestFixtureUUIDsAreUnique(t *testing.T) {
 		}
 	}
 
-	values := make([]string, 0, len(byValue))
-	for v := range byValue {
-		values = append(values, v)
-	}
-	slices.Sort(values)
-
-	for _, v := range values {
+	for _, v := range slices.Sorted(maps.Keys(byValue)) {
 		names := byValue[v]
 		if len(names) > 1 {
 			t.Errorf("UUID %q is declared by more than one constant, and will collide the moment both specs run in the same envtest namespace:\n\t%s",
-				v, joinLines(names))
+				v, strings.Join(names, "\n\t"))
 		}
 	}
-}
-
-func joinLines(lines []string) string {
-	out := lines[0]
-	for _, l := range lines[1:] {
-		out += "\n\t" + l
-	}
-	return out
 }

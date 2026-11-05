@@ -22,10 +22,7 @@ import (
 	"strings"
 	"testing"
 
-	authv1 "k8s.io/api/authorization/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -72,17 +69,7 @@ func TestRotateCAWithYesCreatesOneOperationAndRefusesASecondWhileItRuns(t *testi
 	setAPITestFlags(t, true)
 
 	// The start right is asked as the caller; here Kubernetes says yes.
-	k8s := interceptor.NewClient(fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(opTestObjects()...).Build(), interceptor.Funcs{
-		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
-			if sar, ok := obj.(*authv1.SelfSubjectAccessReview); ok {
-				sar.Status.Allowed = true
-
-				return nil
-			}
-
-			return c.Create(ctx, obj, opts...)
-		},
-	})
+	k8s := allowStarts(t, opTestObjects())
 	c := localClients(apiOpts, apiDeps{K8s: k8s})
 	spec := startSpec{Kind: pb.OperationKind_OPERATION_KIND_CA_ROTATION, Cluster: opTestCluster}
 

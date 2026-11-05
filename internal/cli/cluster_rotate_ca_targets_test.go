@@ -86,11 +86,11 @@ func TestOnlyTheTalosAndKubernetesCAsNeedTheCredentialHandoff(t *testing.T) {
 	}
 }
 
-func allowStarts(t *testing.T) client.Client {
+func allowStarts(t *testing.T, objs []client.Object) client.Client {
 	t.Helper()
 
 	// The start right is asked as the caller; here Kubernetes says yes.
-	return interceptor.NewClient(fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(opTestObjects()...).Build(), interceptor.Funcs{
+	return interceptor.NewClient(fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(objs...).Build(), interceptor.Funcs{
 		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 			if sar, ok := obj.(*authv1.SelfSubjectAccessReview); ok {
 				sar.Status.Allowed = true
@@ -176,7 +176,7 @@ func TestRotateCAOfEtcdAloneWritesTheTargetsAndFollowsNothingItDoesNotNeed(t *te
 
 	outputFormat = outputHuman // restored by setAPITestFlags
 
-	k8s := allowStarts(t)
+	k8s := allowStarts(t, opTestObjects())
 	c := localClients(apiOpts, apiDeps{K8s: k8s})
 
 	cmd := &cobra.Command{}

@@ -67,8 +67,8 @@ func TestResolveRegistryAuth(t *testing.T) {
 		want      RegistryAuth      // zero means no entry for the registry
 		wantErr   []string
 	}{
-		{"no registries at all resolves to an empty map", registryCluster(), registrySecretNamespace, nil, RegistryAuth{}, nil},
-		{"a registry with no authSecretRef is anonymous, not an error", anonymous, registrySecretNamespace, nil, RegistryAuth{}, nil},
+		{"no registries resolves to an empty map", registryCluster(), registrySecretNamespace, nil, RegistryAuth{}, nil},
+		{"no authSecretRef is anonymous, not an error", anonymous, registrySecretNamespace, nil, RegistryAuth{}, nil},
 		{"password", authRegistryCluster(), registrySecretNamespace,
 			map[string][]byte{"password": []byte("s3cr3t-pw")}, RegistryAuth{Password: "s3cr3t-pw"}, nil},
 		{"auth", authRegistryCluster(), registrySecretNamespace,

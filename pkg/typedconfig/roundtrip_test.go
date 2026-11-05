@@ -118,7 +118,7 @@ func TestRoundTripConfig(t *testing.T) {
 
 	// credentialProviderConfig exercises the sixth fieldOverrides entry
 	// (ADR 0003's "KubeletCredentialProviderConfig gets an override" follow-up).
-	credentialProviderConfig := mustUnstructured(t, "kubelet credential provider config", kubeletv1.CredentialProviderConfig{
+	credentialProviderConfig := mustUnstructured(t, "credential provider", kubeletv1.CredentialProviderConfig{
 		Providers: []kubeletv1.CredentialProvider{
 			{
 				Name:                 "ecr-credential-provider",

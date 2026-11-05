@@ -60,6 +60,65 @@ func rotationStage(op *ichorv1alpha1.TalosOperation) string {
 	return ""
 }
 
+// rotationUnderway reports whether op is a rotation of the given kind that has started changing nodes and has
+// not finished.
+func rotationUnderway(op *ichorv1alpha1.TalosOperation, kind string) bool {
+	if op.Spec.Kind != kind {
+		return false
+	}
+
+	switch rotationStage(op) {
+	case "", ichorv1alpha1.CARotationStageDone: // KeyRotationStageDone is the same string
+		return false
+	}
+
+	return op.Status.Phase != ichorv1alpha1.TalosOperationPhaseCompleted
+}
+
+// activeRotation returns the name of the cluster's rotation of the given kind that is under way, or "".
+func activeRotation(ctx context.Context, reader client.Reader, namespace, cluster, kind string) (string, error) {
+	var ops ichorv1alpha1.TalosOperationList
+	if err := reader.List(ctx, &ops, client.InNamespace(namespace)); err != nil {
+		return "", err
+	}
+
+	for i := range ops.Items {
+		if ops.Items[i].Spec.ClusterRef.Name == cluster && rotationUnderway(&ops.Items[i], kind) {
+			return ops.Items[i].Name, nil
+		}
+	}
+
+	return "", nil
+}
+
+// rotationFinalizerStep adds the finalizer to a rotation's operation and removes it once the rotation has
+// settled. handled is true when the reconcile has nothing more to do.
+func (r *TalosOperationReconciler) rotationFinalizerStep(
+	ctx context.Context, op *ichorv1alpha1.TalosOperation, kind, finalizer, bundleKey string,
+) (handled bool, err error) {
+	if op.Spec.Kind != kind {
+		return false, nil
+	}
+
+	has := controllerutil.ContainsFinalizer(op, finalizer)
+	settled := !rotationUnderway(op, kind)
+
+	switch {
+	case has && !settled && !op.DeletionTimestamp.IsZero():
+		return r.rotationDeletion(ctx, op, finalizer, bundleKey)
+	case has && settled && (!op.DeletionTimestamp.IsZero() || op.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted):
+		controllerutil.RemoveFinalizer(op, finalizer)
+
+		return true, client.IgnoreNotFound(r.Update(ctx, op))
+	case !has && op.DeletionTimestamp.IsZero() && op.Status.Phase != ichorv1alpha1.TalosOperationPhaseCompleted:
+		controllerutil.AddFinalizer(op, finalizer)
+
+		return false, r.Update(ctx, op)
+	}
+
+	return false, nil
+}
+
 // rotationDeletion handles a deletion request on a rotation that is under way. handled is true when the
 // operation was abandoned (the finalizer is gone); false means the reconcile goes on, with the rotation
 // continuing and DeletionHeld set when it cannot be abandoned.

@@ -48,18 +48,12 @@ import (
 	"github.com/maeshinshin/ichor/pkg/reclaim"
 )
 
-// bootIDPath is Linux's own per-boot random ID, re-generated on every boot
-// -- the file Talos's own talosctl reads to confirm a reboot happened
-// (cmd/talosctl/pkg/talos/action/tracker.go's getBootID, Talos 1.14.3).
+// bootIDPath is Linux's per-boot random ID, the file talosctl reads to confirm a reboot happened.
 const bootIDPath = "/proc/sys/kernel/random/boot_id"
 
-// NewMachineryTalosClient dials m's Talos API using the bundle's os:admin
-// identity and adapts the connection to TalosClient. It is what cmd/main.go
-// wires into TalosMachineReconciler.TalosClient.
-//
-// This client is the authenticated path only: it works once the node trusts
-// the bundle's CA. A node still in maintenance mode is reached through
-// MaintenanceClient instead (talosmachine_provision.go).
+// NewMachineryTalosClient dials m's Talos API with the bundle's os:admin identity and adapts the connection
+// to TalosClient (wired into TalosMachineReconciler.TalosClient by cmd/main.go). It works once the node
+// trusts the bundle's CA; a node in maintenance mode is reached through MaintenanceClient.
 func NewMachineryTalosClient(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
 ) (TalosClient, error) {
@@ -71,8 +65,7 @@ func NewMachineryTalosClient(
 	return &machineryTalosClient{c: c, endpoint: m.DialEndpoint(), kubernetesCA: bundle.Certs.K8s.Crt}, nil
 }
 
-// dialAdmin dials m's Talos API with the bundle's os:admin identity; shared
-// by every machinery-backed client in this package.
+// dialAdmin dials m's Talos API with the bundle's os:admin identity, for every machinery-backed client here.
 func dialAdmin(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
 ) (*client.Client, error) {
@@ -100,20 +93,15 @@ type machineryTalosClient struct {
 	c *client.Client
 }
 
-// Close releases the gRPC connection. It is not part of the TalosClient
-// interface -- Reconcile closes it through an io.Closer type assertion
-// instead, so the interface design 5.6 needs stays exactly three methods
-// and the fake test double never has to implement a method it has nothing
-// to close.
+// Close releases the gRPC connection. It is not on the TalosClient interface: callers close through an
+// io.Closer assertion (closeTalosClient), so the fake has nothing to implement.
 func (t *machineryTalosClient) Close() error {
 	return t.c.Close()
 }
 
-// CurrentConfig reads the MachineConfig COSI resource's active ID. Its
-// Bytes() returns the node's configuration exactly as last submitted --
-// configloader parses ApplyConfiguration's payload into a readonly
-// container that preserves the original bytes rather than re-encoding --
-// so this is directly comparable to pkg/render's hash.
+// CurrentConfig reads the MachineConfig COSI resource's active ID. Its Bytes() are the configuration exactly
+// as last submitted (configloader keeps the original bytes rather than re-encoding), so it compares directly
+// with pkg/render's hash.
 func (t *machineryTalosClient) CurrentConfig(ctx context.Context) ([]byte, error) {
 	md := resource.NewMetadata(configres.NamespaceName, configres.MachineConfigType, configres.ActiveID, resource.VersionUndefined)
 
@@ -199,9 +187,7 @@ func (t *machineryTalosClient) SecurityState(ctx context.Context) (SecurityState
 	return ReadSecurityState(ctx, t.c.COSI)
 }
 
-// DryRunApply validates cfg without applying it and collects every
-// message's warnings (ValidateAtRuntime's warnings, not
-// Mode/ModeDetails, are what's worth reading from this call).
+// DryRunApply validates cfg without applying it and collects every message's warnings.
 func (t *machineryTalosClient) DryRunApply(ctx context.Context, cfg []byte) ([]string, error) {
 	resp, err := t.c.ApplyConfiguration(ctx, &machineapi.ApplyConfigurationRequest{
 		Data: cfg, Mode: machineapi.ApplyConfigurationRequest_NO_REBOOT, DryRun: true,
@@ -242,10 +228,8 @@ func (t *machineryTalosClient) Reboot(ctx context.Context) error {
 	return t.c.Reboot(ctx)
 }
 
-// EtcdMemberList lists etcd members as this node's own machined sees them
-// (etcd's membership is raft-replicated, so any member -- not only a
-// control plane the request happens to be "about" -- reports the same
-// list).
+// EtcdMemberList lists etcd members as this node's own machined sees them (membership is raft-replicated,
+// so any member reports the same list).
 func (t *machineryTalosClient) EtcdMemberList(ctx context.Context) ([]EtcdMember, error) {
 	resp, err := t.c.EtcdMemberList(ctx, &machineapi.EtcdMemberListRequest{QueryLocal: true})
 	if err != nil {
@@ -274,14 +258,10 @@ func (t *machineryTalosClient) EtcdRemoveMemberByID(ctx context.Context, memberI
 	return t.c.EtcdRemoveMemberByID(ctx, &machineapi.EtcdRemoveMemberByIDRequest{MemberId: memberID})
 }
 
-// Reset wipes this node's STATE and EPHEMERAL partitions by label (never
-// Mode: USER_DISKS, which the server rejects alongside a non-empty
-// SystemPartitionsToWipe, and never the implicit "wipe everything" that
-// an empty SystemPartitionsToWipe would mean) and reboots it back to
-// maintenance mode. Graceful: false -- the caller has already drained and
-// left etcd itself by the time this is ever called, so Talos's
-// own graceful pre-reset routine would find nothing left to do. A
-// wipeMode (reclaim.ResetRequestWipe) wipes the whole system disk instead.
+// Reset wipes this node's STATE and EPHEMERAL partitions by label (never Mode: USER_DISKS, which the server
+// rejects with a non-empty SystemPartitionsToWipe, nor the implicit wipe-everything of an empty one) and
+// reboots it to maintenance mode. Graceful is false: the caller has drained and left etcd already. A wipeMode
+// (reclaim.ResetRequestWipe) wipes the whole system disk instead.
 func (t *machineryTalosClient) Reset(ctx context.Context, wipeMode string) error {
 	return t.c.ResetGeneric(ctx, reclaim.ResetRequestWipe(false, wipeMode))
 }
@@ -323,22 +303,14 @@ func (t *machineryTalosClient) BootID(ctx context.Context) (string, error) {
 	return strings.TrimSpace(string(body)), nil
 }
 
-// Upgrade calls this node's Upgrade API. stage and force both stay false:
-// stage is for upgrading before the next reboot rather than this call's own
-// (not needed, since architecture.md's "Upgrades" always upgrades in
-// place), and force would skip the server's own etcd-health validation for
-// a control plane (v1alpha1_server.go's Server.Upgrade, Talos 1.14.3) --
-// exactly the check this interface's own doc comment says Ichor relies on
-// instead of re-implementing.
+// Upgrade calls this node's Upgrade API. stage and force stay false: force would skip the server's own
+// etcd-health validation of a control plane, which Ichor relies on instead of re-implementing.
 //
-// streaming replacement needs multiplex/streaming infrastructure this
-// package doesn't otherwise have, and plain Upgrade still works across the
-// whole supported upgrade-from range (talosctl's own LifecycleService
-// support starts at >1.13.0-alpha.2, but pkg/machinery/compatibility's
-// MinimumHostUpgradeVersion for 1.14 is 1.12.0 -- a host that old has no
-// LifecycleService to call).
+// The legacy RPC is used, not LifecycleService: its streaming needs infrastructure this package lacks, and
+// plain Upgrade works across the whole supported upgrade-from range (MinimumHostUpgradeVersion for 1.14 is
+// 1.12.0, older than LifecycleService's >1.13.0-alpha.2).
 //
-//nolint:staticcheck // legacy MachineService.Upgrade: LifecycleService's
+//nolint:staticcheck // legacy MachineService.Upgrade, see above
 func (t *machineryTalosClient) Upgrade(ctx context.Context, image string) error {
 	_, err := t.c.Upgrade(ctx, image, false, false)
 
@@ -368,9 +340,8 @@ func (t *machineryTalosClient) Kubeconfig(ctx context.Context) ([]byte, error) {
 	return t.c.Kubeconfig(ctx)
 }
 
-// BootstrapManifests lists the k8s.Manifest resources of the control-plane
-// namespace and flattens their items, the same read
-// go-kubernetes' manifests.GetBootstrapManifests does for talosctl.
+// BootstrapManifests lists the k8s.Manifest resources of the control-plane namespace and flattens their
+// items, as go-kubernetes' manifests.GetBootstrapManifests does for talosctl.
 func (t *machineryTalosClient) BootstrapManifests(ctx context.Context) ([]map[string]any, error) {
 	list, err := safe.StateListAll[*k8sres.Manifest](ctx, t.c.COSI)
 	if err != nil {

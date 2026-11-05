@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -140,23 +139,22 @@ func (s *Server) getUser(ctx context.Context, name string) (*ichorv1alpha1.Ichor
 // guardGrant refuses a role grant above the caller's own: an Ichor user may add only roles they
 // hold, and admin may add any. Kubernetes RBAC alone decided before, so anyone
 // allowed to update ichorusers could make themselves admin. An external identity (OIDC) has
-// no Ichor roles; for it RBAC remains the only gate.
+// no Ichor roles; for it RBAC remains the only gate. The IchorUser webhook enforces the same rule
+// for kubectl.
 func guardGrant(id Identity, current, wanted []string) error {
-	if id.Source != SourceIchor || slices.Contains(id.Groups, IchorGroupPrefix+adminRole) {
+	if id.Source != SourceIchor {
 		return nil
 	}
 
-	for _, r := range wanted {
-		if !slices.Contains(current, r) && !slices.Contains(id.Groups, IchorGroupPrefix+r) {
-			return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("you cannot grant the role %q: you do not hold it", r))
-		}
+	if r := ichorauth.UngrantedRole(id.Groups, current, wanted); r != "" {
+		return connect.NewError(connect.CodePermissionDenied, fmt.Errorf("you cannot grant the role %q: you do not hold it", r))
 	}
 
 	return nil
 }
 
 func isEnabledAdmin(u *ichorv1alpha1.IchorUser) bool {
-	return !u.Spec.Disabled && slices.Contains(u.Spec.Roles, adminRole)
+	return ichorauth.IsEnabledAdmin(u.Spec.Roles, u.Spec.Disabled)
 }
 
 // guardLastAdmin refuses a change that would leave no enabled admin. It is a

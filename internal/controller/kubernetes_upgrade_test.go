@@ -171,6 +171,16 @@ func newKubernetesAdvancer(fake *fakeTalosClient, admin KubernetesAdmin) *kubern
 	}
 }
 
+// advanceOK runs one advance of a machine and fails the test when it errors.
+func advanceOK(advance AdvanceMachineFunc, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, op *ichorv1alpha1.TalosOperation) bool {
+	GinkgoHelper()
+
+	done, err := advance(ctx, cluster, m, op)
+	Expect(err).NotTo(HaveOccurred())
+
+	return done
+}
+
 // k8sCluster creates a cluster whose spec.kubernetesVersion is target.
 func k8sCluster(target string, cniSpec ...ichorv1alpha1.TalosClusterCNI) *ichorv1alpha1.TalosCluster {
 	secret := newTestSecret(newTestBundle(testK8sContract))
@@ -363,8 +373,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		// config is re-rendered the same way.
 		fake.current = renderAt(cluster, w, testK8sOld)
 
-		_, err = adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(adv.Advance, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(fake.applyCalls).To(HaveLen(1))
 	})
 
@@ -372,8 +381,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		cluster, w, fake := k8sWorkerFixture(testK8sTarget, "budget1", true)
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
 
-		_, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(adv.Advance, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(fake.applyBudget).To(BeNumerically(">", 4*etcdDialTimeout),
 			"Talos restarts static pods during the apply; the call must outlive the %s dial bound", etcdDialTimeout)
@@ -418,8 +426,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 
 		op := opAtStage(ichorv1alpha1.KubernetesStageKubelets)
 
-		_, err := adv.Advance(ctx, cluster, w, op)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(adv.Advance, cluster, w, op)
 		Expect(admin.removedFor).To(ConsistOf("1.36"))
 		Expect(fake.applyCalls).To(HaveLen(1))
 
@@ -450,8 +457,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 
 		op := opAtStage(ichorv1alpha1.KubernetesStageKubelets)
 
-		_, err := adv.Advance(ctx, cluster, w, op)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(adv.Advance, cluster, w, op)
 		Expect(admin.removedFrom).To(HaveLen(2))
 		Expect(admin.removedFrom).To(ConsistOf(BeIdenticalTo(cp1Fake), BeIdenticalTo(cp2Fake)))
 
@@ -472,9 +478,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld), nodeName: name}
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
 
-		done, err := adv.Advance(ctx, cluster, fetchMachine(w), opAtStage(ichorv1alpha1.KubernetesStageKubelets))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(adv.Advance, cluster, fetchMachine(w), opAtStage(ichorv1alpha1.KubernetesStageKubelets))).To(BeFalse())
 		Expect(fake.applyCalls).To(HaveLen(1), "the node was found by the name it reports, and the step ran")
 	})
 
@@ -483,9 +487,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		admin := &fakeKubernetesAdmin{}
 		adv := newKubernetesAdvancer(fake, admin)
 
-		done, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(adv.Advance, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))).To(BeFalse())
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(fake.applyCalls[0]).To(Equal(renderAt(cluster, w, testK8sTarget)))
 		Expect(fake.pulled).To(ConsistOf(ContainSubstring(":" + testK8sTarget)))
@@ -495,16 +497,12 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		// observed state, never apply again.
 		fake.current = fake.applyCalls[0]
 
-		done, err = adv.Advance(ctx, cluster, fetchMachine(w), opAtStage(ichorv1alpha1.KubernetesStageKubelets))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(adv.Advance, cluster, fetchMachine(w), opAtStage(ichorv1alpha1.KubernetesStageKubelets))).To(BeFalse())
 		Expect(fake.applyCalls).To(HaveLen(1))
 
 		setK8sNode(w.Spec.Hostname, testK8sTarget)
 
-		done, err = adv.Advance(ctx, cluster, fetchMachine(w), opAtStage(ichorv1alpha1.KubernetesStageKubelets))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(adv.Advance, cluster, fetchMachine(w), opAtStage(ichorv1alpha1.KubernetesStageKubelets))).To(BeTrue())
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(admin.syncCalls).To(BeZero(), "bootstrap manifests are synced when the control planes finish, not per worker")
 		Expect(apimeta.IsStatusConditionTrue(fetchMachine(w).Status.Conditions, conditionKubernetesUpgrade)).To(BeFalse())
@@ -527,24 +525,18 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		adv.Evacuator, adv.Kube = evacuator, kube
 		op := opAtStage(ichorv1alpha1.KubernetesStageKubelets)
 
-		done, err := adv.Advance(ctx, cluster, w, op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(adv.Advance, cluster, w, op)).To(BeFalse())
 		Expect(evacuator.beginCalls).To(Equal(1))
 		Expect(fake.applyCalls).To(BeEmpty(), "the kubelet is not rolled before the evacuation finished")
 
-		done, err = adv.Advance(ctx, cluster, fetchMachine(w), op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(adv.Advance, cluster, fetchMachine(w), op)).To(BeFalse())
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(kube.node(name).Spec.Unschedulable).To(BeTrue(), "the node was cordoned before the roll")
 
 		fake.current = fake.applyCalls[0]
 		setK8sNode(name, testK8sTarget)
 
-		done, err = adv.Advance(ctx, cluster, fetchMachine(w), op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(adv.Advance, cluster, fetchMachine(w), op)).To(BeTrue())
 		Expect(kube.node(name).Spec.Unschedulable).To(BeFalse())
 		Expect(evacuator.endCalls).To(Equal(1))
 	})
@@ -568,8 +560,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		adv.Evacuator, adv.Kube = evacuator, kube
 		op := opAtStage(ichorv1alpha1.KubernetesStageKubelets)
 
-		_, err = adv.Advance(ctx, cluster, w, op)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(adv.Advance, cluster, w, op)
 
 		_, err = adv.Advance(ctx, cluster, fetchMachine(w), op)
 		Expect(err).To(HaveOccurred())
@@ -602,8 +593,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		cluster, w, fake := k8sWorkerFixture(testK8sTarget, "to1", true)
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
 
-		_, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(adv.Advance, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
 
 		fake.current = fake.applyCalls[0]
 
@@ -631,9 +621,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		adv := newKubernetesAdvancer(fake1, admin)
 		op := opAtStage(ichorv1alpha1.KubernetesStageKubelets)
 
-		done, err := adv.Advance(ctx, cluster, cp1, op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(adv.Advance, cluster, cp1, op)).To(BeFalse())
 		Expect(fake1.applyCalls).To(HaveLen(1))
 		Expect(fake1.pulled).To(HaveLen(4), "the apiserver, controller-manager, scheduler and kubelet images are pre-pulled")
 
@@ -642,15 +630,11 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		// The node's kubelet is on the target, but its static pods have not been replaced yet.
 		setK8sNode(cp1.Spec.Hostname, testK8sTarget)
 
-		done, err = adv.Advance(ctx, cluster, fetchMachine(cp1), op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse(), "the static pods still run the old version")
+		Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp1), op)).To(BeFalse(), "the static pods still run the old version")
 
 		setStaticPodImages(cp1.Spec.Hostname, testK8sTarget)
 
-		done, err = adv.Advance(ctx, cluster, fetchMachine(cp1), op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp1), op)).To(BeTrue())
 		Expect(admin.syncCalls).To(BeZero(), "the manifests are synced in the KubeProxy stage")
 	})
 
@@ -664,9 +648,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		admin := &fakeKubernetesAdmin{}
 		op := opAtStage(ichorv1alpha1.KubernetesStageAPIServers)
 
-		done, err := newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, cp, op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(newKubernetesAdvancer(fake, admin).Advance, cluster, cp, op)).To(BeFalse())
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(imageTags(fake.applyCalls[0])).To(Equal(map[string]string{
 			compAPIServer: testK8sTarget, compControllerManager: testK8sOld, compScheduler: testK8sOld,
@@ -677,17 +659,13 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		// A restarted controller (a new advancer) finds the configuration applied and only verifies.
 		fake.current = fake.applyCalls[0]
 
-		done, err = newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, fetchMachine(cp), op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse(), "the apiserver still runs the old version")
+		Expect(advanceOK(newKubernetesAdvancer(fake, admin).Advance, cluster, fetchMachine(cp), op)).To(BeFalse(), "the apiserver still runs the old version")
 		Expect(fake.applyCalls).To(HaveLen(1))
 
 		// Only the apiserver pod moved; the stage does not wait for the other two.
 		newStaticPodImage(cp.Spec.Hostname, compAPIServer, testK8sTarget)
 
-		done, err = newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, fetchMachine(cp), op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue(), "the apiserver is Ready on the target; the others are not this stage's business")
+		Expect(advanceOK(newKubernetesAdvancer(fake, admin).Advance, cluster, fetchMachine(cp), op)).To(BeTrue(), "the apiserver is Ready on the target; the others are not this stage's business")
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(admin.syncCalls).To(BeZero())
 	})
@@ -708,9 +686,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		admin := &fakeKubernetesAdmin{}
 		op := opAtStage(ichorv1alpha1.KubernetesStageControlPlaneComponents)
 
-		done, err := newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, cp, op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(newKubernetesAdvancer(fake, admin).Advance, cluster, cp, op)).To(BeFalse())
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(imageTags(fake.applyCalls[0])).To(Equal(map[string]string{
 			compAPIServer: testK8sTarget, compControllerManager: testK8sTarget, compScheduler: testK8sTarget,
@@ -720,15 +696,11 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 
 		fake.current = fake.applyCalls[0]
 
-		done, err = newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, fetchMachine(cp), op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse(), "controller-manager and scheduler still run the old version")
+		Expect(advanceOK(newKubernetesAdvancer(fake, admin).Advance, cluster, fetchMachine(cp), op)).To(BeFalse(), "controller-manager and scheduler still run the old version")
 
 		setStaticPodImages(cp.Spec.Hostname, testK8sTarget)
 
-		done, err = newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, fetchMachine(cp), op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue(), "the kubelet is still old and that is what this stage wants")
+		Expect(advanceOK(newKubernetesAdvancer(fake, admin).Advance, cluster, fetchMachine(cp), op)).To(BeTrue(), "the kubelet is still old and that is what this stage wants")
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(admin.syncCalls).To(BeZero())
 	})
@@ -747,9 +719,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		admin := &fakeKubernetesAdmin{}
 		op := opAtStage(ichorv1alpha1.KubernetesStageKubeProxy)
 
-		done, err := newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, cp, op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(newKubernetesAdvancer(fake, admin).Advance, cluster, cp, op)).To(BeFalse())
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(imageTags(fake.applyCalls[0])).To(HaveKeyWithValue("kube-proxy", testK8sTarget))
 		Expect(imageTags(fake.applyCalls[0])).To(HaveKeyWithValue(compKubelet, testK8sOld))
@@ -759,9 +729,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 
 		fake.current = fake.applyCalls[0]
 
-		done, err = newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, fetchMachine(cp), op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse(), "kube-proxy has not finished rolling out")
+		Expect(advanceOK(newKubernetesAdvancer(fake, admin).Advance, cluster, fetchMachine(cp), op)).To(BeFalse(), "kube-proxy has not finished rolling out")
 		Expect(admin.syncCalls).To(Equal(1))
 		Expect(fake.applyCalls).To(HaveLen(1))
 
@@ -771,9 +739,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		ds.Status.UpdatedNumberScheduled = 3
 		Expect(k8sClient.Status().Update(ctx, &ds)).To(Succeed())
 
-		done, err = newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, fetchMachine(cp), op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(newKubernetesAdvancer(fake, admin).Advance, cluster, fetchMachine(cp), op)).To(BeTrue())
 	})
 
 	It("stage KubeProxy syncs the manifests but waits for no kube-proxy when the CNI replaces it", func() {
@@ -790,9 +756,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		}
 		admin := &fakeKubernetesAdmin{}
 
-		done, err := newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, cp, opAtStage(ichorv1alpha1.KubernetesStageKubeProxy))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(newKubernetesAdvancer(fake, admin).Advance, cluster, cp, opAtStage(ichorv1alpha1.KubernetesStageKubeProxy))).To(BeTrue())
 		Expect(admin.syncCalls).To(Equal(1))
 	})
 
@@ -809,25 +773,19 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 		admin := &fakeKubernetesAdmin{}
 		op := opAtStage(ichorv1alpha1.KubernetesStageKubelets)
 
-		done, err := newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, cp, op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(newKubernetesAdvancer(fake, admin).Advance, cluster, cp, op)).To(BeFalse())
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(fake.applyCalls[0]).To(Equal(renderAt(cluster, cp, testK8sTarget)))
 		Expect(fake.pulled).To(ConsistOf(ContainSubstring("kubelet:" + testK8sTarget)))
 
 		fake.current = fake.applyCalls[0]
 
-		done, err = newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, fetchMachine(cp), op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse(), "the kubelet has not restarted yet")
+		Expect(advanceOK(newKubernetesAdvancer(fake, admin).Advance, cluster, fetchMachine(cp), op)).To(BeFalse(), "the kubelet has not restarted yet")
 		Expect(fake.applyCalls).To(HaveLen(1))
 
 		setK8sNode(cp.Spec.Hostname, testK8sTarget)
 
-		done, err = newKubernetesAdvancer(fake, admin).Advance(ctx, cluster, fetchMachine(cp), op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(newKubernetesAdvancer(fake, admin).Advance, cluster, fetchMachine(cp), op)).To(BeTrue())
 		Expect(fake.applyCalls).To(HaveLen(1))
 	})
 

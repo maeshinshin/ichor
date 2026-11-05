@@ -41,7 +41,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
@@ -106,14 +105,6 @@ type KubeletServingReconciler struct {
 // +kubebuilder:rbac:groups=certificates.k8s.io,resources=certificatesigningrequests,verbs=get;list;watch
 // +kubebuilder:rbac:groups=certificates.k8s.io,resources=certificatesigningrequests/approval,verbs=update
 // +kubebuilder:rbac:groups=certificates.k8s.io,resources=signers,resourceNames=kubernetes.io/kubelet-serving,verbs=approve
-
-func (r *KubeletServingReconciler) now() time.Time {
-	if r.Now != nil {
-		return r.Now()
-	}
-
-	return time.Now()
-}
 
 // Reconcile decides the open requests of one cluster, records the certificates issued, and updates the
 // cluster's conditions.
@@ -268,7 +259,7 @@ func (r *KubeletServingReconciler) finish(
 ) {
 	cond := certv1.CertificateSigningRequestCondition{
 		Type: certv1.CertificateApproved, Status: corev1.ConditionTrue, Reason: reasonKubeletServingApproved,
-		Message: message, LastUpdateTime: metav1.NewTime(r.now()),
+		Message: message, LastUpdateTime: metav1.NewTime(nowFrom(r.Now)),
 	}
 	event, eventType := "KubeletServingApproved", corev1.EventTypeNormal
 
@@ -465,7 +456,7 @@ func (r *KubeletServingReconciler) coverage(owned []*ichorv1alpha1.TalosMachine)
 	var missing []string
 
 	for _, m := range owned {
-		if st := m.Status.KubeletServingCertificate; st == nil || !st.NotAfter.After(r.now()) {
+		if st := m.Status.KubeletServingCertificate; st == nil || !st.NotAfter.After(nowFrom(r.Now)) {
 			missing = append(missing, m.Name)
 		}
 	}
@@ -558,28 +549,10 @@ func (r *KubeletServingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.TalosCluster{}).
-		Watches(&certv1.CertificateSigningRequest{}, handler.EnqueueRequestsFromMapFunc(r.enabledClusters), builder.WithPredicates(servingOnly)).
+		Watches(&certv1.CertificateSigningRequest{}, handler.EnqueueRequestsFromMapFunc(clusterRequests(r.Client, render.KubeletServingEnabled)), builder.WithPredicates(servingOnly)).
 		Watches(&ichorv1alpha1.TalosMachine{}, handler.EnqueueRequestsFromMapFunc(machineCluster)).
 		Named("kubeletserving").
 		Complete(r)
-}
-
-// enabledClusters maps a request to every cluster that enabled the option.
-func (r *KubeletServingReconciler) enabledClusters(ctx context.Context, _ client.Object) []reconcile.Request {
-	var clusters ichorv1alpha1.TalosClusterList
-	if err := r.List(ctx, &clusters); err != nil {
-		return nil
-	}
-
-	var out []reconcile.Request
-
-	for i := range clusters.Items {
-		if c := &clusters.Items[i]; render.KubeletServingEnabled(c) {
-			out = append(out, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(c)})
-		}
-	}
-
-	return out
 }
 
 // NewMachineryServingIdentity dials m's Talos API and reads the node's names and kubelet addresses.

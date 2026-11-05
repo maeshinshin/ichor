@@ -137,14 +137,6 @@ type IssuerTrustReconciler struct {
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,resourceNames=ichor-user-credentials,verbs=get;update;patch
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,resourceNames=ichor-oidc-signing;ichor-oidc-ca;ichor-oidc-tls;ichor-ui-ca,verbs=get;update;patch
 
-func (r *IssuerTrustReconciler) now() time.Time {
-	if r.Now != nil {
-		return r.Now()
-	}
-
-	return time.Now()
-}
-
 func (r *IssuerTrustReconciler) plan(ctx context.Context) rotationPlan {
 	life := r.RefreshLifetime
 	if life <= 0 {
@@ -199,7 +191,7 @@ func (r *IssuerTrustReconciler) uiService(ctx context.Context) (*corev1.Service,
 
 // Reconcile converges every object. The request key is ignored: all events map to one pass.
 func (r *IssuerTrustReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
-	now := r.now()
+	now := nowFrom(r.Now)
 
 	var next time.Time
 

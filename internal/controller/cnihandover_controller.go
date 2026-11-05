@@ -45,7 +45,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
@@ -765,30 +764,14 @@ func (r *CNIHandoverReconciler) markCNIUnsupported(ctx context.Context, cluster 
 			"no configuration is rendered or applied; delete and recreate the cluster", cluster.Spec.CNI.Preset))
 }
 
-// allClusters enqueues every TalosCluster: the Cilium values follow the number of Nodes (CNIValuesHash),
-// so a Node that appears or goes away may change them, and nothing else would look again once the
-// values were applied.
-func (r *CNIHandoverReconciler) allClusters(ctx context.Context, _ client.Object) []reconcile.Request {
-	var clusters ichorv1alpha1.TalosClusterList
-	if err := r.List(ctx, &clusters); err != nil {
-		return nil
-	}
-
-	reqs := make([]reconcile.Request, 0, len(clusters.Items))
-	for i := range clusters.Items {
-		reqs = append(reqs, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&clusters.Items[i])})
-	}
-
-	return reqs
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *CNIHandoverReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.TalosCluster{}).
 		Watches(&ichorv1alpha1.TalosOperation{}, handler.EnqueueRequestsFromMapFunc(cniUpgradeOperationClusters)).
-		// Only a Node coming or going counts; its heartbeats and status updates do not.
-		Watches(&corev1.Node{}, handler.EnqueueRequestsFromMapFunc(r.allClusters), builder.WithPredicates(predicate.Funcs{
+		// Only a Node coming or going counts; its heartbeats and status updates do not. The Cilium values
+		// follow the number of Nodes (CNIValuesHash) and nothing else would look again once they were applied.
+		Watches(&corev1.Node{}, handler.EnqueueRequestsFromMapFunc(clusterRequests(r.Client, nil)), builder.WithPredicates(predicate.Funcs{
 			UpdateFunc:  func(event.UpdateEvent) bool { return false },
 			GenericFunc: func(event.GenericEvent) bool { return false },
 		})).

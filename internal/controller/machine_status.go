@@ -30,6 +30,15 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
+// nowFrom is the reconcilers' injectable clock: now() when set, else time.Now.
+func nowFrom(now func() time.Time) time.Time {
+	if now != nil {
+		return now()
+	}
+
+	return time.Now()
+}
+
 // machineStatusBackoff retries a conflicting status write a few times, long enough for a cached
 // reader to catch up with the write that caused the conflict.
 var machineStatusBackoff = wait.Backoff{Steps: 6, Duration: 50 * time.Millisecond, Factor: 2, Jitter: 0.1}

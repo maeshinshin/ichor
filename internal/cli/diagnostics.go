@@ -96,48 +96,41 @@ func (l *localDiagnostics) GetMyPermissions(
 	return l.srv.GetMyPermissions(ctx, req)
 }
 
-func (l *localDiagnostics) DownloadSupportBundle(
-	ctx context.Context, req *connect.Request[pb.DownloadSupportBundleRequest],
-) (*connect.ServerStreamForClient[pb.DownloadSupportBundleResponse], error) {
+// loopback sends a download call through the loopback server.
+func loopback[Q, R any](
+	ctx context.Context, l *localDiagnostics, req *connect.Request[Q],
+	call func(ichorv1alpha1connect.DiagnosticsServiceClient, context.Context, *connect.Request[Q]) (*connect.ServerStreamForClient[R], error),
+) (*connect.ServerStreamForClient[R], error) {
 	c, err := l.client()
 	if err != nil {
 		return nil, err
 	}
 
-	return c.DownloadSupportBundle(ctx, req)
+	return call(c, ctx, req)
+}
+
+func (l *localDiagnostics) DownloadSupportBundle(
+	ctx context.Context, req *connect.Request[pb.DownloadSupportBundleRequest],
+) (*connect.ServerStreamForClient[pb.DownloadSupportBundleResponse], error) {
+	return loopback(ctx, l, req, ichorv1alpha1connect.DiagnosticsServiceClient.DownloadSupportBundle)
 }
 
 func (l *localDiagnostics) DownloadEtcdSnapshot(
 	ctx context.Context, req *connect.Request[pb.DownloadEtcdSnapshotRequest],
 ) (*connect.ServerStreamForClient[pb.DownloadEtcdSnapshotResponse], error) {
-	c, err := l.client()
-	if err != nil {
-		return nil, err
-	}
-
-	return c.DownloadEtcdSnapshot(ctx, req)
+	return loopback(ctx, l, req, ichorv1alpha1connect.DiagnosticsServiceClient.DownloadEtcdSnapshot)
 }
 
 func (l *localDiagnostics) CapturePackets(
 	ctx context.Context, req *connect.Request[pb.CapturePacketsRequest],
 ) (*connect.ServerStreamForClient[pb.CapturePacketsResponse], error) {
-	c, err := l.client()
-	if err != nil {
-		return nil, err
-	}
-
-	return c.CapturePackets(ctx, req)
+	return loopback(ctx, l, req, ichorv1alpha1connect.DiagnosticsServiceClient.CapturePackets)
 }
 
 func (l *localDiagnostics) DownloadReaderTalosconfig(
 	ctx context.Context, req *connect.Request[pb.DownloadReaderTalosconfigRequest],
 ) (*connect.ServerStreamForClient[pb.DownloadReaderTalosconfigResponse], error) {
-	c, err := l.client()
-	if err != nil {
-		return nil, err
-	}
-
-	return c.DownloadReaderTalosconfig(ctx, req)
+	return loopback(ctx, l, req, ichorv1alpha1connect.DiagnosticsServiceClient.DownloadReaderTalosconfig)
 }
 
 // chunk is one of the three streaming responses (each RPC has its own message
@@ -225,19 +218,16 @@ func saveDownload[M chunk](stream chunkStream[M], output string, stdout io.Write
 		return "", 0, errors.New("the server sent no data")
 	}
 
-	if err := tmp.Close(); err != nil {
-		cleanup()
-
-		return "", n, err
+	err := tmp.Close()
+	if err == nil {
+		err = os.Chmod(tmp.Name(), 0o600)
 	}
 
-	if err := os.Chmod(tmp.Name(), 0o600); err != nil {
-		cleanup()
-
-		return "", n, err
+	if err == nil {
+		err = os.Rename(tmp.Name(), path)
 	}
 
-	if err := os.Rename(tmp.Name(), path); err != nil {
+	if err != nil {
 		cleanup()
 
 		return "", n, err

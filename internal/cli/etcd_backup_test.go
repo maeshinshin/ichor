@@ -25,7 +25,6 @@ import (
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -37,8 +36,7 @@ func TestEtcdBackupNowSetsTheAnnotation(t *testing.T) {
 	bk.Name, bk.Namespace = "nightly", testNamespace
 	bk.Spec.ClusterRef = corev1.LocalObjectReference{Name: opTestCluster}
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(opTestObjects(), bk)...).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, k8s := freshClients(t, append(opTestObjects(), bk))
 
 	var out, errw bytes.Buffer
 

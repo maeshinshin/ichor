@@ -23,12 +23,10 @@ import (
 	"testing"
 	"time"
 
-	authv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -64,18 +62,7 @@ func liveClients(t *testing.T, yes, allowed bool, extra ...client.Object) (*apiC
 	apiOpts.OverrideReason = liveReason
 
 	objs := append(opTestObjects(), liveBackupObject(liveBackup))
-	base := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(objs, extra...)...).Build()
-	k8s := interceptor.NewClient(base, interceptor.Funcs{
-		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
-			if sar, ok := obj.(*authv1.SelfSubjectAccessReview); ok {
-				sar.Status.Allowed = allowed
-
-				return nil
-			}
-
-			return c.Create(ctx, obj, opts...)
-		},
-	})
+	k8s := reviewAs(allowed, fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(objs, extra...)...).Build())
 
 	return localClients(apiOpts, apiDeps{K8s: k8s}), k8s
 }

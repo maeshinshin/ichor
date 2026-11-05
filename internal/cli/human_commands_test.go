@@ -26,6 +26,7 @@ import (
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -396,8 +397,7 @@ func TestMachineFormatsOfTheConvertedCommandsAreUnchanged(t *testing.T) {
 func TestMachineFormatOfClusterStatusIsTheKeyValueLines(t *testing.T) {
 	setHumanTestFlags(t, outputYAML)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(statusFixtureCluster()).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, _ := freshClients(t, []client.Object{statusFixtureCluster()})
 
 	for _, format := range []string{outputYAML, outputJSON} {
 		outputFormat = format
@@ -454,8 +454,7 @@ func TestHumanOutputThroughTheInProcessAPI(t *testing.T) {
 	m.Name, m.CreationTimestamp = cpUUID, metav1.NewTime(humanTestNow.Add(-2*time.Hour))
 	m.Status.Conditions = []metav1.Condition{{Type: conditionReady, Status: metav1.ConditionTrue, Reason: "Converged"}}
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cl, m).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, _ := freshClients(t, []client.Object{cl, m})
 
 	var out bytes.Buffer
 

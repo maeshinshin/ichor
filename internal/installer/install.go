@@ -225,6 +225,11 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 	return nil
 }
 
+// ciliumSecretsNamespace is the Cilium chart's own secrets namespace. It exists only where Cilium
+// runs, so the manifest's Role and RoleBinding there (ADR 0099 amendment 2026-11-06) are skipped
+// on another CNI instead of failing the run.
+const ciliumSecretsNamespace = "cilium-secrets"
+
 // ciliumPolicyCRD is the CRD the network policies need: it exists once Cilium runs, which an
 // upgrade can assume and a cluster on another CNI cannot.
 const ciliumPolicyCRD = "ciliumnetworkpolicies.cilium.io"
@@ -306,16 +311,26 @@ func checkCRDs(ctx context.Context, c client.Client, target []*unstructured.Unst
 func applyStep(ctx context.Context, c client.Client, opts Options, name string, objs []*unstructured.Unstructured) error {
 	logf(opts.Log, "applying %s (%d objects)", name, len(objs))
 
+	applied := make([]*unstructured.Unstructured, 0, len(objs))
+
 	for _, o := range objs {
 		u := o.DeepCopy()
 		u.SetManagedFields(nil)
 
 		if err := applyWithSettle(ctx, c, u, opts.RBACSettle); err != nil {
+			if apierrors.IsNotFound(err) && o.GetNamespace() == ciliumSecretsNamespace {
+				logf(opts.Log, "skipping %s %s: namespace %s does not exist, Cilium does not run here", o.GetKind(), o.GetName(), ciliumSecretsNamespace)
+
+				continue
+			}
+
 			return fmt.Errorf("applying %s %s: %w", o.GetKind(), o.GetName(), err)
 		}
+
+		applied = append(applied, o)
 	}
 
-	for _, o := range objs {
+	for _, o := range applied {
 		if err := opts.Ready(ctx, c, o); err != nil {
 			return fmt.Errorf("post-check of %s %s: %w", o.GetKind(), o.GetName(), err)
 		}

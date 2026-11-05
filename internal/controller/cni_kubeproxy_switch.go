@@ -110,6 +110,9 @@ type cniKubeProxyAdvancer struct {
 
 	Admin KubeProxyAdmin
 
+	// Images pins the Cilium Job's installer image to a verified digest; nil refuses to start any Job.
+	Images InstallerImages
+
 	// ServiceProbe checks, after kube-proxy was removed, that the kubernetes Service still answers;
 	// nil means probeKubernetesService.
 	ServiceProbe func(ctx context.Context) error
@@ -119,9 +122,9 @@ type cniKubeProxyAdvancer struct {
 func NewCNIKubeProxyAdvancer(
 	c client.Client, reader client.Reader, controllerNamespace string,
 	talosClient func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle) (TalosClient, error),
-	admin KubeProxyAdmin,
+	admin KubeProxyAdmin, images InstallerImages,
 ) AdvanceMachineFunc {
-	a := &cniKubeProxyAdvancer{Client: c, Reader: reader, ControllerNamespace: controllerNamespace, TalosClient: talosClient, Admin: admin}
+	a := &cniKubeProxyAdvancer{Client: c, Reader: reader, ControllerNamespace: controllerNamespace, TalosClient: talosClient, Admin: admin, Images: images}
 
 	return a.Advance
 }
@@ -542,7 +545,7 @@ func (a *cniKubeProxyAdvancer) runCiliumJob(
 		return false, err
 	}
 
-	done, err := AdvanceCNIHelmJob(ctx, a.Client, a.ControllerNamespace, cluster, mode, nodes, inst,
+	done, err := AdvanceCNIHelmJob(ctx, a.Client, a.ControllerNamespace, cluster, mode, nodes, inst, a.Images,
 		cniValuesCheck(a.Client, a.Reader, a.ControllerNamespace, cluster, mode), salt, op.CreationTimestamp.Time)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", doing, err)

@@ -69,8 +69,7 @@ var _ = Describe("two control-plane TalosMachines of one cluster at a step that 
 		m := newTestControlPlane(cluster.Name, suffix)
 		maint[m.Spec.Endpoint] = &fakeMaintenanceClient{identity: HardwareIdentity{UUID: m.Spec.Identity.UUID}}
 
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		return m
 	}
@@ -96,23 +95,18 @@ var _ = Describe("two control-plane TalosMachines of one cluster at a step that 
 		maintA, maintB := maint[a.Spec.Endpoint], maint[b.Spec.Endpoint]
 
 		maintA.applyHook = once(func() {
-			_, err := reconcileMachine(r, b)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, b)
 			Expect(maintB.applyCalls).To(BeEmpty(), "a second join must not apply while the first holds the cluster lock")
 			expectWaitsFor(b, a, reasonClusterLockHeld, conditionReady)
 		})
 
-		_, err := reconcileMachine(r, a)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, a)
 		Expect(maintA.applyCalls).To(HaveLen(1))
 		Expect(fetchMachine(a).Status.ConfigStoredAt).NotTo(BeNil())
 
-		_, held, err := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0).Holder(ctx)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(held).To(BeFalse(), "the first join released the lock; the second's own release did not free it early")
+		expectLockFree(cluster, "the first join released the lock; the second's own release did not free it early")
 
-		_, err = reconcileMachine(r, b)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, b)
 		Expect(maintB.applyCalls).To(HaveLen(1))
 	})
 
@@ -129,8 +123,7 @@ var _ = Describe("two control-plane TalosMachines of one cluster at a step that 
 
 			Expect(k8sClient.Delete(ctx, b)).To(Succeed())
 
-			_, err := reconcileMachine(r, b)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, b)
 			expectWaitsFor(b, a, reasonClusterLockHeld, conditionRemoval)
 			Expect(controllerutil.ContainsFinalizer(fetchMachine(b), machineRemovalFinalizer)).To(BeTrue())
 		})
@@ -152,8 +145,7 @@ var _ = Describe("two control-plane TalosMachines of one cluster at a step that 
 			ran = true
 
 			// The join's reconcile after the finalizer pass; the first one ran in controlPlane.
-			_, err := reconcileMachine(r, joiner)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, joiner)
 			Expect(maint[joiner.Spec.Endpoint].applyCalls).To(BeEmpty(), "a join must not apply while a removal holds the cluster lock")
 			expectWaitsFor(joiner, a, reasonClusterLockHeld, conditionReady)
 		})
@@ -174,8 +166,7 @@ var _ = Describe("two control-plane TalosMachines of one cluster at a step that 
 		maint[joiner.Spec.Endpoint].applyHook = once(func() {
 			ran = true
 
-			_, err := reconcileMachine(r, a)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, a)
 			Expect(talos.etcdRemoveIDs).To(BeEmpty())
 
 			got := &ichorv1alpha1.TalosMachine{}
@@ -185,8 +176,7 @@ var _ = Describe("two control-plane TalosMachines of one cluster at a step that 
 			expectWaitsFor(a, joiner, reasonClusterLockHeld, conditionRemoval)
 		})
 
-		_, err := reconcileMachine(r, joiner)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, joiner)
 		Expect(ran).To(BeTrue(), "the join reached its apply")
 	})
 
@@ -199,8 +189,7 @@ var _ = Describe("two control-plane TalosMachines of one cluster at a step that 
 
 		// join reconciles joiner once (its locked step) and reports whether it applied.
 		join := func(joiner *ichorv1alpha1.TalosMachine) bool {
-			_, err := reconcileMachine(r, joiner)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, joiner)
 
 			return len(maint[joiner.Spec.Endpoint].applyCalls) > 0
 		}

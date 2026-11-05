@@ -48,8 +48,7 @@ func evacuatingRemoval(hostname string, evacuator StorageEvacuator) (
 	cps := make([]*ichorv1alpha1.TalosMachine, 4)
 	for i, suffix := range []string{"41", "42", "43", "44"} {
 		cps[i] = newTestControlPlane(cluster.Name, suffix)
-		_, err := reconcileMachine(r, cps[i])
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, cps[i])
 	}
 
 	setHostname(fetchMachine(cps[0]), hostname)
@@ -105,8 +104,7 @@ var _ = Describe("TalosMachineReconciler removal: storage evacuation", func() {
 
 		ev.remaining = 0
 
-		_, err = reconcileMachine(r2, cp)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r2, cp)
 		Expect(kube.Actions()).NotTo(BeEmpty(), "drain runs once evacuation is done")
 		Expect(machineGone(cp)).To(BeTrue())
 		Expect(ev.endCalls).To(BeZero())
@@ -141,8 +139,7 @@ var _ = Describe("TalosMachineReconciler removal: storage evacuation", func() {
 		ev := &fakeStorageEvacuator{target: nil}
 		r, kube, cp := evacuatingRemoval("node-rm-evac3", ev)
 
-		_, err := reconcileMachine(r, cp)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, cp)
 		Expect(ev.beginCalls).To(BeZero())
 		Expect(kube.Actions()).NotTo(BeEmpty())
 		Expect(machineGone(cp)).To(BeTrue())
@@ -151,8 +148,7 @@ var _ = Describe("TalosMachineReconciler removal: storage evacuation", func() {
 	It("removes as before when no evacuator is configured", func() {
 		r, kube, cp := evacuatingRemoval("node-rm-evac4", nil)
 
-		_, err := reconcileMachine(r, cp)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, cp)
 		Expect(kube.Actions()).NotTo(BeEmpty())
 		Expect(machineGone(cp)).To(BeTrue())
 	})

@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
 
@@ -55,16 +54,6 @@ var _ = Describe("ReclaimService with the MachineReclaim webhook", Ordered, func
 
 	as := func(user string) context.Context {
 		return uiapi.ContextWithIdentity(ctx, uiapi.Identity{User: user})
-	}
-
-	impersonating := func(user string, groups ...string) client.Client {
-		c := rest.CopyConfig(cfg)
-		c.Impersonate = rest.ImpersonationConfig{UserName: user, Groups: groups}
-
-		cl, err := client.New(c, client.Options{Scheme: scheme.Scheme})
-		Expect(err).NotTo(HaveOccurred())
-
-		return cl
 	}
 
 	decodeFile := func(path string, into func(map[string]any)) {
@@ -112,7 +101,7 @@ var _ = Describe("ReclaimService with the MachineReclaim webhook", Ordered, func
 		})
 
 		// ichor-ui's own identity, as the policy names it. system:masters stands in for the RBAC the chart grants it.
-		ui := impersonating("system:serviceaccount:ichor-system:ichor-ui", "system:masters")
+		ui := asUser("system:serviceaccount:ichor-system:ichor-ui", "system:masters")
 		s = &uiapi.Server{
 			Client: ui, ControllerNamespace: ns,
 			Impersonate: uiapi.NewImpersonator(cfg, client.Options{Scheme: scheme.Scheme}),
@@ -183,7 +172,7 @@ var _ = Describe("ReclaimService with the MachineReclaim webhook", Ordered, func
 			GenerateName: "bare-", Namespace: ns,
 			Spec: ichorv1alpha1.MachineReclaimSpec{Address: addr, CredentialSecretRef: "x"},
 		}
-		Expect(impersonating(holder).Create(ctx, mr)).To(MatchError(ContainSubstring(ichorv1alpha1.ReclaimRequestedByAnnotation)))
+		Expect(asUser(holder).Create(ctx, mr)).To(MatchError(ContainSubstring(ichorv1alpha1.ReclaimRequestedByAnnotation)))
 	})
 
 	Describe("confirming", func() {
@@ -195,7 +184,7 @@ var _ = Describe("ReclaimService with the MachineReclaim webhook", Ordered, func
 				Annotations: map[string]string{ichorv1alpha1.ReclaimRequestedByAnnotation: holder},
 				Spec:        ichorv1alpha1.MachineReclaimSpec{Address: addr, CredentialSecretRef: "x"},
 			}
-			Expect(impersonating(holder).Create(ctx, mr)).To(Succeed())
+			Expect(asUser(holder).Create(ctx, mr)).To(Succeed())
 
 			// Stand in for the controller's inspection.
 			mr.Status.Phase = ichorv1alpha1.MachineReclaimAwaitingConfirmation

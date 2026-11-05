@@ -21,7 +21,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
@@ -56,14 +55,7 @@ var _ = Describe("TalosCluster Webhook", func() {
 		Expect(k8sClient.Create(ctx, obj)).To(Succeed())
 	})
 
-	AfterEach(func() {
-		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
-			return
-		}
-		obj.Annotations = map[string]string{deleteguard.AllowDeleteAnnotation: deleteguard.AllowDeleteValue}
-		Expect(k8sClient.Update(ctx, obj)).To(Succeed())
-		Expect(k8sClient.Delete(ctx, obj)).To(Succeed())
-	})
+	AfterEach(func() { forceDelete(obj) })
 
 	It("admits create", func() {
 		// obj was already created in BeforeEach; nothing further to assert.

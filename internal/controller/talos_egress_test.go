@@ -39,6 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/endpointguard"
 )
 
 func TestBuildEgressCoversEveryDialedPort(t *testing.T) {
@@ -250,7 +251,7 @@ var _ = Describe("TalosEgress", Ordered, func() {
 			u := cnpGVK()
 			err := k8sClient.Get(c, types.NamespacedName{Namespace: egressNS, Name: DefaultTalosEgressPolicyName}, u)
 			raw, _ := json.Marshal(u.Object["spec"])
-			host := hostOf(endpoint)
+			host := endpointguard.HostOf(endpoint)
 
 			mu.Lock()
 			defer mu.Unlock()

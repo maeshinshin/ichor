@@ -37,6 +37,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/endpointguard"
 )
 
 // Event reasons Discover records on the TalosCluster when it will not
@@ -432,7 +433,7 @@ func (r *DiscoveryReconciler) DiscoverAll(
 		return nil, err
 	}
 
-	candidates = slices.DeleteFunc(candidates, func(c string) bool { return known[hostOf(c)] })
+	candidates = slices.DeleteFunc(candidates, func(c string) bool { return known[endpointguard.HostOf(c)] })
 
 	// One slot per candidate, so the goroutines never write the same element and need no lock.
 	found := make([]*ichorv1alpha1.TalosMachine, len(candidates))
@@ -447,7 +448,7 @@ func (r *DiscoveryReconciler) DiscoverAll(
 
 			// The address of a pending machine is probed only to refresh that machine, never to
 			// register another one.
-			if pending[hostOf(endpoint)] {
+			if pending[endpointguard.HostOf(endpoint)] {
 				r.refreshPendingAt(cctx, cluster, endpoint)
 
 				return nil
@@ -465,15 +466,6 @@ func (r *DiscoveryReconciler) DiscoverAll(
 	_ = g.Wait() // every task returns nil; the group only bounds concurrency
 
 	return slices.DeleteFunc(found, func(m *ichorv1alpha1.TalosMachine) bool { return m == nil }), nil
-}
-
-// hostOf is endpoint without its port; an endpoint with no port is returned as is.
-func hostOf(endpoint string) string {
-	if h, _, err := net.SplitHostPort(endpoint); err == nil {
-		return h
-	}
-
-	return endpoint
 }
 
 // knownHosts is the set of hosts that already belong to cluster: each of its TalosMachines'
@@ -505,8 +497,8 @@ func (r *DiscoveryReconciler) knownHosts(
 			set = pending
 		}
 
-		set[hostOf(m.Spec.Endpoint)] = true
-		set[hostOf(m.Status.ObservedEndpoint)] = true
+		set[endpointguard.HostOf(m.Spec.Endpoint)] = true
+		set[endpointguard.HostOf(m.Status.ObservedEndpoint)] = true
 	}
 
 	var nodes corev1.NodeList

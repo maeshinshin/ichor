@@ -213,7 +213,10 @@ maximum TTL. It is the one credential in Ichor that is deleted by time rather
 than by an object's lifecycle. It is redacted from logs, Events, status, error
 text and the UI API's access log. The ClusterRole `ichor-machine-reclaimer`
 (`create`, `get`, `list`, `update` and the verb `reclaim` on `machinereclaims`)
-is in no default role, admin included; the webhook checks the verb with a
+is not bound by default, but `ichor-admin` (group `ichor:admin`) holds the
+same verbs by default, `reclaim` included, and the ClusterRole is there for
+granting them to anyone else; `ichor-operator` and `ichor-viewer` do not get
+the verb (ADR 0107, decision 2); the webhook checks the verb with a
 SubjectAccessReview on create and on every write of the typed UUID, and
 `status.audit` keeps who requested and confirmed it. A
 ValidatingAdmissionPolicy limits what ichor-ui's ServiceAccount may create in

@@ -92,3 +92,7 @@ Decision 1 left the three guards that need the machine configuration or the live
 ## Amendment 2026-11-05: the grant rule follows the built-in role hierarchy
 
 The grant rule in decision 2 (and ADR 0108) was a literal match on the requester's `ichor:<role>` groups, so an `operator` could not create a user with `[viewer]`, although the `operator` ClusterRole includes every rule of `viewer` and the issued identity carries only the groups of the roles in `spec.roles`. `ichorauth.UngrantedRole` now honours the order viewer < operator < admin: a requester may grant any built-in role at or below the highest built-in role they hold. A custom role still needs a literal match, and an admin may grant anything, as before. An operator still cannot grant `admin`. The IchorUser webhook and the UI backend call the same function, so both change together.
+
+## Amendment 2026-11-05: reverting a refused or failed edit clears the condition
+
+Found on hardware (lane H): after an edit was refused (`InvalidValues`) or its Job failed (`JobFailed`), reverting the values to exactly the applied ones left `CNIValuesApplied` False and `status.cni.jobFailures` set for good, because the reconcile returned at "the applied hash equals the wanted hash" before it wrote anything. That path now sets `CNIValuesApplied` True with reason `Applied` (the success path's reason and message) and clears `jobFailures` and `jobFailuresHash`, and writes status only when one of them changes. No Job runs, the lock is not taken and `spec` is not touched.

@@ -56,3 +56,4 @@ internal/installmanifest/network-policies.yaml
 
 gate.done
 remote-gate-out/
+.docs-shots/

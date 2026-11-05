@@ -4,10 +4,10 @@ import { CircleXIcon, InboxIcon } from 'lucide-preact'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TableCell, TableRow } from '@/components/ui/table'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields } from '@/components/PageHeader'
-import { EmptyNote } from '@/components/PageStates'
+import { EmptyNote, Failed, Grid } from '@/components/PageStates'
 import { SectionCard, SectionSkeleton } from '@/components/SectionCard'
 import { ToneBadge } from '@/components/ToneBadge'
 import { CardDescription } from '@/components/ui/card'
@@ -100,41 +100,12 @@ function Panel({
 }) {
   return (
     <SectionCard id={id} title={title} description={description} actions={actions}>
-      {error ? (
-        maintenance ? (
-          <EmptyNote icon={InboxIcon}>{t('rt.unavailableMaintenance')}</EmptyNote>
-        ) : (
-          <Alert variant="destructive">
-            <CircleXIcon />
-            <AlertTitle>{t('talos.sectionFailed')}</AlertTitle>
-            <AlertDescription className="break-words">{error}</AlertDescription>
-          </Alert>
-        )
+      {error && maintenance ? (
+        <EmptyNote icon={InboxIcon}>{t('rt.unavailableMaintenance')}</EmptyNote>
       ) : (
-        children
+        <Failed error={error}>{children}</Failed>
       )}
     </SectionCard>
-  )
-}
-
-function Empty() {
-  return <EmptyNote icon={InboxIcon}>{t('talos.none')}</EmptyNote>
-}
-
-// Grid is a table with a header row, or the empty note when there is nothing to list.
-function Grid({ heads, empty, children }: { heads: string[]; empty?: boolean; children: ComponentChildren }) {
-  if (empty) return <Empty />
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          {heads.map((h, i) => (
-            <TableHead key={i}>{h}</TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>{children}</TableBody>
-    </Table>
   )
 }
 

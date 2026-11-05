@@ -61,7 +61,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 
@@ -114,58 +113,18 @@ const (
 // finished: the control planes are not in one settled state. Used by the lock gates and the machine
 // controller, which must not render or apply for a cluster in this state.
 func keyRotationUnderway(op *ichorv1alpha1.TalosOperation) bool {
-	if op.Spec.Kind != ichorv1alpha1.TalosOperationKindKeyRotation || op.Status.KeyRotation == nil {
-		return false
-	}
-
-	switch op.Status.KeyRotation.Stage {
-	case "", ichorv1alpha1.KeyRotationStageDone:
-		return false
-	}
-
-	return op.Status.Phase != ichorv1alpha1.TalosOperationPhaseCompleted
+	return rotationUnderway(op, ichorv1alpha1.TalosOperationKindKeyRotation)
 }
 
 // activeKeyRotation returns the name of the cluster's key rotation that is under way, or "".
 func activeKeyRotation(ctx context.Context, reader client.Reader, namespace, cluster string) (string, error) {
-	var ops ichorv1alpha1.TalosOperationList
-	if err := reader.List(ctx, &ops, client.InNamespace(namespace)); err != nil {
-		return "", err
-	}
-
-	for i := range ops.Items {
-		if ops.Items[i].Spec.ClusterRef.Name == cluster && keyRotationUnderway(&ops.Items[i]) {
-			return ops.Items[i].Name, nil
-		}
-	}
-
-	return "", nil
+	return activeRotation(ctx, reader, namespace, cluster, ichorv1alpha1.TalosOperationKindKeyRotation)
 }
 
 // keyRotationFinalizerStep adds the finalizer to a rotation's operation and removes it once the rotation has
 // settled. handled is true when the reconcile has nothing more to do.
 func (r *TalosOperationReconciler) keyRotationFinalizerStep(ctx context.Context, op *ichorv1alpha1.TalosOperation) (handled bool, err error) {
-	if op.Spec.Kind != ichorv1alpha1.TalosOperationKindKeyRotation {
-		return false, nil
-	}
-
-	has := controllerutil.ContainsFinalizer(op, keyRotationFinalizer)
-	settled := !keyRotationUnderway(op)
-
-	switch {
-	case has && !settled && !op.DeletionTimestamp.IsZero():
-		return r.rotationDeletion(ctx, op, keyRotationFinalizer, secretsbundle.KeyRotationKey)
-	case has && settled && (!op.DeletionTimestamp.IsZero() || op.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted):
-		controllerutil.RemoveFinalizer(op, keyRotationFinalizer)
-
-		return true, client.IgnoreNotFound(r.Update(ctx, op))
-	case !has && op.DeletionTimestamp.IsZero() && op.Status.Phase != ichorv1alpha1.TalosOperationPhaseCompleted:
-		controllerutil.AddFinalizer(op, keyRotationFinalizer)
-
-		return false, r.Update(ctx, op)
-	}
-
-	return false, nil
+	return r.rotationFinalizerStep(ctx, op, ichorv1alpha1.TalosOperationKindKeyRotation, keyRotationFinalizer, secretsbundle.KeyRotationKey)
 }
 
 // keyRun is one reconcile of a key rotation.

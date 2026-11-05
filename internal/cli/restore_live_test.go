@@ -36,7 +36,6 @@ const (
 	liveBackup = "nightly"
 	liveNewest = "etcd-20261001T020000Z.snapshot.age"
 	liveOlder  = "etcd-20260930T020000Z.snapshot.age"
-	liveReason = "a bad change deleted the namespace"
 )
 
 var liveSnapTime = time.Date(2026, 10, 1, 2, 0, 0, 0, time.UTC)
@@ -59,7 +58,6 @@ func liveClients(t *testing.T, yes, allowed bool, extra ...client.Object) (*apiC
 	setAPITestFlags(t, yes)
 
 	apiOpts.Override = true
-	apiOpts.OverrideReason = liveReason
 
 	objs := append(opTestObjects(), liveBackupObject(liveBackup))
 	k8s := reviewAs(allowed, fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(append(objs, extra...)...).Build())
@@ -157,7 +155,7 @@ func TestRestoreLiveShowsThePlanAndAsksForTheClusterName(t *testing.T) {
 	}
 
 	e := ops[0].Spec.EtcdRestore
-	if e == nil || e.BackupRef.Name != liveBackup || e.Snapshot != liveNewest || e.Confirm != opTestCluster || e.Reason != liveReason {
+	if e == nil || e.BackupRef.Name != liveBackup || e.Snapshot != liveNewest || e.Confirm != opTestCluster || e.Reason != "" {
 		t.Fatalf("spec.etcdRestore = %+v", e)
 	}
 
@@ -199,7 +197,6 @@ func TestRestoreLiveYesStillNeedsTheClusterName(t *testing.T) {
 func TestRestoreLiveNeedsOverrideAndTheRight(t *testing.T) {
 	c, k8s := liveClients(t, true, true)
 	apiOpts.Override = false
-	apiOpts.OverrideReason = ""
 
 	s := liveSpec()
 	s.Confirm = opTestCluster

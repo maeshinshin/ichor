@@ -125,7 +125,6 @@ func TestNodeRestartServiceAndEtcdRefusalsAreStatedBeforeAnyPrompt(t *testing.T)
 func TestNodeResetNeedsOverride(t *testing.T) {
 	c, _ := nodeActionClients(t, true)
 	apiOpts.Override = false
-	apiOpts.OverrideReason = ""
 
 	err := runNodeAction(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{},
 		nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_RESET, Confirm: testMachineName})

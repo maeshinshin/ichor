@@ -27,20 +27,18 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-var machineRejectReason string
-
 var machineRejectCmd = &cobra.Command{
 	Use:   "reject NAME",
 	Short: "Reject a pending machine (recorded, never deleted)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
-			return runMachineReject(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), args[0], machineRejectReason)
+			return runMachineReject(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), args[0])
 		})
 	},
 }
 
-func runMachineReject(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, name, reason string) error {
+func runMachineReject(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, name string) error {
 	if !assumeYes {
 		if err := confirmOrAbort(in, errw, "machine reject", fmt.Sprintf("Reject machine %s/%s? [y/N] ", apiOpts.Namespace, name), "aborted"); err != nil {
 			return err
@@ -48,14 +46,14 @@ func runMachineReject(ctx context.Context, c *apiClients, in io.Reader, out, err
 	}
 
 	resp, err := c.Machine.RejectMachine(ctx, connect.NewRequest(&pb.RejectMachineRequest{
-		Machine: objectRef(apiOpts.Namespace, name), Reason: reason,
+		Machine: objectRef(apiOpts.Namespace, name),
 	}))
 	if err != nil {
 		return err
 	}
 
 	if outputFormat == outputHuman {
-		return renderMachineRejected(newHuman(out), name, reason)
+		return renderMachineRejected(newHuman(out), name)
 	}
 
 	return writeMessage(out, outputFormat, resp.Msg)
@@ -63,5 +61,4 @@ func runMachineReject(ctx context.Context, c *apiClients, in io.Reader, out, err
 
 func init() {
 	machineCmd.AddCommand(machineRejectCmd)
-	machineRejectCmd.Flags().StringVar(&machineRejectReason, "reason", "", "recorded with the rejection")
 }

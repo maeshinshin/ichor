@@ -23,6 +23,7 @@ var (
 // entry is one ADR's index row.
 type entry struct {
 	Number  int
+	File    string // file name in docs/adr, the target of the number's link
 	Decided string
 	Status  string
 }
@@ -59,7 +60,7 @@ func parseEntry(path string, number int, content string) (entry, error) {
 		return entry{}, fmt.Errorf("%s: no \"Decided: ...\" line", path)
 	}
 
-	return entry{Number: number, Decided: dm[1], Status: sm[1]}, nil
+	return entry{Number: number, File: filepath.Base(path), Decided: dm[1], Status: sm[1]}, nil
 }
 
 // parseADRs reads every real ADR file in dir (0000-template.md excepted,
@@ -117,7 +118,7 @@ func renderReadme(entries []entry) string {
 	b.WriteString("| # | Decided | Status |\n|---|---|---|\n")
 
 	for _, e := range entries {
-		fmt.Fprintf(&b, "| %04d | %s | %s |\n", e.Number, e.Decided, e.Status)
+		fmt.Fprintf(&b, "| [%04d](%s) | %s | %s |\n", e.Number, e.File, e.Decided, e.Status)
 	}
 
 	return b.String()

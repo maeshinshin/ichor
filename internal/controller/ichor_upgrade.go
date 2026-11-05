@@ -397,19 +397,22 @@ func ichorRolledOut(ctx context.Context, uncached client.Reader, ns string) (boo
 	return waiting == "", nil
 }
 
+// ichorDeployments are Ichor's own workloads in its namespace, found by the labels every install path sets.
+var ichorDeployments = []struct {
+	role   string
+	labels client.MatchingLabels
+}{
+	{"controller", client.MatchingLabels{controlPlaneLabel: valueControllerMgr}},
+	{"ichor-ui", client.MatchingLabels{oidctrust.UIComponentLabel: oidctrust.UIComponentValue}},
+}
+
 // ichorRolloutWaiting names the first of the controller's and ichor-ui's Deployments that has not
 // finished rolling out, as the operation's status says it; "" when both have. Both are found by the
 // labels every install path sets (kustomize prefixes their names); one that is not installed is not
 // waited for. The reader is uncached: a cached read of Deployments would start a cluster-wide
 // informer (cache.go).
 func ichorRolloutWaiting(ctx context.Context, uncached client.Reader, ns string) (string, error) {
-	for _, dep := range []struct {
-		role   string
-		labels client.MatchingLabels
-	}{
-		{"controller", client.MatchingLabels{controlPlaneLabel: valueControllerMgr}},
-		{"ichor-ui", client.MatchingLabels{oidctrust.UIComponentLabel: oidctrust.UIComponentValue}},
-	} {
+	for _, dep := range ichorDeployments {
 		var list appsv1.DeploymentList
 		if err := uncached.List(ctx, &list, client.InNamespace(ns), dep.labels); err != nil {
 			return "", fmt.Errorf("reading the Deployments %v: %w", dep.labels, err)

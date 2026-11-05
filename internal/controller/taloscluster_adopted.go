@@ -23,7 +23,6 @@ import (
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -96,7 +95,7 @@ func clusterRequest(namespace, name string) []reconcile.Request {
 		return nil
 	}
 
-	return []reconcile.Request{{NamespacedName: types.NamespacedName{Namespace: namespace, Name: name}}}
+	return []reconcile.Request{{Namespace: namespace, Name: name}}
 }
 
 // operationClusters maps an operation of the given kind to its cluster, so the end of a ca-rotation

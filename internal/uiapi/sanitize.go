@@ -30,9 +30,13 @@ import (
 // carry resource paths, ServiceAccount names and node addresses. The browser gets the code and a
 // reference; the full error goes to the log under the same reference. Errors
 // the caller caused (not found, forbidden, invalid argument ...) pass unchanged.
-func SanitizeErrors(l *log.Logger) connect.Interceptor { return sanitizer{l} }
+func SanitizeErrors(l *log.Logger) connect.Interceptor { return sanitizer{l: l} }
 
-type sanitizer struct{ l *log.Logger }
+type sanitizer struct {
+	serverOnly
+
+	l *log.Logger
+}
 
 func (s sanitizer) clean(procedure string, err error) error {
 	if err == nil {
@@ -64,10 +68,6 @@ func (s sanitizer) WrapUnary(next connect.UnaryFunc) connect.UnaryFunc {
 
 		return res, s.clean(req.Spec().Procedure, err)
 	}
-}
-
-func (sanitizer) WrapStreamingClient(next connect.StreamingClientFunc) connect.StreamingClientFunc {
-	return next
 }
 
 func (s sanitizer) WrapStreamingHandler(next connect.StreamingHandlerFunc) connect.StreamingHandlerFunc {

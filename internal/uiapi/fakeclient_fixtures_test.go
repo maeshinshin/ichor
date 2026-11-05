@@ -69,7 +69,7 @@ const (
 )
 
 func asUser(ctx context.Context) context.Context {
-	return context.WithValue(ctx, identityKey{}, Identity{User: testUserBob})
+	return ContextWithIdentity(ctx, Identity{User: testUserBob})
 }
 
 // reviewing wraps c so a SelfSubjectAccessReview is answered with allowed

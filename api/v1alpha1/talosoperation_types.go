@@ -192,6 +192,9 @@ const ConditionBundleBackupStale = "BundleBackupStale"
 // `ichor cluster credentials --acknowledge`) after it has written the operator a kubeconfig and a
 // talosconfig that work with both the old and the new CAs, holds CARotationHandoffToken of the
 // operation's status. The controller leaves the AwaitingCredentials stage only when it matches (ADR 0091).
+// It checks nothing else: setting the annotation by hand is an attestation that you hold a working
+// kubeconfig and talosconfig for the new CAs (ADR 0129). `ichor cluster credentials --acknowledge` and the
+// UI verify the new kubeconfig against the cluster before they set it.
 const CredentialsHandoffAnnotation = "ichor.maesh.dev/credentials-handoff"
 
 // CARotationHandoffToken is what CredentialsHandoffAnnotation must hold: the fingerprints of the new
@@ -324,6 +327,9 @@ type TalosOperationSpec struct {
 	// paused stops the operation from advancing any further machine. It
 	// does not undo a machine already advanced, and it does not release
 	// the cluster lock -- the operation is not finished, only halted.
+	// It has no effect on an etcd restore that has started (ADR 0129): the
+	// restore takes the Kubernetes API away and the controller drives it to the
+	// end, or to a failed step that pauses it, whatever this field says.
 	// +kubebuilder:default=false
 	// +optional
 	Paused bool `json:"paused,omitempty"`

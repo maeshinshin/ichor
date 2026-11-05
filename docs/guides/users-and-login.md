@@ -511,7 +511,13 @@ Pick one of these:
    credential below. Pods inside the cluster have their own addresses and are
    not affected.
 - A user may grant only roles they hold (admin: any); Kubernetes RBAC alone
-  used to decide this.
+  used to decide this. A validating webhook on `ichorusers` applies the same rule
+  to a `kubectl` write made as an Ichor user (ADR 0129); an external identity
+  stays gated by RBAC alone.
+- The last enabled admin cannot be deleted, disabled or demoted, in the UI, the CLI
+  or with `kubectl` (ADR 0129). The `system:masters` override certificate below
+  is exempt, and so are the controller and the Kubernetes namespace deletion, so
+  deleting the `ichor-system` namespace still works.
 
 ## Disable a user
 

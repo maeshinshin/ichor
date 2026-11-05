@@ -459,6 +459,14 @@ you list.
 - **No hand-off.** A rotation of etcd and the aggregator CA alone changes nothing
   your kubeconfig or talosconfig depends on, so it does not wait for new
   credentials. After any rotation run `ichor cluster bundle-export NAME`.
+- **The hand-off annotation is an attestation.** A rotation of the Talos or Kubernetes
+  CA stops in `AwaitingCredentials` until the operation carries the annotation
+  `ichor.maesh.dev/credentials-handoff`. `ichor cluster credentials --acknowledge`
+  and the UI check that the new kubeconfig works against the cluster, and only
+  then set it. The controller checks only that the annotation names this
+  rotation's new CAs, so setting it by hand with `kubectl annotate` says "I hold a
+  working kubeconfig and talosconfig for the new CAs" and nothing verifies it: if
+  you do not, the old ones stop working when the old CAs drop (ADR 0129).
 - **Abandoning.** `ichor operation delete NAME` on a rotation that has not yet
   made the new CA issue (Accepting and AwaitingCredentials; Issuing too when
   neither the Kubernetes nor the etcd CA is rotated) takes it back: the new CAs

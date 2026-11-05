@@ -93,7 +93,17 @@ var _ = Describe("kind: ichor executor, installer image (ADR 0122)", func() {
 		return l.Items
 	}
 
-	installation := currentInstallation
+	// upgrade runs the executor once for the upgrade operation.
+	upgrade := func(images InstallerImages, rec record.EventRecorder) (bool, error) {
+		return NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false, images, rec)(ctx, nil, nil, op())
+	}
+
+	// startUpgrade is a running v0.1.0 controller with an installation that asks for v0.2.0.
+	startUpgrade := func() *ichorv1alpha1.IchorInstallation {
+		withVersion("v0.1.0")
+
+		return createInstallation("v0.2.0")
+	}
 
 	AfterEach(func() {
 		Expect(k8sClient.DeleteAllOf(ctx, &batchv1.Job{}, client.InNamespace(jobNs),
@@ -101,13 +111,12 @@ var _ = Describe("kind: ichor executor, installer image (ADR 0122)", func() {
 	})
 
 	It("resolves the tag, verifies the digest for the release workflow of spec.version, and runs the digest", func() {
-		withVersion("v0.1.0")
-		createInstallation("v0.2.0")
+		startUpgrade()
 
 		images := &fakeInstallerImages{digest: testInstallerDigest}
 		rec := record.NewFakeRecorder(5)
 
-		done, err := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false, images, rec)(ctx, nil, nil, op())
+		done, err := upgrade(images, rec)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(done).To(BeFalse())
 
@@ -120,7 +129,7 @@ var _ = Describe("kind: ichor executor, installer image (ADR 0122)", func() {
 		Expect(job.Spec.Template.Spec.Containers[0].Image).To(Equal(testInstallerRepo + "@" + testInstallerDigest))
 		Expect(job.Annotations).To(HaveKeyWithValue(IchorInstallerDigestAnnotation, testInstallerDigest))
 
-		img := installation().Status.InstallerImage
+		img := currentInstallation().Status.InstallerImage
 		Expect(img).NotTo(BeNil())
 		Expect(img.Version).To(Equal("v0.2.0"))
 		Expect(img.Digest).To(Equal(testInstallerDigest))
@@ -130,22 +139,21 @@ var _ = Describe("kind: ichor executor, installer image (ADR 0122)", func() {
 		Expect(rec.Events).To(BeEmpty())
 
 		// A later call finds the Job and asks the registry nothing.
-		_, err = NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false, images, rec)(ctx, nil, nil, op())
+		_, err = upgrade(images, rec)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(images.resolved).To(HaveLen(1))
 		Expect(images.verified).To(HaveLen(1))
 	})
 
 	It("uses spec.installerDigest without resolving the tag, and still verifies it", func() {
-		withVersion("v0.1.0")
-		inst := createInstallation("v0.2.0")
+		inst := startUpgrade()
 		pin := "sha256:" + strings.Repeat("b", 64)
 		inst.Spec.InstallerDigest = pin
 		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
 
 		images := &fakeInstallerImages{digest: testInstallerDigest}
 
-		_, err := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false, images, nil)(ctx, nil, nil, op())
+		_, err := upgrade(images, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(images.resolved).To(BeEmpty())
@@ -155,45 +163,41 @@ var _ = Describe("kind: ichor executor, installer image (ADR 0122)", func() {
 	})
 
 	It("pauses with InstallerImageUnresolved when the tag does not resolve, and creates no Job", func() {
-		withVersion("v0.1.0")
-		createInstallation("v0.2.0")
+		startUpgrade()
 
 		images := &fakeInstallerImages{resolveErr: errors.New("connection refused")}
 
-		_, err := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false, images, nil)(ctx, nil, nil, op())
+		_, err := upgrade(images, nil)
 		Expect(err).To(MatchError(ContainSubstring("connection refused")))
 		Expect(pauseReason(err)).To(Equal(reasonInstallerImageUnresolved))
 		Expect(jobs()).To(BeEmpty())
-		Expect(installation().Status.InstallerImage).To(BeNil())
+		Expect(currentInstallation().Status.InstallerImage).To(BeNil())
 		Expect(images.verified).To(BeEmpty())
 	})
 
 	It("pauses with InstallerImageUnverified when the signature does not verify, and creates no Job", func() {
-		withVersion("v0.1.0")
-		createInstallation("v0.2.0")
+		startUpgrade()
 
 		images := &fakeInstallerImages{digest: testInstallerDigest, verifyErr: errors.New("has no cosign signature")}
 
-		_, err := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false, images, nil)(ctx, nil, nil, op())
+		_, err := upgrade(images, nil)
 		Expect(err).To(MatchError(ContainSubstring("has no cosign signature")))
 		Expect(err).To(MatchError(ContainSubstring("--skip-signature-check")))
 		Expect(pauseReason(err)).To(Equal(reasonInstallerImageUnverified))
 		Expect(jobs()).To(BeEmpty())
-		Expect(installation().Status.InstallerImage).To(BeNil())
+		Expect(currentInstallation().Status.InstallerImage).To(BeNil())
 	})
 
 	It("refuses to run an installer image when there is no verifier at all", func() {
-		withVersion("v0.1.0")
-		createInstallation("v0.2.0")
+		startUpgrade()
 
-		_, err := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false, nil, nil)(ctx, nil, nil, op())
+		_, err := upgrade(nil, nil)
 		Expect(pauseReason(err)).To(Equal(reasonInstallerImageUnverified))
 		Expect(jobs()).To(BeEmpty())
 	})
 
 	It("runs an unsigned image under skip, records Skipped with the reason, and warns", func() {
-		withVersion("v0.1.0")
-		inst := createInstallation("v0.2.0")
+		inst := startUpgrade()
 		inst.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{
 			Mode: ichorv1alpha1.InstallerSignatureSkip, Reason: "demo build",
 		}
@@ -202,14 +206,14 @@ var _ = Describe("kind: ichor executor, installer image (ADR 0122)", func() {
 		images := &fakeInstallerImages{digest: testInstallerDigest, verifyErr: errors.New("must not be called")}
 		rec := record.NewFakeRecorder(5)
 
-		_, err := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false, images, rec)(ctx, nil, nil, op())
+		_, err := upgrade(images, rec)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(images.verified).To(BeEmpty())
 		Expect(jobs()).To(HaveLen(1))
 		Expect(jobs()[0].Spec.Template.Spec.Containers[0].Image).To(Equal(testInstallerRepo + "@" + testInstallerDigest))
 
-		img := installation().Status.InstallerImage
+		img := currentInstallation().Status.InstallerImage
 		Expect(img.Verification).To(Equal(ichorv1alpha1.InstallerImageSkipped))
 		Expect(img.Reason).To(Equal("demo build"))
 		Expect(img.Signer).To(BeEmpty())
@@ -221,20 +225,17 @@ var _ = Describe("kind: ichor executor, installer image (ADR 0122)", func() {
 	})
 
 	It("still pauses when the tag does not resolve under skip", func() {
-		withVersion("v0.1.0")
-		inst := createInstallation("v0.2.0")
+		inst := startUpgrade()
 		inst.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip, Reason: "x"}
 		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
 
-		_, err := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false,
-			&fakeInstallerImages{resolveErr: errors.New("no such tag")}, nil)(ctx, nil, nil, op())
+		_, err := upgrade(&fakeInstallerImages{resolveErr: errors.New("no such tag")}, nil)
 		Expect(pauseReason(err)).To(Equal(reasonInstallerImageUnresolved))
 		Expect(jobs()).To(BeEmpty())
 	})
 
 	It("pauses when spec.installerDigest changes while the Job exists", func() {
-		withVersion("v0.1.0")
-		createInstallation("v0.2.0")
+		startUpgrade()
 
 		images := &fakeInstallerImages{digest: testInstallerDigest}
 		advance := NewIchorUpgradeAdvancer(k8sClient, k8sClient, jobNs, false, images, nil)
@@ -242,7 +243,7 @@ var _ = Describe("kind: ichor executor, installer image (ADR 0122)", func() {
 		_, err := advance(ctx, nil, nil, op())
 		Expect(err).NotTo(HaveOccurred())
 
-		inst := installation()
+		inst := currentInstallation()
 		inst.Spec.InstallerDigest = "sha256:" + strings.Repeat("c", 64)
 		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
 
@@ -256,7 +257,7 @@ var _ = Describe("kind: ichor executor, installer image (ADR 0122)", func() {
 		inst.Spec.InstallerDigest = "sha512:abc"
 		Expect(k8sClient.Update(ctx, inst)).NotTo(Succeed())
 
-		inst = installation()
+		inst = currentInstallation()
 		inst.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip}
 		Expect(k8sClient.Update(ctx, inst)).To(MatchError(ContainSubstring("reason is required when mode is skip")))
 	})

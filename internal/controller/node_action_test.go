@@ -32,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/clusterlock"
 	"github.com/maeshinshin/ichor/pkg/storage"
 )
 
@@ -103,15 +102,44 @@ func (f *nodeFixture) members(hosts ...string) {
 	}
 }
 
-func (f *nodeFixture) newOp(host string, spec ichorv1alpha1.TalosOperationNodeSpec) *ichorv1alpha1.TalosOperation {
+// op builds, without creating it, a node operation of spec on host.
+func (f *nodeFixture) op(host string, spec ichorv1alpha1.TalosOperationNodeSpec) *ichorv1alpha1.TalosOperation {
 	spec.MachineRef.Name = f.machines[host].Name
 
 	op := &ichorv1alpha1.TalosOperation{}
 	op.GenerateName, op.Namespace = nodeOpPrefix, tmNamespace
 	op.Spec.ClusterRef.Name, op.Spec.Kind, op.Spec.Node = f.cluster.Name, ichorv1alpha1.TalosOperationKindNode, &spec
+
+	return op
+}
+
+func (f *nodeFixture) newOp(host string, spec ichorv1alpha1.TalosOperationNodeSpec) *ichorv1alpha1.TalosOperation {
+	op := f.op(host, spec)
 	Expect(k8sClient.Create(ctx, op)).To(Succeed())
 
 	return op
+}
+
+// dropSpareWorker leaves the machines as the only workers, so the last-worker guard applies.
+func (f *nodeFixture) dropSpareWorker() {
+	Expect(f.kube.CoreV1().Nodes().Delete(context.Background(), nodeSpareWorker, metav1.DeleteOptions{})).To(Succeed())
+}
+
+// longhornEvacuator makes the reconciler run a Longhorn evacuation around the node's removal from service.
+func (f *nodeFixture) longhornEvacuator() *fakeStorageEvacuator {
+	hook, err := storage.NewEvacuationHook(storage.LonghornV1)
+	Expect(err).NotTo(HaveOccurred())
+
+	evacuator := &fakeStorageEvacuator{target: &evacuationTarget{hook: hook, timeout: time.Minute, namespace: defaultLonghornNamespace}}
+	f.r.Evacuator = evacuator
+
+	return evacuator
+}
+
+// barePodOn puts a pod without a controller on host, which the drain refuses.
+func (f *nodeFixture) barePodOn(host string) {
+	_, err := f.kube.CoreV1().Pods("default").Create(context.Background(), drainTestPod("bare", host, "", false), metav1.CreateOptions{})
+	Expect(err).NotTo(HaveOccurred())
 }
 
 func (f *nodeFixture) reconcile(op *ichorv1alpha1.TalosOperation) *ichorv1alpha1.TalosOperation {
@@ -186,30 +214,19 @@ var _ = Describe("TalosOperation node actions", func() {
 			Expect(f.fake(hostW1).rebootCalls).To(Equal(1))
 		})
 
-		It("refuses the last schedulable worker, for reboot and shutdown", func() {
+		It("refuses the last schedulable worker, for reboot and shutdown, naming override, which waives it with no reason", func() {
 			for _, action := range []string{ichorv1alpha1.NodeActionReboot, ichorv1alpha1.NodeActionShutdown} {
 				f := newNodeFixture(map[string]string{hostW1: roleWorker})
-				Expect(f.kube.CoreV1().Nodes().Delete(context.Background(), nodeSpareWorker, metav1.DeleteOptions{})).To(Succeed())
+				f.dropSpareWorker()
 
 				got := f.reconcile(f.newOp(hostW1, nodeSpec(action)))
 				Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
-				Expect(got.Status.FailureReason).To(ContainSubstring("last schedulable"))
+				Expect(got.Status.FailureReason).To(And(ContainSubstring("last schedulable"), ContainSubstring("override")))
 				Expect(f.fake(hostW1).rebootCalls).To(BeZero())
 				Expect(f.fake(hostW1).shutdownCalls).To(BeEmpty())
-			}
-		})
-
-		It("names override in the refusal, and lets spec.node.override waive it with no reason", func() {
-			for _, action := range []string{ichorv1alpha1.NodeActionReboot, ichorv1alpha1.NodeActionShutdown} {
-				f := newNodeFixture(map[string]string{hostW1: roleWorker})
-				Expect(f.kube.CoreV1().Nodes().Delete(context.Background(), nodeSpareWorker, metav1.DeleteOptions{})).To(Succeed())
-
-				got := f.reconcile(f.newOp(hostW1, nodeSpec(action)))
-				Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
-				Expect(got.Status.FailureReason).To(ContainSubstring("override"))
 
 				f = newNodeFixture(map[string]string{hostW1: roleWorker})
-				Expect(f.kube.CoreV1().Nodes().Delete(context.Background(), nodeSpareWorker, metav1.DeleteOptions{})).To(Succeed())
+				f.dropSpareWorker()
 
 				spec := nodeSpec(action)
 				spec.Override = true // the reason is optional (ADR 0110)
@@ -267,11 +284,7 @@ var _ = Describe("TalosOperation node actions", func() {
 
 		It("ends the storage evacuation when the operation pauses on a failed Reboot call", func() {
 			f := newNodeFixture(map[string]string{hostW1: roleWorker})
-			hook, err := storage.NewEvacuationHook(storage.LonghornV1)
-			Expect(err).NotTo(HaveOccurred())
-
-			evacuator := &fakeStorageEvacuator{target: &evacuationTarget{hook: hook, timeout: time.Minute, namespace: defaultLonghornNamespace}}
-			f.r.Evacuator = evacuator
+			evacuator := f.longhornEvacuator()
 			f.fake(hostW1).rebootErr = errors.New("boom")
 			op := f.newOp(hostW1, nodeSpec(ichorv1alpha1.NodeActionReboot))
 
@@ -287,13 +300,8 @@ var _ = Describe("TalosOperation node actions", func() {
 
 		It("ends the storage evacuation when the operation pauses on a drain failure (a bare pod)", func() {
 			f := newNodeFixture(map[string]string{hostW1: roleWorker})
-			hook, err := storage.NewEvacuationHook(storage.LonghornV1)
-			Expect(err).NotTo(HaveOccurred())
-
-			evacuator := &fakeStorageEvacuator{target: &evacuationTarget{hook: hook, timeout: time.Minute, namespace: defaultLonghornNamespace}}
-			f.r.Evacuator = evacuator
-			_, err = f.kube.CoreV1().Pods("default").Create(context.Background(), drainTestPod("bare", hostW1, "", false), metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
+			evacuator := f.longhornEvacuator()
+			f.barePodOn(hostW1)
 
 			op := f.newOp(hostW1, nodeSpec(ichorv1alpha1.NodeActionReboot))
 
@@ -310,19 +318,14 @@ var _ = Describe("TalosOperation node actions", func() {
 
 		It("does not pause on a drain failure while ending the storage evacuation fails, and retries", func() {
 			f := newNodeFixture(map[string]string{hostW1: roleWorker})
-			hook, err := storage.NewEvacuationHook(storage.LonghornV1)
-			Expect(err).NotTo(HaveOccurred())
-
-			evacuator := &fakeStorageEvacuator{target: &evacuationTarget{hook: hook, timeout: time.Minute, namespace: defaultLonghornNamespace}}
-			f.r.Evacuator = evacuator
-			_, err = f.kube.CoreV1().Pods("default").Create(context.Background(), drainTestPod("bare", hostW1, "", false), metav1.CreateOptions{})
-			Expect(err).NotTo(HaveOccurred())
+			evacuator := f.longhornEvacuator()
+			f.barePodOn(hostW1)
 
 			op := f.newOp(hostW1, nodeSpec(ichorv1alpha1.NodeActionReboot))
 			f.reconcile(op) // begins the evacuation
 
 			evacuator.endErr = errors.New("conflict")
-			_, err = reconcileOperation(f.r, op)
+			_, err := reconcileOperation(f.r, op)
 			Expect(err).To(MatchError(ContainSubstring("conflict")))
 			Expect(fetchOperation(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress), "not paused while the node is still unschedulable")
 
@@ -334,7 +337,7 @@ var _ = Describe("TalosOperation node actions", func() {
 
 		It("is refused while another operation holds the cluster lock", func() {
 			f := newNodeFixture(map[string]string{hostW1: roleWorker})
-			Expect(clusterlock.New(k8sClient, types.NamespacedName{Namespace: f.cluster.Namespace, Name: f.cluster.Name}, 0).
+			Expect(opTestLock(f.cluster).
 				Acquire(ctx, "someone-else")).To(Succeed())
 
 			got := f.reconcile(f.newOp(hostW1, nodeSpec(ichorv1alpha1.NodeActionReboot)))
@@ -372,7 +375,7 @@ var _ = Describe("TalosOperation node actions", func() {
 			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseShutDown))
 
 			// The machine stays off; another operation is not blocked by this record's lock.
-			lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: f.cluster.Namespace, Name: f.cluster.Name}, 0)
+			lock := opTestLock(f.cluster)
 			Expect(lock.Acquire(ctx, "other")).To(Succeed())
 			Expect(lock.Release(ctx, "other")).To(Succeed())
 
@@ -444,14 +447,9 @@ var _ = Describe("TalosOperation node actions", func() {
 			f := newNodeFixture(map[string]string{hostW1: roleWorker})
 
 			for _, svc := range []string{"etcd", "apid", "trustd", "machined"} {
-				bad := &ichorv1alpha1.TalosOperation{}
-				bad.GenerateName, bad.Namespace = nodeOpPrefix, tmNamespace
-				bad.Spec.ClusterRef.Name, bad.Spec.Kind = f.cluster.Name, ichorv1alpha1.TalosOperationKindNode
-				bad.Spec.Node = &ichorv1alpha1.TalosOperationNodeSpec{
-					MachineRef: corev1.LocalObjectReference{Name: f.machines[hostW1].Name},
-					Action:     ichorv1alpha1.NodeActionRestartService, Service: svc,
-				}
-				Expect(k8sClient.Create(ctx, bad)).NotTo(Succeed(), svc)
+				spec := nodeSpec(ichorv1alpha1.NodeActionRestartService)
+				spec.Service = svc
+				Expect(k8sClient.Create(ctx, f.op(hostW1, spec))).NotTo(Succeed(), svc)
 
 				n := &nodeRun{
 					r: f.r, op: &ichorv1alpha1.TalosOperation{}, m: f.machines[hostW1], talos: f.fake(hostW1),
@@ -568,16 +566,15 @@ var _ = Describe("TalosOperation node actions", func() {
 	})
 
 	Describe("reset", func() {
-		It("is not creatable without the machine's name as confirmation", func() {
+		It("is not creatable without the machine's name as confirmation, or with a wipe mode on any other action", func() {
 			f := newNodeFixture(map[string]string{hostW1: roleWorker})
 			spec := nodeSpec(ichorv1alpha1.NodeActionReset)
-			spec.MachineRef.Name = f.machines[hostW1].Name
 			spec.Confirm = "something-else"
+			Expect(k8sClient.Create(ctx, f.op(hostW1, spec))).NotTo(Succeed())
 
-			op := &ichorv1alpha1.TalosOperation{}
-			op.GenerateName, op.Namespace = nodeOpPrefix, tmNamespace
-			op.Spec.ClusterRef.Name, op.Spec.Kind, op.Spec.Node = f.cluster.Name, ichorv1alpha1.TalosOperationKindNode, &spec
-			Expect(k8sClient.Create(ctx, op)).NotTo(Succeed())
+			spec = nodeSpec(ichorv1alpha1.NodeActionReboot)
+			spec.WipeMode = ichorv1alpha1.WipeModeAll
+			Expect(k8sClient.Create(ctx, f.op(hostW1, spec))).NotTo(Succeed())
 		})
 
 		It("hands a worker to the removal flow with the reset opt-in and completes when the machine is gone", func() {
@@ -597,7 +594,7 @@ var _ = Describe("TalosOperation node actions", func() {
 			Expect(f.fake(hostW1).resetCalls).To(BeZero(), "the removal flow resets, not this operation")
 
 			// The removal flow takes the cluster lock; the operation holds none while it waits.
-			lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: f.cluster.Namespace, Name: f.cluster.Name}, 0)
+			lock := opTestLock(f.cluster)
 			Expect(lock.Acquire(ctx, controllerIdentity+"-removal")).To(Succeed())
 			Expect(f.reconcile(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
 			Expect(lock.Release(ctx, controllerIdentity+"-removal")).To(Succeed())
@@ -656,18 +653,6 @@ var _ = Describe("TalosOperation node actions", func() {
 			var m ichorv1alpha1.TalosMachine
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.machines[hostW1].Name}, &m)).To(Succeed())
 			Expect(m.Annotations).To(HaveKeyWithValue(resetWipeModeAnnotation, ichorv1alpha1.WipeModeSystemDisk))
-		})
-
-		It("is not creatable with a wipe mode on any other action", func() {
-			f := newNodeFixture(map[string]string{hostW1: roleWorker})
-			spec := nodeSpec(ichorv1alpha1.NodeActionReboot)
-			spec.MachineRef.Name = f.machines[hostW1].Name
-			spec.WipeMode = ichorv1alpha1.WipeModeAll
-
-			op := &ichorv1alpha1.TalosOperation{}
-			op.GenerateName, op.Namespace = nodeOpPrefix, tmNamespace
-			op.Spec.ClusterRef.Name, op.Spec.Kind, op.Spec.Node = f.cluster.Name, ichorv1alpha1.TalosOperationKindNode, &spec
-			Expect(k8sClient.Create(ctx, op)).NotTo(Succeed())
 		})
 
 		It("refuses to reset a control plane the cluster cannot do without", func() {

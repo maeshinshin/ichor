@@ -19,16 +19,28 @@ package controller
 import (
 	"testing"
 
+	batchv1 "k8s.io/api/batch/v1"
+
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
+
+func testInstallerJob() *batchv1.Job {
+	return newInstallerJob("ichor-system", "ichor-installer-x", &ichorv1alpha1.TalosOperation{}, &ichorv1alpha1.IchorInstallation{}, testInstallerDigest, "cilium", false)
+}
 
 // ADR 0108: a hung installer must not keep its ServiceAccount's rights, and the cluster lock,
 // forever.
 func TestInstallerJobIsBoundedInTime(t *testing.T) {
-	job := newInstallerJob("ichor-system", "ichor-installer-x", &ichorv1alpha1.TalosOperation{}, &ichorv1alpha1.IchorInstallation{}, testInstallerDigest, "cilium", false)
-
-	got := job.Spec.ActiveDeadlineSeconds
+	got := testInstallerJob().Spec.ActiveDeadlineSeconds
 	if got == nil || *got != installerDeadline {
 		t.Fatalf("installer Job activeDeadlineSeconds = %v, want %d", got, installerDeadline)
+	}
+}
+
+// config/cilium-network-policy selects the installer's pod by this label (ADR 0100): without it
+// the default deny would cut the Job off from the API server.
+func TestInstallerJobPodCarriesTheLabelItsNetworkPolicySelects(t *testing.T) {
+	if got := testInstallerJob().Spec.Template.Labels["app.kubernetes.io/name"]; got != "ichor-installer" {
+		t.Errorf("installer pod label app.kubernetes.io/name = %q, want ichor-installer", got)
 	}
 }

@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
@@ -91,6 +92,35 @@ func newOpTestOperationOfKind(clusterName, kind string) *ichorv1alpha1.TalosOper
 
 func reconcileOperation(r *TalosOperationReconciler, op *ichorv1alpha1.TalosOperation) (ctrl.Result, error) {
 	return r.Reconcile(ctx, ctrl.Request{Namespace: op.Namespace, Name: op.Name})
+}
+
+// mustReconcileOperation reconciles op once and expects no error.
+func mustReconcileOperation(r *TalosOperationReconciler, op *ichorv1alpha1.TalosOperation) {
+	GinkgoHelper()
+
+	_, err := reconcileOperation(r, op)
+	Expect(err).NotTo(HaveOccurred())
+}
+
+// newOpTestReconciler wires a fakeAdvancer scripted with outcomes (nil: every machine is done at once).
+func newOpTestReconciler(outcomes map[string]advanceOutcome) (*TalosOperationReconciler, *fakeAdvancer) {
+	if outcomes == nil {
+		outcomes = map[string]advanceOutcome{}
+	}
+
+	fake := &fakeAdvancer{outcomes: outcomes}
+
+	return &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}, fake
+}
+
+// opTestLock is the cluster lock of cluster, for a test to take or inspect.
+func opTestLock(cluster *ichorv1alpha1.TalosCluster) *clusterlock.Lock {
+	return clusterlock.New(k8sClient, client.ObjectKeyFromObject(cluster), 0)
+}
+
+// pausedMessage is the message of op's Paused condition.
+func pausedMessage(op *ichorv1alpha1.TalosOperation) string {
+	return apimeta.FindStatusCondition(op.Status.Conditions, conditionOperationPaused).Message
 }
 
 func fetchOperation(op *ichorv1alpha1.TalosOperation) *ichorv1alpha1.TalosOperation {
@@ -155,8 +185,7 @@ var _ = Describe("TalosOperationReconciler", func() {
 		op := newOpTestOperation(cluster.Name)
 
 		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient}
-		_, err := reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 
 		got := fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
@@ -169,11 +198,9 @@ var _ = Describe("TalosOperationReconciler", func() {
 		newOpTestMachine(cluster.Name, "controlplane", "tr-cp2")
 		op := newOpTestOperation(cluster.Name)
 
-		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
-		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+		r, fake := newOpTestReconciler(nil)
 
-		_, err := reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 		Expect(fake.calls).To(BeEmpty())
 
 		got := fetchOperation(op)
@@ -186,20 +213,18 @@ var _ = Describe("TalosOperationReconciler", func() {
 		newOpTestMachine(cluster.Name, "controlplane", "lh-cp1")
 		op := newOpTestOperation(cluster.Name)
 
-		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+		lock := opTestLock(cluster)
 		Expect(lock.Acquire(ctx, "someone-else")).To(Succeed())
 
-		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
-		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+		r, fake := newOpTestReconciler(nil)
 
-		_, err := reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 		Expect(fake.calls).To(BeEmpty())
 
 		got := fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		expectPausedBecause(got, reasonOperationLockHeld)
-		Expect(apimeta.FindStatusCondition(got.Status.Conditions, conditionOperationPaused).Message).To(ContainSubstring(`"someone-else"`))
+		Expect(pausedMessage(got)).To(ContainSubstring(`"someone-else"`))
 	})
 
 	It("words a lock held by an unseen holder without an empty quoted name", func() {
@@ -215,18 +240,16 @@ var _ = Describe("TalosOperationReconciler", func() {
 		op.Spec.Paused = true
 		Expect(k8sClient.Update(ctx, op)).To(Succeed())
 
-		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
-		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+		r, fake := newOpTestReconciler(nil)
 
-		_, err := reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 		Expect(fake.calls).To(BeEmpty())
 
 		got := fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		expectPausedBecause(got, reasonOperationPaused)
 
-		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+		lock := opTestLock(cluster)
 		_, held, err := lock.Holder(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(held).To(BeTrue(), "spec.paused halts progress but must not release the cluster lock")
@@ -253,15 +276,13 @@ var _ = Describe("TalosOperationReconciler", func() {
 		op.Spec.MaxUnavailable = 2
 		Expect(k8sClient.Update(ctx, op)).To(Succeed())
 
-		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
-		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+		r, fake := newOpTestReconciler(nil)
 
 		allCPs := []string{cp1.Name, cp2.Name, cp3.Name}
 
 		// Reconcile 1, 2, 3: exactly one control plane per call, never a worker.
 		for i := range allCPs {
-			_, err := reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(r, op)
 			Expect(fake.calls).To(HaveLen(i + 1))
 		}
 		Expect(fake.calls).To(ContainElements(cp1.Name, cp2.Name, cp3.Name))
@@ -269,8 +290,7 @@ var _ = Describe("TalosOperationReconciler", func() {
 		// Reconcile 4: every control plane is Completed now, so workers
 		// start -- up to maxUnavailable (2) of the 2 non-held workers
 		// (w3 is held and must never appear).
-		_, err := reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 		Expect(fake.calls).To(HaveLen(5))
 		Expect(fake.calls[3:]).To(ContainElements(w1.Name, w2.Name))
 		Expect(fake.calls).NotTo(ContainElement(w3.Name))
@@ -281,14 +301,13 @@ var _ = Describe("TalosOperationReconciler", func() {
 		// Reconcile 5: both workers already Completed in status, nothing
 		// left pending (w3 stays excluded, not pending), so this reconcile
 		// calls Advance on nobody and reaches Completed.
-		_, err = reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 		Expect(fake.calls).To(HaveLen(5), "no further Advance call once every eligible machine is already Completed")
 
 		got = fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
 
-		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+		lock := opTestLock(cluster)
 		_, held, err := lock.Holder(ctx)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(held).To(BeFalse(), "the lock must be released once every eligible machine is done")
@@ -303,8 +322,7 @@ var _ = Describe("TalosOperationReconciler", func() {
 		recorder := record.NewFakeRecorder(20)
 		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance, Recorder: recorder}
 
-		_, err := reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 
 		got := fetchOperation(op)
 		Expect(got.Status.Machines).To(HaveLen(1))
@@ -312,14 +330,12 @@ var _ = Describe("TalosOperationReconciler", func() {
 		Expect(got.Status.Machines[0].FinishedAt).To(BeNil())
 
 		fake.outcomes[cp1.Name] = advanceOutcome{done: true}
-		_, err = reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 
 		got = fetchOperation(op)
 		Expect(got.Status.Machines[0].FinishedAt).NotTo(BeNil())
 
-		_, err = reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 
 		got = fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
@@ -341,16 +357,14 @@ var _ = Describe("TalosOperationReconciler", func() {
 		recorder := record.NewFakeRecorder(20)
 		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance, Recorder: recorder}
 
-		_, err := reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 		Expect(drainEvents(recorder)).To(ContainElements(
 			"Normal "+reasonMachineStarted+" machine "+cp1.Name+" started",
 			"Warning "+reasonOperationStepFailed+" paused: machine \""+cp1.Name+"\": boom",
 		))
 
 		// A second reconcile of the same failure raises nothing new.
-		_, err = reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 		Expect(drainEvents(recorder)).To(BeEmpty())
 	})
 
@@ -369,14 +383,11 @@ var _ = Describe("TalosOperationReconciler", func() {
 		op.Spec.MaxUnavailable = 1
 		Expect(k8sClient.Update(ctx, op)).To(Succeed())
 
-		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
-		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+		r, fake := newOpTestReconciler(nil)
 
-		_, err := reconcileOperation(r, op) // the control plane
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op) // the control plane
 
-		_, err = reconcileOperation(r, op) // exactly one worker, by label order
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op) // exactly one worker, by label order
 		Expect(fake.calls).To(HaveLen(2))
 		Expect(fake.calls[1]).To(Equal(wFirst.Name), "the worker labeled \"1\" must advance before the one labeled \"2\"")
 	})
@@ -401,16 +412,13 @@ var _ = Describe("TalosOperationReconciler", func() {
 		op := newOpTestOperation(cluster.Name)
 
 		failure := errors.New("talos upgrade API: dial refused")
-		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{cp2.Name: {done: false, err: failure}}}
-		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+		r, fake := newOpTestReconciler(map[string]advanceOutcome{cp2.Name: {done: false, err: failure}})
 
 		// cp1 succeeds (default outcome: done=true, no error).
-		_, err := reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 
 		// The other control plane fails.
-		_, err = reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 
 		got := fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
@@ -425,8 +433,7 @@ var _ = Describe("TalosOperationReconciler", func() {
 		Expect(completed).To(Equal(1), "the machine that succeeded before the failure must stay Completed")
 
 		callsBefore := len(fake.calls)
-		_, err = reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 		Expect(fake.calls).To(HaveLen(callsBefore), "a paused, failed operation must not retry the failed step automatically")
 	})
 
@@ -443,12 +450,10 @@ var _ = Describe("TalosOperationReconciler", func() {
 			setUpgradeOrder(cp3, "3")
 
 			op := newOpTestOperation(cluster.Name)
-			fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{cp2.Name: {done: false, err: errors.New("drain blocked")}}}
-			r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+			r, fake := newOpTestReconciler(map[string]advanceOutcome{cp2.Name: {done: false, err: errors.New("drain blocked")}})
 
 			for range 2 {
-				_, err := reconcileOperation(r, op)
-				Expect(err).NotTo(HaveOccurred())
+				mustReconcileOperation(r, op)
 			}
 
 			Expect(fetchOperation(op).Status.FailureReason).To(ContainSubstring("drain blocked"))
@@ -471,8 +476,7 @@ var _ = Describe("TalosOperationReconciler", func() {
 
 			requestRetry(op, at)
 
-			_, err := reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(r, op)
 
 			got := fetchOperation(op)
 			Expect(got.Status.FailureReason).To(BeEmpty())
@@ -487,22 +491,19 @@ var _ = Describe("TalosOperationReconciler", func() {
 
 			requestRetry(op, at)
 
-			_, err := reconcileOperation(r, op) // the retry fails again, same outcome
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(r, op) // the retry fails again, same outcome
 			Expect(fetchOperation(op).Status.FailureReason).To(ContainSubstring("drain blocked"))
 			Expect(fetchOperation(op).Status.LastRetry).NotTo(BeNil())
 
 			callsBefore := len(fake.calls)
 
 			requestRetry(op, at.Add(-time.Minute)) // older than lastRetry
-			_, err = reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(r, op)
 			Expect(fake.calls).To(HaveLen(callsBefore), "a stale request must not run the step again")
 			Expect(fetchOperation(op).Status.FailureReason).NotTo(BeEmpty())
 
 			requestRetry(op, at) // the same one again
-			_, err = reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(r, op)
 			Expect(fake.calls).To(HaveLen(callsBefore))
 		})
 
@@ -510,13 +511,11 @@ var _ = Describe("TalosOperationReconciler", func() {
 			cluster := newOpTestCluster()
 			newOpTestMachine(cluster.Name, "controlplane", "norequest-cp1")
 			op := newOpTestOperation(cluster.Name)
-			fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
-			r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+			r, _ := newOpTestReconciler(nil)
 
 			requestRetry(op, time.Now())
 
-			_, err := reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(r, op)
 			Expect(fetchOperation(op).Status.LastRetry).To(BeNil(), "no failure, so the request is not acted on")
 		})
 	})
@@ -527,21 +526,17 @@ var _ = Describe("TalosOperationReconciler", func() {
 		w := newOpTestMachine(cluster.Name, "worker", "resume-w1")
 		op := newOpTestOperation(cluster.Name)
 
-		fake1 := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
-		r1 := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake1.Advance}
+		r1, fake1 := newOpTestReconciler(nil)
 
-		_, err := reconcileOperation(r1, op) // advances cp
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r1, op) // advances cp
 		Expect(fake1.calls).To(Equal([]string{cp.Name}))
 
 		// A brand new reconciler, with its own fake and no memory of r1 at
 		// all, simulating a restarted process picking the same
 		// TalosOperation back up purely from its persisted status.
-		fake2 := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
-		r2 := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake2.Advance}
+		r2, fake2 := newOpTestReconciler(nil)
 
-		_, err = reconcileOperation(r2, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r2, op)
 		Expect(fake2.calls).To(Equal([]string{w.Name}), "cp was already Completed in status; a resumed reconciler must not re-advance it")
 	})
 })

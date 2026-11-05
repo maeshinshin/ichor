@@ -103,8 +103,7 @@ var _ = Describe("Deleting a rotation operation", func() {
 			}
 
 			for range 4 {
-				_, err := reconcileMachine(mr, f.machines[0])
-				Expect(err).NotTo(HaveOccurred())
+				reconcileOK(mr, f.machines[0])
 			}
 
 			// The nodes still accept the extra CAs. Dropping them is a change the machine controller never makes by

@@ -38,8 +38,7 @@ func approveAt(m *ichorv1alpha1.TalosMachine, at time.Time) {
 // reconcileTwice runs the finalizer-adding first pass and then the real one.
 func reconcileTwice(r *TalosMachineReconciler, m *ichorv1alpha1.TalosMachine) {
 	for range 2 {
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 	}
 }
 
@@ -94,8 +93,7 @@ var _ = Describe("TalosMachineReconciler control-plane approval cap", func() {
 		gone.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateRejected
 		Expect(k8sClient.Update(ctx, gone)).To(Succeed())
 
-		_, err := reconcileMachine(r, newest)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, newest)
 
 		if c := readyCondition(fetchMachine(newest)); c != nil {
 			Expect(c.Reason).NotTo(Equal(reasonControlPlaneOverCap))

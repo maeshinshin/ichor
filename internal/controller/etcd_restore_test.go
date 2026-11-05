@@ -139,8 +139,7 @@ func (f *restoreFixture) reconcile(op *ichorv1alpha1.TalosOperation) *ichorv1alp
 }
 
 func (f *restoreFixture) reconcileWith(r *TalosOperationReconciler, op *ichorv1alpha1.TalosOperation) *ichorv1alpha1.TalosOperation {
-	_, err := reconcileOperation(r, op)
-	Expect(err).NotTo(HaveOccurred())
+	mustReconcileOperation(r, op)
 
 	return fetchOperation(op)
 }
@@ -986,16 +985,14 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			fake := &fakeTalosClient{current: rendered}
 			r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-			_, err = reconcileMachine(r, m)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, m)
 			Expect(fetchMachine(m).Status.ObservedReconcileRequest).To(BeEmpty())
 
 			got := fetchMachine(m)
 			got.Annotations = map[string]string{ichorv1alpha1.EtcdRestoreReconcileAnnotation: "token-1"}
 			Expect(k8sClient.Update(ctx, got)).To(Succeed())
 
-			_, err = reconcileMachine(r, m)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, m)
 			Expect(fetchMachine(m).Status.ObservedReconcileRequest).To(Equal("token-1"))
 		})
 	})

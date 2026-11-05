@@ -99,8 +99,7 @@ func reconcileTimes(r *TalosOperationReconciler, op *ichorv1alpha1.TalosOperatio
 	GinkgoHelper()
 
 	for range n {
-		_, err := reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 	}
 }
 
@@ -359,8 +358,7 @@ var _ = Describe("a config operation on the backbone", func() {
 		Expect(k8sClient.Status().Update(ctx, cp2)).To(Succeed())
 
 		op := newOpTestOperationOfKind(cluster.Name, ichorv1alpha1.TalosOperationKindConfig)
-		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
-		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+		r, fake := newOpTestReconciler(nil)
 
 		reconcileTimes(r, op, 4)
 
@@ -378,8 +376,7 @@ var _ = Describe("a config operation on the backbone", func() {
 		newOpTestMachine(cluster.Name, "controlplane", "cfgn-cp3")
 
 		op := newOpTestOperationOfKind(cluster.Name, ichorv1alpha1.TalosOperationKindConfig)
-		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
-		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+		r, fake := newOpTestReconciler(nil)
 
 		reconcileTimes(r, op, 3)
 

@@ -109,8 +109,7 @@ func convergeMachine(
 		Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake),
 	}
 
-	_, err := reconcileMachine(r, m)
-	Expect(err).NotTo(HaveOccurred())
+	reconcileOK(r, m)
 	Expect(fake.applyCalls).To(BeEmpty(), "the node already runs the rendered config; nothing to apply")
 }
 

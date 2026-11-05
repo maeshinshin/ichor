@@ -62,8 +62,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 	reconcileNoLeak := func(r *TalosMachineReconciler, m *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle) {
 		GinkgoHelper()
 
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 		assertNoLeak(fetchMachine(m), bundleSecretMaterial(bundle))
 	}
 
@@ -79,8 +78,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		m := newTestMachine(cluster.Name, true)
 
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		got := fetchMachine(m)
 		Expect(readyCondition(got).Reason).To(Equal(reasonSecretsBundleUnavailable))
@@ -170,8 +168,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		fake := &fakeTalosClient{current: current, warnings: bundleSecretMaterial(bundle)}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		got := fetchMachine(m)
 		warn := warningsCondition(got)

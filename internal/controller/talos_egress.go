@@ -54,11 +54,11 @@ const DefaultTalosEgressPolicyName = "ichor-controller-talos-egress"
 
 // talosEgressPorts are the TCP ports the dynamic policy opens to a machine or cluster endpoint: apid,
 // the API server (cluster endpoint, /readyz) and etcd's peer port (MachineReclaim's member health
-// probe, pkg/reclaim). Derived from Talos's constants where it has them.
+// probe, pkg/reclaim), all Talos constants.
+var talosEgressPorts = []int{constants.ApidPort, constants.DefaultControlPlanePort, constants.EtcdPeerPort}
+
 // TalosEgressPorts returns talosEgressPorts for the chart's policy test (dist/chart).
 func TalosEgressPorts() []int { return slices.Clone(talosEgressPorts) }
-
-var talosEgressPorts = []int{constants.ApidPort, constants.DefaultControlPlanePort, constants.EtcdPeerPort}
 
 var ciliumPolicyGVK = schema.GroupVersionKind{Group: "cilium.io", Version: "v2", Kind: "CiliumNetworkPolicy"}
 
@@ -205,7 +205,7 @@ func collectTargets(ctx context.Context, c client.Reader) (egressTargets, error)
 		set.host(reclaims.Items[i].Spec.Address)
 	}
 
-	t := egressTargets{cidrs: keys(set.cidrs), names: keys(set.names)}
+	t := egressTargets{cidrs: slices.Sorted(maps.Keys(set.cidrs)), names: slices.Sorted(maps.Keys(set.names))}
 
 	var backups ichorv1alpha1.TalosEtcdBackupList
 	if err := c.List(ctx, &backups); err != nil {
@@ -227,8 +227,6 @@ func collectTargets(ctx context.Context, c client.Reader) (egressTargets, error)
 
 	return t, nil
 }
-
-func keys(m map[string]bool) []string { return slices.Sorted(maps.Keys(m)) }
 
 // parseURLTarget is the host and TCP port of "http(s)://host[:port]" (443 and 80 by scheme): an S3 endpoint or
 // an OIDC issuer.
@@ -311,6 +309,8 @@ func clusterLocalService(host string) (string, string, bool) {
 func buildEgress(t egressTargets) []any {
 	var rules []any
 
+	ports := []any{map[string]any{keyPorts: portList(talosEgressPorts...)}}
+
 	if len(t.cidrs) > 0 {
 		set := make([]any, 0, len(t.cidrs))
 		for _, c := range t.cidrs {
@@ -319,7 +319,7 @@ func buildEgress(t egressTargets) []any {
 
 		rules = append(rules, map[string]any{
 			"toCIDRSet": set,
-			keyToPorts:  []any{map[string]any{keyPorts: portList(talosEgressPorts...)}},
+			keyToPorts:  ports,
 		})
 	}
 
@@ -331,7 +331,7 @@ func buildEgress(t egressTargets) []any {
 
 		rules = append(rules, map[string]any{
 			"toFQDNs":  fq,
-			keyToPorts: []any{map[string]any{keyPorts: portList(talosEgressPorts...)}},
+			keyToPorts: ports,
 		})
 	}
 
@@ -347,14 +347,9 @@ func buildEgress(t egressTargets) []any {
 	return rules
 }
 
-// staticPolicy finds the installed controller policy (any name) and returns the app name label
-// its pods carry; "" when Ichor's policies are not installed (Cilium absent, opt-out, or another CNI).
-func (e *TalosEgress) staticPolicy(ctx context.Context) (string, error) {
-	return controllerPolicyApp(ctx, e.Client, e.Namespace, e.name())
-}
-
 // controllerPolicyApp is the app.kubernetes.io/name label the installed controller policy carries
-// (any policy in ns except skip); "" when Ichor's policies are not installed.
+// (any policy in ns except skip); "" when Ichor's policies are not installed (Cilium absent, opt-out,
+// or another CNI).
 func controllerPolicyApp(ctx context.Context, c client.Client, ns, skip string) (string, error) {
 	var list unstructured.UnstructuredList
 
@@ -474,7 +469,7 @@ func (e *TalosEgress) sync(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	app, err := e.staticPolicy(ctx)
+	app, err := controllerPolicyApp(ctx, e.Client, e.Namespace, e.name())
 	if err != nil || app == "" {
 		// Without the default-deny set, a lone egress rule would itself cut the pods off. Skip.
 		return false, err
@@ -531,10 +526,7 @@ func (e *TalosEgress) SettleAfter(ctx context.Context) {
 		return
 	}
 
-	select {
-	case <-ctx.Done():
-	case <-time.After(wait):
-	}
+	sleep(ctx, wait)
 }
 
 // SetupWithManager watches the kinds the policy is built from.

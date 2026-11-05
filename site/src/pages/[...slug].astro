@@ -1,0 +1,45 @@
+---
+// One route per Markdown file under docs/. Nothing here lists pages: add a file and it appears.
+import { render } from 'astro:content'
+import Prose from '@/components/Prose.astro'
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import Docs from '@/layouts/Docs.astro'
+import { base, buildNav, getDocs } from '@/lib/docs'
+
+export async function getStaticPaths() {
+  const docs = await getDocs()
+  const paths = docs.map((doc) => ({ params: { slug: doc.route || undefined }, props: { id: doc.entry.id } }))
+  // No docs/index.md yet: the home page is generated from the sections.
+  if (!docs.some((d) => d.route === '')) paths.push({ params: { slug: undefined }, props: { id: '' } })
+  return paths
+}
+
+const { id } = Astro.props
+const docs = await getDocs()
+const doc = docs.find((d) => d.entry.id === id)
+const rendered = doc && (await render(doc.entry))
+const sections = buildNav(docs).filter((s) => s.label !== 'Overview')
+---
+
+{
+  doc && rendered ? (
+    <Docs title={doc.title} current={doc.url} headings={rendered.headings.map((h) => ({ depth: h.depth, slug: h.slug, text: h.text }))} editUrl={doc.editUrl}>
+      <Prose><rendered.Content /></Prose>
+    </Docs>
+  ) : (
+    <Docs title="Ichor documentation" current={base}>
+      <div class="grid gap-4 sm:grid-cols-2">
+        {sections.map((s) => (
+          <a href={s.children?.[0]?.href}>
+            <Card>
+              <CardHeader>
+                <CardTitle>{s.label}</CardTitle>
+                <CardDescription>{s.children?.length} pages</CardDescription>
+              </CardHeader>
+            </Card>
+          </a>
+        ))}
+      </div>
+    </Docs>
+  )
+}

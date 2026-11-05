@@ -3,8 +3,8 @@ import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import type { ObjectRef } from '@/gen/ichor/v1alpha1/common_pb'
+import { useAction } from '@/hooks/use-action'
 import { cniClient } from '@/lib/connect'
-import { describeError, type ErrorShape } from '@/lib/errors'
 import { notifyDone } from '@/lib/notify'
 import { t } from '@/lib/i18n'
 
@@ -13,22 +13,14 @@ import { t } from '@/lib/i18n'
 // The Cilium page and the Versions card share it. The server can still refuse; the error text is shown as received.
 export function CiliumUpgradeDialog({ cluster, chart, size }: { cluster: ObjectRef; chart: string; size?: 'sm' }) {
   const [open, setOpen] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { busy, error, setError, run } = useAction()
 
-  async function start() {
-    setBusy(true)
-    setError(null)
-    try {
+  const start = () =>
+    run(async () => {
       await cniClient.startCniUpgrade({ cluster })
       setOpen(false)
       notifyDone(t('cilium.upgradeStarted'))
-    } catch (err) {
-      setError(describeError(err))
-    } finally {
-      setBusy(false)
-    }
-  }
+    })
 
   return (
     <ConfirmDialog

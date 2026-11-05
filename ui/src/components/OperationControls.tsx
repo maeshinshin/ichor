@@ -3,9 +3,9 @@ import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { OperationKind, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
+import { useAction } from '@/hooks/use-action'
 import { operationClient } from '@/lib/connect'
 import { notifyDone } from '@/lib/notify'
-import { describeError, type ErrorShape } from '@/lib/errors'
 import { operationState, pauseAction } from '@/lib/operations'
 import { t } from '@/lib/i18n'
 
@@ -23,44 +23,33 @@ export function OperationControls({
   // showDelete is false where only pause and resume belong (the cluster page).
   showDelete?: boolean
 }) {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { busy, error, run } = useAction()
   const [open, setOpen] = useState(false)
   const [resumeOpen, setResumeOpen] = useState(false)
   const state = operationState(op.phase, op.failureReason)
   // A restore that has started is half done; the server refuses to pause it, so only a failed one gets a button (Resume).
   const action = op.kind === OperationKind.ETCD_RESTORE && state !== 'failed' ? null : pauseAction(op.paused, state)
 
-  async function setPaused(paused: boolean) {
-    if (!op.ref) return
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await operationClient.setOperationPaused({ operation: op.ref, paused })
+  function setPaused(paused: boolean) {
+    const operation = op.ref
+    if (!operation) return
+    return run(async () => {
+      const res = await operationClient.setOperationPaused({ operation, paused })
       if (res.operation) onChanged(res.operation)
       setResumeOpen(false)
       notifyDone(t(paused ? 'toast.opPaused' : 'toast.opResumed'))
-    } catch (err) {
-      setError(describeError(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
-  async function remove() {
-    if (!op.ref) return
-    setBusy(true)
-    setError(null)
-    try {
-      await operationClient.deleteOperation({ operation: op.ref })
+  function remove() {
+    const operation = op.ref
+    if (!operation) return
+    return run(async () => {
+      await operationClient.deleteOperation({ operation })
       setOpen(false)
       notifyDone(t('toast.opDeleted'))
       onDeleted()
-    } catch (err) {
-      setError(describeError(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   return (

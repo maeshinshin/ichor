@@ -13,9 +13,9 @@ import {
 } from '@/components/ui/dialog'
 import type { Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import type { Disk } from '@/gen/ichor/v1alpha1/node_pb'
+import { useAction } from '@/hooks/use-action'
 import { machineClient } from '@/lib/connect'
 import { notifyWrite } from '@/lib/notify'
-import { describeError, type ErrorShape } from '@/lib/errors'
 import { diskSelector, installChoice } from '@/lib/installDisk'
 import { t } from '@/lib/i18n'
 
@@ -34,27 +34,21 @@ export function SetInstallDialog({
   const [key, setKey] = useState('')
   const [typed, setTyped] = useState('')
   const [image, setImage] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [submitError, setSubmitError] = useState<ErrorShape | null>(null)
+  const { busy: submitting, error: submitError, run } = useAction()
 
   const selectable = disks.filter((d) => diskSelector(d))
   const { install, ok } = installChoice({ disks: selectable, key, typed, image })
 
 
-  async function submit() {
-    if (!machine.ref || !install) return
-    setSubmitting(true)
-    setSubmitError(null)
-    try {
-      await machineClient.setMachineInstall({ machine: machine.ref, install })
+  function submit() {
+    const ref = machine.ref
+    if (!ref || !install) return
+    return run(async () => {
+      await machineClient.setMachineInstall({ machine: ref, install })
       notifyWrite('toast.installSet')
       setOpen(false)
       onDone()
-    } catch (err) {
-      setSubmitError(describeError(err))
-    } finally {
-      setSubmitting(false)
-    }
+    })
   }
 
   return (

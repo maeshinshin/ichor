@@ -745,6 +745,15 @@ func (c *keyRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 		return c.retry(ctx, fmt.Sprintf("stage %s is not verified, so the next stage is not started: %v", stage, err))
 	}
 
+	// Every control plane signs with the new key: pods started from now on get tokens of it. Ichor's own, which
+	// hold tokens of the old key until the kubelet refreshes them, are rolled now, so that dropping the old key
+	// cannot lock the controller that runs this rotation out of the API.
+	if stage == ichorv1alpha1.KeyRotationStageIssuing && c.has(ichorv1alpha1.KeyRotationTargetServiceAccount) {
+		if err := c.restartIchorWorkloads(ctx); err != nil {
+			return c.retry(ctx, "restarting Ichor's own controller and ichor-ui, so that they hold tokens of the new key, failed: "+err.Error())
+		}
+	}
+
 	return c.advance(ctx, stage, fmt.Sprintf("stage %s verified on %d control plane(s)", stage, len(cps)))
 }
 
@@ -936,6 +945,17 @@ func (c *keyRun) settleTokens(ctx context.Context) (ctrl.Result, error) {
 					"controller manager writes a new one) or delete the Secret; the rotation continues by itself. To drop the old key anyway, "+
 					"recreate the operation with spec.keyRotation.ignoreLegacyTokens", len(found), shown))
 		}
+	}
+
+	// Ichor's own pods hold tokens of the new key only once their Deployments have rolled out (restartIchorWorkloads).
+	waiting, err := c.ichorRolloutPending(ctx)
+	if err != nil {
+		return c.retry(ctx, "reading Ichor's own Deployments failed, so the old service-account key stays: "+err.Error())
+	}
+
+	if waiting != "" {
+		return ctrl.Result{RequeueAfter: keyRotationPoll}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue,
+			reasonKeyRotationSettling, "the old service-account key stays until Ichor's own pods hold tokens of the new one: "+waiting)
 	}
 
 	return c.advance(ctx, ichorv1alpha1.KeyRotationStageSettlingTokens, "the old service-account key is no longer needed; removing it")

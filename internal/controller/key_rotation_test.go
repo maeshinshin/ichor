@@ -691,9 +691,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		op := f.newOp(boxOnly)
 		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageReencrypting))
 
-		for range 4 {
-			op = f.step(op)
-		}
+		op = repeatStep(f.step, op, 4)
 
 		Expect(keyStageOf(op)).To(Equal(ichorv1alpha1.KeyRotationStageReencrypting))
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
@@ -735,9 +733,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		op := f.newOp(saOnly)
 		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageAccepting))
 
-		for range 12 {
-			op = f.step(op)
-		}
+		op = repeatStep(f.step, op, 12)
 
 		Expect(keyStageOf(op)).To(Equal(ichorv1alpha1.KeyRotationStageAccepting))
 		Expect(f.world.applies).To(HaveLen(1), "the other control planes were applied to although the first never restarted")
@@ -933,9 +929,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageSettlingTokens))
 		applied := len(f.world.applies)
 
-		for range 6 {
-			op = f.step(op)
-		}
+		op = repeatStep(f.step, op, 6)
 
 		Expect(keyStageOf(op)).To(Equal(ichorv1alpha1.KeyRotationStageSettlingTokens), "the old key was dropped before the tokens were re-issued")
 		Expect(f.world.applies).To(HaveLen(applied))
@@ -959,9 +953,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		op := f.newOp(saOnly)
 		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageSettlingTokens))
 
-		for range 4 {
-			op = f.step(op)
-		}
+		op = repeatStep(f.step, op, 4)
 
 		Expect(keyStageOf(op)).To(Equal(ichorv1alpha1.KeyRotationStageSettlingTokens))
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
@@ -998,9 +990,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		victim := f.controlPlanes()[1].Name
 		f.world.versionErr[victim] = errors.New("rpc error: Unavailable")
 
-		for range 5 {
-			op = f.step(op)
-		}
+		op = repeatStep(f.step, op, 5)
 
 		Expect(keyStageOf(op)).To(Equal(ichorv1alpha1.KeyRotationStageIssuing), "an unverified stage must not advance")
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
@@ -1020,9 +1010,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 
 		f.world.notReady = []string{"some-worker"}
 
-		for range 4 {
-			op = f.step(op)
-		}
+		op = repeatStep(f.step, op, 4)
 
 		Expect(keyStageOf(op)).To(Equal(ichorv1alpha1.KeyRotationStageDropping))
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Message).To(ContainSubstring("some-worker"))
@@ -1036,9 +1024,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		f.world.nodes[f.controlPlanes()[2].Name].down = true
 
 		op := f.newOp(bothTargets)
-		for range 3 {
-			op = f.step(op)
-		}
+		op = repeatStep(f.step, op, 3)
 
 		Expect(keyStageOf(op)).To(BeEmpty())
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))

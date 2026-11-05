@@ -143,17 +143,14 @@ spec:
                     - skip
                     type: string
                   reason:
-                    description: reason is why the signature is not checked; required
-                      with skip, and recorded with the digest.
+                    description: |-
+                      reason is deprecated: unused, kept so the schema never drops a field (ADR 0130). skip no longer needs
+                      one and nothing reads it.
                     maxLength: 512
                     type: string
                 required:
                 - mode
                 type: object
-                x-kubernetes-validations:
-                - message: reason is required when mode is skip
-                  rule: self.mode != 'skip' || (has(self.reason) && size(self.reason)
-                    > 0)
               reclaim:
                 description: |-
                   reclaim is deprecated and ignored (ADR 0107): "Reset and add" has no installation switch;
@@ -470,8 +467,8 @@ spec:
                     description: digest is the image digest the Job runs, "sha256:...".
                     type: string
                   reason:
-                    description: reason is the reason given for skipping the check;
-                      empty when Verified.
+                    description: 'reason is deprecated: unused, kept so the schema
+                      never drops a field (ADR 0130). It is no longer written.'
                     type: string
                   repository:
                     description: repository is the image repository the Job pulled

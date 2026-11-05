@@ -49,7 +49,7 @@ var _ = Describe("Override webhook on an etcd restore", func() {
 				ClusterRef: corev1.LocalObjectReference{Name: testClusterName}, Kind: ichorv1alpha1.TalosOperationKindEtcdRestore,
 				EtcdRestore: &ichorv1alpha1.TalosOperationEtcdRestoreSpec{
 					BackupRef: corev1.LocalObjectReference{Name: "nightly"}, Snapshot: "etcd-20261001T020000Z.snapshot.age",
-					Confirm: testClusterName, Reason: "bad change",
+					Confirm: testClusterName,
 				},
 			},
 		}

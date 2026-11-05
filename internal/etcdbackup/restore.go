@@ -106,15 +106,13 @@ const (
 // the cluster's etcd to the snapshot, and the TalosOperation that drives it was created after the
 // snapshot, so the rewind deletes it. The marker lives in the backup bucket, which a rewind cannot
 // touch, and holds enough to recreate the operation and to know how far the destructive part got. It
-// holds no secret: names, times and the override reason.
+// holds no secret: names and times.
 type RestoreMarker struct {
-	Namespace string `json:"namespace"`
-	Operation string `json:"operation"`
-	Cluster   string `json:"cluster"`
-	Backup    string `json:"backup"`
-	Snapshot  string `json:"snapshot"`
-	// Reason is the override reason the restore was started under.
-	Reason       string    `json:"reason"`
+	Namespace    string    `json:"namespace"`
+	Operation    string    `json:"operation"`
+	Cluster      string    `json:"cluster"`
+	Backup       string    `json:"backup"`
+	Snapshot     string    `json:"snapshot"`
 	SnapshotTime time.Time `json:"snapshotTime"`
 	// Target is the control plane the snapshot is recovered on.
 	Target string `json:"target"`

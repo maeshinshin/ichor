@@ -287,12 +287,11 @@ type pinnedInstallerImage struct {
 	Digest       string
 	Verification string // ichorv1alpha1.InstallerImageVerified or InstallerImageSkipped
 	Signer       string
-	Reason       string
 }
 
 // pinInstallerImage resolves the installer image to a digest and verifies its signature, or says why not
 // (ADR 0122). Nothing falls back to a tag or to an unchecked image: the only way past the signature is
-// spec.installerSignature.mode skip, with its reason.
+// spec.installerSignature.mode skip.
 func pinInstallerImage(
 	ctx context.Context, images InstallerImages, inst *ichorv1alpha1.IchorInstallation,
 ) (pinnedInstallerImage, error) {
@@ -318,15 +317,14 @@ func pinInstallerImage(
 	}
 
 	if sig := inst.Spec.InstallerSignature; sig != nil && sig.Mode == ichorv1alpha1.InstallerSignatureSkip {
-		return pinnedInstallerImage{Digest: digest, Verification: ichorv1alpha1.InstallerImageSkipped, Reason: sig.Reason}, nil
+		return pinnedInstallerImage{Digest: digest, Verification: ichorv1alpha1.InstallerImageSkipped}, nil
 	}
 
 	id := imagesig.IchorIdentity(tag)
 	if err := images.Verify(ctx, imagesig.Image{Repository: repo, Digest: digest}, id); err != nil {
 		return pinnedInstallerImage{}, &installerImageError{reason: reasonInstallerImageUnverified,
 			err: fmt.Errorf("the installer image %s@%s is not verified, so no installer Job was created "+
-				"(fix the registry or mirror, or run the upgrade with a recorded reason to skip the check: "+
-				"`ichor upgrade ichor --skip-signature-check REASON`): %w", repo, digest, err)}
+				"(fix the registry or mirror, or run the upgrade with `ichor upgrade ichor --skip-signature-check` to skip the check): %w", repo, digest, err)}
 	}
 
 	return pinnedInstallerImage{Digest: digest, Verification: ichorv1alpha1.InstallerImageVerified, Signer: id.SANRegexp}, nil
@@ -343,7 +341,7 @@ func recordInstallerImage(
 
 	inst.Status.InstallerImage = &ichorv1alpha1.IchorInstallerImageStatus{
 		Version: inst.Spec.Version, Repository: inst.Spec.InstallerRepository, Digest: img.Digest,
-		Verification: img.Verification, Signer: img.Signer, Reason: img.Reason, ResolvedAt: &now,
+		Verification: img.Verification, Signer: img.Signer, ResolvedAt: &now,
 	}
 
 	if err := c.Status().Patch(ctx, inst, client.MergeFrom(orig)); err != nil {
@@ -352,8 +350,8 @@ func recordInstallerImage(
 
 	if img.Verification == ichorv1alpha1.InstallerImageSkipped && recorder != nil {
 		recorder.Eventf(inst, corev1.EventTypeWarning, reasonInstallerSignatureSkipped,
-			"the signature of the installer image %s@%s for %s is NOT checked: %s",
-			inst.Spec.InstallerRepository, img.Digest, inst.Spec.Version, img.Reason)
+			"the signature of the installer image %s@%s for %s is NOT checked (spec.installerSignature.mode is skip)",
+			inst.Spec.InstallerRepository, img.Digest, inst.Spec.Version)
 	}
 
 	return nil

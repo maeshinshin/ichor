@@ -101,14 +101,14 @@ const (
 )
 
 // IchorInstallerSignature is the signature policy of the installer image (ADR 0122).
-// +kubebuilder:validation:XValidation:rule="self.mode != 'skip' || (has(self.reason) && size(self.reason) > 0)",message="reason is required when mode is skip"
 type IchorInstallerSignature struct {
 	// mode is required (the default) or skip.
 	// +kubebuilder:validation:Enum=required;skip
 	// +kubebuilder:default=required
 	Mode string `json:"mode"`
 
-	// reason is why the signature is not checked; required with skip, and recorded with the digest.
+	// reason is deprecated: unused, kept so the schema never drops a field (ADR 0130). skip no longer needs
+	// one and nothing reads it.
 	// +kubebuilder:validation:MaxLength=512
 	// +optional
 	Reason string `json:"reason,omitempty"`
@@ -140,7 +140,7 @@ type IchorInstallerImageStatus struct {
 	// signer is the identity the signature matched (the certificate subject pattern); empty when Skipped.
 	// +optional
 	Signer string `json:"signer,omitempty"`
-	// reason is the reason given for skipping the check; empty when Verified.
+	// reason is deprecated: unused, kept so the schema never drops a field (ADR 0130). It is no longer written.
 	// +optional
 	Reason string `json:"reason,omitempty"`
 	// resolvedAt is when the controller resolved and checked the image.

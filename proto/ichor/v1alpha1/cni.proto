@@ -63,6 +63,9 @@ message GetCiliumValuesResponse {
   // available_chart_version is status.cni.availableChartVersion; empty when
   // Cilium is up to date.
   string available_chart_version = 6;
+  // can_edit is whether the caller may change the user layer: the verb update on
+  // talosclusters/cilium-values, which ichor-admin holds.
+  bool can_edit = 7;
 }
 
 message ValidateCiliumValuesRequest {

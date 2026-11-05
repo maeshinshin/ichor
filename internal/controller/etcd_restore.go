@@ -354,7 +354,7 @@ func (r *TalosOperationReconciler) beginEtcdRestore(
 	now := time.Now().UTC()
 	next := etcdbackup.RestoreMarker{
 		Namespace: op.Namespace, Operation: op.Name, Cluster: cluster.Name, Backup: spec.BackupRef.Name,
-		Snapshot: snap.Name, SnapshotTime: snap.Time, Reason: spec.Reason, Target: nodes.target.Name,
+		Snapshot: snap.Name, SnapshotTime: snap.Time, Target: nodes.target.Name,
 		Step: ichorv1alpha1.EtcdRestoreStepWiping, StartedAt: now, Nodes: names,
 	}
 
@@ -982,7 +982,7 @@ func (r *TalosOperationReconciler) recreateRestoreOperation(ctx context.Context,
 	op.Spec = ichorv1alpha1.TalosOperationSpec{
 		ClusterRef: corev1.LocalObjectReference{Name: m.Cluster}, Kind: ichorv1alpha1.TalosOperationKindEtcdRestore,
 		EtcdRestore: &ichorv1alpha1.TalosOperationEtcdRestoreSpec{
-			BackupRef: corev1.LocalObjectReference{Name: m.Backup}, Snapshot: m.Snapshot, Confirm: m.Cluster, Reason: m.Reason,
+			BackupRef: corev1.LocalObjectReference{Name: m.Backup}, Snapshot: m.Snapshot, Confirm: m.Cluster,
 		},
 	}
 

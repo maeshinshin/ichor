@@ -155,9 +155,8 @@ spec:
                     type: string
                   reason:
                     description: |-
-                      reason is the override reason the restore was started under. It is part of the record that
-                      survives the rollback.
-                    minLength: 1
+                      reason is deprecated: unused, kept so the schema never drops a field. It was the
+                      override reason the restore was started under; it is no longer required, asked for or read.
                     type: string
                   snapshot:
                     description: |-
@@ -168,7 +167,6 @@ spec:
                 required:
                 - backupRef
                 - confirm
-                - reason
                 - snapshot
                 type: object
               keyRotation:
@@ -267,8 +265,9 @@ spec:
                   breakGlassReason:
                     description: |-
                       breakGlassReason is the earlier name of overrideReason, kept because CRD fields are append-only
-                      and operations written by older builds carry it. Deprecated: use override and overrideReason.
-                      Ichor's own CLI and UI never set it; it is read, and gated by the same verb, as an override.
+                      and operations written by older builds carry it. Deprecated: use override.
+                      Ichor's own CLI and UI never set it; its text is not read, but a value still counts, and is gated
+                      by the same verb, as an override.
                     minLength: 1
                     type: string
                   confirm:
@@ -297,13 +296,14 @@ spec:
                     description: |-
                       override asks to override a safety check: the last-worker guard for reboot and shutdown, or the
                       reset's own gate. It is only honoured when the creator holds the
-                      override verb on the machine (the override webhook checks), with or without a reason, and it goes
-                      into the audit record and an Event.
+                      override verb on the machine (the override webhook checks), and it goes into the audit record and
+                      an Event.
                     type: boolean
                   overrideReason:
                     description: |-
-                      overrideReason is the optional reason the operator gives for the override. It goes into
-                      the audit record and an Event; without one, the record says no reason was given.
+                      overrideReason is deprecated: unused, kept so the schema never drops a field. It was the
+                      optional reason for an override; no client sets it and nothing reads it. A value written
+                      by an older build still counts as an override (see Overrides).
                     minLength: 1
                     type: string
                   service:

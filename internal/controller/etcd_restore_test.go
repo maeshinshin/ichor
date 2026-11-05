@@ -121,7 +121,7 @@ func (f *restoreFixture) newOp(mutate func(*ichorv1alpha1.TalosOperation)) *icho
 			ClusterRef: corev1.LocalObjectReference{Name: f.backup.cluster.Name}, Kind: ichorv1alpha1.TalosOperationKindEtcdRestore,
 			EtcdRestore: &ichorv1alpha1.TalosOperationEtcdRestoreSpec{
 				BackupRef: corev1.LocalObjectReference{Name: f.bk.Name}, Snapshot: f.snapshot,
-				Confirm: f.backup.cluster.Name, Reason: "a bad change deleted the namespace",
+				Confirm: f.backup.cluster.Name,
 			},
 		},
 	}
@@ -280,7 +280,6 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			Expect(m.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepWiping))
 			Expect(m.Operation).To(Equal(op.Name))
 			Expect(m.Snapshot).To(Equal(f.snapshot))
-			Expect(m.Reason).To(Equal("a bad change deleted the namespace"))
 			Expect(f.pinned()).To(BeTrue(), "a copy the retention cannot prune")
 
 			for _, fk := range f.fakes {
@@ -390,7 +389,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			got := fetchOperation(op)
 			Expect(got.Spec.Kind).To(Equal(ichorv1alpha1.TalosOperationKindEtcdRestore))
 			Expect(got.Spec.EtcdRestore.Snapshot).To(Equal(f.snapshot))
-			Expect(got.Spec.EtcdRestore.Reason).To(Equal("a bad change deleted the namespace"))
+			Expect(got.Spec.EtcdRestore.Reason).To(BeEmpty())
 			Expect(got.Status.EtcdRestore.Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRejoining))
 			Expect(got.Status.EtcdRestore.Target).To(Equal(f.marker().Target))
 			Expect(got.UID).NotTo(Equal(op.UID))

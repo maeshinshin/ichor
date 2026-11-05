@@ -91,6 +91,19 @@ func guards(effective map[string]any, c ValidationContext) error {
 		errs = append(errs, errors.New("gatewayAPI.enabled=true needs the Gateway API CRDs installed first"))
 	}
 
+	// The chart's default, "helm", renders the API server's certificates as Secrets in kube-system, which
+	// the Helm Job's ServiceAccount cannot manage; Ichor keeps cronJob, as for Hubble.
+	if on, _ := values.Get(effective, "clustermesh.useAPIServer"); on == true {
+		auto, _ := values.Get(effective, "clustermesh.apiserver.tls.auto.enabled")
+		method, _ := values.Get(effective, "clustermesh.apiserver.tls.auto.method")
+
+		if auto != false && method != "cronJob" {
+			errs = append(errs, errors.New("clustermesh.useAPIServer=true needs clustermesh.apiserver.tls.auto.method=cronJob "+
+				"(or clustermesh.apiserver.tls.auto.enabled=false with your own certificates): the chart's default creates "+
+				"Secrets in kube-system, which Ichor's Helm Job may not"))
+		}
+	}
+
 	if c.KubeProxy == cni.KubeProxyReplaced && c.KubePrism != nil {
 		port := c.KubePrism.Port
 		if port == 0 {

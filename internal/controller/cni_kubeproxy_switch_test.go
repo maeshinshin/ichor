@@ -171,6 +171,17 @@ func newKubeProxyAdvancer(clients map[string]*fakeTalosClient, admin KubeProxyAd
 	}
 }
 
+// switchRig is one control plane that still runs the old kube-proxy mode, its fake Talos client, and an
+// advancer that reaches it.
+func switchRig(
+	cluster *ichorv1alpha1.TalosCluster, suffix, old string, admin KubeProxyAdmin,
+) (*ichorv1alpha1.TalosMachine, *fakeTalosClient, *cniKubeProxyAdvancer) {
+	cp := newK8sControlPlane(cluster.Name, suffix)
+	fake := &fakeTalosClient{current: nodeConfig(cluster, cp, old)}
+
+	return cp, fake, newKubeProxyAdvancer(map[string]*fakeTalosClient{cp.Name: fake}, admin)
+}
+
 func cniSwitchCluster(mode string) *ichorv1alpha1.TalosCluster {
 	return k8sCluster(testK8sTarget, ichorv1alpha1.TalosClusterCNI{Preset: testCilium, KubeProxy: mode})
 }
@@ -307,10 +318,8 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		})
 		Expect(k8sClient.Status().Update(ctx, cluster)).To(Succeed())
 
-		cp := newK8sControlPlane(cluster.Name, "kp-wait")
-		fake := &fakeTalosClient{current: nodeConfig(cluster, cp, modeEnabled)}
 		admin := &fakeKubeProxyAdmin{}
-		adv := newKubeProxyAdvancer(map[string]*fakeTalosClient{cp.Name: fake}, admin)
+		cp, fake, adv := switchRig(cluster, "kp-wait", modeEnabled, admin)
 
 		op := &ichorv1alpha1.TalosOperation{}
 		done, err := adv.Advance(ctx, cluster, cp, op)
@@ -393,9 +402,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 
 		// The operation: Cilium first, inside the operation, under the verification clock.
 		cluster = fetchCluster(cluster)
-		cp := newK8sControlPlane(cluster.Name, "kp-spec")
-		fake := &fakeTalosClient{current: nodeConfig(cluster, cp, modeEnabled)}
-		adv := newKubeProxyAdvancer(map[string]*fakeTalosClient{cp.Name: fake}, &fakeKubeProxyAdmin{})
+		cp, fake, adv := switchRig(cluster, "kp-spec", modeEnabled, &fakeKubeProxyAdmin{})
 
 		op := &ichorv1alpha1.TalosOperation{}
 		done, err := adv.Advance(ctx, cluster, cp, op)
@@ -434,10 +441,8 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		newKubeProxyDaemonSet(testK8sOld, 2, 2)
 
 		cluster := cniSwitchCluster(modeReplaced)
-		cp := newK8sControlPlane(cluster.Name, "kp-jobfail")
-		fake := &fakeTalosClient{current: nodeConfig(cluster, cp, modeEnabled)}
 		admin := &fakeKubeProxyAdmin{}
-		adv := newKubeProxyAdvancer(map[string]*fakeTalosClient{cp.Name: fake}, admin)
+		cp, fake, adv := switchRig(cluster, "kp-jobfail", modeEnabled, admin)
 		op := &ichorv1alpha1.TalosOperation{}
 
 		_, err := adv.Advance(ctx, cluster, cp, op)
@@ -459,9 +464,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 
 		cluster := cniSwitchCluster(modeReplaced)
 		finishCNIJob(cluster)
-		cp := newK8sControlPlane(cluster.Name, "kp-roll")
-		fake := &fakeTalosClient{current: nodeConfig(cluster, cp, modeEnabled)}
-		adv := newKubeProxyAdvancer(map[string]*fakeTalosClient{cp.Name: fake}, &fakeKubeProxyAdmin{})
+		cp, fake, adv := switchRig(cluster, "kp-roll", modeEnabled, &fakeKubeProxyAdmin{})
 
 		op := &ichorv1alpha1.TalosOperation{}
 		done, err := adv.Advance(ctx, cluster, cp, op)
@@ -482,9 +485,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		newCilium("false", true)
 
 		cluster := cniSwitchCluster(modeReplaced)
-		cp := newK8sControlPlane(cluster.Name, "kp-owner")
-		fake := &fakeTalosClient{current: nodeConfig(cluster, cp, modeEnabled)}
-		adv := newKubeProxyAdvancer(map[string]*fakeTalosClient{cp.Name: fake}, &fakeKubeProxyAdmin{})
+		cp, _, adv := switchRig(cluster, "kp-owner", modeEnabled, &fakeKubeProxyAdmin{})
 
 		op := &ichorv1alpha1.TalosOperation{}
 		_, err := adv.Advance(ctx, cluster, cp, op)
@@ -502,9 +503,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 
 		cluster := cniSwitchCluster(modeReplaced)
 		finishCNIJob(cluster)
-		cp := newK8sControlPlane(cluster.Name, "kp-budget")
-		fake := &fakeTalosClient{current: nodeConfig(cluster, cp, modeEnabled)}
-		adv := newKubeProxyAdvancer(map[string]*fakeTalosClient{cp.Name: fake}, &fakeKubeProxyAdmin{})
+		cp, fake, adv := switchRig(cluster, "kp-budget", modeEnabled, &fakeKubeProxyAdmin{})
 
 		_, err := adv.Advance(ctx, cluster, cp, &ichorv1alpha1.TalosOperation{})
 		Expect(err).NotTo(HaveOccurred())
@@ -564,9 +563,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 
 		cluster := cniSwitchCluster(modeReplaced)
 		finishCNIJob(cluster)
-		cp := newK8sControlPlane(cluster.Name, "kp-probe")
-		fake := &fakeTalosClient{current: nodeConfig(cluster, cp, modeReplaced)}
-		adv := newKubeProxyAdvancer(map[string]*fakeTalosClient{cp.Name: fake}, &fakeKubeProxyAdmin{})
+		cp, _, adv := switchRig(cluster, "kp-probe", modeReplaced, &fakeKubeProxyAdmin{})
 		probeErr := errors.New("connection refused")
 		adv.ServiceProbe = func(context.Context) error { return probeErr }
 		op := &ichorv1alpha1.TalosOperation{}
@@ -683,10 +680,8 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		newCilium("true", true)
 
 		cluster := cniSwitchCluster(modeEnabled)
-		cp := newK8sControlPlane(cluster.Name, "kp-rev")
-		fake := &fakeTalosClient{current: nodeConfig(cluster, cp, modeReplaced)}
 		admin := &fakeKubeProxyAdmin{}
-		adv := newKubeProxyAdvancer(map[string]*fakeTalosClient{cp.Name: fake}, admin)
+		cp, fake, adv := switchRig(cluster, "kp-rev", modeReplaced, admin)
 		before := ciliumConfigVersion()
 		op := &ichorv1alpha1.TalosOperation{}
 

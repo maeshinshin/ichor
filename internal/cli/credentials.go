@@ -341,10 +341,8 @@ func acknowledgeHandoff(ctx context.Context, k8s client.Client, namespace, clust
 
 		_, _ = fmt.Fprintf(errw, "ichor: acknowledging the hand-off failed (%v); retrying\n", err)
 
-		select {
-		case <-ctx.Done():
-			return "", ctx.Err()
-		case <-time.After(delay):
+		if err := sleepCtx(ctx, delay); err != nil {
+			return "", err
 		}
 
 		delay = min(delay*2, followRetryMax)

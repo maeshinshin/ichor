@@ -339,10 +339,8 @@ func watchOperationUntil(ctx context.Context, c *apiClients, ref *pb.ObjectRef, 
 			}
 		}
 
-		select {
-		case <-ctx.Done():
-			return rep.abort(ctx.Err(), true)
-		case <-time.After(opWatchInterval):
+		if err := sleepCtx(ctx, opWatchInterval); err != nil {
+			return rep.abort(err, true)
 		}
 	}
 }

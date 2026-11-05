@@ -446,11 +446,26 @@ func completed(op *ichorv1alpha1.TalosOperation) bool {
 	return op.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted
 }
 
-func (f *caRotFixture) secretData() map[string][]byte {
+func (f *caRotFixture) secretData() map[string][]byte { return secretData(f.secret.Name) }
+
+// secretData is the data of the bundle Secret name.
+func secretData(name string) map[string][]byte {
+	GinkgoHelper()
+
 	var secret corev1.Secret
-	Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.secret.Name}, &secret)).To(Succeed())
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: name}, &secret)).To(Succeed())
 
 	return secret.Data
+}
+
+// editSecret changes the data of the bundle Secret name.
+func editSecret(name string, edit func(data map[string][]byte)) {
+	GinkgoHelper()
+
+	var secret corev1.Secret
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: name}, &secret)).To(Succeed())
+	edit(secret.Data)
+	Expect(k8sClient.Update(ctx, &secret)).To(Succeed())
 }
 
 func (f *caRotFixture) storedRotation() *secretsbundle.Rotation {
@@ -776,11 +791,10 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		replaced, err := yaml.Marshal(rot.Apply(f.old))
 		Expect(err).NotTo(HaveOccurred())
 
-		var secret corev1.Secret
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.secret.Name}, &secret)).To(Succeed())
-		secret.Data[secretsbundle.SecretKey] = replaced
-		delete(secret.Data, secretsbundle.RotationKey)
-		Expect(k8sClient.Update(ctx, &secret)).To(Succeed())
+		editSecret(f.secret.Name, func(data map[string][]byte) {
+			data[secretsbundle.SecretKey] = replaced
+			delete(data, secretsbundle.RotationKey)
+		})
 
 		f.runUntil(op, completed)
 		Expect(f.storedBundle().Certs.OS.Crt).To(Equal(rot.Talos.Crt))
@@ -797,10 +811,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		raw, err := rot.Marshal()
 		Expect(err).NotTo(HaveOccurred())
 
-		var secret corev1.Secret
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.secret.Name}, &secret)).To(Succeed())
-		secret.Data[secretsbundle.RotationKey] = raw
-		Expect(k8sClient.Update(ctx, &secret)).To(Succeed())
+		editSecret(f.secret.Name, func(data map[string][]byte) { data[secretsbundle.RotationKey] = raw })
 
 		op := f.newOp()
 		f.runUntil(op, completed)

@@ -6,7 +6,6 @@ import { SearchDialog } from '@/components/SearchDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
-import { Separator } from '@/components/ui/separator'
 import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from '@/components/ui/sidebar'
 import type { NavNode } from '@/lib/docs'
 
@@ -46,7 +45,6 @@ function Header({ base, version, repoUrl, onSearch }: Pick<Props, 'base' | 'vers
   return (
     <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4">
       <SidebarTrigger />
-      <Separator orientation="vertical" className="h-4 self-center" />
       {/* The brand lives in the sidebar; show it here while the sidebar is hidden or a drawer. */}
       {(isMobile || !open) && (
         <a href={base} className="flex items-center gap-2 font-semibold">

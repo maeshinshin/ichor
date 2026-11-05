@@ -23,6 +23,7 @@ export type Doc = {
   title: string
   label: string
   order?: number
+  description?: string
   editUrl: string
   body: string
   entry: Awaited<ReturnType<typeof getCollection<'docs'>>>[number]
@@ -38,9 +39,12 @@ const plain = (s: string) =>
 
 /** Section names and order for the directories the docs have today; any other directory is Title-Cased and listed after them. */
 const dirs: Record<string, { label: string; order: number; newestFirst?: boolean }> = {
-  guides: { label: 'Guides', order: 10 },
-  design: { label: 'Concepts', order: 20 },
-  reference: { label: 'Reference', order: 30 },
+  guides: { label: 'Guides', order: 20 },
+  concepts: { label: 'Concepts', order: 30 },
+  design: { label: 'Design', order: 40 },
+  reference: { label: 'Reference', order: 60 },
+  cli: { label: 'CLI', order: 50 },
+  crds: { label: 'Custom resources', order: 50 },
   adr: { label: 'Decisions', order: 90, newestFirst: true },
 }
 const titleCase = (s: string) => s.replace(/[-_]/g, ' ').replace(/^./, (c) => c.toUpperCase())
@@ -49,16 +53,15 @@ export async function getDocs(): Promise<Doc[]> {
   const entries = await getCollection('docs')
   return entries.map((entry) => {
     const route = entry.id === 'index' ? '' : entry.id
-    const title =
-      entry.data.title ??
-      (entry.body && /^# (.+)$/m.exec(entry.body)?.[1] && plain(/^# (.+)$/m.exec(entry.body)![1])) ??
-      titleCase(route.split('/').pop() || 'Overview')
+    const h1 = /^# (.+)$/m.exec((entry.body ?? '').replace(/^```[\s\S]*?^```/gm, ''))?.[1]
+    const title = entry.data.title ?? (h1 ? plain(h1) : titleCase(route.split('/').pop() || 'Overview'))
     return {
       route,
       url: route ? `${base}${route}/` : base,
       title,
       label: entry.data.sidebar_label ?? title,
       order: entry.data.sidebar_order,
+      description: entry.data.description,
       editUrl: `${repoUrl}/edit/main/docs/${entry.filePath?.split('/docs/').pop()}`,
       body: entry.body ?? '',
       entry,
@@ -110,9 +113,9 @@ export function buildNav(docs: Doc[]): NavNode[] {
   const all = nodes(t, '')
   const loose = all.filter((n) => !n.children)
   const groups = all.filter((n) => n.children)
-  const overview: NavNode[] = t.page ? [{ label: t.page.label, href: t.page.url }] : []
+  const overview: NavNode[] = t.page ? [{ label: t.page.entry.data.sidebar_label ?? 'Overview', href: t.page.url }] : []
   const start = [...overview, ...loose]
-  return [...(start.length ? [{ label: 'Overview', children: start }] : []), ...groups]
+  return [...(start.length ? [{ label: '', children: start }] : []), ...groups]
 }
 
 export function flatten(nav: NavNode[]): NavNode[] {

@@ -139,7 +139,8 @@ A cluster with no CNI:
   the tunnel (immutable afterwards). Kube-proxy is read from Talos: enabled
   gives `kubeProxyReplacement=false`, disabled gives `true`.
   `--cilium-values FILE` merges your Cilium Helm values over Ichor's defaults;
-  Ichor-owned keys are refused.
+  Ichor-owned keys are refused, and writing values needs `update` on
+  `talosclusters/cilium-values` (`ichor-admin` has it).
 - The plan says what will be installed and needs your consent. There is no
   `ichor-cni` Job and no inline manifest to remove, so hand-over completes at
   once. If adopt stops half-way, run it again.

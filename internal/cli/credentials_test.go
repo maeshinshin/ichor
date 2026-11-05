@@ -374,10 +374,7 @@ func TestCredentialsFromABundleFileWorkOffline(t *testing.T) {
 	f := newCredFixture(t, false, "")
 	t.Setenv("HOME", t.TempDir())
 
-	path, err := saveBundleFile("offline", f.old, "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := saveTestBundle(t, "offline", f.old, "")
 
 	req := f.request()
 	req.BundleFile = path
@@ -406,15 +403,9 @@ func TestBundleFromBeforeTheCurrentCAsIsRefusedUnlessForced(t *testing.T) {
 	ctx := context.Background()
 
 	// newTestBundle is shared: a bundle with CAs of its own needs a fresh one.
-	stalePath, err := saveBundleFile("stale", newFreshTestBundle(t), "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	stalePath := saveTestBundle(t, "stale", newFreshTestBundle(t), "")
 
-	curPath, err := saveBundleFile("current", f.old, "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	curPath := saveTestBundle(t, "current", f.old, "")
 
 	var errw bytes.Buffer
 
@@ -458,10 +449,7 @@ func TestBundleWithTheNewCAsIsCurrentDuringARotation(t *testing.T) {
 	certs.OS, certs.K8s = f.rot.Talos, f.rot.Kubernetes
 	withNew.Certs = &certs
 
-	path, err := saveBundleFile("new", &withNew, "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := saveTestBundle(t, "new", &withNew, "")
 
 	var errw bytes.Buffer
 	if _, err := checkBundleCurrent(context.Background(), f.k8s, &errw, path, f.request(), false); err != nil || errw.Len() != 0 {

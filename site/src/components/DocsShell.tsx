@@ -6,7 +6,7 @@ import { SearchDialog } from '@/components/SearchDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
-import { SidebarInset, SidebarProvider, SidebarTrigger, useSidebar } from '@/components/ui/sidebar'
+import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import type { NavNode } from '@/lib/docs'
 
 const sidebarKey = 'ichor-docs-sidebar'
@@ -39,19 +39,17 @@ function ThemeToggle() {
 }
 
 function Header({ base, version, repoUrl, onSearch }: Pick<Props, 'base' | 'version' | 'repoUrl'> & { onSearch: () => void }) {
-  const { isMobile, open } = useSidebar()
   const [mac, setMac] = useState(false)
   useEffect(() => setMac(/mac|iphone|ipad/i.test(navigator.platform)), [])
   return (
     <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4">
       <SidebarTrigger />
-      {/* The brand lives in the sidebar; show it here while the sidebar is hidden or a drawer. */}
-      {(isMobile || !open) && (
-        <a href={base} className="flex items-center gap-2 font-semibold">
-          Ichor
-          <Badge variant="secondary">{version}</Badge>
-        </a>
-      )}
+      {/* The brand lives in the sidebar; show it here on phones (a drawer) and while the desktop sidebar is hidden.
+          Shown by CSS, so the first paint already matches the stored state (html[data-sidebar]). */}
+      <a href={base} className="hidden items-center gap-2 font-semibold max-md:flex [[data-sidebar=closed]_&]:flex">
+        Ichor
+        <Badge variant="secondary">{version}</Badge>
+      </a>
       <div className="ml-auto flex items-center gap-2">
         <Button variant="outline" className="md:w-64 md:justify-start" onClick={onSearch} aria-label="Search the docs">
           <Search />
@@ -98,6 +96,7 @@ export function DocsShell({ nav, current, base, version, repoUrl, children }: Pr
       open={open}
       onOpenChange={(v) => {
         setOpen(v)
+        document.documentElement.dataset.sidebar = v ? 'open' : 'closed'
         try {
           localStorage.setItem(sidebarKey, v ? 'open' : 'closed')
         } catch {

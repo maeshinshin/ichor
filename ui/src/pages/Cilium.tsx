@@ -14,7 +14,7 @@ import { EmptyNote, PageSkeleton } from '@/components/PageStates'
 import { CiliumUpgradeDialog } from '@/components/CiliumUpgradeDialog'
 import type { GetCiliumValuesResponse } from '@/gen/ichor/v1alpha1/cni_pb'
 import type { ObjectRef } from '@/gen/ichor/v1alpha1/common_pb'
-import { canApply, canEdit, diffLines, type DiffKind } from '@/lib/cilium'
+import { canApply, diffLines, type DiffKind } from '@/lib/cilium'
 import { cniClient } from '@/lib/connect'
 import { detectedCni, isCniUnmanaged } from '@/lib/cni'
 import { describeError, type ErrorShape } from '@/lib/errors'
@@ -74,7 +74,7 @@ export function Cilium() {
     )
   }
 
-  const editable = canEdit(perms)
+  const editable = !!perms?.clusterUpdate
 
   return (
     <div class="space-y-4">

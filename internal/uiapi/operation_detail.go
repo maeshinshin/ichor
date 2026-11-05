@@ -176,8 +176,6 @@ func describeOperation(out *pb.Operation, op *ichorv1alpha1.TalosOperation, clus
 	add("Cluster", op.Spec.ClusterRef.Name)
 	add("Kind", op.Spec.Kind)
 
-	machines := len(op.Status.Machines)
-
 	switch op.Spec.Kind {
 	case ichorv1alpha1.TalosOperationKindTalos:
 		out.Summary = "Upgrade Talos"
@@ -235,19 +233,15 @@ func describeOperation(out *pb.Operation, op *ichorv1alpha1.TalosOperation, clus
 
 		add("CAs", strings.Join(caRotationTargets(op), ", "))
 
-		if rs := op.Status.CARotation; rs != nil && len(rs.EtcdRestarted) > 0 {
+		if rs := op.Status.CARotation; rs != nil {
 			add("control planes rebooted in this stage", strings.Join(rs.EtcdRestarted, ", "))
-		}
-
-		if rs := op.Status.CARotation; rs != nil && rs.EtcdRebooting != "" {
 			add("control plane rebooting now", rs.EtcdRebooting)
 		}
-
 	case ichorv1alpha1.TalosOperationKindKeyRotation:
 		describeKeyRotation(out, op, add)
 	case ichorv1alpha1.TalosOperationKindConfig:
 		out.Summary = "Apply configuration to the machines with pending changes"
-		if machines > 0 {
+		if machines := len(op.Status.Machines); machines > 0 {
 			out.Summary = fmt.Sprintf("Apply configuration to %d machine%s", machines, plural(machines))
 		}
 	case ichorv1alpha1.TalosOperationKindNode:
@@ -348,12 +342,7 @@ func (s *Server) ListOperationEvents(
 		until = op.Status.FinishedAt.Add(eventSlack)
 	}
 
-	type timed struct {
-		at time.Time
-		ev *pb.OperationEvent
-	}
-
-	var found []timed
+	out := &pb.ListOperationEventsResponse{}
 
 	for i := range list.Items {
 		e := &list.Items[i]
@@ -369,18 +358,13 @@ func (s *Server) ListOperationEvents(
 			continue
 		}
 
-		found = append(found, timed{at, &pb.OperationEvent{
+		out.Events = append(out.Events, &pb.OperationEvent{
 			Time: timestamppb.New(at), Type: e.Type, Reason: e.Reason, Message: e.Message,
 			ObjectKind: inv.Kind, ObjectName: inv.Name,
-		}})
+		})
 	}
 
-	slices.SortStableFunc(found, func(a, b timed) int { return a.at.Compare(b.at) })
-
-	out := &pb.ListOperationEventsResponse{}
-	for _, f := range found {
-		out.Events = append(out.Events, f.ev)
-	}
+	slices.SortStableFunc(out.Events, func(a, b *pb.OperationEvent) int { return a.GetTime().AsTime().Compare(b.GetTime().AsTime()) })
 
 	return connect.NewResponse(out), nil
 }

@@ -28,7 +28,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -154,8 +153,8 @@ var _ = Describe("TalosClusterReconciler", func() {
 		}
 
 		resetNode := func(resetAt time.Time) {
-			node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{
-				GenerateName: "reset-node-", Annotations: map[string]string{nodeResetByIchorAnnotation: resetAt.UTC().Format(time.RFC3339)},
+			node := &corev1.Node{GenerateName: "reset-node-", Annotations: map[string]string{
+				nodeResetByIchorAnnotation: resetAt.UTC().Format(time.RFC3339),
 			}}
 			Expect(k8sClient.Create(ctx, node)).To(Succeed())
 			DeferCleanup(func() { Expect(k8sClient.Delete(ctx, node)).To(Succeed()) })
@@ -180,7 +179,7 @@ var _ = Describe("TalosClusterReconciler", func() {
 		})
 
 		It("watches only the Nodes that carry the reset marker", func() {
-			marked := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{nodeResetByIchorAnnotation: "x"}}}
+			marked := &corev1.Node{Annotations: map[string]string{nodeResetByIchorAnnotation: "x"}}
 			Expect(isResetNode(marked)).To(BeTrue())
 			Expect(isResetNode(&corev1.Node{})).To(BeFalse())
 		})

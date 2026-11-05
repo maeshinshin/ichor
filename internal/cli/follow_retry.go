@@ -72,6 +72,13 @@ func isTransient(err error) bool {
 
 	msg := err.Error()
 
+	// An admission webhook that cannot be called (its pod restarts with the control plane it runs on)
+	// arrives as a 500 InternalError "failed calling webhook ...: <cause>", whatever the cause. A webhook
+	// that answered and refused is Forbidden or Invalid, and stays an answer.
+	if strings.Contains(msg, "failed calling webhook") && !apierrors.IsForbidden(err) && !apierrors.IsInvalid(err) {
+		return true
+	}
+
 	// etcd timing out behind a healthy apiserver arrives as a 500 InternalError carrying its text.
 	return strings.Contains(msg, "etcdserver: request timed out") || strings.Contains(msg, "etcdserver: leader changed") ||
 		strings.Contains(msg, "connection refused") || strings.Contains(msg, "connection reset") ||

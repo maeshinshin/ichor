@@ -26,6 +26,7 @@ import (
 	"connectrpc.com/connect"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -37,7 +38,16 @@ const (
 
 const cniTestValues = "debug:\n  enabled: true\n"
 
+// cniTestClient is the in-process server over a fake cluster whose caller holds every right.
 func cniTestClient(t *testing.T, yes bool) (*apiClients, client.Client) {
+	t.Helper()
+
+	return cniTestClientAs(t, yes, true)
+}
+
+// cniTestClientAs answers every SelfSubjectAccessReview with allowed: the right to change the Cilium
+// values (update on talosclusters/cilium-values, ADR 0131) is the one the commands ask.
+func cniTestClientAs(t *testing.T, yes, allowed bool) (*apiClients, client.Client) {
 	t.Helper()
 
 	setAPITestFlags(t, yes)
@@ -45,7 +55,27 @@ func cniTestClient(t *testing.T, yes bool) (*apiClients, client.Client) {
 	cl := newTestCluster()
 	cl.Spec.CNI.KubeProxy = cniTestEnabled
 
-	return freshClients(t, []client.Object{cl})
+	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cl).Build()
+
+	return localClients(apiOpts, apiDeps{K8s: reviewAs(allowed, k8s)}), k8s
+}
+
+func TestCniValuesSetWithoutTheAdminRightRefusesBeforeAskingAnything(t *testing.T) {
+	c, k8s := cniTestClientAs(t, false, false)
+
+	// The prompt would read "y" from here: the refusal must come first.
+	in := strings.NewReader("y\n")
+
+	var errw bytes.Buffer
+
+	err := runCniValuesSet(context.Background(), c, in, &bytes.Buffer{}, &errw, "", cniTestValues)
+	if err == nil || !strings.Contains(err.Error(), "talosclusters/cilium-values") || !strings.Contains(err.Error(), "ichor-admin") {
+		t.Fatalf("want a refusal naming talosclusters/cilium-values and ichor-admin, got %v", err)
+	}
+
+	if strings.Contains(errw.String(), "Effect on") || cniStoredValues(t, k8s) != "" {
+		t.Fatalf("nothing may be shown or written: %q / %q", errw.String(), cniStoredValues(t, k8s))
+	}
 }
 
 func cniStoredValues(t *testing.T, k8s client.Client) string {

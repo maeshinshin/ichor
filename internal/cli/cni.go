@@ -133,7 +133,10 @@ var cniValuesCmd = &cobra.Command{
 	Use:   "values",
 	Short: "Show, edit and diff Cilium's Helm values (the user layer on the TalosCluster)",
 	Long: `Cilium's Helm values are Ichor's defaults, then your layer (spec.cni.cilium.values)
-merged on top, then the keys Ichor owns. Only your layer is written; the controller applies it.`,
+merged on top, then the keys Ichor owns. Only your layer is written; the controller applies it.
+
+Changing your layer (set, edit) needs the verb "update" on talosclusters/cilium-values, which only the
+ichor-admin role holds: the chart can run privileged pods on every node. Reading and diffing need none.`,
 }
 
 var cniValuesGetCmd = &cobra.Command{
@@ -308,10 +311,31 @@ func runCniValuesDiff(ctx context.Context, c *apiClients, out io.Writer, cluster
 	return err
 }
 
+// cniMayEdit refuses before anything is asked or opened when the caller may not change the values
+// (ADR 0131): the right is ichor-admin's, not ichor-operator's.
+func cniMayEdit(cur *pb.GetCiliumValuesResponse) error {
+	if cur.GetCanEdit() {
+		return nil
+	}
+
+	return fmt.Errorf("cni values: you may not change the Cilium values: Kubernetes RBAC does not grant you the %q verb on talosclusters/%s, "+
+		"which only the ichor-admin role holds (the chart can run privileged pods on every node)",
+		ichorv1alpha1.CiliumValuesVerb, ichorv1alpha1.CiliumValuesSubresource)
+}
+
 // runCniValuesSet validates text, shows the diff, asks (unless --yes) and writes it.
 func runCniValuesSet(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, cluster, text string) error {
 	ref, err := resolveCluster(ctx, c, cluster)
 	if err != nil {
+		return err
+	}
+
+	cur, err := c.Cni.GetCiliumValues(ctx, connect.NewRequest(&pb.GetCiliumValuesRequest{Cluster: ref}))
+	if err != nil {
+		return err
+	}
+
+	if err := cniMayEdit(cur.Msg); err != nil {
 		return err
 	}
 
@@ -363,6 +387,10 @@ func runCniValuesEdit(
 
 	cur, err := c.Cni.GetCiliumValues(ctx, connect.NewRequest(&pb.GetCiliumValuesRequest{Cluster: ref}))
 	if err != nil {
+		return err
+	}
+
+	if err := cniMayEdit(cur.Msg); err != nil {
 		return err
 	}
 

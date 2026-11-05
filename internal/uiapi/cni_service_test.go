@@ -38,6 +38,7 @@ import (
 const (
 	cniViewerUser   = "cni-viewer"
 	cniOperatorUser = "cni-operator"
+	cniAdminUser    = "cni-admin"
 	cniVerbGet      = "get"
 	cniVerbList     = "list"
 	cniVerbCreate   = "create"
@@ -73,6 +74,7 @@ var _ = Describe("CniService", func() {
 		for user, rules := range map[string][]rbacv1.PolicyRule{
 			cniViewerUser:   {read, {APIGroups: createOps.APIGroups, Resources: createOps.Resources, Verbs: []string{cniVerbList}}},
 			cniOperatorUser: {read, write, createOps},
+			cniAdminUser:    {read, write, createOps, {APIGroups: createOps.APIGroups, Resources: []string{"talosclusters/cilium-values"}, Verbs: []string{"update"}}},
 		} {
 			name := "cni-test-" + user
 			Expect(client.IgnoreAlreadyExists(k8sClient.Create(ctx, &rbacv1.ClusterRole{Name: name, Rules: rules}))).To(Succeed())
@@ -174,14 +176,14 @@ var _ = Describe("CniService", func() {
 	})
 
 	It("refuses an owned key and writes nothing", func() {
-		err := set(cniOperatorUser, "ipam:\n  mode: cluster-pool\n")
+		err := set(cniAdminUser, "ipam:\n  mode: cluster-pool\n")
 		Expect(connect.CodeOf(err)).To(Equal(connect.CodeInvalidArgument))
 		Expect(err.Error()).To(ContainSubstring("ipam.mode"))
 		Expect(stored()).To(BeNil())
 	})
 
 	It("refuses a document that is not a mapping", func() {
-		Expect(connect.CodeOf(set(cniOperatorUser, "- a\n- b\n"))).To(Equal(connect.CodeInvalidArgument))
+		Expect(connect.CodeOf(set(cniAdminUser, "- a\n- b\n"))).To(Equal(connect.CodeInvalidArgument))
 	})
 
 	// The operator's replicas follow the Nodes the cluster has, as the controller hashes and applies them
@@ -237,7 +239,7 @@ var _ = Describe("CniService", func() {
 			Expect(diff.Msg.GetDiff()).To(ContainSubstring("+  enabled: true"))
 			Expect(diff.Msg.GetDiff()).NotTo(ContainSubstring("replicas"))
 
-			written, err := s.SetCiliumValues(asCniUser(cniOperatorUser), connect.NewRequest(&pb.SetCiliumValuesRequest{
+			written, err := s.SetCiliumValues(asCniUser(cniAdminUser), connect.NewRequest(&pb.SetCiliumValuesRequest{
 				Cluster: ref, UserYaml: cniDebugOn,
 			}))
 			Expect(err).NotTo(HaveOccurred())
@@ -260,18 +262,35 @@ var _ = Describe("CniService", func() {
 		}, Entry("once the cluster has three Nodes", 3), Entry("when there are no Nodes to count", 0))
 	})
 
-	It("lets an operator set the values, shows them in the diff, and clears them again", func() {
+	// ADR 0131: changing the values needs update on talosclusters/cilium-values, which only an admin holds.
+	It("tells who may edit the values and refuses a write without update on talosclusters/cilium-values", func() {
+		for user, want := range map[string]bool{cniViewerUser: false, cniOperatorUser: false, cniAdminUser: true} {
+			got, err := s.GetCiliumValues(asCniUser(user), connect.NewRequest(&pb.GetCiliumValuesRequest{Cluster: ref}))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(got.Msg.GetCanEdit()).To(Equal(want), user)
+		}
+
+		err := set(cniOperatorUser, cniDebugOn)
+		Expect(connect.CodeOf(err)).To(Equal(connect.CodePermissionDenied))
+		Expect(err.Error()).To(ContainSubstring("talosclusters/cilium-values"))
+		Expect(stored()).To(BeNil())
+
+		// Leaving the layer as it is changes nothing, so it asks for nothing.
+		Expect(set(cniOperatorUser, "")).To(Succeed())
+	})
+
+	It("lets an admin set the values, shows them in the diff, and clears them again", func() {
 		diff, err := s.DiffCiliumValues(asCniUser(cniViewerUser), connect.NewRequest(&pb.DiffCiliumValuesRequest{
 			Cluster: ref, UserYaml: cniDebugOn,
 		}))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(diff.Msg.GetDiff()).To(ContainSubstring("+  enabled: true"))
 
-		resp, err := s.SetCiliumValues(asCniUser(cniOperatorUser), connect.NewRequest(&pb.SetCiliumValuesRequest{
+		resp, err := s.SetCiliumValues(asCniUser(cniAdminUser), connect.NewRequest(&pb.SetCiliumValuesRequest{
 			Cluster: ref, UserYaml: cniDebugOn,
 		}))
 		Expect(err).NotTo(HaveOccurred())
-		Expect(resp.Msg.GetAudit().GetActor()).To(Equal(cniOperatorUser))
+		Expect(resp.Msg.GetAudit().GetActor()).To(Equal(cniAdminUser))
 		Expect(resp.Msg.GetEffectiveYaml()).To(ContainSubstring("debug"))
 		Expect(stored()).To(HaveKeyWithValue("debug", map[string]any{"enabled": true}))
 
@@ -285,7 +304,7 @@ var _ = Describe("CniService", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(same.Msg.GetDiff()).To(BeEmpty())
 
-		Expect(set(cniOperatorUser, "")).To(Succeed())
+		Expect(set(cniAdminUser, "")).To(Succeed())
 		Expect(stored()).To(BeNil())
 	})
 

@@ -63,7 +63,7 @@ var _ = Describe("Cilium values gate on TalosCluster", func() {
 		}
 		bindRole("cilium-gate-operator", operator, write)
 		bindRole("cilium-gate-admin", valueAdmin, write, rbacv1.PolicyRule{
-			APIGroups: []string{ichorGroup}, Resources: []string{"talosclusters/" + CiliumValuesSubresource}, Verbs: []string{CiliumValuesVerb},
+			APIGroups: []string{ichorGroup}, Resources: []string{"talosclusters/" + ichorv1alpha1.CiliumValuesSubresource}, Verbs: []string{ichorv1alpha1.CiliumValuesVerb},
 		})
 	})
 

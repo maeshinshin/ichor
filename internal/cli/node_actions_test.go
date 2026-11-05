@@ -83,12 +83,13 @@ func TestNodeRebootShowsThePlanAndDeclineWritesNothing(t *testing.T) {
 	}
 }
 
+// --yes skips only the question: the plan is still printed and one node operation is written.
 func TestNodeRebootYesCreatesOneNodeOperation(t *testing.T) {
 	c, k8s := nodeActionClients(t, true)
 
-	var out bytes.Buffer
+	var errw bytes.Buffer
 
-	if err := runNodeAction(context.Background(), c, strings.NewReader(""), &out, &bytes.Buffer{},
+	if err := runNodeAction(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &errw,
 		nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_REBOOT}); err != nil {
 		t.Fatal(err)
 	}
@@ -97,17 +98,6 @@ func TestNodeRebootYesCreatesOneNodeOperation(t *testing.T) {
 	if len(ops) != 1 || ops[0].Spec.Kind != ichorv1alpha1.TalosOperationKindNode ||
 		ops[0].Spec.Node.MachineRef.Name != testMachineName || ops[0].Spec.Node.Action != ichorv1alpha1.NodeActionReboot {
 		t.Fatalf("operations = %+v", ops)
-	}
-}
-
-func TestNodeActionYesStillPrintsThePlan(t *testing.T) {
-	c, _ := nodeActionClients(t, true)
-
-	var errw bytes.Buffer
-
-	if err := runNodeAction(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &errw,
-		nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_REBOOT}); err != nil {
-		t.Fatal(err)
 	}
 
 	if !strings.Contains(errw.String(), "Reboot node") || strings.Contains(errw.String(), "Proceed?") {

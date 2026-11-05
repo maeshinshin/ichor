@@ -46,6 +46,10 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3)
         var d = s ? s === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
         document.documentElement.classList.toggle('dark', d)
       } catch (e) {}
+      // Desktop sidebar state before first paint (same key as DocsShell).
+      try {
+        document.documentElement.dataset.sidebar = localStorage.getItem('ichor-docs-sidebar') === 'closed' ? 'closed' : 'open'
+      } catch (e) {}
     </script>
   </head>
   <body>

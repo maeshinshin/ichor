@@ -94,12 +94,11 @@ const usersRoute: NavRoute = { path: '/users', label: 'nav.users', Icon: UsersIc
 const settingsRoute: NavRoute = { path: '/settings', label: 'nav.settings', Icon: SettingsIcon, section: '' }
 
 function navGroups(usersEnabled: boolean): { label: Key; routes: NavRoute[] }[] {
-  const groups: { label: Key; routes: NavRoute[] }[] = [
+  return [
     { label: 'nav.group.cluster', routes: [overviewRoute, nodesRoute, configRoute, ciliumRoute] },
     { label: 'nav.group.activity', routes: [operationsRoute, backupsRoute] },
     { label: 'nav.group.admin', routes: [...(usersEnabled ? [usersRoute] : []), settingsRoute] },
   ]
-  return groups.filter((g) => g.routes.length > 0)
 }
 
 // The nav entry is current on its list page and on the detail pages under it.

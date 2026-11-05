@@ -44,6 +44,8 @@ const LOG_SOURCES: { value: string; label: Key | string; wire: string }[] = [
   { value: 'machined', label: 'machined', wire: 'machined' },
 ]
 
+const labelText = (label: string) => (label.startsWith('node.') ? t(label as Key) : label)
+
 // A render error in the log list must not take the whole page down
 // (preact unmounts the tree on an uncaught render error).
 class LogBoundary extends Component<{ children: ComponentChildren }, { error: Error | null }> {
@@ -80,10 +82,7 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
   const listRef = useRef<HTMLDivElement>(null)
   const [wrap, setWrap] = useState(true)
   const service = LOG_SOURCES.find((s) => s.value === source)?.wire ?? ''
-  const sourceLabel = (() => {
-    const label = LOG_SOURCES.find((s) => s.value === source)?.label ?? source
-    return label.startsWith('node.') ? t(label as Key) : label
-  })()
+  const sourceLabel = labelText(LOG_SOURCES.find((s) => s.value === source)?.label ?? source)
   // One string for the copy button, built only when the lines change.
   const copyText = useMemo(() => entries.map((e) => formatTimestamp(e.item.time) + ' ' + e.item.message).join('\n'), [entries])
 
@@ -190,7 +189,7 @@ function LogsSection({ namespace, name }: { namespace: string; name: string }) {
               <SelectContent>
                 {LOG_SOURCES.map((s) => (
                   <SelectItem key={s.value} value={s.value}>
-                    {s.label.startsWith('node.') ? t(s.label as Key) : s.label}
+                    {labelText(s.label)}
                   </SelectItem>
                 ))}
               </SelectContent>

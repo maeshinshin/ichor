@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -63,16 +62,7 @@ spec:
 func policyExists(t *testing.T, ns string) bool {
 	t.Helper()
 
-	var p unstructured.Unstructured
-	p.SetAPIVersion("cilium.io/v2")
-	p.SetKind("CiliumNetworkPolicy")
-
-	err := k8sClient.Get(context.Background(), types.NamespacedName{Namespace: ns, Name: "ichor-default-deny"}, &p)
-	if err != nil && !apierrors.IsNotFound(err) && !strings.Contains(err.Error(), "no matches for kind") {
-		t.Fatalf("getting the policy: %v", err)
-	}
-
-	return err == nil
+	return exists(t, "cilium.io/v2", "CiliumNetworkPolicy", ns, "ichor-default-deny")
 }
 
 // The policies are applied last and only when Cilium's CRD is Established: an upgrade on a

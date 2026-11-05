@@ -87,17 +87,23 @@ func (f *restoreFixture) putSnapshot(t time.Time, body string) (name string, pla
 	pass, err := etcdbackup.DeriveKey(f.backup.bundle)
 	Expect(err).NotTo(HaveOccurred())
 
+	name = etcdbackup.ObjectName(t)
+	f.putSealed(name, pass, plain)
+
+	return name, plain
+}
+
+// putSealed stores plain in the backup storage under name, encrypted with key.
+func (f *restoreFixture) putSealed(name string, key etcdbackup.Key, plain []byte) {
 	var buf bytes.Buffer
 
-	w, err := etcdbackup.Encrypt(&buf, pass)
+	w, err := etcdbackup.Encrypt(&buf, key)
 	Expect(err).NotTo(HaveOccurred())
 	_, err = w.Write(plain)
 	Expect(err).NotTo(HaveOccurred())
 	Expect(w.Close()).To(Succeed())
 
-	f.backup.store.objects[testBackupBase+"/"+etcdbackup.ObjectName(t)] = buf.Bytes()
-
-	return etcdbackup.ObjectName(t), plain
+	f.backup.store.objects[testBackupBase+"/"+name] = buf.Bytes()
 }
 
 // reconciler is a controller process: a new one has no memory of the old.
@@ -594,14 +600,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 
 			bad := validTestSnapshot("corrupt")
 			bad[3] ^= 0xff
-
-			var buf bytes.Buffer
-
-			w, err := etcdbackup.Encrypt(&buf, pass)
-			Expect(err).NotTo(HaveOccurred())
-			_, _ = w.Write(bad)
-			Expect(w.Close()).To(Succeed())
-			f.backup.store.objects[testBackupBase+"/"+name] = buf.Bytes()
+			f.putSealed(name, pass, bad)
 
 			expectRefused(f, f.newOp(func(op *ichorv1alpha1.TalosOperation) { op.Spec.EtcdRestore.Snapshot = name }), "does not pass its check")
 		})
@@ -610,13 +609,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			f := newRestoreFixture("")
 			name := etcdbackup.ObjectName(time.Date(2026, 6, 1, 11, 30, 0, 0, time.UTC))
 
-			var buf bytes.Buffer
-
-			w, err := etcdbackup.Encrypt(&buf, etcdbackup.Key{Current: "some-other-passphrase"})
-			Expect(err).NotTo(HaveOccurred())
-			_, _ = w.Write(validTestSnapshot("foreign"))
-			Expect(w.Close()).To(Succeed())
-			f.backup.store.objects[testBackupBase+"/"+name] = buf.Bytes()
+			f.putSealed(name, etcdbackup.Key{Current: "some-other-passphrase"}, validTestSnapshot("foreign"))
 
 			expectRefused(f, f.newOp(func(op *ichorv1alpha1.TalosOperation) { op.Spec.EtcdRestore.Snapshot = name }), "secrets bundle")
 		})

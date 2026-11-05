@@ -114,6 +114,18 @@ func TestRotateCADoneHintNamesTheNewKubeconfig(t *testing.T) {
 	}
 }
 
+// ADR 0091: the hand-off needs the operator's own kubeconfig, so rotate-ca does it with or without --follow
+// (a rotation left at AwaitingCredentials waits for it); the help says so instead of surprising anyone.
+func TestRotateCAHelpSaysTheHandoffHappensWithoutFollow(t *testing.T) {
+	if !strings.Contains(clusterRotateCACmd.Long, "with or without --follow") {
+		t.Errorf("the help does not say the hand-off is done with or without --follow:\n%s", clusterRotateCACmd.Long)
+	}
+
+	if u := clusterRotateCACmd.Flags().Lookup("follow").Usage; !strings.Contains(u, "without it") {
+		t.Errorf("--follow usage = %q", u)
+	}
+}
+
 func TestProgressLineOfAnOperationWithoutMachinesHasNoCounts(t *testing.T) {
 	line := progressLine(&pb.Operation{Ref: objectRef(testNamespace, "x"), Kind: pb.OperationKind_OPERATION_KIND_ICHOR, Phase: ichorv1alpha1.TalosOperationPhaseInProgress})
 	if line != "ichor x: phase InProgress" {

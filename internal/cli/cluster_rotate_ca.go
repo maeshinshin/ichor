@@ -110,8 +110,10 @@ This command waits for that point while your current credentials still work, the
   (next to your current ones, with the suffix ` + credentialsSuffix + `; your current files are not
   touched; mode 0600),
 
-checks that the new kubeconfig authenticates, and only then lets the operation go on. The files'
-contents are never printed. If this command is interrupted while the operation waits, run
+checks that the new kubeconfig authenticates, and only then lets the operation go on. The hand-off
+needs your own kubeconfig, so this command does it with or without --follow: it stays until the
+operation has gone on (a few seconds to a few minutes), then returns, and the rest of the rotation
+runs in the controller. The files' contents are never printed. If this command is interrupted while the operation waits, run
 'ichor cluster credentials NAME --acknowledge' with your current kubeconfig. If you lost both,
 'ichor cluster credentials NAME --bundle FILE' makes credentials from a current bundle file.
 
@@ -383,7 +385,7 @@ func watchCARotation(ctx context.Context, k8s ctrlclient.Client, namespace, name
 func init() {
 	clusterCmd.AddCommand(clusterRotateCACmd)
 	clusterRotateCACmd.Flags().BoolVar(&clusterRotateCAFollow, "follow", false,
-		"after the credential hand-off, follow the rotation until it completes or fails")
+		"after the credential hand-off, follow the rotation until it completes or fails (without it the command still does the hand-off, then returns)")
 	clusterRotateCACmd.Flags().StringSliceVar(&clusterRotateCATargets, "ca", nil,
 		"the CAs to replace: talos, kubernetes, etcd, kubernetes-aggregator (default: talos and kubernetes)")
 	clusterRotateCACmd.Flags().BoolVar(&clusterRotateCAAll, "all", false, "replace all four CAs")

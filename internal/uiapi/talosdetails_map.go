@@ -18,6 +18,7 @@ package uiapi
 
 import (
 	"net/netip"
+	"slices"
 	"strings"
 
 	"github.com/siderolabs/talos/pkg/machinery/resources/block"
@@ -69,17 +70,7 @@ func redactKernelArgs(args []string) []string {
 		}
 
 		lower := strings.ToLower(key)
-		redact := false
-
-		for _, f := range sensitiveArgFragments {
-			if strings.Contains(lower, f) {
-				redact = true
-
-				break
-			}
-		}
-
-		if redact {
+		if slices.ContainsFunc(sensitiveArgFragments, func(f string) bool { return strings.Contains(lower, f) }) {
 			out = append(out, key+"="+redactedValue)
 		} else {
 			out = append(out, a)

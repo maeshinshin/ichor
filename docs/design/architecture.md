@@ -543,7 +543,9 @@ Values. Cilium's live values are Ichor defaults, then the user's layer in
 KubePrism address, `kubeProxyReplacement`, `tunnelProtocol`). They are edited
 in the UI (Cilium page) or with `ichor cni values get|set|edit|diff`, validated
 by one function in the webhook, the backend and the controller, and applied by
-the Job.
+the Job. Changing the layer needs `update` on `talosclusters/cilium-values`, held
+by `ichor-admin` only (the chart can run privileged pods on every node), and the
+`*.secretsNamespace.name` keys are Ichor-owned, pinned to `cilium-secrets` (ADR 0131).
 The operator runs one replica while the cluster has one node and the chart's two
 from then on, counted from the Nodes that exist, and a Helm Job that keeps failing
 with the same values is retried with a growing backoff (ADR 0113, amendment of 2026-11-04).

@@ -96,3 +96,7 @@ The grant rule in decision 2 (and ADR 0108) was a literal match on the requester
 ## Amendment 2026-11-05: reverting a refused or failed edit clears the condition
 
 Found on hardware (lane H): after an edit was refused (`InvalidValues`) or its Job failed (`JobFailed`), reverting the values to exactly the applied ones left `CNIValuesApplied` False and `status.cni.jobFailures` set for good, because the reconcile returned at "the applied hash equals the wanted hash" before it wrote anything. That path now sets `CNIValuesApplied` True with reason `Applied` (the success path's reason and message) and clears `jobFailures` and `jobFailuresHash`, and writes status only when one of them changes. No Job runs, the lock is not taken and `spec` is not touched.
+
+## Amendment 2026-11-05: changing the Cilium values is an admin's right (ADR 0131)
+
+Decision 1 made the webhook check what the values contain, not who writes them. A value that passes the check can still be harmful by design: the Cilium chart renders `extraContainers`, `extraHostPathMounts` and image overrides into pods the Helm Job (a near-cluster-admin identity) creates on every node. The TalosCluster admission handler now also refuses a create or an update that changes `spec.cni.cilium.values` unless the requester holds `update` on `talosclusters/cilium-values`, which only `ichor-admin` holds; the UI backend and the CLI ask the same question first. The five `*.secretsNamespace.name` chart values became Ichor-owned keys, so this ADR's owned-key check refuses them.

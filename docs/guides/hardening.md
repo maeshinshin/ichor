@@ -385,6 +385,26 @@ planes and leaves it out of workers, whatever layer the patch is on. The `TalosC
 admitted with a warning naming the roles and namespaces. An update that does not
 touch the documents is not re-checked, so a patch stored earlier stays editable.
 
+## Cilium Helm values
+
+`spec.cni.cilium.values` is the Helm values of the Cilium chart, and the Helm Job
+that applies them can create privileged, host-network pods with host paths on
+every node (the chart takes `extraContainers`, `extraHostPathMounts`, image
+overrides and the like). A user who could write the values could therefore become
+root on the nodes. So changing them, from the UI, `ichor cni values set|edit`,
+`ichor adopt --cilium-values` or `kubectl`, needs the verb `update` on
+`talosclusters/cilium-values` (ADR 0131). Only the built-in `ichor-admin` role
+holds it; `ichor-operator` can still edit everything else on the cluster and start a
+Cilium upgrade, but its writes are refused when they change the values (an edit that
+leaves them as they are is not). The webhook checks the right as the requesting
+user, so a hand-written CR obeys it too.
+
+The namespace of the Roles that let Cilium read Secrets is pinned as well: the five
+`*.secretsNamespace.name` values (`ingressController`, `gatewayAPI`, `envoyConfig`,
+`bgpControlPlane` and `tls`) are set by Ichor to `cilium-secrets` and refused as
+"set by Ichor" if you set them. If you use BGP with authentication Secrets, put them in
+`cilium-secrets` (the chart's own default for BGP is `kube-system`).
+
 ## The local secrets bundle
 
 `~/.ichor/clusters/<name>/secrets.yaml` holds every CA key of the cluster. Since

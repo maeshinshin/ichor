@@ -20,11 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/types"
-
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/clusterlock"
 )
 
 // Two TalosOperations created outside the UI/API service (kubectl, GitOps) must not run their
@@ -37,15 +33,12 @@ var _ = Describe("two TalosOperations on one cluster", func() {
 		second := newOpTestOperation(cluster.Name)
 
 		// The first operation's machine is still rebooting, so it keeps the lock between reconciles.
-		firstFake := &fakeAdvancer{outcomes: map[string]advanceOutcome{cp.Name: {done: false}}}
-		firstReconciler := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: firstFake.Advance}
+		firstReconciler, firstFake := newOpTestReconciler(map[string]advanceOutcome{cp.Name: {done: false}})
 
-		_, err := reconcileOperation(firstReconciler, first)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(firstReconciler, first)
 		Expect(firstFake.calls).To(HaveLen(1))
 
-		secondFake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
-		secondReconciler := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: secondFake.Advance}
+		secondReconciler, secondFake := newOpTestReconciler(nil)
 
 		result, err := reconcileOperation(secondReconciler, second)
 		Expect(err).NotTo(HaveOccurred())
@@ -55,19 +48,16 @@ var _ = Describe("two TalosOperations on one cluster", func() {
 		got := fetchOperation(second)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		expectPausedBecause(got, reasonOperationLockHeld)
-		Expect(apimeta.FindStatusCondition(got.Status.Conditions, conditionOperationPaused).Message).
+		Expect(pausedMessage(got)).
 			To(ContainSubstring(first.Name), "the message names the operation that holds the lock")
 
 		// The first finishes: the lock is freed and the second proceeds.
 		firstFake.outcomes = map[string]advanceOutcome{}
-		_, err = reconcileOperation(firstReconciler, first)
-		Expect(err).NotTo(HaveOccurred())
-		_, err = reconcileOperation(firstReconciler, first)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(firstReconciler, first)
+		mustReconcileOperation(firstReconciler, first)
 		Expect(fetchOperation(first).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
 
-		_, err = reconcileOperation(secondReconciler, second)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(secondReconciler, second)
 		Expect(secondFake.calls).To(HaveLen(1))
 	})
 
@@ -79,8 +69,7 @@ var _ = Describe("two TalosOperations on one cluster", func() {
 		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{cp.Name: {done: false}}}
 		for range 3 { // a fresh reconciler each time is a restarted controller
 			r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
-			_, err := reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
+			mustReconcileOperation(r, op)
 		}
 		Expect(fake.calls).To(HaveLen(3))
 		Expect(fetchOperation(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
@@ -90,18 +79,16 @@ var _ = Describe("two TalosOperations on one cluster", func() {
 	It("takes over a lease held by a deleted operation, and by one paused on a failed step", func() {
 		cluster := newOpTestCluster()
 		newOpTestMachine(cluster.Name, "controlplane", "gone-cp1")
-		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+		lock := opTestLock(cluster)
 
 		deleted := newOpTestOperation(cluster.Name)
 		Expect(lock.Acquire(ctx, operationLockIdentity(deleted))).To(Succeed())
 		Expect(k8sClient.Delete(ctx, deleted)).To(Succeed())
 
-		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
-		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+		r, fake := newOpTestReconciler(nil)
 
 		next := newOpTestOperation(cluster.Name)
-		_, err := reconcileOperation(r, next)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, next)
 		Expect(fake.calls).To(HaveLen(1), "the lease of a deleted operation is not waited for")
 
 		failed := newOpTestOperation(cluster.Name)
@@ -112,8 +99,7 @@ var _ = Describe("two TalosOperations on one cluster", func() {
 		Expect(lock.Acquire(ctx, operationLockIdentity(failed))).To(Succeed())
 
 		another := newOpTestOperation(cluster.Name)
-		_, err = reconcileOperation(r, another)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, another)
 		Expect(fake.calls).To(HaveLen(2), "an operation paused on a failed step does not hold the cluster")
 	})
 
@@ -126,15 +112,13 @@ var _ = Describe("two TalosOperations on one cluster", func() {
 		newOpTestMachine(cluster.Name, "controlplane", "old-cp1")
 		op := newOpTestOperation(cluster.Name)
 
-		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+		lock := opTestLock(cluster)
 		Expect(lock.Acquire(ctx, controllerIdentity)).To(Succeed())
 
-		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
-		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+		r, fake := newOpTestReconciler(nil)
 
 		// This operation has started nothing yet, so the old lease is not its own: it waits.
-		_, err := reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 		Expect(fake.calls).To(BeEmpty())
 		expectPausedBecause(fetchOperation(op), reasonOperationLockHeld)
 	})
@@ -146,25 +130,22 @@ var _ = Describe("two TalosOperations on one cluster", func() {
 		op := newOpTestOperation(cluster.Name)
 
 		holder := newOpTestMachine(cluster.Name, "worker", "mh-w1")
-		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
+		lock := opTestLock(cluster)
 		Expect(lock.Acquire(ctx, machineLockIdentity(holder))).To(Succeed())
 
-		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
-		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
+		r, fake := newOpTestReconciler(nil)
 
-		_, err := reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 		Expect(fake.calls).To(BeEmpty())
 
 		got := fetchOperation(op)
 		expectPausedBecause(got, reasonOperationLockHeld)
-		Expect(apimeta.FindStatusCondition(got.Status.Conditions, conditionOperationPaused).Message).
+		Expect(pausedMessage(got)).
 			To(And(ContainSubstring("TalosMachine"), ContainSubstring(holder.Name)))
 
 		Expect(k8sClient.Delete(ctx, holder)).To(Succeed())
 
-		_, err = reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 		Expect(fake.calls).To(HaveLen(1), "the lease of a deleted machine is not waited for")
 	})
 })

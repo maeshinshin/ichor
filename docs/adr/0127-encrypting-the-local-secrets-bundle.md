@@ -45,3 +45,7 @@ The user decided this ships in v0.1.0.
 ## Verification
 
 Unit tests in `internal/cli` (`bundlecrypt_test.go`, `bundlefile_crypto_test.go`, `secrets_encrypt_test.go`, `adopt_secrets_crypto_test.go`, `bundle_readers_crypto_test.go`): seal and open round trip, wrong passphrase, a damaged file, plaintext compatibility with the warning, migration (including that the file is mode 0600 and unchanged on failure), the passphrase never appearing in output or errors, the generated passphrase printed once and never when it came from a file. Hardware follow-up: run the getting-started `init` on a terminal, check the printed passphrase opens `secrets.yaml` with `age -d`, run `restore --recover-cluster` from the encrypted file with `--bundle-passphrase-file`, and `bundle-export` after a CA rotation.
+
+## Amendment: lane B hardware findings (2026-11-05)
+
+Hardware lane B passed every case run (refusal without a passphrase source, the generated passphrase on a terminal, `age -d` of the file, `secrets encrypt`, `bundle-export`, `cluster credentials --bundle`). Three small defects were fixed: an error was printed twice (cobra and `main`), now once; the plaintext-bundle warning of `cluster credentials --bundle` was printed twice because the file is read twice, now once per message per run (`warnBundle`); and the refusal of `ichor secrets encrypt` offered `--bundle-plaintext`, which that command does not have, so it now lists only the passphrase sources. Not run: `restore --recover-cluster` from the encrypted file, and `bundle-export` after a CA rotation.

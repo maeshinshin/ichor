@@ -258,6 +258,26 @@ func endpointsOfTalosconfig(path string) []string {
 	return nil
 }
 
+// retryHandoff runs one API call of the credential hand-off, waiting for the Kubernetes API while it is
+// briefly unreachable (a rotation restarts kube-apiserver, and a cluster with one control plane endpoint has
+// no other to ask) with backoff for up to followRetryWindow, and says that it is waiting. Answers that
+// retrying cannot change are returned at once.
+func retryHandoff(ctx context.Context, errw io.Writer, what string, call func() error) error {
+	announced := false
+
+	return retryTransient(ctx, &apiClients{}, errw, func() error {
+		err := call()
+		if isTransient(err) && !announced {
+			announced = true
+
+			_, _ = fmt.Fprintf(errw, "ichor: %s: the Kubernetes API is not answering (it restarts during a rotation); "+
+				"waiting for it for up to %s\n", what, followRetryWindow)
+		}
+
+		return err
+	})
+}
+
 // acknowledgeHandoff tells the controller the operator has credentials that work with both CAs, by
 // setting the hand-off annotation on the cluster's ca-rotation operation that is waiting for it. name
 // may be empty: then the one waiting operation of the cluster is used. A transient API error (the
@@ -267,7 +287,9 @@ func endpointsOfTalosconfig(path string) []string {
 func acknowledgeHandoff(ctx context.Context, k8s client.Client, namespace, cluster, name string, errw io.Writer,
 	redial func() (client.Client, error)) (string, error) {
 	var ops ichorv1alpha1.TalosOperationList
-	if err := k8s.List(ctx, &ops, client.InNamespace(namespace)); err != nil {
+	if err := retryHandoff(ctx, errw, "listing the operations", func() error {
+		return k8s.List(ctx, &ops, client.InNamespace(namespace))
+	}); err != nil {
 		return "", fmt.Errorf("listing operations: %w", err)
 	}
 

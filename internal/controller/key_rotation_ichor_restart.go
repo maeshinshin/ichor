@@ -18,9 +18,7 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -51,15 +49,7 @@ func (c *keyRun) restartIchorWorkloads(ctx context.Context) error {
 	reader := readerOrClient(c.r.APIReader, c.r.Client)
 	token := string(c.op.UID)
 
-	body, err := json.Marshal(map[string]any{"spec": map[string]any{"template": map[string]any{"metadata": map[string]any{
-		"annotations": map[string]string{
-			restartedAtAnnotation:    time.Now().UTC().Format(time.RFC3339),
-			keyRotationRestartMarker: token,
-		},
-	}}}})
-	if err != nil {
-		return err
-	}
+	body := restartPatch(keyRotationRestartMarker, token)
 
 	for _, w := range ichorDeployments {
 		var list appsv1.DeploymentList

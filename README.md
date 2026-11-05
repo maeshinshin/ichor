@@ -52,8 +52,9 @@ install.
 - Upgrades itself through the `IchorInstallation` resource.
 - Bootstraps Cilium, the only CNI (pinned 1.20.4 chart embedded in the CLI;
   `--cni-tunnel vxlan|geneve` picks its tunnel) and keeps it as a Helm release.
-  Edit its values in the UI (Cilium page) or with `ichor cni values`, upgrade
-  it with `ichor cni upgrade`, and switch kube-proxy with `ichor cni kube-proxy`.
+  An admin edits its values in the UI (Cilium page) or with `ichor cni values`;
+  upgrade it with `ichor cni upgrade`, and switch kube-proxy with
+  `ichor cni kube-proxy`.
   `ichor init` waits for the hand-over of Cilium to Ichor.
 - Locks down its own namespace with CiliumNetworkPolicies, including a
   name-based (FQDN) egress rule for ichor-ui's OIDC issuer; the controller's

@@ -321,7 +321,7 @@ export const en = {
   'talos.uki': 'Booted from a UKI',
   'talos.signedModules': 'Signed kernel modules only',
   'talos.lockdown': 'Kernel lockdown',
-  'talos.ukiKey': 'UKI signing key',
+  'talos.pcrKey': 'PCR signing key',
   'talos.unmet': 'Unmet conditions',
   'talos.kernelArgs': 'Kernel arguments',
   'talos.kernelArgsNote': 'The value of any argument that could hold a credential is hidden.',

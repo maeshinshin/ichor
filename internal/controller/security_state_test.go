@@ -30,6 +30,9 @@ import (
 // testUKIFingerprint is the UKI signing key fingerprint the fake nodes report.
 const testUKIFingerprint = "ab:cd"
 
+// testPCRFingerprint is the PCR signing key fingerprint the fake nodes report (the one Talos v1.14 fills).
+const testPCRFingerprint = "ef:01"
+
 // newSecurityCOSI is a COSI state with the two resource types ReadSecurityState reads.
 func newSecurityCOSI(t *testing.T) state.State {
 	t.Helper()
@@ -81,7 +84,7 @@ func TestReadSecurityState(t *testing.T) {
 		st := newSecurityCOSI(t)
 		putSecurityState(t, st, func(s *runtimeres.SecurityStateSpec) {
 			s.SecureBoot, s.BootedWithUKI, s.ModuleSignatureEnforced = true, true, true
-			s.UKISigningKeyFingerprint = testUKIFingerprint
+			s.UKISigningKeyFingerprint, s.PCRSigningKeyFingerprint = testUKIFingerprint, testPCRFingerprint
 		})
 		putCmdline(t, st, "talos.platform=metal lockdown=confidentiality")
 
@@ -92,7 +95,8 @@ func TestReadSecurityState(t *testing.T) {
 
 		want := SecurityState{
 			SecureBoot: true, BootedWithUKI: true, ModuleSignatureEnforced: true,
-			UKISigningKeyFingerprint: testUKIFingerprint, Cmdline: "talos.platform=metal lockdown=confidentiality",
+			UKISigningKeyFingerprint: testUKIFingerprint, PCRSigningKeyFingerprint: testPCRFingerprint,
+			Cmdline: "talos.platform=metal lockdown=confidentiality",
 		}
 		if got != want {
 			t.Errorf("got %+v, want %+v", got, want)

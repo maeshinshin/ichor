@@ -96,7 +96,7 @@ function SystemSection({ data }: { data: GetNodeTalosDetailsResponse }) {
                   </ToneBadge>
                 </Field>
                 <Field label={t('talos.lockdown')} value={s.kernelLockdown} />
-                <Field label={t('talos.ukiKey')} value={s.ukiSigningKeyFingerprint} />
+                <Field label={t('talos.pcrKey')} value={s.pcrSigningKeyFingerprint} />
               </>
             )}
           </Fields>

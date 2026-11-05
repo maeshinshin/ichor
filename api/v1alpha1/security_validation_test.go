@@ -56,11 +56,7 @@ var _ = Describe("TalosCluster spec.security", func() {
 
 	DescribeTable("firewall",
 		func(s *TalosClusterSecurity, accepted bool) {
-			if accepted {
-				Expect(create(s)).To(Succeed())
-			} else {
-				Expect(create(s)).NotTo(Succeed())
-			}
+			expectAdmitted(create(s), accepted)
 		},
 		Entry("a complete firewall is accepted", fw(nil), true),
 		Entry("disabled needs no sources", &TalosClusterSecurity{Firewall: &TalosClusterFirewall{}}, true),
@@ -86,11 +82,7 @@ var _ = Describe("TalosCluster spec.security", func() {
 
 	DescribeTable("podSecurity, audit and diskEncryption",
 		func(s *TalosClusterSecurity, accepted bool) {
-			if accepted {
-				Expect(create(s)).To(Succeed())
-			} else {
-				Expect(create(s)).NotTo(Succeed())
-			}
+			expectAdmitted(create(s), accepted)
 		},
 		Entry("podSecurity restricted", &TalosClusterSecurity{PodSecurity: &TalosClusterPodSecurity{Enforce: "restricted"}}, true),
 		Entry("podSecurity with an unknown level is rejected", &TalosClusterSecurity{PodSecurity: &TalosClusterPodSecurity{Enforce: "strict"}}, false),
@@ -107,11 +99,7 @@ var _ = Describe("TalosCluster spec.security", func() {
 
 	DescribeTable("kubeletServingCertificates",
 		func(k *TalosClusterKubeletServing, accepted bool) {
-			if accepted {
-				Expect(create(&TalosClusterSecurity{KubeletServingCertificates: k})).To(Succeed())
-			} else {
-				Expect(create(&TalosClusterSecurity{KubeletServingCertificates: k})).NotTo(Succeed())
-			}
+			expectAdmitted(create(&TalosClusterSecurity{KubeletServingCertificates: k}), accepted)
 		},
 		Entry("empty (off)", &TalosClusterKubeletServing{}, true),
 		Entry("enabled", &TalosClusterKubeletServing{Enabled: true}, true),

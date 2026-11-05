@@ -27,25 +27,20 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/pmezard/go-difflib/difflib"
+	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	sigsyaml "sigs.k8s.io/yaml"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/cnifacts"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
-	"github.com/maeshinshin/ichor/pkg/render"
 	"github.com/maeshinshin/ichor/pkg/values"
 )
-
-// gatewayAPICRD is the CRD whose presence stands for "the Gateway API CRDs are installed".
-const gatewayAPICRD = "gateways.gateway.networking.k8s.io"
 
 // ciliumView is a TalosCluster's Cilium inputs in the form the pkg/cni/cilium functions take.
 type ciliumView struct {
@@ -127,73 +122,14 @@ func flattenErrors(err error) []string {
 	return []string{err.Error()}
 }
 
-// validationContext collects the facts the guards need, read server-side. A fact that cannot be
-// read stays nil, which makes its guard pass: the controller re-checks live before every Job.
+// validationContext collects the facts the guards need, read server-side by the code the controller
+// uses too (cnifacts). The machine configuration is rendered with a placeholder
+// bundle and masked Secrets: only hostDNS and KubePrism are read from it, never a secret.
 func (s *Server) validationContext(ctx context.Context, v *ciliumView) cilium.ValidationContext {
-	vc := cilium.ValidationContext{KubeProxy: v.kubeProxy, Tunnel: v.tunnel}
-
-	crd := &metav1.PartialObjectMetadata{}
-	crd.SetGroupVersionKind(apiextensionsv1.SchemeGroupVersion.WithKind("CustomResourceDefinition"))
-
-	switch err := s.Client.Get(ctx, types.NamespacedName{Name: gatewayAPICRD}, crd); {
-	case err == nil:
-		vc.GatewayAPICRDs = ptr.To(true)
-	case apierrors.IsNotFound(err):
-		vc.GatewayAPICRDs = ptr.To(false)
-	}
-
-	vc.ForwardKubeDNSToHost, vc.KubePrism = s.talosFacts(ctx, v.cluster)
-
-	return vc
-}
-
-// talosFacts renders a control plane's configuration, as GetEffectiveConfig does, and reads
-// hostDNS and KubePrism from it. Any failure leaves both unknown.
-func (s *Server) talosFacts(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) (forward *bool, prism *cilium.KubePrism) {
-	var machines ichorv1alpha1.TalosMachineList
-	if err := s.List(ctx, &machines, client.InNamespace(cluster.Namespace)); err != nil {
-		return nil, nil
-	}
-
-	i := slices.IndexFunc(machines.Items, func(m ichorv1alpha1.TalosMachine) bool {
-		return m.Spec.ClusterRef.Name == cluster.Name && m.Spec.Role == opRoleControlPlane &&
-			m.Spec.ApprovalState == ichorv1alpha1.MachineApprovalStateApproved
-	})
-	if i < 0 {
-		return nil, nil
-	}
-
-	bundle, err := s.renderBundle(ctx, cluster)
-	if err != nil {
-		return nil, nil
-	}
-
-	var patches ichorv1alpha1.TalosConfigPatchList
-	if err := s.List(ctx, &patches, client.InNamespace(cluster.Namespace)); err != nil {
-		return nil, nil
-	}
-
-	sys, err := render.ResolveSystemInputs(ctx, maskedSecrets{s.Client}, s.ControllerNamespace, cluster)
-	if err != nil {
-		return nil, nil
-	}
-
-	cfg, err := render.BuildConfig(cluster, &machines.Items[i], bundle, patches.Items, sys)
-	if err != nil {
-		return nil, nil
-	}
-
-	if h := cfg.NetworkHostDNSConfig(); h != nil {
-		forward = ptr.To(h.ForwardKubeDNSToHost())
-	}
-
-	if kp := cfg.K8sKubePrismConfig(); kp != nil {
-		prism = &cilium.KubePrism{Enabled: true, Port: kp.Port()}
-	} else {
-		prism = &cilium.KubePrism{}
-	}
-
-	return forward, prism
+	return cnifacts.Source{
+		Client: maskedSecrets{s.Client}, CRDs: s.Client, Namespace: s.ControllerNamespace,
+		Bundle: func(ctx context.Context) (*secrets.Bundle, error) { return s.renderBundle(ctx, v.cluster) },
+	}.Context(ctx, v.cluster, v.kubeProxy)
 }
 
 // effective is the Helm values the controller would apply for user as the user layer: the same

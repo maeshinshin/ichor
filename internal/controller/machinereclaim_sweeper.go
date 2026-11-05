@@ -64,10 +64,7 @@ func (s *ReclaimCredentialSweeper) Start(ctx context.Context) error {
 // Sweep deletes the overdue credentials and returns how many it deleted. It selects by the
 // ichor.maesh.dev/reclaim label and re-checks the Secret type, so it cannot touch another Secret.
 func (s *ReclaimCredentialSweeper) Sweep(ctx context.Context) (int, error) {
-	now := time.Now()
-	if s.Now != nil {
-		now = s.Now()
-	}
+	now := nowFrom(s.Now)
 
 	var list corev1.SecretList
 

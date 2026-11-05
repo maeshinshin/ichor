@@ -115,14 +115,6 @@ type TalosEtcdBackupReconciler struct {
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosmachines,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=get;list;watch
 
-func (r *TalosEtcdBackupReconciler) now() time.Time {
-	if r.Now != nil {
-		return r.Now()
-	}
-
-	return time.Now()
-}
-
 // Reconcile takes a snapshot when the schedule says one is due. Everything it
 // needs to decide that is in status, so a restarted controller resumes.
 func (r *TalosEtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -150,7 +142,7 @@ func (r *TalosEtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			fmt.Sprintf("spec.schedule is not a valid cron expression: %v", err))
 	}
 
-	now := r.now()
+	now := nowFrom(r.Now)
 
 	manual := consumeBackupNow(&bk)
 
@@ -179,7 +171,7 @@ func (r *TalosEtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{RequeueAfter: backupRetryInterval}, r.Status().Update(ctx, &bk)
 	}
 
-	done := metav1.NewTime(r.now())
+	done := metav1.NewTime(nowFrom(r.Now))
 	bk.Status.LastSuccessTime = &done
 	bk.Status.LastSnapshot = snap
 	bk.Status.Snapshots = stored
@@ -193,7 +185,7 @@ func (r *TalosEtcdBackupReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	setReadyCondition(&bk, metav1.ConditionTrue, ichorv1alpha1.TalosEtcdBackupReasonSucceeded, msg)
 
-	return ctrl.Result{RequeueAfter: max(sched.Next(start).Sub(r.now()), time.Second)}, r.Status().Update(ctx, &bk)
+	return ctrl.Result{RequeueAfter: max(sched.Next(start).Sub(nowFrom(r.Now)), time.Second)}, r.Status().Update(ctx, &bk)
 }
 
 // noteStoreLocation sets the warning condition StoreInCluster while the destination is inside the

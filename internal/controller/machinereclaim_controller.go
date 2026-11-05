@@ -87,14 +87,6 @@ type MachineReclaimReconciler struct {
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=get;list;watch;update;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
-func (r *MachineReclaimReconciler) now() time.Time {
-	if r.Now != nil {
-		return r.Now()
-	}
-
-	return time.Now()
-}
-
 func orDuration(d, def time.Duration) time.Duration {
 	if d > 0 {
 		return d
@@ -124,7 +116,7 @@ func (r *MachineReclaimReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, nil
 	}
 
-	now := r.now()
+	now := nowFrom(r.Now)
 
 	if mr.Status.ExpiresAt == nil {
 		ttl := reclaimDefaultTTL
@@ -261,7 +253,7 @@ func (r *MachineReclaimReconciler) reset(
 
 	rec := &resetRecorder{Node: node}
 	rec.before = func() error {
-		t := metav1.NewTime(r.now())
+		t := metav1.NewTime(nowFrom(r.Now))
 		mr.Status.Phase = ichorv1alpha1.MachineReclaimResetting
 		mr.Status.Audit.ConfirmedBy = confirmedBy
 		mr.Status.Audit.ConfirmedAt = &t
@@ -344,7 +336,7 @@ func (r *MachineReclaimReconciler) waitForMaintenance(ctx context.Context, mr *i
 	}
 
 	// The probes took time: measure again, and come back exactly at the deadline at the latest.
-	remaining = deadline.Sub(r.now())
+	remaining = deadline.Sub(nowFrom(r.Now))
 	if remaining <= 0 {
 		return failed()
 	}
@@ -495,7 +487,7 @@ func (r *MachineReclaimReconciler) deleteCredential(ctx context.Context, mr *ich
 	key := client.ObjectKey{Namespace: mr.Namespace, Name: mr.Spec.CredentialSecretRef}
 	if err := r.Get(ctx, key, &sec); err != nil {
 		if apierrors.IsNotFound(err) && mr.Status.Audit.CredentialDeletedAt == nil {
-			t := metav1.NewTime(r.now())
+			t := metav1.NewTime(nowFrom(r.Now))
 			mr.Status.Audit.CredentialDeletedAt = &t
 		}
 
@@ -513,7 +505,7 @@ func (r *MachineReclaimReconciler) deleteCredential(ctx context.Context, mr *ich
 		return
 	}
 
-	t := metav1.NewTime(r.now())
+	t := metav1.NewTime(nowFrom(r.Now))
 	mr.Status.Audit.CredentialDeletedAt = &t
 
 	r.audit(mr, corev1.EventTypeNormal, "CredentialDeleted", "Secret "+sec.Name)

@@ -250,11 +250,9 @@ func TestANodeEventEnqueuesEveryCluster(t *testing.T) {
 	a, b := cniTestCluster(""), cniTestCluster("")
 	b.Namespace, b.Name = "other", "second"
 
-	r := &CNIHandoverReconciler{Client: cniFakeClient(t, a, b)}
-
-	got := r.allClusters(t.Context(), &corev1.Node{})
+	got := clusterRequests(cniFakeClient(t, a, b), nil)(t.Context(), &corev1.Node{})
 	if len(got) != 2 {
-		t.Fatalf("allClusters = %v, want both clusters", got)
+		t.Fatalf("clusterRequests = %v, want both clusters", got)
 	}
 }
 

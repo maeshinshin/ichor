@@ -53,12 +53,7 @@ func cpuCoresUsed(prev, next perf.CPUStat, cores int) (float64, bool) {
 		return 0, false
 	}
 
-	frac := (b1 - b0) / dTotal
-	if frac > 1 {
-		frac = 1
-	}
-
-	return frac * float64(cores), true
+	return min((b1-b0)/dTotal, 1) * float64(cores), true
 }
 
 // dataFilesystem picks the used and total bytes of the data filesystem from the

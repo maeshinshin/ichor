@@ -106,14 +106,6 @@ func (c *UserCache) Forget(name string) {
 	c.mu.Unlock()
 }
 
-// MustChange reports whether name's credentials entry demands a password
-// change; see Session.
-func (c *UserCache) MustChange(ctx context.Context, name string) (bool, error) {
-	mc, _, err := c.Session(ctx, name)
-
-	return mc, err
-}
-
 // Session returns name's credentials entry's mustChange and notBefore, cached for at
 // most UserCacheTTL like Get: a revoke or password change ends the user's tokens on
 // this replica within that time. A user with no entry (or no credentials Secret) is

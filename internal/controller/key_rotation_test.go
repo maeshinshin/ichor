@@ -373,10 +373,14 @@ func (f *keyRotFixture) newReconciler() *TalosOperationReconciler {
 }
 
 func (f *keyRotFixture) newOp(targets []string) *ichorv1alpha1.TalosOperation {
+	return f.newOpSpec(&ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: targets, TokenSettle: &metav1.Duration{}})
+}
+
+func (f *keyRotFixture) newOpSpec(spec *ichorv1alpha1.TalosOperationKeyRotationSpec) *ichorv1alpha1.TalosOperation {
 	op := &ichorv1alpha1.TalosOperation{}
 	op.GenerateName, op.Namespace = keyOpPrefix, tmNamespace
 	op.Spec.ClusterRef.Name, op.Spec.Kind = f.cluster.Name, ichorv1alpha1.TalosOperationKindKeyRotation
-	op.Spec.KeyRotation = &ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: targets, TokenSettle: &metav1.Duration{}}
+	op.Spec.KeyRotation = spec
 	Expect(k8sClient.Create(ctx, op)).To(Succeed())
 
 	return op
@@ -393,12 +397,7 @@ func (f *keyRotFixture) runUntil(op *ichorv1alpha1.TalosOperation, done func(*ic
 	return runRotationUntil(f.step, op, done)
 }
 
-func (f *keyRotFixture) secretData() map[string][]byte {
-	var secret corev1.Secret
-	Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.secret.Name}, &secret)).To(Succeed())
-
-	return secret.Data
-}
+func (f *keyRotFixture) secretData() map[string][]byte { return secretData(f.secret.Name) }
 
 func (f *keyRotFixture) storedKeys() *secretsbundle.KeyRotation {
 	raw, ok := f.secretData()[secretsbundle.KeyRotationKey]
@@ -827,18 +826,16 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		replaced, err := yaml.Marshal(kr.Apply(f.old))
 		Expect(err).NotTo(HaveOccurred())
 
-		var secret corev1.Secret
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.secret.Name}, &secret)).To(Succeed())
-
 		retired := &secretsbundle.Retired{}
 		retired.Add(secretsbundle.RetiredKey{RetiredAt: time.Now().UTC(), Secretbox: f.old.Secrets.SecretboxEncryptionSecret})
 		rawRetired, err := retired.Marshal()
 		Expect(err).NotTo(HaveOccurred())
 
-		secret.Data[secretsbundle.SecretKey] = replaced
-		secret.Data[secretsbundle.RetiredKeysKey] = rawRetired
-		delete(secret.Data, secretsbundle.KeyRotationKey)
-		Expect(k8sClient.Update(ctx, &secret)).To(Succeed())
+		editSecret(f.secret.Name, func(data map[string][]byte) {
+			data[secretsbundle.SecretKey] = replaced
+			data[secretsbundle.RetiredKeysKey] = rawRetired
+			delete(data, secretsbundle.KeyRotationKey)
+		})
 
 		f.runUntil(op, completed)
 		Expect(string(f.storedBundle().Certs.K8sServiceAccount.Key)).To(Equal(string(kr.ServiceAccount.Key)))
@@ -854,10 +851,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		raw, err := kr.Marshal()
 		Expect(err).NotTo(HaveOccurred())
 
-		var secret corev1.Secret
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.secret.Name}, &secret)).To(Succeed())
-		secret.Data[secretsbundle.KeyRotationKey] = raw
-		Expect(k8sClient.Update(ctx, &secret)).To(Succeed())
+		editSecret(f.secret.Name, func(data map[string][]byte) { data[secretsbundle.KeyRotationKey] = raw })
 
 		op := f.newOp(bothTargets)
 		f.runUntil(op, completed)
@@ -873,10 +867,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 
 		raw, _ := kr.Marshal()
 
-		var secret corev1.Secret
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.secret.Name}, &secret)).To(Succeed())
-		secret.Data[secretsbundle.KeyRotationKey] = raw
-		Expect(k8sClient.Update(ctx, &secret)).To(Succeed())
+		editSecret(f.secret.Name, func(data map[string][]byte) { data[secretsbundle.KeyRotationKey] = raw })
 
 		op := f.step(f.newOp(bothTargets))
 		Expect(rotationStage(op)).To(BeEmpty())
@@ -886,15 +877,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 
 	It("waits tokenSettle after the new key signs before dropping the old one, and keeps its clock across a restart", func() {
 		f := newKeyRotFixture(fastBundle())
-		op := f.newOp(saOnly)
-
-		// A fresh operation with a real wait: tokenSettle is immutable, so create it that way.
-		Expect(k8sClient.Delete(ctx, op)).To(Succeed())
-		op = &ichorv1alpha1.TalosOperation{}
-		op.GenerateName, op.Namespace = keyOpPrefix, tmNamespace
-		op.Spec.ClusterRef.Name, op.Spec.Kind = f.cluster.Name, ichorv1alpha1.TalosOperationKindKeyRotation
-		op.Spec.KeyRotation = &ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: saOnly, TokenSettle: &metav1.Duration{Duration: 2 * time.Hour}}
-		Expect(k8sClient.Create(ctx, op)).To(Succeed())
+		op := f.newOpSpec(&ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: saOnly, TokenSettle: &metav1.Duration{Duration: 2 * time.Hour}})
 
 		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageSettlingTokens))
 		applied := len(f.world.applies)
@@ -942,11 +925,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		f := newKeyRotFixture(fastBundle())
 		f.world.legacy = []string{"a/old-robot"}
 
-		op := &ichorv1alpha1.TalosOperation{}
-		op.GenerateName, op.Namespace = keyOpPrefix, tmNamespace
-		op.Spec.ClusterRef.Name, op.Spec.Kind = f.cluster.Name, ichorv1alpha1.TalosOperationKindKeyRotation
-		op.Spec.KeyRotation = &ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: saOnly, TokenSettle: &metav1.Duration{}, IgnoreLegacyTokens: true}
-		Expect(k8sClient.Create(ctx, op)).To(Succeed())
+		op := f.newOpSpec(&ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: saOnly, TokenSettle: &metav1.Duration{}, IgnoreLegacyTokens: true})
 
 		f.runUntil(op, completed)
 		Expect(f.world.legacyCalls).To(BeZero())

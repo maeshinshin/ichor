@@ -54,11 +54,14 @@ type Spec struct {
 // mutates it, so both sides are copied by a JSON round trip (which also turns
 // Go numbers into float64, what the values come in as anyway).
 func merge(base, over map[string]any) map[string]any {
-	return chartutil.MergeTables(clone(over), clone(base))
+	return chartutil.MergeTables(Clone(over), Clone(base))
 }
 
-func clone(m map[string]any) (out map[string]any) {
-	raw, _ := json.Marshal(m) // values are JSON-shaped: they come from a CR or a chart
+// Clone returns a deep copy of m by a JSON round trip (values are JSON-shaped: they come from a CR
+// or a chart); a nil m gives an empty map.
+func Clone(m map[string]any) map[string]any {
+	out := map[string]any{}
+	raw, _ := json.Marshal(m)
 
 	_ = json.Unmarshal(raw, &out)
 

@@ -55,9 +55,7 @@ var _ = Describe("kind: ichor executor, completion", func() {
 		withVersion("v0.1.0")
 		createInstallation(targetVersion)
 
-		done, err := advance(ctx, nil, nil, op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advance(ctx, nil, nil, op)).To(BeFalse())
 
 		var l batchv1.JobList
 		Expect(k8sClient.List(ctx, &l, client.InNamespace(ns),
@@ -88,9 +86,7 @@ var _ = Describe("kind: ichor executor, completion", func() {
 		deployment("rollout-controller", controllerLabels, true)
 		deployment("rollout-ui", uiLabels, true)
 
-		done, err := advance(ctx, nil, nil, op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advance(ctx, nil, nil, op)).To(BeFalse())
 	})
 
 	It("is not done while ichor-ui is still rolling out, though the Job has succeeded", func() {
@@ -105,9 +101,7 @@ var _ = Describe("kind: ichor executor, completion", func() {
 
 		setRollout(ui, true)
 
-		done, err = advance(ctx, nil, nil, op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advance(ctx, nil, nil, op)).To(BeTrue())
 	})
 
 	It("is not done while the controller Deployment is still rolling out", func() {
@@ -116,9 +110,7 @@ var _ = Describe("kind: ichor executor, completion", func() {
 		deployment("rollout-ui", uiLabels, true)
 		setJobCondition(&job, batchv1.JobComplete, "")
 
-		done, err := advance(ctx, nil, nil, op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advance(ctx, nil, nil, op)).To(BeFalse())
 	})
 
 	It("is not done while a Deployment has not observed its latest generation", func() {
@@ -130,9 +122,7 @@ var _ = Describe("kind: ichor executor, completion", func() {
 		ui.Status.ObservedGeneration = ui.Generation - 1
 		Expect(k8sClient.Status().Update(ctx, ui)).To(Succeed())
 
-		done, err := advance(ctx, nil, nil, op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advance(ctx, nil, nil, op)).To(BeFalse())
 	})
 
 	It("says which rollout it is waiting for, for the operation's status", func() {
@@ -168,9 +158,7 @@ var _ = Describe("kind: ichor executor, completion", func() {
 		deployment("rollout-ui", uiLabels, true)
 		setJobCondition(&job, batchv1.JobComplete, "")
 
-		done, err := advance(ctx, nil, nil, op)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advance(ctx, nil, nil, op)).To(BeTrue())
 	})
 
 	It("fails with an actionable message when the Job failed, even once the controller runs the target", func() {

@@ -90,9 +90,7 @@ var _ = Describe("Deleting a rotation operation", func() {
 			_, held = lockHolder(f.cluster)
 			Expect(held).To(BeFalse(), "the cluster lock is released")
 
-			active, err := activeCARotation(ctx, k8sClient, f.cluster.Namespace, f.cluster.Name)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(active).To(BeEmpty(), "the machine controller no longer sees a rotation under way")
+			Expect(activeCARotation(ctx, k8sClient, f.cluster.Namespace, f.cluster.Name)).To(BeEmpty(), "the machine controller no longer sees a rotation under way")
 
 			// The machine controller renders the old CAs again.
 			mr := &TalosMachineReconciler{
@@ -205,9 +203,7 @@ var _ = Describe("Deleting a rotation operation", func() {
 			_, held := lockHolder(f.cluster)
 			Expect(held).To(BeFalse())
 
-			active, err := activeKeyRotation(ctx, k8sClient, f.cluster.Namespace, f.cluster.Name)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(active).To(BeEmpty())
+			Expect(activeKeyRotation(ctx, k8sClient, f.cluster.Namespace, f.cluster.Name)).To(BeEmpty())
 		})
 
 		It("keeps a rotation whose new keys already sign and encrypt, and says so", func() {

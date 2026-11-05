@@ -44,9 +44,7 @@ func securityMachine(sec *ichorv1alpha1.TalosClusterSecurity, fake *fakeTalosCli
 	Expect(err).NotTo(HaveOccurred())
 
 	fake.current = current
-	r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-	reconcileOK(r, m)
+	reconcileOK(newTestReconciler(fake), m)
 
 	return fetchMachine(m)
 }
@@ -117,7 +115,7 @@ var _ = Describe("TalosMachineReconciler boot security (ADR 0123)", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		fake := &fakeTalosClient{current: current, securityState: SecurityState{BootedWithUKI: true}}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+		r := newTestReconciler(fake)
 
 		reconcileOK(r, m)
 		Expect(apimeta.FindStatusCondition(fetchMachine(m).Status.Conditions, ichorv1alpha1.ConditionSecureBoot)).NotTo(BeNil())

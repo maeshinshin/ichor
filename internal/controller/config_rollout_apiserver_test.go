@@ -90,10 +90,8 @@ var _ = Describe("the API server restart class", func() {
 		cp := newTestControlPlane(f.cluster.Name, "61")
 
 		fake := &fakeTalosClient{current: f.before(cp)}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
 		for range 2 { // the first reconcile of a control plane only adds its removal finalizer
-			reconcileOK(r, cp)
+			reconcileOK(newTestReconciler(fake), cp)
 		}
 
 		Expect(fake.applyCalls).To(BeEmpty(), "applying it from here would restart every control plane's API server at once")
@@ -119,9 +117,7 @@ var _ = Describe("the API server restart class", func() {
 		newTestPatch(cluster.Name, layerCluster, nil, extraArgsConfig())
 
 		fake := &fakeTalosClient{current: renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileOK(r, m)
+		reconcileOK(newTestReconciler(fake), m)
 		Expect(fake.applyCalls).To(HaveLen(1))
 	})
 

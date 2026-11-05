@@ -983,7 +983,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			fake := &fakeTalosClient{current: rendered}
-			r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+			r := newTestReconciler(fake)
 
 			reconcileOK(r, m)
 			Expect(fetchMachine(m).Status.ObservedReconcileRequest).To(BeEmpty())

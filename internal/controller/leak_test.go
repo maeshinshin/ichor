@@ -108,18 +108,14 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		_, m, bundle := newBundledMachine()
 
 		fake := &fakeTalosClient{currentErr: errors.New("read failed")}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileNoLeak(r, m, bundle)
+		reconcileNoLeak(newTestReconciler(fake), m, bundle)
 	})
 
 	It("config diff failed", func() {
 		_, m, bundle := newBundledMachine()
 
 		fake := &fakeTalosClient{current: []byte("{{{not valid yaml")}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileNoLeak(r, m, bundle)
+		reconcileNoLeak(newTestReconciler(fake), m, bundle)
 	})
 
 	It("dry run failed", func() {
@@ -131,9 +127,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		newTestPatch(cluster.Name, layerCluster, nil, desired)
 
 		fake := &fakeTalosClient{current: current, dryRunErr: errors.New("dry run failed")}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileNoLeak(r, m, bundle)
+		reconcileNoLeak(newTestReconciler(fake), m, bundle)
 	})
 
 	It("apply failed", func() {
@@ -145,9 +139,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		newTestPatch(cluster.Name, layerCluster, nil, desired)
 
 		fake := &fakeTalosClient{current: current, applyErr: errors.New("apply failed")}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileNoLeak(r, m, bundle)
+		reconcileNoLeak(newTestReconciler(fake), m, bundle)
 	})
 
 	// TestTalosMachineBundleLeak's own routes above all force an error; none
@@ -166,9 +158,7 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
 
 		fake := &fakeTalosClient{current: current, warnings: bundleSecretMaterial(bundle)}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileOK(r, m)
+		reconcileOK(newTestReconciler(fake), m)
 
 		got := fetchMachine(m)
 		warn := warningsCondition(got)

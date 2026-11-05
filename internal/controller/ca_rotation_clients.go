@@ -204,15 +204,21 @@ func (c *caRun) restartOne(ctx context.Context, t caClient, token string) (ready
 		return available, nil
 	}
 
+	// The patch just made the rollout; whatever status was read describes the previous one.
+	return false, patch(restartPatch(caRestartMarker, token))
+}
+
+// restartPatch is the strategic merge patch that rolls a workload once: restartedAt and the operation's
+// marker on its pod template.
+func restartPatch(marker, token string) []byte {
 	body, _ := json.Marshal(map[string]any{"spec": map[string]any{"template": map[string]any{"metadata": map[string]any{
 		"annotations": map[string]string{
 			restartedAtAnnotation: time.Now().UTC().Format(time.RFC3339),
-			caRestartMarker:       token,
+			marker:                token,
 		},
 	}}}})
 
-	// The patch just made the rollout; whatever status was read describes the previous one.
-	return false, patch(body)
+	return body
 }
 
 func deploymentAvailable(d *appsv1.Deployment) bool {

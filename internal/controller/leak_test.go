@@ -118,29 +118,19 @@ var _ = Describe("TalosMachineReconciler bundle leak", func() {
 		reconcileNoLeak(newTestReconciler(fake), m, bundle)
 	})
 
-	It("dry run failed", func() {
-		cluster, m, bundle := newBundledMachine()
+	DescribeTable("a pending change that fails on the node",
+		func(fail func(*fakeTalosClient)) {
+			cluster, m, bundle := newBundledMachine()
 
-		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
+			newTestPatch(cluster.Name, layerCluster, nil, extraArgsConfig())
 
-		desired := extraArgsConfig()
-		newTestPatch(cluster.Name, layerCluster, nil, desired)
-
-		fake := &fakeTalosClient{current: current, dryRunErr: errors.New("dry run failed")}
-		reconcileNoLeak(newTestReconciler(fake), m, bundle)
-	})
-
-	It("apply failed", func() {
-		cluster, m, bundle := newBundledMachine()
-
-		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
-
-		desired := extraArgsConfig()
-		newTestPatch(cluster.Name, layerCluster, nil, desired)
-
-		fake := &fakeTalosClient{current: current, applyErr: errors.New("apply failed")}
-		reconcileNoLeak(newTestReconciler(fake), m, bundle)
-	})
+			fake := &fakeTalosClient{current: renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())}
+			fail(fake)
+			reconcileNoLeak(newTestReconciler(fake), m, bundle)
+		},
+		Entry("dry run failed", func(f *fakeTalosClient) { f.dryRunErr = errors.New("dry run failed") }),
+		Entry("apply failed", func(f *fakeTalosClient) { f.applyErr = errors.New("apply failed") }),
+	)
 
 	// TestTalosMachineBundleLeak's own routes above all force an error; none
 	// of them has anything to say about setWarnings, the one *success* path

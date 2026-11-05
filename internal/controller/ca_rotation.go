@@ -338,20 +338,14 @@ func (c *caRun) machines(ctx context.Context) ([]*ichorv1alpha1.TalosMachine, er
 		return nil, err
 	}
 
-	var controlPlanes, workers []*ichorv1alpha1.TalosMachine
+	all := ptrs(list)
+	cps := controlPlanes(all)
+	workers := slices.DeleteFunc(all, func(m *ichorv1alpha1.TalosMachine) bool { return m.Spec.Role == roleControlPlane })
 
-	for i := range list {
-		if list[i].Spec.Role == roleControlPlane {
-			controlPlanes = append(controlPlanes, &list[i])
-		} else {
-			workers = append(workers, &list[i])
-		}
-	}
-
-	upgrade.SortByOrder(controlPlanes)
+	upgrade.SortByOrder(cps)
 	upgrade.SortByOrder(workers)
 
-	return slices.Concat(controlPlanes, workers), nil
+	return slices.Concat(cps, workers), nil
 }
 
 // withNode dials m with bundle and runs fn.

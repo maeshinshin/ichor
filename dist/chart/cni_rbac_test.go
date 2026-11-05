@@ -21,13 +21,19 @@ import (
 	"testing"
 )
 
-// cniConfigRolePath is config/rbac/ichor-cni/role.yaml (hand-written, ADR 0099): the Cilium
-// Helm Job's ClusterRole, whose chart copy templates/rbac/ichor-cni.yaml is compared as a rule set.
-const cniConfigRolePath = "../../config/rbac/ichor-cni/role.yaml"
-
 const kubeSystemNs = "kube-system"
 
 const adr0099Doc = "docs/adr/0099-argo-cd-and-kokumi-become-the-standard-stack.md"
+
+// checkCNIRoleMatchesConfig compares the chart's ichor-<cfgName> of kind with cfgName in config/rbac/ichor-cni/<cfgFile>
+// (hand-written, ADR 0099) as a rule set.
+func checkCNIRoleMatchesConfig(t *testing.T, docs []map[string]any, kind, cfgName, cfgFile string) {
+	t.Helper()
+
+	checkRBACRulesMatch(t, "ichor", kind+" "+cfgName,
+		find(loadYAMLDocs(t, "../../config/rbac/ichor-cni/"+cfgFile), kind, cfgName), find(docs, kind, "ichor-"+cfgName),
+		"config/rbac/ichor-cni/"+cfgFile, "dist/chart/templates/rbac/ichor-cni.yaml")
+}
 
 // TestCNIHelmRBAC pins the Cilium Helm Job's identity (ADR 0099): the ServiceAccount
 // ichor-cni the controller names in the Job exists, its ClusterRole equals config/rbac/ichor-cni,
@@ -35,7 +41,6 @@ const adr0099Doc = "docs/adr/0099-argo-cd-and-kokumi-become-the-standard-stack.m
 func TestCNIHelmRBAC(t *testing.T) {
 	t.Run("matches config", func(t *testing.T) {
 		docs := renderChart(t, "ichor")
-		configDocs := loadYAMLDocs(t, cniConfigRolePath)
 
 		if find(docs, kindServiceAccount, "ichor-cni") == nil {
 			t.Fatalf("the chart renders no ServiceAccount ichor-cni, the name the controller puts in the Job; see %s",
@@ -43,15 +48,10 @@ func TestCNIHelmRBAC(t *testing.T) {
 		}
 
 		clusterRole := find(docs, kindClusterRole, "ichor-cni-role")
-
-		checkRBACRulesMatch(t, "ichor", "ClusterRole cni-role",
-			find(configDocs, kindClusterRole, "cni-role"), clusterRole,
-			cniConfigRolePath, "dist/chart/templates/rbac/ichor-cni.yaml")
-
 		role := find(docs, kindRole, "ichor-cni-role")
-		checkRBACRulesMatch(t, "ichor", "Role cni-role",
-			find(configDocs, kindRole, "cni-role"), role,
-			cniConfigRolePath, "dist/chart/templates/rbac/ichor-cni.yaml")
+
+		checkCNIRoleMatchesConfig(t, docs, kindClusterRole, "cni-role", "role.yaml")
+		checkCNIRoleMatchesConfig(t, docs, kindRole, "cni-role", "role.yaml")
 
 		// The takeover's Secret rights in kube-system (ADR 0103, 1.2): namespaced, get/list/delete only.
 		records := find(docs, kindRole, "ichor-cni-records-role")
@@ -59,9 +59,7 @@ func TestCNIHelmRBAC(t *testing.T) {
 			t.Fatalf("Role ichor-cni-records-role = %v, want it in kube-system", records)
 		}
 
-		checkRBACRulesMatch(t, "ichor", "Role cni-records-role",
-			find(loadYAMLDocs(t, "../../config/rbac/ichor-cni/records_role.yaml"), kindRole, "cni-records-role"), records,
-			"config/rbac/ichor-cni/records_role.yaml", "dist/chart/templates/rbac/ichor-cni.yaml")
+		checkCNIRoleMatchesConfig(t, docs, kindRole, "cni-records-role", "records_role.yaml")
 
 		for triple := range rbacTriples(append(allRules(clusterRole), allRules(role)...)) {
 			if triple.resource == "*" || triple.verb == "*" {
@@ -85,9 +83,7 @@ func TestCNIHelmRBAC(t *testing.T) {
 			t.Fatalf("Role ichor-cni-job-role = %v, want it in kube-system", jobRole)
 		}
 
-		checkRBACRulesMatch(t, "ichor", "Role cni-job-role",
-			find(loadYAMLDocs(t, "../../config/rbac/ichor-cni/controller_role.yaml"), kindRole, "cni-job-role"), jobRole,
-			"config/rbac/ichor-cni/controller_role.yaml", "dist/chart/templates/rbac/ichor-cni.yaml")
+		checkCNIRoleMatchesConfig(t, docs, kindRole, "cni-job-role", "controller_role.yaml")
 
 		installerDocs := renderChartWithValues(t, "ichor", "installer.enabled=true")
 

@@ -59,6 +59,9 @@ import (
 type rotNode struct {
 	cfg  []byte
 	down bool
+	// instance numbers the kube-apiserver container; restartIn counts the reads of it left before the
+	// restart an apply caused happens (rotWorld.apiRestartReads).
+	instance, restartIn int
 }
 
 type applyRecord struct{ node, hash string }
@@ -82,6 +85,12 @@ type rotWorld struct {
 	dialLeak string
 	// dials counts successful dials.
 	dials int
+
+	// apiRestartReads, when set, makes every node report its kube-apiserver container (APIServerInstance) and
+	// restart it that many reads after an apply, as Talos does a while after a configuration change; apiNoRestart
+	// reports a container that no apply replaces.
+	apiRestartReads int
+	apiNoRestart    bool
 
 	// etcd fields (ADR 0120): restarts is every etcd service restart in order, with the PKI the node's
 	// configuration gave it at that moment; etcdUnhealthy marks nodes whose etcd does not report healthy;
@@ -219,8 +228,24 @@ func (c *rotClient) ApplyNoReboot(ctx context.Context, cfg []byte) error {
 
 	w.applies = append(w.applies, applyRecord{node: c.name, hash: render.Hash(cfg)})
 	c.node.cfg = bytes.Clone(cfg)
+	c.node.restartIn = w.apiRestartReads
 
 	return nil
+}
+
+func (c *rotClient) APIServerInstance(context.Context) (string, error) {
+	n := c.node
+	if c.w.apiRestartReads == 0 && !c.w.apiNoRestart {
+		return "", nil
+	}
+
+	if n.restartIn > 0 && !c.w.apiNoRestart {
+		if n.restartIn--; n.restartIn == 0 {
+			n.instance++
+		}
+	}
+
+	return fmt.Sprintf("containerd://%s-%d", c.name, n.instance), nil
 }
 
 func (c *rotClient) Version(context.Context) (string, error) {

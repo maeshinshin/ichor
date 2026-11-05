@@ -707,6 +707,19 @@ type TalosOperationCARotationStatus struct {
 	// happened once the node reports another one. Not a secret.
 	// +optional
 	EtcdRebootBootID string `json:"etcdRebootBootID,omitempty"`
+
+	// apiServerInstances is, for each control plane the current stage was applied to in a rotation that
+	// restarts kube-apiserver (the Kubernetes or the aggregator CA), the kube-apiserver container it ran in
+	// just before the apply. The stage is verified once that control plane runs another one and answers
+	// /readyz, so the operation is not Completed while a restart is still to come. Emptied when the stage
+	// changes. Not a secret.
+	// +optional
+	APIServerInstances map[string]string `json:"apiServerInstances,omitempty"`
+
+	// appliedAt is when the current stage was last applied to a machine; a kube-apiserver whose container did
+	// not change within a minute of it is taken as not restarted by this stage.
+	// +optional
+	AppliedAt *metav1.Time `json:"appliedAt,omitempty"`
 }
 
 // CARotationCertificate is one rotated CA. Fingerprints are the SHA-256 of the certificate's DER,

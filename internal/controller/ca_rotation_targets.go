@@ -181,6 +181,107 @@ func (c *caRun) awaitAggregatorAuth(ctx context.Context, first *ichorv1alpha1.Ta
 	return ctrl.Result{}, false, nil
 }
 
+// watchesAPIServer reports whether a stage applied to m is followed by a kube-apiserver restart that the stage
+// waits for: a rotation of the aggregator CA changes what kube-apiserver loads at start, and Talos restarts it
+// some seconds after the apply (hardware: the operation turned Completed 13 s before the last restart).
+func (c *caRun) watchesAPIServer(m *ichorv1alpha1.TalosMachine) bool {
+	return m.Spec.Role == roleControlPlane && c.hasTarget(aggregatorCAName)
+}
+
+// apiServerBaseline reads the kube-apiserver container m runs just before a stage is applied to it; empty when
+// the stage does not wait for a restart there.
+func (c *caRun) apiServerBaseline(ctx context.Context, talos TalosClient, m *ichorv1alpha1.TalosMachine) (string, error) {
+	if !c.watchesAPIServer(m) {
+		return "", nil
+	}
+
+	instance, err := talos.APIServerInstance(ctx)
+	if err != nil {
+		return "", fmt.Errorf("reading %q's kube-apiserver before the apply: %w", m.Name, err)
+	}
+
+	return instance, nil
+}
+
+// recordAPIServerBaseline keeps what apiServerBaseline read, in memory until the stage's status is written.
+func (c *caRun) recordAPIServerBaseline(m *ichorv1alpha1.TalosMachine, baseline string) {
+	if !c.watchesAPIServer(m) {
+		return
+	}
+
+	rs := c.op.Status.CARotation
+	if rs.APIServerInstances == nil {
+		rs.APIServerInstances = map[string]string{}
+	}
+
+	rs.APIServerInstances[m.Name] = baseline
+}
+
+// awaitAPIServers holds a stage, after it was applied everywhere, until each control plane it restarted
+// kube-apiserver on runs it in another container than before the apply (the id read just before, in
+// status.caRotation.apiServerInstances) and answers /readyz. A container that did not change within
+// apiServerRestartGrace of the apply is taken as not restarted by this stage. Without a recorded id (the
+// controller stopped between the apply and the status write) only /readyz is asked. /readyz is verified
+// against the cluster's Kubernetes CA as the bundle holds it, which a rotation of that CA has replaced by the
+// time of the later stages, so it is not asked then (the Node reads that follow need the API anyway).
+func (c *caRun) awaitAPIServers(
+	ctx context.Context, stage string, machines []*ichorv1alpha1.TalosMachine, bundle *secrets.Bundle,
+) (ctrl.Result, bool, error) {
+	rs := c.op.Status.CARotation
+
+	for _, m := range machines {
+		if !c.watchesAPIServer(m) {
+			continue
+		}
+
+		var why string
+
+		err := c.withNode(ctx, m, bundle, func(ctx context.Context, talos TalosClient) error {
+			if baseline := rs.APIServerInstances[m.Name]; baseline != "" {
+				instance, err := talos.APIServerInstance(ctx)
+				if err != nil {
+					return fmt.Errorf("reading the kube-apiserver of %q: %w", m.Name, err)
+				}
+
+				switch {
+				case instance == "":
+					why = fmt.Sprintf("Talos reports no kube-apiserver container on %q right now", m.Name)
+
+					return nil
+				case instance == baseline && (rs.AppliedAt == nil || time.Since(rs.AppliedAt.Time) < apiServerRestartGrace):
+					why = fmt.Sprintf("the kube-apiserver of %q still runs in the container it ran before the apply", m.Name)
+
+					return nil
+				}
+			}
+
+			if c.hasTarget(kubernetesCAName) {
+				return nil
+			}
+
+			if err := talos.APIServerReady(ctx); err != nil {
+				why = fmt.Sprintf("the kube-apiserver of %q is not ready: %v", m.Name, err)
+			}
+
+			return nil
+		})
+		if err != nil {
+			res, rerr := c.retry(ctx, fmt.Sprintf("stage %s is not verified, so the next stage is not started: %v", stage, err))
+
+			return res, true, rerr
+		}
+
+		if why != "" {
+			res, rerr := c.retry(ctx, fmt.Sprintf("stage %s is not verified, so the next stage is not started: waiting for the "+
+				"kube-apiserver restart a configuration change causes: %s", stage, why))
+
+			return res, true, rerr
+		}
+	}
+
+	return ctrl.Result{}, false, nil
+}
+
 func crtOrNil(ca *x509.PEMEncodedCertificateAndKey) []byte {
 	if ca == nil {
 		return nil

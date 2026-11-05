@@ -65,6 +65,8 @@ var _ = Describe("TalosCluster Webhook: Cilium values (ADR 0129)", func() {
 		Entry("a key Ichor owns", ownedKey, "ipam.mode is set by Ichor"),
 		Entry("a schema violation", schemaType, "chart schema"),
 		Entry("a value that is not an object", notAnObject, "object"),
+		Entry("Gateway API while kube-proxy runs", `{"gatewayAPI":{"enabled":true}}`, "needs kube-proxy replacement"),
+		Entry("a refusal of the chart's own templates", `{"cluster":{"id":5}}`, "cluster name is invalid"),
 		Entry("a layer over the size cap", `{"nodeSelector":{"x":"`+strings.Repeat("a", 70<<10)+`"}}`, "byte limit"),
 	)
 
@@ -134,7 +136,9 @@ var _ = Describe("TalosCluster Webhook: Cilium values (ADR 0129)", func() {
 
 	It("does not enforce the guards that need the machine configuration or the live cluster", func() {
 		// bpf.masquerade against forwardKubeDNSToHost, KubePrism and the Gateway API CRDs stay with the UI and CLI.
-		_, err := v.ValidateCreate(ctx, withValues(`{"bpf":{"masquerade":true},"gatewayAPI":{"enabled":true}}`))
+		c := withValues(`{"bpf":{"masquerade":true},"gatewayAPI":{"enabled":true}}`)
+		c.Spec.CNI.KubeProxy = "replaced" // Gateway API needs it; the mode is in the spec, so the webhook checks it
+		_, err := v.ValidateCreate(ctx, c)
 		Expect(err).NotTo(HaveOccurred())
 	})
 })

@@ -255,7 +255,6 @@ function CaptureDialog({
 
   const check = checkCapture({ iface, duration, filter })
   const errors = !check.ok ? check.errors : {}
-  const show = tried
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -286,13 +285,13 @@ function CaptureDialog({
                 <p class="text-xs text-muted-foreground">{t('capture.interfaceNone')}</p>
               </>
             )}
-            {show && errors.iface && <p class="text-xs text-destructive">{errors.iface}</p>}
+            {tried && errors.iface && <p class="text-xs text-destructive">{errors.iface}</p>}
           </div>
           <div class="space-y-1">
             <Label htmlFor="capture-duration">{t('capture.duration')}</Label>
-            <Input id="capture-duration" value={duration} onInput={(e) => setDuration(e.currentTarget.value)} aria-invalid={show && !!errors.duration} />
+            <Input id="capture-duration" value={duration} onInput={(e) => setDuration(e.currentTarget.value)} aria-invalid={tried && !!errors.duration} />
             <p class="text-xs text-muted-foreground">{t('capture.durationHint')}</p>
-            {show && errors.duration && <p class="text-xs text-destructive">{errors.duration}</p>}
+            {tried && errors.duration && <p class="text-xs text-destructive">{errors.duration}</p>}
           </div>
           <div class="space-y-1">
             <Label htmlFor="capture-filter">{t('capture.filter')}</Label>
@@ -302,10 +301,10 @@ function CaptureDialog({
               rows={4}
               value={filter}
               onInput={(e) => setFilter(e.currentTarget.value)}
-              aria-invalid={show && !!errors.filter}
+              aria-invalid={tried && !!errors.filter}
             />
             <p class="text-xs text-muted-foreground">{t('capture.filterHint')}</p>
-            {show && errors.filter && <p class="text-xs text-destructive">{errors.filter}</p>}
+            {tried && errors.filter && <p class="text-xs text-destructive">{errors.filter}</p>}
           </div>
         </div>
         <DialogFooter>

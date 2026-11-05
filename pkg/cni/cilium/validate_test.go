@@ -268,3 +268,28 @@ func TestBootstrapManifest_UserValuesAreApplied(t *testing.T) {
 		t.Error("BootstrapManifest accepted an owned key")
 	}
 }
+
+// BenchmarkValidateValues is the admission and pre-Job validation. The defaults case runs the schema, owned,
+// unknown and size checks on Ichor's own values; the user case also renders the chart (templateCheck), which
+// dominates its cost and is measured separately from the schema work.
+func BenchmarkValidateValues(b *testing.B) {
+	ctx := ValidationContext{KubeProxy: cni.KubeProxyReplaced, Tunnel: tunnelGeneve}
+
+	for _, tc := range []struct {
+		name string
+		user map[string]any
+	}{
+		{"defaults", nil},
+		{"user", debugOn},
+	} {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+
+			for i := 0; i < b.N; i++ {
+				if err := ValidateValues(tc.user, ctx); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}

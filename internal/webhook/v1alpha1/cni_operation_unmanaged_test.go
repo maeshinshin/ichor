@@ -18,14 +18,9 @@ package v1alpha1
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
-	admissionv1 "k8s.io/api/admission/v1"
-	authnv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -54,28 +49,11 @@ func TestCNIOperationIsRefusedForAnUnmanagedCluster(t *testing.T) {
 	}
 
 	request := func(clusterName, user, action string) admission.Request {
-		op := ichorv1alpha1.TalosOperation{
-			Name: "op", Namespace: testNamespace,
-			Spec: ichorv1alpha1.TalosOperationSpec{
-				Kind:       ichorv1alpha1.TalosOperationKindCNI,
-				ClusterRef: corev1.LocalObjectReference{Name: clusterName},
-				CNI:        &ichorv1alpha1.TalosOperationCNISpec{Action: action},
-			},
-		}
-
-		raw, err := json.Marshal(op)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		var req admission.Request
-
-		req.Operation, req.Name, req.Namespace = admissionv1.Create, "op", testNamespace
-		req.Resource = metav1.GroupVersionResource{Group: ichorGroup, Version: ichorv1alpha1.GroupVersion.Version, Resource: resOperations}
-		req.UserInfo = authnv1.UserInfo{Username: user}
-		req.Object = runtime.RawExtension{Raw: raw}
-
-		return req
+		return createOperationRequest(t, ichorv1alpha1.TalosOperationSpec{
+			Kind:       ichorv1alpha1.TalosOperationKindCNI,
+			ClusterRef: corev1.LocalObjectReference{Name: clusterName},
+			CNI:        &ichorv1alpha1.TalosOperationCNISpec{Action: action},
+		}, user)
 	}
 
 	for _, action := range []string{ichorv1alpha1.TalosOperationCNIActionUpgrade, ""} {

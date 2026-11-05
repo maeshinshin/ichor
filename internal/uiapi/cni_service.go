@@ -46,7 +46,6 @@ import (
 type ciliumView struct {
 	cluster   *ichorv1alpha1.TalosCluster
 	kubeProxy cni.KubeProxyMode
-	tunnel    string
 	user      map[string]any
 	nodes     int // the Nodes the cluster has now (countNodes); 0 unknown
 }
@@ -64,8 +63,7 @@ func (s *Server) getCiliumView(ctx context.Context, ref *pb.ObjectRef) (*ciliumV
 	}
 
 	v := &ciliumView{
-		cluster: cluster, kubeProxy: cni.KubeProxyMode(cluster.Spec.CNI.KubeProxy), tunnel: cluster.Spec.CNI.Tunnel,
-		nodes: s.countNodes(ctx),
+		cluster: cluster, kubeProxy: cni.KubeProxyMode(cluster.Spec.CNI.KubeProxy), nodes: s.countNodes(ctx),
 	}
 	if v.kubeProxy == "" {
 		v.kubeProxy = cni.KubeProxyEnabled
@@ -122,14 +120,39 @@ func flattenErrors(err error) []string {
 	return []string{err.Error()}
 }
 
-// validationContext collects the facts the guards need, read server-side by the code the controller
-// uses too (cnifacts). The machine configuration is rendered with a placeholder
-// bundle and masked Secrets: only hostDNS and KubePrism are read from it, never a secret.
-func (s *Server) validationContext(ctx context.Context, v *ciliumView) cilium.ValidationContext {
-	return cnifacts.Source{
+// validate is every problem cilium.ValidateValues finds in user, with the facts the guards need read
+// server-side by the code the controller uses too (cnifacts). The machine
+// configuration is rendered with a placeholder bundle and masked Secrets: only hostDNS and KubePrism
+// are read from it, never a secret.
+func (s *Server) validate(ctx context.Context, v *ciliumView, user map[string]any) []string {
+	return flattenErrors(cilium.ValidateValues(user, cnifacts.Source{
 		Client: maskedSecrets{s.Client}, CRDs: s.Client, Namespace: s.ControllerNamespace,
 		Bundle: func(ctx context.Context) (*secrets.Bundle, error) { return s.renderBundle(ctx, v.cluster) },
-	}.Context(ctx, v.cluster, v.kubeProxy)
+	}.Context(ctx, v.cluster, v.kubeProxy)))
+}
+
+// setUserValues makes user the cluster's spec.cni.cilium.values (none when empty).
+func setUserValues(c *ichorv1alpha1.TalosCluster, user map[string]any) error {
+	if len(user) == 0 {
+		if c.Spec.CNI.Cilium != nil {
+			c.Spec.CNI.Cilium.Values = nil
+		}
+
+		return nil
+	}
+
+	raw, err := json.Marshal(user)
+	if err != nil {
+		return err
+	}
+
+	if c.Spec.CNI.Cilium == nil {
+		c.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{}
+	}
+
+	c.Spec.CNI.Cilium.Values = &apiextensionsv1.JSON{Raw: raw}
+
+	return nil
 }
 
 // effective is the Helm values the controller would apply for user as the user layer: the same
@@ -137,19 +160,8 @@ func (s *Server) validationContext(ctx context.Context, v *ciliumView) cilium.Va
 // so a preview is what gets applied.
 func (v *ciliumView) effective(user map[string]any) (map[string]any, error) {
 	c := v.cluster.DeepCopy()
-	if c.Spec.CNI.Cilium == nil {
-		c.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{}
-	}
-
-	c.Spec.CNI.Cilium.Values = nil
-
-	if len(user) > 0 {
-		raw, err := json.Marshal(user)
-		if err != nil {
-			return nil, err
-		}
-
-		c.Spec.CNI.Cilium.Values = &apiextensionsv1.JSON{Raw: raw}
+	if err := setUserValues(c, user); err != nil {
+		return nil, err
 	}
 
 	return cilium.EffectiveValuesForNodes(c, v.kubeProxy, v.nodes)
@@ -180,7 +192,7 @@ func (s *Server) GetCiliumValues(
 		return nil, err
 	}
 
-	defaults, owned, err := cilium.Layers(v.kubeProxy, v.tunnel, int(v.cluster.Spec.ControlPlane.Count), v.nodes)
+	defaults, owned, err := cilium.Layers(v.kubeProxy, v.cluster.Spec.CNI.Tunnel, int(v.cluster.Spec.ControlPlane.Count), v.nodes)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, err)
 	}
@@ -237,7 +249,7 @@ func (s *Server) ValidateCiliumValues(
 		return nil, err
 	}
 
-	errs := flattenErrors(cilium.ValidateValues(user, s.validationContext(ctx, v)))
+	errs := s.validate(ctx, v, user)
 
 	return connect.NewResponse(&pb.ValidateCiliumValuesResponse{Valid: len(errs) == 0, Errors: errs}), nil
 }
@@ -302,7 +314,7 @@ func (s *Server) SetCiliumValues(
 		return nil, err
 	}
 
-	if errs := flattenErrors(cilium.ValidateValues(user, s.validationContext(ctx, v))); len(errs) > 0 {
+	if errs := s.validate(ctx, v, user); len(errs) > 0 {
 		return nil, invalid("the Cilium values are not valid:\n- %s", strings.Join(errs, "\n- "))
 	}
 
@@ -312,21 +324,8 @@ func (s *Server) SetCiliumValues(
 	}
 
 	cluster := v.cluster
-
-	switch {
-	case len(user) == 0 && cluster.Spec.CNI.Cilium != nil:
-		cluster.Spec.CNI.Cilium.Values = nil
-	case len(user) > 0:
-		raw, err := json.Marshal(user)
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInternal, err)
-		}
-
-		if cluster.Spec.CNI.Cilium == nil {
-			cluster.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{}
-		}
-
-		cluster.Spec.CNI.Cilium.Values = &apiextensionsv1.JSON{Raw: raw}
+	if err := setUserValues(cluster, user); err != nil {
+		return nil, connect.NewError(connect.CodeInternal, err)
 	}
 
 	key := client.ObjectKeyFromObject(cluster)
@@ -374,7 +373,7 @@ func (s *Server) StartCniUpgrade(
 		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("no Cilium upgrade is available: status.cni.availableChartVersion is empty"))
 	}
 
-	if errs := flattenErrors(cilium.ValidateValues(v.user, s.validationContext(ctx, v))); len(errs) > 0 {
+	if errs := s.validate(ctx, v, v.user); len(errs) > 0 {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
 			fmt.Errorf("the stored Cilium values do not validate against the new chart:\n- %s", strings.Join(errs, "\n- ")))
 	}

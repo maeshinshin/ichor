@@ -21,13 +21,6 @@ import (
 	"strings"
 )
 
-// CheckTalosStep is the compatibility rule for a Talos version written to a cluster that runs
-// kubernetes (ADR 0115): the pair must be in the compatibility table (TalosKubernetesError). The
-// server's plan, the TalosCluster webhook and `ichor upgrade` all call it.
-func CheckTalosStep(talos, kubernetes string) error {
-	return TalosKubernetesError(talos, kubernetes)
-}
-
 // CheckKubernetesStep is the compatibility rule for a Kubernetes version written to a cluster whose
 // Talos is talos and whose installed Cilium is installedCilium (ADR 0115; "" when it is not
 // observed, in which case the Cilium half is not checked). When the installed Cilium cannot run the

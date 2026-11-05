@@ -67,7 +67,7 @@ func TestPinnedIsConsistentWithMachinery(t *testing.T) {
 	}
 
 	// A first install is refused on a pinned set the table does not hold (ADR 0115).
-	if err := CheckTalosStep(Pinned.Talos, Pinned.Kubernetes); err != nil {
+	if err := TalosKubernetesError(Pinned.Talos, Pinned.Kubernetes); err != nil {
 		t.Errorf("pinned Talos and Kubernetes are incompatible: %v", err)
 	}
 

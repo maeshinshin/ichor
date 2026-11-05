@@ -246,16 +246,8 @@ func TestRunUpgradesUnderAnOldInstallerRoleWithoutTheNewKindsRule(t *testing.T) 
 func TestRollbackRestoresTheInstallerRBACSnapshot(t *testing.T) {
 	o := newOldInstaller(t)
 
-	failUI := func(_ context.Context, _ client.Client, obj *unstructured.Unstructured) error {
-		if obj.GetName() == "ichor-ui" {
-			return errors.New("UI never became ready")
-		}
-
-		return nil
-	}
-
 	err := Run(context.Background(), o.client, Options{
-		Namespace: o.ns, RunID: o.run, Manifest: o.newManifest(), Ready: failUI, RBACSettle: 20 * time.Second,
+		Namespace: o.ns, RunID: o.run, Manifest: o.newManifest(), Ready: failOn("ichor-ui", "UI never became ready"), RBACSettle: 20 * time.Second,
 	})
 	if err == nil || !strings.Contains(err.Error(), "rolled back") {
 		t.Fatalf("Run error = %v, want a rollback", err)

@@ -22,6 +22,7 @@ import (
 	"io"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/configloader"
@@ -351,7 +352,7 @@ func (r *TalosMachineReconciler) followStage(
 	}
 
 	message := fmt.Sprintf("the node is in stage %q on its way to running", stage)
-	if failed := volumeFailures(ctx, talos); failed != "" {
+	if failed := settleVolumeFailures(volumeFailures(ctx, talos), m.Status.ConfigStoredAt); failed != "" {
 		message += "; a volume failed: " + failed
 	}
 
@@ -424,6 +425,34 @@ type volumeFailureReader interface {
 	// VolumeFailures lists the volumes in phase failed with Talos's error message
 	// ("STATE: stat /dev/tpm0: no such file or directory"), joined by "; "; "" when none failed.
 	VolumeFailures(ctx context.Context) (string, error)
+}
+
+// Talos reports the STATE volume failed on every first boot, for 15-60 s, because its disk locator
+// names the system disk before Talos knows which disk that is; it then recovers by itself. That one
+// message is left out of a starting node's report for volumeSettleWindow after the configuration
+// was stored, so a user does not read it as a failure. Any other failure is shown at once, and this
+// one too when it outlasts the window (a node that never learns its system disk).
+const (
+	transientVolumeFailure = "error evaluating disk locator: no such attribute(s): system_disk"
+	volumeSettleWindow     = 3 * time.Minute
+)
+
+// settleVolumeFailures drops the transient entries of failed ("; "-joined, as VolumeFailures
+// returns them) while the configuration was stored less than volumeSettleWindow ago.
+func settleVolumeFailures(failed string, storedAt *metav1.Time) string {
+	if failed == "" || storedAt == nil || time.Since(storedAt.Time) >= volumeSettleWindow {
+		return failed
+	}
+
+	var kept []string
+
+	for _, f := range strings.Split(failed, "; ") {
+		if !strings.HasSuffix(f, transientVolumeFailure) {
+			kept = append(kept, f)
+		}
+	}
+
+	return strings.Join(kept, "; ")
 }
 
 // volumeFailures asks talos for failed volumes; a client that cannot, or an error, gives "".

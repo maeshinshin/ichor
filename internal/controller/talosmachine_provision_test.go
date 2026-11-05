@@ -178,6 +178,30 @@ var _ = Describe("TalosMachineReconciler provisioning a node in maintenance mode
 		Expect(readyCondition(got).Message).To(ContainSubstring("stat /dev/tpm0: no such file or directory"))
 		talos.volumeFailure = ""
 
+		// The STATE volume's disk locator fails for 15-60 s on every first boot, until the system disk
+		// is known: not shown while the node is new, and shown (with the rest) once it lasts.
+		const transient = "STATE: error evaluating disk locator: no such attribute(s): system_disk"
+
+		talos.volumeFailure = transient
+		got = reconcileOnce()
+		Expect(readyCondition(got).Reason).To(Equal(reasonNodeStarting))
+		Expect(readyCondition(got).Message).NotTo(ContainSubstring("a volume failed"))
+
+		talos.volumeFailure = transient + "; EPHEMERAL: stat /dev/tpm0: no such file or directory"
+		got = reconcileOnce()
+		Expect(readyCondition(got).Message).To(ContainSubstring("a volume failed: EPHEMERAL: stat /dev/tpm0"))
+		Expect(readyCondition(got).Message).NotTo(ContainSubstring("system_disk"))
+
+		stale := fetchMachine(machine)
+		old := metav1.NewTime(time.Now().Add(-volumeSettleWindow - time.Minute))
+		stale.Status.ConfigStoredAt = &old
+		Expect(k8sClient.Status().Update(ctx, stale)).To(Succeed())
+
+		talos.volumeFailure = transient
+		got = reconcileOnce()
+		Expect(readyCondition(got).Message).To(ContainSubstring("a volume failed: " + transient))
+		talos.volumeFailure = ""
+
 		talos.stage = stageRunning
 		got = reconcileOnce()
 		Expect(got.Status.Stage).To(Equal(stageRunning))

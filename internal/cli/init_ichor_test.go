@@ -111,7 +111,7 @@ func TestCreateIchorInstallation_RecordsTheBinarysVersion(t *testing.T) {
 	c := newIchorInstallationFake(t)
 
 	var warn bytes.Buffer
-	created, err := createIchorInstallation(context.Background(), c, &warn, 0)
+	created, err := createIchorInstallation(context.Background(), c, &warn, 0, installerPin{})
 	if err != nil || !created {
 		t.Fatalf("createIchorInstallation = %v, %v", created, err)
 	}
@@ -132,7 +132,7 @@ func TestCreateIchorInstallation_SkipsADevBuild(t *testing.T) {
 	c := newIchorInstallationFake(t)
 
 	var warn bytes.Buffer
-	if created, err := createIchorInstallation(context.Background(), c, &warn, 0); err != nil || created {
+	if created, err := createIchorInstallation(context.Background(), c, &warn, 0, installerPin{}); err != nil || created {
 		t.Fatalf("createIchorInstallation = %v, %v", created, err)
 	}
 
@@ -288,7 +288,7 @@ func TestCreateIchorInstallation_RetriesWhileTheWebhookIsDown(t *testing.T) {
 	webhookDown := apierrors.NewInternalError(errors.New(`failed calling webhook "vichorinstallation.kb.io": Post "https://svc:443/validate": dial tcp 10.96.0.1:443: operation not permitted`))
 	c := failingCreates(t, 2, webhookDown, &calls)
 
-	created, err := createIchorInstallation(context.Background(), c, io.Discard, 0)
+	created, err := createIchorInstallation(context.Background(), c, io.Discard, 0, installerPin{})
 	if err != nil || !created {
 		t.Fatalf("createIchorInstallation = %v, %v", created, err)
 	}
@@ -309,7 +309,7 @@ func TestCreateIchorInstallation_HonoursTheCallersWait(t *testing.T) {
 	c := failingCreates(t, 0, nil, &calls)
 
 	start := time.Now()
-	_, err := createIchorInstallation(context.Background(), c, io.Discard, 100*time.Millisecond)
+	_, err := createIchorInstallation(context.Background(), c, io.Discard, 100*time.Millisecond, installerPin{})
 
 	if err == nil || !strings.Contains(err.Error(), "ichor-controller-manager") {
 		t.Fatalf("createIchorInstallation = %v, want the not-Ready message", err)

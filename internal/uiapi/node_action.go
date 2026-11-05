@@ -401,15 +401,12 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 		}
 	}
 
-	var reason string
-
 	if override {
 		if err := s.authorizeOverride(ctx, np.machine); err != nil {
 			return nil, err
 		}
 
-		reason = strings.TrimSpace(np.bg.GetReason())
-		np.spec.Override, np.spec.OverrideReason = true, reason
+		np.spec.Override = true
 	}
 
 	cluster := p.cluster
@@ -422,13 +419,11 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 	audit := s.opAudit(ctx, "create", objectRef(op.Namespace, op.Name))
 
 	if override {
-		why := overrideReason(reason)
 		audit.Action += "-override"
-		audit.Reason = why
-		msg := fmt.Sprintf("%s of %s requested by %s under override: %s", np.action, np.machine.Name, audit.Actor, why)
+		msg := fmt.Sprintf("%s of %s requested by %s under override", np.action, np.machine.Name, audit.Actor)
 
 		if err := s.emitWarningEvent(ctx, np.machine, kindTalosMachine, "Override", msg); err != nil {
-			audit.Reason += " (the Kubernetes Event could not be recorded)"
+			audit.Reason = "the Kubernetes Event could not be recorded"
 		}
 	}
 

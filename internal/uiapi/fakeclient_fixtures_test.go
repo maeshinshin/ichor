@@ -63,10 +63,7 @@ func testMachine() *ichorv1alpha1.TalosMachine {
 	}
 }
 
-const (
-	bgReason = "node-2 is down, a rebuild would take an hour"
-	bgUser   = "oidc:alice"
-)
+const bgUser = "oidc:alice"
 
 func asUser(ctx context.Context) context.Context {
 	return ContextWithIdentity(ctx, Identity{User: testUserBob})

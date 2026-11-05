@@ -44,7 +44,7 @@ func (s *Server) AddDiscoveryAddress(
 
 	ref := req.Msg.GetCluster()
 
-	out, audit, err := s.editDiscovery(ctx, ref, "add-discovery-address", req.Msg.GetReason(),
+	out, audit, err := s.editDiscovery(ctx, ref, "add-discovery-address",
 		"adding a discovery address to", func(d *ichorv1alpha1.TalosClusterDiscovery) error {
 			if slices.Contains(d.Addresses, addr) {
 				return fmt.Errorf("%s is already in the discovery list", addr)

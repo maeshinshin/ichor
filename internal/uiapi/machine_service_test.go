@@ -261,23 +261,23 @@ var _ = Describe("MachineService", func() {
 
 			s := &Server{Client: k8sClient}
 			resp, err := s.RejectMachine(ctx, connect.NewRequest(&pb.RejectMachineRequest{
-				Machine: objectRef(m.Namespace, m.Name), Reason: "wrong hardware",
+				Machine: objectRef(m.Namespace, m.Name),
 			}))
 			Expect(err).NotTo(HaveOccurred())
 
 			audit := resp.Msg.GetAudit()
 			Expect(audit.GetAction()).To(Equal("reject"))
-			Expect(audit.GetReason()).To(Equal("wrong hardware"))
+			Expect(audit.GetReason()).To(BeEmpty())
 
 			got := fetchTestMachine(m)
 			Expect(got.Spec.ApprovalState).To(Equal(ichorv1alpha1.MachineApprovalStateRejected))
 			Expect(got.Spec.IsApproved()).To(BeFalse())
 
-			// The reason and actor behind "rejected" are recorded on the machine
-			// itself (ADR 0021's amendment) -- not just this one-shot AuditRecord --
-			// so a person revisiting the Rejected list later can still see why.
+			// The actor behind "rejected" is recorded on the machine itself (ADR 0021's
+			// amendment) -- not just this one-shot AuditRecord -- and no reason is asked for
+			// (ADR 0130).
 			Expect(got.Spec.ApprovalDecision).NotTo(BeNil())
-			Expect(got.Spec.ApprovalDecision.Reason).To(Equal("wrong hardware"))
+			Expect(got.Spec.ApprovalDecision.Reason).To(BeEmpty())
 			Expect(got.Spec.ApprovalDecision.Actor).NotTo(BeEmpty())
 
 			// condition 4: the machine must still exist under its own identity, so a
@@ -322,7 +322,7 @@ var _ = Describe("MachineService", func() {
 
 			s := &Server{Client: k8sClient}
 			_, err := s.RejectMachine(ctx, connect.NewRequest(&pb.RejectMachineRequest{
-				Machine: objectRef(m.Namespace, m.Name), Reason: "changed my mind",
+				Machine: objectRef(m.Namespace, m.Name),
 			}))
 			Expect(err).To(HaveOccurred())
 			Expect(connect.CodeOf(err)).To(Equal(connect.CodeFailedPrecondition))

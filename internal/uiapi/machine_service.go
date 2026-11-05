@@ -235,7 +235,7 @@ func (s *Server) ApproveMachine(
 	m.Spec.Disks = disks
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
 	m.Spec.ApprovalDecision = &ichorv1alpha1.TalosMachineApprovalDecision{
-		Actor: s.actorName(ctx), Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
+		Actor: s.actorName(ctx), At: metav1.NewTime(now),
 	}
 
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
@@ -247,7 +247,7 @@ func (s *Server) ApproveMachine(
 	}
 
 	audit := &pb.AuditRecord{
-		Actor: s.actorName(ctx), At: timestamppb.New(now), Action: "approve", Target: objectRef(m.Namespace, m.Name), Reason: req.Msg.GetReason(),
+		Actor: s.actorName(ctx), At: timestamppb.New(now), Action: "approve", Target: objectRef(m.Namespace, m.Name),
 	}
 
 	// The webhook raises the same warnings on the write; the response carries them too, since the
@@ -352,7 +352,7 @@ func (s *Server) RejectMachine(
 
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateRejected
 	m.Spec.ApprovalDecision = &ichorv1alpha1.TalosMachineApprovalDecision{
-		Actor: s.actorName(ctx), Reason: req.Msg.GetReason(), At: metav1.NewTime(now),
+		Actor: s.actorName(ctx), At: metav1.NewTime(now),
 	}
 
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
@@ -361,7 +361,7 @@ func (s *Server) RejectMachine(
 
 	audit := &pb.AuditRecord{
 		Actor: s.actorName(ctx), At: timestamppb.New(now), Action: "reject",
-		Target: objectRef(m.Namespace, m.Name), Reason: req.Msg.GetReason(),
+		Target: objectRef(m.Namespace, m.Name),
 	}
 
 	return connect.NewResponse(&pb.RejectMachineResponse{Audit: audit}), nil

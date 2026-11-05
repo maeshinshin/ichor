@@ -319,7 +319,9 @@ type GetIchorInstallationResponse struct {
 	// installer_verification is "Verified" when that image's signature was checked, "Skipped" when it was not;
 	// empty before any upgrade has run.
 	InstallerVerification string `protobuf:"bytes,13,opt,name=installer_verification,json=installerVerification,proto3" json:"installer_verification,omitempty"`
-	// installer_skip_reason is why the check was skipped; empty when it was not.
+	// Deprecated: no reason is asked for any more (docs/adr/0130). No longer sent; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/operation.proto.
 	InstallerSkipReason string `protobuf:"bytes,14,opt,name=installer_skip_reason,json=installerSkipReason,proto3" json:"installer_skip_reason,omitempty"`
 	// installer_signature_skip is true while spec.installerSignature.mode is skip: the next Ichor upgrade
 	// will not check the installer image's signature.
@@ -450,6 +452,7 @@ func (x *GetIchorInstallationResponse) GetInstallerVerification() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/operation.proto.
 func (x *GetIchorInstallationResponse) GetInstallerSkipReason() string {
 	if x != nil {
 		return x.InstallerSkipReason
@@ -471,10 +474,14 @@ type IchorInstallerOptions struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// digest pins the installer image ("sha256:" and 64 hex digits); empty lets the controller resolve the tag.
 	Digest string `protobuf:"bytes,1,opt,name=digest,proto3" json:"digest,omitempty"`
-	// skip_signature_reason, when not empty, skips the signature check of the installer image and records why.
+	// Deprecated: use skip_signature (docs/adr/0130). A non-empty value still means skip; its text is not read.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/operation.proto.
 	SkipSignatureReason string `protobuf:"bytes,2,opt,name=skip_signature_reason,json=skipSignatureReason,proto3" json:"skip_signature_reason,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// skip_signature skips the signature check of the installer image (spec.installerSignature.mode skip, ADR 0122).
+	SkipSignature bool `protobuf:"varint,3,opt,name=skip_signature,json=skipSignature,proto3" json:"skip_signature,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *IchorInstallerOptions) Reset() {
@@ -514,11 +521,19 @@ func (x *IchorInstallerOptions) GetDigest() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/operation.proto.
 func (x *IchorInstallerOptions) GetSkipSignatureReason() string {
 	if x != nil {
 		return x.SkipSignatureReason
 	}
 	return ""
+}
+
+func (x *IchorInstallerOptions) GetSkipSignature() bool {
+	if x != nil {
+		return x.SkipSignature
+	}
+	return false
 }
 
 type ListEtcdBackupsRequest struct {
@@ -1045,8 +1060,8 @@ type EtcdRestoreRequest struct {
 	Snapshot string `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
 	// confirm is the cluster's name, typed.
 	Confirm string `protobuf:"bytes,3,opt,name=confirm,proto3" json:"confirm,omitempty"`
-	// override is required; its reason is optional and goes to the audit record and the Event on the
-	// cluster (ADR 0065, ADR 0110), and the caller must hold the override verb on the TalosCluster.
+	// override is required, and the caller must hold the override verb on the TalosCluster (ADR 0065,
+	// ADR 0110); no reason is asked for (ADR 0130).
 	Override      *Override `protobuf:"bytes,4,opt,name=override,proto3" json:"override,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1122,8 +1137,8 @@ type NodeActionRequest struct {
 	// confirm is the machine's name, typed, for reset (and remove).
 	Confirm string `protobuf:"bytes,5,opt,name=confirm,proto3" json:"confirm,omitempty"`
 	// override is required for reset, and for reboot or shutdown it overrides the last-worker
-	// guard. Its reason is optional, and the caller must hold the override verb on the machine
-	// (ADR 0065, ADR 0110).
+	// guard. The caller must hold the override verb on the machine (ADR 0065, ADR 0110); no reason
+	// is asked for (ADR 0130).
 	Override *Override `protobuf:"bytes,6,opt,name=override,proto3" json:"override,omitempty"`
 	// wipe_mode is for reset only: system-disk wipes the whole system disk (boot and EFI included, so the
 	// node boots a boot image again instead of its installed UKI), all also wipes every user disk. Empty
@@ -3479,7 +3494,7 @@ var File_ichor_v1alpha1_operation_proto protoreflect.FileDescriptor
 const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	"\n" +
 	"\x1eichor/v1alpha1/operation.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\x1a\x1cichor/v1alpha1/cluster.proto\"\x1d\n" +
-	"\x1bGetIchorInstallationRequest\"\xf3\x05\n" +
+	"\x1bGetIchorInstallationRequest\"\xf7\x05\n" +
 	"\x1cGetIchorInstallationResponse\x12+\n" +
 	"\x11installed_version\x18\x01 \x01(\tR\x10installedVersion\x12%\n" +
 	"\x0etarget_version\x18\x02 \x01(\tR\rtargetVersion\x12+\n" +
@@ -3494,12 +3509,13 @@ const file_ichor_v1alpha1_operation_proto_rawDesc = "" +
 	" \x01(\bR\x10autoPatchEnabled\x12=\n" +
 	"\x1bauto_patch_halted_operation\x18\v \x01(\tR\x18autoPatchHaltedOperation\x12)\n" +
 	"\x10installer_digest\x18\f \x01(\tR\x0finstallerDigest\x125\n" +
-	"\x16installer_verification\x18\r \x01(\tR\x15installerVerification\x122\n" +
-	"\x15installer_skip_reason\x18\x0e \x01(\tR\x13installerSkipReason\x128\n" +
-	"\x18installer_signature_skip\x18\x0f \x01(\bR\x16installerSignatureSkip\"c\n" +
+	"\x16installer_verification\x18\r \x01(\tR\x15installerVerification\x126\n" +
+	"\x15installer_skip_reason\x18\x0e \x01(\tB\x02\x18\x01R\x13installerSkipReason\x128\n" +
+	"\x18installer_signature_skip\x18\x0f \x01(\bR\x16installerSignatureSkip\"\x8e\x01\n" +
 	"\x15IchorInstallerOptions\x12\x16\n" +
-	"\x06digest\x18\x01 \x01(\tR\x06digest\x122\n" +
-	"\x15skip_signature_reason\x18\x02 \x01(\tR\x13skipSignatureReason\"M\n" +
+	"\x06digest\x18\x01 \x01(\tR\x06digest\x126\n" +
+	"\x15skip_signature_reason\x18\x02 \x01(\tB\x02\x18\x01R\x13skipSignatureReason\x12%\n" +
+	"\x0eskip_signature\x18\x03 \x01(\bR\rskipSignature\"M\n" +
 	"\x16ListEtcdBackupsRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"f\n" +
 	"\fEtcdSnapshot\x12\x12\n" +

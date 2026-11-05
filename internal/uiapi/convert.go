@@ -124,9 +124,8 @@ func approvalDecisionToPB(d *ichorv1alpha1.TalosMachineApprovalDecision) *pb.Mac
 	}
 
 	return &pb.MachineApprovalDecision{
-		Actor:  d.Actor,
-		Reason: d.Reason,
-		At:     timestamppb.New(d.At.Time),
+		Actor: d.Actor,
+		At:    timestamppb.New(d.At.Time),
 	}
 }
 

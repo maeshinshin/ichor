@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 
 	"connectrpc.com/connect"
 	authv1 "k8s.io/api/authorization/v1"
@@ -99,19 +98,6 @@ func (s *Server) emitWarningEvent(ctx context.Context, obj client.Object, kind, 
 	ev.GenerateName, ev.Namespace = obj.GetName()+".", obj.GetNamespace()
 
 	return s.Client.Create(ctx, ev)
-}
-
-// noReasonGiven is what the audit record, the Event and a stored restore reason say when an override
-// was made without a reason (ADR 0110).
-const noReasonGiven = "no reason given"
-
-// overrideReason is the reason an override records: the trimmed reason, or noReasonGiven.
-func overrideReason(reason string) string {
-	if r := strings.TrimSpace(reason); r != "" {
-		return r
-	}
-
-	return noReasonGiven
 }
 
 const (

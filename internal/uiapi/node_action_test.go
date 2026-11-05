@@ -202,10 +202,10 @@ func TestNodeShutdownRestingInShutDownDoesNotBlockTheNextOperation(t *testing.T)
 	}
 }
 
-func resetReq(confirm, reason string) *connect.Request[pb.CreateOperationRequest] {
+func resetReq(confirm string, override bool) *connect.Request[pb.CreateOperationRequest] {
 	n := &pb.NodeActionRequest{Machine: objectRef(opNS, "w1"), Action: pb.NodeAction_NODE_ACTION_RESET, Confirm: confirm}
-	if reason != "" {
-		n.Override = &pb.Override{Reason: reason}
+	if override {
+		n.Override = &pb.Override{}
 	}
 
 	return nodeCreateReq(n)
@@ -215,16 +215,16 @@ func TestNodeResetNeedsTheNameAndOverride(t *testing.T) {
 	s, k8s := opServer(t, opObjects()...)
 	bg := context.Background()
 
-	if _, err := s.CreateOperation(bg, resetReq("not-the-name", bgReason)); connect.CodeOf(err) != connect.CodeInvalidArgument {
+	if _, err := s.CreateOperation(bg, resetReq("not-the-name", true)); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("wrong name: %v", err)
 	}
 
-	if _, err := s.CreateOperation(bg, resetReq("w1", "")); connect.CodeOf(err) != connect.CodeInvalidArgument {
+	if _, err := s.CreateOperation(bg, resetReq("w1", false)); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("no override: %v", err)
 	}
 
 	// With no signed-in user nobody can be asked whether they may override.
-	if _, err := s.CreateOperation(bg, resetReq("w1", bgReason)); connect.CodeOf(err) != connect.CodePermissionDenied {
+	if _, err := s.CreateOperation(bg, resetReq("w1", true)); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("no user: %v", err)
 	}
 
@@ -233,7 +233,7 @@ func TestNodeResetNeedsTheNameAndOverride(t *testing.T) {
 	s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, false, &asked), nil }
 	user := context.WithValue(bg, identityKey{}, Identity{User: bgUser})
 
-	if _, err := s.CreateOperation(user, resetReq("w1", bgReason)); connect.CodeOf(err) != connect.CodePermissionDenied {
+	if _, err := s.CreateOperation(user, resetReq("w1", true)); connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("RBAC says no: %v", err)
 	}
 
@@ -248,12 +248,12 @@ func TestNodeResetNeedsTheNameAndOverride(t *testing.T) {
 
 	s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, true, &asked), nil }
 
-	res, err := s.CreateOperation(user, resetReq("w1", bgReason))
+	res, err := s.CreateOperation(user, resetReq("w1", true))
 	if err != nil {
 		t.Fatalf("allowed: %v", err)
 	}
 
-	if a := res.Msg.GetAudit(); a.GetAction() != createOverrideAction || a.GetReason() != bgReason {
+	if a := res.Msg.GetAudit(); a.GetAction() != createOverrideAction || a.GetReason() != "" {
 		t.Fatalf("audit = %+v", a)
 	}
 
@@ -266,9 +266,9 @@ func TestNodeResetNeedsTheNameAndOverride(t *testing.T) {
 // createOverrideAction is the audit action of an override create (the "-override" suffix is added to create).
 const createOverrideAction = "create-override"
 
-// An override with no reason is allowed: the verb gates it, and the audit record and the Event say no
-// reason was given (ADR 0110).
-func TestNodeResetOverrideWithoutAReason(t *testing.T) {
+// An override asks for no reason (ADR 0130): the verb gates it, the audit record and the Event say who
+// asked, and nothing typed is stored.
+func TestNodeResetOverrideRecordsNoReason(t *testing.T) {
 	s, k8s := opServer(t, opObjects()...)
 	var asked []authv1.ResourceAttributes
 	s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, true, &asked), nil }
@@ -280,10 +280,10 @@ func TestNodeResetOverrideWithoutAReason(t *testing.T) {
 
 	res, err := s.CreateOperation(user, req)
 	if err != nil {
-		t.Fatalf("override without a reason: %v", err)
+		t.Fatalf("override: %v", err)
 	}
 
-	if a := res.Msg.GetAudit(); a.GetAction() != createOverrideAction || a.GetReason() != noReasonGiven {
+	if a := res.Msg.GetAudit(); a.GetAction() != createOverrideAction || a.GetReason() != "" {
 		t.Fatalf("audit = %+v", a)
 	}
 
@@ -298,12 +298,12 @@ func TestNodeResetOverrideWithoutAReason(t *testing.T) {
 	}
 
 	for _, e := range events.Items {
-		if e.Reason == "Override" && strings.Contains(e.Message, "under override: no reason given") {
+		if e.Reason == "Override" && strings.HasSuffix(e.Message, "requested by "+bgUser+" under override") {
 			return
 		}
 	}
 
-	t.Fatalf("no Override event that says no reason was given: %+v", events.Items)
+	t.Fatalf("no Override event without a reason: %+v", events.Items)
 }
 
 func TestRemoveMachineDeletesAfterTheTypedName(t *testing.T) {
@@ -364,7 +364,7 @@ func TestNodeResetByHostnameStoresTheMachineNameAsConfirm(t *testing.T) {
 
 	req := nodeCreateReq(&pb.NodeActionRequest{
 		Machine: objectRef(opNS, "node-w1"), Action: pb.NodeAction_NODE_ACTION_RESET, Confirm: "node-w1",
-		Override: &pb.Override{Reason: bgReason},
+		Override: &pb.Override{},
 	})
 	if _, err := s.CreateOperation(user, req); err != nil {
 		t.Fatal(err)

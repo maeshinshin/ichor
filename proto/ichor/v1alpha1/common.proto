@@ -26,18 +26,18 @@ message Condition {
   google.protobuf.Timestamp last_transition_time = 5;
 }
 
-// Override asks to override a safety check (docs/adr/0065, docs/adr/0110). Setting it
-// on a request means "override": the field's presence is the request, and the reason
-// is optional. The backend allows it only to a signed-in user whose Kubernetes RBAC
-// grants the override verb on the resource, and refuses it otherwise.
+// Override asks to override a safety check (docs/adr/0065, docs/adr/0110, docs/adr/0130). Setting it
+// on a request means "override": the field's presence is the request, and no reason is asked for.
+// The backend allows it only to a signed-in user whose Kubernetes RBAC grants the override verb on
+// the resource, and refuses it otherwise.
 message Override {
-  // reason is optional: when given it is recorded in the audit record and the
-  // Kubernetes Event. Without one the record says no reason given.
-  string reason = 1;
+  // Deprecated: no reason is asked for any more (docs/adr/0130). Never read or set; kept so the wire
+  // format is unchanged.
+  string reason = 1 [deprecated = true];
 }
 
 // AuditRecord is returned by ApproveMachine and RejectMachine so the caller
-// can confirm what was recorded: who did it, when, against what, and why.
+// can confirm what was recorded: who did it, when and against what.
 // "actor" comes from the caller's authenticated identity, not from the
 // request body.
 message AuditRecord {
@@ -49,6 +49,7 @@ message AuditRecord {
   // change is not applied until the pull request merges.
   string action = 3;
   ObjectRef target = 4;
-  // reason is optional free text, mainly used for rejections.
+  // reason is never a typed reason (docs/adr/0130: no reason is asked for). It is empty, or a remark the
+  // backend adds, such as that the Kubernetes Event of an override could not be recorded.
   string reason = 5;
 }

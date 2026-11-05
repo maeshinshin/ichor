@@ -532,8 +532,8 @@ func (s *Server) planOperation(
 			p.resp.SpecChanges = true
 		}
 
-		if reason := p.installer.GetSkipSignatureReason(); reason != "" {
-			p.resp.Warning = strings.TrimSpace(p.resp.GetWarning() + " " + installerSkipWarning(reason))
+		if skipsSignatureCheck(p.installer) {
+			p.resp.Warning = strings.TrimSpace(p.resp.GetWarning() + " " + installerSkipWarning)
 		}
 	}
 
@@ -592,8 +592,7 @@ func (s *Server) checkCompatibility(
 		return "", err
 	}
 
-	return fmt.Sprintf("%s %s is incompatible (%v), overridden under override: %s", kind, target, err,
-		overrideReason(bg.GetReason())), nil
+	return fmt.Sprintf("%s %s is incompatible (%v), overridden under override", kind, target, err), nil
 }
 
 // installedCilium is the Cilium release the status shows, "" when it is not observed.

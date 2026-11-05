@@ -64,7 +64,8 @@ go build -o bin/kubevirt-harness ./test/harness/kubevirt
 sed s/__PREFIX__/$P/ test/harness/ui-demo/registry.yaml | kubectl --context $C -n ichor-e2e apply -f -
 REG=$(kubectl --context $C -n ichor-e2e get svc $P-registry -o jsonpath={.spec.clusterIP})
 kubectl --context $C -n ichor-e2e port-forward svc/$P-registry 5000:5000 &   # leave it running while you push
-make demo-images VERSION=v0.0.0-demo REGISTRY=localhost:5000   # builds and pushes manager, ichor-ui, installer; prints digests
+make demo-images VERSION=v0.0.0-demo REGISTRY=localhost:5000 DIGEST_FILE=bin/demo-digests.txt   # builds and pushes manager, ichor-ui, installer; prints digests
+D=$(sed -n 's/.*ichor-installer@//p' bin/demo-digests.txt)   # the installer image's digest, for init below
 cp bin/img/ichor/ichor bin/ichor-static   # the installembed ichor demo-images built
 
 # 2. VMs in maintenance mode (prints CP_IP and WORKER_IP)
@@ -91,7 +92,11 @@ kubectl --context $C -n ichor-e2e exec $P-tools -- env HOME=/tmp/home /tmp/ichor
   --pod-subnets 10.248.0.0/16 --service-subnets 10.249.0.0/16 --registry-mirror ghcr.io=http://$REG:5000 \
   --discover-address $WORKER_IP \
   --ui-url https://$LB_IP --admin-user admin --ui-tls-cert /tmp/ui.crt --ui-tls-key /tmp/ui.key \
-  --kube-api-server-url https://$LB_IP:6443 --kube-api-tls-server-name $CP_IP
+  --kube-api-server-url https://$LB_IP:6443 --kube-api-tls-server-name $CP_IP \
+  --installer-digest $D --skip-signature-check
+# `--installer-digest` and `--skip-signature-check` are what a demo build needs: the inner cluster cannot reach ghcr.io (the
+# controller would resolve the installer's tag there for the Cilium Job and pause with CNIHandover InstallerImageUnresolved), and
+# a demo image has no signature. init records both in the IchorInstallation.
 # `--ui-url` must be https and needs --version-contract v1.14 or later when users are on.
 # init prints the generated admin password ONCE (must change on first login). Save it at once to a
 # 0600 file under bin/ (gitignored), e.g. umask 077 and redirect it to bin/ui-demo.admin-password.

@@ -693,6 +693,8 @@ export const en = {
   'ops.plan.effectNone': 'No node is touched; a Job applies the new install manifest.',
   'ops.plan.effectCARotation':
     'Every node is reconfigured once per pass, without a reboot. The kubelet restarts on each node in the passes that change the Kubernetes CA.',
+  'ops.plan.effectCARotationEtcd':
+    'Every node is reconfigured once per pass; the control planes REBOOT in each pass (see the warning below), workers do not. The kubelet restarts on each node in the passes that change the Kubernetes CA.',
   'ops.plan.stages': 'Passes over every node, each verified before the next: {stages}.',
   'ops.plan.keyStages': 'Stages, each verified before the next: {stages}.',
   'ops.plan.effectKeyRotation':

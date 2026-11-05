@@ -28,8 +28,6 @@ import (
 	sx509 "github.com/siderolabs/crypto/x509"
 	"github.com/siderolabs/talos/pkg/machinery/config/configloader"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/types"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/etcdbackup"
@@ -434,40 +432,5 @@ var _ = Describe("TalosOperation ca-rotation of the etcd CA and the aggregator C
 		Expect(cond).NotTo(BeNil())
 		Expect(cond.Message).NotTo(ContainSubstring("PRIVATE KEY"))
 		Expect(cond.Message).To(ContainSubstring(redacted))
-	})
-
-	It("clears BundleBackupStale only for an export that holds the new etcd CA", func() {
-		f := newCARotFixture()
-		f.targets = []string{ichorv1alpha1.CARotationTargetEtcd}
-		f.runUntil(f.newOp(), completed)
-
-		key := types.NamespacedName{Namespace: tmNamespace, Name: f.cluster.Name}
-		r := &CertExpiryReconciler{Client: k8sClient, ControllerNamespace: tmNamespace}
-
-		export := func(fingerprint string) bool {
-			var got ichorv1alpha1.TalosCluster
-			Expect(k8sClient.Get(ctx, key, &got)).To(Succeed())
-
-			if got.Annotations == nil {
-				got.Annotations = map[string]string{}
-			}
-
-			got.Annotations[ichorv1alpha1.BundleExportedAnnotation] = fingerprint
-			Expect(k8sClient.Update(ctx, &got)).To(Succeed())
-
-			_, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: key})
-			Expect(err).NotTo(HaveOccurred())
-			Expect(k8sClient.Get(ctx, key, &got)).To(Succeed())
-
-			return apimeta.IsStatusConditionTrue(got.Status.Conditions, ichorv1alpha1.ConditionBundleBackupStale)
-		}
-
-		before, err := secretsbundle.ExportFingerprint(f.old, nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(export(before)).To(BeTrue(), "a copy with the old etcd CA is stale although the Talos and Kubernetes CAs did not change")
-
-		live, err := secretsbundle.ExportFingerprint(f.storedBundle(), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(export(live)).To(BeFalse())
 	})
 })

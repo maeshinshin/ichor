@@ -230,24 +230,14 @@ var _ = Describe("TalosOperation ca-rotation client restarts", func() {
 		Expect(patchCount(kc)).To(HaveKeyWithValue(corednsPatchKey, 1))
 	})
 
-	It("finishes the rotation, naming what is not back, once the wait is over", func() {
+	It("finishes the rotation, naming what is not back, once the wait is over, and does not look like a clean success", func() {
 		f, _ := restartFixture(3)
 		caClientRestartTimeout = time.Nanosecond
-		op := f.newOp()
+		op, _ := f.runUntil(f.newOp(), completed)
 
-		op, _ = f.runUntil(op, completed)
-		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseCompleted))
-		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).
-			To(And(ContainSubstring("not back after the restart"), ContainSubstring("cilium")))
-	})
-
-	It("does not look like a clean success when workloads are not back: distinct reason, cluster condition, Warning Event", func() {
-		f, _ := restartFixture(3)
-		caClientRestartTimeout = time.Nanosecond
-		op := f.newOp()
-
-		op, _ = f.runUntil(op, completed)
-		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Reason).To(Equal(reasonCARotationClientsNotBack))
+		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation)
+		Expect(cond.Reason).To(Equal(reasonCARotationClientsNotBack), "a distinct reason")
+		Expect(cond.Message).To(And(ContainSubstring("not back after the restart"), ContainSubstring("cilium")))
 
 		var cluster ichorv1alpha1.TalosCluster
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.cluster.Name}, &cluster)).To(Succeed())

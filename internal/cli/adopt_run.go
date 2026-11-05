@@ -1160,8 +1160,11 @@ func printPreflight(say adoptSay, rep *cilium.PreflightReport) {
 func waitHandover(ctx context.Context, deps adoptDeps, key types.NamespacedName) error {
 	errPending := errors.New("not finished")
 
-	err := pollBounded(ctx, cmp.Or(deps.ReleaseWait, defaultReleaseWait), cmp.Or(deps.Interval, defaultReleaseInterval), deps.Stderr,
-		"the Cilium takeover ("+render.ConditionCNIHandover+")", newWaitDiag(deps.K8s, deps.Stderr), func(ctx context.Context) error {
+	timeout := cmp.Or(deps.ReleaseWait, defaultReleaseWait)
+	what := "the Cilium takeover (" + render.ConditionCNIHandover + ")"
+
+	err := pollDiag(ctx, timeout, cmp.Or(deps.Interval, defaultReleaseInterval), deps.Stderr,
+		what, newWaitDiag(deps.K8s, deps.Stderr), func(ctx context.Context) error {
 			var c ichorv1alpha1.TalosCluster
 
 			if err := deps.K8s.Get(ctx, key, &c); err == nil && apimeta.IsStatusConditionTrue(c.Status.Conditions, render.ConditionCNIHandover) {
@@ -1169,7 +1172,7 @@ func waitHandover(ctx context.Context, deps adoptDeps, key types.NamespacedName)
 			}
 
 			return errPending
-		}, func(err error) bool { return errors.Is(err, errPending) })
+		}, func(err error) bool { return errors.Is(err, errPending) }, what+" did not finish within "+timeout.String())
 	if err != nil {
 		return fmt.Errorf("adopt: %w; the machines stay held", err)
 	}

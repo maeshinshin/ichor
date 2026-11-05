@@ -127,9 +127,7 @@ var _ = Describe("the API server restart class", func() {
 		fake := &fakeTalosClient{current: f.before(cp), apiInstance: apiInstanceOld}
 		adv := newRolloutAdvancer(fake)
 
-		done, err := adv.Advance(ctx, f.cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(adv.Advance, f.cluster, fetchMachine(cp), nil)).To(BeFalse())
 		Expect(fake.dryRunCalls).To(Equal(1))
 		Expect(fake.applyCalls).To(HaveLen(1), "one plain apply")
 		Expect(fake.stagedCalls).To(BeEmpty())
@@ -145,25 +143,19 @@ var _ = Describe("the API server restart class", func() {
 		// even a /readyz that answers (the old one) is not the end of the step.
 		fake.current = f.after(cp)
 
-		done, err = adv.Advance(ctx, f.cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(adv.Advance, f.cluster, fetchMachine(cp), nil)).To(BeFalse())
 		Expect(fake.apiReadyCalls).To(BeZero())
 
 		// Restarted, not ready yet.
 		fake.apiInstance, fake.apiReadyErr = apiInstanceNew, errors.New("connection refused")
 
-		done, err = adv.Advance(ctx, f.cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(adv.Advance, f.cluster, fetchMachine(cp), nil)).To(BeFalse())
 		Expect(fake.apiReadyCalls).To(Equal(1))
 
 		// Ready.
 		fake.apiReadyErr = nil
 
-		done, err = adv.Advance(ctx, f.cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(adv.Advance, f.cluster, fetchMachine(cp), nil)).To(BeTrue())
 		Expect(fake.applyCalls).To(HaveLen(1), "applied once")
 		Expect(apimeta.IsStatusConditionTrue(fetchMachine(cp).Status.Conditions, conditionConfigRollout)).To(BeFalse())
 	})
@@ -174,15 +166,12 @@ var _ = Describe("the API server restart class", func() {
 		fake := &fakeTalosClient{current: f.before(cp), apiInstance: apiInstanceOld}
 		adv := newRolloutAdvancer(fake)
 
-		_, err := adv.Advance(ctx, f.cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(adv.Advance, f.cluster, fetchMachine(cp), nil)
 
 		fake.current = f.after(cp)
 		ageRollout(cp, 2*apiServerRestartGrace)
 
-		done, err := adv.Advance(ctx, f.cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(adv.Advance, f.cluster, fetchMachine(cp), nil)).To(BeTrue())
 	})
 
 	It("pauses with a clear reason when /readyz does not return in time, and a retry waits again", func() {
@@ -191,8 +180,7 @@ var _ = Describe("the API server restart class", func() {
 		fake := &fakeTalosClient{current: f.before(cp), apiInstance: apiInstanceOld}
 		adv := newRolloutAdvancer(fake)
 
-		_, err := adv.Advance(ctx, f.cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(adv.Advance, f.cluster, fetchMachine(cp), nil)
 
 		fake.current, fake.apiInstance, fake.apiReadyErr = f.after(cp), apiInstanceNew, errors.New("connection refused")
 		ageRollout(cp, 2*apiServerReadyTimeout)
@@ -207,16 +195,12 @@ var _ = Describe("the API server restart class", func() {
 
 		// The retry (ADR 0095) calls Advance again: the configuration is on the node, so it must not
 		// report "nothing pending" but wait again, with a fresh clock.
-		done, err = adv.Advance(ctx, f.cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(adv.Advance, f.cluster, fetchMachine(cp), nil)).To(BeFalse())
 		Expect(fake.applyCalls).To(HaveLen(1), "nothing is applied twice")
 
 		fake.apiReadyErr = nil
 
-		done, err = adv.Advance(ctx, f.cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(adv.Advance, f.cluster, fetchMachine(cp), nil)).To(BeTrue())
 	})
 
 	It("resumes after a controller restart without applying twice, and re-applies when it stopped before the apply", func() {
@@ -224,15 +208,13 @@ var _ = Describe("the API server restart class", func() {
 		cp := newTestControlPlane(f.cluster.Name, "65")
 		fake := &fakeTalosClient{current: f.before(cp), apiInstance: apiInstanceOld}
 
-		_, err := newRolloutAdvancer(fake).Advance(ctx, f.cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(newRolloutAdvancer(fake).Advance, f.cluster, fetchMachine(cp), nil)
 		Expect(fake.applyCalls).To(HaveLen(1))
 
 		// A new advancer: nothing is remembered except the marker on the machine. The node is still
 		// on the old configuration (the controller died after recording the marker, before the apply
 		// landed), so the step applies again.
-		_, err = newRolloutAdvancer(fake).Advance(ctx, f.cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(newRolloutAdvancer(fake).Advance, f.cluster, fetchMachine(cp), nil)
 		Expect(fake.applyCalls).To(HaveLen(2))
 
 		// Applied now, and the controller dies once more while the API server is down: the new one
@@ -245,9 +227,7 @@ var _ = Describe("the API server restart class", func() {
 
 		fake.currentErr = nil
 
-		done, err = newRolloutAdvancer(fake).Advance(ctx, f.cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(newRolloutAdvancer(fake).Advance, f.cluster, fetchMachine(cp), nil)).To(BeTrue())
 		Expect(fake.applyCalls).To(HaveLen(2))
 	})
 

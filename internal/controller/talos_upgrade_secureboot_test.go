@@ -46,8 +46,7 @@ var _ = Describe("talosUpgradeAdvancer installer variant", func() {
 
 		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore, securityState: node}
 
-		_, err := newUpgradeAdvancer(fake, nil).Advance(ctx, cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(newUpgradeAdvancer(fake, nil).Advance, cluster, fetchMachine(cp), nil)
 		Expect(fake.upgradeCalls).To(HaveLen(1))
 
 		return fake.upgradeCalls[0]

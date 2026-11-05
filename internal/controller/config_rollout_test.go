@@ -111,9 +111,7 @@ var _ = Describe("configRolloutAdvancer", func() {
 
 		fake := &fakeTalosClient{current: f.after(m), bootID: testBootIDBefore}
 
-		done, err := newRolloutAdvancer(fake).Advance(ctx, f.cluster, fetchMachine(m), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(newRolloutAdvancer(fake).Advance, f.cluster, fetchMachine(m), nil)).To(BeTrue())
 		Expect(fake.rebootCalls).To(BeZero())
 	})
 
@@ -125,16 +123,12 @@ var _ = Describe("configRolloutAdvancer", func() {
 		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore, nodeName: "node-cr-reported"}
 		adv := newRolloutAdvancer(fake)
 
-		done, err := adv.Advance(ctx, f.cluster, fetchMachine(m), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(adv.Advance, f.cluster, fetchMachine(m), nil)).To(BeFalse())
 		Expect(fake.rebootCalls).To(Equal(1))
 
 		fake.bootID, fake.current = testBootIDAfter, f.after(m)
 
-		done, err = adv.Advance(ctx, f.cluster, fetchMachine(m), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(adv.Advance, f.cluster, fetchMachine(m), nil)).To(BeTrue())
 	})
 
 	It("does nothing to a machine that already runs the rendered configuration", func() {
@@ -142,9 +136,7 @@ var _ = Describe("configRolloutAdvancer", func() {
 
 		fake := &fakeTalosClient{current: f.after(m), bootID: testBootIDBefore}
 
-		done, err := newRolloutAdvancer(fake).Advance(ctx, f.cluster, fetchMachine(m), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(newRolloutAdvancer(fake).Advance, f.cluster, fetchMachine(m), nil)).To(BeTrue())
 		Expect(fake.stagedCalls).To(BeEmpty())
 		Expect(fake.applyCalls).To(BeEmpty())
 		Expect(fake.rebootCalls).To(BeZero(), "no pending change means no reboot")
@@ -156,9 +148,7 @@ var _ = Describe("configRolloutAdvancer", func() {
 		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore}
 		adv := newRolloutAdvancer(fake)
 
-		done, err := adv.Advance(ctx, f.cluster, fetchMachine(m), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(adv.Advance, f.cluster, fetchMachine(m), nil)).To(BeFalse())
 		Expect(fake.dryRunCalls).To(Equal(1), "dry run first, always (ADR 0009)")
 		Expect(fake.stagedCalls).To(HaveLen(1))
 		Expect(fake.applyCalls).To(BeEmpty(), "never NO_REBOOT for a reboot-requiring change")
@@ -172,18 +162,14 @@ var _ = Describe("configRolloutAdvancer", func() {
 		Expect(cond.Message).To(Equal(testBootIDBefore))
 
 		// Not rebooted yet (same boot ID): wait, and above all do not reboot again.
-		done, err = adv.Advance(ctx, f.cluster, fetchMachine(m), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(adv.Advance, f.cluster, fetchMachine(m), nil)).To(BeFalse())
 		Expect(fake.rebootCalls).To(Equal(1))
 
 		// Rebooted onto the rendered configuration.
 		fake.bootID = testBootIDAfter
 		fake.current = f.after(m)
 
-		done, err = adv.Advance(ctx, f.cluster, fetchMachine(m), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(adv.Advance, f.cluster, fetchMachine(m), nil)).To(BeTrue())
 		Expect(fake.rebootCalls).To(Equal(1))
 		Expect(apimeta.IsStatusConditionTrue(fetchMachine(m).Status.Conditions, conditionConfigRollout)).To(BeFalse())
 	})
@@ -199,8 +185,7 @@ var _ = Describe("configRolloutAdvancer", func() {
 
 		fake := &fakeTalosClient{current: renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())}
 
-		_, err := newRolloutAdvancer(fake).Advance(ctx, cluster, fetchMachine(m), nil)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(newRolloutAdvancer(fake).Advance, cluster, fetchMachine(m), nil)
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(fake.stagedCalls).To(BeEmpty())
 		Expect(fake.rebootCalls).To(BeZero())
@@ -216,9 +201,7 @@ var _ = Describe("configRolloutAdvancer", func() {
 		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore}
 		fake.dryRunHook = func() { time.Sleep(2 * etcdDialTimeout) } // stands in for the evacuation and drain
 
-		done, err := newRolloutAdvancer(fake).Advance(ctx, f.cluster, fetchMachine(m), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(newRolloutAdvancer(fake).Advance, f.cluster, fetchMachine(m), nil)).To(BeFalse())
 		Expect(fake.rebootCalls).To(Equal(1))
 	})
 
@@ -255,8 +238,7 @@ var _ = Describe("configRolloutAdvancer", func() {
 
 		fake.etcdMembers = append(fake.etcdMembers, EtcdMember{ID: 2, Hostname: "node-cr-cp2"})
 
-		_, err = newRolloutAdvancer(fake).Advance(ctx, f.cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(newRolloutAdvancer(fake).Advance, f.cluster, fetchMachine(cp), nil)
 		Expect(fake.rebootCalls).To(Equal(1))
 	})
 
@@ -272,20 +254,15 @@ var _ = Describe("configRolloutAdvancer", func() {
 		}
 		adv := newRolloutAdvancer(fake)
 
-		_, err := adv.Advance(ctx, f.cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(adv.Advance, f.cluster, fetchMachine(cp), nil)
 
 		fake.bootID, fake.current, fake.etcdMembers = testBootIDAfter, f.after(cp), nil
 
-		done, err := adv.Advance(ctx, f.cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse(), "not an etcd member again yet")
+		Expect(advanceOK(adv.Advance, f.cluster, fetchMachine(cp), nil)).To(BeFalse(), "not an etcd member again yet")
 
 		fake.etcdMembers = []EtcdMember{{ID: 1, Hostname: "node-cr-cp3"}}
 
-		done, err = adv.Advance(ctx, f.cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(adv.Advance, f.cluster, fetchMachine(cp), nil)).To(BeTrue())
 	})
 
 	It("fails, and clears the marker, when the reboot call fails", func() {
@@ -305,8 +282,7 @@ var _ = Describe("configRolloutAdvancer", func() {
 		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore}
 		adv := newRolloutAdvancer(fake)
 
-		_, err := adv.Advance(ctx, f.cluster, fetchMachine(m), nil)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(adv.Advance, f.cluster, fetchMachine(m), nil)
 
 		fake.bootID = testBootIDAfter // rebooted, but current still the old configuration
 
@@ -321,8 +297,7 @@ var _ = Describe("configRolloutAdvancer", func() {
 		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore}
 		adv := newRolloutAdvancer(fake)
 
-		_, err := adv.Advance(ctx, f.cluster, fetchMachine(m), nil)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(adv.Advance, f.cluster, fetchMachine(m), nil)
 
 		// The marker is old: the node never came back.
 		got := fetchMachine(m)

@@ -137,18 +137,14 @@ var _ = Describe("talosUpgradeAdvancer schematic", func() {
 		fake := &fakeTalosClient{version: cluster.Spec.TalosVersion, schematic: oldSchematic, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, nil)
 
-		done, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)).To(BeFalse())
 		Expect(fake.upgradeCalls).To(HaveLen(1))
 		Expect(fake.upgradeCalls[0]).To(ContainSubstring(newSchematic + ":" + cluster.Spec.TalosVersion))
 
 		fake.bootID, fake.schematic = testBootIDAfter, newSchematic
 		fake.etcdMembers = []EtcdMember{{ID: 1, Hostname: "node-sc1"}}
 
-		done, err = adv.Advance(ctx, cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)).To(BeTrue())
 	})
 
 	It("fails when the node reboots onto the right version but still the old schematic", func() {
@@ -158,12 +154,11 @@ var _ = Describe("talosUpgradeAdvancer schematic", func() {
 		fake := &fakeTalosClient{version: cluster.Spec.TalosVersion, schematic: oldSchematic, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, nil)
 
-		_, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)
 
 		fake.bootID = testBootIDAfter
 
-		_, err = adv.Advance(ctx, cluster, fetchMachine(cp), nil)
+		_, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
 		Expect(err).To(MatchError(ContainSubstring("fell back")))
 	})
 
@@ -176,9 +171,7 @@ var _ = Describe("talosUpgradeAdvancer schematic", func() {
 			etcdMembers: []EtcdMember{{ID: 1, Hostname: "node-sc3"}},
 		}
 
-		done, err := newUpgradeAdvancer(fake, nil).Advance(ctx, cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(newUpgradeAdvancer(fake, nil).Advance, cluster, fetchMachine(cp), nil)).To(BeTrue())
 		Expect(fake.upgradeCalls).To(BeEmpty())
 	})
 
@@ -190,9 +183,7 @@ var _ = Describe("talosUpgradeAdvancer schematic", func() {
 			etcdMembers: []EtcdMember{{ID: 1, Hostname: "node-sc4"}},
 		}
 
-		done, err := newUpgradeAdvancer(fake, nil).Advance(ctx, cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(newUpgradeAdvancer(fake, nil).Advance, cluster, fetchMachine(cp), nil)).To(BeTrue())
 		Expect(fake.upgradeCalls).To(BeEmpty())
 	})
 })
@@ -209,9 +200,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 			etcdMembers: []EtcdMember{{ID: 1, Hostname: "node-nh1"}},
 		}
 
-		done, err := newUpgradeAdvancer(fake, nil).Advance(ctx, cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(newUpgradeAdvancer(fake, nil).Advance, cluster, fetchMachine(cp), nil)).To(BeTrue())
 		Expect(fake.upgradeCalls).To(BeEmpty())
 	})
 
@@ -223,8 +212,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 
 		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore, nodeName: "node-nh2"}
 
-		_, err := newUpgradeAdvancer(fake, nil).Advance(ctx, cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(newUpgradeAdvancer(fake, nil).Advance, cluster, fetchMachine(cp), nil)
 		Expect(fake.upgradeCalls).To(HaveLen(1))
 	})
 
@@ -234,8 +222,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, nil)
 
-		_, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)
 		Expect(fake.upgradeCalls).To(HaveLen(1))
 		Expect(fake.upgradeBudget).To(BeNumerically(">", 4*etcdDialTimeout),
 			"the Upgrade RPC's context must not inherit the %s dial bound", etcdDialTimeout)
@@ -251,8 +238,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, &fakeStorageEvacuator{resolveDelay: 2 * etcdDialTimeout})
 
-		_, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)
 		Expect(fake.upgradeCalls).To(HaveLen(1))
 	})
 
@@ -262,8 +248,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, nil)
 
-		done, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
+		done := advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)
 		Expect(done).To(BeFalse())
 		Expect(fake.upgradeCalls).To(HaveLen(1), "the Upgrade API call must have been made")
 
@@ -271,7 +256,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 		// version: Talos's own A/B bootloader fell back.
 		fake.bootID = testBootIDAfter
 
-		done, err = adv.Advance(ctx, cluster, fetchMachine(cp), nil)
+		done, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("fell back to its previous A/B slot"))
 		Expect(done).To(BeFalse())
@@ -283,18 +268,14 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, nil)
 
-		done, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)).To(BeFalse())
 
 		// The node reboots onto the target version and rejoins etcd.
 		fake.bootID = testBootIDAfter
 		fake.version = cluster.Spec.TalosVersion
 		fake.etcdMembers = []EtcdMember{{ID: 1, Hostname: "node-ok1"}}
 
-		done, err = adv.Advance(ctx, cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeTrue())
+		Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)).To(BeTrue())
 
 		got := fetchMachine(cp)
 		Expect(apimeta.IsStatusConditionTrue(got.Status.Conditions, conditionTalosUpgrade)).To(BeFalse(),
@@ -307,17 +288,14 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, nil)
 
-		_, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)
 
 		// Rebooted onto the target version, but not an etcd member yet (still joining).
 		fake.bootID = testBootIDAfter
 		fake.version = cluster.Spec.TalosVersion
 		fake.etcdMembers = nil
 
-		done, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)).To(BeFalse())
 	})
 
 	It("refuses to start an upgrade on a node that is not Ready", func() {
@@ -361,8 +339,7 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 		adv := newUpgradeAdvancer(fake, evacuator)
 
 		// First call: begins evacuation, does not yet proceed to the Upgrade API.
-		done, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
+		done := advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)
 		Expect(done).To(BeFalse())
 		Expect(evacuator.beginCalls).To(Equal(1))
 		Expect(fake.upgradeCalls).To(BeEmpty(), "evacuation must finish before the Upgrade API is ever called")
@@ -396,14 +373,11 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore}
 		adv := newUpgradeAdvancer(fake, evacuator)
 
-		_, err = adv.Advance(ctx, cluster, fetchMachine(cp), nil) // begins evacuation
-		Expect(err).NotTo(HaveOccurred())
+		advanceOK(adv.Advance, cluster, fetchMachine(cp), nil) // begins evacuation
 
 		evacuator.remaining = 0 // the replica has finished moving off
 
-		done, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(done).To(BeFalse())
+		Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)).To(BeFalse())
 		Expect(fake.upgradeCalls).To(HaveLen(1))
 		Expect(evacuator.endCalls).To(BeZero(),
 			"scheduling must stay disabled until the drain-and-reboot is confirmed, not re-enabled the moment replicas finish moving")

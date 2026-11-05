@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -282,7 +281,7 @@ var _ = Describe("the API server restart class", func() {
 		adv := newRolloutAdvancer(nil)
 		adv.TalosClient = perMachineClientFactory(map[string]*fakeTalosClient{cp1.Name: fake1, cp2.Name: fake2, cp3.Name: fake3})
 
-		op := newConfigOpFor(f.cluster.Name)
+		op := newOpTestOperationOfKind(f.cluster.Name, ichorv1alpha1.TalosOperationKindConfig)
 		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: adv.Advance}
 
 		fake1.apiReadyErr = errors.New("connection refused")
@@ -327,21 +326,14 @@ var _ = Describe("the API server restart class", func() {
 		adv := newRolloutAdvancer(nil)
 		adv.TalosClient = perMachineClientFactory(map[string]*fakeTalosClient{cp1.Name: fake1, cp2.Name: fake2, cp3.Name: fake3})
 
-		op := newConfigOpFor(f.cluster.Name)
+		op := newOpTestOperationOfKind(f.cluster.Name, ichorv1alpha1.TalosOperationKindConfig)
 		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: adv.Advance}
 
-		_, err := reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
-		_, err = reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileTimes(r, op, 2)
 
 		fake1.current, fake1.apiInstance = f.after(cp1), apiInstanceNew
 		ageRollout(cp1, 2*apiServerReadyTimeout)
-
-		for range 3 {
-			_, err = reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
-		}
+		reconcileTimes(r, op, 3)
 
 		got := fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
@@ -357,16 +349,4 @@ func markAPIServerRestartPending(ms ...*ichorv1alpha1.TalosMachine) {
 		m.Status.APIServerRestartPaths = []string{"KubeAuthenticationConfig.configuration"}
 		Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
 	}
-}
-
-func newConfigOpFor(clusterName string) *ichorv1alpha1.TalosOperation {
-	op := &ichorv1alpha1.TalosOperation{
-		GenerateName: "cfg-api-op-", Namespace: tmNamespace,
-		Spec: ichorv1alpha1.TalosOperationSpec{
-			ClusterRef: corev1.LocalObjectReference{Name: clusterName}, Kind: ichorv1alpha1.TalosOperationKindConfig,
-		},
-	}
-	Expect(k8sClient.Create(ctx, op)).To(Succeed())
-
-	return op
 }

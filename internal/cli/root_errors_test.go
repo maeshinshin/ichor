@@ -26,7 +26,7 @@ import (
 func TestExecuteRootPrintsAnErrorOnce(t *testing.T) {
 	var buf bytes.Buffer
 
-	rootCmd.SetArgs([]string{"version", "--no-such-flag"})
+	rootCmd.SetArgs([]string{"secrets", "--no-such-flag"})
 	t.Cleanup(func() {
 		rootCmd.SetArgs(nil)
 		rootCmd.SetErr(nil)

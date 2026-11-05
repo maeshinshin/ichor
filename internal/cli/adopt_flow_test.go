@@ -350,53 +350,50 @@ func withAPIServerArg(c *ichorv1alpha1.TalosCluster) *ichorv1alpha1.TalosCluster
 	return out
 }
 
-// replaced mode with KubePrism off is refused (1.6) before anything is written.
-func TestAdoptRefusesReplacedKubeProxyWithoutKubePrism(t *testing.T) {
-	env := newFlowEnv(t, cniCilium, nil)
-	env.cluster.Spec.CNI.KubeProxy = kubeProxyReplaced
-
-	if err := env.k8s.Update(context.Background(), env.cluster); err != nil {
-		t.Fatal(err)
+// Either kube-proxy mode with KubePrism off is refused (1.6) before anything is written: the CNI Job
+// needs KubePrism, and enabling it needs a reboot.
+func TestAdoptRefusesKubeProxyWithoutKubePrism(t *testing.T) {
+	tests := []struct {
+		name    string
+		replace bool
+		want    []string
+	}{
+		{kubeProxyReplaced, true, []string{"KubePrism"}},
+		{kubeProxyEnabled, false, []string{"KubePrism is off on machine", "port 7445"}},
 	}
 
-	*env.writes = nil
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			env := newFlowEnv(t, cniCilium, nil)
 
-	for addr, cfg := range env.live {
-		env.live[addr] = dropDocument(cfg, "KubePrismConfig")
-	}
+			if tc.replace {
+				env.cluster.Spec.CNI.KubeProxy = kubeProxyReplaced
 
-	deps := env.deps(t)
-	deps.AssumeYes = true
+				if err := env.k8s.Update(context.Background(), env.cluster); err != nil {
+					t.Fatal(err)
+				}
+			}
 
-	err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps)
-	if err == nil || !strings.Contains(err.Error(), "KubePrism") {
-		t.Fatalf("runAdopt = %v, want the KubePrism refusal", err)
-	}
+			*env.writes = nil
 
-	if len(*env.writes) != 0 {
-		t.Fatalf("wrote despite the refusal: %v", *env.writes)
-	}
-}
+			for addr, cfg := range env.live {
+				env.live[addr] = dropDocument(cfg, "KubePrismConfig")
+			}
 
-// kube-proxy enabled mode is refused too: the CNI Job needs KubePrism, and enabling it needs a reboot.
-func TestAdoptRefusesEnabledKubeProxyWithoutKubePrism(t *testing.T) {
-	env := newFlowEnv(t, cniCilium, nil)
-	*env.writes = nil
+			deps := env.deps(t)
+			deps.AssumeYes = true
 
-	for addr, cfg := range env.live {
-		env.live[addr] = dropDocument(cfg, "KubePrismConfig")
-	}
+			err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps)
+			for _, w := range tc.want {
+				if err == nil || !strings.Contains(err.Error(), w) {
+					t.Fatalf("runAdopt = %v, want the KubePrism refusal with %q", err, w)
+				}
+			}
 
-	deps := env.deps(t)
-	deps.AssumeYes = true
-
-	err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps)
-	if err == nil || !strings.Contains(err.Error(), "KubePrism is off on machine") || !strings.Contains(err.Error(), "port 7445") {
-		t.Fatalf("runAdopt = %v, want the KubePrism refusal", err)
-	}
-
-	if len(*env.writes) != 0 {
-		t.Fatalf("wrote despite the refusal: %v", *env.writes)
+			if len(*env.writes) != 0 {
+				t.Fatalf("wrote despite the refusal: %v", *env.writes)
+			}
+		})
 	}
 }
 

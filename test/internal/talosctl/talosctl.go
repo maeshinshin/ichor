@@ -63,9 +63,7 @@ func Get(namespace, node, resource string) (string, error) {
 // (an admin talosconfig's YAML, as produced by the config generator) instead of the insecure
 // maintenance service.
 func GetAuthenticated(namespace, node, resource string, talosconfig []byte) (string, error) {
-	return run(namespace,
-		[]string{"get", resource, "-o", "json", talosconfigFlag, talosconfigMount, nodesFlag, node},
-		map[string]string{talosconfigKey: string(talosconfig)}, time.Minute)
+	return runAuth(namespace, node, talosconfig, time.Minute, "get", resource, "-o", "json")
 }
 
 // Apply applies machineConfig to node's insecure maintenance API, which installs Talos and
@@ -79,30 +77,22 @@ func Apply(namespace, node string, machineConfig []byte) (string, error) {
 
 // Bootstrap bootstraps etcd on node's authenticated API.
 func Bootstrap(namespace, node string, talosconfig []byte) (string, error) {
-	return run(namespace,
-		[]string{"bootstrap", talosconfigFlag, talosconfigMount, nodesFlag, node},
-		map[string]string{talosconfigKey: string(talosconfig)}, time.Minute)
+	return runAuth(namespace, node, talosconfig, time.Minute, "bootstrap")
 }
 
 // Version runs the authenticated `talosctl version` (no --insecure) against node.
 func Version(namespace, node string, talosconfig []byte) (string, error) {
-	return run(namespace,
-		[]string{"version", talosconfigFlag, talosconfigMount, nodesFlag, node},
-		map[string]string{talosconfigKey: string(talosconfig)}, time.Minute)
+	return runAuth(namespace, node, talosconfig, time.Minute, "version")
 }
 
 // Upgrade runs `talosctl upgrade --image <image> --wait` against node's authenticated API.
 func Upgrade(namespace, node, image string, talosconfig []byte) (string, error) {
-	return run(namespace,
-		[]string{"upgrade", "--image", image, "--wait", "--timeout", "9m", talosconfigFlag, talosconfigMount, nodesFlag, node},
-		map[string]string{talosconfigKey: string(talosconfig)}, 10*time.Minute)
+	return runAuth(namespace, node, talosconfig, 10*time.Minute, "upgrade", "--image", image, "--wait", "--timeout", "9m")
 }
 
 // Kubeconfig downloads the admin kubeconfig from node's authenticated API, unmerged.
 func Kubeconfig(namespace, node string, talosconfig []byte) ([]byte, error) {
-	out, err := run(namespace,
-		[]string{"kubeconfig", "-", "--merge=false", talosconfigFlag, talosconfigMount, nodesFlag, node, "--endpoints", node},
-		map[string]string{talosconfigKey: string(talosconfig)}, time.Minute)
+	out, err := runAuth(namespace, node, talosconfig, time.Minute, "kubeconfig", "-", "--merge=false", "--endpoints", node)
 	return []byte(out), err
 }
 
@@ -113,19 +103,15 @@ func Health(namespace string, controlPlaneNodes []string, talosconfig []byte) (s
 	// --nodes (-n) targets exactly one node to run the check from; --control-plane-nodes
 	// is the list health checks against. Confirmed for real: "command health requires
 	// exactly one node" when --nodes carried the full list too.
-	return run(namespace,
-		[]string{"health", "--control-plane-nodes", strings.Join(controlPlaneNodes, ","),
-			talosconfigFlag, talosconfigMount, nodesFlag, controlPlaneNodes[0]},
-		map[string]string{talosconfigKey: string(talosconfig)}, 3*time.Minute)
+	return runAuth(namespace, controlPlaneNodes[0], talosconfig, 3*time.Minute,
+		"health", "--control-plane-nodes", strings.Join(controlPlaneNodes, ","))
 }
 
 // EtcdMembers runs the authenticated `talosctl etcd members` against node, listing etcd's
 // own view of cluster membership -- direct evidence of a membership change, not a count
 // derived from TalosMachine objects.
 func EtcdMembers(namespace, node string, talosconfig []byte) (string, error) {
-	return run(namespace,
-		[]string{"etcd", "members", talosconfigFlag, talosconfigMount, nodesFlag, node},
-		map[string]string{talosconfigKey: string(talosconfig)}, time.Minute)
+	return runAuth(namespace, node, talosconfig, time.Minute, "etcd", "members")
 }
 
 // DecodeAll decodes the concatenated JSON objects talosctl prints for multi-instance
@@ -165,6 +151,13 @@ func MachineStatusReady(obj map[string]any) bool {
 func MetadataID(obj map[string]any) any {
 	metadata, _ := obj["metadata"].(map[string]any)
 	return metadata["id"]
+}
+
+// runAuth is run for an authenticated call: talosconfig is mounted and --talosconfig and --nodes node
+// are appended to args.
+func runAuth(namespace, node string, talosconfig []byte, timeout time.Duration, args ...string) (string, error) {
+	return run(namespace, append(args, talosconfigFlag, talosconfigMount, nodesFlag, node),
+		map[string]string{talosconfigKey: string(talosconfig)}, timeout)
 }
 
 // run creates a one-shot Pod in namespace running talosctl with args, optionally mounting
@@ -300,9 +293,6 @@ func deleteSecret(namespace, name string) {
 // Reset wipes STATE and EPHEMERAL on node's authenticated API and reboots it, without the graceful
 // leave, so a node of a cluster the caller owns comes back in maintenance mode (ADR 0103 harness).
 func Reset(namespace, node string, talosconfig []byte) (string, error) {
-	return run(namespace,
-		[]string{"reset", "--graceful=false", "--reboot", "--wait=false",
-			"--system-labels-to-wipe", "STATE", "--system-labels-to-wipe", "EPHEMERAL",
-			talosconfigFlag, talosconfigMount, nodesFlag, node, "--endpoints", node},
-		map[string]string{talosconfigKey: string(talosconfig)}, 2*time.Minute)
+	return runAuth(namespace, node, talosconfig, 2*time.Minute, "reset", "--graceful=false", "--reboot", "--wait=false",
+		"--system-labels-to-wipe", "STATE", "--system-labels-to-wipe", "EPHEMERAL", "--endpoints", node)
 }

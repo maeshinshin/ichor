@@ -19,16 +19,20 @@ package ichorauth
 import "testing"
 
 func TestUngrantedRole(t *testing.T) {
+	admin, operator := []string{RoleAdmin}, []string{RoleOperator}
+
 	for _, tc := range []struct {
 		name                  string
 		groups, current, want []string
 		role                  string
 	}{
-		{name: "admin may grant any role", groups: []string{"ichor:admin"}, want: []string{"admin", "custom"}},
-		{name: "a held role", groups: []string{"ichor:operator"}, want: []string{"operator"}},
-		{name: "a role not held", groups: []string{"ichor:operator"}, want: []string{"operator", "admin"}, role: "admin"},
-		{name: "a role the target already has is no grant", groups: []string{"ichor:viewer"}, current: []string{"admin"}, want: []string{"admin"}},
-		{name: "a group of another prefix holds nothing", groups: []string{"oidc:admin"}, want: []string{"admin"}, role: "admin"},
+		{name: "admin may grant any role", groups: []string{GroupPrefix + RoleAdmin}, want: []string{RoleAdmin, "custom"}},
+		{name: "a held role", groups: []string{GroupPrefix + RoleOperator}, want: operator},
+		{name: "a role not held", groups: []string{GroupPrefix + RoleOperator},
+			want: []string{RoleOperator, RoleAdmin}, role: RoleAdmin},
+		{name: "a role the target already has is no grant", groups: []string{GroupPrefix + RoleViewer},
+			current: admin, want: admin},
+		{name: "a group of another prefix holds nothing", groups: []string{"oidc:admin"}, want: admin, role: RoleAdmin},
 		{name: "no roles wanted", groups: nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -45,10 +49,10 @@ func TestIsEnabledAdmin(t *testing.T) {
 		disabled bool
 		want     bool
 	}{
-		{roles: []string{"admin"}, want: true},
-		{roles: []string{"viewer", "admin"}, want: true},
-		{roles: []string{"admin"}, disabled: true},
-		{roles: []string{"operator"}},
+		{roles: []string{RoleAdmin}, want: true},
+		{roles: []string{RoleViewer, RoleAdmin}, want: true},
+		{roles: []string{RoleAdmin}, disabled: true},
+		{roles: []string{RoleOperator}},
 		{},
 	} {
 		if got := IsEnabledAdmin(tc.roles, tc.disabled); got != tc.want {

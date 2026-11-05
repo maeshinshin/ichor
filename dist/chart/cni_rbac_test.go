@@ -55,7 +55,7 @@ func TestCNIHelmRBAC(t *testing.T) {
 
 		// The takeover's Secret rights in kube-system (ADR 0103, 1.2): namespaced, get/list/delete only.
 		records := find(docs, kindRole, "ichor-cni-records-role")
-		if records == nil || docNamespace(records) != kubeSystemNs {
+		if records == nil || namespaceOf(records) != kubeSystemNs {
 			t.Fatalf("Role ichor-cni-records-role = %v, want it in kube-system", records)
 		}
 
@@ -75,20 +75,13 @@ func TestCNIHelmRBAC(t *testing.T) {
 	t.Run("lives in kube-system", func(t *testing.T) {
 		docs := renderChart(t, "ichor")
 
-		nsOf := func(d map[string]any) string {
-			md, _ := d["metadata"].(map[string]any)
-			ns, _ := md["namespace"].(string)
-
-			return ns
-		}
-
 		sa := find(docs, kindServiceAccount, "ichor-cni")
-		if sa == nil || nsOf(sa) != kubeSystemNs {
+		if sa == nil || namespaceOf(sa) != kubeSystemNs {
 			t.Errorf("ServiceAccount ichor-cni = %v, want it in kube-system", sa)
 		}
 
 		jobRole := find(docs, kindRole, "ichor-cni-job-role")
-		if jobRole == nil || nsOf(jobRole) != kubeSystemNs {
+		if jobRole == nil || namespaceOf(jobRole) != kubeSystemNs {
 			t.Fatalf("Role ichor-cni-job-role = %v, want it in kube-system", jobRole)
 		}
 
@@ -102,14 +95,14 @@ func TestCNIHelmRBAC(t *testing.T) {
 		// release's role, which cannot create a Role in kube-system, so the installer holds no
 		// namespaced Role there and its ClusterRole carries what it needs to apply the Job's objects.
 		for _, d := range installerDocs {
-			if (kindOf(d) == kindRole || kindOf(d) == kindRoleBinding) && nsOf(d) == kubeSystemNs &&
+			if (kindOf(d) == kindRole || kindOf(d) == kindRoleBinding) && namespaceOf(d) == kubeSystemNs &&
 				strings.HasPrefix(nameOf(d), "ichor-installer") {
 				t.Errorf("%s %s is in kube-system; installer rights are cluster-scoped only (ADR 0059)", kindOf(d), nameOf(d))
 			}
 		}
 
 		secrets := find(docs, kindRole, "ichor-cni-role")
-		if secrets == nil || nsOf(secrets) == kubeSystemNs {
+		if secrets == nil || namespaceOf(secrets) == kubeSystemNs {
 			t.Errorf("Role ichor-cni-role (release records) = %v, want it in the release namespace", secrets)
 		}
 

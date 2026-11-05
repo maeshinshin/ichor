@@ -18,7 +18,6 @@ package chart
 
 import (
 	"encoding/json"
-	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
@@ -36,15 +35,9 @@ const ciliumAPI = "cilium.io/v2/CiliumNetworkPolicy"
 func renderWithAPIs(t *testing.T, apis string, sets ...string) []map[string]any {
 	t.Helper()
 
-	args := make([]string, 0, 5+2*len(sets))
-	args = append(args, "template", "ichor", ".", "--api-versions", apis)
-	for _, s := range sets {
-		args = append(args, "--set", s)
-	}
-
-	out, err := exec.Command("helm", args...).CombinedOutput()
+	out, err := helmTemplate("ichor", []string{"--api-versions", apis}, sets)
 	if err != nil {
-		t.Fatalf("helm %s: %v\n%s", strings.Join(args, " "), err, out)
+		t.Fatalf("helm template --api-versions %s (--set %s): %v\n%s", apis, strings.Join(sets, " --set "), err, out)
 	}
 
 	return decodeYAMLDocs(t, out, "helm template with api versions")

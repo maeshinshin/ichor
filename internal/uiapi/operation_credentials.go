@@ -29,7 +29,6 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -95,22 +94,10 @@ func (s *Server) caRotationOperation(ctx context.Context, ref *pb.ObjectRef, sta
 // emitCredentialsEvent records who started the download. It carries no content, and is created with
 // the backend's own client like the diagnostics Event (the users may not create Events).
 func (s *Server) emitCredentialsEvent(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, operation string) error {
-	now := metav1.NewTime(s.now())
 	msg := fmt.Sprintf("CA rotation credentials download started by %s at %s (operation %s)",
-		s.actorName(ctx), now.UTC().Format(time.RFC3339), operation)
+		s.actorName(ctx), s.now().UTC().Format(time.RFC3339), operation)
 
-	ev := &corev1.Event{
-		InvolvedObject: corev1.ObjectReference{
-			APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: kindTalosCluster,
-			Namespace: cluster.Namespace, Name: cluster.Name, UID: cluster.UID,
-		},
-		Reason: credentialsReason, Message: msg, Type: corev1.EventTypeWarning,
-		Source:         corev1.EventSource{Component: actor},
-		FirstTimestamp: now, LastTimestamp: now, Count: 1,
-	}
-	ev.GenerateName, ev.Namespace = cluster.Name+".", cluster.Namespace
-
-	return s.Client.Create(ctx, ev)
+	return s.emitWarningEvent(ctx, cluster, kindTalosCluster, credentialsReason, msg)
 }
 
 // talosEndpoints are the Talos API endpoints a handed-out talosconfig names: the cluster's control planes, else

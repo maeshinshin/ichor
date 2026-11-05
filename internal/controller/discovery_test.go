@@ -92,6 +92,34 @@ func maintenanceFactory(fake *fakeMaintenanceClient) func(context.Context, strin
 	}
 }
 
+// probeRecorder is a MaintenanceClient factory that records every endpoint it is asked for and hands out client.
+type probeRecorder struct {
+	client    MaintenanceClient
+	mu        sync.Mutex
+	endpoints []string
+}
+
+func (p *probeRecorder) factory(_ context.Context, endpoint string) (MaintenanceClient, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.endpoints = append(p.endpoints, endpoint)
+
+	return p.client, nil
+}
+
+// createNode creates a Node with the InternalIP ip and the given conditions, deleted after the spec.
+func createNode(name, ip string, annotations map[string]string, conds ...corev1.NodeCondition) {
+	node := &corev1.Node{}
+	node.Name, node.Annotations = name, annotations
+	Expect(k8sClient.Create(ctx, node)).To(Succeed())
+	DeferCleanup(func() { _ = k8sClient.Delete(ctx, node) })
+
+	node.Status.Addresses = []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: ip}}
+	node.Status.Conditions = conds
+	Expect(k8sClient.Status().Update(ctx, node)).To(Succeed())
+}
+
 // getMachine fetches the TalosMachine named name in namespace, or nil if it
 // does not exist -- discovery_test.go's own tests care about exactly this
 // question (did Discover create or touch the object named after this
@@ -585,33 +613,15 @@ var _ = Describe("DiscoveryReconciler.DiscoverAll known addresses", func() {
 		Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
 
 		// .12 matches only a Node's InternalIP.
-		node := &corev1.Node{}
-		node.Name = "skip-known-node"
-		Expect(k8sClient.Create(ctx, node)).To(Succeed())
-		DeferCleanup(func() { _ = k8sClient.Delete(ctx, node) })
+		createNode("skip-known-node", "198.51.100.12", nil)
 
-		node.Status.Addresses = []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: "198.51.100.12"}}
-		Expect(k8sClient.Status().Update(ctx, node)).To(Succeed())
-
-		var (
-			mu     sync.Mutex
-			probed []string
-		)
-
-		factory := func(_ context.Context, endpoint string) (MaintenanceClient, error) {
-			mu.Lock()
-			probed = append(probed, endpoint)
-			mu.Unlock()
-
-			return &fakeMaintenanceClient{err: fmt.Errorf("%w: rejected", ErrAlreadyConfigured)}, nil
-		}
-
+		probes := &probeRecorder{client: &fakeMaintenanceClient{err: fmt.Errorf("%w: rejected", ErrAlreadyConfigured)}}
 		recorder := record.NewFakeRecorder(10)
-		r := &DiscoveryReconciler{Client: k8sClient, Recorder: recorder, MaintenanceClient: factory}
+		r := &DiscoveryReconciler{Client: k8sClient, Recorder: recorder, MaintenanceClient: probes.factory}
 
 		_, err := r.DiscoverAll(ctx, cluster)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(probed).To(ConsistOf("198.51.100.13:50000"))
+		Expect(probes.endpoints).To(ConsistOf("198.51.100.13:50000"))
 		Expect(recorder.Events).To(Receive(ContainSubstring("198.51.100.13:50000")))
 		Consistently(recorder.Events).ShouldNot(Receive())
 	})
@@ -622,42 +632,15 @@ var _ = Describe("DiscoveryReconciler.DiscoverAll known addresses", func() {
 				Addresses: []string{"198.51.100.20", "198.51.100.21"},
 			}}}
 
-		mkNode := func(name, ip string, ready corev1.ConditionStatus, annotated bool) {
-			node := &corev1.Node{}
-			node.Name = name
+		reset := map[string]string{nodeResetByIchorAnnotation: "2026-11-02T00:00:00Z"}
+		createNode("reset-left-node", "198.51.100.20", reset, corev1.NodeCondition{Type: corev1.NodeReady, Status: corev1.ConditionUnknown})
+		createNode("reset-rejoined-node", "198.51.100.21", reset, corev1.NodeCondition{Type: corev1.NodeReady, Status: corev1.ConditionTrue})
 
-			if annotated {
-				node.Annotations = map[string]string{nodeResetByIchorAnnotation: "2026-11-02T00:00:00Z"}
-			}
-
-			Expect(k8sClient.Create(ctx, node)).To(Succeed())
-			DeferCleanup(func() { _ = k8sClient.Delete(ctx, node) })
-
-			node.Status.Addresses = []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: ip}}
-			node.Status.Conditions = []corev1.NodeCondition{{Type: corev1.NodeReady, Status: ready}}
-			Expect(k8sClient.Status().Update(ctx, node)).To(Succeed())
-		}
-
-		mkNode("reset-left-node", "198.51.100.20", corev1.ConditionUnknown, true)
-		mkNode("reset-rejoined-node", "198.51.100.21", corev1.ConditionTrue, true)
-
-		var (
-			mu     sync.Mutex
-			probed []string
-		)
-
-		factory := func(_ context.Context, endpoint string) (MaintenanceClient, error) {
-			mu.Lock()
-			probed = append(probed, endpoint)
-			mu.Unlock()
-
-			return &fakeMaintenanceClient{err: fmt.Errorf("%w: rejected", ErrAlreadyConfigured)}, nil
-		}
-
-		r := &DiscoveryReconciler{Client: k8sClient, Recorder: record.NewFakeRecorder(10), MaintenanceClient: factory}
+		probes := &probeRecorder{client: &fakeMaintenanceClient{err: fmt.Errorf("%w: rejected", ErrAlreadyConfigured)}}
+		r := &DiscoveryReconciler{Client: k8sClient, Recorder: record.NewFakeRecorder(10), MaintenanceClient: probes.factory}
 
 		_, err := r.DiscoverAll(ctx, cluster)
 		Expect(err).NotTo(HaveOccurred())
-		Expect(probed).To(ConsistOf("198.51.100.20:50000"))
+		Expect(probes.endpoints).To(ConsistOf("198.51.100.20:50000"))
 	})
 })

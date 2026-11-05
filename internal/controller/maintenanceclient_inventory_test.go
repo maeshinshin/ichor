@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"net"
+	"slices"
 	"testing"
 
 	"github.com/cosi-project/runtime/pkg/resource/meta"
@@ -128,27 +129,15 @@ func TestReadInventory(t *testing.T) {
 		{WWID: "naa.1", BusPath: "/pci0000:00/ata1", DevPath: inventoryDisk, SizeBytes: 120 << 30},
 		{Serial: "S-B", ByIDPath: "/dev/disk/by-id/ata-WD-B", DevPath: testDevice, SizeBytes: 500 << 30, Model: "WD Blue", Transport: "sata"},
 	}
-	if len(inv.Disks) != len(wantDisks) {
+	if !slices.Equal(inv.Disks, wantDisks) {
 		t.Fatalf("Disks = %+v, want %+v", inv.Disks, wantDisks)
-	}
-
-	for i := range wantDisks {
-		if inv.Disks[i] != wantDisks[i] {
-			t.Fatalf("Disks[%d] = %+v, want %+v", i, inv.Disks[i], wantDisks[i])
-		}
 	}
 
 	wantLinks := []ichorv1alpha1.TalosMachineDiscoveredLink{
 		{Name: inventoryNIC, PermanentMAC: "aa:bb:cc:00:00:01"},
 		{Name: "enp3s0", PermanentMAC: "aa:bb:cc:00:00:02", LinkUp: true, SpeedMbit: 1000, Driver: "igb"},
 	}
-	if len(inv.Links) != len(wantLinks) {
+	if !slices.Equal(inv.Links, wantLinks) {
 		t.Fatalf("Links = %+v, want %+v", inv.Links, wantLinks)
-	}
-
-	for i := range wantLinks {
-		if inv.Links[i] != wantLinks[i] {
-			t.Fatalf("Links[%d] = %+v, want %+v", i, inv.Links[i], wantLinks[i])
-		}
 	}
 }

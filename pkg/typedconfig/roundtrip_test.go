@@ -82,38 +82,26 @@ func TestRoundTripConfig(t *testing.T) {
 		t.Fatalf("seeding endpoint: %v", err)
 	}
 
-	boolTrue := true
-	boolFalse := false
-
 	// The six fieldOverrides entries (internal/tools/mirrorgen/main.go):
 	// building these through mirrorToMachineryUnstructured, the same helper
 	// ToMachinery itself calls, guarantees the fixture is exactly the shape a
 	// real round trip would produce, including every field the upstream
 	// type requires with no omitempty.
-	requests, err := mirrorToMachineryUnstructured(corev1.ResourceList{
+	requests := mustUnstructured(t, "resources requests", corev1.ResourceList{
 		corev1.ResourceCPU:    resource.MustParse("1"),
 		corev1.ResourceMemory: resource.MustParse("2Gi"),
 	})
-	if err != nil {
-		t.Fatalf("seeding resources requests: %v", err)
-	}
 
-	limits, err := mirrorToMachineryUnstructured(corev1.ResourceList{
+	limits := mustUnstructured(t, "resources limits", corev1.ResourceList{
 		corev1.ResourceCPU:    resource.MustParse("2"),
 		corev1.ResourceMemory: resource.MustParse("4Gi"),
 	})
-	if err != nil {
-		t.Fatalf("seeding resources limits: %v", err)
-	}
 
-	auditPolicy, err := mirrorToMachineryUnstructured(auditv1.Policy{
+	auditPolicy := mustUnstructured(t, "audit policy", auditv1.Policy{
 		Rules: []auditv1.PolicyRule{{Level: auditv1.LevelMetadata}},
 	})
-	if err != nil {
-		t.Fatalf("seeding audit policy: %v", err)
-	}
 
-	webhook, err := mirrorToMachineryUnstructured(apiserverv1.WebhookConfiguration{
+	webhook := mustUnstructured(t, "authorizer webhook", apiserverv1.WebhookConfiguration{
 		AuthorizedTTL:                            metav1.Duration{Duration: 5 * time.Minute},
 		UnauthorizedTTL:                          metav1.Duration{Duration: 30 * time.Second},
 		Timeout:                                  metav1.Duration{Duration: 30 * time.Second},
@@ -122,20 +110,14 @@ func TestRoundTripConfig(t *testing.T) {
 		FailurePolicy:                            "NoOpinion",
 		ConnectionInfo:                           apiserverv1.WebhookConnectionInfo{Type: "InClusterConfig"},
 	})
-	if err != nil {
-		t.Fatalf("seeding authorizer webhook: %v", err)
-	}
 
-	seccomp, err := mirrorToMachineryUnstructured(specs.LinuxSeccomp{
+	seccomp := mustUnstructured(t, "seccomp profile", specs.LinuxSeccomp{
 		DefaultAction: specs.ActAllow,
 		Architectures: []specs.Arch{specs.ArchX86_64},
 	})
-	if err != nil {
-		t.Fatalf("seeding seccomp profile: %v", err)
-	}
 
 	// credentialProviderConfig exercises the sixth fieldOverrides entry.
-	credentialProviderConfig, err := mirrorToMachineryUnstructured(kubeletv1.CredentialProviderConfig{
+	credentialProviderConfig := mustUnstructured(t, "kubelet credential provider config", kubeletv1.CredentialProviderConfig{
 		Providers: []kubeletv1.CredentialProvider{
 			{
 				Name:                 "ecr-credential-provider",
@@ -145,13 +127,10 @@ func TestRoundTripConfig(t *testing.T) {
 			},
 		},
 	})
-	if err != nil {
-		t.Fatalf("seeding kubelet credential provider config: %v", err)
-	}
 
 	orig := &mv1alpha1.Config{
 		ConfigVersion: apiVersionV1Alpha1,
-		ConfigDebug:   &boolFalse,
+		ConfigDebug:   new(false),
 		MachineConfig: &mv1alpha1.MachineConfig{
 			MachineType: "controlplane",
 			// MachineToken and MachineCA are deliberately left unset: both are on
@@ -172,7 +151,7 @@ func TestRoundTripConfig(t *testing.T) {
 					Type:  mv1alpha1.InstallDiskType("ssd"),
 				},
 				InstallImage: "factory.talos.dev/metal-installer/abc123:latest",
-				InstallWipe:  &boolTrue,
+				InstallWipe:  new(true),
 			},
 			MachineKubelet: &mv1alpha1.KubeletConfig{ //nolint:staticcheck // see comment above
 				KubeletExtraArgs: mmeta.Args{ //nolint:staticcheck // see comment above
@@ -305,6 +284,17 @@ func TestRoundTripRawVolumeConfig(t *testing.T) {
 	assertRoundTrip(t, orig, func() (machineryConverter[mblock.RawVolumeConfigV1Alpha1], error) {
 		return RawVolumeConfigV1Alpha1FromMachinery(orig)
 	})
+}
+
+func mustUnstructured[T any](t *testing.T, what string, v T) mmeta.Unstructured {
+	t.Helper()
+
+	u, err := mirrorToMachineryUnstructured(v)
+	if err != nil {
+		t.Fatalf("seeding %s: %v", what, err)
+	}
+
+	return u
 }
 
 // machineryConverter is a mirror type's ToMachinery method, named so the

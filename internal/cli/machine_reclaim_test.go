@@ -199,12 +199,17 @@ func TestMachineReclaimAddressChangeGivesHint(t *testing.T) {
 }
 
 // A control plane whose etcd is not running is
-// reset with --force-ungraceful, and the report says why there is no etcd membership.
-func TestMachineReclaimEtcdDownProceedsWithForceUngraceful(t *testing.T) {
-	h := newReclaimHarness("", reclaim.Known{})
-	h.node.in.ControlPlane, h.node.in.ClusterReachable = true, false
-	h.node.in.EtcdProblem = "etcd member list did not answer within 20s"
+// refused without --force-ungraceful, and reset with it; the report says why there is no etcd membership.
+func TestMachineReclaimEtcdDown(t *testing.T) {
+	mk := func() *reclaimHarness {
+		h := newReclaimHarness("", reclaim.Known{})
+		h.node.in.ControlPlane, h.node.in.ClusterReachable = true, false
+		h.node.in.EtcdProblem = "etcd member list did not answer within 20s"
 
+		return h
+	}
+
+	h := mk()
 	if err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Confirm: testUUID, ForceUngraceful: true}); err != nil {
 		t.Fatalf("%v\n%s", err, h.out.String())
 	}
@@ -218,12 +223,8 @@ func TestMachineReclaimEtcdDownProceedsWithForceUngraceful(t *testing.T) {
 			t.Errorf("output lacks %q:\n%s", want, h.out.String())
 		}
 	}
-}
 
-func TestMachineReclaimEtcdDownRefusesWithoutForceUngraceful(t *testing.T) {
-	h := newReclaimHarness("", reclaim.Known{})
-	h.node.in.ControlPlane, h.node.in.ClusterReachable = true, false
-	h.node.in.EtcdProblem = "etcd member list did not answer within 20s"
+	h = mk()
 
 	err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Confirm: testUUID})
 	if err == nil || !strings.Contains(err.Error(), "--force-ungraceful") || len(h.node.resets) != 0 {

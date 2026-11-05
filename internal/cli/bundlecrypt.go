@@ -107,10 +107,12 @@ func warnBundle(format string, args ...any) {
 
 // isEncryptedBundle reports whether raw is an age file (armored or binary), by its first line.
 func isEncryptedBundle(raw []byte) bool {
-	head := strings.TrimSpace(string(raw[:min(len(raw), 128)]))
-
-	return strings.HasPrefix(head, ageArmorHeader) || strings.HasPrefix(head, ageBinaryHeader)
+	return isArmoredBundle(raw) || strings.HasPrefix(bundleHead(raw), ageBinaryHeader)
 }
+
+func bundleHead(raw []byte) string { return strings.TrimSpace(string(raw[:min(len(raw), 128)])) }
+
+func isArmoredBundle(raw []byte) bool { return strings.HasPrefix(bundleHead(raw), ageArmorHeader) }
 
 // sealBundleBytes encrypts plain to an armored age file under pass.
 func sealBundleBytes(plain []byte, pass string) ([]byte, error) {
@@ -128,19 +130,19 @@ func sealBundleBytes(plain []byte, pass string) ([]byte, error) {
 	armored := armor.NewWriter(&out)
 
 	w, err := age.Encrypt(armored, rcp)
+	if err == nil {
+		_, err = w.Write(plain)
+	}
+
+	if err == nil {
+		err = w.Close()
+	}
+
+	if err == nil {
+		err = armored.Close()
+	}
+
 	if err != nil {
-		return nil, fmt.Errorf("encrypting the secrets bundle: %w", err)
-	}
-
-	if _, err := w.Write(plain); err != nil {
-		return nil, fmt.Errorf("encrypting the secrets bundle: %w", err)
-	}
-
-	if err := w.Close(); err != nil {
-		return nil, fmt.Errorf("encrypting the secrets bundle: %w", err)
-	}
-
-	if err := armored.Close(); err != nil {
 		return nil, fmt.Errorf("encrypting the secrets bundle: %w", err)
 	}
 
@@ -156,7 +158,7 @@ func openBundleBytes(raw []byte, pass string) ([]byte, error) {
 	}
 
 	src := io.Reader(bytes.NewReader(raw))
-	if strings.HasPrefix(strings.TrimSpace(string(raw[:min(len(raw), 128)])), ageArmorHeader) {
+	if isArmoredBundle(raw) {
 		src = armor.NewReader(src)
 	}
 

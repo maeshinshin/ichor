@@ -119,14 +119,14 @@ func TestRotateCAPlanOfEtcdAloneHasNoHandoffAndWarnsAboutRestartsAndTheSnapshot(
 
 	for _, want := range []string{
 		"Rotate the etcd certificate authorities", "no credential hand-off", "rebooted once in each of the three stages",
-		"ichor etcd backup now", "ichor cluster bundle-export " + opTestCluster,
+		"the control planes REBOOT in each pass", "ichor etcd backup now", "ichor cluster bundle-export " + opTestCluster,
 	} {
 		if !strings.Contains(prompt.String(), want) {
 			t.Errorf("prompt lacks %q:\n%s", want, prompt.String())
 		}
 	}
 
-	for _, not := range []string{"STOP WORKING", "WAITS", "kubelet RESTARTS", "kube-root-ca.crt"} {
+	for _, not := range []string{"STOP WORKING", "WAITS", "kubelet RESTARTS", "kube-root-ca.crt", "without a reboot"} {
 		if strings.Contains(prompt.String(), not) {
 			t.Errorf("an etcd rotation's prompt must not say %q:\n%s", not, prompt.String())
 		}

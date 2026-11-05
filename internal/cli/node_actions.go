@@ -38,6 +38,7 @@ var nodeActionOpts struct {
 	Confirm     string
 	AllowLeader bool
 	Node        string
+	WipeMode    string
 }
 
 // nodeActionSpec is what one node action command asks for.
@@ -49,12 +50,14 @@ type nodeActionSpec struct {
 	// Confirm is the machine name, typed or passed with --confirm; required for reset and remove.
 	Confirm string
 	Follow  bool
+	// WipeMode is --wipe-mode of reset: system-disk or all; empty wipes STATE and EPHEMERAL only.
+	WipeMode string
 }
 
 func (s nodeActionSpec) request(bg *pb.Override) *pb.NodeActionRequest {
 	return &pb.NodeActionRequest{
 		Machine: objectRef(apiOpts.Namespace, s.Machine), Action: s.Action, Service: s.Service,
-		AllowLeader: s.AllowLeader, Confirm: s.Confirm, Override: bg,
+		AllowLeader: s.AllowLeader, Confirm: s.Confirm, Override: bg, WipeMode: s.WipeMode,
 	}
 }
 
@@ -208,6 +211,7 @@ It shows the plan and asks for confirmation unless --yes. The CLI only writes th
 		RunE: func(cmd *cobra.Command, a []string) error {
 			s := spec(a)
 			s.Action, s.Follow, s.Confirm = action, nodeActionOpts.Follow, nodeActionOpts.Confirm
+			s.WipeMode = nodeActionOpts.WipeMode
 
 			return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 				return runNodeAction(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), s)
@@ -228,7 +232,7 @@ var (
 	nodeShutdownCmd = newNodeActionCmd("shutdown NODE", "Shut a node down; it stays off until you power it on",
 		pb.NodeAction_NODE_ACTION_SHUTDOWN, cobra.ExactArgs(1), machineArg)
 	nodeResetCmd = newNodeActionCmd("reset NODE",
-		"Remove a node from the cluster and wipe it (its STATE and EPHEMERAL partitions); needs the override permission",
+		"Remove a node from the cluster and wipe it (its STATE and EPHEMERAL partitions, or the whole disk with --wipe-mode); needs the override permission",
 		pb.NodeAction_NODE_ACTION_RESET, cobra.ExactArgs(1), machineArg)
 	nodeRemoveCmd = newNodeActionCmd("remove NODE", "Remove a node from the cluster: drain it and, for a control plane, remove its etcd member",
 		pb.NodeAction_NODE_ACTION_REMOVE, cobra.ExactArgs(1), machineArg)
@@ -259,6 +263,9 @@ func init() {
 
 	etcdDefragCmd.Flags().BoolVar(&nodeActionOpts.AllowLeader, "allow-leader", false,
 		"allow defragmenting the etcd leader (writes pause for the whole cluster meanwhile)")
+
+	nodeResetCmd.Flags().StringVar(&nodeActionOpts.WipeMode, "wipe-mode", "",
+		"wipe more than STATE and EPHEMERAL: system-disk (the whole system disk, so the node boots its boot image again and can be installed afresh) or all (also every user disk)")
 
 	for _, c := range []*cobra.Command{nodeResetCmd, nodeRemoveCmd} {
 		c.Flags().StringVar(&nodeActionOpts.Confirm, "confirm", "", "the node's name, to go on without being asked to type it")

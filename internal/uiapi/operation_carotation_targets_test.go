@@ -98,6 +98,11 @@ func TestPlanCARotationRefusesWhatItCannotRotate(t *testing.T) {
 	if connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("a shutdown with ca_targets: want InvalidArgument, got %v", err)
 	}
+
+	// A rotation has no version target.
+	if _, err = planOp(srv, pb.OperationKind_OPERATION_KIND_CA_ROTATION, opNewTalos); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("a ca-rotation with a target: want InvalidArgument, got %v", err)
+	}
 }
 
 func TestPlanCARotationBlocksTheAggregatorOnAnOldVersionContract(t *testing.T) {

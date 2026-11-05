@@ -46,9 +46,7 @@ func TestPlanAndCreateRefuseADowngrade(t *testing.T) {
 			srv, base := opServer(t, objs...)
 			before := getCluster(t, base).Spec
 
-			res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-				Cluster: objectRef(opNS, opCluster), Kind: tc.kind, Target: tc.target,
-			}))
+			res, err := planOp(srv, tc.kind, tc.target)
 			if err != nil || !strings.Contains(res.Msg.GetBlocked(), "downgrade") {
 				t.Fatalf("err=%v plan=%v", err, res.Msg)
 			}
@@ -74,9 +72,7 @@ func TestPlanRefusesAnOlderIchorVersion(t *testing.T) {
 	}
 	srv, _ := opServer(t, append(opObjects(), inst)...)
 
-	res, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_ICHOR, Target: "v0.4.0",
-	}))
+	res, err := planOp(srv, pb.OperationKind_OPERATION_KIND_ICHOR, "v0.4.0")
 	if err != nil || !strings.Contains(res.Msg.GetBlocked(), "downgrade") {
 		t.Fatalf("err=%v plan=%v", err, res.Msg)
 	}

@@ -48,6 +48,7 @@ func useBundleCrypto(t *testing.T) *bytes.Buffer {
 	bundleTerminal = func() bool { return false }
 
 	t.Setenv(bundlePassphraseEnv, "")
+	t.Setenv("HOME", t.TempDir())
 	clear(sealedThisRun)
 	clear(openedThisRun)
 	clear(readFromFile)
@@ -61,6 +62,18 @@ func useBundleCrypto(t *testing.T) *bytes.Buffer {
 	})
 
 	return &warn
+}
+
+// saveTestBundle is saveBundleFile that fails the test and returns the path.
+func saveTestBundle(t *testing.T, cluster string, bundle *secrets.Bundle, pass string) string {
+	t.Helper()
+
+	path, err := saveBundleFile(cluster, bundle, pass)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return path
 }
 
 // savePlainBundle is saveBundleFile without encryption, for tests that fake the save seam.

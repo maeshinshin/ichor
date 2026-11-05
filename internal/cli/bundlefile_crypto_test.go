@@ -29,14 +29,10 @@ import (
 // back with the passphrase from a source.
 func TestBundleFileEncryptedRoundTrip(t *testing.T) {
 	useBundleCrypto(t)
-	t.Setenv("HOME", t.TempDir())
 
 	bundle := newTestBundle(t)
 
-	path, err := saveBundleFile("enc", bundle, testBundlePass)
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := saveTestBundle(t, "enc", bundle, testBundlePass)
 
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -67,12 +63,8 @@ func TestBundleFileEncryptedRoundTrip(t *testing.T) {
 
 func TestLoadBundleFileEncryptedFailures(t *testing.T) {
 	warn := useBundleCrypto(t)
-	t.Setenv("HOME", t.TempDir())
 
-	path, err := saveBundleFile("enc", newTestBundle(t), testBundlePass)
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := saveTestBundle(t, "enc", newTestBundle(t), testBundlePass)
 
 	t.Run("wrong passphrase", func(t *testing.T) {
 		t.Setenv(bundlePassphraseEnv, testBundleWrongPass)
@@ -103,14 +95,10 @@ func TestLoadBundleFileEncryptedFailures(t *testing.T) {
 // names the migration.
 func TestLoadBundleFilePlaintextWarns(t *testing.T) {
 	warn := useBundleCrypto(t)
-	t.Setenv("HOME", t.TempDir())
 
 	bundle := newTestBundle(t)
 
-	path, err := saveBundleFile("plain", bundle, "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := saveTestBundle(t, "plain", bundle, "")
 
 	got, err := loadBundleFile(path)
 	if err != nil || got.Cluster.ID != bundle.Cluster.ID {
@@ -148,7 +136,6 @@ func TestSaveSealedBundle(t *testing.T) {
 
 	t.Run("plaintext opt-out warns", func(t *testing.T) {
 		useBundleCrypto(t)
-		t.Setenv("HOME", t.TempDir())
 
 		var errw bytes.Buffer
 
@@ -168,7 +155,6 @@ func TestSaveSealedBundle(t *testing.T) {
 
 	t.Run("a generated passphrase is shown once and opens the file", func(t *testing.T) {
 		useBundleCrypto(t)
-		t.Setenv("HOME", t.TempDir())
 
 		bundleTerminal = func() bool { return true }
 
@@ -192,7 +178,6 @@ func TestSaveSealedBundle(t *testing.T) {
 
 	t.Run("a passphrase from a source is never printed", func(t *testing.T) {
 		useBundleCrypto(t)
-		t.Setenv("HOME", t.TempDir())
 		t.Setenv(bundlePassphraseEnv, testBundlePass)
 
 		var errw bytes.Buffer
@@ -208,12 +193,8 @@ func TestSaveSealedBundle(t *testing.T) {
 
 	t.Run("an existing encrypted file keeps its passphrase, and a wrong one changes nothing", func(t *testing.T) {
 		useBundleCrypto(t)
-		t.Setenv("HOME", t.TempDir())
 
-		path, err := saveBundleFile("c", newTestBundle(t), testBundlePass)
-		if err != nil {
-			t.Fatal(err)
-		}
+		path := saveTestBundle(t, "c", newTestBundle(t), testBundlePass)
 
 		before, _ := os.ReadFile(path)
 

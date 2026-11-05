@@ -9,7 +9,6 @@ import { Input } from '@/components/ui/input'
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { VersionPicker } from '@/components/VersionPicker'
 import { AlertDialogCancel, AlertDialogFooter } from '@/components/ui/alert-dialog'
@@ -72,16 +71,13 @@ export function StartOperationDialog({
   const { busy, error, setError, run } = useAction()
   // list is the candidates for the picker, read when the dialog opens; null while they are read.
   const [list, setList] = useState<TargetList | null>(null)
-  // The override (ADR 0110) lifts a compatibility refusal the plan names; the reason is optional.
+  // The override (ADR 0110) lifts a compatibility refusal the plan names.
   const [overridden, setOverridden] = useState(false)
   // overridable is set when the server refused the plan for an incompatibility the override lifts; no plan exists then.
   const [overridable, setOverridable] = useState(false)
-  const [reason, setReason] = useState('')
-  // An Ichor upgrade can skip the check of the installer image's signature, with a recorded reason (ADR 0122).
+  // An Ichor upgrade can skip the check of the installer image's signature (ADR 0122).
   const [skipSignature, setSkipSignature] = useState(false)
-  const [skipReason, setSkipReason] = useState('')
-  const skipProblem = kind === 'ichor' && skipSignature && skipReason.trim() === ''
-  const ichorInstaller = kind === 'ichor' ? { digest: '', skipSignatureReason: skipSignature ? skipReason.trim() : '' } : undefined
+  const ichorInstaller = kind === 'ichor' ? { digest: '', skipSignature } : undefined
   // The CAs a rotation replaces (ADR 0120); the Talos API and Kubernetes API CAs unless changed.
   const [caTargets, setCATargets] = useState<CATarget[]>(defaultCATargets)
 
@@ -122,9 +118,7 @@ export function StartOperationDialog({
       setTouched(false)
       setOverridden(false)
       setOverridable(false)
-      setReason('')
       setSkipSignature(false)
-      setSkipReason('')
       setCATargets(defaultCATargets)
     }
   }
@@ -133,7 +127,7 @@ export function StartOperationDialog({
     cluster,
     kind: wireKindOf(kind),
     target: needsTarget ? target.trim() : '',
-    override: withOverride ? { reason: reason.trim() } : undefined,
+    override: withOverride ? {} : undefined,
     ichorInstaller,
     caTargets: kind === 'ca-rotation' ? caTargets : [],
   })
@@ -184,7 +178,7 @@ export function StartOperationDialog({
             </Button>
           ) : (
             <Button
-              disabled={busy || (needsTarget && targetProblem !== null) || (overridable && !overridden) || skipProblem || (kind === 'ca-rotation' && caTargets.length === 0)}
+              disabled={busy || (needsTarget && targetProblem !== null) || (overridable && !overridden) || (kind === 'ca-rotation' && caTargets.length === 0)}
               onClick={() => review()}
             >
               {busy ? t('ops.dialog.reviewing') : t('ops.dialog.review')}
@@ -247,13 +241,7 @@ export function StartOperationDialog({
             <Checkbox id="op-skip-signature" checked={skipSignature} onCheckedChange={(on: boolean | 'indeterminate') => setSkipSignature(on === true)} />
             <Label htmlFor="op-skip-signature">{t('ops.dialog.skipSignature')}</Label>
           </div>
-          {skipSignature && (
-            <Field>
-              <FieldLabel htmlFor="op-skip-signature-reason">{t('ops.dialog.skipSignatureReason')}</FieldLabel>
-              <Input id="op-skip-signature-reason" value={skipReason} onInput={(e) => setSkipReason((e.currentTarget as HTMLInputElement).value)} />
-              <FieldDescription>{t('ops.dialog.skipSignatureHint')}</FieldDescription>
-            </Field>
-          )}
+          {skipSignature && <FieldDescription>{t('ops.dialog.skipSignatureHint')}</FieldDescription>}
         </div>
       )}
 
@@ -294,7 +282,7 @@ export function StartOperationDialog({
       )}
 
       {(overridable || overridden || (plan && plan.overrideRequired)) && (
-        <div class="space-y-3">
+        <div class="space-y-2">
           <div class="flex items-center gap-2 text-sm">
             <Checkbox
               id={`op-override-${kind}`}
@@ -307,11 +295,7 @@ export function StartOperationDialog({
             />
             <Label htmlFor={`op-override-${kind}`}>{t('ops.dialog.override')}</Label>
           </div>
-          <div class="space-y-2">
-            <Label htmlFor={`op-reason-${kind}`}>{t('ops.dialog.reason')}</Label>
-            <Textarea id={`op-reason-${kind}`} value={reason} onInput={(e) => setReason((e.currentTarget as HTMLTextAreaElement).value)} />
-            <p class="text-xs text-muted-foreground">{t('ops.dialog.overrideHint')}</p>
-          </div>
+          <p class="text-xs text-muted-foreground">{t('ops.dialog.overrideHint')}</p>
         </div>
       )}
 

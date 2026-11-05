@@ -44,7 +44,7 @@ export function canReview(o: { choice: SnapshotChoice | undefined; busy: boolean
 }
 
 // canRestore folds everything the plan step needs before its button is enabled: the plan came back
-// without a blocker, the cluster's name was typed, and the override was ticked. A reason is optional.
+// without a blocker, the cluster's name was typed, and the override was ticked.
 export function canRestore(o: {
   planned: boolean
   blocked: string

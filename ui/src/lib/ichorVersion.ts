@@ -35,8 +35,6 @@ export function releaseNotice(info: { latestVersion: string; releaseAvailable: b
 // (docs/adr/0122): the last upgrade did (verification Skipped), or the next one will (the spec says skip). It is
 // null when nothing was or will be skipped, so the UI stays quiet for the normal, verified case.
 export type InstallerUnverified = {
-  // reason is the reason the person gave, or '' when only the next upgrade is known to skip (an unrecorded older run).
-  reason: string
   // digest is the installer image the last upgrade ran, or ''.
   digest: string
   // pending is true when the next upgrade will skip the check, whether or not the last one did.
@@ -44,10 +42,10 @@ export type InstallerUnverified = {
 }
 
 export function installerUnverified(
-  info: { installerVerification: string; installerSkipReason: string; installerDigest: string; installerSignatureSkip: boolean } | null,
+  info: { installerVerification: string; installerDigest: string; installerSignatureSkip: boolean } | null,
 ): InstallerUnverified | null {
   if (!info) return null
   const last = info.installerVerification === 'Skipped'
   if (!last && !info.installerSignatureSkip) return null
-  return { reason: last ? info.installerSkipReason : '', digest: last ? info.installerDigest : '', pending: info.installerSignatureSkip }
+  return { digest: last ? info.installerDigest : '', pending: info.installerSignatureSkip }
 }

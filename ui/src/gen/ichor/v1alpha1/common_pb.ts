@@ -17,7 +17,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file ichor/v1alpha1/common.proto.
  */
 export const file_ichor_v1alpha1_common: GenFile = /*@__PURE__*/
-  fileDesc("ChtpY2hvci92MWFscGhhMS9jb21tb24ucHJvdG8SDmljaG9yLnYxYWxwaGExIiwKCU9iamVjdFJlZhIRCgluYW1lc3BhY2UYASABKAkSDAoEbmFtZRgCIAEoCSKEAQoJQ29uZGl0aW9uEgwKBHR5cGUYASABKAkSDgoGc3RhdHVzGAIgASgJEg4KBnJlYXNvbhgDIAEoCRIPCgdtZXNzYWdlGAQgASgJEjgKFGxhc3RfdHJhbnNpdGlvbl90aW1lGAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIaCghPdmVycmlkZRIOCgZyZWFzb24YASABKAkijwEKC0F1ZGl0UmVjb3JkEg0KBWFjdG9yGAEgASgJEiYKAmF0GAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIOCgZhY3Rpb24YAyABKAkSKQoGdGFyZ2V0GAQgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEg4KBnJlYXNvbhgFIAEoCUK8AQoSY29tLmljaG9yLnYxYWxwaGExQgtDb21tb25Qcm90b1ABWkBnaXRodWIuY29tL21hZXNoaW5zaGluL2ljaG9yL2dlbi9nby9pY2hvci92MWFscGhhMTtpY2hvcnYxYWxwaGExogIDSVhYqgIOSWNob3IuVjFhbHBoYTHKAg5JY2hvclxWMWFscGhhMeICGkljaG9yXFYxYWxwaGExXEdQQk1ldGFkYXRh6gIPSWNob3I6OlYxYWxwaGExYgZwcm90bzM", [file_google_protobuf_timestamp]);
+  fileDesc("ChtpY2hvci92MWFscGhhMS9jb21tb24ucHJvdG8SDmljaG9yLnYxYWxwaGExIiwKCU9iamVjdFJlZhIRCgluYW1lc3BhY2UYASABKAkSDAoEbmFtZRgCIAEoCSKEAQoJQ29uZGl0aW9uEgwKBHR5cGUYASABKAkSDgoGc3RhdHVzGAIgASgJEg4KBnJlYXNvbhgDIAEoCRIPCgdtZXNzYWdlGAQgASgJEjgKFGxhc3RfdHJhbnNpdGlvbl90aW1lGAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcCIeCghPdmVycmlkZRISCgZyZWFzb24YASABKAlCAhgBIo8BCgtBdWRpdFJlY29yZBINCgVhY3RvchgBIAEoCRImCgJhdBgCIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDgoGYWN0aW9uGAMgASgJEikKBnRhcmdldBgEIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIOCgZyZWFzb24YBSABKAlCvAEKEmNvbS5pY2hvci52MWFscGhhMUILQ29tbW9uUHJvdG9QAVpAZ2l0aHViLmNvbS9tYWVzaGluc2hpbi9pY2hvci9nZW4vZ28vaWNob3IvdjFhbHBoYTE7aWNob3J2MWFscGhhMaICA0lYWKoCDkljaG9yLlYxYWxwaGExygIOSWNob3JcVjFhbHBoYTHiAhpJY2hvclxWMWFscGhhMVxHUEJNZXRhZGF0YeoCD0ljaG9yOjpWMWFscGhhMWIGcHJvdG8z", [file_google_protobuf_timestamp]);
 
 /**
  * ObjectRef names a namespaced Kubernetes custom resource (TalosCluster,
@@ -86,19 +86,20 @@ export const ConditionSchema: GenMessage<Condition> = /*@__PURE__*/
   messageDesc(file_ichor_v1alpha1_common, 1);
 
 /**
- * Override asks to override a safety check (docs/adr/0065, docs/adr/0110). Setting it
- * on a request means "override": the field's presence is the request, and the reason
- * is optional. The backend allows it only to a signed-in user whose Kubernetes RBAC
- * grants the override verb on the resource, and refuses it otherwise.
+ * Override asks to override a safety check (docs/adr/0065, docs/adr/0110, docs/adr/0130). Setting it
+ * on a request means "override": the field's presence is the request, and no reason is asked for.
+ * The backend allows it only to a signed-in user whose Kubernetes RBAC grants the override verb on
+ * the resource, and refuses it otherwise.
  *
  * @generated from message ichor.v1alpha1.Override
  */
 export type Override = Message<"ichor.v1alpha1.Override"> & {
   /**
-   * reason is optional: when given it is recorded in the audit record and the
-   * Kubernetes Event. Without one the record says no reason given.
+   * Deprecated: no reason is asked for any more (docs/adr/0130). Never read or set; kept so the wire
+   * format is unchanged.
    *
-   * @generated from field: string reason = 1;
+   * @generated from field: string reason = 1 [deprecated = true];
+   * @deprecated
    */
   reason: string;
 };
@@ -112,7 +113,7 @@ export const OverrideSchema: GenMessage<Override> = /*@__PURE__*/
 
 /**
  * AuditRecord is returned by ApproveMachine and RejectMachine so the caller
- * can confirm what was recorded: who did it, when, against what, and why.
+ * can confirm what was recorded: who did it, when and against what.
  * "actor" comes from the caller's authenticated identity, not from the
  * request body.
  *
@@ -145,7 +146,8 @@ export type AuditRecord = Message<"ichor.v1alpha1.AuditRecord"> & {
   target?: ObjectRef | undefined;
 
   /**
-   * reason is optional free text, mainly used for rejections.
+   * reason is never a typed reason (docs/adr/0130: no reason is asked for). It is empty, or a remark the
+   * backend adds, such as that the Kubernetes Event of an override could not be recorded.
    *
    * @generated from field: string reason = 5;
    */

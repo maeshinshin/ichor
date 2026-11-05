@@ -16,7 +16,7 @@ export type NodeActionDef = {
   destructive: boolean
   // typedName: the user types the node's name before the action can start.
   typedName: boolean
-  // override: the user must tick the override and needs the override permission (reset). A reason is optional.
+  // override: the user must tick the override and needs the override permission (reset).
   override: boolean
   controlPlaneOnly: boolean
 }

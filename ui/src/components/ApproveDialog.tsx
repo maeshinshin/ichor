@@ -12,7 +12,6 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { DiskRoleFields } from '@/components/DiskRoleFields'
 import { InstallDiskPicker } from '@/components/InstallDiskPicker'
@@ -73,7 +72,6 @@ export function ApproveDialog({
   // networkForm is null until the person changes it, so the default NIC applies (defaultLink).
   const [networkForm, setNetworkForm] = useState<NetworkForm | null>(null)
   const [rolesForm, setRolesForm] = useState<DiskRolesForm>(emptyRoles)
-  const [reason, setReason] = useState('')
   const { busy: submitting, error: submitError, setError: setSubmitError, run } = useAction()
 
   const strong = isStrongIdentity(machine.identity)
@@ -117,7 +115,6 @@ export function ApproveDialog({
     setInstallKey(null)
     setInstallDev('')
     setInstallImage('')
-    setReason('')
     setSubmitError(null)
   }, [open])
 
@@ -134,7 +131,6 @@ export function ApproveDialog({
         network: net.network,
         disks: roles.disks,
         nodeLabels: {},
-        reason,
       })
       if (res.machine) onApproved(res.machine)
       notifyWrite('toast.approved', { name: hostname || ref.name })
@@ -250,19 +246,6 @@ export function ApproveDialog({
             errors={net.errors}
             onChange={setNetworkForm}
           />
-
-          <section class="space-y-1">
-            <Label htmlFor="approve-reason">{t('approve.reason')}</Label>
-            {/* Symmetric with reject's reason: approving rarely needs a justification -
-                identity, hardware and role above already say what's being approved -
-                but one can still be recorded, e.g. "replacing node-3, same role". */}
-            <Textarea
-              id="approve-reason"
-              value={reason}
-              onInput={(e) => setReason((e.target as HTMLTextAreaElement).value)}
-              placeholder={t('approve.reasonPlaceholder')}
-            />
-          </section>
 
           {submitError && <ErrorAlert {...submitError} />}
         </div>

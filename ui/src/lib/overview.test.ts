@@ -67,8 +67,8 @@ test('attentionItems lists a halted automatic patcher with the operation that st
 })
 
 test('attentionItems lists an installer image whose signature was not checked', () => {
-  assert.deepEqual(attentionItems({ conditions: [], pending: 0, configWaiting: 0, opState: null, installerUnverified: 'demo build' }), [
-    { kind: 'installerUnverified', reason: 'demo build' },
+  assert.deepEqual(attentionItems({ conditions: [], pending: 0, configWaiting: 0, opState: null, installerUnverified: true }), [
+    { kind: 'installerUnverified' },
   ])
-  assert.deepEqual(attentionItems({ conditions: [], pending: 0, configWaiting: 0, opState: null, installerUnverified: null }), [])
+  assert.deepEqual(attentionItems({ conditions: [], pending: 0, configWaiting: 0, opState: null, installerUnverified: false }), [])
 })

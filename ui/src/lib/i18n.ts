@@ -31,7 +31,7 @@ export const en = {
   'version.updateAvailable': 'Update available',
   'version.released': '{version} available',
   'version.unverified': 'Installer not verified',
-  'version.unverifiedLast': 'The signature of the installer image {digest} was not checked: {reason}',
+  'version.unverifiedLast': 'The signature of the installer image {digest} was not checked.',
   'version.unverifiedNext': 'The next Ichor upgrade will not check the signature of the installer image.',
   'version.updateHint': 'This cluster is set to run Ichor {version}. Start "Upgrade Ichor" on a cluster page to move to it.',
 
@@ -157,7 +157,6 @@ export const en = {
   'machines.rejected': 'Rejected ({n})',
   'machines.approved': 'Approved ({n})',
   'machines.approvedEmpty': 'No approved nodes yet.',
-  'machines.colReason': 'Reason',
   'machines.colWhen': 'When',
   'machines.colHostname': 'Hostname',
   'machines.unknown': 'unknown',
@@ -193,8 +192,6 @@ export const en = {
   'approve.installDiskTyped':
     'Neither discovery nor the node reported any disk, so type a device path. It can change between boots; a stable identifier is better.',
   'approve.installImage': 'Installer image (optional)',
-  'approve.reason': 'Reason (optional)',
-  'approve.reasonPlaceholder': "Why, if it isn't obvious from the above",
   'approve.submitting': 'Approving',
 
   'network.title': 'Network',
@@ -257,8 +254,6 @@ export const en = {
   'reject.title': 'Reject {name}?',
   'reject.description':
     'Rejecting records who rejected it, when, and why, and marks it rejected; it is not deleted and its own discovery loop running again will not bring it back to "pending". This isn\'t permanent: approving a rejected node later simply reverses it - there\'s no separate "un-reject" action.',
-  'reject.reason': 'Reason',
-  'reject.reasonPlaceholder': 'Why is this node being turned away?',
   'reject.submitting': 'Rejecting…',
 
   'role.controlPlane': 'Control plane',
@@ -790,9 +785,6 @@ export const en = {
   'node.action.apiDown': 'The Kubernetes API will be unavailable',
   'node.action.typeName': 'Type the node name ({name}) to confirm',
   'node.action.override': 'Override the safety check (needs the override permission)',
-  'node.action.reason': 'Reason (optional)',
-  'node.action.reasonHint':
-    'Resetting a node needs the override. A reason you give goes into the audit record and a Kubernetes Event; without one, the record says no reason was given.',
   'node.action.starting': 'Starting…',
   'node.action.started': 'Started “{action}” on {node}.',
   'node.action.removed': 'Removing {node}. The controller drains it and, for a control plane, removes its etcd member.',
@@ -811,8 +803,6 @@ export const en = {
   'restore.warnTitle': 'This rewinds the whole cluster',
   'restore.warn': 'etcd is wiped on every control plane and recovered from the snapshot. The Kubernetes API is unavailable for several minutes and everything written after the snapshot is lost.',
   'restore.override': 'Override the safety check (needs the override permission on the cluster)',
-  'restore.reasonHint':
-    'A restore always needs the override. A reason you give goes into the audit record and a Kubernetes Event; without one, the record says no reason was given.',
   'restore.go': 'Restore cluster',
   'restore.starting': 'Starting…',
   'restore.started': 'Restoring {cluster}. The controller wipes and recovers etcd; follow it on this page.',
@@ -1064,7 +1054,7 @@ export const en = {
   'home.attnPending': 'Nodes waiting for approval: {n}.',
   'home.attnConfig': 'Nodes with configuration waiting for a reboot: {n}.',
   'home.attnInstallerUnverified': 'The installer image was not verified',
-  'home.attnInstallerUnverifiedHint': 'Its signature was not checked ({reason}). The installer holds nearly cluster-admin rights. Run the next Ichor upgrade without skipping the check.',
+  'home.attnInstallerUnverifiedHint': 'Its signature was not checked. The installer holds nearly cluster-admin rights. Run the next Ichor upgrade without skipping the check.',
   'home.attnRelease': 'Ichor {version} is available.',
   'home.attnReleaseHint': 'A newer Ichor release is published. Start Upgrade on the Ichor row of Versions when you are ready.',
   'home.review': 'Review',
@@ -1206,11 +1196,9 @@ export const en = {
   'ops.picker.nextMinor': 'Next minor',
   'ops.picker.empty': 'No version matches.',
   'ops.dialog.skipSignature': 'Do not check the signature of the installer image',
-  'ops.dialog.skipSignatureReason': 'Why the signature is not checked (required, recorded with the image digest)',
   'ops.dialog.skipSignatureHint': 'Only for builds nobody signs, such as development and demo images. The installer holds nearly cluster-admin rights.',
-  'ops.dialog.reason': 'Reason (optional)',
   'ops.dialog.override': 'Override the compatibility check (needs the override permission on the cluster)',
-  'ops.dialog.overrideHint': 'Ichor records the override and the reason you give in a Kubernetes Event on the cluster.',
+  'ops.dialog.overrideHint': 'Ichor records the override in a Kubernetes Event on the cluster.',
 } as const
 
 export type Key = keyof typeof en

@@ -23,8 +23,8 @@ import (
 
 const kubeSystemNs = "kube-system"
 
-// checkCNIRoleMatchesConfig compares the chart's ichor-<cfgName> of kind with cfgName in config/rbac/ichor-cni/<cfgFile>
-// (hand-written) as a rule set.
+// checkCNIRoleMatchesConfig compares the chart's ichor-<cfgName> of kind with cfgName in
+// config/rbac/ichor-cni/<cfgFile> (hand-written) as a rule set.
 func checkCNIRoleMatchesConfig(t *testing.T, docs []map[string]any, kind, cfgName, cfgFile string) {
 	t.Helper()
 

@@ -44,47 +44,38 @@ var nodeServices = []string{"kubelet", "containerd", "cri"}
 
 const stepEvacuate = "Move storage replicas off the node, if a storage system is set up."
 
+// nodeActions pairs each wire action with its spec name; remove is planning-only and never reaches a
+// TalosOperation.
+var nodeActions = []struct {
+	wire pb.NodeAction
+	spec string
+}{
+	{pb.NodeAction_NODE_ACTION_REBOOT, ichorv1alpha1.NodeActionReboot},
+	{pb.NodeAction_NODE_ACTION_SHUTDOWN, ichorv1alpha1.NodeActionShutdown},
+	{pb.NodeAction_NODE_ACTION_RESTART_SERVICE, ichorv1alpha1.NodeActionRestartService},
+	{pb.NodeAction_NODE_ACTION_ETCD_DEFRAG, ichorv1alpha1.NodeActionEtcdDefrag},
+	{pb.NodeAction_NODE_ACTION_ETCD_FORFEIT_LEADERSHIP, ichorv1alpha1.NodeActionEtcdForfeitLeadership},
+	{pb.NodeAction_NODE_ACTION_RESET, ichorv1alpha1.NodeActionReset},
+	{pb.NodeAction_NODE_ACTION_REMOVE, nodeActionRemove},
+}
+
+const nodeActionRemove = "remove"
+
 func nodeActionToSpec(a pb.NodeAction) (string, error) {
-	switch a {
-	case pb.NodeAction_NODE_ACTION_REBOOT:
-		return ichorv1alpha1.NodeActionReboot, nil
-	case pb.NodeAction_NODE_ACTION_SHUTDOWN:
-		return ichorv1alpha1.NodeActionShutdown, nil
-	case pb.NodeAction_NODE_ACTION_RESTART_SERVICE:
-		return ichorv1alpha1.NodeActionRestartService, nil
-	case pb.NodeAction_NODE_ACTION_ETCD_DEFRAG:
-		return ichorv1alpha1.NodeActionEtcdDefrag, nil
-	case pb.NodeAction_NODE_ACTION_ETCD_FORFEIT_LEADERSHIP:
-		return ichorv1alpha1.NodeActionEtcdForfeitLeadership, nil
-	case pb.NodeAction_NODE_ACTION_RESET:
-		return ichorv1alpha1.NodeActionReset, nil
-	case pb.NodeAction_NODE_ACTION_REMOVE:
-		return nodeActionRemove, nil
-	case pb.NodeAction_NODE_ACTION_UNSPECIFIED:
+	for _, n := range nodeActions {
+		if n.wire == a {
+			return n.spec, nil
+		}
 	}
 
 	return "", connect.NewError(connect.CodeInvalidArgument, errors.New("node action is required"))
 }
 
-// nodeActionRemove is the planning-only action; it never reaches a TalosOperation.
-const nodeActionRemove = "remove"
-
 func nodeActionToPB(a string) pb.NodeAction {
-	switch a {
-	case ichorv1alpha1.NodeActionReboot:
-		return pb.NodeAction_NODE_ACTION_REBOOT
-	case ichorv1alpha1.NodeActionShutdown:
-		return pb.NodeAction_NODE_ACTION_SHUTDOWN
-	case ichorv1alpha1.NodeActionRestartService:
-		return pb.NodeAction_NODE_ACTION_RESTART_SERVICE
-	case ichorv1alpha1.NodeActionEtcdDefrag:
-		return pb.NodeAction_NODE_ACTION_ETCD_DEFRAG
-	case ichorv1alpha1.NodeActionEtcdForfeitLeadership:
-		return pb.NodeAction_NODE_ACTION_ETCD_FORFEIT_LEADERSHIP
-	case ichorv1alpha1.NodeActionReset:
-		return pb.NodeAction_NODE_ACTION_RESET
-	case nodeActionRemove:
-		return pb.NodeAction_NODE_ACTION_REMOVE
+	for _, n := range nodeActions {
+		if n.spec == a {
+			return n.wire
+		}
 	}
 
 	return pb.NodeAction_NODE_ACTION_UNSPECIFIED

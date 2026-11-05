@@ -89,6 +89,10 @@ foreign-cilium-chart: ## Fetch the pinned Cilium 1.19 chart the foreign-cluster 
 adr-index: ## Regenerate docs/adr/README.md's index table from each ADR's own Decided:/Status: line.
 	go run ./internal/tools/adrindex
 
+.PHONY: docs-reference
+docs-reference: ## Regenerate docs/reference/cli (from the ichor command tree) and docs/reference/crds (from config/crd/bases); run after manifests.
+	go run ./internal/tools/gendocs
+
 .PHONY: generate
 generate: controller-gen ## Generate mirror types (go generate) plus DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	go generate ./...

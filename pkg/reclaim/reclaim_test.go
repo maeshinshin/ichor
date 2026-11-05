@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -162,7 +163,7 @@ func TestAssess(t *testing.T) {
 		},
 		{
 			name: "already an Ichor cluster", in: worker(), refused: "already manages",
-			known: Known{ClusterIDs: []string{"cid-old"}},
+			known: Known{ClusterIDs: []string{testOldClusterID}},
 		},
 		{
 			name: "a managed cluster's node is pointed at --add-machine", in: worker(), refused: "ichor adopt --cluster",
@@ -260,58 +261,42 @@ func (f *fakeNode) Reset(_ context.Context, graceful bool) error {
 	return f.resetErr
 }
 
-func TestExecuteSendsNothingWithoutConfirmation(t *testing.T) {
-	n := &fakeNode{in: worker()}
+func TestExecute(t *testing.T) {
+	ok := Confirmation{UUID: testUUID}
 
-	if _, err := Execute(context.Background(), n, Known{}, Options{}, Confirmation{UUID: "wrong"}); err == nil {
-		t.Fatal("want an error")
-	}
-
-	if len(n.resets) != 0 {
-		t.Fatal("a reset was sent without a matching UUID")
-	}
-}
-
-func TestExecuteRefusesAnIchorMachine(t *testing.T) {
-	n := &fakeNode{in: worker()}
-
-	known := Known{MachineUUIDs: []string{testUUID}}
-	_, err := Execute(context.Background(), n, known, Options{}, Confirmation{UUID: testUUID})
-	if err == nil || len(n.resets) != 0 {
-		t.Fatalf("err = %v, resets = %v", err, n.resets)
-	}
-}
-
-func TestExecuteSendsGracefulReset(t *testing.T) {
-	n := &fakeNode{in: worker()}
-
-	if _, err := Execute(context.Background(), n, Known{}, Options{}, Confirmation{UUID: testUUID}); err != nil {
-		t.Fatal(err)
-	}
-
-	if len(n.resets) != 1 || !n.resets[0] {
-		t.Fatalf("want one graceful reset, got %v", n.resets)
-	}
-}
-
-func TestExecuteUngracefulOnlyWhenForced(t *testing.T) {
-	n := &fakeNode{in: unreachable()}
-
-	opt := Options{ForceUngraceful: true}
-	if _, err := Execute(context.Background(), n, Known{}, opt, Confirmation{UUID: testUUID}); err != nil {
-		t.Fatal(err)
-	}
-
-	if len(n.resets) != 1 || n.resets[0] {
-		t.Fatalf("want one ungraceful reset, got %v", n.resets)
-	}
-}
-
-func TestExecuteWrapsResetFailure(t *testing.T) {
-	n := &fakeNode{in: worker(), resetErr: errors.New("boom")}
-
-	if _, err := Execute(context.Background(), n, Known{}, Options{}, Confirmation{UUID: testUUID}); err == nil {
-		t.Fatal("want an error")
+	for _, tc := range []struct {
+		name    string
+		node    *fakeNode
+		known   Known
+		opt     Options
+		conf    Confirmation
+		wantErr bool
+		resets  []bool
+	}{
+		{
+			name: "nothing without a matching UUID", node: &fakeNode{in: worker()},
+			conf: Confirmation{UUID: "wrong"}, wantErr: true,
+		},
+		{
+			name: "refuses an Ichor machine", node: &fakeNode{in: worker()}, conf: ok, wantErr: true,
+			known: Known{MachineUUIDs: []string{testUUID}},
+		},
+		{name: "graceful reset", node: &fakeNode{in: worker()}, conf: ok, resets: []bool{true}},
+		{
+			name: "ungraceful only when forced", node: &fakeNode{in: unreachable()}, conf: ok,
+			opt: Options{ForceUngraceful: true}, resets: []bool{false},
+		},
+		{
+			name: "wraps a reset failure", node: &fakeNode{in: worker(), resetErr: errors.New("boom")}, conf: ok,
+			wantErr: true, resets: []bool{true},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Execute(context.Background(), tc.node, tc.known, tc.opt, tc.conf)
+			if (err != nil) != tc.wantErr || !slices.Equal(tc.node.resets, tc.resets) {
+				t.Fatalf("err = %v (want error %v), resets = %v, want %v", err, tc.wantErr, tc.node.resets, tc.resets)
+			}
+		})
 	}
 }
 

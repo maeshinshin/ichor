@@ -514,7 +514,6 @@ func (s *Server) planOperation(
 		if p.resp.Current == "" {
 			p.resp.Current = p.install.Spec.Version
 		}
-
 	}
 
 	specVersion := p.resp.Current
@@ -1102,15 +1101,15 @@ func checkUpgradeTarget(kind, current, target, talos string) error {
 	return nil
 }
 
-// isDowngrade reports a version target older than the current one for the
-// kinds that carry a version (talos, kubernetes, ichor). The executors refuse
-// it too, but only after the CLI has written the lower version into the spec.
 // samePatchLine reports that moving from current to target stays within one minor version. An
 // empty or unparsable target (the spec already says it) is not known to, so it is not "same".
 func samePatchLine(current, target string) bool {
 	return semver.IsValid(current) && semver.IsValid(target) && semver.MajorMinor(current) == semver.MajorMinor(target)
 }
 
+// isDowngrade reports a version target older than the current one for the
+// kinds that carry a version (talos, kubernetes, ichor). The executors refuse
+// it too, but only after the CLI has written the lower version into the spec.
 func isDowngrade(p *opPlan) bool {
 	switch p.kind {
 	case ichorv1alpha1.TalosOperationKindTalos, ichorv1alpha1.TalosOperationKindKubernetes, ichorv1alpha1.TalosOperationKindIchor:

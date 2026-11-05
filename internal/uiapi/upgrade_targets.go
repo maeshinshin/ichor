@@ -52,18 +52,16 @@ func (s *Server) ListUpgradeTargets(
 		return nil, err
 	}
 
-	var inst ichorv1alpha1.IchorInstallation
+	inst := &ichorv1alpha1.IchorInstallation{}
 
-	found := true
-
-	switch err := s.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); {
+	switch err := s.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, inst); {
 	case apierrors.IsNotFound(err):
-		found = false
+		inst = nil
 	case err != nil:
 		return nil, mapGetError("IchorInstallation \""+ichorv1alpha1.IchorInstallationName+"\"", err)
 	}
 
-	lists, reason := upgradeLists(&inst, found, kind)
+	lists, reason := upgradeLists(inst, kind)
 	choices := upgradeChoices(kind, cluster, lists)
 
 	return connect.NewResponse(&pb.ListUpgradeTargetsResponse{
@@ -79,8 +77,8 @@ func (s *Server) ListUpgradeTargets(
 // upgradeLists is the recorded list the server filters, and why it cannot be used ("" when it can).
 // A list with an error is still returned: its last good value is what the controller kept, and the
 // reason says it may be stale.
-func upgradeLists(inst *ichorv1alpha1.IchorInstallation, found bool, kind pb.OperationKind) (*ichorv1alpha1.IchorUpgradeTargets, string) {
-	if !found {
+func upgradeLists(inst *ichorv1alpha1.IchorInstallation, kind pb.OperationKind) (*ichorv1alpha1.IchorUpgradeTargets, string) {
+	if inst == nil {
 		return nil, reasonNoListYet
 	}
 

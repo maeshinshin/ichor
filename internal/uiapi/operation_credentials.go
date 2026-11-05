@@ -136,7 +136,7 @@ func (s *Server) talosEndpoints(ctx context.Context, cluster *ichorv1alpha1.Talo
 func (s *Server) buildCredentials(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, ttl time.Duration, readOnly bool,
 ) (kubeconfig, talosconfig []byte, err error) {
-	kube, err := s.issueAsCaller(ctx, cluster, ichorv1alpha1.CredentialPurposeCredentialsKubernetes, "", ttl, "")
+	kubeconfig, err = s.kubeconfig(ctx, cluster, ttl)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -152,13 +152,6 @@ func (s *Server) buildCredentials(
 	}
 
 	endpoints, err := s.talosEndpoints(ctx, cluster)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	server := "https://" + net.JoinHostPort(cluster.Spec.Endpoint.Address, strconv.Itoa(constants.DefaultControlPlanePort))
-
-	kubeconfig, err = credentials.BuildKubeconfig(credentials.ServerConfig(cluster.Name, server), kube.CA, kube.Crt, kube.Key)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -247,10 +240,9 @@ func (s *Server) DownloadCARotationCredentials(
 	return w.finish()
 }
 
-// verificationKubeconfig is a kubeconfig valid for minutes, made only to check that the new Kubernetes CA is
-// accepted before the rotation continues.
-func (s *Server) verificationKubeconfig(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) ([]byte, error) {
-	kube, err := s.issueAsCaller(ctx, cluster, ichorv1alpha1.CredentialPurposeCredentialsKubernetes, "", credentials.DialLifetime, "")
+// kubeconfig is a kubeconfig of cluster's declared endpoint, signed for ttl as the caller.
+func (s *Server) kubeconfig(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, ttl time.Duration) ([]byte, error) {
+	kube, err := s.issueAsCaller(ctx, cluster, ichorv1alpha1.CredentialPurposeCredentialsKubernetes, "", ttl, "")
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +282,7 @@ func (s *Server) AcknowledgeCARotationCredentials(
 	}
 
 	// A short-lived certificate, asked for as the caller, only to prove the new CA is accepted.
-	kube, err := s.verificationKubeconfig(ctx, &cluster)
+	kube, err := s.kubeconfig(ctx, &cluster, credentials.DialLifetime)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("building the credentials: %s", truncateText(err.Error(), 300)))
 	}

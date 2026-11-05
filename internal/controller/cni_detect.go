@@ -91,12 +91,8 @@ func (r *CNIDetectReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	detected, version := DetectCNI(list.Items)
 	orig := cluster.DeepCopy()
 
-	if cluster.Status.CNI == nil {
-		cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{}
-	}
-
-	cluster.Status.CNI.Detected = detected
-	cluster.Status.CNI.DetectedVersion = version
+	st := cniStatus(&cluster)
+	st.Detected, st.DetectedVersion = detected, version
 
 	if detected == ciliumName {
 		apimeta.RemoveStatusCondition(&cluster.Status.Conditions, ichorv1alpha1.ConditionNetworkPoliciesApplied)
@@ -165,6 +161,15 @@ func daemonSetImageTag(ds *appsv1.DaemonSet) string {
 	}
 
 	return img[i+1:]
+}
+
+// cniStatus is cluster.status.cni, created when absent.
+func cniStatus(cluster *ichorv1alpha1.TalosCluster) *ichorv1alpha1.TalosClusterCNIStatus {
+	if cluster.Status.CNI == nil {
+		cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{}
+	}
+
+	return cluster.Status.CNI
 }
 
 // detectedCNI is status.cni.detected, empty before the first detection.

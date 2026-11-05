@@ -50,6 +50,7 @@ limitations under the License.
 package controller
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -297,6 +298,34 @@ func (c *caRun) blocked(ctx context.Context, message string) error {
 
 func (c *caRun) retry(ctx context.Context, message string) (ctrl.Result, error) {
 	return ctrl.Result{RequeueAfter: operationRequeueInterval}, c.blocked(ctx, message)
+}
+
+// retryWait is retry for the await steps, whose caller must stop and return its result.
+func (c *caRun) retryWait(ctx context.Context, message string) (ctrl.Result, bool, error) {
+	res, err := c.retry(ctx, message)
+
+	return res, true, err
+}
+
+// settle holds a stage for delay after the CARotation condition first turned True with reason: the first call
+// starts the clock by writing started, later ones wait out what is left. wait is false once delay has passed. The
+// clock is the condition's transition time, so it survives a controller restart.
+func (c *caRun) settle(ctx context.Context, reason string, delay time.Duration, started string) (ctrl.Result, bool, error) {
+	cond := apimeta.FindStatusCondition(c.op.Status.Conditions, conditionCARotation)
+	if cond == nil || cond.Reason != reason || cond.Status != metav1.ConditionTrue {
+		// A removed condition gets a fresh transition time.
+		apimeta.RemoveStatusCondition(&c.op.Status.Conditions, conditionCARotation)
+
+		err := c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue, reason, started)
+
+		return ctrl.Result{RequeueAfter: min(delay, operationRequeueInterval)}, true, err
+	}
+
+	if left := delay - time.Since(cond.LastTransitionTime.Time); left > 0 {
+		return ctrl.Result{RequeueAfter: min(left, operationRequeueInterval)}, true, nil
+	}
+
+	return ctrl.Result{}, false, nil
 }
 
 // machines returns the machines to rotate, control planes first. A rotation reaches every
@@ -580,20 +609,6 @@ func setStageCertificates(rs *ichorv1alpha1.TalosOperationCARotationStatus) {
 	}
 }
 
-// nextStage is the stage that follows a verified one.
-func nextStage(stage string) string {
-	switch stage {
-	case ichorv1alpha1.CARotationStageAccepting:
-		return ichorv1alpha1.CARotationStageAwaitingCredentials
-	case ichorv1alpha1.CARotationStageAwaitingCredentials:
-		return ichorv1alpha1.CARotationStageIssuing
-	case ichorv1alpha1.CARotationStageIssuing:
-		return ichorv1alpha1.CARotationStageDropping
-	default:
-		return ichorv1alpha1.CARotationStageFinalizing
-	}
-}
-
 // pass makes every machine run the configuration of stage, then verifies it. Applying and
 // verifying are separate reconciles: a stage that applied anything is checked on the next one, so
 // the kubelet restart a CA change causes has begun before Node readiness is read.
@@ -769,59 +784,30 @@ func (c *caRun) awaitClients(ctx context.Context, first *ichorv1alpha1.TalosMach
 		return ctrl.Result{}, false, nil
 	}
 
-	fingerprint := ""
-
-	for _, cert := range c.op.Status.CARotation.Certificates {
-		if cert.Name == kubernetesCAName {
-			fingerprint = cert.Next
-		}
-	}
-
 	var stale []string
 
 	err := c.withNode(ctx, first, bundle, func(ctx context.Context, talos TalosClient) error {
 		var err error
 
-		stale, err = c.r.RootCAPublished(ctx, talos, fingerprint)
+		stale, err = c.r.RootCAPublished(ctx, talos, c.newFingerprint(kubernetesCAName))
 
 		return err
 	})
 	if err != nil {
-		res, err := c.retry(ctx, "stage Issuing is not settled, so the old CAs stay: could not read kube-root-ca.crt: "+err.Error())
-
-		return res, true, err
+		return c.retryWait(ctx, "stage Issuing is not settled, so the old CAs stay: could not read kube-root-ca.crt: "+err.Error())
 	}
 
 	if len(stale) > 0 {
 		shown := stale[:min(len(stale), 5)]
-		res, err := c.retry(ctx, fmt.Sprintf("stage Issuing is not settled, so the old CAs stay: waiting for kube-root-ca.crt to carry "+
+		return c.retryWait(ctx, fmt.Sprintf("stage Issuing is not settled, so the old CAs stay: waiting for kube-root-ca.crt to carry "+
 			"the new Kubernetes CA in %d namespace(s), among them %v; pods there do not trust the API server yet", len(stale), shown))
-
-		return res, true, err
 	}
 
-	delay := c.r.ClientSettleDelay
-	if delay == 0 {
-		delay = caClientSettleDelay
-	}
+	delay := cmp.Or(c.r.ClientSettleDelay, caClientSettleDelay)
 
-	cond := apimeta.FindStatusCondition(c.op.Status.Conditions, conditionCARotation)
-	if cond == nil || cond.Reason != reasonCARotationSettling || cond.Status != metav1.ConditionTrue {
-		// Start the clock: a removed condition gets a fresh transition time.
-		apimeta.RemoveStatusCondition(&c.op.Status.Conditions, conditionCARotation)
-
-		err := c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue, reasonCARotationSettling,
-			fmt.Sprintf("kube-root-ca.crt carries the new Kubernetes CA everywhere; giving pods %s to load it before the old CAs are dropped. "+
-				"In-cluster clients that read the CA only once may need a restart", delay))
-
-		return ctrl.Result{RequeueAfter: min(delay, operationRequeueInterval)}, true, err
-	}
-
-	if left := delay - time.Since(cond.LastTransitionTime.Time); left > 0 {
-		return ctrl.Result{RequeueAfter: min(left, operationRequeueInterval)}, true, nil
-	}
-
-	return ctrl.Result{}, false, nil
+	return c.settle(ctx, reasonCARotationSettling, delay, fmt.Sprintf(
+		"kube-root-ca.crt carries the new Kubernetes CA everywhere; giving pods %s to load it before the old CAs are dropped. "+
+			"In-cluster clients that read the CA only once may need a restart", delay))
 }
 
 // awaitCredentials holds the rotation, changing nothing, until the operator has acknowledged the
@@ -957,9 +943,7 @@ func (c *caRun) awaitNodes(ctx context.Context, first *ichorv1alpha1.TalosMachin
 
 	if c.r.KubeClient == nil || restarting {
 		if err := c.nodesReady(ctx, first, bundle); err != nil {
-			res, rerr := c.retry(ctx, "the replaced bundle is not verified: "+err.Error())
-
-			return res, true, rerr
+			return c.retryWait(ctx, "the replaced bundle is not verified: "+err.Error())
 		}
 
 		return ctrl.Result{}, false, nil
@@ -975,21 +959,9 @@ func (c *caRun) awaitNodes(ctx context.Context, first *ichorv1alpha1.TalosMachin
 		return ctrl.Result{RequeueAfter: operationRequeueInterval}, true, err
 	}
 
-	if cond == nil || cond.Reason != reasonCARotationSettlingNodes || cond.Status != metav1.ConditionTrue {
-		apimeta.RemoveStatusCondition(&c.op.Status.Conditions, conditionCARotation)
-
-		err := c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue, reasonCARotationSettlingNodes,
-			fmt.Sprintf("the old CAs are dropped and the Nodes are Ready; waiting %s to see they stay Ready after the kubelets restarted, "+
-				"before any client is restarted", caKubeletSettleDelay))
-
-		return ctrl.Result{RequeueAfter: min(caKubeletSettleDelay, operationRequeueInterval)}, true, err
-	}
-
-	if left := caKubeletSettleDelay - time.Since(cond.LastTransitionTime.Time); left > 0 {
-		return ctrl.Result{RequeueAfter: min(left, operationRequeueInterval)}, true, nil
-	}
-
-	return ctrl.Result{}, false, nil
+	return c.settle(ctx, reasonCARotationSettlingNodes, caKubeletSettleDelay, fmt.Sprintf(
+		"the old CAs are dropped and the Nodes are Ready; waiting %s to see they stay Ready after the kubelets restarted, "+
+			"before any client is restarted", caKubeletSettleDelay))
 }
 
 // holdsNewCAs reports whether bundle already carries the CAs this rotation is moving to.

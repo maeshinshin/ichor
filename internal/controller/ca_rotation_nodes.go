@@ -129,3 +129,26 @@ func pemBundleHolds(bundle []byte, fingerprint string) bool {
 		}
 	}
 }
+
+// pemBundleIs reports whether bundle holds exactly one certificate, the one with the given fingerprint.
+func pemBundleIs(bundle []byte, fingerprint string) bool {
+	certs := 0
+
+	for {
+		var block *pem.Block
+
+		block, bundle = pem.Decode(bundle)
+		if block == nil {
+			return certs == 1
+		}
+
+		if block.Type == pemTypeCertificate {
+			certs++
+
+			sum := sha256.Sum256(block.Bytes)
+			if hex.EncodeToString(sum[:]) != fingerprint {
+				return false
+			}
+		}
+	}
+}

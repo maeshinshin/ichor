@@ -184,6 +184,15 @@ func (h *human) Table(header []string, rows [][]string) {
 // same everywhere.
 const fieldLabelWidth = 12
 
+// sep starts a block: a blank line after the one before it.
+func (h *human) sep() {
+	if h.nblk > 0 {
+		h.print("\n")
+	}
+
+	h.nblk++
+}
+
 // Block prints an optional bold title and below it the labelled values, the labels dim in an
 // aligned column. With a title the rows are indented two spaces; a block without one starts at
 // the left edge. A blank line separates two blocks.
@@ -192,11 +201,7 @@ func (h *human) Block(title string, rows ...kv) {
 		return
 	}
 
-	if h.nblk > 0 {
-		h.print("\n")
-	}
-
-	h.nblk++
+	h.sep()
 
 	indent := ""
 
@@ -225,11 +230,7 @@ func (h *human) Block(title string, rows ...kv) {
 
 // Title starts a block whose body is lines (Line) instead of labelled values.
 func (h *human) Title(title string) {
-	if h.nblk > 0 {
-		h.print("\n")
-	}
-
-	h.nblk++
+	h.sep()
 	h.print(h.p.paint(sgrBold, title) + "\n")
 }
 
@@ -247,14 +248,9 @@ func (h *human) Conditions(title string, conds []conditionRow) {
 
 	h.Title(title)
 
-	w := 0
+	w, rw := 0, 0
 	for _, c := range conds {
-		w = max(w, len(c.Type))
-	}
-
-	rw := 0
-	for _, c := range conds {
-		rw = max(rw, len(c.Reason))
+		w, rw = max(w, len(c.Type)), max(rw, len(c.Reason))
 	}
 
 	for _, c := range conds {

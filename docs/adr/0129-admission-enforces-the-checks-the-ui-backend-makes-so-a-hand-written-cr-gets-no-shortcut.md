@@ -77,3 +77,14 @@ No new mechanism. The annotation `ichor.maesh.dev/credentials-handoff` is not ve
 ## Amendments to earlier ADRs
 
 ADR 0094 and ADR 0108 each get a pointer to this ADR; ADR 0099 gets the note that decision 4's controller re-check is not built.
+
+## Amendment 2026-11-05: the controller re-checks the Cilium values before every Helm Job
+
+Decision 1 left the three guards that need the machine configuration or the live cluster (`bpf.masquerade` against `forwardKubeDNSToHost`, KubePrism in kube-proxy-replaced mode, Gateway API CRDs) to the UI and the CLI, so a `kubectl patch` by an `operator` could still make the controller install values that break CoreDNS. The gap is closed in the controller.
+
+- **One builder.** The context the UI backend built for `ValidateValues` moved to `internal/cnifacts` (`Source.Context`); the UI's `validationContext` calls it, and so does the controller (`Source.Validate`: the stored user values, the kube-proxy mode the Job runs with, the facts). The only differences are the inputs: the UI renders with a placeholder bundle and masked Secrets, the controller with the real bundle (`loadBundle`) and its own Secret reads. A fact that cannot be read stays unknown and its guard passes, as in the UI.
+- **Where.** `AdvanceCNIHelmJob`, the one function every Cilium Helm Job goes through (hand-over and values change in `CNIHandoverReconciler`, kube-proxy switch and chart upgrade in the operation executor), takes a check and runs it only when the Job does not exist yet. A Job already running or finished is not re-checked, so a late edit of a patch cannot hide a completed Job. A refusal returns `*CNIInvalidValuesError` and creates nothing.
+- **Hand-over and values change.** The reconciler releases the cluster operation lock it had taken, sets `CNIValuesApplied=False` with reason `InvalidValues` (the reason a parse failure of the values already uses; before the hand-over `CNIHandover` carries it too, after it `CNIHandover` stays True) with every problem in the message, and requeues after the normal 30 s. A later valid edit of the values, or of the patches the guards read, is picked up on the next pass. `spec` is never written.
+- **Operations.** A `cni` upgrade or kube-proxy switch whose Job would be refused pauses with the problems as its failure reason, like any other error of its executor; fix the values and retry.
+- **RBAC.** The controller may `get` the CRD `gateways.gateway.networking.k8s.io` by name (a marker on `CNIHandoverReconciler`, `config/rbac/role.yaml`), read through the uncached reader.
+- **Not changed.** The webhook stays static (decision 1). A cluster whose stored values were valid when stored but fail the check now is refused a new Job until they are fixed; the running Cilium is untouched.

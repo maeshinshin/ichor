@@ -95,14 +95,6 @@ func (p *AutoPatcher) Start(ctx context.Context) error {
 	return nil
 }
 
-func (p *AutoPatcher) now() time.Time {
-	if p.Now != nil {
-		return p.Now()
-	}
-
-	return time.Now()
-}
-
 func isAutoOperation(op *ichorv1alpha1.TalosOperation) bool {
 	return op.Annotations[ichorv1alpha1.OperationAutoPatchAnnotation] == autoPatchMarker
 }
@@ -278,7 +270,7 @@ func (p *AutoPatcher) passCluster(
 	ops []ichorv1alpha1.TalosOperation, setting settings.AutoPatch, ichorUpgrading bool,
 ) error {
 	in := autopatch.Input{
-		Now: p.now(), Setting: setting, Enabled: true, IchorUpgrading: ichorUpgrading, Targets: inst.Status.UpgradeTargets,
+		Now: nowFrom(p.Now), Setting: setting, Enabled: true, IchorUpgrading: ichorUpgrading, Targets: inst.Status.UpgradeTargets,
 		Cluster: autopatch.Cluster{
 			Talos: cluster.Spec.TalosVersion, Kubernetes: cluster.Spec.KubernetesVersion,
 			CNIUnmanaged: cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged,
@@ -386,7 +378,7 @@ func (p *AutoPatcher) start(ctx context.Context, inst *ichorv1alpha1.IchorInstal
 	p.Recorder.Eventf(cluster, corev1.EventTypeNormal, "AutoPatchStarted",
 		"Automatic patching started operation %s: %s %s to %s", op.Name, d.Component, from, d.Target)
 
-	now := metav1.NewTime(p.now())
+	now := metav1.NewTime(nowFrom(p.Now))
 
 	return p.patchStatus(ctx, inst, func(s *ichorv1alpha1.IchorInstallationStatus) {
 		if s.AutoPatch == nil {

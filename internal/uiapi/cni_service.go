@@ -387,16 +387,10 @@ func (s *Server) StartCniUpgrade(
 	cluster := v.cluster
 	chart := cluster.Status.CNI.AvailableChartVersion
 
-	op := &ichorv1alpha1.TalosOperation{
-		GenerateName: ichorv1alpha1.TalosOperationKindCNI + "-", Namespace: cluster.Namespace, Annotations: s.startedByAnnotation(ctx),
-		Spec: ichorv1alpha1.TalosOperationSpec{
-			ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
-			Kind:       ichorv1alpha1.TalosOperationKindCNI,
-			CNI: &ichorv1alpha1.TalosOperationCNISpec{
-				Action: ichorv1alpha1.TalosOperationCNIActionUpgrade, ChartVersion: chart,
-			},
-		},
-	}
+	op := s.newOperation(ctx, cluster, ichorv1alpha1.TalosOperationSpec{
+		Kind: ichorv1alpha1.TalosOperationKindCNI,
+		CNI:  &ichorv1alpha1.TalosOperationCNISpec{Action: ichorv1alpha1.TalosOperationCNIActionUpgrade, ChartVersion: chart},
+	})
 
 	if err := s.createOperation(ctx, cluster, op); err != nil {
 		return nil, err

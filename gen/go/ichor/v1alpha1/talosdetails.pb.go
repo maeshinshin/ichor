@@ -238,6 +238,9 @@ type TalosSystemSection struct {
 	ModuleSignatureEnforced  bool   `protobuf:"varint,15,opt,name=module_signature_enforced,json=moduleSignatureEnforced,proto3" json:"module_signature_enforced,omitempty"`
 	UkiSigningKeyFingerprint string `protobuf:"bytes,16,opt,name=uki_signing_key_fingerprint,json=ukiSigningKeyFingerprint,proto3" json:"uki_signing_key_fingerprint,omitempty"`
 	KernelLockdown           string `protobuf:"bytes,17,opt,name=kernel_lockdown,json=kernelLockdown,proto3" json:"kernel_lockdown,omitempty"`
+	// pcr_signing_key_fingerprint is the fingerprint of the key that signs the PCR measurements of the
+	// booted UKI (the field Talos v1.14 fills; uki_signing_key_fingerprint is not reported and stays empty).
+	PcrSigningKeyFingerprint string `protobuf:"bytes,18,opt,name=pcr_signing_key_fingerprint,json=pcrSigningKeyFingerprint,proto3" json:"pcr_signing_key_fingerprint,omitempty"`
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
@@ -387,6 +390,13 @@ func (x *TalosSystemSection) GetUkiSigningKeyFingerprint() string {
 func (x *TalosSystemSection) GetKernelLockdown() string {
 	if x != nil {
 		return x.KernelLockdown
+	}
+	return ""
+}
+
+func (x *TalosSystemSection) GetPcrSigningKeyFingerprint() string {
+	if x != nil {
+		return x.PcrSigningKeyFingerprint
 	}
 	return ""
 }
@@ -1147,7 +1157,7 @@ const file_ichor_v1alpha1_talosdetails_proto_rawDesc = "" +
 	"extensions\"A\n" +
 	"\x13TalosUnmetCondition\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
-	"\x06reason\x18\x02 \x01(\tR\x06reason\"\x90\x05\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xcf\x05\n" +
 	"\x12TalosSystemSection\x12\x14\n" +
 	"\x05error\x18\x01 \x01(\tR\x05error\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\x12\n" +
@@ -1170,7 +1180,8 @@ const file_ichor_v1alpha1_talosdetails_proto_rawDesc = "" +
 	"\x0fbooted_with_uki\x18\x0e \x01(\bR\rbootedWithUki\x12:\n" +
 	"\x19module_signature_enforced\x18\x0f \x01(\bR\x17moduleSignatureEnforced\x12=\n" +
 	"\x1buki_signing_key_fingerprint\x18\x10 \x01(\tR\x18ukiSigningKeyFingerprint\x12'\n" +
-	"\x0fkernel_lockdown\x18\x11 \x01(\tR\x0ekernelLockdown\"\xf9\x01\n" +
+	"\x0fkernel_lockdown\x18\x11 \x01(\tR\x0ekernelLockdown\x12=\n" +
+	"\x1bpcr_signing_key_fingerprint\x18\x12 \x01(\tR\x18pcrSigningKeyFingerprint\"\xf9\x01\n" +
 	"\tTalosLink\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
 	"\x03mac\x18\x02 \x01(\tR\x03mac\x12+\n" +

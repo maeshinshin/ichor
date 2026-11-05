@@ -32,11 +32,18 @@ type TalosMachineSecurity struct {
 	// +optional
 	ModuleSignatureEnforced bool `json:"moduleSignatureEnforced,omitempty"`
 
-	// ukiSigningKeyFingerprint is the fingerprint of the key that signed the booted UKI; empty
-	// without SecureBoot.
+	// ukiSigningKeyFingerprint is the UKI signing key fingerprint of Talos's SecurityState. Talos
+	// v1.14 does not fill it, so it stays empty; pcrSigningKeyFingerprint is the one it reports.
+	// Kept for compatibility (CRD fields are append-only).
 	// +kubebuilder:validation:MaxLength=128
 	// +optional
 	UKISigningKeyFingerprint string `json:"ukiSigningKeyFingerprint,omitempty"`
+
+	// pcrSigningKeyFingerprint is the fingerprint of the key that signs the PCR measurements of the
+	// booted UKI (SecurityState.pcrSigningKeyFingerprint); empty when the node reports none.
+	// +kubebuilder:validation:MaxLength=128
+	// +optional
+	PCRSigningKeyFingerprint string `json:"pcrSigningKeyFingerprint,omitempty"`
 
 	// kernelLockdown is the lockdown level in effect: the last lockdown= word of the kernel
 	// command line, else integrity under SecureBoot (Talos v1.14's implicit level), else none.

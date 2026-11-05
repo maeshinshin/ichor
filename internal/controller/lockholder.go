@@ -21,9 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -75,7 +75,7 @@ func releaseIfHolderStopped(
 	ctx context.Context, reader client.Reader, lock *clusterlock.Lock, acquireErr error,
 ) (retry bool, err error) {
 	held, ok := errors.AsType[*clusterlock.HeldError](acquireErr)
-	if !ok || !lockHolderStopped(ctx, reader, held.Holder) {
+	if !ok || !lockHolderStopped(ctx, reader, held.Holder, held.Acquired) {
 		return false, nil
 	}
 
@@ -89,19 +89,22 @@ func releaseIfHolderStopped(
 //     moves it, and that takes the lock again);
 //   - a TalosMachine that is gone (its removal finished, or it was never removed through the
 //     finalizer), or that is not being removed and is done with its locked step: a join holds the lock
-//     only while it hands the configuration to the node, so a machine whose configuration is stored
-//     (status.configStoredAt) or that is Ready has nothing left to do under it.
+//     only while it hands the configuration to the node, so a machine that stored its configuration
+//     after it took the lock (status.configStoredAt no older than acquired, the lease's acquireTime)
+//     has nothing left to do under it. A configuration stored before that says nothing: configStoredAt
+//     is never cleared, and Ready may be stale, so a control plane that is re-provisioning (removing
+//     its etcd member, then sending a new configuration) looks just like that and is still working.
 //
 // A machine being removed (deletionTimestamp set) is not stopped: the removal is its locked step and
 // runs until the finalizer goes. Any other holder, including the legacy shared "ichor-controller"
 // identity a previous build left, may still be working and ages out on its own.
-func lockHolderStopped(ctx context.Context, reader client.Reader, holder string) bool {
+func lockHolderStopped(ctx context.Context, reader client.Reader, holder string, acquired time.Time) bool {
 	if nn, ok := strings.CutPrefix(holder, operationLockIdentityPrefix); ok {
 		return operationHolderStopped(ctx, reader, nn)
 	}
 
 	if nn, ok := strings.CutPrefix(holder, machineLockIdentityPrefix); ok {
-		return machineHolderStopped(ctx, reader, nn)
+		return machineHolderStopped(ctx, reader, nn, acquired)
 	}
 
 	return false
@@ -119,7 +122,7 @@ func operationHolderStopped(ctx context.Context, reader client.Reader, namespace
 		(o.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused && o.Status.FailureReason != "" && !o.Spec.Paused)
 }
 
-func machineHolderStopped(ctx context.Context, reader client.Reader, namespacedName string) bool {
+func machineHolderStopped(ctx context.Context, reader client.Reader, namespacedName string, acquired time.Time) bool {
 	namespace, name, _ := strings.Cut(namespacedName, "/")
 
 	var m ichorv1alpha1.TalosMachine
@@ -131,5 +134,7 @@ func machineHolderStopped(ctx context.Context, reader client.Reader, namespacedN
 		return false
 	}
 
-	return m.Status.ConfigStoredAt != nil || apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionReady)
+	// configStoredAt has second precision, the lease's acquireTime microseconds.
+	return !acquired.IsZero() && m.Status.ConfigStoredAt != nil &&
+		!m.Status.ConfigStoredAt.Time.Before(acquired.Truncate(time.Second))
 }

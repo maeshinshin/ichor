@@ -203,13 +203,35 @@ var _ = Describe("two control-plane TalosMachines of one cluster at a step that 
 			Expect(lock.Release(ctx, machineLockIdentity(gone))).To(Succeed())
 
 			stored := newTestControlPlane(cluster.Name, "63")
+			Expect(lock.Acquire(ctx, machineLockIdentity(stored))).To(Succeed())
+
 			got := fetchMachine(stored)
 			now := metav1.Now()
 			got.Status.ConfigStoredAt = &now
 			Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
-			Expect(lock.Acquire(ctx, machineLockIdentity(stored))).To(Succeed())
 
-			Expect(join(controlPlane("64"))).To(BeTrue(), "a join that stored its configuration has nothing left under the lock")
+			Expect(join(controlPlane("64"))).To(BeTrue(), "a join that stored its configuration under the lock has nothing left under it")
+		})
+
+		It("is kept by a control plane that is re-provisioning: a configuration stored before the lock was taken says nothing", func() {
+			reprovisioning := newTestControlPlane(cluster.Name, "72")
+			got := fetchMachine(reprovisioning)
+			longAgo := metav1.NewTime(time.Now().Add(-48 * time.Hour))
+			got.Status.ConfigStoredAt = &longAgo
+			Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
+
+			got = fetchMachine(reprovisioning)
+			got.Status.Conditions = []metav1.Condition{{
+				Type: conditionReady, Status: metav1.ConditionTrue, Reason: reasonConverged, Message: "was ready before the wipe",
+				LastTransitionTime: longAgo,
+			}}
+			Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
+			Expect(lock.Acquire(ctx, machineLockIdentity(reprovisioning))).To(Succeed())
+
+			waiting := controlPlane("73")
+			Expect(join(waiting)).To(BeFalse(), "the holder is mid-step (etcd member removal, new configuration); it is not stopped")
+			Expect(readyCondition(fetchMachine(waiting)).Reason).To(Equal(reasonClusterLockHeld))
+			Expect(readyCondition(fetchMachine(waiting)).Message).To(ContainSubstring(reprovisioning.Name))
 		})
 
 		It("is taken over from a TalosOperation that is gone or completed, and kept by one that is running", func() {

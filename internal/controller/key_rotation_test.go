@@ -35,7 +35,10 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/configloader"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	yaml "go.yaml.in/yaml/v4"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -94,7 +97,11 @@ type keyWorld struct {
 
 	failApply  func(node string, n int) error
 	versionErr map[string]error
-	dialLeak   string
+
+	// instanceErr is what reading a node's kube-apiserver container fails with; noInstance makes Talos list none.
+	instanceErr map[string]error
+	noInstance  bool
+	dialLeak    string
 
 	// restartDelay is how many /readyz probes fail after each apply; noRestart keeps the container as it was.
 	restartDelay int
@@ -259,6 +266,14 @@ func (c *keyClient) Version(context.Context) (string, error) {
 }
 
 func (c *keyClient) APIServerInstance(context.Context) (string, error) {
+	if err := c.w.instanceErr[c.name]; err != nil {
+		return "", err
+	}
+
+	if c.w.noInstance {
+		return "", nil
+	}
+
 	return fmt.Sprintf("containerd://%s-%d", c.name, c.node.instance), nil
 }
 
@@ -323,7 +338,7 @@ func newKeyRotFixture(bundle *secrets.Bundle) *keyRotFixture {
 	f := &keyRotFixture{recorder: record.NewFakeRecorder(200), old: bundle}
 	f.secret = newTestSecret(f.old)
 	f.cluster = newTestClusterWithCount(3, f.secret.Name)
-	f.world = &keyWorld{nodes: map[string]*keyNode{}, secretName: f.secret.Name, versionErr: map[string]error{}}
+	f.world = &keyWorld{nodes: map[string]*keyNode{}, secretName: f.secret.Name, versionErr: map[string]error{}, instanceErr: map[string]error{}}
 
 	for _, n := range []string{"cp1", "cp2", "cp3"} {
 		f.machines = append(f.machines, newOpTestMachine(f.cluster.Name, roleControlPlane, "key-"+n))
@@ -726,11 +741,74 @@ var _ = Describe("TalosOperation key-rotation", func() {
 
 		Expect(keyStageOf(op)).To(Equal(ichorv1alpha1.KeyRotationStageAccepting))
 		Expect(f.world.applies).To(HaveLen(1), "the other control planes were applied to although the first never restarted")
-		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Message).To(ContainSubstring("container"))
+		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation)
+		Expect(cond.Message).To(ContainSubstring("still runs in the container it ran before the apply"))
+		Expect(cond.Message).To(ContainSubstring("last checked"), "a stalled controller must show when the message was last true")
+		Expect(cond.Message).NotTo(ContainSubstring("refused"))
 
 		// It goes on once the container is replaced.
 		f.world.noRestart = false
 		f.world.nodes[f.world.applies[0].node].instance++
+		f.runUntil(op, completed)
+	})
+
+	// Hardware (ADR 0121, amendment 2026-11-05): a rotation stalled for 17 minutes under "still runs in the container
+	// it ran before the apply" although the container had changed; the real cause was credentials refused.
+	It("says so when the state of the kube-apiserver cannot be read because credentials were refused, not that the container is unchanged", func() {
+		f := newKeyRotFixture(fastBundle())
+		f.world.restartDelay = 3
+
+		op := f.newOp(saOnly)
+		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageAccepting))
+
+		for op.Status.KeyRotation.Restart == nil {
+			op = f.step(op)
+		}
+
+		victim := op.Status.KeyRotation.Restart.Machine
+
+		for name, refused := range map[string]error{
+			"the Talos API":      status.Error(codes.Unauthenticated, "certificate rejected"),
+			"the Kubernetes API": apierrors.NewUnauthorized("the server has asked for the client to provide credentials"),
+			"a wrapped refusal":  fmt.Errorf("listing static pod statuses: %w", status.Error(codes.PermissionDenied, "not allowed")),
+		} {
+			f.world.instanceErr[victim] = refused
+			op = f.step(op)
+
+			cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation)
+			Expect(cond.Message).To(ContainSubstring("refused the credentials"), name)
+			Expect(cond.Message).To(ContainSubstring("not a kube-apiserver that has not restarted"), name)
+			Expect(cond.Message).NotTo(ContainSubstring("still runs in the container"), name)
+		}
+
+		// An unrelated failure is reported as it is, without the claim.
+		f.world.instanceErr[victim] = errors.New("rpc error: Unavailable")
+		op = f.step(op)
+		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Message).NotTo(ContainSubstring("refused"))
+
+		delete(f.world.instanceErr, victim)
+		f.runUntil(op, completed)
+	})
+
+	It("does not call a missing kube-apiserver container an unchanged one", func() {
+		f := newKeyRotFixture(fastBundle())
+		f.world.restartDelay = 2
+
+		op := f.newOp(saOnly)
+		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageAccepting))
+
+		for op.Status.KeyRotation.Restart == nil {
+			op = f.step(op)
+		}
+
+		f.world.noInstance = true
+		op = f.step(op)
+
+		msg := apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Message
+		Expect(msg).To(ContainSubstring("reports no kube-apiserver container"))
+		Expect(msg).NotTo(ContainSubstring("still runs in the container"))
+
+		f.world.noInstance = false
 		f.runUntil(op, completed)
 	})
 

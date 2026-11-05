@@ -191,3 +191,7 @@ is gone once the finalizer clears and nobody was watching mid-flight), the
 `ResetFailed` hold (no failing node was available), and the
 second-call-is-a-no-op path against a live node. Those stay covered by
 `internal/controller/reset_test.go` only.
+
+## Amendment 2026-11-05: an optional full wipe
+
+The default stays as decided here: STATE and EPHEMERAL by label, nothing else. A node that has to be installed afresh (a SecureBoot move, ADR 0123) cannot use it, because the installed boot partition survives and the node boots its installed system again. `TalosOperation.spec.node.wipeMode` (`system-disk` or `all`, only with the `reset` action; `ichor node reset --wipe-mode`) therefore asks for the other shape of `ResetRequest`: `Mode` SYSTEM_DISK or ALL and no `systemPartitionsToWipe`, which Talos reads as the whole system disk (and, for ALL, every user disk). The mode travels to the removal flow in the machine annotation `ichor.maesh.dev/reset-wipe-mode`, next to `reset-on-delete`; `reclaim.ResetRequestWipe` is the one place that builds the request, and `MachineReclaim` is unchanged (it always wipes STATE and EPHEMERAL). Needs the same override and typed name as any reset. Talos reference: `talosctl reset --wipe-mode all|system-disk|user-disks` (docs.siderolabs.com/talos/v1.14).

@@ -86,7 +86,7 @@ jobs:
       # they match what `make build`/`make test` (which both depend on fmt too) actually
       # produce.
       - name: Regenerate manifests and mirror types
-        run: nix develop --command make manifests generate fmt
+        run: nix develop --command make manifests generate fmt docs-reference
 
       - name: Fail if regenerating produced a diff
         run: |

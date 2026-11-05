@@ -65,6 +65,21 @@ func shrinkFollowTimers(t *testing.T) {
 	t.Cleanup(func() { opWatchInterval, followRetryDelay, followRetryWindow = oi, od, ow })
 }
 
+// watchStderr watches an operation on ops until it ends, fails the test on an error and returns what
+// the watch wrote to stderr.
+func watchStderr(t *testing.T, ops ichorv1alpha1connect.OperationServiceClient) string {
+	t.Helper()
+
+	var out, errw bytes.Buffer
+
+	c := &apiClients{Operation: ops, Close: func() {}}
+	if err := watchOperation(context.Background(), c, objectRef(testNamespace, "x"), &out, &errw); err != nil {
+		t.Fatalf("%v\n%s", err, errw.String())
+	}
+
+	return errw.String()
+}
+
 // stagesOps reports a CA rotation one stage per poll, then Completed.
 type stagesOps struct {
 	ichorv1alpha1connect.OperationServiceClient
@@ -93,13 +108,7 @@ func TestOperationWatchPrintsTheStagesAPollJumpedOver(t *testing.T) {
 	ops := &stagesOps{stages: []string{
 		ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDone,
 	}}
-	c := &apiClients{Operation: ops, Close: func() {}}
-
-	var out, errw bytes.Buffer
-
-	if err := watchOperation(context.Background(), c, objectRef(testNamespace, "x"), &out, &errw); err != nil {
-		t.Fatalf("%v\n%s", err, errw.String())
-	}
+	stderr := watchStderr(t, ops)
 
 	at := 0
 
@@ -108,9 +117,9 @@ func TestOperationWatchPrintsTheStagesAPollJumpedOver(t *testing.T) {
 		ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDropping,
 		ichorv1alpha1.CARotationStageFinalizing, ichorv1alpha1.CARotationStageDone,
 	} {
-		i := strings.Index(errw.String()[at:], ", stage "+stage)
+		i := strings.Index(stderr[at:], ", stage "+stage)
 		if i < 0 {
-			t.Fatalf("no line for stage %s after position %d:\n%s", stage, at, errw.String())
+			t.Fatalf("no line for stage %s after position %d:\n%s", stage, at, stderr)
 		}
 
 		at += i + len(", stage "+stage)
@@ -125,13 +134,7 @@ func TestOperationWatchHumanPrintsTheStagesAPollJumpedOver(t *testing.T) {
 	ops := &stagesOps{stages: []string{
 		ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDone,
 	}}
-	c := &apiClients{Operation: ops, Close: func() {}}
-
-	var out, errw bytes.Buffer
-
-	if err := watchOperation(context.Background(), c, objectRef(testNamespace, "x"), &out, &errw); err != nil {
-		t.Fatalf("%v\n%s", err, errw.String())
-	}
+	stderr := watchStderr(t, ops)
 
 	at := 0
 
@@ -139,16 +142,16 @@ func TestOperationWatchHumanPrintsTheStagesAPollJumpedOver(t *testing.T) {
 		ichorv1alpha1.CARotationStageAccepting, ichorv1alpha1.CARotationStageAwaitingCredentials,
 		ichorv1alpha1.CARotationStageIssuing, ichorv1alpha1.CARotationStageDropping, ichorv1alpha1.CARotationStageFinalizing,
 	} {
-		i := strings.Index(errw.String()[at:], "· stage "+stage+"\n")
+		i := strings.Index(stderr[at:], "· stage "+stage+"\n")
 		if i < 0 {
-			t.Fatalf("no line for stage %s after position %d:\n%s", stage, at, errw.String())
+			t.Fatalf("no line for stage %s after position %d:\n%s", stage, at, stderr)
 		}
 
 		at += i
 	}
 
-	if !strings.HasSuffix(errw.String(), "✓ ca-rotation — Completed\n") {
-		t.Errorf("the rotation must end with its Completed line:\n%s", errw.String())
+	if !strings.HasSuffix(stderr, "✓ ca-rotation — Completed\n") {
+		t.Errorf("the rotation must end with its Completed line:\n%s", stderr)
 	}
 }
 
@@ -182,20 +185,14 @@ func TestWatchPrintsTheOperationMessageWhenItChanges(t *testing.T) {
 		installerRunning, installerRunning,
 		"waiting for the ichor-ui Deployment to finish rolling out (0 of 1 updated replicas are available)",
 	}}
-	c := &apiClients{Operation: ops, Close: func() {}}
-
-	var out, errw bytes.Buffer
-
-	if err := watchOperation(context.Background(), c, objectRef(testNamespace, "x"), &out, &errw); err != nil {
-		t.Fatalf("%v\n%s", err, errw.String())
-	}
+	stderr := watchStderr(t, ops)
 
 	for _, want := range []string{
 		"phase InProgress: the installer Job is running",
 		"phase InProgress: waiting for the ichor-ui Deployment to finish rolling out",
 	} {
-		if n := strings.Count(errw.String(), want); n != 1 {
-			t.Fatalf("want %q printed once, got %d:\n%s", want, n, errw.String())
+		if n := strings.Count(stderr, want); n != 1 {
+			t.Fatalf("want %q printed once, got %d:\n%s", want, n, stderr)
 		}
 	}
 }
@@ -208,20 +205,14 @@ func TestWatchHumanPrintsTheOperationMessageWhenItChanges(t *testing.T) {
 		installerRunning, installerRunning,
 		"waiting for the ichor-ui Deployment to finish rolling out (0 of 1 updated replicas are available)",
 	}}
-	c := &apiClients{Operation: ops, Close: func() {}}
-
-	var out, errw bytes.Buffer
-
-	if err := watchOperation(context.Background(), c, objectRef(testNamespace, "x"), &out, &errw); err != nil {
-		t.Fatalf("%v\n%s", err, errw.String())
-	}
+	stderr := watchStderr(t, ops)
 
 	for _, want := range []string{
 		"… ichor — InProgress · " + installerRunning + "\n",
 		"… ichor — InProgress · waiting for the ichor-ui Deployment to finish rolling out",
 	} {
-		if n := strings.Count(errw.String(), want); n != 1 {
-			t.Fatalf("want %q printed once, got %d:\n%s", want, n, errw.String())
+		if n := strings.Count(stderr, want); n != 1 {
+			t.Fatalf("want %q printed once, got %d:\n%s", want, n, stderr)
 		}
 	}
 }
@@ -234,16 +225,10 @@ func TestWatchRetriesTransientErrors(t *testing.T) {
 		errors.New("Get \"https://10.0.0.1:6443/apis\": dial tcp 10.0.0.1:6443: connect: connection refused"),
 		connect.NewError(connect.CodeUnavailable, errors.New("tunnel gone")),
 	}}
-	c := &apiClients{Operation: ops, Close: func() {}}
+	stderr := watchStderr(t, ops)
 
-	var out, errw bytes.Buffer
-
-	if err := watchOperation(context.Background(), c, objectRef(testNamespace, "x"), &out, &errw); err != nil {
-		t.Fatalf("want success after retries, got %v", err)
-	}
-
-	if ops.calls != 3 || strings.Count(errw.String(), "API unreachable, retrying") != 2 {
-		t.Fatalf("calls=%d stderr=%q", ops.calls, errw.String())
+	if ops.calls != 3 || strings.Count(stderr, "API unreachable, retrying") != 2 {
+		t.Fatalf("calls=%d stderr=%q", ops.calls, stderr)
 	}
 }
 

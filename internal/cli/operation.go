@@ -290,15 +290,24 @@ func watchRestoreOperation(ctx context.Context, c *apiClients, ref *pb.ObjectRef
 
 // watchOperationUntil is the watch; goneWindow > 0 treats NotFound as transient for that long.
 func watchOperationUntil(ctx context.Context, c *apiClients, ref *pb.ObjectRef, out, errw io.Writer, goneWindow time.Duration) error {
+	return watchOperationKind(ctx, c, ref, out, errw, goneWindow, pb.OperationKind_OPERATION_KIND_UNSPECIFIED)
+}
+
+// watchOperationKind is watchOperationUntil told the operation's kind when the caller knows it. An
+// Ichor upgrade replaces ichor-ui and its RBAC, so while one is followed ichor-ui answering that it
+// cannot impersonate is retried (within followRetryWindow) like it being unreachable. The kind is
+// also learned from the operation once a poll has returned it.
+func watchOperationKind(ctx context.Context, c *apiClients, ref *pb.ObjectRef, out, errw io.Writer, goneWindow time.Duration, kind pb.OperationKind) error {
 	var (
 		rep       = newOpReporter(errw)
 		goneSince time.Time
+		rollout   = func(err error) bool { return kind == pb.OperationKind_OPERATION_KIND_ICHOR && isImpersonationDenied(err) }
 	)
 
 	for {
 		var resp *connect.Response[pb.GetOperationResponse]
 
-		err := retryTransient(ctx, c, rep.retryWriter(), func() (err error) {
+		err := retryTransientOr(ctx, c, rep.retryWriter(), rollout, func() (err error) {
 			resp, err = c.Operation.GetOperation(ctx, connect.NewRequest(&pb.GetOperationRequest{Operation: ref}))
 
 			return err
@@ -320,6 +329,9 @@ func watchOperationUntil(ctx context.Context, c *apiClients, ref *pb.ObjectRef, 
 			goneSince = time.Time{}
 
 			op := resp.Msg.GetOperation()
+			if k := op.GetKind(); k != pb.OperationKind_OPERATION_KIND_UNSPECIFIED {
+				kind = k
+			}
 
 			rep.show(op)
 
@@ -465,7 +477,7 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 
 	announceCreated(errw, resp.Msg.GetOperation().GetRef().GetName())
 
-	return watchOperation(ctx, c, resp.Msg.GetOperation().GetRef(), out, errw)
+	return watchOperationKind(ctx, c, resp.Msg.GetOperation().GetRef(), out, errw, 0, s.Kind)
 }
 
 func init() {

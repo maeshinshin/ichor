@@ -31,8 +31,6 @@ import (
 	"github.com/siderolabs/crypto/x509"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	yaml "go.yaml.in/yaml/v4"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -182,24 +180,7 @@ func (kr *KeyRotation) Apply(bundle *secrets.Bundle) *secrets.Bundle {
 // LoadKeyRotation reads KeyRotationKey from the Secret named name in namespace. It returns nil, nil when
 // the key is absent: no key rotation is in progress.
 func LoadKeyRotation(ctx context.Context, c client.Reader, namespace, name string) (*KeyRotation, error) {
-	var secret corev1.Secret
-
-	key := types.NamespacedName{Namespace: namespace, Name: name}
-	if err := c.Get(ctx, key, &secret); err != nil {
-		return nil, fmt.Errorf("getting secrets bundle Secret %q: %w", key, err)
-	}
-
-	raw, ok := secret.Data[KeyRotationKey]
-	if !ok {
-		return nil, nil //nolint:nilnil // absence is the answer
-	}
-
-	kr, err := ParseKeyRotation(raw)
-	if err != nil {
-		return nil, fmt.Errorf("reading %q from Secret %q: %w", KeyRotationKey, key, err)
-	}
-
-	return kr, nil
+	return loadKey(ctx, c, namespace, name, KeyRotationKey, ParseKeyRotation)
 }
 
 // ServiceAccountFingerprint is the SHA-256 of the DER of key's public half, hex encoded. It is public, and
@@ -298,22 +279,10 @@ func ParseRetired(raw []byte) (*Retired, error) {
 
 // LoadRetired reads RetiredKeysKey from the Secret named name in namespace. An absent key is an empty list.
 func LoadRetired(ctx context.Context, c client.Reader, namespace, name string) (*Retired, error) {
-	var secret corev1.Secret
-
-	key := types.NamespacedName{Namespace: namespace, Name: name}
-	if err := c.Get(ctx, key, &secret); err != nil {
-		return nil, fmt.Errorf("getting secrets bundle Secret %q: %w", key, err)
+	r, err := loadKey(ctx, c, namespace, name, RetiredKeysKey, ParseRetired)
+	if r == nil && err == nil {
+		r = &Retired{}
 	}
 
-	raw, ok := secret.Data[RetiredKeysKey]
-	if !ok {
-		return &Retired{}, nil
-	}
-
-	r, err := ParseRetired(raw)
-	if err != nil {
-		return nil, fmt.Errorf("reading %q from Secret %q: %w", RetiredKeysKey, key, err)
-	}
-
-	return r, nil
+	return r, err
 }

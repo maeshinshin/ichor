@@ -112,6 +112,14 @@ const (
 	NodeActionReset                 = "reset"
 )
 
+// Values for TalosOperationNodeSpec.WipeMode.
+const (
+	// WipeModeSystemDisk wipes the whole system disk, boot and EFI included.
+	WipeModeSystemDisk = "system-disk"
+	// WipeModeAll wipes the system disk and every user disk.
+	WipeModeAll = "all"
+)
+
 // Values for TalosOperationNodeStatus.Step.
 const (
 	// NodeStepRequested: the action was sent to the node; the operation waits for its effect.
@@ -409,6 +417,7 @@ type TalosOperationEtcdRestoreSpec struct {
 // +kubebuilder:validation:XValidation:rule="self.action == 'restart-service' ? has(self.service) : !has(self.service)",message="service is required for restart-service and only allowed there"
 // +kubebuilder:validation:XValidation:rule="self.action != 'reset' || (has(self.confirm) && self.confirm == self.machineRef.name)",message="reset needs confirm equal to the machine name"
 // +kubebuilder:validation:XValidation:rule="!self.allowLeader || self.action == 'etcd-defrag'",message="allowLeader only applies to etcd-defrag"
+// +kubebuilder:validation:XValidation:rule="!has(self.wipeMode) || self.action == 'reset'",message="wipeMode only applies to reset"
 type TalosOperationNodeSpec struct {
 	// machineRef names the TalosMachine the action runs on.
 	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="machineRef.name is required"
@@ -450,6 +459,14 @@ type TalosOperationNodeSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	// +optional
 	OverrideReason string `json:"overrideReason,omitempty"`
+
+	// wipeMode makes a reset wipe more than the STATE and EPHEMERAL partitions: system-disk erases
+	// the whole system disk (boot and EFI included, so the node boots a boot image again instead of
+	// its installed UKI, which is what installing it afresh from a SecureBoot ISO needs), all also
+	// erases every user disk. Only with the reset action; unset keeps the STATE and EPHEMERAL wipe.
+	// +kubebuilder:validation:Enum=system-disk;all
+	// +optional
+	WipeMode string `json:"wipeMode,omitempty"`
 
 	// breakGlassReason is the earlier name of overrideReason, kept because CRD fields are append-only
 	// and operations written by older builds carry it. Deprecated: use override and overrideReason.

@@ -28,6 +28,9 @@ import (
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/api/machine"
+	"google.golang.org/protobuf/proto"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
 const testUUID = "AAAA-1"
@@ -340,5 +343,29 @@ func TestWaitMaintenance(t *testing.T) {
 	err := WaitMaintenance(ctx, "10.0.0.5", testUUID, time.Millisecond, never)
 	if err == nil || !strings.Contains(err.Error(), "down") {
 		t.Fatalf("want a timeout carrying the last probe error, got %v", err)
+	}
+}
+
+// A wipe mode asks Talos to erase the whole system disk (boot and EFI included), so the node can
+// be installed again from a boot image; without one the request stays the STATE and EPHEMERAL
+// wipe.
+func TestResetRequestWipeMode(t *testing.T) {
+	if got, want := ResetRequestWipe(false, ""), ResetRequest(false); !proto.Equal(got, want) {
+		t.Fatalf("no mode must be the request: %+v", got)
+	}
+
+	for mode, want := range map[string]machine.ResetRequest_WipeMode{
+		ichorv1alpha1.WipeModeSystemDisk: machine.ResetRequest_SYSTEM_DISK,
+		ichorv1alpha1.WipeModeAll:        machine.ResetRequest_ALL,
+	} {
+		r := ResetRequestWipe(false, mode)
+		if r.Mode != want || r.Graceful || !r.Reboot {
+			t.Fatalf("%s: mode/graceful/reboot wrong: %+v", mode, r)
+		}
+
+		// An empty list is what makes Talos wipe the whole system disk.
+		if len(r.SystemPartitionsToWipe) != 0 || len(r.UserDisksToWipe) != 0 {
+			t.Fatalf("%s: partitions or user disks named: %+v", mode, r)
+		}
 	}
 }

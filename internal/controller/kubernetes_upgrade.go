@@ -510,8 +510,6 @@ func (a *kubernetesUpgradeAdvancer) removedAPIsInUse(
 		return nil, fmt.Errorf("cluster %q has no control plane to ask for removed APIs", cluster.Name)
 	}
 
-	seen := map[string]bool{}
-
 	var out []string
 
 	for i := range planes {
@@ -528,17 +526,12 @@ func (a *kubernetesUpgradeAdvancer) removedAPIsInUse(
 			return nil, fmt.Errorf("control plane %q: %w", planes[i].Name, err)
 		}
 
-		for _, r := range removed {
-			if !seen[r] {
-				seen[r] = true
-				out = append(out, r)
-			}
-		}
+		out = append(out, removed...)
 	}
 
 	slices.Sort(out)
 
-	return out, nil
+	return slices.Compact(out), nil
 }
 
 // prePull pulls the new component images (changed image fields only) onto the node before its
@@ -715,15 +708,7 @@ func (a *kubernetesUpgradeAdvancer) componentPods(ctx context.Context, component
 
 	// A terminating pod is the old generation of a static pod being replaced; judging the node by
 	// it would report the old version.
-	live := pods.Items[:0]
-
-	for i := range pods.Items {
-		if pods.Items[i].DeletionTimestamp.IsZero() {
-			live = append(live, pods.Items[i])
-		}
-	}
-
-	return live, nil
+	return slices.DeleteFunc(pods.Items, func(p corev1.Pod) bool { return !p.DeletionTimestamp.IsZero() }), nil
 }
 
 // kubeProxyNotReady returns why the kube-proxy DaemonSet has not finished rolling out target.

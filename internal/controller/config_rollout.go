@@ -127,7 +127,7 @@ func (a *configRolloutAdvancer) Advance(
 	// failure to read or write the cluster is waiting (bounded), not a reason to pause the operation.
 	early := func(err error) (bool, error) {
 		if restarting {
-			return a.restartWaiting(ctx, cluster, m, err.Error())
+			return a.restartWaiting(ctx, m, err.Error())
 		}
 
 		return false, err
@@ -189,7 +189,7 @@ func (a *configRolloutAdvancer) unreachable(
 ) (bool, error) {
 	switch {
 	case restarting:
-		return a.restartWaiting(ctx, cluster, m, err.Error())
+		return a.restartWaiting(ctx, m, err.Error())
 	case rebooting:
 		return false, a.stillWaiting(ctx, cluster, m, err.Error())
 	}
@@ -216,9 +216,7 @@ func (a *configRolloutAdvancer) setRollout(
 
 // restartWaiting returns nil while the restart is inside its window (apiServerReadyTimeout) and,
 // past it, pauses the operation with a reason that says the API server did not come back.
-func (a *configRolloutAdvancer) restartWaiting(
-	ctx context.Context, _ *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, why string,
-) (bool, error) {
+func (a *configRolloutAdvancer) restartWaiting(ctx context.Context, m *ichorv1alpha1.TalosMachine, why string) (bool, error) {
 	cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionConfigRollout)
 	if cond == nil || time.Since(cond.LastTransitionTime.Time) < apiServerReadyTimeout {
 		return false, nil
@@ -287,7 +285,7 @@ func (a *configRolloutAdvancer) afterRestart(
 
 	instance, err := talos.APIServerInstance(dialCtx)
 	if err != nil {
-		return a.restartWaiting(ctx, cluster, m, "reading the kube-apiserver container: "+err.Error())
+		return a.restartWaiting(ctx, m, "reading the kube-apiserver container: "+err.Error())
 	}
 
 	restarted := cond.Message == "" || instance != cond.Message
@@ -299,7 +297,7 @@ func (a *configRolloutAdvancer) afterRestart(
 	defer cancelReady()
 
 	if err := talos.APIServerReady(readyCtx); err != nil {
-		return a.restartWaiting(ctx, cluster, m, err.Error())
+		return a.restartWaiting(ctx, m, err.Error())
 	}
 
 	if err := a.setRollout(ctx, m, metav1.ConditionFalse, reasonRolloutConverged,

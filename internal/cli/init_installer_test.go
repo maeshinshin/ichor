@@ -115,7 +115,7 @@ func TestInitInstallerFlags(t *testing.T) {
 		t.Errorf("a valid digest was refused: %v", err)
 	}
 
-	for _, bad := range []string{"sha256:abc", "latest", strings.ToUpper(testInstallerDigest)} {
+	for _, bad := range []string{"sha256:abc", "not-a-digest", strings.ToUpper(testInstallerDigest)} {
 		if err := validateInitInstaller(initOptions{InstallerDigest: bad}); err == nil {
 			t.Errorf("--installer-digest %q was accepted", bad)
 		}

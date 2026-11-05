@@ -42,6 +42,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/installer"
 	"github.com/maeshinshin/ichor/internal/installmanifest"
 	"github.com/maeshinshin/ichor/internal/version"
 )
@@ -390,7 +391,7 @@ func TestApplyIchorManifest_CreatesCiliumSecretsForCilium(t *testing.T) {
 		t.Fatalf("applyIchorManifest: %v", err)
 	}
 
-	if err := c.Get(context.Background(), types.NamespacedName{Name: "cilium-secrets"}, &corev1.Namespace{}); err != nil {
+	if err := c.Get(context.Background(), types.NamespacedName{Name: installer.CiliumSecretsNamespace}, &corev1.Namespace{}); err != nil {
 		t.Fatalf("the cilium-secrets Namespace was not created: %v", err)
 	}
 
@@ -416,7 +417,7 @@ func TestApplyIchorManifest_SkipsCiliumSecretsWithoutCilium(t *testing.T) {
 		t.Fatalf("applyIchorManifest: %v", err)
 	}
 
-	if err := c.Get(context.Background(), types.NamespacedName{Name: "cilium-secrets"}, &corev1.Namespace{}); !apierrors.IsNotFound(err) {
+	if err := c.Get(context.Background(), types.NamespacedName{Name: installer.CiliumSecretsNamespace}, &corev1.Namespace{}); !apierrors.IsNotFound(err) {
 		t.Fatalf("the cilium-secrets Namespace: got %v, want not found", err)
 	}
 

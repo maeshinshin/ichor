@@ -130,9 +130,7 @@ func TestGetIchorInstallation(t *testing.T) {
 func TestIchorPlanAfterARolledBackUpgradeReportsTheRunningVersion(t *testing.T) {
 	srv, _ := opServer(t, append(opObjects(), ichorInstallation(ichorNew, ichorOld))...)
 
-	plan, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_ICHOR,
-	}))
+	plan, err := planOp(srv, pb.OperationKind_OPERATION_KIND_ICHOR, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,5 +147,21 @@ func TestIchorOperationRefusedWhenInstalledByHelm(t *testing.T) {
 	_, err := srv.CreateOperation(context.Background(), ichorCreate(ichorNew))
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition || !strings.Contains(err.Error(), ichorv1alpha1.IchorHelmManagedMessage) {
 		t.Fatalf("got %v", err)
+	}
+}
+
+// A Helm-installed Ichor has no IchorInstallation: planning an Ichor upgrade says
+// to use Helm instead of failing with a bare not-found, and the read-only answer stays empty.
+func TestIchorUpgradeOnAHelmInstalledIchorPointsToHelm(t *testing.T) {
+	srv, _ := opServer(t, opObjects()...)
+
+	_, err := planOp(srv, pb.OperationKind_OPERATION_KIND_ICHOR, "")
+	if err == nil || connect.CodeOf(err) != connect.CodeFailedPrecondition || !strings.Contains(err.Error(), "helm upgrade") {
+		t.Fatalf("PlanOperation = %v; want FailedPrecondition naming helm upgrade", err)
+	}
+
+	res, err := srv.GetIchorInstallation(context.Background(), connect.NewRequest(&pb.GetIchorInstallationRequest{}))
+	if err != nil || res.Msg.GetInstalledVersion() != "" {
+		t.Fatalf("GetIchorInstallation = %v, %v; want empty and no error", res, err)
 	}
 }

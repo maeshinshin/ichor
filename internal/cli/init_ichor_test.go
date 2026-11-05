@@ -229,80 +229,48 @@ func TestApplyIchorManifest_ForbiddenFailsAtOnce(t *testing.T) {
 	}
 }
 
-func TestIsTransient_EtcdTimeout(t *testing.T) {
-	for _, msg := range []string{"etcdserver: request timed out", "etcdserver: leader changed"} {
-		if !isTransient(apierrors.NewInternalError(errors.New(msg))) {
-			t.Errorf("%q should be transient", msg)
-		}
-	}
-
-	if isTransient(apierrors.NewInternalError(errors.New("boom"))) {
-		t.Error("an unrelated InternalError must not be transient")
-	}
-}
-
-// A webhook that cannot be called (its pod restarting with the control plane) comes back as a 500
-// InternalError whatever the cause (refused, timed out, no endpoints); a webhook that answered "no"
-// is a Forbidden or Invalid refusal and must fail at once, even if its reason quotes such text.
-func TestIsTransient_WebhookCallFailures(t *testing.T) {
-	gr := schema.GroupResource{Group: "ichor.maesh.dev", Resource: "talosoperations"}
-	call := func(cause string) error {
-		return apierrors.NewInternalError(errors.New("failed calling webhook \"voverrideop-v1alpha1.kb.io\": " +
-			"failed to call webhook: Post \"https://ichor-webhook-service.ichor-system.svc:443/validate\": " + cause))
-	}
-
-	for name, err := range map[string]error{
-		"refused":        call("dial tcp 10.249.23.203:443: connect: connection refused"),
-		"deadline":       call("context deadline exceeded"),
-		"client timeout": call("net/http: request canceled (Client.Timeout exceeded while awaiting headers)"),
-		"no endpoints":   call("no endpoints available for service \"ichor-webhook-service\""),
-		"unavailable":    apierrors.NewServiceUnavailable("failed calling webhook: no endpoints"),
-	} {
-		if !isTransient(err) {
-			t.Errorf("%s: %v should be transient", name, err)
-		}
-	}
-
-	for name, err := range map[string]error{
-		"denied": apierrors.NewForbidden(gr, "x", errors.New("admission webhook \"voverrideop-v1alpha1.kb.io\" denied the request: tokenSettle is too short")),
-		"denied quoting a call failure": apierrors.NewForbidden(gr, "x",
-			errors.New("denied: earlier failed calling webhook text: context deadline exceeded")),
-		"invalid": apierrors.NewInvalid(schema.GroupKind{Group: gr.Group, Kind: "TalosOperation"}, "x", nil),
-	} {
-		if isTransient(err) {
-			t.Errorf("%s: %v must fail fast", name, err)
-		}
-	}
-}
-
-// While the kube-apiserver of the endpoint comes back, the client's REST mapper cannot discover the
+// isTransient is true for the API briefly unreachable and false for an answer. A webhook that cannot be
+// called (its pod restarting with the control plane) comes back as a 500 InternalError whatever the cause;
+// a webhook that answered "no" is a Forbidden or Invalid refusal and fails at once, even if its reason
+// quotes such text. While the endpoint kube-apiserver comes back, the REST mapper cannot discover the
 // ichor group yet: that is discovery failing, not an answer.
-func TestIsTransient_DiscoveryFailures(t *testing.T) {
+func TestIsTransient(t *testing.T) {
 	gv := ichorv1alpha1.GroupVersion
+	gr := schema.GroupResource{Group: gv.Group, Resource: "talosoperations"}
 	mapperFailed := apiutil.ErrResourceDiscoveryFailed{gv: apierrors.NewNotFound(schema.GroupResource{}, "")}
 	groupFailed := &discovery.ErrGroupDiscoveryFailed{Groups: map[schema.GroupVersion]error{gv: errors.New("503")}}
-
-	for name, err := range map[string]error{
-		"no match":            &meta.NoResourceMatchError{PartialResource: gv.WithResource("")},
-		"wrapped no match":    fmt.Errorf("patching: %w", &meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: gv.Group, Kind: "Thing"}}),
-		"rest mapper":         &mapperFailed,
-		"wrapped rest mapper": fmt.Errorf("acknowledging: %w", &mapperFailed),
-		"group discovery":     groupFailed,
-		"wrapped group":       fmt.Errorf("listing: %w", groupFailed),
-	} {
-		if !isTransient(err) {
-			t.Errorf("%s: %v should be transient", name, err)
-		}
+	internal := func(msg string) error { return apierrors.NewInternalError(errors.New(msg)) }
+	call := func(cause string) error {
+		return internal("failed calling webhook \"voverrideop-v1alpha1.kb.io\": " +
+			"failed to call webhook: Post \"https://ichor-webhook-service.ichor-system.svc:443/validate\": " + cause)
 	}
 
-	gr := schema.GroupResource{Group: gv.Group, Resource: "things"}
-
-	for name, err := range map[string]error{
-		"forbidden": apierrors.NewForbidden(gr, "x", errors.New("no match for this user")),
-		"not found": apierrors.NewNotFound(gr, "x"),
+	for name, tc := range map[string]struct {
+		err  error
+		want bool
+	}{
+		"etcd timeout":                  {internal("etcdserver: request timed out"), true},
+		"etcd leader changed":           {internal("etcdserver: leader changed"), true},
+		"unrelated internal":            {internal("boom"), false},
+		"webhook refused":               {call("dial tcp 10.249.23.203:443: connect: connection refused"), true},
+		"webhook deadline":              {call("context deadline exceeded"), true},
+		"webhook client timeout":        {call("net/http: request canceled (Client.Timeout exceeded while awaiting headers)"), true},
+		"webhook no endpoints":          {call("no endpoints available for service \"ichor-webhook-service\""), true},
+		"webhook unavailable":           {apierrors.NewServiceUnavailable("failed calling webhook: no endpoints"), true},
+		"webhook denied":                {apierrors.NewForbidden(gr, "x", errors.New("admission webhook \"voverrideop-v1alpha1.kb.io\" denied the request: tokenSettle is too short")), false},
+		"denied quoting a call failure": {apierrors.NewForbidden(gr, "x", errors.New("denied: earlier failed calling webhook text: context deadline exceeded")), false},
+		"webhook invalid":               {apierrors.NewInvalid(schema.GroupKind{Group: gv.Group, Kind: "TalosOperation"}, "x", nil), false},
+		"no match":                      {&meta.NoResourceMatchError{PartialResource: gv.WithResource("")}, true},
+		"wrapped no match":              {fmt.Errorf("patching: %w", &meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: gv.Group, Kind: "Thing"}}), true},
+		"rest mapper":                   {&mapperFailed, true},
+		"wrapped rest mapper":           {fmt.Errorf("acknowledging: %w", &mapperFailed), true},
+		"group discovery":               {groupFailed, true},
+		"wrapped group":                 {fmt.Errorf("listing: %w", groupFailed), true},
+		"forbidden":                     {apierrors.NewForbidden(gr, "x", errors.New("no match for this user")), false},
+		"not found":                     {apierrors.NewNotFound(gr, "x"), false},
 	} {
-		if isTransient(err) {
-			t.Errorf("%s: %v must fail fast", name, err)
+		if got := isTransient(tc.err); got != tc.want {
+			t.Errorf("%s: isTransient(%v) = %t, want %t", name, tc.err, got, tc.want)
 		}
 	}
 }

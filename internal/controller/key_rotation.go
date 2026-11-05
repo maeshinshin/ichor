@@ -802,14 +802,14 @@ func (c *keyRun) awaitRestart(
 			return fmt.Errorf("reading the kube-apiserver of %q: %w", m.Name, err)
 		}
 
-		switch {
-		case instance == "":
+		switch instance {
+		case "":
 			// Not "unchanged": Talos lists no kube-apiserver container at all (it is being replaced, or its status is not
 			// reported yet). Saying "still runs in the container it ran before" here misled an operator on hardware.
 			why = fmt.Sprintf("Talos reports no kube-apiserver container on %q right now", m.Name)
 
 			return nil
-		case instance == restart.Instance:
+		case restart.Instance:
 			why = fmt.Sprintf("the kube-apiserver of %q still runs in the container it ran before the apply", m.Name)
 
 			return nil

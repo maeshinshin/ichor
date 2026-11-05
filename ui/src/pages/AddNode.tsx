@@ -129,10 +129,7 @@ export function AddNode() {
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">{m.endpoint || '-'}</TableCell>
                       <TableCell>
-                        <ApproveDialog
-                          machine={m}
-                          onApproved={() => reloadMachines()}
-                        />
+                        <ApproveDialog machine={m} onApproved={reloadMachines} />
                       </TableCell>
                     </TableRow>
                   ))}

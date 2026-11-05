@@ -144,12 +144,12 @@ function Routes({ path, usersEnabled }: { path: string; usersEnabled: boolean })
           <AlertDescription>{t('shell.manyClusters', { name: cluster.ref?.name ?? '' })}</AlertDescription>
         </Alert>
       )}
-      {renderRoute(path, t('common.notFound'))}
+      {renderRoute(path)}
     </>
   )
 }
 
-function renderRoute(path: string, notFound: string) {
+function renderRoute(path: string) {
   if (path === '/') return <Overview />
   if (path === '/nodes') return <MachineList />
   if (path === '/nodes/add') return <AddNode />
@@ -168,5 +168,5 @@ function renderRoute(path: string, notFound: string) {
   const patch = matchRoute('/config/:name', path)
   if (patch) return <PatchDetail name={patch.name} />
 
-  return <Placeholder title={notFound} />
+  return <Placeholder title={t('common.notFound')} />
 }

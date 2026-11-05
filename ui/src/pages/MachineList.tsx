@@ -208,7 +208,6 @@ function RejectDialog({
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<ErrorShape | null>(null)
 
-
   async function submit() {
     if (!machine.ref) return
     setSubmitting(true)

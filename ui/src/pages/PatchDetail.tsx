@@ -1,3 +1,4 @@
+import { Fragment } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -181,7 +182,6 @@ export function PatchDetail({ name }: { name?: string }) {
       documents: documents.map((d) => ({ kind: d.kind, document: d.document })),
     }
   }
-
 
   async function save() {
     const wire = buildWire(setSaveError)
@@ -430,41 +430,31 @@ export function PatchDetail({ name }: { name?: string }) {
                     <Badge variant={preview.rebootRequired ? 'secondary' : 'outline'}>{preview.rebootRequired ? t('common.yes') : t('common.no')}</Badge>
                   </ItemActions>
                 </Item>
-                {preview.installTimeOnly.length > 0 && (
-                  <>
-                    <ItemSeparator />
-                    <Item>
-                      <ItemContent>
-                        <ItemTitle>{t('patch.installTimeOnly')}</ItemTitle>
-                        <ItemDescription>{t('patch.installTimeOnlyHelp')}</ItemDescription>
-                        <div class="flex flex-wrap gap-1">
-                          {preview.installTimeOnly.map((p) => (
-                            <Badge key={p} variant="outline">
-                              {p}
-                            </Badge>
-                          ))}
-                        </div>
-                      </ItemContent>
-                    </Item>
-                  </>
-                )}
-                {preview.unsupported.length > 0 && (
-                  <>
-                    <ItemSeparator />
-                    <Item>
-                      <ItemContent>
-                        <ItemTitle>{t('patch.unsupported')}</ItemTitle>
-                        <ItemDescription>{t('patch.unsupportedHelp')}</ItemDescription>
-                        <div class="flex flex-wrap gap-1">
-                          {preview.unsupported.map((p) => (
-                            <Badge key={p} variant="destructive">
-                              {p}
-                            </Badge>
-                          ))}
-                        </div>
-                      </ItemContent>
-                    </Item>
-                  </>
+                {(
+                  [
+                    ['patch.installTimeOnly', 'patch.installTimeOnlyHelp', preview.installTimeOnly, 'outline'],
+                    ['patch.unsupported', 'patch.unsupportedHelp', preview.unsupported, 'destructive'],
+                  ] as const
+                ).map(
+                  ([title, help, paths, variant]) =>
+                    paths.length > 0 && (
+                      <Fragment key={title}>
+                        <ItemSeparator />
+                        <Item>
+                          <ItemContent>
+                            <ItemTitle>{t(title)}</ItemTitle>
+                            <ItemDescription>{t(help)}</ItemDescription>
+                            <div class="flex flex-wrap gap-1">
+                              {paths.map((p) => (
+                                <Badge key={p} variant={variant}>
+                                  {p}
+                                </Badge>
+                              ))}
+                            </div>
+                          </ItemContent>
+                        </Item>
+                      </Fragment>
+                    ),
                 )}
                 {preview.installTimeOnly.length === 0 && preview.unsupported.length === 0 && (
                   <>

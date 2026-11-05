@@ -195,27 +195,17 @@ func (s *Server) controllerMachine(ctx context.Context, machines []ichorv1alpha1
 // controllerNamespaces are the namespaces controllerMachine looks for the controller pod in, in order;
 // corev1.NamespaceAll (every namespace) comes last, and only for the in-process server.
 func (s *Server) controllerNamespaces(machines []ichorv1alpha1.TalosMachine) []string {
-	var out []string
-
-	for _, ns := range []string{s.ControllerNamespace, machinesNamespace(machines)} {
-		if ns != "" && !slices.Contains(out, ns) {
-			out = append(out, ns)
-		}
+	out := []string{s.ControllerNamespace}
+	if len(machines) > 0 {
+		out = append(out, machines[0].Namespace)
 	}
 
+	out = slices.DeleteFunc(slices.Compact(out), func(ns string) bool { return ns == "" })
 	if s.CallerCredentials {
 		out = append(out, corev1.NamespaceAll)
 	}
 
 	return out
-}
-
-func machinesNamespace(machines []ichorv1alpha1.TalosMachine) string {
-	if len(machines) == 0 {
-		return ""
-	}
-
-	return machines[0].Namespace
 }
 
 func whenText(t time.Time) string {

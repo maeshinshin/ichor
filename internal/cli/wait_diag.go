@@ -173,6 +173,15 @@ func pollBounded(
 	ctx context.Context, timeout, interval time.Duration, progress io.Writer, what string, d *waitDiag,
 	attempt func(context.Context) error, retryable func(error) bool,
 ) error {
+	return pollDiag(ctx, timeout, interval, progress, what, d, attempt, retryable, what+" did not finish within "+timeout.String())
+}
+
+// pollDiag is pollBounded with the start of the timeout message given: timedOut, then what is left
+// in brackets, then the last error.
+func pollDiag(
+	ctx context.Context, timeout, interval time.Duration, progress io.Writer, what string, d *waitDiag,
+	attempt func(context.Context) error, retryable func(error) bool, timedOut string,
+) error {
 	err := pollWhile(ctx, timeout, interval, progress, what, func(ctx context.Context) error {
 		err := attempt(ctx)
 		if err == nil || d == nil {
@@ -189,12 +198,11 @@ func pollBounded(
 		return err
 	}
 
-	msg := fmt.Sprintf("%s did not finish within %s", what, timeout)
 	if d != nil {
 		if s := d.summary(ctx); s != "" {
-			msg += " (" + s + ")"
+			timedOut += " (" + s + ")"
 		}
 	}
 
-	return fmt.Errorf("%s: %w", msg, err)
+	return fmt.Errorf("%s: %w", timedOut, err)
 }

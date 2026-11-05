@@ -85,55 +85,40 @@ var _ = Describe("resetAggregatorAuth", func() {
 
 	deletes := func(kc *fake.Clientset) []clienttesting.DeleteActionImpl {
 		var out []clienttesting.DeleteActionImpl
-
 		for _, a := range kc.Actions() {
 			if d, ok := a.(clienttesting.DeleteActionImpl); ok {
 				out = append(out, d)
 			}
 		}
-
 		return out
 	}
 
-	It("deletes a ConfigMap that still carries the old CA, by name and with the UID it read, and reports it not settled", func() {
+	DescribeTable("settles only when the ConfigMap holds the new CA alone, and deletes it otherwise",
+		func(existing func() *corev1.ConfigMap, settled bool, wantDeletes int) {
+			kc := fake.NewClientset()
+			if cm := existing(); cm != nil {
+				kc = fake.NewClientset(cm)
+			}
+			got, err := resetAggregatorAuth(ctx, kc.CoreV1().ConfigMaps(kubeSystemNamespace), wantFP())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(got).To(Equal(settled))
+			Expect(deletes(kc)).To(HaveLen(wantDeletes))
+		},
+		Entry("still carries the old CA", func() *corev1.ConfigMap { return configMap(oldCA + newCA) }, false, 1),
+		Entry("is missing: kube-apiserver has not recreated it yet", func() *corev1.ConfigMap { return nil }, false, 0),
+		Entry("holds the new CA alone", func() *corev1.ConfigMap { return configMap(newCA) }, true, 0),
+		Entry("holds neither CA: the new aggregator CA has not reached it", func() *corev1.ConfigMap { return configMap(oldCA) }, false, 1),
+	)
+
+	It("deletes by name and with the UID it read", func() {
 		kc := fake.NewClientset(configMap(oldCA + newCA))
-
-		settled, err := resetAggregatorAuth(ctx, kc.CoreV1().ConfigMaps(kubeSystemNamespace), wantFP())
+		_, err := resetAggregatorAuth(ctx, kc.CoreV1().ConfigMaps(kubeSystemNamespace), wantFP())
 		Expect(err).NotTo(HaveOccurred())
-		Expect(settled).To(BeFalse())
-
 		got := deletes(kc)
 		Expect(got).To(HaveLen(1))
 		Expect(got[0].Name).To(Equal(extensionAuthConfigMap))
 		Expect(got[0].Namespace).To(Equal(kubeSystemNamespace))
 		Expect(got[0].DeleteOptions.Preconditions).NotTo(BeNil())
 		Expect(string(*got[0].DeleteOptions.Preconditions.UID)).To(Equal("uid-1"))
-	})
-
-	It("reports a missing ConfigMap as not settled (kube-apiserver has not recreated it yet) and deletes nothing", func() {
-		kc := fake.NewClientset()
-
-		settled, err := resetAggregatorAuth(ctx, kc.CoreV1().ConfigMaps(kubeSystemNamespace), wantFP())
-		Expect(err).NotTo(HaveOccurred())
-		Expect(settled).To(BeFalse())
-		Expect(deletes(kc)).To(BeEmpty())
-	})
-
-	It("is settled, and deletes nothing, once the ConfigMap holds the new CA alone", func() {
-		kc := fake.NewClientset(configMap(newCA))
-
-		settled, err := resetAggregatorAuth(ctx, kc.CoreV1().ConfigMaps(kubeSystemNamespace), wantFP())
-		Expect(err).NotTo(HaveOccurred())
-		Expect(settled).To(BeTrue())
-		Expect(deletes(kc)).To(BeEmpty())
-	})
-
-	It("deletes a ConfigMap that holds neither CA, as one the new aggregator CA has not reached", func() {
-		kc := fake.NewClientset(configMap(oldCA))
-
-		settled, err := resetAggregatorAuth(ctx, kc.CoreV1().ConfigMaps(kubeSystemNamespace), wantFP())
-		Expect(err).NotTo(HaveOccurred())
-		Expect(settled).To(BeFalse())
-		Expect(deletes(kc)).To(HaveLen(1))
 	})
 })

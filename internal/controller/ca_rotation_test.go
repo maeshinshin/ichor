@@ -471,7 +471,7 @@ func (f *caRotFixture) storedBundle() *secrets.Bundle {
 	return &bundle
 }
 
-// nodeStates reports, for each machine, the issuing Talos CA and the accepted ones.
+// nodesIssueAndAccept checks that every machine issues from the given Talos CA and accepts exactly the others.
 func (f *caRotFixture) nodesIssueAndAccept(issuer []byte, accepted ...[]byte) {
 	for name, node := range f.world.nodes {
 		provider, err := configloader.NewFromBytes(node.cfg)
@@ -989,9 +989,6 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 
 	It("never puts bundle or CA material into a status, an Event or an error", func() {
 		f := newCARotFixture()
-		// Every dial error echoes whatever text it is given, as a real error could.
-		f.world.dialLeak = "" // set per phase below
-
 		op := f.newOp()
 		op, _ = f.runUntil(op, atStage(ichorv1alpha1.CARotationStageIssuing))
 

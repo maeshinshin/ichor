@@ -139,13 +139,13 @@ var _ = Describe("Deleting a rotation operation", func() {
 			f.targets = []string{ichorv1alpha1.CARotationTargetEtcd}
 
 			cp := f.machines[0]
-			f.world.nodeNames[cp.Name] = "rot-cp1-node"
+			f.world.nodeNames[cp.Name] = rotCPNode
 			f.world.frozenBoot[cp.Name] = true
 
-			cp.Status.NodeName = "rot-cp1-node"
+			cp.Status.NodeName = rotCPNode
 			Expect(k8sClient.Status().Update(ctx, cp)).To(Succeed())
 
-			kc := fake.NewClientset(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "rot-cp1-node"}})
+			kc := fake.NewClientset(&corev1.Node{Name: rotCPNode})
 			f.kube = kc
 
 			op := f.newOp()
@@ -155,14 +155,14 @@ var _ = Describe("Deleting a rotation operation", func() {
 
 			Expect(op.Status.CARotation.EtcdRebooting).To(Equal(cp.Name))
 
-			node, err := kc.CoreV1().Nodes().Get(ctx, "rot-cp1-node", metav1.GetOptions{})
+			node, err := kc.CoreV1().Nodes().Get(ctx, rotCPNode, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(node.Spec.Unschedulable).To(BeTrue())
 
 			Expect(k8sClient.Delete(ctx, op)).To(Succeed())
 			reconcileUntilGone(f.newReconciler, op, 6)
 
-			node, err = kc.CoreV1().Nodes().Get(ctx, "rot-cp1-node", metav1.GetOptions{})
+			node, err = kc.CoreV1().Nodes().Get(ctx, rotCPNode, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(node.Spec.Unschedulable).To(BeFalse(), "the node accepts pods again")
 		})

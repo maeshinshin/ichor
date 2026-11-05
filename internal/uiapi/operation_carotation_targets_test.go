@@ -59,13 +59,13 @@ func TestPlanCARotationWithEtcdAndAggregatorWarnsAndStopsTheAPIOfASingleControlP
 		t.Fatal(err)
 	}
 
-	for _, want := range []string{"snapshot", "one member at a time", "Extension API servers"} {
+	for _, want := range []string{"snapshot", "three reboots each", "one at a time", "Extension API servers"} {
 		if !strings.Contains(plan.GetWarning(), want) {
 			t.Errorf("the warning does not say %q: %s", want, plan.GetWarning())
 		}
 	}
 
-	// opObjects has one control plane: each etcd restart takes the Kubernetes API down.
+	// opObjects has one control plane: each etcd reboot takes the Kubernetes API down.
 	if !plan.GetKubernetesApiUnavailable() || plan.GetBlocked() != "" {
 		t.Fatalf("plan = %v", plan)
 	}

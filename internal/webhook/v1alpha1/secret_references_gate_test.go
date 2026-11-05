@@ -25,7 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
 const (
@@ -64,16 +63,6 @@ var _ = Describe("Secret-references gate", func() {
 	Describe("on TalosCluster", func() {
 		var cluster *ichorv1alpha1.TalosCluster
 
-		cleanup := func(c *ichorv1alpha1.TalosCluster) {
-			if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(c), c); err != nil {
-				return
-			}
-
-			c.Annotations = map[string]string{deleteguard.AllowDeleteAnnotation: deleteguard.AllowDeleteValue}
-			Expect(k8sClient.Update(ctx, c)).To(Succeed())
-			Expect(k8sClient.Delete(ctx, c)).To(Succeed())
-		}
-
 		BeforeEach(func() {
 			cluster = newTestCluster()
 			cluster.Spec.Registries = []ichorv1alpha1.TalosClusterRegistry{{
@@ -83,7 +72,7 @@ var _ = Describe("Secret-references gate", func() {
 			Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 		})
 
-		AfterEach(func() { cleanup(cluster) })
+		AfterEach(func() { forceDelete(cluster) })
 
 		change := func(user string, mutate func(*ichorv1alpha1.TalosCluster)) error {
 			c := &ichorv1alpha1.TalosCluster{}
@@ -136,7 +125,7 @@ var _ = Describe("Secret-references gate", func() {
 		It("admits an admin who creates a cluster with a secretsRef", func() {
 			c := newTestCluster()
 			Expect(asUser(admin).Create(ctx, c)).To(Succeed())
-			DeferCleanup(func() { cleanup(c) })
+			DeferCleanup(func() { forceDelete(c) })
 		})
 	})
 

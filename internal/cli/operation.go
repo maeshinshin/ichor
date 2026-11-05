@@ -301,7 +301,9 @@ func watchOperationKind(ctx context.Context, c *apiClients, ref *pb.ObjectRef, o
 	var (
 		rep       = newOpReporter(errw)
 		goneSince time.Time
-		rollout   = func(err error) bool { return kind == pb.OperationKind_OPERATION_KIND_ICHOR && isImpersonationDenied(err) }
+		rollout   = func(err error) bool {
+			return kind == pb.OperationKind_OPERATION_KIND_ICHOR && isImpersonationDenied(err)
+		}
 	)
 
 	for {

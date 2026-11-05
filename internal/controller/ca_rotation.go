@@ -955,28 +955,33 @@ func (c *caRun) replaceBundle(ctx context.Context) (*secrets.Bundle, error) {
 	return replaced, nil
 }
 
-// markBundleBackupStale raises BundleBackupStale on the cluster, and an Event the first time. The
-// message carries no secret; it names the command that clears it.
+// markBundleBackupStale raises BundleBackupStale. The message carries no secret; it names the command that clears it.
 func (c *caRun) markBundleBackupStale(ctx context.Context) error {
-	if apimeta.IsStatusConditionTrue(c.cluster.Status.Conditions, ichorv1alpha1.ConditionBundleBackupStale) {
+	return c.r.raiseBundleBackupStale(ctx, c.cluster, bundleStaleReason, fmt.Sprintf(
+		"A CA rotation replaced the secrets bundle. The copy saved on your machine no longer matches the "+
+			"cluster, and recovering from a total loss needs the new one. Run `ichor cluster bundle-export %s` and keep the file safe.",
+		c.cluster.Name))
+}
+
+// raiseBundleBackupStale raises BundleBackupStale on the cluster, and an Event the first time.
+func (r *TalosOperationReconciler) raiseBundleBackupStale(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, reason, message string,
+) error {
+	if apimeta.IsStatusConditionTrue(cluster.Status.Conditions, ichorv1alpha1.ConditionBundleBackupStale) {
 		return nil
 	}
 
-	message := fmt.Sprintf("A CA rotation replaced the secrets bundle. The copy saved on your machine no longer matches the "+
-		"cluster, and recovering from a total loss needs the new one. Run `ichor cluster bundle-export %s` and keep the file safe.",
-		c.cluster.Name)
-
-	base := c.cluster.DeepCopy()
-	apimeta.SetStatusCondition(&c.cluster.Status.Conditions, metav1.Condition{
+	base := cluster.DeepCopy()
+	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 		Type: ichorv1alpha1.ConditionBundleBackupStale, Status: metav1.ConditionTrue,
-		Reason: bundleStaleReason, Message: message, ObservedGeneration: c.cluster.Generation,
+		Reason: reason, Message: message, ObservedGeneration: cluster.Generation,
 	})
 
-	if err := c.r.Status().Patch(ctx, c.cluster, client.MergeFrom(base)); err != nil {
+	if err := r.Status().Patch(ctx, cluster, client.MergeFrom(base)); err != nil {
 		return fmt.Errorf("raising BundleBackupStale: %w", err)
 	}
 
-	c.r.operationEvent(c.cluster, corev1.EventTypeWarning, ichorv1alpha1.ConditionBundleBackupStale, message)
+	r.operationEvent(cluster, corev1.EventTypeWarning, ichorv1alpha1.ConditionBundleBackupStale, message)
 
 	return nil
 }

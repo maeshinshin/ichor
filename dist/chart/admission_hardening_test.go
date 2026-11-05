@@ -17,6 +17,7 @@ limitations under the License.
 package chart
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"slices"
@@ -257,7 +258,14 @@ func TestInstallerEscalationNamesEveryRoleOfTheInstallManifest(t *testing.T) {
 // gatewayAPIValues is the user layer that makes the Cilium chart render its Gateway API objects. The
 // GatewayClass is created "auto" only when the cluster has the CRD, which a plain render does not, so it is
 // forced here.
-var gatewayAPIValues = map[string]any{"gatewayAPI": map[string]any{"enabled": true, "gatewayClass": map[string]any{"create": "true"}}}
+var gatewayAPIValues = func() map[string]any {
+	var v map[string]any
+	if err := json.Unmarshal([]byte(`{"gatewayAPI":{"enabled":true,"gatewayClass":{"create":"true"}}}`), &v); err != nil {
+		panic(err)
+	}
+
+	return v
+}()
 
 // TestCNIEscalationNamesOnlyCiliumsRoles guards ADR 0108: the Cilium Job may bind and escalate only
 // the roles the pinned Cilium chart creates, in config/rbac and in the chart. Every role the chart
@@ -373,9 +381,10 @@ func TestCNIRoleCoversTheGatewayAPIObjects(t *testing.T) {
 				}
 			}
 
-			for _, v := range []string{"get", "list", "create", "update", "patch", "delete"} {
+			for v := range strings.FieldsSeq("get list create update patch delete") {
 				if !held[v] {
-					t.Errorf("%s: the CNI role cannot %s %s.%s, which the Cilium chart renders with gatewayAPI.enabled", label, v, o[1], o[0])
+					t.Errorf("%s: the CNI role cannot %s %s.%s, which the Cilium chart renders with gatewayAPI.enabled",
+						label, v, o[1], o[0])
 				}
 			}
 		}

@@ -170,7 +170,7 @@ var _ = Describe("The Cilium values re-check before a Helm Job", func() {
 
 		setValues(cluster, debug)
 		reconcileHandoverOK(r, cluster)
-		failJobJustNow(cniJob(getCluster(cluster)), "Job has reached the specified backoff limit")
+		failJobJustNow(cniJob(getCluster(cluster)), "pod ichor-cni was OOMKilled")
 
 		reconcileHandoverOK(r, cluster) // retires the failed Job and counts it
 		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Reason).To(Equal("JobFailed"))

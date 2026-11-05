@@ -32,6 +32,7 @@ const (
 	pathKubeletMounts        = "machine.kubelet.extraMounts"
 	pathKubeProxyArgs        = "KubeProxyConfig.extraArgs"
 	pathKubeAuthJWT          = "KubeAuthenticationConfig.configuration.jwt"
+	pathEtcdMetricsArg       = "cluster.etcd.extraArgs.listen-metrics-urls"
 	pathUnattendedSelector   = "UnattendedInstallConfig.provisioning.diskSelector.match"
 
 	pathVolumeConfigSelector = "VolumeConfig.provisioning.diskSelector.match"
@@ -151,6 +152,42 @@ func TestAssess_Rules(t *testing.T) {
 			name: "ResolverConfig.nameservers is safe", match: "ResolverConfig.nameservers",
 			nonMatch: "ResolverConfig.hostDNS.enabled",
 		},
+		// The rules ADR 0009's "multi-document and registry paths" addendum verified against the
+		// Talos v1.14.3 source.
+		{name: "registry mirrors", match: "machine.registries.mirrors.docker.io.endpoints", nonMatch: pathKubeletMounts},
+		{name: "registry auth", match: "machine.registries.config.docker.io.auth.password", nonMatch: pathKubeletMounts},
+		{name: "registry tls", match: "machine.registries.config.registry.local:5000.tls.ca", nonMatch: pathKubeletMounts},
+		{name: "RegistryAuthConfig", match: "RegistryAuthConfig.password", nonMatch: pathKubeletMounts},
+		{name: "RegistryTLSConfig", match: "RegistryTLSConfig.ca", nonMatch: pathKubeletMounts},
+		{name: "RegistryMirrorConfig", match: "RegistryMirrorConfig.endpoints", nonMatch: pathKubeletMounts},
+		{name: "KubeNodeConfig labels", match: "KubeNodeConfig.labels.x", nonMatch: "KubeNodeConfig.nodeIP.validSubnets"},
+		{
+			name: "KubeNodeConfig annotations", match: "KubeNodeConfig.annotations.x",
+			nonMatch: "KubeNodeConfig.nodeIP.validSubnets",
+		},
+		{
+			name:  "KubeNodeConfig taints",
+			match: "KubeNodeConfig.taints.node-role.kubernetes.io/control-plane", nonMatch: "KubeNodeConfig.nodeIP",
+		},
+		{name: "machine.nodeLabels", match: "machine.nodeLabels.x", nonMatch: pathKubeletMounts},
+		{name: "machine.nodeAnnotations", match: "machine.nodeAnnotations.x", nonMatch: pathKubeletMounts},
+		{name: "machine.nodeTaints", match: "machine.nodeTaints.x", nonMatch: pathKubeletMounts},
+		{
+			name: "cluster.allowSchedulingOnControlPlanes", match: "cluster.allowSchedulingOnControlPlanes",
+			nonMatch: pathClusterProxyDisabled,
+		},
+		{
+			name: "cluster.allowSchedulingOnMasters", match: "cluster.allowSchedulingOnMasters",
+			nonMatch: pathClusterProxyDisabled,
+		},
+		{name: "KubeAPIServerConfig args", match: "KubeAPIServerConfig.extraArgs.x", nonMatch: pathKubeProxyArgs},
+		{
+			name: "KubeControllerManagerConfig args", match: "KubeControllerManagerConfig.extraArgs.x",
+			nonMatch: pathKubeProxyArgs,
+		},
+		{name: "KubeSchedulerConfig args", match: "KubeSchedulerConfig.extraArgs.x", nonMatch: pathKubeProxyArgs},
+		{name: "NetworkRuleConfig", match: "NetworkRuleConfig.ingress", nonMatch: pathEtcdMetricsArg},
+		{name: "NetworkDefaultActionConfig", match: "NetworkDefaultActionConfig.ingress", nonMatch: pathEtcdMetricsArg},
 		{
 			name: "machine.install is install-time-only, not reboot", match: pathMachineInstallDisk,
 			nonMatch: "machine.installer.anything", wantInstallSet: true,
@@ -248,48 +285,6 @@ func TestAssess_AggregatesAcrossMultiplePaths(t *testing.T) {
 	}
 	if len(impact.InstallTimeOnly) != 1 || impact.InstallTimeOnly[0] != pathMachineInstallDisk {
 		t.Fatalf("Assess(mixed paths).InstallTimeOnly = %v, want [%s]", impact.InstallTimeOnly, pathMachineInstallDisk)
-	}
-}
-
-// TestAssess_NoRebootRules covers the rules ADR 0009's "multi-document and
-// registry paths" addendum verified against the Talos v1.14.3 source: each
-// path applies without a reboot, and its uncovered sibling still needs one.
-func TestAssess_NoRebootRules(t *testing.T) {
-	cases := []struct{ name, safe, sibling string }{
-		{
-			"registry mirrors", "machine.registries.mirrors.docker.io.endpoints",
-			pathKubeletMounts,
-		},
-		{"registry auth", "machine.registries.config.docker.io.auth.password", pathKubeletMounts},
-		{"registry tls", "machine.registries.config.registry.local:5000.tls.ca", pathKubeletMounts},
-		{"RegistryAuthConfig", "RegistryAuthConfig.password", pathKubeletMounts},
-		{"RegistryTLSConfig", "RegistryTLSConfig.ca", pathKubeletMounts},
-		{"RegistryMirrorConfig", "RegistryMirrorConfig.endpoints", pathKubeletMounts},
-		{"KubeNodeConfig labels", "KubeNodeConfig.labels.x", "KubeNodeConfig.nodeIP.validSubnets"},
-		{"KubeNodeConfig annotations", "KubeNodeConfig.annotations.x", "KubeNodeConfig.nodeIP.validSubnets"},
-		{"KubeNodeConfig taints", "KubeNodeConfig.taints.node-role.kubernetes.io/control-plane", "KubeNodeConfig.nodeIP"},
-		{"machine.nodeLabels", "machine.nodeLabels.x", pathKubeletMounts},
-		{"machine.nodeAnnotations", "machine.nodeAnnotations.x", pathKubeletMounts},
-		{"machine.nodeTaints", "machine.nodeTaints.x", pathKubeletMounts},
-		{"cluster.allowSchedulingOnControlPlanes", "cluster.allowSchedulingOnControlPlanes", pathClusterProxyDisabled},
-		{"cluster.allowSchedulingOnMasters", "cluster.allowSchedulingOnMasters", pathClusterProxyDisabled},
-		{"KubeAPIServerConfig args", "KubeAPIServerConfig.extraArgs.x", pathKubeProxyArgs},
-		{"KubeControllerManagerConfig args", "KubeControllerManagerConfig.extraArgs.x", pathKubeProxyArgs},
-		{"KubeSchedulerConfig args", "KubeSchedulerConfig.extraArgs.x", pathKubeProxyArgs},
-		{"NetworkRuleConfig", "NetworkRuleConfig.ingress", "cluster.etcd.extraArgs.listen-metrics-urls"},
-		{"NetworkDefaultActionConfig", "NetworkDefaultActionConfig.ingress", "cluster.etcd.extraArgs.listen-metrics-urls"},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := Assess([]string{tc.safe}, nil); got.RebootRequired {
-				t.Errorf("Assess(%q).RebootRequired = true, want false", tc.safe)
-			}
-
-			if got := Assess([]string{tc.sibling}, nil); !got.RebootRequired {
-				t.Errorf("Assess(%q) (sibling) = %+v, want RebootRequired true", tc.sibling, got)
-			}
-		})
 	}
 }
 

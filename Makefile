@@ -111,6 +111,10 @@ vet: ## Run go vet against code.
 test: manifests generate fmt vet setup-envtest build-installer ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
+.PHONY: remote-gate
+remote-gate: ## Run the full gate (go test, lint, ui-ci) for HEAD as parallel Jobs in the homelab's ichor-e2e namespace; logs in remote-gate-out/.
+	hack/remote-gate.sh
+
 .PHONY: test-e2e
 test-e2e: test-e2e-prereqs manifests generate fmt vet ## Run the PR-sized (short) e2e set against the cluster given by KUBECONFIG.
 	go test -tags=e2e ./test/e2e/ -v -ginkgo.v -ginkgo.label-filter=short

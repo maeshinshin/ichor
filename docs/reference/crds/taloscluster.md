@@ -1,0 +1,687 @@
+---
+title: "TalosCluster"
+description: "TalosCluster is the Schema for the talosclusters API"
+---
+
+# TalosCluster
+
+This page is generated from the CRD schema in `config/crd/bases` (`make docs-reference`). Do not edit it.
+
+TalosCluster is the Schema for the talosclusters API
+
+| | |
+|---|---|
+| Group | `ichor.maesh.dev` |
+| Kind | `TalosCluster` (list kind `TalosClusterList`) |
+| Resource | `talosclusters` |
+| Short names | `tcl` |
+| Scope | Namespaced |
+
+## v1alpha1
+
+Version v1alpha1: has a `status` subresource.
+
+### spec
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `spec` | `object` | yes | spec defines the desired state of TalosCluster |
+| `spec.authentication` | `object` | no | authentication declares who the kube-apiserver trusts to sign users in with a JWT: Ichor's own issuer and up to three external OIDC providers. It is rendered into Talos's KubeAuthenticationConfig document, so it needs versionContract v1.14 or later, and changing it needs the update verb on talosclusters/authentication. Unset (the default) renders the Talos default: no JWT authenticator, anonymous access to the health endpoints only. |
+| `spec.authentication.external` | `[]object` | no | external lists the external OIDC providers the kube-apiserver also trusts. Keep it equal to ichorUI.oidc.*: that is what the UI signs in against, this is what the kube-apiserver accepts. |
+| `spec.authentication.external[].audiences` | `[]string` | yes | audiences are the accepted aud values (the OIDC client IDs). |
+| `spec.authentication.external[].certificateAuthority` | `string` | no | certificateAuthority is a PEM bundle (public certificates only) that verifies the provider's TLS certificate. Empty uses the control plane's system roots. |
+| `spec.authentication.external[].groupsClaim` | `string` | no | groupsClaim is the token claim that lists the user's groups. Default: `"groups"`. |
+| `spec.authentication.external[].groupsPrefix` | `string` | no | groupsPrefix is put in front of every group, with the same restrictions as usernamePrefix. Default: `"oidc:"`. |
+| `spec.authentication.external[].issuerURL` | `string` | yes | issuerURL is the provider's issuer, an https URL without query or fragment. |
+| `spec.authentication.external[].usernameClaim` | `string` | no | usernameClaim is the token claim that names the user. Default: `"email"`. |
+| `spec.authentication.external[].usernamePrefix` | `string` | no | usernamePrefix is put in front of every username. It cannot be empty or start with "ichor:", so an external user can never be mistaken for an Ichor user. Default: `"oidc:"`. |
+| `spec.authentication.ichor` | `object` | no | ichor turns on Ichor's own OIDC issuer (ichor-ui) as a kube-apiserver authenticator. Users appear as ichor:\<name>, groups as ichor:\<role>. |
+| `spec.authentication.ichor.enabled` | `boolean` | no | enabled renders Ichor's issuer into the kube-apiserver. It needs the trust ConfigMap ichor-oidc-trust (the controller publishes it); without it the render fails and says so. Default: `false`. |
+| `spec.authentication.ichor.url` | `string` | yes | url is the external https URL of ichor-ui. It is the issuer (the iss claim of every token). |
+| `spec.certSANs` | `[]string` | no | certSANs are extra subject alternative names (hostnames, IPs) for the Talos API certificate of every node and for the kube-apiserver serving certificate: machine.certSANs and KubeAPIServerConfig.certExtraSANs, which Talos's generator writes together from one list. The cluster endpoint host is not added for you here; list it if the nodes should serve it. Unset adds none. |
+| `spec.cni` | `object` | no | cni configures which CNI preset this cluster bootstraps and how kube-proxy is split between Talos and the CNI (docs/design/architecture.md, "CNI"). |
+| `spec.cni.cilium` | `object` | no | cilium holds the user layer of Cilium's Helm values. |
+| `spec.cni.cilium.values` | `object (free-form)` | no | values is the user layer of Cilium's Helm values. Effective values are Ichor's defaults, then these deep-merged on top, then the Ichor-owned keys (ipam.mode, securityContext.capabilities.ciliumAgent, securityContext.capabilities.cleanCiliumState, cgroup.autoMount.enabled, cgroup.hostRoot, k8sServiceHost, k8sServicePort, kubeProxyReplacement, tunnelProtocol); a value for an owned key is a validation error. The merged values must stay under 64 KiB. |
+| `spec.cni.custom` **(deprecated)** | `object` | no | custom is deprecated, unused; kept so the CRD never drops a field. It declared the chart/manifest source and Talos-side settings for a user-supplied CNI. |
+| `spec.cni.custom.documents` **(deprecated)** | `[]object` | no | documents are the Talos-side config documents this CNI needs, applied as a cluster-layer patch -- e.g. disabling kube-proxy when kubeProxy is "replaced". |
+| `spec.cni.custom.documents[].config` **(deprecated)** | `object` | no | config is a Talos v1alpha1 Config document; populated when kind is "Config". |
+| `spec.cni.custom.documents[].config.cluster` **(deprecated)** | `object` | no | Talos: ClusterConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.acceptedCAs` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.cluster.acceptedCAs[].crt` **(deprecated)** | `string (byte)` | yes |  |
+| `spec.cni.custom.documents[].config.cluster.adminKubeconfig` **(deprecated)** | `object` | no | Talos: AdminKubeconfigConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.adminKubeconfig.certLifetime` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.allowSchedulingOnControlPlanes` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.cluster.allowSchedulingOnMasters` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.cluster.apiServer` **(deprecated)** | `object` | no | Talos: APIServerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.apiServer.admissionControl` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.cluster.apiServer.admissionControl[].name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy` **(deprecated)** | `object` | no | Policy defines the configuration of audit logging, and the rules for how different request categories are logged. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.apiVersion` **(deprecated)** | `string` | no | APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.kind` **(deprecated)** | `string` | no | Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.metadata` **(deprecated)** | `object` | no | ObjectMeta is included for interoperability with API infrastructure. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.omitManagedFields` **(deprecated)** | `boolean` | no | OmitManagedFields indicates whether to omit the managed fields of the request and response bodies from being written to the API audit log. This is used as a global default - a value of 'true' will omit the managed fileds, otherwise the managed fields will be included in the API audit log. Note that this can also be specified per rule in which case the value specified in a rule will override the global default. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.omitStages` **(deprecated)** | `[]string` | no | OmitStages is a list of stages for which no events are created. Note that this can also be specified per rule in which case the union of both are omitted. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.rules` **(deprecated)** | `[]object` | yes | Rules specify the audit Level a request should be recorded at. A request may match multiple rules, in which case the FIRST matching rule is used. The default audit level is None, but can be overridden by a catch-all rule at the end of the list. PolicyRules are strictly ordered. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.rules[].level` **(deprecated)** | `string` | yes | The Level that requests matching this rule are recorded at. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.rules[].namespaces` **(deprecated)** | `[]string` | no | Namespaces that this rule matches. The empty string "" matches non-namespaced resources. An empty list implies every namespace. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.rules[].nonResourceURLs` **(deprecated)** | `[]string` | no | NonResourceURLs is a set of URL paths that should be audited. `*`s are allowed, but only as the full, final step in the path. Examples: - `/metrics` - Log requests for apiserver metrics - `/healthz*` - Log all health checks |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.rules[].omitManagedFields` **(deprecated)** | `boolean` | no | OmitManagedFields indicates whether to omit the managed fields of the request and response bodies from being written to the API audit log. - a value of 'true' will drop the managed fields from the API audit log - a value of 'false' indicates that the managed fileds should be included in the API audit log Note that the value, if specified, in this rule will override the global default If a value is not specified then the global default specified in Policy.OmitManagedFields will stand. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.rules[].omitStages` **(deprecated)** | `[]string` | no | OmitStages is a list of stages for which no events are created. Note that this can also be specified policy wide in which case the union of both are omitted. An empty list means no restrictions will apply. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.rules[].resources` **(deprecated)** | `[]object` | no | Resources that this rule matches. An empty list implies all kinds in all API groups. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.rules[].resources[].group` **(deprecated)** | `string` | no | Group is the name of the API group that contains the resources. The empty string represents the core API group. `*` matches all groups |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.rules[].resources[].resourceNames` **(deprecated)** | `[]string` | no | ResourceNames is a list of resource instance names that the policy matches. Using this field requires Resources to be specified. An empty list implies that every instance of the resource is matched. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.rules[].resources[].resources` **(deprecated)** | `[]string` | no | Resources is a list of resources this rule applies to. For example: - `pods` matches pods. - `pods/log` matches the log subresource of pods. - `*` matches all resources and their subresources. - `pods/*` matches all subresources of pods. - `*/scale` matches all scale subresources. If wildcard is present, the validation rule will ensure resources do not overlap with each other. An empty list implies all resources and subresources in this API groups apply. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.rules[].userGroups` **(deprecated)** | `[]string` | no | The user groups this rule applies to. A user is considered matching if it is a member of any of the UserGroups. An empty list implies every user group. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.rules[].users` **(deprecated)** | `[]string` | no | The users (by authenticated user name) this rule applies to. An empty list implies every user. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.auditPolicy.rules[].verbs` **(deprecated)** | `[]string` | no | The verbs that match this rule. An empty list implies every verb. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.authorizationConfig` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.cluster.apiServer.authorizationConfig[].name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.cluster.apiServer.authorizationConfig[].type` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.cluster.apiServer.authorizationConfig[].webhook` **(deprecated)** | `object` | no |  |
+| `spec.cni.custom.documents[].config.cluster.apiServer.authorizationConfig[].webhook.authorizedTTL` **(deprecated)** | `string` | yes | The duration to cache 'authorized' responses from the webhook authorizer. Same as setting `--authorization-webhook-cache-authorized-ttl` flag Default: 5m0s |
+| `spec.cni.custom.documents[].config.cluster.apiServer.authorizationConfig[].webhook.cacheAuthorizedRequests` **(deprecated)** | `boolean` | no | CacheAuthorizedRequests specifies whether authorized requests should be cached. If set to true, the TTL for cached decisions can be configured via the AuthorizedTTL field. Default: true |
+| `spec.cni.custom.documents[].config.cluster.apiServer.authorizationConfig[].webhook.cacheUnauthorizedRequests` **(deprecated)** | `boolean` | no | CacheUnauthorizedRequests specifies whether unauthorized requests should be cached. If set to true, the TTL for cached decisions can be configured via the UnauthorizedTTL field. Default: true |
+| `spec.cni.custom.documents[].config.cluster.apiServer.authorizationConfig[].webhook.connectionInfo` **(deprecated)** | `object` | yes | ConnectionInfo defines how we talk to the webhook |
+| `spec.cni.custom.documents[].config.cluster.apiServer.authorizationConfig[].webhook.connectionInfo.kubeConfigFile` **(deprecated)** | `string` | yes | Path to KubeConfigFile for connection info Required, if connectionInfo.Type is KubeConfig |
+| `spec.cni.custom.documents[].config.cluster.apiServer.authorizationConfig[].webhook.connectionInfo.type` **(deprecated)** | `string` | yes | Controls how the webhook should communicate with the server. Valid values: - KubeConfigFile: use the file specified in kubeConfigFile to locate the server. - InClusterConfig: use the in-cluster configuration to call the SubjectAccessReview API hosted by kube-apiserver. This mode is not allowed for kube-apiserver. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.authorizationConfig[].webhook.failurePolicy` **(deprecated)** | `string` | yes | Controls the authorization decision when a webhook request fails to complete or returns a malformed response or errors evaluating matchConditions. Valid values: - NoOpinion: continue to subsequent authorizers to see if one of them allows the request - Deny: reject the request without consulting subsequent authorizers Required, with no default. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.authorizationConfig[].webhook.matchConditionSubjectAccessReviewVersion` **(deprecated)** | `string` | yes | MatchConditionSubjectAccessReviewVersion specifies the SubjectAccessReview version the CEL expressions are evaluated against Valid values: v1 Required, no default value |
+| `spec.cni.custom.documents[].config.cluster.apiServer.authorizationConfig[].webhook.matchConditions` **(deprecated)** | `[]object` | yes | matchConditions is a list of conditions that must be met for a request to be sent to this webhook. An empty list of matchConditions matches all requests. There are a maximum of 64 match conditions allowed. The exact matching logic is (in order): 1. If at least one matchCondition evaluates to FALSE, then the webhook is skipped. 2. If ALL matchConditions evaluate to TRUE, then the webhook is called. 3. If at least one matchCondition evaluates to an error (but none are FALSE): - If failurePolicy=Deny, then the webhook rejects the request - If failurePolicy=NoOpinion, then the error is ignored and the webhook is skipped |
+| `spec.cni.custom.documents[].config.cluster.apiServer.authorizationConfig[].webhook.matchConditions[].expression` **(deprecated)** | `string` | yes | expression represents the expression which will be evaluated by CEL. Must evaluate to bool. CEL expressions have access to the contents of the SubjectAccessReview in v1 version. If version specified by subjectAccessReviewVersion in the request variable is v1beta1, the contents would be converted to the v1 version before evaluating the CEL expression. - 'resourceAttributes' describes information for a resource access request and is unset for non-resource requests. e.g. has(request.resourceAttributes) && request.resourceAttributes.namespace == 'default' - 'nonResourceAttributes' describes information for a non-resource access request and is unset for resource requests. e.g. has(request.nonResourceAttributes) && request.nonResourceAttributes.path == '/healthz'. - 'user' is the user to test for. e.g. request.user == 'alice' - 'groups' is the groups to test for. e.g. ('group1' in request.groups) - 'extra' corresponds to the user.Info.GetExtra() method from the authenticator. - 'uid' is the information about the requesting user. e.g. request.uid == '1' Documentation on CEL: https://kubernetes.io/docs/reference/using-api/cel/ |
+| `spec.cni.custom.documents[].config.cluster.apiServer.authorizationConfig[].webhook.subjectAccessReviewVersion` **(deprecated)** | `string` | yes | The API version of the authorization.k8s.io SubjectAccessReview to send to and expect from the webhook. Same as setting `--authorization-webhook-version` flag Valid values: v1beta1, v1 Required, no default value |
+| `spec.cni.custom.documents[].config.cluster.apiServer.authorizationConfig[].webhook.timeout` **(deprecated)** | `string` | yes | Timeout for the webhook request Maximum allowed value is 30s. Required, no default value. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.authorizationConfig[].webhook.unauthorizedTTL` **(deprecated)** | `string` | yes | The duration to cache 'unauthorized' responses from the webhook authorizer. Same as setting `--authorization-webhook-cache-unauthorized-ttl` flag Default: 30s |
+| `spec.cni.custom.documents[].config.cluster.apiServer.certSANs` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.apiServer.disablePodSecurityPolicy` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.cluster.apiServer.env` **(deprecated)** | `map[string]string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.apiServer.extraArgs` **(deprecated)** | `map[string][]string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.apiServer.extraVolumes` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.cluster.apiServer.extraVolumes[].hostPath` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.cluster.apiServer.extraVolumes[].mountPath` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.cluster.apiServer.extraVolumes[].readonly` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.cluster.apiServer.image` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.apiServer.resources` **(deprecated)** | `object` | no | Talos: ResourcesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.apiServer.resources.limits` **(deprecated)** | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
+| `spec.cni.custom.documents[].config.cluster.apiServer.resources.requests` **(deprecated)** | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
+| `spec.cni.custom.documents[].config.cluster.clusterName` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.controlPlane` **(deprecated)** | `object` | no | Talos: ControlPlaneConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.controlPlane.endpoint` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.cluster.controlPlane.localAPIServerPort` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.cluster.controllerManager` **(deprecated)** | `object` | no | Talos: ControllerManagerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.controllerManager.env` **(deprecated)** | `map[string]string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.controllerManager.extraArgs` **(deprecated)** | `map[string][]string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.controllerManager.extraVolumes` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.cluster.controllerManager.extraVolumes[].hostPath` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.cluster.controllerManager.extraVolumes[].mountPath` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.cluster.controllerManager.extraVolumes[].readonly` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.cluster.controllerManager.image` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.controllerManager.resources` **(deprecated)** | `object` | no | Talos: ResourcesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.controllerManager.resources.limits` **(deprecated)** | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
+| `spec.cni.custom.documents[].config.cluster.controllerManager.resources.requests` **(deprecated)** | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
+| `spec.cni.custom.documents[].config.cluster.coreDNS` **(deprecated)** | `object` | no | Talos: CoreDNS — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.coreDNS.disabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.cluster.coreDNS.image` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.discovery` **(deprecated)** | `object` | no | Talos: ClusterDiscoveryConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.discovery.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.cluster.discovery.registries` **(deprecated)** | `object` | yes | Talos: DiscoveryRegistriesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.discovery.registries.kubernetes` **(deprecated)** | `object` | yes | Talos: RegistryKubernetesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.discovery.registries.kubernetes.disabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.cluster.discovery.registries.service` **(deprecated)** | `object` | yes | Talos: RegistryServiceConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.discovery.registries.service.disabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.cluster.discovery.registries.service.endpoint` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.etcd` **(deprecated)** | `object` | no | Talos: EtcdConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.etcd.advertisedSubnets` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.etcd.extraArgs` **(deprecated)** | `map[string][]string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.etcd.image` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.etcd.listenSubnets` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.etcd.subnet` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.externalCloudProvider` **(deprecated)** | `object` | no | Talos: ExternalCloudProviderConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.externalCloudProvider.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.cluster.externalCloudProvider.manifests` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.extraManifestHeaders` **(deprecated)** | `map[string]string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.extraManifests` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.id` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.inlineManifests` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.cluster.inlineManifests[].contents` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.cluster.inlineManifests[].name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.cluster.network` **(deprecated)** | `object` | no | Talos: ClusterNetworkConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.network.cni` **(deprecated)** | `object` | no | Talos: CNIConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.network.cni.flannel` **(deprecated)** | `object` | no | Talos: FlannelCNIConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.network.cni.flannel.extraArgs` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.network.cni.flannel.kubeNetworkPoliciesEnabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.cluster.network.cni.name` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.network.cni.urls` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.network.dnsDomain` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.cluster.network.podSubnets` **(deprecated)** | `[]string` | yes |  |
+| `spec.cni.custom.documents[].config.cluster.network.serviceSubnets` **(deprecated)** | `[]string` | yes |  |
+| `spec.cni.custom.documents[].config.cluster.proxy` **(deprecated)** | `object` | no | Talos: ProxyConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.proxy.disabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.cluster.proxy.extraArgs` **(deprecated)** | `map[string][]string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.proxy.image` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.proxy.mode` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.scheduler` **(deprecated)** | `object` | no | Talos: SchedulerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.scheduler.env` **(deprecated)** | `map[string]string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.scheduler.extraArgs` **(deprecated)** | `map[string][]string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.scheduler.extraVolumes` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.cluster.scheduler.extraVolumes[].hostPath` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.cluster.scheduler.extraVolumes[].mountPath` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.cluster.scheduler.extraVolumes[].readonly` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.cluster.scheduler.image` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.cluster.scheduler.resources` **(deprecated)** | `object` | no | Talos: ResourcesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.cluster.scheduler.resources.limits` **(deprecated)** | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
+| `spec.cni.custom.documents[].config.cluster.scheduler.resources.requests` **(deprecated)** | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
+| `spec.cni.custom.documents[].config.debug` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine` **(deprecated)** | `object` | no | Talos: MachineConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.acceptedCAs` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.acceptedCAs[].crt` **(deprecated)** | `string (byte)` | yes |  |
+| `spec.cni.custom.documents[].config.machine.certSANs` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.controlPlane` **(deprecated)** | `object` | no | Talos: MachineControlPlaneConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.controlPlane.controllerManager` **(deprecated)** | `object` | no | Talos: MachineControllerManagerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.controlPlane.controllerManager.disabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.controlPlane.scheduler` **(deprecated)** | `object` | no | Talos: MachineSchedulerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.controlPlane.scheduler.disabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.disks` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.disks[].device` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.disks[].partitions` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.disks[].partitions[].mountpoint` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.disks[].partitions[].size` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.env` **(deprecated)** | `map[string]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.features` **(deprecated)** | `object` | no | Talos: FeaturesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.features.apidCheckExtKeyUsage` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.features.diskQuotaSupport` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.features.hostDNS` **(deprecated)** | `object` | no | Talos: HostDNSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.features.hostDNS.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.features.hostDNS.forwardKubeDNSToHost` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.features.hostDNS.resolveMemberNames` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.features.imageCache` **(deprecated)** | `object` | no | Talos: ImageCacheConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.features.imageCache.localEnabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.features.kubePrism` **(deprecated)** | `object` | no | Talos: KubePrism — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.features.kubePrism.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.features.kubePrism.port` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.features.kubernetesTalosAPIAccess` **(deprecated)** | `object` | no | Talos: KubernetesTalosAPIAccessConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.features.kubernetesTalosAPIAccess.allowedKubernetesNamespaces` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.features.kubernetesTalosAPIAccess.allowedRoles` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.features.kubernetesTalosAPIAccess.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.features.nodeAddressSortAlgorithm` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.features.rbac` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.features.stableHostname` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.files` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.files[].content` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.files[].op` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.files[].path` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.files[].permissions` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.install` **(deprecated)** | `object` | no | Talos: InstallConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.install.bootloader` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.install.disk` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.install.diskSelector` **(deprecated)** | `object` | no | Talos: InstallDiskSelector — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.install.diskSelector.busPath` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.install.diskSelector.modalias` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.install.diskSelector.model` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.install.diskSelector.name` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.install.diskSelector.serial` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.install.diskSelector.size` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.install.diskSelector.type` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.install.diskSelector.uuid` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.install.diskSelector.wwid` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.install.extensions` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.install.extensions[].image` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.install.extraKernelArgs` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.install.grubUseUKICmdline` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.install.image` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.install.legacyBIOSSupport` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.install.wipe` **(deprecated)** | `boolean` | yes |  |
+| `spec.cni.custom.documents[].config.machine.kernel` **(deprecated)** | `object` | no | Talos: KernelConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.kernel.modules` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.kernel.modules[].name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.kernel.modules[].parameters` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.kubelet` **(deprecated)** | `object` | no | Talos: KubeletConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.kubelet.clusterDNS` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig` **(deprecated)** | `object` | no | CredentialProviderConfig is the configuration containing information about each exec credential provider. Kubelet reads this configuration from disk and enables each provider as specified by the CredentialProvider type. |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig.apiVersion` **(deprecated)** | `string` | no | APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig.kind` **(deprecated)** | `string` | no | Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig.providers` **(deprecated)** | `[]object` | yes | providers is a list of credential provider plugins that will be enabled by the kubelet. Multiple providers may match against a single image, in which case credentials from all providers will be returned to the kubelet. If multiple providers are called for a single image, the results are combined. If providers return overlapping auth keys, the value from the provider earlier in this list is attempted first. |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig.providers[].apiVersion` **(deprecated)** | `string` | yes | Required input version of the exec CredentialProviderRequest. The returned CredentialProviderResponse MUST use the same encoding version as the input. Current supported values are: - credentialprovider.kubelet.k8s.io/v1 |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig.providers[].args` **(deprecated)** | `[]string` | no | Arguments to pass to the command when executing it. |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig.providers[].defaultCacheDuration` **(deprecated)** | `string` | yes | defaultCacheDuration is the default duration the plugin will cache credentials in-memory if a cache duration is not provided in the plugin response. This field is required. |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig.providers[].env` **(deprecated)** | `[]object` | no | Env defines additional environment variables to expose to the process. These are unioned with the host's environment, as well as variables client-go uses to pass argument to the plugin. |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig.providers[].env[].name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig.providers[].env[].value` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig.providers[].matchImages` **(deprecated)** | `[]string` | yes | matchImages is a required list of strings used to match against images in order to determine if this provider should be invoked. If one of the strings matches the requested image from the kubelet, the plugin will be invoked and given a chance to provide credentials. Images are expected to contain the registry domain and URL path. Each entry in matchImages is a pattern which can optionally contain a port and a path. Globs can be used in the domain, but not in the port or the path. Globs are supported as subdomains like '*.k8s.io' or 'k8s.*.io', and top-level-domains such as 'k8s.*'. Matching partial subdomains like 'app*.k8s.io' is also supported. Each glob can only match a single subdomain segment, so *.io does not match *.k8s.io. A match exists between an image and a matchImage when all of the below are true: - Both contain the same number of domain parts and each part matches. - The URL path of an imageMatch must be a prefix of the target image URL path. - If the imageMatch contains a port, then the port must match in the image as well. Example values of matchImages: - 123456789.dkr.ecr.us-east-1.amazonaws.com - *.azurecr.io - gcr.io - *.*.registry.io - registry.io:8080/path |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig.providers[].name` **(deprecated)** | `string` | yes | name is the required name of the credential provider. It must match the name of the provider executable as seen by the kubelet. The executable must be in the kubelet's bin directory (set by the --image-credential-provider-bin-dir flag). Required to be unique across all providers. |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig.providers[].tokenAttributes` **(deprecated)** | `object` | no | tokenAttributes is the configuration for the service account token that will be passed to the plugin. The credential provider opts in to using service account tokens for image pull by setting this field. When this field is set, kubelet will generate a service account token bound to the pod for which the image is being pulled and pass to the plugin as part of CredentialProviderRequest along with other attributes required by the plugin. The service account metadata and token attributes will be used as a dimension to cache the credentials in kubelet. The cache key is generated by combining the service account metadata (namespace, name, UID, and annotations key+value for the keys defined in serviceAccountTokenAttribute.requiredServiceAccountAnnotationKeys and serviceAccountTokenAttribute.optionalServiceAccountAnnotationKeys). The pod metadata (namespace, name, UID) that are in the service account token are not used as a dimension to cache the credentials in kubelet. This means workloads that are using the same service account could end up using the same credentials for image pull. For plugins that don't want this behavior, or plugins that operate in pass-through mode; i.e., they return the service account token as-is, they can set the credentialProviderResponse.cacheDuration to 0. This will disable the caching of credentials in kubelet and the plugin will be invoked for every image pull. This does result in token generation overhead for every image pull, but it is the only way to ensure that the credentials are not shared across pods (even if they are using the same service account). |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig.providers[].tokenAttributes.cacheType` **(deprecated)** | `string` | yes | cacheType indicates the type of cache key use for caching the credentials returned by the plugin when the service account token is used. The most conservative option is to set this to "Token", which means the kubelet will cache returned credentials on a per-token basis. This should be set if the returned credential's lifetime is limited to the service account token's lifetime. If the plugin's credential retrieval logic depends only on the service account and not on pod-specific claims, then the plugin can set this to "ServiceAccount". In this case, the kubelet will cache returned credentials on a per-serviceaccount basis. Use this when the returned credential is valid for all pods using the same service account. |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig.providers[].tokenAttributes.optionalServiceAccountAnnotationKeys` **(deprecated)** | `[]string` | no | optionalServiceAccountAnnotationKeys is the list of annotation keys that the plugin is interested in and that are optional to be present in the service account. The keys defined in this list will be extracted from the corresponding service account and passed to the plugin as part of the CredentialProviderRequest. The plugin is responsible for validating the existence of annotations and their values. This field is optional and may be empty. Plugins may use this field to extract additional information required to fetch credentials. Keys in this list must be unique. |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig.providers[].tokenAttributes.requireServiceAccount` **(deprecated)** | `boolean` | yes | requireServiceAccount indicates whether the plugin requires the pod to have a service account. If set to true, kubelet will only invoke the plugin if the pod has a service account. If set to false, kubelet will invoke the plugin even if the pod does not have a service account and will not include a token in the CredentialProviderRequest in that scenario. This is useful for plugins that are used to pull images for pods without service accounts (e.g., static pods). |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig.providers[].tokenAttributes.requiredServiceAccountAnnotationKeys` **(deprecated)** | `[]string` | no | requiredServiceAccountAnnotationKeys is the list of annotation keys that the plugin is interested in and that are required to be present in the service account. The keys defined in this list will be extracted from the corresponding service account and passed to the plugin as part of the CredentialProviderRequest. If any of the keys defined in this list are not present in the service account, kubelet will not invoke the plugin and will return an error. This field is optional and may be empty. Plugins may use this field to extract additional information required to fetch credentials or allow workloads to opt in to using service account tokens for image pull. If non-empty, requireServiceAccount must be set to true. Keys in this list must be unique. This list needs to be mutually exclusive with optionalServiceAccountAnnotationKeys. |
+| `spec.cni.custom.documents[].config.machine.kubelet.credentialProviderConfig.providers[].tokenAttributes.serviceAccountTokenAudience` **(deprecated)** | `string` | yes | serviceAccountTokenAudience is the intended audience for the projected service account token. |
+| `spec.cni.custom.documents[].config.machine.kubelet.defaultRuntimeSeccompProfileEnabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.disableManifestsDirectory` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.extraArgs` **(deprecated)** | `map[string][]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.extraMounts` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.extraMounts[].destination` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.extraMounts[].gidMappings` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.extraMounts[].gidMappings[].containerID` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.extraMounts[].gidMappings[].hostID` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.extraMounts[].gidMappings[].size` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.extraMounts[].options` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.extraMounts[].source` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.extraMounts[].type` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.extraMounts[].uidMappings` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.extraMounts[].uidMappings[].containerID` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.extraMounts[].uidMappings[].hostID` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.extraMounts[].uidMappings[].size` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.image` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.nodeIP` **(deprecated)** | `object` | no | Talos: KubeletNodeIPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.kubelet.nodeIP.validSubnets` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.registerWithFQDN` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.kubelet.skipNodeRegistration` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.logging` **(deprecated)** | `object` | no | Talos: LoggingConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.logging.destinations` **(deprecated)** | `[]object` | yes |  |
+| `spec.cni.custom.documents[].config.machine.logging.destinations[].endpoint` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.logging.destinations[].extraTags` **(deprecated)** | `map[string]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.logging.destinations[].format` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.network` **(deprecated)** | `object` | no | Talos: NetworkConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.disableSearchDomain` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.extraHostEntries` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.extraHostEntries[].aliases` **(deprecated)** | `[]string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.network.extraHostEntries[].ip` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.network.hostname` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].addresses` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond` **(deprecated)** | `object` | no | Talos: Bond — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.adActorSysPrio` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.adActorSystem` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.adSelect` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.adUserPortKey` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.allSlavesActive` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.arpAllTargets` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.arpIPTarget` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.arpInterval` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.arpValidate` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.deviceSelectors` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.deviceSelectors[].busPath` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.deviceSelectors[].driver` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.deviceSelectors[].hardwareAddr` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.deviceSelectors[].pciID` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.deviceSelectors[].permanentAddr` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.deviceSelectors[].physical` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.downdelay` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.failOverMac` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.interfaces` **(deprecated)** | `[]string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.lacpRate` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.lpInterval` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.miimon` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.minLinks` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.mode` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.numPeerNotif` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.packetsPerSlave` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.peerNotifyDelay` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.primary` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.primaryReselect` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.resendIgmp` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.tlbDynamicLb` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.updelay` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.useCarrier` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bond.xmitHashPolicy` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bridge` **(deprecated)** | `object` | no | Talos: Bridge — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bridge.interfaces` **(deprecated)** | `[]string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bridge.stp` **(deprecated)** | `object` | no | Talos: STP — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bridge.stp.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bridge.vlan` **(deprecated)** | `object` | no | Talos: BridgeVLAN — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bridge.vlan.vlanFiltering` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bridgePort` **(deprecated)** | `object` | no | Talos: BridgePort — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].bridgePort.master` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].cidr` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].deviceSelector` **(deprecated)** | `object` | no | Talos: NetworkDeviceSelector — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].deviceSelector.busPath` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].deviceSelector.driver` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].deviceSelector.hardwareAddr` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].deviceSelector.pciID` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].deviceSelector.permanentAddr` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].deviceSelector.physical` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].dhcp` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].dhcpOptions` **(deprecated)** | `object` | no | Talos: DHCPOptions — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].dhcpOptions.duidv6` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].dhcpOptions.ipv4` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].dhcpOptions.ipv6` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].dhcpOptions.routeMetric` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].dummy` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].ignore` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].interface` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].routes` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].routes[].gateway` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].routes[].metric` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].routes[].mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].routes[].network` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].routes[].source` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vip` **(deprecated)** | `object` | no | Talos: DeviceVIPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vip.equinixMetal` **(deprecated)** | `object` | no | Talos: VIPEquinixMetalConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vip.hcloud` **(deprecated)** | `object` | no | Talos: VIPHCloudConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vip.ip` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].addresses` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].cidr` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].dhcp` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].dhcpOptions` **(deprecated)** | `object` | no | Talos: DHCPOptions — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].dhcpOptions.duidv6` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].dhcpOptions.ipv4` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].dhcpOptions.ipv6` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].dhcpOptions.routeMetric` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].routes` **(deprecated)** | `[]object` | yes |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].routes[].gateway` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].routes[].metric` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].routes[].mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].routes[].network` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].routes[].source` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].vip` **(deprecated)** | `object` | no | Talos: DeviceVIPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].vip.equinixMetal` **(deprecated)** | `object` | no | Talos: VIPEquinixMetalConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].vip.hcloud` **(deprecated)** | `object` | no | Talos: VIPHCloudConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].vip.ip` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].vlans[].vlanId` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].wireguard` **(deprecated)** | `object` | no | Talos: DeviceWireguardConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].wireguard.firewallMark` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].wireguard.listenPort` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].wireguard.peers` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].wireguard.peers[].allowedIPs` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].wireguard.peers[].endpoint` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].wireguard.peers[].persistentKeepaliveInterval` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.interfaces[].wireguard.peers[].publicKey` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.kubespan` **(deprecated)** | `object` | no | Talos: NetworkKubeSpan — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.kubespan.advertiseKubernetesNetworks` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.kubespan.allowDownPeerBypass` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.kubespan.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.kubespan.filters` **(deprecated)** | `object` | no | Talos: KubeSpanFilters — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.network.kubespan.filters.endpoints` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.kubespan.filters.excludeAdvertisedNetworks` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.kubespan.harvestExtraEndpoints` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.kubespan.mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.nameservers` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.network.searchDomains` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.nodeAnnotations` **(deprecated)** | `map[string]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.nodeLabels` **(deprecated)** | `map[string]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.nodeTaints` **(deprecated)** | `map[string]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.registries` **(deprecated)** | `object` | no | Talos: RegistriesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.registries.config` **(deprecated)** | `map[string]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.registries.config.<key>.auth` **(deprecated)** | `object` | no | Talos: RegistryAuthConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.registries.config.<key>.auth.username` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.registries.config.<key>.tls` **(deprecated)** | `object` | no | Talos: RegistryTLSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.registries.config.<key>.tls.ca` **(deprecated)** | `string (byte)` | no |  |
+| `spec.cni.custom.documents[].config.machine.registries.config.<key>.tls.clientIdentity` **(deprecated)** | `object` | no | github.com/siderolabs/crypto/x509: PEMEncodedCertificateAndKey |
+| `spec.cni.custom.documents[].config.machine.registries.config.<key>.tls.clientIdentity.crt` **(deprecated)** | `string (byte)` | yes |  |
+| `spec.cni.custom.documents[].config.machine.registries.config.<key>.tls.clientIdentity.key` **(deprecated)** | `string (byte)` | yes |  |
+| `spec.cni.custom.documents[].config.machine.registries.config.<key>.tls.insecureSkipVerify` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.registries.mirrors` **(deprecated)** | `map[string]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.registries.mirrors.<key>.endpoints` **(deprecated)** | `[]string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.registries.mirrors.<key>.overridePath` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.registries.mirrors.<key>.skipFallback` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles[].name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles[].value` **(deprecated)** | `object` | yes | SeccompProfile is MachineSeccompProfile.MachineSeccompProfileValue's mirror type (internal/tools/mirrorgen/main.go's fieldOverrides): byte-for-byte the same fields and JSON tags as specs.LinuxSeccomp (github.com/opencontainers/ runtime-spec), under a local name so DeepCopyInto/DeepCopy can be hand-written below. The generic conversion helpers in substitution.go and the generated CRD schema are unaffected by the rename -- both work off the JSON shape, which is identical. Why hand-written: specs.LinuxSeccomp has pointer and slice fields but, unlike the other four field overrides (all Kubernetes API types), no DeepCopy of its own; controller-gen's object:generate step assumes one exists for any struct-shaped field type it doesn't otherwise recognize, and errors at compile time rather than generation time when it doesn't. The methods can't live on specs.LinuxSeccomp directly -- Go forbids methods on types from another package -- and can't live one level up, on MachineSeccompProfile itself, either: MachineConfig holds MachineSeccompProfiles []*MachineSeccompProfile, and controller-gen's generated code for a slice of pointers to a type with a *known* DeepCopy method assumes a value-typed element and double-dereferences, which doesn't compile. Putting the hand-written methods here, one level down, avoids both problems: SeccompProfile is reached only through a plain pointer field, never through a pointer slice. deepCopyLinuxSeccomp and deepCopyLinuxSyscall below copy their known pointer/slice fields by name rather than reflecting over the upstream type, so they go stale -- silently, by sharing instead of copying -- if specs-go ever adds one. seccomp_test.go's TestLinuxSeccompShape guards against that by pinning the exact field set each one assumes. |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles[].value.architectures` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles[].value.defaultAction` **(deprecated)** | `string` | yes | LinuxSeccompAction taken upon Seccomp rule match |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles[].value.defaultErrnoRet` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles[].value.flags` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles[].value.listenerMetadata` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles[].value.listenerPath` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles[].value.syscalls` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles[].value.syscalls[].action` **(deprecated)** | `string` | yes | LinuxSeccompAction taken upon Seccomp rule match |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles[].value.syscalls[].args` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles[].value.syscalls[].args[].index` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles[].value.syscalls[].args[].op` **(deprecated)** | `string` | yes | LinuxSeccompOperator used to match syscall arguments in Seccomp |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles[].value.syscalls[].args[].value` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles[].value.syscalls[].args[].valueTwo` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles[].value.syscalls[].errnoRet` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.seccompProfiles[].value.syscalls[].names` **(deprecated)** | `[]string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.sysctls` **(deprecated)** | `map[string]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.sysfs` **(deprecated)** | `map[string]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption` **(deprecated)** | `object` | no | Talos: SystemDiskEncryptionConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.ephemeral` **(deprecated)** | `object` | no | Talos: EncryptionConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.ephemeral.blockSize` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.ephemeral.cipher` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.ephemeral.keySize` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.ephemeral.keys` **(deprecated)** | `[]object` | yes |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.ephemeral.keys[].kms` **(deprecated)** | `object` | no | Talos: EncryptionKeyKMS — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.ephemeral.keys[].kms.endpoint` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.ephemeral.keys[].nodeID` **(deprecated)** | `object` | no | Talos: EncryptionKeyNodeID — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.ephemeral.keys[].slot` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.ephemeral.keys[].tpm` **(deprecated)** | `object` | no | Talos: EncryptionKeyTPM — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.ephemeral.keys[].tpm.checkSecurebootStatusOnEnroll` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.ephemeral.options` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.ephemeral.provider` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.state` **(deprecated)** | `object` | no | Talos: EncryptionConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.state.blockSize` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.state.cipher` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.state.keySize` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.state.keys` **(deprecated)** | `[]object` | yes |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.state.keys[].kms` **(deprecated)** | `object` | no | Talos: EncryptionKeyKMS — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.state.keys[].kms.endpoint` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.state.keys[].nodeID` **(deprecated)** | `object` | no | Talos: EncryptionKeyNodeID — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.state.keys[].slot` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.state.keys[].tpm` **(deprecated)** | `object` | no | Talos: EncryptionKeyTPM — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.state.keys[].tpm.checkSecurebootStatusOnEnroll` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.state.options` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.systemDiskEncryption.state.provider` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].config.machine.time` **(deprecated)** | `object` | no | Talos: TimeConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.time.bootTimeout` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.time.disabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.machine.time.servers` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.machine.type` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].config.machine.udev` **(deprecated)** | `object` | no | Talos: UdevConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
+| `spec.cni.custom.documents[].config.machine.udev.rules` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].config.persist` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].config.version` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].kernelModuleConfig` **(deprecated)** | `object` | no | kernelModuleConfig is a Talos KernelModuleConfig document; populated when kind is "KernelModuleConfig". |
+| `spec.cni.custom.documents[].kernelModuleConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].kernelModuleConfig.parameters` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].kind` **(deprecated)** | `string` | yes | kind selects which of the fields below is populated. Allowed values: `SysctlConfig`, `KernelModuleConfig`, `Config`, `VolumeConfig`, `UserVolumeConfig`, `RawVolumeConfig`. |
+| `spec.cni.custom.documents[].rawVolumeConfig` **(deprecated)** | `object` | no | rawVolumeConfig is a Talos RawVolumeConfig document (an unformatted partition for a CSI provisioner); populated when kind is "RawVolumeConfig". |
+| `spec.cni.custom.documents[].rawVolumeConfig.encryption` **(deprecated)** | `object` | no | Talos: EncryptionSpec |
+| `spec.cni.custom.documents[].rawVolumeConfig.encryption.allowDiscards` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].rawVolumeConfig.encryption.blockSize` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].rawVolumeConfig.encryption.cipher` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].rawVolumeConfig.encryption.keySize` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].rawVolumeConfig.encryption.keys` **(deprecated)** | `[]object` | yes |  |
+| `spec.cni.custom.documents[].rawVolumeConfig.encryption.keys[].kms` **(deprecated)** | `object` | no | Talos: EncryptionKeyKMS |
+| `spec.cni.custom.documents[].rawVolumeConfig.encryption.keys[].kms.endpoint` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].rawVolumeConfig.encryption.keys[].lockToState` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].rawVolumeConfig.encryption.keys[].nodeID` **(deprecated)** | `object` | no | Talos: EncryptionKeyNodeID |
+| `spec.cni.custom.documents[].rawVolumeConfig.encryption.keys[].slot` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].rawVolumeConfig.encryption.keys[].tpm` **(deprecated)** | `object` | no | Talos: EncryptionKeyTPM |
+| `spec.cni.custom.documents[].rawVolumeConfig.encryption.keys[].tpm.checkSecurebootStatusOnEnroll` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].rawVolumeConfig.encryption.keys[].tpm.options` **(deprecated)** | `object` | no | Talos: EncryptionKeyTPMOptions |
+| `spec.cni.custom.documents[].rawVolumeConfig.encryption.keys[].tpm.options.pcrs` **(deprecated)** | `[]integer` | no |  |
+| `spec.cni.custom.documents[].rawVolumeConfig.encryption.options` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].rawVolumeConfig.encryption.provider` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].rawVolumeConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].rawVolumeConfig.provisioning` **(deprecated)** | `object` | no | Talos: ProvisioningSpec |
+| `spec.cni.custom.documents[].rawVolumeConfig.provisioning.diskSelector` **(deprecated)** | `object` | no | Talos: DiskSelector |
+| `spec.cni.custom.documents[].rawVolumeConfig.provisioning.diskSelector.match` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].rawVolumeConfig.provisioning.grow` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].rawVolumeConfig.provisioning.maxSize` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].rawVolumeConfig.provisioning.minSize` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].sysctlConfig` **(deprecated)** | `object` | no | sysctlConfig is a Talos SysctlConfig document; populated when kind is "SysctlConfig". |
+| `spec.cni.custom.documents[].sysctlConfig.params` **(deprecated)** | `map[string]string` | yes |  |
+| `spec.cni.custom.documents[].userVolumeConfig` **(deprecated)** | `object` | no | userVolumeConfig is a Talos UserVolumeConfig document; populated when kind is "UserVolumeConfig". |
+| `spec.cni.custom.documents[].userVolumeConfig.encryption` **(deprecated)** | `object` | no | Talos: EncryptionSpec |
+| `spec.cni.custom.documents[].userVolumeConfig.encryption.allowDiscards` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.encryption.blockSize` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.encryption.cipher` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.encryption.keySize` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.encryption.keys` **(deprecated)** | `[]object` | yes |  |
+| `spec.cni.custom.documents[].userVolumeConfig.encryption.keys[].kms` **(deprecated)** | `object` | no | Talos: EncryptionKeyKMS |
+| `spec.cni.custom.documents[].userVolumeConfig.encryption.keys[].kms.endpoint` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].userVolumeConfig.encryption.keys[].lockToState` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.encryption.keys[].nodeID` **(deprecated)** | `object` | no | Talos: EncryptionKeyNodeID |
+| `spec.cni.custom.documents[].userVolumeConfig.encryption.keys[].slot` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].userVolumeConfig.encryption.keys[].tpm` **(deprecated)** | `object` | no | Talos: EncryptionKeyTPM |
+| `spec.cni.custom.documents[].userVolumeConfig.encryption.keys[].tpm.checkSecurebootStatusOnEnroll` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.encryption.keys[].tpm.options` **(deprecated)** | `object` | no | Talos: EncryptionKeyTPMOptions |
+| `spec.cni.custom.documents[].userVolumeConfig.encryption.keys[].tpm.options.pcrs` **(deprecated)** | `[]integer` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.encryption.options` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.encryption.provider` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].userVolumeConfig.filesystem` **(deprecated)** | `object` | no | Talos: FilesystemSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig |
+| `spec.cni.custom.documents[].userVolumeConfig.filesystem.projectQuotaSupport` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.filesystem.type` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.filesystem.xfs` **(deprecated)** | `object` | no | Talos: XFSSpec |
+| `spec.cni.custom.documents[].userVolumeConfig.filesystem.xfs.minAllocationGroupSize` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.mount` **(deprecated)** | `object` | no | Talos: UserMountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig |
+| `spec.cni.custom.documents[].userVolumeConfig.mount.disableAccessTime` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.mount.secure` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].userVolumeConfig.provisioning` **(deprecated)** | `object` | no | Talos: ProvisioningSpec |
+| `spec.cni.custom.documents[].userVolumeConfig.provisioning.diskSelector` **(deprecated)** | `object` | no | Talos: DiskSelector |
+| `spec.cni.custom.documents[].userVolumeConfig.provisioning.diskSelector.match` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.provisioning.grow` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.provisioning.maxSize` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.provisioning.minSize` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.scrub` **(deprecated)** | `object` | no | Talos: ScrubConfig |
+| `spec.cni.custom.documents[].userVolumeConfig.scrub.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.scrub.interval` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.trim` **(deprecated)** | `object` | no | Talos: TrimConfig |
+| `spec.cni.custom.documents[].userVolumeConfig.trim.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.trim.interval` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].userVolumeConfig.volumeType` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].volumeConfig` **(deprecated)** | `object` | no | volumeConfig is a Talos VolumeConfig document (a system volume, e.g. STATE or EPHEMERAL, placed on its own disk); populated when kind is "VolumeConfig". |
+| `spec.cni.custom.documents[].volumeConfig.encryption` **(deprecated)** | `object` | no | Talos: EncryptionSpec |
+| `spec.cni.custom.documents[].volumeConfig.encryption.allowDiscards` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.encryption.blockSize` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.encryption.cipher` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.encryption.keySize` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.encryption.keys` **(deprecated)** | `[]object` | yes |  |
+| `spec.cni.custom.documents[].volumeConfig.encryption.keys[].kms` **(deprecated)** | `object` | no | Talos: EncryptionKeyKMS |
+| `spec.cni.custom.documents[].volumeConfig.encryption.keys[].kms.endpoint` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].volumeConfig.encryption.keys[].lockToState` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.encryption.keys[].nodeID` **(deprecated)** | `object` | no | Talos: EncryptionKeyNodeID |
+| `spec.cni.custom.documents[].volumeConfig.encryption.keys[].slot` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].volumeConfig.encryption.keys[].tpm` **(deprecated)** | `object` | no | Talos: EncryptionKeyTPM |
+| `spec.cni.custom.documents[].volumeConfig.encryption.keys[].tpm.checkSecurebootStatusOnEnroll` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.encryption.keys[].tpm.options` **(deprecated)** | `object` | no | Talos: EncryptionKeyTPMOptions |
+| `spec.cni.custom.documents[].volumeConfig.encryption.keys[].tpm.options.pcrs` **(deprecated)** | `[]integer` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.encryption.options` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.encryption.provider` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].volumeConfig.filesystem` **(deprecated)** | `object` | no | Talos: SystemVolumeFilesystemSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig |
+| `spec.cni.custom.documents[].volumeConfig.filesystem.xfs` **(deprecated)** | `object` | no | Talos: XFSSpec |
+| `spec.cni.custom.documents[].volumeConfig.filesystem.xfs.minAllocationGroupSize` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.mount` **(deprecated)** | `object` | no | Talos: MountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig |
+| `spec.cni.custom.documents[].volumeConfig.mount.disableAccessTime` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.mount.secure` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].volumeConfig.provisioning` **(deprecated)** | `object` | no | Talos: ProvisioningSpec |
+| `spec.cni.custom.documents[].volumeConfig.provisioning.diskSelector` **(deprecated)** | `object` | no | Talos: DiskSelector |
+| `spec.cni.custom.documents[].volumeConfig.provisioning.diskSelector.match` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.provisioning.grow` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.provisioning.maxSize` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.provisioning.minSize` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.scrub` **(deprecated)** | `object` | no | Talos: ScrubConfig |
+| `spec.cni.custom.documents[].volumeConfig.scrub.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.scrub.interval` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.trim` **(deprecated)** | `object` | no | Talos: TrimConfig |
+| `spec.cni.custom.documents[].volumeConfig.trim.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].volumeConfig.trim.interval` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.source` **(deprecated)** | `object` | yes | source points Argo CD at the chart or manifests for this CNI. |
+| `spec.cni.custom.source.chart` **(deprecated)** | `string` | no | chart is a Helm chart name within repoURL; set instead of path. |
+| `spec.cni.custom.source.path` **(deprecated)** | `string` | no | path is a directory within repoURL holding plain manifests; set instead of chart. |
+| `spec.cni.custom.source.repoURL` **(deprecated)** | `string` | yes | repoURL is the Git or Helm repository Argo CD syncs from. |
+| `spec.cni.custom.source.targetRevision` **(deprecated)** | `string` | yes | targetRevision is the Git ref or chart version Argo CD syncs. |
+| `spec.cni.kubeProxy` | `string` | no | kubeProxy is enabled (Talos's own default) or replaced by the CNI. Replacing it splits the setting across two owners -- Talos (cluster.proxy.disabled, written by Ichor) and the CNI (written by Argo CD) -- so a consistency check reads the CNI's live configuration and reports a mismatch as a health failure. Allowed values: `enabled`, `replaced`. Default: `"enabled"`. |
+| `spec.cni.preset` **(deprecated)** | `string` | no | preset selects the CNI this cluster bootstraps. Cilium is the only CNI Ichor installs; unmanaged leaves the CNI of an adopted cluster exactly as it is, and the webhook accepts it on create only for an object carrying the adoption annotation. The values flannel and custom are deprecated, unused and kept so the CRD never drops a value. Allowed values: `flannel`, `cilium`, `custom`, `unmanaged`. Default: `"cilium"`. |
+| `spec.cni.tunnel` | `string` | no | tunnel is Cilium's tunnel protocol. It only applies to the cilium preset; empty means Cilium's default (vxlan). Immutable once set. Allowed values: `vxlan`, `geneve`. |
+| `spec.cni.unmanaged` | `object` | no | unmanaged configures the unmanaged preset. Only valid when preset is unmanaged; when omitted there, talosCNI is default. |
+| `spec.cni.unmanaged.talosCNI` | `string` | no | talosCNI is default (the machine config has no CNI selection, so Talos runs its own flannel or whatever cluster.network.cni selects by default; render emits nothing about the CNI) or none (render emits cluster.network.cni.name: none). Allowed values: `default`, `none`. Default: `"default"`. |
+| `spec.controlPlane` | `object` | yes | controlPlane configures the control-plane topology. |
+| `spec.controlPlane.count` | `integer` | yes | count is the number of control-plane nodes; 2 and 4 are rejected because they don't improve etcd availability over 1 or 3. Allowed values: `1`, `3`, `5`. |
+| `spec.controlPlane.schedulable` | `string` | yes | schedulable controls whether control planes accept workloads; required with no default because nothing on the object can resolve an auto value before any machine exists. Allowed values: `true`, `false`. |
+| `spec.controlPlaneMetrics` | `object` | no | controlPlaneMetrics exposes the control-plane metrics Talos binds locally and restricts scraping to a CIDR. Unset (the default) leaves the Talos defaults alone. |
+| `spec.controlPlaneMetrics.allowedCIDRs` | `[]string` | no | allowedCIDRs are the only sources that may reach the metrics ports (TCP 10257, 10259 and 2381) on control-plane nodes. Every other port keeps Talos's default firewall action (accept). A prefix length of 0 is rejected: that would be no restriction at all. |
+| `spec.controlPlaneMetrics.enabled` | `boolean` | no | enabled binds the metrics endpoints on all addresses and adds ingress firewall rules that drop connections to those ports from any source outside allowedCIDRs. Default: `false`. |
+| `spec.discovery` | `object` | no | discovery lists maintenance-mode candidates for the controller to probe directly. Empty (the default) disables discovery: the controller opens no connection at all. |
+| `spec.discovery.addresses` | `[]string` | no | addresses are specific IPv4 candidates to probe, each on Talos's fixed maintenance API port. |
+| `spec.discovery.cidrs` | `[]string` | no | cidrs are IPv4 address ranges to probe, one maintenance-mode connection attempt per address in range. Each must be /24 or smaller (at most 256 addresses). |
+| `spec.driftPolicy` | `string` | no | driftPolicy controls what the reconciler does when a node's live configuration no longer matches what Ichor last rendered for it, and nothing on Ichor's side (this TalosCluster, a TalosConfigPatch, or the TalosMachine) has changed since Ichor last confirmed the two matched: warnOnly leaves the node as it is and reports the drift through a condition; autoCorrect re-applies, but only when every changed field is reboot-free (pkg/fieldmeta) -- a reboot-requiring or install-time-only drift is always just reported, regardless of this setting. Defaults to warnOnly: unlike controlPlane.schedulable, the two values here are not wrong half the time each -- silently changing a node is the one that can surprise, so it is never the default. The CRD carries no default: the defaulting webhook fills warnOnly, or the installation's spec.defaults.driftPolicy, at create; an empty value is warnOnly. Allowed values: `warnOnly`, `autoCorrect`. |
+| `spec.endpoint` | `object` | yes | endpoint is the cluster's control-plane endpoint. |
+| `spec.endpoint.address` | `string` | yes | address is the endpoint's address: an IP for vip/node, or a hostname for loadBalancer/dns. |
+| `spec.endpoint.type` | `string` | yes | type is the kind of address the endpoint resolves through. Allowed values: `vip`, `loadBalancer`, `dns`, `node`. |
+| `spec.kubernetesVersion` | `string` | yes | kubernetesVersion is the Kubernetes release this cluster runs. |
+| `spec.network` | `object` | no | network sets the pod and service subnets. Unset keeps Talos's defaults. It cannot change once set. |
+| `spec.network.podSubnets` | `[]string` | no | podSubnets are the pod CIDRs, at most one per IP family. |
+| `spec.network.serviceSubnets` | `[]string` | no | serviceSubnets are the service CIDRs, at most one per IP family. |
+| `spec.registries` | `[]object` | no | registries declares this cluster's private registry mirrors and where their pull credentials live, pushed to every node through the system layer (docs/design/architecture.md "Monitoring and registry mirrors"). Empty (the default) configures no mirrors at all -- mirrors stay entirely optional. listType=map on host (rather than a CEL uniqueness rule, same as status.conditions below) is what the structural schema itself rejects a duplicate host under -- a CEL self.exists_one rule over this list was tried first and rejected by envtest's apiserver: with MaxItems=32 its estimated cost exceeds the per-field budget by 32x (quadratic in list length), and still contributed enough to blow the whole-schema budget by 3.3x alongside this CRD's existing CEL rules. |
+| `spec.registries[].authSecretRef` | `object` | no | authSecretRef names a Secret, read in the controller's own namespace (the same reasoning as secretsRef below: RBAC cannot scope a Secret read to "wherever this TalosCluster happens to live" below cluster-wide), holding this registry's password-shaped credentials. Unset means an anonymous mirror -- a public registry needing no credentials at all, not an error. Set but unresolvable (Secret missing, or present but carrying none of its three recognized keys) is: pkg/render.ResolveRegistryAuth fails the render rather than silently producing a mirror with no auth, since that would look identical to a working one until the first pull fails on the node. A corev1.LocalObjectReference, not a SecretKeySelector: machinery's RegistryAuthConfig carries three mutually-exclusive credential shapes (password, auth, identityToken, matching docker config.json's own auth forms) that one registry's credentials pick at most one of, so one reference to a Secret with those three well-known keys covers it -- same shape secretsRef already uses for bundleSecretKey, rather than three separate single-key selectors for a value that is, in practice, one secret. |
+| `spec.registries[].authSecretRef.name` | `string` | no | Name of the referent. This field is effectively required, but due to backwards compatibility is allowed to be empty. Instances of this type with an empty value here are almost certainly wrong. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names Default: `""`. |
+| `spec.registries[].endpoints` | `[]string` | yes | endpoints are the mirror endpoint URLs for host (RegistryMirrorConfig.endpoints) -- not secret, so they stay a plain typed field here rather than behind a reference. Checked here, not left to machinery: pkg/machinery/config/types/v1alpha1's own ValidateAtRuntime has no validator at all for RegistryMirrorConfig/RegistryConfig, so an endpoint shaped wrong would otherwise reach a node's machine config unexamined, exactly the gap spec.discovery's own CEL above already closes for its addresses. |
+| `spec.registries[].host` | `string` | yes | host is the registry host (and port, if not the default) this entry's mirror and credentials apply to, matching RegistriesConfig's own map key: the first segment of an image reference, "docker.io" being the default one, or "*" for a fallback mirror. TLS config (RegistryConfig.tls) uses the same key but never the "*" fallback; this field carries both mirror and auth, so "*" is only meaningful when authSecretRef is unset. |
+| `spec.registries[].overridePath` | `boolean` | no | overridePath makes the nodes use every endpoint's path as given, without adding the /v2/ suffix (RegistryMirrorConfig.endpoints[].overridePath). It applies to all of this entry's endpoints; Talos allows it per endpoint, and a mix cannot be recorded here. |
+| `spec.registries[].skipFallback` | `boolean` | no | skipFallback stops nodes falling back to host itself when none of the endpoints has the image (RegistryMirrorConfig.skipFallback). Default false, Talos's own default. |
+| `spec.registries[].username` | `string` | no | username is this registry's non-secret auth username (RegistryAuthConfig.username). Optional: some private registries authenticate on password/token alone. |
+| `spec.schematic` | `object` | no | schematic is the Image Factory schematic used for this cluster's installer image. |
+| `spec.schematic.id` | `string` | yes | id is the Image Factory schematic ID. |
+| `spec.secretsRef` | `object` | yes | secretsRef names the Secret holding the Talos, Kubernetes and etcd CA bundle. The Secret lives in the controller's own namespace (not necessarily this TalosCluster's), because Kubernetes RBAC cannot restrict Secret reads to "wherever the referencing TalosCluster happens to live" at anything narrower than cluster-wide. |
+| `spec.secretsRef.name` | `string` | no | Name of the referent. This field is effectively required, but due to backwards compatibility is allowed to be empty. Instances of this type with an empty value here are almost certainly wrong. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names Default: `""`. |
+| `spec.security` | `object` | no | security holds opt-in hardening of this cluster: an ingress firewall, Cilium WireGuard encryption, Pod Security levels, an audit policy preset and disk encryption. Unset (the default) changes nothing. |
+| `spec.security.audit` | `object` | no | audit selects a kube-apiserver audit policy preset. Restarts the kube-apiserver on every control plane, no node reboot. Needs versionContract v1.14 or later. |
+| `spec.security.audit.policy` | `string` | yes | policy is the preset. metadata records who did what, without bodies, for every request (Talos's own default). rbacChanges is metadata plus the full request and response of changes to roles and bindings. writes is metadata plus the request body of every change. Secrets, configmaps, service account tokens and token reviews are never logged above metadata in any preset. Allowed values: `metadata`, `rbacChanges`, `writes`. |
+| `spec.security.diskEncryption` | `object` | no | diskEncryption encrypts the STATE and EPHEMERAL volumes with LUKS2. Talos encrypts a volume only when it creates it, so on a cluster that already has machines it needs the wipe-and-rejoin path (see docs/guides/hardening.md) and the confirm annotation. |
+| `spec.security.diskEncryption.kmsEndpoint` | `string` | no | kmsEndpoint is the KMS server, as a URL with a scheme (https://kms.example.com:4443). A scheme other than https is refused. |
+| `spec.security.diskEncryption.requireSecureBoot` | `boolean` | no | requireSecureBoot makes enrolling a TPM key fail unless SecureBoot is enabled in the firmware. Without SecureBoot a TPM key gives no boot-chain protection. |
+| `spec.security.diskEncryption.type` | `string` | yes | type is where the key comes from. tpm seals it in the machine's TPM 2.0 (bound to PCR 7); nodeID derives it from the node UUID, which protects only against a removed disk; kms has a KMS server seal and unseal it. Allowed values: `tpm`, `nodeID`, `kms`. |
+| `spec.security.firewall` | `object` | no | firewall turns on Talos's ingress firewall in block mode with the rules a Talos cluster needs, plus the sources you list. No reboot. |
+| `spec.security.firewall.allow` | `[]object` | no | allow opens further host ports, for services running with host networking (an ingress controller on 80 and 443, a node exporter). Everything not listed is blocked. |
+| `spec.security.firewall.allow[].cidrs` | `[]string` | yes | cidrs are the sources allowed to reach the ports. |
+| `spec.security.firewall.allow[].name` | `string` | yes | name identifies the rule; it becomes ichor-fw-allow-\<name> in the machine config. |
+| `spec.security.firewall.allow[].ports` | `[]string` | yes | ports are single ports ("443") or inclusive ranges ("8000-8100"). |
+| `spec.security.firewall.allow[].protocol` | `string` | yes | protocol is tcp or udp. Allowed values: `tcp`, `udp`. |
+| `spec.security.firewall.apiServerCIDRs` | `[]string` | no | apiServerCIDRs are further sources allowed to reach the Kubernetes API (6443), for users and load balancers. |
+| `spec.security.firewall.controlPlaneCIDRs` | `[]string` | no | controlPlaneCIDRs are the addresses of the control planes only; etcd and the control planes' own reach to apid and the kubelet are limited to them. Unset means nodeCIDRs. |
+| `spec.security.firewall.controllerCIDRs` | `[]string` | no | controllerCIDRs are the addresses Ichor's controller connects from. They are always allowed to reach apid and the Kubernetes API. The admission webhook refuses a value that does not contain the address the controller reaches the cluster endpoint from. |
+| `spec.security.firewall.enabled` | `boolean` | no | enabled turns the firewall on. Default: `false`. |
+| `spec.security.firewall.kubeSpan` | `boolean` | no | kubeSpan allows KubeSpan's WireGuard port (UDP 51820) from anywhere; set it when the cluster uses KubeSpan. |
+| `spec.security.firewall.nodeCIDRs` | `[]string` | no | nodeCIDRs are the addresses of all the cluster's machines, control planes and workers. |
+| `spec.security.firewall.talosAPICIDRs` | `[]string` | no | talosAPICIDRs are further sources allowed to reach apid (50000), for operators using talosctl. |
+| `spec.security.kernelLockdown` | `string` | no | kernelLockdown is the kernel lockdown level the nodes are expected to run with. Ichor checks it and reports a node below it; it does not render it, because the kernel command line is embedded in the UKI (build it into the boot asset with an Image Factory schematic whose extraKernelArgs has lockdown=confidentiality, and set spec.schematic). SecureBoot images run at integrity by themselves in Talos v1.14. Allowed values: `integrity`, `confidentiality`. |
+| `spec.security.kubeletServingCertificates` | `object` | no | kubeletServingCertificates makes every kubelet serve a certificate signed by the Kubernetes CA instead of a self-signed one. Ichor's controller approves the kubelets' serving-certificate requests itself, for the machines it manages and nothing else. A kubelet restart on every node, no node reboot. |
+| `spec.security.kubeletServingCertificates.enabled` | `boolean` | no | enabled turns serverTLSBootstrap on and the controller's approval of the requests on. Default: `false`. |
+| `spec.security.kubeletServingCertificates.verifyFromAPIServer` | `boolean` | no | verifyFromAPIServer also makes the kube-apiserver check the kubelets' certificates against the Kubernetes CA (--kubelet-certificate-authority). Ichor renders it only once every machine has been issued a serving certificate (condition KubeletServingCertificates), and keeps it once rendered. It restarts the kube-apiserver on every control plane. Until then the apiserver does not verify the kubelets, as before. |
+| `spec.security.podSecurity` | `object` | no | podSecurity sets the Pod Security admission levels of the kube-apiserver. Restarts the kube-apiserver on every control plane, no node reboot. Needs versionContract v1.14 or later. |
+| `spec.security.podSecurity.audit` | `string` | no | audit is the level above which violations are recorded in the audit log. Allowed values: `privileged`, `baseline`, `restricted`. |
+| `spec.security.podSecurity.enforce` | `string` | no | enforce is the level a pod must meet to be admitted. Allowed values: `privileged`, `baseline`, `restricted`. |
+| `spec.security.podSecurity.exemptNamespaces` | `[]string` | no | exemptNamespaces are added to the exempt namespaces (kube-system stays exempt). |
+| `spec.security.podSecurity.warn` | `string` | no | warn is the level above which violations produce a warning to the client. Allowed values: `privileged`, `baseline`, `restricted`. |
+| `spec.security.secureBoot` | `object` | no | secureBoot asks for UEFI SecureBoot with Talos's UKI images. It picks the installer image variant and reports each node's actual state; it never changes an installed node, because Talos cannot convert a GRUB install and the firmware keys are not Talos's. |
+| `spec.security.secureBoot.mode` | `string` | yes | mode is Off (the default: the stock installer, nothing reported), Preferred (Ichor uses the SecureBoot installer where it chooses one and reports nodes without SecureBoot) or Required (as Preferred, a TPM disk key must check SecureBoot, enabling it needs the confirm annotation while any approved machine lacks SecureBoot, and a machine in maintenance mode without SecureBoot is not given its first configuration). A node that already runs SecureBoot is upgraded with the SecureBoot installer whatever the mode. Allowed values: `Off`, `Preferred`, `Required`. |
+| `spec.security.wireGuard` | `object` | no | wireGuard turns on Cilium's transparent WireGuard encryption of pod traffic between nodes. A rolling restart of the Cilium agents, no node reboot. |
+| `spec.security.wireGuard.enabled` | `boolean` | no | enabled sets encryption.enabled=true and encryption.type=wireguard in the managed Cilium values. It wins over any encryption.* the user values set. When the firewall is on, UDP 51871 is opened between nodes. Default: `false`. |
+| `spec.security.wireGuard.nodeEncryption` | `boolean` | no | nodeEncryption also encrypts node-to-node traffic that is not pod traffic (encryption.nodeEncryption). |
+| `spec.talosVersion` | `string` | yes | talosVersion is the Talos release this cluster renders configuration for. |
+| `spec.versionContract` | `string` | yes | versionContract is required rather than defaulted, so that a machinery bump cannot silently change what gets applied (principle 4). |
+
+### status
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `status` | `object` | no | status defines the observed state of TalosCluster |
+| `status.certificates` | `[]object` | no | certificates lists when each cluster certificate authority in the secrets bundle expires, so an approaching expiry is visible before it locks anyone out. Read from the bundle, never from a node. |
+| `status.certificates[].name` | `string` | yes | name is which authority: talos, kubernetes, kubernetes-aggregator or etcd. |
+| `status.certificates[].notAfter` | `string (date-time)` | yes | notAfter is the certificate's last instant of validity. |
+| `status.cni` | `object` | no | cni is the observed CNI state that is not a spec ingredient. |
+| `status.cni.appliedValuesHash` | `string` | no | appliedValuesHash is the hash of the effective Cilium values the last successful Helm Job applied. The controller starts a new Job when the hash of spec.cni.cilium.values (merged with Ichor's defaults) differs from it. Written by the controller only. |
+| `status.cni.availableChartVersion` | `string` | no | availableChartVersion is the Cilium chart version the running Ichor ships when it differs from the installed release; empty when up to date. It backs the CiliumUpgradeAvailable condition. |
+| `status.cni.detected` | `string` | no | detected is the CNI the cluster is observed to run, read-only display and the network-policy gate. Written by the controller only. Allowed values: `cilium`, `flannel`, `calico`, `other`, `none`. |
+| `status.cni.detectedVersion` | `string` | no | detectedVersion is the image tag of the detected CNI's DaemonSet where one exposes it. |
+| `status.cni.imageOverride` | `object` | no | imageOverride is the Cilium patch an earlier Ichor recorded as the images the release runs over the embedded chart. Ichor sets no new one (amendment 2026-11-04 (3)). A recorded patch newer than the embedded chart keeps being rendered, so an Ichor upgrade never steps Cilium back, and the CiliumUpgradeAvailable condition says so; the controller clears it once the embedded chart reaches the patch. |
+| `status.cni.imageOverride.images` | `map[string]string` | yes | images maps each image key to the reference the Job runs: "agent", "operator" and "hubble-relay" are repository:tag@sha256:digest, verified against the Cilium release signature. |
+| `status.cni.imageOverride.version` | `string` | yes | version is the patch, with a leading v (v1.20.5). |
+| `status.cni.jobFailures` | `integer` | no | jobFailures is how many Cilium Helm Jobs failed in a row for the values whose hash is jobFailuresHash, counted when the controller removes a failed Job to try again. Each failure doubles the wait before the next attempt (a minute, up to 30 minutes), so a Job that keeps failing does not hold the cluster operation lock in a near-continuous loop. Other values (another hash) start again at once, and a successful Job clears it. Written by the controller only. |
+| `status.cni.jobFailuresHash` | `string` | no | jobFailuresHash is the effective-values hash jobFailures counts for. |
+| `status.cni.kubeProxy` | `string` | no | kubeProxy is the mode the Talos side (cluster.proxy.disabled) is rendered for. Unset until a kube-proxy switch first runs, which means "render whatever the patches say"; once set, pkg/render appends it as the last patch, so it wins over any patch. Only the TalosOperation of kind cni writes it, and only after the new side is verified. Allowed values: `enabled`, `replaced`. |
+| `status.cni.takenOverInlineManifest` | `string` | no | takenOverInlineManifest is the name of the cluster.inlineManifests entry of the adopted machines that held the Cilium DaemonSet Ichor took over, which pkg/render stops rendering once CNIHandover is True. The controller copies it from the TalosClusterCNIInlineManifestAnnotation when the hand-over completes; empty when the adopted Cilium was not in an inline manifest. |
+| `status.conditions` | `[]object` | no | conditions represent the current state of the TalosCluster resource, kstatus-compatible. |
+| `status.conditions[].lastTransitionTime` | `string (date-time)` | yes | lastTransitionTime is the last time the condition transitioned from one status to another. This should be when the underlying condition changed. If that is not known, then using the time when the API field changed is acceptable. |
+| `status.conditions[].message` | `string` | yes | message is a human readable message indicating details about the transition. This may be an empty string. |
+| `status.conditions[].observedGeneration` | `integer` | no | observedGeneration represents the .metadata.generation that the condition was set based upon. For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date with respect to the current state of the instance. |
+| `status.conditions[].reason` | `string` | yes | reason contains a programmatic identifier indicating the reason for the condition's last transition. Producers of specific condition types may define expected values and meanings for this field, and whether the values are considered a guaranteed API. The value should be a CamelCase string. This field may not be empty. |
+| `status.conditions[].status` | `string` | yes | status of the condition, one of True, False, Unknown. Allowed values: `True`, `False`, `Unknown`. |
+| `status.conditions[].type` | `string` | yes | type of condition in CamelCase or in foo.example.com/CamelCase. |
+| `status.observedGeneration` | `integer` | no | observedGeneration is the most recent generation the controller has reconciled. |
+

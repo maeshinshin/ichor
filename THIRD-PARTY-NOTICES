@@ -3117,6 +3117,8 @@ Components:
     Copyright (c) 2016 Caleb Spare
 - github.com/clipperhouse/uax29/v2@v2.7.0
     Copyright (c) 2020 Matt Sherman
+- github.com/cpuguy83/go-md2man/v2@v2.0.7
+    Copyright (c) 2014 Brian Goff
 - github.com/digitorus/pkcs7@v0.0.0-20230818184609-3a137a874352
     Copyright (c) 2015 Andrew Smith
 - github.com/docker/docker-credential-helpers@v0.9.5

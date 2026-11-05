@@ -1,0 +1,47 @@
+---
+title: "ichor operation get"
+description: "Show one operation: phase, failure reason and the state of each machine"
+---
+
+## ichor operation get
+
+Show one operation: phase, failure reason and the state of each machine
+
+### Synopsis
+
+get prints the operation's status as the controller wrote it. With --watch it
+keeps polling, prints a progress line to stderr whenever the status changes, and
+exits when the operation completes (or pauses itself because a machine failed,
+which is an error exit).
+
+```
+ichor operation get NAME [flags]
+```
+
+### Options
+
+```
+  -h, --help    help for get
+  -w, --watch   keep polling and print progress until the operation finishes
+```
+
+### Options inherited from parent commands
+
+```
+      --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle; any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
+      --ca-file string                  PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
+      --ichor-namespace string          namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")
+      --kubeconfig string               path to the kubeconfig for the cluster's Kubernetes API; defaults to $KUBECONFIG, then ~/.kube/config
+      --local                           do not use ichor-ui; compute from the Kubernetes API directly
+  -n, --namespace string                namespace of the Ichor resources the command names (default "ichor-system")
+  -o, --output string                   output format: "yaml" or "json" for scripts; by default a command prints for people (commands without a human view print YAML)
+      --override                        incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker, an upgrade the compatibility table refuses); needs the override RBAC verb on the resource; implies --local
+      --talosconfig string              path to the talosconfig used to reach each node's Talos API; defaults to $TALOSCONFIG, then ~/.talos/config
+      --tls-server-name string          name on ichor-ui's serving certificate, when it is not the Service's DNS name (<service>.<namespace>.svc)
+      --yes                             skip interactive confirmation before a dangerous operation
+```
+
+### SEE ALSO
+
+* [ichor operation](ichor_operation.md)	 - List, follow, pause, resume or delete the operations (upgrades, shutdowns) of a cluster
+

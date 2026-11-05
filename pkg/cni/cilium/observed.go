@@ -44,6 +44,12 @@ const (
 	keyServicePort    = "k8sServicePort"
 	keyCapsAgent      = "securityContext.capabilities.ciliumAgent"
 	keyCapsCleanState = "securityContext.capabilities.cleanCiliumState"
+
+	// The flag that keeps the agent's Secret read to cilium-secrets and its deprecated alias.
+	keyReadSecretsOnly = "tls.readSecretsOnlyFromSecretsNamespace"
+	keySecretsBackend  = "tls.secretsBackend"
+	// cmReadSecretsOnly is the cilium-config key the chart writes, as "true", only while the flag is true.
+	cmReadSecretsOnly = "policy-secrets-only-from-secrets-namespace"
 )
 
 // ConfigMapValues maps the keys of the cilium-config ConfigMap to the Helm value they render
@@ -68,6 +74,9 @@ var ConfigMapValues = map[string]string{
 	"bgp-secrets-namespace":         "bgpControlPlane.secretsNamespace.name",
 	"enable-bgp-control-plane":      "bgpControlPlane.enabled",
 	"policy-secrets-namespace":      "tls.secretsNamespace.name",
+
+	// Written only while the flag is true, so overlayObserved reads its absence as false.
+	cmReadSecretsOnly: keyReadSecretsOnly,
 }
 
 // LiveValuesFromCluster is LiveValuesFromUser with the Ichor-owned keys replaced by what the
@@ -104,6 +113,13 @@ func overlayObserved(vals map[string]any, cm *corev1.ConfigMap, ds *appsv1.Daemo
 		for key, path := range ConfigMapValues {
 			if v, ok := cm.Data[key]; ok {
 				values.Set(vals, path, v)
+			}
+		}
+
+		// ponytail: assumes a chart that writes the key while the flag is true (1.19 and 1.20 do).
+		if cm.Name != "" {
+			if _, ok := cm.Data[cmReadSecretsOnly]; !ok {
+				values.Set(vals, keyReadSecretsOnly, false)
 			}
 		}
 	}

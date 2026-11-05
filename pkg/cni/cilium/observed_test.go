@@ -63,6 +63,7 @@ func talosGuideCluster(ipam string) *fake.Clientset {
 		Data: map[string]string{
 			keyIPAM: ipam, "tunnel-protocol": tunnelVxlan, "routing-mode": "tunnel",
 			"kube-proxy-replacement": valTrue, "cgroup-root": cgroupRoot,
+			cmReadSecretsOnly: valTrue, // the chart's default
 		},
 	}
 
@@ -149,6 +150,8 @@ func TestConfigMapValuesAreHelmPaths(t *testing.T) {
 		switch path {
 		case keyServiceHost, keyServicePort, keyAutoMount, keyCapsAgent, keyCapsCleanState:
 			continue // read from the DaemonSet
+		case keySecretsBackend:
+			continue // an alias the chart does not write; the flag's key tells the same
 		}
 
 		if !slices.Contains(slices.Collect(maps.Values(ConfigMapValues)), path) {

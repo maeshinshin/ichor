@@ -1049,56 +1049,49 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		f.runUntil(op, completed)
 	})
 
-	It("refuses to start while a control plane does not run the configuration Ichor renders for it", func() {
-		f := newKeyRotFixture(fastBundle())
+	DescribeTable("refuses to start, naming why, and writes nothing",
+		func(setup func() (*keyRotFixture, []string), want string) {
+			f, targets := setup()
 
-		node := f.world.nodes[f.controlPlanes()[0].Name]
-		node.cfg = append(node.cfg, []byte("# edited by hand\n")...)
+			op := f.step(f.newOp(targets))
+			Expect(keyStageOf(op)).To(BeEmpty())
+			Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Message).To(ContainSubstring(want))
+			Expect(f.secretData()).NotTo(HaveKey(secretsbundle.KeyRotationKey))
+			Expect(f.world.applies).To(BeEmpty())
+		},
+		Entry("a control plane does not run the configuration Ichor renders for it", func() (*keyRotFixture, []string) {
+			f := newKeyRotFixture(fastBundle())
+			node := f.world.nodes[f.controlPlanes()[0].Name]
+			node.cfg = append(node.cfg, []byte("# edited by hand\n")...)
 
-		op := f.step(f.newOp(bothTargets))
-		Expect(keyStageOf(op)).To(BeEmpty())
-		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Message).To(ContainSubstring("converge"))
-		Expect(f.secretData()).NotTo(HaveKey(secretsbundle.KeyRotationKey))
-	})
+			return f, bothTargets
+		}, "converge"),
+		Entry("a kube-apiserver is not ready", func() (*keyRotFixture, []string) {
+			f := newKeyRotFixture(fastBundle())
+			f.world.nodes[f.controlPlanes()[1].Name].notReady = 100
 
-	It("refuses to start while a kube-apiserver is not ready", func() {
-		f := newKeyRotFixture(fastBundle())
-		f.world.nodes[f.controlPlanes()[1].Name].notReady = 100
+			return f, bothTargets
+		}, "not ready"),
+		Entry("the contract keeps the keys in single fields, naming the contract that works", func() (*keyRotFixture, []string) {
+			f := newKeyRotFixture(fastBundle())
 
-		op := f.step(f.newOp(bothTargets))
-		Expect(keyStageOf(op)).To(BeEmpty())
-		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Message).To(ContainSubstring("not ready"))
-		Expect(f.secretData()).NotTo(HaveKey(secretsbundle.KeyRotationKey))
-	})
+			var cluster ichorv1alpha1.TalosCluster
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.cluster.Name}, &cluster)).To(Succeed())
+			cluster.Spec.VersionContract = "v1.13"
+			Expect(k8sClient.Update(ctx, &cluster)).To(Succeed())
 
-	It("refuses a cluster whose contract keeps the keys in single fields, naming the contract that works", func() {
-		f := newKeyRotFixture(fastBundle())
+			return f, bothTargets
+		}, "v1.14"),
+		Entry("a secretbox rotation of a bundle that has no secretbox secret", func() (*keyRotFixture, []string) {
+			bare := *fastBundle()
+			secs := *bare.Secrets
+			secs.SecretboxEncryptionSecret = ""
+			secs.AESCBCEncryptionSecret = "legacy-aescbc"
+			bare.Secrets = &secs
 
-		var cluster ichorv1alpha1.TalosCluster
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.cluster.Name}, &cluster)).To(Succeed())
-		cluster.Spec.VersionContract = "v1.13"
-		Expect(k8sClient.Update(ctx, &cluster)).To(Succeed())
-
-		op := f.step(f.newOp(bothTargets))
-		Expect(keyStageOf(op)).To(BeEmpty())
-		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Message).To(ContainSubstring("v1.14"))
-		Expect(f.secretData()).NotTo(HaveKey(secretsbundle.KeyRotationKey))
-		Expect(f.world.applies).To(BeEmpty())
-	})
-
-	It("refuses a secretbox rotation of a bundle that has no secretbox secret", func() {
-		bare := *fastBundle()
-		secs := *bare.Secrets
-		secs.SecretboxEncryptionSecret = ""
-		secs.AESCBCEncryptionSecret = "legacy-aescbc"
-		bare.Secrets = &secs
-
-		f := newKeyRotFixture(&bare)
-		op := f.step(f.newOp(boxOnly))
-
-		Expect(keyStageOf(op)).To(BeEmpty())
-		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Message).To(ContainSubstring("no secretbox secret"))
-	})
+			return newKeyRotFixture(&bare), boxOnly
+		}, "no secretbox secret"),
+	)
 
 	It("keeps the machine controller from rendering, dialing or applying, and refuses other operations, while a rotation is under way", func() {
 		f := newKeyRotFixture(fastBundle())

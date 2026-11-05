@@ -678,13 +678,12 @@ func (c *Cluster) bringUp() error {
 // applyConfigs applies the control-plane and worker configs to their nodes, which installs and reboots them.
 func (c *Cluster) applyConfigs(cpCfg, wCfg []byte) error {
 	fmt.Println("--- applying configs (installs and reboots) ---")
-	for _, ip := range c.CPs {
-		if out, err := talosctl.Apply(namespace, ip, cpCfg); err != nil {
-			return fmt.Errorf("apply-config %s: %w: %s", ip, err, tail(out))
+	for i, ip := range c.Nodes() {
+		cfg := wCfg
+		if i < len(c.CPs) {
+			cfg = cpCfg
 		}
-	}
-	for _, ip := range c.Workers {
-		if out, err := talosctl.Apply(namespace, ip, wCfg); err != nil {
+		if out, err := talosctl.Apply(namespace, ip, cfg); err != nil {
 			return fmt.Errorf("apply-config %s: %w: %s", ip, err, tail(out))
 		}
 	}
@@ -848,18 +847,17 @@ func multiDoc(version string) bool {
 
 // cniManifest returns the manifest the node config carries for the cilium-inline and calico variants.
 func (c *Cluster) cniManifest() (string, error) {
-	switch c.Opts.CNI {
-	case CNICiliumInline:
-		if c.Opts.CiliumChart == "" {
-			return "", errors.New("cilium-inline needs Options.CiliumChart")
-		}
-		out, err := runLocal(append([]string{"helm", "template", ciliumName, c.Opts.CiliumChart}, c.ciliumHelmArgs()...)...)
-		if err != nil {
-			return "", fmt.Errorf("helm template: %w: %s", err, tail(out))
-		}
-		return out, nil
+	if c.Opts.CNI != CNICiliumInline {
+		return "", nil
 	}
-	return "", nil
+	if c.Opts.CiliumChart == "" {
+		return "", errors.New("cilium-inline needs Options.CiliumChart")
+	}
+	out, err := runLocal(append([]string{"helm", "template", ciliumName, c.Opts.CiliumChart}, c.ciliumHelmArgs()...)...)
+	if err != nil {
+		return "", fmt.Errorf("helm template: %w: %s", err, tail(out))
+	}
+	return out, nil
 }
 
 func (c *Cluster) applyCalico() error {

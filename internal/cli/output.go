@@ -33,69 +33,40 @@ import (
 // -- never the secrets bundle, never a rendered machine configuration --
 // so there is nothing sensitive for either encoder to reach.
 func writeOutput(w io.Writer, format string, patches []ichorv1alpha1.TalosConfigPatch) error {
-	switch machineFormat(format) {
-	case outputJSON:
-		enc := json.NewEncoder(w)
-		enc.SetIndent("", "  ")
-
-		if err := enc.Encode(patches); err != nil {
-			return fmt.Errorf("adopt: encoding output as JSON: %w", err)
-		}
-
-		return nil
-	case outputYAML:
-		for i := range patches {
-			if i > 0 {
-				if _, err := fmt.Fprintln(w, "---"); err != nil {
-					return err
-				}
-			}
-
-			out, err := sigsyaml.Marshal(&patches[i])
-			if err != nil {
-				return fmt.Errorf("adopt: encoding output as YAML: %w", err)
-			}
-
-			if _, err := w.Write(out); err != nil {
-				return err
-			}
-		}
-
-		return nil
-	default:
-		return fmt.Errorf("adopt: invalid output format %q", format)
-	}
+	return writeObjects(w, format, "adopt", patches)
 }
 
-// writeOutputObjects is writeOutput's init counterpart: adopt only ever
-// creates one kind of object, but init creates a TalosCluster, a
-// TalosMachine and zero or more TalosConfigPatches, so this takes
-// whatever client.Object values the caller built instead of one typed
-// slice. Same two formats, same rule: every object printed is a CR init
-// is creating or just created, never the secrets bundle or a rendered
-// machine configuration.
+// writeOutputObjects is writeOutput's init counterpart: init creates a TalosCluster, a
+// TalosMachine and zero or more TalosConfigPatches, so this takes whatever client.Object values
+// the caller built. Same two formats, same rule: every object printed is a CR init is creating or
+// just created, never the secrets bundle or a rendered machine configuration.
 func writeOutputObjects(w io.Writer, format string, objs []client.Object) error {
+	return writeObjects(w, format, "init", objs)
+}
+
+// writeObjects prints objs as one JSON array or as YAML documents split by "---"; who prefixes the errors.
+func writeObjects[T any](w io.Writer, format, who string, objs []T) error {
 	switch machineFormat(format) {
 	case outputJSON:
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
 
 		if err := enc.Encode(objs); err != nil {
-			return fmt.Errorf("init: encoding output as JSON: %w", err)
+			return fmt.Errorf("%s: encoding output as JSON: %w", who, err)
 		}
 
 		return nil
 	case outputYAML:
-		for i, obj := range objs {
+		for i := range objs {
 			if i > 0 {
 				if _, err := fmt.Fprintln(w, "---"); err != nil {
 					return err
 				}
 			}
 
-			out, err := sigsyaml.Marshal(obj)
+			out, err := sigsyaml.Marshal(&objs[i])
 			if err != nil {
-				return fmt.Errorf("init: encoding output as YAML: %w", err)
+				return fmt.Errorf("%s: encoding output as YAML: %w", who, err)
 			}
 
 			if _, err := w.Write(out); err != nil {
@@ -105,6 +76,6 @@ func writeOutputObjects(w io.Writer, format string, objs []client.Object) error 
 
 		return nil
 	default:
-		return fmt.Errorf("init: invalid output format %q", format)
+		return fmt.Errorf("%s: invalid output format %q", who, format)
 	}
 }

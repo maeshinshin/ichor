@@ -52,6 +52,16 @@ func TestValidateValues(t *testing.T) {
 	masq := map[string]any{keyBPF: map[string]any{"masquerade": true}}
 	gw := map[string]any{"gatewayAPI": map[string]any{keyEnabled: true}}
 
+	// mesh is clustermesh.useAPIServer with the given clustermesh.apiserver.tls.auto (nil: the chart's).
+	mesh := func(auto map[string]any) map[string]any {
+		cm := map[string]any{"useAPIServer": true}
+		if auto != nil {
+			cm["apiserver"] = map[string]any{"tls": map[string]any{"auto": auto}}
+		}
+
+		return map[string]any{"clustermesh": cm}
+	}
+
 	tests := []struct {
 		name    string
 		user    map[string]any
@@ -102,15 +112,12 @@ func TestValidateValues(t *testing.T) {
 		}), user: gw},
 		{name: "gateway API, CRDs unknown passes", ctx: enabled, user: gw},
 
-		{name: "clustermesh API server with the default helm certificates", ctx: enabled,
-			user:    map[string]any{"clustermesh": map[string]any{"useAPIServer": true}},
+		{name: "clustermesh API server with the default helm certificates", ctx: enabled, user: mesh(nil),
 			wantErr: []string{"clustermesh.apiserver.tls.auto.method=cronJob"}},
 		{name: "clustermesh API server with cronJob certificates", ctx: enabled,
-			user: map[string]any{"clustermesh": map[string]any{"useAPIServer": true,
-				"apiserver": map[string]any{"tls": map[string]any{"auto": map[string]any{"method": "cronJob"}}}}}},
+			user: mesh(map[string]any{"method": "cronJob"})},
 		{name: "clustermesh API server with its own certificates", ctx: enabled,
-			user: map[string]any{"clustermesh": map[string]any{"useAPIServer": true,
-				"apiserver": map[string]any{"tls": map[string]any{"auto": map[string]any{keyEnabled: false}}}}}},
+			user: mesh(map[string]any{keyEnabled: false})},
 
 		{name: "replaced, KubePrism off", ctx: with(replaced, func(c *ValidationContext) {
 			c.KubePrism = &KubePrism{Enabled: false}

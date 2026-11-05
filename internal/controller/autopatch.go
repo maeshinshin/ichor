@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"strings"
@@ -83,10 +84,7 @@ func (p *AutoPatcher) NeedLeaderElection() bool { return true }
 
 // Start runs a pass now and then on the interval, until ctx ends.
 func (p *AutoPatcher) Start(ctx context.Context) error {
-	interval := p.Interval
-	if interval == 0 {
-		interval = autoPatchInterval
-	}
+	interval := cmp.Or(p.Interval, autoPatchInterval)
 
 	wait.JitterUntilWithContext(ctx, func(ctx context.Context) {
 		if err := p.Pass(ctx); err != nil {
@@ -230,7 +228,7 @@ func (p *AutoPatcher) keepHalt(
 			continue
 		}
 
-		reason := cmpOr(o.Status.FailureReason, "the operation is paused")
+		reason := cmp.Or(o.Status.FailureReason, "the operation is paused")
 		if err := p.setHalt(ctx, inst, opRef(o), fmt.Sprintf("automatic operation %s (%s) is paused: %s", opRef(o), o.Spec.Kind, reason)); err != nil {
 			return "", err
 		}
@@ -243,14 +241,6 @@ func (p *AutoPatcher) keepHalt(
 	}
 
 	return "", nil
-}
-
-func cmpOr(a, b string) string {
-	if a != "" {
-		return a
-	}
-
-	return b
 }
 
 // setHalt records the halt (operation namespace/name and message) or, with empty arguments, clears it.
@@ -368,15 +358,7 @@ func (p *AutoPatcher) start(ctx context.Context, inst *ichorv1alpha1.IchorInstal
 		},
 	}
 
-	from := ""
-
-	switch d.Component {
-	case ichorv1alpha1.AutoPatchTalos:
-		from = cluster.Spec.TalosVersion
-	case ichorv1alpha1.AutoPatchKubernetes:
-		from = cluster.Spec.KubernetesVersion
-	}
-
+	from := versionFrom(cluster, d.Component)
 	op.Annotations[ichorv1alpha1.OperationFromVersionAnnotation] = from
 
 	if err := p.Actor.Create(ctx, op.DeepCopy(), client.DryRunAll); err != nil {
@@ -416,12 +398,11 @@ func (p *AutoPatcher) start(ctx context.Context, inst *ichorv1alpha1.IchorInstal
 }
 
 func autoPatchKind(component string) string {
-	switch component {
-	case ichorv1alpha1.AutoPatchKubernetes:
+	if component == ichorv1alpha1.AutoPatchKubernetes {
 		return ichorv1alpha1.TalosOperationKindKubernetes
-	default:
-		return ichorv1alpha1.TalosOperationKindTalos
 	}
+
+	return ichorv1alpha1.TalosOperationKindTalos
 }
 
 // writeVersion is the controller's one write to a TalosCluster spec (ADR 0116). It reads the cluster fresh, and
@@ -443,9 +424,8 @@ func (p *AutoPatcher) writeVersion(ctx context.Context, cluster *ichorv1alpha1.T
 			return nil
 		}
 
-		if *field != cluster.Spec.TalosVersion && d.Component == ichorv1alpha1.AutoPatchTalos ||
-			*field != cluster.Spec.KubernetesVersion && d.Component == ichorv1alpha1.AutoPatchKubernetes {
-			return fmt.Errorf("the version changed from %s to %s since it was decided", versionFrom(cluster, d.Component), *field)
+		if from := versionFrom(cluster, d.Component); *field != from {
+			return fmt.Errorf("the version changed from %s to %s since it was decided", from, *field)
 		}
 
 		*field = d.Target

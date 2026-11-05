@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -81,10 +82,7 @@ func (r *ReleaseCheck) NeedLeaderElection() bool { return true }
 
 // Start checks now and then on the interval, until ctx ends.
 func (r *ReleaseCheck) Start(ctx context.Context) error {
-	interval := r.Interval
-	if interval == 0 {
-		interval = releaseCheckInterval
-	}
+	interval := cmp.Or(r.Interval, releaseCheckInterval)
 
 	for {
 		next := wait.Jitter(interval, 0.1)
@@ -158,20 +156,12 @@ func (r *ReleaseCheck) check(ctx context.Context) bool {
 
 // talosRepository is the image repository of the Talos releases; the default when none is set.
 func (r *ReleaseCheck) talosRepository() string {
-	if r.TalosRepository == "" {
-		return releasecheck.DefaultTalosRepository
-	}
-
-	return r.TalosRepository
+	return cmp.Or(r.TalosRepository, releasecheck.DefaultTalosRepository)
 }
 
 // kubernetesRepository is the image repository of the Kubernetes releases; the default when none is set.
 func (r *ReleaseCheck) kubernetesRepository() string {
-	if r.KubernetesRepository == "" {
-		return releasecheck.DefaultKubernetesRepository
-	}
-
-	return r.KubernetesRepository
+	return cmp.Or(r.KubernetesRepository, releasecheck.DefaultKubernetesRepository)
 }
 
 // allowRegistry writes the egress rule to the hosts of the three repositories, but only while Ichor's

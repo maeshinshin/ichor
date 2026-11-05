@@ -238,9 +238,7 @@ func TestClusterDiscoveryListHumanOutput(t *testing.T) {
 		"10.0.0.10     address  " + actionsMachineShort + "\n" +
 		"10.1.0.0/24   range    -\n" +
 		"10.0.0.0/24   range    " + actionsMachineShort + "\n"
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 }
 
 func TestClusterDiscoveryEditHumanOutput(t *testing.T) {
@@ -285,9 +283,7 @@ func TestClusterDiscoveryAddWarnsAboutAnAlreadyConfiguredAddress(t *testing.T) {
 		"! 10.0.0.5 already runs a Talos configuration, so discovery does not add it as a machine; " +
 		"if it is a member of this cluster's Talos cluster run `ichor adopt --cluster initshow --add-machine 10.0.0.5`, " +
 		"if another cluster configured it run `ichor machine reclaim 10.0.0.5 --talosconfig FILE --cluster initshow`\n"
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 }
 
 // The machine formats print the wire message and the lines discovery list always printed.
@@ -337,9 +333,7 @@ func TestRotateCAHumanOutput(t *testing.T) {
 		"When it completes\n" +
 		"  ichor cluster credentials " + opTestCluster + " --kubeconfig " + newKubeconfig + "   files that trust the new CA only\n" +
 		"  ichor cluster bundle-export " + opTestCluster + "   save the new secrets bundle\n"
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 
 	out.Reset()
 

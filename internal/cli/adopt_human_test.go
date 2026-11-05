@@ -183,7 +183,5 @@ func TestBundleNagWriterMakesOneWarning(t *testing.T) {
 
 	want := "! the cluster's secrets bundle was written to /some/dir/secrets.yaml. It is the cluster's only root of trust: " +
 		"back it up now, somewhere other than this machine\n"
-	if out.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", out.String(), want)
-	}
+	wantText(t, out.String(), want)
 }

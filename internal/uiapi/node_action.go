@@ -462,11 +462,7 @@ func (s *Server) RemoveMachine(
 		return nil, invalid("type the machine name %q to confirm the removal", m.Name)
 	}
 
-	if m.Annotations == nil {
-		m.Annotations = map[string]string{}
-	}
-
-	m.Annotations[deleteguard.AllowDeleteAnnotation] = deleteguard.AllowDeleteValue
+	metav1.SetMetaDataAnnotation(&m.ObjectMeta, deleteguard.AllowDeleteAnnotation, deleteguard.AllowDeleteValue)
 
 	// A worker has no finalizer of its own; with it the controller drains the node before the
 	// machine goes (a control plane already has it).

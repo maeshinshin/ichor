@@ -23,9 +23,9 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"slices"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 )
 
 // NewNodesReady returns the NodesReadyFunc cmd/main.go wires in: it lists the Nodes through an
@@ -34,14 +34,9 @@ import (
 // fresh on every call, so it carries whichever Kubernetes CA the node issues from at that moment.
 func NewNodesReady() NodesReadyFunc {
 	return func(ctx context.Context, talos TalosClient) ([]string, error) {
-		cfg, err := restConfig(ctx, talos)
+		cs, err := adminClientset(ctx, talos)
 		if err != nil {
 			return nil, err
-		}
-
-		cs, err := kubernetes.NewForConfig(cfg)
-		if err != nil {
-			return nil, fmt.Errorf("building a clientset from the admin kubeconfig: %w", err)
 		}
 
 		nodes, err := cs.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
@@ -79,14 +74,9 @@ type RootCAPublishedFunc func(ctx context.Context, talos TalosClient, fingerprin
 // ServiceAccount needs no cluster-wide right on ConfigMaps.
 func NewRootCAPublished() RootCAPublishedFunc {
 	return func(ctx context.Context, talos TalosClient, fingerprint string) ([]string, error) {
-		cfg, err := restConfig(ctx, talos)
+		cs, err := adminClientset(ctx, talos)
 		if err != nil {
 			return nil, err
-		}
-
-		cs, err := kubernetes.NewForConfig(cfg)
-		if err != nil {
-			return nil, fmt.Errorf("building a clientset from the admin kubeconfig: %w", err)
 		}
 
 		maps, err := cs.CoreV1().ConfigMaps(metav1.NamespaceAll).List(ctx, metav1.ListOptions{
@@ -112,43 +102,25 @@ func NewRootCAPublished() RootCAPublishedFunc {
 	}
 }
 
-// pemBundleHolds reports whether a PEM bundle carries the certificate with the given fingerprint
-// (the sha256 of its DER encoding, as secretsbundle.Fingerprint computes it).
-func pemBundleHolds(bundle []byte, fingerprint string) bool {
-	for {
-		var block *pem.Block
-
-		block, bundle = pem.Decode(bundle)
-		if block == nil {
-			return false
-		}
-
-		sum := sha256.Sum256(block.Bytes)
-		if block.Type == pemTypeCertificate && hex.EncodeToString(sum[:]) == fingerprint {
-			return true
+// certFingerprints lists the fingerprint (the sha256 of the DER encoding, as secretsbundle.Fingerprint computes
+// it) of every certificate in a PEM bundle.
+func certFingerprints(bundle []byte) (out []string) {
+	for block, rest := pem.Decode(bundle); block != nil; block, rest = pem.Decode(rest) {
+		if block.Type == pemTypeCertificate {
+			sum := sha256.Sum256(block.Bytes)
+			out = append(out, hex.EncodeToString(sum[:]))
 		}
 	}
+
+	return out
+}
+
+// pemBundleHolds reports whether a PEM bundle carries the certificate with the given fingerprint.
+func pemBundleHolds(bundle []byte, fingerprint string) bool {
+	return slices.Contains(certFingerprints(bundle), fingerprint)
 }
 
 // pemBundleIs reports whether bundle holds exactly one certificate, the one with the given fingerprint.
 func pemBundleIs(bundle []byte, fingerprint string) bool {
-	certs := 0
-
-	for {
-		var block *pem.Block
-
-		block, bundle = pem.Decode(bundle)
-		if block == nil {
-			return certs == 1
-		}
-
-		if block.Type == pemTypeCertificate {
-			certs++
-
-			sum := sha256.Sum256(block.Bytes)
-			if hex.EncodeToString(sum[:]) != fingerprint {
-				return false
-			}
-		}
-	}
+	return slices.Equal(certFingerprints(bundle), []string{fingerprint})
 }

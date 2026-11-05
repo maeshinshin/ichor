@@ -29,6 +29,7 @@ import (
 	"golang.org/x/mod/semver"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -237,11 +238,7 @@ func (s *Server) SetOperationPaused(
 			at = last.Add(time.Second) // always newer than the request the controller already acted on
 		}
 
-		if op.Annotations == nil {
-			op.Annotations = map[string]string{}
-		}
-
-		op.Annotations[ichorv1alpha1.OperationRetryAnnotation] = at.Format(time.RFC3339)
+		metav1.SetMetaDataAnnotation(&op.ObjectMeta, ichorv1alpha1.OperationRetryAnnotation, at.Format(time.RFC3339))
 	}
 
 	if err := s.Update(ctx, op, strictFieldValidation); err != nil {
@@ -1019,11 +1016,7 @@ func (s *Server) writeTarget(ctx context.Context, p *opPlan) error {
 		// removed again once the operation exists (clearKubeProxyConsent), so it never
 		// lingers as a standing consent for someone else's later edit.
 		mutate = func(c *ichorv1alpha1.TalosCluster) {
-			if c.Annotations == nil {
-				c.Annotations = map[string]string{}
-			}
-
-			c.Annotations[ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation] = target
+			metav1.SetMetaDataAnnotation(&c.ObjectMeta, ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation, target)
 			c.Spec.CNI.KubeProxy = target
 		}
 	}

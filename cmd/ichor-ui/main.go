@@ -236,7 +236,9 @@ func main() {
 	})
 
 	if issuer != nil {
-		mountIssuer(mux, issuer)
+		h := issuer.Handler() // the issuer's external endpoints
+		mux.Handle("/.well-known/openid-configuration", h)
+		mux.Handle("/oidc/", h)
 	}
 	mux.Handle("/", spaHandler(webFS))
 

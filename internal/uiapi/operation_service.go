@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	"connectrpc.com/connect"
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
@@ -212,8 +211,8 @@ func (s *Server) GetOperation(
 }
 
 // SetOperationPaused writes spec.paused: pausing keeps the cluster lock and undoes nothing.
-// Resuming an operation that paused itself after a failed step also sets the retry annotation to a time
-// newer than status.lastRetry, so the controller runs the failed step again.
+// Resuming an operation that paused itself after a failed step also sets the retry annotation to "true",
+// so the controller runs the failed step again.
 func (s *Server) SetOperationPaused(
 	ctx context.Context, req *connect.Request[pb.SetOperationPausedRequest],
 ) (*connect.Response[pb.SetOperationPausedResponse], error) {
@@ -233,12 +232,7 @@ func (s *Server) SetOperationPaused(
 	op.Spec.Paused = req.Msg.GetPaused()
 
 	if !op.Spec.Paused && op.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused && op.Status.FailureReason != "" {
-		at := time.Now().UTC().Truncate(time.Second)
-		if last := op.Status.LastRetry; last != nil && !at.After(last.Time) {
-			at = last.Add(time.Second) // always newer than the request the controller already acted on
-		}
-
-		metav1.SetMetaDataAnnotation(&op.ObjectMeta, ichorv1alpha1.OperationRetryAnnotation, at.Format(time.RFC3339))
+		metav1.SetMetaDataAnnotation(&op.ObjectMeta, ichorv1alpha1.OperationRetryAnnotation, ichorv1alpha1.OperationRetryRequested)
 	}
 
 	if err := s.Update(ctx, op, strictFieldValidation); err != nil {

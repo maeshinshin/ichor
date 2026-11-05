@@ -22,12 +22,10 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -804,20 +802,18 @@ func TestUnfinishedOperationTellsAFailedIchorUpgradeToBeDeleted(t *testing.T) {
 }
 
 func TestResumeAnnotatesOnlyAFailedOperation(t *testing.T) {
-	newOp := func(name, phase, reason string, last *metav1.Time) *ichorv1alpha1.TalosOperation {
+	newOp := func(name, phase, reason string) *ichorv1alpha1.TalosOperation {
 		return &ichorv1alpha1.TalosOperation{
 			Name: name, Namespace: opNS,
 			Spec:   ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindTalos},
-			Status: ichorv1alpha1.TalosOperationStatus{Phase: phase, FailureReason: reason, LastRetry: last},
+			Status: ichorv1alpha1.TalosOperationStatus{Phase: phase, FailureReason: reason},
 		}
 	}
 
-	future := metav1.NewTime(time.Now().Add(time.Hour))
 	srv, k8s := opServer(t, append(opObjects(),
-		newOp("failed", ichorv1alpha1.TalosOperationPhasePaused, "boom", nil),
-		newOp("operator-paused", ichorv1alpha1.TalosOperationPhasePaused, "", nil),
-		newOp("in-progress", ichorv1alpha1.TalosOperationPhaseInProgress, "", nil),
-		newOp("retried", ichorv1alpha1.TalosOperationPhasePaused, "boom again", &future),
+		newOp("failed", ichorv1alpha1.TalosOperationPhasePaused, "boom"),
+		newOp("operator-paused", ichorv1alpha1.TalosOperationPhasePaused, ""),
+		newOp("in-progress", ichorv1alpha1.TalosOperationPhaseInProgress, ""),
 	)...)
 	ctx := context.Background()
 
@@ -841,24 +837,14 @@ func TestResumeAnnotatesOnlyAFailedOperation(t *testing.T) {
 		return ""
 	}
 
-	if annotation("failed") == "" {
-		t.Fatal("a failed operation was not annotated")
+	if annotation("failed") != ichorv1alpha1.OperationRetryRequested {
+		t.Fatalf("a failed operation's annotation = %q, want true", annotation("failed"))
 	}
 
 	for _, name := range []string{"operator-paused", "in-progress"} {
 		if err := resume(name); err != nil || annotation(name) != "" {
 			t.Errorf("%s: err = %v, annotation %q; want a plain resume and no annotation", name, err, annotation(name))
 		}
-	}
-
-	// A request is always newer than the one the controller already acted on.
-	if err := resume("retried"); err != nil {
-		t.Fatal(err)
-	}
-
-	at, err := time.Parse(time.RFC3339, annotation("retried"))
-	if err != nil || !at.After(future.Time) {
-		t.Fatalf("annotation %q (%v) is not after lastRetry %v", annotation("retried"), err, future.Time)
 	}
 }
 

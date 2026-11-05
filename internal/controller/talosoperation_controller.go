@@ -201,6 +201,10 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{}, err
 	}
 
+	if err := r.dropStaleRetry(ctx, &op); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if op.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted {
 		return ctrl.Result{}, nil // done; the cluster lock was already released when it got here
 	}
@@ -331,25 +335,47 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		reasonOperationAdvancing, advancingMessage(&op, len(toAdvance)))
 }
 
-// consumeRetry acts on a retry request (OperationRetryAnnotation) newer than status.lastRetry for a
-// failed operation: it clears failureReason, records the request and puts the operation back to
-// InProgress, so the caller runs the failed machine's step again (that machine is still InProgress in
-// status.machines). It reports whether it did; a missing, unparsable or stale request is ignored.
+// consumeRetry acts on a retry request (OperationRetryAnnotation set to "true") for a failed
+// operation: it records the request in status.lastRetry, clears failureReason and puts the operation
+// back to InProgress, so the caller runs the failed machine's step again (that machine is still
+// InProgress in status.machines), then removes the annotation, which is what makes the next "true" a
+// new request. It reports whether it acted; any other value is ignored. If the removal fails the
+// operation is already InProgress, so dropStaleRetry removes the leftover on the next reconcile.
 func (r *TalosOperationReconciler) consumeRetry(ctx context.Context, op *ichorv1alpha1.TalosOperation) (bool, error) {
-	at, err := time.Parse(time.RFC3339, op.Annotations[ichorv1alpha1.OperationRetryAnnotation])
-	if err != nil {
-		return false, nil //nolint:nilerr // no (valid) request: nothing to do
-	}
-
-	if last := op.Status.LastRetry; last != nil && !at.After(last.Time) {
+	if op.Annotations[ichorv1alpha1.OperationRetryAnnotation] != ichorv1alpha1.OperationRetryRequested {
 		return false, nil
 	}
 
-	t := metav1.NewTime(at)
-	op.Status.LastRetry = &t
+	now := metav1.Now()
+	op.Status.LastRetry = &now
 
-	return true, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhaseInProgress,
-		reasonOperationAdvancing, "retrying the failed step")
+	if err := r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhaseInProgress,
+		reasonOperationAdvancing, "retrying the failed step"); err != nil {
+		return false, err
+	}
+
+	return true, r.removeRetryAnnotation(ctx, op)
+}
+
+// dropStaleRetry removes a retry request ("true") from an operation that is not waiting on a failed
+// step: it has nothing to retry, and a request left behind would rerun the next failure unasked. An
+// operation paused by spec.paused after a failure keeps it; the request is acted on after the resume.
+func (r *TalosOperationReconciler) dropStaleRetry(ctx context.Context, op *ichorv1alpha1.TalosOperation) error {
+	failed := op.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused && op.Status.FailureReason != ""
+	if failed || !op.DeletionTimestamp.IsZero() ||
+		op.Annotations[ichorv1alpha1.OperationRetryAnnotation] != ichorv1alpha1.OperationRetryRequested {
+		return nil
+	}
+
+	return r.removeRetryAnnotation(ctx, op)
+}
+
+// removeRetryAnnotation deletes the request with a metadata patch that fails on a concurrent edit.
+func (r *TalosOperationReconciler) removeRetryAnnotation(ctx context.Context, op *ichorv1alpha1.TalosOperation) error {
+	patch := client.MergeFromWithOptions(op.DeepCopy(), client.MergeFromWithOptimisticLock{})
+	delete(op.Annotations, ichorv1alpha1.OperationRetryAnnotation)
+
+	return client.IgnoreNotFound(r.Patch(ctx, op, patch))
 }
 
 // lockUnavailable turns a refusal of acquireDisruptiveLock into the pause that explains it; the

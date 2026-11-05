@@ -22,6 +22,7 @@ limitations under the License.
 package values
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +30,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chartutil"
 	sigsyaml "sigs.k8s.io/yaml"
@@ -46,6 +48,45 @@ type Spec struct {
 	// Owned maps a dotted path (for example "cgroup.autoMount.enabled") to
 	// the reason users may not set it.
 	Owned map[string]string
+	// Schema is Chart's values.schema.json compiled once by CompileSchema. When
+	// set, CheckSchema validates against it; when nil it compiles the schema
+	// on every call, as chartutil does, which is most of a check's cost.
+	Schema *jsonschema.Schema
+}
+
+// schemaURL is the resource URL Helm compiles values.schema.json under, so
+// the validation messages match Helm's.
+const schemaURL = "file:///values.schema.json"
+
+// CompileSchema compiles ch's values.schema.json for Spec.Schema the way Helm
+// compiles it (same resource URL, so the same messages). It returns nil for a
+// chart without a schema. A chart with subcharts is refused: their schemas
+// would be skipped.
+func CompileSchema(ch *chart.Chart) (*jsonschema.Schema, error) {
+	if ch.Schema == nil {
+		return nil, nil
+	}
+
+	if len(ch.Dependencies()) > 0 {
+		return nil, fmt.Errorf("%s: compiling a schema with subcharts is not supported", ch.Name())
+	}
+
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(ch.Schema))
+	if err != nil {
+		return nil, fmt.Errorf("reading %s values.schema.json: %w", ch.Name(), err)
+	}
+
+	c := jsonschema.NewCompiler()
+	if err := c.AddResource(schemaURL, doc); err != nil {
+		return nil, fmt.Errorf("adding %s values.schema.json: %w", ch.Name(), err)
+	}
+
+	schema, err := c.Compile(schemaURL)
+	if err != nil {
+		return nil, fmt.Errorf("compiling %s values.schema.json: %w", ch.Name(), err)
+	}
+
+	return schema, nil
 }
 
 // merge returns base with over merged on top, leaving both untouched: maps
@@ -280,8 +321,20 @@ func (s Spec) CheckSchema(effective map[string]any) error {
 		return fmt.Errorf("combining values with the chart defaults: %w", err)
 	}
 
-	if err := chartutil.ValidateAgainstSchema(s.Chart, coalesced); err != nil {
-		return fmt.Errorf("values do not match the chart schema: %w", err)
+	if s.Schema == nil {
+		if err := chartutil.ValidateAgainstSchema(s.Chart, coalesced); err != nil {
+			return fmt.Errorf("values do not match the chart schema: %w", err)
+		}
+
+		return nil
+	}
+
+	// The same message as chartutil's: the chart's name, then the validator's
+	// report without its leading line.
+	if err := s.Schema.Validate(map[string]any(coalesced)); err != nil {
+		report := strings.TrimPrefix(err.Error(), "jsonschema validation failed with '"+schemaURL+"#'\n")
+
+		return errors.New("values do not match the chart schema: " + s.Chart.Name() + ":\n" + report + "\n")
 	}
 
 	return nil

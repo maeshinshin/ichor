@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
+
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/values"
@@ -52,13 +54,29 @@ const secretsNamespaceReason = "Cilium may read Secrets only in its own namespac
 
 var loadChart = sync.OnceValues(freshChart)
 
+// compiledSchema compiles the chart's values.schema.json once: compiling it per
+// validation was most of ValidateValues' allocations.
+var compiledSchema = sync.OnceValues(func() (*jsonschema.Schema, error) {
+	ch, err := loadChart()
+	if err != nil {
+		return nil, err
+	}
+
+	return values.CompileSchema(ch)
+})
+
 func valuesSpec() (values.Spec, error) {
 	ch, err := loadChart()
 	if err != nil {
 		return values.Spec{}, err
 	}
 
-	return values.Spec{Chart: ch, Owned: OwnedKeys}, nil
+	schema, err := compiledSchema()
+	if err != nil {
+		return values.Spec{}, err
+	}
+
+	return values.Spec{Chart: ch, Owned: OwnedKeys, Schema: schema}, nil
 }
 
 // WithValues returns a copy of p whose bootstrap manifest also applies the

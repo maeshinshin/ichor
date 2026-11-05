@@ -115,8 +115,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		Expect(got.Spec.Endpoint).To(Equal(storageTestEndpoint), "the controller never mutates spec")
 		Expect(got.Status.ObservedEndpoint).To(Equal("10.9.9.9:50000"))
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 		Expect(dialed).To(Equal([]string{storageTestEndpoint, "10.9.9.9:50000"}), "the next round dials the observed address")
 
 		// An operator editing spec.endpoint overrides what was observed.
@@ -145,8 +144,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		fake := &fakeTalosClient{current: current}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonConverged))
 
 		// The node's IP changed: reads now fail. Within the grace the usual reason stays.
@@ -163,8 +161,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		cond.LastTransitionTime = metav1.NewTime(time.Now().Add(-2 * nodeUnreachableGrace))
 		Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		got = fetchMachine(m)
 		ready := readyCondition(got)
@@ -191,8 +188,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 			return n.Status.NodeInfo.SystemUUID
 		}).Should(Equal(m.Spec.Identity.UUID))
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		got = fetchMachine(m)
 		Expect(readyCondition(got).Message).To(ContainSubstring("spec.endpoint may need updating to 10.77.7.7:50000"))
@@ -200,8 +196,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 
 		// The node answers again: converged, and the unreachable marker is gone.
 		fake.currentErr = nil
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		got = fetchMachine(m)
 		Expect(readyCondition(got).Reason).To(Equal(reasonConverged))
@@ -218,8 +213,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		fake := &fakeTalosClient{current: current, identity: HardwareIdentity{UUID: m.Spec.Identity.UUID}}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonConverged))
 
 		// The old address is now held by another node: it answers, with the same configuration.
@@ -238,8 +232,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 
 		// The right node is back at the address: converged again.
 		fake.identity = HardwareIdentity{UUID: m.Spec.Identity.UUID}
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonConverged))
 	})
 
@@ -253,12 +246,10 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		fake := &fakeTalosClient{current: current}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		fake.currentErr = errors.New("dial tcp " + m.Spec.Endpoint + ": i/o timeout")
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		got := fetchMachine(m)
 		cond := apimeta.FindStatusCondition(got.Status.Conditions, conditionNodeReachable)
@@ -266,8 +257,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		cond.LastTransitionTime = metav1.NewTime(time.Now().Add(-2 * nodeUnreachableGrace))
 		Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonNodeUnreachable))
 	})
 
@@ -345,8 +335,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 
 		fake := &fakeTalosClient{current: rendered}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		drifted := extraArgsConfig()
 		drifted.ClusterConfig.APIServerConfig.ExtraArgsConfig["foo"] = []string{"c"}

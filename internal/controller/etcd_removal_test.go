@@ -24,11 +24,9 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -73,8 +71,7 @@ func reconcileEach(r *TalosMachineReconciler, ms []*ichorv1alpha1.TalosMachine) 
 	GinkgoHelper()
 
 	for _, m := range ms {
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 	}
 }
 
@@ -116,9 +113,7 @@ var _ = Describe("removeEtcdMember", func() {
 		Expect(self.etcdLeaveCalls).To(Equal(1))
 		Expect(self.etcdRemoveIDs).To(BeEmpty())
 
-		var gone ichorv1alpha1.TalosMachine
-		err = k8sClient.Get(ctx, client.ObjectKeyFromObject(cp1), &gone)
-		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "the finalizer must be cleared once EtcdLeaveCluster succeeds")
+		Expect(machineGone(cp1)).To(BeTrue(), "the finalizer must be cleared once EtcdLeaveCluster succeeds")
 	})
 
 	It("falls back to a surviving sibling's EtcdRemoveMemberByID when the departing machine cannot be dialed", func() {
@@ -130,9 +125,7 @@ var _ = Describe("removeEtcdMember", func() {
 		Expect(survivor.etcdRemoveIDs).To(Equal([]uint64{42}))
 		Expect(survivor.etcdLeaveCalls).To(Equal(0))
 
-		var gone ichorv1alpha1.TalosMachine
-		err = k8sClient.Get(ctx, client.ObjectKeyFromObject(cp1), &gone)
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		Expect(machineGone(cp1)).To(BeTrue())
 	})
 
 	It("is idempotent: a departing machine already absent from etcd needs no further Talos call", func() {
@@ -145,9 +138,7 @@ var _ = Describe("removeEtcdMember", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(self.etcdLeaveCalls).To(Equal(0), "already gone: leaving again is not idempotency, it's a wasted call")
 
-		var gone ichorv1alpha1.TalosMachine
-		err = k8sClient.Get(ctx, client.ObjectKeyFromObject(cp1), &gone)
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		Expect(machineGone(cp1)).To(BeTrue())
 	})
 
 	It("holds the finalizer and does not clear it when no survivor can be reached", func() {

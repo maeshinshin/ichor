@@ -88,8 +88,7 @@ var _ = Describe("a kube-proxy mode committed to spec ahead of the switch", func
 				_, err := reconcileMachine(r, f.m) // adds the removal finalizer of an approved control plane
 				Expect(err).NotTo(HaveOccurred())
 
-				_, err = reconcileMachine(r, f.m)
-				Expect(err).NotTo(HaveOccurred())
+				reconcileOK(r, f.m)
 
 				got := fetchMachine(f.m)
 				cond := readyCondition(got)

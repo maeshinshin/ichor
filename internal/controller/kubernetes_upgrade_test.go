@@ -922,8 +922,7 @@ func (f *kubernetesFleet) reconcile() (applied [][2]string) {
 	}
 	r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: adv.Advance, NodeName: f.ownNode}
 
-	_, err := reconcileOperation(r, f.op)
-	Expect(err).NotTo(HaveOccurred())
+	mustReconcileOperation(r, f.op)
 
 	stage := ""
 	if st := fetchOperation(f.op).Status.Kubernetes; st != nil {
@@ -1177,8 +1176,7 @@ var _ = Describe("kind: kubernetes through TalosOperationReconciler", func() {
 
 		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: adv.Advance}
 
-		_, err := reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 
 		applied := 0
 
@@ -1203,8 +1201,7 @@ var _ = Describe("kind: kubernetes through TalosOperationReconciler", func() {
 		Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: tmNamespace, Name: first}, &firstMachine)).To(Succeed())
 		setK8sNode(firstMachine.Spec.Hostname, testK8sOld)
 
-		_, err = reconcileOperation(r, op)
-		Expect(err).NotTo(HaveOccurred())
+		mustReconcileOperation(r, op)
 
 		got = fetchOperation(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))

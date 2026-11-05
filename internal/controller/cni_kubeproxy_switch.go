@@ -31,6 +31,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -235,11 +236,7 @@ func (a *cniKubeProxyAdvancer) setTalosSide(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, target cni.KubeProxyMode,
 ) error {
 	base := cluster.DeepCopy()
-	if cluster.Status.CNI == nil {
-		cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{}
-	}
-
-	cluster.Status.CNI.KubeProxy = string(target)
+	cniStatus(cluster).KubeProxy = string(target)
 
 	if err := a.Status().Patch(ctx, cluster, client.MergeFrom(base)); err != nil {
 		return fmt.Errorf("recording the Talos-side kube-proxy mode: %w", err)
@@ -340,13 +337,9 @@ func (a *cniKubeProxyAdvancer) othersDone(
 }
 
 func machineCompleted(op *ichorv1alpha1.TalosOperation, name string) bool {
-	for _, rec := range op.Status.Machines {
-		if rec.Name == name && rec.Phase == ichorv1alpha1.TalosOperationMachinePhaseCompleted {
-			return true
-		}
-	}
-
-	return false
+	return slices.ContainsFunc(op.Status.Machines, func(rec ichorv1alpha1.TalosOperationMachineStatus) bool {
+		return rec.Name == name && rec.Phase == ichorv1alpha1.TalosOperationMachinePhaseCompleted
+	})
 }
 
 // removeKubeProxy is the replacing tail: Talos stopped managing the objects but does not delete

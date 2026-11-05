@@ -395,11 +395,8 @@ func (r *CNIHandoverReconciler) retryFailedJob(
 		return wait, failures, nil
 	}
 
-	if cluster.Status.CNI == nil {
-		cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{}
-	}
-
-	cluster.Status.CNI.JobFailures, cluster.Status.CNI.JobFailuresHash = failures, hash
+	st := cniStatus(cluster)
+	st.JobFailures, st.JobFailuresHash = failures, hash
 	if err := r.Status().Update(ctx, cluster); err != nil {
 		return 0, failures, err
 	}
@@ -439,18 +436,14 @@ func (r *CNIHandoverReconciler) finish(
 		return ctrl.Result{RequeueAfter: handoverRequeueInterval}, r.setProgress(ctx, cluster, handedOver, reasonHandoverWaitingForCilium, why)
 	}
 
-	if cluster.Status.CNI == nil {
-		cluster.Status.CNI = &ichorv1alpha1.TalosClusterCNIStatus{}
-	}
-
-	cluster.Status.CNI.AppliedValuesHash = hash
-	cluster.Status.CNI.JobFailures, cluster.Status.CNI.JobFailuresHash = 0, ""
+	st := cniStatus(cluster)
+	st.AppliedValuesHash, st.JobFailures, st.JobFailuresHash = hash, 0, ""
 
 	// An adopted cluster's own Cilium inline manifest entry (named by `ichor adopt` in an
 	// annotation) is recorded in the same update that sets CNIHandover, so render drops it exactly
 	// when it drops the bootstrap entry, never before the takeover has succeeded.
 	if name := cluster.Annotations[ichorv1alpha1.TalosClusterCNIInlineManifestAnnotation]; name != "" {
-		cluster.Status.CNI.TakenOverInlineManifest = name
+		st.TakenOverInlineManifest = name
 	}
 
 	apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
@@ -493,12 +486,8 @@ func (r *CNIHandoverReconciler) setProgress(
 // failureMessage is the Job's last log line, or its own reason when the log cannot be read.
 func (r *CNIHandoverReconciler) failureMessage(ctx context.Context, failed *CNIHelmJobFailedError) string {
 	if failed.NoPod {
-		detail := r.failedCreateMessage(ctx, failed.JobName)
-		if detail == "" {
-			detail = failed.Message
-		}
-
-		return fmt.Sprintf("Cilium Helm Job %s created no pod within %s: %s", failed.JobName, cniPodGrace, detail)
+		return fmt.Sprintf("Cilium Helm Job %s created no pod within %s: %s", failed.JobName, cniPodGrace,
+			cmp.Or(r.failedCreateMessage(ctx, failed.JobName), failed.Message))
 	}
 
 	if line := r.lastLogLine(ctx, failed.JobName); line != "" {

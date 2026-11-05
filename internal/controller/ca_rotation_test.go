@@ -814,9 +814,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		victim := f.machines[3].Name
 		f.world.versionErr[victim] = errors.New("rpc error: Unavailable")
 
-		for range 5 {
-			op = f.step(op)
-		}
+		op = repeatStep(f.step, op, 5)
 
 		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageIssuing), "an unverified stage must not advance")
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
@@ -837,9 +835,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		op := f.newOp()
 
 		op, _ = f.runUntil(op, atStage(ichorv1alpha1.CARotationStageIssuing))
-		for range 8 {
-			op = f.step(op)
-		}
+		op = repeatStep(f.step, op, 8)
 
 		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageIssuing), "Dropping started while pods lack the new CA")
 		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation)
@@ -864,9 +860,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 
 		f.world.notReady = []string{"worker-1"}
 
-		for range 4 {
-			op = f.step(op)
-		}
+		op = repeatStep(f.step, op, 4)
 
 		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageDropping))
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).To(ContainSubstring("worker-1"))
@@ -880,9 +874,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		f.world.nodes[f.machines[4].Name].down = true
 
 		op := f.newOp()
-		for range 3 {
-			op = f.step(op)
-		}
+		op = repeatStep(f.step, op, 3)
 
 		Expect(stageOf(op)).To(BeEmpty())
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))

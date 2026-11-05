@@ -102,6 +102,17 @@ func mustReconcileOperation(r *TalosOperationReconciler, op *ichorv1alpha1.Talos
 	Expect(err).NotTo(HaveOccurred())
 }
 
+// repeatStep runs step on op n times, each on the operation the last returned.
+func repeatStep(
+	step func(*ichorv1alpha1.TalosOperation) *ichorv1alpha1.TalosOperation, op *ichorv1alpha1.TalosOperation, n int,
+) *ichorv1alpha1.TalosOperation {
+	for range n {
+		op = step(op)
+	}
+
+	return op
+}
+
 // newOpTestReconciler wires a fakeAdvancer scripted with outcomes (nil: every machine is done at once).
 func newOpTestReconciler(outcomes map[string]advanceOutcome) (*TalosOperationReconciler, *fakeAdvancer) {
 	if outcomes == nil {

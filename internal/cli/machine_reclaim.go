@@ -18,6 +18,7 @@ package cli
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -257,13 +258,7 @@ func say(w io.Writer, format string, args ...any) {
 	_, _ = fmt.Fprintf(w, format, args...)
 }
 
-func orNone(s string) string {
-	if s == "" {
-		return "(none)"
-	}
-
-	return s
-}
+func orNone(s string) string { return cmp.Or(s, "(none)") }
 
 func readTypedLine(r *bufio.Reader) (string, error) {
 	s, err := r.ReadString('\n')

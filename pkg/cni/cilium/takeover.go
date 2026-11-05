@@ -459,6 +459,12 @@ func normOwned(path string, v any) any {
 		s := fmt.Sprint(v)
 
 		return s == "true" || s == "strict"
+	case keyReadSecretsOnly:
+		return v == nil || fmt.Sprint(v) == "true" // the chart reads an unset flag as true
+	case keySecretsBackend:
+		if v == "local" {
+			return "" // the alias of true, the same as unset
+		}
 	case keyTunnelProtocol:
 		if v == nil || v == "" {
 			return "vxlan"

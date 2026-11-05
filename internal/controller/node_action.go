@@ -717,6 +717,9 @@ func (n *nodeRun) beginReset(ctx context.Context) (ctrl.Result, error) {
 	n.op.Status.Phase = ichorv1alpha1.TalosOperationPhaseInProgress
 	n.op.Status.Node = &ichorv1alpha1.TalosOperationNodeStatus{
 		Step: ichorv1alpha1.NodeStepRemoving, Message: "the machine was handed to the removal flow with a reset",
+		// The wait follows this object, not the name: discovery may recreate a pending machine with
+		// the same name (the node's UUID) the moment the old one is gone.
+		MachineUID: n.m.UID,
 	}
 
 	if err := n.r.Status().Update(ctx, n.op); err != nil {
@@ -731,12 +734,17 @@ func (n *nodeRun) beginReset(ctx context.Context) (ctrl.Result, error) {
 }
 
 // awaitRemoval deletes the machine (once) and waits until the removal flow has finished with it.
-// It runs without the cluster lock: the removal takes it.
+// It runs without the cluster lock: the removal takes it. The machine it follows is the one the
+// reset started on, by UID: gone, or replaced by an object with another UID (discovery recreates
+// a pending machine under the same name within seconds), means the removal is done, and the new
+// object is never touched.
 func (r *TalosOperationReconciler) awaitRemoval(ctx context.Context, op *ichorv1alpha1.TalosOperation) (ctrl.Result, error) {
 	m := &ichorv1alpha1.TalosMachine{}
 
 	err := readerOrClient(r.APIReader, r.Client).Get(ctx, types.NamespacedName{Namespace: op.Namespace, Name: op.Spec.Node.MachineRef.Name}, m)
-	if apierrors.IsNotFound(err) {
+
+	// ponytail: an operation recorded before machineUID existed has none and follows the name.
+	if uid := op.Status.Node.MachineUID; apierrors.IsNotFound(err) || (err == nil && uid != "" && m.UID != uid) {
 		r.markMachine(op, op.Spec.Node.MachineRef.Name, ichorv1alpha1.TalosOperationMachinePhaseCompleted)
 		op.Status.Node.Message = "the machine was removed and its node reset"
 
@@ -748,7 +756,7 @@ func (r *TalosOperationReconciler) awaitRemoval(ctx context.Context, op *ichorv1
 	}
 
 	if m.DeletionTimestamp.IsZero() {
-		if err := r.Delete(ctx, m); err != nil && !apierrors.IsNotFound(err) {
+		if err := r.Delete(ctx, m, client.Preconditions{UID: &m.UID}); err != nil && !apierrors.IsNotFound(err) {
 			return r.nodeFailed(ctx, op, fmt.Errorf("removing %q: %w", m.Name, err))
 		}
 	}

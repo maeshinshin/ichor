@@ -129,20 +129,20 @@ export function StartOperationDialog({
     }
   }
 
+  const request = (withOverride: boolean) => ({
+    cluster,
+    kind: wireKindOf(kind),
+    target: needsTarget ? target.trim() : '',
+    override: withOverride ? { reason: reason.trim() } : undefined,
+    ichorInstaller,
+    caTargets: kind === 'ca-rotation' ? caTargets : [],
+  })
+
   async function review(withOverride = overridden) {
     setBusy(true)
     setError(null)
     try {
-      setPlan(
-        await operationClient.planOperation({
-          cluster,
-          kind: wireKindOf(kind),
-          target: needsTarget ? target.trim() : '',
-          override: withOverride ? { reason: reason.trim() } : undefined,
-          ichorInstaller,
-          caTargets: kind === 'ca-rotation' ? caTargets : [],
-        }),
-      )
+      setPlan(await operationClient.planOperation(request(withOverride)))
     } catch (err) {
       setError(describeError(err))
       setOverridable(withOverride || isOverridable(err))
@@ -155,14 +155,7 @@ export function StartOperationDialog({
     setBusy(true)
     setError(null)
     try {
-      const res = await operationClient.createOperation({
-        cluster,
-        kind: wireKindOf(kind),
-        target: needsTarget ? target.trim() : '',
-        override: overridden ? { reason: reason.trim() } : undefined,
-        ichorInstaller,
-        caTargets: kind === 'ca-rotation' ? caTargets : [],
-      })
+      const res = await operationClient.createOperation(request(overridden))
       reset(false)
       notifyDone(t('toast.opStarted', { action: t(`ops.start.${kind}`) }))
       if (res.operation?.ref) navigate(`/operations/${encodeURIComponent(res.operation.ref.name)}`)
@@ -174,7 +167,6 @@ export function StartOperationDialog({
   }
 
   return (
-    <>
     <ConfirmDialog
       open={open}
       onOpenChange={reset}
@@ -347,7 +339,6 @@ export function StartOperationDialog({
       {error && <ErrorAlert {...error} />}
 
     </ConfirmDialog>
-    </>
   )
 }
 

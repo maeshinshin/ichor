@@ -1,12 +1,6 @@
-// No import from "@/gen" or "@bufbuild/protobuf" here, by design: this
-// file is loaded directly by node --test (ADR 0021's own no-bundler,
-// no-framework choice for ui/src/lib tests), and the generated client
-// (ui/src/gen) uses plain, extensionless relative imports among its own
-// files that only a bundler's module resolution understands - Node's own
-// ESM resolver can't follow them. The "Like" interfaces below are
-// structurally compatible with the generated PatchTarget/LabelSelector
-// types (and their Init-shaped, "$typeName"-free form a fresh form builds),
-// so callers in ui/src/pages pass either one straight through untouched.
+// No import from "@/gen" or "@bufbuild/protobuf": node --test loads this file directly and cannot follow
+// the generated client's extensionless imports (ADR 0021). The "Like" interfaces are structurally
+// compatible with the generated PatchTarget/LabelSelector and with a fresh form's Init shape.
 interface LabelSelectorLike {
   matchLabels?: Record<string, string>
   matchExpressions?: { key?: string; operator?: string; values?: string[] }[]
@@ -32,13 +26,8 @@ export function targetKindOf(target: TargetLike | undefined): TargetKind {
   return 'none'
 }
 
-// LabelSelector is a structured wire message (a map plus a list), not an
-// opaque string like PatchDocument.document - but the same "edit as one
-// JSON blob in a Textarea, let the server validate it" choice (ADR 0039's
-// own design question 2) still applies, since there's no editor library to
-// build a dedicated matchLabels/matchExpressions form with. Unlike
-// PatchDocument.document, turning the text back into a wire message needs a
-// JSON.parse here; that's syntax only, not a second copy of any CRD rule.
+// A label selector is edited as one JSON blob in a Textarea and validated by the server (ADR 0039,
+// question 2); parseLabelSelector below only checks syntax, not a second copy of any CRD rule.
 export function stringifyLabelSelector(ls: LabelSelectorLike | undefined): string {
   return JSON.stringify(
     { matchLabels: ls?.matchLabels ?? {}, matchExpressions: ls?.matchExpressions ?? [] },

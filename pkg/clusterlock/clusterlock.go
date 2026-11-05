@@ -63,6 +63,10 @@ const DefaultDuration = 5 * time.Minute
 type HeldError struct {
 	// Holder is the identity currently holding the lock, when known.
 	Holder string
+	// Acquired is when Holder took the lock (the Lease's acquireTime), when known. It is not
+	// moved by the holder's renewals, so a caller can tell work the holder did under this
+	// hold from work it did before it.
+	Acquired time.Time
 }
 
 func (e *HeldError) Error() string {
@@ -135,7 +139,11 @@ func (l *Lock) Acquire(ctx context.Context, identity string) error {
 		return l.renew(ctx, &lease)
 	}
 	if !expired(&lease, l.duration) {
-		return &HeldError{Holder: holder}
+		held := &HeldError{Holder: holder}
+		if lease.Spec.AcquireTime != nil {
+			held.Acquired = lease.Spec.AcquireTime.Time
+		}
+		return held
 	}
 	return l.takeOver(ctx, &lease, identity)
 }

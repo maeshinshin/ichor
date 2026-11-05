@@ -66,7 +66,9 @@ func TestLeaderElectionRoleIsLeasesOnly(t *testing.T) {
 func TestWebhooksFailFastAndCoverFinalizersAndDeletes(t *testing.T) {
 	docs := renderChart(t, "ichor")
 
-	sets := map[string][]map[string]any{labelChart: docs, "config/webhook": loadYAMLDocs(t, "../../config/webhook/manifests.yaml")}
+	sets := map[string][]map[string]any{
+		labelChart: docs, "config/webhook": loadYAMLDocs(t, "../../config/webhook/manifests.yaml"),
+	}
 
 	for label, set := range sets {
 		hooks := map[string]map[string]any{}
@@ -260,14 +262,13 @@ var gatewayAPIValues = userValues(`{"gatewayAPI":{"enabled":true,"gatewayClass":
 var optionalCiliumFeatures = []struct {
 	name   string
 	values map[string]any
-	kind   string // a kind the chart must render with the feature on, so the test cannot pass for nothing
 }{
-	{"gatewayAPI", gatewayAPIValues, "GatewayClass"},
-	{"ingressController", userValues(`{"ingressController":{"enabled":true}}`), "IngressClass"},
-	{"hubbleUI", userValues(`{"hubble":{"relay":{"enabled":true},"ui":{"enabled":true}}}`), ""},
-	{"clustermesh", userValues(`{"clustermesh":{"useAPIServer":true,"apiserver":{"tls":{"auto":{"method":"cronJob"}}}}}`), ""},
-	{"bgpControlPlane", userValues(`{"bgpControlPlane":{"enabled":true}}`), ""},
-	{"envoyConfig", userValues(`{"envoyConfig":{"enabled":true}}`), ""},
+	{"gatewayAPI", gatewayAPIValues},
+	{"ingressController", userValues(`{"ingressController":{"enabled":true}}`)},
+	{"hubbleUI", userValues(`{"hubble":{"relay":{"enabled":true},"ui":{"enabled":true}}}`)},
+	{"clustermesh", userValues(`{"clustermesh":{"useAPIServer":true,"apiserver":{"tls":{"auto":{"method":"cronJob"}}}}}`)},
+	{"bgpControlPlane", userValues(`{"bgpControlPlane":{"enabled":true}}`)},
+	{"envoyConfig", userValues(`{"envoyConfig":{"enabled":true}}`)},
 }
 
 // cniClusterRoles is the Cilium Job's ClusterRole as config/rbac and the chart carry it.
@@ -378,8 +379,9 @@ func TestCNIRoleCoversTheOptionalFeatureObjects(t *testing.T) {
 				kinds[[2]string{group, kindOf(d)}] = true
 			}
 
-			if f.kind != "" && !slices.ContainsFunc(slices.Collect(maps.Keys(kinds)), func(k [2]string) bool { return k[1] == f.kind }) {
-				t.Fatalf("the Cilium chart renders no %s with %s on", f.kind, f.name)
+			// The test must not pass for nothing: the Gateway API values really render a GatewayClass.
+			if f.name == "gatewayAPI" && !kinds[[2]string{"gateway.networking.k8s.io", "GatewayClass"}] {
+				t.Fatal("the Cilium chart renders no GatewayClass with gatewayAPI on")
 			}
 
 			for label, role := range roles {

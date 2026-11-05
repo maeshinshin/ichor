@@ -25,8 +25,8 @@ const kubeSystemNs = "kube-system"
 
 const adr0099Doc = "docs/adr/0099-argo-cd-and-kokumi-become-the-standard-stack.md"
 
-// checkCNIRoleMatchesConfig compares the chart's ichor-<cfgName> of kind with cfgName in config/rbac/ichor-cni/<cfgFile>
-// (hand-written, ADR 0099) as a rule set.
+// checkCNIRoleMatchesConfig compares the chart's ichor-<cfgName> of kind with cfgName in
+// config/rbac/ichor-cni/<cfgFile> (hand-written, ADR 0099) as a rule set.
 func checkCNIRoleMatchesConfig(t *testing.T, docs []map[string]any, kind, cfgName, cfgFile string) {
 	t.Helper()
 

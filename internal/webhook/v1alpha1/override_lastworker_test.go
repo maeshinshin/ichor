@@ -18,15 +18,10 @@ package v1alpha1
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 
-	admissionv1 "k8s.io/api/admission/v1"
-	authnv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -61,23 +56,17 @@ func lastWorkerFixture(t *testing.T) (*TalosClusterCustomValidator, *TalosMachin
 		&TalosMachineCustomValidator{APIReader: reader, Can: check}, worker
 }
 
-func admissionCtxAs(user string) context.Context {
-	return admission.NewContextWithRequest(context.Background(), admission.Request{
-		UserInfo: authnv1.UserInfo{Username: user},
-	})
-}
-
 func TestLastWorkerGuardMachineDelete(t *testing.T) {
 	t.Parallel()
 
 	_, v, worker := lastWorkerFixture(t)
 
-	_, err := v.ValidateDelete(admissionCtxAs(bgUnitPlain), worker)
+	_, err := v.ValidateDelete(settingsCtx(bgUnitPlain, false), worker)
 	if err == nil || !strings.Contains(err.Error(), "override") {
 		t.Fatalf("a plain user deleting the last worker should be refused naming override, got %v", err)
 	}
 
-	if _, err := v.ValidateDelete(admissionCtxAs(bgUnitHolder), worker); err != nil {
+	if _, err := v.ValidateDelete(settingsCtx(bgUnitHolder, false), worker); err != nil {
 		t.Fatalf("an override holder should be allowed to delete the last worker, got %v", err)
 	}
 
@@ -94,11 +83,11 @@ func TestLastWorkerGuardMachineUnapprove(t *testing.T) {
 	rejected := worker.DeepCopy()
 	rejected.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateRejected
 
-	if _, err := v.ValidateUpdate(admissionCtxAs(bgUnitPlain), worker, rejected); err == nil {
+	if _, err := v.ValidateUpdate(settingsCtx(bgUnitPlain, false), worker, rejected); err == nil {
 		t.Fatal("a plain user un-approving the last worker should be refused")
 	}
 
-	if _, err := v.ValidateUpdate(admissionCtxAs(bgUnitHolder), worker, rejected); err != nil {
+	if _, err := v.ValidateUpdate(settingsCtx(bgUnitHolder, false), worker, rejected); err != nil {
 		t.Fatalf("an override holder should be allowed, got %v", err)
 	}
 }
@@ -114,24 +103,9 @@ func TestLastWorkerGuardNodeOperationOverride(t *testing.T) {
 	handle := func(user string, node ichorv1alpha1.TalosOperationNodeSpec) admission.Response {
 		node.MachineRef = corev1.LocalObjectReference{Name: "w1"}
 		node.Action = ichorv1alpha1.NodeActionReboot
-		op := ichorv1alpha1.TalosOperation{
-			Name: "op", Namespace: testNamespace,
-			Spec: ichorv1alpha1.TalosOperationSpec{
-				ClusterRef: corev1.LocalObjectReference{Name: lwCluster}, Kind: ichorv1alpha1.TalosOperationKindNode,
-				Node: &node,
-			},
-		}
-
-		raw, err := json.Marshal(op)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		return h.Handle(context.Background(), admission.Request{
-			Operation: admissionv1.Create, Name: "op", Namespace: testNamespace,
-			Resource: metav1.GroupVersionResource{Group: ichorGroup, Version: "v1alpha1", Resource: resOperations},
-			UserInfo: authnv1.UserInfo{Username: user}, Object: runtime.RawExtension{Raw: raw},
-		})
+		return h.Handle(context.Background(), createOperationRequest(t, ichorv1alpha1.TalosOperationSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: lwCluster}, Kind: ichorv1alpha1.TalosOperationKindNode, Node: &node,
+		}, user))
 	}
 
 	const teardown = "teardown"
@@ -173,12 +147,12 @@ func TestLastWorkerGuardClusterUnschedulable(t *testing.T) {
 	newC := oldC.DeepCopy()
 	newC.Spec.ControlPlane.Schedulable = "false"
 
-	_, err := v.ValidateUpdate(admissionCtxAs(bgUnitPlain), oldC, newC)
+	_, err := v.ValidateUpdate(settingsCtx(bgUnitPlain, false), oldC, newC)
 	if err == nil || !strings.Contains(err.Error(), "override") {
 		t.Fatalf("a plain user should be refused naming override, got %v", err)
 	}
 
-	if _, err := v.ValidateUpdate(admissionCtxAs(bgUnitHolder), oldC, newC); err != nil {
+	if _, err := v.ValidateUpdate(settingsCtx(bgUnitHolder, false), oldC, newC); err != nil {
 		t.Fatalf("an override holder should be allowed, got %v", err)
 	}
 }

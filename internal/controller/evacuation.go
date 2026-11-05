@@ -36,68 +36,51 @@ import (
 	"github.com/maeshinshin/ichor/pkg/storage"
 )
 
-// defaultEvacuationTimeout is used when the matching TalosStorage's own
-// spec.evacuationTimeout is unset ("Unset means the hook's own default",
-// TalosStorageSpec's doc comment). No number is fixed for that default;
-// ten minutes is a generous, round wait for one Longhorn replica to rebuild
-// elsewhere before this pauses the rollout rather than proceeding to drain.
+// defaultEvacuationTimeout is used when the matching TalosStorage's spec.evacuationTimeout is unset. No fixed number
+// exists; ten minutes is a generous wait for one Longhorn replica to rebuild elsewhere before the
+// rollout pauses instead of draining.
 const defaultEvacuationTimeout = 10 * time.Minute
 
-// defaultLonghornNamespace is Longhorn's own documented default install
-// namespace.
+// defaultLonghornNamespace is Longhorn's documented default install namespace.
 //
-// ponytail: TalosStorageSpec carries no namespace field, so a Longhorn
-// install in a non-default namespace cannot be evacuated by this code.
-// Upgrade by adding a namespace field to TalosStorageSpec if that is ever
-// needed -- nothing else here assumes "longhorn-system" beyond this one
-// constant.
+// ponytail: TalosStorageSpec carries no namespace field, so a Longhorn in another namespace cannot be
+// evacuated. Add one to TalosStorageSpec if that is ever needed; nothing else assumes "longhorn-system".
 const defaultLonghornNamespace = "longhorn-system"
 
-// evacuationTarget is what StorageEvacuator.Resolve found for one node:
-// which storage.EvacuationHook to drive, how long to wait before pausing,
-// and which namespace its storage-system resources live in.
+// evacuationTarget is what StorageEvacuator.Resolve found for one node: the storage.EvacuationHook to
+// drive, how long to wait before pausing, and the namespace of its storage-system resources.
 type evacuationTarget struct {
 	hook      storage.EvacuationHook
 	timeout   time.Duration
 	namespace string
 }
 
-// StorageEvacuator is layer 4's caller-side counterpart to pkg/storage's
-// EvacuationHook/EvacuationStatus split: pkg/storage makes no
-// cluster call of its own, so something in internal/controller has to find
-// which TalosStorage (if any) applies to a node, and read/write that
-// storage system's own resources. Declared here, the consumer, the same way
-// AdvanceMachineFunc already is -- talosUpgradeAdvancer is this
-// interface's consumer.
+// StorageEvacuator is the caller-side counterpart to pkg/storage's EvacuationHook/EvacuationStatus split:
+// pkg/storage makes no cluster call, so this finds the TalosStorage that applies to a node and
+// reads and writes the storage system's own resources. Declared by its consumer (talosUpgradeAdvancer), as
+// And AdvanceMachineFunc do.
 type StorageEvacuator interface {
-	// Resolve finds the TalosStorage (if any) in cluster whose node
-	// selector matches node. nil, nil means none does: nothing to
-	// evacuate, which is the common case for a cluster with no storage
-	// system configured at all.
+	// Resolve finds the TalosStorage (if any) in cluster whose node selector matches node. nil, nil means
+	// none does: nothing to evacuate, the common case for a cluster with no storage system.
 	Resolve(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, node string) (*evacuationTarget, error)
 
-	// Begin writes target.hook.BeginEvacuation's two values to node's
-	// storage-system resource, in the order BeginEvacuation names.
+	// Begin writes target.hook.BeginEvacuation's two values to node's storage-system resource, in the order
+	// BeginEvacuation names.
 	Begin(ctx context.Context, target *evacuationTarget, node string) error
 
-	// ReplicasRemaining counts the storage system's own replica-shaped
-	// resources still naming node -- the count storage.EvacuationStatus
-	// needs.
+	// ReplicasRemaining counts the storage system's replica-shaped resources still naming node, the count
+	// storage.EvacuationStatus needs.
 	ReplicasRemaining(ctx context.Context, target *evacuationTarget, node string) (int, error)
 
-	// End writes target.hook.EndEvacuation's two values to node's
-	// storage-system resource, in the order EndEvacuation names.
+	// End writes target.hook.EndEvacuation's two values to node's storage-system resource, in the order
+	// EndEvacuation names.
 	End(ctx context.Context, target *evacuationTarget, node string) error
 }
 
-// LonghornEvacuator is the StorageEvacuator for TalosStorage.spec.diskPreset
-// "longhorn-v1" (pkg/storage's only preset today). It reads and
-// writes Longhorn's nodes.longhorn.io/v1beta2 and replicas.longhorn.io/v1beta2
-// as unstructured.Unstructured -- the same technique
-// cnihandover_controller.go already uses for Argo CD's Application -- never
-// as a typed dependency on longhorn-manager's own API types, which
-// explicitly rejected ("adding longhorn-manager's own API types as a
-// dependency here ... was considered and rejected").
+// LonghornEvacuator is the StorageEvacuator for TalosStorage.spec.diskPreset "longhorn-v1" (pkg/storage's
+// only preset). It reads and writes Longhorn's nodes and replicas (longhorn.io/v1beta2) as
+// unstructured.Unstructured, never as a typed dependency on longhorn-manager's API types, which
+// rejected.
 type LonghornEvacuator struct {
 	client.Client
 
@@ -112,18 +95,14 @@ var (
 	longhornReplicaListGVK = schema.GroupVersionKind{Group: longhornGroup, Version: "v1beta2", Kind: "ReplicaList"}
 )
 
-// Longhorn's own objects, read and written in whichever namespace it is installed in. The
-// verbs are the ones Begin/End/ReplicasRemaining use and no more; talosstorages is read by
-// Resolve.
+// Longhorn's own objects, in whichever namespace it is installed in: the verbs Begin, End and
+// ReplicasRemaining use and no more; talosstorages is read by Resolve.
 //
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=talosstorages,verbs=get;list;watch
 // +kubebuilder:rbac:groups=longhorn.io,resources=nodes,verbs=get;update
 // +kubebuilder:rbac:groups=longhorn.io,resources=replicas,verbs=list
 
-// Resolve implements StorageEvacuator. It only reads TalosStorage and the
-// Kubernetes Node, neither Longhorn-specific, so (unlike Begin/
-// ReplicasRemaining/End) it needs no real Longhorn CRDs to exercise in a
-// test.
+// Resolve implements StorageEvacuator. It reads only TalosStorage and the Node, so a test needs no Longhorn CRDs.
 func (e *LonghornEvacuator) Resolve(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, node string,
 ) (*evacuationTarget, error) {
@@ -193,11 +172,10 @@ type nodeField struct {
 	value bool
 }
 
-// absent reports whether err means Longhorn itself is not there to evacuate: its CRD is not
-// installed, or it has no Node object for this machine (e.g. longhorn-manager is crash-looping
-// because the schematic still lacks iscsi-tools). A TalosStorage legitimately exists before
-// Longhorn does (the disk comes first), so this is "nothing to evacuate", not a failure. The
-// first sighting per node is logged at info level.
+// absent reports whether err means Longhorn is not there to evacuate: its CRD is not installed, or it has
+// no Node object for this machine (e.g. longhorn-manager is crash-looping for want of iscsi-tools). A
+// TalosStorage legitimately exists before Longhorn does, so this is "nothing to evacuate", not a failure.
+// The first sighting per node is logged at info level.
 func (e *LonghornEvacuator) absent(ctx context.Context, node string, err error) bool {
 	if !apimeta.IsNoMatchError(err) && !apierrors.IsNotFound(err) {
 		return false
@@ -247,13 +225,10 @@ func (e *LonghornEvacuator) writeNodeEvacuation(
 	return nil
 }
 
-// ReplicasRemaining implements StorageEvacuator: it counts
-// replicas.longhorn.io objects whose spec.nodeID still names node --
-// longhorn-manager v1.9.1's own VolumeController.cleanupEvictionRequestedReplicas
-// deletes exactly that object once a healthy replacement replica exists
-// elsewhere. Whole-node eviction only, never the per-disk form
-// (spec.diskID): architecture.md's node-operation hook evacuates a whole
-// node before an upgrade, never one disk.
+// ReplicasRemaining implements StorageEvacuator: it counts replicas.longhorn.io objects whose spec.nodeID
+// still names node; longhorn-manager v1.9.1's VolumeController.cleanupEvictionRequestedReplicas deletes
+// exactly that object once a healthy replacement exists elsewhere. Whole-node eviction only,
+// never per disk (spec.diskID).
 func (e *LonghornEvacuator) ReplicasRemaining(ctx context.Context, target *evacuationTarget, node string) (int, error) {
 	var list unstructured.UnstructuredList
 	list.SetGroupVersionKind(longhornReplicaListGVK)
@@ -278,31 +253,25 @@ func (e *LonghornEvacuator) ReplicasRemaining(ctx context.Context, target *evacu
 	return count, nil
 }
 
-// conditionStorageEvacuation is a TalosMachine status condition, True from
-// BeginEvacuation's write until EvacuationStatus reports paused (or the
-// caller ends it). LastTransitionTime is evacuateMachine's own "elapsed"
-// clock start. Shared by the Talos upgrade (talos_upgrade.go) and node
-// removal (removal.go): both are node operations that must go through the
-// same evacuation hook (architecture.md, "Storage"), so the decision lives
-// here once.
+// conditionStorageEvacuation is a TalosMachine status condition, True from BeginEvacuation's write until
+// EvacuationStatus reports paused (or the caller ends it); its LastTransitionTime starts evacuateMachine's
+// "elapsed" clock. The Talos upgrade and node removal share it: both go through the same evacuation hook
+// (architecture.md, "Storage").
 const (
 	conditionStorageEvacuation = "StorageEvacuation"
 	reasonEvacuating           = "Evacuating"
 	reasonEvacuationStopped    = "EvacuationStopped"
 )
 
-// evacuateMachine drives one storage.EvacuationStatus step for m's node:
-// Begin on the first call (returning EvacuationWaiting so the caller keeps
-// reconciling), then ReplicasRemaining against the elapsed time since
-// conditionStorageEvacuation's own LastTransitionTime on every call after.
-// On EvacuationPaused it also calls End (a paused evacuation gives up and
-// re-enables scheduling). On EvacuationDone it deliberately does NOT call
-// End: what follows (a drain and reboot, or a removal) decides when
-// scheduling is meaningful again. purpose completes "evacuating node X
+// evacuateMachine drives one storage.EvacuationStatus step for m's node: Begin on the first call (returning
+// EvacuationWaiting), then ReplicasRemaining against the time since conditionStorageEvacuation's
+// LastTransitionTime on every call after. On EvacuationPaused it also calls End (a paused evacuation gives
+// up and re-enables scheduling). On EvacuationDone it deliberately does not: what follows (a drain and
+// reboot, or a removal) decides when scheduling is meaningful again. purpose completes "evacuating node X
 // before <purpose>" in the condition message.
 //
-// ev nil, no matching TalosStorage, or the Kubernetes Node already gone
-// all mean there is nothing to evacuate: EvacuationDone, not an error.
+// ev nil, no matching TalosStorage, or the Node already gone all mean nothing to evacuate: EvacuationDone,
+// not an error.
 func evacuateMachine(
 	ctx context.Context, c client.Client, ev StorageEvacuator,
 	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, node, purpose string,

@@ -22,8 +22,6 @@ import (
 	"strings"
 	"testing"
 
-	corev1 "k8s.io/api/core/v1"
-
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
@@ -331,25 +329,15 @@ func TestTalosAPIAccessRendersOnControlPlanesOnly(t *testing.T) {
 	bundle := testBundle(t)
 	on := true
 
-	patch := ichorv1alpha1.TalosConfigPatch{
-		Namespace: testNamespace, Name: "api-access",
-		Spec: ichorv1alpha1.TalosConfigPatchSpec{
-			ClusterRef: corev1.LocalObjectReference{Name: testClusterName},
-			Layer:      "cluster",
-			Documents: []ichorv1alpha1.TalosConfigPatchDocument{{
-				Kind: "Config",
-				Config: &typedconfig.Config{
-					ConfigVersion: "v1alpha1",
-					MachineConfig: &typedconfig.MachineConfig{MachineFeatures: &typedconfig.FeaturesConfig{
-						KubernetesTalosAPIAccessConfig: &typedconfig.KubernetesTalosAPIAccessConfig{
-							AccessEnabled: &on, AccessAllowedRoles: []string{"os:reader"},
-							AccessAllowedKubernetesNamespaces: []string{"ops"},
-						},
-					}},
-				},
-			}},
-		},
-	}
+	patch := configPatch("api-access", &typedconfig.Config{
+		ConfigVersion: configVersionV1Alpha1,
+		MachineConfig: &typedconfig.MachineConfig{MachineFeatures: &typedconfig.FeaturesConfig{
+			KubernetesTalosAPIAccessConfig: &typedconfig.KubernetesTalosAPIAccessConfig{
+				AccessEnabled: &on, AccessAllowedRoles: []string{"os:reader"},
+				AccessAllowedKubernetesNamespaces: []string{"ops"},
+			},
+		}},
+	})
 	patches := []ichorv1alpha1.TalosConfigPatch{patch}
 
 	cp := mustRender(t, testCluster("true"), testMachine("cp", roleControlPlane, nil), bundle, patches)

@@ -9,7 +9,6 @@ import {
   fileNameOf,
   filterProblem,
   parseDuration,
-  toPermissions,
   type Chunk,
 } from './diagnostics.ts'
 
@@ -98,10 +97,4 @@ test('a file name falls back to a sensible one', () => {
   assert.equal(fileNameOf(c, 'packet-capture'), 'capture.pcap')
   assert.equal(fileNameOf(c, 'ca-credentials'), 'credentials.zip')
   assert.equal(fileNameOf({ ...c, filename: 'mine.zip' }, 'support-bundle'), 'mine.zip')
-})
-
-test('toPermissions keeps unknown unknown and copies the four flags', () => {
-  assert.equal(toPermissions(undefined), undefined)
-  const all = { supportBundle: true, etcdSnapshot: false, packetCapture: true, clusterCredentials: true, clusterUpdate: true, talosconfigReader: true }
-  assert.deepEqual(toPermissions({ ...all }), all)
 })

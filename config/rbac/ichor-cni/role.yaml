@@ -1,6 +1,7 @@
 # The Cilium Helm Job's permissions: what Helm needs to adopt and
 # upgrade a release of the pinned Cilium chart, and to wait for its rollout. Cilium's chart
-# creates the kinds listed here; Helm keeps the release records in Secrets (the Role below).
+# creates the kinds listed here (with gatewayAPI.enabled: the GatewayClass and the ValidatingAdmissionPolicy
+# with its binding); Helm keeps the release records in Secrets (the Role below).
 #
 # Not narrowable further: the clusterroles rule with escalate and bind.
 # The chart's ClusterRoles grant more than this identity holds, so applying them needs
@@ -42,6 +43,29 @@ rules:
   - get
   - list
   - watch
+- apiGroups:
+  - admissionregistration.k8s.io
+  resources:
+  - validatingadmissionpolicies
+  - validatingadmissionpolicybindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gatewayclasses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
 - apiGroups:
   - apps
   resources:
@@ -119,6 +143,8 @@ rules:
   - rbac.authorization.k8s.io
   resourceNames:
   - cilium-config-agent
+  - cilium-gateway-secrets
+  - cilium-operator-gateway-secrets
   - cilium-operator-tlsinterception-secrets
   - cilium-operator-ztunnel
   - cilium-tlsinterception-secrets

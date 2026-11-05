@@ -254,6 +254,11 @@ func TestInstallerEscalationNamesEveryRoleOfTheInstallManifest(t *testing.T) {
 	}
 }
 
+// gatewayAPIValues is the user layer that makes the Cilium chart render its Gateway API objects. The
+// GatewayClass is created "auto" only when the cluster has the CRD, which a plain render does not, so it is
+// forced here.
+var gatewayAPIValues = map[string]any{"gatewayAPI": map[string]any{"enabled": true, "gatewayClass": map[string]any{"create": "true"}}}
+
 // TestCNIEscalationNamesOnlyCiliumsRoles guards: the Cilium Job may bind and escalate only
 // the roles the pinned Cilium chart creates, in config/rbac and in the chart. Every role the chart
 // renders under Ichor's values must be named, so a chart bump that adds one fails here, not in a cluster.
@@ -262,25 +267,27 @@ func TestCNIEscalationNamesOnlyCiliumsRoles(t *testing.T) {
 
 	for _, mode := range []cni.KubeProxyMode{cni.KubeProxyEnabled, cni.KubeProxyReplaced} {
 		for _, tunnel := range []string{"", "geneve", "vxlan"} {
-			p := cilium.New()
-			if tunnel != "" {
-				var err error
-				if p, err = p.WithTunnel(tunnel); err != nil {
-					t.Fatal(err)
+			for _, user := range []map[string]any{nil, gatewayAPIValues} {
+				p := cilium.New().WithValues(user)
+				if tunnel != "" {
+					var err error
+					if p, err = p.WithTunnel(tunnel); err != nil {
+						t.Fatal(err)
+					}
 				}
-			}
 
-			manifest, err := p.BootstrapManifest(mode)
-			if err != nil {
-				t.Fatalf("rendering cilium (%s, %q): %v", mode, tunnel, err)
-			}
+				manifest, err := p.BootstrapManifest(mode)
+				if err != nil {
+					t.Fatalf("rendering cilium (%s, %q): %v", mode, tunnel, err)
+				}
 
-			for _, d := range decodeYAMLDocs(t, manifest, "cilium bootstrap") {
-				switch kindOf(d) {
-				case kindClusterRole:
-					rendered[resClusterRoles][nameOf(d)] = true
-				case kindRole:
-					rendered["roles"][nameOf(d)] = true
+				for _, d := range decodeYAMLDocs(t, manifest, "cilium bootstrap") {
+					switch kindOf(d) {
+					case kindClusterRole:
+						rendered[resClusterRoles][nameOf(d)] = true
+					case kindRole:
+						rendered["roles"][nameOf(d)] = true
+					}
 				}
 			}
 		}
@@ -307,6 +314,68 @@ func TestCNIEscalationNamesOnlyCiliumsRoles(t *testing.T) {
 			for n := range names {
 				if !rendered[res][n] {
 					t.Errorf("%s: the CNI role binds or escalates %s %q, which the Cilium chart does not render", label, res, n)
+				}
+			}
+		}
+	}
+}
+
+// TestCNIRoleCoversTheGatewayAPIObjects: with gatewayAPI.enabled the Cilium chart renders a GatewayClass
+// and a ValidatingAdmissionPolicy with its binding, which Helm reads, creates and updates as the Job's
+// ServiceAccount. Without a rule for them the upgrade fails on the first get (found on hardware). The role in
+// config/rbac and in the chart must grant Helm's verbs on each.
+func TestCNIRoleCoversTheGatewayAPIObjects(t *testing.T) {
+	manifest, err := cilium.New().WithValues(gatewayAPIValues).BootstrapManifest(cni.KubeProxyEnabled)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	plural := map[string]string{
+		"GatewayClass":                     "gatewayclasses",
+		"ValidatingAdmissionPolicy":        "validatingadmissionpolicies",
+		"ValidatingAdmissionPolicyBinding": "validatingadmissionpolicybindings",
+	}
+
+	var objs [][2]string // apiGroup, resource
+
+	for _, d := range decodeYAMLDocs(t, manifest, "cilium bootstrap") {
+		res, ok := plural[kindOf(d)]
+		if !ok {
+			continue
+		}
+
+		group, _, _ := strings.Cut(d["apiVersion"].(string), "/")
+		objs = append(objs, [2]string{group, res})
+	}
+
+	if len(objs) != len(plural) {
+		t.Fatalf("the Cilium chart renders %v with gatewayAPI.enabled, want one of each of %v", objs, plural)
+	}
+
+	cfgDocs := loadYAMLDocs(t, "../../config/rbac/ichor-cni/role.yaml")
+	chartDocs := renderChartWithValues(t, "ichor", "cniHelm.enabled=true")
+
+	for label, role := range map[string]map[string]any{
+		labelConfig: find(cfgDocs, kindClusterRole, "cni-role"),
+		labelChart:  find(chartDocs, kindClusterRole, "ichor-cni-role"),
+	} {
+		for _, o := range objs {
+			held := map[string]bool{}
+
+			for _, r := range allRules(role) {
+				rm, _ := r.(map[string]any)
+				if !slices.Contains(stringsOf(rm["apiGroups"]), o[0]) || !slices.Contains(stringsOf(rm["resources"]), o[1]) {
+					continue
+				}
+
+				for _, v := range stringsOf(rm["verbs"]) {
+					held[v] = true
+				}
+			}
+
+			for _, v := range []string{"get", "list", "create", "update", "patch", "delete"} {
+				if !held[v] {
+					t.Errorf("%s: the CNI role cannot %s %s.%s, which the Cilium chart renders with gatewayAPI.enabled", label, v, o[1], o[0])
 				}
 			}
 		}

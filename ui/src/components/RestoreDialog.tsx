@@ -16,8 +16,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { OperationKind, type PlanOperationResponse } from '@/gen/ichor/v1alpha1/operation_pb'
+import { useAction } from '@/hooks/use-action'
 import { operationClient } from '@/lib/connect'
-import { describeError, type ErrorShape } from '@/lib/errors'
+import { describeError } from '@/lib/errors'
 import { canRestore, canReview, snapshotChoices, type SnapshotChoice } from '@/lib/etcdRestore'
 import { formatBytes, formatDate } from '@/lib/format'
 import { notifyDone } from '@/lib/notify'
@@ -38,8 +39,7 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
   const [typed, setTyped] = useState('')
   const [overridden, setOverridden] = useState(false)
   const [reason, setReason] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { busy, error, setError, run } = useAction()
 
   const choice = choices?.find((c) => c.key === chosen)
 
@@ -87,32 +87,15 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
     },
   })
 
-  async function review() {
-    setBusy(true)
-    setError(null)
-    try {
-      setPlan(await operationClient.planOperation(request('')))
-    } catch (err) {
-      setError(describeError(err))
-    } finally {
-      setBusy(false)
-    }
-  }
+  const review = () => run(async () => setPlan(await operationClient.planOperation(request(''))))
 
-  async function start() {
-    setBusy(true)
-    setError(null)
-    try {
+  const start = () =>
+    run(async () => {
       const res = await operationClient.createOperation(request(typed.trim()))
       reset(false)
       notifyDone(t('restore.started', { cluster: cluster.name }))
       if (res.operation?.ref) navigate(`/operations/${encodeURIComponent(res.operation.ref.name)}`)
-    } catch (err) {
-      setError(describeError(err))
-    } finally {
-      setBusy(false)
-    }
-  }
+    })
 
   const startable = canRestore({
     planned: plan !== null,

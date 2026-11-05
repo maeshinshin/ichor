@@ -3,9 +3,9 @@ import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import type { EtcdBackup } from '@/gen/ichor/v1alpha1/operation_pb'
+import { useAction } from '@/hooks/use-action'
 import { backNowBlock } from '@/lib/backups'
 import { operationClient } from '@/lib/connect'
-import { describeError, type ErrorShape } from '@/lib/errors'
 import { notifyDone } from '@/lib/notify'
 import { t } from '@/lib/i18n'
 
@@ -13,25 +13,19 @@ import { t } from '@/lib/i18n'
 // the controller takes the snapshot. onChanged gets the backup as it now stands (request pending).
 export function BackupNow({ backup, onChanged }: { backup: EtcdBackup; onChanged: (next: EtcdBackup) => void }) {
   const [open, setOpen] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { busy, error, setError, run } = useAction()
   const block = backNowBlock(backup)
   const name = backup.ref?.name ?? ''
 
-  async function request() {
-    if (!backup.ref) return
-    setBusy(true)
-    setError(null)
-    try {
-      const res = await operationClient.requestEtcdBackup({ backup: backup.ref })
+  function request() {
+    const ref = backup.ref
+    if (!ref) return
+    return run(async () => {
+      const res = await operationClient.requestEtcdBackup({ backup: ref })
       if (res.backup) onChanged(res.backup)
       setOpen(false)
       notifyDone(t('toast.backupRequested'))
-    } catch (err) {
-      setError(describeError(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   return (

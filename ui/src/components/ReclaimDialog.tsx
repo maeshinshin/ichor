@@ -10,8 +10,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields } from '@/components/PageHeader'
 import type { Reclaim } from '@/gen/ichor/v1alpha1/reclaim_pb'
+import { useAction } from '@/hooks/use-action'
 import { reclaimClient } from '@/lib/connect'
-import { describeError, type ErrorShape } from '@/lib/errors'
 import { reclaimSettled, uuidMatches } from '@/lib/reclaim'
 import { t } from '@/lib/i18n'
 
@@ -35,8 +35,7 @@ export function ReclaimDialog({
   const [context, setContext] = useState('')
   const [reclaim, setReclaim] = useState<Reclaim | null>(null)
   const [typed, setTyped] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { busy, error, setError, run } = useAction()
 
   // The cluster is offered only when the caller may update it; otherwise reclaim goes ahead without registering.
   const [clusterAllowed, setClusterAllowed] = useState(false)
@@ -65,10 +64,8 @@ export function ReclaimDialog({
     return () => clearInterval(id)
   }, [ref?.name, phase])
 
-  async function create() {
-    setBusy(true)
-    setError(null)
-    try {
+  const create = () =>
+    run(async () => {
       const res = await reclaimClient.createReclaim({
         address: address.trim(),
         talosconfig: new TextEncoder().encode(talosconfig),
@@ -77,25 +74,14 @@ export function ReclaimDialog({
       })
       setTalosconfig('')
       setReclaim(res.reclaim ?? null)
-    } catch (err) {
-      setError(describeError(err))
-    } finally {
-      setBusy(false)
-    }
-  }
+    })
 
-  async function confirm() {
+  function confirm() {
     if (!ref || !uuidMatches(typed, uuid)) return
-    setBusy(true)
-    setError(null)
-    try {
+    return run(async () => {
       const res = await reclaimClient.confirmReclaim({ reclaim: ref, uuid: typed.trim() })
       if (res.reclaim) setReclaim(res.reclaim)
-    } catch (err) {
-      setError(describeError(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   async function readFile(e: Event) {

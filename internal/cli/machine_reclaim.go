@@ -72,8 +72,9 @@ does not satisfy it.
 Afterwards the machine comes back in maintenance mode with the same UUID. With
 --cluster NAME its address is added to that cluster's spec.discovery.addresses
 so that Ichor registers it as a pending machine. A pending TalosMachine of the same
-UUID that an earlier reclaim left is deleted after the reset (it pinned the old
-maintenance certificate); discovery creates it again with the new one.`,
+UUID that an earlier reclaim left is kept: on its next pass (within about five
+minutes) discovery re-probes the node and records the new maintenance certificate
+and disks on that same machine (Event MaintenanceIdentityRefreshed); approve it after that.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if talosconfigPath == "" {

@@ -44,9 +44,7 @@ func TestDownloadHumanOutput(t *testing.T) {
 
 	want := "✓ Download — 6 B to " + out + " (mode 0600)\n" +
 		"! the file is NOT encrypted and may contain secrets; keep it safe\n"
-	if stderr.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", stderr.String(), want)
-	}
+	wantText(t, stderr.String(), want)
 }
 
 func TestDownloadFailureIsShownOnceWithTheHint(t *testing.T) {

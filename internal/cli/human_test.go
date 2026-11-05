@@ -73,9 +73,7 @@ func TestHumanTableAlignsColumnsAndLeavesNoTrailingSpaces(t *testing.T) {
 	want := "ID                  READY  AGE\n" +
 		"alpha               ✓      5m\n" +
 		"a-much-longer-name  -      2h\n"
-	if buf.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", buf.String(), want)
-	}
+	wantText(t, buf.String(), want)
 }
 
 func TestHumanTableOnATerminalAlignsPastTheColourCodes(t *testing.T) {
@@ -117,9 +115,7 @@ func TestHumanBlockAlignsLabelsAndSkipsEmptyValues(t *testing.T) {
 		"\n" +
 		"cli          v0.1.0\n" +
 		"new installs Talos v1.14.5\n"
-	if buf.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", buf.String(), want)
-	}
+	wantText(t, buf.String(), want)
 }
 
 func TestHumanMarksCarryColourOnlyOnATerminal(t *testing.T) {
@@ -239,5 +235,14 @@ func TestMachineFormatFallsBackToYAMLCentrally(t *testing.T) {
 
 	if err := validateOutputFormat("xml"); err == nil {
 		t.Error("xml must be refused")
+	}
+}
+
+// wantText fails the test when got is not want.
+func wantText(t *testing.T, got, want string) {
+	t.Helper()
+
+	if got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}
 }

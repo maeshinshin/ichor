@@ -114,7 +114,5 @@ func TestSettingsTableHumanOutput(t *testing.T) {
 		"autoPatch.window       -       -\n" +
 		"\n" +
 		"! The settings are managed by the deployment (--settings-read-only); change them there.\n"
-	if sb.String() != want {
-		t.Errorf("got:\n%s\nwant:\n%s", sb.String(), want)
-	}
+	wantText(t, sb.String(), want)
 }

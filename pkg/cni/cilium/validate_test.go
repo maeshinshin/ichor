@@ -104,16 +104,22 @@ func TestValidateValues(t *testing.T) {
 			c.ForwardKubeDNSToHost = ptr.To(true)
 		})},
 
-		{name: "gateway API without CRDs", ctx: with(enabled, func(c *ValidationContext) {
+		{name: "gateway API without CRDs", ctx: with(replaced, func(c *ValidationContext) {
 			c.GatewayAPICRDs = ptr.To(false)
 		}), user: gw, wantErr: []string{"Gateway API CRDs"}},
-		{name: "gateway API with CRDs", ctx: with(enabled, func(c *ValidationContext) {
+		{name: "gateway API with CRDs", ctx: with(replaced, func(c *ValidationContext) {
 			c.GatewayAPICRDs = ptr.To(true)
 		}), user: gw},
-		{name: "gateway API, CRDs unknown passes", ctx: enabled, user: gw},
+		{name: "gateway API, CRDs unknown passes", ctx: replaced, user: gw},
+		// Cilium's Gateway API prerequisites (docs.cilium.io/en/stable/network/servicemesh/gateway-api/gateway-api):
+		// "Cilium must be configured with the kube-proxy replacement, using kubeProxyReplacement=true".
+		{name: "gateway API while kube-proxy runs", ctx: enabled, user: gw,
+			wantErr: []string{"gatewayAPI.enabled=true needs kube-proxy replacement", "spec.cni.kubeProxy=replaced"}},
+		{name: "gateway API explicitly off while kube-proxy runs", ctx: enabled,
+			user: map[string]any{"gatewayAPI": map[string]any{keyEnabled: false}}},
 
 		{name: "clustermesh API server with the default helm certificates", ctx: enabled, user: mesh(nil),
-			wantErr: []string{"clustermesh.apiserver.tls.auto.method=cronJob"}},
+			wantErr: []string{"clustermesh.apiserver.tls.auto.method=cronJob", "which Ichor's Helm Job may not manage"}},
 		{name: "clustermesh API server with cronJob certificates", ctx: enabled,
 			user: mesh(map[string]any{"method": "cronJob"})},
 		{name: "clustermesh API server with its own certificates", ctx: enabled,
@@ -134,6 +140,17 @@ func TestValidateValues(t *testing.T) {
 		{name: "enabled mode ignores KubePrism", ctx: with(enabled, func(c *ValidationContext) {
 			c.KubePrism = &KubePrism{Enabled: false}
 		})},
+
+		// The chart's own template validation (validate.yaml) refuses these in the Helm Job; they are
+		// refused at admission instead.
+		{name: "cluster.id without cluster.name", ctx: enabled,
+			user:    map[string]any{"cluster": map[string]any{"id": 5}},
+			wantErr: []string{"cluster name is invalid", "cluster.id != 0"}},
+		{name: "valid cluster name and id", ctx: enabled,
+			user: map[string]any{"cluster": map[string]any{"name": "east", "id": 5}}},
+		{name: "a ServiceMonitor passes: the CRD is the Job's to find", ctx: enabled,
+			user: map[string]any{"prometheus": map[string]any{keyEnabled: true,
+				"serviceMonitor": map[string]any{keyEnabled: true}}}},
 
 		{name: "all problems are reported together", ctx: with(enabled, func(c *ValidationContext) {
 			c.ForwardKubeDNSToHost = ptr.To(true)

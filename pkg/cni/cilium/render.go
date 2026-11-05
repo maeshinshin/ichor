@@ -20,6 +20,7 @@ import (
 	_ "embed" // the pinned chart archive
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 
 	"helm.sh/helm/v3/pkg/chartutil"
@@ -41,7 +42,11 @@ var chartArchive []byte
 // chart ships no crds/ directory -- the operator installs Cilium's CRDs
 // itself -- so nothing else is included. Output order is Helm's install
 // order, then template path, so it is deterministic.
-func renderChart(values any) ([]byte, error) {
+func renderChart(values any) ([]byte, error) { return renderChartWith(values) }
+
+// renderChartWith is renderChart for a cluster that also serves the given API versions (Helm's
+// .Capabilities.APIVersions); the validation of user values declares the CRDs it cannot look up.
+func renderChartWith(values any, apiVersions ...string) ([]byte, error) {
 	ch, err := freshChart()
 	if err != nil {
 		return nil, err
@@ -65,6 +70,7 @@ func renderChart(values any) ([]byte, error) {
 
 	caps := chartutil.DefaultCapabilities.Copy()
 	caps.KubeVersion = *kv
+	caps.APIVersions = append(slices.Clone(caps.APIVersions), apiVersions...) // Copy shares the slice
 
 	renderVals, err := chartutil.ToRenderValues(ch, vals, chartutil.ReleaseOptions{
 		Name: ChartName, Namespace: namespace, IsInstall: true, Revision: 1,

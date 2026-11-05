@@ -118,6 +118,33 @@ func TestRotateKeysWithTheFlagsCreatesTheOperationTheyDescribe(t *testing.T) {
 	}
 }
 
+func TestRotateKeysRefusesATokenSettleShorterThanTheKubeletRefresh(t *testing.T) {
+	sa := []string{ichorv1alpha1.KeyRotationTargetServiceAccount}
+
+	for _, settle := range []string{"5m", "0s", "74m"} {
+		_, err := keyRotationStart(opTestCluster, sa, settle, false)
+		if err == nil || !strings.Contains(err.Error(), "--token-settle "+settle) || !strings.Contains(err.Error(), "kubelet") {
+			t.Errorf("--token-settle %s: want a refusal that explains the kubelet refresh, got %v", settle, err)
+		}
+	}
+
+	// No target means both keys, so the service-account key is among them.
+	if _, err := keyRotationStart(opTestCluster, nil, "5m", false); err == nil {
+		t.Error("--token-settle 5m without --only must be refused")
+	}
+
+	for _, ok := range []string{"", "75m", "90m", "24h"} {
+		if _, err := keyRotationStart(opTestCluster, sa, ok, false); err != nil {
+			t.Errorf("--token-settle %q: %v", ok, err)
+		}
+	}
+
+	// The secretbox key alone has no tokens.
+	if _, err := keyRotationStart(opTestCluster, []string{ichorv1alpha1.KeyRotationTargetSecretbox}, "5m", false); err != nil {
+		t.Errorf("--only secretbox --token-settle 5m: %v", err)
+	}
+}
+
 func TestRotateKeysOnlyAcceptsTheKeysItKnows(t *testing.T) {
 	for only, want := range map[string][]string{
 		"":                          nil,

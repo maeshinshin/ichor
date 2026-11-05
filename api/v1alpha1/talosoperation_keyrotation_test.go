@@ -17,11 +17,51 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+func TestKeyRotationTokenSettleRefusal(t *testing.T) {
+	for name, tc := range map[string]struct {
+		settle  *metav1.Duration
+		refused bool
+	}{
+		"unset takes the default": {nil, false},
+		"the default":             {&metav1.Duration{Duration: DefaultKeyRotationTokenSettle}, false},
+		"exactly the minimum":     {&metav1.Duration{Duration: MinKeyRotationTokenSettle}, false},
+		"a day":                   {&metav1.Duration{Duration: 24 * time.Hour}, false},
+		"just under the minimum":  {&metav1.Duration{Duration: MinKeyRotationTokenSettle - time.Second}, true},
+		"five minutes":            {&metav1.Duration{Duration: 5 * time.Minute}, true},
+		"zero":                    {&metav1.Duration{}, true},
+	} {
+		spec := &TalosOperationKeyRotationSpec{Targets: []string{KeyRotationTargetServiceAccount}, TokenSettle: tc.settle}
+
+		if got := spec.TokenSettleRefusal(); (got != "") != tc.refused {
+			t.Errorf("%s: refusal %q, want refused=%v", name, got, tc.refused)
+		}
+	}
+
+	// The message says why and what to do instead.
+	short := &TalosOperationKeyRotationSpec{
+		Targets: []string{KeyRotationTargetServiceAccount}, TokenSettle: &metav1.Duration{Duration: 5 * time.Minute},
+	}
+
+	msg := short.TokenSettleRefusal()
+	for _, want := range []string{"5m0s", MinKeyRotationTokenSettle.String(), "projected", "kubelet"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("the refusal %q does not mention %q", msg, want)
+		}
+	}
+
+	// A rotation of the secretbox key alone has no tokens to wait for.
+	box := &TalosOperationKeyRotationSpec{Targets: []string{KeyRotationTargetSecretbox}, TokenSettle: &metav1.Duration{}}
+	if got := box.TokenSettleRefusal(); got != "" {
+		t.Errorf("a secretbox-only rotation ignores tokenSettle, got refusal %q", got)
+	}
+}
 
 func TestKeyRotationOutdatesSnapshot(t *testing.T) {
 	snap := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)

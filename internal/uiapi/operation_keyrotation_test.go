@@ -123,14 +123,21 @@ func TestPlanKeyRotationRefusesWhatItCannotRun(t *testing.T) {
 	srv, _ := opServer(t, keyObjects("v1.14")...)
 
 	for name, req := range map[string]*pb.KeyRotationRequest{
-		"an unknown key":      {Targets: []string{"aescbc"}},
-		"a duplicated key":    {Targets: []string{ichorv1alpha1.KeyRotationTargetSecretbox, ichorv1alpha1.KeyRotationTargetSecretbox}},
-		"a bad duration":      {TokenSettle: "soon"},
-		"a negative duration": {TokenSettle: "-5m"},
+		"an unknown key":                             {Targets: []string{"aescbc"}},
+		"a duplicated key":                           {Targets: []string{ichorv1alpha1.KeyRotationTargetSecretbox, ichorv1alpha1.KeyRotationTargetSecretbox}},
+		"a bad duration":                             {TokenSettle: "soon"},
+		"a negative duration":                        {TokenSettle: "-5m"},
+		"a settle too short":                         {TokenSettle: "5m"},
+		"a short settle for the service-account key": {Targets: []string{ichorv1alpha1.KeyRotationTargetServiceAccount}, TokenSettle: "74m"},
 	} {
 		if _, err := keyPlan(srv, req); connect.CodeOf(err) != connect.CodeInvalidArgument {
 			t.Errorf("%s: want InvalidArgument, got %v", name, err)
 		}
+	}
+
+	// The secretbox key has no tokens to wait for: a short settle is ignored, not refused.
+	if _, err := keyPlan(srv, &pb.KeyRotationRequest{Targets: []string{ichorv1alpha1.KeyRotationTargetSecretbox}, TokenSettle: "5m"}); err != nil {
+		t.Errorf("a secretbox-only rotation with a short settle: %v", err)
 	}
 
 	// A target (a version) means nothing here.

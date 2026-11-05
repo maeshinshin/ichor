@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -117,8 +118,19 @@ func keyRotationTargets(only string) ([]string, error) {
 // keyRotationStart is what the flags ask for, as a start.
 func keyRotationStart(cluster string, targets []string, tokenSettle string, ignoreLegacyTokens bool) (startSpec, error) {
 	if tokenSettle != "" {
-		if d, err := time.ParseDuration(tokenSettle); err != nil || d < 0 {
+		d, err := time.ParseDuration(tokenSettle)
+		if err != nil || d < 0 {
 			return startSpec{}, fmt.Errorf("--token-settle %q is not a duration of zero or more (like 90m)", tokenSettle)
+		}
+
+		// No --only means both keys, the service-account key among them.
+		checked := &ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: targets, TokenSettle: &metav1.Duration{Duration: d}}
+		if len(targets) == 0 {
+			checked.Targets = []string{ichorv1alpha1.KeyRotationTargetServiceAccount}
+		}
+
+		if why := checked.TokenSettleRefusal(); why != "" {
+			return startSpec{}, fmt.Errorf("--token-settle %s: %s", tokenSettle, why)
 		}
 	}
 
@@ -132,7 +144,7 @@ func init() {
 	clusterCmd.AddCommand(clusterRotateKeysCmd)
 	clusterRotateKeysCmd.Flags().StringVar(&clusterRotateKeysOnly, "only", "", "rotate only this key: service-account or secretbox (default: both)")
 	clusterRotateKeysCmd.Flags().StringVar(&clusterRotateKeysTokenSettle, "token-settle", "",
-		"how long the old service-account key is kept after the new one signs (default 90m)")
+		"how long the old service-account key is kept after the new one signs (default 90m, at least 75m: pods refresh their tokens after 48m)")
 	clusterRotateKeysCmd.Flags().BoolVar(&clusterRotateKeysIgnoreLegacyTokens, "ignore-legacy-tokens", false,
 		"drop the old service-account key although token Secrets it signed still exist")
 	clusterRotateKeysCmd.Flags().BoolVar(&clusterRotateKeysFollow, "follow", false, "keep reporting progress until the rotation completes or fails")

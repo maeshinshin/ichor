@@ -711,7 +711,7 @@ func (c *keyRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 			return nil
 		})
 		if err != nil {
-			return c.retry(ctx, fmt.Sprintf("stage %s did not advance: %v", stage, err))
+			return c.retry(ctx, fmt.Sprintf("stage %s did not advance: %v%s", stage, err, refusalNote(err)))
 		}
 
 		if applied {
@@ -737,12 +737,12 @@ func (c *keyRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 			return nil
 		})
 		if err != nil {
-			return c.retry(ctx, fmt.Sprintf("stage %s is not verified, so the next stage is not started: %v", stage, err))
+			return c.retry(ctx, fmt.Sprintf("stage %s is not verified, so the next stage is not started: %v%s", stage, err, refusalNote(err)))
 		}
 	}
 
 	if err := c.nodesReady(ctx, cps[0]); err != nil {
-		return c.retry(ctx, fmt.Sprintf("stage %s is not verified, so the next stage is not started: %v", stage, err))
+		return c.retry(ctx, fmt.Sprintf("stage %s is not verified, so the next stage is not started: %v%s", stage, err, refusalNote(err)))
 	}
 
 	// Every control plane signs with the new key: pods started from now on get tokens of it. Ichor's own, which
@@ -802,7 +802,14 @@ func (c *keyRun) awaitRestart(
 			return fmt.Errorf("reading the kube-apiserver of %q: %w", m.Name, err)
 		}
 
-		if instance == restart.Instance {
+		switch {
+		case instance == "":
+			// Not "unchanged": Talos lists no kube-apiserver container at all (it is being replaced, or its status is not
+			// reported yet). Saying "still runs in the container it ran before" here misled an operator on hardware.
+			why = fmt.Sprintf("Talos reports no kube-apiserver container on %q right now", m.Name)
+
+			return nil
+		case instance == restart.Instance:
 			why = fmt.Sprintf("the kube-apiserver of %q still runs in the container it ran before the apply", m.Name)
 
 			return nil
@@ -819,14 +826,15 @@ func (c *keyRun) awaitRestart(
 		return nil
 	})
 	if err != nil {
-		res, err := c.retry(ctx, fmt.Sprintf("stage %s did not advance: %v", stage, err))
+		res, err := c.retry(ctx, fmt.Sprintf("stage %s did not advance: %v%s", stage, err, refusalNote(err)))
 
 		return res, true, err
 	}
 
 	if rs.Restart != nil {
 		return ctrl.Result{RequeueAfter: keyRotationPoll}, true, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue,
-			reasonKeyRotationRestarting, fmt.Sprintf("stage %s: waiting for the new configuration to take effect: %s", stage, why))
+			reasonKeyRotationRestarting, fmt.Sprintf("stage %s: waiting for the new configuration to take effect: %s (last checked %s; "+
+				"an older time means Ichor's controller is not running, see its pod)", stage, why, time.Now().UTC().Format("15:04Z")))
 	}
 
 	c.r.markMachine(c.op, m.Name, ichorv1alpha1.TalosOperationMachinePhaseCompleted)
@@ -855,7 +863,7 @@ func (c *keyRun) reencrypt(ctx context.Context) (ctrl.Result, error) {
 		return err
 	})
 	if err != nil {
-		return c.retry(ctx, "re-encrypting the Secrets did not finish, so the old secretbox key stays: "+err.Error())
+		return c.retry(ctx, "re-encrypting the Secrets did not finish, so the old secretbox key stays: "+err.Error()+refusalNote(err))
 	}
 
 	rs := c.op.Status.KeyRotation
@@ -912,7 +920,7 @@ func (c *keyRun) settleTokens(ctx context.Context) (ctrl.Result, error) {
 	}
 
 	if err := c.nodesReady(ctx, cps[0]); err != nil {
-		return c.retry(ctx, "the old service-account key stays until the cluster is healthy: "+err.Error())
+		return c.retry(ctx, "the old service-account key stays until the cluster is healthy: "+err.Error()+refusalNote(err))
 	}
 
 	if !c.op.Spec.KeyRotation.IgnoreLegacyTokens {
@@ -931,7 +939,7 @@ func (c *keyRun) settleTokens(ctx context.Context) (ctrl.Result, error) {
 			return err
 		})
 		if err != nil {
-			return c.retry(ctx, "looking for token Secrets signed by the old key failed, so it stays: "+err.Error())
+			return c.retry(ctx, "looking for token Secrets signed by the old key failed, so it stays: "+err.Error()+refusalNote(err))
 		}
 
 		if len(found) > 0 {

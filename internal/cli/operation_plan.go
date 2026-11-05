@@ -130,7 +130,13 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 		kube := caPlanHas(targets, ichorv1alpha1.CARotationTargetKubernetes)
 		credentials := kube || caPlanHas(targets, ichorv1alpha1.CARotationTargetTalos)
 
-		fmt.Fprintf(&b, "Every machine is reconfigured once per pass (%s), without a reboot.", strings.Join(p.GetStages(), ", "))
+		if caPlanHas(targets, ichorv1alpha1.CARotationTargetEtcd) {
+			// Talos does not restart etcd on a configuration change, so the control planes reboot.
+			fmt.Fprintf(&b, "Every machine is reconfigured once per pass (%s); the control planes REBOOT in each pass (see the warning below), workers do not.",
+				strings.Join(p.GetStages(), ", "))
+		} else {
+			fmt.Fprintf(&b, "Every machine is reconfigured once per pass (%s), without a reboot.", strings.Join(p.GetStages(), ", "))
+		}
 
 		if kube {
 			b.WriteString(" The kubelet RESTARTS on each machine in the passes that change the Kubernetes CA.")

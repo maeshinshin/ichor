@@ -54,22 +54,16 @@ func (s *Server) authorizeOverride(ctx context.Context, obj client.Object) error
 				" verb, and this backend has no user (enable OIDC with ichorUI.oidc, or use `ichor ... --override` with your kubeconfig)"))
 	}
 
-	c, err := s.cl(ctx)
-	if err != nil {
-		return connect.NewError(connect.CodeUnavailable, fmt.Errorf("override: acting as the user: %w", err))
-	}
-
 	resource := resourceOf(obj)
-	review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authv1.ResourceAttributes{
-		Namespace: obj.GetNamespace(), Verb: OverrideVerb, Group: ichorv1alpha1.GroupVersion.Group,
-		Resource: resource, Name: obj.GetName(),
-	}}}
 
-	if err := c.Create(ctx, review); err != nil {
-		return connect.NewError(connect.CodeUnavailable, fmt.Errorf("override: asking Kubernetes whether you may: %w", err))
+	allowed, err := s.askAll(ctx, "override: ", authv1.ResourceAttributes{
+		Namespace: obj.GetNamespace(), Verb: OverrideVerb, Group: ichorv1alpha1.GroupVersion.Group, Resource: resource, Name: obj.GetName(),
+	})
+	if err != nil {
+		return err
 	}
 
-	if !review.Status.Allowed {
+	if !allowed {
 		return connect.NewError(connect.CodePermissionDenied,
 			fmt.Errorf("you may not override on %s %q: Kubernetes RBAC does not grant you the %q verb on it",
 				resource, obj.GetName(), OverrideVerb))

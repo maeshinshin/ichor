@@ -27,7 +27,6 @@ import (
 
 	"connectrpc.com/connect"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	authv1 "k8s.io/api/authorization/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/types"
@@ -82,21 +81,12 @@ func (s *Server) requireUsers(ctx context.Context) (Identity, error) {
 // mayUpdatePasswords asks Kubernetes, as the caller, whether they hold verb
 // update on ichorusers/password. It gates SetPassword and RevokeSessions.
 func (s *Server) mayUpdatePasswords(ctx context.Context) error {
-	c, err := s.cl(ctx)
+	allowed, err := s.may(ctx, verbUpdate, s.ControllerNamespace, "ichorusers", passwordSubres, "")
 	if err != nil {
-		return connect.NewError(connect.CodeUnavailable, errors.New("acting as the user failed"))
+		return err
 	}
 
-	review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authv1.ResourceAttributes{
-		Namespace: s.ControllerNamespace, Verb: verbUpdate, Group: ichorv1alpha1.GroupVersion.Group,
-		Resource: "ichorusers", Subresource: passwordSubres,
-	}}}
-
-	if err := c.Create(ctx, review); err != nil {
-		return connect.NewError(connect.CodeUnavailable, errors.New("asking Kubernetes whether you may failed"))
-	}
-
-	if !review.Status.Allowed {
+	if !allowed {
 		return connect.NewError(connect.CodePermissionDenied,
 			errors.New("kubernetes RBAC does not grant you the update verb on ichorusers/password"))
 	}

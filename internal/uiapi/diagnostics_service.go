@@ -162,21 +162,31 @@ func (s *Server) mayDownload(ctx context.Context, namespace, resource, subresour
 
 // may asks the same question for any verb.
 func (s *Server) may(ctx context.Context, verb, namespace, resource, subresource, name string) (bool, error) {
+	return s.askAll(ctx, "", authv1.ResourceAttributes{
+		Namespace: namespace, Verb: verb, Group: ichorv1alpha1.GroupVersion.Group, Resource: resource, Subresource: subresource, Name: name,
+	})
+}
+
+// askAll makes a SelfSubjectAccessReview as the caller for each of attrs and reports whether every one
+// is allowed. prefix starts the error messages.
+func (s *Server) askAll(ctx context.Context, prefix string, attrs ...authv1.ResourceAttributes) (bool, error) {
 	c, err := s.cl(ctx)
 	if err != nil {
-		return false, connect.NewError(connect.CodeUnavailable, fmt.Errorf("acting as the user: %w", err))
+		return false, connect.NewError(connect.CodeUnavailable, fmt.Errorf("%sacting as the user: %w", prefix, err))
 	}
 
-	review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authv1.ResourceAttributes{
-		Namespace: namespace, Verb: verb, Group: ichorv1alpha1.GroupVersion.Group,
-		Resource: resource, Subresource: subresource, Name: name,
-	}}}
+	for i := range attrs {
+		review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &attrs[i]}}
+		if err := c.Create(ctx, review); err != nil {
+			return false, connect.NewError(connect.CodeUnavailable, fmt.Errorf("%sasking Kubernetes whether you may: %w", prefix, err))
+		}
 
-	if err := c.Create(ctx, review); err != nil {
-		return false, connect.NewError(connect.CodeUnavailable, fmt.Errorf("asking Kubernetes whether you may: %w", err))
+		if !review.Status.Allowed {
+			return false, nil
+		}
 	}
 
-	return review.Status.Allowed, nil
+	return true, nil
 }
 
 func (s *Server) authorizeDownload(ctx context.Context, m *ichorv1alpha1.TalosMachine, scope DownloadScope) error {

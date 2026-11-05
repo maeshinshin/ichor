@@ -123,6 +123,29 @@ func networkToPB(in *ichorv1alpha1.TalosMachineNetwork) *pb.MachineNetwork {
 	}
 }
 
+// diskFromPB converts a wire disk selector; exactly one identifier must be set, the same rule the CRD enforces.
+func diskFromPB(who string, d *pb.MachineDisk) (ichorv1alpha1.TalosMachineDisk, error) {
+	set := 0
+
+	for _, v := range []string{d.GetWwid(), d.GetSerial(), d.GetByIdPath(), d.GetBusPath(), d.GetDevPath()} {
+		if v != "" {
+			set++
+		}
+	}
+
+	if set != 1 {
+		return ichorv1alpha1.TalosMachineDisk{}, fmt.Errorf("%s needs exactly one of wwid, serial, by_id_path, bus_path or dev_path", who)
+	}
+
+	return ichorv1alpha1.TalosMachineDisk{
+		WWID: d.GetWwid(), Serial: d.GetSerial(), ByIDPath: d.GetByIdPath(), BusPath: d.GetBusPath(), DevPath: d.GetDevPath(),
+	}, nil
+}
+
+func diskToPB(d ichorv1alpha1.TalosMachineDisk) *pb.MachineDisk {
+	return &pb.MachineDisk{Wwid: d.WWID, Serial: d.Serial, ByIdPath: d.ByIDPath, BusPath: d.BusPath, DevPath: d.DevPath}
+}
+
 // disksFromPB converts the wire disk roles to spec.disks, with the CRD's rules: one
 // selector per disk, at most one ephemeral disk, a unique name per user volume.
 func disksFromPB(in []*pb.MachineDiskRole) ([]ichorv1alpha1.TalosMachineDiskRole, error) {
@@ -133,28 +156,12 @@ func disksFromPB(in []*pb.MachineDiskRole) ([]ichorv1alpha1.TalosMachineDiskRole
 	)
 
 	for i, d := range in {
-		sel := d.GetDisk()
-
-		set := 0
-
-		for _, v := range []string{sel.GetWwid(), sel.GetSerial(), sel.GetByIdPath(), sel.GetBusPath(), sel.GetDevPath()} {
-			if v != "" {
-				set++
-			}
+		disk, err := diskFromPB(fmt.Sprintf("disks[%d]: the disk", i), d.GetDisk())
+		if err != nil {
+			return nil, err
 		}
 
-		if set != 1 {
-			return nil, fmt.Errorf("disks[%d]: the disk needs exactly one of wwid, serial, by_id_path, bus_path or dev_path", i)
-		}
-
-		role := ichorv1alpha1.TalosMachineDiskRole{
-			Role: d.GetRole(),
-			Disk: ichorv1alpha1.TalosMachineDisk{
-				WWID: sel.GetWwid(), Serial: sel.GetSerial(), ByIDPath: sel.GetByIdPath(),
-				BusPath: sel.GetBusPath(), DevPath: sel.GetDevPath(),
-			},
-			Name: d.GetName(), MaxSize: d.GetMaxSize(),
-		}
+		role := ichorv1alpha1.TalosMachineDiskRole{Role: d.GetRole(), Disk: disk, Name: d.GetName(), MaxSize: d.GetMaxSize()}
 
 		switch d.GetRole() {
 		case ichorv1alpha1.MachineDiskRoleEphemeral:
@@ -223,11 +230,7 @@ func disksToPB(in []ichorv1alpha1.TalosMachineDiskRole) []*pb.MachineDiskRole {
 
 	for _, d := range in {
 		out = append(out, &pb.MachineDiskRole{
-			Role: d.Role, Name: d.Name, MaxSize: d.MaxSize,
-			Disk: &pb.MachineDisk{
-				Wwid: d.Disk.WWID, Serial: d.Disk.Serial, ByIdPath: d.Disk.ByIDPath,
-				BusPath: d.Disk.BusPath, DevPath: d.Disk.DevPath,
-			},
+			Role: d.Role, Name: d.Name, MaxSize: d.MaxSize, Disk: diskToPB(d.Disk),
 		})
 	}
 

@@ -18,7 +18,6 @@ package uiapi
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -306,26 +305,12 @@ func installFromPB(in *pb.MachineInstall) (*ichorv1alpha1.TalosMachineInstall, e
 		return nil, nil
 	}
 
-	d := in.GetDisk()
-
-	set := 0
-
-	for _, v := range []string{d.GetWwid(), d.GetSerial(), d.GetByIdPath(), d.GetBusPath(), d.GetDevPath()} {
-		if v != "" {
-			set++
-		}
+	disk, err := diskFromPB("install.disk", in.GetDisk())
+	if err != nil {
+		return nil, err
 	}
 
-	if set != 1 {
-		return nil, errors.New("install.disk needs exactly one of wwid, serial, by_id_path, bus_path or dev_path")
-	}
-
-	return &ichorv1alpha1.TalosMachineInstall{
-		Disk: ichorv1alpha1.TalosMachineDisk{
-			WWID: d.GetWwid(), Serial: d.GetSerial(), ByIDPath: d.GetByIdPath(), BusPath: d.GetBusPath(), DevPath: d.GetDevPath(),
-		},
-		Image: in.GetImage(),
-	}, nil
+	return &ichorv1alpha1.TalosMachineInstall{Disk: disk, Image: in.GetImage()}, nil
 }
 
 func installToPB(in *ichorv1alpha1.TalosMachineInstall) *pb.MachineInstall {
@@ -333,12 +318,7 @@ func installToPB(in *ichorv1alpha1.TalosMachineInstall) *pb.MachineInstall {
 		return nil
 	}
 
-	return &pb.MachineInstall{
-		Disk: &pb.MachineDisk{
-			Wwid: in.Disk.WWID, Serial: in.Disk.Serial, ByIdPath: in.Disk.ByIDPath, BusPath: in.Disk.BusPath, DevPath: in.Disk.DevPath,
-		},
-		Image: in.Image,
-	}
+	return &pb.MachineInstall{Disk: diskToPB(in.Disk), Image: in.Image}
 }
 
 // RejectMachine records that a pending machine was turned away by setting

@@ -318,6 +318,16 @@ spec:
                     - containerd
                     - cri
                     type: string
+                  wipeMode:
+                    description: |-
+                      wipeMode makes a reset wipe more than the STATE and EPHEMERAL partitions: system-disk erases
+                      the whole system disk (boot and EFI included, so the node boots a boot image again instead of
+                      its installed UKI, which is what installing it afresh from a SecureBoot ISO needs), all also
+                      erases every user disk. Only with the reset action; unset keeps the STATE and EPHEMERAL wipe.
+                    enum:
+                    - system-disk
+                    - all
+                    type: string
                 required:
                 - action
                 - machineRef
@@ -332,6 +342,8 @@ spec:
                     == self.machineRef.name)
                 - message: allowLeader only applies to etcd-defrag
                   rule: '!self.allowLeader || self.action == ''etcd-defrag'''
+                - message: wipeMode only applies to reset
+                  rule: '!has(self.wipeMode) || self.action == ''reset'''
               paused:
                 default: false
                 description: |-

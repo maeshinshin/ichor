@@ -119,6 +119,34 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 		Expect(apierrors.IsNotFound(err)).To(BeTrue(), "a successful opt-in reset must still let the removal complete")
 	})
 
+	It("wipes the whole system disk when the removal asks for a wipe mode", func() {
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestClusterWithCount(1, secret.Name)
+		cp1 := newTestControlPlane(cluster.Name, "r4w")
+		cp2 := newTestControlPlane(cluster.Name, "r5w")
+		cp3 := newTestControlPlane(cluster.Name, "r6w")
+
+		fake := &fakeTalosClient{nodeName: resetTestNode}
+		r := &TalosMachineReconciler{
+			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
+			TalosClient: clientFactory(fake), Recorder: record.NewFakeRecorder(10),
+		}
+		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
+			_, err := reconcileMachine(r, cp)
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		got := fetchMachine(cp1)
+		got.Annotations = map[string]string{resetWipeModeAnnotation: ichorv1alpha1.WipeModeSystemDisk}
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+		optIntoReset(cp1)
+
+		_, err := reconcileMachine(r, cp1)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.resetModes).To(Equal([]string{ichorv1alpha1.WipeModeSystemDisk}))
+	})
+
 	It("holds the finalizer and does not clear it when Reset fails", func() {
 		bundle := newTestBundle("v1.14")
 		secret := newTestSecret(bundle)

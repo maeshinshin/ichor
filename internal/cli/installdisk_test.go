@@ -39,15 +39,15 @@ func TestParseInstallDisk(t *testing.T) {
 		{testInstallDisk, ichorv1alpha1.TalosMachineDisk{DevPath: testInstallDisk}},
 		{"/pci0000:00/0000:00:17.0/ata1", ichorv1alpha1.TalosMachineDisk{BusPath: "/pci0000:00/0000:00:17.0/ata1"}},
 	} {
-		got, err := parseInstallDisk(tc.in)
+		got, err := parseDiskSelector("--install-disk", tc.in)
 		if err != nil || *got != tc.want {
-			t.Errorf("parseInstallDisk(%q) = %+v, %v; want %+v", tc.in, got, err, tc.want)
+			t.Errorf("parseDiskSelector(%q) = %+v, %v; want %+v", tc.in, got, err, tc.want)
 		}
 	}
 
 	for _, bad := range []string{"", "sda", "wwid:", "serial:", "vda"} {
-		if _, err := parseInstallDisk(bad); err == nil {
-			t.Errorf("parseInstallDisk(%q) must fail", bad)
+		if _, err := parseDiskSelector("--install-disk", bad); err == nil {
+			t.Errorf("parseDiskSelector(%q) must fail", bad)
 		}
 	}
 }

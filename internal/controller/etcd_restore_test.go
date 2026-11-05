@@ -211,6 +211,16 @@ func (f *restoreFixture) run(job *restoreJob, maxSteps int) (done bool, err erro
 	return false, nil
 }
 
+// runOK is run, failing the test when the job errors.
+func (f *restoreFixture) runOK(job *restoreJob, maxSteps int) bool {
+	GinkgoHelper()
+
+	done, err := f.run(job, maxSteps)
+	Expect(err).NotTo(HaveOccurred())
+
+	return done
+}
+
 // members makes the target's etcd list every control plane.
 func (f *restoreFixture) members(hosts ...string) {
 	list := make([]EtcdMember, 0, len(hosts))
@@ -285,9 +295,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 
 			// The job: one pass sends the wipe to every control plane at once.
 			job := f.lastJob()
-			done, err := job.step(ctx)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(done).To(BeFalse())
+			Expect(f.runOK(job, 1)).To(BeFalse())
 
 			for _, fk := range f.fakes {
 				Expect(fk.resetEtcdCalls).To(Equal(1))
@@ -295,9 +303,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 
 			// They are wiped; the next pass records Recovering before it touches the target, and a
 			// later one sees etcd answer on it.
-			done, err = f.run(job, 5)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(done).To(BeTrue())
+			Expect(f.runOK(job, 5)).To(BeTrue())
 			Expect(f.marker().Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRejoining))
 
 			target := f.targetFake()
@@ -717,9 +723,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			Expect(f.marker().Failure).To(BeEmpty())
 
 			f.targetFake().recoverErr = nil
-			done, err := f.run(job, 4)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(done).To(BeTrue())
+			Expect(f.runOK(job, 4)).To(BeTrue())
 		})
 
 		It("gives up at the deadline and says what it was waiting for", func() {
@@ -797,24 +801,19 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 
 			// Recovered, but the others have not joined: the own node is left alone.
 			f.members(f.target())
-			done, err := f.run(job, 8)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(done).To(BeFalse())
+			Expect(f.runOK(job, 8)).To(BeFalse())
 			Expect(f.marker().Step).To(Equal(ichorv1alpha1.EtcdRestoreStepRejoining))
 			Expect(f.fake(restoreHostA).resetEtcdCalls).To(BeZero(), "wiping it would stop the controller before the recovery")
 			Expect(f.targetFake().recovered).To(HaveLen(1))
 
 			// Both others are members: the intent is recorded, then the wipe is sent, once.
 			f.members(restoreHostB, restoreHostC)
-			_, err = job.step(ctx)
-			Expect(err).NotTo(HaveOccurred())
+			f.runOK(job, 1)
 			Expect(f.fake(restoreHostA).resetEtcdCalls).To(Equal(1))
 			Expect(f.marker().OwnWipeAt.IsZero()).To(BeFalse(), "recorded before the wipe was sent")
 
 			// It reboots wiped (the fake's data is gone), and the job is done.
-			done, err = job.step(ctx)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(done).To(BeTrue())
+			Expect(f.runOK(job, 1)).To(BeTrue())
 			Expect(f.marker().OwnDone).To(BeTrue())
 
 			// The reconcile does not wipe it either, and goes on once it is a member.
@@ -860,14 +859,10 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 
 			// Unreachable while it reboots: wait; back and wiped: done.
 			f.fake(restoreHostA).etcdDataErr = errors.New("connection refused")
-			done, err := job.step(ctx)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(done).To(BeFalse())
+			Expect(f.runOK(job, 1)).To(BeFalse())
 
 			f.fake(restoreHostA).etcdDataErr = nil
-			done, err = job.step(ctx)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(done).To(BeTrue())
+			Expect(f.runOK(job, 1)).To(BeTrue())
 		})
 
 		It("has no own wipe when the controller does not run on a control plane", func() {
@@ -880,9 +875,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			Expect(job.own).To(BeNil())
 
 			f.members(f.hosts()...)
-			done, err := f.run(job, 8)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(done).To(BeTrue())
+			Expect(f.runOK(job, 8)).To(BeTrue())
 			Expect(f.marker().Own).To(BeEmpty())
 		})
 
@@ -892,9 +885,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			op := f.newOp(nil)
 			f.reconcile(op)
 			f.members(f.hosts()...)
-			done, err := f.run(f.lastJob(), 8)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(done).To(BeTrue())
+			Expect(f.runOK(f.lastJob(), 8)).To(BeTrue())
 
 			f.reconcile(op)
 			Expect(f.fake(restoreHostA).resetEtcdCalls).To(BeZero())

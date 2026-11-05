@@ -26,15 +26,15 @@ import (
 // TestCacheDropsManagedFields: managedFields is often the largest part of a cached object and nothing in the
 // controller reads it from the cache (hardware run I, the controller hit its memory limit).
 func TestCacheDropsManagedFields(t *testing.T) {
-	for _, ns := range []string{"", "ichor-system"} {
+	for _, ns := range []string{"", testIchorNamespace} {
 		transform := CacheOptions(ns).DefaultTransform
 		if transform == nil {
 			t.Fatalf("CacheOptions(%q) has no DefaultTransform", ns)
 		}
 
-		node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{
-			Name: "n1", ManagedFields: []metav1.ManagedFieldsEntry{{Manager: "kubelet"}},
-		}}
+		node := &corev1.Node{}
+		node.Name = "n1"
+		node.ManagedFields = []metav1.ManagedFieldsEntry{{Manager: "kubelet"}}
 
 		out, err := transform(node)
 		if err != nil {

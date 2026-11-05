@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -70,7 +71,9 @@ func (r *BootSecurityReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		ichorv1alpha1.ConditionSecureBoot:     secureboot.Mode(sec) != ichorv1alpha1.SecureBootOff,
 		ichorv1alpha1.ConditionKernelLockdown: sec != nil && sec.KernelLockdown != "",
 	} {
-		if !optionSet && !anyHas(machines, typ) {
+		if !optionSet && !slices.ContainsFunc(approved, func(m ichorv1alpha1.TalosMachine) bool {
+			return apimeta.FindStatusCondition(m.Status.Conditions, typ) != nil
+		}) {
 			apimeta.RemoveStatusCondition(&cluster.Status.Conditions, typ)
 
 			continue
@@ -90,17 +93,6 @@ func (r *BootSecurityReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	}
 
 	return ctrl.Result{}, nil
-}
-
-// anyHas reports whether any machine carries a condition of type typ.
-func anyHas(machines map[string][]metav1.Condition, typ string) bool {
-	for _, conds := range machines {
-		if apimeta.FindStatusCondition(conds, typ) != nil {
-			return true
-		}
-	}
-
-	return false
 }
 
 // machineCluster maps a TalosMachine to its cluster.

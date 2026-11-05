@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"slices"
 	"strconv"
 
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -81,15 +82,10 @@ func caRotationCompleted(ctx context.Context, c client.Client, cluster *ichorv1a
 		return false, err
 	}
 
-	for i := range ops.Items {
-		op := &ops.Items[i]
-		if op.Spec.ClusterRef.Name == cluster.Name && op.Spec.Kind == ichorv1alpha1.TalosOperationKindCARotation &&
-			op.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted {
-			return true, nil
-		}
-	}
-
-	return false, nil
+	return slices.ContainsFunc(ops.Items, func(op ichorv1alpha1.TalosOperation) bool {
+		return op.Spec.ClusterRef.Name == cluster.Name && op.Spec.Kind == ichorv1alpha1.TalosOperationKindCARotation &&
+			op.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted
+	}), nil
 }
 
 // caRotationOperationClusters maps a ca-rotation operation to its cluster, so a completed rotation

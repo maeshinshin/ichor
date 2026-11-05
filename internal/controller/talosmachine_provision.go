@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -185,7 +184,7 @@ func (r *TalosMachineReconciler) provision(
 				"recorded identity; nothing was applied", m.Spec.Endpoint, hw.UUID, hw.Serial, hw.MACAddresses))
 	}
 
-	if converged && m.Annotations[ichorv1alpha1.TalosMachineHoldApplyAnnotation] == strconv.FormatBool(true) {
+	if converged && holdApplySet(m) {
 		return r.retryLater(ctx, m, reasonReprovisionBlocked, fmt.Sprintf("the node at %s is in maintenance mode with this machine's "+
 			"recorded identity, but the annotation %s is set, so nothing was sent; remove it to have the node reinstalled",
 			m.DialEndpoint(), ichorv1alpha1.TalosMachineHoldApplyAnnotation))
@@ -444,13 +443,9 @@ func settleVolumeFailures(failed string, storedAt *metav1.Time) string {
 		return failed
 	}
 
-	var kept []string
-
-	for f := range strings.SplitSeq(failed, "; ") {
-		if !strings.HasSuffix(f, transientVolumeFailure) {
-			kept = append(kept, f)
-		}
-	}
+	kept := slices.DeleteFunc(strings.Split(failed, "; "), func(f string) bool {
+		return strings.HasSuffix(f, transientVolumeFailure)
+	})
 
 	return strings.Join(kept, "; ")
 }

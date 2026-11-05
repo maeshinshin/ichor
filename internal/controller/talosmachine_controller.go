@@ -51,6 +51,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -329,12 +330,8 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	// A preset other than cilium is not rendered: rendering would strip Talos's flannel
-	// and take that cluster's network down. Nothing on the node is touched.
-	// Refreshed here, on every approved machine's reconcile, rather than on
-	// its own schedule: architecture.md's "Nodes" wants the cluster's
-	// Transitioning status kept current, not just recomputed when a
-	// removal happens to run.
+	// Refreshed on every approved machine's reconcile, not just when a removal runs
+	// (architecture.md "Nodes": Transitioning is kept current).
 	if err := r.refreshTransitioning(ctx, &cluster, &m); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -729,16 +726,9 @@ func registryAuthFingerprint(auth map[string]render.RegistryAuth) string {
 		return ""
 	}
 
-	hosts := make([]string, 0, len(auth))
-	for h := range auth {
-		hosts = append(hosts, h)
-	}
-
-	slices.Sort(hosts)
-
 	var b strings.Builder
 
-	for _, h := range hosts {
+	for _, h := range slices.Sorted(maps.Keys(auth)) {
 		a := auth[h]
 		// %q quotes each field, so a value cannot run into its neighbour.
 		fmt.Fprintf(&b, "%q:%q,%q,%q;", h, a.Password, a.Auth, a.IdentityToken)
@@ -1131,9 +1121,14 @@ func (r *TalosMachineReconciler) machinesOfAuthSecret(ctx context.Context, obj c
 	return reqs
 }
 
+// holdApplySet reports whether the hold-apply annotation is set on m.
+func holdApplySet(m *ichorv1alpha1.TalosMachine) bool {
+	return m.Annotations[ichorv1alpha1.TalosMachineHoldApplyAnnotation] == strconv.FormatBool(true)
+}
+
 // dropReleasedHold removes the AdoptionHeld condition once hold-apply is not set.
 func dropReleasedHold(m *ichorv1alpha1.TalosMachine) {
-	if m.Annotations[ichorv1alpha1.TalosMachineHoldApplyAnnotation] != strconv.FormatBool(true) {
+	if !holdApplySet(m) {
 		apimeta.RemoveStatusCondition(&m.Status.Conditions, conditionAdoptionHeld)
 	}
 }
@@ -1144,7 +1139,7 @@ func dropReleasedHold(m *ichorv1alpha1.TalosMachine) {
 func (r *TalosMachineReconciler) reportHold(
 	ctx context.Context, m *ichorv1alpha1.TalosMachine, current, rendered []byte, hash string,
 ) (ctrl.Result, bool, error) {
-	if m.Annotations[ichorv1alpha1.TalosMachineHoldApplyAnnotation] != strconv.FormatBool(true) {
+	if !holdApplySet(m) {
 		return ctrl.Result{}, false, nil // Reconcile already dropped the condition
 	}
 

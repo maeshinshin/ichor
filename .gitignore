@@ -61,3 +61,4 @@ internal/installmanifest/network-policies.yaml
 /test/harness/kubevirt/kubevirt
 gate.done
 remote-gate-out/
+.docs-shots/

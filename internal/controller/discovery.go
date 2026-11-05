@@ -40,11 +40,8 @@ import (
 	"github.com/maeshinshin/ichor/pkg/endpointguard"
 )
 
-// Event reasons Discover records on the TalosCluster when it will not
-// register a candidate -- the human-visible report
-// docs/design/architecture.md's "Nodes" section calls for when a key is weak
-// or collides, since no TalosMachine is created to carry a condition for
-// either case.
+// Event reasons Discover records on the TalosCluster when it will not register a candidate (architecture.md
+// "Nodes"): no TalosMachine is created to carry a condition for a weak or colliding key.
 const (
 	reasonWeakIdentity      = "WeakIdentity"
 	reasonIdentityCollision = "IdentityCollision"
@@ -64,58 +61,39 @@ const (
 // unauthenticated call because the node already has a configuration.
 var ErrAlreadyConfigured = errors.New("the node already has a Talos configuration")
 
-// DiscoveryReconciler turns a maintenance-mode node's hardware identity into
-// a pending, unapproved TalosMachine (docs/design/architecture.md "Nodes":
-// "The controller reads hardware identity ... and creates a pending
-// TalosMachine"). It leaves TalosMachineSpec.ApprovalState at its "pending" default, so a discovered
-// machine gets no configuration applied until a human approves it --
-// TalosMachineReconciler's own first line already refuses to touch an
-// unapproved machine, so that guarantee lives in one place, not two.
+// DiscoveryReconciler turns a maintenance-mode node's hardware identity into a pending, unapproved
+// TalosMachine (architecture.md "Nodes"). It leaves ApprovalState at "pending", so the machine gets no
+// configuration until a human approves it (TalosMachineReconciler refuses to touch an unapproved one).
 //
-// What supplies the candidate endpoint -- registering one by IP, a future
-// subnet scan, or anything else "Nodes" lists as an option -- is not decided
-// here; see docs/adr/0011. Discover takes the endpoint as a plain argument
-// so whichever mechanism is chosen later can drive it unchanged.
+// What supplies the candidate endpoint (an IP, a subnet scan, ...) is not decided here (docs/adr/0011):
+// Discover takes it as a plain argument.
 type DiscoveryReconciler struct {
 	client.Client
 
-	// Recorder reports a weak or colliding identity in a form an operator
-	// can see (architecture.md "Nodes": "the address, MACs, serial and
-	// manufacturer shown to decide on"), as a Warning Event on the
-	// TalosCluster, since neither case creates a TalosMachine to hold a
-	// condition. nil is valid -- Discover still returns nil, nil, it just
-	// has nowhere to report to.
+	// Recorder reports a weak or colliding identity as a Warning Event on the TalosCluster (the address,
+	// MACs, serial and manufacturer to decide on; architecture.md "Nodes"). nil is valid: Discover still
+	// returns nil, nil.
 	Recorder record.EventRecorder
 
-	// MaintenanceClient opens the insecure maintenance-mode connection
-	// Discover reads identity over (NewMachineryMaintenanceClient is the
-	// real implementation cmd/main.go wires in). nil is reported through the
-	// returned error, the same "not configured" shape
-	// TalosMachineReconciler.TalosClient uses.
+	// MaintenanceClient opens the insecure maintenance-mode connection Discover reads identity over
+	// (NewMachineryMaintenanceClient). nil is reported through the returned error.
 	MaintenanceClient func(ctx context.Context, endpoint string) (MaintenanceClient, error)
 }
 
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
-// Discover reads endpoint's hardware identity and decides, from that alone,
-// whether to register it:
+// Discover reads endpoint's hardware identity and decides, from that alone, whether to register it:
 //
-//   - A weak identity (any of UUID, serial or at least one permanent MAC
-//     missing) is never auto-registered (architecture.md "Nodes"): Discover
-//     records a WeakIdentity event on cluster and returns (nil, nil).
-//   - A strong identity whose UUID already names an existing TalosMachine
-//     with a *different* serial number or MAC set is a collision Ichor
-//     cannot resolve by itself -- Talos does not guarantee the UUID is
-//     unique, so the same value could be two different machines. Discover
-//     records an IdentityCollision event and returns (nil, nil), leaving the
-//     existing machine untouched.
-//   - A strong identity matching an existing TalosMachine exactly is the
-//     same machine returning; Discover returns it unchanged.
-//   - Otherwise Discover creates a new, unapproved TalosMachine keyed by the
-//     UUID and returns it.
+//   - A weak identity (a missing UUID, serial or permanent MAC) is never auto-registered: Discover records a
+//     WeakIdentity event on cluster and returns (nil, nil).
+//   - A strong identity whose UUID names an existing TalosMachine with a different serial or MAC set is a
+//     collision Ichor cannot resolve (Talos does not guarantee UUIDs are unique): an IdentityCollision
+//     event, (nil, nil), the existing machine untouched.
+//   - A strong identity matching an existing TalosMachine exactly is the same machine returning; it is
+//     returned unchanged.
+//   - Otherwise a new, unapproved TalosMachine keyed by the UUID is created and returned.
 //
-// A created machine's Spec.Role is left unset: architecture.md's "Nodes"
-// assigns the role at approval, not at discovery.
+// A created machine's Spec.Role is left unset: the role is assigned at approval.
 func (r *DiscoveryReconciler) Discover(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, endpoint string,
 ) (*ichorv1alpha1.TalosMachine, error) {

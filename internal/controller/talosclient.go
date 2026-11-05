@@ -32,34 +32,24 @@ var (
 	ErrEtcdDataExists = errors.New("etcd data directory is not empty")
 )
 
-// TalosClient is the Talos API surface the reconciler needs for one
-// machine (architecture.md's "Configuration reconcile" steps 2 and 4). It
-// is the one interface rule 0 allows: a real implementation dials machined
-// over gRPC; tests use a fake, since no Talos call may ever reach a real
-// node from a test (unit rule 2).
+// TalosClient is the Talos API surface the reconciler needs for one machine (architecture.md's
+// "Configuration reconcile" steps 2 and 4): a real implementation dials machined over gRPC, tests use a
+// fake, since no Talos call may reach a real node from a test (unit rule 2).
 //
-// Deliberately not on this interface: anything that decides reboot vs.
-// no-reboot. ADR 0009 found that Talos's own ApplyConfiguration response
-// cannot answer that (AUTO is a hardcoded alias for NO_REBOOT and never
-// inspects the diff), so the reconciler decides from pkg/fieldmeta before
-// it ever calls DryRunApply or ApplyNoReboot, and this interface has no
-// method that could tempt it to ask Talos instead.
+// Deliberately not on this interface: anything that decides reboot vs. no-reboot. Talos's own
+// ApplyConfiguration response cannot answer that (AUTO is a hardcoded alias for NO_REBOOT, ADR 0009), so the
+// reconciler decides from pkg/fieldmeta before it calls DryRunApply or ApplyNoReboot.
 type TalosClient interface {
-	// CurrentConfig returns the node's current machine configuration as
-	// canonical YAML bytes (design step 2: "read the node's current
-	// configuration over the Talos API"), the same encoding pkg/render
-	// produces so the two hash comparably.
+	// CurrentConfig returns the node's current machine configuration as canonical YAML bytes, the encoding
+	// pkg/render produces, so the two hash comparably.
 	CurrentConfig(ctx context.Context) ([]byte, error)
 
-	// DryRunApply validates cfg against the node without applying it and
-	// returns ValidateAtRuntime's warnings: deprecated-field migration
-	// hints, missing cross-document configuration, label mismatches (ADR
-	// 0009). It is always called before an apply, and is genuinely
-	// side-effect free.
+	// DryRunApply validates cfg against the node without applying it and returns ValidateAtRuntime's
+	// warnings (deprecated-field hints, missing cross-document configuration, label mismatches; ADR 0009).
+	// It is side-effect free and always called before an apply.
 	DryRunApply(ctx context.Context, cfg []byte) (warnings []string, err error)
 
-	// ApplyNoReboot applies cfg with ApplyConfigurationRequest_NO_REBOOT.
-	// The reconciler only ever calls this once pkg/fieldmeta has said the
+	// ApplyNoReboot applies cfg with ApplyConfigurationRequest_NO_REBOOT, once pkg/fieldmeta has said the
 	// change needs neither a reboot nor a reinstall.
 	ApplyNoReboot(ctx context.Context, cfg []byte) error
 
@@ -75,39 +65,23 @@ type TalosClient interface {
 	// (drain.go, ADR 0080). The RPC returns once the request is accepted.
 	Reboot(ctx context.Context) error
 
-	// EtcdMemberList lists etcd members as seen by the node this client is
-	// dialed to (removal.go: queried on the departing machine's own client
-	// first, and on a surviving sibling's client as a fallback, to decide
-	// whether the departing machine is still a member at all -- the check
-	// half of removal.go's idempotent check-then-act, since
-	// architecture.md records that "removing an already-removed etcd
-	// member reports not-found, which counts as success").
+	// EtcdMemberList lists etcd members as seen by the node this client is dialed to (removal.go: the
+	// check half of its idempotent check-then-act, asked of the departing machine, else of a survivor).
 	EtcdMemberList(ctx context.Context) ([]EtcdMember, error)
 
-	// EtcdLeaveCluster asks the node this client is dialed to to leave the
-	// etcd cluster gracefully. Call it on the departing machine's own
-	// client: Talos's own `talosctl etcd leave` is explicit that this is
-	// always preferred over EtcdRemoveMemberByID.
+	// EtcdLeaveCluster asks the node this client is dialed to to leave etcd gracefully. Call it on the
+	// departing machine's own client: `talosctl etcd leave` is always preferred over EtcdRemoveMemberByID.
 	EtcdLeaveCluster(ctx context.Context) error
 
-	// EtcdRemoveMemberByID forcibly removes memberID from etcd, as decided
-	// by the node this client is dialed to. Call it on a surviving
-	// sibling's client when the departing machine cannot be dialed at all
-	// (ADR 0032; architecture.md's forceRemove case: the node is dead or
-	// unreachable, so it can never call EtcdLeaveCluster on itself).
+	// EtcdRemoveMemberByID forcibly removes memberID from etcd, as decided by the node this client is dialed
+	// to. Call it on a survivor's client when the departing machine cannot be dialed (ADR 0032).
 	EtcdRemoveMemberByID(ctx context.Context, memberID uint64) error
 
-	// Reset wipes this client's node back to maintenance mode: its STATE
-	// and EPHEMERAL partitions only, never the whole system disk (ADR
-	// 0038 -- Talos's own ResetRequest wipes everything, boot and EFI
-	// included, unless told which partitions to name) and never
-	// graceful (removal.go has already drained and left etcd itself by
-	// the time this is ever called, so there is nothing left for Talos's
-	// own graceful pre-reset routine to do). Opt-in per removal, and
-	// fire-and-forget on Talos's side: this returns once the request is
-	// accepted, not once the wipe finishes. wipeMode "system-disk" or "all"
-	// (TalosOperation.spec.node.wipeMode) instead wipes the whole system disk,
-	// so the node boots a boot image again; empty keeps the STATE and EPHEMERAL wipe.
+	// Reset wipes this client's node back to maintenance mode: STATE and EPHEMERAL only, not the system disk
+	// (ADR 0038; Talos's own ResetRequest wipes boot and EFI too unless told which partitions), and not
+	// gracefully (removal.go has drained and left etcd already). Fire-and-forget: it returns once the
+	// request is accepted. wipeMode "system-disk" or "all" (TalosOperation.spec.node.wipeMode) wipes the
+	// whole system disk so the node boots a boot image again; empty keeps the STATE and EPHEMERAL wipe.
 	Reset(ctx context.Context, wipeMode string) error
 
 	// Shutdown powers this node off. force=false lets Talos cordon and
@@ -118,52 +92,32 @@ type TalosClient interface {
 	// RPC returns once the request is accepted, not once the node is down.
 	Shutdown(ctx context.Context, force bool) error
 
-	// Version reports this node's current Talos release tag (e.g.
-	// "v1.14.3"), the "from" half of a Talos upgrade's pre-checks
-	// (pkg/upgrade.TalosPath) and the signal talos_upgrade.go polls to tell
-	// "upgrade not started yet" from "upgraded" from "rebooted but fell
-	// back to its previous A/B slot" (architecture.md, "Upgrades").
+	// Version reports this node's current Talos release tag (e.g. "v1.14.3"): the "from" of a Talos upgrade's
+	// pre-checks (pkg/upgrade.TalosPath) and what talos_upgrade.go polls to tell "not started" from
+	// "upgraded" from "rebooted but fell back to its previous A/B slot" (architecture.md, "Upgrades").
 	Version(ctx context.Context) (string, error)
 
-	// BootID reads this node's current boot ID
-	// (/proc/sys/kernel/random/boot_id), the same mechanism Talos's own
-	// talosctl uses to confirm a reboot actually happened
-	// (cmd/talosctl/pkg/talos/action/tracker.go's BootIDChangedPostCheckFn
-	// and getBootID, Talos 1.14.3) -- Version alone cannot tell "hasn't
-	// rebooted yet" apart from "rebooted and fell back", since both report
-	// the same, unchanged version.
+	// BootID reads this node's boot ID (/proc/sys/kernel/random/boot_id), as talosctl does to confirm a
+	// reboot happened: Version alone cannot tell "not rebooted yet" from "rebooted and fell back".
 	BootID(ctx context.Context) (string, error)
 
-	// Upgrade calls this node's Upgrade API with image (an installer image
-	// reference), the default reboot mode, and preserve=false and
-	// stage=false -- UpgradeRequest.Preserve is deprecated and the
-	// installer ignores it on upgrade anyway (architecture.md's "Upgrades"
-	// section, confirmed against Talos 1.14.3's source), so there is
-	// nothing for a flag here to do. For a control-plane node this is also
-	// where Talos validates etcd health before proceeding (its own
-	// server-side ValidateForUpgrade, gated on force/preserve both being
-	// false): Ichor does not re-implement that check, the same reasoning
-	// architecture.md already gives for not re-implementing cordon/drain.
+	// Upgrade calls this node's Upgrade API with image (an installer image reference), the default reboot
+	// mode, preserve=false and stage=false (Preserve is deprecated and ignored by the installer on upgrade).
+	// For a control plane Talos validates etcd health itself (ValidateForUpgrade); Ichor does not
+	// re-implement that check.
 	Upgrade(ctx context.Context, image string) error
 
-	// PullImage pre-pulls image on this node, into the system containerd
-	// namespace when system is true (the kubelet's image) and the CRI
-	// namespace otherwise (the static pods' images), the same two
-	// namespaces talosctl upgrade-k8s pulls into
-	// (pkg/cluster/kubernetes/talos_managed.go's prePullImages, Talos
-	// 1.14.3). A node that does not implement the RPC is not an error.
+	// PullImage pre-pulls image on this node, into the system containerd namespace when system is true (the
+	// kubelet's image) and the CRI namespace otherwise (the static pods' images), as talosctl upgrade-k8s
+	// does. A node that does not implement the RPC is not an error.
 	PullImage(ctx context.Context, image string, system bool) error
 
-	// Kubeconfig returns an admin kubeconfig for the cluster, issued by the
-	// control-plane node this client is dialed to. It is how the Kubernetes
-	// upgrade writes the bootstrap manifests without giving the controller
-	// itself broad Kubernetes RBAC, exactly as talosctl upgrade-k8s does.
+	// Kubeconfig returns an admin kubeconfig issued by the control plane this client is dialed to, how the
+	// Kubernetes upgrade writes the bootstrap manifests without broad Kubernetes RBAC for the controller.
 	Kubeconfig(ctx context.Context) ([]byte, error)
 
-	// BootstrapManifests returns the objects of the node's bootstrap
-	// manifest set (the k8s.Manifest resources in the controlplane
-	// namespace: CoreDNS, kube-proxy, inlineManifests, ...), as Talos
-	// itself renders them from the node's current machine configuration.
+	// BootstrapManifests returns the objects of the node's bootstrap manifest set (CoreDNS, kube-proxy,
+	// inlineManifests, ...), as Talos renders them from the node's current machine configuration.
 	BootstrapManifests(ctx context.Context) ([]map[string]any, error)
 
 	// NodeName reports the Kubernetes node name this node registers under (its Nodename
@@ -252,10 +206,8 @@ type TalosClient interface {
 	Identity(ctx context.Context) (HardwareIdentity, error)
 }
 
-// EtcdMember is the one piece of each etcd member EtcdMemberList's callers
-// need: enough to find the member matching a TalosMachine's
-// Spec.Hostname (etcd reports the Node's own hostname, not an Ichor
-// identity) and the numeric ID EtcdRemoveMemberByID takes.
+// EtcdMember is what EtcdMemberList's callers need of a member: its hostname (the Node's own, matched
+// against TalosMachine.spec.hostname) and the ID EtcdRemoveMemberByID takes.
 type EtcdMember struct {
 	ID       uint64
 	Hostname string

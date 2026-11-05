@@ -199,7 +199,7 @@ func machinesFixture() []*pb.Machine {
 			Endpoint: "10.244.1.136:50000", NodeName: "ichor-e2e-initshow-cp", CreatedAt: ago(5 * time.Minute),
 			Identity:         &pb.MachineIdentity{Uuid: cpUUID, Serial: "c427f61b", MacAddresses: []string{"a6:c8:83:c3:79:d9"}},
 			Install:          &pb.MachineInstall{Disk: &pb.MachineDisk{DevPath: classADisk}},
-			ApprovalDecision: &pb.MachineApprovalDecision{Actor: actorCLI, At: ago(4 * time.Minute), Reason: "first node"},
+			ApprovalDecision: &pb.MachineApprovalDecision{Actor: actorCLI, At: ago(4 * time.Minute)},
 			Conditions: []*pb.Condition{
 				cond(conditionReady, condTrue, "Converged", "node configuration matches the rendered configuration", 4*time.Minute),
 				cond("ConfigWarnings", condFalse, "DryRunWarnings", "dry run reported no warnings", 4*time.Minute),
@@ -262,7 +262,7 @@ func TestMachineGetHumanOutput(t *testing.T) {
 	want := `fa70962a-4fd9-4d01-88c5-f9966adcda99 · ichor-system
   Cluster      initshow
   Role         control-plane
-  Approval     approved by ichor-cli (4m ago): first node
+  Approval     approved by ichor-cli (4m ago)
   Health       ✓ ready
   Node         ichor-e2e-initshow-cp
   Endpoint     10.244.1.136:50000

@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"connectrpc.com/connect"
+	"github.com/spf13/cobra"
 	yaml "go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -147,7 +148,7 @@ func getMachine(t *testing.T, k8s client.Client, name string) ichorv1alpha1.Talo
 	return m
 }
 
-var approveWorker = machineApproveOptions{Role: testRoleWorker, Reason: "test"}
+var approveWorker = machineApproveOptions{Role: testRoleWorker}
 
 func TestApproveThroughBackendRunsTheBackendsChecks(t *testing.T) {
 	setAPITestFlags(t, true)
@@ -554,26 +555,30 @@ func (b *syncBuffer) String() string {
 	return b.buf.String()
 }
 
-// --override is a flag and the reason is optional: the field's presence is the override, and a reason
-// without --override is refused rather than dropped (ADR 0110).
-func TestOverrideIsAFlagAndTheReasonIsOptional(t *testing.T) {
+// --override is a bare flag: the field's presence is the override, and no reason is asked for or accepted
+// (ADR 0130).
+func TestOverrideIsABareFlagWithNoReason(t *testing.T) {
 	if overrideOf(apiOptions{}) != nil {
 		t.Fatal("no override must send no field")
 	}
 
-	bare := overrideOf(apiOptions{Override: true})
-	if bare == nil || bare.GetReason() != "" {
-		t.Fatalf("--override alone must send the override without a reason, got %v", bare)
+	if overrideOf(apiOptions{Override: true}) == nil {
+		t.Fatal("--override must send the override")
 	}
 
-	const reason = "node is dead"
+	var walk func(c *cobra.Command)
 
-	if got := overrideOf(apiOptions{Override: true, OverrideReason: reason}).GetReason(); got != reason {
-		t.Fatalf("reason = %q", got)
+	walk = func(c *cobra.Command) {
+		for _, name := range []string{"override-reason", "reason"} {
+			if c.Flag(name) != nil {
+				t.Errorf("%s has --%s: no reason is asked for (ADR 0130)", c.CommandPath(), name)
+			}
+		}
+
+		for _, sub := range c.Commands() {
+			walk(sub)
+		}
 	}
 
-	_, err := connectAPI(context.Background(), apiOptions{OverrideReason: reason}, apiDeps{}, false)
-	if err == nil || !strings.Contains(err.Error(), "--override-reason needs --override") {
-		t.Fatalf("a reason without --override = %v", err)
-	}
+	walk(rootCmd)
 }

@@ -27,11 +27,8 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// demoBuildReason is the reason the tests give for skipping the signature check.
-const demoBuildReason = "demo build"
-
 // withInstallerFlags sets the installer image flags of `ichor upgrade ichor` for one test.
-func withInstallerFlags(t *testing.T, digest, skip string) {
+func withInstallerFlags(t *testing.T, digest string, skip bool) {
 	t.Helper()
 
 	oldDigest, oldSkip := upgradeInstallerDigest, upgradeSkipSignature
@@ -41,64 +38,51 @@ func withInstallerFlags(t *testing.T, digest, skip string) {
 }
 
 func TestInstallerOptionsOnlyForAnIchorUpgrade(t *testing.T) {
-	withInstallerFlags(t, "sha256:"+strings.Repeat("a", 64), demoBuildReason)
+	withInstallerFlags(t, "sha256:"+strings.Repeat("a", 64), true)
 
 	if o := installerOptionsFor(pb.OperationKind_OPERATION_KIND_TALOS); o != nil {
 		t.Errorf("a Talos upgrade carries installer options: %v", o)
 	}
 
 	o := installerOptionsFor(pb.OperationKind_OPERATION_KIND_ICHOR)
-	if o.GetDigest() != "sha256:"+strings.Repeat("a", 64) || o.GetSkipSignatureReason() != demoBuildReason {
+	if o.GetDigest() != "sha256:"+strings.Repeat("a", 64) || !o.GetSkipSignature() {
 		t.Errorf("options = %v", o)
 	}
 
 	// With no flags an Ichor upgrade still sends the (empty) options, which clears an earlier pin or skip.
-	withInstallerFlags(t, "", "")
+	withInstallerFlags(t, "", false)
 
-	if o := installerOptionsFor(pb.OperationKind_OPERATION_KIND_ICHOR); o == nil || o.GetDigest() != "" || o.GetSkipSignatureReason() != "" {
+	if o := installerOptionsFor(pb.OperationKind_OPERATION_KIND_ICHOR); o == nil || o.GetDigest() != "" || o.GetSkipSignature() {
 		t.Errorf("options without flags = %v", o)
 	}
 }
 
-func TestSkipSignatureCheckNeedsAReason(t *testing.T) {
-	withInstallerFlags(t, "", "")
-
-	err := checkInstallerFlags(true)
-	if err == nil || !strings.Contains(err.Error(), "needs a reason") {
-		t.Fatalf("a bare --skip-signature-check: err = %v", err)
+// --skip-signature-check is a bare boolean flag: no reason is asked for (ADR 0130), and it takes no argument.
+func TestSkipSignatureCheckIsABareFlag(t *testing.T) {
+	f := upgradeIchorCmd.Flags().Lookup("skip-signature-check")
+	if f == nil || f.Value.Type() != "bool" {
+		t.Fatalf("--skip-signature-check = %+v, want a bool flag", f)
 	}
 
-	withInstallerFlags(t, "", "   ")
+	withInstallerFlags(t, "", true)
 
-	if err := checkInstallerFlags(true); err == nil {
-		t.Error("a blank reason was accepted")
-	}
-
-	withInstallerFlags(t, "", demoBuildReason)
-
-	if err := checkInstallerFlags(true); err != nil {
-		t.Errorf("a reason: err = %v", err)
-	}
-
-	withInstallerFlags(t, "", "")
-
-	if err := checkInstallerFlags(false); err != nil {
-		t.Errorf("no flag: err = %v", err)
+	if err := checkInstallerFlags(); err != nil {
+		t.Errorf("a bare --skip-signature-check: err = %v", err)
 	}
 }
 
 func TestInstallerDigestFlagMustBeASha256Digest(t *testing.T) {
 	for _, bad := range []string{"latest", "sha256:abc", "sha256:" + strings.Repeat("A", 64), "sha512:" + strings.Repeat("a", 128)} {
-		withInstallerFlags(t, bad, "")
+		withInstallerFlags(t, bad, false)
 
-		if err := checkInstallerFlags(false); err == nil {
+		if err := checkInstallerFlags(); err == nil {
 			t.Errorf("--installer-digest %q was accepted", bad)
 		}
 	}
 
-	withInstallerFlags(t, "sha256:"+strings.Repeat("0", 64), "")
+	withInstallerFlags(t, "sha256:"+strings.Repeat("0", 64), false)
 
-	if err := checkInstallerFlags(false); err != nil {
+	if err := checkInstallerFlags(); err != nil {
 		t.Errorf("a digest: err = %v", err)
 	}
 }
@@ -108,7 +92,7 @@ func TestInstallerDigestFlagMustBeASha256Digest(t *testing.T) {
 func TestPlanTextShowsTheSkippedSignatureWarning(t *testing.T) {
 	text := planText(pb.OperationKind_OPERATION_KIND_ICHOR, "c", &pb.PlanOperationResponse{
 		Effect: pb.OperationEffect_OPERATION_EFFECT_NONE, Current: testSettingsVersion, Target: noticeNewer,
-		Warning: "The signature of the installer image is NOT checked, and the installer Job holds nearly cluster-admin rights: demo build.",
+		Warning: "The signature of the installer image is NOT checked, and the installer Job holds nearly cluster-admin rights.",
 	})
 
 	if !strings.Contains(text, "Warning: The signature of the installer image is NOT checked") {
@@ -126,12 +110,12 @@ func TestVersionShowsAnUncheckedInstallerImageLoudly(t *testing.T) {
 		Name: ichorv1alpha1.IchorInstallationName,
 		Spec: ichorv1alpha1.IchorInstallationSpec{
 			Version:            noticeNewer,
-			InstallerSignature: &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip, Reason: demoBuildReason},
+			InstallerSignature: &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip},
 		},
 		Status: ichorv1alpha1.IchorInstallationStatus{
 			InstalledVersion: noticeNewer,
 			InstallerImage: &ichorv1alpha1.IchorInstallerImageStatus{
-				Digest: "sha256:" + strings.Repeat("a", 64), Verification: ichorv1alpha1.InstallerImageSkipped, Reason: demoBuildReason,
+				Digest: "sha256:" + strings.Repeat("a", 64), Verification: ichorv1alpha1.InstallerImageSkipped,
 			},
 		},
 	}
@@ -139,7 +123,7 @@ func TestVersionShowsAnUncheckedInstallerImageLoudly(t *testing.T) {
 	info, _ := collectVersion(context.Background(), fake.NewClientBuilder().WithScheme(scheme).WithObjects(inst).Build(), testCLIVersion)
 
 	out := renderVersion(t, info, outputHuman)
-	for _, want := range []string{"signature NOT checked (demo build)", "sha256:" + strings.Repeat("a", 64), "the next upgrade will NOT check the signature"} {
+	for _, want := range []string{"signature NOT checked", "sha256:" + strings.Repeat("a", 64), "the next upgrade will NOT check the signature"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("ichor version does not say %q:\n%s", want, out)
 		}

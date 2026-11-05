@@ -73,14 +73,9 @@ func renderMachineApproved(h, warnings *human, resp *pb.ApproveMachineResponse) 
 	return cmp.Or(h.Err(), warnings.Err())
 }
 
-// renderMachineRejected prints "✓ rejected fa70962a: reason".
-func renderMachineRejected(h *human, name, reason string) error {
-	line := "rejected " + machineLabel(name)
-	if reason != "" {
-		line += ": " + reason
-	}
-
-	h.done("%s", line)
+// renderMachineRejected prints "✓ rejected fa70962a".
+func renderMachineRejected(h *human, name string) error {
+	h.done("rejected %s", machineLabel(name))
 
 	return h.Err()
 }

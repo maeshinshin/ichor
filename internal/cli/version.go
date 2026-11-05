@@ -94,8 +94,6 @@ type versionServer struct {
 type versionInstaller struct {
 	Digest       string `json:"digest,omitempty"`
 	Verification string `json:"verification,omitempty"`
-	// SkipReason is why the check was skipped; empty when it was not.
-	SkipReason string `json:"skipReason,omitempty"`
 	// SkipNext is true while spec.installerSignature says skip: the next upgrade will not check the signature.
 	SkipNext bool `json:"skipNext,omitempty"`
 }
@@ -129,7 +127,7 @@ func collectVersion(ctx context.Context, c client.Reader, cliVersion string) (in
 
 	skipNext := inst.Spec.InstallerSignature != nil && inst.Spec.InstallerSignature.Mode == ichorv1alpha1.InstallerSignatureSkip
 	if img := inst.Status.InstallerImage; img != nil {
-		info.Server.InstallerImage = &versionInstaller{Digest: img.Digest, Verification: img.Verification, SkipReason: img.Reason, SkipNext: skipNext}
+		info.Server.InstallerImage = &versionInstaller{Digest: img.Digest, Verification: img.Verification, SkipNext: skipNext}
 	} else if skipNext {
 		info.Server.InstallerImage = &versionInstaller{SkipNext: true}
 	}
@@ -174,7 +172,7 @@ func installerImageText(img *versionInstaller) string {
 
 	switch {
 	case img.Verification == ichorv1alpha1.InstallerImageSkipped:
-		text = "signature NOT checked (" + img.SkipReason + ")"
+		text = "signature NOT checked"
 	case img.Verification != "":
 		text = "signature verified"
 	}

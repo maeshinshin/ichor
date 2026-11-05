@@ -33,7 +33,6 @@ type machineApproveOptions struct {
 	Role     string
 	Labels   map[string]string
 	Hostname string
-	Reason   string
 	// InstallDisk is the system disk (see parseDiskSelector); InstallImage the installer image.
 	InstallDisk  string
 	InstallImage string
@@ -117,7 +116,7 @@ func runMachineApprove(
 	}
 
 	resp, err := c.Machine.ApproveMachine(ctx, connect.NewRequest(&pb.ApproveMachineRequest{
-		Machine: ref, Role: role, NodeLabels: opts.Labels, Hostname: opts.Hostname, Reason: opts.Reason,
+		Machine: ref, Role: role, NodeLabels: opts.Labels, Hostname: opts.Hostname,
 		Install: install, Network: network, Disks: disks,
 	}))
 	if err != nil {
@@ -145,7 +144,6 @@ func init() {
 	f.StringVar(&machineApproveOpts.Role, "role", "", "controlplane or worker (required)")
 	f.StringToStringVar(&machineApproveOpts.Labels, "label", nil, "node label KEY=VALUE (repeatable)")
 	f.StringVar(&machineApproveOpts.Hostname, "hostname", "", "hostname to set")
-	f.StringVar(&machineApproveOpts.Reason, "reason", "", "recorded with the approval")
 	f.StringVar(&machineApproveOpts.InstallDisk, "install-disk", "", "system disk Talos installs onto: "+installDiskUsage)
 	f.StringVar(&machineApproveOpts.InstallImage, "install-image", "", "installer image (default: the booted schematic's; the cluster's SecureBoot installer when spec.security.secureBoot.mode is Preferred or Required)")
 	f.StringVar(&machineApproveOpts.NIC, "nic", "", "primary network link, by its permanent MAC (aa:bb:cc:dd:ee:ff); alone it means DHCP")

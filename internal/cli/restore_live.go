@@ -128,8 +128,8 @@ func liveRestoreText(s liveRestoreSpec, snap *pb.EtcdSnapshot, p *pb.PlanOperati
 	return b.String()
 }
 
-// runLiveRestore lists the backups, plans, confirms with the typed cluster name and an override
-// reason, and starts the operation. --yes skips the y/N question only: the name is still needed.
+// runLiveRestore lists the backups, plans, confirms with the typed cluster name (and an override),
+// and starts the operation. --yes skips the y/N question only: the name is still needed.
 func runLiveRestore(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, s liveRestoreSpec) error {
 	cluster, err := resolveCluster(ctx, c, s.Cluster)
 	if err != nil {
@@ -144,7 +144,7 @@ func runLiveRestore(ctx context.Context, c *apiClients, in io.Reader, out, errw 
 
 	bg := overrideOf(apiOpts)
 	if bg == nil {
-		return errors.New("restore --live: it needs --override (and the override RBAC verb on the cluster); --override-reason records why in the audit record")
+		return errors.New("restore --live: it needs --override (and the override RBAC verb on the cluster)")
 	}
 
 	list, err := c.Operation.ListEtcdBackups(ctx, connect.NewRequest(&pb.ListEtcdBackupsRequest{Cluster: cluster}))

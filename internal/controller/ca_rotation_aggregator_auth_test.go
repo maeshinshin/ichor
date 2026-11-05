@@ -22,7 +22,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	clienttesting "k8s.io/client-go/testing"
 
@@ -79,8 +78,8 @@ var _ = Describe("resetAggregatorAuth", func() {
 
 	configMap := func(ca string) *corev1.ConfigMap {
 		return &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{Namespace: kubeSystemNamespace, Name: extensionAuthConfigMap, UID: "uid-1"},
-			Data:       map[string]string{extensionAuthCAKey: ca, "client-ca-file": "other"},
+			Namespace: kubeSystemNamespace, Name: extensionAuthConfigMap, UID: "uid-1",
+			Data: map[string]string{extensionAuthCAKey: ca, "client-ca-file": "an unrelated key"},
 		}
 	}
 

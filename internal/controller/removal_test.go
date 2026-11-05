@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -32,7 +31,6 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
-	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
 // clusterKeyOf returns the NamespacedName clusterlock.New keys its Lease by
@@ -204,9 +202,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		cp2 := newTestControlPlane(cluster.Name, "7")
 		cp3 := newTestControlPlane(cluster.Name, "8")
 
-		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
-			reconcileOK(r, cp)
-		}
+		reconcileOK(r, cp1, cp2, cp3)
 
 		// 3 -> 2: quorum of 3 is 2, allowed (desiredCount is 1, so the count
 		// guard doesn't refuse it either). cp1 has no Hostname set, so
@@ -217,17 +213,14 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		// removal used to leave it.
 		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
 		reconcileOK(r, cp1)
-		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Namespace: cp1.Namespace, Name: cp1.Name}, &ichorv1alpha1.TalosMachine{}))).
-			To(BeTrue(), "a removal that passes every check now completes for real")
+		Expect(machineGone(cp1)).To(BeTrue(), "a removal that passes every check now completes for real")
 
 		// A separate pair: cp1 is gone now, so this needs fresh machines
 		// rather than reusing cp2/cp3 from the group cp1 came from.
 		cluster2 := newTestClusterWithCount(1, "does-not-exist")
 		cpA := newTestControlPlane(cluster2.Name, "6b")
 		cpB := newTestControlPlane(cluster2.Name, "7b")
-		for _, cp := range []*ichorv1alpha1.TalosMachine{cpA, cpB} {
-			reconcileOK(r, cp)
-		}
+		reconcileOK(r, cpA, cpB)
 
 		// 2 -> 1: quorum of 2 is 2, refused.
 		Expect(k8sClient.Delete(ctx, cpA)).To(Succeed())
@@ -243,9 +236,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		cp2 := newTestControlPlane(cluster.Name, "10")
 		cp3 := newTestControlPlane(cluster.Name, "11")
 
-		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
-			reconcileOK(r, cp)
-		}
+		reconcileOK(r, cp1, cp2, cp3)
 
 		// 3 -> 2, below the declared count of 3: refused even though quorum
 		// of 3 (which is 2) would itself allow it.
@@ -263,8 +254,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		reconcileOK(r, cp1)
 		// cp1 has no Hostname set, so removeEtcdMember's fake sees it as
 		// already absent and the removal completes in full this time.
-		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Namespace: cp1.Namespace, Name: cp1.Name}, &ichorv1alpha1.TalosMachine{}))).
-			To(BeTrue(), "4 -> 3 meets the declared count, so this removal completes for real")
+		Expect(machineGone(cp1)).To(BeTrue(), "4 -> 3 meets the declared count, so this removal completes for real")
 	})
 
 	It("does not count another control plane that is already being deleted toward the declared count", func() {
@@ -275,9 +265,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		cp3 := newTestControlPlane(cluster.Name, "15")
 		cp4 := newTestControlPlane(cluster.Name, "16")
 
-		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3, cp4} {
-			reconcileOK(r, cp)
-		}
+		reconcileOK(r, cp1, cp2, cp3, cp4)
 
 		// cp1 is deleted but never reconciled again, so its finalizer keeps
 		// it in the API: a removal that is stuck mid-way.
@@ -407,17 +395,12 @@ var _ = Describe("TalosCluster transitioning status", func() {
 		cp2 := newTestControlPlane(cluster.Name, "28")
 		cp3 := newTestControlPlane(cluster.Name, "29")
 		cp4 := newTestControlPlane(cluster.Name, "30")
-		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3, cp4} {
-			reconcileOK(r, cp)
-		}
+		reconcileOK(r, cp1, cp2, cp3, cp4)
 
 		worker := newTestMachine(cluster.Name, true)
 		current := renderWithConfig(cluster, worker, bundle, layerCluster, nil, minimalConfigSkeleton())
 
-		disabled := true
-		desired := minimalConfigSkeleton()
-		desired.ClusterConfig.ProxyConfig = &typedconfig.ProxyConfig{Disabled: &disabled}
-		newTestPatch(cluster.Name, layerCluster, nil, desired)
+		newTestPatch(cluster.Name, layerCluster, nil, proxyDisabledConfig())
 
 		fake := &fakeTalosClient{current: current}
 		r.TalosClient = clientFactory(fake)

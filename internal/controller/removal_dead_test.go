@@ -6,8 +6,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
-
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
@@ -39,9 +37,7 @@ var _ = Describe("removing a dead control plane below the declared count", func(
 			TalosClient: perMachineClientFactory(f.departing),
 		}
 
-		for _, cp := range []*ichorv1alpha1.TalosMachine{f.cp1, f.cp2, f.cp3} {
-			reconcileOK(f.r, cp)
-		}
+		reconcileOK(f.r, f.cp1, f.cp2, f.cp3)
 
 		return f
 	}
@@ -53,7 +49,7 @@ var _ = Describe("removing a dead control plane below the declared count", func(
 		reconcileOK(f.r, f.cp1)
 
 		Expect(f.survivor.etcdRemoveIDs).To(Equal([]uint64{42}))
-		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, machineKeyOf(f.cp1), &ichorv1alpha1.TalosMachine{}))).To(BeTrue(),
+		Expect(machineGone(f.cp1)).To(BeTrue(),
 			"3 -> 2 is below the declared 3, but the member is dead")
 	})
 
@@ -64,7 +60,7 @@ var _ = Describe("removing a dead control plane below the declared count", func(
 		Expect(k8sClient.Delete(ctx, f.cp1)).To(Succeed())
 		reconcileOK(f.r, f.cp1)
 
-		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, machineKeyOf(f.cp1), &ichorv1alpha1.TalosMachine{}))).To(BeTrue())
+		Expect(machineGone(f.cp1)).To(BeTrue())
 	})
 
 	It("still refuses a healthy member below the declared count, saying so", func() {

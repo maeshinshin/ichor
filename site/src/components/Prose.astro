@@ -34,4 +34,4 @@ function callouts() {
 const out = String(await unified().use(rehypeParse, { fragment: true }).use(callouts).use(rehypeStringify).process(html))
 ---
 
-<div class="prose prose-neutral max-w-none dark:prose-invert prose-code:before:content-none prose-code:after:content-none prose-pre:bg-muted prose-pre:text-foreground prose-blockquote:font-normal prose-blockquote:not-italic [&_blockquote_p]:before:content-none [&_blockquote_p]:after:content-none" set:html={out} />
+<div class="prose prose-neutral max-w-none dark:prose-invert prose-code:before:content-none prose-code:after:content-none prose-pre:bg-muted prose-pre:text-foreground prose-blockquote:font-normal prose-blockquote:not-italic [&_blockquote_p]:before:content-none [&_blockquote_p]:after:content-none [&_td]:wrap-anywhere [&_td:first-child]:whitespace-nowrap" set:html={out} />

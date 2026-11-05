@@ -62,11 +62,20 @@ var _ = Describe("ReleaseCheck", Ordered, func() {
 
 	failing := func(string) ([]string, error) { return nil, errors.New("registry unreachable") }
 
-	latest := func() *ichorv1alpha1.IchorLatestRelease {
+	installation := func() *ichorv1alpha1.IchorInstallation {
 		var inst ichorv1alpha1.IchorInstallation
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
 
-		return inst.Status.LatestRelease
+		return &inst
+	}
+
+	latest := func() *ichorv1alpha1.IchorLatestRelease { return installation().Status.LatestRelease }
+
+	// switchOff turns the check off in the spec. The check wrote the status, so the object is read again first.
+	switchOff := func() {
+		inst := installation()
+		inst.Spec.UpdateCheck = &ichorv1alpha1.IchorUpdateCheckSettings{Enabled: new(false)}
+		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
 	}
 
 	It("records the newest final release and when it was checked", func() {
@@ -97,11 +106,7 @@ var _ = Describe("ReleaseCheck", Ordered, func() {
 		Expect(newCheck(listing("0.2.0"), true).check(ctx)).To(BeTrue())
 		Expect(latest()).NotTo(BeNil())
 
-		// The check wrote the status, so read the object again before the spec change.
-		var inst ichorv1alpha1.IchorInstallation
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
-		inst.Spec.UpdateCheck = &ichorv1alpha1.IchorUpdateCheckSettings{Enabled: new(false)}
-		Expect(k8sClient.Update(ctx, &inst)).To(Succeed())
+		switchOff()
 
 		Expect(newCheck(listing("0.9.0"), true).check(ctx)).To(BeTrue())
 		Expect(latest()).To(BeNil())
@@ -154,12 +159,7 @@ var _ = Describe("ReleaseCheck", Ordered, func() {
 		}
 	}
 
-	targets := func() *ichorv1alpha1.IchorUpgradeTargets {
-		var inst ichorv1alpha1.IchorInstallation
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
-
-		return inst.Status.UpgradeTargets
-	}
+	targets := func() *ichorv1alpha1.IchorUpgradeTargets { return installation().Status.UpgradeTargets }
 
 	It("lists the Talos and Kubernetes releases at or above the floors, newest first", func() {
 		createInstallation("v0.1.0")
@@ -207,10 +207,7 @@ var _ = Describe("ReleaseCheck", Ordered, func() {
 		}), true).check(ctx)).To(BeTrue())
 		Expect(targets()).NotTo(BeNil())
 
-		var inst ichorv1alpha1.IchorInstallation
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst)).To(Succeed())
-		inst.Spec.UpdateCheck = &ichorv1alpha1.IchorUpdateCheckSettings{Enabled: new(false)}
-		Expect(k8sClient.Update(ctx, &inst)).To(Succeed())
+		switchOff()
 
 		Expect(newCheck(listing("0.9.0"), true).check(ctx)).To(BeTrue())
 		Expect(targets()).To(BeNil())

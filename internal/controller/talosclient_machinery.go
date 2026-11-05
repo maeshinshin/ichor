@@ -280,9 +280,10 @@ func (t *machineryTalosClient) EtcdRemoveMemberByID(ctx context.Context, memberI
 // an empty SystemPartitionsToWipe would mean) and reboots it back to
 // maintenance mode. Graceful: false -- the caller has already drained and
 // left etcd itself by the time this is ever called, so Talos's
-// own graceful pre-reset routine would find nothing left to do.
-func (t *machineryTalosClient) Reset(ctx context.Context) error {
-	return t.c.ResetGeneric(ctx, reclaim.ResetRequest(false))
+// own graceful pre-reset routine would find nothing left to do. A
+// wipeMode (reclaim.ResetRequestWipe) wipes the whole system disk instead.
+func (t *machineryTalosClient) Reset(ctx context.Context, wipeMode string) error {
+	return t.c.ResetGeneric(ctx, reclaim.ResetRequestWipe(false, wipeMode))
 }
 
 // Shutdown calls this node's Shutdown API. See TalosClient.Shutdown.

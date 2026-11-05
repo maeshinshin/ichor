@@ -19,6 +19,8 @@ package reclaim
 import (
 	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
 // ResetRequest is the one definition of what an Ichor reset sends:
@@ -39,4 +41,19 @@ func ResetRequest(graceful bool) *machineapi.ResetRequest {
 			{Label: constants.EphemeralPartitionLabel, Wipe: true},
 		},
 	}
+}
+
+// ResetRequestWipe is ResetRequest with an optional wipe mode (TalosOperation.spec.node.wipeMode).
+// "system-disk" and "all" name no partitions, which is what makes Talos erase the whole system disk
+// (boot and EFI included, so the node boots a boot image again instead of its installed UKI); "all"
+// also wipes the user disks. Empty is ResetRequest.
+func ResetRequestWipe(graceful bool, mode string) *machineapi.ResetRequest {
+	switch mode {
+	case ichorv1alpha1.WipeModeSystemDisk:
+		return &machineapi.ResetRequest{Graceful: graceful, Reboot: true, Mode: machineapi.ResetRequest_SYSTEM_DISK}
+	case ichorv1alpha1.WipeModeAll:
+		return &machineapi.ResetRequest{Graceful: graceful, Reboot: true, Mode: machineapi.ResetRequest_ALL}
+	}
+
+	return ResetRequest(graceful)
 }

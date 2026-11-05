@@ -27,11 +27,15 @@ import (
 // The scrubber must cover keys the old hand-written list missed.
 var _ = Describe("bundleSecretMaterial", func() {
 	It("covers every key of the bundle", func() {
-		b := newTestBundle("v1.14")
-		b.Secrets.SecretboxEncryptionSecret = "secretbox-value"
-		b.Secrets.AESCBCEncryptionSecret = "aescbc-value"
+		// newTestBundle hands out one bundle to the whole suite: set the two secrets on a copy, or every spec that runs
+		// after this one renders a cluster that also has an aescbc provider.
+		b := *newTestBundle("v1.14")
+		secs := *b.Secrets
+		secs.SecretboxEncryptionSecret = "secretbox-value"
+		secs.AESCBCEncryptionSecret = "aescbc-value"
+		b.Secrets = &secs
 
-		got := bundleSecretMaterial(b)
+		got := bundleSecretMaterial(&b)
 
 		for _, want := range []string{
 			string(b.Certs.Etcd.Key), string(b.Certs.K8sAggregator.Key), string(b.Certs.K8sServiceAccount.Key),

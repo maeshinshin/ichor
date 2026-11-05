@@ -661,6 +661,11 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 				return fmt.Errorf("dry-run apply to %q failed: %w", m.Name, err)
 			}
 
+			baseline, err := c.apiServerBaseline(dialCtx, talos, m)
+			if err != nil {
+				return err
+			}
+
 			// The apply gets its own deadline: the 15s dial bound would cut it off while Talos
 			// restarts services (the Kubernetes upgrade hit exactly that).
 			applyCtx, cancelApply := context.WithTimeout(ctx, upgradeCallTimeout)
@@ -669,6 +674,8 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 			if err := talos.ApplyNoReboot(applyCtx, rendered); err != nil {
 				return fmt.Errorf("applying the %s configuration to %q failed: %w", stage, m.Name, err)
 			}
+
+			c.recordAPIServerBaseline(m, baseline)
 
 			didApply = true
 
@@ -686,6 +693,9 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 	}
 
 	if applied > 0 {
+		now := metav1.Now()
+		c.op.Status.CARotation.AppliedAt = &now
+
 		return ctrl.Result{RequeueAfter: operationRequeueInterval}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress,
 			metav1.ConditionTrue, reasonCARotationStage,
 			fmt.Sprintf("stage %s: applied to %d of %d machine(s); verifying on the next pass", stage, applied, len(machines)))
@@ -712,6 +722,10 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 		}
 	}
 
+	if res, wait, err := c.awaitAPIServers(ctx, stage, machines, verifyBundle); wait {
+		return res, err
+	}
+
 	if err := c.nodesReady(ctx, machines[0], verifyBundle); err != nil {
 		return c.retry(ctx, fmt.Sprintf("stage %s is not verified, so the next stage is not started: %v", stage, err))
 	}
@@ -732,6 +746,7 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 	c.op.Status.Machines = nil
 	c.op.Status.CARotation.EtcdRestarted, c.op.Status.CARotation.EtcdRestartedAt = nil, nil
 	c.op.Status.CARotation.EtcdRebooting, c.op.Status.CARotation.EtcdRebootBootID = "", ""
+	c.op.Status.CARotation.APIServerInstances, c.op.Status.CARotation.AppliedAt = nil, nil
 	c.op.Status.CARotation.Stage = c.nextStage(stage)
 	setStageCertificates(c.op.Status.CARotation)
 

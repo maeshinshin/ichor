@@ -68,9 +68,9 @@ func applyNetworkPolicies(
 		return fmt.Errorf("init: decoding Ichor's network policies: %w", err)
 	}
 
-	err = pollBounded(ctx, wait, interval, progress, "Cilium to be Ready", newWaitDiag(c, progress), func(ctx context.Context) error {
+	err = pollDiag(ctx, wait, interval, progress, "Cilium to be Ready", newWaitDiag(c, progress), func(ctx context.Context) error {
 		return ciliumReady(ctx, c)
-	}, func(error) bool { return true })
+	}, func(error) bool { return true }, "Cilium to be Ready did not finish within "+wait.String())
 	if err != nil {
 		return fmt.Errorf("init: Cilium is not Ready, so Ichor's network policies were not applied: %w", err)
 	}

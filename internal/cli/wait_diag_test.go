@@ -139,7 +139,7 @@ func TestPollBoundedStopsEarlyAndTimesOutWithReason(t *testing.T) {
 		return errNot
 	}
 
-	err := pollBounded(context.Background(), time.Hour, time.Millisecond, &bytes.Buffer{}, "x", d, attempt, func(error) bool { return true })
+	err := pollDiag(context.Background(), time.Hour, time.Millisecond, &bytes.Buffer{}, "x", d, attempt, func(error) bool { return true }, "x did not finish")
 	if !errors.Is(err, errNoPodNetwork) {
 		t.Fatalf("got %v, want errNoPodNetwork", err)
 	}
@@ -147,8 +147,8 @@ func TestPollBoundedStopsEarlyAndTimesOutWithReason(t *testing.T) {
 	ready := fake.NewClientBuilder().WithObjects(pendingPod("insufficient memory"), nodeWithReady(corev1.ConditionTrue, "")).Build()
 	d = newWaitDiag(ready, &bytes.Buffer{})
 
-	err = pollBounded(context.Background(), 30*time.Millisecond, time.Millisecond, &bytes.Buffer{}, "Ichor's webhooks", d,
-		func(context.Context) error { return errNot }, func(error) bool { return true })
+	err = pollDiag(context.Background(), 30*time.Millisecond, time.Millisecond, &bytes.Buffer{}, "Ichor's webhooks", d,
+		func(context.Context) error { return errNot }, func(error) bool { return true }, "Ichor's webhooks did not finish within 30ms")
 	if !errors.Is(err, errNot) || !strings.Contains(err.Error(), "did not finish within") || !strings.Contains(err.Error(), "insufficient memory") {
 		t.Fatalf("got %v", err)
 	}

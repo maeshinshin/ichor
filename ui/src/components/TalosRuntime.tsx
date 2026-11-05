@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { CircleXIcon, InboxIcon } from 'lucide-preact'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -13,7 +13,7 @@ import { ToneBadge } from '@/components/ToneBadge'
 import { CardDescription } from '@/components/ui/card'
 import type { GetNodeTalosRuntimeResponse } from '@/gen/ichor/v1alpha1/talosruntime_pb'
 import { nodeClient } from '@/lib/connect'
-import { describeError } from '@/lib/errors'
+import { useLoad } from '@/lib/useLoad'
 import { formatBytes, formatResource } from '@/lib/format'
 import {
   conditionTone,
@@ -40,25 +40,7 @@ import { t } from '@/lib/i18n'
 // part="talos" renders processes, containers and kernel (the Talos tab);
 // part="kubernetes" renders the k8s node, etcd and network state.
 export function TalosRuntime({ namespace, name, part }: { namespace: string; name: string; part: 'talos' | 'kubernetes' }) {
-  const [data, setData] = useState<GetNodeTalosRuntimeResponse | null>(null)
-  const [error, setError] = useState<{ title: string; detail: string } | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    setData(null)
-    setError(null)
-    nodeClient.getNodeTalosRuntime({ machine: { namespace, name } }).then(
-      (res) => {
-        if (!cancelled) setData(res)
-      },
-      (err) => {
-        if (!cancelled) setError(describeError(err))
-      },
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [namespace, name])
+  const { data, error } = useLoad(() => nodeClient.getNodeTalosRuntime({ machine: { namespace, name } }), [namespace, name])
 
   if (error) return <ErrorAlert {...error} />
   if (!data) return <SectionSkeleton label={t('rt.loading')} />

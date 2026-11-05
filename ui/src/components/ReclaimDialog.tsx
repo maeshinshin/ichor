@@ -13,6 +13,7 @@ import type { Reclaim } from '@/gen/ichor/v1alpha1/reclaim_pb'
 import { useAction } from '@/hooks/use-action'
 import { reclaimClient } from '@/lib/connect'
 import { reclaimSettled, uuidMatches } from '@/lib/reclaim'
+import { useLoad } from '@/lib/useLoad'
 import { t } from '@/lib/i18n'
 
 const POLL_MS = 2000
@@ -38,14 +39,7 @@ export function ReclaimDialog({
   const { busy, error, setError, run } = useAction()
 
   // The cluster is offered only when the caller may update it; otherwise reclaim goes ahead without registering.
-  const [clusterAllowed, setClusterAllowed] = useState(false)
-  useEffect(() => {
-    if (!cluster) return
-    reclaimClient.canReclaim({ cluster }).then(
-      (res) => setClusterAllowed(res.clusterAllowed),
-      () => {},
-    )
-  }, [cluster?.namespace, cluster?.name])
+  const clusterAllowed = useLoad(cluster ? () => reclaimClient.canReclaim({ cluster }) : undefined, [cluster?.namespace, cluster?.name]).data?.clusterAllowed ?? false
 
   const ref = reclaim?.ref
   const phase = reclaim?.phase ?? ''

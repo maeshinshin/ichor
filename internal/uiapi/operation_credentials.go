@@ -301,11 +301,7 @@ func (s *Server) AcknowledgeCARotationCredentials(
 				"and your current credentials keep working", truncateText(err.Error(), 300)))
 	}
 
-	if op.Annotations == nil {
-		op.Annotations = map[string]string{}
-	}
-
-	op.Annotations[ichorv1alpha1.CredentialsHandoffAnnotation] = token
+	metav1.SetMetaDataAnnotation(&op.ObjectMeta, ichorv1alpha1.CredentialsHandoffAnnotation, token)
 
 	if err := s.Update(ctx, op, strictFieldValidation); err != nil {
 		return nil, mapOperationWriteError("acknowledging the credentials hand-off on operation", namespacedName(ref), err)

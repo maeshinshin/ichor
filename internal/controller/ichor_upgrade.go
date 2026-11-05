@@ -32,6 +32,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -99,7 +100,7 @@ func (e *installerImageError) Unwrap() error { return e.err }
 
 // pauseReason is the reason a failed step pauses its operation with.
 func pauseReason(err error) string {
-	if ie := (*installerImageError)(nil); errors.As(err, &ie) {
+	if ie, ok := errors.AsType[*installerImageError](err); ok {
 		return ie.reason
 	}
 
@@ -114,9 +115,14 @@ func pauseReason(err error) string {
 // ichorInstallerJobName derives the Job's name from the operation, so the same operation
 // always finds the same Job (the executor is re-entered every reconcile).
 func ichorInstallerJobName(op *ichorv1alpha1.TalosOperation) string {
+	return ichorInstallerJobPrefix + operationHash(op)[:10]
+}
+
+// operationHash is the hex SHA-256 of the operation's namespace/name.
+func operationHash(op *ichorv1alpha1.TalosOperation) string {
 	sum := sha256.Sum256([]byte(op.Namespace + "/" + op.Name))
 
-	return ichorInstallerJobPrefix + hex.EncodeToString(sum[:])[:10]
+	return hex.EncodeToString(sum[:])
 }
 
 // +kubebuilder:rbac:groups=batch,namespace=ichor-system,resources=jobs,verbs=get;list;watch;create
@@ -422,7 +428,7 @@ func ichorRolloutWaiting(ctx context.Context, uncached client.Reader, ns string)
 			d := &list.Items[i]
 			if !deploymentRolledOut(d) {
 				return fmt.Sprintf("waiting for the %s Deployment to finish rolling out (%d of %d updated replicas are available)",
-					dep.role, min(d.Status.UpdatedReplicas, d.Status.AvailableReplicas), desiredReplicas(d)), nil
+					dep.role, min(d.Status.UpdatedReplicas, d.Status.AvailableReplicas), ptr.Deref(d.Spec.Replicas, 1)), nil
 			}
 		}
 	}
@@ -430,21 +436,10 @@ func ichorRolloutWaiting(ctx context.Context, uncached client.Reader, ns string)
 	return "", nil
 }
 
-// desiredReplicas is the replica count a Deployment asks for: one when unset, as the API defaults it.
-func desiredReplicas(d *appsv1.Deployment) int32 {
-	if d.Spec.Replicas == nil {
-		return 1
-	}
-
-	return *d.Spec.Replicas
-}
-
 // deploymentRolledOut is kubectl rollout status's test: the controller has seen the latest spec,
 // every replica is of that spec, no old replica is left, and all are ready and available.
 func deploymentRolledOut(d *appsv1.Deployment) bool {
-	want := desiredReplicas(d)
-
-	s := d.Status
+	want, s := ptr.Deref(d.Spec.Replicas, 1), d.Status // unset means one, as the API defaults it
 
 	return s.ObservedGeneration >= d.Generation &&
 		s.UpdatedReplicas == want && s.Replicas == want && s.ReadyReplicas == want && s.AvailableReplicas == want
@@ -455,8 +450,6 @@ func deploymentRolledOut(d *appsv1.Deployment) bool {
 func newInstallerJob(
 	ns, name string, op *ichorv1alpha1.TalosOperation, inst *ichorv1alpha1.IchorInstallation, digest, cni string, noPolicies bool,
 ) *batchv1.Job {
-	sum := sha256.Sum256([]byte(op.Namespace + "/" + op.Name))
-
 	// One attempt: a retry after a rollback would redo a failed upgrade without anyone having
 	// looked at why. The operation pauses instead. installerDeadline bounds the run in time.
 	args := []string{"installer", "run", "--namespace=" + ns, "--run-id=" + name, "--cni-detected=" + cni}
@@ -465,7 +458,7 @@ func newInstallerJob(
 	}
 
 	return newJob(ns, name, "ichor-installer", IchorInstallerServiceAccount, installerDeadline,
-		map[string]string{ichorInstallerOperationLabel: hex.EncodeToString(sum[:])[:32]},
+		map[string]string{ichorInstallerOperationLabel: operationHash(op)[:32]},
 		map[string]string{IchorInstallerTargetAnnotation: inst.Spec.Version, IchorInstallerDigestAnnotation: digest},
 		corev1.Container{
 			Name:  "installer",

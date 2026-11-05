@@ -96,7 +96,7 @@ func TestBootstrapManifest_IsTheExpandedChart(t *testing.T) {
 		}
 		// Cluster-scoped kinds have no namespace; every namespaced one must be kube-system.
 		// cilium-secrets is the chart's own secrets namespace (Roles for TLS interception).
-		if ns := o.Metadata.Namespace; ns != "" && ns != namespace && ns != "cilium-secrets" {
+		if ns := o.Metadata.Namespace; ns != "" && ns != namespace && ns != ciliumSecretsNamespace {
 			t.Errorf("%s %q is in namespace %q, want kube-system", o.Kind, o.Metadata.Name, o.Metadata.Namespace)
 		}
 	}

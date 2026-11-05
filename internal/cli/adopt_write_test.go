@@ -34,7 +34,6 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
-	"github.com/maeshinshin/ichor/internal/version"
 )
 
 const (
@@ -178,13 +177,19 @@ func TestWriteAdopt_UnmanagedClusterRecordsTalosCNI(t *testing.T) {
 // writeDenyPolicy is the default-deny policy testPolicies declares.
 const writeDenyPolicy = "ichor-default-deny"
 
+// getDenyPolicy reads Ichor's default-deny CiliumNetworkPolicy; the error is nil when it exists.
+func getDenyPolicy(ctx context.Context, c client.Reader) error {
+	pol := &unstructured.Unstructured{}
+	pol.SetAPIVersion("cilium.io/v2")
+	pol.SetKind("CiliumNetworkPolicy")
+
+	return c.Get(ctx, client.ObjectKey{Namespace: ichorControllerNamespace, Name: writeDenyPolicy}, pol)
+}
+
 // The preset does not veto the gate, so an unmanaged cluster that runs Cilium
 // gets Ichor's policies.
 func TestWriteAdopt_UnmanagedCiliumAppliesNetworkPolicies(t *testing.T) {
-	old := version.Version
-	version.Version = testReleasedVersion
-
-	t.Cleanup(func() { version.Version = old })
+	setVersion(t, testReleasedVersion)
 
 	ctx := context.Background()
 	c := fake.NewClientBuilder().WithScheme(newTestScheme(t)).
@@ -201,21 +206,14 @@ func TestWriteAdopt_UnmanagedCiliumAppliesNetworkPolicies(t *testing.T) {
 		t.Fatalf("writeAdopt: %v", err)
 	}
 
-	pol := &unstructured.Unstructured{}
-	pol.SetAPIVersion("cilium.io/v2")
-	pol.SetKind("CiliumNetworkPolicy")
-
-	if err := c.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: writeDenyPolicy}, pol); err != nil {
+	if err := getDenyPolicy(ctx, c); err != nil {
 		t.Fatalf("Ichor's network policy was not applied: %v", err)
 	}
 }
 
 // A non-Cilium CNI skips the policies and the message names the detected CNI.
 func TestWriteAdopt_UnmanagedFlannelSkipsNetworkPoliciesAndNamesIt(t *testing.T) {
-	old := version.Version
-	version.Version = testReleasedVersion
-
-	t.Cleanup(func() { version.Version = old })
+	setVersion(t, testReleasedVersion)
 
 	ctx := context.Background()
 	c := newWriteFake(t)
@@ -239,11 +237,7 @@ func TestWriteAdopt_UnmanagedFlannelSkipsNetworkPoliciesAndNamesIt(t *testing.T)
 		t.Errorf("skip message does not name the detected CNI:\n%s", out.String())
 	}
 
-	pol := &unstructured.Unstructured{}
-	pol.SetAPIVersion("cilium.io/v2")
-	pol.SetKind("CiliumNetworkPolicy")
-
-	if err := c.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: writeDenyPolicy}, pol); err == nil {
+	if err := getDenyPolicy(ctx, c); err == nil {
 		t.Errorf("a network policy was applied on a flannel cluster")
 	}
 }
@@ -423,10 +417,7 @@ func TestWriteAdopt_MachineNeedsAStrongIdentity(t *testing.T) {
 }
 
 func TestWriteAdopt_InstallsIchorOnlyWhenItIsNotRunning(t *testing.T) {
-	old := version.Version
-	version.Version = testReleasedVersion
-
-	t.Cleanup(func() { version.Version = old })
+	setVersion(t, testReleasedVersion)
 
 	ctx := context.Background()
 	c := newWriteFake(t)

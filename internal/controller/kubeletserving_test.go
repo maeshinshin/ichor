@@ -208,14 +208,10 @@ func TestJudgeKubeletServingRequest(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			csr := tc.csr.build(t)
 
-			reason := ""
-
-			parsed, denial := parseServingRequest(csr)
-			if denial == "" {
-				denial = checkServingIdentity(parsed, servingIdentityOf(servingIP))
+			parsed, reason := parseServingRequest(csr)
+			if reason == "" {
+				reason = checkServingIdentity(parsed, servingIdentityOf(servingIP))
 			}
-
-			reason = denial
 
 			if tc.deny == "" {
 				if reason != "" {

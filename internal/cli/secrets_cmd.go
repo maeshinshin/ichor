@@ -97,6 +97,10 @@ func runSecretsEncrypt(path string, stdout, stderr io.Writer) error {
 	}
 
 	pass, generated, err := resolveSealPassphrase(false)
+	if errors.Is(err, errNoSealPassphrase) {
+		return errNoSealPassphraseOnly // this command has no --bundle-plaintext to offer
+	}
+
 	if err != nil {
 		return err
 	}

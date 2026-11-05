@@ -389,38 +389,8 @@ func (f *keyRotFixture) step(op *ichorv1alpha1.TalosOperation) *ichorv1alpha1.Ta
 	return fetchOperation(op)
 }
 
-func keyStageOf(op *ichorv1alpha1.TalosOperation) string {
-	if op.Status.KeyRotation == nil {
-		return ""
-	}
-
-	return op.Status.KeyRotation.Stage
-}
-
-func atKeyStage(stage string) func(*ichorv1alpha1.TalosOperation) bool {
-	return func(op *ichorv1alpha1.TalosOperation) bool { return keyStageOf(op) == stage }
-}
-
-// runUntil steps until done(op), at most 200 times, and returns every distinct stage seen in order.
 func (f *keyRotFixture) runUntil(op *ichorv1alpha1.TalosOperation, done func(*ichorv1alpha1.TalosOperation) bool) (*ichorv1alpha1.TalosOperation, []string) {
-	var stages []string
-
-	for range 200 {
-		op = f.step(op)
-
-		if s := keyStageOf(op); s != "" && (len(stages) == 0 || stages[len(stages)-1] != s) {
-			stages = append(stages, s)
-		}
-
-		if done(op) {
-			return op, stages
-		}
-	}
-
-	Fail(fmt.Sprintf("the rotation did not reach the wanted state; stage %q phase %q, condition %v",
-		keyStageOf(op), op.Status.Phase, apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation)))
-
-	return op, stages
+	return runRotationUntil(f.step, op, done)
 }
 
 func (f *keyRotFixture) secretData() map[string][]byte {
@@ -481,7 +451,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 	It("saves the new keys before any control plane is told to use them", func() {
 		f := newKeyRotFixture(fastBundle())
 		op := f.newOp(bothTargets)
-		f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageIssuing))
+		f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageIssuing))
 
 		Expect(f.world.keysSavedAtFirstApply).NotTo(BeNil())
 		Expect(*f.world.keysSavedAtFirstApply).To(BeTrue(), "the Secret did not hold keyrotation.yaml when the first control plane was told anything")
@@ -494,7 +464,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		f.world.sweeps = []ReencryptResult{{Scanned: 40, Rewritten: 12}, {Scanned: 40}}
 
 		op := f.newOp(bothTargets)
-		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageAccepting))
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageAccepting))
 
 		kr := f.storedKeys()
 		Expect(kr).NotTo(BeNil())
@@ -538,7 +508,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		for range 400 {
 			op = f.step(op)
 
-			s := keyStageOf(op)
+			s := rotationStage(op)
 			if len(stages) == 0 || stages[len(stages)-1] != s {
 				stages = append(stages, s)
 
@@ -678,7 +648,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		f.world.sweeps = []ReencryptResult{{Scanned: 9, Rewritten: 5}, {Scanned: 9, Conflicts: 2}, {Scanned: 9}}
 
 		op := f.newOp(boxOnly)
-		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageDropping))
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageDropping))
 
 		Expect(f.world.sweepCalls).To(Equal(3))
 		Expect(op.Status.KeyRotation.Reencryption.Sweeps).To(Equal(int32(3)))
@@ -689,11 +659,11 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		f.world.sweepErr = errors.New("kube-apiserver: context deadline exceeded")
 
 		op := f.newOp(boxOnly)
-		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageReencrypting))
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageReencrypting))
 
 		op = repeatStep(f.step, op, 4)
 
-		Expect(keyStageOf(op)).To(Equal(ichorv1alpha1.KeyRotationStageReencrypting))
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.KeyRotationStageReencrypting))
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Message).To(ContainSubstring("old secretbox key stays"))
 
@@ -706,7 +676,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		f.world.restartDelay = 3
 
 		op := f.newOp(saOnly)
-		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageAccepting))
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageAccepting))
 
 		// Step until exactly one apply has happened: the next control plane waits for it.
 		for len(f.world.applies) < 1 {
@@ -731,11 +701,11 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		f.world.noRestart = true
 
 		op := f.newOp(saOnly)
-		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageAccepting))
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageAccepting))
 
 		op = repeatStep(f.step, op, 12)
 
-		Expect(keyStageOf(op)).To(Equal(ichorv1alpha1.KeyRotationStageAccepting))
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.KeyRotationStageAccepting))
 		Expect(f.world.applies).To(HaveLen(1), "the other control planes were applied to although the first never restarted")
 		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation)
 		Expect(cond.Message).To(ContainSubstring("still runs in the container it ran before the apply"))
@@ -755,7 +725,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		f.world.restartDelay = 3
 
 		op := f.newOp(saOnly)
-		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageAccepting))
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageAccepting))
 
 		for op.Status.KeyRotation.Restart == nil {
 			op = f.step(op)
@@ -791,7 +761,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		f.world.restartDelay = 2
 
 		op := f.newOp(saOnly)
-		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageAccepting))
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageAccepting))
 
 		for op.Status.KeyRotation.Restart == nil {
 			op = f.step(op)
@@ -816,7 +786,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 			f.world.restartDelay = 1
 			op := f.newOp(bothTargets)
 
-			op, _ = f.runUntil(op, atKeyStage(stage))
+			op, _ = f.runUntil(op, atStage(stage))
 			before := len(f.world.applies)
 
 			// Die in the middle of the second control plane's apply, after its restart was recorded.
@@ -831,7 +801,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 			op, _ = f.runUntil(op, func(o *ichorv1alpha1.TalosOperation) bool {
 				return o.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused
 			})
-			Expect(keyStageOf(op)).To(Equal(stage), "the stage must not advance on a half-done pass")
+			Expect(rotationStage(op)).To(Equal(stage), "the stage must not advance on a half-done pass")
 			Expect(op.Status.KeyRotation.Restart).NotTo(BeNil(), "the restart is recorded before the apply, so a dead controller finds it")
 
 			// A brand-new controller picks the stage up from status.
@@ -850,7 +820,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 	It("resumes after the Secret was replaced but the operation never learned of it", func() {
 		f := newKeyRotFixture(fastBundle())
 		op := f.newOp(bothTargets)
-		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageFinalizing))
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageFinalizing))
 
 		// What finalize does first, done by the "previous process" that then died.
 		kr := f.storedKeys()
@@ -909,7 +879,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		Expect(k8sClient.Update(ctx, &secret)).To(Succeed())
 
 		op := f.step(f.newOp(bothTargets))
-		Expect(keyStageOf(op)).To(BeEmpty())
+		Expect(rotationStage(op)).To(BeEmpty())
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		Expect(f.world.applies).To(BeEmpty())
 	})
@@ -926,12 +896,12 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		op.Spec.KeyRotation = &ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: saOnly, TokenSettle: &metav1.Duration{Duration: 2 * time.Hour}}
 		Expect(k8sClient.Create(ctx, op)).To(Succeed())
 
-		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageSettlingTokens))
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageSettlingTokens))
 		applied := len(f.world.applies)
 
 		op = repeatStep(f.step, op, 6)
 
-		Expect(keyStageOf(op)).To(Equal(ichorv1alpha1.KeyRotationStageSettlingTokens), "the old key was dropped before the tokens were re-issued")
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.KeyRotationStageSettlingTokens), "the old key was dropped before the tokens were re-issued")
 		Expect(f.world.applies).To(HaveLen(applied))
 		Expect(op.Status.KeyRotation.SettlingSince).NotTo(BeNil())
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Reason).To(Equal(reasonKeyRotationSettling))
@@ -951,11 +921,11 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		f.world.legacy = []string{"b/ci-token", "a/old-robot"}
 
 		op := f.newOp(saOnly)
-		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageSettlingTokens))
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageSettlingTokens))
 
 		op = repeatStep(f.step, op, 4)
 
-		Expect(keyStageOf(op)).To(Equal(ichorv1alpha1.KeyRotationStageSettlingTokens))
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.KeyRotationStageSettlingTokens))
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 
 		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation)
@@ -985,14 +955,14 @@ var _ = Describe("TalosOperation key-rotation", func() {
 	It("does not advance, and pauses, while a control plane's kube-apiserver is not ready or Ichor cannot reach it", func() {
 		f := newKeyRotFixture(fastBundle())
 		op := f.newOp(saOnly)
-		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageIssuing))
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageIssuing))
 
 		victim := f.controlPlanes()[1].Name
 		f.world.versionErr[victim] = errors.New("rpc error: Unavailable")
 
 		op = repeatStep(f.step, op, 5)
 
-		Expect(keyStageOf(op)).To(Equal(ichorv1alpha1.KeyRotationStageIssuing), "an unverified stage must not advance")
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.KeyRotationStageIssuing), "an unverified stage must not advance")
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 
 		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation)
@@ -1006,13 +976,13 @@ var _ = Describe("TalosOperation key-rotation", func() {
 	It("does not advance while a Kubernetes Node is not Ready", func() {
 		f := newKeyRotFixture(fastBundle())
 		op := f.newOp(saOnly)
-		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageDropping))
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageDropping))
 
 		f.world.notReady = []string{"some-worker"}
 
 		op = repeatStep(f.step, op, 4)
 
-		Expect(keyStageOf(op)).To(Equal(ichorv1alpha1.KeyRotationStageDropping))
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.KeyRotationStageDropping))
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Message).To(ContainSubstring("some-worker"))
 
 		f.world.notReady = nil
@@ -1026,7 +996,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		op := f.newOp(bothTargets)
 		op = repeatStep(f.step, op, 3)
 
-		Expect(keyStageOf(op)).To(BeEmpty())
+		Expect(rotationStage(op)).To(BeEmpty())
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		Expect(f.secretData()).NotTo(HaveKey(secretsbundle.KeyRotationKey), "no key may be generated for a rotation that cannot start")
 		Expect(f.world.applies).To(BeEmpty())
@@ -1040,7 +1010,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 			f, targets := setup()
 
 			op := f.step(f.newOp(targets))
-			Expect(keyStageOf(op)).To(BeEmpty())
+			Expect(rotationStage(op)).To(BeEmpty())
 			Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionKeyRotation).Message).To(ContainSubstring(want))
 			Expect(f.secretData()).NotTo(HaveKey(secretsbundle.KeyRotationKey))
 			Expect(f.world.applies).To(BeEmpty())
@@ -1082,7 +1052,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 	It("keeps the machine controller from rendering, dialing or applying, and refuses other operations, while a rotation is under way", func() {
 		f := newKeyRotFixture(fastBundle())
 		op := f.newOp(bothTargets)
-		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageIssuing))
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageIssuing))
 
 		dials := 0
 		mr := &TalosMachineReconciler{
@@ -1131,14 +1101,14 @@ var _ = Describe("TalosOperation key-rotation", func() {
 	It("holds the operation's deletion until the rotation is done", func() {
 		f := newKeyRotFixture(fastBundle())
 		op := f.newOp(bothTargets)
-		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageIssuing))
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageIssuing))
 		Expect(op.Finalizers).To(ContainElement(keyRotationFinalizer))
 
 		Expect(k8sClient.Delete(ctx, op)).To(Succeed())
 
 		op = f.step(op)
 		Expect(op.DeletionTimestamp.IsZero()).To(BeFalse())
-		Expect(keyStageOf(op)).NotTo(BeEmpty(), "the stage is the only record of the nodes' state and must survive a delete")
+		Expect(rotationStage(op)).NotTo(BeEmpty(), "the stage is the only record of the nodes' state and must survive a delete")
 
 		for range 200 {
 			_, err := reconcileOperation(f.newReconciler(), op)
@@ -1240,7 +1210,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		f.world.dialLeak = ""
 
 		op := f.newOp(bothTargets)
-		op, _ = f.runUntil(op, atKeyStage(ichorv1alpha1.KeyRotationStageIssuing))
+		op, _ = f.runUntil(op, atStage(ichorv1alpha1.KeyRotationStageIssuing))
 
 		kr := f.storedKeys()
 		material := append(bundleSecretMaterial(f.old), string(kr.ServiceAccount.Key), kr.Secretbox)
@@ -1286,7 +1256,7 @@ var _ = Describe("TalosOperation key-rotation", func() {
 		for range 40 {
 			op = f.step(op)
 
-			if keyStageOf(op) == ichorv1alpha1.KeyRotationStageReencrypting {
+			if rotationStage(op) == ichorv1alpha1.KeyRotationStageReencrypting {
 				break
 			}
 		}

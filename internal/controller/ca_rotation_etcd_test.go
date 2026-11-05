@@ -276,7 +276,7 @@ var _ = Describe("TalosOperation ca-rotation of the etcd CA and the aggregator C
 		}
 
 		Expect(f.world.restarts).To(BeEmpty())
-		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageAccepting))
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageAccepting))
 
 		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation)
 		Expect(cond.Message).To(ContainSubstring("does not hold the etcd PKI of this stage"))
@@ -296,7 +296,7 @@ var _ = Describe("TalosOperation ca-rotation of the etcd CA and the aggregator C
 			op = f.step(op)
 		}
 
-		Expect(stageOf(op)).To(BeEmpty())
+		Expect(rotationStage(op)).To(BeEmpty())
 		Expect(f.storedRotation()).To(BeNil())
 		Expect(f.world.applies).To(BeEmpty())
 
@@ -313,7 +313,7 @@ var _ = Describe("TalosOperation ca-rotation of the etcd CA and the aggregator C
 			op = f.step(op)
 		}
 
-		Expect(stageOf(op)).To(BeEmpty())
+		Expect(rotationStage(op)).To(BeEmpty())
 		Expect(f.storedRotation()).To(BeNil())
 		Expect(f.world.applies).To(BeEmpty())
 		Expect(f.world.restarts).To(BeEmpty())
@@ -345,7 +345,7 @@ var _ = Describe("TalosOperation ca-rotation of the etcd CA and the aggregator C
 			op = f.step(op)
 		}
 
-		Expect(stageOf(op)).To(Equal(ichorv1alpha1.CARotationStageAccepting))
+		Expect(rotationStage(op)).To(Equal(ichorv1alpha1.CARotationStageAccepting))
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		Expect(apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation).Message).To(ContainSubstring(extensionAuthConfigMap))
 		Expect(f.aggregatorChecks).NotTo(BeEmpty())

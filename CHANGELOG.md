@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.1.0 (2026-11-05)
+## v0.1.0 (2026-11-06)
 
 First release. Alpha: exercised end to end on Talos v1.14 test clusters, not yet on bare metal.
 
@@ -92,9 +92,9 @@ table accepts; a refusal passes only with the override verb.
   the plain reset still wipes STATE and EPHEMERAL only.
 - The installer image of an Ichor upgrade runs by digest and its keyless release
   signature is verified, offline against an embedded Sigstore root, before the
-  installer Job is created. `ichor upgrade ichor` takes `--installer-digest` and
-  `--skip-signature-check` (recorded, shown in `ichor version`, the plan
-  and the UI); the API server refuses an installer Job that names a tag. The
+  installer Job is created. `ichor upgrade ichor` and `ichor init` take
+  `--installer-digest` and `--skip-signature-check`, a bare flag (recorded, shown
+  in `ichor version`, the plan and the UI); the API server refuses an installer Job that names a tag. The
   release workflow pushes the controller and ichor-ui images first and builds the
   installer last, so the install manifest embedded in it names both by digest.
 - FQDN egress and a closed metrics port: the controller writes a
@@ -130,6 +130,25 @@ table accepts; a refusal passes only with the override verb.
   back in maintenance mode; a pending machine whose node was reset has its pinned maintenance
   certificate and inventory refreshed by discovery, so `ichor machine reclaim`
   no longer deletes it.
+- Admission enforces what the UI checks, so a CR written with `kubectl` gets no
+  shortcut. The `TalosCluster` webhook validates
+  `spec.cni.cilium.values` (schema, unknown and Ichor-owned keys, size, the
+  chart's own template checks) on create and when the values, kube-proxy mode or
+  tunnel change, and the controller checks the values again before every Cilium
+  Helm Job: a refusal starts no Job and shows as `CNIValuesApplied=False`. A new
+  `IchorUser` webhook holds the role-grant rule (a requester grants only roles
+  below their own, viewer < operator < admin; admin grants any) and refuses to
+  remove or demote the last admin. An `operator` can create viewer and operator
+  users.
+- A failed `TalosOperation` is retried with `kubectl annotate talosoperation NAME
+  ichor.maesh.dev/retry=true`, which the controller acts on once and removes.
+- Cilium's optional features work through the Helm Job: Gateway API, ingress,
+  Hubble UI, clustermesh and BGP control plane no longer fail for missing rights.
+  Values that cannot work are refused at admission with the reason:
+  `gatewayAPI.enabled` needs kube-proxy replacement, and
+  `clustermesh.useAPIServer` needs the `cronJob` certificate method.
+- `make remote-gate` runs the full test gate as sharded Jobs in a Kubernetes
+  cluster, with infrastructure failures reported apart from test failures.
 - Release artifacts are built with `make release VERSION=v0.1.0`.
 - `ichor init -f init.yaml` reads the init settings from an `InitConfig` file
   instead of a long flag line (a flag overrides the file;
@@ -168,6 +187,22 @@ build or wrote scripts against one.
   `installerSignature.reason` with `mode: skip`). The fields stay in the schema,
   deprecated and unused. The override verb, the typed confirmations and the
   Events that record who did what are unchanged.
+- Changing the Cilium values needs the `update` verb on
+  `talosclusters/cilium-values`, which only `ichor-admin` holds. The
+  chart accepts privileged pods and host paths, so whoever sets the values has
+  root on the nodes. The UI, the CLI and `kubectl` all obey it; an operator sees
+  the values read-only, and `ichor adopt --cilium-values` needs the right too.
+  The five `*.secretsNamespace.name` values are Ichor-owned and pinned to
+  `cilium-secrets`, as is `tls.readSecretsOnlyFromSecretsNamespace=true`; a
+  value for any of them is refused. The BGP control plane's secrets namespace
+  therefore moves from `kube-system` to `cilium-secrets`: move BGP
+  authentication Secrets there.
+- `ichor.maesh.dev/retry=true` is the only retry form. The time form of the
+  annotation from earlier builds is ignored.
+- The Cilium Helm Job runs the installer by a verified digest, never a tag, so a
+  fresh install whose controller cannot resolve the tag in its registry needs
+  `ichor init --installer-digest sha256:...`, and an unsigned build needs
+  `ichor init --skip-signature-check`.
 - The local secrets bundle is encrypted by default. `ichor init` prints a
   generated passphrase once on a terminal and waits for Enter; `ichor adopt
   --recover-secrets` seals the recovered bundle the same way. With no terminal and
@@ -234,6 +269,40 @@ Found on hardware while building this release.
 - ichor-ui: list tables and dialogs fit a phone, the Overview actions stay on
   while an operation runs and show the server's refusal.
 - An error is printed once, and the plaintext-bundle warning once per run.
+- `ichor node reset` and `node remove` take `--confirm NAME` as the confirmation
+  without a second prompt; `ichor cluster rotate-ca --help` says it does
+  the credential hand-off with or without `--follow`; `ichor init` creates the
+  `cilium-secrets` namespace before the objects that live in it; the follow of
+  an Ichor upgrade rides out ichor-ui's denial of requests while it rolls out.
+
+Security, found in review and on hardware:
+
+- Discovery no longer moves an approved machine's address. A converged machine
+  that fell back to maintenance mode followed any address that answered with its
+  identity, so a spoofed twin could have been sent the full configuration. Only
+  unapproved machines follow a discovery match.
+- A control plane that is re-provisioning keeps the cluster lock until it has
+  stored its new configuration; before, another actor could take the lock
+  mid-step.
+- The Cilium Helm Job's installer is pinned by a verified digest (above), and the
+  Job's ServiceAccount `ichor-cni` is scoped: it may change only the objects the
+  pinned chart renders, by name, and holds what Cilium's optional features need
+  instead of a blanket escalation.
+- A CA-rotation credentials acknowledgement set before the operation asks for it
+  is dropped, so it cannot skip the gate.
+
+Robustness:
+
+- The controller and ichor-ui have a 512Mi memory limit, `GOMEMLIMIT` and 5 s
+  probe timeouts; on a 3+1 node cluster the controller had restarted six times in
+  80 minutes (one OOM kill), and the fail-closed admission webhook was down each
+  time. `managedFields` are stripped from cached objects and the Cilium values
+  schema is compiled once.
+- An aggregator CA rotation waits for every kube-apiserver to restart before it
+  verifies a stage, and the credential hand-off keeps retrying while the API
+  server restarts, including webhook timeouts and API discovery failures.
+- A failed Cilium Job of values the user has since changed is deleted, and
+  reverting an edit to the applied values clears a stale `CNIValuesApplied=False`.
 
 ### Not part of Ichor
 
@@ -254,6 +323,11 @@ UI.
   `os:reader` talosconfig, kubelet serving certificates and a signed installer
   upgrade have unit and envtest coverage but await a hardware run; the Cilium
   takeover with `--cilium-values` and the flannel move were not run.
+- Admission checks the Cilium values only as far as the object itself tells. The
+  checks that need the machine configuration or the live cluster
+  (`bpf.masquerade` with `forwardKubeDNSToHost`, KubePrism in replaced mode, the
+  Gateway API CRDs) stay in the UI and the CLI, so a `kubectl` edit of such a
+  value is caught by the Helm Job's failure instead.
 - `ichor adopt --add-machine` has no UI button. Ichor does not migrate a cluster
   from another CNI to Cilium; `adopt --cni-unmanaged` leaves it as it is.
 - A pod that asks for a projected service-account token valid for more than about

@@ -46,21 +46,15 @@ func (s *Server) authorizeStart(ctx context.Context, spec *ichorv1alpha1.TalosOp
 		return nil
 	}
 
-	c, err := s.cl(ctx)
-	if err != nil {
-		return connect.NewError(connect.CodeUnavailable, fmt.Errorf("start: acting as the user: %w", err))
-	}
-
-	review := &authv1.SelfSubjectAccessReview{Spec: authv1.SelfSubjectAccessReviewSpec{ResourceAttributes: &authv1.ResourceAttributes{
+	allowed, err := s.askAll(ctx, "start: ", authv1.ResourceAttributes{
 		Namespace: namespace, Verb: ichorv1alpha1.OperationStartVerb, Group: ichorv1alpha1.GroupVersion.Group,
 		Resource: "talosoperations", Subresource: sub,
-	}}}
-
-	if err := c.Create(ctx, review); err != nil {
-		return connect.NewError(connect.CodeUnavailable, fmt.Errorf("start: asking Kubernetes whether you may: %w", err))
+	})
+	if err != nil {
+		return err
 	}
 
-	if !review.Status.Allowed {
+	if !allowed {
 		return connect.NewError(connect.CodePermissionDenied,
 			fmt.Errorf("you may not start a %s operation: Kubernetes RBAC does not grant you the %q verb on talosoperations/%s",
 				spec.Kind, ichorv1alpha1.OperationStartVerb, sub))

@@ -58,7 +58,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -309,18 +308,7 @@ func (c *keyRun) patches(ctx context.Context) ([]ichorv1alpha1.TalosConfigPatch,
 
 // nodesReady fails unless every Kubernetes Node is Ready, asked through first's admin kubeconfig.
 func (c *keyRun) nodesReady(ctx context.Context, first *ichorv1alpha1.TalosMachine) error {
-	return c.withNode(ctx, first, etcdDialTimeout, func(ctx context.Context, talos TalosClient) error {
-		notReady, err := c.r.NodesReady(ctx, talos)
-		if err != nil {
-			return fmt.Errorf("checking the Kubernetes Nodes: %w", err)
-		}
-
-		if len(notReady) > 0 {
-			return fmt.Errorf("kubernetes Nodes not Ready: %v", notReady)
-		}
-
-		return nil
-	})
+	return c.withNode(ctx, first, etcdDialTimeout, c.r.checkNodesReady)
 }
 
 // keyIdentifiers returns the public identifiers of the keys the rotation moves, from the old bundle and the new keys.
@@ -548,21 +536,6 @@ func (c *keyRun) preflightMachine(
 	return ctrl.Result{}, false, nil
 }
 
-// bundleKey is the only Secret this executor ever writes: the one the cluster's spec.secretsRef names, in the
-// controller namespace (the manager's Role grants update on every Secret there, ADR 0063).
-func (c *keyRun) bundleKey() types.NamespacedName {
-	return types.NamespacedName{Namespace: c.r.ControllerNamespace, Name: c.cluster.Spec.SecretsRef.Name}
-}
-
-// updateBundle refuses to write any Secret other than bundleKey.
-func (c *keyRun) updateBundle(ctx context.Context, secret *corev1.Secret) error {
-	if secret.Name == "" || client.ObjectKeyFromObject(secret) != c.bundleKey() {
-		return fmt.Errorf("refusing to write Secret %s/%s: it is not the secrets bundle %q names", secret.Namespace, secret.Name, c.cluster.Name)
-	}
-
-	return c.r.Update(ctx, secret)
-}
-
 // saveKeyRotation writes keyrotation.yaml into the bundle Secret, once and only if absent.
 func (c *keyRun) saveKeyRotation(ctx context.Context, kr *secretsbundle.KeyRotation) error {
 	raw, err := kr.Marshal()
@@ -571,7 +544,7 @@ func (c *keyRun) saveKeyRotation(ctx context.Context, kr *secretsbundle.KeyRotat
 	}
 
 	var secret corev1.Secret
-	if err := readerOrClient(c.r.APIReader, c.r.Client).Get(ctx, c.bundleKey(), &secret); err != nil {
+	if err := readerOrClient(c.r.APIReader, c.r.Client).Get(ctx, c.r.bundleKey(c.cluster), &secret); err != nil {
 		return err
 	}
 
@@ -585,7 +558,7 @@ func (c *keyRun) saveKeyRotation(ctx context.Context, kr *secretsbundle.KeyRotat
 
 	secret.Data[secretsbundle.KeyRotationKey] = raw
 
-	return c.updateBundle(ctx, &secret)
+	return c.r.updateBundle(ctx, c.cluster, &secret)
 }
 
 // pass makes every control plane run the configuration of stage one at a time, waiting for each kube-apiserver
@@ -1029,7 +1002,7 @@ func (c *keyRun) replaceBundle(ctx context.Context) (*secrets.Bundle, error) {
 	}
 
 	var secret corev1.Secret
-	if err := readerOrClient(c.r.APIReader, c.r.Client).Get(ctx, c.bundleKey(), &secret); err != nil {
+	if err := readerOrClient(c.r.APIReader, c.r.Client).Get(ctx, c.r.bundleKey(c.cluster), &secret); err != nil {
 		return nil, err
 	}
 
@@ -1064,7 +1037,7 @@ func (c *keyRun) replaceBundle(ctx context.Context) (*secrets.Bundle, error) {
 	secret.Data[secretsbundle.RetiredKeysKey] = rawRetired
 	delete(secret.Data, secretsbundle.KeyRotationKey)
 
-	if err := c.updateBundle(ctx, &secret); err != nil {
+	if err := c.r.updateBundle(ctx, c.cluster, &secret); err != nil {
 		return nil, err
 	}
 

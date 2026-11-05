@@ -228,9 +228,7 @@ func TestChartCiliumPoliciesDropWhatIsOff(t *testing.T) {
 
 // containerArgs returns the first container's args.
 func containerArgs(deployment map[string]any) []any {
-	spec, _ := deployment["spec"].(map[string]any)
-	tmpl, _ := spec["template"].(map[string]any)
-	podSpec, _ := tmpl["spec"].(map[string]any)
+	podSpec := podSpecOf(deployment)
 	containers, _ := podSpec["containers"].([]any)
 
 	if len(containers) == 0 {

@@ -72,7 +72,7 @@ func checkRoleBindingSubjects(t *testing.T, label string, docs []map[string]any)
 
 	accounts := make(map[string]bool)
 	for _, sa := range findAll(docs, kindServiceAccount) {
-		accounts[docNamespace(sa)+"/"+nameOf(sa)] = true
+		accounts[namespaceOf(sa)+"/"+nameOf(sa)] = true
 	}
 
 	bindings := append(findAll(docs, kindRoleBinding), findAll(docs, kindClusterRoleBinding)...)
@@ -92,12 +92,4 @@ func checkRoleBindingSubjects(t *testing.T, label string, docs []map[string]any)
 			}
 		}
 	}
-}
-
-// docNamespace returns metadata.namespace of a decoded object, or "" for a cluster-scoped one.
-func docNamespace(doc map[string]any) string {
-	md, _ := doc["metadata"].(map[string]any)
-	ns, _ := md["namespace"].(string)
-
-	return ns
 }

@@ -94,9 +94,7 @@ func TestPlanCNIOperationRefusesAnUnmanagedCluster(t *testing.T) {
 
 	srv, _ := opServer(t, objs...)
 
-	_, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CNI, Target: kubeProxyReplaced,
-	}))
+	_, err := planOp(srv, pb.OperationKind_OPERATION_KIND_CNI, kubeProxyReplaced)
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
 		t.Fatalf("want FailedPrecondition, got %v", err)
 	}

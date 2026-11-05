@@ -28,6 +28,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
 const (
@@ -81,6 +83,25 @@ func bgUnitRequest(t *testing.T, resource, user string, removeFinalizer bool) ad
 	req.UserInfo = authnv1.UserInfo{Username: user}
 	req.Object = obj(next)
 	req.OldObject = obj([]string{bgUnitFinalizer})
+
+	return req
+}
+
+// createOperationRequest is the CREATE of a TalosOperation named op with spec, made by user.
+func createOperationRequest(t *testing.T, spec ichorv1alpha1.TalosOperationSpec, user string) admission.Request {
+	t.Helper()
+
+	raw, err := json.Marshal(ichorv1alpha1.TalosOperation{Name: "op", Namespace: testNamespace, Spec: spec})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var req admission.Request
+
+	req.Operation, req.Name, req.Namespace = admissionv1.Create, "op", testNamespace
+	req.Resource = metav1.GroupVersionResource{Group: ichorGroup, Version: ichorv1alpha1.GroupVersion.Version, Resource: resOperations}
+	req.UserInfo = authnv1.UserInfo{Username: user}
+	req.Object = runtime.RawExtension{Raw: raw}
 
 	return req
 }

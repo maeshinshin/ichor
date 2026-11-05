@@ -24,7 +24,6 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"slices"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -111,8 +110,4 @@ func isInstallerRBAC(o *unstructured.Unstructured) bool {
 	}
 
 	return false
-}
-
-func (p plan) nonRBAC() []*unstructured.Unstructured {
-	return slices.Concat(p.crds, p.controller, p.ui)
 }

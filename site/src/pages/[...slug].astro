@@ -23,7 +23,7 @@ const sections = buildNav(docs).filter((s) => s.label !== 'Overview')
 
 {
   doc && rendered ? (
-    <Docs title={doc.title} current={doc.url} headings={rendered.headings.map((h) => ({ depth: h.depth, slug: h.slug, text: h.text }))} editUrl={doc.editUrl}>
+    <Docs title={doc.title} current={doc.url} headings={rendered.headings.map((h) => ({ depth: h.depth, slug: h.slug, text: h.text }))} editUrl={doc.editUrl} description={doc.description}>
       <Prose><rendered.Content /></Prose>
     </Docs>
   ) : (

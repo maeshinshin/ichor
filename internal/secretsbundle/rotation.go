@@ -30,8 +30,6 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	yaml "go.yaml.in/yaml/v4"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -130,12 +128,6 @@ func (r *Rotation) Targets() []string {
 	return out
 }
 
-// RotatesCredentials reports whether r replaces a CA the operator's talosconfig or kubeconfig
-// depends on, which is what makes the operation wait for a credential hand-off.
-func (r *Rotation) RotatesCredentials() bool {
-	return r.Talos != nil || r.Kubernetes != nil
-}
-
 // Validate reports whether r holds at least one CA and every CA it holds has a certificate and a
 // key. The message never includes their content.
 func (r *Rotation) Validate() error {
@@ -209,24 +201,7 @@ func (r *Rotation) Apply(bundle *secrets.Bundle) *secrets.Bundle {
 // LoadRotation reads RotationKey from the Secret named name in namespace. It returns nil, nil when
 // the key is absent: no rotation is in progress.
 func LoadRotation(ctx context.Context, c client.Reader, namespace, name string) (*Rotation, error) {
-	var secret corev1.Secret
-
-	key := types.NamespacedName{Namespace: namespace, Name: name}
-	if err := c.Get(ctx, key, &secret); err != nil {
-		return nil, fmt.Errorf("getting secrets bundle Secret %q: %w", key, err)
-	}
-
-	raw, ok := secret.Data[RotationKey]
-	if !ok {
-		return nil, nil //nolint:nilnil // absence is the answer
-	}
-
-	r, err := ParseRotation(raw)
-	if err != nil {
-		return nil, fmt.Errorf("reading %q from Secret %q: %w", RotationKey, key, err)
-	}
-
-	return r, nil
+	return loadKey(ctx, c, namespace, name, RotationKey, ParseRotation)
 }
 
 // Fingerprint is the SHA-256 of the first certificate in crtPEM, hex encoded. It is public.

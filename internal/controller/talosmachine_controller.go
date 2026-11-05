@@ -343,6 +343,12 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
+	// The AdoptionHeld condition goes in the reconcile that sees hold-apply gone, whichever path
+	// (running node, maintenance mode) this round takes; the status write of that path persists it.
+	if m.Annotations[ichorv1alpha1.TalosMachineHoldApplyAnnotation] != strconv.FormatBool(true) {
+		apimeta.RemoveStatusCondition(&m.Status.Conditions, conditionAdoptionHeld)
+	}
+
 	// Gates that keep the machine from being rendered or applied this round (ADR 0054, ADR 0063).
 	if res, stop, err := r.holdUntilEligible(ctx, &cluster, &m); stop {
 		return res, err
@@ -1139,9 +1145,7 @@ func (r *TalosMachineReconciler) reportHold(
 	ctx context.Context, m *ichorv1alpha1.TalosMachine, current, rendered []byte, hash string,
 ) (ctrl.Result, bool, error) {
 	if m.Annotations[ichorv1alpha1.TalosMachineHoldApplyAnnotation] != strconv.FormatBool(true) {
-		apimeta.RemoveStatusCondition(&m.Status.Conditions, conditionAdoptionHeld)
-
-		return ctrl.Result{}, false, nil
+		return ctrl.Result{}, false, nil // Reconcile already dropped the condition
 	}
 
 	apimeta.SetStatusCondition(&m.Status.Conditions, metav1.Condition{

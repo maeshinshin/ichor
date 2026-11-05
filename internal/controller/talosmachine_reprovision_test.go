@@ -197,6 +197,31 @@ var _ = Describe("TalosMachineReconciler re-provisioning a node that fell back t
 		Expect(readyCondition(got).Message).To(ContainSubstring(ichorv1alpha1.TalosMachineHoldApplyAnnotation))
 	})
 
+	It("drops the AdoptionHeld condition in the reconcile that sees hold-apply gone, even on the maintenance path", func() {
+		setup(roleWorker)
+
+		got := fetchMachine(machine)
+		got.Annotations = map[string]string{ichorv1alpha1.TalosMachineHoldApplyAnnotation: "true"}
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+		// The running-node path set it before the wipe; the maintenance path never touches it.
+		got = fetchMachine(machine)
+		apimeta.SetStatusCondition(&got.Status.Conditions, metav1.Condition{
+			Type: conditionAdoptionHeld, Status: metav1.ConditionTrue, Reason: reasonAdoptionHeld, Message: "held",
+		})
+		Expect(k8sClient.Status().Update(ctx, got)).To(Succeed())
+
+		got = reconcileOnce()
+		Expect(readyCondition(got).Reason).To(Equal(reasonReprovisionBlocked))
+
+		got.Annotations = nil
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+		got = reconcileOnce()
+		Expect(readyCondition(got).Reason).To(Equal(reasonConfigStored))
+		Expect(apimeta.FindStatusCondition(got.Status.Conditions, conditionAdoptionHeld)).To(BeNil())
+	})
+
 	It("never probes or sends when the endpoint is not a valid target", func() {
 		setup(roleWorker)
 

@@ -37,7 +37,6 @@ func adoptRecoverOptions() adoptSecretsOptions {
 // wrong passphrase is an error of its own, not "already exists" and not an overwrite.
 func TestResolveAdoptBundle_RecoverEncrypts(t *testing.T) {
 	useBundleCrypto(t)
-	t.Setenv("HOME", t.TempDir())
 	t.Setenv(bundlePassphraseEnv, testBundlePass)
 
 	reader := &fakeTalosReader{current: renderRole(t, testControlPlaneRole)}
@@ -89,7 +88,6 @@ func TestResolveAdoptBundle_RecoverEncrypts(t *testing.T) {
 // there is no passphrase and no --bundle-plaintext.
 func TestResolveAdoptBundle_RecoverRefusesWithoutAPassphrase(t *testing.T) {
 	useBundleCrypto(t)
-	t.Setenv("HOME", t.TempDir())
 
 	reader := &fakeTalosReader{current: renderRole(t, testControlPlaneRole)}
 	opts := adoptRecoverOptions()

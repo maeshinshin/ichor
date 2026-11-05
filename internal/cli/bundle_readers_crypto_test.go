@@ -32,9 +32,7 @@ func TestRestoreRecoverClusterFromAnEncryptedBundle(t *testing.T) {
 	useBundleCrypto(t)
 
 	h := newRestoreHarness(t) // saved the bundle as plaintext; replace it with a sealed one
-	if _, err := saveBundleFile("lost", h.bundle, testBundlePass); err != nil {
-		t.Fatal(err)
-	}
+	saveTestBundle(t, "lost", h.bundle, testBundlePass)
 
 	snap := goodSnapshot(t)
 	putSnapshot(t, h.store, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), snap, h.bundle)
@@ -74,7 +72,6 @@ func TestCredentialsFromAnEncryptedBundleFileWorkOffline(t *testing.T) {
 	useBundleCrypto(t)
 
 	f := newCredFixture(t, false, "")
-	t.Setenv("HOME", t.TempDir())
 
 	path := saveTestBundle(t, "offline", f.old, testBundlePass)
 

@@ -83,7 +83,6 @@ func exportRotated(t *testing.T, deps func(client.Client) bundleExportDeps) (nam
 }
 
 func TestBundleExportSavesThePlaintextRetiredKeysOfAPlaintextBundleWithTheSameWarning(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
 	useBundleCrypto(t)
 
 	var out, errw bytes.Buffer
@@ -149,7 +148,6 @@ func assertAcknowledged(t *testing.T, k8s client.Client, name string, rotated *s
 
 // The retired keys are key material and are sealed under the bundle's passphrase, from the same sources.
 func TestBundleExportSealsTheRetiredKeysUnderTheBundlesPassphrase(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
 	useBundleCrypto(t)
 	t.Setenv(bundlePassphraseEnv, testBundlePass)
 
@@ -221,7 +219,6 @@ func TestBundleExportSealsTheRetiredKeysUnderTheBundlesPassphrase(t *testing.T) 
 }
 
 func TestBundleExportRefusesToAcknowledgeWithoutBeingAbleToSaveRetiredKeys(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
 	useBundleCrypto(t)
 
 	rotated, retired := rotatedKeys(t, newTestBundle(t))
@@ -246,13 +243,9 @@ func TestBundleExportRefusesToAcknowledgeWithoutBeingAbleToSaveRetiredKeys(t *te
 // The retired keys cannot be sealed under a passphrase nobody knows: an encrypted bundle whose passphrase this
 // process does not hold is refused rather than followed by a plaintext file.
 func TestSavingRetiredKeysNextToAnEncryptedBundleWithoutItsPassphraseIsRefused(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
 	useBundleCrypto(t)
 
-	path, err := saveBundleFile("enc", newTestBundle(t), testBundlePass)
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := saveTestBundle(t, "enc", newTestBundle(t), testBundlePass)
 
 	var errw bytes.Buffer
 
@@ -275,10 +268,7 @@ func TestRestoreOpensASnapshotSealedBeforeAKeyRotation(t *testing.T) {
 			putSnapshot(t, h.store, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), snapshot, h.bundle)
 
 			// What `ichor cluster bundle-export` leaves after the rotation.
-			path, err := saveBundleFile("lost", rotated, pass)
-			if err != nil {
-				t.Fatal(err)
-			}
+			path := saveTestBundle(t, "lost", rotated, pass)
 
 			if pass != "" {
 				t.Setenv(bundlePassphraseEnv, pass)
@@ -319,16 +309,12 @@ func TestRestoreOpensASnapshotSealedBeforeAKeyRotation(t *testing.T) {
 
 // `ichor secrets encrypt` seals the retired keys next to a plaintext bundle under the same passphrase.
 func TestSecretsEncryptSealsTheRetiredKeysNextToTheBundle(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
 	useBundleCrypto(t)
 	t.Setenv(bundlePassphraseEnv, testBundlePass)
 
 	rotated, retired := rotatedKeys(t, newTestBundle(t))
 
-	path, err := saveBundleFile("old", rotated, "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := saveTestBundle(t, "old", rotated, "")
 
 	if _, err := saveRetiredFile("old", retired, path, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)

@@ -377,3 +377,125 @@ func TestSnapshotFailsOnForbiddenButNotOnAMissingKind(t *testing.T) {
 		t.Errorf("a kind that is not installed means nothing to snapshot, got %v", err)
 	}
 }
+
+// The apiserver sees no object name on a create, so `escalate` limited by resourceNames (the installer's
+// real role) never authorizes creating a Role or ClusterRole that grants more than the installer holds; on
+// an update the name is in the path and it does. A Role or ClusterRole that is new in a release must
+// therefore be created empty and then updated.
+func TestRunCreatesANewRoleThatGrantsMoreThanTheInstallerHolds(t *testing.T) {
+	ctx := context.Background()
+	o := newOldInstaller(t)
+
+	newRole, newCR := "ichor-cni-newrole", "ichor-cni-newcr-"+o.ns
+
+	// The installer's role as the chart ships it: bind and escalate by name only, the names of the new release.
+	named := strings.Replace(oldRoleRules, `- apiGroups: [rbac.authorization.k8s.io]
+  resources: [roles]
+  verbs: [bind, escalate]`, fmt.Sprintf(`- apiGroups: [rbac.authorization.k8s.io]
+  resourceNames: [ichor-installer-role, %s]
+  resources: [roles]
+  verbs: [bind, escalate]`, newRole), 1)
+
+	// The cluster-scoped part of the old installer role, plus escalate on the one new ClusterRole by name.
+	clusterNamed := fmt.Sprintf(`---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: %[1]s}
+rules:
+- apiGroups: [apiextensions.k8s.io]
+  resources: [customresourcedefinitions]
+  verbs: [create, get, patch, update]
+- apiGroups: [rbac.authorization.k8s.io]
+  resources: [clusterroles, clusterrolebindings]
+  verbs: [create, get, patch, update, delete]
+- apiGroups: [rbac.authorization.k8s.io]
+  resourceNames: [%[1]s, %[2]s]
+  resources: [clusterroles]
+  verbs: [bind, escalate]
+`, o.clusterRole, newCR)
+
+	for _, doc := range []string{o.installerRBAC(named), clusterNamed} {
+		objs, err := Decode([]byte(doc))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		for _, obj := range objs {
+			if err := applyOne(ctx, k8sClient, obj); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	manifest := append(append(o.manifest("ctrl:v2", ""), []byte(o.installerRBAC(named))...), []byte(clusterNamed)...)
+	manifest = append(manifest, []byte(fmt.Sprintf(`---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: %s, namespace: %s}
+rules:
+- apiGroups: [""]
+  resources: [secrets]
+  verbs: [get, list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: {name: %s}
+rules:
+- apiGroups: [""]
+  resources: [nodes]
+  verbs: [get, list, watch]
+`, newRole, o.ns, newCR))...)
+
+	// Not creatable with its rules by this installer: the precondition the fix is for.
+	precondition := mustDecodeOne(t, fmt.Sprintf(`apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata: {name: %s, namespace: %s}
+rules: [{apiGroups: [""], resources: [secrets], verbs: [get]}]
+`, newRole, o.ns))
+
+	// The named role is effective once the installer can read the Role it holds, then a create is refused.
+	if err := wait.PollUntilContextTimeout(ctx, 200*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+		err := o.client.Create(ctx, precondition.DeepCopy())
+
+		return err != nil && strings.Contains(err.Error(), "attempting to grant"), nil
+	}); err != nil {
+		t.Fatalf("precondition: creating a Role with rules the installer does not hold must be refused as an escalation: %v", err)
+	}
+
+	if err := Run(ctx, o.client, Options{
+		Namespace: o.ns, RunID: o.run, Manifest: manifest, Ready: noWait(new([]string)), RBACSettle: 5 * time.Second,
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	for _, c := range []struct {
+		kind string
+		key  types.NamespacedName
+		want string
+	}{
+		{"Role", types.NamespacedName{Namespace: o.ns, Name: newRole}, "secrets"},
+		{"ClusterRole", types.NamespacedName{Name: newCR}, "nodes"},
+	} {
+		live := o.unstructured("rbac.authorization.k8s.io/v1", c.kind)
+		if err := k8sClient.Get(ctx, c.key, live); err != nil {
+			t.Errorf("%s %s was not created: %v", c.kind, c.key.Name, err)
+
+			continue
+		}
+
+		if !strings.Contains(fmt.Sprint(live.Object["rules"]), c.want) {
+			t.Errorf("%s %s has rules %v, want the new release's (%s)", c.kind, c.key.Name, live.Object["rules"], c.want)
+		}
+	}
+}
+
+func mustDecodeOne(t *testing.T, doc string) *unstructured.Unstructured {
+	t.Helper()
+
+	objs, err := Decode([]byte(doc))
+	if err != nil || len(objs) != 1 {
+		t.Fatalf("decoding: %v (%d objects)", err, len(objs))
+	}
+
+	return objs[0]
+}

@@ -48,7 +48,13 @@ var OwnedKeys = map[string]string{
 	"envoyConfig.secretsNamespace.name":       secretsNamespaceReason,
 	"bgpControlPlane.secretsNamespace.name":   secretsNamespaceReason,
 	"tls.secretsNamespace.name":               secretsNamespaceReason,
+
+	// The agent reads Secrets only in that namespace, never cluster-wide.
+	keyReadSecretsOnly: clusterWideSecretsReason,
+	keySecretsBackend:  clusterWideSecretsReason,
 }
+
+const clusterWideSecretsReason = "the Cilium agent runs on every node and may read Secrets only in cilium-secrets, not cluster-wide"
 
 const secretsNamespaceReason = "Cilium may read Secrets only in its own namespace, cilium-secrets"
 

@@ -35,7 +35,11 @@ type object struct {
 		Name      string `json:"name"`
 		Namespace string `json:"namespace"`
 	} `json:"metadata"`
-	Data map[string]string `json:"data"`
+	Data  map[string]string `json:"data"`
+	Rules []struct {
+		Resources []string `json:"resources"`
+		Verbs     []string `json:"verbs"`
+	} `json:"rules"`
 }
 
 func renderObjects(t *testing.T, p Preset, mode cni.KubeProxyMode) (string, []object) {

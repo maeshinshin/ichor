@@ -56,12 +56,10 @@ func bundleDir(cluster string) (string, error) {
 	return filepath.Join(home, ".ichor", "clusters", cluster), nil
 }
 
-// saveBundleFile writes bundle to ~/.ichor/clusters/<cluster>/secrets.yaml
-// with the permissions the Trust section requires, creating the directory
-// if necessary. A non-empty pass seals it as an age file (ADR 0127); ""
-// writes plaintext, which only a caller that was asked for it may do. It
-// returns the path written, for the backup nag to name.
-func saveBundleFile(cluster string, bundle *secrets.Bundle, pass string) (string, error) {
+// ensureBundleDir creates bundleDir(cluster) and enforces 0700: MkdirAll does not chmod a directory that
+// already existed (e.g. from a previous, differently-permissioned run), and the Trust section requires
+// it never to be weaker.
+func ensureBundleDir(cluster string) (string, error) {
 	dir, err := bundleDir(cluster)
 	if err != nil {
 		return "", err
@@ -71,11 +69,22 @@ func saveBundleFile(cluster string, bundle *secrets.Bundle, pass string) (string
 		return "", fmt.Errorf("creating %s: %w", dir, err)
 	}
 
-	// MkdirAll does not chmod a directory that already existed (e.g. from a
-	// previous, differently-permissioned run); enforce 0700 explicitly so
-	// this is never silently weaker than the Trust section requires.
 	if err := os.Chmod(dir, bundleDirPerm); err != nil {
 		return "", fmt.Errorf("setting permissions on %s: %w", dir, err)
+	}
+
+	return dir, nil
+}
+
+// saveBundleFile writes bundle to ~/.ichor/clusters/<cluster>/secrets.yaml
+// with the permissions the Trust section requires, creating the directory
+// if necessary. A non-empty pass seals it as an age file (ADR 0127); ""
+// writes plaintext, which only a caller that was asked for it may do. It
+// returns the path written, for the backup nag to name.
+func saveBundleFile(cluster string, bundle *secrets.Bundle, pass string) (string, error) {
+	dir, err := ensureBundleDir(cluster)
+	if err != nil {
+		return "", err
 	}
 
 	out, err := yaml.Marshal(bundle)
@@ -108,18 +117,9 @@ const kubeconfigFilename = "kubeconfig"
 // gets: it carries a client certificate and key, not a Talos secret, but
 // still a credential this command should not leave world-readable.
 func saveKubeconfigFile(cluster string, kubeconfig []byte) (string, error) {
-	dir, err := bundleDir(cluster)
+	dir, err := ensureBundleDir(cluster)
 	if err != nil {
 		return "", err
-	}
-
-	if err := os.MkdirAll(dir, bundleDirPerm); err != nil {
-		return "", fmt.Errorf("creating %s: %w", dir, err)
-	}
-
-	// MkdirAll leaves an existing directory's mode alone; see saveBundleFile.
-	if err := os.Chmod(dir, bundleDirPerm); err != nil {
-		return "", fmt.Errorf("setting permissions on %s: %w", dir, err)
 	}
 
 	path := filepath.Join(dir, kubeconfigFilename)
@@ -247,16 +247,12 @@ func fsyncDir(dir string) error {
 	return nil
 }
 
-// backupNagWriter is satisfied by any io.Writer; kept as a named type only
-// so nagBackup's signature documents its intent.
-type backupNagWriter = io.Writer
-
 // nagBackup prints the backup reminder architecture.md's "Trust" section
 // requires ("Generate the secrets bundle locally; nag the user to back it
 // up"): losing this file and the Secret both means the cluster can never
 // be recovered (ADR, "Full-loss recovery": "bundle + snapshot is
 // sufficient"), so init never proceeds quietly past having just written it.
-func nagBackup(w backupNagWriter, path string) {
+func nagBackup(w io.Writer, path string) {
 	_, _ = fmt.Fprintf(w, "\n"+
 		"IMPORTANT: the cluster's secrets bundle was written to:\n"+
 		"    %s\n"+

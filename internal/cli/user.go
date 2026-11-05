@@ -90,6 +90,15 @@ func addPasswordFlags(cmd *cobra.Command) {
 	cmd.Flags().BoolVar(&userOpts.generate, "generate", false, "generate a password; it is printed once to stderr and stored nowhere")
 }
 
+// userRunE is the RunE of a command that takes NAME and calls run on the UserService client.
+func userRunE(run func(context.Context, ichorv1alpha1connect.UserServiceClient, *cobra.Command, string) error) func(*cobra.Command, []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		return withUsers(cmd, func(ctx context.Context, u ichorv1alpha1connect.UserServiceClient) error {
+			return run(ctx, u, cmd, args[0])
+		})
+	}
+}
+
 // withUsers dials ichor-ui and runs fn with the UserService client.
 func withUsers(cmd *cobra.Command, fn func(ctx context.Context, u ichorv1alpha1connect.UserServiceClient) error) error {
 	if err := validateOutputFormat(outputFormat); err != nil {
@@ -145,9 +154,7 @@ var userCreateCmd = &cobra.Command{
 			return runUserBootstrap(cmd, args[0])
 		}
 
-		return withUsers(cmd, func(ctx context.Context, u ichorv1alpha1connect.UserServiceClient) error {
-			return runUserCreate(ctx, u, cmd, args[0])
-		})
+		return userRunE(runUserCreate)(cmd, args)
 	},
 }
 
@@ -182,11 +189,7 @@ var userUpdateCmd = &cobra.Command{
 	Use:   "update NAME",
 	Short: "Change a user's display name, e-mail, roles or disabled flag (only the flags you pass)",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return withUsers(cmd, func(ctx context.Context, u ichorv1alpha1connect.UserServiceClient) error {
-			return runUserUpdate(ctx, u, cmd, args[0])
-		})
-	},
+	RunE:  userRunE(runUserUpdate),
 }
 
 func runUserUpdate(ctx context.Context, u ichorv1alpha1connect.UserServiceClient, cmd *cobra.Command, name string) error {
@@ -237,11 +240,7 @@ var userDeleteCmd = &cobra.Command{
 	Use:   useUserDelete,
 	Short: "Delete a user (the last enabled admin cannot be deleted)",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return withUsers(cmd, func(ctx context.Context, u ichorv1alpha1connect.UserServiceClient) error {
-			return runUserDelete(ctx, u, cmd, args[0])
-		})
-	},
+	RunE:  userRunE(runUserDelete),
 }
 
 func runUserDelete(ctx context.Context, u ichorv1alpha1connect.UserServiceClient, cmd *cobra.Command, name string) error {
@@ -265,11 +264,7 @@ var userSetPasswordCmd = &cobra.Command{
 	Use:   "set-password NAME",
 	Short: "Set a user's password as an administrator (the user must change it at the next sign-in)",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return withUsers(cmd, func(ctx context.Context, u ichorv1alpha1connect.UserServiceClient) error {
-			return runUserSetPassword(ctx, u, cmd, args[0])
-		})
-	},
+	RunE:  userRunE(runUserSetPassword),
 }
 
 func runUserSetPassword(ctx context.Context, u ichorv1alpha1connect.UserServiceClient, cmd *cobra.Command, name string) error {
@@ -297,11 +292,7 @@ var userRevokeCmd = &cobra.Command{
 	Use:   "revoke-sessions NAME",
 	Short: "Sign a user out everywhere (kubectl tokens last at most the token lifetime)",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return withUsers(cmd, func(ctx context.Context, u ichorv1alpha1connect.UserServiceClient) error {
-			return runUserRevoke(ctx, u, cmd, args[0])
-		})
-	},
+	RunE:  userRunE(runUserRevoke),
 }
 
 func runUserRevoke(ctx context.Context, u ichorv1alpha1connect.UserServiceClient, cmd *cobra.Command, name string) error {

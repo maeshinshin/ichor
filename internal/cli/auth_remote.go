@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"cmp"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -137,12 +138,7 @@ func dialUIOverIssuer(cmd *cobra.Command, interactive bool) (*uiSession, error) 
 		return nil, err
 	}
 
-	base := http.DefaultTransport
-	if f.HTTP != nil {
-		base = f.HTTP.Transport
-	}
-
-	h := &http.Client{Transport: bearerTransport{base: base, token: e.IDToken}}
+	h := withBearer(cmp.Or(f.HTTP, &http.Client{}), e.IDToken)
 
 	return &uiSession{Users: ichorv1alpha1connect.NewUserServiceClient(h, authOpts.issuer), Entry: e, Issuer: authOpts.issuer}, nil
 }

@@ -24,6 +24,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthv1 "k8s.io/client-go/pkg/apis/clientauthentication/v1"
@@ -158,7 +159,7 @@ func newAuthFlowFor(cmd *cobra.Command, audience string, openBrowserToo bool) (*
 		Dir: dir, Stderr: cmd.ErrOrStderr(), HTTP: hc,
 	}
 	if openBrowserToo {
-		f.OpenBrowser = openBrowser
+		f.OpenBrowser = browser.OpenURL
 	}
 
 	return f, nil

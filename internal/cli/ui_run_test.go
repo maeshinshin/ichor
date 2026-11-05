@@ -66,39 +66,11 @@ func uiTestService() *corev1.Service {
 	}
 }
 
-// TestSelectPod_PrefersNonExcluded proves the re-forward decision: given
-// two ready pods, excluding the one that just failed picks the other one
-// deterministically (sorted by name), not whichever the API happened to
-// list first.
-func TestSelectPod_PrefersNonExcluded(t *testing.T) {
-	pods := []corev1.Pod{*uiTestPod(uiTestPodB), *uiTestPod(uiTestPodA)}
-
-	got, ok := selectPod(pods, uiTestPodA)
-	if !ok {
-		t.Fatal("selectPod: expected a pod, got none")
-	}
-
-	if got.Name != uiTestPodB {
-		t.Fatalf("selectPod excluding pod-a = %q, want pod-b", got.Name)
-	}
-}
-
-// TestSelectPod_FallsBackToExcludedWhenOnlyOption proves a single-replica
-// cluster still gets a target: excluding the only ready pod must not
-// leave selectPod with nothing to return.
-func TestSelectPod_FallsBackToExcludedWhenOnlyOption(t *testing.T) {
-	pods := []corev1.Pod{*uiTestPod(uiTestPodA)}
-
-	got, ok := selectPod(pods, uiTestPodA)
-	if !ok || got.Name != uiTestPodA {
-		t.Fatalf("selectPod = (%v, %v), want (pod-a, true)", got, ok)
-	}
-}
-
-// TestSelectPod_IgnoresNotReadyAndTerminating proves a pod mid-rollout
-// (not Ready yet) or mid-drain (DeletionTimestamp set) is never a
-// forwarding target.
-func TestSelectPod_IgnoresNotReadyAndTerminating(t *testing.T) {
+// TestSelectPod proves the re-forward decision: among the ready pods, one other than the pod that just
+// failed wins, deterministically (sorted by name); the failed pod is the fallback when it is the only
+// one (single replica); a pod mid-rollout (not Ready), mid-drain (DeletionTimestamp) or Pending is never
+// a target, and no ready pod means no target.
+func TestSelectPod(t *testing.T) {
 	notReady := uiTestPod("pod-not-ready")
 	notReady.Status.Conditions[0].Status = corev1.ConditionFalse
 
@@ -106,22 +78,33 @@ func TestSelectPod_IgnoresNotReadyAndTerminating(t *testing.T) {
 	now := metav1.Now()
 	terminating.DeletionTimestamp = &now
 
-	ready := uiTestPod("pod-ready")
+	pending := uiTestPod(uiTestPodA)
+	pending.Status.Phase = corev1.PodPending
 
-	got, ok := selectPod([]corev1.Pod{*notReady, *terminating, *ready}, "")
-	if !ok || got.Name != "pod-ready" {
-		t.Fatalf("selectPod = (%v, %v), want (pod-ready, true)", got, ok)
+	cases := []struct {
+		name    string
+		pods    []*corev1.Pod
+		exclude string
+		want    string // "" for no target
+	}{
+		{"prefers a non-excluded pod, by name", []*corev1.Pod{uiTestPod(uiTestPodB), uiTestPod(uiTestPodA)}, uiTestPodA, uiTestPodB},
+		{"falls back to the excluded pod when it is the only one", []*corev1.Pod{uiTestPod(uiTestPodA)}, uiTestPodA, uiTestPodA},
+		{"ignores not ready and terminating pods", []*corev1.Pod{notReady, terminating, uiTestPod("pod-ready")}, "", "pod-ready"},
+		{"none ready", []*corev1.Pod{pending}, "", ""},
 	}
-}
 
-// TestSelectPod_NoneReady proves an all-unready pod list reports no
-// target rather than panicking or returning a bad one.
-func TestSelectPod_NoneReady(t *testing.T) {
-	notReady := uiTestPod(uiTestPodA)
-	notReady.Status.Phase = corev1.PodPending
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pods := make([]corev1.Pod, len(tc.pods))
+			for i, p := range tc.pods {
+				pods[i] = *p
+			}
 
-	if _, ok := selectPod([]corev1.Pod{*notReady}, ""); ok {
-		t.Fatal("selectPod: expected no target, got one")
+			got, ok := selectPod(pods, tc.exclude)
+			if ok != (tc.want != "") || (ok && got.Name != tc.want) {
+				t.Fatalf("selectPod = (%v, %v), want %q", got, ok, tc.want)
+			}
+		})
 	}
 }
 

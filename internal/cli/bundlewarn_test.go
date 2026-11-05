@@ -25,14 +25,10 @@ import (
 // `ichor secrets encrypt` has no --bundle-plaintext flag, so its refusal must not offer it.
 func TestSecretsEncryptRefusalDoesNotOfferBundlePlaintext(t *testing.T) {
 	useBundleCrypto(t)
-	t.Setenv("HOME", t.TempDir())
 
-	path, err := saveBundleFile("plain", newTestBundle(t), "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := saveTestBundle(t, "plain", newTestBundle(t), "")
 
-	err = runSecretsEncrypt(path, &bytes.Buffer{}, &bytes.Buffer{})
+	err := runSecretsEncrypt(path, &bytes.Buffer{}, &bytes.Buffer{})
 	if err == nil {
 		t.Fatal("encrypt succeeded without a passphrase")
 	}
@@ -51,12 +47,8 @@ func TestSecretsEncryptRefusalDoesNotOfferBundlePlaintext(t *testing.T) {
 // writes from it) warns once.
 func TestLoadBundleFilePlaintextWarnsOnce(t *testing.T) {
 	warn := useBundleCrypto(t)
-	t.Setenv("HOME", t.TempDir())
 
-	path, err := saveBundleFile("plain", newTestBundle(t), "")
-	if err != nil {
-		t.Fatal(err)
-	}
+	path := saveTestBundle(t, "plain", newTestBundle(t), "")
 
 	for range 2 {
 		if _, err := loadBundleFile(path); err != nil {

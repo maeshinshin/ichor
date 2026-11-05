@@ -79,6 +79,28 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /validate-ichor-maesh-dev-v1alpha1-ichoruser
+  failurePolicy: Fail
+  name: vichoruser-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - ichor.maesh.dev
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    - DELETE
+    resources:
+    - ichorusers
+  sideEffects: None
+  timeoutSeconds: 5
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /validate-ichor-maesh-dev-v1alpha1-machinereclaim
   failurePolicy: Fail
   name: vmachinereclaim-v1alpha1.kb.io

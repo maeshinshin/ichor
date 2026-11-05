@@ -22,6 +22,8 @@ package cnifacts
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"slices"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -55,6 +57,24 @@ type Source struct {
 	// Bundle is the secrets bundle the machine configuration is rendered with. It is only called when
 	// the cluster has an approved control plane.
 	Bundle func(context.Context) (*secrets.Bundle, error)
+}
+
+// Validate is cilium.ValidateValues on the user values cluster stores, with the facts Context reads,
+// for kubeProxy mode (empty: enabled). The controller calls it before it starts a Cilium Helm Job.
+func (s Source) Validate(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, kubeProxy cni.KubeProxyMode) error {
+	var user map[string]any
+
+	if c := cluster.Spec.CNI.Cilium; c != nil && c.Values != nil && len(c.Values.Raw) > 0 {
+		if err := json.Unmarshal(c.Values.Raw, &user); err != nil {
+			return fmt.Errorf("reading spec.cni.cilium.values: %w", err)
+		}
+	}
+
+	if kubeProxy == "" {
+		kubeProxy = cni.KubeProxyEnabled
+	}
+
+	return cilium.ValidateValues(user, s.Context(ctx, cluster, kubeProxy))
 }
 
 // Context collects the facts the guards need. A fact that cannot be read stays nil, which makes its

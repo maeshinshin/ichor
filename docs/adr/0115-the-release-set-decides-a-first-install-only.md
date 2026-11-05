@@ -273,3 +273,5 @@ The user decided on 2026-11-04 that Ichor pins the Cilium version: the only Cili
 **Note (v0.1.0 cleanup).** `releasecheck.DefaultCiliumRepository`, named under Candidates above, was removed in the v0.1.0 cleanup because nothing used it.
 
 **Note (v0.1.0 cleanup).** `release.CheckTalosStep` (Decision and Files lists above) was also removed: it only forwarded to `release.TalosKubernetesError`, which its callers now use.
+
+Amendment 2026-11-05 (ADR 0130): the operation start's override carries no reason. `ichor upgrade talos|kubernetes` and `ichor cni upgrade` take `--override` alone (no `--override-reason`), and the override checkbox of the plan view and of the Cilium dialog has no reason box.

@@ -362,3 +362,5 @@ original boundary, which had treated them as read-only) - `internal/
 controller/` was not touched, and `IsApproved()`'s meaning did not
 change, both confirmed by `internal/controller`'s own test suite passing
 unchanged.
+
+Amendment 2026-11-05 (ADR 0130): the "symmetric reason" is gone. `ApproveMachineRequest.reason`, `RejectMachineRequest.reason` and `MachineApprovalDecision.reason` are deprecated and unused, `TalosMachine.spec.approvalDecision.reason` is kept in the schema but no longer written or shown, the Approve and Reject dialogs have no reason box, and the Rejected list has no Reason column. `ichor machine approve|reject` lost `--reason`. The decision still records the actor and the time.

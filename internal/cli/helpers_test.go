@@ -26,9 +26,7 @@ import (
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -214,21 +212,9 @@ func legacyConfigPatch(clusterName string) ichorv1alpha1.TalosConfigPatch {
 func newTestScheme(t *testing.T) *runtime.Scheme {
 	t.Helper()
 
-	s := runtime.NewScheme()
-	if err := corev1.AddToScheme(s); err != nil {
-		t.Fatalf("adding corev1 to scheme: %v", err)
-	}
-
-	if err := appsv1.AddToScheme(s); err != nil {
-		t.Fatalf("adding appsv1 to scheme: %v", err)
-	}
-
-	if err := discoveryv1.AddToScheme(s); err != nil {
-		t.Fatalf("adding discoveryv1 to scheme: %v", err)
-	}
-
-	if err := ichorv1alpha1.AddToScheme(s); err != nil {
-		t.Fatalf("adding ichorv1alpha1 to scheme: %v", err)
+	s, err := cliScheme()
+	if err != nil {
+		t.Fatalf("building the CLI scheme: %v", err)
 	}
 
 	return s

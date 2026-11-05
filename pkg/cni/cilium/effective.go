@@ -39,7 +39,16 @@ var OwnedKeys = map[string]string{
 	"k8sServicePort":                                "derived from spec.cni.kubeProxy (KubePrism)",
 	"kubeProxyReplacement":                          "owned by the kube-proxy switch, spec.cni.kubeProxy",
 	"tunnelProtocol":                                "owned by spec.cni.tunnel, which is immutable",
+
+	// The namespace of the Roles that let Cilium read Secrets stays Cilium's own.
+	"ingressController.secretsNamespace.name": secretsNamespaceReason,
+	"gatewayAPI.secretsNamespace.name":        secretsNamespaceReason,
+	"envoyConfig.secretsNamespace.name":       secretsNamespaceReason,
+	"bgpControlPlane.secretsNamespace.name":   secretsNamespaceReason,
+	"tls.secretsNamespace.name":               secretsNamespaceReason,
 }
+
+const secretsNamespaceReason = "Cilium may read Secrets only in its own namespace, cilium-secrets"
 
 var loadChart = sync.OnceValues(freshChart)
 

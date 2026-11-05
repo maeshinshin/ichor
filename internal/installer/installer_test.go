@@ -210,6 +210,17 @@ func noWait(order *[]string) ReadyFunc {
 	}
 }
 
+// failOn fails the post-check of the object named name with msg.
+func failOn(name, msg string) ReadyFunc {
+	return func(_ context.Context, _ client.Client, obj *unstructured.Unstructured) error {
+		if obj.GetName() == name {
+			return errors.New(msg)
+		}
+
+		return nil
+	}
+}
+
 func TestRunAppliesCRDsThenControllerThenUI(t *testing.T) {
 	f := newFixture(t)
 
@@ -329,16 +340,8 @@ func TestRunRollsBackWhenAPostCheckFails(t *testing.T) {
 		t.Fatalf("deleting the UI: %v", err)
 	}
 
-	failUI := func(_ context.Context, _ client.Client, obj *unstructured.Unstructured) error {
-		if obj.GetName() == "ichor-ui" {
-			return errors.New("UI never became ready")
-		}
-
-		return nil
-	}
-
 	err := Run(context.Background(), k8sClient, Options{
-		Namespace: f.ns, RunID: f.run + "-v2", Manifest: f.manifest("ctrl:v2", "color"), Ready: failUI,
+		Namespace: f.ns, RunID: f.run + "-v2", Manifest: f.manifest("ctrl:v2", "color"), Ready: failOn("ichor-ui", "UI never became ready"),
 	})
 	if err == nil || !strings.Contains(err.Error(), "rolled back") || !strings.Contains(err.Error(), "UI never became ready") {
 		t.Fatalf("Run error = %v, want the cause and a rollback", err)
@@ -366,15 +369,9 @@ func TestSnapshotIsKeptWhenARunIsRepeated(t *testing.T) {
 	f := newFixture(t)
 
 	// A first run that fails after the snapshot leaves the original in place...
-	failCtrl := func(_ context.Context, _ client.Client, obj *unstructured.Unstructured) error {
-		if obj.GetName() == "ichor-controller-manager" {
-			return errors.New("boom")
-		}
-
-		return nil
-	}
-
-	_ = Run(context.Background(), k8sClient, Options{Namespace: f.ns, RunID: f.run, Manifest: f.manifest("ctrl:v2", ""), Ready: failCtrl})
+	_ = Run(context.Background(), k8sClient, Options{
+		Namespace: f.ns, RunID: f.run, Manifest: f.manifest("ctrl:v2", ""), Ready: failOn("ichor-controller-manager", "boom"),
+	})
 
 	first, err := loadSnapshot(context.Background(), k8sClient, f.ns, f.run)
 	if err != nil || len(first) == 0 {

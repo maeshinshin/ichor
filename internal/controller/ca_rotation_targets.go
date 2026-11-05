@@ -20,6 +20,7 @@ limitations under the License.
 package controller
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -32,9 +33,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -71,14 +70,9 @@ type AggregatorCAPublishedFunc func(ctx context.Context, talos TalosClient, fing
 // ConfigMap through the admin kubeconfig a Talos node issues, as NewRootCAPublished does.
 func NewAggregatorCAPublished() AggregatorCAPublishedFunc {
 	return func(ctx context.Context, talos TalosClient, fingerprint string) (bool, error) {
-		cfg, err := restConfig(ctx, talos)
+		cs, err := adminClientset(ctx, talos)
 		if err != nil {
 			return false, err
-		}
-
-		cs, err := kubernetes.NewForConfig(cfg)
-		if err != nil {
-			return false, fmt.Errorf("building a clientset from the admin kubeconfig: %w", err)
 		}
 
 		cm, err := cs.CoreV1().ConfigMaps(kubeSystemNamespace).Get(ctx, extensionAuthConfigMap, metav1.GetOptions{})
@@ -103,14 +97,9 @@ type AggregatorAuthResetFunc func(ctx context.Context, talos TalosClient, finger
 // (no standing credential and no RBAC of Ichor's own), and it touches that one ConfigMap and nothing else.
 func NewAggregatorAuthReset() AggregatorAuthResetFunc {
 	return func(ctx context.Context, talos TalosClient, fingerprint string) (bool, error) {
-		cfg, err := restConfig(ctx, talos)
+		cs, err := adminClientset(ctx, talos)
 		if err != nil {
 			return false, err
-		}
-
-		cs, err := kubernetes.NewForConfig(cfg)
-		if err != nil {
-			return false, fmt.Errorf("building a clientset from the admin kubeconfig: %w", err)
 		}
 
 		return resetAggregatorAuth(ctx, cs.CoreV1().ConfigMaps(kubeSystemNamespace), fingerprint)
@@ -149,27 +138,17 @@ func (c *caRun) awaitAggregatorAuth(ctx context.Context, first *ichorv1alpha1.Ta
 		return ctrl.Result{}, false, nil
 	}
 
-	fingerprint := ""
-
-	for _, cert := range c.op.Status.CARotation.Certificates {
-		if cert.Name == aggregatorCAName {
-			fingerprint = cert.Next
-		}
-	}
-
 	var settled bool
 
 	err := c.withNode(ctx, first, bundle, func(ctx context.Context, talos TalosClient) error {
 		var err error
 
-		settled, err = c.r.AggregatorAuthReset(ctx, talos, fingerprint)
+		settled, err = c.r.AggregatorAuthReset(ctx, talos, c.newFingerprint(aggregatorCAName))
 
 		return err
 	})
 	if err != nil {
-		res, rerr := c.retry(ctx, "the replaced bundle is not verified: could not reset "+extensionAuthConfigMap+": "+err.Error())
-
-		return res, true, rerr
+		return c.retryWait(ctx, "the replaced bundle is not verified: could not reset "+extensionAuthConfigMap+": "+err.Error())
 	}
 
 	if !settled {
@@ -266,16 +245,12 @@ func (c *caRun) awaitAPIServers(
 			return nil
 		})
 		if err != nil {
-			res, rerr := c.retry(ctx, fmt.Sprintf("stage %s is not verified, so the next stage is not started: %v", stage, err))
-
-			return res, true, rerr
+			return c.retryWait(ctx, fmt.Sprintf("stage %s is not verified, so the next stage is not started: %v", stage, err))
 		}
 
 		if why != "" {
-			res, rerr := c.retry(ctx, fmt.Sprintf("stage %s is not verified, so the next stage is not started: waiting for the "+
+			return c.retryWait(ctx, fmt.Sprintf("stage %s is not verified, so the next stage is not started: waiting for the "+
 				"kube-apiserver restart a configuration change causes: %s", stage, why))
-
-			return res, true, rerr
 		}
 	}
 
@@ -335,14 +310,11 @@ func (c *caRun) pairs() ([]caPair, error) {
 
 	for _, n := range []struct {
 		name string
-		next func() []byte
+		ca   *x509.PEMEncodedCertificateAndKey
 	}{
-		{talosCAName, func() []byte { return crtOrNil(c.rot.Talos) }},
-		{kubernetesCAName, func() []byte { return crtOrNil(c.rot.Kubernetes) }},
-		{etcdCAName, func() []byte { return crtOrNil(c.rot.Etcd) }},
-		{aggregatorCAName, func() []byte { return crtOrNil(c.rot.Aggregator) }},
+		{talosCAName, c.rot.Talos}, {kubernetesCAName, c.rot.Kubernetes}, {etcdCAName, c.rot.Etcd}, {aggregatorCAName, c.rot.Aggregator},
 	} {
-		next := n.next()
+		next := crtOrNil(n.ca)
 		if next == nil {
 			continue
 		}
@@ -381,11 +353,31 @@ func bundleCrt(bundle *secrets.Bundle, name string) []byte {
 // nextStage is the stage that follows a verified one. The credential hand-off sits between Accepting
 // and Issuing only when the operator's talosconfig or kubeconfig depends on a CA being replaced.
 func (c *caRun) nextStage(stage string) string {
-	if stage == ichorv1alpha1.CARotationStageAccepting && !c.hasTarget(talosCAName) && !c.hasTarget(kubernetesCAName) {
+	switch stage {
+	case ichorv1alpha1.CARotationStageAccepting:
+		if !c.hasTarget(talosCAName) && !c.hasTarget(kubernetesCAName) {
+			return ichorv1alpha1.CARotationStageIssuing
+		}
+
+		return ichorv1alpha1.CARotationStageAwaitingCredentials
+	case ichorv1alpha1.CARotationStageAwaitingCredentials:
 		return ichorv1alpha1.CARotationStageIssuing
+	case ichorv1alpha1.CARotationStageIssuing:
+		return ichorv1alpha1.CARotationStageDropping
 	}
 
-	return nextStage(stage)
+	return ichorv1alpha1.CARotationStageFinalizing
+}
+
+// newFingerprint is the fingerprint of the CA the rotation moves the named CA to.
+func (c *caRun) newFingerprint(name string) string {
+	for _, cert := range c.op.Status.CARotation.Certificates {
+		if cert.Name == name {
+			return cert.Next
+		}
+	}
+
+	return ""
 }
 
 // checkTargets refuses a rotation the cluster cannot do safely, before anything is saved or changed.
@@ -542,15 +534,11 @@ func (c *caRun) rollEtcd(
 	}
 
 	if err := c.etcdHealthy(ctx, cps, bundle, c.etcdExpected()); err != nil {
-		res, rerr := c.retry(ctx, fmt.Sprintf("stage %s: etcd is not ready for the next step, so no control plane is rebooted: %v", stage, err))
-
-		return res, true, rerr
+		return c.retryWait(ctx, fmt.Sprintf("stage %s: etcd is not ready for the next step, so no control plane is rebooted: %v", stage, err))
 	}
 
 	if err := c.nodesReady(ctx, machines[0], bundle); err != nil {
-		res, rerr := c.retry(ctx, fmt.Sprintf("stage %s: no control plane is rebooted: %v", stage, err))
-
-		return res, true, rerr
+		return c.retryWait(ctx, fmt.Sprintf("stage %s: no control plane is rebooted: %v", stage, err))
 	}
 
 	i := slices.IndexFunc(cps, func(m *ichorv1alpha1.TalosMachine) bool { return !slices.Contains(rs.EtcdRestarted, m.Name) })
@@ -657,9 +645,7 @@ func (c *caRun) awaitEtcdReboot(
 			metav1.ConditionTrue, reasonCARotationRebootingEtcd, fmt.Sprintf("stage %s: %q: %s", stage, m.Name, why))
 	}
 
-	var (
-		bootID, node string
-	)
+	var bootID, node string
 
 	if err := c.withNode(ctx, m, bundle, func(ctx context.Context, talos TalosClient) error {
 		var err error
@@ -790,57 +776,29 @@ func (c *caRun) awaitAggregator(ctx context.Context, first *ichorv1alpha1.TalosM
 		return ctrl.Result{}, false, nil
 	}
 
-	fingerprint := ""
-
-	for _, cert := range c.op.Status.CARotation.Certificates {
-		if cert.Name == aggregatorCAName {
-			fingerprint = cert.Next
-		}
-	}
-
 	var published bool
 
 	err := c.withNode(ctx, first, bundle, func(ctx context.Context, talos TalosClient) error {
 		var err error
 
-		published, err = c.r.AggregatorCAPublished(ctx, talos, fingerprint)
+		published, err = c.r.AggregatorCAPublished(ctx, talos, c.newFingerprint(aggregatorCAName))
 
 		return err
 	})
 	if err != nil {
-		res, rerr := c.retry(ctx, "stage Accepting is not settled, so the aggregator CA stays: could not read "+extensionAuthConfigMap+": "+err.Error())
-
-		return res, true, rerr
+		return c.retryWait(ctx, "stage Accepting is not settled, so the aggregator CA stays: could not read "+extensionAuthConfigMap+": "+err.Error())
 	}
 
 	if !published {
-		res, rerr := c.retry(ctx, "stage Accepting is not settled, so the aggregator CA stays: waiting for kube-apiserver to publish "+
+		return c.retryWait(ctx, "stage Accepting is not settled, so the aggregator CA stays: waiting for kube-apiserver to publish "+
 			"the new aggregator CA in "+extensionAuthConfigMap)
-
-		return res, true, rerr
 	}
 
-	delay := c.r.ClientSettleDelay
-	if delay == 0 {
-		delay = caClientSettleDelay
-	}
+	delay := cmp.Or(c.r.ClientSettleDelay, caClientSettleDelay)
 
-	cond := apimeta.FindStatusCondition(c.op.Status.Conditions, conditionCARotation)
-	if cond == nil || cond.Reason != reasonCARotationSettlingAggregator || cond.Status != metav1.ConditionTrue {
-		apimeta.RemoveStatusCondition(&c.op.Status.Conditions, conditionCARotation)
-
-		err := c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue, reasonCARotationSettlingAggregator,
-			fmt.Sprintf("kube-apiserver publishes the new aggregator CA; giving extension API servers %s to load it before the front-proxy "+
-				"certificate is signed by it. An extension API server that reads the CA only once needs a restart by its owner", delay))
-
-		return ctrl.Result{RequeueAfter: min(delay, operationRequeueInterval)}, true, err
-	}
-
-	if left := delay - time.Since(cond.LastTransitionTime.Time); left > 0 {
-		return ctrl.Result{RequeueAfter: min(left, operationRequeueInterval)}, true, nil
-	}
-
-	return ctrl.Result{}, false, nil
+	return c.settle(ctx, reasonCARotationSettlingAggregator, delay, fmt.Sprintf(
+		"kube-apiserver publishes the new aggregator CA; giving extension API servers %s to load it before the front-proxy "+
+			"certificate is signed by it. An extension API server that reads the CA only once needs a restart by its owner", delay))
 }
 
 // replacedCAs names what a completed rotation replaced, for its message.

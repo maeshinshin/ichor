@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -85,6 +84,26 @@ func (f *rolloutFixture) after(m *ichorv1alpha1.TalosMachine) []byte {
 	return out
 }
 
+// newRolloutNode is the fixture plus one worker whose Kubernetes node (Ready or not) is named hostname.
+func newRolloutNode(hostname string, ready bool) (*rolloutFixture, *ichorv1alpha1.TalosMachine) {
+	f := newRolloutFixture()
+	m := newTestMachine(f.cluster.Name, true)
+	setHostname(m, hostname)
+	newTestNode(hostname, ready)
+
+	return f, m
+}
+
+// reconcileTimes runs n reconcile passes of op, each of which must succeed.
+func reconcileTimes(r *TalosOperationReconciler, op *ichorv1alpha1.TalosOperation, n int) {
+	GinkgoHelper()
+
+	for range n {
+		_, err := reconcileOperation(r, op)
+		Expect(err).NotTo(HaveOccurred())
+	}
+}
+
 var _ = Describe("configRolloutAdvancer", func() {
 	It("is done for a machine that needs nothing even when no hostname is recorded", func() {
 		f := newRolloutFixture()
@@ -120,10 +139,7 @@ var _ = Describe("configRolloutAdvancer", func() {
 	})
 
 	It("does nothing to a machine that already runs the rendered configuration", func() {
-		f := newRolloutFixture()
-		m := newTestMachine(f.cluster.Name, true)
-		setHostname(m, "node-cr-noop")
-		newTestNode("node-cr-noop", true)
+		f, m := newRolloutNode("node-cr-noop", true)
 
 		fake := &fakeTalosClient{current: f.after(m), bootID: testBootIDBefore}
 
@@ -136,10 +152,7 @@ var _ = Describe("configRolloutAdvancer", func() {
 	})
 
 	It("stages the rendered configuration, reboots once, and finishes when the node is back on it", func() {
-		f := newRolloutFixture()
-		m := newTestMachine(f.cluster.Name, true)
-		setHostname(m, "node-cr-ok")
-		newTestNode("node-cr-ok", true)
+		f, m := newRolloutNode("node-cr-ok", true)
 
 		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore}
 		adv := newRolloutAdvancer(fake)
@@ -199,10 +212,7 @@ var _ = Describe("configRolloutAdvancer", func() {
 
 		etcdDialTimeout = 200 * time.Millisecond
 
-		f := newRolloutFixture()
-		m := newTestMachine(f.cluster.Name, true)
-		setHostname(m, "node-cr-slowdrain")
-		newTestNode("node-cr-slowdrain", true)
+		f, m := newRolloutNode("node-cr-slowdrain", true)
 
 		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore}
 		fake.dryRunHook = func() { time.Sleep(2 * etcdDialTimeout) } // stands in for the evacuation and drain
@@ -214,10 +224,7 @@ var _ = Describe("configRolloutAdvancer", func() {
 	})
 
 	It("refuses to reboot a node that is not Ready", func() {
-		f := newRolloutFixture()
-		m := newTestMachine(f.cluster.Name, true)
-		setHostname(m, "node-cr-nr")
-		newTestNode("node-cr-nr", false)
+		f, m := newRolloutNode("node-cr-nr", false)
 
 		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore}
 
@@ -283,10 +290,7 @@ var _ = Describe("configRolloutAdvancer", func() {
 	})
 
 	It("fails, and clears the marker, when the reboot call fails", func() {
-		f := newRolloutFixture()
-		m := newTestMachine(f.cluster.Name, true)
-		setHostname(m, "node-cr-rf")
-		newTestNode("node-cr-rf", true)
+		f, m := newRolloutNode("node-cr-rf", true)
 
 		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore, rebootErr: errors.New("node busy")}
 
@@ -297,10 +301,7 @@ var _ = Describe("configRolloutAdvancer", func() {
 	})
 
 	It("fails when the node rebooted but does not run the rendered configuration", func() {
-		f := newRolloutFixture()
-		m := newTestMachine(f.cluster.Name, true)
-		setHostname(m, "node-cr-bad")
-		newTestNode("node-cr-bad", true)
+		f, m := newRolloutNode("node-cr-bad", true)
 
 		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore}
 		adv := newRolloutAdvancer(fake)
@@ -316,10 +317,7 @@ var _ = Describe("configRolloutAdvancer", func() {
 	})
 
 	It("fails once the node has not come back within the verification window", func() {
-		f := newRolloutFixture()
-		m := newTestMachine(f.cluster.Name, true)
-		setHostname(m, "node-cr-slow")
-		newTestNode("node-cr-slow", true)
+		f, m := newRolloutNode("node-cr-slow", true)
 
 		fake := &fakeTalosClient{current: f.before(m), bootID: testBootIDBefore}
 		adv := newRolloutAdvancer(fake)
@@ -342,18 +340,6 @@ var _ = Describe("configRolloutAdvancer", func() {
 })
 
 var _ = Describe("a config operation on the backbone", func() {
-	newConfigOp := func(clusterName string) *ichorv1alpha1.TalosOperation {
-		op := &ichorv1alpha1.TalosOperation{
-			GenerateName: "cfg-op-", Namespace: tmNamespace,
-			Spec: ichorv1alpha1.TalosOperationSpec{
-				ClusterRef: corev1.LocalObjectReference{Name: clusterName}, Kind: ichorv1alpha1.TalosOperationKindConfig,
-			},
-		}
-		Expect(k8sClient.Create(ctx, op)).To(Succeed())
-
-		return op
-	}
-
 	pend := func(ms ...*ichorv1alpha1.TalosMachine) {
 		for _, m := range ms {
 			m.Status.RebootPaths = []string{"machine.network"}
@@ -372,14 +358,11 @@ var _ = Describe("a config operation on the backbone", func() {
 		cp2.Status.APIServerRestartPaths = []string{"cluster.apiServer"}
 		Expect(k8sClient.Status().Update(ctx, cp2)).To(Succeed())
 
-		op := newConfigOp(cluster.Name)
+		op := newOpTestOperationOfKind(cluster.Name, ichorv1alpha1.TalosOperationKindConfig)
 		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
 		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
 
-		for range 4 {
-			_, err := reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
-		}
+		reconcileTimes(r, op, 4)
 
 		got := fetchOperation(op)
 		Expect(got.Status.Machines).To(HaveLen(1))
@@ -394,14 +377,11 @@ var _ = Describe("a config operation on the backbone", func() {
 		newOpTestMachine(cluster.Name, "controlplane", "cfgn-cp2")
 		newOpTestMachine(cluster.Name, "controlplane", "cfgn-cp3")
 
-		op := newConfigOp(cluster.Name)
+		op := newOpTestOperationOfKind(cluster.Name, ichorv1alpha1.TalosOperationKindConfig)
 		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
 		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
 
-		for range 3 {
-			_, err := reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
-		}
+		reconcileTimes(r, op, 3)
 
 		got := fetchOperation(op)
 		Expect(got.Status.Machines).To(BeEmpty())
@@ -427,14 +407,11 @@ var _ = Describe("a config operation on the backbone", func() {
 		held.Annotations = map[string]string{ichorv1alpha1.TalosMachineUpgradeHoldAnnotation: resetOnDeleteValue}
 		Expect(k8sClient.Update(ctx, held)).To(Succeed())
 
-		op := newConfigOp(cluster.Name)
+		op := newOpTestOperationOfKind(cluster.Name, ichorv1alpha1.TalosOperationKindConfig)
 		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{}}
 		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance, NodeName: "node-cfg-self"}
 
-		for range 5 {
-			_, err := reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
-		}
+		reconcileTimes(r, op, 5)
 
 		Expect(fake.calls).To(Equal([]string{cp2.Name, cp3.Name, w1.Name, cp1.Name}),
 			"one control plane at a time, then workers, then the node the controller runs on")
@@ -450,14 +427,11 @@ var _ = Describe("a config operation on the backbone", func() {
 		setUpgradeOrder(cp2, "2")
 		pend(cp1, cp2)
 
-		op := newConfigOp(cluster.Name)
+		op := newOpTestOperationOfKind(cluster.Name, ichorv1alpha1.TalosOperationKindConfig)
 		fake := &fakeAdvancer{outcomes: map[string]advanceOutcome{cp1.Name: {err: errors.New("etcd member missing")}}}
 		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: fake.Advance}
 
-		for range 3 {
-			_, err := reconcileOperation(r, op)
-			Expect(err).NotTo(HaveOccurred())
-		}
+		reconcileTimes(r, op, 3)
 
 		Expect(fake.calls).To(Equal([]string{cp1.Name}))
 

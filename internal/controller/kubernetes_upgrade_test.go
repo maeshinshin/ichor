@@ -218,18 +218,8 @@ func renderAt(cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine
 	return rendered
 }
 
-// setStaticPodImages moves node's three static pods to version, as the kubelet does once Talos
-// has rewritten their manifests.
-func setStaticPodImages(node, version string) {
-	for _, c := range staticPodComponents {
-		var p corev1.Pod
-		Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: c + "-" + node}, &p)).To(Succeed())
-		p.Spec.Containers[0].Image = "registry.k8s.io/" + c + ":" + version
-		Expect(k8sClient.Update(ctx, &p)).To(Succeed())
-	}
-}
-
-// newStaticPodImage moves node's one static pod component to version.
+// newStaticPodImage moves node's one static pod component to version, as the kubelet does once
+// Talos has rewritten its manifest.
 func newStaticPodImage(node, component, version string) {
 	var p corev1.Pod
 	Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: component + "-" + node}, &p)).To(Succeed())
@@ -237,16 +227,20 @@ func newStaticPodImage(node, component, version string) {
 	Expect(k8sClient.Update(ctx, &p)).To(Succeed())
 }
 
+// setStaticPodImages moves node's three static pods to version.
+func setStaticPodImages(node, version string) {
+	for _, c := range staticPodComponents {
+		newStaticPodImage(node, c, version)
+	}
+}
+
 // setStaticPodImagesFromConfig moves node's static pods to the versions the applied configuration
-// names, component by component, as the kubelet does once Talos has rewritten their manifests.
+// names, component by component.
 func setStaticPodImagesFromConfig(node string, cfg []byte) {
 	tags := imageTags(cfg)
 
 	for _, c := range staticPodComponents {
-		var p corev1.Pod
-		Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: testKubeSystem, Name: c + "-" + node}, &p)).To(Succeed())
-		p.Spec.Containers[0].Image = "registry.k8s.io/" + c + ":" + tags[c]
-		Expect(k8sClient.Update(ctx, &p)).To(Succeed())
+		newStaticPodImage(node, c, tags[c])
 	}
 }
 
@@ -301,13 +295,19 @@ func newK8sControlPlane(clusterName, suffix string) *ichorv1alpha1.TalosMachine 
 	return fetchMachine(m)
 }
 
+// k8sWorkerFixture is a cluster targeting target, one worker of it whose Node (Ready or not) runs
+// testK8sOld, and the fake Talos client of that worker, which holds the old configuration.
+func k8sWorkerFixture(target, suffix string, ready bool) (*ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *fakeTalosClient) {
+	cluster := k8sCluster(target)
+	w := newK8sWorker(cluster.Name, suffix)
+	newK8sNode(w.Spec.Hostname, ready)
+
+	return cluster, w, &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
+}
+
 var _ = Describe("kubernetesUpgradeAdvancer", func() {
 	It("refuses a skipped minor without touching the node", func() {
-		cluster := k8sCluster(testK8sTooFar)
-		w := newK8sWorker(cluster.Name, "skip1")
-		newK8sNode(w.Spec.Hostname, true)
-
-		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
+		cluster, w, fake := k8sWorkerFixture(testK8sTooFar, "skip1", true)
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
 
 		done, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
@@ -369,11 +369,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 	})
 
 	It("gives the apply its own long deadline, not what is left of the 15s dial bound", func() {
-		cluster := k8sCluster(testK8sTarget)
-		w := newK8sWorker(cluster.Name, "budget1")
-		newK8sNode(w.Spec.Hostname, true)
-
-		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
+		cluster, w, fake := k8sWorkerFixture(testK8sTarget, "budget1", true)
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
 
 		_, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
@@ -385,11 +381,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 	})
 
 	It("refuses to start on a node that is not Ready", func() {
-		cluster := k8sCluster(testK8sTarget)
-		w := newK8sWorker(cluster.Name, "nr1")
-		newK8sNode(w.Spec.Hostname, false)
-
-		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
+		cluster, w, fake := k8sWorkerFixture(testK8sTarget, "nr1", false)
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
 
 		_, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
@@ -487,11 +479,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 	})
 
 	It("applies a worker's kubelet image once, pre-pulls it, and finishes when the node runs the target", func() {
-		cluster := k8sCluster(testK8sTarget)
-		w := newK8sWorker(cluster.Name, "w1")
-		newK8sNode(w.Spec.Hostname, true)
-
-		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
+		cluster, w, fake := k8sWorkerFixture(testK8sTarget, "w1", true)
 		admin := &fakeKubernetesAdmin{}
 		adv := newKubernetesAdvancer(fake, admin)
 
@@ -592,11 +580,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 	})
 
 	It("records the applied marker even when something else wrote the machine's status during the long calls", func() {
-		cluster := k8sCluster(testK8sTarget)
-		w := newK8sWorker(cluster.Name, "conf1")
-		newK8sNode(w.Spec.Hostname, true)
-
-		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
+		cluster, w, fake := k8sWorkerFixture(testK8sTarget, "conf1", true)
 		fake.dryRunHook = func() {
 			other := fetchMachine(w)
 			apimeta.SetStatusCondition(&other.Status.Conditions, metav1.Condition{
@@ -615,11 +599,7 @@ var _ = Describe("kubernetesUpgradeAdvancer", func() {
 	})
 
 	It("pauses (errors) when the node never converges within the verification timeout", func() {
-		cluster := k8sCluster(testK8sTarget)
-		w := newK8sWorker(cluster.Name, "to1")
-		newK8sNode(w.Spec.Hostname, true)
-
-		fake := &fakeTalosClient{version: testTalosVersion, current: renderAt(cluster, w, testK8sOld)}
+		cluster, w, fake := k8sWorkerFixture(testK8sTarget, "to1", true)
 		adv := newKubernetesAdvancer(fake, &fakeKubernetesAdmin{})
 
 		_, err := adv.Advance(ctx, cluster, w, opAtStage(ichorv1alpha1.KubernetesStageKubelets))
@@ -1193,14 +1173,7 @@ var _ = Describe("kind: kubernetes through TalosOperationReconciler", func() {
 			TalosClient: perMachineClientFactory(byName), Admin: &fakeKubernetesAdmin{},
 		}
 
-		op := &ichorv1alpha1.TalosOperation{
-			GenerateName: "op-", Namespace: tmNamespace,
-			Spec: ichorv1alpha1.TalosOperationSpec{
-				ClusterRef: corev1.LocalObjectReference{Name: cluster.Name},
-				Kind:       ichorv1alpha1.TalosOperationKindKubernetes,
-			},
-		}
-		Expect(k8sClient.Create(ctx, op)).To(Succeed())
+		op := newOpTestOperationOfKind(cluster.Name, ichorv1alpha1.TalosOperationKindKubernetes)
 
 		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: adv.Advance}
 

@@ -35,9 +35,8 @@ var _ = Describe("TalosOperationReconciler, kind ichor", func() {
 	newIchorOp := func(clusterName string) *ichorv1alpha1.TalosOperation {
 		newOpTestMachine(clusterName, "controlplane", "ich-cp")
 		newOpTestMachine(clusterName, "worker", "ich-w")
-		op := newOpTestOperationOfKind(clusterName, ichorv1alpha1.TalosOperationKindIchor)
 
-		return op
+		return newOpTestOperationOfKind(clusterName, ichorv1alpha1.TalosOperationKindIchor)
 	}
 
 	It("runs the executor with no machine, records no machines, and pauses on its failure", func() {

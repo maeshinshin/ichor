@@ -293,7 +293,7 @@ func TestCNIEscalationNamesOnlyCiliumsRoles(t *testing.T) {
 
 	for _, mode := range []cni.KubeProxyMode{cni.KubeProxyEnabled, cni.KubeProxyReplaced} {
 		for _, tunnel := range []string{"", "geneve", "vxlan"} {
-			users := []map[string]any{nil}
+			users := make([]map[string]any, 1, 1+len(optionalCiliumFeatures)) // nil first: no user values
 			for _, f := range optionalCiliumFeatures {
 				users = append(users, f.values)
 			}
@@ -420,25 +420,16 @@ func TestCNIRoleCoversTheGatewayAPIObjects(t *testing.T) {
 // chart bump that renders a kind nobody mapped fails too. Role and ClusterRole names are
 // TestCNIEscalationNamesOnlyCiliumsRoles's business.
 func TestCNIRoleCoversTheOptionalFeatureObjects(t *testing.T) {
-	resource := map[string]string{
-		"ConfigMap":                        "configmaps",
-		"Service":                          "services",
-		"ServiceAccount":                   "serviceaccounts",
-		"Namespace":                        "namespaces",
-		"Deployment":                       "deployments",
-		"DaemonSet":                        "daemonsets",
-		"Job":                              "jobs",
-		"CronJob":                          "cronjobs",
-		"PodDisruptionBudget":              "poddisruptionbudgets",
-		"Role":                             "roles",
-		"RoleBinding":                      "rolebindings",
-		"ClusterRole":                      "clusterroles",
-		"ClusterRoleBinding":               "clusterrolebindings",
-		"IngressClass":                     "ingressclasses",
-		"EndpointSlice":                    "endpointslices",
-		"GatewayClass":                     "gatewayclasses",
-		"ValidatingAdmissionPolicy":        "validatingadmissionpolicies",
-		"ValidatingAdmissionPolicyBinding": "validatingadmissionpolicybindings",
+	resource := map[string]string{}
+
+	for pair := range strings.FieldsSeq("ConfigMap=configmaps Service=services ServiceAccount=serviceaccounts " +
+		"Namespace=namespaces Deployment=deployments DaemonSet=daemonsets Job=jobs CronJob=cronjobs " +
+		"PodDisruptionBudget=poddisruptionbudgets Role=roles RoleBinding=rolebindings ClusterRole=clusterroles " +
+		"ClusterRoleBinding=clusterrolebindings IngressClass=ingressclasses EndpointSlice=endpointslices " +
+		"GatewayClass=gatewayclasses ValidatingAdmissionPolicy=validatingadmissionpolicies " +
+		"ValidatingAdmissionPolicyBinding=validatingadmissionpolicybindings") {
+		kind, res, _ := strings.Cut(pair, "=")
+		resource[kind] = res
 	}
 
 	cfgDocs := loadYAMLDocs(t, "../../config/rbac/ichor-cni/role.yaml")
@@ -470,7 +461,8 @@ func TestCNIRoleCoversTheOptionalFeatureObjects(t *testing.T) {
 				for k := range kinds {
 					res, ok := resource[k[1]]
 					if !ok {
-						t.Errorf("%s: the chart renders a %s (group %q) this test does not map to a resource, so the CNI role may not cover it", label, k[1], k[0])
+						t.Errorf("%s: the chart renders a %s (group %q) this test does not map to a resource, "+
+							"so the CNI role may not cover it", label, k[1], k[0])
 
 						continue
 					}
@@ -488,9 +480,10 @@ func TestCNIRoleCoversTheOptionalFeatureObjects(t *testing.T) {
 						}
 					}
 
-					for _, v := range []string{"get", "list", "create", "update", "patch", "delete"} {
+					for v := range strings.FieldsSeq("get list create update patch delete") {
 						if !held[v] {
-							t.Errorf("%s: the CNI role cannot %s %s.%s, which the Cilium chart renders with %s on", label, v, res, k[0], f.name)
+							t.Errorf("%s: the CNI role cannot %s %s.%s, which the Cilium chart renders with %s on",
+								label, v, res, k[0], f.name)
 						}
 					}
 				}

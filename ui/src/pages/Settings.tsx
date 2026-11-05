@@ -7,6 +7,7 @@ import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet 
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ErrorAlert } from '@/components/ErrorAlert'
+import { useAction } from '@/hooks/use-action'
 import { PageSkeleton } from '@/components/PageStates'
 import { PageTitle } from '@/components/PageTitle'
 import { SectionCard } from '@/components/SectionCard'
@@ -109,22 +110,16 @@ function Fact({ label, value }: { label: string; value: string }) {
 
 // useSave sends one UpdateSettings call and reports the answer; the card shows its own error.
 function useSave(onSaved: (r: GetSettingsResponse) => void) {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<ErrorShape | null>(null)
+  const { busy, error, run } = useAction()
   async function save(changes: Fields & { updateCheckEnabled?: boolean }): Promise<boolean> {
-    setBusy(true)
-    setError(null)
-    try {
+    let ok = false
+    await run(async () => {
       const out = await settingsClient.updateSettings({ changes })
       if (out.settings) onSaved(out.settings)
       notifyWrite('settings.saved')
-      return true
-    } catch (err) {
-      setError(describeError(err))
-      return false
-    } finally {
-      setBusy(false)
-    }
+      ok = true
+    })
+    return ok
   }
   return { busy, error, save }
 }

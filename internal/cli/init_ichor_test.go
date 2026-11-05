@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
@@ -27,10 +28,13 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/discovery"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
@@ -264,6 +268,38 @@ func TestIsTransient_WebhookCallFailures(t *testing.T) {
 		"denied quoting a call failure": apierrors.NewForbidden(gr, "x",
 			errors.New("denied: earlier failed calling webhook text: context deadline exceeded")),
 		"invalid": apierrors.NewInvalid(schema.GroupKind{Group: gr.Group, Kind: "TalosOperation"}, "x", nil),
+	} {
+		if isTransient(err) {
+			t.Errorf("%s: %v must fail fast", name, err)
+		}
+	}
+}
+
+// While the kube-apiserver of the endpoint comes back, the client's REST mapper cannot discover the
+// ichor group yet: that is discovery failing, not an answer.
+func TestIsTransient_DiscoveryFailures(t *testing.T) {
+	gv := ichorv1alpha1.GroupVersion
+	mapperFailed := apiutil.ErrResourceDiscoveryFailed{gv: apierrors.NewNotFound(schema.GroupResource{}, "")}
+	groupFailed := &discovery.ErrGroupDiscoveryFailed{Groups: map[schema.GroupVersion]error{gv: errors.New("503")}}
+
+	for name, err := range map[string]error{
+		"no match":            &meta.NoResourceMatchError{PartialResource: gv.WithResource("")},
+		"wrapped no match":    fmt.Errorf("patching: %w", &meta.NoKindMatchError{GroupKind: schema.GroupKind{Group: gv.Group, Kind: "Thing"}}),
+		"rest mapper":         &mapperFailed,
+		"wrapped rest mapper": fmt.Errorf("acknowledging: %w", &mapperFailed),
+		"group discovery":     groupFailed,
+		"wrapped group":       fmt.Errorf("listing: %w", groupFailed),
+	} {
+		if !isTransient(err) {
+			t.Errorf("%s: %v should be transient", name, err)
+		}
+	}
+
+	gr := schema.GroupResource{Group: gv.Group, Resource: "things"}
+
+	for name, err := range map[string]error{
+		"forbidden": apierrors.NewForbidden(gr, "x", errors.New("no match for this user")),
+		"not found": apierrors.NewNotFound(gr, "x"),
 	} {
 		if isTransient(err) {
 			t.Errorf("%s: %v must fail fast", name, err)

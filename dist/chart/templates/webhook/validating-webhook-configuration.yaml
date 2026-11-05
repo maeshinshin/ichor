@@ -9,6 +9,7 @@
   (dict "name" "vtalosconfigpatch" "path" "talosconfigpatch" "ops" (list "CREATE" "UPDATE") "res" (list "talosconfigpatches"))
   (dict "name" "vtalosmachine" "path" "talosmachine" "ops" (list "CREATE" "UPDATE" "DELETE") "res" (list "talosmachines"))
   (dict "name" "vmachinereclaim" "path" "machinereclaim" "ops" (list "CREATE" "UPDATE") "res" (list "machinereclaims"))
+  (dict "name" "vichoruser" "path" "ichoruser" "ops" (list "CREATE" "UPDATE" "DELETE") "res" (list "ichorusers"))
   (dict "name" "vtaloscredentialrequest" "path" "taloscredentialrequest" "ops" (list "CREATE") "res" (list "taloscredentialrequests") "sideEffects" "NoneOnDryRun")
   (dict "name" "vichorinstallation" "path" "ichorinstallation" "ops" (list "CREATE" "UPDATE" "DELETE") "res" (list "ichorinstallations") "sideEffects" "NoneOnDryRun") }}
 apiVersion: admissionregistration.k8s.io/v1

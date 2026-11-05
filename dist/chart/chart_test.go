@@ -451,6 +451,8 @@ func checkWebhookInvariants(t *testing.T, release string, docs []map[string]any)
 				"vtalosconfigpatch-v1alpha1.kb.io":  {opCreate, opUpdate},
 				"vichorinstallation-v1alpha1.kb.io": {opCreate, opUpdate, "DELETE"},
 				"vtaloscluster-v1alpha1.kb.io":      {opCreate, opUpdate, opDelete}, // ADR 0099
+				// ADR 0129: the role-grant and last-admin rules hold for kubectl too.
+				"vichoruser-v1alpha1.kb.io": {opCreate, opUpdate, opDelete},
 				// ADR 0065: override checks writes to existing CRs only.
 				"voverride-v1alpha1.kb.io": {opUpdate},
 				// ADR 0085: and the creation of a node reset by hand.

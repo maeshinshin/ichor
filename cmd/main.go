@@ -404,6 +404,7 @@ func main() {
 			}), "Failed to create webhook", "webhook", "Override")
 			must(webhookv1alpha1.SetupMachineReclaimWebhookWithManager(mgr), "Failed to create webhook", "webhook", "MachineReclaim")
 			must(webhookv1alpha1.SetupCredentialRequestWebhookWithManager(mgr), "Failed to create webhook", "webhook", "TalosCredentialRequest")
+			must(webhookv1alpha1.SetupIchorUserWebhookWithManager(mgr, exempt), "Failed to create webhook", "webhook", "IchorUser")
 			mgr.GetWebhookServer() // idempotent; makes sure the server is a runnable even if no handler did
 			close(webhooksUp)
 		}()

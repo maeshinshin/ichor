@@ -39,12 +39,17 @@ import (
 // ADR 0129: the role-grant and last-admin rules of the UI backend (internal/uiapi guardGrant and
 // guardLastAdmin) hold for a hand-written CR too.
 
-const userNS = "ichor-system"
+const (
+	userNS           = "ichor-system"
+	userAlice        = "ichor:alice"
+	userBoss         = "ichor:boss"
+	nsControllerUser = "system:serviceaccount:kube-system:namespace-controller"
+)
 
 func iuser(name string, disabled bool, roles ...string) *ichorv1alpha1.IchorUser {
 	return &ichorv1alpha1.IchorUser{
-		ObjectMeta: metav1.ObjectMeta{Namespace: userNS, Name: name},
-		Spec:       ichorv1alpha1.IchorUserSpec{Roles: roles, Disabled: disabled},
+		Namespace: userNS, Name: name,
+		Spec: ichorv1alpha1.IchorUserSpec{Roles: roles, Disabled: disabled},
 	}
 }
 
@@ -64,7 +69,7 @@ func userValidator(t *testing.T, stored ...*ichorv1alpha1.IchorUser) *IchorUserC
 		b = b.WithObjects(u.DeepCopy())
 	}
 
-	return &IchorUserCustomValidator{Reader: b.Build(), ExemptUsers: []string{testControllerUser, "system:serviceaccount:kube-system:namespace-controller"}}
+	return &IchorUserCustomValidator{Reader: b.Build(), ExemptUsers: []string{testControllerUser, nsControllerUser}}
 }
 
 func wantRefusal(t *testing.T, err error, want string) {
@@ -93,15 +98,15 @@ func TestIchorUserGrant(t *testing.T) {
 		old, new *ichorv1alpha1.IchorUser // old nil: a create
 		want     string
 	}{
-		{name: "an operator creates an operator", user: "ichor:alice", groups: alice, new: iuser("bob", false, "operator")},
-		{name: "an operator cannot create an admin", user: "ichor:alice", groups: alice, new: iuser("bob", false, "admin"), want: `role "admin"`},
-		{name: "an operator cannot create a role it lacks", user: "ichor:alice", groups: alice, new: iuser("bob", false, "operator", "viewer"), want: `role "viewer"`},
-		{name: "an admin creates any role", user: "ichor:boss", groups: boss, new: iuser("bob", false, "admin", "custom")},
-		{name: "an operator cannot make an admin of a viewer", user: "ichor:alice", groups: alice,
+		{name: "an operator creates an operator", user: userAlice, groups: alice, new: iuser("bob", false, "operator")},
+		{name: "an operator cannot create an admin", user: userAlice, groups: alice, new: iuser("bob", false, "admin"), want: `role "admin"`},
+		{name: "an operator cannot create a role it lacks", user: userAlice, groups: alice, new: iuser("bob", false, "operator", "viewer"), want: `role "viewer"`},
+		{name: "an admin creates any role", user: userBoss, groups: boss, new: iuser("bob", false, "admin", "custom")},
+		{name: "an operator cannot make an admin of a viewer", user: userAlice, groups: alice,
 			old: iuser("bob", false, "viewer"), new: iuser("bob", false, "viewer", "admin"), want: `role "admin"`},
-		{name: "an operator may edit an admin without adding a role", user: "ichor:alice", groups: alice,
+		{name: "an operator may edit an admin without adding a role", user: userAlice, groups: alice,
 			old: iuser("bob", false, "admin"), new: iuser("bob", false, "admin")},
-		{name: "an operator may drop a role", user: "ichor:alice", groups: alice,
+		{name: "an operator may drop a role", user: userAlice, groups: alice,
 			old: iuser("bob", false, "viewer", "operator"), new: iuser("bob", false, "operator")},
 		{name: "an external identity is gated by RBAC alone", user: "oidc:carol", groups: []string{"oidc:team"}, new: iuser("bob", false, "admin")},
 		{name: "a person with a certificate is gated by RBAC alone", user: "dave", new: iuser("bob", false, "admin")},
@@ -155,34 +160,34 @@ func TestIchorUserLastAdmin(t *testing.T) {
 		upd    *update
 		want   string
 	}{
-		{name: "deleting the only admin", user: "ichor:boss", groups: boss, stored: []*ichorv1alpha1.IchorUser{root}, del: root, want: lastAdmin},
-		{name: "deleting an admin when another is enabled", user: "ichor:boss", groups: boss, stored: []*ichorv1alpha1.IchorUser{root, other}, del: root},
-		{name: "deleting an admin when the other is disabled", user: "ichor:boss", groups: boss,
+		{name: "deleting the only admin", user: userBoss, groups: boss, stored: []*ichorv1alpha1.IchorUser{root}, del: root, want: lastAdmin},
+		{name: "deleting an admin when another is enabled", user: userBoss, groups: boss, stored: []*ichorv1alpha1.IchorUser{root, other}, del: root},
+		{name: "deleting an admin when the other is disabled", user: userBoss, groups: boss,
 			stored: []*ichorv1alpha1.IchorUser{root, iuser("other", true, "admin")}, del: root, want: lastAdmin},
-		{name: "deleting an admin when the other is no admin", user: "ichor:boss", groups: boss,
+		{name: "deleting an admin when the other is no admin", user: userBoss, groups: boss,
 			stored: []*ichorv1alpha1.IchorUser{root, iuser("other", false, "operator")}, del: root, want: lastAdmin},
-		{name: "deleting a user who is no admin", user: "ichor:boss", groups: boss, stored: []*ichorv1alpha1.IchorUser{root, iuser("op", false, "operator")},
+		{name: "deleting a user who is no admin", user: userBoss, groups: boss, stored: []*ichorv1alpha1.IchorUser{root, iuser("op", false, "operator")},
 			del: iuser("op", false, "operator")},
-		{name: "deleting a disabled admin", user: "ichor:boss", groups: boss, stored: []*ichorv1alpha1.IchorUser{root, iuser("off", true, "admin")},
+		{name: "deleting a disabled admin", user: userBoss, groups: boss, stored: []*ichorv1alpha1.IchorUser{root, iuser("off", true, "admin")},
 			del: iuser("off", true, "admin")},
 		{name: "an external admin is limited too", user: "oidc:carol", groups: []string{"oidc:ops"}, stored: []*ichorv1alpha1.IchorUser{root}, del: root, want: lastAdmin},
-		{name: "disabling the only admin", user: "ichor:boss", groups: boss, stored: []*ichorv1alpha1.IchorUser{root},
+		{name: "disabling the only admin", user: userBoss, groups: boss, stored: []*ichorv1alpha1.IchorUser{root},
 			upd: &update{root, iuser("root", true, "admin")}, want: lastAdmin},
-		{name: "demoting the only admin", user: "ichor:boss", groups: boss, stored: []*ichorv1alpha1.IchorUser{root},
+		{name: "demoting the only admin", user: userBoss, groups: boss, stored: []*ichorv1alpha1.IchorUser{root},
 			upd: &update{root, iuser("root", false, "operator")}, want: lastAdmin},
-		{name: "demoting an admin when another is enabled", user: "ichor:boss", groups: boss, stored: []*ichorv1alpha1.IchorUser{root, other},
+		{name: "demoting an admin when another is enabled", user: userBoss, groups: boss, stored: []*ichorv1alpha1.IchorUser{root, other},
 			upd: &update{root, iuser("root", false, "operator")}},
-		{name: "editing the only admin without demoting it", user: "ichor:boss", groups: boss, stored: []*ichorv1alpha1.IchorUser{root},
+		{name: "editing the only admin without demoting it", user: userBoss, groups: boss, stored: []*ichorv1alpha1.IchorUser{root},
 			upd: &update{root, iuser("root", false, "admin", "viewer")}},
-		{name: "enabling a disabled admin", user: "ichor:boss", groups: boss, stored: []*ichorv1alpha1.IchorUser{root},
+		{name: "enabling a disabled admin", user: userBoss, groups: boss, stored: []*ichorv1alpha1.IchorUser{root},
 			upd: &update{iuser("off", true, "admin"), iuser("off", false, "admin")}},
 		{name: "the override certificate may remove the last admin", user: "admin", groups: []string{"system:masters"},
 			stored: []*ichorv1alpha1.IchorUser{root}, del: root},
 		{name: "the override certificate may demote the last admin", user: "admin", groups: []string{"system:masters"},
 			stored: []*ichorv1alpha1.IchorUser{root}, upd: &update{root, iuser("root", true, "admin")}},
-		{name: "the namespace controller deletes everything", user: "system:serviceaccount:kube-system:namespace-controller",
+		{name: "the namespace controller deletes everything", user: nsControllerUser,
 			stored: []*ichorv1alpha1.IchorUser{root}, del: root},
-		{name: "an object already being deleted is not guarded", user: "ichor:boss", groups: boss, stored: []*ichorv1alpha1.IchorUser{terminating(false)},
+		{name: "an object already being deleted is not guarded", user: userBoss, groups: boss, stored: []*ichorv1alpha1.IchorUser{terminating(false)},
 			upd: &update{terminating(false), terminating(true)}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -212,11 +217,9 @@ func TestIchorUserWithoutARequest(t *testing.T) {
 	wantRefusal(t, err, "no admission request")
 }
 
-
 // Through the API server and its real RBAC, as users of Ichor's own issuer: the apiserver names them ichor:<name>
 // and puts them in the groups ichor:<role> (ADR 0094).
 var _ = Describe("IchorUser Webhook through the API server (ADR 0129)", func() {
-	const alice, boss = "ichor:alice", "ichor:boss"
 
 	as := func(user string, groups ...string) client.Client {
 		c := rest.CopyConfig(cfg)
@@ -230,27 +233,27 @@ var _ = Describe("IchorUser Webhook through the API server (ADR 0129)", func() {
 
 	user := func(name string, roles ...string) *ichorv1alpha1.IchorUser {
 		return &ichorv1alpha1.IchorUser{
-			ObjectMeta: metav1.ObjectMeta{Namespace: testNamespace, Name: name},
-			Spec:       ichorv1alpha1.IchorUserSpec{Roles: roles},
+			Namespace: testNamespace, Name: name,
+			Spec: ichorv1alpha1.IchorUserSpec{Roles: roles},
 		}
 	}
 
 	BeforeEach(func() {
 		all := rbacv1.PolicyRule{APIGroups: []string{ichorGroup}, Resources: []string{"ichorusers"}, Verbs: []string{"*"}}
-		bindRole("ichoruser-gate-alice", alice, all)
-		bindRole("ichoruser-gate-boss", boss, all)
+		bindRole("ichoruser-gate-alice", userAlice, all)
+		bindRole("ichoruser-gate-boss", userBoss, all)
 	})
 
 	It("refuses a grant above the requester's own and admits one within it", func() {
-		err := as(alice, "ichor:operator").Create(ctx, user("grant-admin", "admin"))
+		err := as(userAlice, "ichor:operator").Create(ctx, user("grant-admin", "admin"))
 		Expect(err).To(MatchError(ContainSubstring(`you cannot grant the role "admin"`)))
 
 		ok := user("grant-operator", "operator")
-		Expect(as(alice, "ichor:operator").Create(ctx, ok)).To(Succeed())
+		Expect(as(userAlice, "ichor:operator").Create(ctx, ok)).To(Succeed())
 		Expect(k8sClient.Delete(ctx, ok)).To(Succeed())
 
 		anything := user("grant-anything", "admin", "custom")
-		Expect(as(boss, "ichor:admin").Create(ctx, anything)).To(Succeed())
+		Expect(as(userBoss, "ichor:admin").Create(ctx, anything)).To(Succeed())
 		Expect(k8sClient.Delete(ctx, anything)).To(Succeed())
 	})
 
@@ -258,7 +261,7 @@ var _ = Describe("IchorUser Webhook through the API server (ADR 0129)", func() {
 		root := user("last-admin", "admin")
 		Expect(k8sClient.Create(ctx, root)).To(Succeed())
 
-		asBoss := as(boss, "ichor:admin")
+		asBoss := as(userBoss, "ichor:admin")
 
 		Expect(asBoss.Delete(ctx, root.DeepCopy())).To(MatchError(ContainSubstring("last enabled admin")))
 

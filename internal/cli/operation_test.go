@@ -376,8 +376,8 @@ func TestResumeOfAFailedOperationReRunsTheStep(t *testing.T) {
 		t.Fatalf("stderr = %q, want %q", errw.String(), want)
 	}
 
-	if got := opTestOps(t, k8s)[0].Annotations[ichorv1alpha1.OperationRetryAnnotation]; got == "" {
-		t.Fatal("the retry annotation was not set")
+	if got := opTestOps(t, k8s)[0].Annotations[ichorv1alpha1.OperationRetryAnnotation]; got != ichorv1alpha1.OperationRetryRequested {
+		t.Fatalf("the retry annotation = %q, want true", got)
 	}
 }
 

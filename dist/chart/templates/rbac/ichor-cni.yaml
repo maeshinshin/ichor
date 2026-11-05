@@ -71,6 +71,28 @@ rules:
   - patch
   - update
 - apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingressclasses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
   - apps
   resources:
   - daemonsets
@@ -138,6 +160,8 @@ rules:
   resourceNames:
   - cilium
   - cilium-operator
+  - clustermesh-apiserver
+  - hubble-ui
   resources:
   - clusterroles
   verbs:
@@ -146,12 +170,17 @@ rules:
 - apiGroups:
   - rbac.authorization.k8s.io
   resourceNames:
+  - cilium-bgp-control-plane-secrets
   - cilium-config-agent
+  - cilium-envoy-config-secrets
   - cilium-gateway-secrets
+  - cilium-ingress-secrets
   - cilium-operator-gateway-secrets
+  - cilium-operator-ingress-secrets
   - cilium-operator-tlsinterception-secrets
   - cilium-operator-ztunnel
   - cilium-tlsinterception-secrets
+  - clustermesh-apiserver-generate-certs
   - hubble-generate-certs
   resources:
   - roles

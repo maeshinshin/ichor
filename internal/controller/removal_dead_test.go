@@ -7,7 +7,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -41,8 +40,7 @@ var _ = Describe("removing a dead control plane below the declared count", func(
 		}
 
 		for _, cp := range []*ichorv1alpha1.TalosMachine{f.cp1, f.cp2, f.cp3} {
-			_, err := reconcileMachine(f.r, cp)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(f.r, cp)
 		}
 
 		return f
@@ -52,8 +50,7 @@ var _ = Describe("removing a dead control plane below the declared count", func(
 		f := setup("d1")
 
 		Expect(k8sClient.Delete(ctx, f.cp1)).To(Succeed())
-		_, err := reconcileMachine(f.r, f.cp1)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(f.r, f.cp1)
 
 		Expect(f.survivor.etcdRemoveIDs).To(Equal([]uint64{42}))
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, machineKeyOf(f.cp1), &ichorv1alpha1.TalosMachine{}))).To(BeTrue(),
@@ -65,8 +62,7 @@ var _ = Describe("removing a dead control plane below the declared count", func(
 		f.departing[f.cp1.Name] = &fakeTalosClient{etcdStatusErr: errors.New("connection refused")}
 
 		Expect(k8sClient.Delete(ctx, f.cp1)).To(Succeed())
-		_, err := reconcileMachine(f.r, f.cp1)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(f.r, f.cp1)
 
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, machineKeyOf(f.cp1), &ichorv1alpha1.TalosMachine{}))).To(BeTrue())
 	})
@@ -76,11 +72,9 @@ var _ = Describe("removing a dead control plane below the declared count", func(
 		f.departing[f.cp1.Name] = &fakeTalosClient{etcdStatus: EtcdStatus{MemberID: 42, LeaderID: 7}}
 
 		Expect(k8sClient.Delete(ctx, f.cp1)).To(Succeed())
-		_, err := reconcileMachine(f.r, f.cp1)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(f.r, f.cp1)
 
-		cond := apimeta.FindStatusCondition(fetchMachine(f.cp1).Status.Conditions, conditionRemoval)
-		Expect(cond.Reason).To(Equal(reasonRemovalRefused))
+		cond := expectRemoval(fetchMachine(f.cp1), reasonRemovalRefused)
 		Expect(cond.Message).To(ContainSubstring("declared count"))
 		Expect(cond.Message).To(ContainSubstring("healthy"))
 		Expect(f.survivor.etcdRemoveIDs).To(BeEmpty())
@@ -92,11 +86,9 @@ var _ = Describe("removing a dead control plane below the declared count", func(
 		delete(f.departing, f.cp3.Name)
 
 		Expect(k8sClient.Delete(ctx, f.cp1)).To(Succeed())
-		_, err := reconcileMachine(f.r, f.cp1)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(f.r, f.cp1)
 
-		cond := apimeta.FindStatusCondition(fetchMachine(f.cp1).Status.Conditions, conditionRemoval)
-		Expect(cond.Reason).To(Equal(reasonRemovalRefused))
+		expectRemoval(fetchMachine(f.cp1), reasonRemovalRefused)
 	})
 
 	It("never lets quorum be lost: a two control plane cluster refuses even a dead member", func() {
@@ -105,11 +97,9 @@ var _ = Describe("removing a dead control plane below the declared count", func(
 		f.cp3 = fetchMachine(f.cp3)
 		// cp3 is now being deleted and not counted; 2 approved remain, one of them dead.
 		Expect(k8sClient.Delete(ctx, f.cp1)).To(Succeed())
-		_, err := reconcileMachine(f.r, f.cp1)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(f.r, f.cp1)
 
-		cond := apimeta.FindStatusCondition(fetchMachine(f.cp1).Status.Conditions, conditionRemoval)
-		Expect(cond.Reason).To(Equal(reasonRemovalRefused))
+		cond := expectRemoval(fetchMachine(f.cp1), reasonRemovalRefused)
 		Expect(cond.Message).To(ContainSubstring("quorum"))
 	})
 })

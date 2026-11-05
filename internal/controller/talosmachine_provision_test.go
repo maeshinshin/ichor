@@ -89,8 +89,7 @@ var _ = Describe("TalosMachineReconciler provisioning a node in maintenance mode
 	}
 
 	reconcileOnce := func() *ichorv1alpha1.TalosMachine {
-		_, err := reconcileMachine(r, machine)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, machine)
 
 		return fetchMachine(machine)
 	}
@@ -350,9 +349,7 @@ var _ = Describe("TalosMachineReconciler provisioning a node in maintenance mode
 		Expect(maint.applyCalls).To(HaveLen(1))
 		Expect(got.Status.ConfigStoredAt).NotTo(BeNil())
 
-		_, held, err := lock.Holder(ctx)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(held).To(BeFalse(), "the lock is released once the configuration is stored")
+		expectLockFree(cluster, "the lock is released once the configuration is stored")
 	})
 
 	It("joins a worker while the cluster lock is held: a worker is no etcd member, so its join takes no lock", func() {

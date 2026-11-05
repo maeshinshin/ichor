@@ -27,6 +27,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -104,8 +105,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		cp := newTestControlPlane(cluster.Name, "1")
 
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
-		_, err := reconcileMachine(r, cp)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, cp)
 
 		got := fetchMachine(cp)
 		Expect(controllerutil.ContainsFinalizer(got, machineRemovalFinalizer)).To(BeTrue())
@@ -120,10 +120,8 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		Expect(k8sClient.Update(ctx, pending)).To(Succeed())
 
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
-		_, err := reconcileMachine(r, worker)
-		Expect(err).NotTo(HaveOccurred())
-		_, err = reconcileMachine(r, pending)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, worker)
+		reconcileOK(r, pending)
 
 		Expect(controllerutil.ContainsFinalizer(fetchMachine(worker), machineRemovalFinalizer)).To(BeFalse())
 		Expect(controllerutil.ContainsFinalizer(fetchMachine(pending), machineRemovalFinalizer)).To(BeFalse())
@@ -131,8 +129,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		// Both delete immediately: no finalizer ever intercepts them.
 		Expect(k8sClient.Delete(ctx, worker)).To(Succeed())
 		Expect(k8sClient.Delete(ctx, pending)).To(Succeed())
-		_, err = reconcileMachine(r, worker)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, worker)
 	})
 
 	// The four failure modes docs/design/architecture.md's "Nodes" names for
@@ -153,17 +150,13 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 			cp := newTestControlPlane(cluster.Name, "3")
 
 			r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, cp)
 
 			Expect(k8sClient.Delete(ctx, cp)).To(Succeed())
-			_, err = reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, cp)
 
 			got := fetchMachine(cp)
-			cond := apimeta.FindStatusCondition(got.Status.Conditions, conditionRemoval)
-			Expect(cond).NotTo(BeNil())
-			Expect(cond.Reason).To(Equal(reasonRemovalRefused))
+			cond := expectRemoval(got, reasonRemovalRefused)
 			Expect(cond.Message).To(ContainSubstring("last control plane"))
 
 			// The finalizer is still there: refusing means staying, not disappearing.
@@ -176,10 +169,8 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 			cp2 := newTestControlPlane(cluster.Name, "5")
 
 			r1 := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
-			_, err := reconcileMachine(r1, cp1)
-			Expect(err).NotTo(HaveOccurred())
-			_, err = reconcileMachine(r1, cp2)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r1, cp1)
+			reconcileOK(r1, cp2)
 
 			Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
 
@@ -192,7 +183,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 			Expect(lock.Acquire(ctx, machineLockIdentity(cp1))).To(Succeed())
 
 			r2 := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
-			_, err = reconcileMachine(r2, cp1)
+			_, err := reconcileMachine(r2, cp1)
 			Expect(err).NotTo(HaveOccurred(), "a fresh reconciler must resume its own identity's lock, not be told it's held")
 
 			got := fetchMachine(cp1)
@@ -214,8 +205,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		cp3 := newTestControlPlane(cluster.Name, "8")
 
 		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, cp)
 		}
 
 		// 3 -> 2: quorum of 3 is 2, allowed (desiredCount is 1, so the count
@@ -226,8 +216,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		// "RemovalApproved" condition the way an unimplemented etcd
 		// removal used to leave it.
 		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
-		_, err := reconcileMachine(r, cp1)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, cp1)
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Namespace: cp1.Namespace, Name: cp1.Name}, &ichorv1alpha1.TalosMachine{}))).
 			To(BeTrue(), "a removal that passes every check now completes for real")
 
@@ -237,16 +226,13 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		cpA := newTestControlPlane(cluster2.Name, "6b")
 		cpB := newTestControlPlane(cluster2.Name, "7b")
 		for _, cp := range []*ichorv1alpha1.TalosMachine{cpA, cpB} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, cp)
 		}
 
 		// 2 -> 1: quorum of 2 is 2, refused.
 		Expect(k8sClient.Delete(ctx, cpA)).To(Succeed())
-		_, err = reconcileMachine(r, cpA)
-		Expect(err).NotTo(HaveOccurred())
-		cond := apimeta.FindStatusCondition(fetchMachine(cpA).Status.Conditions, conditionRemoval)
-		Expect(cond.Reason).To(Equal(reasonRemovalRefused))
+		reconcileOK(r, cpA)
+		cond := expectRemoval(fetchMachine(cpA), reasonRemovalRefused)
 		Expect(cond.Message).To(ContainSubstring("quorum"))
 	})
 
@@ -258,28 +244,23 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		cp3 := newTestControlPlane(cluster.Name, "11")
 
 		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, cp)
 		}
 
 		// 3 -> 2, below the declared count of 3: refused even though quorum
 		// of 3 (which is 2) would itself allow it.
 		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
-		_, err := reconcileMachine(r, cp1)
-		Expect(err).NotTo(HaveOccurred())
-		cond := apimeta.FindStatusCondition(fetchMachine(cp1).Status.Conditions, conditionRemoval)
-		Expect(cond.Reason).To(Equal(reasonRemovalRefused))
+		reconcileOK(r, cp1)
+		cond := expectRemoval(fetchMachine(cp1), reasonRemovalRefused)
 		Expect(cond.Message).To(ContainSubstring("declared count"))
 
 		// Approve a 4th control plane first (3 -> 4), then removing one of
 		// the original three (4 -> 3) meets the declared count.
 		cp4 := newTestControlPlane(cluster.Name, "12")
-		_, err = reconcileMachine(r, cp4)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, cp4)
 
 		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
-		_, err = reconcileMachine(r, cp1)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, cp1)
 		// cp1 has no Hostname set, so removeEtcdMember's fake sees it as
 		// already absent and the removal completes in full this time.
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Namespace: cp1.Namespace, Name: cp1.Name}, &ichorv1alpha1.TalosMachine{}))).
@@ -295,8 +276,7 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		cp4 := newTestControlPlane(cluster.Name, "16")
 
 		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3, cp4} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, cp)
 		}
 
 		// cp1 is deleted but never reconciled again, so its finalizer keeps
@@ -306,11 +286,8 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 
 		// 4 listed, but only 3 are staying. Removing cp2 would leave 2.
 		Expect(k8sClient.Delete(ctx, cp2)).To(Succeed())
-		_, err := reconcileMachine(r, cp2)
-		Expect(err).NotTo(HaveOccurred())
-		cond := apimeta.FindStatusCondition(fetchMachine(cp2).Status.Conditions, conditionRemoval)
-		Expect(cond).NotTo(BeNil(), "cp2's removal must be refused, not completed")
-		Expect(cond.Reason).To(Equal(reasonRemovalRefused))
+		reconcileOK(r, cp2)
+		cond := expectRemoval(fetchMachine(cp2), reasonRemovalRefused)
 		Expect(cond.Message).To(ContainSubstring("declared count"))
 	})
 
@@ -319,20 +296,16 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		cp := newTestControlPlane(cluster.Name, "13")
 
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
-		_, err := reconcileMachine(r, cp)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, cp)
 
 		lock := clusterlock.New(k8sClient, clusterKeyOf(cp), 0)
 		Expect(lock.Acquire(ctx, "someone-else")).To(Succeed())
 
 		Expect(k8sClient.Delete(ctx, cp)).To(Succeed())
-		_, err = reconcileMachine(r, cp)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, cp)
 
 		got := fetchMachine(cp)
-		cond := apimeta.FindStatusCondition(got.Status.Conditions, conditionRemoval)
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Reason).To(Equal(reasonClusterLockHeld))
+		expectRemoval(got, reasonClusterLockHeld)
 		Expect(controllerutil.ContainsFinalizer(got, machineRemovalFinalizer)).To(BeTrue())
 
 		Expect(lock.Release(ctx, "someone-else")).To(Succeed())
@@ -372,13 +345,9 @@ var _ = Describe("renewWhile", func() {
 // condition after a reconcile.
 func fetchCluster(cluster *ichorv1alpha1.TalosCluster) *ichorv1alpha1.TalosCluster {
 	var got ichorv1alpha1.TalosCluster
-	Expect(k8sClient.Get(ctx, clusterKeyOf2(cluster), &got)).To(Succeed())
+	Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), &got)).To(Succeed())
 
 	return &got
-}
-
-func clusterKeyOf2(cluster *ichorv1alpha1.TalosCluster) types.NamespacedName {
-	return types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}
 }
 
 var _ = Describe("TalosCluster transitioning status", func() {
@@ -394,10 +363,8 @@ var _ = Describe("TalosCluster transitioning status", func() {
 			// the transitioning update happens on the pass after that,
 			// once the machine reconcile proceeds past the finalizer-add
 			// branch.
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
-			_, err = reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, cp)
+			reconcileOK(r, cp)
 		}
 
 		cond := apimeta.FindStatusCondition(fetchCluster(cluster).Status.Conditions, conditionTransitioning)
@@ -414,17 +381,13 @@ var _ = Describe("TalosCluster transitioning status", func() {
 
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
-			_, err = reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, cp)
+			reconcileOK(r, cp)
 		}
 
 		cp4 := newTestControlPlane(cluster.Name, "26")
-		_, err := reconcileMachine(r, cp4)
-		Expect(err).NotTo(HaveOccurred())
-		_, err = reconcileMachine(r, cp4)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, cp4)
+		reconcileOK(r, cp4)
 
 		cond := apimeta.FindStatusCondition(fetchCluster(cluster).Status.Conditions, conditionTransitioning)
 		Expect(cond).NotTo(BeNil())
@@ -445,8 +408,7 @@ var _ = Describe("TalosCluster transitioning status", func() {
 		cp3 := newTestControlPlane(cluster.Name, "29")
 		cp4 := newTestControlPlane(cluster.Name, "30")
 		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3, cp4} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, cp)
 		}
 
 		worker := newTestMachine(cluster.Name, true)
@@ -460,18 +422,11 @@ var _ = Describe("TalosCluster transitioning status", func() {
 		fake := &fakeTalosClient{current: current}
 		r.TalosClient = clientFactory(fake)
 
-		_, err := reconcileMachine(r, worker)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, worker)
 		Expect(fake.applyCalls).To(BeEmpty())
 
-		cond := readyCondition(fetchMachine(worker))
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(cond.Reason).To(Equal(reasonRebootRequired))
+		expectReady(fetchMachine(worker), metav1.ConditionFalse, reasonRebootRequired)
 
-		lock := clusterlock.New(k8sClient, clusterKeyOf2(cluster), 0)
-		_, held, err := lock.Holder(ctx)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(held).To(BeFalse(), "refuseReboot never takes the cluster lock")
+		expectLockFree(cluster, "refuseReboot never takes the cluster lock")
 	})
 })

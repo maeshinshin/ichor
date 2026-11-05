@@ -100,8 +100,7 @@ var _ = Describe("TalosMachineReconciler re-provisioning a node that fell back t
 	}
 
 	reconcileOnce := func() *ichorv1alpha1.TalosMachine {
-		_, err := reconcileMachine(r, machine)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, machine)
 
 		return fetchMachine(machine)
 	}
@@ -304,9 +303,7 @@ var _ = Describe("TalosMachineReconciler re-provisioning a node that fell back t
 			Expect(maint.applyCalls).To(HaveLen(1))
 			Expect(talos.etcdRemoveIDs).To(BeEmpty())
 
-			_, held, err := lock.Holder(ctx)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(held).To(BeFalse(), "the lock is released once the configuration is stored")
+			expectLockFree(cluster, "the lock is released once the configuration is stored")
 		})
 	})
 })

@@ -35,6 +35,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
@@ -523,6 +524,54 @@ func warningsCondition(m *ichorv1alpha1.TalosMachine) *metav1.Condition {
 	return apimeta.FindStatusCondition(m.Status.Conditions, conditionConfigWarnings)
 }
 
+// newTestFixture creates a v1.14 secrets bundle, the TalosCluster that references it and an approved worker.
+func newTestFixture() (*secrets.Bundle, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine) {
+	bundle := newTestBundle("v1.14")
+	cluster := newTestCluster(newTestSecret(bundle).Name, "v1.14")
+
+	return bundle, cluster, newTestMachine(cluster.Name, true)
+}
+
+// reconcileOK reconciles m once and fails unless that returned no error.
+func reconcileOK(r *TalosMachineReconciler, m *ichorv1alpha1.TalosMachine) {
+	GinkgoHelper()
+
+	_, err := reconcileMachine(r, m)
+	Expect(err).NotTo(HaveOccurred())
+}
+
+// expectReady asserts m's Ready condition and returns it for further checks.
+func expectReady(m *ichorv1alpha1.TalosMachine, status metav1.ConditionStatus, reason string) *metav1.Condition {
+	GinkgoHelper()
+
+	cond := readyCondition(m)
+	Expect(cond).NotTo(BeNil())
+	Expect(cond.Status).To(Equal(status))
+	Expect(cond.Reason).To(Equal(reason))
+
+	return cond
+}
+
+// expectLockFree asserts that nothing holds cluster's lock.
+func expectLockFree(cluster *ichorv1alpha1.TalosCluster, msg string) {
+	GinkgoHelper()
+
+	_, held, err := clusterlock.New(k8sClient, client.ObjectKeyFromObject(cluster), 0).Holder(ctx)
+	Expect(err).NotTo(HaveOccurred())
+	Expect(held).To(BeFalse(), msg)
+}
+
+// expectRemoval asserts the reason of m's Removal condition and returns it for further checks.
+func expectRemoval(m *ichorv1alpha1.TalosMachine, reason string) *metav1.Condition {
+	GinkgoHelper()
+
+	cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionRemoval)
+	Expect(cond).NotTo(BeNil())
+	Expect(cond.Reason).To(Equal(reason))
+
+	return cond
+}
+
 var _ = Describe("TalosMachineReconciler", func() {
 	It("does nothing at all for a machine that is not approved", func() {
 		cluster := newTestCluster("does-not-exist", "v1.14")
@@ -530,8 +579,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
 
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		got := fetchMachine(m)
 		Expect(got.Status.Conditions).To(BeEmpty())
@@ -546,13 +594,9 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(k8sClient.Update(ctx, m)).To(Succeed())
 
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
-		cond := readyCondition(fetchMachine(m))
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(cond.Reason).To(Equal(reasonClusterNotFound))
+		cond := expectReady(fetchMachine(m), metav1.ConditionFalse, reasonClusterNotFound)
 		Expect(cond.Message).To(ContainSubstring("no-such-cluster"))
 	})
 
@@ -561,20 +605,13 @@ var _ = Describe("TalosMachineReconciler", func() {
 		m := newTestMachine(cluster.Name, true)
 
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
-		cond := readyCondition(fetchMachine(m))
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(cond.Reason).To(Equal(reasonSecretsBundleUnavailable))
+		expectReady(fetchMachine(m), metav1.ConditionFalse, reasonSecretsBundleUnavailable)
 	})
 
 	It("records convergence and attempts no apply when hashes match", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		bundle, cluster, m := newTestFixture()
 
 		current, hash, err := render.Render(cluster, m, bundle, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
@@ -582,8 +619,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: current}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		Expect(fake.dryRunCalls).To(Equal(0))
 		Expect(fake.applyCalls).To(BeEmpty())
@@ -592,17 +628,11 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(got.Status.AppliedConfigHash).To(Equal(hash))
 		Expect(got.Status.ObservedGeneration).To(Equal(got.Generation))
 
-		cond := readyCondition(got)
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
-		Expect(cond.Reason).To(Equal(reasonConverged))
+		expectReady(got, metav1.ConditionTrue, reasonConverged)
 	})
 
 	It("records the node's Kubernetes name in status.nodeName once it is read", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		bundle, cluster, m := newTestFixture()
 
 		current, _, err := render.Render(cluster, m, bundle, nil, nil)
 		Expect(err).NotTo(HaveOccurred())
@@ -610,8 +640,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: current, nodeName: "ichor-cp-1"}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 		Expect(fetchMachine(m).Status.NodeName).To(Equal("ichor-cp-1"))
 	})
 
@@ -645,8 +674,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: current}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		got := fetchMachine(m)
 		cond := readyCondition(got)
@@ -676,8 +704,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		got := fetchMachine(m)
 		cond := readyCondition(got)
@@ -688,10 +715,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 	})
 
 	It("applies a non-reboot change with NO_REBOOT and converges hash and observedGeneration", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		bundle, cluster, m := newTestFixture()
 
 		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
 
@@ -703,8 +727,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: current}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		Expect(fake.dryRunCalls).To(Equal(1))
 		Expect(fake.applyCalls).To(HaveLen(1))
@@ -714,10 +737,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(got.Status.AppliedConfigHash).To(Equal(wantHash))
 		Expect(got.Status.ObservedGeneration).To(Equal(got.Generation))
 
-		cond := readyCondition(got)
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
-		Expect(cond.Reason).To(Equal(reasonApplied))
+		expectReady(got, metav1.ConditionTrue, reasonApplied)
 
 		warn := warningsCondition(got)
 		Expect(warn).NotTo(BeNil())
@@ -725,10 +745,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 	})
 
 	It("applies nothing and never takes the cluster lock for a reboot-causing change", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		bundle, cluster, m := newTestFixture()
 
 		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
 
@@ -742,8 +759,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: current}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		Expect(fake.applyCalls).To(BeEmpty())
 		Expect(fake.stagedCalls).To(BeEmpty(), "no operation, so nothing is staged")
@@ -752,25 +768,16 @@ var _ = Describe("TalosMachineReconciler", func() {
 		got := fetchMachine(m)
 		Expect(got.Status.AppliedConfigHash).To(BeEmpty())
 
-		cond := readyCondition(got)
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(cond.Reason).To(Equal(reasonRebootRequired))
+		cond := expectReady(got, metav1.ConditionFalse, reasonRebootRequired)
 		Expect(cond.Message).To(ContainSubstring("cluster.proxy.disabled"), "the message names the field that needs the reboot")
 		Expect(cond.Message).To(ContainSubstring("ichor config apply"), "and says how to apply it")
 		Expect(got.Status.RebootPaths).To(ContainElement("cluster.proxy.disabled"))
 
-		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
-		_, held, err := lock.Holder(ctx)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(held).To(BeFalse(), "refuseReboot never takes the cluster lock")
+		expectLockFree(cluster, "refuseReboot never takes the cluster lock")
 	})
 
 	It("never touches a cluster lock a running operation holds as the controller", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		bundle, cluster, m := newTestFixture()
 
 		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
 
@@ -785,8 +792,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: current}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		holder, held, err := lock.Holder(ctx)
 		Expect(err).NotTo(HaveOccurred())
@@ -797,10 +803,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 	})
 
 	It("reports RebootRequired and leaves another identity's cluster lock alone", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		bundle, cluster, m := newTestFixture()
 
 		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
 
@@ -815,15 +818,11 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: current}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		Expect(fake.applyCalls).To(BeEmpty())
 
-		cond := readyCondition(fetchMachine(m))
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(cond.Reason).To(Equal(reasonRebootRequired))
+		expectReady(fetchMachine(m), metav1.ConditionFalse, reasonRebootRequired)
 
 		holder, held, err := lock.Holder(ctx)
 		Expect(err).NotTo(HaveOccurred())
@@ -832,10 +831,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 	})
 
 	It("applies nothing and reports reset-and-reinstall for an install-time-only change", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		bundle, cluster, m := newTestFixture()
 
 		target := &ichorv1alpha1.TalosConfigPatchTarget{MachineRef: &corev1.LocalObjectReference{Name: m.Name}}
 		current := renderWithConfig(cluster, m, bundle, "machine", target, minimalConfigSkeleton())
@@ -848,16 +844,12 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: current}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		Expect(fake.applyCalls).To(BeEmpty())
 
 		got := fetchMachine(m)
-		cond := readyCondition(got)
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(cond.Reason).To(Equal(reasonInstallTimeOnlyChange))
+		cond := expectReady(got, metav1.ConditionFalse, reasonInstallTimeOnlyChange)
 		Expect(cond.Message).To(ContainSubstring("machine.install.disk"))
 	})
 
@@ -877,24 +869,17 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: current}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		Expect(fake.applyCalls).To(BeEmpty())
 
 		got := fetchMachine(m)
-		cond := readyCondition(got)
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(cond.Reason).To(Equal(reasonUnsupportedTalosVersion))
+		cond := expectReady(got, metav1.ConditionFalse, reasonUnsupportedTalosVersion)
 		Expect(cond.Message).To(ContainSubstring("SysctlConfig.params."))
 	})
 
 	It("surfaces dry-run warnings in status", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		bundle, cluster, m := newTestFixture()
 
 		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
 
@@ -904,8 +889,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: current, warnings: []string{"deprecated field migrated: example"}}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		got := fetchMachine(m)
 		warn := warningsCondition(got)
@@ -936,8 +920,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: current}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(fake.applyCalls[0]).To(Equal(wantRendered))
@@ -946,17 +929,11 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(got.Status.AppliedConfigHash).To(Equal(wantHash))
 		Expect(got.Status.ObservedInputsHash).NotTo(BeEmpty())
 
-		cond := readyCondition(got)
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
-		Expect(cond.Reason).To(Equal(reasonApplied))
+		expectReady(got, metav1.ConditionTrue, reasonApplied)
 	})
 
 	It("reports drift and applies nothing when driftPolicy is warnOnly and the node moved on its own", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		bundle, cluster, m := newTestFixture()
 
 		patch := newTestPatch(cluster.Name, layerCluster, nil, extraArgsConfig())
 		wantRendered, wantHash, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch}, nil)
@@ -967,8 +944,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 
 		// First reconcile converges: nothing to apply, but it records the
 		// fingerprint of what fed this render (cluster, machine, patch).
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 		Expect(fetchMachine(m).Status.AppliedConfigHash).To(Equal(wantHash))
 
 		// Now the node drifts on its own: a safe field (cluster.apiServer,
@@ -980,27 +956,20 @@ var _ = Describe("TalosMachineReconciler", func() {
 		driftedCurrent := renderWithConfig(cluster, m, bundle, layerCluster, nil, drifted)
 		fake.current = driftedCurrent
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		Expect(fake.applyCalls).To(BeEmpty())
 
 		got := fetchMachine(m)
 		Expect(got.Status.AppliedConfigHash).To(Equal(wantHash), "left at the last known-good hash, not the node's drifted one")
 
-		cond := readyCondition(got)
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(cond.Reason).To(Equal(reasonNodeDrifted))
+		cond := expectReady(got, metav1.ConditionFalse, reasonNodeDrifted)
 		Expect(cond.Message).To(ContainSubstring("cluster.apiServer.extraArgs.foo"))
 		Expect(cond.Message).To(ContainSubstring("warnOnly"))
 	})
 
 	It("reports drift and applies nothing while hold-apply is set, then applies once it is removed", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		bundle, cluster, m := newTestFixture()
 
 		patch := newTestPatch(cluster.Name, layerCluster, nil, extraArgsConfig())
 		wantRendered, wantHash, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch}, nil)
@@ -1016,17 +985,13 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: renderWithConfig(cluster, m, bundle, layerCluster, nil, other)}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 		Expect(fake.applyCalls).To(BeEmpty())
 
 		got := fetchMachine(m)
 		Expect(got.Status.AppliedConfigHash).To(BeEmpty())
 
-		cond := readyCondition(got)
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(cond.Reason).To(Equal(reasonAdoptionHeld))
+		cond := expectReady(got, metav1.ConditionFalse, reasonAdoptionHeld)
 		Expect(cond.Message).To(ContainSubstring("cluster.apiServer.extraArgs.foo"))
 		Expect(apimeta.IsStatusConditionTrue(got.Status.Conditions, conditionAdoptionHeld)).To(BeTrue())
 
@@ -1034,8 +999,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		got.Annotations = nil
 		Expect(k8sClient.Update(ctx, got)).To(Succeed())
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(fake.applyCalls[0]).To(Equal(wantRendered))
 
@@ -1065,8 +1029,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 		Expect(fake.applyCalls).To(BeEmpty())
 
 		got := fetchMachine(m)
@@ -1079,10 +1042,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 	})
 
 	It("applies a render change from an Ichor upgrade under warnOnly instead of calling it drift, and a restart re-applies nothing", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		bundle, cluster, m := newTestFixture()
 
 		patch := newTestPatch(cluster.Name, layerCluster, nil, extraArgsConfig())
 		wantRendered, wantHash, err := render.Render(cluster, m, bundle, []ichorv1alpha1.TalosConfigPatch{*patch}, nil)
@@ -1091,13 +1051,11 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: wantRendered}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 		Expect(fetchMachine(m).Status.AppliedConfigHash).To(Equal(wantHash))
 
 		// A restart on the same Ichor changes nothing: a fresh reconciler, same version, no apply.
-		_, err = reconcileMachine(&TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(&TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}, m)
 		Expect(fake.applyCalls).To(BeEmpty())
 
 		// The node holds what the previous Ichor rendered, which differs from what this one does,
@@ -1111,32 +1069,24 @@ var _ = Describe("TalosMachineReconciler", func() {
 
 		DeferCleanup(func() { renderVersion = prev })
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(fake.applyCalls[0]).To(Equal(wantRendered))
 
-		cond := readyCondition(fetchMachine(m))
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
-		Expect(cond.Reason).To(Equal(reasonApplied))
+		expectReady(fetchMachine(m), metav1.ConditionTrue, reasonApplied)
 
 		// Converged at the new version, the same difference is drift again.
 		fake.current = renderWithConfig(cluster, m, bundle, layerCluster, nil, old)
 		fake.applyCalls = nil
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 		Expect(fake.applyCalls).To(BeEmpty())
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonNodeDrifted))
 	})
 
 	It("applies the CNI inlineManifests removal under warnOnly once the hand-over completes, not NodeDrifted", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		bundle, cluster, m := newTestFixture()
 
 		cfg := minimalConfigSkeleton()
 		cfg.ClusterConfig.ClusterInlineManifests = []*typedconfig.ClusterInlineManifest{
@@ -1150,8 +1100,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: before}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 		Expect(readyCondition(fetchMachine(m)).Reason).To(Equal(reasonConverged))
 
 		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, cluster)).To(Succeed())
@@ -1165,8 +1114,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(after).NotTo(Equal(before))
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(fake.applyCalls[0]).To(Equal(after))
@@ -1177,10 +1125,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 	})
 
 	It("corrects drift when driftPolicy is autoCorrect and every changed path is reboot-free", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		bundle, cluster, m := newTestFixture()
 
 		// driftPolicy is set before the converging reconcile below, not
 		// between it and the drift reconcile: a later change would itself
@@ -1198,16 +1143,14 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: wantRendered}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 		Expect(fetchMachine(m).Status.AppliedConfigHash).To(Equal(wantHash))
 
 		drifted := extraArgsConfig()
 		drifted.ClusterConfig.APIServerConfig.ExtraArgsConfig["foo"] = []string{"c"}
 		fake.current = renderWithConfig(cluster, m, bundle, layerCluster, nil, drifted)
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		Expect(fake.applyCalls).To(HaveLen(1))
 		Expect(fake.applyCalls[0]).To(Equal(wantRendered), "re-applied the rendered configuration, correcting the drift")
@@ -1215,17 +1158,11 @@ var _ = Describe("TalosMachineReconciler", func() {
 		got := fetchMachine(m)
 		Expect(got.Status.AppliedConfigHash).To(Equal(wantHash))
 
-		cond := readyCondition(got)
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionTrue))
-		Expect(cond.Reason).To(Equal(reasonDriftCorrected))
+		expectReady(got, metav1.ConditionTrue, reasonDriftCorrected)
 	})
 
 	It("reports drift and applies nothing when driftPolicy is autoCorrect but a changed path needs a reboot", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		bundle, cluster, m := newTestFixture()
 
 		// See the "corrects drift" test above: driftPolicy is set before the
 		// converging reconcile, not after, so flipping it doesn't itself
@@ -1239,8 +1176,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: baseline}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 		Expect(fetchMachine(m).Status.AppliedConfigHash).To(Equal(baseHash))
 
 		// cluster.proxy.disabled is deliberately uncovered by pkg/fieldmeta's
@@ -1252,31 +1188,21 @@ var _ = Describe("TalosMachineReconciler", func() {
 		driftedCfg.ClusterConfig.ProxyConfig = &typedconfig.ProxyConfig{Disabled: &disabled}
 		fake.current = renderWithConfig(cluster, m, bundle, layerCluster, nil, driftedCfg)
 
-		_, err = reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		Expect(fake.applyCalls).To(BeEmpty())
 
 		got := fetchMachine(m)
 		Expect(got.Status.AppliedConfigHash).To(Equal(baseHash))
 
-		cond := readyCondition(got)
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Status).To(Equal(metav1.ConditionFalse))
-		Expect(cond.Reason).To(Equal(reasonRebootRequired))
+		cond := expectReady(got, metav1.ConditionFalse, reasonRebootRequired)
 		Expect(cond.Message).To(ContainSubstring("drifted"))
 
-		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
-		_, held, err := lock.Holder(ctx)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(held).To(BeFalse(), "cluster lock should have been released")
+		expectLockFree(cluster, "cluster lock should have been released")
 	})
 
 	It("never modifies spec on any object it touches", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestCluster(secret.Name, "v1.14")
-		m := newTestMachine(cluster.Name, true)
+		bundle, cluster, m := newTestFixture()
 
 		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
 
@@ -1290,8 +1216,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		fake := &fakeTalosClient{current: current}
 		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		_, err := reconcileMachine(r, m)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(r, m)
 
 		gotMachine := fetchMachine(m)
 		Expect(reflect.DeepEqual(&gotMachine.Spec, wantMachineSpec)).To(BeTrue(), "TalosMachine.spec was modified")

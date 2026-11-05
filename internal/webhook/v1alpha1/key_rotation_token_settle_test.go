@@ -18,16 +18,12 @@ package v1alpha1
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
-	admissionv1 "k8s.io/api/admission/v1"
-	authnv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -47,27 +43,10 @@ func TestKeyRotationWithATokenSettleShorterThanTheKubeletRefreshIsRefused(t *tes
 	}
 
 	request := func(user string, targets []string, settle time.Duration) admission.Request {
-		op := ichorv1alpha1.TalosOperation{
-			Name: "op", Namespace: testNamespace,
-			Spec: ichorv1alpha1.TalosOperationSpec{
-				Kind: ichorv1alpha1.TalosOperationKindKeyRotation, ClusterRef: corev1.LocalObjectReference{Name: "c"},
-				KeyRotation: &ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: targets, TokenSettle: &metav1.Duration{Duration: settle}},
-			},
-		}
-
-		raw, err := json.Marshal(op)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		var req admission.Request
-
-		req.Operation, req.Name, req.Namespace = admissionv1.Create, "op", testNamespace
-		req.Resource = metav1.GroupVersionResource{Group: ichorGroup, Version: ichorv1alpha1.GroupVersion.Version, Resource: resOperations}
-		req.UserInfo = authnv1.UserInfo{Username: user}
-		req.Object = runtime.RawExtension{Raw: raw}
-
-		return req
+		return createOperationRequest(t, ichorv1alpha1.TalosOperationSpec{
+			Kind: ichorv1alpha1.TalosOperationKindKeyRotation, ClusterRef: corev1.LocalObjectReference{Name: "c"},
+			KeyRotation: &ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: targets, TokenSettle: &metav1.Duration{Duration: settle}},
+		}, user)
 	}
 
 	both := []string{ichorv1alpha1.KeyRotationTargetServiceAccount, ichorv1alpha1.KeyRotationTargetSecretbox}

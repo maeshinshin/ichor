@@ -30,10 +30,7 @@ import (
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
-const (
-	secConfirmed      = "true"
-	secNewKubeVersion = "v1.36.6"
-)
+const secNewKubeVersion = "v1.36.6"
 
 func secTestCluster(s *ichorv1alpha1.TalosClusterSecurity) *ichorv1alpha1.TalosCluster {
 	c := newTestCluster()
@@ -230,7 +227,7 @@ func TestSecurityDiskEncryptionNeedsConfirmation(t *testing.T) {
 
 	t.Run("the annotation confirms it", func(t *testing.T) {
 		c := secTestCluster(enc("tpm"))
-		c.Annotations = map[string]string{ichorv1alpha1.TalosClusterDiskEncryptionConfirmAnnotation: secConfirmed}
+		c.Annotations = map[string]string{ichorv1alpha1.TalosClusterDiskEncryptionConfirmAnnotation: annotationTrue}
 
 		if _, err := withMachines.ValidateUpdate(ctx, secTestCluster(nil), c); err != nil {
 			t.Fatal(err)

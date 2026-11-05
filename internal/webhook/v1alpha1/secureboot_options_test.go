@@ -98,7 +98,7 @@ func TestSecureBootRequiredNeedsConfirmation(t *testing.T) {
 
 	t.Run("the annotation confirms it", func(t *testing.T) {
 		c := secTestCluster(sbSecurity("Required"))
-		c.Annotations = map[string]string{ichorv1alpha1.TalosClusterSecureBootConfirmAnnotation: secConfirmed}
+		c.Annotations = map[string]string{ichorv1alpha1.TalosClusterSecureBootConfirmAnnotation: annotationTrue}
 
 		if _, err := validator(sbMachine("m", off)).ValidateUpdate(ctx, secTestCluster(nil), c); err != nil {
 			t.Fatal(err)

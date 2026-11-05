@@ -57,6 +57,9 @@ message TalosSystemSection {
   bool module_signature_enforced = 15;
   string uki_signing_key_fingerprint = 16;
   string kernel_lockdown = 17;
+  // pcr_signing_key_fingerprint is the fingerprint of the key that signs the PCR measurements of the
+  // booted UKI (the field Talos v1.14 fills; uki_signing_key_fingerprint is not reported and stays empty).
+  string pcr_signing_key_fingerprint = 18;
 }
 
 message TalosLink {

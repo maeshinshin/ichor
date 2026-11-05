@@ -30,13 +30,14 @@ var _ = Describe("securityFromSpec", func() {
 	It("copies the SecurityState fields and derives the lockdown level", func() {
 		out := &pb.TalosSystemSection{}
 		securityFromSpec(out, &runtime.SecurityStateSpec{
-			SecureBoot: true, BootedWithUKI: true, ModuleSignatureEnforced: true, UKISigningKeyFingerprint: "ab:cd",
+			SecureBoot: true, BootedWithUKI: true, ModuleSignatureEnforced: true, UKISigningKeyFingerprint: "ab:cd", PCRSigningKeyFingerprint: "ef:01",
 		}, "talos.platform=metal lockdown=confidentiality")
 
 		Expect(out.GetSecureBoot()).To(BeTrue())
 		Expect(out.GetBootedWithUki()).To(BeTrue())
 		Expect(out.GetModuleSignatureEnforced()).To(BeTrue())
 		Expect(out.GetUkiSigningKeyFingerprint()).To(Equal("ab:cd"))
+		Expect(out.GetPcrSigningKeyFingerprint()).To(Equal("ef:01"))
 		Expect(out.GetKernelLockdown()).To(Equal("confidentiality"))
 	})
 

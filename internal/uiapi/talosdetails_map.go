@@ -45,7 +45,7 @@ func securityFromSpec(out *pb.TalosSystemSection, spec *runtime.SecurityStateSpe
 	}
 
 	out.SecureBoot, out.BootedWithUki, out.ModuleSignatureEnforced = spec.SecureBoot, spec.BootedWithUKI, spec.ModuleSignatureEnforced
-	out.UkiSigningKeyFingerprint = spec.UKISigningKeyFingerprint
+	out.UkiSigningKeyFingerprint, out.PcrSigningKeyFingerprint = spec.UKISigningKeyFingerprint, spec.PCRSigningKeyFingerprint
 	out.KernelLockdown = secureboot.LockdownLevel(cmdline, spec.SecureBoot)
 }
 

@@ -19,6 +19,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -27,8 +28,10 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -48,7 +51,7 @@ func TestApplyIchorManifest_RefusesPlaceholder(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	err := applyIchorManifest(context.Background(), k8sClient, []byte(installmanifest.PlaceholderSentinel+"\n# nothing else"), &warn)
+	err := applyIchorManifest(context.Background(), k8sClient, []byte(installmanifest.PlaceholderSentinel+"\n# nothing else"), &warn, false)
 	if err == nil {
 		t.Fatal("expected an error for the placeholder manifest, got nil")
 	}
@@ -59,7 +62,7 @@ func TestApplyIchorManifest_AppliesEveryDocument(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	if err := applyIchorManifest(context.Background(), k8sClient, []byte(testIchorManifest), &warn); err != nil {
+	if err := applyIchorManifest(context.Background(), k8sClient, []byte(testIchorManifest), &warn, false); err != nil {
 		t.Fatalf("applyIchorManifest: %v", err)
 	}
 
@@ -82,11 +85,11 @@ func TestApplyIchorManifest_AlreadyExistsIsNotAnError(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	if err := applyIchorManifest(context.Background(), k8sClient, []byte(testIchorManifest), &warn); err != nil {
+	if err := applyIchorManifest(context.Background(), k8sClient, []byte(testIchorManifest), &warn, false); err != nil {
 		t.Fatalf("first apply: %v", err)
 	}
 
-	if err := applyIchorManifest(context.Background(), k8sClient, []byte(testIchorManifest), &warn); err != nil {
+	if err := applyIchorManifest(context.Background(), k8sClient, []byte(testIchorManifest), &warn, false); err != nil {
 		t.Fatalf("second apply: %v", err)
 	}
 }
@@ -203,7 +206,7 @@ func TestApplyIchorManifest_RetriesEtcdTimeout(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	if err := applyIchorManifest(context.Background(), failingCreates(t, 2, etcd, &calls), []byte(testIchorManifest), &warn); err != nil {
+	if err := applyIchorManifest(context.Background(), failingCreates(t, 2, etcd, &calls), []byte(testIchorManifest), &warn, false); err != nil {
 		t.Fatalf("applyIchorManifest: %v", err)
 	}
 
@@ -220,7 +223,7 @@ func TestApplyIchorManifest_ForbiddenFailsAtOnce(t *testing.T) {
 
 	var warn bytes.Buffer
 
-	if err := applyIchorManifest(context.Background(), failingCreates(t, 100, forbidden, &calls), []byte(testIchorManifest), &warn); err == nil {
+	if err := applyIchorManifest(context.Background(), failingCreates(t, 100, forbidden, &calls), []byte(testIchorManifest), &warn, false); err == nil {
 		t.Fatal("want the Forbidden error, got nil")
 	}
 
@@ -318,5 +321,116 @@ func TestCreateIchorInstallation_HonoursTheCallersWait(t *testing.T) {
 
 	if time.Since(start) > 30*time.Second {
 		t.Errorf("the wait ran %v, want about the 100ms the caller gave", time.Since(start))
+	}
+}
+
+// testCiliumSecretsManifest is testIchorManifest plus the pair Ichor installs into cilium-secrets, the
+// Cilium chart's own namespace, and a Role in a namespace that never exists.
+const testCiliumSecretsManifest = testIchorManifest + `---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ichor-cni-secrets-role
+  namespace: cilium-secrets
+rules:
+- apiGroups: [""]
+  resources: [secrets]
+  verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ichor-cni-secrets-rolebinding
+  namespace: cilium-secrets
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ichor-cni-secrets-role
+subjects:
+- kind: ServiceAccount
+  name: ichor-cni
+  namespace: kube-system
+`
+
+// namespaceGatedClient is a fake that answers a namespaced apply into a namespace it does not hold with
+// the API server's "namespaces X not found", as a real cluster does before Cilium's bootstrap has run.
+func namespaceGatedClient(t *testing.T) client.Client {
+	t.Helper()
+
+	return fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithInterceptorFuncs(interceptor.Funcs{
+		Apply: func(ctx context.Context, c client.WithWatch, obj runtime.ApplyConfiguration, opts ...client.ApplyOption) error {
+			raw, err := json.Marshal(obj)
+			if err != nil {
+				return err
+			}
+
+			u := &unstructured.Unstructured{}
+			if err := u.UnmarshalJSON(raw); err != nil {
+				return err
+			}
+
+			if ns := u.GetNamespace(); ns != "" {
+				if err := c.Get(ctx, types.NamespacedName{Name: ns}, &corev1.Namespace{}); err != nil {
+					return err
+				}
+			}
+
+			return c.Apply(ctx, obj, opts...)
+		},
+	}).Build()
+}
+
+// TestApplyIchorManifest_CreatesCiliumSecretsForCilium: init lost a race against Cilium's bootstrap twice on
+// hardware (the namespace comes from Cilium's inline manifest, minutes after the API server). On a Cilium
+// cluster init creates the namespace itself, so the Role and RoleBinding exist before Cilium needs them.
+func TestApplyIchorManifest_CreatesCiliumSecretsForCilium(t *testing.T) {
+	c := namespaceGatedClient(t)
+
+	if err := applyIchorManifest(context.Background(), c, []byte(testCiliumSecretsManifest), &bytes.Buffer{}, true); err != nil {
+		t.Fatalf("applyIchorManifest: %v", err)
+	}
+
+	if err := c.Get(context.Background(), types.NamespacedName{Name: "cilium-secrets"}, &corev1.Namespace{}); err != nil {
+		t.Fatalf("the cilium-secrets Namespace was not created: %v", err)
+	}
+
+	for _, key := range []types.NamespacedName{{Namespace: "cilium-secrets", Name: "ichor-cni-secrets-role"}} {
+		if err := c.Get(context.Background(), key, &rbacv1.Role{}); err != nil {
+			t.Fatalf("Role %s: %v", key, err)
+		}
+	}
+
+	if err := c.Get(context.Background(), types.NamespacedName{Namespace: "cilium-secrets", Name: "ichor-cni-secrets-rolebinding"}, &rbacv1.RoleBinding{}); err != nil {
+		t.Fatalf("RoleBinding: %v", err)
+	}
+}
+
+// TestApplyIchorManifest_SkipsCiliumSecretsWithoutCilium: another CNI never creates the namespace, so the
+// pair is skipped (as the installer does) and init does not create a namespace nothing would use.
+func TestApplyIchorManifest_SkipsCiliumSecretsWithoutCilium(t *testing.T) {
+	c := namespaceGatedClient(t)
+
+	var warn bytes.Buffer
+
+	if err := applyIchorManifest(context.Background(), c, []byte(testCiliumSecretsManifest), &warn, false); err != nil {
+		t.Fatalf("applyIchorManifest: %v", err)
+	}
+
+	if err := c.Get(context.Background(), types.NamespacedName{Name: "cilium-secrets"}, &corev1.Namespace{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("the cilium-secrets Namespace: got %v, want not found", err)
+	}
+
+	if !strings.Contains(warn.String(), "skipping Role ichor-cni-secrets-role") {
+		t.Fatalf("no skip line:\n%s", warn.String())
+	}
+}
+
+// TestApplyIchorManifest_MissingNamespaceElsewhereStillFails: only cilium-secrets is skipped.
+func TestApplyIchorManifest_MissingNamespaceElsewhereStillFails(t *testing.T) {
+	manifest := strings.ReplaceAll(testCiliumSecretsManifest, "namespace: cilium-secrets", "namespace: elsewhere")
+
+	err := applyIchorManifest(context.Background(), namespaceGatedClient(t), []byte(manifest), &bytes.Buffer{}, true)
+	if err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Fatalf("got %v, want the not found error", err)
 	}
 }

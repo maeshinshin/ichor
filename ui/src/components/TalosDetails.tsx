@@ -1,15 +1,14 @@
 import { useState } from 'preact/hooks'
-import type { ComponentChildren } from 'preact'
-import { CircleXIcon, InboxIcon, InfoIcon } from 'lucide-preact'
+import { CircleXIcon, InfoIcon } from 'lucide-preact'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { CodeBlock, CodeBlockContent, CodeBlockLine } from '@/components/ui/code-block'
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from '@/components/ui/item'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TableCell, TableRow } from '@/components/ui/table'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields } from '@/components/PageHeader'
-import { EmptyNote } from '@/components/PageStates'
+import { Failed, Grid } from '@/components/PageStates'
 import { SectionCard, SectionSkeleton } from '@/components/SectionCard'
 import { ToneBadge } from '@/components/ToneBadge'
 import type { GetNodeTalosDetailsResponse } from '@/gen/ichor/v1alpha1/talosdetails_pb'
@@ -43,17 +42,6 @@ export function TalosDetails({ namespace, name, part }: { namespace: string; nam
       <ServicesSection data={data} />
       <ExtensionsSection data={data} />
     </>
-  )
-}
-
-function Failed({ error, children }: { error: string; children: ComponentChildren }) {
-  if (!error) return <>{children}</>
-  return (
-    <Alert variant="destructive">
-      <CircleXIcon />
-      <AlertTitle>{t('talos.sectionFailed')}</AlertTitle>
-      <AlertDescription className="break-words">{error}</AlertDescription>
-    </Alert>
   )
 }
 
@@ -146,19 +134,7 @@ function NetworkSection({ data }: { data: GetNodeTalosDetailsResponse }) {
           <Field label={t('talos.timeServers')} value={list(n.timeServers)} />
         </Fields>
         {n.links.length > 0 && (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('node.colInterface')}</TableHead>
-                <TableHead>{t('node.colMac')}</TableHead>
-                <TableHead>{t('talos.colState')}</TableHead>
-                <TableHead>{t('talos.colMtu')}</TableHead>
-                <TableHead>{t('talos.colSpeed')}</TableHead>
-                <TableHead>{t('talos.colKind')}</TableHead>
-                <TableHead>{t('talos.colDriver')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+          <Grid heads={[t('node.colInterface'), t('node.colMac'), t('talos.colState'), t('talos.colMtu'), t('talos.colSpeed'), t('talos.colKind'), t('talos.colDriver')]}>
               {n.links.map((l) => (
                 <TableRow key={l.name}>
                   <TableCell className="font-mono">{l.name}</TableCell>
@@ -172,8 +148,7 @@ function NetworkSection({ data }: { data: GetNodeTalosDetailsResponse }) {
                   <TableCell>{display(l.driver)}</TableCell>
                 </TableRow>
               ))}
-            </TableBody>
-          </Table>
+          </Grid>
         )}
       </Failed>
     </SectionCard>
@@ -190,21 +165,7 @@ function StorageSection({ data }: { data: GetNodeTalosDetailsResponse }) {
     <>
       <SectionCard id="storage" title={t('node.disks')}>
         <Failed error={s.error}>
-          {s.disks.length === 0 ? (
-            <EmptyNote icon={InboxIcon}>{t('talos.none')}</EmptyNote>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('talos.colDevice')}</TableHead>
-                  <TableHead>{t('talos.colModel')}</TableHead>
-                  <TableHead>{t('talos.colSerial')}</TableHead>
-                  <TableHead>{t('node.colSize')}</TableHead>
-                  <TableHead>{t('talos.colType')}</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+          <Grid heads={[t('talos.colDevice'), t('talos.colModel'), t('talos.colSerial'), t('node.colSize'), t('talos.colType'), '']} empty={s.disks.length === 0}>
                 {s.disks.map((d) => (
                   <TableRow key={d.id}>
                     <TableCell className="font-mono">{d.devPath || d.id}</TableCell>
@@ -220,9 +181,7 @@ function StorageSection({ data }: { data: GetNodeTalosDetailsResponse }) {
                     </TableCell>
                   </TableRow>
                 ))}
-              </TableBody>
-            </Table>
-          )}
+          </Grid>
         </Failed>
       </SectionCard>
       {!s.error && (
@@ -235,21 +194,7 @@ function StorageSection({ data }: { data: GetNodeTalosDetailsResponse }) {
           </Button>
         }
       >
-          {volumes.length === 0 ? (
-            <EmptyNote icon={InboxIcon}>{t('talos.none')}</EmptyNote>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('talos.colName')}</TableHead>
-                  <TableHead>{t('talos.colType')}</TableHead>
-                  <TableHead>{t('talos.colPhase')}</TableHead>
-                  <TableHead>{t('talos.colMount')}</TableHead>
-                  <TableHead>{t('node.colSize')}</TableHead>
-                  <TableHead>{t('talos.colFilesystem')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+          <Grid heads={[t('talos.colName'), t('talos.colType'), t('talos.colPhase'), t('talos.colMount'), t('node.colSize'), t('talos.colFilesystem')]} empty={volumes.length === 0}>
                 {volumes.map((v) => (
                   <TableRow key={v.id}>
                     <TableCell className="font-mono">{v.id}</TableCell>
@@ -264,9 +209,7 @@ function StorageSection({ data }: { data: GetNodeTalosDetailsResponse }) {
                     </TableCell>
                   </TableRow>
                 ))}
-              </TableBody>
-            </Table>
-          )}
+          </Grid>
           {failedVolumes.map((v) => (
             <Alert key={v.id} variant="destructive">
               <CircleXIcon />
@@ -286,17 +229,7 @@ function ServicesSection({ data }: { data: GetNodeTalosDetailsResponse }) {
   return (
     <SectionCard id="services" title={t('talos.services')}>
       <Failed error={s.error}>
-        {s.services.length === 0 ? (
-          <EmptyNote icon={InboxIcon}>{t('talos.none')}</EmptyNote>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('talos.colService')}</TableHead>
-                <TableHead>{t('talos.colState')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+        <Grid heads={[t('talos.colService'), t('talos.colState')]} empty={s.services.length === 0}>
               {sortServices(s.services).map((svc) => {
                 const status = serviceStatus(svc)
                 return (
@@ -309,9 +242,7 @@ function ServicesSection({ data }: { data: GetNodeTalosDetailsResponse }) {
                   </TableRow>
                 )
               })}
-            </TableBody>
-          </Table>
-        )}
+        </Grid>
       </Failed>
     </SectionCard>
   )
@@ -323,18 +254,7 @@ function ExtensionsSection({ data }: { data: GetNodeTalosDetailsResponse }) {
   return (
     <SectionCard id="extensions" title={t('talos.extensions')}>
       <Failed error={e.error}>
-        {e.extensions.length === 0 ? (
-          <EmptyNote icon={InboxIcon}>{t('talos.noExtensions')}</EmptyNote>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>{t('talos.colName')}</TableHead>
-                <TableHead>{t('talos.colVersion')}</TableHead>
-                <TableHead>{t('talos.colAuthor')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+        <Grid heads={[t('talos.colName'), t('talos.colVersion'), t('talos.colAuthor')]} empty={e.extensions.length === 0} none="talos.noExtensions">
               {e.extensions.map((x) => (
                 <TableRow key={x.name}>
                   <TableCell>{x.name}</TableCell>
@@ -342,9 +262,7 @@ function ExtensionsSection({ data }: { data: GetNodeTalosDetailsResponse }) {
                   <TableCell>{display(x.author)}</TableCell>
                 </TableRow>
               ))}
-            </TableBody>
-          </Table>
-        )}
+        </Grid>
       </Failed>
     </SectionCard>
   )

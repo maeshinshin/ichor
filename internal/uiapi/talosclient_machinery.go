@@ -201,9 +201,7 @@ func (t *machineryNodeTalosClient) ResourceUsage(ctx context.Context) (*pb.Resou
 		usage.MemoryTotalBytes, usage.MemoryUsedBytes = kibToBytes(spec.MemTotal), kibToBytes(spec.MemUsed)
 	}
 
-	if err := t.sampleCPU(ctx, usage); err != nil {
-		return nil, err
-	}
+	sampleCPUUsage(ctx, t.readSystemStat, cpuSampleGap, usage)
 
 	// A refused or empty Mounts call leaves the filesystem fields at zero; the
 	// UI shows that as unknown.
@@ -251,35 +249,29 @@ func (t *machineryNodeTalosClient) readSystemStat(ctx context.Context) (cpuReadi
 	}, nil
 }
 
-func (t *machineryNodeTalosClient) sampleCPU(ctx context.Context, usage *pb.ResourceUsage) error {
-	return sampleCPUUsage(ctx, t.readSystemStat, cpuSampleGap, usage)
-}
-
 // sampleCPUUsage reads the counters twice, gap apart, and sets the cores in use from the
 // difference. A failed read leaves the usage unsampled (shown as unknown) rather than failing the
 // whole page.
-func sampleCPUUsage(ctx context.Context, read func(context.Context) (cpuReading, error), gap time.Duration, usage *pb.ResourceUsage) error {
+func sampleCPUUsage(ctx context.Context, read func(context.Context) (cpuReading, error), gap time.Duration, usage *pb.ResourceUsage) {
 	first, err := read(ctx)
 	if err != nil {
-		return nil //nolint:nilerr // CPU is optional on the page
+		return
 	}
 
 	select {
 	case <-ctx.Done():
-		return nil
+		return
 	case <-time.After(gap):
 	}
 
 	next, err := read(ctx)
 	if err != nil {
-		return nil //nolint:nilerr // CPU is optional on the page
+		return
 	}
 
 	if cores, ok := cpuCoresUsed(first.Total, next.Total, next.Cores); ok {
 		usage.CpuCoresUsed, usage.CpuSampled = cores, true
 	}
-
-	return nil
 }
 
 // dataStream is the common shape of Dmesg's and Logs' response streams

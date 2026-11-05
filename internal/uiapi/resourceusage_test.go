@@ -43,9 +43,7 @@ func TestCPUSamplingNeedsALiveSource(t *testing.T) {
 	}
 
 	usage := &pb.ResourceUsage{}
-	if err := sampleCPUUsage(context.Background(), live, time.Millisecond, usage); err != nil {
-		t.Fatal(err)
-	}
+	sampleCPUUsage(context.Background(), live, time.Millisecond, usage)
 
 	if !usage.CpuSampled || math.Abs(usage.CpuCoresUsed-1) > 1e-9 {
 		t.Fatalf("live source: sampled=%v cores=%v, want 1 core", usage.CpuSampled, usage.CpuCoresUsed)
@@ -57,9 +55,7 @@ func TestCPUSamplingNeedsALiveSource(t *testing.T) {
 	}
 
 	usage = &pb.ResourceUsage{}
-	if err := sampleCPUUsage(context.Background(), cached, time.Millisecond, usage); err != nil {
-		t.Fatal(err)
-	}
+	sampleCPUUsage(context.Background(), cached, time.Millisecond, usage)
 
 	if usage.CpuSampled {
 		t.Fatal("identical samples must stay unsampled")
@@ -70,8 +66,10 @@ func TestCPUSamplingErrorLeavesTheUsageUnsampled(t *testing.T) {
 	fail := func(context.Context) (cpuReading, error) { return cpuReading{}, errors.New("denied") }
 
 	usage := &pb.ResourceUsage{}
-	if err := sampleCPUUsage(context.Background(), fail, time.Millisecond, usage); err != nil || usage.CpuSampled {
-		t.Fatalf("err=%v sampled=%v", err, usage.CpuSampled)
+	sampleCPUUsage(context.Background(), fail, time.Millisecond, usage)
+
+	if usage.CpuSampled {
+		t.Fatal("a failed read must leave the usage unsampled")
 	}
 }
 

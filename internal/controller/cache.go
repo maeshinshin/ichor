@@ -30,18 +30,23 @@ import (
 // either granted cluster-wide on purpose or listed here; cache_rbac_test.go enforces that
 // against the generated RBAC.
 func CacheOptions(namespace string) cache.Options {
+	// managedFields is often the biggest part of a cached object and nothing reads it from the cache.
+	base := cache.Options{DefaultTransform: cache.TransformStripManagedFields()}
+
 	if namespace == "" {
-		return cache.Options{}
+		return base
 	}
 
 	scoped := cache.ByObject{Namespaces: map[string]cache.Config{namespace: {}}}
 
-	return cache.Options{ByObject: map[client.Object]cache.ByObject{
+	base.ByObject = map[client.Object]cache.ByObject{
 		&corev1.Secret{}:    scoped,
 		&corev1.ConfigMap{}: scoped,
 		&corev1.Service{}:   scoped,
 		// The installer Job runs in the controller's namespace, the Cilium Helm Job in
 		// kube-system (cniJobNamespace, with its own Role: config/rbac/ichor-cni/controller_role.yaml).
 		&batchv1.Job{}: {Namespaces: map[string]cache.Config{namespace: {}, cniJobNamespace: {}}},
-	}}
+	}
+
+	return base
 }

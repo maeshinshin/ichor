@@ -144,31 +144,35 @@ func shutdownBlocker(ctx context.Context, reader client.Reader, namespace, clust
 
 	for i := range ops.Items {
 		other := &ops.Items[i]
-		if other.Spec.ClusterRef.Name == cluster && caRotationUnderway(other) && (self == nil || self.Name != other.Name) {
+		if other.Spec.ClusterRef.Name != cluster || self != nil && self.Name == other.Name {
+			continue
+		}
+
+		switch {
+		case caRotationUnderway(other):
 			return &shuttingDownError{operation: other.Name, rotation: true}
-		}
-
-		if other.Spec.ClusterRef.Name == cluster && keyRotationUnderway(other) && (self == nil || self.Name != other.Name) {
+		case keyRotationUnderway(other):
 			return &shuttingDownError{operation: other.Name, rotation: true, keys: true}
-		}
-
-		if other.Spec.ClusterRef.Name != cluster || other.Spec.Kind != ichorv1alpha1.TalosOperationKindShutdown ||
-			other.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted || !other.DeletionTimestamp.IsZero() {
+		case other.Spec.Kind != ichorv1alpha1.TalosOperationKindShutdown || other.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted ||
+			!other.DeletionTimestamp.IsZero() ||
+			self != nil && self.Spec.Kind == ichorv1alpha1.TalosOperationKindShutdown && len(other.Status.Machines) == 0:
 			continue
+		default:
+			return &shuttingDownError{operation: other.Name}
 		}
-
-		if self != nil && other.Name == self.Name {
-			continue
-		}
-
-		if self != nil && self.Spec.Kind == ichorv1alpha1.TalosOperationKindShutdown && len(other.Status.Machines) == 0 {
-			continue
-		}
-
-		return &shuttingDownError{operation: other.Name}
 	}
 
 	return nil
+}
+
+// ptrs returns pointers to the elements of s.
+func ptrs[T any](s []T) []*T {
+	out := make([]*T, len(s))
+	for i := range s {
+		out[i] = &s[i]
+	}
+
+	return out
 }
 
 // readerOrClient is APIReader, or the cached client in a process that wired
@@ -183,10 +187,8 @@ func readerOrClient(reader client.Reader, c client.Client) client.Reader {
 
 // recorded returns op.status.machines' entry for name.
 func recorded(op *ichorv1alpha1.TalosOperation, name string) (ichorv1alpha1.TalosOperationMachineStatus, bool) {
-	for _, rec := range op.Status.Machines {
-		if rec.Name == name {
-			return rec, true
-		}
+	if i := slices.IndexFunc(op.Status.Machines, func(rec ichorv1alpha1.TalosOperationMachineStatus) bool { return rec.Name == name }); i >= 0 {
+		return op.Status.Machines[i], true
 	}
 
 	return ichorv1alpha1.TalosOperationMachineStatus{}, false
@@ -210,6 +212,8 @@ func (r *TalosOperationReconciler) shutdownPlan(
 		return nil, nil, err
 	}
 
+	machines := ptrs(list)
+
 	var own []*ichorv1alpha1.TalosMachine
 
 	// Which machine is the controller's is asked of the node names, not of spec.hostname, which is
@@ -217,17 +221,10 @@ func (r *TalosOperationReconciler) shutdownPlan(
 	var names map[string]string
 
 	if r.NodeName != "" {
-		ptrs := make([]*ichorv1alpha1.TalosMachine, len(list))
-		for i := range list {
-			ptrs[i] = &list[i]
-		}
-
-		names, _ = r.nodeNames(ctx, cluster, nil, ptrs) // a machine whose name cannot be told is simply not the controller's
+		names, _ = r.nodeNames(ctx, cluster, nil, machines) // a machine whose name cannot be told is simply not the controller's
 	}
 
-	for i := range list {
-		m := &list[i]
-
+	for _, m := range machines {
 		switch {
 		case r.NodeName != "" && names[m.Name] == r.NodeName:
 			own = append(own, m)

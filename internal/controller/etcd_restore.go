@@ -221,16 +221,8 @@ func planRestoreNodes(cps []*ichorv1alpha1.TalosMachine, nodeName string, names 
 // stale list.
 func (r *TalosOperationReconciler) restoreCandidates(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) ([]*ichorv1alpha1.TalosMachine, error) {
 	list, err := (&restoreRun{r: r, cluster: cluster}).approved(ctx, deleteguard.MachineFilter{Role: roleControlPlane})
-	if err != nil {
-		return nil, err
-	}
 
-	out := make([]*ichorv1alpha1.TalosMachine, len(list))
-	for i := range list {
-		out[i] = &list[i]
-	}
-
-	return out, nil
+	return ptrs(list), err
 }
 
 func (r *TalosOperationReconciler) restoreNode(

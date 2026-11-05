@@ -40,14 +40,6 @@ type settingChange struct {
 	subresource string
 }
 
-func orUnset(s string) string {
-	if s == "" {
-		return "<unset>"
-	}
-
-	return s
-}
-
 // boolOf is the update check switch as "true", "false" or "" when unset.
 func boolOf(c *ichorv1alpha1.IchorUpdateCheckSettings) string {
 	if c == nil || c.Enabled == nil {
@@ -185,7 +177,7 @@ func (g *SettingsGate) emit(obj *ichorv1alpha1.IchorInstallation, user string, c
 
 	parts := make([]string, 0, len(changes))
 	for _, c := range changes {
-		parts = append(parts, fmt.Sprintf("%s: %s -> %s", c.path, orUnset(c.old), orUnset(c.new)))
+		parts = append(parts, fmt.Sprintf("%s: %s -> %s", c.path, cmp.Or(c.old, "<unset>"), cmp.Or(c.new, "<unset>")))
 	}
 
 	g.Recorder.Eventf(obj, "Normal", "SettingsChanged", "%s changed %s", user, strings.Join(parts, "; "))

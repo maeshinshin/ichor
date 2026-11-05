@@ -255,17 +255,35 @@ func TestInstallerEscalationNamesEveryRoleOfTheInstallManifest(t *testing.T) {
 	}
 }
 
-// gatewayAPIValues is the user layer that makes the Cilium chart render its Gateway API objects. The
-// GatewayClass is created "auto" only when the cluster has the CRD, which a plain render does not, so it is
-// forced here.
-var gatewayAPIValues = func() map[string]any {
+func userValues(js string) map[string]any {
 	var v map[string]any
-	if err := json.Unmarshal([]byte(`{"gatewayAPI":{"enabled":true,"gatewayClass":{"create":"true"}}}`), &v); err != nil {
+	if err := json.Unmarshal([]byte(js), &v); err != nil {
 		panic(err)
 	}
 
 	return v
-}()
+}
+
+// gatewayAPIValues is the user layer that makes the Cilium chart render its Gateway API objects. The
+// GatewayClass is created "auto" only when the cluster has the CRD, which a plain render does not, so it is
+// forced here.
+var gatewayAPIValues = userValues(`{"gatewayAPI":{"enabled":true,"gatewayClass":{"create":"true"}}}`)
+
+// optionalCiliumFeatures are the user layers that turn on the optional Cilium features whose objects the CNI
+// role has to cover (ADR 0099 amendments). Hubble UI needs the relay (the chart refuses it otherwise), and
+// the Cluster Mesh API server needs the cronJob certificate method like Hubble's: the chart's default,
+// "helm", renders Secrets in kube-system, which the Job's ServiceAccount cannot manage.
+var optionalCiliumFeatures = []struct {
+	name   string
+	values map[string]any
+}{
+	{"gatewayAPI", gatewayAPIValues},
+	{"ingressController", userValues(`{"ingressController":{"enabled":true}}`)},
+	{"hubbleUI", userValues(`{"hubble":{"relay":{"enabled":true},"ui":{"enabled":true}}}`)},
+	{"clustermesh", userValues(`{"clustermesh":{"useAPIServer":true,"apiserver":{"tls":{"auto":{"method":"cronJob"}}}}}`)},
+	{"bgpControlPlane", userValues(`{"bgpControlPlane":{"enabled":true}}`)},
+	{"envoyConfig", userValues(`{"envoyConfig":{"enabled":true}}`)},
+}
 
 // TestCNIEscalationNamesOnlyCiliumsRoles guards ADR 0108: the Cilium Job may bind and escalate only
 // the roles the pinned Cilium chart creates, in config/rbac and in the chart. Every role the chart
@@ -275,7 +293,12 @@ func TestCNIEscalationNamesOnlyCiliumsRoles(t *testing.T) {
 
 	for _, mode := range []cni.KubeProxyMode{cni.KubeProxyEnabled, cni.KubeProxyReplaced} {
 		for _, tunnel := range []string{"", "geneve", "vxlan"} {
-			for _, user := range []map[string]any{nil, gatewayAPIValues} {
+			users := []map[string]any{nil}
+			for _, f := range optionalCiliumFeatures {
+				users = append(users, f.values)
+			}
+
+			for _, user := range users {
 				p := cilium.New().WithValues(user)
 				if tunnel != "" {
 					var err error
@@ -388,6 +411,91 @@ func TestCNIRoleCoversTheGatewayAPIObjects(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestCNIRoleCoversTheOptionalFeatureObjects: every object the Cilium chart renders with an optional feature
+// on must be one the CNI role lets Helm read, create, update and delete, or the upgrade fails on the first
+// get (the Gateway API case found on hardware, ADR 0099 amendment). Kinds are mapped to resources here, so a
+// chart bump that renders a kind nobody mapped fails too. Role and ClusterRole names are
+// TestCNIEscalationNamesOnlyCiliumsRoles's business.
+func TestCNIRoleCoversTheOptionalFeatureObjects(t *testing.T) {
+	resource := map[string]string{
+		"ConfigMap":                        "configmaps",
+		"Service":                          "services",
+		"ServiceAccount":                   "serviceaccounts",
+		"Namespace":                        "namespaces",
+		"Deployment":                       "deployments",
+		"DaemonSet":                        "daemonsets",
+		"Job":                              "jobs",
+		"CronJob":                          "cronjobs",
+		"PodDisruptionBudget":              "poddisruptionbudgets",
+		"Role":                             "roles",
+		"RoleBinding":                      "rolebindings",
+		"ClusterRole":                      "clusterroles",
+		"ClusterRoleBinding":               "clusterrolebindings",
+		"IngressClass":                     "ingressclasses",
+		"EndpointSlice":                    "endpointslices",
+		"GatewayClass":                     "gatewayclasses",
+		"ValidatingAdmissionPolicy":        "validatingadmissionpolicies",
+		"ValidatingAdmissionPolicyBinding": "validatingadmissionpolicybindings",
+	}
+
+	cfgDocs := loadYAMLDocs(t, "../../config/rbac/ichor-cni/role.yaml")
+	chartDocs := renderChartWithValues(t, "ichor", "cniHelm.enabled=true")
+	roles := map[string]map[string]any{
+		labelConfig: find(cfgDocs, kindClusterRole, "cni-role"),
+		labelChart:  find(chartDocs, kindClusterRole, "ichor-cni-role"),
+	}
+
+	for _, f := range optionalCiliumFeatures {
+		t.Run(f.name, func(t *testing.T) {
+			manifest, err := cilium.New().WithValues(f.values).BootstrapManifest(cni.KubeProxyEnabled)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			kinds := map[[2]string]bool{} // apiGroup, kind
+
+			for _, d := range decodeYAMLDocs(t, manifest, "cilium bootstrap") {
+				group, _, hasGroup := strings.Cut(d["apiVersion"].(string), "/")
+				if !hasGroup {
+					group = "" // the core group: apiVersion is just "v1"
+				}
+
+				kinds[[2]string{group, kindOf(d)}] = true
+			}
+
+			for label, role := range roles {
+				for k := range kinds {
+					res, ok := resource[k[1]]
+					if !ok {
+						t.Errorf("%s: the chart renders a %s (group %q) this test does not map to a resource, so the CNI role may not cover it", label, k[1], k[0])
+
+						continue
+					}
+
+					held := map[string]bool{}
+
+					for _, r := range allRules(role) {
+						rm, _ := r.(map[string]any)
+						if !slices.Contains(stringsOf(rm["apiGroups"]), k[0]) || !slices.Contains(stringsOf(rm["resources"]), res) {
+							continue
+						}
+
+						for _, v := range stringsOf(rm["verbs"]) {
+							held[v] = true
+						}
+					}
+
+					for _, v := range []string{"get", "list", "create", "update", "patch", "delete"} {
+						if !held[v] {
+							t.Errorf("%s: the CNI role cannot %s %s.%s, which the Cilium chart renders with %s on", label, v, res, k[0], f.name)
+						}
+					}
+				}
+			}
+		})
 	}
 }
 

@@ -1,7 +1,8 @@
 # The Cilium Helm Job's permissions (ADR 0099, decision 2): what Helm needs to adopt and
 # upgrade a release of the pinned Cilium chart, and to wait for its rollout. Cilium's chart
 # creates the kinds listed here (with gatewayAPI.enabled: the GatewayClass and the ValidatingAdmissionPolicy
-# with its binding, ADR 0099 amendment); Helm keeps the release records in Secrets (the Role below).
+# with its binding; with ingressController.enabled: the IngressClass and an EndpointSlice; ADR 0099
+# amendments); Helm keeps the release records in Secrets (the Role below).
 #
 # Not narrowable further, and the ADR says why: the clusterroles rule with escalate and bind.
 # The chart's ClusterRoles grant more than this identity holds, so applying them needs
@@ -9,7 +10,8 @@
 # cluster-admin. That is why the ServiceAccount exists only for the Job (the controller can
 # create the Job but holds none of this). No wildcard verbs or resources, and nothing for
 # Ichor's own CRDs beyond reading the TalosCluster. A chart value that makes Cilium's chart itself
-# create Secrets (hubble.tls.auto.method=helm) is not covered: Ichor keeps cronJob.
+# create Secrets (hubble.tls.auto.method=helm, and clustermesh.apiserver.tls.auto.method=helm, the
+# chart's default) is not covered: Ichor keeps cronJob.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -59,6 +61,28 @@ rules:
   - gateway.networking.k8s.io
   resources:
   - gatewayclasses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+- apiGroups:
+  - networking.k8s.io
+  resources:
+  - ingressclasses
   verbs:
   - create
   - delete
@@ -134,6 +158,8 @@ rules:
   resourceNames:
   - cilium
   - cilium-operator
+  - clustermesh-apiserver
+  - hubble-ui
   resources:
   - clusterroles
   verbs:
@@ -142,12 +168,17 @@ rules:
 - apiGroups:
   - rbac.authorization.k8s.io
   resourceNames:
+  - cilium-bgp-control-plane-secrets
   - cilium-config-agent
+  - cilium-envoy-config-secrets
   - cilium-gateway-secrets
+  - cilium-ingress-secrets
   - cilium-operator-gateway-secrets
+  - cilium-operator-ingress-secrets
   - cilium-operator-tlsinterception-secrets
   - cilium-operator-ztunnel
   - cilium-tlsinterception-secrets
+  - clustermesh-apiserver-generate-certs
   - hubble-generate-certs
   resources:
   - roles

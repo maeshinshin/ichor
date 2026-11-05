@@ -143,11 +143,21 @@ func (s *Server) planNode(ctx context.Context, req *pb.NodeActionRequest) (*opPl
 		return nil, invalid("allow leader only goes with etcd defragmentation")
 	}
 
+	if wm := req.GetWipeMode(); wm != "" {
+		if action != ichorv1alpha1.NodeActionReset {
+			return nil, invalid("a wipe mode only goes with reset")
+		}
+
+		if wm != ichorv1alpha1.WipeModeSystemDisk && wm != ichorv1alpha1.WipeModeAll {
+			return nil, invalid("wipe mode %q is not one of %s, %s", wm, ichorv1alpha1.WipeModeSystemDisk, ichorv1alpha1.WipeModeAll)
+		}
+	}
+
 	np := &nodePlan{
 		action: action, machine: m, bg: req.GetOverride(), asked: req.GetMachine().GetName(),
 		spec: ichorv1alpha1.TalosOperationNodeSpec{
 			MachineRef: corev1.LocalObjectReference{Name: m.Name}, Action: action,
-			Service: req.GetService(), AllowLeader: req.GetAllowLeader(), Confirm: req.GetConfirm(),
+			Service: req.GetService(), AllowLeader: req.GetAllowLeader(), Confirm: req.GetConfirm(), WipeMode: req.GetWipeMode(),
 		},
 	}
 	p := &opPlan{
@@ -274,7 +284,16 @@ func describeNode(resp *pb.PlanOperationResponse, m *ichorv1alpha1.TalosMachine,
 		}
 		resp.Warning = "Writes pause for a moment while a new leader is elected."
 	case ichorv1alpha1.NodeActionReset:
-		resp.Steps = removalSteps(isCP, "Wipe the node's STATE and EPHEMERAL partitions and reboot it into maintenance mode.")
+		wipe := "Wipe the node's STATE and EPHEMERAL partitions and reboot it into maintenance mode."
+
+		switch spec.WipeMode {
+		case ichorv1alpha1.WipeModeSystemDisk:
+			wipe = "Wipe the node's whole system disk (boot and EFI included) and reboot it; it starts from its boot image again, so the disk is installed afresh."
+		case ichorv1alpha1.WipeModeAll:
+			wipe = "Wipe the node's whole system disk (boot and EFI included) and every user disk, and reboot it; it starts from its boot image again."
+		}
+
+		resp.Steps = removalSteps(isCP, wipe)
 		resp.Warning = "This cannot be undone. The node leaves the cluster and its data is wiped. Ichor deletes this machine; the node shows up as a new pending machine."
 		resp.ConfirmName, resp.OverrideRequired = name, true
 	case nodeActionRemove:

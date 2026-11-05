@@ -188,3 +188,19 @@ func TestNodeRemoveWithYesStillNeedsConfirm(t *testing.T) {
 		t.Fatalf("--yes alone must not remove: %v", err)
 	}
 }
+
+// --wipe-mode belongs to reset alone and reaches the request.
+func TestNodeResetWipeModeFlag(t *testing.T) {
+	if nodeResetCmd.Flags().Lookup("wipe-mode") == nil {
+		t.Fatal("ichor node reset has no --wipe-mode")
+	}
+
+	if nodeRemoveCmd.Flags().Lookup("wipe-mode") != nil || nodeRebootCmd.Flags().Lookup("wipe-mode") != nil {
+		t.Fatal("--wipe-mode is for reset only")
+	}
+
+	req := nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_RESET, WipeMode: "system-disk"}.request(nil)
+	if req.GetWipeMode() != "system-disk" {
+		t.Fatalf("request = %+v", req)
+	}
+}

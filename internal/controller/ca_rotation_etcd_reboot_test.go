@@ -31,6 +31,8 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
+const rotCPNode = "rot-cp1-node"
+
 // Talos v1.14.5 has no restart operation for the etcd service and does not
 // restart it on a configuration change, so each pass is followed by a rolling reboot of the control planes.
 var _ = Describe("TalosOperation ca-rotation etcd roll by reboot", func() {
@@ -130,7 +132,7 @@ var _ = Describe("TalosOperation ca-rotation etcd roll by reboot", func() {
 
 		f.world.frozenBoot[first] = false
 
-		op, _ = f.runUntil(op, completed)
+		f.runUntil(op, completed)
 		Expect(f.world.restarts).To(HaveLen(10), "the reboot of the first control plane was requested twice")
 		Expect(f.world.restarts[1].node).To(Equal(first))
 	})
@@ -162,15 +164,15 @@ var _ = Describe("TalosOperation ca-rotation etcd roll by reboot", func() {
 		f.targets = []string{ichorv1alpha1.CARotationTargetEtcd}
 
 		cp := f.machines[0]
-		f.world.nodeNames[cp.Name] = "rot-cp1-node"
+		f.world.nodeNames[cp.Name] = rotCPNode
 
-		kc := fake.NewClientset(&corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "rot-cp1-node"}})
+		kc := fake.NewClientset(&corev1.Node{Name: rotCPNode})
 		f.kube = kc
 
 		cordoned := false
 
 		f.world.afterRestart = func(string) {
-			node, err := kc.CoreV1().Nodes().Get(ctx, "rot-cp1-node", metav1.GetOptions{})
+			node, err := kc.CoreV1().Nodes().Get(ctx, rotCPNode, metav1.GetOptions{})
 			Expect(err).NotTo(HaveOccurred())
 
 			cordoned = node.Spec.Unschedulable
@@ -180,7 +182,7 @@ var _ = Describe("TalosOperation ca-rotation etcd roll by reboot", func() {
 		Expect(f.world.restarts).To(HaveLen(3))
 		Expect(cordoned).To(BeTrue(), "the node is cordoned when it is rebooted")
 
-		node, err := kc.CoreV1().Nodes().Get(ctx, "rot-cp1-node", metav1.GetOptions{})
+		node, err := kc.CoreV1().Nodes().Get(ctx, rotCPNode, metav1.GetOptions{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(node.Spec.Unschedulable).To(BeFalse(), "and schedulable again afterwards")
 	})

@@ -41,6 +41,13 @@ func reconcileCluster(r *TalosClusterReconciler, c *ichorv1alpha1.TalosCluster) 
 	return r.Reconcile(ctx, ctrl.Request{Namespace: c.Namespace, Name: c.Name})
 }
 
+func newDiscoveryReconciler(factory func(context.Context, string) (MaintenanceClient, error)) *TalosClusterReconciler {
+	return &TalosClusterReconciler{
+		Client:    k8sClient,
+		Discovery: &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: factory},
+	}
+}
+
 var _ = Describe("TalosClusterReconciler", func() {
 	It("does not requeue, and never opens a connection, when spec.discovery is unset (the default)", func() {
 		cluster := newTestCluster("does-not-exist", "v1.14")
@@ -52,10 +59,7 @@ var _ = Describe("TalosClusterReconciler", func() {
 			return nil, errFactoryMustNotBeCalled
 		}
 
-		r := &TalosClusterReconciler{
-			Client:    k8sClient,
-			Discovery: &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: factory},
-		}
+		r := newDiscoveryReconciler(factory)
 
 		result, err := reconcileCluster(r, cluster)
 		Expect(err).NotTo(HaveOccurred())
@@ -82,10 +86,7 @@ var _ = Describe("TalosClusterReconciler", func() {
 			}}, nil
 		}
 
-		r := &TalosClusterReconciler{
-			Client:    k8sClient,
-			Discovery: &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: factory},
-		}
+		r := newDiscoveryReconciler(factory)
 
 		result, err := reconcileCluster(r, cluster)
 		Expect(err).NotTo(HaveOccurred())
@@ -111,10 +112,7 @@ var _ = Describe("TalosClusterReconciler", func() {
 			return nil, errFactoryMustNotBeCalled
 		}
 
-		r := &TalosClusterReconciler{
-			Client:    k8sClient,
-			Discovery: &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: factory},
-		}
+		r := newDiscoveryReconciler(factory)
 
 		result, err := reconcileCluster(r, cluster)
 		Expect(err).NotTo(HaveOccurred())
@@ -138,11 +136,8 @@ var _ = Describe("TalosClusterReconciler", func() {
 
 			clock := time.Now()
 			factory := func(context.Context, string) (MaintenanceClient, error) { return nil, errFactoryMustNotBeCalled }
-			r := &TalosClusterReconciler{
-				Client:    k8sClient,
-				Discovery: &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: factory},
-				now:       func() time.Time { return clock },
-			}
+			r := newDiscoveryReconciler(factory)
+			r.now = func() time.Time { return clock }
 
 			_, err := reconcileCluster(r, cluster)
 			Expect(err).NotTo(HaveOccurred())

@@ -112,10 +112,7 @@ it. 'ichor cluster rotate-ca' does all of this itself.`,
 
 		if o.Bundle != "" {
 			// Best effort: without a cluster to compare with, the bundle is taken as it is.
-			var cluster ctrlclient.Client
-			if kc, err := newKubeClient(kubeconfigPath); err == nil {
-				cluster = kc
-			}
+			cluster, _ := newKubeClient(kubeconfigPath)
 
 			var err error
 

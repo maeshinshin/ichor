@@ -1,0 +1,94 @@
+# What the Cilium chart's own Roles grant for the optional features (ADR 0099 amendment 2026-11-06), held
+# by the Job's ServiceAccount itself, rule for rule, in the two namespaces those Roles live in. The
+# apiserver refuses to create a Role whose rules the caller does not hold, and `escalate` limited by
+# resourceNames never authorizes a create (the name is not known on a create), so the Job must hold them.
+# TestCNIJobHoldsWhatTheCiliumRolesItCreatesGrant (dist/chart) renders the chart with each feature on and
+# fails when a Role's rules are not covered, in config/rbac and in the chart copy.
+#
+# kube-system: cilium-bgp-control-plane-secrets (bgpControlPlane) and clustermesh-apiserver-generate-certs
+# (clustermesh.useAPIServer with the cronJob certificate method). The create, cilium-ca and the
+# unnamed get and list the rest of these Roles need are in hubble_role.yaml and records_role.yaml.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cni-features-role
+  namespace: kube-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  resourceNames:
+  - clustermesh-apiserver-server-cert
+  - clustermesh-apiserver-admin-cert
+  - clustermesh-apiserver-remote-cert
+  - clustermesh-apiserver-local-cert
+  verbs:
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: cni-features-rolebinding
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cni-features-role
+# Written out for the same reason as in controller_role.yaml.
+subjects:
+- kind: ServiceAccount
+  name: ichor-cni
+  namespace: kube-system
+---
+# cilium-secrets, the chart's own secrets namespace: the Roles of gatewayAPI (cilium-gateway-secrets and
+# cilium-operator-gateway-secrets), ingressController (cilium-ingress-secrets, cilium-operator-ingress-secrets)
+# and envoyConfig (cilium-envoy-config-secrets) grant, between them, every Secret verb but deletecollection
+# on every Secret in that namespace, which holds Gateway, Ingress and Envoy TLS Secrets and nothing of Ichor's.
+# The namespace exists where Cilium runs; the installer skips this Role and its binding where it does not.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cni-secrets-role
+  namespace: cilium-secrets
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/name: ichor
+    app.kubernetes.io/managed-by: kustomize
+  name: cni-secrets-rolebinding
+  namespace: cilium-secrets
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cni-secrets-role
+subjects:
+- kind: ServiceAccount
+  name: ichor-cni
+  namespace: kube-system

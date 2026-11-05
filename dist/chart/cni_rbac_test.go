@@ -68,6 +68,39 @@ func TestCNIHelmRBAC(t *testing.T) {
 		}
 	})
 
+	// What the Cilium chart's own Roles in kube-system and cilium-secrets grant, held by the Job itself
+	// (ADR 0099 amendment 2026-11-06). The cilium-secrets pair renders only where its namespace exists
+	// ("auto" cannot look under helm template, so it is left out there), or always on "true".
+	t.Run("feature roles match config", func(t *testing.T) {
+		configDocs := loadYAMLDocs(t, "../../config/rbac/ichor-cni/features_role.yaml")
+
+		for _, c := range []struct{ set, cfgName, chartName, ns string }{
+			{"cniHelm.ciliumSecretsRoles=false", "cni-features-role", "ichor-cni-features-role", kubeSystemNs},
+			{"cniHelm.ciliumSecretsRoles=true", "cni-secrets-role", "ichor-cni-secrets-role", "cilium-secrets"},
+		} {
+			docs := renderChartWithValues(t, "ichor", c.set)
+
+			role := find(docs, kindRole, c.chartName)
+			if role == nil || namespaceOf(role) != c.ns {
+				t.Fatalf("%s: Role %s = %v, want it in %s", c.set, c.chartName, role, c.ns)
+			}
+
+			checkRBACRulesMatch(t, "ichor", "Role "+c.cfgName, find(configDocs, kindRole, c.cfgName), role,
+				"config/rbac/ichor-cni/features_role.yaml", "dist/chart/templates/rbac/ichor-cni.yaml")
+
+			bindingName := strings.Replace(c.chartName, "-role", "-rolebinding", 1)
+			if b := find(docs, kindRoleBinding, bindingName); b == nil || !bindsCNIJob(b) {
+				t.Errorf("%s: no RoleBinding of %s to the Cilium Job's ServiceAccount: %v", c.set, c.chartName, b)
+			}
+		}
+
+		for _, set := range []string{"cniHelm.ciliumSecretsRoles=auto", "cniHelm.ciliumSecretsRoles=false"} {
+			if find(renderChartWithValues(t, "ichor", set), kindRole, "ichor-cni-secrets-role") != nil {
+				t.Errorf("%s renders the cilium-secrets Role although the namespace cannot be known to exist", set)
+			}
+		}
+	})
+
 	// The Job runs in kube-system (hostNetwork is exempt from Pod Security admission only there,
 	// ADR 0099 unit 7 as built); the release record's Role stays in the release namespace.
 	t.Run("lives in kube-system", func(t *testing.T) {

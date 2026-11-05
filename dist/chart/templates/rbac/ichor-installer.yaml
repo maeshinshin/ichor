@@ -125,9 +125,11 @@ rules:
   - rbac.authorization.k8s.io
   resourceNames:
   - ichor-auto-patch-impersonate-role
+  - ichor-cni-features-role
   - ichor-cni-hubble-role
   - ichor-cni-job-role
   - ichor-cni-records-role
+  - ichor-cni-secrets-role
   - ichor-cni-role
   - ichor-ichor-ui-role
   - ichor-installer-role

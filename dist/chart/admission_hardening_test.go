@@ -281,71 +281,11 @@ func cniClusterRoles(t *testing.T) map[string]map[string]any {
 	}
 }
 
-// TestCNIEscalationNamesOnlyCiliumsRoles guards ADR 0108: the Cilium Job may bind and escalate only
-// the roles the pinned Cilium chart creates, in config/rbac and in the chart. Every role the chart
-// renders under Ichor's values must be named, so a chart bump that adds one fails here, not in a cluster.
-func TestCNIEscalationNamesOnlyCiliumsRoles(t *testing.T) {
-	rendered := map[string]map[string]bool{resClusterRoles: {}, "roles": {}}
-
-	for _, mode := range []cni.KubeProxyMode{cni.KubeProxyEnabled, cni.KubeProxyReplaced} {
-		for _, tunnel := range []string{"", "geneve", "vxlan"} {
-			users := make([]map[string]any, 1, 1+len(optionalCiliumFeatures)) // nil first: no user values
-			for _, f := range optionalCiliumFeatures {
-				users = append(users, f.values)
-			}
-
-			for _, user := range users {
-				p := cilium.New().WithValues(user)
-				if tunnel != "" {
-					var err error
-					if p, err = p.WithTunnel(tunnel); err != nil {
-						t.Fatal(err)
-					}
-				}
-
-				manifest, err := p.BootstrapManifest(mode)
-				if err != nil {
-					t.Fatalf("rendering cilium (%s, %q): %v", mode, tunnel, err)
-				}
-
-				for _, d := range decodeYAMLDocs(t, manifest, "cilium bootstrap") {
-					switch kindOf(d) {
-					case kindClusterRole:
-						rendered[resClusterRoles][nameOf(d)] = true
-					case kindRole:
-						rendered["roles"][nameOf(d)] = true
-					}
-				}
-			}
-		}
-	}
-
-	for label, role := range cniClusterRoles(t) {
-		got := escalationNames(t, label, role)
-		for res, names := range rendered {
-			for n := range names {
-				if !got[res][n] {
-					t.Errorf("%s: the Cilium chart renders %s %q, which the CNI role cannot bind or escalate", label, res, n)
-				}
-			}
-		}
-
-		// The other way: a name the chart no longer renders is a grant nothing needs (ADR 0108).
-		for res, names := range got {
-			for n := range names {
-				if !rendered[res][n] {
-					t.Errorf("%s: the CNI role binds or escalates %s %q, which the Cilium chart does not render", label, res, n)
-				}
-			}
-		}
-	}
-}
-
 // TestCNIRoleCoversTheOptionalFeatureObjects: every object the Cilium chart renders with an optional feature
 // on must be one the CNI role lets Helm read, create, update and delete, or the upgrade fails on the first
 // get (the Gateway API case found on hardware, ADR 0099 amendment). Kinds are mapped to resources here, so a
 // chart bump that renders a kind nobody mapped fails too. Role and ClusterRole names are
-// TestCNIEscalationNamesOnlyCiliumsRoles's business.
+// TestCNIJobHoldsWhatTheCiliumRolesItCreatesGrant's business.
 func TestCNIRoleCoversTheOptionalFeatureObjects(t *testing.T) {
 	resource := map[string]string{}
 
@@ -427,7 +367,16 @@ var cniNamedObjects = map[string][2]string{ // kind: apiGroup, resource
 	"ValidatingAdmissionPolicyBinding": {"admissionregistration.k8s.io", "validatingadmissionpolicybindings"},
 	"GatewayClass":                     {"gateway.networking.k8s.io", "gatewayclasses"},
 	"IngressClass":                     {"networking.k8s.io", "ingressclasses"},
-	"EndpointSlice":                    {"discovery.k8s.io", "endpointslices"},
+	"EndpointSlice":                    {"discovery.k8s.io", resEndpointSlices},
+}
+
+const resEndpointSlices = "endpointslices"
+
+// cniMayReadUnnamed: the one read the CNI role holds without a name. The ClusterRole clustermesh-apiserver
+// grants get on every EndpointSlice, which the Job must hold to create it (ADR 0099 amendment 2026-11-06);
+// writing stays by name.
+func cniMayReadUnnamed(verb, resource string) bool {
+	return verb == verbGetController && resource == resEndpointSlices
 }
 
 // TestCNIRoleChangesOnlyTheObjectsCiliumRenders: get, update, patch and delete on the kinds above are granted
@@ -482,10 +431,9 @@ func TestCNIRoleChangesOnlyTheObjectsCiliumRenders(t *testing.T) {
 							t.Errorf("%s: %s on %s carries resourceNames, which RBAC cannot apply to it", label, v, gr[1])
 						}
 					default:
-						if len(names) == 0 {
+						if len(names) == 0 && !cniMayReadUnnamed(v, gr[1]) {
 							t.Errorf("%s: the CNI role grants %s on every %s; limit it to the names Cilium renders", label, v, gr[1])
 						}
-
 					}
 				}
 
@@ -514,63 +462,15 @@ func TestCNIRoleChangesOnlyTheObjectsCiliumRenders(t *testing.T) {
 			for protected := range strings.FieldsSeq("ichor-controller-jobs ichor-controller-job-image " +
 				"ichor-controller-jobs-binding ichor-controller-job-image-binding") {
 				for v := range strings.FieldsSeq("get update patch delete") {
+					if cniMayReadUnnamed(v, gr[1]) {
+						continue // no Ichor policy is an EndpointSlice
+					}
+
 					if cniHolds(allRules(role), gr[0], gr[1], v, protected) {
 						t.Errorf("%s: the CNI role can %s %s %q, one of the policies that confine it", label, v, gr[1], protected)
 					}
 				}
 			}
-		}
-	}
-}
-
-// TestCNIRoleHoldsEveryRuleTheCiliumChartGrants guards ADR 0108 and ADR 0103 (the 1.19.10 takeover
-// failure): Helm refuses to create a Role that grants a rule its caller does not hold. The Cilium
-// chart's hubble-generate-certs Role, which the Job creates on a takeover, must have every one of its
-// rules held by the Cilium Job's ServiceAccount through its bindings in kube-system, in config/rbac/ichor-cni
-// and in the chart. A chart bump that changes that Role fails here, not on a node. Other Cilium Roles and
-// ClusterRoles are not enforced here: they exist on a takeover and Helm does not create them (ADR 0103 amendment).
-func TestCNIRoleHoldsEveryRuleTheCiliumChartGrants(t *testing.T) {
-	var roles []map[string]any
-
-	for _, mode := range []cni.KubeProxyMode{cni.KubeProxyEnabled, cni.KubeProxyReplaced} {
-		for _, tunnel := range []string{"", "geneve", "vxlan"} {
-			p := cilium.New()
-			if tunnel != "" {
-				var err error
-				if p, err = p.WithTunnel(tunnel); err != nil {
-					t.Fatal(err)
-				}
-			}
-
-			manifest, err := p.BootstrapManifest(mode)
-			if err != nil {
-				t.Fatalf("rendering cilium (%s, %q): %v", mode, tunnel, err)
-			}
-
-			for _, d := range decodeYAMLDocs(t, manifest, "cilium bootstrap") {
-				if kindOf(d) == kindRole && namespaceOf(d) == kubeSystemNs && nameOf(d) == "hubble-generate-certs" {
-					roles = append(roles, d)
-				}
-			}
-		}
-	}
-
-	if len(roles) == 0 {
-		t.Fatal("the Cilium chart renders no hubble-generate-certs Role in kube-system; the check would pass for nothing")
-	}
-
-	cfgDocs := loadYAMLDocs(t, "../../config/rbac/ichor-cni/role.yaml")
-	for _, f := range []string{"role_binding.yaml", "records_role.yaml", "hubble_role.yaml"} {
-		cfgDocs = append(cfgDocs, loadYAMLDocs(t, "../../config/rbac/ichor-cni/"+f)...)
-	}
-
-	for label, docs := range map[string][]map[string]any{
-		labelConfig: cfgDocs,
-		labelChart:  renderChartWithValues(t, "ichor", "cniHelm.enabled=true"),
-	} {
-		held := cniGrantedRules(docs, kubeSystemNs)
-		for _, r := range roles {
-			checkCNIHolds(t, label, r, held)
 		}
 	}
 }
@@ -629,33 +529,6 @@ func bindsCNIJob(b map[string]any) bool {
 	}
 
 	return false
-}
-
-// checkCNIHolds reports each (group, resource, verb, resourceName) that role grants and held does not.
-func checkCNIHolds(t *testing.T, label string, role map[string]any, held []any) {
-	t.Helper()
-
-	for _, r := range allRules(role) {
-		rm, _ := r.(map[string]any)
-
-		names := stringsOf(rm["resourceNames"])
-		if len(names) == 0 {
-			names = []string{""}
-		}
-
-		for _, g := range stringsOf(rm["apiGroups"]) {
-			for _, res := range stringsOf(rm["resources"]) {
-				for _, v := range stringsOf(rm["verbs"]) {
-					for _, n := range names {
-						if !cniHolds(held, g, res, v, n) {
-							t.Errorf("%s: %s %s grants %s/%s:%s (name %q) that the Cilium Job does not hold; Helm refuses it (ADR 0108)",
-								label, kindOf(role), nameOf(role), g, res, v, n)
-						}
-					}
-				}
-			}
-		}
-	}
 }
 
 // cniHolds reports whether one of the held rules grants (group, resource, verb) on name, an empty

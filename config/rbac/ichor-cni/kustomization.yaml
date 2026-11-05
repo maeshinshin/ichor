@@ -10,3 +10,4 @@ resources:
 - controller_role.yaml
 - records_role.yaml
 - hubble_role.yaml
+- features_role.yaml

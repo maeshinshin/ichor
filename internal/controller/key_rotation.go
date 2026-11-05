@@ -219,12 +219,7 @@ func (r *TalosOperationReconciler) advanceKeyRotation(
 
 	if kr != nil {
 		run.kr = kr
-
-		if kr.ServiceAccount != nil {
-			run.scrub.add(string(kr.ServiceAccount.Key))
-		}
-
-		run.scrub.add(kr.Secretbox)
+		run.addNewKeys(kr)
 	}
 
 	rs := op.Status.KeyRotation
@@ -297,19 +292,12 @@ func (c *keyRun) retry(ctx context.Context, message string) (ctrl.Result, error)
 // key rotation edits: a worker is never applied to.
 func (c *keyRun) controlPlanes(ctx context.Context) ([]*ichorv1alpha1.TalosMachine, error) {
 	list, err := deleteguard.ApprovedMachines(ctx, readerOrClient(c.r.APIReader, c.r.Client),
-		c.cluster.Namespace, c.cluster.Name, deleteguard.MachineFilter{})
+		c.cluster.Namespace, c.cluster.Name, deleteguard.MachineFilter{Role: roleControlPlane})
 	if err != nil {
 		return nil, err
 	}
 
-	var out []*ichorv1alpha1.TalosMachine
-
-	for i := range list {
-		if list[i].Spec.Role == roleControlPlane {
-			out = append(out, &list[i])
-		}
-	}
-
+	out := ptrs(list)
 	upgrade.SortByOrder(out)
 
 	return out, nil

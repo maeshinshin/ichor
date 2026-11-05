@@ -162,7 +162,7 @@ func afterRotateCAWithoutHandoff(ctx context.Context, cmd *cobra.Command, cluste
 
 	if !clusterRotateCAFollow {
 		if outputFormat == outputHuman {
-			return printRotateCAStartedPlain(out, ref.GetName(), cluster)
+			return printRotateCAStarted(out, ref.GetName(), cluster, "")
 		}
 
 		if err := writeMessage(out, outputFormat, created); err != nil {
@@ -185,7 +185,7 @@ func afterRotateCAWithoutHandoff(ctx context.Context, cmd *cobra.Command, cluste
 	}
 
 	if outputFormat == outputHuman {
-		return printRotateCADonePlain(out, ref.GetName(), cluster)
+		return printRotateCADone(out, ref.GetName(), cluster, "")
 	}
 
 	_, _ = fmt.Fprintf(errw, "When it completes: ichor cluster bundle-export %s\n", cluster)

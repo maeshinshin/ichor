@@ -260,6 +260,11 @@ func bindInitFlags(flags *pflag.FlagSet, o *initOptions, wait *time.Duration) {
 	for _, name := range []string{"talos-version", "kubernetes-version", "version-contract"} {
 		_ = flags.MarkDeprecated(name, "the version is set by this Ichor build; the flag only accepts its value")
 	}
+	flags.StringVar(&o.InstallerDigest, "installer-digest", "",
+		"pin Ichor's installer image to this digest (sha256:...) in the IchorInstallation instead of letting the controller resolve the version's tag; "+
+			"for a cluster whose controller cannot reach the registry (a demo behind a mirror)")
+	flags.BoolVar(&o.SkipSignatureCheck, "skip-signature-check", false,
+		"run the installer image WITHOUT checking its signature (for builds nobody signs: development and demo images)")
 	flags.StringVar(&o.InstallDisk, "install-disk", "", "the first node's install disk: "+installDiskUsage+" (required)")
 	flags.StringSliceVar(&o.PodSubnets, "pod-subnets", nil,
 		"pod CIDRs (spec.network.podSubnets; at most one per IP family); unset keeps Talos's default 10.244.0.0/16. Fixed once the cluster exists")

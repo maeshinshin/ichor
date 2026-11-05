@@ -225,6 +225,23 @@ func updateRetrying[T client.Object](ctx context.Context, c client.Client, obj T
 	})
 }
 
+// installerPin is what init records about the installer image in the IchorInstallation: the digest
+// to pin (spec.installerDigest; empty leaves it to the controller to resolve the tag) and whether the
+// signature check is skipped (spec.installerSignature.mode skip)..
+type installerPin struct {
+	Digest        string
+	SkipSignature bool
+}
+
+// validateInitInstaller refuses an --installer-digest the IchorInstallation would refuse, before anything is changed.
+func validateInitInstaller(opts initOptions) error {
+	if opts.InstallerDigest != "" && !installerDigestPattern.MatchString(opts.InstallerDigest) {
+		return fmt.Errorf("init: --installer-digest %q is not sha256: followed by 64 lowercase hex characters", opts.InstallerDigest)
+	}
+
+	return nil
+}
+
 // createIchorInstallation records the version `ichor init` just installed -- this binary's
 // own, since the manifest it applied is embedded in it -- as the IchorInstallation singleton, the CR a later
 // TalosOperation of kind ichor reads its target from. A "dev"
@@ -233,21 +250,31 @@ func updateRetrying[T client.Object](ctx context.Context, c client.Client, obj T
 //
 // The bool is false when nothing was created (a dev build), in which case there is no Cilium
 // hand-over to wait for.
-func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn io.Writer, wait time.Duration) (bool, error) {
+func createIchorInstallation(ctx context.Context, k8sClient client.Client, warn io.Writer, wait time.Duration, pin installerPin) (bool, error) {
 	if !semver.IsValid(version.Version) {
 		_, _ = fmt.Fprintf(warn, "init: not creating IchorInstallation: this ichor binary is %q, not a released version\n", version.Version)
 
 		return false, nil
 	}
 
+	spec := ichorv1alpha1.IchorInstallationSpec{
+		Version:         version.Version,
+		InstallerDigest: pin.Digest,
+		Deployment:      &ichorv1alpha1.IchorDeploymentSpec{Manager: ichorv1alpha1.IchorManagerInstaller},
+	}
+
+	if pin.SkipSignature {
+		spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip}
+
+		_, _ = fmt.Fprintln(warn, "init: Warning: the signature of the installer image is NOT checked "+
+			"(spec.installerSignature.mode skip); the next `ichor upgrade ichor` without --skip-signature-check checks it again")
+	}
+
 	content, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&ichorv1alpha1.IchorInstallation{
 		APIVersion: ichorv1alpha1.GroupVersion.String(),
 		Kind:       "IchorInstallation",
 		Name:       ichorv1alpha1.IchorInstallationName,
-		Spec: ichorv1alpha1.IchorInstallationSpec{
-			Version:    version.Version,
-			Deployment: &ichorv1alpha1.IchorDeploymentSpec{Manager: ichorv1alpha1.IchorManagerInstaller},
-		},
+		Spec:       spec,
 	})
 	if err != nil {
 		return false, err

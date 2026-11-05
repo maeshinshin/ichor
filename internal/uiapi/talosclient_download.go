@@ -174,12 +174,21 @@ func (t *machineryDownloadClient) CollectSupport(
 		what string
 		fn   func() (map[string][]byte, error)
 	}{
-		{"version", func() (map[string][]byte, error) { d, e := t.version(ctx); return one("version.json", d, e) }},
+		{"version", func() (map[string][]byte, error) {
+			d, e := marshalJSON(t.c.Version(ctx))
+			return one("version.json", d, e)
+		}},
 		{"kernel log", func() (map[string][]byte, error) { d, e := t.dmesg(ctx); return one("dmesg.log", d, e) }},
 		{"services", func() (map[string][]byte, error) { return t.serviceLogs(ctx, &problems) }},
 		{"processes", func() (map[string][]byte, error) { d, e := t.processes(ctx); return one("processes.json", d, e) }},
-		{"mounts", func() (map[string][]byte, error) { d, e := t.mounts(ctx); return one("mounts.json", d, e) }},
-		{"memory", func() (map[string][]byte, error) { d, e := t.memory(ctx); return one("memory.json", d, e) }},
+		{"mounts", func() (map[string][]byte, error) {
+			d, e := marshalJSON(t.c.Mounts(ctx))
+			return one("mounts.json", d, e)
+		}},
+		{"memory", func() (map[string][]byte, error) {
+			d, e := marshalJSON(t.c.Memory(ctx))
+			return one("memory.json", d, e)
+		}},
 		{"containers", func() (map[string][]byte, error) { d, e := t.containers(ctx); return one("containers.json", d, e) }},
 		{"resources", func() (map[string][]byte, error) { return collectResources(ctx, t.c.COSI, &problems) }},
 	}
@@ -193,17 +202,13 @@ func (t *machineryDownloadClient) CollectSupport(
 	return problems, nil
 }
 
-func marshalJSON(m proto.Message) ([]byte, error) {
-	return protojson.MarshalOptions{Multiline: true, Indent: "  "}.Marshal(m)
-}
-
-func (t *machineryDownloadClient) version(ctx context.Context) ([]byte, error) {
-	resp, err := t.c.Version(ctx)
+// marshalJSON passes a failed call's error on, else renders its reply as indented JSON.
+func marshalJSON(m proto.Message, err error) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
 
-	return marshalJSON(resp)
+	return protojson.MarshalOptions{Multiline: true, Indent: "  "}.Marshal(m)
 }
 
 // readData reads a Dmesg or Logs stream to its end, keeping at most
@@ -352,24 +357,6 @@ func (t *machineryDownloadClient) processes(ctx context.Context) ([]byte, error)
 	}
 
 	return mustJSON(procs), nil
-}
-
-func (t *machineryDownloadClient) mounts(ctx context.Context) ([]byte, error) {
-	resp, err := t.c.Mounts(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return marshalJSON(resp)
-}
-
-func (t *machineryDownloadClient) memory(ctx context.Context) ([]byte, error) {
-	resp, err := t.c.Memory(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return marshalJSON(resp)
 }
 
 func (t *machineryDownloadClient) containers(ctx context.Context) ([]byte, error) {

@@ -54,9 +54,33 @@ func (s *Server) GetNodeTalosDetails(
 	// allows fewer calls (dialNode).
 	resp := &pb.GetNodeTalosDetailsResponse{MaintenanceMode: maintenance}
 
+	runSections(ctx,
+		func(c context.Context) {
+			resp.System = section(c, tc.TalosSystem, func(e string) *pb.TalosSystemSection { return &pb.TalosSystemSection{Error: e} })
+			resp.System.KernelArgs = redactKernelArgs(resp.System.KernelArgs)
+		},
+		func(c context.Context) {
+			resp.Network = section(c, tc.TalosNetwork, func(e string) *pb.TalosNetworkSection { return &pb.TalosNetworkSection{Error: e} })
+		},
+		func(c context.Context) {
+			resp.Storage = section(c, tc.TalosStorage, func(e string) *pb.TalosStorageSection { return &pb.TalosStorageSection{Error: e} })
+		},
+		func(c context.Context) {
+			resp.Services = section(c, tc.TalosServices, func(e string) *pb.TalosServicesSection { return &pb.TalosServicesSection{Error: e} })
+		},
+		func(c context.Context) {
+			resp.Extensions = section(c, tc.TalosExtensions, func(e string) *pb.TalosExtensionsSection { return &pb.TalosExtensionsSection{Error: e} })
+		},
+	)
+
+	return connect.NewResponse(resp), nil
+}
+
+// runSections runs the reads concurrently, each under its own timeout, and waits for them all.
+func runSections(ctx context.Context, reads ...func(context.Context)) {
 	var wg sync.WaitGroup
 
-	run := func(read func(context.Context)) {
+	for _, read := range reads {
 		wg.Go(func() {
 			cctx, cancel := context.WithTimeout(ctx, talosDetailsTimeout)
 			defer cancel()
@@ -65,30 +89,7 @@ func (s *Server) GetNodeTalosDetails(
 		})
 	}
 
-	run(func(c context.Context) {
-		resp.System = section(c, tc.TalosSystem, func(e string) *pb.TalosSystemSection { return &pb.TalosSystemSection{Error: e} })
-		resp.System.KernelArgs = redactKernelArgs(resp.System.KernelArgs)
-	})
-	run(func(c context.Context) {
-		resp.Network = section(c, tc.TalosNetwork, func(e string) *pb.TalosNetworkSection { return &pb.TalosNetworkSection{Error: e} })
-
-	})
-	run(func(c context.Context) {
-		resp.Storage = section(c, tc.TalosStorage, func(e string) *pb.TalosStorageSection { return &pb.TalosStorageSection{Error: e} })
-
-	})
-	run(func(c context.Context) {
-		resp.Services = section(c, tc.TalosServices, func(e string) *pb.TalosServicesSection { return &pb.TalosServicesSection{Error: e} })
-
-	})
-	run(func(c context.Context) {
-		resp.Extensions = section(c, tc.TalosExtensions, func(e string) *pb.TalosExtensionsSection { return &pb.TalosExtensionsSection{Error: e} })
-
-	})
-
 	wg.Wait()
-
-	return connect.NewResponse(resp), nil
 }
 
 // section runs one section read and turns a failure (or a nil result) into a
@@ -96,12 +97,7 @@ func (s *Server) GetNodeTalosDetails(
 func section[T any](ctx context.Context, read func(context.Context) (*T, error), failed func(string) *T) *T {
 	v, err := read(ctx)
 	if err != nil {
-		msg := err.Error()
-		if len(msg) > maxSectionErrorLen {
-			msg = msg[:maxSectionErrorLen] + "..."
-		}
-
-		return failed(msg)
+		return failed(truncateText(err.Error(), maxSectionErrorLen))
 	}
 
 	if v == nil {

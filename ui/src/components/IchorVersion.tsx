@@ -26,7 +26,7 @@ export function IchorVersion() {
             <Badge variant="destructive">{t('version.unverified')}</Badge>
           </TooltipTrigger>
           <TooltipContent>
-            {unverified.digest !== '' ? t('version.unverifiedLast', { digest: unverified.digest, reason: unverified.reason }) : ''}
+            {unverified.digest !== '' ? t('version.unverifiedLast', { digest: unverified.digest }) : ''}
             {unverified.digest !== '' && unverified.pending ? ' ' : ''}
             {unverified.pending ? t('version.unverifiedNext') : ''}
           </TooltipContent>

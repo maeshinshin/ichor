@@ -17,7 +17,7 @@ export type Attention =
   | { kind: 'patch'; components: string[] }
   | { kind: 'release'; version: string }
   | { kind: 'autoPatchHalted'; operation: string }
-  | { kind: 'installerUnverified'; reason: string }
+  | { kind: 'installerUnverified' }
 
 // attentionItems lists, in order, only what applies to the cluster now.
 export function attentionItems(i: {
@@ -31,14 +31,14 @@ export function attentionItems(i: {
   release?: string | null
   // autoPatchHalted is the automatic operation (namespace/name) that stopped automatic patching, or empty.
   autoPatchHalted?: string
-  // installerUnverified is the reason the installer image's signature was not checked, or null.
-  installerUnverified?: string | null
+  // installerUnverified is true when the installer image's signature was not checked.
+  installerUnverified?: boolean
 }): Attention[] {
   const out: Attention[] = []
   if (i.opState === 'failed') out.push({ kind: 'opFailed' })
   if (i.opState === 'paused') out.push({ kind: 'opPaused' })
   if (i.autoPatchHalted) out.push({ kind: 'autoPatchHalted', operation: i.autoPatchHalted })
-  if (i.installerUnverified !== undefined && i.installerUnverified !== null) out.push({ kind: 'installerUnverified', reason: i.installerUnverified })
+  if (i.installerUnverified) out.push({ kind: 'installerUnverified' })
   const certs = activeCondition(i.conditions, 'CertificatesExpiring')
   if (certs !== null) out.push({ kind: 'certs', message: certs })
   const stale = activeCondition(i.conditions, 'BundleBackupStale')

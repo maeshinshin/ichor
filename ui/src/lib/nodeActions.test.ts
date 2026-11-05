@@ -62,7 +62,7 @@ test('Start waits for the plan, the typed name and the override tick, and never 
   assert.equal(canStart({ ...base, busy: true }), false)
 })
 
-test('a reset needs the override ticked, and no reason is required', () => {
+test('a reset needs the override ticked', () => {
   assert.equal(canStart({ ...base, overridden: true }), true)
 })
 

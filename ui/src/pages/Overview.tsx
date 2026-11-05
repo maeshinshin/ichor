@@ -108,8 +108,8 @@ function Home({
   const [release, setRelease] = useState<string | null>(null)
   // Automatic patching: whether it is on, and the automatic operation that halted it.
   const [autoPatch, setAutoPatch] = useState<{ enabled: boolean; halted: string }>({ enabled: false, halted: '' })
-  // The reason the installer image's signature was not checked, or null when it was or nothing ran yet.
-  const [unverified, setUnverified] = useState<string | null>(null)
+  // Whether the installer image's signature was not checked.
+  const [unverified, setUnverified] = useState(false)
   // What Talos and Kubernetes can move to, for the patch hints; null when the list could not be read.
   const [candidates, setCandidates] = useState<{ talos: TargetList | null; kubernetes: TargetList | null }>({
     talos: null,
@@ -155,11 +155,10 @@ function Home({
       const info = await operationClient.getIchorInstallation({})
       setRelease(releaseNotice(info))
       setAutoPatch({ enabled: info.autoPatchEnabled, halted: info.autoPatchHaltedOperation })
-      const skipped = installerUnverified(info)
-      setUnverified(skipped ? skipped.reason : null)
+      setUnverified(installerUnverified(info) !== null)
     } catch {
       setRelease(null)
-      setUnverified(null)
+      setUnverified(false)
       setAutoPatch({ enabled: false, halted: '' })
     }
   }
@@ -295,7 +294,7 @@ function Home({
                       {a.kind === 'installerUnverified' && (
                         <>
                           <AlertTitle>{t('home.attnInstallerUnverified')}</AlertTitle>
-                          <AlertDescription>{t('home.attnInstallerUnverifiedHint', { reason: a.reason || t('common.none') })}</AlertDescription>
+                          <AlertDescription>{t('home.attnInstallerUnverifiedHint')}</AlertDescription>
                         </>
                       )}
                       {a.kind === 'release' && (

@@ -28,6 +28,9 @@ import (
 
 	"connectrpc.com/connect"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/client-go/discovery"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 // followRetryWindow bounds how long a --follow/--watch poll keeps retrying
@@ -41,7 +44,8 @@ var (
 )
 
 // isTransient reports whether err is the API being briefly unreachable --
-// connection refused/reset, Unavailable, EOF, a timeout -- as opposed to an
+// connection refused/reset, Unavailable, EOF, a timeout, discovery not yet
+// serving a group -- as opposed to an
 // answer (NotFound, PermissionDenied, ...) that retrying cannot change.
 func isTransient(err error) bool {
 	if err == nil {
@@ -59,9 +63,17 @@ func isTransient(err error) bool {
 		}
 	}
 
-	var ne net.Error
+	var (
+		ne        net.Error
+		restmap   *apiutil.ErrResourceDiscoveryFailed
+		groupdisc *discovery.ErrGroupDiscoveryFailed
+	)
 
 	switch {
+	// Discovery failing while a restarted kube-apiserver has not yet served the CRD groups. The client's
+	// lazy REST mapper does not cache the failure, so the same client succeeds on the next attempt.
+	case meta.IsNoMatchError(err), errors.As(err, &restmap), errors.As(err, &groupdisc), discovery.IsGroupDiscoveryFailedError(err):
+		return true
 	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF),
 		errors.Is(err, syscall.ECONNREFUSED), errors.Is(err, syscall.ECONNRESET),
 		errors.Is(err, context.DeadlineExceeded),

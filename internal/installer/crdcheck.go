@@ -48,10 +48,6 @@ var retiredFields = []retiredField{
 	{crd: ichorInstallationsCRD, path: "spec.managementMode"},
 }
 
-func isRetired(crd, path string) bool {
-	return slices.Contains(retiredFields, retiredField{crd, path})
-}
-
 // checkAdditive refuses a target CRD that would take something away from the live one: a
 // served version, a schema property, a changed property type, or a changed scope. That is
 // what "additive, never downgraded" means (design, "Upgrades"), judged on the schemas
@@ -115,7 +111,7 @@ func schemaCovers(crd string, target, live *apiextensionsv1.JSONSchemaProps, pat
 		}
 
 		if !ok {
-			if isRetired(crd, childRel) {
+			if slices.Contains(retiredFields, retiredField{crd, childRel}) {
 				continue
 			}
 

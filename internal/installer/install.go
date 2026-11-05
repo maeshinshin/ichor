@@ -176,7 +176,7 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 
 	// Stage 2: everything else, now readable under the new rights. A failure here leaves nothing
 	// but the RBAC applied, which the stage-0 snapshot restores.
-	rest, err := takeSnapshot(ctx, c, opts.Namespace, opts.RunID, 2, append(p.nonRBAC(), policies...))
+	rest, err := takeSnapshot(ctx, c, opts.Namespace, opts.RunID, 2, slices.Concat(p.crds, p.controller, p.ui, policies))
 	if err != nil {
 		return failWithRollback(c, opts, snap, err)
 	}
@@ -203,7 +203,7 @@ func Run(ctx context.Context, c client.Client, opts Options) error {
 	bundle := make([]ref, 0, len(applied))
 
 	for _, o := range applied {
-		bundle = append(bundle, refOf(o))
+		bundle = append(bundle, ref{APIVersion: o.GetAPIVersion(), Kind: o.GetKind(), Namespace: o.GetNamespace(), Name: o.GetName()})
 	}
 
 	prev, err := readInventory(ctx, c, opts.Namespace, opts.Log)

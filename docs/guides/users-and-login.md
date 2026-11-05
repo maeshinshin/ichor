@@ -298,10 +298,18 @@ The built-in roles are:
 |---|---|
 | `viewer` | read clusters, machines, operations and nodes |
 | `operator` | viewer, plus edit machines and config, and start routine operations |
-| `admin` | operator, plus delete, user administration, sign-in settings and the destructive operations |
+| `admin` | operator, plus delete, user administration, sign-in settings, the Cilium Helm values and the destructive operations |
 
 A role is a group in Kubernetes. A custom permission is a ClusterRole bound to
 the group `ichor:<name>` of the user. No built-in role can read secrets.
+
+Changing the Cilium Helm values (`spec.cni.cilium.values`: the Cilium page, `ichor
+cni values set|edit`, `ichor adopt --cilium-values`, `kubectl`) needs the verb
+`update` on `talosclusters/cilium-values`, which only `admin` holds:
+the chart can run privileged pods on every node. An `operator` sees the values
+read-only, and a write of theirs that changes the values is refused; an edit of the
+cluster that leaves them as they are is not. To let someone else change them, bind
+a ClusterRole with that verb to their group.
 
 A new user has no password until an admin sets one. The admin can set a
 password, or ask for a generated one, which is shown once. The user changes it

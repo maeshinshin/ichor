@@ -350,22 +350,31 @@ func (st *adoptState) planPhase(deps adoptDeps) (*adoptPlanned, error) {
 		return nil, err
 	}
 
+	if st.fresh || st.adding {
+		reportMachines(deps.say, st.nodes)
+	}
+
 	toCreate := reportPlans(deps.say, plans)
 	pl := &adoptPlanned{owned: reportOwned(deps.say, plans)}
 
 	pl.writable, pl.blocked = splitBlocked(st.nodes, plans)
 	pl.held = st.heldNodes(pl.writable)
 
+	// Before "nothing to adopt": a machine that is blocked does not match a fresh render.
+	if (st.fresh || st.adding) && len(pl.writable) == 0 {
+		return nil, fmt.Errorf("adopt: every machine is blocked by configuration Ichor cannot represent (%s); nothing was written", strings.Join(pl.blocked, ", "))
+	}
+
 	if !st.fresh && len(toCreate) == 0 && len(pl.held) == 0 {
-		deps.say(adoptInfo, "nothing to adopt, every machine already matches a fresh render")
+		if len(pl.blocked) > 0 {
+			deps.say(adoptWarn, "nothing to adopt: %s blocked by configuration Ichor cannot represent (see above)", strings.Join(pl.blocked, ", "))
+		} else {
+			deps.say(adoptInfo, "nothing to adopt, every machine already matches a fresh render")
+		}
 
 		pl.nothing = true
 
 		return pl, nil
-	}
-
-	if (st.fresh || st.adding) && len(pl.writable) == 0 {
-		return nil, fmt.Errorf("adopt: every machine is blocked by configuration Ichor cannot represent (%s); nothing was written", strings.Join(pl.blocked, ", "))
 	}
 
 	pl.patches = make([]ichorv1alpha1.TalosConfigPatch, 0, len(toCreate))
@@ -1291,6 +1300,23 @@ func ciliumPolicyCRDPresent(ctx context.Context, r client.Reader) bool {
 	return r.Get(ctx, types.NamespacedName{Name: "ciliumnetworkpolicies.cilium.io"}, crd) == nil
 }
 
+// reportMachines says, per machine adopt will create a TalosMachine for, the role and install disk it
+// read from the node's own configuration: they are what the TalosMachine will carry.
+func reportMachines(say adoptSay, nodes []*adoptNode) {
+	for _, n := range nodes {
+		if n.Skipped != "" {
+			continue
+		}
+
+		disk := "not stated in the node's configuration"
+		if n.InstallDisk != "" {
+			disk = n.InstallDisk
+		}
+
+		say(adoptInfo, "machine %q: role %s, install disk %s", n.M.Name, cmp.Or(n.M.Spec.Role, "unknown"), disk)
+	}
+}
+
 // reportPlans says a line per machine and returns the
 // plans that have a patch ready to create.
 func reportPlans(say adoptSay, plans []*adoptPlan) []*adoptPlan {
@@ -1306,7 +1332,7 @@ func reportPlans(say adoptSay, plans []*adoptPlan) []*adoptPlan {
 
 			toCreate = append(toCreate, p)
 		case len(p.UnrepresentablePaths) > 0:
-			say(adoptWarn, "machine %q: drift found in %d field(s) that adopt cannot patch automatically: %s",
+			say(adoptWarn, "machine %q: blocked, it differs from a fresh render in %d field(s) that adopt cannot patch automatically: %s",
 				p.Machine, len(p.UnrepresentablePaths), strings.Join(p.UnrepresentablePaths, ", "))
 			for _, line := range explainUnrepresentable(p.UnrepresentablePaths) {
 				say(adoptWarn, "machine %q: %s", p.Machine, line)
@@ -1330,7 +1356,9 @@ const cniHint = "the CNI selection has no spec field; Ichor leaves it as the nod
 const (
 	installHint = "set TalosMachine spec.install (disk, image, wipe) for this machine; a disk selector that is not one wwid, serial, " +
 		"by-id, bus-path or device-path match, extra kernel arguments, extensions and the bootloader options have no spec field"
-	mirrorHint = "set TalosCluster spec.registries (host, endpoints, skipFallback, overridePath) to the node's value; every node must state the " +
+	mirrorHint = "the node and TalosCluster spec.registries disagree on registry mirrors, and every machine is rendered with the cluster's: " +
+		"if the node has none or other ones, add the cluster's mirrors to the node's own configuration and run adopt again; if the node's " +
+		"are the ones to keep, set spec.registries (host, endpoints, skipFallback, overridePath) to them. Every node must state the " +
 		"same mirrors, and one overridePath value for all of a host's endpoints"
 	registryAuthHint = "registry credentials are never copied into Ichor: create the TalosCluster yourself with spec.registries[].authSecretRef " +
 		"(a Secret in the controller's namespace holding password, auth or identityToken), then run adopt again"

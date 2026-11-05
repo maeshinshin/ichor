@@ -50,46 +50,32 @@ func injectStagedVersions(
 		return cfg, nil
 	}
 
+	worker := cfg.Machine().Type() == machine.TypeWorker
+
 	var patches []configpatcher.Patch
 
-	add := func(b []byte, err error) error {
-		if err != nil {
-			return err
+	for _, s := range []struct {
+		version, repository, what string
+		controlPlaneOnly          bool
+		with                      func(*coreconfig.VersionContract, string) ([]byte, error)
+	}{
+		{staged.ControllerManagerVersion, constants.KubernetesControllerManagerImage, "controller-manager", true,
+			stdpatches.WithKubeControllerManagerImage},
+		{staged.SchedulerVersion, constants.KubernetesSchedulerImage, "scheduler", true,
+			stdpatches.WithKubeSchedulerImage},
+		{staged.KubeletVersion, constants.KubeletImage, "kubelet", false, stdpatches.WithKubeletImage},
+		{staged.KubeProxyVersion, constants.KubeProxyImage, "kube-proxy", true, stdpatches.WithKubeProxyImage},
+	} {
+		if s.version == "" || (s.controlPlaneOnly && worker) {
+			continue
 		}
 
-		p, err := configpatcher.LoadPatch(b)
+		p, err := stdpatches.PreparePatch(s.with(contract, image(s.repository, s.version)))
 		if err != nil {
-			return err
+			return nil, fmt.Errorf("render: pinning the %s image: %w", s.what, err)
 		}
 
 		patches = append(patches, p)
-
-		return nil
-	}
-
-	if v := staged.ControllerManagerVersion; v != "" && cfg.Machine().Type() != machine.TypeWorker {
-		img := image(constants.KubernetesControllerManagerImage, v)
-		if err := add(stdpatches.WithKubeControllerManagerImage(contract, img)); err != nil {
-			return nil, fmt.Errorf("render: pinning the controller-manager image: %w", err)
-		}
-	}
-
-	if v := staged.SchedulerVersion; v != "" && cfg.Machine().Type() != machine.TypeWorker {
-		if err := add(stdpatches.WithKubeSchedulerImage(contract, image(constants.KubernetesSchedulerImage, v))); err != nil {
-			return nil, fmt.Errorf("render: pinning the scheduler image: %w", err)
-		}
-	}
-
-	if v := staged.KubeletVersion; v != "" {
-		if err := add(stdpatches.WithKubeletImage(contract, image(constants.KubeletImage, v))); err != nil {
-			return nil, fmt.Errorf("render: pinning the kubelet image: %w", err)
-		}
-	}
-
-	if v := staged.KubeProxyVersion; v != "" && cfg.Machine().Type() != machine.TypeWorker {
-		if err := add(stdpatches.WithKubeProxyImage(contract, image(constants.KubeProxyImage, v))); err != nil {
-			return nil, fmt.Errorf("render: pinning the kube-proxy image: %w", err)
-		}
 	}
 
 	if len(patches) == 0 {

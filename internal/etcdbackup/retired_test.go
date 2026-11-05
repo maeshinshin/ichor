@@ -17,9 +17,6 @@ limitations under the License.
 package etcdbackup
 
 import (
-	"bytes"
-	"errors"
-	"io"
 	"testing"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -43,19 +40,7 @@ func TestRetiredSecretboxKeysKeepOlderBackupsReadable(t *testing.T) {
 	plain := makeSnapshot("etcd data")
 	before := sealed(t, plain, oldKey)
 
-	open := func(enc []byte, k Key) error {
-		r, err := Decrypt(bytes.NewReader(enc), k)
-		if err != nil {
-			return err
-		}
-
-		got, err := io.ReadAll(r)
-		if err == nil && !bytes.Equal(got, plain) {
-			err = errors.New("plaintext differs")
-		}
-
-		return err
-	}
+	open := func(enc []byte, k Key) error { return opens(enc, k, plain) }
 
 	withoutRetired, err := DeriveKey(rotated)
 	if err != nil {

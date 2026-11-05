@@ -133,6 +133,21 @@ func (m memStore) Get(_ context.Context, key string) (io.ReadCloser, error) {
 
 func (m memStore) Delete(_ context.Context, key string) error { delete(m, key); return nil }
 
+// opens decrypts enc with k and reports why it does not yield plain.
+func opens(enc []byte, k Key, plain []byte) error {
+	r, err := Decrypt(bytes.NewReader(enc), k)
+	if err != nil {
+		return err
+	}
+
+	got, err := io.ReadAll(r)
+	if err == nil && !bytes.Equal(got, plain) {
+		err = errors.New("plaintext differs")
+	}
+
+	return err
+}
+
 func sealed(t *testing.T, plain []byte, pass Key) []byte {
 	t.Helper()
 

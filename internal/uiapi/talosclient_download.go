@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"path"
 	"slices"
 	"strings"
@@ -30,11 +31,9 @@ import (
 	"github.com/cosi-project/runtime/pkg/resource"
 	"github.com/cosi-project/runtime/pkg/resource/meta"
 	"github.com/cosi-project/runtime/pkg/state"
-	"github.com/siderolabs/crypto/x509"
 	"github.com/siderolabs/talos/pkg/machinery/api/common"
 	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/siderolabs/talos/pkg/machinery/client"
-	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
 	"github.com/siderolabs/talos/pkg/machinery/constants"
 	yaml "go.yaml.in/yaml/v4"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -85,11 +84,9 @@ func NewMachineryDownloadTalosClient(
 		return nil, errors.New("downloads need a certificate for the call")
 	}
 
-	cfg := clientconfig.NewConfig(cluster.Name, []string{m.DialEndpoint()}, id.CA, &x509.PEMEncodedCertificateAndKey{Crt: id.Crt, Key: id.Key})
-
-	c, err := client.New(ctx, client.WithConfig(cfg))
+	c, err := dialTalos(ctx, cluster, m, id)
 	if err != nil {
-		return nil, fmt.Errorf("dialing Talos API: %w", err)
+		return nil, err
 	}
 
 	return &machineryDownloadClient{c: c}, nil
@@ -146,14 +143,7 @@ func (t *machineryDownloadClient) CollectSupport(
 			problems = append(problems, what+": "+truncateText(err.Error(), 300))
 		}
 
-		names := make([]string, 0, len(files))
-		for n := range files {
-			names = append(names, n)
-		}
-
-		slices.Sort(names)
-
-		for _, n := range names {
+		for _, n := range slices.Sorted(maps.Keys(files)) {
 			if err := add(n, files[n]); err != nil {
 				return err
 			}
@@ -301,7 +291,7 @@ func (t *machineryDownloadClient) serviceLogs(ctx context.Context, problems *[]s
 		}
 	}
 
-	out["services.yaml"] = mustYAML(infos)
+	out["services.yaml"], _ = yaml.Marshal(infos)
 
 	for _, s := range infos {
 		stream, err := t.c.Logs(ctx, constants.SystemContainerdNamespace, common.ContainerDriver_CONTAINERD, s.ID, false, bundleLogTailLines)
@@ -453,12 +443,6 @@ func collectResources(ctx context.Context, st state.State, problems *[]string) (
 func mustJSON(v any) []byte {
 	// ponytail: encoding/json of plain structs and maps cannot fail.
 	raw, _ := json.MarshalIndent(v, "", "  ")
-
-	return raw
-}
-
-func mustYAML(v any) []byte {
-	raw, _ := yaml.Marshal(v)
 
 	return raw
 }

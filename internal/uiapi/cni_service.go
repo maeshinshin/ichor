@@ -188,7 +188,7 @@ func (s *Server) countNodes(ctx context.Context) int {
 // mayEditCiliumValues asks, as the caller, for update on talosclusters/cilium-values.
 func (s *Server) mayEditCiliumValues(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) (bool, error) {
 	return s.mayAll(ctx, authv1.ResourceAttributes{
-		Namespace: cluster.Namespace, Name: cluster.Name, Group: ichorv1alpha1.GroupVersion.Group, Resource: "talosclusters",
+		Namespace: cluster.Namespace, Name: cluster.Name, Group: ichorv1alpha1.GroupVersion.Group, Resource: resourceTalosClusters,
 		Verb: ichorv1alpha1.CiliumValuesVerb, Subresource: ichorv1alpha1.CiliumValuesSubresource,
 	})
 }

@@ -38,7 +38,7 @@ var secretsNamespaceKeys = []string{
 // cilium-*-secrets can only land in Cilium's own namespace.
 func TestValidateValues_SecretsNamespacesArePinned(t *testing.T) {
 	for _, key := range secretsNamespaceKeys {
-		for _, v := range []any{"ichor-system", "cilium-secrets", "", nil} {
+		for _, v := range []any{"ichor-system", ciliumSecretsNamespace, "", nil} {
 			user := map[string]any{}
 			values.Set(user, key, v)
 
@@ -53,13 +53,15 @@ func TestValidateValues_SecretsNamespacesArePinned(t *testing.T) {
 // The effective values put every secretsNamespace name in cilium-secrets, bgpControlPlane included
 // (the chart's own default for it is kube-system).
 func TestEffectiveValues_SecretsNamespacesAreCiliumsOwn(t *testing.T) {
-	eff, err := EffectiveValues(map[string]any{"bgpControlPlane": map[string]any{keyEnabled: true}}, cni.KubeProxyEnabled, "", 0)
+	user := map[string]any{"bgpControlPlane": map[string]any{keyEnabled: true}}
+
+	eff, err := EffectiveValues(user, cni.KubeProxyEnabled, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for _, key := range secretsNamespaceKeys {
-		if got, _ := values.Get(eff, key); got != "cilium-secrets" {
+		if got, _ := values.Get(eff, key); got != ciliumSecretsNamespace {
 			t.Errorf("%s = %v, want cilium-secrets", key, got)
 		}
 	}
@@ -115,7 +117,7 @@ func TestBootstrapManifest_SecretsRolesStayInCiliumsNamespace(t *testing.T) {
 
 		roles++
 
-		if o.Metadata.Namespace != "cilium-secrets" {
+		if o.Metadata.Namespace != ciliumSecretsNamespace {
 			t.Errorf("%s %q is in namespace %q, want cilium-secrets", o.Kind, o.Metadata.Name, o.Metadata.Namespace)
 		}
 	}

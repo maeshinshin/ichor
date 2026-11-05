@@ -1094,6 +1094,7 @@ export const en = {
   'cilium.loading': 'Loading Cilium values…',
   'cilium.noCluster': 'There is no cluster to show Cilium settings for.',
   'cilium.noWrite': 'You may view these values but not change them.',
+  'cilium.noValuesWrite': 'Changing the Cilium values needs the update verb on talosclusters/cilium-values, which only the ichor-admin role holds. You can read the values.',
   'cilium.effective': 'Effective values',
   'cilium.effectiveHint': 'What Cilium is rendered with: Ichor defaults, then your values, then the keys Ichor manages.',
   'cilium.owned': 'Managed by Ichor',

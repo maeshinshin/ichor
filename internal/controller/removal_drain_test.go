@@ -24,7 +24,6 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -56,8 +55,7 @@ var _ = Describe("a removal whose drain is blocked", func() {
 		}
 
 		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
+			reconcileOK(r, cp)
 		}
 
 		var live ichorv1alpha1.TalosMachine
@@ -71,9 +69,7 @@ var _ = Describe("a removal whose drain is blocked", func() {
 		Expect(err).NotTo(HaveOccurred(), "a blocked drain is a wait, not an error: the error backoff grows to 1000s")
 		Expect(res.RequeueAfter).To(Equal(drainRetryInterval), "retried on the fixed short interval")
 
-		cond := apimeta.FindStatusCondition(fetchMachine(cp1).Status.Conditions, conditionRemoval)
-		Expect(cond).NotTo(BeNil())
-		Expect(cond.Reason).To(Equal(reasonDrainFailed))
+		cond := expectRemoval(fetchMachine(cp1), reasonDrainFailed)
 		Expect(cond.Message).To(ContainSubstring("bare-pod"))
 		Eventually(recorder.Events).Should(Receive(And(ContainSubstring(reasonDrainFailed), ContainSubstring("bare-pod"))))
 

@@ -49,32 +49,15 @@ func loadKubeconfig(path string) (*rest.Config, error) {
 func cliScheme() (*runtime.Scheme, error) {
 	scheme := runtime.NewScheme()
 
-	if err := corev1.AddToScheme(scheme); err != nil {
-		return nil, err
-	}
-
-	// apps/v1: init turns on users by editing the ichor-ui Deployment (ADR 0094).
-	if err := appsv1.AddToScheme(scheme); err != nil {
-		return nil, err
-	}
-
-	// discovery/v1: init and adopt wait for the webhook Service's ready endpoint.
-	if err := discoveryv1.AddToScheme(scheme); err != nil {
-		return nil, err
-	}
-
-	// authorization/v1: local mode runs the uiapi server in-process, and its
-	// override and diagnostics checks create SelfSubjectAccessReviews.
-	if err := authv1.AddToScheme(scheme); err != nil {
-		return nil, err
-	}
-
+	// corev1; apps/v1: init turns on users by editing the ichor-ui Deployment (ADR 0094);
+	// discovery/v1: init and adopt wait for the webhook Service's ready endpoint;
+	// authorization/v1: local mode runs the uiapi server in-process, and its override and
+	// diagnostics checks create SelfSubjectAccessReviews;
 	// rbac/v1: `ichor upgrade ichor` lists roles that still grant the earlier override verb.
-	if err := rbacv1.AddToScheme(scheme); err != nil {
-		return nil, err
-	}
+	builder := runtime.NewSchemeBuilder(corev1.AddToScheme, appsv1.AddToScheme, discoveryv1.AddToScheme, authv1.AddToScheme,
+		rbacv1.AddToScheme, ichorv1alpha1.AddToScheme)
 
-	if err := ichorv1alpha1.AddToScheme(scheme); err != nil {
+	if err := builder.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 

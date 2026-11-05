@@ -39,7 +39,6 @@ const (
 	TalosEtcdBackupReasonFailed    = "Failed"
 	TalosEtcdBackupReasonStale     = "Stale"
 	TalosEtcdBackupReasonSuspended = "Suspended"
-	TalosEtcdBackupReasonPending   = "Pending"
 )
 
 // BackupNowAnnotation, set by `ichor etcd backup now` (or the UI) to an RFC 3339 time, asks the

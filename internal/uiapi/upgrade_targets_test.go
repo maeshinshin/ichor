@@ -183,28 +183,19 @@ func TestListUpgradeTargetsKeepsTheLastListWhenTheCheckFailed(t *testing.T) {
 
 // Cilium moves only with the chart Ichor embeds: there is no list of
 // Cilium targets, even when a status written by an earlier controller still carries one.
-func TestListUpgradeTargetsHasNoCiliumList(t *testing.T) {
+func TestListUpgradeTargetsRefusesAnotherKindAndHasNoCiliumList(t *testing.T) {
 	inst := recordedLists(nil, nil, "")
 	inst.Status.UpgradeTargets.Cilium = []string{"v1.20.6", "v1.20.5"}
 
 	srv, _ := opServer(t, upgradeCluster(fixtureTalos, "1.20.4"), inst)
 
-	_, err := srv.ListUpgradeTargets(context.Background(), connect.NewRequest(&pb.ListUpgradeTargetsRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_CNI,
-	}))
-	if connect.CodeOf(err) != connect.CodeInvalidArgument {
-		t.Fatalf("err = %v, want InvalidArgument", err)
-	}
-}
-
-func TestListUpgradeTargetsRefusesAnotherKind(t *testing.T) {
-	srv, _ := opServer(t, upgradeCluster(fixtureTalos, "1.20.0"))
-
-	_, err := srv.ListUpgradeTargets(context.Background(), connect.NewRequest(&pb.ListUpgradeTargetsRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_UNSPECIFIED,
-	}))
-	if connect.CodeOf(err) != connect.CodeInvalidArgument {
-		t.Fatalf("err = %v, want InvalidArgument", err)
+	for _, kind := range []pb.OperationKind{pb.OperationKind_OPERATION_KIND_CNI, pb.OperationKind_OPERATION_KIND_UNSPECIFIED} {
+		_, err := srv.ListUpgradeTargets(context.Background(), connect.NewRequest(&pb.ListUpgradeTargetsRequest{
+			Cluster: objectRef(opNS, opCluster), Kind: kind,
+		}))
+		if connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Fatalf("%s: err = %v, want InvalidArgument", kind, err)
+		}
 	}
 }
 

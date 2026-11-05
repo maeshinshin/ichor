@@ -83,22 +83,18 @@ func TestPlanKeyRotationNamesTheControlPlanesTheStagesAndTheStaleBundle(t *testi
 	}
 
 	// Without the secretbox target there is nothing to re-encrypt, without the other nothing to settle.
-	plan, err = keyPlan(srv, &pb.KeyRotationRequest{Targets: []string{ichorv1alpha1.KeyRotationTargetSecretbox}})
-	if err != nil {
-		t.Fatal(err)
-	}
+	for target, want := range map[string]string{
+		ichorv1alpha1.KeyRotationTargetSecretbox:      "Accepting,Issuing,Reencrypting,Dropping",
+		ichorv1alpha1.KeyRotationTargetServiceAccount: "Accepting,Issuing,SettlingTokens,Dropping",
+	} {
+		plan, err = keyPlan(srv, &pb.KeyRotationRequest{Targets: []string{target}})
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	if got := strings.Join(plan.GetStages(), ","); got != "Accepting,Issuing,Reencrypting,Dropping" {
-		t.Fatalf("secretbox-only stages = %s", got)
-	}
-
-	plan, err = keyPlan(srv, &pb.KeyRotationRequest{Targets: []string{ichorv1alpha1.KeyRotationTargetServiceAccount}})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if got := strings.Join(plan.GetStages(), ","); got != "Accepting,Issuing,SettlingTokens,Dropping" {
-		t.Fatalf("service-account-only stages = %s", got)
+		if got := strings.Join(plan.GetStages(), ","); got != want {
+			t.Fatalf("%s-only stages = %s, want %s", target, got, want)
+		}
 	}
 }
 
@@ -141,9 +137,7 @@ func TestPlanKeyRotationRefusesWhatItCannotRun(t *testing.T) {
 	}
 
 	// A target (a version) means nothing here.
-	_, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
-		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_KEY_ROTATION, Target: opNewTalos,
-	}))
+	_, err := planOp(srv, pb.OperationKind_OPERATION_KIND_KEY_ROTATION, opNewTalos)
 	if connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Errorf("a target: want InvalidArgument, got %v", err)
 	}

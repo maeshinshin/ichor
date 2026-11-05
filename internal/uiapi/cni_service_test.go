@@ -247,8 +247,9 @@ var _ = Describe("CniService", func() {
 			Expect(replicas).To(BeEquivalentTo(1))
 		})
 
-		It("keeps the chart default once the cluster has three Nodes", func() {
-			haWithNodes(3)
+		// Three Nodes, or none to count (the desired control-plane count then applies).
+		DescribeTable("keeps the chart default", func(nodes int) {
+			haWithNodes(nodes)
 
 			got, err := s.GetCiliumValues(asCniUser(cniViewerUser), connect.NewRequest(&pb.GetCiliumValuesRequest{Cluster: ref}))
 			Expect(err).NotTo(HaveOccurred())
@@ -256,17 +257,7 @@ var _ = Describe("CniService", func() {
 			_, ok := operatorReplicas(got.Msg.GetEffectiveYaml())
 			Expect(ok).To(BeFalse())
 			Expect(got.Msg.GetDefaultsYaml()).NotTo(ContainSubstring("replicas"))
-		})
-
-		It("falls back to the desired control-plane count when there are no Nodes to count", func() {
-			haWithNodes(0)
-
-			got, err := s.GetCiliumValues(asCniUser(cniViewerUser), connect.NewRequest(&pb.GetCiliumValuesRequest{Cluster: ref}))
-			Expect(err).NotTo(HaveOccurred())
-
-			_, ok := operatorReplicas(got.Msg.GetEffectiveYaml())
-			Expect(ok).To(BeFalse())
-		})
+		}, Entry("once the cluster has three Nodes", 3), Entry("when there are no Nodes to count", 0))
 	})
 
 	It("lets an operator set the values, shows them in the diff, and clears them again", func() {

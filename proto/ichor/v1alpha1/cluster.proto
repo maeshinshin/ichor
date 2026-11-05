@@ -34,7 +34,8 @@ message AddDiscoveryCidrRequest {
   ObjectRef cluster = 1;
   // cidr is an IPv4 range of /24 or smaller, e.g. "192.168.0.0/24".
   string cidr = 2;
-  string reason = 3;
+  // Deprecated: no reason is asked for any more. Never read or set; kept so the wire format is unchanged.
+  string reason = 3 [deprecated = true];
 }
 
 message AddDiscoveryCidrResponse {
@@ -45,13 +46,15 @@ message AddDiscoveryCidrResponse {
 message RemoveDiscoveryAddressRequest {
   ObjectRef cluster = 1;
   string address = 2;
-  string reason = 3;
+  // Deprecated: no reason is asked for any more. Never read or set; kept so the wire format is unchanged.
+  string reason = 3 [deprecated = true];
 }
 
 message RemoveDiscoveryCidrRequest {
   ObjectRef cluster = 1;
   string cidr = 2;
-  string reason = 3;
+  // Deprecated: no reason is asked for any more. Never read or set; kept so the wire format is unchanged.
+  string reason = 3 [deprecated = true];
 }
 
 message RemoveDiscoveryAddressResponse {
@@ -76,7 +79,8 @@ message AddDiscoveryAddressRequest {
   ObjectRef cluster = 1;
   // address is a single IPv4 address, e.g. "192.168.0.50".
   string address = 2;
-  string reason = 3;
+  // Deprecated: no reason is asked for any more. Never read or set; kept so the wire format is unchanged.
+  string reason = 3 [deprecated = true];
   // Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
   Override override = 4 [deprecated = true];
 }

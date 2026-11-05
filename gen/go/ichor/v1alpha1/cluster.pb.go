@@ -144,7 +144,10 @@ type AddDiscoveryCidrRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Cluster *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
 	// cidr is an IPv4 range of /24 or smaller, e.g. "192.168.0.0/24".
-	Cidr          string `protobuf:"bytes,2,opt,name=cidr,proto3" json:"cidr,omitempty"`
+	Cidr string `protobuf:"bytes,2,opt,name=cidr,proto3" json:"cidr,omitempty"`
+	// Deprecated: no reason is asked for any more. Never read or set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/cluster.proto.
 	Reason        string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -194,6 +197,7 @@ func (x *AddDiscoveryCidrRequest) GetCidr() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/cluster.proto.
 func (x *AddDiscoveryCidrRequest) GetReason() string {
 	if x != nil {
 		return x.Reason
@@ -254,10 +258,13 @@ func (x *AddDiscoveryCidrResponse) GetAudit() *AuditRecord {
 }
 
 type RemoveDiscoveryAddressRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Cluster       *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
-	Address       string                 `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
-	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Cluster *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	Address string                 `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
+	// Deprecated: no reason is asked for any more. Never read or set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/cluster.proto.
+	Reason        string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -306,6 +313,7 @@ func (x *RemoveDiscoveryAddressRequest) GetAddress() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/cluster.proto.
 func (x *RemoveDiscoveryAddressRequest) GetReason() string {
 	if x != nil {
 		return x.Reason
@@ -314,10 +322,13 @@ func (x *RemoveDiscoveryAddressRequest) GetReason() string {
 }
 
 type RemoveDiscoveryCidrRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Cluster       *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
-	Cidr          string                 `protobuf:"bytes,2,opt,name=cidr,proto3" json:"cidr,omitempty"`
-	Reason        string                 `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Cluster *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	Cidr    string                 `protobuf:"bytes,2,opt,name=cidr,proto3" json:"cidr,omitempty"`
+	// Deprecated: no reason is asked for any more. Never read or set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/cluster.proto.
+	Reason        string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -366,6 +377,7 @@ func (x *RemoveDiscoveryCidrRequest) GetCidr() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/cluster.proto.
 func (x *RemoveDiscoveryCidrRequest) GetReason() string {
 	if x != nil {
 		return x.Reason
@@ -570,7 +582,10 @@ type AddDiscoveryAddressRequest struct {
 	Cluster *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
 	// address is a single IPv4 address, e.g. "192.168.0.50".
 	Address string `protobuf:"bytes,2,opt,name=address,proto3" json:"address,omitempty"`
-	Reason  string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
+	// Deprecated: no reason is asked for any more. Never read or set; kept so the wire format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/cluster.proto.
+	Reason string `protobuf:"bytes,3,opt,name=reason,proto3" json:"reason,omitempty"`
 	// Deprecated: GitOps is no longer part of Ichor. Never set; kept so the wire format is unchanged.
 	//
 	// Deprecated: Marked as deprecated in ichor/v1alpha1/cluster.proto.
@@ -623,6 +638,7 @@ func (x *AddDiscoveryAddressRequest) GetAddress() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/cluster.proto.
 func (x *AddDiscoveryAddressRequest) GetReason() string {
 	if x != nil {
 		return x.Reason
@@ -1481,22 +1497,22 @@ var File_ichor_v1alpha1_cluster_proto protoreflect.FileDescriptor
 
 const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\n" +
-	"\x1cichor/v1alpha1/cluster.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\"z\n" +
+	"\x1cichor/v1alpha1/cluster.proto\x12\x0eichor.v1alpha1\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1bichor/v1alpha1/common.proto\"~\n" +
 	"\x17AddDiscoveryCidrRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12\x12\n" +
-	"\x04cidr\x18\x02 \x01(\tR\x04cidr\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\"\x80\x01\n" +
+	"\x04cidr\x18\x02 \x01(\tR\x04cidr\x12\x1a\n" +
+	"\x06reason\x18\x03 \x01(\tB\x02\x18\x01R\x06reason\"\x80\x01\n" +
 	"\x18AddDiscoveryCidrResponse\x121\n" +
 	"\acluster\x18\x01 \x01(\v2\x17.ichor.v1alpha1.ClusterR\acluster\x121\n" +
-	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"\x86\x01\n" +
+	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"\x8a\x01\n" +
 	"\x1dRemoveDiscoveryAddressRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12\x18\n" +
-	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\"}\n" +
+	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x1a\n" +
+	"\x06reason\x18\x03 \x01(\tB\x02\x18\x01R\x06reason\"\x81\x01\n" +
 	"\x1aRemoveDiscoveryCidrRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12\x12\n" +
-	"\x04cidr\x18\x02 \x01(\tR\x04cidr\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\"\x86\x01\n" +
+	"\x04cidr\x18\x02 \x01(\tR\x04cidr\x12\x1a\n" +
+	"\x06reason\x18\x03 \x01(\tB\x02\x18\x01R\x06reason\"\x86\x01\n" +
 	"\x1eRemoveDiscoveryAddressResponse\x121\n" +
 	"\acluster\x18\x01 \x01(\v2\x17.ichor.v1alpha1.ClusterR\acluster\x121\n" +
 	"\x05audit\x18\x02 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"\x83\x01\n" +
@@ -1506,11 +1522,11 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\x1eDismissCARotationAdviceRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"T\n" +
 	"\x1fDismissCARotationAdviceResponse\x121\n" +
-	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"\xbd\x01\n" +
+	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit\"\xc1\x01\n" +
 	"\x1aAddDiscoveryAddressRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12\x18\n" +
-	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\x128\n" +
+	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x1a\n" +
+	"\x06reason\x18\x03 \x01(\tB\x02\x18\x01R\x06reason\x128\n" +
 	"\boverride\x18\x04 \x01(\v2\x18.ichor.v1alpha1.OverrideB\x02\x18\x01R\boverride\"\xcd\x01\n" +
 	"\x1bAddDiscoveryAddressResponse\x121\n" +
 	"\acluster\x18\x01 \x01(\v2\x17.ichor.v1alpha1.ClusterR\acluster\x121\n" +

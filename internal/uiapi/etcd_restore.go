@@ -266,13 +266,11 @@ func (s *Server) createEtcdRestore(ctx context.Context, p *opPlan) (*pb.CreateOp
 		return nil, invalid("type the cluster name %q to confirm the restore", cluster.Name)
 	}
 
-	// A restore is always an override; the reason is optional, and the spec's reason (required by the CRD)
-	// then says that none was given.
+	// A restore is always an override; no reason is asked for.
 	if rp.bg == nil {
 		return nil, invalid("an etcd restore needs the override: it is checked against the override permission on the cluster")
 	}
 
-	reason := overrideReason(rp.bg.GetReason())
 	if err := s.authorizeOverride(ctx, cluster); err != nil {
 		return nil, err
 	}
@@ -280,7 +278,7 @@ func (s *Server) createEtcdRestore(ctx context.Context, p *opPlan) (*pb.CreateOp
 	op := s.newOperation(ctx, cluster, ichorv1alpha1.TalosOperationSpec{
 		Kind: p.kind,
 		EtcdRestore: &ichorv1alpha1.TalosOperationEtcdRestoreSpec{
-			BackupRef: corev1.LocalObjectReference{Name: rp.backup.Name}, Snapshot: rp.snapshot, Confirm: cluster.Name, Reason: reason,
+			BackupRef: corev1.LocalObjectReference{Name: rp.backup.Name}, Snapshot: rp.snapshot, Confirm: cluster.Name,
 		},
 	})
 
@@ -289,11 +287,9 @@ func (s *Server) createEtcdRestore(ctx context.Context, p *opPlan) (*pb.CreateOp
 	}
 
 	audit := s.opAudit(ctx, "create-override", objectRef(op.Namespace, op.Name))
-	audit.Reason = reason
-
-	msg := fmt.Sprintf("etcd restore of %s from snapshot %s requested by %s under override: %s", cluster.Name, rp.snapshot, audit.Actor, reason)
+	msg := fmt.Sprintf("etcd restore of %s from snapshot %s requested by %s under override", cluster.Name, rp.snapshot, audit.Actor)
 	if err := s.emitWarningEvent(ctx, cluster, kindTalosCluster, "Override", msg); err != nil {
-		audit.Reason += " (the Kubernetes Event could not be recorded)"
+		audit.Reason = "the Kubernetes Event could not be recorded"
 	}
 
 	return &pb.CreateOperationResponse{Operation: operationToPB(op), Audit: audit}, nil

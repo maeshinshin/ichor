@@ -161,13 +161,15 @@ func (x *Condition) GetLastTransitionTime() *timestamppb.Timestamp {
 }
 
 // Override asks to override a safety check. Setting it
-// on a request means "override": the field's presence is the request, and the reason
-// is optional. The backend allows it only to a signed-in user whose Kubernetes RBAC
-// grants the override verb on the resource, and refuses it otherwise.
+// on a request means "override": the field's presence is the request, and no reason is asked for.
+// The backend allows it only to a signed-in user whose Kubernetes RBAC grants the override verb on
+// the resource, and refuses it otherwise.
 type Override struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// reason is optional: when given it is recorded in the audit record and the
-	// Kubernetes Event. Without one the record says no reason given.
+	// Deprecated: no reason is asked for any more. Never read or set; kept so the wire
+	// format is unchanged.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/common.proto.
 	Reason        string `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -203,6 +205,7 @@ func (*Override) Descriptor() ([]byte, []int) {
 	return file_ichor_v1alpha1_common_proto_rawDescGZIP(), []int{2}
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/common.proto.
 func (x *Override) GetReason() string {
 	if x != nil {
 		return x.Reason
@@ -211,7 +214,7 @@ func (x *Override) GetReason() string {
 }
 
 // AuditRecord is returned by ApproveMachine and RejectMachine so the caller
-// can confirm what was recorded: who did it, when, against what, and why.
+// can confirm what was recorded: who did it, when and against what.
 // "actor" comes from the caller's authenticated identity, not from the
 // request body.
 type AuditRecord struct {
@@ -224,7 +227,8 @@ type AuditRecord struct {
 	// change is not applied until the pull request merges.
 	Action string     `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`
 	Target *ObjectRef `protobuf:"bytes,4,opt,name=target,proto3" json:"target,omitempty"`
-	// reason is optional free text, mainly used for rejections.
+	// reason is never a typed reason. It is empty, or a remark the
+	// backend adds, such as that the Kubernetes Event of an override could not be recorded.
 	Reason        string `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -308,9 +312,9 @@ const file_ichor_v1alpha1_common_proto_rawDesc = "" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x16\n" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x18\n" +
 	"\amessage\x18\x04 \x01(\tR\amessage\x12L\n" +
-	"\x14last_transition_time\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"\"\n" +
-	"\bOverride\x12\x16\n" +
-	"\x06reason\x18\x01 \x01(\tR\x06reason\"\xb2\x01\n" +
+	"\x14last_transition_time\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"&\n" +
+	"\bOverride\x12\x1a\n" +
+	"\x06reason\x18\x01 \x01(\tB\x02\x18\x01R\x06reason\"\xb2\x01\n" +
 	"\vAuditRecord\x12\x14\n" +
 	"\x05actor\x18\x01 \x01(\tR\x05actor\x12*\n" +
 	"\x02at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x02at\x12\x16\n" +

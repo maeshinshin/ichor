@@ -39,7 +39,7 @@ func discoveryCluster(d *ichorv1alpha1.TalosClusterDiscovery) *ichorv1alpha1.Tal
 
 func addAddrReq(addr string) *connect.Request[pb.AddDiscoveryAddressRequest] {
 	return connect.NewRequest(&pb.AddDiscoveryAddressRequest{
-		Cluster: objectRef(testNS, "c"), Address: addr, Reason: "new rack",
+		Cluster: objectRef(testNS, "c"), Address: addr,
 	})
 }
 

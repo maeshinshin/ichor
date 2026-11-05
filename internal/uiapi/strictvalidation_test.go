@@ -78,7 +78,7 @@ var _ = Describe("Writes request strict field validation", func() {
 		rec := &recordingUpdateClient{Client: k8sClient}
 		s := &Server{Client: rec}
 		_, err := s.RejectMachine(ctx, connect.NewRequest(&pb.RejectMachineRequest{
-			Machine: objectRef(m.Namespace, m.Name), Reason: "test",
+			Machine: objectRef(m.Namespace, m.Name),
 		}))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(rec.lastUpdateOptions.FieldValidation).To(Equal("Strict"))

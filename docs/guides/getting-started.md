@@ -75,8 +75,8 @@ nothing, so the `demo-images` steps above are still how you build and push
 the images.
 
 Images you build yourself carry no signature. A cluster installed from them can
-be upgraded later with `ichor upgrade ichor VERSION --skip-signature-check
-"REASON"`, which Ichor records; see
+be upgraded later with `ichor upgrade ichor VERSION --skip-signature-check`,
+which Ichor records; see
 [The installer image on an upgrade](install-with-helm.md#the-installer-image-on-an-upgrade)
 (ADR 0122).
 

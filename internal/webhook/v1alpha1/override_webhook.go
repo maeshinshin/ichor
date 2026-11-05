@@ -244,7 +244,7 @@ func (h *OverrideHandler) handleOperation(ctx context.Context, req admission.Req
 	}
 
 	// A reset wipes the node; an override on any other action overrides the last-worker guard. Either
-	// needs the verb on the machine, whether or not a reason is given (ADR 0110).
+	// needs the verb on the machine (ADR 0110; no reason is asked for, ADR 0130).
 	reset := op.Spec.Node.Action == ichorv1alpha1.NodeActionReset
 	if !reset && !op.Spec.Node.Overrides() {
 		return admission.Allowed("")

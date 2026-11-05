@@ -198,15 +198,15 @@ needs credentials or redirects blobs to a host that is not allowed has no way
 through except the pin plus the recorded skip below.
 
 **Builds nobody signs.** Development and demo images (`v0.0.N-gSHA`) carry no
-signature. Skip the check with a reason, which Ichor records:
+signature. Skip the check, which Ichor records:
 
 ```
-ichor upgrade ichor v0.0.1900000001-g1a2b3c4 --skip-signature-check "demo build, not signed"
+ichor upgrade ichor v0.0.1900000001-g1a2b3c4 --skip-signature-check
 ```
 
 The plan prints a warning before you confirm, the controller emits a Warning
 Event `InstallerSignatureSkipped`, `status.installerImage.verification` becomes
-`Skipped` with the reason, `ichor version` says "signature NOT checked", and the
+`Skipped`, `ichor version` says "signature NOT checked", and the
 UI shows an "Installer not verified" badge on every page and an alert on the
 cluster page. The skip is never inherited: the next `ichor upgrade ichor`
 without the flag checks again (the CLI and the UI write the setting exactly as

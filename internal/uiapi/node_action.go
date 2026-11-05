@@ -384,7 +384,7 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 	}
 
 	// An override (a non-nil request field) is honoured for a reset, and for a reboot or shutdown, where
-	// it overrides the controller's last-worker guard (ADR 0065, amended). The reason is optional (ADR 0110).
+	// it overrides the controller's last-worker guard (ADR 0065, amended). No reason is asked for (ADR 0110, ADR 0130).
 	override := np.bg != nil && (np.action == ichorv1alpha1.NodeActionReset ||
 		np.action == ichorv1alpha1.NodeActionReboot || np.action == ichorv1alpha1.NodeActionShutdown)
 

@@ -100,7 +100,7 @@ table accepts; a refusal passes only with the override verb
 - The installer image of an Ichor upgrade runs by digest and its keyless release
   signature is verified, offline against an embedded Sigstore root, before the
   installer Job is created. `ichor upgrade ichor` takes `--installer-digest` and
-  `--skip-signature-check REASON` (recorded, shown in `ichor version`, the plan
+  `--skip-signature-check` (recorded, shown in `ichor version`, the plan
   and the UI); the API server refuses an installer Job that names a tag. The
   release workflow pushes the controller and ichor-ui images first and builds the
   installer last, so the install manifest embedded in it names both by digest
@@ -170,6 +170,13 @@ table accepts; a refusal passes only with the override verb
 These are decisions made late in the cycle. They matter if you ran a pre-release
 build or wrote scripts against one.
 
+- No free-text reason is asked for anywhere (ADR 0130). `--override-reason`,
+  `ichor machine approve --reason`, `ichor machine reject --reason` and the
+  reason of `--skip-signature-check` are gone, the dialogs of the UI have no
+  reason box, and the CRDs no longer require one (`etcdRestore.reason`, and
+  `installerSignature.reason` with `mode: skip`). The fields stay in the schema,
+  deprecated and unused. The override verb, the typed confirmations and the
+  Events that record who did what are unchanged.
 - The local secrets bundle is encrypted by default. `ichor init` prints a
   generated passphrase once on a terminal and waits for Enter; `ichor adopt
   --recover-secrets` seals the recovered bundle the same way. With no terminal and
@@ -190,8 +197,7 @@ build or wrote scripts against one.
   (`enable-l7-proxy`); with the proxy off the issuer is unreachable unless
   `dynamicTalosEgress` is turned off (ADR 0126).
 - `ichor upgrade ichor` verifies the installer image's signature. Development and
-  demo builds (`v0.0.N-gSHA`) are not signed and need `--skip-signature-check
-  "REASON"`, and, when the controller cannot resolve the tag in its registry,
+  demo builds (`v0.0.N-gSHA`) are not signed and need `--skip-signature-check`, and, when the controller cannot resolve the tag in its registry,
   `--installer-digest sha256:...`. The skip is recorded and never inherited by
   the next upgrade (ADR 0122).
 - Image-only Cilium patches are gone. The Cilium upgrade dialog and `ichor cni

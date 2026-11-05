@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Run the full gate (go test, lint, ui-ci) for the current HEAD as parallel Jobs
 # in the homelab cluster's ichor-e2e namespace; see CONTRIBUTING.md.
-#   make remote-gate        (GATE_SHARDS="ctl:10 cli:4 uiapi:2 rest:3" to resize)
+#   make remote-gate        (GATE_SHARDS="ctl:10 cli:4 uiapi:2 rest:3" to resize;
+#                            GATE_ONLY="cli0 uiapi1" to re-run just those shards)
 # The same file runs inside each pod as `remote-gate.sh pod <group> <k> <n>`.
+# Exit 75 from a pod = INFRA (module download), reported apart from test FAIL.
 # Logs land in remote-gate-out/<shard>.log. Only uncommitted work is NOT tested:
 # the source is `git archive HEAD`.
 set -euo pipefail
@@ -42,10 +44,22 @@ split_test() {
 
 fetch() { curl -fsSL "$1" | tar xz -C /usr/local/bin --strip-components="$2" "$3"; }
 
+# The proxy drops streams now and then: retry the whole download, and exit 75 (INFRA) if it still fails.
+download_modules() {
+  local i
+  for i in 1 2 3; do
+    go mod download && return 0
+    sleep $((i * 20))
+  done
+  echo "INFRA: go mod download failed 3 times"
+  exit 75
+}
+
 pod_main() {
   local group=$1 k=$2 n=$3
   export HOME=/w GOCACHE=/w/gocache GOMODCACHE=/w/gomod GOFLAGS=-buildvcs=false
   export KUBEBUILDER_ASSETS=$PWD/bin/k8s/$ENVTEST PATH=$PWD/bin/k8s/$ENVTEST:$PATH # its kubectl too
+  [ "$group" = ui ] || download_modules
   case $group in
   ctl) split_test ./internal/controller "$k" "$n" ;;
   cli) split_test ./internal/cli "$k" "$n" ;;
@@ -75,8 +89,8 @@ RUN=$(date +%d%H%M%S)
 OUT=remote-gate-out
 JOBS=()
 mkdir -p "$OUT"
-rm -f "$OUT"/*.log "$OUT"/*.status
 START=$(date +%s)
+LABELS=()
 
 # shellcheck disable=SC2329
 cleanup() { # kill the shard waiters, then delete only the Jobs this run created, by explicit name (their pods go with them)
@@ -120,48 +134,80 @@ spec:
 EOF
 }
 
-# shard <label> <image> <group> <k> <n>: run one Job to the end, log to $OUT/<label>.log, record PASS/FAIL.
+# shard <label> <image> <group> <k> <n>: run one Job to the end, log to $OUT/<label>.log, record the status.
+# Runs in a background subshell with errexit off, so every path below must write $OUT/<label>.status.
+# Statuses: PASS, FAIL (tests), INFRA (<step>), NOT RUN (queued | no pod | apply failed).
 shard() {
-  local name=ichor-gate-$RUN-$1 pod t0 t1 rc=FAIL
+  local name=ichor-gate-$RUN-$1 pod='' t0 t1 phase code last deadline
+  set +e
+  status() { echo "$2 $(($(date +%s) - t0))s" >"$OUT/$1.status"; }
   t0=$(date +%s)
-  job "$name" "$2" "$3" "$4" "$5" | k apply -f - >/dev/null
-  until pod=$(k get pod -l job-name="$name" -o name 2>/dev/null) && [ -n "$pod" ]; do sleep 1; done
-  k wait --for=condition=Ready "$pod" --timeout=20m >/dev/null
+  deadline=$((t0 + 3660)) # the Job's activeDeadlineSeconds is 3600 and counts pending time too
+  job "$name" "$2" "$3" "$4" "$5" | k apply -f - >/dev/null || { status "$1" "NOT RUN (apply failed)"; return; }
+  until pod=$(k get pod -l job-name="$name" -o name 2>/dev/null) && [ -n "$pod" ]; do
+    [ "$(date +%s)" -lt "$deadline" ] || { status "$1" "NOT RUN (no pod)"; return; }
+    sleep 2
+  done
+  last=$t0
+  while phase=$(k get "$pod" -o jsonpath='{.status.phase}' 2>/dev/null) && [ "$phase" = Pending ]; do
+    [ "$(date +%s)" -lt "$deadline" ] || break
+    if [ $(($(date +%s) - last)) -ge 180 ]; then
+      last=$(date +%s)
+      echo "$1: still queued after $((last - t0))s: $(k get "$pod" -o jsonpath='{.status.conditions[?(@.type=="PodScheduled")].message}' 2>/dev/null)"
+    fi
+    sleep 5
+  done
+  case ${phase:-} in Running | Succeeded | Failed) ;; *) status "$1" "NOT RUN (queued)"; return ;; esac
+  k wait --for=condition=Ready "$pod" --timeout=300s >/dev/null || { status "$1" "INFRA (pod not ready)"; return; }
   t1=$(date +%s)
-  k exec -i "$pod" -- sh -c 'mkdir -p /w/src && tar xz -C /w/src' <"$OUT/src.tgz"
+  k exec -i "$pod" -- sh -c 'mkdir -p /w/src && tar xz -C /w/src' <"$OUT/src.tgz" || { status "$1" "INFRA (copy source)"; return; }
   case $3 in lint | ui) ;; *)
-    k exec -i "$pod" -- sh -c 'mkdir -p /w/src/bin/k8s && tar xz -C /w/src/bin/k8s' <"$OUT/envtest.tgz" ;;
+    k exec -i "$pod" -- sh -c 'mkdir -p /w/src/bin/k8s && tar xz -C /w/src/bin/k8s' <"$OUT/envtest.tgz" || { status "$1" "INFRA (copy envtest)"; return; } ;;
   esac
   k exec "$pod" -- touch /w/ready
-  k logs -f "$pod" >"$OUT/$1.log" 2>&1 || true
-  k wait --for=condition=complete "job/$name" --timeout=120s >/dev/null 2>&1 && rc=PASS
-  echo "$rc $(($(date +%s) - t1))s (+$((t1 - t0))s queued for a node)" >"$OUT/$1.status"
+  k logs -f "$pod" >"$OUT/$1.log" 2>&1
+  code=$(k get "$pod" -o jsonpath='{.status.containerStatuses[0].state.terminated.exitCode}' 2>/dev/null)
+  if k wait --for=condition=complete "job/$name" --timeout=120s >/dev/null 2>&1; then
+    echo "PASS $(($(date +%s) - t1))s (+$((t1 - t0))s queued for a node)" >"$OUT/$1.status"
+  elif [ "$code" = 75 ]; then
+    echo "INFRA (module download) $(($(date +%s) - t1))s" >"$OUT/$1.status"
+  else
+    echo "FAIL $(($(date +%s) - t1))s (+$((t1 - t0))s queued for a node)" >"$OUT/$1.status"
+  fi
 }
 
-launch() { JOBS+=("ichor-gate-$RUN-$1"); shard "$@" & }
+# launch <label> <image> <group> <k> <n>: start one shard, unless GATE_ONLY is set and does not name it
+launch() {
+  if [ -n "${GATE_ONLY:-}" ] && [[ " $GATE_ONLY " != *" $1 "* ]]; then return 0; fi
+  rm -f "$OUT/$1.log" "$OUT/$1.status"
+  LABELS+=("$1")
+  JOBS+=("ichor-gate-$RUN-$1")
+  shard "$@" &
+}
 
 GOIMG=golang:$GOVER
 launch lint "$GOIMG" lint 0 1
 launch ui "$NODE_IMAGE" ui 0 1
 launch inst "$GOIMG" inst 0 1
-LABELS=(lint ui inst)
 for g in $GATE_SHARDS; do
   for ((i = 0; i < ${g#*:}; i++)); do
     launch "${g%:*}$i" "$GOIMG" "${g%:*}" "$i" "${g#*:}"
-    LABELS+=("${g%:*}$i")
   done
+done
+for w in ${GATE_ONLY:-}; do # a typo must not pass as an empty green run
+  [[ " ${LABELS[*]} " == *" $w "* ]] || { echo "GATE_ONLY: no shard named $w (have: ${LABELS[*]})" >&2; exit 2; }
 done
 wait
 
 fails=0
 echo "== remote gate: $(git rev-parse --short HEAD), $(($(date +%s) - START))s wall =="
 for l in "${LABELS[@]}"; do
-  s=$(cat "$OUT/$l.status" 2>/dev/null || echo "FAIL ?")
+  s=$(cat "$OUT/$l.status" 2>/dev/null || echo "NOT RUN (no status)")
   printf '%-8s %s\n' "$l" "$s"
   [ "${s%% *}" = PASS ] || fails=1
 done
 if [ $fails = 1 ]; then
   echo "== failing tests =="
-  grep -hE -e '--- FAIL' -e '\[FAIL\]' -e $'FAIL\t' "$OUT"/*.log | sort -u || true
+  for l in "${LABELS[@]}"; do grep -hE -e '--- FAIL' -e '\[FAIL\]' -e $'FAIL\t' "$OUT/$l.log" 2>/dev/null || true; done | sort -u
 fi
 exit $fails

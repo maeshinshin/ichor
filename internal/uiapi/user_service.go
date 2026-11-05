@@ -106,17 +106,13 @@ func (s *Server) mayUpdatePasswords(ctx context.Context) error {
 }
 
 func userToPB(u *ichorv1alpha1.IchorUser) *pb.User {
-	out := &pb.User{
+	return &pb.User{
 		Name: u.Name, DisplayName: u.Spec.DisplayName, Email: u.Spec.Email,
 		Roles: u.Spec.Roles, Disabled: u.Spec.Disabled,
 		PasswordSet: meta.IsStatusConditionTrue(u.Status.Conditions, condPasswordSet),
 		Conditions:  conditions(u.Status.Conditions),
+		CreatedAt:   createdAtToPB(u.CreationTimestamp),
 	}
-	if !u.CreationTimestamp.IsZero() {
-		out.CreatedAt = timestamppb.New(u.CreationTimestamp.Time)
-	}
-
-	return out
 }
 
 // invalidArg wraps a validation error as InvalidArgument; nil stays nil.
@@ -523,11 +519,10 @@ func buildKubeconfig(cluster, server, tlsServerName string, ca []byte, user, iss
 	cfg := clientcmdapi.NewConfig()
 	cfg.Clusters[cluster] = &clientcmdapi.Cluster{Server: server, TLSServerName: tlsServerName, CertificateAuthorityData: ca}
 	cfg.AuthInfos[user] = &clientcmdapi.AuthInfo{Exec: &clientcmdapi.ExecConfig{
-		APIVersion:         "client.authentication.k8s.io/v1",
-		Command:            "ichor",
-		Args:               args,
-		InteractiveMode:    clientcmdapi.IfAvailableExecInteractiveMode,
-		ProvideClusterInfo: false,
+		APIVersion:      "client.authentication.k8s.io/v1",
+		Command:         "ichor",
+		Args:            args,
+		InteractiveMode: clientcmdapi.IfAvailableExecInteractiveMode,
 	}}
 	cfg.Contexts[cluster] = &clientcmdapi.Context{Cluster: cluster, AuthInfo: user}
 	cfg.CurrentContext = cluster

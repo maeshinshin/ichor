@@ -409,11 +409,7 @@ func (s *Server) RequestEtcdBackup(
 		at = last.Add(time.Second)
 	}
 
-	if bk.Annotations == nil {
-		bk.Annotations = map[string]string{}
-	}
-
-	bk.Annotations[ichorv1alpha1.BackupNowAnnotation] = at.Format(time.RFC3339)
+	metav1.SetMetaDataAnnotation(&bk.ObjectMeta, ichorv1alpha1.BackupNowAnnotation, at.Format(time.RFC3339))
 
 	if err := s.Update(ctx, &bk, strictFieldValidation); err != nil {
 		return nil, mapOperationWriteError("updating etcd backup", namespacedName(ref), err)

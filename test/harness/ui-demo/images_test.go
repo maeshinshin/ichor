@@ -21,7 +21,6 @@ import (
 	"io"
 	"log"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -313,12 +312,7 @@ func startRegistry(t *testing.T) string {
 	srv := httptest.NewServer(registry.New(registry.Logger(log.New(io.Discard, "", 0))))
 	t.Cleanup(srv.Close)
 
-	u, err := url.Parse(srv.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return u.Host
+	return strings.TrimPrefix(srv.URL, "http://")
 }
 
 // pushBase puts a tiny random image where images.sh's BASE_IMAGE points, in place of the distroless base.

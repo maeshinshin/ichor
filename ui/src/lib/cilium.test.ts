@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { canApply, canEdit, classifyDiffLine, diffLines } from './cilium.ts'
+import { canApply, classifyDiffLine, diffLines } from './cilium.ts'
 
 test('diff lines are classified, and file headers are not additions', () => {
   assert.equal(classifyDiffLine('+++ proposed'), 'meta')
@@ -20,12 +20,6 @@ test('diffLines drops the trailing newline and keeps blank context lines', () =>
     { kind: 'add', text: '+b' },
     { kind: 'ctx', text: '' },
   ])
-})
-
-test('editing needs the permission and an untracked cluster', () => {
-  assert.equal(canEdit(undefined), false)
-  assert.equal(canEdit({ clusterUpdate: false }), false)
-  assert.equal(canEdit({ clusterUpdate: true }), true)
 })
 
 test('apply needs the reviewed text, valid, with a change', () => {

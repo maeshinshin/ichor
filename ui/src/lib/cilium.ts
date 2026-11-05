@@ -21,12 +21,6 @@ export function diffLines(diff: string): { kind: DiffKind; text: string }[] {
   return lines.map((text) => ({ kind: classifyDiffLine(text), text }))
 }
 
-// canEdit: the write controls show only when the caller may update the cluster (the permission
-// probe answered yes).
-export function canEdit(perms: { clusterUpdate: boolean } | undefined): boolean {
-  return !!perms?.clusterUpdate
-}
-
 // canApply: the text must be the exact text that was validated and diffed, and a diff must exist.
 export function canApply(text: string, reviewed: { text: string; valid: boolean; diff: string } | null): boolean {
   return reviewed !== null && reviewed.text === text && reviewed.valid && reviewed.diff !== ''

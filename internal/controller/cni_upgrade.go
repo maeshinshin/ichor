@@ -27,7 +27,6 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
@@ -150,21 +149,6 @@ func (r *CNIHandoverReconciler) dropPatchImages(ctx context.Context, cluster *ic
 	cluster.Status.CNI.ImageOverride = nil
 
 	return r.Status().Patch(ctx, cluster, client.MergeFrom(orig))
-}
-
-// cniUpgradeOperationClusters maps a cni-kind operation to its cluster, so the end of an upgrade
-// clears the available version without waiting for another event.
-func cniUpgradeOperationClusters(_ context.Context, obj client.Object) []reconcile.Request {
-	op, ok := obj.(*ichorv1alpha1.TalosOperation)
-	if !ok || op.Spec.Kind != ichorv1alpha1.TalosOperationKindCNI {
-		return nil
-	}
-
-	var req reconcile.Request
-
-	req.Namespace, req.Name = op.Namespace, op.Spec.ClusterRef.Name
-
-	return []reconcile.Request{req}
 }
 
 // machineless reports whether op's executor touches no machine (an Ichor self-upgrade, a Cilium

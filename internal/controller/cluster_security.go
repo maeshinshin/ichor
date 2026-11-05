@@ -98,15 +98,11 @@ func (r *BootSecurityReconciler) Reconcile(ctx context.Context, req ctrl.Request
 // machineCluster maps a TalosMachine to its cluster.
 func machineCluster(_ context.Context, obj client.Object) []reconcile.Request {
 	m, ok := obj.(*ichorv1alpha1.TalosMachine)
-	if !ok || m.Spec.ClusterRef.Name == "" {
+	if !ok {
 		return nil
 	}
 
-	var req reconcile.Request
-
-	req.Namespace, req.Name = m.Namespace, m.Spec.ClusterRef.Name
-
-	return []reconcile.Request{req}
+	return clusterRequest(m.Namespace, m.Spec.ClusterRef.Name)
 }
 
 // SetupWithManager sets up the controller with the Manager.

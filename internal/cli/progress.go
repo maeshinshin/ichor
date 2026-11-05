@@ -479,11 +479,8 @@ func (p *progress) endLocked(s *step, mark, style, detail, errMsg string) {
 		p.cur = nil
 	}
 
-	if !p.tty {
-		if s.pending != detail {
-			s.flushLocked()
-		}
-
+	if !p.tty && s.pending != detail {
+		s.flushLocked()
 	}
 
 	elapsed := ""

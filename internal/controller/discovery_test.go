@@ -165,6 +165,8 @@ const (
 
 	// testAddr is one address out of testCIDR, reused by tests that only need a single candidate.
 	testAddr = "192.0.2.1"
+
+	pinnedFingerprint = "pinned"
 )
 
 var _ = Describe("strongIdentity", func() {
@@ -372,13 +374,13 @@ var _ = Describe("DiscoveryReconciler.Discover", func() {
 			}
 		},
 		Entry("whose configuration it applied is not moved", "a1000000-0000-0000-0000-000000000001",
-			ichorv1alpha1.TalosMachineStatus{AppliedConfigHash: "sha256:applied", MaintenanceFingerprint: "pinned"}, false),
+			ichorv1alpha1.TalosMachineStatus{AppliedConfigHash: "sha256:applied", MaintenanceFingerprint: pinnedFingerprint}, false),
 		Entry("whose configuration was stored (re-provisioning) is not moved", "a1000000-0000-0000-0000-000000000002",
-			ichorv1alpha1.TalosMachineStatus{ConfigStoredAt: ptr.To(metav1.Now()), MaintenanceFingerprint: "pinned"}, false),
+			ichorv1alpha1.TalosMachineStatus{ConfigStoredAt: ptr.To(metav1.Now()), MaintenanceFingerprint: pinnedFingerprint}, false),
 		Entry("that never got a configuration and has no pinned certificate is not moved", "a1000000-0000-0000-0000-000000000003",
 			ichorv1alpha1.TalosMachineStatus{}, false),
 		Entry("that never got a configuration and has a pinned certificate is followed", "a1000000-0000-0000-0000-000000000004",
-			ichorv1alpha1.TalosMachineStatus{MaintenanceFingerprint: "pinned"}, true),
+			ichorv1alpha1.TalosMachineStatus{MaintenanceFingerprint: pinnedFingerprint}, true),
 	)
 
 	It("does not auto-register a colliding UUID and leaves the existing TalosMachine untouched", func() {

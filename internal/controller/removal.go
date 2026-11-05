@@ -14,30 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package controller: this file implements the ordered removal operation
-// docs/design/architecture.md's "Nodes" section describes
-// "What this guard protects, and what it doesn't" leaves as the real fix
-// for the webhook's admission-time quorum check: counting objects at
-// admission time cannot see a concurrent delete of a sibling control
-// plane, because admission is never serialized with the commit it
-// gatekeeps. A finalizer turns "delete the control plane" into a step of
-// this serialized operation instead, so the recount that decides safety
-// happens under the per-cluster lock, where a second concurrent removal of
-// a sibling has to wait its turn rather than racing.
+// Package controller: this file implements the ordered removal operation docs/design/architecture.md's
+// "Nodes" section describes, the real fix for the webhook's admission-time quorum check
+// (admission is never serialized with the commit, so it cannot see a concurrent delete of a sibling). A
+// finalizer makes "delete the control plane" a step of this operation, whose recount runs under the
+// per-cluster lock.
 //
-// A control plane that fails the safety check above keeps its finalizer
-// and nothing else happens. One that passes is drained (k8s.io/kubectl's
-// own helper, cordon then evict -- architecture.md: "Draining uses
-// k8s.io/kubectl's own drain helper rather than a hand-written eviction
-// loop"), then has its etcd member removed (the departing
-// machine's own graceful EtcdLeaveCluster first, a surviving sibling's
-// EtcdRemoveMemberByID as fallback), then -- only if its removal opted in,
-// since Reset is irreversible -- reset back to maintenance mode (STATE and EPHEMERAL by label, never the whole
-// system disk). Only
-// once every step that ran actually succeeded does the finalizer clear;
-// any failure along the way holds it instead of letting deletion complete
-// while the physical node might still be configured, still an etcd
-// member, or still credentialed.
+// A control plane that fails the safety check keeps its finalizer. One that passes is drained (kubectl's
+// drain helper), has its etcd member removed (its own graceful EtcdLeaveCluster, else a
+// survivor's EtcdRemoveMemberByID), then, only if its removal opted in, is reset to maintenance mode (STATE and
+// EPHEMERAL, never the system disk). The finalizer clears only once every step that ran
+// succeeded; a failure holds it while the node might still be configured, an etcd member or credentialed.
 package controller
 
 import (
@@ -130,15 +117,9 @@ func (r *TalosMachineReconciler) reconcileDeletion(ctx context.Context, m *ichor
 	return ctrl.Result{}, err
 }
 
-// etcdDialTimeout bounds every dial and RPC removeEtcdMember/removeEtcdMemberFromSurvivor
-// make. Confirmed necessary for real: a node that just left etcd can itself
-// go unreachable moments later, and an unbounded context on an unreachable target blocks
-// for as long as Reconcile's own ctx lives -- with one worker per controller
-// (SetupWithManager's default), that wedges every other TalosMachine's reconcile behind
-// it, not just this one's retry. 15s is generous for a healthy node's own API (normally
-// sub-second) while still bounding a dead one's hang to something a human waits out
-// rather than a human who gives up and kills the process not knowing it would have
-// recovered on its own eventually.
+// etcdDialTimeout bounds every dial and RPC of the etcd-member removal and the reset: a node
+// that just left etcd can go unreachable moments later, and an unbounded context on it blocks for as long
+// as Reconcile's ctx lives, wedging every other TalosMachine behind this one worker.
 //
 // A var so tests can shrink it; nothing else assigns it.
 var etcdDialTimeout = 15 * time.Second
@@ -163,15 +144,10 @@ const (
 	reasonNodeNameUnresolved   = "NodeNameUnresolved"
 )
 
-// resetOnDeleteAnnotation opts a TalosMachine's removal into also
-// resetting its physical node, the same shape
-// deleteguard.AllowDeleteAnnotation already uses: a deliberate,
-// explicit, per-object opt-in rather than a default, because Reset is
-// irreversible and an operator may want the disk left alone to inspect
-// or to reuse for something else. Its absence leaves removal exactly
-// as it was: etcd member removed, finalizer cleared, and
-// NodeStillHasClusterCredentials said the node still holds the cluster's
-// PKI.
+// resetOnDeleteAnnotation opts a TalosMachine's removal into also resetting its physical node,
+// a per-object opt-in like deleteguard.AllowDeleteAnnotation, because Reset is irreversible. Without it
+// removal stops there: etcd member removed, finalizer cleared, and
+// NodeStillHasClusterCredentials said the node still holds the cluster's PKI.
 const resetOnDeleteAnnotation = "ichor.maesh.dev/reset-on-delete"
 
 // resetWipeModeAnnotation carries TalosOperation.spec.node.wipeMode of a reset to the removal flow,
@@ -187,21 +163,12 @@ func resetRequested(m *ichorv1alpha1.TalosMachine) bool {
 	return m.Annotations[resetOnDeleteAnnotation] == resetOnDeleteValue
 }
 
-// reasonNodeStillHasClusterCredentials is the Event reason removal.go
-// emits in the same breath as clearing machineRemovalFinalizer.
-// The condition that would normally carry this message disappears with the
-// object the moment the finalizer clears, so the Event -- a separate
-// object with its own lifetime -- is what keeps the caveat visible to an
-// operator afterward, instead of it passing silently.
+// reasonNodeStillHasClusterCredentials is the Event reason emitted as machineRemovalFinalizer clears.
+// The Removal condition goes with the object, so the Event, which outlives it, keeps the caveat visible.
 const reasonNodeStillHasClusterCredentials = "NodeStillHasClusterCredentials"
 
-// nodeStillHasClusterCredentialsMessage is deliberately explicit rather
-// than folded into reasonRemovalApproved's own message: Reset is a separate unit (a partition-wipe argument it is
-// not this
-// code's job to get wrong), so a removed TalosMachine's physical node still
-// holds this cluster's PKI until something resets it -- it cannot rejoin
-// as a trusted etcd member, but it is not safe to repurpose or discard
-// either.
+// nodeStillHasClusterCredentialsMessage is explicit rather than folded into reasonRemovalApproved's message:
+// until something resets it, a removed machine's physical node still holds the cluster's PKI.
 const nodeStillHasClusterCredentialsMessage = "control plane %q was removed from etcd, but its physical node was never reset " +
 	"and still holds this cluster's PKI; it cannot rejoin etcd, but do not repurpose or discard the hardware until it is reset. " +
 	nodeObjectStaysNote
@@ -214,37 +181,24 @@ const workerStillHasClusterCredentialsMessage = "worker %q was removed, but its 
 // nodeObjectStaysNote: the Kubernetes Node is not deleted, because the running kubelet would register it again.
 const nodeObjectStaysNote = "The Kubernetes Node stays while the machine runs; power it off or reset it, then delete the Node with kubectl delete node %[1]s"
 
-// conditionTransitioning and its two reasons implement
-// docs/design/architecture.md's "Nodes" section: "Even counts are allowed
-// only transiently during a change and shown as 'transitioning', during
-// which the cluster lock blocks other disruptive work." spec.controlPlane.count
-// is the desired state and stays an odd enum (1, 3 or 5) throughout --
-// nothing about that field ever becomes even. The *actual* count of
-// approved control-plane TalosMachines does, for exactly as long as a
-// replacement is being added before the one it replaces is removed
-// (architecture.md: "3->4->3, never 3->2"), and that is a fact about the
-// cluster's live state, not its spec -- TalosCluster.status is where it
-// belongs (and this is a derived fact about TalosMachine
-// objects that already exist, not a record of an imperative action).
+// conditionTransitioning and its two reasons implement docs/design/architecture.md's "Nodes" section: even
+// counts are allowed only transiently during a change (3->4->3, never 3->2), shown as "transitioning", while
+// the cluster lock blocks other disruptive work. spec.controlPlane.count stays odd; the live count of approved
+// control planes is what goes even, so the condition lives in TalosCluster.status.
 const (
 	conditionTransitioning        = "Transitioning"
 	reasonEvenControlPlaneCount   = "EvenControlPlaneCount"
 	reasonStableControlPlaneCount = "StableControlPlaneCount"
 )
 
-// transitioningControlPlanes reports whether controlPlanes control planes
-// -- a live count, not spec.controlPlane.count's declared one -- is itself
-// evidence of an in-progress control-plane replacement. Zero is not
-// transitioning: that is "no control planes exist yet" (a brand-new
-// cluster before its first approval), not a change in progress.
+// transitioningControlPlanes reports whether the live count of control planes is even, evidence of an
+// in-progress replacement. Zero is not: that is a brand-new cluster before its first approval.
 func transitioningControlPlanes(controlPlanes int) bool {
 	return controlPlanes > 0 && controlPlanes%2 == 0
 }
 
-// transitioningError is acquireDisruptiveLock's refusal when the cluster's
-// live control-plane count is even and the caller is not the operation
-// resolving that transition. Distinguished from clusterlock.HeldError so
-// callers can report the right condition reason for each.
+// transitioningError is acquireDisruptiveLock's refusal when the live control-plane count is even and the
+// caller is not the operation resolving that transition; distinct from clusterlock.HeldError for the reason.
 type transitioningError struct {
 	controlPlanes int
 }
@@ -253,26 +207,15 @@ func (e *transitioningError) Error() string {
 	return fmt.Sprintf("cluster has %d approved control planes (even -- a replacement is in progress)", e.controlPlanes)
 }
 
-// acquireDisruptiveLock is the only place in this package that calls
-// clusterlock.Lock.Acquire -- enforced by TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite,
-// a go/parser check in the same spirit as TestFixtureUUIDsAreUnique. Every
-// disruptive operation (removal and the TalosOperation backbone today; a future upgrade or CA
-// rotation) goes through it, so the control-plane-transitioning refusal
-// lives in exactly one place instead of being a safety net each new call
-// site has to remember to add -- the same way the secrets RBAC marker
-// regressed once already by not being centralized.
+// acquireDisruptiveLock is the only place in this package that calls clusterlock.Lock.Acquire (enforced by
+// TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite), so the control-plane-transitioning refusal lives in
+// one place instead of in each disruptive operation.
 //
-// The live control-plane count is recomputed fresh here, under m's
-// cluster, rather than trusting TalosCluster.status's own Transitioning
-// condition, which could be one reconcile stale. If it is even,
-// acquireDisruptiveLock refuses with a *transitioningError before ever
-// calling Acquire -- unless completesTransition is true, the one
-// legitimate exception: the removal that completes a 3->4->3 replacement
-// necessarily runs while the count is still even, and refusing it here
-// would make that replacement impossible to ever finish. Removal still
-// has its own, more precise quorum/last-control-plane/declared-count
-// checks after the lock is held; this is only the generic gate every
-// other disruptive operation needs.
+// The live control-plane count is recomputed here rather than read from the Transitioning condition, which
+// could be one reconcile stale. If it is even, acquireDisruptiveLock refuses with a *transitioningError
+// before calling Acquire, unless completesTransition is true: the removal that completes a 3->4->3
+// replacement runs while the count is still even. Removal has its own, more precise checks once the lock is
+// held; this is the generic gate.
 func (r *TalosMachineReconciler) acquireDisruptiveLock(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 	identity string, completesTransition bool,
@@ -310,12 +253,9 @@ func (r *TalosMachineReconciler) acquireDisruptiveLock(
 	return lock, nil
 }
 
-// updateTransitioning recomputes conditionTransitioning on cluster from
-// controlPlanes and persists it. Called from wherever this file already
-// counts control planes for another reason (reconcileRemoval, and
-// TalosMachineReconciler.Reconcile's main path for every approved
-// machine's reconcile), rather than on its own schedule, so it costs no
-// extra List beyond what that caller already pays for.
+// updateTransitioning recomputes conditionTransitioning on cluster from controlPlanes and persists it. It is
+// called wherever the control planes are counted anyway (reconcileRemoval, Reconcile's main path), so it
+// costs no extra List.
 func (r *TalosMachineReconciler) updateTransitioning(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, controlPlanes int) error {
 	status, reason := metav1.ConditionFalse, reasonStableControlPlaneCount
 	if transitioningControlPlanes(controlPlanes) {
@@ -367,10 +307,8 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		return err
 	}
 
-	// completesTransition is true: this is the removal that can bring the
-	// live count back to the declared one (3->4->3's last step), so it
-	// must be allowed to proceed while the count is still even -- refusing
-	// it here would make that replacement impossible to ever finish.
+	// completesTransition is true: this removal can bring the live count back to the declared one (3->4->3's
+	// last step), so it must run while the count is still even.
 	lock, err := r.acquireDisruptiveLock(ctx, &cluster, m, machineLockIdentity(m), true)
 	if err != nil {
 		if shuttingDown, ok := errors.AsType[*shuttingDownError](err); ok {
@@ -389,11 +327,8 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		}
 	}()
 
-	// Recomputed under the lock: a sibling control plane's own removal,
-	// running concurrently, has to go through this same lock to reach this
-	// same point, so whichever of two concurrent removals gets here second
-	// sees the first's finalizer (or its completed deletion) already
-	// reflected -- the race the webhook's admission-time count cannot see.
+	// Recomputed under the lock: of two concurrent removals the second sees the first's finalizer (or
+	// completed deletion), the race the webhook's admission-time count cannot see.
 	// A worker only reaches here when a reset gave it the finalizer; it was never an
 	// etcd member and is not counted toward quorum, so only the drain and the reset apply to it.
 	isControlPlane := m.Spec.Role == roleControlPlane
@@ -432,12 +367,9 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		return errors.New(msg) // an error, so Reconcile requeues: the node may only be rebooting
 	}
 
-	// Storage evacuation comes before the drain (architecture.md, "Nodes":
-	// evacuation hook, drain, etcd member, reset, Node delete), through the
-	// same evacuateMachine the Talos upgrade uses. Its progress lives in
-	// the StorageEvacuation condition, so a restarted controller resumes
-	// from status; a timeout stops the removal here and never advances it.
-	// A dead control plane has no kubelet to evict pods or move replicas: neither would ever finish.
+	// Storage evacuation comes before the drain (architecture.md, "Nodes"), through the evacuateMachine the
+	// Talos upgrade uses. Its progress lives in the StorageEvacuation condition; a timeout stops the removal
+	// here. A dead control plane has no kubelet to evict pods or move replicas: neither would ever finish.
 	progress := storage.EvacuationDone
 	if !deadMember {
 		var err error
@@ -562,19 +494,13 @@ func (r *TalosMachineReconciler) removalNodeName(
 	return resolveNodeName(ctx, r.Client, talos, m)
 }
 
-// completeRemoval records the Removal condition's terminal success message,
-// then clears machineRemovalFinalizer -- in that order, so a crash between
-// the two leaves the finalizer still held (removeEtcdMember's own
-// idempotent check-then-act, and resetNode's own already-requested check,
-// mean the next reconcile finds the earlier work already done and comes
-// straight back here, not back to a redundant removal or reset attempt).
+// completeRemoval records the Removal condition's terminal success message, then clears
+// machineRemovalFinalizer, in that order: a crash between the two leaves the finalizer held, and the next
+// reconcile (removeEtcdMember and resetNode are idempotent) comes straight back here.
 //
-// reset is true only when this removal opted into's Reset step
-// and it succeeded: the Warning Event -- the one that
-// survives the object's own disappearance to say a decommissioned node
-// still holds the cluster's PKI -- is skipped in that case, because it is
-// no longer true: Reset wiped the STATE partition those credentials lived
-// on. The event fires exactly when it did existed.
+// reset is true only when this removal opted into's Reset step and it succeeded: the Warning Event
+// that a decommissioned node still holds the cluster's PKI is skipped then, because Reset wiped
+// the STATE partition those credentials lived on.
 func (r *TalosMachineReconciler) completeRemoval(ctx context.Context, m *ichorv1alpha1.TalosMachine, reset bool) error {
 	message := "the node was drained and removed"
 	if m.Spec.Role == roleControlPlane {
@@ -608,17 +534,11 @@ func (r *TalosMachineReconciler) completeRemoval(ctx context.Context, m *ichorv1
 	return r.Update(ctx, m)
 }
 
-// resetNode asks m's own node to reset: wipe STATE and
-// EPHEMERAL and reboot back to maintenance mode. Idempotent the only way
-// a fire-and-forget RPC can be: conditionRemoval already carrying
-// reasonResetRequested means Talos already accepted this request on an
-// earlier reconcile, so this returns immediately without asking again --
-// architecture.md's own fix for "a resumed reconcile fires a second
-// concurrent reset at the same node." The record is written immediately
-// after Reset's own RPC acknowledges the request, not before: Reset
-// returns once Talos has accepted it and started the sequence in the
-// background, not once the wipe finishes, so acknowledging is the
-// earliest point at which "a reset was requested" is actually true.
+// resetNode asks m's own node to reset: wipe STATE and EPHEMERAL and reboot back to maintenance
+// mode. Idempotent for a fire-and-forget RPC: conditionRemoval already True means Talos accepted the request
+// on an earlier reconcile, so a resumed reconcile does not fire a second one. The record is written after
+// Reset's RPC acknowledges the request (not when the wipe finishes), the earliest point at which "a reset
+// was requested" is true.
 func (r *TalosMachineReconciler) resetNode(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) error {
@@ -652,21 +572,12 @@ func (r *TalosMachineReconciler) resetNode(
 		"reset requested: the node's STATE and EPHEMERAL partitions are being wiped and it will reboot to maintenance mode")
 }
 
-// removeEtcdMember removes m from etcd, preferring m's own graceful
-// EtcdLeaveCluster -- talosctl's own "etcd leave" command says plainly to
-// "always prefer etcd leave over" removing a member by ID -- and falling
-// back to EtcdRemoveMemberByID from a surviving sibling only when m cannot
-// be dialed or cannot leave on its own (architecture.md's forceRemove case:
-// the node is dead or unreachable).
+// removeEtcdMember removes m from etcd, preferring m's own graceful EtcdLeaveCluster (talosctl says to
+// always prefer etcd leave) and falling back to EtcdRemoveMemberByID from a surviving sibling only when m
+// cannot be dialed or cannot leave on its own (architecture.md's forceRemove case).
 //
-// Idempotent by construction, not by catching a particular error string:
-// architecture.md records that "removing an already-removed etcd member
-// reports not-found, which counts as success", so both branches check the
-// live member list first and return nil immediately if m is already gone.
-// That is also how this resumes correctly after a crash between a
-// completed removal and the finalizer clearing in completeRemoval: the
-// next reconcile re-lists rather than trusting any local memory of what it
-// already did.
+// Idempotent: both branches check the live member list first and return nil if m is already gone, which is
+// also how it resumes after a crash between the removal and the finalizer clearing in completeRemoval.
 func (r *TalosMachineReconciler) removeEtcdMember(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, nodeName string,
 ) error {
@@ -686,17 +597,10 @@ func (r *TalosMachineReconciler) removeEtcdMember(
 	return r.removeEtcdMemberFromSurvivor(ctx, cluster, m, nodeName, bundle)
 }
 
-// trySelfLeave attempts removeEtcdMember's first-choice path (self-dial, list, leave) and
-// reports whether m is now confirmed gone from etcd -- either because it already was, or
-// because EtcdLeaveCluster just succeeded. false covers every other outcome (unreachable,
-// listed but leave itself failed), for which removeEtcdMember falls back to a survivor.
-//
-// etcdDialTimeout bounds this whole attempt: confirmed for real that a node
-// which just left etcd can itself go unreachable moments later (its own apiserver and
-// Talos API both stopped answering), and grpc's lazy dial means the first RPC on an
-// unreachable target blocks for as long as ctx allows -- which, without this, is however
-// long Reconcile's own ctx happens to live, wedging this package's one worker on every
-// other TalosMachine behind it.
+// trySelfLeave attempts removeEtcdMember's first-choice path (self-dial, list, leave) and reports whether m
+// is now confirmed gone from etcd, because it already was or EtcdLeaveCluster just succeeded. false covers
+// every other outcome (unreachable, listed but leave failed): removeEtcdMember falls back to a survivor.
+// etcdDialTimeout bounds the whole attempt.
 func (r *TalosMachineReconciler) trySelfLeave(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, nodeName string, bundle *secrets.Bundle,
 ) bool {
@@ -721,12 +625,9 @@ func (r *TalosMachineReconciler) trySelfLeave(
 	return self.EtcdLeaveCluster(selfCtx) == nil
 }
 
-// removeEtcdMemberFromSurvivor is removeEtcdMember's fallback: dial a
-// different approved control-plane TalosMachine in the same cluster and
-// use its view of etcd to remove m by ID. Returns a descriptive error if no
-// survivor can be found or dialed at all -- reconcileRemoval holds the
-// finalizer and retries later rather than treating that as "already
-// removed".
+// removeEtcdMemberFromSurvivor is removeEtcdMember's fallback: dial another approved control plane of the
+// cluster and remove m by ID from its view of etcd. No survivor to find or dial is an error:
+// reconcileRemoval holds the finalizer and retries rather than treating it as "already removed".
 func (r *TalosMachineReconciler) removeEtcdMemberFromSurvivor(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, nodeName string, bundle *secrets.Bundle,
 ) error {
@@ -757,12 +658,9 @@ func (r *TalosMachineReconciler) removeEtcdMemberFromSurvivor(
 	return sc.EtcdRemoveMemberByID(survivorCtx, id)
 }
 
-// findEtcdSurvivor finds another approved control-plane TalosMachine in m's
-// cluster that is not itself being deleted, to dial as the "a surviving
-// node says remove this member" side of EtcdRemoveMemberByID. Uses
-// r.APIReader, the same direct read deleteguard.CountApprovedControlPlanes
-// requires, for the same reason: a cached read could still show a sibling
-// that has, moments ago, started its own removal.
+// findEtcdSurvivor finds another approved control plane of m's cluster to dial for EtcdRemoveMemberByID.
+// It reads through r.APIReader like deleteguard.CountApprovedControlPlanes: a cached read could still show
+// a sibling that started its own removal moments ago.
 func (r *TalosMachineReconciler) findEtcdSurvivor(
 	ctx context.Context, m *ichorv1alpha1.TalosMachine,
 ) (*ichorv1alpha1.TalosMachine, error) {
@@ -786,12 +684,8 @@ func etcdMemberPresent(members []EtcdMember, hostname string) bool {
 	return found
 }
 
-// etcdMemberID finds the etcd member ID matching hostname -- etcd reports
-// the Node's own hostname, which is TalosMachineSpec.Hostname's job to
-// carry (architecture.md: Talos derives one when it is left unset, but
-// nothing here can discover that derived name, so an unset Hostname can
-// never be found and removeEtcdMember's caller holds the finalizer and
-// retries rather than guessing).
+// etcdMemberID finds the etcd member ID matching hostname, the Node's own hostname (an empty one never
+// matches: nothing here can discover a name Talos derived, so the caller holds the finalizer and retries).
 func etcdMemberID(members []EtcdMember, hostname string) (uint64, bool) {
 	if hostname == "" {
 		return 0, false
@@ -804,22 +698,15 @@ func etcdMemberID(members []EtcdMember, hostname string) (uint64, bool) {
 	return 0, false
 }
 
-// closeTalosClient closes talos if it is an io.Closer, the same optional
-// capability check talosmachine_controller.go's main path already uses --
-// the fake test double has nothing to close, so the interface itself stays
-// at the methods design 5.6 actually need.
+// closeTalosClient closes talos if it is an io.Closer (the test fake has nothing to close).
 func closeTalosClient(talos TalosClient) {
 	if closer, ok := talos.(io.Closer); ok {
 		_ = closer.Close()
 	}
 }
 
-// removalCondition records reconcileRemoval's verdict as the Removal
-// condition (distinct from Ready, which design 5.6's configuration
-// reconcile owns and which this path never writes), so the object's
-// status says what reconcileRemoval last decided even after a crash and
-// restart resumes it -- the "resumable from status" requirement
-// architecture.md's chaos cases ask for.
+// removalCondition records reconcileRemoval's verdict as the Removal condition (distinct from Ready, which
+// the configuration reconcile owns), so a restart resumes from status (architecture.md's chaos cases).
 func (r *TalosMachineReconciler) removalCondition(
 	ctx context.Context, m *ichorv1alpha1.TalosMachine, status metav1.ConditionStatus, reason, message string,
 ) error {
@@ -828,14 +715,9 @@ func (r *TalosMachineReconciler) removalCondition(
 	})
 }
 
-// checkControlPlaneRemoval runs every refusal docs/design/architecture.md's
-// "Nodes" names for the etcd-member-removal step against currentControlPlanes
-// control planes (including the one being removed), declared as
-// desiredCount in spec.controlPlane.count: last-control-plane and quorum
-// (deleteguard.CheckControlPlaneQuorum), then the declared count
-// (deleteguard.CheckControlPlaneCount). Non-control-plane roles have
-// nothing to check -- they were never counted toward any of this -- so this
-// is only ever called for one.
+// checkControlPlaneRemoval runs every refusal architecture.md's "Nodes" names for the etcd-member-removal
+// step against currentControlPlanes control planes (including the one being removed) and the declared
+// desiredCount: last-control-plane and quorum, then the declared count. Only called for a control plane.
 func checkControlPlaneRemoval(currentControlPlanes, desiredCount int) error {
 	if err := deleteguard.CheckControlPlaneQuorum(currentControlPlanes); err != nil {
 		return err
@@ -843,13 +725,9 @@ func checkControlPlaneRemoval(currentControlPlanes, desiredCount int) error {
 	return deleteguard.CheckControlPlaneCount(currentControlPlanes, desiredCount)
 }
 
-// countApprovedControlPlanes counts, the same way
-// internal/webhook/v1alpha1/talosmachine_webhook.go's ValidateDelete does,
-// every approved control-plane TalosMachine in m's namespace and cluster,
-// including m itself (which is being deleted) but not another control plane
-// that is also being deleted's addendum -- via r.APIReader, not r.Client, so this stays
-// correct under the same cached-read trap deleteguard.CountApprovedControlPlanes
-// documents.
+// countApprovedControlPlanes counts, as the webhook's ValidateDelete does, every approved control plane of
+// m's cluster, m itself included but not another one being deleted, through
+// r.APIReader to avoid the cached-read trap deleteguard.CountApprovedControlPlanes documents.
 func (r *TalosMachineReconciler) countApprovedControlPlanes(ctx context.Context, m *ichorv1alpha1.TalosMachine) (int, error) {
 	cps, err := deleteguard.ApprovedMachines(ctx, r.APIReader, m.Namespace, m.Spec.ClusterRef.Name,
 		deleteguard.MachineFilter{Role: roleControlPlane, KeepDeleting: m.Name})
@@ -857,12 +735,8 @@ func (r *TalosMachineReconciler) countApprovedControlPlanes(ctx context.Context,
 	return len(cps), err
 }
 
-// drainNode cordons and drains the Kubernetes Node named hostname, the
-// design's belt before the (not yet implemented) etcd-member removal and
-// reset. hostname empty, or no Node by that name, is not an error: a
-// control plane that was approved but never actually joined has nothing to
-// drain, and Talos derives a Node's name when TalosMachineSpec.Hostname is
-// left unset, which this code has no way to guess.
+// drainNode cordons and drains the Kubernetes Node named hostname. An empty hostname, or no Node by that
+// name, is not an error: a control plane that was approved but never joined has nothing to drain.
 func (r *TalosMachineReconciler) drainNode(ctx context.Context, hostname string) error {
 	if hostname == "" || r.KubeClient == nil {
 		return nil
@@ -891,12 +765,9 @@ func (r *TalosMachineReconciler) drainNode(ctx context.Context, hostname string)
 	return cordonAndDrain(newDrainHelper(ctx, r.KubeClient, 0), &node)
 }
 
-// renewWhile calls lock.Renew every interval until stop is called. A
-// failed renew is logged, not escalated: the caller's own next clusterlock
-// call surfaces a lost lock as a HeldError exactly when it matters, so
-// there is nothing more to do with the error here than record it. interval
-// is a parameter rather than always removalRenewInterval only so tests can
-// use a short one instead of waiting out a real minute.
+// renewWhile calls lock.Renew every interval until stop is called. A failed renew is logged, not escalated:
+// the caller's next clusterlock call surfaces a lost lock as a HeldError. interval is a parameter so tests
+// can use a short one.
 func renewWhile(ctx context.Context, lock *clusterlock.Lock, identity string, interval time.Duration) (stop func()) {
 	done := make(chan struct{})
 

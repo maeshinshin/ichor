@@ -88,3 +88,7 @@ Decision 1 left the three guards that need the machine configuration or the live
 - **Operations.** A `cni` upgrade or kube-proxy switch whose Job would be refused pauses with the problems as its failure reason, like any other error of its executor; fix the values and retry.
 - **RBAC.** The controller may `get` the CRD `gateways.gateway.networking.k8s.io` by name (a marker on `CNIHandoverReconciler`, `config/rbac/role.yaml`), read through the uncached reader.
 - **Not changed.** The webhook stays static (decision 1). A cluster whose stored values were valid when stored but fail the check now is refused a new Job until they are fixed; the running Cilium is untouched.
+
+## Amendment 2026-11-05: the grant rule follows the built-in role hierarchy
+
+The grant rule in decision 2 (and ADR 0108) was a literal match on the requester's `ichor:<role>` groups, so an `operator` could not create a user with `[viewer]`, although the `operator` ClusterRole includes every rule of `viewer` and the issued identity carries only the groups of the roles in `spec.roles`. `ichorauth.UngrantedRole` now honours the order viewer < operator < admin: a requester may grant any built-in role at or below the highest built-in role they hold. A custom role still needs a literal match, and an admin may grant anything, as before. An operator still cannot grant `admin`. The IchorUser webhook and the UI backend call the same function, so both change together.

@@ -19,6 +19,8 @@ package ichorauth
 import "testing"
 
 func TestUngrantedRole(t *testing.T) {
+	const custom = "custom"
+
 	admin, operator := []string{RoleAdmin}, []string{RoleOperator}
 
 	for _, tc := range []struct {
@@ -26,12 +28,23 @@ func TestUngrantedRole(t *testing.T) {
 		groups, current, want []string
 		role                  string
 	}{
-		{name: "admin may grant any role", groups: []string{GroupPrefix + RoleAdmin}, want: []string{RoleAdmin, "custom"}},
+		{name: "admin may grant any role", groups: []string{GroupPrefix + RoleAdmin}, want: []string{RoleAdmin, custom}},
 		{name: "a held role", groups: []string{GroupPrefix + RoleOperator}, want: operator},
 		{name: "a role not held", groups: []string{GroupPrefix + RoleOperator},
 			want: []string{RoleOperator, RoleAdmin}, role: RoleAdmin},
 		{name: "a role the target already has is no grant", groups: []string{GroupPrefix + RoleViewer},
 			current: admin, want: admin},
+		{name: "an operator may grant viewer", groups: []string{GroupPrefix + RoleOperator},
+			want: []string{RoleViewer, RoleOperator}},
+		{name: "an operator may not grant admin", groups: []string{GroupPrefix + RoleOperator},
+			want: []string{RoleViewer, RoleAdmin}, role: RoleAdmin},
+		{name: "a viewer may not grant operator", groups: []string{GroupPrefix + RoleViewer},
+			want: []string{RoleViewer, RoleOperator}, role: RoleOperator},
+		{name: "the highest built-in role counts", groups: []string{GroupPrefix + RoleViewer, GroupPrefix + RoleOperator},
+			want: []string{RoleViewer}},
+		{name: "a custom role needs a literal match", groups: []string{GroupPrefix + RoleOperator},
+			want: []string{custom}, role: custom},
+		{name: "a held custom role is granted", groups: []string{GroupPrefix + custom}, want: []string{custom}},
 		{name: "a group of another prefix holds nothing", groups: []string{"oidc:admin"}, want: admin, role: RoleAdmin},
 		{name: "no roles wanted", groups: nil},
 	} {

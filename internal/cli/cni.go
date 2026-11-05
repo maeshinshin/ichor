@@ -335,7 +335,9 @@ func runCniValuesSet(ctx context.Context, c *apiClients, in io.Reader, out, errw
 		return err
 	}
 
-	return printAPI(out, resp.Msg, func(h *human, _ *pb.SetCiliumValuesResponse) error { return renderValuesSet(h, ref) })
+	return printAPI(out, resp.Msg, func(h *human, _ *pb.SetCiliumValuesResponse) error {
+		return doneLine(h, "%s the Cilium values of %s", verbUpdate, nsName(ref))
+	})
 }
 
 // runEditor opens path in $VISUAL, $EDITOR or vi and waits. A var so a test can stand in for the editor.

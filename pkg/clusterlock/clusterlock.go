@@ -50,18 +50,12 @@ import (
 // DefaultDuration is how long a held lock survives without renewal before a
 // different identity may take it over.
 //
-// Reboot-causing operations go one node at a time, and each step - cordon,
-// drain, Talos reboot, rejoin, verify - takes minutes on real hardware, not
-// seconds (architecture.md's "Configuration reconcile" section). The
-// reconciler is expected to call Renew well inside this window on every
-// step, so DefaultDuration only has to outlive the gap between two
-// renewals, not the whole operation. Five minutes gives a slow drain or a
-// sluggish reboot room to finish one step and renew again before the lease
-// expires, while still bounding the damage a crash does: if the holder dies
-// mid-step without releasing, the cluster is blocked for at most
-// DefaultDuration, never for the rest of the operation. Both failure modes
-// scale with this one number, which is why it is a parameter to New rather
-// than a constant wired into the logic.
+// Each step of a reboot-causing operation (cordon, drain, Talos reboot,
+// rejoin, verify) takes minutes on real hardware, and the reconciler renews on
+// every step, so this only has to outlive the gap between two renewals. Five
+// minutes lets a slow step finish, while a holder that crashes mid-step
+// blocks the cluster for at most this long. It is a parameter to New, not a
+// constant in the logic, because both failure modes scale with it.
 const DefaultDuration = 5 * time.Minute
 
 // HeldError is returned by Acquire and Renew when a different, unexpired
@@ -114,14 +108,11 @@ func New(c client.Client, cluster types.NamespacedName, duration time.Duration) 
 // Acquire takes the lock for identity. It succeeds if the lock is free, if
 // it has expired, or if identity already holds it - that last case is
 // resumption (design principle 7: progress resumes idempotently after a
-// restart or a leader change), so the new process picks its own lock back
-// up instead of being told it conflicts with itself.
+// restart or a leader change).
 //
-// identity must be stable across restarts for the same logical holder - a
-// fixed name for "the active ichor-controller", for instance - not a
-// per-process random value or a Kubernetes pod name, both of which change on
-// every restart and would make resumption always look like a fresh,
-// conflicting acquire.
+// identity must be stable across restarts for the same logical holder (a
+// fixed name such as "the active ichor-controller"), not a per-process random
+// value or a pod name, or resumption would look like a conflicting acquire.
 //
 // If a different identity holds the lock and it has not expired, Acquire
 // returns a *HeldError and makes no change.
@@ -174,11 +165,8 @@ func (l *Lock) Renew(ctx context.Context, identity string) error {
 
 // Release frees the lock if identity holds it. If identity does not hold
 // it - wrong identity, already expired and taken over, or already free -
-// Release changes nothing and returns nil. A reconciler that errored
-// halfway through an operation must be able to call Release unconditionally
-// (a defer, typically) without risking that it deletes a lock someone else
-// has since legitimately acquired; silently doing nothing is what makes
-// that safe, since there is nothing destructive to report.
+// Release changes nothing and returns nil, so a reconciler can defer it
+// unconditionally without deleting a lock someone else has since acquired.
 func (l *Lock) Release(ctx context.Context, identity string) error {
 	if identity == "" {
 		return errors.New("clusterlock: identity must not be empty")
@@ -223,9 +211,8 @@ func (l *Lock) Holder(ctx context.Context) (identity string, held bool, err erro
 }
 
 // create makes the Lease for the first time. If it already exists, someone
-// else won the race between our caller's Get and this Create, so that is
-// reported as held rather than retried - two racing Acquire calls must
-// produce exactly one winner, not a retry loop that could flip the outcome.
+// else won the race, which is reported as held rather than retried: two
+// racing Acquire calls must produce exactly one winner.
 func (l *Lock) create(ctx context.Context, identity string) error {
 	lease := &coordinationv1.Lease{
 		Name: l.key.Name, Namespace: l.key.Namespace,
@@ -240,11 +227,9 @@ func (l *Lock) create(ctx context.Context, identity string) error {
 	return nil
 }
 
-// renew updates lease, which the caller has already confirmed identity
-// holds, to extend its expiry. lease carries the resourceVersion that was
-// just read, so a concurrent change - a takeover that slipped in after
-// expiry, or a release - surfaces as a conflict instead of being silently
-// overwritten.
+// renew extends the expiry of lease, which the caller has confirmed identity
+// holds. lease carries the resourceVersion just read, so a concurrent takeover
+// or release surfaces as a conflict instead of being overwritten.
 func (l *Lock) renew(ctx context.Context, lease *coordinationv1.Lease) error {
 	lease.Spec.RenewTime = ptr.To(metav1.NowMicro())
 	lease.Spec.LeaseDurationSeconds = leaseSeconds(l.duration)
@@ -252,9 +237,8 @@ func (l *Lock) renew(ctx context.Context, lease *coordinationv1.Lease) error {
 }
 
 // takeOver claims an expired lease for identity. lease carries the
-// resourceVersion just read, so if two identities race to take over the
-// same expired lease, only the first Update lands; the second gets a
-// conflict and is told the (new) holder instead of corrupting its state.
+// resourceVersion just read, so when two identities race only the first
+// Update lands; the second gets a conflict and is told the new holder.
 func (l *Lock) takeOver(ctx context.Context, lease *coordinationv1.Lease, identity string) error {
 	transitions := int32(1)
 	if lease.Spec.LeaseTransitions != nil {

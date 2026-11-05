@@ -280,13 +280,28 @@ node, for three reasons Talos gives: a GRUB install cannot become UKI, key
 enrolment happens in the firmware, and a TPM disk key is bound to the SecureBoot
 state (PCR 7). The path, one node at a time, as for disk encryption: set the
 mode (and the confirm annotation for `Required`); take an etcd backup; reset the
-node (`ichor node reset NODE --override --confirm NODE`); boot the machine from
-the SecureBoot ISO of this cluster's schematic and Talos version with the
-firmware in setup mode (the keys are enrolled automatically; on bare
+node with a full system-disk wipe
+(`ichor node reset NODE --override --confirm NODE --wipe-mode system-disk`); boot
+the machine from the SecureBoot ISO of this cluster's schematic and Talos version
+with the firmware in setup mode (the keys are enrolled automatically; on bare
 metal choose "Enroll Secure Boot keys: auto" in the boot menu); approve it again;
 wait for `SecureBoot=True` before the next node, control planes one at a time
 with etcd quorum intact. Keep the UKI and PCR signing keys if you build your own
 images: losing them stops the next UKI booting and the encrypted disks unlocking.
+
+**Why the plain reset is not enough here.** `ichor node reset` without `--wipe-mode`
+wipes only STATE and EPHEMERAL. The installed boot partition stays, so a
+machine whose system disk comes first in the boot order boots its installed UKI
+again, into maintenance mode, and the SecureBoot ISO is never started: nothing is
+reinstalled, the node only takes the configuration again (seen on hardware). `--wipe-mode system-disk` erases the whole system disk, boot and EFI
+included, so the firmware falls through to the ISO; `--wipe-mode all` also erases
+every user disk (use it only when their data is expendable). Keep the ISO attached
+or first in the boot order before you reset. Without Ichor's wipe, the same effect
+comes from `talosctl reset --wipe-mode all` through the admin path, or from putting
+the ISO first in the boot order. After the reset the machine is looked for again
+every 15 seconds for 3 minutes, so it shows up as a pending machine soon after it
+has booted. The Kubernetes Node object of the reset node stays; it is used again if the
+machine rejoins under the same name, otherwise delete it.
 
 ## Kubelet serving certificates
 

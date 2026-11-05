@@ -121,7 +121,7 @@ func nodeRemoveNext(errw io.Writer, name string) {
 
 	p := newProgress(errw)
 	p.Info("The Kubernetes Node stays while the machine runs (its kubelet keeps the cluster's credentials).")
-	p.Next("power it off or reset it: ichor node reset "+name+" --override --override-reason WHY --confirm "+name,
+	p.Next("power it off or reset it: ichor node reset "+name+" --override --confirm "+name,
 		"then delete the Node: kubectl delete node "+name)
 }
 

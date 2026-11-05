@@ -101,13 +101,7 @@ func approvalRow(m *pb.Machine) string {
 		s += " by " + d.GetActor()
 	}
 
-	s += agoSuffix(d.GetAt())
-
-	if d.GetReason() != "" {
-		s += ": " + d.GetReason()
-	}
-
-	return s
+	return s + agoSuffix(d.GetAt())
 }
 
 func renderMachineGet(h *human, m *pb.Machine) error {

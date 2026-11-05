@@ -61,7 +61,7 @@ func TestMachineApproveHumanOutput(t *testing.T) {
 
 	var out, errw bytes.Buffer
 	if err := runMachineApprove(context.Background(), c, strings.NewReader(""), &out, &errw, actionsMachineUUID,
-		machineApproveOptions{Role: roleControlPlane, Reason: "test"}); err != nil {
+		machineApproveOptions{Role: roleControlPlane}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -106,11 +106,11 @@ func TestMachineRejectHumanOutput(t *testing.T) {
 	c, _ := freshClients(t, []client.Object{pendingActionsMachine()})
 
 	var out bytes.Buffer
-	if err := runMachineReject(context.Background(), c, strings.NewReader(""), &out, &bytes.Buffer{}, actionsMachineUUID, "not ours"); err != nil {
+	if err := runMachineReject(context.Background(), c, strings.NewReader(""), &out, &bytes.Buffer{}, actionsMachineUUID); err != nil {
 		t.Fatal(err)
 	}
 
-	if want := "✓ rejected " + actionsMachineShort + ": not ours\n"; out.String() != want {
+	if want := "✓ rejected " + actionsMachineShort + "\n"; out.String() != want {
 		t.Errorf("got %q, want %q", out.String(), want)
 	}
 }
@@ -137,7 +137,7 @@ func TestMachineActionsMachineFormatsAreUnchanged(t *testing.T) {
 
 			out.Reset()
 
-			if err := runMachineReject(context.Background(), c, strings.NewReader(""), &out, &bytes.Buffer{}, actionsOtherMachine, "x"); err != nil {
+			if err := runMachineReject(context.Background(), c, strings.NewReader(""), &out, &bytes.Buffer{}, actionsOtherMachine); err != nil {
 				t.Fatal(err)
 			}
 

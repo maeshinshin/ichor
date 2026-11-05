@@ -402,8 +402,10 @@ Both paths refuse:
 - a machine that is already an approved Ichor machine, or one that belongs to a
   cluster Ichor manages (it does not need a reset: use
   `ichor adopt --add-machine`). A stale pending `TalosMachine` for the same UUID, left
-  by an earlier reclaim, does not count (the CLI deletes it after the reset, because it
-  pinned the old maintenance certificate; discovery creates it again with the new one);
+  by an earlier reclaim, does not count (it pinned the old maintenance certificate; the
+  cluster's discovery re-reads the node on its next pass, within about five minutes, and
+  records the new certificate and disks on that same machine, so approve it after that.
+  This needs the node's address in the cluster's `spec.discovery`);
 - a control plane whose removal would leave its cluster's etcd without quorum,
   or that is the last control plane of a reachable cluster.
 

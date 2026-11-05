@@ -107,10 +107,6 @@ type ref struct {
 	Name       string `json:"name"`
 }
 
-func refOf(o *unstructured.Unstructured) ref {
-	return ref{APIVersion: o.GetAPIVersion(), Kind: o.GetKind(), Namespace: o.GetNamespace(), Name: o.GetName()}
-}
-
 func (r ref) groupKind() schema.GroupKind {
 	return schema.FromAPIVersionAndKind(r.APIVersion, r.Kind).GroupKind()
 }

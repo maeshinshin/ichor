@@ -31,8 +31,10 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/ptr"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -329,6 +331,55 @@ var _ = Describe("DiscoveryReconciler.Discover", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(again.ResourceVersion).To(Equal(got.ResourceVersion))
 	})
+
+	// A node that answers the insecure maintenance API with an approved machine's identity must not
+	// move where an approved machine is dialled once the machine has, or is getting, its
+	// configuration: the identity is self-reported, and what follows a redirect is the CA keys (and an
+	// etcd member removed) for a converged machine that lost its disk. Only a machine that never
+	// received its configuration and whose maintenance certificate was pinned is still followed:
+	// the pin refuses any other certificate at the new address.
+	DescribeTable("an approved machine seen at another address",
+		func(uuid string, status ichorv1alpha1.TalosMachineStatus, wantMoved bool) {
+			cluster := newTestCluster("does-not-exist", "v1.14")
+			id := ichorv1alpha1.TalosMachineIdentity{UUID: uuid, Serial: "S-approved", MACAddresses: []string{"11:22:33:44:55:aa"}}
+			m := &ichorv1alpha1.TalosMachine{
+				Name: uuid, Namespace: cluster.Namespace,
+				Spec: ichorv1alpha1.TalosMachineSpec{
+					ClusterRef: corev1.LocalObjectReference{Name: cluster.Name}, Identity: id,
+					Endpoint: "10.0.1.30:50000", ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
+				},
+			}
+			Expect(k8sClient.Create(ctx, m)).To(Succeed())
+			DeferCleanup(func() { _ = k8sClient.Delete(ctx, m) })
+
+			m.Status = status
+			Expect(k8sClient.Status().Update(ctx, m)).To(Succeed())
+
+			fake := &fakeMaintenanceClient{identity: HardwareIdentity{UUID: uuid, Serial: id.Serial, MACAddresses: id.MACAddresses}}
+			r := &DiscoveryReconciler{Client: k8sClient, MaintenanceClient: maintenanceFactory(fake)}
+
+			_, err := r.Discover(ctx, cluster, "10.0.1.99:50000")
+			Expect(err).NotTo(HaveOccurred())
+
+			got := getMachine(cluster.Namespace, uuid)
+			Expect(got.Spec.Endpoint).To(Equal("10.0.1.30:50000"))
+
+			if wantMoved {
+				Expect(got.DialEndpoint()).To(Equal("10.0.1.99:50000"))
+			} else {
+				Expect(got.Status.ObservedEndpoint).To(BeEmpty(), "a discovery match must not redirect an approved machine")
+				Expect(got.DialEndpoint()).To(Equal("10.0.1.30:50000"))
+			}
+		},
+		Entry("whose configuration it applied is not moved", "a1000000-0000-0000-0000-000000000001",
+			ichorv1alpha1.TalosMachineStatus{AppliedConfigHash: "sha256:applied", MaintenanceFingerprint: "pinned"}, false),
+		Entry("whose configuration was stored (re-provisioning) is not moved", "a1000000-0000-0000-0000-000000000002",
+			ichorv1alpha1.TalosMachineStatus{ConfigStoredAt: ptr.To(metav1.Now()), MaintenanceFingerprint: "pinned"}, false),
+		Entry("that never got a configuration and has no pinned certificate is not moved", "a1000000-0000-0000-0000-000000000003",
+			ichorv1alpha1.TalosMachineStatus{}, false),
+		Entry("that never got a configuration and has a pinned certificate is followed", "a1000000-0000-0000-0000-000000000004",
+			ichorv1alpha1.TalosMachineStatus{MaintenanceFingerprint: "pinned"}, true),
+	)
 
 	It("does not auto-register a colliding UUID and leaves the existing TalosMachine untouched", func() {
 		cluster := newTestCluster("does-not-exist", "v1.14")

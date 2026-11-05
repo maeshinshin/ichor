@@ -147,10 +147,8 @@ func retryInit(ctx context.Context, progress io.Writer, fn func() error) error {
 
 		_, _ = fmt.Fprintf(progress, "init: retrying in %s: %v\n", delay, err)
 
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(delay):
+		if err := sleepCtx(ctx, delay); err != nil {
+			return err
 		}
 
 		delay = min(delay*2, followRetryMax)

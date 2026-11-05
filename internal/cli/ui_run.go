@@ -126,10 +126,8 @@ func waitForReadyPod(
 			printedWaiting = true
 		}
 
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(uiPollInterval):
+		if err := sleepCtx(ctx, uiPollInterval); err != nil {
+			return nil, err
 		}
 	}
 }

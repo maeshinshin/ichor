@@ -436,21 +436,36 @@ rotated, so rotating after a compromise is complete only for the CAs
 you list.
 
 - **etcd.** Talos has no accepted-CA list for etcd, so Ichor puts the old and the
-  new CA certificate into `cluster.etcd.ca` together and restarts the etcd of
-  every control plane, one member at a time and only while etcd is healthy,
-  after each of the three passes. A cluster with one control plane has no
-  Kubernetes API while its only member restarts. Take a snapshot first
+  new CA certificate into `cluster.etcd.ca` together and reboots every control
+  plane, one at a time and only while etcd is healthy, after each of the three
+  passes (Talos does not restart etcd on a configuration change and its etcd
+  service has no restart call, so a reboot is the only way a member loads the
+  CA): three reboots of every control plane, each preceded by cordon and drain.
+  A cluster with one control plane has no Kubernetes API while its only member
+  reboots. Take a snapshot first
   (`ichor etcd backup now NAME`). Snapshots stay readable: the backup key does
   not depend on the CAs.
 - **aggregator.** kube-apiserver publishes the CAs it accepts for extension API
   servers (for example metrics-server) in `extension-apiserver-authentication`.
   Ichor waits until it carries the new CA and then two minutes before the
-  front-proxy certificate is signed by it. It restarts none of them: an
-  extension API server that reads the CA only once needs a restart by its owner.
+  front-proxy certificate is signed by it. When the rotation ends it deletes
+  `extension-apiserver-authentication` once, so that kube-apiserver recreates it
+  with the new CA alone (it never removes an old CA from that ConfigMap by
+  itself). It restarts none of the extension API servers: one that reads the CA
+  only once needs a restart by its owner.
   The aggregator CA needs `versionContract` v1.14 or later.
 - **No hand-off.** A rotation of etcd and the aggregator CA alone changes nothing
   your kubeconfig or talosconfig depends on, so it does not wait for new
   credentials. After any rotation run `ichor cluster bundle-export NAME`.
+- **Abandoning.** `ichor operation delete NAME` on a rotation that has not yet
+  made the new CA issue (Accepting and AwaitingCredentials; Issuing too when
+  neither the Kubernetes nor the etcd CA is rotated) takes it back: the new CAs
+  leave the bundle, the cluster lock is released and the machines are rendered
+  from the old CAs again. The nodes then report a pending change (the extra
+  accepted CAs, and for etcd the CA field, are still loaded); run
+  `ichor config apply` to drop them, which reboots the nodes it has to. Later in
+  the rotation the delete is refused, because the nodes would be left between
+  two CAs: let it finish.
 
 ## Not modelled
 

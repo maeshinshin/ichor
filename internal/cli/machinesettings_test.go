@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	"connectrpc.com/connect"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -100,8 +100,7 @@ func TestDisksFromFlags(t *testing.T) {
 func TestApproveWritesNetworkAndDisks(t *testing.T) {
 	setAPITestFlags(t, true)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(strongMachine()).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, k8s := freshClients(t, []client.Object{strongMachine()})
 	run := func(o machineApproveOptions) error {
 		o.Role = testRoleWorker
 

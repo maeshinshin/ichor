@@ -249,8 +249,7 @@ func TestApproveFallbackKeepsTheChecks(t *testing.T) {
 func TestApproveAsksUnlessYes(t *testing.T) {
 	setAPITestFlags(t, false)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(strongMachine()).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, k8s := freshClients(t, []client.Object{strongMachine()})
 
 	err := runMachineApprove(context.Background(), c, strings.NewReader("n\n"), &bytes.Buffer{}, &bytes.Buffer{}, "strong", approveWorker)
 	if err == nil || getMachine(t, k8s, "strong").Spec.IsApproved() {
@@ -289,8 +288,7 @@ func TestPatchCreatePrintsItsImpact(t *testing.T) {
 	setAPITestFlags(t, true)
 
 	cluster := newTestCluster()
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, _ := freshClients(t, []client.Object{cluster})
 
 	p := sysctlPatch(cluster.Name, map[string]string{testSysctlKey: "1"})
 	p.Name = testPatchName
@@ -310,8 +308,7 @@ func TestPatchWriteAndPreviewLocally(t *testing.T) {
 	setAPITestFlags(t, true)
 
 	cluster := newTestCluster()
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, k8s := freshClients(t, []client.Object{cluster})
 
 	p := sysctlPatch(cluster.Name, map[string]string{testSysctlKey: "1"})
 	p.Name = testPatchName

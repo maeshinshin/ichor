@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -48,8 +47,7 @@ func configApplyObjects() []client.Object {
 func TestConfigApplyPromptNamesTheMachineTheFieldAndTheRebootAndDeclineWritesNothing(t *testing.T) {
 	setAPITestFlags(t, false)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(configApplyObjects()...).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, k8s := freshClients(t, configApplyObjects())
 
 	var prompt bytes.Buffer
 
@@ -73,8 +71,7 @@ func TestConfigApplyPromptNamesTheMachineTheFieldAndTheRebootAndDeclineWritesNot
 func TestConfigApplyWithYesCreatesOneConfigOperation(t *testing.T) {
 	setAPITestFlags(t, true)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(configApplyObjects()...).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, k8s := freshClients(t, configApplyObjects())
 
 	if err := runStartOperation(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{},
 		startSpec{Kind: pb.OperationKind_OPERATION_KIND_CONFIG, Cluster: opTestCluster}); err != nil {
@@ -90,8 +87,7 @@ func TestConfigApplyWithYesCreatesOneConfigOperation(t *testing.T) {
 func TestConfigApplyRefusesWhenNothingNeedsAReboot(t *testing.T) {
 	setAPITestFlags(t, true)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(opTestObjects()...).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, k8s := freshClients(t, opTestObjects())
 
 	err := runStartOperation(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{},
 		startSpec{Kind: pb.OperationKind_OPERATION_KIND_CONFIG, Cluster: opTestCluster})

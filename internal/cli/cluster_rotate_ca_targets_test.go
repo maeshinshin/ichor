@@ -86,14 +86,20 @@ func TestOnlyTheTalosAndKubernetesCAsNeedTheCredentialHandoff(t *testing.T) {
 	}
 }
 
+// allowStarts is the in-process cluster of objs on which the start right (ADR 0094), asked as the
+// caller, is granted.
 func allowStarts(t *testing.T, objs []client.Object) client.Client {
 	t.Helper()
 
-	// The start right (ADR 0094) is asked as the caller; here Kubernetes says yes.
-	return interceptor.NewClient(fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(objs...).Build(), interceptor.Funcs{
+	return reviewAs(true, fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(objs...).Build())
+}
+
+// reviewAs answers every SelfSubjectAccessReview made through base with allowed.
+func reviewAs(allowed bool, base client.WithWatch) client.WithWatch {
+	return interceptor.NewClient(base, interceptor.Funcs{
 		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
 			if sar, ok := obj.(*authv1.SelfSubjectAccessReview); ok {
-				sar.Status.Allowed = true
+				sar.Status.Allowed = allowed
 
 				return nil
 			}
@@ -106,8 +112,7 @@ func allowStarts(t *testing.T, objs []client.Object) client.Client {
 func TestRotateCAPlanOfEtcdAloneHasNoHandoffAndWarnsAboutRestartsAndTheSnapshot(t *testing.T) {
 	setAPITestFlags(t, false)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(opTestObjects()...).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, k8s := freshClients(t, opTestObjects())
 
 	var prompt bytes.Buffer
 

@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"cmp"
 	"context"
 	"time"
 
@@ -45,7 +46,7 @@ func (*ReclaimCredentialSweeper) NeedLeaderElection() bool { return true }
 
 // Start sweeps once a minute until ctx ends.
 func (s *ReclaimCredentialSweeper) Start(ctx context.Context) error {
-	t := time.NewTicker(orDuration(s.Interval, time.Minute))
+	t := time.NewTicker(cmp.Or(s.Interval, time.Minute))
 	defer t.Stop()
 
 	for {
@@ -81,7 +82,7 @@ func (s *ReclaimCredentialSweeper) Sweep(ctx context.Context) (int, error) {
 
 	for i := range list.Items {
 		sec := &list.Items[i]
-		if sec.Type != ichorv1alpha1.ReclaimCredentialSecretType || now.Sub(sec.CreationTimestamp.Time) <= orDuration(s.MaxAge, ReclaimMaxCredentialAge) {
+		if sec.Type != ichorv1alpha1.ReclaimCredentialSecretType || now.Sub(sec.CreationTimestamp.Time) <= cmp.Or(s.MaxAge, ReclaimMaxCredentialAge) {
 			continue
 		}
 

@@ -26,8 +26,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	kubefake "k8s.io/client-go/kubernetes/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -66,9 +66,7 @@ func evacuatingRemoval(hostname string, evacuator StorageEvacuator) (
 }
 
 func machineGone(m *ichorv1alpha1.TalosMachine) bool {
-	err := k8sClient.Get(ctx, types.NamespacedName{Namespace: m.Namespace, Name: m.Name}, &ichorv1alpha1.TalosMachine{})
-
-	return apierrors.IsNotFound(err)
+	return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKeyFromObject(m), &ichorv1alpha1.TalosMachine{}))
 }
 
 var _ = Describe("TalosMachineReconciler removal: storage evacuation", func() {

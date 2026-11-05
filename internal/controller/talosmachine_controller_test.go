@@ -378,11 +378,15 @@ func newFreshTestBundle(versionContract string) *secrets.Bundle {
 }
 
 func newTestSecret(bundle *secrets.Bundle) *corev1.Secret {
+	return newTestSecretIn(tmNamespace, bundle)
+}
+
+func newTestSecretIn(ns string, bundle *secrets.Bundle) *corev1.Secret {
 	raw, err := yaml.Marshal(bundle)
 	Expect(err).NotTo(HaveOccurred())
 
 	secret := &corev1.Secret{
-		GenerateName: "bundle-", Namespace: tmNamespace,
+		GenerateName: "bundle-", Namespace: ns,
 		Data: map[string][]byte{secretsbundle.SecretKey: raw},
 	}
 	Expect(k8sClient.Create(ctx, secret)).To(Succeed())
@@ -400,13 +404,17 @@ func newTestCluster(secretName, versionContract string) *ichorv1alpha1.TalosClus
 }
 
 func newTestMachine(clusterName string, approved bool) *ichorv1alpha1.TalosMachine {
+	return newTestMachineIn(tmNamespace, clusterName, approved)
+}
+
+func newTestMachineIn(ns, clusterName string, approved bool) *ichorv1alpha1.TalosMachine {
 	state := ichorv1alpha1.MachineApprovalStatePending
 	if approved {
 		state = ichorv1alpha1.MachineApprovalStateApproved
 	}
 
 	m := &ichorv1alpha1.TalosMachine{
-		GenerateName: machinePrefix, Namespace: tmNamespace,
+		GenerateName: machinePrefix, Namespace: ns,
 		Spec: ichorv1alpha1.TalosMachineSpec{
 			ClusterRef:    corev1.LocalObjectReference{Name: clusterName},
 			Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: "uuid-" + clusterName},
@@ -481,6 +489,16 @@ func extraArgsConfig() *typedconfig.Config {
 	return cfg
 }
 
+// proxyDisabledConfig is minimalConfigSkeleton with cluster.proxy.disabled set: deliberately
+// uncovered by pkg/fieldmeta's table (see its own test), so changing it stays reboot-required.
+func proxyDisabledConfig() *typedconfig.Config {
+	disabled := true
+	cfg := minimalConfigSkeleton()
+	cfg.ClusterConfig.ProxyConfig = &typedconfig.ProxyConfig{Disabled: &disabled}
+
+	return cfg
+}
+
 // renderWithConfig renders cluster/m/bundle with a single, uncreated
 // (not stored in the API server) Config-kind patch, for computing the
 // "current" bytes a test's fakeTalosClient should return -- the node's
@@ -532,12 +550,14 @@ func newTestFixture() (*secrets.Bundle, *ichorv1alpha1.TalosCluster, *ichorv1alp
 	return bundle, cluster, newTestMachine(cluster.Name, true)
 }
 
-// reconcileOK reconciles m once and fails unless that returned no error.
-func reconcileOK(r *TalosMachineReconciler, m *ichorv1alpha1.TalosMachine) {
+// reconcileOK reconciles each of ms once and fails unless every reconcile returned no error.
+func reconcileOK(r *TalosMachineReconciler, ms ...*ichorv1alpha1.TalosMachine) {
 	GinkgoHelper()
 
-	_, err := reconcileMachine(r, m)
-	Expect(err).NotTo(HaveOccurred())
+	for _, m := range ms {
+		_, err := reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+	}
 }
 
 // expectReady asserts m's Ready condition and returns it for further checks.
@@ -744,91 +764,49 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(warn.Status).To(Equal(metav1.ConditionFalse))
 	})
 
-	It("applies nothing and never takes the cluster lock for a reboot-causing change", func() {
-		bundle, cluster, m := newTestFixture()
+	// A reboot-requiring change is only reported, whoever holds the cluster lock: the machine
+	// reconciler never applies, stages or reboots it, and neither takes nor releases the lock.
+	DescribeTable("reports RebootRequired, applies nothing and leaves the cluster lock alone",
+		func(holder string) {
+			bundle, cluster, m := newTestFixture()
 
-		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
+			current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
+			newTestPatch(cluster.Name, layerCluster, nil, proxyDisabledConfig())
 
-		// cluster.proxy.disabled is deliberately uncovered by pkg/fieldmeta's
-		// table (see its own test), so it stays reboot-required by default.
-		disabled := true
-		desired := minimalConfigSkeleton()
-		desired.ClusterConfig.ProxyConfig = &typedconfig.ProxyConfig{Disabled: &disabled}
-		newTestPatch(cluster.Name, layerCluster, nil, desired)
+			lock := clusterlock.New(k8sClient, client.ObjectKeyFromObject(cluster), 0)
+			if holder != "" {
+				Expect(lock.Acquire(ctx, holder)).To(Succeed())
+			}
 
-		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
+			fake := &fakeTalosClient{current: current}
+			r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
 
-		reconcileOK(r, m)
+			reconcileOK(r, m)
 
-		Expect(fake.applyCalls).To(BeEmpty())
-		Expect(fake.stagedCalls).To(BeEmpty(), "no operation, so nothing is staged")
-		Expect(fake.rebootCalls).To(BeZero(), "no operation, so nothing reboots")
+			Expect(fake.applyCalls).To(BeEmpty())
+			Expect(fake.stagedCalls).To(BeEmpty(), "no operation, so nothing is staged")
+			Expect(fake.rebootCalls).To(BeZero(), "no operation, so nothing reboots")
 
-		got := fetchMachine(m)
-		Expect(got.Status.AppliedConfigHash).To(BeEmpty())
+			got := fetchMachine(m)
+			Expect(got.Status.AppliedConfigHash).To(BeEmpty())
 
-		cond := expectReady(got, metav1.ConditionFalse, reasonRebootRequired)
-		Expect(cond.Message).To(ContainSubstring("cluster.proxy.disabled"), "the message names the field that needs the reboot")
-		Expect(cond.Message).To(ContainSubstring("ichor config apply"), "and says how to apply it")
-		Expect(got.Status.RebootPaths).To(ContainElement("cluster.proxy.disabled"))
+			cond := expectReady(got, metav1.ConditionFalse, reasonRebootRequired)
+			Expect(cond.Message).To(ContainSubstring("cluster.proxy.disabled"), "the message names the field that needs the reboot")
+			Expect(cond.Message).To(ContainSubstring("ichor config apply"), "and says how to apply it")
+			Expect(got.Status.RebootPaths).To(ContainElement("cluster.proxy.disabled"))
 
-		expectLockFree(cluster, "refuseReboot never takes the cluster lock")
-	})
+			holderNow, held, err := lock.Holder(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(held).To(Equal(holder != ""), "refuseReboot neither takes nor releases the cluster lock")
 
-	It("never touches a cluster lock a running operation holds as the controller", func() {
-		bundle, cluster, m := newTestFixture()
-
-		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
-
-		disabled := true
-		desired := minimalConfigSkeleton()
-		desired.ClusterConfig.ProxyConfig = &typedconfig.ProxyConfig{Disabled: &disabled}
-		newTestPatch(cluster.Name, layerCluster, nil, desired)
-
-		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
-		Expect(lock.Acquire(ctx, controllerIdentity)).To(Succeed())
-
-		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileOK(r, m)
-
-		holder, held, err := lock.Holder(ctx)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(held).To(BeTrue())
-		Expect(holder).To(Equal(controllerIdentity))
-		Expect(fake.stagedCalls).To(BeEmpty())
-		Expect(fake.rebootCalls).To(BeZero(), "the machine reconciler never reboots a node")
-	})
-
-	It("reports RebootRequired and leaves another identity's cluster lock alone", func() {
-		bundle, cluster, m := newTestFixture()
-
-		current := renderWithConfig(cluster, m, bundle, layerCluster, nil, minimalConfigSkeleton())
-
-		disabled := true
-		desired := minimalConfigSkeleton()
-		desired.ClusterConfig.ProxyConfig = &typedconfig.ProxyConfig{Disabled: &disabled}
-		newTestPatch(cluster.Name, layerCluster, nil, desired)
-
-		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0)
-		Expect(lock.Acquire(ctx, "someone-else")).To(Succeed())
-
-		fake := &fakeTalosClient{current: current}
-		r := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, TalosClient: clientFactory(fake)}
-
-		reconcileOK(r, m)
-
-		Expect(fake.applyCalls).To(BeEmpty())
-
-		expectReady(fetchMachine(m), metav1.ConditionFalse, reasonRebootRequired)
-
-		holder, held, err := lock.Holder(ctx)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(held).To(BeTrue(), "the other identity's lock must not be released by a failed Acquire")
-		Expect(holder).To(Equal("someone-else"))
-	})
+			if held {
+				Expect(holderNow).To(Equal(holder))
+			}
+		},
+		Entry("lock free", ""),
+		Entry("lock held by a running operation as the controller", controllerIdentity),
+		Entry("lock held by another identity", "someone-else"),
+	)
 
 	It("applies nothing and reports reset-and-reinstall for an install-time-only change", func() {
 		bundle, cluster, m := newTestFixture()
@@ -1179,14 +1157,9 @@ var _ = Describe("TalosMachineReconciler", func() {
 		reconcileOK(r, m)
 		Expect(fetchMachine(m).Status.AppliedConfigHash).To(Equal(baseHash))
 
-		// cluster.proxy.disabled is deliberately uncovered by pkg/fieldmeta's
-		// table, so it stays reboot-required by default (see the existing
-		// reboot test above) -- drift there must still refuse to apply even
-		// though the policy is autoCorrect.
-		disabled := true
-		driftedCfg := minimalConfigSkeleton()
-		driftedCfg.ClusterConfig.ProxyConfig = &typedconfig.ProxyConfig{Disabled: &disabled}
-		fake.current = renderWithConfig(cluster, m, bundle, layerCluster, nil, driftedCfg)
+		// A reboot-required field: drift there must still refuse to apply even though the policy
+		// is autoCorrect.
+		fake.current = renderWithConfig(cluster, m, bundle, layerCluster, nil, proxyDisabledConfig())
 
 		reconcileOK(r, m)
 

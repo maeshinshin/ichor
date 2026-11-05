@@ -124,7 +124,15 @@ type Values struct {
 	GatewayAPI        secretsNamespaceOf `json:"gatewayAPI"`
 	EnvoyConfig       secretsNamespaceOf `json:"envoyConfig"`
 	BGPControlPlane   secretsNamespaceOf `json:"bgpControlPlane"`
-	TLS               secretsNamespaceOf `json:"tls"`
+	TLS               tlsValues          `json:"tls"`
+}
+
+// tlsValues is cilium.tls: its secretsNamespace name, and true for readSecretsOnlyFromSecretsNamespace,
+// set explicitly because with false the agent on every node can read the Secrets of every namespace.
+// The deprecated alias tls.secretsBackend stays unset: the flag wins over it.
+type tlsValues struct {
+	secretsNamespaceOf
+	ReadSecretsOnlyFromSecretsNamespace bool `json:"readSecretsOnlyFromSecretsNamespace"`
 }
 
 // secretsNamespaceOf is a chart block's secretsNamespace.name. The chart renders a Role and a
@@ -185,11 +193,13 @@ func (p Preset) valuesFor(kubeProxy cni.KubeProxyMode) Values {
 		},
 	}
 
-	pinned := []*secretsNamespaceOf{&v.IngressController, &v.GatewayAPI, &v.EnvoyConfig, &v.BGPControlPlane, &v.TLS}
+	pinned := []*secretsNamespaceOf{&v.IngressController, &v.GatewayAPI, &v.EnvoyConfig, &v.BGPControlPlane, &v.TLS.secretsNamespaceOf}
 
 	for _, b := range pinned {
 		b.SecretsNamespace.Name = ciliumSecretsNamespace
 	}
+
+	v.TLS.ReadSecretsOnlyFromSecretsNamespace = true
 
 	if kubeProxy == cni.KubeProxyReplaced {
 		v.KubeProxyReplacement = true

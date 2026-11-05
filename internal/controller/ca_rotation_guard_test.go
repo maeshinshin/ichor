@@ -38,15 +38,15 @@ func TestCARotationWritesOnlyTheReferencedBundleSecret(t *testing.T) {
 
 	cl := fake.NewClientBuilder().WithObjects(secret("ichor-system", "bundle"), secret("ichor-system", "other"),
 		secret("elsewhere", "bundle")).Build()
-	run := &caRun{r: &TalosOperationReconciler{Client: cl, ControllerNamespace: "ichor-system"}, cluster: cluster}
+	r := &TalosOperationReconciler{Client: cl, ControllerNamespace: "ichor-system"}
 
 	for _, bad := range []*corev1.Secret{secret("ichor-system", "other"), secret("elsewhere", "bundle"), secret("ichor-system", "")} {
-		if err := run.updateBundle(context.Background(), bad); err == nil {
+		if err := r.updateBundle(context.Background(), cluster, bad); err == nil {
 			t.Errorf("wrote %s/%s, which is not the cluster's secrets bundle", bad.Namespace, bad.Name)
 		}
 	}
 
-	if err := run.updateBundle(context.Background(), secret("ichor-system", "bundle")); err != nil {
+	if err := r.updateBundle(context.Background(), cluster, secret("ichor-system", "bundle")); err != nil {
 		t.Errorf("refused the referenced bundle: %v", err)
 	}
 }

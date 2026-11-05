@@ -21,6 +21,8 @@ config/crd/bases/ichor.maesh.dev_talosclusters.yaml
 config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml
 dist/chart/templates/crd/talosclusters.ichor.maesh.dev.yaml
 dist/chart/templates/crd/talosconfigpatches.ichor.maesh.dev.yaml
+docs/reference/crds/taloscluster.md
+docs/reference/crds/talosconfigpatch.md
 
 The install manifest embedded in the ichor command and in the installer
 image contains the two CustomResourceDefinitions above and is covered in the

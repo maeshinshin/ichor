@@ -22,10 +22,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
 // Spec.endpoint must be an address the cluster declares (spec.discovery) unless the user
@@ -63,23 +61,13 @@ var _ = Describe("Endpoint and approval gates on TalosMachine", func() {
 		cluster.Spec.Network = &ichorv1alpha1.TalosClusterNetwork{PodSubnets: []string{"10.248.0.0/16"}}
 		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 
-		DeferCleanup(func() {
-			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), cluster)).To(Succeed())
-			cluster.Annotations = map[string]string{deleteguard.AllowDeleteAnnotation: deleteguard.AllowDeleteValue}
-			Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
-			Expect(k8sClient.Delete(ctx, cluster)).To(Succeed())
-		})
+		DeferCleanup(func() { forceDelete(cluster) })
 	})
 
 	create := func(user string, m *ichorv1alpha1.TalosMachine) error {
 		err := asUser(user).Create(ctx, m)
 		if err == nil {
-			DeferCleanup(func() {
-				Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(m), m)).To(Succeed())
-				m.Annotations = map[string]string{deleteguard.AllowDeleteAnnotation: deleteguard.AllowDeleteValue}
-				Expect(k8sClient.Update(ctx, m)).To(Succeed())
-				Expect(k8sClient.Delete(ctx, m)).To(Succeed())
-			})
+			DeferCleanup(func() { forceDelete(m) })
 		}
 
 		return err

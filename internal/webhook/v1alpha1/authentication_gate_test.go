@@ -25,7 +25,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/release"
 )
 
@@ -77,15 +76,7 @@ var _ = Describe("Authentication gate on TalosCluster", func() {
 		Expect(k8sClient.Create(ctx, cluster)).To(Succeed())
 	})
 
-	AfterEach(func() {
-		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(cluster), cluster); err != nil {
-			return
-		}
-
-		cluster.Annotations = map[string]string{deleteguard.AllowDeleteAnnotation: deleteguard.AllowDeleteValue}
-		Expect(k8sClient.Update(ctx, cluster)).To(Succeed())
-		Expect(k8sClient.Delete(ctx, cluster)).To(Succeed())
-	})
+	AfterEach(func() { forceDelete(cluster) })
 
 	set := func(user string, a *ichorv1alpha1.TalosClusterAuthentication) error {
 		c := &ichorv1alpha1.TalosCluster{}
@@ -133,12 +124,7 @@ var _ = Describe("Authentication gate on TalosCluster", func() {
 		old := newTestCluster()
 		old.Spec.VersionContract = "v1.13"
 		Expect(k8sClient.Create(ctx, old)).To(Succeed())
-		DeferCleanup(func() {
-			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(old), old)).To(Succeed())
-			old.Annotations = map[string]string{deleteguard.AllowDeleteAnnotation: deleteguard.AllowDeleteValue}
-			Expect(k8sClient.Update(ctx, old)).To(Succeed())
-			Expect(k8sClient.Delete(ctx, old)).To(Succeed())
-		})
+		DeferCleanup(func() { forceDelete(old) })
 
 		old.Spec.Authentication = &ichorv1alpha1.TalosClusterAuthentication{
 			External: []ichorv1alpha1.TalosClusterExternalIssuer{external("https://idp.example.org")},

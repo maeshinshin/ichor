@@ -39,16 +39,27 @@ const (
 	testClusterName    = "cluster"
 )
 
-// asUser returns a client that makes requests as name (impersonated, so the
+// asUser returns a client that makes requests as name, in groups (impersonated, so the
 // webhook sees that user in the admission request).
-func asUser(name string) client.Client {
+func asUser(name string, groups ...string) client.Client {
 	c := rest.CopyConfig(cfg)
-	c.Impersonate = rest.ImpersonationConfig{UserName: name}
+	c.Impersonate = rest.ImpersonationConfig{UserName: name, Groups: groups}
 
 	cl, err := client.New(c, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 
 	return cl
+}
+
+// forceDelete deletes obj with the allow-delete annotation, unless it is gone already.
+func forceDelete(obj client.Object) {
+	if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), obj); err != nil {
+		return
+	}
+
+	obj.SetAnnotations(map[string]string{deleteguard.AllowDeleteAnnotation: deleteguard.AllowDeleteValue})
+	Expect(k8sClient.Update(ctx, obj)).To(Succeed())
+	Expect(k8sClient.Delete(ctx, obj)).To(Succeed())
 }
 
 // grant gives user the ordinary write rights, and (if glass) the override

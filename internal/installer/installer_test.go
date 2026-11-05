@@ -578,8 +578,8 @@ rules:
 `, ns))
 	}
 
-	if err := k8sClient.Get(context.Background(), types.NamespacedName{Name: ciliumSecretsNamespace}, &corev1.Namespace{}); !apierrors.IsNotFound(err) {
-		t.Fatalf("this test needs envtest without a %s namespace, Get error = %v", ciliumSecretsNamespace, err)
+	if err := k8sClient.Get(context.Background(), types.NamespacedName{Name: CiliumSecretsNamespace}, &corev1.Namespace{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("this test needs envtest without a %s namespace, Get error = %v", CiliumSecretsNamespace, err)
 	}
 
 	f := newFixture(t)
@@ -587,10 +587,10 @@ rules:
 	var order []string
 
 	err := Run(context.Background(), k8sClient, Options{
-		Namespace: f.ns, RunID: f.run, Manifest: append(f.manifest("ctrl:v2", ""), role(ciliumSecretsNamespace)...), Ready: noWait(&order),
+		Namespace: f.ns, RunID: f.run, Manifest: append(f.manifest("ctrl:v2", ""), role(CiliumSecretsNamespace)...), Ready: noWait(&order),
 	})
 	if err != nil {
-		t.Fatalf("Run with a Role in a missing %s: %v", ciliumSecretsNamespace, err)
+		t.Fatalf("Run with a Role in a missing %s: %v", CiliumSecretsNamespace, err)
 	}
 
 	for _, o := range order {
@@ -606,5 +606,76 @@ rules:
 	})
 	if err == nil || !strings.Contains(err.Error(), "not found") {
 		t.Errorf("Run with a Role in another missing namespace = %v, want a not found error", err)
+	}
+}
+
+// A Cilium cluster whose namespace did not exist yet when the pair was first skipped gets the Role the next
+// time the install manifest is applied (ADR 0099 amendment 2026-11-06): the skip is not remembered.
+func TestRunAppliesTheCiliumSecretsRoleOnceTheNamespaceExists(t *testing.T) {
+	ctx := context.Background()
+
+	role := []byte(`---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ichor-cni-secrets-role
+  namespace: ` + CiliumSecretsNamespace + `
+rules:
+- apiGroups: [""]
+  resources: [secrets]
+  verbs: [get]
+`)
+
+	getRole := func() error {
+		live := &unstructured.Unstructured{}
+		live.SetAPIVersion("rbac.authorization.k8s.io/v1")
+		live.SetKind("Role")
+
+		return k8sClient.Get(ctx, types.NamespacedName{Namespace: CiliumSecretsNamespace, Name: "ichor-cni-secrets-role"}, live)
+	}
+
+	if err := k8sClient.Get(ctx, types.NamespacedName{Name: CiliumSecretsNamespace}, &corev1.Namespace{}); !apierrors.IsNotFound(err) {
+		t.Fatalf("this test needs envtest without a %s namespace, Get error = %v", CiliumSecretsNamespace, err)
+	}
+
+	run := func() {
+		t.Helper()
+
+		f := newFixture(t)
+
+		var order []string
+
+		if err := Run(ctx, k8sClient, Options{
+			Namespace: f.ns, RunID: f.run, Manifest: append(f.manifest("ctrl:v2", ""), role...), Ready: noWait(&order),
+		}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	}
+
+	run()
+
+	if err := getRole(); !apierrors.IsNotFound(err) {
+		t.Fatalf("the Role before the namespace exists: Get error = %v, want not found", err)
+	}
+
+	ns := &corev1.Namespace{}
+	ns.Name = CiliumSecretsNamespace
+
+	if err := k8sClient.Create(ctx, ns); err != nil {
+		t.Fatal(err)
+	}
+
+	// envtest has no namespace controller: remove the namespace through its finalize subresource so the
+	// next test finds none.
+	t.Cleanup(func() {
+		_ = k8sClient.Delete(ctx, ns)
+		ns.Spec.Finalizers = nil
+		_ = k8sClient.SubResource("finalize").Update(ctx, ns)
+	})
+
+	run()
+
+	if err := getRole(); err != nil {
+		t.Fatalf("the Role after the namespace exists: %v", err)
 	}
 }

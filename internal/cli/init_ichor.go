@@ -49,11 +49,14 @@ import (
 // Manifest; tests: a small fixture), so this function never reaches
 // into a package-level embed var itself.
 //
+// cilium says Cilium is (or is about to be) this cluster's CNI: init then creates the cilium-secrets
+// namespace the manifest's Role and RoleBinding live in; otherwise those two are skipped.
+//
 // It refuses outright if manifest is the placeholder
 // (internal/installmanifest's doc comment): that means this binary was
 // built with plain `go build`, not `make build-ichor-embed`, and has
 // nothing real to apply.
-func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest []byte, warn io.Writer) error {
+func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest []byte, warn io.Writer, cilium bool) error {
 	if bytes.Contains(manifest, []byte(installmanifest.PlaceholderSentinel)) {
 		return fmt.Errorf(
 			"init: this ichor binary has no install manifest embedded (built without -tags installembed); " +
@@ -73,7 +76,31 @@ func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest [
 	}
 
 	for _, obj := range objs {
-		if err := createWithRetry(ctx, k8sClient, obj, warn); err != nil {
+		inSecrets := obj.GetNamespace() == installer.CiliumSecretsNamespace
+
+		// cilium-secrets comes from Cilium's own bootstrap manifest, which Talos applies minutes after the API
+		// server answers, so on a Cilium cluster init creates it first (the Cilium chart's Helm hand-over takes
+		// it over, TakeOwnership); anywhere else the objects in it are skipped, as the installer does.
+		if inSecrets && cilium {
+			ns := &unstructured.Unstructured{}
+			ns.SetAPIVersion("v1")
+			ns.SetKind("Namespace")
+			ns.SetName(installer.CiliumSecretsNamespace)
+
+			if err := createWithRetry(ctx, k8sClient, ns, warn); err != nil {
+				return fmt.Errorf("init: creating Namespace %q for Ichor's own %s %q: %w", ns.GetName(), obj.GetKind(), obj.GetName(), err)
+			}
+		}
+
+		err := createWithRetry(ctx, k8sClient, obj, warn)
+		if apierrors.IsNotFound(err) && inSecrets && !cilium {
+			_, _ = fmt.Fprintf(warn, "init: skipping %s %s: namespace %s does not exist, Cilium does not run here\n",
+				obj.GetKind(), obj.GetName(), installer.CiliumSecretsNamespace)
+
+			continue
+		}
+
+		if err != nil {
 			return fmt.Errorf("init: applying Ichor's own %s %q: %w", obj.GetKind(), obj.GetName(), err)
 		}
 	}

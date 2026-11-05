@@ -264,7 +264,7 @@ func (w *adoptWriter) installIchor(ctx context.Context) error {
 		return nil
 	}
 
-	if err := applyIchorManifest(ctx, w.c, ichor.Manifest, w.in.Stderr); err != nil {
+	if err := applyIchorManifest(ctx, w.c, ichor.Manifest, w.in.Stderr, ichor.DetectedCNI == cniCilium); err != nil {
 		return err
 	}
 

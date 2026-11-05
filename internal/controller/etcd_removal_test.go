@@ -59,35 +59,60 @@ func perMachineClientFactory(byName map[string]*fakeTalosClient) func(
 	}
 }
 
+// newThreeControlPlanes declares a cluster with one control plane and gives it three.
+func newThreeControlPlanes() []*ichorv1alpha1.TalosMachine {
+	cluster := newTestClusterWithCount(1, newTestSecret(newTestBundle("v1.14")).Name)
+
+	return []*ichorv1alpha1.TalosMachine{
+		newTestControlPlane(cluster.Name, "1"), newTestControlPlane(cluster.Name, "2"), newTestControlPlane(cluster.Name, "3"),
+	}
+}
+
+// reconcileEach reconciles every machine once, which is what gives each its removal finalizer.
+func reconcileEach(r *TalosMachineReconciler, ms []*ichorv1alpha1.TalosMachine) {
+	GinkgoHelper()
+
+	for _, m := range ms {
+		_, err := reconcileMachine(r, m)
+		Expect(err).NotTo(HaveOccurred())
+	}
+}
+
+// removeFirstOfThree reconciles three control planes once with a reconciler whose dial answers per
+// index in clients (0 is the first control plane; a missing index cannot be dialed), then deletes
+// the first and reconciles it again. hostname, when set, is the first one's spec.hostname.
+func removeFirstOfThree(
+	hostname string, recorder record.EventRecorder, clients map[int]*fakeTalosClient,
+) (*ichorv1alpha1.TalosMachine, error) {
+	cps := newThreeControlPlanes()
+
+	if hostname != "" {
+		setHostname(cps[0], hostname)
+	}
+
+	byName := map[string]*fakeTalosClient{}
+	for i, c := range clients {
+		byName[cps[i].Name] = c
+	}
+
+	r := &TalosMachineReconciler{
+		Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, Recorder: recorder,
+		TalosClient: perMachineClientFactory(byName),
+	}
+	reconcileEach(r, cps)
+
+	Expect(k8sClient.Delete(ctx, cps[0])).To(Succeed())
+	_, err := reconcileMachine(r, cps[0])
+
+	return cps[0], err
+}
+
 var _ = Describe("removeEtcdMember", func() {
 	It("removes the departing machine's own etcd member via EtcdLeaveCluster when it can be dialed", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestClusterWithCount(1, secret.Name)
-		cp1 := newTestControlPlane(cluster.Name, "e1")
-		cp2 := newTestControlPlane(cluster.Name, "e2")
-		setHostname(cp1, "node-e1")
-
 		self := &fakeTalosClient{etcdMembers: []EtcdMember{{ID: 1, Hostname: "node-e1"}}}
-		r := &TalosMachineReconciler{
-			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
-			TalosClient: perMachineClientFactory(map[string]*fakeTalosClient{cp1.Name: self}),
-		}
-		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
-		}
 
-		// 2 -> 1 with declared count 1: quorum of 2 is 2, which 1 fails --
-		// use a 3rd so this removal actually passes its checks.
-		cp3 := newTestControlPlane(cluster.Name, "e3")
-		_, err := reconcileMachine(r, cp3)
+		cp1, err := removeFirstOfThree("node-e1", nil, map[int]*fakeTalosClient{0: self})
 		Expect(err).NotTo(HaveOccurred())
-
-		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
-		_, err = reconcileMachine(r, cp1)
-		Expect(err).NotTo(HaveOccurred())
-
 		Expect(self.etcdLeaveCalls).To(Equal(1))
 		Expect(self.etcdRemoveIDs).To(BeEmpty())
 
@@ -97,32 +122,11 @@ var _ = Describe("removeEtcdMember", func() {
 	})
 
 	It("falls back to a surviving sibling's EtcdRemoveMemberByID when the departing machine cannot be dialed", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestClusterWithCount(1, secret.Name)
-		cp1 := newTestControlPlane(cluster.Name, "e4")
-		cp2 := newTestControlPlane(cluster.Name, "e5")
-		cp3 := newTestControlPlane(cluster.Name, "e6")
-		setHostname(cp1, "node-e4")
-
 		survivor := &fakeTalosClient{etcdMembers: []EtcdMember{{ID: 42, Hostname: "node-e4"}}}
-		r := &TalosMachineReconciler{
-			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
-			// cp1 (the departing machine) has no entry: it cannot be dialed at
-			// all, as if the node were powered off.
-			TalosClient: perMachineClientFactory(map[string]*fakeTalosClient{
-				cp2.Name: survivor, cp3.Name: survivor,
-			}),
-		}
-		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
-		}
 
-		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
-		_, err := reconcileMachine(r, cp1)
+		// The departing machine has no entry: it cannot be dialed at all, as if the node were powered off.
+		cp1, err := removeFirstOfThree("node-e4", nil, map[int]*fakeTalosClient{1: survivor, 2: survivor})
 		Expect(err).NotTo(HaveOccurred())
-
 		Expect(survivor.etcdRemoveIDs).To(Equal([]uint64{42}))
 		Expect(survivor.etcdLeaveCalls).To(Equal(0))
 
@@ -132,32 +136,13 @@ var _ = Describe("removeEtcdMember", func() {
 	})
 
 	It("is idempotent: a departing machine already absent from etcd needs no further Talos call", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestClusterWithCount(1, secret.Name)
-		cp1 := newTestControlPlane(cluster.Name, "e7")
-		cp2 := newTestControlPlane(cluster.Name, "e8")
-		cp3 := newTestControlPlane(cluster.Name, "e9")
-		setHostname(cp1, "node-e7")
-
-		// cp1's own client reports an etcd member list that no longer
-		// contains "node-e7" -- the resumption case: killed after a
-		// previous reconcile's EtcdLeaveCluster already succeeded, before
-		// the finalizer was cleared.
+		// The machine's own client reports an etcd member list that no longer contains "node-e7" -- the
+		// resumption case: killed after a previous reconcile's EtcdLeaveCluster already succeeded,
+		// before the finalizer was cleared.
 		self := &fakeTalosClient{etcdMembers: nil}
-		r := &TalosMachineReconciler{
-			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
-			TalosClient: perMachineClientFactory(map[string]*fakeTalosClient{cp1.Name: self}),
-		}
-		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
-		}
 
-		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
-		_, err := reconcileMachine(r, cp1)
+		cp1, err := removeFirstOfThree("node-e7", nil, map[int]*fakeTalosClient{0: self})
 		Expect(err).NotTo(HaveOccurred())
-
 		Expect(self.etcdLeaveCalls).To(Equal(0), "already gone: leaving again is not idempotency, it's a wasted call")
 
 		var gone ichorv1alpha1.TalosMachine
@@ -166,27 +151,8 @@ var _ = Describe("removeEtcdMember", func() {
 	})
 
 	It("holds the finalizer and does not clear it when no survivor can be reached", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestClusterWithCount(1, secret.Name)
-		cp1 := newTestControlPlane(cluster.Name, "e10")
-		cp2 := newTestControlPlane(cluster.Name, "e11")
-		cp3 := newTestControlPlane(cluster.Name, "e12")
-		setHostname(cp1, "node-e10")
-
-		// Nobody in the map: cp1 cannot be dialed, and neither can any
-		// sibling removeEtcdMemberFromSurvivor would try.
-		r := &TalosMachineReconciler{
-			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
-			TalosClient: perMachineClientFactory(map[string]*fakeTalosClient{}),
-		}
-		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
-		}
-
-		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
-		_, err := reconcileMachine(r, cp1)
+		// Nobody can be dialed: neither the machine nor any sibling removeEtcdMemberFromSurvivor would try.
+		cp1, err := removeFirstOfThree("node-e10", nil, nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		got := fetchMachine(cp1)
@@ -198,51 +164,18 @@ var _ = Describe("removeEtcdMember", func() {
 
 var _ = Describe("removal of a control plane with an empty spec.hostname", func() {
 	It("resolves the node name from the node's own report and leaves etcd under that name", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestClusterWithCount(1, secret.Name)
-		cp1 := newTestControlPlane(cluster.Name, "h1")
-		cp2 := newTestControlPlane(cluster.Name, "h2")
-		cp3 := newTestControlPlane(cluster.Name, "h3")
-
 		self := &fakeTalosClient{nodeName: "talos-abc-def", etcdMembers: []EtcdMember{{ID: 7, Hostname: "talos-abc-def"}}}
-		r := &TalosMachineReconciler{
-			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
-			TalosClient: perMachineClientFactory(map[string]*fakeTalosClient{cp1.Name: self}),
-		}
-		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
-		}
 
-		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
-		_, err := reconcileMachine(r, cp1)
+		_, err := removeFirstOfThree("", nil, map[int]*fakeTalosClient{0: self})
 		Expect(err).NotTo(HaveOccurred())
-
 		Expect(self.etcdLeaveCalls).To(Equal(1), "the member must be found under the resolved name, not skipped")
 	})
 
 	It("refuses the removal, keeping the finalizer, when the node name cannot be resolved", func() {
-		bundle := newTestBundle("v1.14")
-		secret := newTestSecret(bundle)
-		cluster := newTestClusterWithCount(1, secret.Name)
-		cp1 := newTestControlPlane(cluster.Name, "h4")
-		cp2 := newTestControlPlane(cluster.Name, "h5")
-		cp3 := newTestControlPlane(cluster.Name, "h6")
-
 		self := &fakeTalosClient{nodeNameErr: fmt.Errorf("node is down")}
 		recorder := record.NewFakeRecorder(10)
-		r := &TalosMachineReconciler{
-			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, Recorder: recorder,
-			TalosClient: perMachineClientFactory(map[string]*fakeTalosClient{cp1.Name: self}),
-		}
-		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
-			_, err := reconcileMachine(r, cp)
-			Expect(err).NotTo(HaveOccurred())
-		}
 
-		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
-		_, _ = reconcileMachine(r, cp1)
+		cp1, _ := removeFirstOfThree("", recorder, map[int]*fakeTalosClient{0: self})
 
 		got := fetchMachine(cp1)
 		cond := apimeta.FindStatusCondition(got.Status.Conditions, conditionRemoval)

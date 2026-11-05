@@ -55,12 +55,12 @@ func TestAddDiscoveryCidrAppendsOnlyThatRange(t *testing.T) {
 	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(c).Build()
 
 	resp, err := (&Server{Client: k8s}).AddDiscoveryCidr(context.Background(), connect.NewRequest(
-		&pb.AddDiscoveryCidrRequest{Cluster: objectRef(testNS, "c"), Cidr: " 192.168.0.7/24 ", Reason: "rack 2"}))
+		&pb.AddDiscoveryCidrRequest{Cluster: objectRef(testNS, "c"), Cidr: " 192.168.0.7/24 "}))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if a := resp.Msg.GetAudit(); a.GetAction() != "add-discovery-cidr" || a.GetReason() != "rack 2" {
+	if a := resp.Msg.GetAudit(); a.GetAction() != "add-discovery-cidr" || a.GetReason() != "" {
 		t.Fatalf("audit %v", a)
 	}
 

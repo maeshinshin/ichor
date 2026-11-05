@@ -29,9 +29,6 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// demoBuild is the reason the tests give for skipping the signature check.
-const demoBuild = "demo build"
-
 func getInstallation(t *testing.T, k8s client.Client) ichorv1alpha1.IchorInstallation {
 	t.Helper()
 
@@ -51,7 +48,7 @@ func TestIchorUpgradeWritesTheInstallerSettingsAndClearsThemNextTime(t *testing.
 	srv, k8s := opServer(t, append(opObjects(), ichorInstallation(ichorOld, ichorOld))...)
 
 	req := ichorCreate(ichorNew)
-	req.Msg.IchorInstaller = &pb.IchorInstallerOptions{Digest: pin, SkipSignatureReason: demoBuild}
+	req.Msg.IchorInstaller = &pb.IchorInstallerOptions{Digest: pin, SkipSignature: true}
 
 	if _, err := srv.CreateOperation(context.Background(), req); err != nil {
 		t.Fatal(err)
@@ -59,7 +56,7 @@ func TestIchorUpgradeWritesTheInstallerSettingsAndClearsThemNextTime(t *testing.
 
 	inst := getInstallation(t, k8s)
 	if inst.Spec.InstallerDigest != pin || inst.Spec.InstallerSignature == nil ||
-		inst.Spec.InstallerSignature.Mode != ichorv1alpha1.InstallerSignatureSkip || inst.Spec.InstallerSignature.Reason != demoBuild {
+		inst.Spec.InstallerSignature.Mode != ichorv1alpha1.InstallerSignatureSkip || inst.Spec.InstallerSignature.Reason != "" {
 		t.Fatalf("spec = %+v", inst.Spec)
 	}
 
@@ -90,13 +87,13 @@ func TestIchorPlanWarnsWhenTheSignatureCheckIsSkipped(t *testing.T) {
 
 	plan, err := srv.PlanOperation(context.Background(), connect.NewRequest(&pb.PlanOperationRequest{
 		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_ICHOR, Target: ichorNew,
-		IchorInstaller: &pb.IchorInstallerOptions{SkipSignatureReason: demoBuild},
+		IchorInstaller: &pb.IchorInstallerOptions{SkipSignature: true},
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if w := plan.Msg.GetWarning(); !strings.Contains(w, "NOT checked") || !strings.Contains(w, demoBuild) {
+	if w := plan.Msg.GetWarning(); !strings.Contains(w, "NOT checked") {
 		t.Fatalf("warning = %q", w)
 	}
 
@@ -114,10 +111,8 @@ func TestIchorUpgradeRefusesBadInstallerSettings(t *testing.T) {
 	srv, k8s := opServer(t, append(opObjects(), ichorInstallation(ichorOld, ichorOld))...)
 
 	for name, o := range map[string]*pb.IchorInstallerOptions{
-		"a tag as the pin":   {Digest: "v0.2.0"},
-		"an upper-case pin":  {Digest: "sha256:" + strings.Repeat("A", 64)},
-		"a blank reason":     {SkipSignatureReason: "   "},
-		"an overlong reason": {SkipSignatureReason: strings.Repeat("x", 513)},
+		"a tag as the pin":  {Digest: "v0.2.0"},
+		"an upper-case pin": {Digest: "sha256:" + strings.Repeat("A", 64)},
 	} {
 		req := ichorCreate("v0.3.0")
 		req.Msg.IchorInstaller = o
@@ -134,7 +129,7 @@ func TestIchorUpgradeRefusesBadInstallerSettings(t *testing.T) {
 	// Installer settings belong to an Ichor upgrade only.
 	req := connect.NewRequest(&pb.CreateOperationRequest{
 		Cluster: objectRef(opNS, opCluster), Kind: pb.OperationKind_OPERATION_KIND_TALOS, Target: "v1.14.0",
-		IchorInstaller: &pb.IchorInstallerOptions{SkipSignatureReason: "x"},
+		IchorInstaller: &pb.IchorInstallerOptions{SkipSignature: true},
 	})
 	if _, err := srv.CreateOperation(context.Background(), req); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Errorf("a Talos upgrade with installer settings: err = %v", err)
@@ -143,9 +138,9 @@ func TestIchorUpgradeRefusesBadInstallerSettings(t *testing.T) {
 
 func TestGetIchorInstallationShowsTheInstallerImage(t *testing.T) {
 	inst := ichorInstallation(ichorNew, ichorOld)
-	inst.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip, Reason: demoBuild}
+	inst.Spec.InstallerSignature = &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip}
 	inst.Status.InstallerImage = &ichorv1alpha1.IchorInstallerImageStatus{
-		Digest: "sha256:" + strings.Repeat("a", 64), Verification: ichorv1alpha1.InstallerImageSkipped, Reason: demoBuild,
+		Digest: "sha256:" + strings.Repeat("a", 64), Verification: ichorv1alpha1.InstallerImageSkipped,
 	}
 
 	srv, _ := opServer(t, inst)
@@ -156,8 +151,24 @@ func TestGetIchorInstallationShowsTheInstallerImage(t *testing.T) {
 	}
 
 	m := res.Msg
-	if !m.GetInstallerSignatureSkip() || m.GetInstallerVerification() != "Skipped" || m.GetInstallerSkipReason() != demoBuild ||
+	if !m.GetInstallerSignatureSkip() || m.GetInstallerVerification() != "Skipped" ||
 		m.GetInstallerDigest() != "sha256:"+strings.Repeat("a", 64) {
 		t.Fatalf("got %v", m)
+	}
+}
+
+// An older client says skip with the deprecated reason text: that still skips, and the text is dropped.
+func TestIchorUpgradeReadsAnOlderClientsSkipReasonAsASkip(t *testing.T) {
+	srv, k8s := opServer(t, append(opObjects(), ichorInstallation(ichorOld, ichorOld))...)
+
+	req := ichorCreate(ichorNew)
+	req.Msg.IchorInstaller = &pb.IchorInstallerOptions{SkipSignatureReason: "demo build"} //nolint:staticcheck // the deprecated field is still read
+
+	if _, err := srv.CreateOperation(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+
+	if sig := getInstallation(t, k8s).Spec.InstallerSignature; sig == nil || sig.Mode != ichorv1alpha1.InstallerSignatureSkip || sig.Reason != "" {
+		t.Fatalf("spec.installerSignature = %+v", sig)
 	}
 }

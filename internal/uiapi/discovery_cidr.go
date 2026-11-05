@@ -37,7 +37,7 @@ const maxDiscoveryCIDRs = 4
 // returns the stored cluster with its audit record. Nothing but spec.discovery is touched. The write
 // itself wakes the TalosCluster reconcile, which is what starts a scan pass at once.
 func (s *Server) editDiscovery(
-	ctx context.Context, ref *pb.ObjectRef, action, reason, doing string,
+	ctx context.Context, ref *pb.ObjectRef, action, doing string,
 	edit func(d *ichorv1alpha1.TalosClusterDiscovery) error,
 ) (*pb.Cluster, *pb.AuditRecord, error) {
 	key := namespacedName(ref)
@@ -59,10 +59,7 @@ func (s *Server) editDiscovery(
 		return nil, nil, mapOperationWriteError(doing, key, err)
 	}
 
-	audit := s.opAudit(ctx, action, objectRef(c.Namespace, c.Name))
-	audit.Reason = reason
-
-	return clusterToPB(c), audit, nil
+	return clusterToPB(c), s.opAudit(ctx, action, objectRef(c.Namespace, c.Name)), nil
 }
 
 // AddDiscoveryCidr appends one IPv4 range (/24 or smaller) to spec.discovery.cidrs.
@@ -74,7 +71,7 @@ func (s *Server) AddDiscoveryCidr(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	cl, audit, err := s.editDiscovery(ctx, req.Msg.GetCluster(), "add-discovery-cidr", req.Msg.GetReason(),
+	cl, audit, err := s.editDiscovery(ctx, req.Msg.GetCluster(), "add-discovery-cidr",
 		"adding a discovery range to", func(d *ichorv1alpha1.TalosClusterDiscovery) error {
 			if slices.Contains(d.CIDRs, cidr) {
 				return fmt.Errorf("%s is already in the discovery list", cidr)
@@ -104,7 +101,7 @@ func (s *Server) RemoveDiscoveryAddress(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	cl, audit, err := s.editDiscovery(ctx, req.Msg.GetCluster(), "remove-discovery-address", req.Msg.GetReason(),
+	cl, audit, err := s.editDiscovery(ctx, req.Msg.GetCluster(), "remove-discovery-address",
 		"removing a discovery address from", func(d *ichorv1alpha1.TalosClusterDiscovery) error {
 			i := slices.Index(d.Addresses, addr)
 			if i < 0 {
@@ -131,7 +128,7 @@ func (s *Server) RemoveDiscoveryCidr(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	cl, audit, err := s.editDiscovery(ctx, req.Msg.GetCluster(), "remove-discovery-cidr", req.Msg.GetReason(),
+	cl, audit, err := s.editDiscovery(ctx, req.Msg.GetCluster(), "remove-discovery-cidr",
 		"removing a discovery range from", func(d *ichorv1alpha1.TalosClusterDiscovery) error {
 			i := slices.Index(d.CIDRs, cidr)
 			if i < 0 {

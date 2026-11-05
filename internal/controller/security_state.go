@@ -37,7 +37,7 @@ import (
 // is derived.
 type SecurityState struct {
 	SecureBoot, BootedWithUKI, ModuleSignatureEnforced bool
-	UKISigningKeyFingerprint                           string
+	UKISigningKeyFingerprint, PCRSigningKeyFingerprint string
 	Cmdline                                            string
 }
 
@@ -53,7 +53,7 @@ func ReadSecurityState(ctx context.Context, cosi state.State) (SecurityState, er
 	spec := ss.TypedSpec()
 	out := SecurityState{
 		SecureBoot: spec.SecureBoot, BootedWithUKI: spec.BootedWithUKI, ModuleSignatureEnforced: spec.ModuleSignatureEnforced,
-		UKISigningKeyFingerprint: spec.UKISigningKeyFingerprint,
+		UKISigningKeyFingerprint: spec.UKISigningKeyFingerprint, PCRSigningKeyFingerprint: spec.PCRSigningKeyFingerprint,
 	}
 
 	cmd, err := safe.StateGetByID[*runtimeres.KernelCmdline](ctx, cosi, runtimeres.KernelCmdlineID)
@@ -138,7 +138,7 @@ func (r *TalosMachineReconciler) requireSecureBoot(
 func (s SecurityState) status() *ichorv1alpha1.TalosMachineSecurity {
 	return &ichorv1alpha1.TalosMachineSecurity{
 		SecureBoot: s.SecureBoot, BootedWithUKI: s.BootedWithUKI, ModuleSignatureEnforced: s.ModuleSignatureEnforced,
-		UKISigningKeyFingerprint: s.UKISigningKeyFingerprint,
-		KernelLockdown:           secureboot.LockdownLevel(s.Cmdline, s.SecureBoot),
+		UKISigningKeyFingerprint: s.UKISigningKeyFingerprint, PCRSigningKeyFingerprint: s.PCRSigningKeyFingerprint,
+		KernelLockdown: secureboot.LockdownLevel(s.Cmdline, s.SecureBoot),
 	}
 }

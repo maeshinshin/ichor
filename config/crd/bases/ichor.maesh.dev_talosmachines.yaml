@@ -667,14 +667,21 @@ spec:
                     description: moduleSignatureEnforced is true when the kernel only
                       loads signed modules.
                     type: boolean
+                  pcrSigningKeyFingerprint:
+                    description: |-
+                      pcrSigningKeyFingerprint is the fingerprint of the key that signs the PCR measurements of the
+                      booted UKI (SecurityState.pcrSigningKeyFingerprint); empty when the node reports none.
+                    maxLength: 128
+                    type: string
                   secureBoot:
                     description: secureBoot is true when the node booted with UEFI
                       SecureBoot enabled.
                     type: boolean
                   ukiSigningKeyFingerprint:
                     description: |-
-                      ukiSigningKeyFingerprint is the fingerprint of the key that signed the booted UKI; empty
-                      without SecureBoot.
+                      ukiSigningKeyFingerprint is the UKI signing key fingerprint of Talos's SecurityState. Talos
+                      v1.14 does not fill it, so it stays empty; pcrSigningKeyFingerprint is the one it reports.
+                      Kept for compatibility (CRD fields are append-only).
                     maxLength: 128
                     type: string
                 type: object

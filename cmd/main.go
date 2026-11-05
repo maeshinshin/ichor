@@ -557,6 +557,7 @@ func main() {
 		RootCAPublished: controller.NewRootCAPublished(),
 		// The aggregator CA's wait for extension API servers (ADR 0120).
 		AggregatorCAPublished: controller.NewAggregatorCAPublished(),
+		AggregatorAuthReset:   controller.NewAggregatorAuthReset(),
 		Reencrypt:             controller.NewReencryptSecrets(),
 		LegacyTokens:          controller.NewLegacyTokens(),
 		Recorder:              mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above

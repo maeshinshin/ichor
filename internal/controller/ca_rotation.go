@@ -880,6 +880,14 @@ func (c *caRun) finalize(ctx context.Context) (ctrl.Result, error) {
 		}
 	}
 
+	// kube-apiserver never removes the old aggregator CA from the ConfigMap extension API servers read: ask it to
+	// recreate that ConfigMap, and finish only when it holds the new CA alone.
+	if len(machines) > 0 {
+		if res, wait, err := c.awaitAggregatorAuth(ctx, machines[0], bundle); wait {
+			return res, err
+		}
+	}
+
 	// The kubelets and the in-cluster clients depend on the Kubernetes API CA only. A rotation without it
 	// (Talos API, etcd, aggregator) needs the Nodes Ready and nothing restarted.
 	switch {

@@ -31,9 +31,11 @@ import (
 	"github.com/siderolabs/crypto/x509"
 	"github.com/siderolabs/talos/pkg/machinery/config"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -86,6 +88,97 @@ func NewAggregatorCAPublished() AggregatorCAPublishedFunc {
 
 		return pemBundleHolds([]byte(cm.Data[extensionAuthCAKey]), fingerprint), nil
 	}
+}
+
+// AggregatorAuthResetFunc makes kube-apiserver forget the old aggregator CA in the ConfigMap
+// kube-system/extension-apiserver-authentication, and reports whether the ConfigMap now holds the CA with the
+// given fingerprint alone. kube-apiserver merges the CAs it serves into that ConfigMap and never removes one,
+// so a ConfigMap that still holds more is deleted for kube-apiserver to recreate from its (new) bundle; the
+// next call finds it again and reports settled. A seam so tests never reach a cluster; cmd/main.go wires
+// NewAggregatorAuthReset.
+type AggregatorAuthResetFunc func(ctx context.Context, talos TalosClient, fingerprint string) (settled bool, err error)
+
+// NewAggregatorAuthReset returns the AggregatorAuthResetFunc cmd/main.go wires in. It reaches the managed
+// cluster as the reads of the other CA checks do: with the admin kubeconfig a Talos node issues for the call
+// (no standing credential and no RBAC of Ichor's own), and it touches that one ConfigMap and nothing else.
+func NewAggregatorAuthReset() AggregatorAuthResetFunc {
+	return func(ctx context.Context, talos TalosClient, fingerprint string) (bool, error) {
+		cfg, err := restConfig(ctx, talos)
+		if err != nil {
+			return false, err
+		}
+
+		cs, err := kubernetes.NewForConfig(cfg)
+		if err != nil {
+			return false, fmt.Errorf("building a clientset from the admin kubeconfig: %w", err)
+		}
+
+		return resetAggregatorAuth(ctx, cs.CoreV1().ConfigMaps(kubeSystemNamespace), fingerprint)
+	}
+}
+
+// resetAggregatorAuth is NewAggregatorAuthReset's step against a ConfigMap client. The delete carries the UID
+// that was read, so a ConfigMap kube-apiserver has recreated in the meantime is not deleted again.
+func resetAggregatorAuth(ctx context.Context, cms corev1client.ConfigMapInterface, fingerprint string) (bool, error) {
+	cm, err := cms.Get(ctx, extensionAuthConfigMap, metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return false, nil // deleted; kube-apiserver recreates it
+	}
+
+	if err != nil {
+		return false, fmt.Errorf("reading %s: %w", extensionAuthConfigMap, err)
+	}
+
+	if pemBundleIs([]byte(cm.Data[extensionAuthCAKey]), fingerprint) {
+		return true, nil
+	}
+
+	err = cms.Delete(ctx, extensionAuthConfigMap, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &cm.UID}})
+	if err != nil && !apierrors.IsNotFound(err) && !apierrors.IsConflict(err) {
+		return false, fmt.Errorf("deleting %s so that kube-apiserver recreates it: %w", extensionAuthConfigMap, err)
+	}
+
+	return false, nil
+}
+
+// awaitAggregatorAuth holds the end of a rotation of the aggregator CA until extension-apiserver-authentication
+// holds the new CA alone: the old one is gone from every node's bundle, but kube-apiserver keeps it in the
+// ConfigMap, where an extension API server would go on trusting it. wait is false when it may finish.
+func (c *caRun) awaitAggregatorAuth(ctx context.Context, first *ichorv1alpha1.TalosMachine, bundle *secrets.Bundle) (ctrl.Result, bool, error) {
+	if c.r.AggregatorAuthReset == nil || !c.hasTarget(aggregatorCAName) {
+		return ctrl.Result{}, false, nil
+	}
+
+	fingerprint := ""
+
+	for _, cert := range c.op.Status.CARotation.Certificates {
+		if cert.Name == aggregatorCAName {
+			fingerprint = cert.Next
+		}
+	}
+
+	var settled bool
+
+	err := c.withNode(ctx, first, bundle, func(ctx context.Context, talos TalosClient) error {
+		var err error
+
+		settled, err = c.r.AggregatorAuthReset(ctx, talos, fingerprint)
+
+		return err
+	})
+	if err != nil {
+		res, rerr := c.retry(ctx, "the replaced bundle is not verified: could not reset "+extensionAuthConfigMap+": "+err.Error())
+
+		return res, true, rerr
+	}
+
+	if !settled {
+		return ctrl.Result{RequeueAfter: operationRequeueInterval}, true, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress,
+			metav1.ConditionTrue, reasonCARotationSettlingAggregator,
+			"the old aggregator CA is dropped; "+extensionAuthConfigMap+" was deleted so that kube-apiserver recreates it without the old CA, waiting for it")
+	}
+
+	return ctrl.Result{}, false, nil
 }
 
 func crtOrNil(ca *x509.PEMEncodedCertificateAndKey) []byte {

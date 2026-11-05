@@ -139,6 +139,9 @@ type TalosOperationReconciler struct {
 	// API servers before the front-proxy certificate changes CA (ca_rotation_targets.go, ADR 0120);
 	// nil skips the check. ClientSettleDelay is the wait after it.
 	AggregatorCAPublished AggregatorCAPublishedFunc
+	// AggregatorAuthReset makes kube-apiserver drop the old aggregator CA from extension-apiserver-authentication
+	// when the rotation ends (ca_rotation_targets.go, ADR 0120); nil skips it.
+	AggregatorAuthReset AggregatorAuthResetFunc
 
 	// Reencrypt and LegacyTokens serve the key-rotation kind alone (key_rotation.go, ADR 0121): the first
 	// stores every Secret under the current secretbox key, the second finds token Secrets the old

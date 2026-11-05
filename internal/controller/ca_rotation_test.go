@@ -257,6 +257,10 @@ type caRotFixture struct {
 	// aggregatorChecks the fingerprints it was asked about.
 	aggregatorPublished bool
 	aggregatorChecks    []string
+	// aggregatorAuthPending is how many more times the fake reset of extension-apiserver-authentication
+	// answers "not settled yet"; aggregatorAuthCalls the fingerprints it was asked about.
+	aggregatorAuthPending int
+	aggregatorAuthCalls   []string
 }
 
 func newCARotFixture() *caRotFixture { return newCARotFixtureCPs(3) }
@@ -319,6 +323,17 @@ func (f *caRotFixture) newReconciler() *TalosOperationReconciler {
 			f.aggregatorChecks = append(f.aggregatorChecks, fp)
 
 			return f.aggregatorPublished, nil
+		},
+		AggregatorAuthReset: func(_ context.Context, _ TalosClient, fp string) (bool, error) {
+			f.aggregatorAuthCalls = append(f.aggregatorAuthCalls, fp)
+
+			if f.aggregatorAuthPending > 0 {
+				f.aggregatorAuthPending--
+
+				return false, nil
+			}
+
+			return true, nil
 		},
 		ClientSettleDelay: f.settleDelay,
 	}

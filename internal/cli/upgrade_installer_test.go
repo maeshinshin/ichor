@@ -100,6 +100,14 @@ func TestPlanTextShowsTheSkippedSignatureWarning(t *testing.T) {
 	}
 }
 
+// A same-version --skip-signature-check upgrade runs no installer Job, so the image is empty: the line
+// must still read as a sentence, not start with "; ".
+func TestVersionSkipWithoutAnInstallerImageHasNoStraySeparator(t *testing.T) {
+	if got, want := installerImageText(&versionInstaller{SkipNext: true}), "the next upgrade will NOT check the signature"; got != want {
+		t.Errorf("empty image with skip = %q, want %q", got, want)
+	}
+}
+
 func TestVersionShowsAnUncheckedInstallerImageLoudly(t *testing.T) {
 	scheme, err := cliScheme()
 	if err != nil {

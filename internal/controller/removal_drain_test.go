@@ -26,6 +26,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -56,7 +57,7 @@ var _ = Describe("a removal whose drain is blocked", func() {
 		reconcileOK(r, cp1, cp2, cp3)
 
 		var live ichorv1alpha1.TalosMachine
-		Expect(k8sClient.Get(ctx, machineKeyOf(cp1), &live)).To(Succeed())
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(cp1), &live)).To(Succeed())
 		live.Status.NodeName = drainRetryNode
 		Expect(k8sClient.Status().Update(ctx, &live)).To(Succeed())
 

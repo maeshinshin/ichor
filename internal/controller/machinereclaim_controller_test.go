@@ -155,8 +155,27 @@ var _ = Describe("MachineReclaim Controller", func() {
 		return client.ObjectKeyFromObject(mr)
 	}
 
+	// createBare makes only the request: no annotations and no credential Secret.
+	createBare := func() types.NamespacedName {
+		mr := &ichorv1alpha1.MachineReclaim{
+			Name: fmt.Sprintf("mr-%d", seq), Namespace: ns,
+			Spec: ichorv1alpha1.MachineReclaimSpec{Address: testNodeAddr, CredentialSecretRef: secret},
+		}
+		Expect(k8sClient.Create(ctx, mr)).To(Succeed())
+
+		return client.ObjectKeyFromObject(mr)
+	}
+
 	reconcileOnce := func(key types.NamespacedName) (reconcile.Result, error) {
 		return r.Reconcile(lctx, reconcile.Request{NamespacedName: key})
+	}
+
+	// reconcileOK is a reconcile that must not return an error.
+	reconcileOK := func(key types.NamespacedName) {
+		GinkgoHelper()
+
+		_, err := reconcileOnce(key)
+		Expect(err).NotTo(HaveOccurred())
 	}
 
 	get := func(key types.NamespacedName) *ichorv1alpha1.MachineReclaim {
@@ -209,8 +228,7 @@ var _ = Describe("MachineReclaim Controller", func() {
 	It("inspects, waits for the typed UUID, resets once and reports maintenance mode", func() {
 		key := create()
 
-		_, err := reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 
 		mr := get(key)
 		Expect(mr.Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimAwaitingConfirmation))
@@ -227,14 +245,12 @@ var _ = Describe("MachineReclaim Controller", func() {
 		Expect(sec.OwnerReferences).To(HaveLen(1))
 
 		// A spec edit without the UUID re-inspects and still sends nothing.
-		_, err = reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 		Expect(node.resets.Load()).To(BeZero())
 
 		confirm(key, "uuid-1")
 
-		_, err = reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 		Expect(node.resets.Load()).To(Equal(int32(1)))
 		Expect(secretExists()).To(BeFalse(), "the credential is deleted as soon as the reset is sent")
 
@@ -244,16 +260,14 @@ var _ = Describe("MachineReclaim Controller", func() {
 		Expect(mr.Status.Audit.ResetSentAt).NotTo(BeNil())
 		Expect(mr.Status.Audit.CredentialDeletedAt).NotTo(BeNil())
 
-		_, err = reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 
 		mr = get(key)
 		Expect(mr.Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimDone))
 		Expect(mr.Status.Result).To(ContainSubstring("192.0.2.10 is in maintenance mode"))
 
 		// Done is final: no further reset.
-		_, err = reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 		Expect(node.resets.Load()).To(Equal(int32(1)))
 
 		var reasons []string
@@ -272,13 +286,7 @@ var _ = Describe("MachineReclaim Controller", func() {
 	})
 
 	It("waits for a credential Secret that the UI API writes after the request", func() {
-		mr := &ichorv1alpha1.MachineReclaim{
-			Name: fmt.Sprintf("mr-%d", seq), Namespace: ns,
-			Spec: ichorv1alpha1.MachineReclaimSpec{Address: testNodeAddr, CredentialSecretRef: secret},
-		}
-		Expect(k8sClient.Create(ctx, mr)).To(Succeed())
-
-		key := client.ObjectKeyFromObject(mr)
+		key := createBare()
 		res, err := reconcileOnce(key)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.RequeueAfter).To(BeNumerically(">", 0))
@@ -287,38 +295,28 @@ var _ = Describe("MachineReclaim Controller", func() {
 		Expect(k8sClient.Create(ctx, &corev1.Secret{
 			Name: secret, Namespace: ns, Labels: map[string]string{ichorv1alpha1.ReclaimLabel: testTrue},
 			OwnerReferences: []metav1.OwnerReference{{
-				APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: "MachineReclaim", Name: mr.Name, UID: get(key).UID,
+				APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: "MachineReclaim", Name: key.Name, UID: get(key).UID,
 			}},
 			Type: ichorv1alpha1.ReclaimCredentialSecretType,
 			Data: map[string][]byte{ichorv1alpha1.ReclaimCredentialKey: []byte(reclaimMarker)},
 		})).To(Succeed())
 
-		_, err = reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 		Expect(get(key).Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimAwaitingConfirmation))
 	})
 
 	It("expires a request whose Secret never appears", func() {
-		mr := &ichorv1alpha1.MachineReclaim{
-			Name: fmt.Sprintf("mr-%d", seq), Namespace: ns,
-			Spec: ichorv1alpha1.MachineReclaimSpec{Address: testNodeAddr, CredentialSecretRef: secret},
-		}
-		Expect(k8sClient.Create(ctx, mr)).To(Succeed())
-
-		key := client.ObjectKeyFromObject(mr)
-		_, err := reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		key := createBare()
+		reconcileOK(key)
 
 		now = get(key).Status.ExpiresAt.Add(time.Second)
-		_, err = reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 		Expect(get(key).Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimExpired))
 	})
 
 	It("refuses a second reset from the same request", func() {
 		key := create()
-		_, err := reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 
 		// The status says a reset was already sent (a controller restart, or a stale edit).
 		mr := get(key)
@@ -328,8 +326,7 @@ var _ = Describe("MachineReclaim Controller", func() {
 
 		confirm(key, "uuid-1")
 
-		_, err = reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 		Expect(node.resets.Load()).To(BeZero())
 		Expect(get(key).Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimFailed))
 		Expect(secretExists()).To(BeFalse())
@@ -337,14 +334,12 @@ var _ = Describe("MachineReclaim Controller", func() {
 
 	It("does not reset when the freshly read UUID differs from the typed one", func() {
 		key := create()
-		_, err := reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 
 		node.in.UUID = "uuid-other" // a different machine now answers
 		confirm(key, "uuid-1")
 
-		_, err = reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 		Expect(node.resets.Load()).To(BeZero())
 		Expect(get(key).Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimFailed))
 		Expect(secretExists()).To(BeFalse())
@@ -356,14 +351,12 @@ var _ = Describe("MachineReclaim Controller", func() {
 		node.in.LocalMemberID = 1
 		key := create()
 
-		_, err := reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 		Expect(get(key).Status.Inspection.Refusals).NotTo(BeEmpty())
 
 		confirm(key, "uuid-1")
 
-		_, err = reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 		Expect(node.resets.Load()).To(BeZero())
 		Expect(get(key).Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimFailed))
 	})
@@ -371,15 +364,13 @@ var _ = Describe("MachineReclaim Controller", func() {
 	It("expires at the TTL, deletes the credential and sends nothing", func() {
 		key := create(func(mr *ichorv1alpha1.MachineReclaim) { mr.Spec.TTL = &metav1.Duration{Duration: time.Minute} })
 
-		_, err := reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 
 		confirm(key, "uuid-1")
 
 		now = get(key).Status.ExpiresAt.Add(time.Second)
 
-		_, err = reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 
 		Expect(get(key).Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimExpired))
 		Expect(node.resets.Load()).To(BeZero())
@@ -390,11 +381,9 @@ var _ = Describe("MachineReclaim Controller", func() {
 	toWaiting := func(key types.NamespacedName) time.Time {
 		GinkgoHelper()
 
-		_, err := reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 		confirm(key, "uuid-1")
-		_, err = reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 
 		mr := get(key)
 		Expect(mr.Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimWaitingForMaintenance))
@@ -467,25 +456,20 @@ var _ = Describe("MachineReclaim Controller", func() {
 	It("keeps a finished request for seven days after its expiry, then deletes it", func() {
 		key := create()
 
-		_, err := reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 
 		now = get(key).Status.ExpiresAt.Add(time.Second)
-		_, err = reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 		Expect(get(key).Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimExpired))
 
 		now = get(key).Status.ExpiresAt.Add(6 * 24 * time.Hour)
-		_, err = reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 		Expect(get(key)).NotTo(BeNil())
 
 		now = get(key).Status.ExpiresAt.Add(7*24*time.Hour + time.Minute)
-		_, err = reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 
-		err = k8sClient.Get(ctx, key, &ichorv1alpha1.MachineReclaim{})
-		Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, key, &ichorv1alpha1.MachineReclaim{}))).To(BeTrue())
 	})
 
 	It("will not read or delete a Secret of another type named as the credential", func() {
@@ -494,15 +478,10 @@ var _ = Describe("MachineReclaim Controller", func() {
 			Data: map[string][]byte{"talosconfig": []byte("x")},
 		})).To(Succeed())
 
-		mr := &ichorv1alpha1.MachineReclaim{
-			Name: fmt.Sprintf("mr-%d", seq), Namespace: ns,
-			Spec: ichorv1alpha1.MachineReclaimSpec{Address: testNodeAddr, CredentialSecretRef: secret},
-		}
-		Expect(k8sClient.Create(ctx, mr)).To(Succeed())
+		key := createBare()
 
-		_, err := reconcileOnce(client.ObjectKeyFromObject(mr))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(get(client.ObjectKeyFromObject(mr)).Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimFailed))
+		reconcileOK(key)
+		Expect(get(key).Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimFailed))
 		Expect(secretExists()).To(BeTrue(), "an unrelated Secret must survive")
 	})
 
@@ -552,11 +531,10 @@ var _ = Describe("MachineReclaim Controller", func() {
 		node.resetErr = fmt.Errorf("rpc: %s", reclaimMarker)
 		key := create()
 
-		_, err := reconcileOnce(key)
-		Expect(err).NotTo(HaveOccurred())
+		reconcileOK(key)
 		confirm(key, "uuid-1")
 
-		_, err = reconcileOnce(key)
+		_, err := reconcileOnce(key)
 		expectNoMarker(key, err)
 		Expect(get(key).Status.Phase).To(Equal(ichorv1alpha1.MachineReclaimFailed))
 	})

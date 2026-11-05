@@ -148,12 +148,7 @@ var _ = Describe("UIEgress", Ordered, func() {
 	})
 
 	It("writes the issuer rule beside the controller policy, leaves it alone when unchanged, and removes it with the issuer", func() {
-		static := cnpGVK()
-		static.SetNamespace(uiEgressNS)
-		static.SetName("ichor-controller-manager")
-		static.Object[keySpec] = map[string]any{"endpointSelector": map[string]any{"matchLabels": map[string]any{
-			controlPlaneLabel: valueControllerMgr, nameLabel: releaseCheckApp,
-		}}, keyEgress: []any{map[string]any{}}}
+		static := staticControllerPolicy(uiEgressNS, releaseCheckApp)
 		Expect(k8sClient.Create(ctx, static)).To(Succeed())
 		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, static))).To(Succeed()) })
 

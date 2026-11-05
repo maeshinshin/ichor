@@ -1,0 +1,111 @@
+---
+import '../styles/global.css'
+import { CodeCopy } from '@/components/CodeCopy'
+import { DocsShell } from '@/components/DocsShell'
+import { type Heading, TocAside, TocCollapsible } from '@/components/Toc'
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb'
+import { Button } from '@/components/ui/button'
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
+import { base, buildNav, crumbs, docsVersion, flatten, getDocs, repoUrl } from '@/lib/docs'
+import { ArrowLeft, ArrowRight, SquarePen } from 'lucide-preact'
+
+interface Props {
+  title: string
+  /** Site URL of this page, as in the sidebar. */
+  current: string
+  headings?: Heading[]
+  editUrl?: string
+}
+const { title, current, headings = [], editUrl } = Astro.props
+
+const docs = await getDocs()
+const nav = buildNav(docs)
+const trail = crumbs(nav, current)
+const pages = flatten(nav)
+const at = pages.findIndex((p) => p.href === current)
+const prev = at > 0 ? pages[at - 1] : undefined
+const next = at >= 0 ? pages[at + 1] : undefined
+const toc = headings.filter((h) => h.depth === 2 || h.depth === 3)
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>{current === base ? 'Ichor documentation' : `${title} - Ichor`}</title>
+    <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
+    <script is:inline>
+      // First paint in the saved or system theme (same rule as the toggle in DocsShell).
+      try {
+        var s = localStorage.getItem('ichor-docs-theme')
+        var d = s ? s === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches
+        document.documentElement.classList.toggle('dark', d)
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <DocsShell client:load nav={nav} current={current} base={base} version={docsVersion()} repoUrl={repoUrl}>
+      <div class="mx-auto grid w-full max-w-6xl gap-10 p-4 md:p-8 xl:grid-cols-[minmax(0,1fr)_14rem]">
+        <article class="flex min-w-0 flex-col gap-6" data-pagefind-body>
+          <Breadcrumb>
+            <BreadcrumbList>
+              <BreadcrumbItem><BreadcrumbLink href={base}>Docs</BreadcrumbLink></BreadcrumbItem>
+              {trail.slice(0, -1).filter((c) => c.href !== base).map((c) => (
+                <>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem>{c.href ? <BreadcrumbLink href={c.href}>{c.label}</BreadcrumbLink> : c.label}</BreadcrumbItem>
+                </>
+              ))}
+              {current !== base && (
+                <>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem><BreadcrumbPage>{title}</BreadcrumbPage></BreadcrumbItem>
+                </>
+              )}
+            </BreadcrumbList>
+          </Breadcrumb>
+          <h1 class="text-3xl font-semibold tracking-tight">{title}</h1>
+          {toc.length > 0 && <TocCollapsible client:idle headings={toc} />}
+          <slot />
+          <CodeCopy client:idle />
+          <Separator />
+          <div class="flex flex-col gap-4">
+            {editUrl && (
+              <div>
+                <Button asChild variant="ghost" size="sm">
+                  <a href={editUrl}><SquarePen />Edit this page on GitHub</a>
+                </Button>
+              </div>
+            )}
+            <div class="grid gap-4 sm:grid-cols-2">
+              {prev ? (
+                <a href={prev.href}>
+                  <Card size="sm">
+                    <CardHeader>
+                      <CardDescription className="flex items-center gap-1"><ArrowLeft className="size-3" />Previous</CardDescription>
+                      <CardTitle className="truncate">{prev.label}</CardTitle>
+                    </CardHeader>
+                  </Card>
+                </a>
+              ) : <div />}
+              {next && (
+                <a href={next.href}>
+                  <Card size="sm">
+                    <CardHeader className="sm:text-right">
+                      <CardDescription className="flex items-center gap-1 sm:justify-end">Next<ArrowRight className="size-3" /></CardDescription>
+                      <CardTitle className="truncate">{next.label}</CardTitle>
+                    </CardHeader>
+                  </Card>
+                </a>
+              )}
+            </div>
+          </div>
+        </article>
+        <aside>{toc.length > 0 && <TocAside client:idle headings={toc} />}</aside>
+      </div>
+    </DocsShell>
+  </body>
+</html>

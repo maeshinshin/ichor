@@ -1,0 +1,37 @@
+---
+// The rendered Markdown of a docs page. Callouts (`> [!NOTE]`) are swapped for
+// the preactcn Alert and tables get a scroll container; everything else is the
+// Markdown pipeline's own HTML.
+import { fromHtml } from 'hast-util-from-html'
+import { h } from 'preact'
+import { renderToString } from 'preact-render-to-string'
+import rehypeParse from 'rehype-parse'
+import rehypeStringify from 'rehype-stringify'
+import { unified } from 'unified'
+import { visit } from 'unist-util-visit'
+import { Callout, type CalloutKind } from './Callout'
+
+const html = await Astro.slots.render('default')
+
+function callouts() {
+  return (tree: any) => {
+    visit(tree, 'element', (node: any, i, parent: any) => {
+      const kind = node.properties?.dataCallout as CalloutKind | undefined
+      if (kind) {
+        const alert = fromHtml(renderToString(h(Callout, { kind }, h('span', { 'data-here': '' }))), { fragment: true })
+        visit(alert, 'element', (n: any) => {
+          if (n.properties?.dataHere !== undefined) Object.assign(n, { tagName: 'div', properties: {}, children: node.children })
+        })
+        parent.children[i] = { type: 'element', tagName: 'div', properties: { className: ['not-prose', 'my-4'] }, children: alert.children }
+      } else if (node.tagName === 'table') {
+        parent.children[i] = { type: 'element', tagName: 'div', properties: { className: ['overflow-x-auto'] }, children: [node] }
+        return 'skip'
+      }
+    })
+  }
+}
+
+const out = String(await unified().use(rehypeParse, { fragment: true }).use(callouts).use(rehypeStringify).process(html))
+---
+
+<div class="prose prose-neutral max-w-none dark:prose-invert prose-code:before:content-none prose-code:after:content-none prose-pre:bg-muted prose-pre:text-foreground" set:html={out} />

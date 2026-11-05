@@ -31,7 +31,6 @@ import (
 	"helm.sh/helm/v3/pkg/release"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -162,11 +161,7 @@ func TestWriteAdopt_HelmInstalledIchorSkipsInstallAndAdvisesPolicies(t *testing.
 		}
 	}
 
-	pol := &unstructured.Unstructured{}
-	pol.SetAPIVersion("cilium.io/v2")
-	pol.SetKind("CiliumNetworkPolicy")
-
-	if err := c.Get(context.Background(), types.NamespacedName{Namespace: ichorControllerNamespace, Name: writeDenyPolicy}, pol); err == nil {
+	if err := getDenyPolicy(context.Background(), c); err == nil {
 		t.Error("a network policy was applied into the Helm-owned namespace")
 	}
 }

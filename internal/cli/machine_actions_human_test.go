@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -56,8 +57,7 @@ func pendingActionsMachine() *ichorv1alpha1.TalosMachine {
 func TestMachineApproveHumanOutput(t *testing.T) {
 	setHumanTestFlags(t, outputHuman)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(pendingActionsMachine()).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, _ := freshClients(t, []client.Object{pendingActionsMachine()})
 
 	var out, errw bytes.Buffer
 	if err := runMachineApprove(context.Background(), c, strings.NewReader(""), &out, &errw, actionsMachineUUID,
@@ -81,8 +81,7 @@ func TestMachineApproveHumanOutputShowsTheWarningsAsBangLines(t *testing.T) {
 	m := pendingActionsMachine()
 	m.Status.DiscoveredDisks = []ichorv1alpha1.TalosMachineDiscoveredDisk{{WWID: "naa.2"}}
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(m).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, _ := freshClients(t, []client.Object{m})
 
 	var out, errw bytes.Buffer
 	if err := runMachineApprove(context.Background(), c, strings.NewReader(""), &out, &errw, actionsMachineUUID,
@@ -104,8 +103,7 @@ func TestMachineApproveHumanOutputShowsTheWarningsAsBangLines(t *testing.T) {
 func TestMachineRejectHumanOutput(t *testing.T) {
 	setHumanTestFlags(t, outputHuman)
 
-	k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(pendingActionsMachine()).Build()
-	c := localClients(apiOpts, apiDeps{K8s: k8s})
+	c, _ := freshClients(t, []client.Object{pendingActionsMachine()})
 
 	var out bytes.Buffer
 	if err := runMachineReject(context.Background(), c, strings.NewReader(""), &out, &bytes.Buffer{}, actionsMachineUUID, "not ours"); err != nil {
@@ -126,8 +124,7 @@ func TestMachineActionsMachineFormatsAreUnchanged(t *testing.T) {
 			other := strongMachine()
 			other.Name = actionsOtherMachine
 
-			k8s := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(pendingActionsMachine(), other).Build()
-			c := localClients(apiOpts, apiDeps{K8s: k8s})
+			c, _ := freshClients(t, []client.Object{pendingActionsMachine(), other})
 
 			var out bytes.Buffer
 			if err := runMachineApprove(context.Background(), c, strings.NewReader(""), &out, &bytes.Buffer{}, actionsMachineUUID, approveWorker); err != nil {
@@ -181,15 +178,7 @@ func TestMachineReclaimHumanOutputOnAPlainWriter(t *testing.T) {
 		"Next\n  ichor machine list",
 	}
 
-	rest := out
-	for _, w := range want {
-		i := strings.Index(rest, w)
-		if i < 0 {
-			t.Fatalf("%q is missing, or out of order, in:\n%s", w, out)
-		}
-
-		rest = rest[i+len(w):]
-	}
+	assertInOrder(t, out, want)
 }
 
 func TestMachineReclaimARefusalIsAFailedLineAndTheHintStaysVisible(t *testing.T) {

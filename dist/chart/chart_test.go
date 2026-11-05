@@ -261,21 +261,14 @@ func renderChart(t *testing.T, release string) []map[string]any {
 func renderChartWithValues(t *testing.T, release string, sets ...string) []map[string]any {
 	t.Helper()
 
-	args := make([]string, 0, 3+2*len(sets))
-	args = append(args, "template", release, ".")
-	for _, s := range sets {
-		args = append(args, "--set", s)
-	}
-
-	out, err := exec.Command("helm", args...).CombinedOutput()
+	out, err := renderChartWithValuesErr(release, sets...)
 	if err != nil {
-		t.Fatalf("helm %s: %v\n%s", strings.Join(args, " "), err, out)
+		t.Fatalf("helm template %s . (--set %s): %v\n%s", release, strings.Join(sets, " --set "), err, out)
 	}
 
-	label := "helm " + strings.Join(args, " ") + " output"
-	docs := decodeYAMLDocs(t, out, label)
+	docs := decodeYAMLDocs(t, out, "helm template output")
 	if len(docs) == 0 {
-		t.Fatalf("helm %s produced no documents", strings.Join(args, " "))
+		t.Fatalf("helm template %s . produced no documents", release)
 	}
 	return docs
 }
@@ -283,9 +276,12 @@ func renderChartWithValues(t *testing.T, release string, sets ...string) []map[s
 // renderChartWithValuesErr runs "helm template" with --set overrides and returns its error
 // instead of failing, for values the chart must refuse.
 func renderChartWithValuesErr(release string, sets ...string) ([]byte, error) {
-	args := make([]string, 0, 3+2*len(sets))
-	args = append(args, "template", release, ".")
+	return helmTemplate(release, nil, sets)
+}
 
+// helmTemplate runs "helm template" on this directory's chart with extra flags and --set overrides.
+func helmTemplate(release string, flags, sets []string) ([]byte, error) {
+	args := append([]string{"template", release, "."}, flags...)
 	for _, s := range sets {
 		args = append(args, "--set", s)
 	}
@@ -336,6 +332,14 @@ func nameOf(doc map[string]any) string {
 	md, _ := doc["metadata"].(map[string]any)
 	n, _ := md["name"].(string)
 	return n
+}
+
+// podSpecOf returns spec.template.spec of a decoded Deployment.
+func podSpecOf(deployment map[string]any) map[string]any {
+	spec, _ := deployment["spec"].(map[string]any)
+	tmpl, _ := spec["template"].(map[string]any)
+	podSpec, _ := tmpl["spec"].(map[string]any)
+	return podSpec
 }
 
 func findAll(docs []map[string]any, kind string) []map[string]any {
@@ -502,11 +506,15 @@ func checkKubeProxySwitchPolicy(t *testing.T, release string, docs []map[string]
 func checkUIBackendRBACIsSeparate(t *testing.T, release string, docs []map[string]any) {
 	t.Helper()
 
-	uiDeployment := find(docs, kindDeployment, ichorUIDeploymentName)
-	if uiDeployment == nil {
-		t.Fatalf("helm template %s .: expected a %s named %q",
-			release, kindDeployment, ichorUIDeploymentName)
+	require := func(kind, name string) map[string]any {
+		d := find(docs, kind, name)
+		if d == nil {
+			t.Fatalf("helm template %s .: expected a %s named %q", release, kind, name)
+		}
+		return d
 	}
+
+	uiDeployment := require(kindDeployment, ichorUIDeploymentName)
 	if sa := deploymentServiceAccountName(uiDeployment); sa != ichorUIServiceAccountName {
 		t.Errorf(
 			"helm template %s .: %s %q runs as ServiceAccount %q, want %q (its own identity, "+
@@ -515,20 +523,9 @@ func checkUIBackendRBACIsSeparate(t *testing.T, release string, docs []map[strin
 		)
 	}
 
-	if find(docs, kindServiceAccount, ichorUIServiceAccountName) == nil {
-		t.Fatalf("helm template %s .: expected a %s named %q",
-			release, kindServiceAccount, ichorUIServiceAccountName)
-	}
-	if find(docs, kindClusterRole, ichorUIRoleName) == nil {
-		t.Fatalf("helm template %s .: expected a %s named %q",
-			release, kindClusterRole, ichorUIRoleName)
-	}
-
-	binding := find(docs, kindClusterRoleBinding, ichorUIRoleBindingName)
-	if binding == nil {
-		t.Fatalf("helm template %s .: expected a %s named %q",
-			release, kindClusterRoleBinding, ichorUIRoleBindingName)
-	}
+	require(kindServiceAccount, ichorUIServiceAccountName)
+	require(kindClusterRole, ichorUIRoleName)
+	binding := require(kindClusterRoleBinding, ichorUIRoleBindingName)
 	roleRef, subject := clusterRoleBindingRefs(binding)
 	if roleRef != ichorUIRoleName || subject != ichorUIServiceAccountName {
 		t.Errorf(
@@ -580,13 +577,9 @@ func TestReclaimerRoleName(t *testing.T) {
 // TestReclaimEnabledIsIgnored pins: the removed reclaim.enabled value changes nothing in
 // the manager or ichor-ui, and no flag or env var for it is rendered.
 func TestReclaimEnabledIsIgnored(t *testing.T) {
-	for _, docs := range [][]map[string]any{
-		renderChartWithValues(t, "ichor", "reclaim.enabled=true", "rbac.helpers.enabled=true"),
-	} {
-		for _, d := range docs {
-			if s := fmt.Sprint(d); strings.Contains(s, "--reclaim") || strings.Contains(s, "ICHOR_RECLAIM_ENABLED") {
-				t.Errorf("%v: reclaim.enabled must be ignored", d["kind"])
-			}
+	for _, d := range renderChartWithValues(t, "ichor", "reclaim.enabled=true", "rbac.helpers.enabled=true") {
+		if s := fmt.Sprint(d); strings.Contains(s, "--reclaim") || strings.Contains(s, "ICHOR_RECLAIM_ENABLED") {
+			t.Errorf("%v: reclaim.enabled must be ignored", d["kind"])
 		}
 	}
 }
@@ -780,9 +773,7 @@ func TestUIUsers(t *testing.T) {
 // containerEnvValue returns the value of env var name on the ichor-ui container of a decoded
 // Deployment, and whether it is set.
 func containerEnvValue(deployment map[string]any, name string) (string, bool) {
-	spec, _ := deployment["spec"].(map[string]any)
-	template, _ := spec["template"].(map[string]any)
-	podSpec, _ := template["spec"].(map[string]any)
+	podSpec := podSpecOf(deployment)
 	containers, _ := podSpec["containers"].([]any)
 	for _, c := range containers {
 		cm, _ := c.(map[string]any)
@@ -804,9 +795,7 @@ func containerEnvValue(deployment map[string]any, name string) (string, bool) {
 // deploymentServiceAccountName reads spec.template.spec.serviceAccountName from a decoded
 // Deployment.
 func deploymentServiceAccountName(deployment map[string]any) string {
-	spec, _ := deployment["spec"].(map[string]any)
-	template, _ := spec["template"].(map[string]any)
-	podSpec, _ := template["spec"].(map[string]any)
+	podSpec := podSpecOf(deployment)
 	sa, _ := podSpec["serviceAccountName"].(string)
 	return sa
 }
@@ -921,9 +910,7 @@ const managerContainerName = "manager"
 // the pod during a CA rotation.
 func TestManagerStartupProbe(t *testing.T) {
 	docs := renderChart(t, "ichor")
-	spec, _ := findNameSuffix(docs, kindDeployment, "controller-manager")["spec"].(map[string]any)
-	tmpl, _ := spec["template"].(map[string]any)
-	podSpec, _ := tmpl["spec"].(map[string]any)
+	podSpec := podSpecOf(findNameSuffix(docs, kindDeployment, "controller-manager"))
 	containers, _ := podSpec["containers"].([]any)
 	for _, c := range containers {
 		container, _ := c.(map[string]any)
@@ -943,9 +930,7 @@ func TestManagerStartupProbe(t *testing.T) {
 
 // podTolerations returns a Deployment's pod tolerations.
 func podTolerations(d map[string]any) []any {
-	spec, _ := d["spec"].(map[string]any)
-	tmpl, _ := spec["template"].(map[string]any)
-	podSpec, _ := tmpl["spec"].(map[string]any)
+	podSpec := podSpecOf(d)
 	tols, _ := podSpec["tolerations"].([]any)
 
 	return tols
@@ -1656,9 +1641,7 @@ func checkInstallerCoversEveryCRD(t *testing.T, clusterRole map[string]any) {
 func TestPodNamespaceFromDownwardAPI(t *testing.T) {
 	seen := map[string]bool{}
 	for _, d := range findAll(renderChartWithValues(t, "ichor"), kindDeployment) {
-		spec, _ := d["spec"].(map[string]any)
-		template, _ := spec["template"].(map[string]any)
-		podSpec, _ := template["spec"].(map[string]any)
+		podSpec := podSpecOf(d)
 		containers, _ := podSpec["containers"].([]any)
 		for _, c := range containers {
 			cm, _ := c.(map[string]any)
@@ -1703,20 +1686,21 @@ func allRules(doc map[string]any) []any {
 	return rules
 }
 
+// bindingsTo returns the ClusterRoleBindings in docs whose roleRef is roleName.
+func bindingsTo(docs []map[string]any, roleName string) []map[string]any {
+	var out []map[string]any
+	for _, b := range findAll(docs, kindClusterRoleBinding) {
+		if ref, _ := clusterRoleBindingRefs(b); ref == roleName {
+			out = append(out, b)
+		}
+	}
+	return out
+}
+
 // TestUICredentialsDownloadVerb guards: the download verb on talosclusters/credentials is
 // granted to nobody by default, not to ichor-ui-role, and only bound when the values say so.
 func TestUICredentialsDownloadVerb(t *testing.T) {
 	const roleName = "ichor-credentials-role"
-
-	bindingsTo := func(docs []map[string]any) []map[string]any {
-		var out []map[string]any
-		for _, b := range findAll(docs, kindClusterRoleBinding) {
-			if ref, _ := clusterRoleBindingRefs(b); ref == roleName {
-				out = append(out, b)
-			}
-		}
-		return out
-	}
 
 	off := renderChartWithValues(t, "ichor")
 	if find(off, kindClusterRole, roleName) != nil {
@@ -1735,12 +1719,12 @@ func TestUICredentialsDownloadVerb(t *testing.T) {
 	if role == nil || !strings.Contains(rules, subresource) || !strings.Contains(rules, "download") {
 		t.Fatalf("expected ClusterRole %q granting download on talosclusters/credentials; got %v", roleName, role)
 	}
-	if b := bindingsTo(helpers); len(b) != 0 {
+	if b := bindingsTo(helpers, roleName); len(b) != 0 {
 		t.Errorf("the credentials verb is bound by default: %v", b)
 	}
 
 	groups := renderChartWithValues(t, "ichor", "ichorUI.credentials.groups={oidc:platform-admins}")
-	bs := bindingsTo(groups)
+	bs := bindingsTo(groups, roleName)
 	if len(bs) != 1 || !strings.Contains(fmt.Sprint(bs[0]["subjects"]), "oidc:platform-admins") ||
 		strings.Contains(fmt.Sprint(bs[0]["subjects"]), "ServiceAccount") {
 		t.Errorf("ichorUI.credentials.groups must bind only those groups, got %v", bs)
@@ -1750,7 +1734,7 @@ func TestUICredentialsDownloadVerb(t *testing.T) {
 	}
 
 	sa := renderChartWithValues(t, "ichor", "ichorUI.credentials.serviceAccount=true")
-	bs = bindingsTo(sa)
+	bs = bindingsTo(sa, roleName)
 	if len(bs) != 1 || !strings.Contains(fmt.Sprint(bs[0]["subjects"]), ichorUIServiceAccountName) {
 		t.Errorf("ichorUI.credentials.serviceAccount must bind the ichor-ui ServiceAccount, got %v", bs)
 	}
@@ -1764,16 +1748,6 @@ func TestUIDiagnosticsDownloadVerb(t *testing.T) {
 
 	grants := func(role map[string]any) bool {
 		return strings.Contains(fmt.Sprint(role["rules"]), "download")
-	}
-
-	bindingsTo := func(docs []map[string]any) []map[string]any {
-		var out []map[string]any
-		for _, b := range findAll(docs, kindClusterRoleBinding) {
-			if ref, _ := clusterRoleBindingRefs(b); ref == roleName {
-				out = append(out, b)
-			}
-		}
-		return out
 	}
 
 	off := renderChartWithValues(t, "ichor")
@@ -1793,7 +1767,7 @@ func TestUIDiagnosticsDownloadVerb(t *testing.T) {
 			t.Errorf("ClusterRole %q lacks %s", roleName, sub)
 		}
 	}
-	if b := bindingsTo(helpers); len(b) != 0 {
+	if b := bindingsTo(helpers, roleName); len(b) != 0 {
 		t.Errorf("the download verb is bound by default: %v", b)
 	}
 	if ui := find(off, kindClusterRole, ichorUIRoleName); ui == nil || grants(ui) {
@@ -1801,21 +1775,21 @@ func TestUIDiagnosticsDownloadVerb(t *testing.T) {
 	}
 
 	groups := renderChartWithValues(t, "ichor", "ichorUI.diagnostics.groups={oidc:platform-admins}")
-	bs := bindingsTo(groups)
+	bs := bindingsTo(groups, roleName)
 	if len(bs) != 1 || !strings.Contains(fmt.Sprint(bs[0]["subjects"]), "oidc:platform-admins") ||
 		strings.Contains(fmt.Sprint(bs[0]["subjects"]), "ServiceAccount") {
 		t.Errorf("ichorUI.diagnostics.groups must bind only those groups, got %v", bs)
 	}
 
 	sa := renderChartWithValues(t, "ichor", "ichorUI.diagnostics.serviceAccount=true")
-	bs = bindingsTo(sa)
+	bs = bindingsTo(sa, roleName)
 	if len(bs) != 1 || !strings.Contains(fmt.Sprint(bs[0]["subjects"]), ichorUIServiceAccountName) {
 		t.Errorf("ichorUI.diagnostics.serviceAccount must bind the ichor-ui ServiceAccount, got %v", bs)
 	}
 
 	// The role is rendered, and bound, even when the RBAC helper roles are off.
 	noHelpers := renderChartWithValues(t, "ichor", "ichorUI.diagnostics.groups={oidc:platform-admins}")
-	if find(noHelpers, kindClusterRole, roleName) == nil || len(bindingsTo(noHelpers)) != 1 {
+	if find(noHelpers, kindClusterRole, roleName) == nil || len(bindingsTo(noHelpers, roleName)) != 1 {
 		t.Errorf("a bound diagnostics role must render without the helper roles")
 	}
 }

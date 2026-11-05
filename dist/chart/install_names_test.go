@@ -186,9 +186,7 @@ func TestManagerPrefersAControlPlane(t *testing.T) {
 	}
 
 	for label, d := range pods {
-		spec, _ := d["spec"].(map[string]any)
-		tmpl, _ := spec["template"].(map[string]any)
-		podSpec, _ := tmpl["spec"].(map[string]any)
+		podSpec := podSpecOf(d)
 		aff, _ := podSpec["affinity"].(map[string]any)
 		na, _ := aff["nodeAffinity"].(map[string]any)
 

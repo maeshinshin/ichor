@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	corev1 "k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -54,9 +53,7 @@ var _ = Describe("a removal whose drain is blocked", func() {
 			TalosClient: clientFactory(fake), Recorder: recorder, KubeClient: kube,
 		}
 
-		for _, cp := range []*ichorv1alpha1.TalosMachine{cp1, cp2, cp3} {
-			reconcileOK(r, cp)
-		}
+		reconcileOK(r, cp1, cp2, cp3)
 
 		var live ichorv1alpha1.TalosMachine
 		Expect(k8sClient.Get(ctx, machineKeyOf(cp1), &live)).To(Succeed())
@@ -88,8 +85,7 @@ var _ = Describe("a removal whose drain is blocked", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.RequeueAfter).To(BeZero())
 
-		var gone ichorv1alpha1.TalosMachine
-		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, machineKeyOf(cp1), &gone))).To(BeTrue())
+		Expect(machineGone(cp1)).To(BeTrue())
 	})
 })
 

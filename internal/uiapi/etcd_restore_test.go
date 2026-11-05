@@ -179,6 +179,17 @@ func TestEtcdRestorePlanRefusals(t *testing.T) {
 		createRefused        bool // override does not lift it: starting the restore is refused as well
 	}
 
+	inside := func(endpoint string) refusal {
+		backup := restoreBackupObject()
+		backup.Spec.Destination.S3.Endpoint = endpoint
+
+		return refusal{
+			name: "a backup store inside the cluster: " + endpoint, snapshot: restoreSnap, createRefused: true,
+			objs: append(opObjects(), backup, opMachine("cp2", "controlplane", nil, nil)),
+			want: "the backup store must live outside the cluster being restored",
+		}
+	}
+
 	tests := []refusal{
 		{name: "a snapshot the backup does not list", snapshot: "etcd-20200101T000000Z.snapshot.age", objs: restoreObjects(), want: "not among the snapshots"},
 		{name: "a backup of another cluster", snapshot: restoreSnap, objs: append(opObjects(), otherCluster), want: "backs up cluster"},
@@ -201,17 +212,9 @@ func TestEtcdRestorePlanRefusals(t *testing.T) {
 				op.Status.Phase = ichorv1alpha1.TalosOperationPhaseCompleted
 			})),
 		},
-	}
-
-	for _, endpoint := range []string{"http://minio.minio.svc:9000", "http://minio.minio.svc.cluster.local:9000", "http://10.96.4.2:9000"} {
-		inside := restoreBackupObject()
-		inside.Spec.Destination.S3.Endpoint = endpoint
-
-		tests = append(tests, refusal{
-			name: "a backup store inside the cluster: " + endpoint, snapshot: restoreSnap, createRefused: true,
-			objs: append(opObjects(), inside, opMachine("cp2", "controlplane", nil, nil)),
-			want: "the backup store must live outside the cluster being restored",
-		})
+		inside("http://minio.minio.svc:9000"),
+		inside("http://minio.minio.svc.cluster.local:9000"),
+		inside("http://10.96.4.2:9000"),
 	}
 
 	for _, tc := range tests {

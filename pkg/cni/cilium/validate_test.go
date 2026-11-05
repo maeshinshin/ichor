@@ -102,6 +102,16 @@ func TestValidateValues(t *testing.T) {
 		}), user: gw},
 		{name: "gateway API, CRDs unknown passes", ctx: enabled, user: gw},
 
+		{name: "clustermesh API server with the default helm certificates", ctx: enabled,
+			user:    map[string]any{"clustermesh": map[string]any{"useAPIServer": true}},
+			wantErr: []string{"clustermesh.apiserver.tls.auto.method=cronJob"}},
+		{name: "clustermesh API server with cronJob certificates", ctx: enabled,
+			user: map[string]any{"clustermesh": map[string]any{"useAPIServer": true,
+				"apiserver": map[string]any{"tls": map[string]any{"auto": map[string]any{"method": "cronJob"}}}}}},
+		{name: "clustermesh API server with its own certificates", ctx: enabled,
+			user: map[string]any{"clustermesh": map[string]any{"useAPIServer": true,
+				"apiserver": map[string]any{"tls": map[string]any{"auto": map[string]any{keyEnabled: false}}}}}},
+
 		{name: "replaced, KubePrism off", ctx: with(replaced, func(c *ValidationContext) {
 			c.KubePrism = &KubePrism{Enabled: false}
 		}), wantErr: []string{"KubePrism"}},

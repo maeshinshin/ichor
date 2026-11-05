@@ -102,6 +102,15 @@ func mustReconcileOperation(r *TalosOperationReconciler, op *ichorv1alpha1.Talos
 	Expect(err).NotTo(HaveOccurred())
 }
 
+// reconcileFetch reconciles op once, expecting no error, and returns it as stored afterwards.
+func reconcileFetch(r *TalosOperationReconciler, op *ichorv1alpha1.TalosOperation) *ichorv1alpha1.TalosOperation {
+	GinkgoHelper()
+
+	mustReconcileOperation(r, op)
+
+	return fetchOperation(op)
+}
+
 // repeatStep runs step on op n times, each on the operation the last returned.
 func repeatStep(
 	step func(*ichorv1alpha1.TalosOperation) *ichorv1alpha1.TalosOperation, op *ichorv1alpha1.TalosOperation, n int,

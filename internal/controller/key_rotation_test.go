@@ -387,10 +387,7 @@ func (f *keyRotFixture) newOpSpec(spec *ichorv1alpha1.TalosOperationKeyRotationS
 }
 
 func (f *keyRotFixture) step(op *ichorv1alpha1.TalosOperation) *ichorv1alpha1.TalosOperation {
-	_, err := reconcileOperation(f.newReconciler(), op)
-	Expect(err).NotTo(HaveOccurred())
-
-	return fetchOperation(op)
+	return reconcileFetch(f.newReconciler(), op)
 }
 
 func (f *keyRotFixture) runUntil(op *ichorv1alpha1.TalosOperation, done func(*ichorv1alpha1.TalosOperation) bool) (*ichorv1alpha1.TalosOperation, []string) {

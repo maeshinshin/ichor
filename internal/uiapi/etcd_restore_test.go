@@ -159,88 +159,74 @@ func TestEtcdRestorePlanNamesTheControllersNodeWhateverTheAppNameIs(t *testing.T
 func TestEtcdRestorePlanRefusals(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("a snapshot the backup does not list", func(t *testing.T) {
-		s, _ := opServer(t, restoreObjects()...)
+	otherCluster := restoreBackupObject()
+	otherCluster.Spec.ClusterRef.Name = "elsewhere"
 
-		res, err := s.PlanOperation(ctx, restorePlanReq(restoreReq("etcd-20200101T000000Z.snapshot.age", "", "")))
-		if err != nil || !strings.Contains(res.Msg.GetBlocked(), "not among the snapshots") {
-			t.Fatalf("blocked = %q, %v", res.Msg.GetBlocked(), err)
+	finished := metav1.NewTime(restoreSnapTime.Add(time.Hour))
+	opOf := func(name, kind string, mutate func(*ichorv1alpha1.TalosOperation)) *ichorv1alpha1.TalosOperation {
+		op := &ichorv1alpha1.TalosOperation{
+			Name: name, Namespace: opNS, CreationTimestamp: metav1.NewTime(restoreSnapTime.Add(time.Hour)),
+			Spec: ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: kind},
 		}
-	})
+		mutate(op)
 
-	t.Run("a backup of another cluster", func(t *testing.T) {
-		other := restoreBackupObject()
-		other.Spec.ClusterRef.Name = "elsewhere"
+		return op
+	}
 
-		s, _ := opServer(t, append(opObjects(), other)...)
+	type refusal struct {
+		name, snapshot, want string
+		objs                 []client.Object
+		createRefused        bool // override does not lift it: starting the restore is refused as well
+	}
 
-		res, err := s.PlanOperation(ctx, restorePlanReq(restoreReq(restoreSnap, "", "")))
-		if err != nil || !strings.Contains(res.Msg.GetBlocked(), "backs up cluster") {
-			t.Fatalf("blocked = %q, %v", res.Msg.GetBlocked(), err)
-		}
-	})
-
-	t.Run("an unfinished operation", func(t *testing.T) {
-		busy := &ichorv1alpha1.TalosOperation{
-			Name: "upgrade", Namespace: opNS,
-			Spec:   ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindTalos},
-			Status: ichorv1alpha1.TalosOperationStatus{Phase: ichorv1alpha1.TalosOperationPhaseInProgress},
-		}
-		s, _ := opServer(t, append(restoreObjects(), busy)...)
-
-		res, err := s.PlanOperation(ctx, restorePlanReq(restoreReq(restoreSnap, "", "")))
-		if err != nil || !strings.Contains(res.Msg.GetBlocked(), "not finished") {
-			t.Fatalf("blocked = %q, %v", res.Msg.GetBlocked(), err)
-		}
-	})
-
-	t.Run("a key rotation that finished after the snapshot", func(t *testing.T) {
-		finished := metav1.NewTime(restoreSnapTime.Add(time.Hour))
-		rot := &ichorv1alpha1.TalosOperation{
-			Name: "key-rotation", Namespace: opNS,
-			Spec: ichorv1alpha1.TalosOperationSpec{
-				ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindKeyRotation,
-				KeyRotation: &ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: []string{ichorv1alpha1.KeyRotationTargetSecretbox}},
-			},
-			Status: ichorv1alpha1.TalosOperationStatus{Phase: ichorv1alpha1.TalosOperationPhaseCompleted, FinishedAt: &finished},
-		}
-		s, _ := opServer(t, append(restoreObjects(), rot)...)
-
-		res, err := s.PlanOperation(ctx, restorePlanReq(restoreReq(restoreSnap, "", "")))
-		if err != nil || !strings.Contains(res.Msg.GetBlocked(), "service-account or secretbox key") {
-			t.Fatalf("blocked = %q, %v", res.Msg.GetBlocked(), err)
-		}
-	})
-
-	t.Run("a CA rotation after the snapshot", func(t *testing.T) {
-		rot := &ichorv1alpha1.TalosOperation{
-			Name: "rotation", Namespace: opNS, CreationTimestamp: metav1.NewTime(restoreSnapTime.Add(time.Hour)),
-			Spec:   ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindCARotation},
-			Status: ichorv1alpha1.TalosOperationStatus{Phase: ichorv1alpha1.TalosOperationPhaseCompleted},
-		}
-		s, _ := opServer(t, append(restoreObjects(), rot)...)
-
-		res, err := s.PlanOperation(ctx, restorePlanReq(restoreReq(restoreSnap, "", "")))
-		if err != nil || !strings.Contains(res.Msg.GetBlocked(), "rotated the cluster's CAs") {
-			t.Fatalf("blocked = %q, %v", res.Msg.GetBlocked(), err)
-		}
-	})
+	tests := []refusal{
+		{name: "a snapshot the backup does not list", snapshot: "etcd-20200101T000000Z.snapshot.age", objs: restoreObjects(), want: "not among the snapshots"},
+		{name: "a backup of another cluster", snapshot: restoreSnap, objs: append(opObjects(), otherCluster), want: "backs up cluster"},
+		{
+			name: "an unfinished operation", snapshot: restoreSnap, want: "not finished",
+			objs: append(restoreObjects(), opOf("upgrade", ichorv1alpha1.TalosOperationKindTalos, func(op *ichorv1alpha1.TalosOperation) {
+				op.Status.Phase = ichorv1alpha1.TalosOperationPhaseInProgress
+			})),
+		},
+		{
+			name: "a key rotation that finished after the snapshot", snapshot: restoreSnap, want: "service-account or secretbox key",
+			objs: append(restoreObjects(), opOf("key-rotation", ichorv1alpha1.TalosOperationKindKeyRotation, func(op *ichorv1alpha1.TalosOperation) {
+				op.Spec.KeyRotation = &ichorv1alpha1.TalosOperationKeyRotationSpec{Targets: []string{ichorv1alpha1.KeyRotationTargetSecretbox}}
+				op.Status = ichorv1alpha1.TalosOperationStatus{Phase: ichorv1alpha1.TalosOperationPhaseCompleted, FinishedAt: &finished}
+			})),
+		},
+		{
+			name: "a CA rotation after the snapshot", snapshot: restoreSnap, want: "rotated the cluster's CAs",
+			objs: append(restoreObjects(), opOf("rotation", ichorv1alpha1.TalosOperationKindCARotation, func(op *ichorv1alpha1.TalosOperation) {
+				op.Status.Phase = ichorv1alpha1.TalosOperationPhaseCompleted
+			})),
+		},
+	}
 
 	for _, endpoint := range []string{"http://minio.minio.svc:9000", "http://minio.minio.svc.cluster.local:9000", "http://10.96.4.2:9000"} {
-		t.Run("a backup store inside the cluster: "+endpoint, func(t *testing.T) {
-			inside := restoreBackupObject()
-			inside.Spec.Destination.S3.Endpoint = endpoint
+		inside := restoreBackupObject()
+		inside.Spec.Destination.S3.Endpoint = endpoint
 
-			s, _ := opServer(t, append(opObjects(), inside, opMachine("cp2", "controlplane", nil, nil))...)
+		tests = append(tests, refusal{
+			name: "a backup store inside the cluster: " + endpoint, snapshot: restoreSnap, createRefused: true,
+			objs: append(opObjects(), inside, opMachine("cp2", "controlplane", nil, nil)),
+			want: "the backup store must live outside the cluster being restored",
+		})
+	}
 
-			res, err := s.PlanOperation(ctx, restorePlanReq(restoreReq(restoreSnap, "", "")))
-			if err != nil || !strings.Contains(res.Msg.GetBlocked(), "the backup store must live outside the cluster being restored") {
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			s, _ := opServer(t, tc.objs...)
+
+			res, err := s.PlanOperation(ctx, restorePlanReq(restoreReq(tc.snapshot, "", "")))
+			if err != nil || !strings.Contains(res.Msg.GetBlocked(), tc.want) {
 				t.Fatalf("blocked = %q, %v", res.Msg.GetBlocked(), err)
 			}
 
-			// Override does not lift it: starting the restore is refused as well.
-			if _, err := s.CreateOperation(ctx, restoreCreateReq(restoreReq(restoreSnap, opCluster, bgReason))); connect.CodeOf(err) != connect.CodeFailedPrecondition {
-				t.Fatalf("create: %v", err)
+			if tc.createRefused {
+				if _, err := s.CreateOperation(ctx, restoreCreateReq(restoreReq(restoreSnap, opCluster, bgReason))); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+					t.Fatalf("create: %v", err)
+				}
 			}
 		})
 	}

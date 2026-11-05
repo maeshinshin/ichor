@@ -188,7 +188,11 @@ func (r *CNIHandoverReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if handedOver && cluster.Status.CNI != nil && cluster.Status.CNI.AppliedValuesHash == hash {
 		// Cilium already runs these values, so an earlier refused or failed edit that was reverted to
 		// them is over: report the values applied again and forget the failures of that attempt. Status
-		// is written only when it changes.
+		// is written only when it changes. A Job of that attempt that failed is of no use either.
+		if err := r.pruneSupersededFailedJobs(ctx, &cluster, ""); err != nil {
+			return ctrl.Result{}, err
+		}
+
 		if recordApplied(&cluster) {
 			return ctrl.Result{}, r.Status().Update(ctx, &cluster)
 		}
@@ -318,6 +322,10 @@ func (r *CNIHandoverReconciler) runJob(
 		return ctrl.Result{}, err
 	}
 
+	if err := r.pruneSupersededFailedJobs(ctx, cluster, hash); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	done, err := AdvanceCNIHelmJob(ctx, r.Client, r.Namespace, cluster, mode, nodes, inst, r.Images,
 		cniValuesCheck(r.Client, r.reader(), r.Namespace, cluster, mode), "", time.Time{})
 
@@ -377,6 +385,45 @@ func (r *CNIHandoverReconciler) runJob(
 	}
 
 	return r.finish(ctx, cluster, hash, handedOver)
+}
+
+// pruneSupersededFailedJobs deletes the failed Jobs of this cluster that ran for other values than
+// keepHash ("" keeps none): the user moved on, so they would only linger in kube-system until their TTL,
+// and a Job that stays under the name of values the user later sets again would be reported as that
+// run's own failure until its retry wait is over instead of being retried at once (hardware run I). The
+// failure count of the values left behind is forgotten for the same reason. Only the Jobs of a values
+// change are touched: a Job of a kube-proxy switch or upgrade carries a salted name and is theirs.
+func (r *CNIHandoverReconciler) pruneSupersededFailedJobs(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, keepHash string) error {
+	var jobs batchv1.JobList
+	if err := r.reader().List(ctx, &jobs, client.InNamespace(cniJobNamespace),
+		client.MatchingLabels{cniClusterLabel: cniHelmClusterHash(cluster)}); err != nil {
+		return err
+	}
+
+	for i := range jobs.Items {
+		job := &jobs.Items[i]
+
+		hash := job.Annotations[CNIValuesHashAnnotation]
+		if hash == "" || hash == keepHash || job.Name != cniHelmJobName(cluster, hash) {
+			continue
+		}
+
+		if _, failed := jobOutcome(job); failed == nil {
+			continue
+		}
+
+		if err := deleteCNIHelmJob(ctx, r.Client, job); err != nil {
+			return err
+		}
+	}
+
+	if s := cluster.Status.CNI; keepHash != "" && s != nil && s.JobFailuresHash != "" && s.JobFailuresHash != keepHash {
+		s.JobFailures, s.JobFailuresHash = 0, ""
+
+		return r.Status().Update(ctx, cluster)
+	}
+
+	return nil
 }
 
 // cniJobRetryCap is the longest wait between two attempts of a Helm Job that keeps failing.

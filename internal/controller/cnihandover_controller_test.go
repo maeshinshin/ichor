@@ -31,6 +31,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -524,6 +525,91 @@ var _ = Describe("CNIHandoverReconciler", func() {
 			_, failedCond := jobOutcome(&job)
 			g.Expect(failedCond).To(BeNil())
 		}).Should(Succeed())
+	})
+
+	// Hardware run I (M1, M4): a failed Job of values the user moved away from stayed in kube-system, and when
+	// the same values were set again its stale failure was reported until the retry wait was over.
+	setValues := func(cluster *ichorv1alpha1.TalosCluster, raw string) {
+		GinkgoHelper()
+
+		edited := getCluster(cluster)
+		edited.Spec.CNI.Cilium = nil
+
+		if raw != "" {
+			edited.Spec.CNI.Cilium = &ichorv1alpha1.TalosClusterCNICilium{Values: &apiextensionsv1.JSON{Raw: []byte(raw)}}
+		}
+
+		Expect(k8sClient.Update(ctx, edited)).To(Succeed())
+	}
+
+	It("removes the failed Job of values the user moved on from, so returning to them retries at once", func() {
+		cluster := newTestCiliumCluster()
+		ciliumDaemonSet()(true)
+		r.JobRetryInterval = time.Hour
+
+		reconcileHandoverOK(r, cluster)
+
+		stale := cniJob(cluster)
+		failJobJustNow(stale, "Job has reached the specified backoff limit")
+		reconcileHandoverOK(r, cluster)
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Reason).To(Equal("JobFailed"))
+
+		setValues(cluster, `{"debug":{"enabled":true}}`)
+		reconcileHandoverOK(r, cluster)
+		Expect(cniJobCount(cluster)).To(Equal(1), "only the Job of the new values is left")
+
+		setValues(cluster, "")
+		reconcileHandoverOK(r, cluster)
+
+		var job batchv1.Job
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(stale), &job)).To(Succeed())
+		Expect(job.UID).NotTo(Equal(stale.UID), "a new Job, not the old failed one")
+
+		_, failedCond := jobOutcome(&job)
+		Expect(failedCond).To(BeNil())
+
+		cond := conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied)
+		Expect(cond.Reason).To(Equal("Applying"))
+		Expect(getCluster(cluster).Status.CNI).To(Or(BeNil(), HaveField("JobFailures", BeZero())))
+	})
+
+	It("removes the failed Job of an edit that was reverted, and retries a re-set edit with a new Job", func() {
+		cluster := newTestCiliumCluster()
+		ciliumDaemonSet()(true)
+		r.JobRetryInterval = time.Hour
+
+		reconcileHandoverOK(r, cluster)
+		setJobCondition(cniJob(cluster), batchv1.JobComplete, "")
+		helmRelease(1, "deployed", effectiveValues(cluster))
+		reconcileHandoverOK(r, cluster)
+		Expect(getCluster(cluster).Status.CNI.AppliedValuesHash).NotTo(BeEmpty())
+
+		const bad = `{"debug":{"enabled":true}}`
+
+		setValues(cluster, bad)
+		reconcileHandoverOK(r, cluster)
+
+		stale := cniJob(getCluster(cluster))
+		failJobJustNow(stale, "Job has reached the specified backoff limit")
+		reconcileHandoverOK(r, cluster)
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Reason).To(Equal("JobFailed"))
+
+		// The revert: Cilium already runs these values, and the failed Job of the edit is dropped.
+		setValues(cluster, "")
+		reconcileHandoverOK(r, cluster)
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Status).To(Equal(metav1.ConditionTrue))
+
+		var gone batchv1.Job
+		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKeyFromObject(stale), &gone))).To(BeTrue(),
+			"the failed Job of the reverted edit is removed")
+
+		setValues(cluster, bad)
+		reconcileHandoverOK(r, cluster)
+
+		var job batchv1.Job
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(stale), &job)).To(Succeed())
+		Expect(job.UID).NotTo(Equal(stale.UID))
+		Expect(conditionOf(cluster, ichorv1alpha1.ConditionCNIValuesApplied).Reason).To(Equal("Applying"))
 	})
 
 	// A Job that fails again with the same values waits twice as long each time (up to 30 minutes), and

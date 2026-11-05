@@ -218,13 +218,8 @@ func (s *Sigstore) check(entity verify.SignedEntity, digest []byte, id Identity)
 	return err
 }
 
-// ResolveDigest is the digest the tag of a repository points at now, "sha256:<hex>", from a HEAD request
-// on the manifest. A mirror's tag is resolved at the mirror.
-func ResolveDigest(ctx context.Context, repository, tag string) (string, error) {
-	return resolveDigest(ctx, repository, tag, false)
-}
-
-// Resolve is ResolveDigest for the registry this verifier reads (tests point it at an http registry).
+// Resolve is the digest the tag of a repository points at now, "sha256:<hex>", from a HEAD request on the
+// manifest. A mirror's tag is resolved at the mirror. Tests point the verifier at an http registry.
 func (s *Sigstore) Resolve(ctx context.Context, repository, tag string) (string, error) {
 	return resolveDigest(ctx, repository, tag, s.insecure)
 }

@@ -32,6 +32,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/resources/network"
 	certv1 "k8s.io/api/certificates/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
@@ -496,7 +497,7 @@ func (r *KubeletServingReconciler) patchConditions(
 		setServingConditions(cluster, report, verify)
 	}
 
-	if apiequalityConditions(base.Status.Conditions, cluster.Status.Conditions) {
+	if apiequality.Semantic.DeepEqual(base.Status.Conditions, cluster.Status.Conditions) {
 		return nil
 	}
 
@@ -549,15 +550,6 @@ func setServingConditions(cluster *ichorv1alpha1.TalosCluster, report *coverageR
 	apimeta.SetStatusCondition(&cluster.Status.Conditions, latch)
 }
 
-// apiequalityConditions is true when the two lists carry the same type, status, reason and message
-// (not times, which SetStatusCondition keeps when nothing else changed).
-func apiequalityConditions(a, b []metav1.Condition) bool {
-	return slices.EqualFunc(a, b, func(x, y metav1.Condition) bool {
-		return x.Type == y.Type && x.Status == y.Status && x.Reason == y.Reason && x.Message == y.Message &&
-			x.ObservedGeneration == y.ObservedGeneration
-	})
-}
-
 // SetupWithManager wakes the reconciler on a cluster change, on a machine's status (a node name
 // appearing) and on every kubelet-serving request.
 func (r *KubeletServingReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -570,7 +562,7 @@ func (r *KubeletServingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&ichorv1alpha1.TalosCluster{}).
 		Watches(&certv1.CertificateSigningRequest{}, handler.EnqueueRequestsFromMapFunc(r.enabledClusters), builder.WithPredicates(servingOnly)).
-		Watches(&ichorv1alpha1.TalosMachine{}, handler.EnqueueRequestsFromMapFunc(r.clusterOfMachine)).
+		Watches(&ichorv1alpha1.TalosMachine{}, handler.EnqueueRequestsFromMapFunc(machineCluster)).
 		Named("kubeletserving").
 		Complete(r)
 }
@@ -591,16 +583,6 @@ func (r *KubeletServingReconciler) enabledClusters(ctx context.Context, _ client
 	}
 
 	return out
-}
-
-// clusterOfMachine maps a machine to its cluster.
-func (r *KubeletServingReconciler) clusterOfMachine(_ context.Context, obj client.Object) []reconcile.Request {
-	m, ok := obj.(*ichorv1alpha1.TalosMachine)
-	if !ok || m.Spec.ClusterRef.Name == "" {
-		return nil
-	}
-
-	return []reconcile.Request{{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name}}
 }
 
 // NewMachineryServingIdentity dials m's Talos API and reads the node's names and kubelet addresses.

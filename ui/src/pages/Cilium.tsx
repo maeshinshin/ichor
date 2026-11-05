@@ -85,6 +85,12 @@ export function Cilium() {
           <AlertDescription>{t('cilium.noWrite')}</AlertDescription>
         </Alert>
       )}
+      {perms?.clusterUpdate && !data.canEdit && (
+        <Alert>
+          <InfoIcon />
+          <AlertDescription>{t('cilium.noValuesWrite')}</AlertDescription>
+        </Alert>
+      )}
       <Card id="effective" className="scroll-mt-section">
         <CardHeader>
           <CardTitle>{t('cilium.effective')}</CardTitle>
@@ -97,7 +103,7 @@ export function Cilium() {
         </CardContent>
       </Card>
       <OwnedKeys owned={data.owned} />
-      <UserValues key={version} cluster={ref} data={data} editable={editable} onApplied={() => setVersion(version + 1)} />
+      <UserValues key={version} cluster={ref} data={data} editable={editable && data.canEdit} onApplied={() => setVersion(version + 1)} />
       <CiliumUpgrade cluster={ref} chart={data.availableChartVersion} editable={editable} />
     </div>
   )

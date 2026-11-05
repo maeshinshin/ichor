@@ -29,7 +29,10 @@ install.
   runs that step again.
 - Runs node actions as operations: reboot, shutdown, restart a service, etcd
   defrag, forfeit etcd leadership, reset, and remove.
-- Rotates the cluster CAs in verified passes. The operation waits until you
+- Rotates the cluster CAs in verified passes: the Talos and Kubernetes API CAs
+  by default, and with `--ca etcd`, `--ca kubernetes-aggregator` or `--all` the
+  etcd CA and the aggregator CA too. The
+  operation waits until you
   have the new kubeconfig and talosconfig, from the CLI or the UI, before it
   stops trusting the old CAs, then restarts the in-cluster clients that keep
   the old one.
@@ -52,7 +55,17 @@ install.
   Edit its values in the UI (Cilium page) or with `ichor cni values`, upgrade
   it with `ichor cni upgrade`, and switch kube-proxy with `ichor cni kube-proxy`.
   `ichor init` waits for the hand-over of Cilium to Ichor.
-- Locks down its own namespace with CiliumNetworkPolicies.
+- Locks down its own namespace with CiliumNetworkPolicies, including a
+  name-based (FQDN) egress rule for ichor-ui's OIDC issuer; the controller's
+  metrics port stays closed until you name a namespace.
+- Offers typed, off-by-default hardening for the clusters it creates: SecureBoot
+  (with the SecureBoot installer picked per node), kernel lockdown and kubelet
+  serving certificates that the controller approves itself
+  ([guide](docs/guides/hardening.md)).
+- Hands operators a short-lived `os:reader` talosconfig for `talosctl`
+  (`ichor cluster talosconfig`) without access to the secrets bundle.
+- Resolves the installer image of an Ichor upgrade to a digest and verifies its
+  release signature before the installer Job runs.
 - Prepares disks for storage systems such as Longhorn, and waits for data to
   evacuate before draining or removing a node.
 
@@ -88,8 +101,11 @@ bin/img/ichor/ichor version         # CLI version and the installed Ichor versio
 
 [Getting started](docs/guides/getting-started.md) walks through all of it,
 from the build to the first sign-in to the UI. `ichor <command> --help` lists
-the rest. The CLI prints for people; add `-o yaml` or `-o json` in a script. Existing
-clusters are brought in with `ichor adopt`.
+the rest. The CLI prints for people; add `-o yaml` or `-o json` in a script. `ichor init`
+prints the passphrase of the local secrets bundle once and waits for Enter; a
+script gives it `--bundle-passphrase-file`. Existing clusters are brought in with
+`ichor adopt` (`ichor adopt --add-machine` adds a machine that already runs the
+cluster's configuration).
 
 ## Security
 
@@ -100,10 +116,13 @@ enforces. Only the controller holds an `os:admin`-equivalent Talos identity and 
 to nodes. The UI backend reads with `os:reader`; for the admin-gated downloads
 (support bundle, etcd snapshot, packet capture, CA-rotation credentials) it uses the narrowest
 role Talos accepts for that one call. The browser holds no credentials at all.
-Users never receive a talosconfig, except an administrator during a CA
-rotation.
+Users never receive an admin talosconfig, except an administrator during a CA
+rotation; operators and administrators can download a one-hour `os:reader`
+talosconfig.
 The secrets bundle (Talos, Kubernetes and etcd CA keys) is the root of trust
-and lives in a Secret, never in a custom resource. See the Trust section of
+and lives in a Secret, never in a custom resource. The copy `ichor init` keeps
+on your machine is encrypted with a passphrase (an age file); keep the passphrase
+apart from the file. See the Trust section of
 [docs/design/architecture.md](docs/design/architecture.md) for the full
 picture.
 

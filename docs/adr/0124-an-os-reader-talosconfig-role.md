@@ -1,6 +1,6 @@
 # 0124. An os:reader talosconfig role
 
-Status: Accepted · Date: 2026-11-04 · Design section: Credentials, Security · Touches: 0058, 0084, 0093, 0094, 0108
+Status: Accepted; built; hardware verification pending · Date: 2026-11-04 · Design section: Credentials, Security · Touches: 0058, 0084, 0093, 0094, 0108
 
 Decided: a person with the Kubernetes RBAC verb `download` on `talosclusters/talosconfig-reader` gets a short-lived talosconfig whose client certificate carries the Talos role `os:reader`, for `talosctl`. It is a new `TalosCredentialRequest` purpose, `talosconfig-reader` (default lifetime 1 hour, cap 12 hours, longer is refused at admission and again by the controller), signed by the controller for a key the requester keeps. Every issuance is recorded as an Event on the TalosCluster that names the requesting user, written by the admission webhook before the request is admitted (a request whose Event cannot be written is refused). `ichor cluster talosconfig NAME` and the UI (the cluster page's "..." menu, a download) are the two ways to ask. The shipped roles `ichor-operator` and `ichor-admin` carry the verb; `ichor-viewer` does not. Ichor offers no `os:operator` talosconfig.
 

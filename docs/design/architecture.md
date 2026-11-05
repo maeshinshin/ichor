@@ -177,11 +177,19 @@ edit a cluster must not be able to repoint one.
 A user's kubeconfig holds no secret. It runs `ichor auth token` as a client-go
 exec plugin. That command logs in through the browser and keeps a 5 minute ID
 token and a 12 hour refresh token on the user's machine. The browser never
-holds a Kubernetes credential; its token is for ichor-ui only.
+holds a Kubernetes credential; its token is for ichor-ui only. The browser keeps
+its session going with a refresh token held in `sessionStorage` (rotated on use,
+reuse revokes the family), and signing out, in the UI or with `ichor auth
+logout`, revokes it at the issuer's RFC 7009 endpoint `/oidc/revoke`.
 
-Users never get a talosconfig, because no per-user Talos identity exists. Two
-paths can hand Talos credentials to a person, and both stay admin-only: the
-CLI hand-off and the UI download.
+Users never get an admin talosconfig, because no per-user Talos identity exists. Two
+paths can hand Talos admin credentials to a person, and both stay admin-only: the
+CLI hand-off and the UI download. A third hands out much
+less: `ichor cluster talosconfig` and a UI download give an operator or admin an
+`os:reader` talosconfig valid for one hour (twelve at most), signed through a
+`TalosCredentialRequest` like the backend's own reads; it needs the verb
+`download` on `talosclusters/talosconfig-reader`, and each request is an Event
+with the user's name.
 
 Override: the secrets bundle keeps the `admin` client certificate
 (`system:masters`) and the Talos `os:admin` identity in
@@ -378,6 +386,20 @@ reboot-required.
 imports as-is. Kinds outside the allow-list are listed, and the user chooses
 between extending the list and dropping them. Nothing is dropped silently.
 
+Typed hardening options for the clusters Ichor creates, all off by default and
+rendered only when set: `spec.security.secureBoot` (`Off`, `Preferred`,
+`Required`) picks the SecureBoot installer for approval and for each Talos upgrade
+and holds the first configuration of a node without SecureBoot under `Required`;
+`spec.security.kernelLockdown` is checked against what each node reports; both
+surface as per-node and cluster conditions, and a node's state is read from its
+`SecurityState`, never changed in place. `ichor node reset --wipe-mode
+system-disk|all` wipes more than STATE and EPHEMERAL so a node can be installed
+afresh from the SecureBoot ISO.
+`spec.security.kubeletServingCertificates` renders `serverTLSBootstrap` and the
+kube-apiserver's kubelet CA, and the controller approves each kubelet's
+serving-certificate request itself, only for that node's own names and addresses,
+read from the node.
+
 ### Patch layers
 
 Patches apply bottom-up:
@@ -515,6 +537,9 @@ KubePrism address, `kubeProxyReplacement`, `tunnelProtocol`). They are edited
 in the UI (Cilium page) or with `ichor cni values get|set|edit|diff`, validated
 by one function in the webhook, the backend and the controller, and applied by
 the Job.
+The operator runs one replica while the cluster has one node and the chart's two
+from then on, counted from the Nodes that exist, and a Helm Job that keeps failing
+with the same values is retried with a growing backoff.
 
 Upgrades. A new Ichor release carries new pinned charts. Cilium is upgraded
 only when the user starts a `cni` operation (`ichor cni upgrade`, or the UI),
@@ -946,7 +971,9 @@ An upgrade target is valid when it is a final semantic version newer than the ru
   and the cluster's Talos supports the target (`upgrade.KubernetesPairing`).
 - Compatibility: the Talos and Kubernetes pair, and the Kubernetes and the installed Cilium, are checked
   against the one table `pkg/release/compat.go`. An incompatible pair is refused, and the override verb is the only way past the refusal; the override is recorded as a Warning Event on the cluster.
-  Cilium moves only to the chart embedded in the running Ichor.
+  Cilium moves only to the chart embedded in the running Ichor: there is no
+  image-only patch, and a daily CI run opens a pull request when Cilium publishes a new patch of
+  the pinned minor, so a patch reaches clusters with an Ichor release.
 
 The upgrade dialog offers the Talos and Kubernetes targets as a searchable list of the candidates the
 controller found: the patches of the current minor and the next minor, grouped "Recommended" (the set's
@@ -958,6 +985,13 @@ cluster; each component is upgraded by its own operation.
 A step that fails pauses its operation with a `failureReason` and is never
 retried by itself; `ichor operation resume` (or Resume in the UI) on such an
 operation re-runs the failed step through an annotation, not through `spec`.
+
+Every operation takes the cluster lock under its own identity
+(`ichor-controller/op/<namespace>/<name>`), a control-plane join or removal under the
+machine's own, and the Cilium Helm Job under `ichor-controller/cni-helm`, so two disruptive pieces of
+work never run together, whoever created them; the one that waits pauses with
+`ClusterLockHeld` naming the holder, and a lease whose holder is gone, completed or
+paused on a failed step is taken over.
 
 All three upgrade kinds share the lock, the status-held state machine, pause-
 on-failure (no automatic cluster-wide rollback), `paused`, `maxUnavailable`
@@ -1007,7 +1041,14 @@ replaced, so the installer applies its own RBAC first; its rights are
 cluster-scoped, plus a Role in Ichor's namespace. It then snapshots the current
 manifests, updates CRDs (additive, never downgraded), the controller, then the
 UI, applies the network policies when Cilium's CRD exists, runs post-checks, and
-rolls back from the snapshot on failure. The CLI refuses writes when more than one minor
+rolls back from the snapshot on failure. The installer image never runs by tag:
+before the Job exists the controller resolves `installerRepository:version` to a digest
+(or takes the pin in `spec.installerDigest`), verifies the release workflow's keyless
+cosign signature offline against an embedded Sigstore root, and runs the Job as
+`repository@digest`; a failure pauses the operation, and the only bypass is a
+recorded, reasoned `spec.installerSignature: skip` (`--skip-signature-check`) for
+builds nobody signs. The install manifest inside a release's installer names the
+controller and ichor-ui by digest too. The CLI refuses writes when more than one minor
 away from the server. A UI backend response header (`X-Ichor-Version`) that
 would make a stale SPA prompt a reload is not built; the
 top bar shows the installed Ichor version as a badge instead

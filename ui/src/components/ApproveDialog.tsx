@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'preact/hooks'
+import { machineDisplayName } from '@/lib/machineName'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -148,7 +149,7 @@ export function ApproveDialog({
       </DialogTrigger>
       <DialogContent className="grid-cols-1 sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{t('approve.title', { name: machine.ref?.name ?? '' })}</DialogTitle>
+          <DialogTitle>{t('approve.title', { name: machineDisplayName(machine) })}</DialogTitle>
           <DialogDescription>{t('approve.description')}</DialogDescription>
         </DialogHeader>
 

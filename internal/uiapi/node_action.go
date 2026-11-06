@@ -144,11 +144,16 @@ func (s *Server) planNode(ctx context.Context, req *pb.NodeActionRequest) (*opPl
 		}
 	}
 
+	if req.GetReboot() && action != nodeActionRemove {
+		return nil, invalid("reboot only goes with remove: a reset always reboots")
+	}
+
 	np := &nodePlan{
 		action: action, machine: m, bg: req.GetOverride(), asked: req.GetMachine().GetName(),
 		spec: ichorv1alpha1.TalosOperationNodeSpec{
 			MachineRef: corev1.LocalObjectReference{Name: m.Name}, Action: action,
 			Service: req.GetService(), AllowLeader: req.GetAllowLeader(), Confirm: req.GetConfirm(), WipeMode: req.GetWipeMode(),
+			PowerOff: action == nodeActionRemove && !req.GetReboot(),
 		},
 	}
 	p := &opPlan{
@@ -274,31 +279,47 @@ func describeNode(resp *pb.PlanOperationResponse, m *ichorv1alpha1.TalosMachine,
 			"Check that a different member leads.",
 		}
 		resp.Warning = "Writes pause for a moment while a new leader is elected."
-	case ichorv1alpha1.NodeActionReset:
-		wipe := "Wipe the node's STATE and EPHEMERAL partitions and reboot it into maintenance mode."
+	case ichorv1alpha1.NodeActionReset, nodeActionRemove:
+		// Remove and reset are one flow (ADR 0135): a reset only differs in always rebooting afterwards.
+		powerOff := action == nodeActionRemove && spec.PowerOff
+		after := "reboot it into maintenance mode"
+		if powerOff {
+			after = "power it off"
+		}
+
+		wipe := "Wipe the node's STATE and EPHEMERAL partitions and " + after + "."
 
 		switch spec.WipeMode {
 		case ichorv1alpha1.WipeModeSystemDisk:
-			wipe = "Wipe the node's whole system disk (boot and EFI included) and reboot it; it starts from its boot image again, so the disk is installed afresh."
+			wipe = "Wipe the node's whole system disk (boot and EFI included) and " + after + "; it starts from its boot image again, so the disk is installed afresh."
 		case ichorv1alpha1.WipeModeAll:
-			wipe = "Wipe the node's whole system disk (boot and EFI included) and every user disk, and reboot it; it starts from its boot image again."
+			wipe = "Wipe the node's whole system disk (boot and EFI included) and every user disk, and " + after + "; it starts from its boot image again."
 		}
 
 		resp.Steps = removalSteps(isCP, wipe)
-		resp.Warning = "This cannot be undone. The node leaves the cluster and its data is wiped. Ichor deletes this machine; the node shows up as a new pending machine."
+		resp.Warning = removeWarning(powerOff, spec.WipeMode)
 		resp.ConfirmName, resp.OverrideRequired = name, true
-	case nodeActionRemove:
-		resp.Steps = append(removalSteps(isCP, ""), nodeStaysStep)
-		resp.Warning = "The node leaves the cluster but is not wiped: it still holds the cluster's certificates until you reset it."
-		resp.ConfirmName = name
 	}
 }
 
-// nodeStaysStep is the last line of a remove plan (ADR 0085): the kubelet keeps the cluster's
-// credentials and would re-register a deleted Node, so the Node object is the operator's to delete
-// once the machine is off.
-const nodeStaysStep = "The Kubernetes Node stays while the machine runs (its kubelet keeps the cluster's credentials). " +
-	"Power it off or reset it (`ichor node reset`, override), then delete the Node: `kubectl delete node <name>`."
+// removeWarning is the text of the remove plan (ADR 0135): the node's STATE and EPHEMERAL partitions are
+// wiped, so the data is gone, and what the node does afterwards depends on the chosen end state.
+func removeWarning(powerOff bool, wipeMode string) string {
+	wiped := "The node's STATE and EPHEMERAL partitions are wiped; user disks are not touched."
+	switch wipeMode {
+	case ichorv1alpha1.WipeModeSystemDisk:
+		wiped = "The node's whole system disk is wiped; user disks are not touched."
+	case ichorv1alpha1.WipeModeAll:
+		wiped = "The node's system disk and every user disk are wiped."
+	}
+
+	after := "It reboots into maintenance mode and shows up as a new pending machine, so you can add it again."
+	if powerOff {
+		after = "It is powered off. To add it again, power it on: it boots into maintenance mode and shows up as a new pending machine."
+	}
+
+	return "This cannot be undone. The node leaves the cluster, its Kubernetes Node is deleted and Ichor deletes this machine. " + wiped + " " + after
+}
 
 func removalSteps(isCP bool, wipe string) []string {
 	steps := []string{stepEvacuate, "Cordon the node and drain it."}
@@ -306,11 +327,7 @@ func removalSteps(isCP bool, wipe string) []string {
 		steps = append(steps, "Remove the node's etcd member.")
 	}
 
-	if wipe != "" {
-		steps = append(steps, wipe)
-	}
-
-	return append(steps, "Delete the machine from Ichor.")
+	return append(steps, wipe, "Delete the Kubernetes Node.", "Delete the machine from Ichor.")
 }
 
 // nodeBlocked is the first reason the action cannot start now, or "". The checks that need the
@@ -431,14 +448,17 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 }
 
 // RemoveMachine deletes an approved machine, which starts the removal flow of the controller
-// (ADR 0032): drain, etcd member removal for a control plane, then the TalosMachine goes. The
-// annotation that lets the delete through is set here, for this one delete.
+// (ADR 0032, 0135): drain, etcd member removal for a control plane, the reset (STATE and EPHEMERAL wiped,
+// then power off or reboot), the Kubernetes Node, then the TalosMachine goes. The annotations that let the
+// delete through and ask for the reset are set here, for this one delete.
 func (s *Server) RemoveMachine(
 	ctx context.Context, req *connect.Request[pb.RemoveMachineRequest],
 ) (*connect.Response[pb.RemoveMachineResponse], error) {
 	ref := req.Msg.GetMachine()
 
-	p, err := s.planNode(ctx, &pb.NodeActionRequest{Machine: ref, Action: pb.NodeAction_NODE_ACTION_REMOVE})
+	p, err := s.planNode(ctx, &pb.NodeActionRequest{
+		Machine: ref, Action: pb.NodeAction_NODE_ACTION_REMOVE, Reboot: req.Msg.GetReboot(), Override: req.Msg.GetOverride(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -452,7 +472,21 @@ func (s *Server) RemoveMachine(
 		return nil, invalid("type the machine name %q to confirm the removal", m.Name)
 	}
 
+	// The remove wipes the node, so it needs the override like a reset (ADR 0135, ADR 0065).
+	if req.Msg.GetOverride() == nil {
+		return nil, invalid("a remove wipes the node: it needs the override, checked against the override permission on the machine")
+	}
+
+	if err := s.authorizeOverride(ctx, m); err != nil {
+		return nil, err
+	}
+
 	metav1.SetMetaDataAnnotation(&m.ObjectMeta, deleteguard.AllowDeleteAnnotation, deleteguard.AllowDeleteValue)
+	metav1.SetMetaDataAnnotation(&m.ObjectMeta, deleteguard.ResetOnDeleteAnnotation, deleteguard.AllowDeleteValue)
+
+	if !req.Msg.GetReboot() {
+		metav1.SetMetaDataAnnotation(&m.ObjectMeta, deleteguard.ResetPowerOffAnnotation, deleteguard.AllowDeleteValue)
+	}
 
 	// A worker has no finalizer of its own; with it the controller drains the node before the
 	// machine goes (a control plane already has it).

@@ -272,6 +272,12 @@ message RemoveMachineRequest {
   ObjectRef machine = 1;
   // confirm must equal the machine's name.
   string confirm = 2;
+  // reboot makes the node reboot into maintenance mode after it is wiped, so it can be added again.
+  // Unset, it powers off (ADR 0135).
+  bool reboot = 3;
+  // override is required: a remove wipes the node's STATE and EPHEMERAL partitions. The caller must
+  // hold the override verb on the machine (ADR 0065, ADR 0130); no reason is asked for.
+  Override override = 4;
 }
 
 message RemoveMachineResponse {

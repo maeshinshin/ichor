@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
@@ -73,8 +74,7 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 		reconcileOK(r, cp1)
 
 		Expect(fake.resetCalls).To(Equal(0))
-		Expect(fake.shutdownCalls).To(Equal([]bool{true}))
-		Eventually(recorder.Events).Should(Receive(And(ContainSubstring(reasonNodeStillHasClusterCredentials), ContainSubstring("powered off"))))
+		Eventually(recorder.Events).Should(Receive(And(ContainSubstring(reasonNodeStillHasClusterCredentials), ContainSubstring("kubectl delete node "+resetTestNode))))
 
 		Expect(machineGone(cp1)).To(BeTrue())
 	})
@@ -120,7 +120,14 @@ var _ = Describe("resetNode (ADR 0042)", func() {
 		Expect(fake.resetModes).To(Equal([]string{ichorv1alpha1.WipeModeSystemDisk}))
 	})
 
-	It("holds the finalizer and does not clear it when Reset fails", func() {
+	It("holds the finalizer and does not clear it when Reset fails on a node that is still Ready", func() {
+		newTestNode(resetTestNode, true)
+		DeferCleanup(func() {
+			n := &corev1.Node{}
+			n.Name = resetTestNode
+			_ = k8sClient.Delete(ctx, n)
+		})
+
 		cps := newThreeControlPlanes()
 		cp1 := cps[0]
 

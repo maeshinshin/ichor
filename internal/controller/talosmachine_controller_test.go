@@ -97,9 +97,10 @@ type fakeTalosClient struct {
 	etcdRemoveIDs  []uint64
 
 	// reset-related fields: etcd_removal_test.go's fixtures for resetNode (ADR 0042).
-	resetErr   error
-	resetCalls int
-	resetModes []string // the wipe mode of each Reset call ("" is the STATE and EPHEMERAL wipe)
+	resetErr      error
+	resetCalls    int
+	resetPowerOff []bool   // powerOff of each Reset call
+	resetModes    []string // the wipe mode of each Reset call ("" is the STATE and EPHEMERAL wipe)
 
 	// upgrade-related fields: talos_upgrade_test.go's fixtures for
 	// talosUpgradeAdvancer (ADR 0043). version and bootID are mutated
@@ -251,7 +252,8 @@ func (f *fakeTalosClient) EtcdRemoveMemberByID(_ context.Context, memberID uint6
 	return f.etcdRemoveErr
 }
 
-func (f *fakeTalosClient) Reset(_ context.Context, wipeMode string) error {
+func (f *fakeTalosClient) Reset(_ context.Context, wipeMode string, powerOff bool) error {
+	f.resetPowerOff = append(f.resetPowerOff, powerOff)
 	f.resetCalls++
 	f.resetModes = append(f.resetModes, wipeMode)
 

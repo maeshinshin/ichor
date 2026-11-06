@@ -104,25 +104,31 @@ func renderNodeGet(h *human, resp *pb.GetNodeResponse) error {
 // renderMachineRemoved is the result of `node remove`: the removal started.
 func renderMachineRemoved(name string) func(*human, *pb.RemoveMachineResponse) error {
 	return func(h *human, _ *pb.RemoveMachineResponse) error {
-		h.Note(h.Mark(markOK) + " removing node " + name + ": the controller drains it and, for a control plane, removes its etcd member")
+		h.Note(h.Mark(markOK) + " removing node " + name + ": the controller drains it, removes its etcd member (control plane), wipes it and deletes its Kubernetes Node")
 
 		return h.Err()
 	}
 }
 
-// nodeRemoveNext tells what to do after `node remove`: the Kubernetes Node outlives the machine.
-func nodeRemoveNext(errw io.Writer, name string) {
+// nodeRemoveNext tells what a remove did and how to bring the machine back (ADR 0135).
+func nodeRemoveNext(errw io.Writer, name string, reboot bool) {
+	did := "The controller drains the node, removes its etcd member (control plane), wipes its STATE and EPHEMERAL partitions, powers it off and deletes its Kubernetes Node."
+	back := "to add it again: power it on; it boots into maintenance mode and shows up as a new pending machine, which you can approve"
+
+	if reboot {
+		did = "The controller drains the node, removes its etcd member (control plane), wipes its STATE and EPHEMERAL partitions, reboots it into maintenance mode and deletes its Kubernetes Node."
+		back = "to add it again: it shows up as a new pending machine, which you can approve"
+	}
+
 	if outputFormat != outputHuman {
-		_, _ = fmt.Fprintf(errw, "Next: the Kubernetes Node stays while the machine runs (its kubelet keeps the cluster's credentials).\n"+
-			"Power it off or reset it (`ichor node reset`, override), then delete the Node: `kubectl delete node %s`.\n", name)
+		_, _ = fmt.Fprintf(errw, "Next: %s To add it again: %s.\n", did, back)
 
 		return
 	}
 
 	p := newProgress(errw)
-	p.Info("The Kubernetes Node stays while the machine runs (its kubelet keeps the cluster's credentials).")
-	p.Next("power it off or reset it: ichor node reset "+name+" --override --confirm "+name,
-		"then delete the Node: kubectl delete node "+name)
+	p.Info(did)
+	p.Next(back)
 }
 
 // logsReconnectNotice says the log stream ended and --follow reconnects.

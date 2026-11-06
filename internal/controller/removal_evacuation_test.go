@@ -52,7 +52,7 @@ func evacuatingRemoval(hostname string, evacuator StorageEvacuator) (
 	}
 
 	setHostname(fetchMachine(cps[0]), hostname)
-	newTestNode(hostname, false)
+	newTestNode(hostname, true)
 
 	fakeNode := &corev1.Node{}
 	fakeNode.Name = hostname

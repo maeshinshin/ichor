@@ -429,6 +429,7 @@ type TalosOperationEtcdRestoreSpec struct {
 // +kubebuilder:validation:XValidation:rule="self.action != 'reset' || (has(self.confirm) && self.confirm == self.machineRef.name)",message="reset needs confirm equal to the machine name"
 // +kubebuilder:validation:XValidation:rule="!self.allowLeader || self.action == 'etcd-defrag'",message="allowLeader only applies to etcd-defrag"
 // +kubebuilder:validation:XValidation:rule="!has(self.wipeMode) || self.action == 'reset'",message="wipeMode only applies to reset"
+// +kubebuilder:validation:XValidation:rule="!has(self.powerOff) || self.action == 'reset'",message="powerOff only applies to reset"
 type TalosOperationNodeSpec struct {
 	// machineRef names the TalosMachine the action runs on.
 	// +kubebuilder:validation:XValidation:rule="self.name != ''",message="machineRef.name is required"
@@ -479,6 +480,12 @@ type TalosOperationNodeSpec struct {
 	// +kubebuilder:validation:Enum=system-disk;all
 	// +optional
 	WipeMode string `json:"wipeMode,omitempty"`
+
+	// powerOff makes the node power off after the reset wipes it instead of rebooting into maintenance
+	// mode (ADR 0135). Only with the reset action; unset keeps the reboot, which is what a reset did before
+	// the field existed. The UI and `ichor node remove` set it unless asked to reboot.
+	// +optional
+	PowerOff bool `json:"powerOff,omitempty"`
 
 	// breakGlassReason is the earlier name of overrideReason, kept because CRD fields are append-only
 	// and operations written by older builds carry it. Deprecated: use override.

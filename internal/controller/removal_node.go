@@ -16,10 +16,10 @@ limitations under the License.
 
 package controller
 
-// The Node step of a removal that does not reset (ADR 0135): after the drain and the etcd member
-// removal the machine is shut down, the Kubernetes Node is waited on until it is NotReady, and then
-// deleted. A powered-off kubelet cannot register the Node again, which is why the Node used to stay
-// (ADR 0085).
+// The Node step of a removal that wipes the machine (ADR 0135): after Talos accepted the Reset the
+// Kubernetes Node is waited on until it is NotReady, and then deleted. The wiped machine has no
+// credentials left, so its kubelet cannot register the Node again; the wait is only for the moment
+// between the request and the wipe.
 
 import (
 	"context"
@@ -28,163 +28,117 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 )
 
 const (
-	// nodeShutdownRequestedAnnotation marks the Kubernetes Node of a machine the removal asked to
-	// shut down, with the time it did. A resumed removal sees it and goes straight to the wait,
-	// without draining a node that is already off. It lives on the Node, not on the TalosMachine.
-	nodeShutdownRequestedAnnotation = "ichor.maesh.dev/removal-shutdown-requested"
-	// nodeShutdownUnsentAnnotation carries why the shutdown could not be sent (the node was unreachable).
-	nodeShutdownUnsentAnnotation = "ichor.maesh.dev/removal-shutdown-unsent"
+	// resetPowerOffAnnotation carries TalosOperation.spec.node.powerOff of a reset to the removal flow:
+	// with "true" the node powers off after the wipe instead of rebooting into maintenance mode.
+	resetPowerOffAnnotation = deleteguard.ResetPowerOffAnnotation
 
-	reasonNodeShutdownRequested = "NodeShutdownRequested"
+	// reasonNodeNotDeleted is the Event reason when the Node was still Ready after nodeDownWait.
+	reasonNodeNotDeleted = "KubernetesNodeNotDeleted"
 
 	// nodeWaitInterval is how often the removal looks again at a Node that is still Ready.
 	nodeWaitInterval = 10 * time.Second
 )
 
-// nodeDownWait bounds the wait for the Node to go NotReady after the shutdown was requested. Kubernetes
+// nodeDownWait bounds the wait for the Node to go NotReady after the reset was accepted. Kubernetes
 // marks a silent kubelet NotReady after 40 s, so this is generous. A var so tests can shrink it.
 var nodeDownWait = 5 * time.Minute
 
-// removalWaitError is reconcileRemoval's verdict while a Node is still Ready after its machine was asked
-// to shut down: a requeue after nodeWaitInterval, not an error for the backoff.
+// powerOffRequested reports whether m's reset powers the node off after the wipe.
+func powerOffRequested(m *ichorv1alpha1.TalosMachine) bool {
+	return m.Annotations[resetPowerOffAnnotation] == resetOnDeleteValue
+}
+
+// removalWaitError is reconcileRemoval's verdict while a Node is still Ready after its machine was told to
+// reset: a requeue after nodeWaitInterval, not an error for the backoff.
 type removalWaitError struct{ msg string }
 
 func (e *removalWaitError) Error() string { return e.msg }
 
 // nodeStep is what the Node step did.
 type nodeStep struct {
-	// note says it in words for the Removal condition and the Event.
+	// unwiped is set when the node did not answer, so no Reset was sent: it says why.
+	unwiped string
+	// note says what happened to the Kubernetes Node.
 	note string
 	// left is true when the Node was not deleted because it was still Ready after nodeDownWait.
 	left bool
 }
 
-// shutdownAndDeleteNode runs the Node step for m, whose Kubernetes Node is nodeName. It returns a
-// *removalWaitError while the Node is Ready and the wait is not over.
-func (r *TalosMachineReconciler) shutdownAndDeleteNode(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, nodeName string,
-) (nodeStep, error) {
-	node := &corev1.Node{}
+// nodeDown reports whether the Kubernetes Node nodeName is missing or not Ready.
+func (r *TalosMachineReconciler) nodeDown(ctx context.Context, nodeName string) bool {
+	if nodeName == "" {
+		return true
+	}
+
+	var node corev1.Node
+	if err := r.Get(ctx, types.NamespacedName{Name: nodeName}, &node); err != nil {
+		return apierrors.IsNotFound(err)
+	}
+
+	return !nodeIsReady(&node)
+}
+
+// resetAccepted reports whether the removal already got Talos to accept the Reset (resetNode's record).
+func resetAccepted(m *ichorv1alpha1.TalosMachine) bool {
+	c := apimeta.FindStatusCondition(m.Status.Conditions, conditionRemoval)
+
+	return c != nil && c.Status == metav1.ConditionTrue && c.Reason == reasonResetRequested
+}
+
+// finishReset deletes the Kubernetes Node of a machine that was told to wipe, once the Node is NotReady, and
+// completes the removal. While it is Ready it asks for a requeue; after nodeDownWait it leaves the Node, marked
+// as reset, and the Event names the manual step.
+func (r *TalosMachineReconciler) finishReset(
+	ctx context.Context, m *ichorv1alpha1.TalosMachine, nodeName string, step nodeStep,
+) error {
+	var node corev1.Node
 
 	found := nodeName != ""
 	if found {
-		if err := r.Get(ctx, types.NamespacedName{Name: nodeName}, node); err != nil {
+		if err := r.Get(ctx, types.NamespacedName{Name: nodeName}, &node); err != nil {
 			if !apierrors.IsNotFound(err) {
-				return nodeStep{}, err
+				return err
 			}
 
 			found = false
 		}
 	}
 
-	if !found || node.Annotations[nodeShutdownRequestedAnnotation] == "" {
-		sendErr := r.sendShutdown(ctx, cluster, m)
-		if found {
-			if err := r.markShutdownRequested(ctx, node, sendErr); err != nil {
-				return nodeStep{}, err
-			}
+	switch {
+	case !found:
+		step.note = "it had no Kubernetes Node to delete"
+	case !nodeIsReady(&node):
+		if err := r.Delete(ctx, &node, client.Preconditions{UID: &node.UID}); err != nil && !apierrors.IsNotFound(err) {
+			return err
 		}
 
-		if !found {
-			return nodeStep{note: unsentNote(sendErr, "powered off") + "; it had no Kubernetes Node"}, nil
-		}
+		step.note = fmt.Sprintf("the Kubernetes Node %s was deleted", nodeName)
+	case !step.expired(m):
+		return &removalWaitError{msg: fmt.Sprintf("waiting for the Kubernetes Node %s to go NotReady before deleting it", nodeName)}
+	default:
+		r.markNodeReset(ctx, nodeName)
+
+		step.left = true
+		step.note = fmt.Sprintf("the Kubernetes Node %[1]s was still Ready after %[2]s, so it was not deleted; "+
+			"once the machine is off or rebooted, run kubectl delete node %[1]s", nodeName, nodeDownWait)
 	}
 
-	return r.awaitNodeDown(ctx, m, node)
+	return r.completeRemoval(ctx, m, true, step)
 }
 
-// sendShutdown asks m's own node to power off, forced: the drain and the etcd leave already happened.
-func (r *TalosMachineReconciler) sendShutdown(
-	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
-) error {
-	if r.TalosClient == nil {
-		return fmt.Errorf("no Talos API connectivity is configured for this controller")
-	}
+// expired reports whether the wait that began when the Reset was accepted is over.
+func (nodeStep) expired(m *ichorv1alpha1.TalosMachine) bool {
+	c := apimeta.FindStatusCondition(m.Status.Conditions, conditionRemoval)
 
-	bundle, err := loadBundle(ctx, r.Client, r.ControllerNamespace, cluster)
-	if err != nil {
-		return fmt.Errorf("loading secrets bundle to shut %q down: %w", m.Name, err)
-	}
-
-	callCtx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
-	defer cancel()
-
-	talos, err := r.TalosClient(callCtx, cluster, m, bundle)
-	if err != nil {
-		return fmt.Errorf("dialing %q to shut it down: %w", m.Name, err)
-	}
-	defer closeTalosClient(talos)
-
-	if err := talos.Shutdown(callCtx, true); err != nil {
-		return fmt.Errorf("shutdown request to %q failed: %w", m.Name, err)
-	}
-
-	return nil
-}
-
-func (r *TalosMachineReconciler) markShutdownRequested(ctx context.Context, node *corev1.Node, sendErr error) error {
-	patch := client.MergeFrom(node.DeepCopy())
-
-	metav1.SetMetaDataAnnotation(&node.ObjectMeta, nodeShutdownRequestedAnnotation, time.Now().UTC().Format(time.RFC3339))
-
-	if sendErr != nil {
-		metav1.SetMetaDataAnnotation(&node.ObjectMeta, nodeShutdownUnsentAnnotation, sendErr.Error())
-	}
-
-	if err := r.Patch(ctx, node, patch); err != nil {
-		return fmt.Errorf("marking node %q as asked to shut down: %w", node.Name, err)
-	}
-
-	return nil
-}
-
-// awaitNodeDown deletes node once it is not Ready, leaves it when the wait is over, and otherwise asks for
-// a requeue.
-func (r *TalosMachineReconciler) awaitNodeDown(ctx context.Context, m *ichorv1alpha1.TalosMachine, node *corev1.Node) (nodeStep, error) {
-	var unsent error
-	if why := node.Annotations[nodeShutdownUnsentAnnotation]; why != "" {
-		unsent = fmt.Errorf("%s", why)
-	}
-
-	if !nodeIsReady(node) {
-		if err := r.Delete(ctx, node, client.Preconditions{UID: &node.UID}); err != nil && !apierrors.IsNotFound(err) {
-			return nodeStep{}, err
-		}
-
-		return nodeStep{note: unsentNote(unsent, "powered off") + fmt.Sprintf("; the Kubernetes Node %s was deleted", node.Name)}, nil
-	}
-
-	sent, _ := time.Parse(time.RFC3339, node.Annotations[nodeShutdownRequestedAnnotation])
-	if time.Since(sent) >= nodeDownWait {
-		return nodeStep{
-			left: true,
-			note: unsentNote(unsent, "asked to power off") + fmt.Sprintf(
-				"; the Kubernetes Node %[1]s was still Ready after %s, so it was not deleted: once the machine is off, run kubectl delete node %[1]s",
-				node.Name, nodeDownWait),
-		}, nil
-	}
-
-	msg := fmt.Sprintf("waiting for the Kubernetes Node %s to go NotReady before deleting it", node.Name)
-	if err := r.removalCondition(ctx, m, metav1.ConditionFalse, reasonNodeShutdownRequested, msg); err != nil {
-		return nodeStep{}, err
-	}
-
-	return nodeStep{}, &removalWaitError{msg: msg}
-}
-
-// unsentNote words the shutdown: done, or not sent because the node did not answer (then it is down anyway).
-func unsentNote(sendErr error, done string) string {
-	if sendErr == nil {
-		return "the machine was " + done
-	}
-
-	return fmt.Sprintf("the shutdown could not be sent (%v), so the machine is treated as down", sendErr)
+	return c != nil && time.Since(c.LastTransitionTime.Time) >= nodeDownWait
 }

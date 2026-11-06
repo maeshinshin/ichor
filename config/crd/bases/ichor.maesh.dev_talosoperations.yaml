@@ -307,6 +307,12 @@ spec:
                       by an older build still counts as an override (see Overrides).
                     minLength: 1
                     type: string
+                  powerOff:
+                    description: |-
+                      powerOff makes the node power off after the reset wipes it instead of rebooting into maintenance
+                      mode (ADR 0135). Only with the reset action; unset keeps the reboot, which is what a reset did before
+                      the field existed. The UI and `ichor node remove` set it unless asked to reboot.
+                    type: boolean
                   service:
                     description: |-
                       service is the Talos service restart-service restarts. Only kubelet, containerd and cri
@@ -342,6 +348,8 @@ spec:
                   rule: '!self.allowLeader || self.action == ''etcd-defrag'''
                 - message: wipeMode only applies to reset
                   rule: '!has(self.wipeMode) || self.action == ''reset'''
+                - message: powerOff only applies to reset
+                  rule: '!has(self.powerOff) || self.action == ''reset'''
               paused:
                 default: false
                 description: |-

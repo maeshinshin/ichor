@@ -702,6 +702,9 @@ func (n *nodeRun) beginReset(ctx context.Context) (ctrl.Result, error) {
 	if n.spec.WipeMode != "" {
 		n.m.Annotations[resetWipeModeAnnotation] = n.spec.WipeMode
 	}
+	if n.spec.PowerOff {
+		n.m.Annotations[resetPowerOffAnnotation] = resetOnDeleteValue
+	}
 	n.m.Annotations[deleteguard.AllowDeleteAnnotation] = deleteguard.AllowDeleteValue
 
 	// The finalizer is added here, not left to the machine reconciler, so the delete below cannot

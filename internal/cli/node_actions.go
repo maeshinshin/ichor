@@ -39,6 +39,7 @@ var nodeActionOpts struct {
 	AllowLeader bool
 	Node        string
 	WipeMode    string
+	Reboot      bool
 }
 
 // nodeActionSpec is what one node action command asks for.
@@ -52,12 +53,14 @@ type nodeActionSpec struct {
 	Follow  bool
 	// WipeMode is --wipe-mode of reset: system-disk or all; empty wipes STATE and EPHEMERAL only.
 	WipeMode string
+	// Reboot is --reboot of remove: reboot into maintenance mode after the wipe instead of powering off.
+	Reboot bool
 }
 
 func (s nodeActionSpec) request(bg *pb.Override) *pb.NodeActionRequest {
 	return &pb.NodeActionRequest{
 		Machine: objectRef(apiOpts.Namespace, s.Machine), Action: s.Action, Service: s.Service,
-		AllowLeader: s.AllowLeader, Confirm: s.Confirm, Override: bg, WipeMode: s.WipeMode,
+		AllowLeader: s.AllowLeader, Confirm: s.Confirm, Override: bg, WipeMode: s.WipeMode, Reboot: s.Reboot,
 	}
 }
 
@@ -97,7 +100,7 @@ func nodeHeadline(s nodeActionSpec) string {
 	case pb.NodeAction_NODE_ACTION_RESET:
 		return "RESET and remove"
 	case pb.NodeAction_NODE_ACTION_REMOVE:
-		return "REMOVE"
+		return "REMOVE and wipe"
 	case pb.NodeAction_NODE_ACTION_UNSPECIFIED:
 	}
 
@@ -127,8 +130,8 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 		return fmt.Errorf("node %s: %s", name, b)
 	}
 
-	if s.Action == pb.NodeAction_NODE_ACTION_RESET && bg == nil {
-		return errors.New("node reset: it needs --override (and the override RBAC verb on the machine)")
+	if needsTypedName(s.Action) && bg == nil {
+		return fmt.Errorf("node %s: it wipes the node, so it needs --override (and the override RBAC verb on the machine)", name)
 	}
 
 	text := nodePlanText(s, plan.Msg)
@@ -163,7 +166,7 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 
 	if s.Action == pb.NodeAction_NODE_ACTION_REMOVE {
 		resp, err := c.Machine.RemoveMachine(ctx, connect.NewRequest(&pb.RemoveMachineRequest{
-			Machine: objectRef(apiOpts.Namespace, s.Machine), Confirm: s.Confirm,
+			Machine: objectRef(apiOpts.Namespace, s.Machine), Confirm: s.Confirm, Reboot: s.Reboot, Override: bg,
 		}))
 		if err != nil {
 			return err
@@ -173,7 +176,7 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 			return err
 		}
 
-		nodeRemoveNext(errw, s.Machine)
+		nodeRemoveNext(errw, s.Machine, s.Reboot)
 
 		return nil
 	}
@@ -218,7 +221,7 @@ It shows the plan and asks for confirmation unless --yes. For reset and remove t
 		Args: args,
 		RunE: func(cmd *cobra.Command, a []string) error {
 			s := spec(a)
-			s.Action, s.Follow, s.Confirm = action, nodeActionOpts.Follow, nodeActionOpts.Confirm
+			s.Action, s.Follow, s.Confirm, s.Reboot = action, nodeActionOpts.Follow, nodeActionOpts.Confirm, nodeActionOpts.Reboot
 			s.WipeMode = nodeActionOpts.WipeMode
 
 			return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
@@ -240,9 +243,9 @@ var (
 	nodeShutdownCmd = newNodeActionCmd("shutdown NODE", "Shut a node down; it stays off until you power it on",
 		pb.NodeAction_NODE_ACTION_SHUTDOWN, cobra.ExactArgs(1), machineArg)
 	nodeResetCmd = newNodeActionCmd("reset NODE",
-		"Remove a node from the cluster and wipe it (its STATE and EPHEMERAL partitions, or the whole disk with --wipe-mode); needs the override permission",
+		"Deprecated, use `node remove --reboot`: remove a node from the cluster, wipe it (its STATE and EPHEMERAL partitions, or the whole disk with --wipe-mode) and reboot it; needs the override permission",
 		pb.NodeAction_NODE_ACTION_RESET, cobra.ExactArgs(1), machineArg)
-	nodeRemoveCmd = newNodeActionCmd("remove NODE", "Remove a node from the cluster: drain it and, for a control plane, remove its etcd member",
+	nodeRemoveCmd = newNodeActionCmd("remove NODE", "Remove a node from the cluster: drain it, wipe its STATE and EPHEMERAL partitions, power it off (or reboot it with --reboot) and delete its Kubernetes Node; needs the override permission",
 		pb.NodeAction_NODE_ACTION_REMOVE, cobra.ExactArgs(1), machineArg)
 	nodeRestartServiceCmd = newNodeActionCmd("restart-service NODE SERVICE",
 		"Restart a Talos service on a node (kubelet, containerd or cri)",
@@ -274,6 +277,9 @@ func init() {
 
 	nodeResetCmd.Flags().StringVar(&nodeActionOpts.WipeMode, "wipe-mode", "",
 		"wipe more than STATE and EPHEMERAL: system-disk (the whole system disk, so the node boots its boot image again and can be installed afresh) or all (also every user disk)")
+
+	nodeRemoveCmd.Flags().BoolVar(&nodeActionOpts.Reboot, "reboot", false,
+		"after the wipe reboot the node into maintenance mode, so it can be added again, instead of powering it off")
 
 	for _, c := range []*cobra.Command{nodeResetCmd, nodeRemoveCmd} {
 		c.Flags().StringVar(&nodeActionOpts.Confirm, "confirm", "", "the node's name, to go on without being asked to type it")

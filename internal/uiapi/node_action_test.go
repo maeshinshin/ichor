@@ -88,12 +88,25 @@ func TestNodePlanSaysWhatHappensInPlainEnglish(t *testing.T) {
 	}
 
 	rm := planNodeOK(t, s, nodePlanReq("w1", pb.NodeAction_NODE_ACTION_REMOVE))
-	if rm.GetConfirmName() != "w1" || rm.GetOverrideRequired() || rm.GetBlocked() != "" {
+	if rm.GetConfirmName() != "w1" || !rm.GetOverrideRequired() || rm.GetBlocked() != "" {
 		t.Fatalf("remove plan = %+v", rm)
 	}
 
-	if last := rm.GetSteps()[len(rm.GetSteps())-1]; !strings.Contains(last, "kubectl delete node") || !strings.Contains(last, "Node stays") {
-		t.Fatalf("the remove plan must say the Kubernetes Node stays: %q", last)
+	steps := strings.Join(rm.GetSteps(), "\n")
+	for _, want := range []string{"power it off", "Delete the Kubernetes Node"} {
+		if !strings.Contains(steps, want) {
+			t.Fatalf("the remove plan lacks %q: %q", want, steps)
+		}
+	}
+
+	for _, want := range []string{"cannot be undone", "STATE and EPHEMERAL partitions are wiped", "user disks are not touched", "powered off"} {
+		if !strings.Contains(rm.GetWarning(), want) {
+			t.Fatalf("the remove warning lacks %q: %q", want, rm.GetWarning())
+		}
+	}
+
+	if strings.Contains(strings.Join(reset.GetSteps(), "\n"), "power it off") {
+		t.Fatalf("a reset reboots the node, it does not power it off: %q", reset.GetSteps())
 	}
 }
 
@@ -308,9 +321,16 @@ func TestNodeResetOverrideRecordsNoReason(t *testing.T) {
 
 func TestRemoveMachineDeletesAfterTheTypedName(t *testing.T) {
 	s, k8s := opServer(t, opObjects()...)
-	ctx := context.Background()
+	var asked []authv1.ResourceAttributes
+	s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, true, &asked), nil }
+	ctx := context.WithValue(context.Background(), identityKey{}, Identity{User: bgUser})
+	override := &pb.Override{}
 
-	if _, err := s.RemoveMachine(ctx, connect.NewRequest(&pb.RemoveMachineRequest{Machine: objectRef(opNS, "w1"), Confirm: "nope"})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+	if _, err := s.RemoveMachine(ctx, connect.NewRequest(&pb.RemoveMachineRequest{Machine: objectRef(opNS, "w1"), Confirm: "w1"})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("no override: %v", err)
+	}
+
+	if _, err := s.RemoveMachine(ctx, connect.NewRequest(&pb.RemoveMachineRequest{Machine: objectRef(opNS, "w1"), Confirm: "nope", Override: override})); connect.CodeOf(err) != connect.CodeInvalidArgument {
 		t.Fatalf("wrong name: %v", err)
 	}
 
@@ -319,7 +339,7 @@ func TestRemoveMachineDeletesAfterTheTypedName(t *testing.T) {
 		t.Fatalf("a refused removal leaves the machine: %v", err)
 	}
 
-	res, err := s.RemoveMachine(ctx, connect.NewRequest(&pb.RemoveMachineRequest{Machine: objectRef(opNS, "w1"), Confirm: "w1"}))
+	res, err := s.RemoveMachine(ctx, connect.NewRequest(&pb.RemoveMachineRequest{Machine: objectRef(opNS, "w1"), Confirm: "w1", Override: override}))
 	if err != nil {
 		t.Fatalf("remove: %v", err)
 	}
@@ -331,8 +351,10 @@ func TestRemoveMachineDeletesAfterTheTypedName(t *testing.T) {
 	err = k8s.Get(ctx, types.NamespacedName{Namespace: opNS, Name: "w1"}, &m)
 	// The fake client deletes at once, or, with the finalizer the removal sets, marks it deleted.
 	if err == nil && (m.DeletionTimestamp.IsZero() ||
-		m.Annotations[deleteguard.AllowDeleteAnnotation] != deleteguard.AllowDeleteValue) {
-		t.Fatalf("machine = %+v", m)
+		m.Annotations[deleteguard.AllowDeleteAnnotation] != deleteguard.AllowDeleteValue ||
+		m.Annotations[deleteguard.ResetOnDeleteAnnotation] != deleteguard.AllowDeleteValue ||
+		m.Annotations[deleteguard.ResetPowerOffAnnotation] != deleteguard.AllowDeleteValue) {
+		t.Fatalf("a remove must reset the node and power it off: %+v", m)
 	}
 }
 
@@ -419,5 +441,35 @@ func TestNodeResetWipeMode(t *testing.T) {
 
 	if ops := listOps(t, k8s); len(ops) != 1 || ops[0].Spec.Node.WipeMode != ichorv1alpha1.WipeModeAll {
 		t.Fatalf("operations = %+v", ops)
+	}
+}
+
+// --reboot (ADR 0135): the node reboots into maintenance mode after the wipe, so no power-off is asked for,
+// and the plan says it reboots.
+func TestRemoveMachineWithRebootDoesNotPowerOff(t *testing.T) {
+	s, k8s := opServer(t, opObjects()...)
+	var asked []authv1.ResourceAttributes
+	s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, true, &asked), nil }
+	ctx := context.WithValue(context.Background(), identityKey{}, Identity{User: bgUser})
+
+	plan := planNodeOK(t, s, connect.NewRequest(&pb.PlanOperationRequest{
+		Kind: pb.OperationKind_OPERATION_KIND_NODE,
+		Node: &pb.NodeActionRequest{Machine: objectRef(opNS, "w1"), Action: pb.NodeAction_NODE_ACTION_REMOVE, Reboot: true},
+	}))
+	if !strings.Contains(strings.Join(plan.GetSteps(), "\n"), "reboot it into maintenance mode") {
+		t.Fatalf("steps = %q", plan.GetSteps())
+	}
+
+	if _, err := s.RemoveMachine(ctx, connect.NewRequest(&pb.RemoveMachineRequest{
+		Machine: objectRef(opNS, "w1"), Confirm: "w1", Reboot: true, Override: &pb.Override{},
+	})); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+
+	var m ichorv1alpha1.TalosMachine
+	if err := k8s.Get(ctx, types.NamespacedName{Namespace: opNS, Name: "w1"}, &m); err == nil {
+		if m.Annotations[deleteguard.ResetOnDeleteAnnotation] != deleteguard.AllowDeleteValue || m.Annotations[deleteguard.ResetPowerOffAnnotation] != "" {
+			t.Fatalf("annotations = %v", m.Annotations)
+		}
 	}
 }

@@ -247,3 +247,10 @@ func CheckLastWorker(unschedulable bool, workersAfter int, override bool) error 
 	}
 	return nil
 }
+
+// ResetOnDeleteAnnotation, set to "true", makes the removal of a TalosMachine also reset its node (ADR 0042,
+// 0135); ResetPowerOffAnnotation, set to "true", makes the node power off after the wipe instead of rebooting.
+const (
+	ResetOnDeleteAnnotation = "ichor.maesh.dev/reset-on-delete"
+	ResetPowerOffAnnotation = "ichor.maesh.dev/reset-power-off"
+)

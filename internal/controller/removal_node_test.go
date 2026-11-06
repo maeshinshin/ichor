@@ -32,34 +32,34 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// ADR 0135: a removal that does not reset powers the machine off and deletes its Kubernetes Node.
-var _ = Describe("removal: shutdown and delete the Kubernetes Node (ADR 0135)", func() {
+// ADR 0135: a removal wipes the machine (power off or reboot) and deletes its Kubernetes Node.
+var _ = Describe("removal: reset, then delete the Kubernetes Node (ADR 0135)", func() {
 	nodeGone := func(name string) bool {
 		return apierrors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{Name: name}, &corev1.Node{}))
 	}
 
-	setReady := func(name string, ready bool) {
-		var n corev1.Node
-		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: name}, &n)).To(Succeed())
-
-		status := corev1.ConditionFalse
-		if ready {
-			status = corev1.ConditionTrue
-		}
-
-		n.Status.Conditions = []corev1.NodeCondition{{Type: corev1.NodeReady, Status: status}}
-		Expect(k8sClient.Status().Update(ctx, &n)).To(Succeed())
-	}
-
 	newNode := func(name string, ready bool) {
 		newTestNode(name, ready)
+
 		n := &corev1.Node{}
 		n.Name = name
 		DeferCleanup(func() { _ = k8sClient.Delete(ctx, n) })
 	}
 
-	// cpRemoval makes three reconciled control planes and deletes the first.
-	cpRemoval := func(fake *fakeTalosClient) (*TalosMachineReconciler, *ichorv1alpha1.TalosMachine, *record.FakeRecorder) {
+	// annotate sets machine annotations the way RemoveMachine does, then deletes the machine.
+	annotate := func(m *ichorv1alpha1.TalosMachine, powerOff bool) {
+		got := fetchMachine(m)
+		got.Annotations = map[string]string{resetOnDeleteAnnotation: resetOnDeleteValue}
+
+		if powerOff {
+			got.Annotations[resetPowerOffAnnotation] = resetOnDeleteValue
+		}
+
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, got)).To(Succeed())
+	}
+
+	setup := func(fake *fakeTalosClient) (*TalosMachineReconciler, []*ichorv1alpha1.TalosMachine, *record.FakeRecorder) {
 		cps := newThreeControlPlanes()
 		recorder := record.NewFakeRecorder(10)
 		r := &TalosMachineReconciler{
@@ -68,69 +68,77 @@ var _ = Describe("removal: shutdown and delete the Kubernetes Node (ADR 0135)", 
 		}
 		reconcileEach(r, cps)
 
-		Expect(k8sClient.Delete(ctx, cps[0])).To(Succeed())
-
-		return r, cps[0], recorder
+		return r, cps, recorder
 	}
 
-	It("shuts a control plane down, waits for its Node to go NotReady, then deletes the Node and the machine", func() {
-		fake := &fakeTalosClient{nodeName: "rmnode-cp-wait"}
-		newNode("rmnode-cp-wait", true)
-		r, cp, recorder := cpRemoval(fake)
+	It("powers a control plane off after the wipe, waits for its Node to go NotReady, then deletes the Node and the machine", func() {
+		fake := &fakeTalosClient{nodeName: "rmnode-cp-off"}
+		newNode("rmnode-cp-off", true)
+		r, cps, _ := setup(fake)
+		annotate(cps[0], true)
 
-		res, err := reconcileMachine(r, cp)
+		res, err := reconcileMachine(r, cps[0])
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.RequeueAfter).To(Equal(nodeWaitInterval))
-		Expect(fake.shutdownCalls).To(Equal([]bool{true}))
-		Expect(nodeGone("rmnode-cp-wait")).To(BeFalse(), "a Ready Node is not deleted while the machine may still run")
-		Expect(machineGone(cp)).To(BeFalse())
+		Expect(fake.resetPowerOff).To(Equal([]bool{true}))
+		Expect(nodeGone("rmnode-cp-off")).To(BeFalse(), "a Ready Node is not deleted while the machine may still run")
+		Expect(machineGone(cps[0])).To(BeFalse())
 
-		setReady("rmnode-cp-wait", false)
-		reconcileOK(r, cp)
+		var n corev1.Node
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "rmnode-cp-off"}, &n)).To(Succeed())
+		n.Status.Conditions = []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse}}
+		Expect(k8sClient.Status().Update(ctx, &n)).To(Succeed())
 
-		Expect(fake.shutdownCalls).To(HaveLen(1), "the shutdown is sent once")
-		Expect(nodeGone("rmnode-cp-wait")).To(BeTrue())
-		Expect(machineGone(cp)).To(BeTrue())
-		Eventually(recorder.Events).Should(Receive(And(
-			ContainSubstring(reasonNodeStillHasClusterCredentials), ContainSubstring("powered off"), ContainSubstring("was deleted"))))
+		reconcileOK(r, cps[0])
+
+		Expect(fake.resetCalls).To(Equal(1), "the reset is sent once")
+		Expect(nodeGone("rmnode-cp-off")).To(BeTrue())
+		Expect(machineGone(cps[0])).To(BeTrue())
 	})
 
-	It("deletes the Node of a worker the same way", func() {
-		cps := newThreeControlPlanes()
+	It("reboots into maintenance mode when asked, and deletes the Node of a worker", func() {
 		fake := &fakeTalosClient{nodeName: "rmnode-worker"}
 		newNode("rmnode-worker", false)
-
-		recorder := record.NewFakeRecorder(10)
-		r := &TalosMachineReconciler{
-			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
-			TalosClient: clientFactory(fake), Recorder: recorder,
-		}
+		r, cps, _ := setup(fake)
 
 		w := newTestMachine(cps[0].Spec.ClusterRef.Name, true)
 		controllerutil.AddFinalizer(w, machineRemovalFinalizer)
 		Expect(k8sClient.Update(ctx, w)).To(Succeed())
-		Expect(k8sClient.Delete(ctx, w)).To(Succeed())
+		annotate(w, false)
 
 		reconcileOK(r, w)
 
-		Expect(fake.shutdownCalls).To(Equal([]bool{true}))
+		Expect(fake.resetPowerOff).To(Equal([]bool{false}))
 		Expect(fake.etcdLeaveCalls).To(Equal(0), "a worker was never an etcd member")
 		Expect(nodeGone("rmnode-worker")).To(BeTrue())
 		Expect(machineGone(w)).To(BeTrue())
-		Eventually(recorder.Events).Should(Receive(ContainSubstring("worker")))
 	})
 
-	It("deletes the Node of a node that cannot be told to shut down, and says so", func() {
-		fake := &fakeTalosClient{nodeName: "rmnode-unreachable", shutdownErr: errors.New("connection refused")}
-		newNode("rmnode-unreachable", false)
-		r, cp, recorder := cpRemoval(fake)
+	It("removes a node that does not answer, deletes its NotReady Node, and says it was not wiped", func() {
+		fake := &fakeTalosClient{nodeName: "rmnode-dead", resetErr: errors.New("connection refused")}
+		newNode("rmnode-dead", false)
+		r, cps, recorder := setup(fake)
+		annotate(cps[0], true)
 
-		reconcileOK(r, cp)
+		reconcileOK(r, cps[0])
 
-		Expect(nodeGone("rmnode-unreachable")).To(BeTrue())
-		Expect(machineGone(cp)).To(BeTrue())
+		Expect(nodeGone("rmnode-dead")).To(BeTrue())
+		Expect(machineGone(cps[0])).To(BeTrue())
 		Eventually(recorder.Events).Should(Receive(And(
-			ContainSubstring("shutdown could not be sent"), ContainSubstring("connection refused"))))
+			ContainSubstring(reasonNodeStillHasClusterCredentials), ContainSubstring("not wiped"), ContainSubstring("connection refused"))))
+	})
+
+	It("holds the removal when a node that is still Ready cannot be reset", func() {
+		fake := &fakeTalosClient{nodeName: "rmnode-up", resetErr: errors.New("busy")}
+		newNode("rmnode-up", true)
+		r, cps, _ := setup(fake)
+		annotate(cps[0], true)
+
+		_, err := reconcileMachine(r, cps[0])
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(nodeGone("rmnode-up")).To(BeFalse())
+		Expect(machineGone(cps[0])).To(BeFalse())
 	})
 
 	It("does not delete a Node that is still Ready after the wait, and warns with the manual step", func() {
@@ -138,45 +146,30 @@ var _ = Describe("removal: shutdown and delete the Kubernetes Node (ADR 0135)", 
 		nodeDownWait = time.Nanosecond
 		DeferCleanup(func() { nodeDownWait = old })
 
-		fake := &fakeTalosClient{nodeName: "rmnode-stale", shutdownErr: errors.New("refused")}
+		fake := &fakeTalosClient{nodeName: "rmnode-stale"}
 		newNode("rmnode-stale", true)
-		r, cp, recorder := cpRemoval(fake)
+		r, cps, recorder := setup(fake)
+		annotate(cps[0], true)
 
-		reconcileOK(r, cp)
+		reconcileOK(r, cps[0]) // sends the reset and waits
+		reconcileOK(r, cps[0]) // the wait is over
 
 		Expect(nodeGone("rmnode-stale")).To(BeFalse())
-		Expect(machineGone(cp)).To(BeTrue(), "the removal still finishes")
+		Expect(machineGone(cps[0])).To(BeTrue(), "the removal still finishes")
 		Eventually(recorder.Events).Should(Receive(And(
-			ContainSubstring(reasonNodeStillHasClusterCredentials), ContainSubstring("kubectl delete node rmnode-stale"))))
+			ContainSubstring(reasonNodeNotDeleted), ContainSubstring("kubectl delete node rmnode-stale"))))
 	})
 
-	It("does not shut down or delete the Node of a removal that resets", func() {
-		fake := &fakeTalosClient{nodeName: "rmnode-reset"}
-		newNode("rmnode-reset", true)
+	It("does not reset or touch the Node of a removal that did not ask for a reset", func() {
+		fake := &fakeTalosClient{nodeName: "rmnode-plain"}
+		newNode("rmnode-plain", true)
+		r, cps, _ := setup(fake)
 
-		cps := newThreeControlPlanes()
-		r := &TalosMachineReconciler{
-			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
-			TalosClient: clientFactory(fake), Recorder: record.NewFakeRecorder(10),
-		}
-		reconcileEach(r, cps)
-
-		optIntoReset(cps[0])
+		Expect(k8sClient.Delete(ctx, cps[0])).To(Succeed())
 		reconcileOK(r, cps[0])
 
-		Expect(fake.resetCalls).To(Equal(1))
-		Expect(fake.shutdownCalls).To(BeEmpty())
-		Expect(nodeGone("rmnode-reset")).To(BeFalse())
+		Expect(fake.resetCalls).To(Equal(0))
+		Expect(nodeGone("rmnode-plain")).To(BeFalse())
 		Expect(machineGone(cps[0])).To(BeTrue())
-	})
-
-	It("deletes nothing when the machine has no Kubernetes Node, and still shuts it down", func() {
-		fake := &fakeTalosClient{nodeName: "rmnode-none"}
-		r, cp, _ := cpRemoval(fake)
-
-		reconcileOK(r, cp)
-
-		Expect(fake.shutdownCalls).To(Equal([]bool{true}))
-		Expect(machineGone(cp)).To(BeTrue())
 	})
 })

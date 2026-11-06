@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { CircleXIcon } from 'lucide-preact'
 import { Badge } from '@/components/ui/badge'
+import { CopyableName } from '@/components/CopyableName'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -217,7 +218,8 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
             </Alert>
           )}
           <Field>
-            <FieldLabel htmlFor="restore-name">{t('ops.dialog.typeName', { name: cluster.name })}</FieldLabel>
+            <CopyableName value={cluster.name} ariaLabel={t('ops.dialog.copyName')} />
+            <FieldLabel htmlFor="restore-name">{t('ops.dialog.typeName')}</FieldLabel>
             <Input id="restore-name" autoComplete="off" value={typed} onInput={(e) => setTyped((e.currentTarget as HTMLInputElement).value)} />
           </Field>
           <div class="flex items-center gap-2 text-sm">

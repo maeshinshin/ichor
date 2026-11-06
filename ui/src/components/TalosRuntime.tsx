@@ -129,8 +129,8 @@ function EtcdCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; ma
               <TableRow key={m.id}>
                 <TableCell className="font-mono">{m.id}</TableCell>
                 <TableCell>{m.hostname || '-'}</TableCell>
-                <TableCell className="break-all font-mono">{m.peerUrls.join(', ') || '-'}</TableCell>
-                <TableCell className="break-all font-mono">{m.clientUrls.join(', ') || '-'}</TableCell>
+                <TableCell className="min-w-40 whitespace-normal break-all font-mono">{m.peerUrls.join(', ') || '-'}</TableCell>
+                <TableCell className="min-w-40 whitespace-normal break-all font-mono">{m.clientUrls.join(', ') || '-'}</TableCell>
                 <TableCell>
                   <div class="flex flex-wrap gap-1">
                     {m.leader && <Badge variant="secondary">{t('rt.leader')}</Badge>}
@@ -193,9 +193,9 @@ function ContainersCard({ data, maintenance }: { data: GetNodeTalosRuntimeRespon
         {c.containers.map((x) => (
           <TableRow key={`${x.runtimeNamespace}/${x.id}`}>
             <TableCell>{x.runtimeNamespace}</TableCell>
-            <TableCell className="break-all font-mono">{x.pod || '-'}</TableCell>
+            <TableCell className="min-w-40 whitespace-normal break-all font-mono">{x.pod || '-'}</TableCell>
             <TableCell className="font-mono">{x.name || x.id}</TableCell>
-            <TableCell className="break-all font-mono">{x.image}</TableCell>
+            <TableCell className="min-w-40 whitespace-normal break-all font-mono">{x.image}</TableCell>
             <TableCell>
               <Badge variant="outline">{x.status || '-'}</Badge>
             </TableCell>
@@ -251,7 +251,7 @@ function KubernetesCard({ data }: { data: GetNodeTalosRuntimeResponse }) {
               {sortPods(k.pods).map((p) => (
                 <TableRow key={`${p.namespace}/${p.name}`}>
                   <TableCell className="font-mono">{p.namespace}</TableCell>
-                  <TableCell className="break-all font-mono">{p.name}</TableCell>
+                  <TableCell className="min-w-40 whitespace-normal break-all font-mono">{p.name}</TableCell>
                   <TableCell>
                     <ToneBadge tone={podTone(p)}>{p.phase || '-'}</ToneBadge>
                   </TableCell>
@@ -302,7 +302,7 @@ function NetworkStateCard({ data, maintenance }: { data: GetNodeTalosRuntimeResp
         {n.members.map((m, i) => (
           <TableRow key={i}>
             <TableCell>{m.hostname || '-'}</TableCell>
-            <TableCell className="break-all font-mono">{m.addresses.join(', ')}</TableCell>
+            <TableCell className="min-w-40 whitespace-normal break-all font-mono">{m.addresses.join(', ')}</TableCell>
             <TableCell>{m.machineType || '-'}</TableCell>
             <TableCell>{m.operatingSystem || '-'}</TableCell>
           </TableRow>

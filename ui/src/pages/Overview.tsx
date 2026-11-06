@@ -397,7 +397,7 @@ function Home({
                           <TableCell>
                             <ToneBadge tone={opStateTone(state)}>{t(`ops.state.${state}`)}</ToneBadge>
                           </TableCell>
-                          <TableCell>{formatTimestamp(op.createdAt)}</TableCell>
+                          <TableCell className="max-sm:whitespace-normal">{formatTimestamp(op.createdAt)}</TableCell>
                         </TableRow>
                       )
                     })}

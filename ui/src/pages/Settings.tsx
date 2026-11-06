@@ -275,7 +275,7 @@ function UpdatesCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: 
           </SelectContent>
         </Select>
       </Field>
-      {info?.releaseCheckError && <p className="text-sm text-muted-foreground">{t('settings.updateCheckFailed', { error: info.releaseCheckError })}</p>}
+      {info?.releaseCheckError && <p className="break-words wrap-anywhere text-sm text-muted-foreground">{t('settings.updateCheckFailed', { error: info.releaseCheckError })}</p>}
       {checkedAt && <p className="text-sm text-muted-foreground">{t('settings.updateCheckedAt', { time: new Date(Number(checkedAt.seconds) * 1000).toLocaleString() })}</p>}
       {error && <ErrorAlert {...error} />}
       <Button disabled={locked || busy || choice === start} onClick={() => save({ updateCheckEnabled: choice === 'on' })}>

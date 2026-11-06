@@ -26,6 +26,7 @@ import { Settings } from '@/pages/Settings'
 import { matchRoute, replace, usePath } from '@/router'
 import { redirectFor } from '@/lib/routes'
 import { useCluster } from '@/lib/useCluster'
+import { useCanListUsers } from '@/lib/useMyPermissions'
 import { PageSkeleton } from '@/components/PageStates'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 
@@ -106,6 +107,8 @@ function Authenticated({ path }: { path: string }) {
   // Keeps the ichor session going until its absolute lifetime; the end of it signs the tab out.
   useEffect(() => (signedIn ? startRefreshing(signOut) : undefined), [signedIn])
   const usersEnabled = login.providers.some((p) => p.id === 'ichor')
+  // The Users page is offered only to someone who may list users; the route stays, and says so when asked.
+  const canListUsers = useCanListUsers(signedIn)
 
   if (login.state === 'loading' || (signedIn && !who.loaded)) return <p class="p-8 text-sm text-muted-foreground">{t('app.signingIn')}</p>
   if (login.state === 'error') return <ErrorAlert title={t('app.signInFailed')} detail={login.error} />
@@ -121,7 +124,7 @@ function Authenticated({ path }: { path: string }) {
       path={path}
       signInNotConfigured={login.state === 'open' ? login.anonymous : false}
       me={who.me}
-      usersEnabled={usersEnabled}
+      usersEnabled={usersEnabled && canListUsers}
     >
       <Routes path={path} usersEnabled={usersEnabled} />
     </AppShell>

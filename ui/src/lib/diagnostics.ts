@@ -2,12 +2,13 @@
 // capture form, and reading a download stream into memory with a bound. Pure: no DOM, no preact, so
 // it runs under `node --test`. The click that saves the file is in download.ts.
 import type { TalosLink } from '@/gen/ichor/v1alpha1/talosdetails_pb'
+import type { ActionPermissions } from './actions.ts'
 
 export type DownloadKind = 'support-bundle' | 'etcd-snapshot' | 'packet-capture'
 
 // What the caller may download (DiagnosticsService.GetMyPermissions): the machine's three downloads and
 // the cluster's CA rotation credentials (docs/adr/0084, 0093).
-export type Permissions = { supportBundle: boolean; etcdSnapshot: boolean; packetCapture: boolean; clusterCredentials: boolean; clusterUpdate: boolean; talosconfigReader: boolean }
+export type Permissions = ActionPermissions & { supportBundle: boolean; etcdSnapshot: boolean; packetCapture: boolean; clusterCredentials: boolean }
 
 // The server enforces these too; the form says so before the call.
 export const maxCaptureSeconds = 300

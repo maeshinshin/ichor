@@ -127,4 +127,5 @@ Version v1alpha1: has a `status` subresource.
 | `status.node.requestedAt` | `string (date-time)` | no | requestedAt is when the action was sent; the wait for its effect is bounded from it. |
 | `status.node.step` | `string` | no | step is empty until the action was sent, then Requested (waiting for its effect) or Removing (a reset waiting for the removal flow). Allowed values: `Requested`, `Removing`. |
 | `status.phase` | `string` | no | phase is this operation's own state-machine phase (see the TalosOperationPhase* constants). The whole state machine lives here, not in the controller's memory, so a restart resumes from exactly this value and the machines list below, not from scratch (docs/design/architecture.md, "Upgrades": "the status-held state machine"). Allowed values: `Pending`, `InProgress`, `Paused`, `ShutDown`, `Completed`. |
+| `status.toVersion` | `string` | no | toVersion is the Ichor version an ichor operation upgrades to: the controller copies IchorInstallation.spec.version here once, when the upgrade starts, and never rewrites it (ADR 0133). It is empty on other kinds and on operations that started before it existed. |
 

@@ -598,17 +598,20 @@ function Tile({ label, icon: Icon, value, sub, badge, target }: { label: string;
         <CardDescription>{label}</CardDescription>
         {value && <CardTitle>{value}</CardTitle>}
         <CardAction>
-          {badge ? (
-            <Badge variant="destructive" className="h-auto max-w-full whitespace-normal">
+          <Icon aria-hidden="true" />
+        </CardAction>
+      </CardHeader>
+      {(badge || sub) && (
+        <CardContent className="space-y-2">
+          {badge && (
+            <Badge variant="destructive" className="max-w-full">
               <CircleAlertIcon data-icon="inline-start" aria-hidden="true" />
               {badge}
             </Badge>
-          ) : (
-            <Icon aria-hidden="true" />
           )}
-        </CardAction>
-      </CardHeader>
-      {sub && <CardContent>{sub}</CardContent>}
+          {sub}
+        </CardContent>
+      )}
     </Card>
   )
   if (target.kind === 'route') {
@@ -698,7 +701,7 @@ function ActiveProgress({ row, total }: { row: Row; total: number }) {
   return (
     <>
       <p>
-        {tracksNodes ? t('ops.currentNodes', { done, total }) : t(`ops.state.${operationState(op.phase, op.failureReason)}`)}
+        {tracksNodes ? t('ops.currentNodes', { done, total }) : opStateTone(operationState(op.phase, op.failureReason)) === 'bad' ? null : t(`ops.state.${operationState(op.phase, op.failureReason)}`)}
         {kubeStage && ` · ${t('ops.kubeStage', { stage: t(`ops.kubeStageName.${kubeStage.name}`), n: kubeStage.index, total: kubeStage.total })}`}
       </p>
       {tracksNodes && <Progress value={(done / total) * 100} />}

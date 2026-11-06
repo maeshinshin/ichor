@@ -19,6 +19,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -86,17 +87,11 @@ func mergeKubeconfig(target string, chain []string, incoming []byte, cluster str
 			return "", err
 		}
 
-		for k, v := range other.Clusters {
-			taken.Clusters[k] = v
-		}
+		maps.Copy(taken.Clusters, other.Clusters)
 
-		for k, v := range other.AuthInfos {
-			taken.AuthInfos[k] = v
-		}
+		maps.Copy(taken.AuthInfos, other.AuthInfos)
 
-		for k, v := range other.Contexts {
-			taken.Contexts[k] = v
-		}
+		maps.Copy(taken.Contexts, other.Contexts)
 	}
 
 	name, userName := cluster, "admin@"+cluster

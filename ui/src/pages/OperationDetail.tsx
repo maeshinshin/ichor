@@ -121,7 +121,7 @@ export function OperationDetail({ name }: { name: string }) {
   const panel = credentialsPanel(op.kind === OperationKind.CA_ROTATION, op.caRotationStage, state === 'done', op.caTargets)
 
   const nodeLink = op.nodeMachine ? (
-    <Button asChild variant="link" size="sm">
+    <Button asChild variant="link" size="sm" className="h-auto max-w-full whitespace-normal break-all py-1 text-left">
       <Link to={`/nodes/${op.nodeMachine.name}`}>{op.nodeMachine.name}</Link>
     </Button>
   ) : undefined
@@ -267,7 +267,7 @@ export function OperationDetail({ name }: { name: string }) {
                         {/* The controller's own word (InProgress, Completed), as received. */}
                         <ToneBadge tone={m.phase === 'Completed' ? 'good' : m.phase === 'InProgress' ? 'progress' : 'neutral'}>{m.phase}</ToneBadge>
                       </TableCell>
-                      <TableCell className="whitespace-normal break-words">{[m.step, m.message].filter(Boolean).join(': ') || '-'}</TableCell>
+                      <TableCell className="min-w-48 whitespace-normal break-words">{[m.step, m.message].filter(Boolean).join(': ') || '-'}</TableCell>
                       <TableCell>{formatTimestamp(m.startedAt)}</TableCell>
                       <TableCell>{formatTimestamp(m.finishedAt)}</TableCell>
                       <TableCell>{formatDuration(spanMs(toDate(m.startedAt), toDate(m.finishedAt), now, m.phase === 'Completed'))}</TableCell>
@@ -317,7 +317,7 @@ export function OperationDetail({ name }: { name: string }) {
                         </TableCell>
                         <TableCell>{`${e.objectKind}/${e.objectName}`}</TableCell>
                         <TableCell>{e.reason}</TableCell>
-                        <TableCell className="whitespace-normal break-words">{e.message}</TableCell>
+                        <TableCell className="min-w-64 whitespace-normal break-words">{e.message}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

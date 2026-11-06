@@ -11,8 +11,8 @@ Reboot a node gracefully: cordon, drain, reboot, wait until it is Ready again
 
 Reboot a node gracefully: cordon, drain, reboot, wait until it is Ready again.
 
-It shows the plan and asks for confirmation unless --yes. For reset and remove the typed node name
-(or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
+It shows the plan and asks for confirmation unless --yes. For reset and remove the typed machine name
+(the TalosMachine name, or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
 (or deletes the machine); the controller does the work. Follow it with --follow.
 
 ```sh

@@ -270,6 +270,39 @@ func TestNodeActionSummaryNamesTheMachineByHostname(t *testing.T) {
 	}
 }
 
+// A freshly created, paused node operation has no status.machines yet; the machine is named from
+// spec.node.machineRef.
+func TestPausedNodeActionWithoutStatusNamesTheMachineByHostname(t *testing.T) {
+	m := opMachine("uuid-a", "worker", nil, nil)
+	m.Spec.Hostname = "worker-a"
+
+	op := &ichorv1alpha1.TalosOperation{
+		Name: "node-y", Namespace: opNS,
+		Spec: ichorv1alpha1.TalosOperationSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindNode, Paused: true,
+			Node: &ichorv1alpha1.TalosOperationNodeSpec{MachineRef: corev1.LocalObjectReference{Name: "uuid-a"}, Action: ichorv1alpha1.NodeActionReboot},
+		},
+	}
+
+	s, _ := opServer(t, append(opObjects(), m, op)...)
+
+	resp, err := s.GetOperation(context.Background(), connect.NewRequest(&pb.GetOperationRequest{Operation: objectRef(opNS, "node-y")}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	o := resp.Msg.GetOperation()
+	if o.GetSummary() != "Reboot node worker-a" {
+		t.Fatalf("summary = %q", o.GetSummary())
+	}
+
+	for _, d := range o.GetDetails() {
+		if d.GetKey() == "Machine" && d.GetValue() != "worker-a" {
+			t.Fatalf("Machine = %q", d.GetValue())
+		}
+	}
+}
+
 // "Installed Ichor version" is the version before the upgrade (the stamped from-version); once the
 // operation has Completed it is the old one, so the row goes (the summary keeps from → to).
 func TestIchorDetailsDropTheInstalledVersionOnceCompleted(t *testing.T) {

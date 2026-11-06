@@ -623,6 +623,12 @@ type TalosOperationStatus struct {
 	// +optional
 	FromVersion string `json:"fromVersion,omitempty"`
 
+	// toVersion is the Ichor version an ichor operation upgrades to: the controller copies
+	// IchorInstallation.spec.version here once, when the upgrade starts, and never rewrites it (ADR 0133).
+	// It is empty on other kinds and on operations that started before it existed.
+	// +optional
+	ToVersion string `json:"toVersion,omitempty"`
+
 	// finishedAt is when the operation reached Completed.
 	// +optional
 	FinishedAt *metav1.Time `json:"finishedAt,omitempty"`

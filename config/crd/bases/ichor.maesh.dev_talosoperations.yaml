@@ -830,6 +830,12 @@ spec:
                 - ShutDown
                 - Completed
                 type: string
+              toVersion:
+                description: |-
+                  toVersion is the Ichor version an ichor operation upgrades to: the controller copies
+                  IchorInstallation.spec.version here once, when the upgrade starts, and never rewrites it (ADR 0133).
+                  It is empty on other kinds and on operations that started before it existed.
+                type: string
             type: object
         required:
         - spec

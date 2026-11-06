@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"strings"
@@ -219,5 +220,44 @@ func TestRunInit_WeakIdentityRejected(t *testing.T) {
 
 	if maint.callCount != 0 {
 		t.Fatalf("expected ApplyInsecure to never be called, got callCount=%d", maint.callCount)
+	}
+}
+
+// TestRunInit_MergeKubeconfig: with --merge-kubeconfig the admin context lands in the first file of
+// $KUBECONFIG and the closing lines name it; without it they give the export line and the hint, and no
+// file outside ~/.ichor is written.
+func TestRunInit_MergeKubeconfig(t *testing.T) {
+	for _, merge := range []bool{true, false} {
+		withTempHome(t)
+
+		target := t.TempDir() + "/config"
+		t.Setenv("KUBECONFIG", target)
+
+		deps, _, boot := newFakeInitDeps(t, fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build())
+		boot.kubeconfig = adminKubeconfig(t, testInitClusterName, "https://10.0.0.1:6443")
+
+		opts := validInitOptions()
+		opts.MergeKubeconfig = merge
+
+		if err := runInit(context.Background(), opts, deps); err != nil {
+			t.Fatalf("merge=%v: runInit: %v", merge, err)
+		}
+
+		out := deps.Stderr.(*bytes.Buffer).String()
+		_, statErr := os.Stat(target)
+
+		if merge {
+			want := "admin@" + testInitClusterName
+			if statErr != nil || mustLoad(t, target).CurrentContext != want || !strings.Contains(out, "kubectl and ichor now use context "+want) {
+				t.Fatalf("merge: stat %v, output:\n%s", statErr, out)
+			}
+
+			if !strings.Contains(out, "--merge-kubeconfig: will add context "+want) {
+				t.Fatalf("plan line missing:\n%s", out)
+			}
+		} else if statErr == nil || !strings.Contains(out, "export KUBECONFIG=~/.ichor/clusters/"+testInitClusterName+"/kubeconfig") ||
+			!strings.Contains(out, "--merge-kubeconfig") {
+			t.Fatalf("no merge: stat %v, output:\n%s", statErr, out)
+		}
 	}
 }

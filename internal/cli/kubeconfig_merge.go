@@ -158,3 +158,26 @@ func withoutOrigin[T clientcmdapi.Cluster | clientcmdapi.AuthInfo](v *T) *T {
 
 	return &cp
 }
+
+// planKubeconfigMerge says in init's header what --merge-kubeconfig will do, and reads the target
+// so that a kubeconfig that cannot be parsed stops init before anything is applied.
+func planKubeconfigMerge(cluster string, p *progress) error {
+	target, chain := kubeconfigMergeTarget(kubeconfigPath)
+
+	for _, f := range chain {
+		if _, err := loadKubeconfigFile(f); err != nil {
+			return fmt.Errorf("init: --merge-kubeconfig: %w", err)
+		}
+	}
+
+	p.Info(fmt.Sprintf("--merge-kubeconfig: will add context admin@%s to %s and make it current", cluster, tildePath(target)))
+
+	return nil
+}
+
+// mergeIntoUserKubeconfig merges the fetched kubeconfig into the user's kubeconfig (ADR 0134).
+func mergeIntoUserKubeconfig(cluster string, kubeconfig []byte) (string, error) {
+	target, chain := kubeconfigMergeTarget(kubeconfigPath)
+
+	return mergeKubeconfig(target, chain, kubeconfig, cluster)
+}

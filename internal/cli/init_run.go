@@ -63,6 +63,11 @@ type initOptions struct {
 	BundlePassphrase string
 	BundlePlaintext  bool
 
+	// MergeKubeconfig (--merge-kubeconfig, ADR 0134) merges the cluster-admin kubeconfig into the user's
+	// own kubeconfig; mergedContext is the context it ended up as, set by runInit for the epilogue.
+	MergeKubeconfig bool
+	mergedContext   string
+
 	// InstallerDigest and SkipSignatureCheck are recorded in the IchorInstallation (spec.installerDigest,
 	// spec.installerSignature.mode skip; ADR 0122) so the controller can run the Cilium Job without resolving
 	// the installer's tag: a build nobody signs, served by a mirror the controller cannot reach (a demo).
@@ -159,6 +164,13 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	defer func() { initEpilogue(steps, opts, adminPassword, err == nil) }()
 
 	steps.Header("Ichor init · "+opts.Cluster, initSummary(opts))
+
+	// Read the merge target now: a malformed kubeconfig must stop init before the irreversible apply.
+	if opts.MergeKubeconfig {
+		if err := planKubeconfigMerge(opts.Cluster, steps); err != nil {
+			return err
+		}
+	}
 
 	// Step 2: settle the cluster's shape.
 	cluster, err := buildInitPlan(opts.initPlanInput, steps.WarnWriter())
@@ -277,7 +289,9 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 
 	// Step 4: bootstrap etcd, fetch the kubeconfig, store the bundle as a
 	// Secret.
-	k8sClient, err := initBootstrapAccess(ctx, opts, deps, cluster, bundle, rendered)
+	k8sClient, mergedContext, err := initBootstrapAccess(ctx, opts, deps, cluster, bundle, rendered)
+	opts.mergedContext = mergedContext
+
 	if err != nil {
 		return err
 	}
@@ -501,7 +515,7 @@ func waitForCiliumHandover(
 func initBootstrapAccess(
 	ctx context.Context, opts initOptions, deps initDeps, cluster *ichorv1alpha1.TalosCluster, bundle *secrets.Bundle,
 	rendered []byte,
-) (client.Client, error) {
+) (client.Client, string, error) {
 	steps := deps.progress()
 
 	var admin bootstrapClient
@@ -531,10 +545,13 @@ func initBootstrapAccess(
 		return opts.NodeEndpoint + " installed Talos and rebooted", nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	var k8sClient client.Client
+	var (
+		k8sClient     client.Client
+		mergedContext string
+	)
 
 	err = steps.Run("Bootstrap etcd", func(*step) (string, error) {
 		kubeconfig, err := admin.Kubeconfig(ctx)
@@ -547,14 +564,25 @@ func initBootstrapAccess(
 			return "", fmt.Errorf("init: saving the kubeconfig: %w", err)
 		}
 
+		detail := "kubeconfig saved to " + tildePath(kubeconfigPath)
+
+		if opts.MergeKubeconfig {
+			// The saved copy exists and the cluster is up: a failed merge is a warning, not a failed init.
+			if mergedContext, err = mergeIntoUserKubeconfig(cluster.Name, kubeconfig); err != nil {
+				steps.Warn(fmt.Sprintf("--merge-kubeconfig: %v; use the saved copy instead", err))
+			} else {
+				detail += ", merged as context " + mergedContext
+			}
+		}
+
 		if k8sClient, err = deps.NewK8sClient(kubeconfig); err != nil {
 			return "", fmt.Errorf("init: connecting to the new cluster: %w", err)
 		}
 
-		return "kubeconfig saved to " + tildePath(kubeconfigPath), nil
+		return detail, nil
 	})
 
-	return k8sClient, err
+	return k8sClient, mergedContext, err
 }
 
 // initDetail turns a message of the wait helpers into the short detail of a step.

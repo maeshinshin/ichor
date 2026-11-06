@@ -13,7 +13,9 @@ import { ReadyCell } from '@/components/ReadyCell'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { useAction } from '@/hooks/use-action'
 import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
+import { mayApprove, mayReject } from '@/lib/actions'
 import { machineClient } from '@/lib/connect'
+import { useMyPermissions } from '@/lib/useMyPermissions'
 import { enumLabel } from '@/lib/enum'
 import { machineDisplayName } from '@/lib/machineName'
 import { notifyWrite } from '@/lib/notify'
@@ -31,6 +33,8 @@ export function MachineList() {
   const { items: machines, setItems: setMachines, error, reload } = useList(async () => (await machineClient.listMachines({})).machines)
   const [query, setQuery] = useState('')
   const canReclaim = useCanReclaim()
+  // What the role may do to a machine that waits for a decision; the machines share a namespace, so one is asked.
+  const perms = useMyPermissions(machines?.find((m) => m.approvalState !== MachineApprovalState.APPROVED)?.ref)
 
   function replaceMachine(updated: Machine) {
     setMachines((prev) => prev?.map((m) => (sameRef(m, updated) ? updated : m)) ?? prev)
@@ -89,8 +93,8 @@ export function MachineList() {
                     <TableCell className="hidden sm:table-cell">{m.endpoint || '-'}</TableCell>
                     <TableCell>
                       <div class="flex gap-2 max-sm:flex-wrap">
-                        <ApproveDialog machine={m} onApproved={replaceMachine} />
-                        <RejectDialog machine={m} onRejected={reload} />
+                        {mayApprove(perms) && <ApproveDialog machine={m} onApproved={replaceMachine} />}
+                        {mayReject(perms) && <RejectDialog machine={m} onRejected={reload} />}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -127,8 +131,8 @@ export function MachineList() {
                         {/* Rejection is reversible: approving a
                             rejected machine simply moves it to approved, no separate
                             "un-reject" action exists. */}
-                        <ApproveDialog machine={m} onApproved={replaceMachine} />
-                        <RejectDialog machine={m} onRejected={reload} />
+                        {mayApprove(perms) && <ApproveDialog machine={m} onApproved={replaceMachine} />}
+                        {mayReject(perms) && <RejectDialog machine={m} onRejected={reload} />}
                       </div>
                     </TableCell>
                   </TableRow>

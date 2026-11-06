@@ -1,3 +1,4 @@
+import { canListUsers } from '@/lib/actions'
 import { diagnosticsClient } from '@/lib/connect'
 import type { Permissions } from '@/lib/diagnostics'
 import { useLoad } from '@/lib/useLoad'
@@ -13,4 +14,10 @@ export function useMyPermissions(machine?: Ref, cluster?: Ref): Permissions | un
     [machine?.namespace, machine?.name, cluster?.namespace, cluster?.name],
   )
   return data ?? undefined
+}
+
+// useCanListUsers asks once whether the caller may list users, which decides if the nav offers the Users page.
+// False until answered, and when the probe fails: offer nothing.
+export function useCanListUsers(signedIn: boolean): boolean {
+  return canListUsers(useLoad(signedIn ? () => diagnosticsClient.getMyPermissions({}) : undefined, [signedIn]).data ?? undefined)
 }

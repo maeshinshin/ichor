@@ -12,11 +12,13 @@ import {
   type Chunk,
 } from './diagnostics.ts'
 
-const all = { supportBundle: true, etcdSnapshot: true, packetCapture: true, clusterCredentials: true, clusterUpdate: true, talosconfigReader: true }
+const acts = { listUsers: true, createOperations: true, startCaRotation: true, startKeyRotation: true, startShutdown: true, startEtcdRestore: true, updateIchorVersion: true, updateBackups: true }
+const all = { ...acts, supportBundle: true, etcdSnapshot: true, packetCapture: true, clusterCredentials: true, clusterUpdate: true, talosconfigReader: true }
+const nothing = Object.fromEntries(Object.keys(all).map((k) => [k, false])) as typeof all
 
 test('a user with no permissions, or unknown ones, is offered nothing', () => {
   assert.deepEqual(availableActions(undefined, true), [])
-  assert.deepEqual(availableActions({ supportBundle: false, etcdSnapshot: false, packetCapture: false, clusterCredentials: false, clusterUpdate: false, talosconfigReader: false }, true), [])
+  assert.deepEqual(availableActions(nothing, true), [])
 })
 
 test('the etcd snapshot is offered on a control plane node only', () => {

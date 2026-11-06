@@ -72,6 +72,11 @@ They become site links. A relative link that leaves `docs/`
 (`../../internal/foo.go`, `../../test/harness/`) becomes a link to that file or
 directory on GitHub. A link to something that does not exist fails the build.
 
+Images live in `docs/images/` and are referenced the same way,
+`![What it shows](../images/name.svg)`; the site serves the SVG and PNG files of
+`docs/` at their own path. A missing image fails the build too. Diagrams have
+their own section below.
+
 ## Callouts
 
 Use GitHub's alert syntax; GitHub renders it too, and the site shows it as an
@@ -111,3 +116,53 @@ Markdown of every page is served as `<page>.md` next to it, with `/llms.txt`
 (an index) and `/llms-full.txt` (all pages) for tools that read the docs. The
 copied Markdown has its relative links rewritten to full URLs, so it still
 works outside the site.
+
+## Diagrams
+
+Diagrams are [draw.io](https://www.drawio.com/) files in `docs/images/`, always
+a pair:
+
+- `NAME.light.drawio.svg` is the one you edit. It is an ordinary SVG, so GitHub
+  and the site show it as an image, and it carries the whole draw.io model, so
+  draw.io (the web app, the desktop app or the VS Code Draw.io extension) opens
+  it as a diagram.
+- `NAME.dark.drawio.svg` is the same diagram in the dark theme. It is exported
+  from the light file and never edited by hand.
+
+A page names the light file once, with an alt text that says what the diagram
+shows and a one-line caption under it:
+
+```markdown
+![What the diagram shows, in a sentence or two.](../images/NAME.light.drawio.svg)
+
+*A one-line caption.*
+```
+
+GitHub shows the light image. The site shows the dark one when the reader's
+theme is dark, and each image links to its SVG, which opens at full size (the
+page column is narrower than the diagram).
+
+To change a diagram, open `docs/images/NAME.light.drawio.svg` in draw.io, edit
+it and save it under the same name, then export the pair again:
+
+```sh
+make docs-diagrams                                              # every diagram
+make docs-diagrams SOURCE=docs/images/NAME.light.drawio.svg     # one
+```
+
+`make docs-diagrams` runs the draw.io command line from the dev shell (under
+`xvfb-run`, as draw.io is an Electron app), once for each theme. A new diagram
+is drawn the same way and saved as `docs/images/NAME.drawio`;
+`make docs-diagrams SOURCE=docs/images/NAME.drawio` writes the pair.
+
+One model gives both files because every colour in it is a `light-dark()` pair,
+which draw.io writes into the shape's style (Edit Style, Ctrl-E in draw.io), for
+example `fillColor=light-dark(#EEF2FF,#232553);strokeColor=light-dark(#6366F1,#818CF8)`.
+Copy a shape from an existing diagram to keep the look, which is one palette
+throughout: neutral grey for boxes and groups, indigo for Ichor's own parts and
+for what a person does, amber for what waits or is not authenticated, green for
+done and red for no way back. Boxes are rounded, connectors are orthogonal with
+labels on the line, text is 12 px or more, and a diagram is about 900 px wide.
+The export drops the PNG copies of the labels that draw.io adds for viewers
+without `foreignObject` (700 KB a diagram), as browsers and GitHub draw the live
+text.

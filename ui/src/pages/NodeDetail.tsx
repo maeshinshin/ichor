@@ -137,6 +137,7 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
             {machine && (
               <NodeActions
                 machine={{ namespace, name }}
+                displayName={machineDisplayName(machine)}
                 perms={perms}
                 controlPlane={machine.role === MachineRole.CONTROL_PLANE}
                 approved={approved}

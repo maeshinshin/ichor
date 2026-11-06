@@ -108,7 +108,7 @@ function UserRow({ user, onChanged }: { user: User; onChanged: () => void }) {
               <EllipsisIcon />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent align="end" className="w-auto min-w-48">
             <DropdownMenuItem onSelect={() => setDialog('edit')}>{t('users.edit')}</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setDialog('password')}>{t('users.setPassword')}</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setDialog('revoke')}>{t('users.revoke')}</DropdownMenuItem>

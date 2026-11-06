@@ -81,7 +81,7 @@ There are two reasons an operation is `Paused`, and they are told apart by
 The request to run the step again is an annotation, not a change to `spec`.
 With `kubectl` it is:
 
-```
+```sh
 kubectl annotate talosoperation NAME ichor.maesh.dev/retry=true
 ```
 

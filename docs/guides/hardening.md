@@ -90,7 +90,7 @@ reverting the spec alone cannot help because it cannot reach them to deliver
 it. From a workstation in `talosAPICIDRs`, open apid to the control plane with
 a temporary rule, then fix the spec:
 
-```
+```sh
 talosctl -e NODE -n NODE patch machineconfig --patch @rule.yaml
 # rule.yaml:
 #   apiVersion: v1alpha1
@@ -432,7 +432,7 @@ a damaged file give the same error, which names neither.
 A bundle file you made before this change still works, with a warning on every
 use. Encrypt it:
 
-```
+```sh
 ichor secrets encrypt demo              # ~/.ichor/clusters/demo/secrets.yaml
 ichor secrets encrypt --file ./secrets.yaml
 ```

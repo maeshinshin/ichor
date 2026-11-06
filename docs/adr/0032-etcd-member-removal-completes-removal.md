@@ -227,7 +227,7 @@ going in:**
 
 **The removal itself, with etcd's own before/after member list:**
 
-```
+```text
 # before, queried from ichor-e2e-ha-0 itself (10.244.1.40):
 NODE          ID                 HOSTNAME         ...
 10.244.1.40   221caadec20f5672   ichor-e2e-ha-2
@@ -237,7 +237,7 @@ NODE          ID                 HOSTNAME         ...
 Lowered `TalosCluster.spec.controlPlane.count` from 3 to 1 (the operator
 action `CheckControlPlaneCount`'s own refusal message now names), annotated
 `ichor-e2e-ha-0`'s `TalosMachine` with `allow-delete=true` and deleted it.
-```
+```text
 # after, queried from a survivor (10.244.1.208, since ha-0's own endpoint
 # was no longer answering by this point -- see bug 2 above):
 NODE           ID                 HOSTNAME

@@ -109,7 +109,7 @@ Registering a cluster from chart values (a `TalosCluster` templated in the chart
 
 **4.2 The sequence.**
 
-```
+```sh
 helm install ichor oci://ghcr.io/maeshinshin/charts/ichor --version X.Y.Z \
     --namespace ichor-system --create-namespace [--set ...]
 ichor adopt --cluster NAME --talosconfig FILE (--recover-secrets --recover-from ADDR | --secrets-bundle FILE) [--cni-unmanaged]

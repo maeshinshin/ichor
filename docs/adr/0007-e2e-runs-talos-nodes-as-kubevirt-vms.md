@@ -308,7 +308,7 @@ two joining on their own): all three reach `running`/`ready`, and `talosctl heal
 schedulable". `talosctl etcd members` against any one of them shows all three as
 voters, not learners:
 
-```
+```text
 NODE           ID                 HOSTNAME         PEER URLS                   CLIENT URLS                 LEARNER
 10.244.1.223   42e7cb66e97d0e6b   ichor-e2e-ha-2   https://10.244.1.226:2380   https://10.244.1.226:2379   false
 10.244.1.223   c1a928177d9c3bd5   ichor-e2e-ha-0   https://10.244.1.223:2380   https://10.244.1.223:2379   false
@@ -400,7 +400,7 @@ admission refuse one delete. Quorum, last-control-plane, removal ordering,
 without `ichor.maesh.dev/allow-delete` is refused by the live admission webhook, and the
 identical object deletes cleanly once annotated:
 
-```
+```console
 $ kubectl delete talosmachine wh-machine
 Error from server (Forbidden): admission webhook "vtalosmachine-v1alpha1.kb.io" denied the request: delete refused: set the annotation ichor.maesh.dev/allow-delete="true" to allow it
 
@@ -564,7 +564,7 @@ cleared `e2e-ha-0`'s finalizer directly (`kubectl patch ... finalizers: null`, n
 `DeletionTimestamp` on it yet, so it just vanished) to get a *real* two-machine count,
 simulating "a prior removal already finished" without exercising removal.go's own
 (incomplete) sequence. With that real two-machine state:
-```
+```console
 $ kubectl delete talosmachine e2e-ha-1   # annotated allow-delete=true first
 Error from server (Forbidden): admission webhook "vtalosmachine-v1alpha1.kb.io" denied
 the request: delete refused: control planes 2 -> 1, below etcd quorum of 2 for 2 members
@@ -577,7 +577,7 @@ A second, unplanned finding from the *first* real delete attempt (`e2e-ha-0`, 3 
 while all three originals were still present and `controlPlane.count` was still 3):
 admission allowed it (quorum alone passes 3 -> 2), but `reconcileRemoval`'s own recheck
 refused it anyway, for a *different* reason than quorum:
-```
+```text
 "delete refused: control planes 3 -> 2, below the declared count of 3; approve a
 replacement control plane before removing this one"
 ```
@@ -592,7 +592,7 @@ size. The architecture doc's "3->4->3, never 3->2" is enforced right here.
 finalizer too, dropped its `approvalState` to `rejected` so it would stop counting, then
 deleted it for real -- leaving `e2e-ha-2` as the cluster's only approved control plane),
 then:
-```
+```console
 $ kubectl delete talosmachine e2e-ha-2   # annotated allow-delete=true first
 Error from server (Forbidden): admission webhook "vtalosmachine-v1alpha1.kb.io" denied
 the request: delete refused: last control plane (1 -> 0); delete the TalosCluster instead
@@ -616,7 +616,7 @@ deleted it (annotated): `checkControlPlaneRemoval(4, 3)` passed both quorum and 
 count, and `drainNode` ran for real against the real inner-cluster Node -- cordoned it
 (`spec.unschedulable: true`) and began evicting a real Pod placed there for the test. It
 reached:
-```
+```text
 "removal passed the quorum, last-control-plane and declared-count checks and the node was
 drained; etcd member removal and reset are not implemented yet, so the finalizer is held
 rather than letting deletion complete while the node may still be an etcd member"
@@ -647,7 +647,7 @@ the Node showed `unschedulable: true` and the test Pod showed a `deletionTimesta
 still `Running` (it traps `SIGTERM` and ignores it, so eviction's grace period keeps it
 alive long enough to interrupt) -- a real, observed mid-drain window, not a guess at
 timing. At that point:
-```
+```console
 $ kubectl exec ichor-e2e-controller -- kill -9 293   # /manager's pid
 ```
 Confirmed etcd healthy and unchanged (still the same 3 members) with the controller dead.

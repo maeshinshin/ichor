@@ -17,14 +17,14 @@ with `ichor adopt`. The chart does not ship Cilium.
 The chart is published as an OCI artifact, with the images next to it, by a
 workflow that runs when a `v*` tag is pushed:
 
-```
+```text
 oci://ghcr.io/maeshinshin/charts/ichor
 ```
 
 No release has been tagged yet, so that address has nothing in it today. Until
 the first release, install from a checkout:
 
-```
+```sh
 helm install ichor ./dist/chart --namespace ichor-system --create-namespace \
   --set manager.image.repository=REPO --set ichorUI.image.repository=REPO
 ```
@@ -40,7 +40,7 @@ yourself.
 
 For a cluster that already has a pod network:
 
-```
+```sh
 helm install ichor oci://ghcr.io/maeshinshin/charts/ichor --version X.Y.Z \
   --namespace ichor-system --create-namespace
 ichor adopt --cluster NAME --node ADDR --recover-secrets --recover-from ADDR
@@ -63,7 +63,7 @@ Values worth knowing (see `dist/chart/values.yaml` for all of them):
 Adopt does not apply the network policies on a Helm install. When they apply,
 it tells you to run:
 
-```
+```sh
 helm upgrade ichor oci://ghcr.io/maeshinshin/charts/ichor --version X.Y.Z \
   --namespace ichor-system --reuse-values --set networkPolicy.cilium.enabled=true
 ```
@@ -97,7 +97,7 @@ A new issuer on the ichor-ui Deployment reaches ichor-ui within about a minute.
 you name a scraper. With the chart, set
 `networkPolicy.cilium.metricsNamespaces` (and `metricsPodLabels`):
 
-```
+```sh
 helm upgrade ichor oci://ghcr.io/maeshinshin/charts/ichor --version X.Y.Z \
   --namespace ichor-system --reuse-values \
   --set 'networkPolicy.cilium.metricsNamespaces={monitoring}' \
@@ -108,7 +108,7 @@ With `ichor init` or the installer Job there is no value to carry the
 namespace; add a policy of your own, which adds to Ichor's (change the
 namespace and labels to your Prometheus's, and the port if you changed it):
 
-```
+```yaml
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -141,7 +141,7 @@ chart is signed keylessly with cosign by the release workflow, and carries an
 SPDX SBOM and a build provenance attestation (ADR 0108). Verify by digest, with
 the identity of this repository's workflow:
 
-```
+```sh
 cosign verify ghcr.io/maeshinshin/ichor-controller:vX.Y.Z \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp '^https://github.com/maeshinshin/ichor/\.github/workflows/release\.yml@refs/tags/v.*$'
@@ -200,7 +200,7 @@ through except the pin plus the recorded skip below.
 **Builds nobody signs.** Development and demo images (`v0.0.N-gSHA`) carry no
 signature. Skip the check, which Ichor records:
 
-```
+```sh
 ichor upgrade ichor v0.0.1900000001-g1a2b3c4 --skip-signature-check
 ```
 
@@ -275,7 +275,7 @@ Its nodes are NotReady, so the chart's pods could not start and `helm install
 --wait` would hang. The chart's preflight refuses to install and says so. The
 sequence is:
 
-```
+```sh
 ichor cni bootstrap --kubeconfig FILE --kube-proxy enabled|replaced [--tunnel vxlan|geneve] [--cilium-values FILE]
 helm install ichor oci://ghcr.io/maeshinshin/charts/ichor --version X.Y.Z \
   --namespace ichor-system --create-namespace

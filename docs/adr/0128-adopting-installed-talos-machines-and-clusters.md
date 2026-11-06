@@ -40,7 +40,7 @@ Talos behaviour this rests on (Talos v1.14 docs, "Disk Encryption", via Context7
 
 ### 1. Adding a machine that is already in the cluster's PKI: `ichor adopt --add-machine`
 
-```
+```sh
 ichor adopt --cluster prod --add-machine 10.0.0.21 [--add-machine 10.0.0.22 ...] --talosconfig FILE [--plan] [--yes]
 ```
 

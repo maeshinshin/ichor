@@ -42,7 +42,7 @@ GitOps tools, and does not target air-gapped installs.
 
 ## How the pieces fit
 
-```
+```text
 operator ──┬── ichor CLI ─────────┐
            └── browser ─▶ ichor-ui │
                                    ▼

@@ -167,7 +167,7 @@ For (ii), discovery cannot read identity (a configured node's API requires a cli
 
 #### 2.1 CLI path
 
-```
+```sh
 ichor machine reclaim ADDRESS --talosconfig FILE [--context C] [--confirm UUID]
 ```
 
@@ -412,7 +412,7 @@ The earlier note here (not feasible) was wrong about the harness: no kernel-boot
 
 On the KubeVirt harness the guest reset keeps the pod IP, but stopping and starting the VM gives it a new one, which is the same effect as a DHCP address change. `ichor machine reclaim 10.244.0.179 --confirm <UUID> --cluster ichor-e2e-x --wait 3m` ran in the Ichor tools pod; 2.4 s after the CLI started, as soon as the output had `Reset accepted (graceful: true)`, the VM was set `runStrategy: Halted` (08:02:09), then `Always` at 08:02:18 (new IP 10.244.0.70; maintenance with the same UUID at 08:02:42). Result after the 3 minute wait:
 
-```
+```text
 Reset accepted (graceful: true). Waiting for 10.244.0.179 to return to maintenance mode.
 
 waiting for 10.244.0.179 to return to maintenance mode: context deadline exceeded (last probe: rpc error: code = DeadlineExceeded desc = context deadline exceeded while waiting for connections to become ready)

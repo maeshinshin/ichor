@@ -21,7 +21,7 @@ already provides it. Argo CD publishes its `Application` CRD type at
 `github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1`. It was tried
 directly, not assumed:
 
-```
+```sh
 go get github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1@latest
 ```
 
@@ -116,7 +116,7 @@ correctly-shaped-but-broken Application by omission:
 
 `Skeleton.Write(dir)` lays out exactly the structure the design specifies:
 
-```
+```text
 bootstrap/root-app.yaml      <- Skeleton.RootApp
 apps/<name>/application.yaml <- one per Skeleton.Apps entry
 clusters/<cluster>/<file>    <- one per Skeleton.CRs entry

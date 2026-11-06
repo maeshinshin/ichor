@@ -16,6 +16,9 @@ export type DismissableLayerProps = Omit<DismissableLayerOptions, "onDismiss">
 // Open layers in creation order; only the last one reacts to Escape
 const layers: HTMLElement[] = []
 
+// How far a finger may drift and still be a tap
+const TAP_SLOP = 10
+
 // Preact events do not bubble through portals, so "inside" means the layer or any layer opened after it
 export function useDismissableLayer(node: HTMLElement | null, options: DismissableLayerOptions) {
   const latest = useRef(options)
@@ -39,12 +42,31 @@ export function useDismissableLayer(node: HTMLElement | null, options: Dismissab
     const isTop = () => layers[layers.length - 1] === node
     let pendingClick = () => {}
     const onPointerDown = (event: PointerEvent) => {
-      document.removeEventListener("click", pendingClick)
+      pendingClick()
       if (!isTop() || isInside(event.target)) return
-      // Touch dismisses on the click that follows, so a scroll gesture outside keeps the layer open
+      // Touch dismisses when the finger lifts without having moved, so a scroll gesture outside keeps the layer open. Not on the click:
+      // iOS sends none for a tap on a non-interactive element (the inert page root).
       if (event.pointerType === "touch") {
-        pendingClick = () => dismiss(event, "onPointerDownOutside")
-        document.addEventListener("click", pendingClick, { once: true })
+        const { clientX, clientY, pointerId } = event
+        const cancel = () => {
+          document.removeEventListener("pointerup", onUp, true)
+          document.removeEventListener("pointercancel", cancel, true)
+        }
+        const onUp = (up: PointerEvent) => {
+          cancel()
+          if (up.pointerId !== pointerId || Math.hypot(up.clientX - clientX, up.clientY - clientY) > TAP_SLOP) return
+          dismiss(event, "onPointerDownOutside")
+          // The click that follows would land on whatever the layer covered
+          const swallow = (click: Event) => {
+            click.stopPropagation()
+            click.preventDefault()
+          }
+          document.addEventListener("click", swallow, { capture: true, once: true })
+          setTimeout(() => document.removeEventListener("click", swallow, true), 400)
+        }
+        pendingClick = cancel
+        document.addEventListener("pointerup", onUp, true)
+        document.addEventListener("pointercancel", cancel, true)
       } else dismiss(event, "onPointerDownOutside")
     }
     const onFocusIn = (event: FocusEvent) => {
@@ -67,7 +89,7 @@ export function useDismissableLayer(node: HTMLElement | null, options: Dismissab
       clearTimeout(timer)
       layers.splice(layers.indexOf(node), 1)
       document.removeEventListener("pointerdown", onPointerDown)
-      document.removeEventListener("click", pendingClick)
+      pendingClick()
       document.removeEventListener("focusin", onFocusIn)
       document.removeEventListener("keydown", onKeyDown, true)
     }

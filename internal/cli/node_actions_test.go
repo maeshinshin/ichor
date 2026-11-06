@@ -149,7 +149,7 @@ func TestNodeRemoveNeedsTheTypedName(t *testing.T) {
 		t.Fatalf("wrong name = %v", err)
 	}
 
-	if !strings.Contains(prompt.String(), "Type the node name") || !present(k8s, testMachineName) {
+	if !strings.Contains(prompt.String(), "Type the machine name") || !present(k8s, testMachineName) {
 		t.Fatalf("a wrong name must remove nothing:\n%s", prompt.String())
 	}
 
@@ -225,5 +225,46 @@ func TestNodeRemoveHasRebootAndResetIsDeprecated(t *testing.T) {
 
 	if !strings.Contains(nodeResetCmd.Short, "Deprecated") || !strings.Contains(nodeResetCmd.Short, "node remove --reboot") {
 		t.Errorf("node reset must point at node remove --reboot: %q", nodeResetCmd.Short)
+	}
+}
+
+// NODE may be the hostname, but the typed confirmation is always the machine name: the prompt and the
+// refusal name both, and the hostname does not confirm.
+func TestNodeRemoveConfirmationIsTheMachineNameNotTheHostname(t *testing.T) {
+	c, k8s := nodeActionClients(t, false)
+	ctx := context.Background()
+
+	var m ichorv1alpha1.TalosMachine
+	if err := k8s.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: testMachineName}, &m); err != nil {
+		t.Fatal(err)
+	}
+
+	m.Spec.Hostname = "host-a"
+	if err := k8s.Update(ctx, &m); err != nil {
+		t.Fatal(err)
+	}
+
+	spec := nodeActionSpec{Machine: "host-a", Action: pb.NodeAction_NODE_ACTION_REMOVE}
+
+	var prompt bytes.Buffer
+
+	err := runNodeAction(ctx, c, strings.NewReader("host-a\n"), &bytes.Buffer{}, &prompt, spec)
+	if err == nil || !strings.Contains(err.Error(), "type the machine name "+testMachineName+" (node host-a)") {
+		t.Fatalf("the hostname must not confirm: %v", err)
+	}
+
+	if !strings.Contains(prompt.String(), "Type the machine name "+testMachineName+" (node host-a) to confirm") || !present(k8s, testMachineName) {
+		t.Fatalf("the prompt names the machine and the node:\n%s", prompt.String())
+	}
+
+	spec.Confirm = "host-a"
+	if err := runNodeAction(ctx, c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, spec); err == nil ||
+		!strings.Contains(err.Error(), "--confirm") {
+		t.Fatalf("--confirm with the hostname must be refused: %v", err)
+	}
+
+	spec.Confirm = testMachineName
+	if err := runNodeAction(ctx, c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, spec); err != nil {
+		t.Fatalf("--confirm with the machine name: %v", err)
 	}
 }

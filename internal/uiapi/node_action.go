@@ -87,8 +87,6 @@ type nodePlan struct {
 	action  string
 	machine *ichorv1alpha1.TalosMachine
 	bg      *pb.Override
-	// asked is the name the caller used for the machine: its own, its hostname or its Node name.
-	asked string
 	// belowCount is set by nodeBlocked when the removal is allowed below the declared count because
 	// the control plane is unreachable.
 	belowCount bool
@@ -149,7 +147,7 @@ func (s *Server) planNode(ctx context.Context, req *pb.NodeActionRequest) (*opPl
 	}
 
 	np := &nodePlan{
-		action: action, machine: m, bg: req.GetOverride(), asked: req.GetMachine().GetName(),
+		action: action, machine: m, bg: req.GetOverride(),
 		spec: ichorv1alpha1.TalosOperationNodeSpec{
 			MachineRef: corev1.LocalObjectReference{Name: m.Name}, Action: action,
 			Service: req.GetService(), AllowLeader: req.GetAllowLeader(), Confirm: req.GetConfirm(), WipeMode: req.GetWipeMode(),
@@ -406,12 +404,9 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 		np.action == ichorv1alpha1.NodeActionReboot || np.action == ichorv1alpha1.NodeActionShutdown)
 
 	if np.action == ichorv1alpha1.NodeActionReset {
-		if np.spec.Confirm != np.machine.Name && np.spec.Confirm != np.asked {
+		if np.spec.Confirm != np.machine.Name {
 			return nil, invalid("type the machine name %q to confirm the reset", np.machine.Name)
 		}
-
-		// The user may have named the node by its hostname; the CRD compares confirm with machineRef.name.
-		np.spec.Confirm = np.machine.Name
 
 		if !override {
 			return nil, invalid("a reset needs the override: it is checked against the override permission on the machine")
@@ -468,7 +463,7 @@ func (s *Server) RemoveMachine(
 	}
 
 	m := p.node.machine
-	if c := req.Msg.GetConfirm(); c != m.Name && c != p.node.asked {
+	if c := req.Msg.GetConfirm(); c != m.Name {
 		return nil, invalid("type the machine name %q to confirm the removal", m.Name)
 	}
 

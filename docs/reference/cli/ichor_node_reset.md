@@ -11,8 +11,8 @@ Deprecated, use `node remove --reboot`: remove a node from the cluster, wipe it 
 
 Deprecated, use `node remove --reboot`: remove a node from the cluster, wipe it (its STATE and EPHEMERAL partitions, or the whole disk with --wipe-mode) and reboot it; needs the override permission.
 
-It shows the plan and asks for confirmation unless --yes. For reset and remove the typed node name
-(or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
+It shows the plan and asks for confirmation unless --yes. For reset and remove the typed machine name
+(the TalosMachine name, or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
 (or deletes the machine); the controller does the work. Follow it with --follow.
 
 ```sh
@@ -22,7 +22,7 @@ ichor node reset NODE [flags]
 ### Options
 
 ```text
-      --confirm string     the node's name, to go on without being asked to type it
+      --confirm string     the machine name (the TalosMachine name, not the hostname), to go on without being asked to type it
       --follow             after creating the operation, follow its progress until it finishes
   -h, --help               help for reset
       --wipe-mode string   wipe more than STATE and EPHEMERAL: system-disk (the whole system disk, so the node boots its boot image again and can be installed afresh) or all (also every user disk)

@@ -15,13 +15,13 @@ It shows the plan and asks for confirmation unless --yes. For reset and remove t
 (or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
 (or deletes the machine); the controller does the work. Follow it with --follow.
 
-```
+```sh
 ichor node reset NODE [flags]
 ```
 
 ### Options
 
-```
+```text
       --confirm string     the node's name, to go on without being asked to type it
       --follow             after creating the operation, follow its progress until it finishes
   -h, --help               help for reset
@@ -30,7 +30,7 @@ ichor node reset NODE [flags]
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle; any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
       --ichor-namespace string          namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")

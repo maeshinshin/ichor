@@ -7,13 +7,13 @@ description: "Replace your layer of Cilium's values with a YAML file (- is stdin
 
 Replace your layer of Cilium's values with a YAML file (- is stdin; an empty file clears it)
 
-```
+```sh
 ichor cni values set -f FILE [flags]
 ```
 
 ### Options
 
-```
+```text
       --cluster string    the cluster (default: the only one in the namespace)
   -f, --filename string   YAML file holding your layer of the values; - reads stdin (required)
   -h, --help              help for set
@@ -21,7 +21,7 @@ ichor cni values set -f FILE [flags]
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle; any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
       --ichor-namespace string          namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")

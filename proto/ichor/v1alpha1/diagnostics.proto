@@ -54,8 +54,9 @@ message GetMyPermissionsResponse {
   // list_users is the "list" verb on ichorusers; the UI shows the Users page only
   // when it is true. It needs no request field.
   bool list_users = 7;
-  // The flags below need the cluster; without it they are false. They let the UI
-  // hide the actions the caller's role cannot perform.
+  // The flags below need the cluster or the machine (the namespace they act in is
+  // the cluster's, else the machine's); without either they are false. They let the
+  // UI hide the actions the caller's role cannot perform.
   // create_operations is the "create" verb on talosoperations (upgrades, config
   // apply, node actions, pause/resume).
   bool create_operations = 8;
@@ -69,6 +70,22 @@ message GetMyPermissionsResponse {
   bool update_ichor_version = 13;
   // update_backups is the "update" verb on talosetcdbackups, which Back up now needs.
   bool update_backups = 14;
+  // start_node_reset and start_node_shutdown are the "start" verb on the
+  // talosoperations subresources node-reset and node-shutdown.
+  bool start_node_reset = 15;
+  bool start_node_shutdown = 16;
+  // override_machines is the "override" verb on talosmachines (a node reset needs it).
+  bool override_machines = 17;
+  // update_machines and delete_machines are the "update" and "delete" verbs on
+  // talosmachines (removing a node needs both; rejecting a pending machine, update).
+  bool update_machines = 18;
+  bool delete_machines = 19;
+  // approve_machines is the "approve" verb on talosmachines/approval.
+  bool approve_machines = 20;
+  // create_patches, update_patches and delete_patches are those verbs on talosconfigpatches.
+  bool create_patches = 21;
+  bool update_patches = 22;
+  bool delete_patches = 23;
 }
 
 message DownloadReaderTalosconfigRequest {

@@ -4,6 +4,16 @@
 
 ### Features
 
+- "Remove node" and reset are one action. `ichor node remove NODE`
+  (the UI's "Remove node") drains the node, removes its etcd member (control
+  plane), wipes STATE and EPHEMERAL, then powers the machine off, or reboots it
+  into maintenance mode with `--reboot` ("After wiping" in the UI), and deletes
+  its Kubernetes Node. It needs the typed name and the override permission, and
+  no longer leaves a running, unwiped node behind. A node that does not answer
+  is removed unwiped, its Node is deleted and an Event says so; a Node that
+  stays Ready is left with a Warning Event naming the `kubectl delete node`
+  step. `ichor node reset` stays as a deprecated alias of `node remove
+  --reboot`. The controller needs `delete` on Nodes.
 - `ichor init --merge-kubeconfig` merges the new cluster's admin kubeconfig into
   yours as context `admin@NAME` and makes it current; `init` always
   ends by saying which kubeconfig to use.

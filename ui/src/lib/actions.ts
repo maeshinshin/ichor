@@ -14,6 +14,15 @@ export type ActionPermissions = {
   updateBackups: boolean
   clusterUpdate: boolean
   talosconfigReader: boolean
+  startNodeReset: boolean
+  startNodeShutdown: boolean
+  overrideMachines: boolean
+  updateMachines: boolean
+  deleteMachines: boolean
+  approveMachines: boolean
+  createPatches: boolean
+  updatePatches: boolean
+  deletePatches: boolean
 }
 
 export function canListUsers(p: ActionPermissions | undefined): boolean {
@@ -50,4 +59,13 @@ export function clusterMenu(p: ActionPermissions | undefined): ClusterMenuItem[]
   if (p?.talosconfigReader) out.push('reader-talosconfig')
   if (mayStart(p, 'shutdown')) out.push('shutdown')
   return out
+}
+
+// A pending machine: approving needs the approve verb and the write of the machine's spec; rejecting only the write.
+export function mayApprove(p: ActionPermissions | undefined): boolean {
+  return p?.approveMachines === true && p.updateMachines
+}
+
+export function mayReject(p: ActionPermissions | undefined): boolean {
+  return p?.updateMachines === true
 }

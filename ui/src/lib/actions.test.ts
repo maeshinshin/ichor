@@ -1,31 +1,9 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { canListUsers, clusterMenu, mayStart, type ActionPermissions } from './actions.ts'
+import { canListUsers, clusterMenu, mayApprove, mayReject, mayStart } from './actions.ts'
+import { admin, operator, viewer } from './roles.testdata.ts'
 
-const none: ActionPermissions = {
-  listUsers: false,
-  createOperations: false,
-  startCaRotation: false,
-  startKeyRotation: false,
-  startShutdown: false,
-  startEtcdRestore: false,
-  updateIchorVersion: false,
-  updateBackups: false,
-  clusterUpdate: false,
-  talosconfigReader: false,
-}
-// The built-in roles (config/rbac/ichor_*_role.yaml).
-const viewer = none
-const operator: ActionPermissions = { ...none, createOperations: true, updateBackups: true, clusterUpdate: true, talosconfigReader: true }
-const admin: ActionPermissions = {
-  ...operator,
-  listUsers: true,
-  startCaRotation: true,
-  startKeyRotation: true,
-  startShutdown: true,
-  startEtcdRestore: true,
-  updateIchorVersion: true,
-}
+const none = viewer
 
 test('nothing is offered until the permissions are known', () => {
   assert.equal(canListUsers(undefined), false)
@@ -64,4 +42,18 @@ test('the cluster menu lists only what the role may do', () => {
   assert.deepEqual(clusterMenu(viewer), [])
   assert.deepEqual(clusterMenu(operator), ['reader-talosconfig'])
   assert.deepEqual(clusterMenu(admin), ['ca-rotation', 'key-rotation', 'reader-talosconfig', 'shutdown'])
+})
+
+test('a pending machine: a viewer does neither, an operator and an admin approve and reject', () => {
+  assert.equal(mayApprove(undefined), false)
+  assert.equal(mayReject(undefined), false)
+  assert.equal(mayApprove(viewer), false)
+  assert.equal(mayReject(viewer), false)
+  assert.equal(mayApprove(operator), true)
+  assert.equal(mayReject(operator), true)
+  assert.equal(mayApprove(admin), true)
+  assert.equal(mayReject(admin), true)
+  // The approve verb alone cannot write the machine.
+  assert.equal(mayApprove({ ...none, approveMachines: true }), false)
+  assert.equal(mayApprove({ ...none, updateMachines: true }), false)
 })

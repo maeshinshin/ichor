@@ -15,16 +15,13 @@ const themeKey = 'ichor-docs-theme'
 type Props = { nav: NavNode[]; current: string; base: string; version: string; repoUrl: string; children?: ComponentChildren }
 
 function ThemeToggle() {
-  const [dark, setDark] = useState(false)
-  useEffect(() => setDark(document.documentElement.classList.contains('dark')), [])
   return (
     <Button
       variant="ghost"
       size="icon"
       aria-label="Toggle light and dark theme"
       onClick={() => {
-        const next = !dark
-        setDark(next)
+        const next = !document.documentElement.classList.contains('dark')
         document.documentElement.classList.toggle('dark', next)
         try {
           localStorage.setItem(themeKey, next ? 'dark' : 'light')
@@ -33,7 +30,9 @@ function ThemeToggle() {
         }
       }}
     >
-      {dark ? <Sun /> : <Moon />}
+      {/* Both icons are rendered and CSS shows the one for the `dark` class the head script sets, so the first paint is right. */}
+      <Sun className="hidden dark:block" />
+      <Moon className="dark:hidden" />
     </Button>
   )
 }

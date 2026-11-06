@@ -27,6 +27,8 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
+const mergedDemo = "admin@demo"
+
 // adminKubeconfig is what the cluster hands out: cluster, admin@cluster user and context.
 func adminKubeconfig(t *testing.T, cluster, server string) []byte {
 	t.Helper()
@@ -59,13 +61,13 @@ func mustLoad(t *testing.T, path string) *clientcmdapi.Config {
 func TestMergeKubeconfig_IntoMissingFileCreatesDirAndSets0600(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "newdir", "config")
 
-	name, err := mergeKubeconfig(target, []string{target}, adminKubeconfig(t, "demo", "https://10.0.0.1:6443"), "demo")
-	if err != nil || name != "admin@demo" {
+	name, err := mergeKubeconfig(target, []string{target}, adminKubeconfig(t, "demo", credServer), "demo")
+	if err != nil || name != mergedDemo {
 		t.Fatalf("mergeKubeconfig = %q, %v", name, err)
 	}
 
 	cfg := mustLoad(t, target)
-	if cfg.CurrentContext != "admin@demo" || cfg.Clusters["demo"].Server != "https://10.0.0.1:6443" || cfg.AuthInfos["admin@demo"] == nil {
+	if cfg.CurrentContext != mergedDemo || cfg.Clusters["demo"].Server != credServer || cfg.AuthInfos[mergedDemo] == nil {
 		t.Fatalf("merged config wrong: %+v", cfg)
 	}
 
@@ -83,7 +85,7 @@ func TestMergeKubeconfig_KeepsOtherContextsIntact(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := mergeKubeconfig(target, []string{target}, adminKubeconfig(t, "demo", "https://10.0.0.1:6443"), "demo"); err != nil {
+	if _, err := mergeKubeconfig(target, []string{target}, adminKubeconfig(t, "demo", credServer), "demo"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -92,7 +94,7 @@ func TestMergeKubeconfig_KeepsOtherContextsIntact(t *testing.T) {
 		t.Fatalf("other cluster not intact: %+v", cfg)
 	}
 
-	if cfg.CurrentContext != "admin@demo" {
+	if cfg.CurrentContext != mergedDemo {
 		t.Fatalf("current-context = %q", cfg.CurrentContext)
 	}
 }
@@ -100,7 +102,7 @@ func TestMergeKubeconfig_KeepsOtherContextsIntact(t *testing.T) {
 func TestMergeKubeconfig_CollisionRenamesWithSuffix(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "config")
 
-	for _, server := range []string{"https://10.0.0.1:6443", "https://10.0.0.2:6443", "https://10.0.0.3:6443"} {
+	for _, server := range []string{credServer, "https://10.0.0.2:6443", "https://10.0.0.3:6443"} {
 		if _, err := mergeKubeconfig(target, []string{target}, adminKubeconfig(t, "demo", server), "demo"); err != nil {
 			t.Fatal(err)
 		}
@@ -108,7 +110,7 @@ func TestMergeKubeconfig_CollisionRenamesWithSuffix(t *testing.T) {
 
 	cfg := mustLoad(t, target)
 	for ctx, server := range map[string]string{
-		"admin@demo": "https://10.0.0.1:6443", "admin@demo-1": "https://10.0.0.2:6443", "admin@demo-2": "https://10.0.0.3:6443",
+		mergedDemo: credServer, "admin@demo-1": "https://10.0.0.2:6443", "admin@demo-2": "https://10.0.0.3:6443",
 	} {
 		c := cfg.Contexts[ctx]
 		if c == nil || cfg.Clusters[c.Cluster].Server != server || cfg.AuthInfos[c.AuthInfo] == nil {
@@ -123,10 +125,10 @@ func TestMergeKubeconfig_CollisionRenamesWithSuffix(t *testing.T) {
 
 func TestMergeKubeconfig_RepeatedMergeIsIdempotent(t *testing.T) {
 	target := filepath.Join(t.TempDir(), "config")
-	kc := adminKubeconfig(t, "demo", "https://10.0.0.1:6443")
+	kc := adminKubeconfig(t, "demo", credServer)
 
 	for range 2 {
-		if name, err := mergeKubeconfig(target, []string{target}, kc, "demo"); err != nil || name != "admin@demo" {
+		if name, err := mergeKubeconfig(target, []string{target}, kc, "demo"); err != nil || name != mergedDemo {
 			t.Fatalf("mergeKubeconfig = %q, %v", name, err)
 		}
 	}
@@ -177,7 +179,7 @@ func TestMergeKubeconfig_MultiPathWritesOnlyTargetButAvoidsNamesInOtherFiles(t *
 	dir := t.TempDir()
 	first, second := filepath.Join(dir, "first"), filepath.Join(dir, "second")
 
-	if _, err := mergeKubeconfig(first, []string{first}, adminKubeconfig(t, "demo", "https://10.0.0.1:6443"), "demo"); err != nil {
+	if _, err := mergeKubeconfig(first, []string{first}, adminKubeconfig(t, "demo", credServer), "demo"); err != nil {
 		t.Fatal(err)
 	}
 

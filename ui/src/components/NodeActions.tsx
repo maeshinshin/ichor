@@ -79,6 +79,7 @@ const downloadLabel = { 'support-bundle': 'actions.supportBundle', 'etcd-snapsho
 // Actions that cannot apply to the node are not offered, and the whole menu is absent when none is.
 export function NodeActions({
   machine,
+  displayName,
   perms,
   controlPlane,
   approved,
@@ -86,6 +87,8 @@ export function NodeActions({
   onStarted,
 }: {
   machine: Ref
+  // The hostname the page shows for the machine; the machine's own name (a UUID) is what a typed confirmation needs.
+  displayName?: string
   // What the caller may download, fetched once by the page; undefined offers no download.
   perms: Permissions | undefined
   controlPlane: boolean
@@ -177,6 +180,7 @@ export function NodeActions({
           key={active.id}
           def={active}
           machine={machine}
+          displayName={displayName}
           onClose={() => setActive(null)}
           onStarted={() => {
             setActive(null)
@@ -328,14 +332,17 @@ function CaptureDialog({
 function NodeActionDialog({
   def,
   machine,
+  displayName,
   onClose,
   onStarted,
 }: {
   def: NodeActionDef
   machine: { namespace: string; name: string }
+  displayName?: string
   onClose: () => void
   onStarted: () => void
 }) {
+  const shown = displayName || machine.name
   const [service, setService] = useState(def.id === 'restart-service' ? restartableServices[0] : '')
   const [allowLeader, setAllowLeader] = useState(false)
   const [typed, setTyped] = useState('')
@@ -390,12 +397,12 @@ function NodeActionDialog({
       const label = t(`node.action.go.${def.id}`)
       if (def.id === 'remove') {
         await machineClient.removeMachine({ machine: { namespace: machine.namespace, name: machine.name }, confirm: typed.trim() })
-        notifyDone(t('node.action.removed', { node: machine.name }))
+        notifyDone(t('node.action.removed', { node: shown }))
         onStarted()
         return
       }
       await operationClient.createOperation({ kind: OperationKind.NODE, node: request(typed.trim()) })
-      notifyDone(t('node.action.started', { action: label, node: machine.name }))
+      notifyDone(t('node.action.started', { action: label, node: shown }))
       onStarted()
     } catch (err) {
       setError(describeError(err))
@@ -407,7 +414,7 @@ function NodeActionDialog({
     <ConfirmDialog
       open
       onOpenChange={(open) => !open && !busy && onClose()}
-      title={t('node.action.title', { action: t(`node.action.${def.id}`), node: machine.name })}
+      title={t('node.action.title', { action: t(`node.action.${def.id}`), node: shown })}
       description={plan === null && !error ? t('node.action.checking') : undefined}
       confirm={{
         label: busy ? t('node.action.starting') : t(`node.action.go.${def.id}`),
@@ -472,7 +479,7 @@ function NodeActionDialog({
             )}
             {confirmName !== '' && (
               <div class="space-y-2">
-                <Label htmlFor="node-action-name">{t('node.action.typeName', { name: machine.name })}</Label>
+                <Label htmlFor="node-action-name">{shown === machine.name ? t('node.action.typeName', { name: machine.name }) : t('node.action.typeNameHost', { name: machine.name, host: shown })}</Label>
                 <Input
                   id="node-action-name"
                   autoComplete="off"

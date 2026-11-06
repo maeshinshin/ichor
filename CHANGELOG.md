@@ -39,6 +39,7 @@
 
 ### Notable fixes
 
+- The typed confirmation of `ichor node remove|reset` is the machine name everywhere (the TalosMachine name the UI dialog shows), not the hostname: `--confirm` takes it, the prompt and the refusal say "the machine name <uuid> (node <host>)", and the server no longer accepts the hostname. NODE still takes the machine name, hostname or Node name.
 - `ichor version` prints the no-image skip warning on its own line.
 
 ## v0.1.0 (2026-11-06)

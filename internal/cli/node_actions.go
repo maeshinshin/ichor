@@ -113,7 +113,7 @@ func needsTypedName(a pb.NodeAction) bool {
 }
 
 // runNodeAction plans, confirms and starts one node action. --yes skips the y/N question; reset
-// and remove need the node's name instead, typed here or given with --confirm, which replaces the question.
+// and remove need the machine name instead, typed here or given with --confirm, which replaces the question.
 func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, s nodeActionSpec) error {
 	bg := overrideOf(apiOpts)
 
@@ -134,6 +134,13 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 		return fmt.Errorf("node %s: it wipes the node, so it needs --override (and the override RBAC verb on the machine)", name)
 	}
 
+	// The typed name is the TalosMachine's name, as the CRD rule and RemoveMachine check it; NODE
+	// may be its hostname or Node name, so the plan says which machine that is.
+	machine := s.Machine
+	if n := plan.Msg.GetConfirmName(); n != "" {
+		machine = n
+	}
+
 	text := nodePlanText(s, plan.Msg)
 
 	// The typed name is the consent for reset and remove: typed at the prompt or given as --confirm
@@ -144,13 +151,13 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 	case !assumeYes && needsTypedName(s.Action):
 		_, _ = fmt.Fprint(errw, text)
 
-		typed, err := readLine(in, errw, fmt.Sprintf("Type the node name %q to confirm: ", s.Machine))
+		typed, err := readLine(in, errw, confirmPrompt(machine, s.Machine))
 		if err != nil {
 			return fmt.Errorf("node %s: reading confirmation: %w", name, err)
 		}
 
-		if typed != s.Machine {
-			return fmt.Errorf("node %s: aborted (the name did not match)", name)
+		if typed != machine {
+			return fmt.Errorf("node %s: aborted (the name did not match; type %s)", name, confirmWhat(machine, s.Machine))
 		}
 
 		s.Confirm = typed
@@ -160,8 +167,8 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 		}
 	}
 
-	if needsTypedName(s.Action) && s.Confirm != s.Machine {
-		return fmt.Errorf("node %s: type the node name with --confirm %s to go on without asking", name, s.Machine)
+	if needsTypedName(s.Action) && s.Confirm != machine {
+		return fmt.Errorf("node %s: type %s with --confirm to go on without asking", name, confirmWhat(machine, s.Machine))
 	}
 
 	if s.Action == pb.NodeAction_NODE_ACTION_REMOVE {
@@ -197,6 +204,19 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 	return watchOperation(ctx, c, resp.Msg.GetOperation().GetRef(), out, errw)
 }
 
+// confirmWhat names what to type: the machine name, and the node as the user gave it when that differs.
+func confirmWhat(machine, asked string) string {
+	if asked == machine {
+		return "the machine name " + machine
+	}
+
+	return fmt.Sprintf("the machine name %s (node %s)", machine, asked)
+}
+
+func confirmPrompt(machine, asked string) string {
+	return "Type " + confirmWhat(machine, asked) + " to confirm: "
+}
+
 // readLine prompts and returns the trimmed answer.
 func readLine(r io.Reader, w io.Writer, prompt string) (string, error) {
 	_, _ = fmt.Fprint(w, prompt)
@@ -215,8 +235,8 @@ func newNodeActionCmd(use, short string, action pb.NodeAction, args cobra.Positi
 		Short: short,
 		Long: short + `.
 
-It shows the plan and asks for confirmation unless --yes. For reset and remove the typed node name
-(or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
+It shows the plan and asks for confirmation unless --yes. For reset and remove the typed machine name
+(the TalosMachine name, or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
 (or deletes the machine); the controller does the work. Follow it with --follow.`,
 		Args: args,
 		RunE: func(cmd *cobra.Command, a []string) error {
@@ -282,6 +302,6 @@ func init() {
 		"after the wipe reboot the node into maintenance mode, so it can be added again, instead of powering it off")
 
 	for _, c := range []*cobra.Command{nodeResetCmd, nodeRemoveCmd} {
-		c.Flags().StringVar(&nodeActionOpts.Confirm, "confirm", "", "the node's name, to go on without being asked to type it")
+		c.Flags().StringVar(&nodeActionOpts.Confirm, "confirm", "", "the machine name (the TalosMachine name, not the hostname), to go on without being asked to type it")
 	}
 }

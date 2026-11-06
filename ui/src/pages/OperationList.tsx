@@ -31,7 +31,7 @@ export function OperationList() {
   if (!ops) return <PageSkeleton label={t('ops.loading')} />
 
   const rows = ops.filter((o) =>
-    matchesQuery(query, o.ref?.name, enumLabel(OperationKind, o.kind), t(`ops.state.${operationState(o.phase, o.failureReason)}`)),
+    matchesQuery(query, o.ref?.name, o.summary, enumLabel(OperationKind, o.kind), t(`ops.state.${operationState(o.phase, o.failureReason)}`)),
   )
 
   return (
@@ -75,9 +75,10 @@ function OperationRow({ op, onChanged }: { op: Operation; onChanged: () => void 
       <TableCell className="max-sm:whitespace-normal max-sm:wrap-anywhere">
         {op.ref && (
           <Button asChild variant="link" size="sm" className="max-sm:h-auto max-sm:whitespace-normal">
-            <Link to={`/operations/${op.ref.name}`}>{op.ref.name}</Link>
+            <Link to={`/operations/${op.ref.name}`}>{op.summary || op.ref.name}</Link>
           </Button>
         )}
+        {op.ref && op.summary && <div class="px-3 font-mono text-xs text-muted-foreground">{op.ref.name}</div>}
         <div class="sm:hidden">
           <ToneBadge tone={opStateTone(state)}>{t(`ops.state.${state}`)}</ToneBadge>
         </div>

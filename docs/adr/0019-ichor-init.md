@@ -9,7 +9,7 @@ Decided: `ichor init`: VIP recommended not required, Ichor applied through the A
 `docs/design/architecture.md`'s "Bootstrap" section gives `ichor init` six
 steps and one example invocation:
 
-```
+```sh
 ichor init --preset standard --cni cilium [--argocd --repo URL --path clusters/NAME] [--gitops-dir DIR]
 ```
 

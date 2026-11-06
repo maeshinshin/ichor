@@ -167,7 +167,7 @@ grants `get`, `list` or `watch` on `secrets` without `resourceNames`. Run
 against the regression this ADR describes (the marker without
 `namespace=`), it fails with:
 
-```
+```text
 ClusterRole "ichor-manager-role" grants [get list watch] on secrets across every namespace with no
 resourceNames; the bundle Secret is resolved in the controller's own namespace (ADR 0011), so this
 permission must live in a namespace-scoped Role instead

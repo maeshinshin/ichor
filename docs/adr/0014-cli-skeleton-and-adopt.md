@@ -65,7 +65,7 @@ never touch the chart.
 
 ### Package layout
 
-```
+```text
 cmd/ichor/main.go       — package main; nothing but Execute()
 internal/cli/root.go    — rootCmd, persistent flags (-o/--output, --yes,
                            --kubeconfig, --talosconfig), Execute()
@@ -85,7 +85,7 @@ internal/cli/output.go     — -o yaml|json encoding
 
 Scaffolding commands run (from the repo root, inside `nix develop`):
 
-```
+```sh
 cobra-cli init cmd/ichor
 cobra-cli add adopt
 ```

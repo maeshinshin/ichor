@@ -56,7 +56,7 @@ The installer derives the case from the live Deployment as it already does and n
 
 **7. Settings live in `IchorInstallation`, as new optional fields; there is no new kind.** The singleton already exists on every `ichor init` install, is already guarded by a CEL name rule and the webhook, is already read by the CLI, UI and installer, and is already the place "how Ichor itself is installed" is recorded. Added to `spec` (all optional; none removed or renamed; defaults keep today's behaviour):
 
-```
+```text
 spec.deployment.manager      installer | helm      (omitted = installer)
 spec.reclaim.enabled         *bool                  (override, ADR 0103)
 spec.users.tokenTTL          duration, 1m..1h       (ADR 0094)

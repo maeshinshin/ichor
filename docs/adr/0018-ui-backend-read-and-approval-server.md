@@ -362,7 +362,7 @@ effect nobody had named yet -- `go build ./...`, `go test ./...`, `go vet
 ./...` and golangci-lint's default run **never compile that file at all**,
 since none of them ever sets that tag:
 
-```
+```console
 $ go list -f '{{.GoFiles}}' ./internal/uiapi/
 [bundle.go cluster_service.go ... ]      # rbac_markers.go absent
 $ go list -tags ichorui_rbac -f '{{.GoFiles}}' ./internal/uiapi/
@@ -497,7 +497,7 @@ vendored source carries the authoritative per-method role table (not
 `pkg/machinery`, which ships no server-side policy at all), and both
 entries read:
 
-```
+```go
 "/machine.MachineService/Dmesg": role.MakeSet(role.Admin, role.Operator, role.Reader),
 "/machine.MachineService/Logs":  role.MakeSet(role.Admin, role.Operator, role.Reader),
 ```
@@ -565,7 +565,7 @@ regardless of what the generated `ClusterRole` actually said; only a real
 deployment's `Get`/`List` would have returned `Forbidden`, surfaced to the
 UI as `CodeInternal` (`GetNode`'s own error wrapping). Fixed by adding
 
-```
+```go
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list
 ```
 
@@ -651,7 +651,7 @@ Proven to actually fail, not just reasoned to: removing `update` from the
 chart's `talosconfigpatches` verbs and running `go test ./dist/chart/...
 -run TestChartInvariants -count=1` produced
 
-```
+```text
 chart_test.go:119: helm template ichor .: ClusterRole ichor-ui-role is
 missing ichor.maesh.dev/talosconfigpatches:update (present in
 ../../config/rbac/ichor-ui/role.yaml); add it to

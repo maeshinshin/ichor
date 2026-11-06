@@ -112,7 +112,7 @@ export function Backups() {
                   const lastText = b.lastSuccessTime ? formatTimestamp(b.lastSuccessTime) : last ? formatTimestamp(last.time) : t('backups.never')
                   return (
                     <TableRow key={b.ref?.name}>
-                      <TableCell className="min-w-48 font-medium whitespace-normal wrap-anywhere">
+                      <TableCell className="md:min-w-48 font-medium whitespace-normal wrap-anywhere">
                         {b.ref?.name}
                         <div class="font-mono font-normal text-muted-foreground md:hidden">{b.schedule}</div>
                         <div class="font-normal text-muted-foreground md:hidden">{lastText}</div>

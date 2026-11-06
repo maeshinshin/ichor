@@ -45,7 +45,10 @@ import (
 // Kubernetes decides and Ichor keeps no list of who may.
 const DownloadVerb = "download"
 
-const resourceTalosMachines = "talosmachines"
+const (
+	resourceTalosMachines   = "talosmachines"
+	resourceTalosOperations = "talosoperations"
+)
 
 // Caps, enforced here whatever the caller asks for.
 const (
@@ -93,11 +96,12 @@ func (s *Server) acquireDownloadSlot() (func(), error) {
 	}
 }
 
-// GetMyPermissions answers every download flag the UI needs in one call, each a
+// GetMyPermissions answers every flag the UI needs in one call, each a
 // SelfSubjectAccessReview as the caller (run concurrently): the three machine
-// downloads when a machine is given, the cluster credentials download when a
-// cluster is given. The answer only decides what the UI shows; each download
-// asks again.
+// downloads when a machine is given, the cluster's downloads and the actions the
+// UI hides from a role that lacks them (start, create, update) when a cluster is
+// given, and whether the caller may list users. The answer only decides what the
+// UI shows; each action asks again.
 func (s *Server) GetMyPermissions(
 	ctx context.Context, req *connect.Request[pb.GetMyPermissionsRequest],
 ) (*connect.Response[pb.GetMyPermissionsResponse], error) {
@@ -142,7 +146,43 @@ func (s *Server) GetMyPermissions(
 
 			return err
 		})
+
+		// What the UI hides when the caller's role cannot do it. Kubernetes decides, as for the downloads.
+		start := func(dst *bool, sub string) {
+			g.Go(func() (err error) {
+				*dst, err = s.may(ctx, ichorv1alpha1.OperationStartVerb, c.GetNamespace(), resourceTalosOperations, sub, "")
+
+				return err
+			})
+		}
+		start(&out.StartCaRotation, ichorv1alpha1.TalosOperationKindCARotation)
+		start(&out.StartKeyRotation, ichorv1alpha1.TalosOperationKindKeyRotation)
+		start(&out.StartShutdown, ichorv1alpha1.TalosOperationKindShutdown)
+		start(&out.StartEtcdRestore, ichorv1alpha1.TalosOperationKindEtcdRestore)
+
+		g.Go(func() (err error) {
+			out.CreateOperations, err = s.may(ctx, "create", c.GetNamespace(), resourceTalosOperations, "", "")
+
+			return err
+		})
+		g.Go(func() (err error) {
+			out.UpdateBackups, err = s.may(ctx, "update", c.GetNamespace(), "talosetcdbackups", "", "")
+
+			return err
+		})
+		g.Go(func() (err error) {
+			out.UpdateIchorVersion, err = s.may(ctx, "update", "", "ichorinstallations", ichorv1alpha1.IchorSubresourceVersion, "")
+
+			return err
+		})
 	}
+
+	// The Users page needs no cluster: IchorUsers live in the backend's own namespace.
+	g.Go(func() (err error) {
+		out.ListUsers, err = s.may(ctx, "list", s.ControllerNamespace, "ichorusers", "", "")
+
+		return err
+	})
 
 	if err := g.Wait(); err != nil {
 		return nil, err

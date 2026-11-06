@@ -234,7 +234,7 @@ var _ = Describe("DiagnosticsService", func() {
 		read := rbacv1.PolicyRule{
 			// Reading the machine is ordinary RBAC, separate from the download verb.
 			APIGroups: []string{ichorv1alpha1.GroupVersion.Group},
-			Resources: []string{"talosmachines", "talosclusters"},
+			Resources: []string{"talosmachines", resourceTalosClusters},
 			Verbs:     []string{"get", "list"},
 		}
 		download := rbacv1.PolicyRule{

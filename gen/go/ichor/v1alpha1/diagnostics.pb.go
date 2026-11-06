@@ -94,8 +94,26 @@ type GetMyPermissionsResponse struct {
 	ClusterUpdate bool `protobuf:"varint,5,opt,name=cluster_update,json=clusterUpdate,proto3" json:"cluster_update,omitempty"`
 	// talosconfig_reader is the "download" verb on talosclusters/talosconfig-reader.
 	TalosconfigReader bool `protobuf:"varint,6,opt,name=talosconfig_reader,json=talosconfigReader,proto3" json:"talosconfig_reader,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// list_users is the "list" verb on ichorusers; the UI shows the Users page only
+	// when it is true. It needs no request field.
+	ListUsers bool `protobuf:"varint,7,opt,name=list_users,json=listUsers,proto3" json:"list_users,omitempty"`
+	// The flags below need the cluster; without it they are false. They let the UI
+	// hide the actions the caller's role cannot perform.
+	// create_operations is the "create" verb on talosoperations (upgrades, config
+	// apply, node actions, pause/resume).
+	CreateOperations bool `protobuf:"varint,8,opt,name=create_operations,json=createOperations,proto3" json:"create_operations,omitempty"`
+	// start_* are the "start" verb on the talosoperations subresource of that kind.
+	StartCaRotation  bool `protobuf:"varint,9,opt,name=start_ca_rotation,json=startCaRotation,proto3" json:"start_ca_rotation,omitempty"`
+	StartKeyRotation bool `protobuf:"varint,10,opt,name=start_key_rotation,json=startKeyRotation,proto3" json:"start_key_rotation,omitempty"`
+	StartShutdown    bool `protobuf:"varint,11,opt,name=start_shutdown,json=startShutdown,proto3" json:"start_shutdown,omitempty"`
+	StartEtcdRestore bool `protobuf:"varint,12,opt,name=start_etcd_restore,json=startEtcdRestore,proto3" json:"start_etcd_restore,omitempty"`
+	// update_ichor_version is the "update" verb on ichorinstallations/version, which
+	// an Ichor upgrade needs.
+	UpdateIchorVersion bool `protobuf:"varint,13,opt,name=update_ichor_version,json=updateIchorVersion,proto3" json:"update_ichor_version,omitempty"`
+	// update_backups is the "update" verb on talosetcdbackups, which Back up now needs.
+	UpdateBackups bool `protobuf:"varint,14,opt,name=update_backups,json=updateBackups,proto3" json:"update_backups,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetMyPermissionsResponse) Reset() {
@@ -166,6 +184,62 @@ func (x *GetMyPermissionsResponse) GetClusterUpdate() bool {
 func (x *GetMyPermissionsResponse) GetTalosconfigReader() bool {
 	if x != nil {
 		return x.TalosconfigReader
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetListUsers() bool {
+	if x != nil {
+		return x.ListUsers
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetCreateOperations() bool {
+	if x != nil {
+		return x.CreateOperations
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetStartCaRotation() bool {
+	if x != nil {
+		return x.StartCaRotation
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetStartKeyRotation() bool {
+	if x != nil {
+		return x.StartKeyRotation
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetStartShutdown() bool {
+	if x != nil {
+		return x.StartShutdown
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetStartEtcdRestore() bool {
+	if x != nil {
+		return x.StartEtcdRestore
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetUpdateIchorVersion() bool {
+	if x != nil {
+		return x.UpdateIchorVersion
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetUpdateBackups() bool {
+	if x != nil {
+		return x.UpdateBackups
 	}
 	return false
 }
@@ -685,14 +759,24 @@ const file_ichor_v1alpha1_diagnostics_proto_rawDesc = "" +
 	" ichor/v1alpha1/diagnostics.proto\x12\x0eichor.v1alpha1\x1a\x1bichor/v1alpha1/common.proto\"\x83\x01\n" +
 	"\x17GetMyPermissionsRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x123\n" +
-	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\x94\x02\n" +
+	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\xe8\x04\n" +
 	"\x18GetMyPermissionsResponse\x12%\n" +
 	"\x0esupport_bundle\x18\x01 \x01(\bR\rsupportBundle\x12#\n" +
 	"\retcd_snapshot\x18\x02 \x01(\bR\fetcdSnapshot\x12%\n" +
 	"\x0epacket_capture\x18\x03 \x01(\bR\rpacketCapture\x12/\n" +
 	"\x13cluster_credentials\x18\x04 \x01(\bR\x12clusterCredentials\x12%\n" +
 	"\x0ecluster_update\x18\x05 \x01(\bR\rclusterUpdate\x12-\n" +
-	"\x12talosconfig_reader\x18\x06 \x01(\bR\x11talosconfigReader\"\x82\x01\n" +
+	"\x12talosconfig_reader\x18\x06 \x01(\bR\x11talosconfigReader\x12\x1d\n" +
+	"\n" +
+	"list_users\x18\a \x01(\bR\tlistUsers\x12+\n" +
+	"\x11create_operations\x18\b \x01(\bR\x10createOperations\x12*\n" +
+	"\x11start_ca_rotation\x18\t \x01(\bR\x0fstartCaRotation\x12,\n" +
+	"\x12start_key_rotation\x18\n" +
+	" \x01(\bR\x10startKeyRotation\x12%\n" +
+	"\x0estart_shutdown\x18\v \x01(\bR\rstartShutdown\x12,\n" +
+	"\x12start_etcd_restore\x18\f \x01(\bR\x10startEtcdRestore\x120\n" +
+	"\x14update_ichor_version\x18\r \x01(\bR\x12updateIchorVersion\x12%\n" +
+	"\x0eupdate_backups\x18\x0e \x01(\bR\rupdateBackups\"\x82\x01\n" +
 	" DownloadReaderTalosconfigRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12)\n" +
 	"\x10lifetime_seconds\x18\x02 \x01(\x03R\x0flifetimeSeconds\"v\n" +

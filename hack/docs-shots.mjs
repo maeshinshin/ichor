@@ -211,6 +211,13 @@ try {
       await sleep(300)
       check((await clipboard()) === (await ev(`document.querySelector('article pre code').textContent`)), `${tag}: the code copy button copies the code`)
 
+      // Syntax highlighting: a YAML block has several token colours, taken from the theme that is on.
+      await ev(`(() => { const p = [...document.querySelectorAll('article pre')].find((p) => p.textContent.includes('kind: InitConfig')); p.scrollIntoView({ block: 'center' }) })()`)
+      await sleep(300)
+      const colours = await ev(`new Set([...[...document.querySelectorAll('article pre.astro-code')].find((p) => p.textContent.includes('kind: InitConfig')).querySelectorAll('span')].map((s) => getComputedStyle(s).color)).size`)
+      check(colours > 2, `${tag}: a YAML block is highlighted (${colours} colours)`)
+      await shot(`${tag}-highlight`)
+
       // Versions: versions.json, the redirects, the switcher, the banners and a per-version search.
       const vs = await (await fetch(origin + root + 'versions.json')).json()
       const latest = vs.find((v) => v.isLatest)

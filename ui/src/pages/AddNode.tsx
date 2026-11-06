@@ -108,6 +108,7 @@ export function AddNode() {
           <Discovery
             cluster={cluster}
             configured={configured}
+            canEdit={perms?.clusterUpdate === true}
             onAdded={(c) => (c ? setCluster(c) : reloadCurrent())}
           />
         </SectionCard>
@@ -121,7 +122,7 @@ export function AddNode() {
                   <TableRow>
                     <TableHead>{t('col.identity')}</TableHead>
                     <TableHead className="hidden sm:table-cell">{t('col.endpoint')}</TableHead>
-                    <TableHead>{t('col.actions')}</TableHead>
+                    {mayApprove(perms) && <TableHead>{t('col.actions')}</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -132,9 +133,11 @@ export function AddNode() {
                         <div class="font-sans whitespace-nowrap text-muted-foreground sm:hidden">{m.endpoint || '-'}</div>
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">{m.endpoint || '-'}</TableCell>
-                      <TableCell>
-                        {mayApprove(perms) && <ApproveDialog machine={m} onApproved={reloadMachines} />}
-                      </TableCell>
+                      {mayApprove(perms) && (
+                        <TableCell>
+                          <ApproveDialog machine={m} onApproved={reloadMachines} />
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -187,10 +190,12 @@ function RemoveCidr({ cidr, onRemove }: { cidr: string; onRemove: () => Promise<
 function Discovery({
   cluster,
   configured,
+  canEdit,
   onAdded,
 }: {
   cluster: Cluster
   configured: readonly string[]
+  canEdit: boolean
   onAdded: (c: Cluster | undefined) => void
 }) {
   const [address, setAddress] = useState('')
@@ -245,15 +250,17 @@ function Discovery({
               {cluster.discoveryAddresses.map((a) => (
                 <span key={a} class="flex items-center gap-1">
                   <Badge variant="outline">{a}</Badge>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label={t('addNode.remove', { target: a })}
-                    onClick={() => remove(a, false).catch(() => {})}
-                  >
-                    <XIcon aria-hidden="true" />
-                  </Button>
+                  {canEdit && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={t('addNode.remove', { target: a })}
+                      onClick={() => remove(a, false).catch(() => {})}
+                    >
+                      <XIcon aria-hidden="true" />
+                    </Button>
+                  )}
                 </span>
               ))}
             </div>
@@ -267,13 +274,14 @@ function Discovery({
               {cluster.discoveryCidrs.map((c) => (
                 <span key={c} class="flex items-center gap-1">
                   <Badge variant="outline">{c}</Badge>
-                  <RemoveCidr cidr={c} onRemove={() => remove(c, true)} />
+                  {canEdit && <RemoveCidr cidr={c} onRemove={() => remove(c, true)} />}
                 </span>
               ))}
             </div>
           )}
         </Field>
       </Fields>
+      {canEdit && (
       <form
         class="space-y-2"
         onSubmit={(e) => {
@@ -305,6 +313,7 @@ function Discovery({
         )}
         <CardDescription>{t('addNode.cidrHint')}</CardDescription>
       </form>
+      )}
       {error && <ErrorAlert {...error} />}
       {configured.map((a) => (
         <Alert key={a}>

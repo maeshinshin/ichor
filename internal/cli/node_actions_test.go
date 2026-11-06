@@ -24,6 +24,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -33,8 +34,11 @@ func nodeActionClients(t *testing.T, yes bool) (*apiClients, client.Client) {
 	t.Helper()
 
 	setAPITestFlags(t, yes)
+	apiOpts.Override = true // a remove and a reset both need it
 
-	return freshClients(t, opTestObjects())
+	k8s := reviewAs(true, fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(opTestObjects()...).Build())
+
+	return localClients(apiOpts, apiDeps{K8s: k8s}), k8s
 }
 
 // present reports whether the machine is still there.
@@ -155,8 +159,8 @@ func TestNodeRemoveNeedsTheTypedName(t *testing.T) {
 		t.Fatalf("typed name: %v", err)
 	}
 
-	if !strings.Contains(done.String(), "Next: the Kubernetes Node stays") || !strings.Contains(done.String(), "kubectl delete node "+testMachineName) {
-		t.Fatalf("remove must print the Node next step:\n%s", done.String())
+	if !strings.Contains(done.String(), "deletes its Kubernetes Node") || !strings.Contains(done.String(), "new pending machine") {
+		t.Fatalf("remove must say how to add the machine again:\n%s", done.String())
 	}
 
 	var m ichorv1alpha1.TalosMachine
@@ -210,5 +214,16 @@ func TestNodeResetWipeModeFlag(t *testing.T) {
 	req := nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_RESET, WipeMode: "system-disk"}.request(nil)
 	if req.GetWipeMode() != "system-disk" {
 		t.Fatalf("request = %+v", req)
+	}
+}
+
+// ichor node reset is the deprecated alias of node remove --reboot.
+func TestNodeRemoveHasRebootAndResetIsDeprecated(t *testing.T) {
+	if nodeRemoveCmd.Flags().Lookup("reboot") == nil {
+		t.Error("ichor node remove has no --reboot")
+	}
+
+	if !strings.Contains(nodeResetCmd.Short, "Deprecated") || !strings.Contains(nodeResetCmd.Short, "node remove --reboot") {
+		t.Errorf("node reset must point at node remove --reboot: %q", nodeResetCmd.Short)
 	}
 }

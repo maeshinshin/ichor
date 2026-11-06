@@ -1643,7 +1643,13 @@ type RemoveMachineRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Machine *ObjectRef             `protobuf:"bytes,1,opt,name=machine,proto3" json:"machine,omitempty"`
 	// confirm must equal the machine's name.
-	Confirm       string `protobuf:"bytes,2,opt,name=confirm,proto3" json:"confirm,omitempty"`
+	Confirm string `protobuf:"bytes,2,opt,name=confirm,proto3" json:"confirm,omitempty"`
+	// reboot makes the node reboot into maintenance mode after it is wiped, so it can be added again.
+	// Unset, it powers off.
+	Reboot bool `protobuf:"varint,3,opt,name=reboot,proto3" json:"reboot,omitempty"`
+	// override is required: a remove wipes the node's STATE and EPHEMERAL partitions. The caller must
+	// hold the override verb on the machine; no reason is asked for.
+	Override      *Override `protobuf:"bytes,4,opt,name=override,proto3" json:"override,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1690,6 +1696,20 @@ func (x *RemoveMachineRequest) GetConfirm() string {
 		return x.Confirm
 	}
 	return ""
+}
+
+func (x *RemoveMachineRequest) GetReboot() bool {
+	if x != nil {
+		return x.Reboot
+	}
+	return false
+}
+
+func (x *RemoveMachineRequest) GetOverride() *Override {
+	if x != nil {
+		return x.Override
+	}
+	return nil
 }
 
 type RemoveMachineResponse struct {
@@ -1866,10 +1886,12 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\alink_up\x18\x03 \x01(\bR\x06linkUp\x12\x1d\n" +
 	"\n" +
 	"speed_mbit\x18\x04 \x01(\x05R\tspeedMbit\x12\x16\n" +
-	"\x06driver\x18\x05 \x01(\tR\x06driver\"e\n" +
+	"\x06driver\x18\x05 \x01(\tR\x06driver\"\xb3\x01\n" +
 	"\x14RemoveMachineRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x12\x18\n" +
-	"\aconfirm\x18\x02 \x01(\tR\aconfirm\"J\n" +
+	"\aconfirm\x18\x02 \x01(\tR\aconfirm\x12\x16\n" +
+	"\x06reboot\x18\x03 \x01(\bR\x06reboot\x124\n" +
+	"\boverride\x18\x04 \x01(\v2\x18.ichor.v1alpha1.OverrideR\boverride\"J\n" +
 	"\x15RemoveMachineResponse\x121\n" +
 	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit*d\n" +
 	"\vMachineRole\x12\x1c\n" +
@@ -1977,24 +1999,25 @@ var file_ichor_v1alpha1_machine_proto_depIdxs = []int32{
 	20, // 36: ichor.v1alpha1.Machine.discovered_links:type_name -> ichor.v1alpha1.DiscoveredLink
 	28, // 37: ichor.v1alpha1.Machine.created_at:type_name -> google.protobuf.Timestamp
 	25, // 38: ichor.v1alpha1.RemoveMachineRequest.machine:type_name -> ichor.v1alpha1.ObjectRef
-	27, // 39: ichor.v1alpha1.RemoveMachineResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
-	2,  // 40: ichor.v1alpha1.MachineService.ListMachines:input_type -> ichor.v1alpha1.ListMachinesRequest
-	4,  // 41: ichor.v1alpha1.MachineService.GetMachine:input_type -> ichor.v1alpha1.GetMachineRequest
-	6,  // 42: ichor.v1alpha1.MachineService.ApproveMachine:input_type -> ichor.v1alpha1.ApproveMachineRequest
-	12, // 43: ichor.v1alpha1.MachineService.RejectMachine:input_type -> ichor.v1alpha1.RejectMachineRequest
-	21, // 44: ichor.v1alpha1.MachineService.RemoveMachine:input_type -> ichor.v1alpha1.RemoveMachineRequest
-	13, // 45: ichor.v1alpha1.MachineService.SetMachineInstall:input_type -> ichor.v1alpha1.SetMachineInstallRequest
-	3,  // 46: ichor.v1alpha1.MachineService.ListMachines:output_type -> ichor.v1alpha1.ListMachinesResponse
-	5,  // 47: ichor.v1alpha1.MachineService.GetMachine:output_type -> ichor.v1alpha1.GetMachineResponse
-	11, // 48: ichor.v1alpha1.MachineService.ApproveMachine:output_type -> ichor.v1alpha1.ApproveMachineResponse
-	15, // 49: ichor.v1alpha1.MachineService.RejectMachine:output_type -> ichor.v1alpha1.RejectMachineResponse
-	22, // 50: ichor.v1alpha1.MachineService.RemoveMachine:output_type -> ichor.v1alpha1.RemoveMachineResponse
-	14, // 51: ichor.v1alpha1.MachineService.SetMachineInstall:output_type -> ichor.v1alpha1.SetMachineInstallResponse
-	46, // [46:52] is the sub-list for method output_type
-	40, // [40:46] is the sub-list for method input_type
-	40, // [40:40] is the sub-list for extension type_name
-	40, // [40:40] is the sub-list for extension extendee
-	0,  // [0:40] is the sub-list for field type_name
+	26, // 39: ichor.v1alpha1.RemoveMachineRequest.override:type_name -> ichor.v1alpha1.Override
+	27, // 40: ichor.v1alpha1.RemoveMachineResponse.audit:type_name -> ichor.v1alpha1.AuditRecord
+	2,  // 41: ichor.v1alpha1.MachineService.ListMachines:input_type -> ichor.v1alpha1.ListMachinesRequest
+	4,  // 42: ichor.v1alpha1.MachineService.GetMachine:input_type -> ichor.v1alpha1.GetMachineRequest
+	6,  // 43: ichor.v1alpha1.MachineService.ApproveMachine:input_type -> ichor.v1alpha1.ApproveMachineRequest
+	12, // 44: ichor.v1alpha1.MachineService.RejectMachine:input_type -> ichor.v1alpha1.RejectMachineRequest
+	21, // 45: ichor.v1alpha1.MachineService.RemoveMachine:input_type -> ichor.v1alpha1.RemoveMachineRequest
+	13, // 46: ichor.v1alpha1.MachineService.SetMachineInstall:input_type -> ichor.v1alpha1.SetMachineInstallRequest
+	3,  // 47: ichor.v1alpha1.MachineService.ListMachines:output_type -> ichor.v1alpha1.ListMachinesResponse
+	5,  // 48: ichor.v1alpha1.MachineService.GetMachine:output_type -> ichor.v1alpha1.GetMachineResponse
+	11, // 49: ichor.v1alpha1.MachineService.ApproveMachine:output_type -> ichor.v1alpha1.ApproveMachineResponse
+	15, // 50: ichor.v1alpha1.MachineService.RejectMachine:output_type -> ichor.v1alpha1.RejectMachineResponse
+	22, // 51: ichor.v1alpha1.MachineService.RemoveMachine:output_type -> ichor.v1alpha1.RemoveMachineResponse
+	14, // 52: ichor.v1alpha1.MachineService.SetMachineInstall:output_type -> ichor.v1alpha1.SetMachineInstallResponse
+	47, // [47:53] is the sub-list for method output_type
+	41, // [41:47] is the sub-list for method input_type
+	41, // [41:41] is the sub-list for extension type_name
+	41, // [41:41] is the sub-list for extension extendee
+	0,  // [0:41] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_machine_proto_init() }

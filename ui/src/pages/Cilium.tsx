@@ -124,25 +124,31 @@ function OwnedKeys({ owned }: { owned: GetCiliumValuesResponse['owned'] }) {
           <TableHeader>
             <TableRow>
               <TableHead>{t('cilium.colKey')}</TableHead>
-              <TableHead>{t('cilium.colValue')}</TableHead>
-              <TableHead>{t('cilium.colReason')}</TableHead>
+              <TableHead className="max-md:hidden">{t('cilium.colValue')}</TableHead>
+              <TableHead className="max-md:hidden">{t('cilium.colReason')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {owned.map((k) => (
               <TableRow key={k.path}>
-                <TableCell className="align-top">
+                <TableCell className="align-top max-md:whitespace-normal max-md:wrap-anywhere">
                   <div class="flex flex-col items-start gap-1">
                     {k.path}
                     <Badge variant="secondary">{t('cilium.managedBadge')}</Badge>
                   </div>
+                  <div class="mt-2 space-y-2 md:hidden">
+                    <CodeBlock size="sm">
+                      <CodeBlockContent wrap>{k.valueYaml.trimEnd()}</CodeBlockContent>
+                    </CodeBlock>
+                    <div class="text-muted-foreground">{k.reason}</div>
+                  </div>
                 </TableCell>
-                <TableCell className="align-top">
+                <TableCell className="align-top max-md:hidden">
                   <CodeBlock size="sm">
                     <CodeBlockContent wrap>{k.valueYaml.trimEnd()}</CodeBlockContent>
                   </CodeBlock>
                 </TableCell>
-                <TableCell className="align-top whitespace-normal">{k.reason}</TableCell>
+                <TableCell className="align-top whitespace-normal max-md:hidden">{k.reason}</TableCell>
               </TableRow>
             ))}
           </TableBody>

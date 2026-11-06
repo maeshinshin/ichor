@@ -177,7 +177,7 @@ func TestCreateRefusedWhenTheCallerMayNotCreateOperationsLeavesTheSpecAlone(t *t
 	base := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(opObjects()...).Build()
 	user := interceptor.NewClient(base, interceptor.Funcs{
 		Create: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.CreateOption) error {
-			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.GroupVersion.Group, Resource: "talosoperations"}, obj.GetName(), nil)
+			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.GroupVersion.Group, Resource: resourceTalosOperations}, obj.GetName(), nil)
 		},
 	})
 	srv := &Server{Client: base, Impersonate: func(Identity) (client.Client, error) { return user, nil }}
@@ -200,7 +200,7 @@ func TestCreateRefusedWhenTheCallerMayNotUpdateTheCluster(t *testing.T) {
 	base := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(opObjects()...).Build()
 	user := interceptor.NewClient(base, interceptor.Funcs{
 		Update: func(_ context.Context, _ client.WithWatch, obj client.Object, _ ...client.UpdateOption) error {
-			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.GroupVersion.Group, Resource: "talosclusters"}, obj.GetName(), nil)
+			return apierrors.NewForbidden(schema.GroupResource{Group: ichorv1alpha1.GroupVersion.Group, Resource: resourceTalosClusters}, obj.GetName(), nil)
 		},
 	})
 	srv := &Server{Client: base, Impersonate: func(Identity) (client.Client, error) { return user, nil }}

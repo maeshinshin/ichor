@@ -113,7 +113,7 @@ var _ = Describe("MachineReclaim Controller", func() {
 		rec = record.NewFakeRecorder(200)
 		logs = &bytes.Buffer{}
 		lctx = ctrlLogInto(ctx, logs)
-		now = time.Now()
+		now = time.Now().Truncate(time.Second) // API times keep whole seconds; a fractional clock would skew timing assertions
 
 		r = &MachineReclaimReconciler{
 			Client: inNamespace{k8sClient, ns}, ControllerNamespace: ns, Recorder: rec,

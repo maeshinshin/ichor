@@ -206,8 +206,9 @@ for this. The path, one node at a time: set the option and the annotation, then
 reset a worker, wait for it to rejoin and come up encrypted, then do each
 control plane in turn, leaving etcd quorum intact. Back up etcd first. "Reset
 and add" is for machines of another cluster and refuses one already
-in Ichor; for your own node use `ichor node remove NODE --reboot --override --confirm NODE`
-(NODE is the machine's name or its hostname; `--confirm` takes the same name),
+in Ichor; for your own node use `ichor node remove NODE --reboot --override --confirm MACHINE`
+(NODE is the machine's name or its hostname; `--confirm` is always the machine name, the
+TalosMachine's UUID that the prompt and the UI dialog show),
 and approve the pending machine again once it is rediscovered. Pods that no
 controller manages (bare pods) block the drain: the machine's `Removal`
 condition says `DrainFailed` and names the pod, a Warning Event repeats it,
@@ -281,7 +282,7 @@ enrolment happens in the firmware, and a TPM disk key is bound to the SecureBoot
 state (PCR 7). The path, one node at a time, as for disk encryption: set the
 mode (and the confirm annotation for `Required`); take an etcd backup; reset the
 node with a full system-disk wipe
-(`ichor node reset NODE --override --confirm NODE --wipe-mode system-disk`); boot
+(`ichor node reset NODE --override --confirm MACHINE --wipe-mode system-disk`); boot
 the machine from the SecureBoot ISO of this cluster's schematic and Talos version
 with the firmware in setup mode (the keys are enrolled automatically; on bare
 metal choose "Enroll Secure Boot keys: auto" in the boot menu); approve it again;

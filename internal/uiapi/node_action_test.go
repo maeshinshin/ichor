@@ -367,9 +367,9 @@ func TestRemoveMachineRefusesTheLastControlPlane(t *testing.T) {
 	}
 }
 
-// A reset asked for by the node's hostname and confirmed with it is stored with the machine's own
-// name as confirm: the TalosOperation webhook compares it with machineRef.name (hardware run).
-func TestNodeResetByHostnameStoresTheMachineNameAsConfirm(t *testing.T) {
+// A reset asked for by the node's hostname is confirmed with the machine's own name, which is what the
+// TalosOperation webhook compares with machineRef.name; the hostname does not confirm.
+func TestNodeResetByHostnameNeedsTheMachineNameAsConfirm(t *testing.T) {
 	objs := opObjects()
 
 	for _, o := range objs {
@@ -388,6 +388,11 @@ func TestNodeResetByHostnameStoresTheMachineNameAsConfirm(t *testing.T) {
 		Machine: objectRef(opNS, "node-w1"), Action: pb.NodeAction_NODE_ACTION_RESET, Confirm: "node-w1",
 		Override: &pb.Override{},
 	})
+	if _, err := s.CreateOperation(user, req); err == nil || !strings.Contains(err.Error(), `type the machine name "w1"`) {
+		t.Fatalf("the hostname must not confirm: %v", err)
+	}
+
+	req.Msg.Node.Confirm = "w1"
 	if _, err := s.CreateOperation(user, req); err != nil {
 		t.Fatal(err)
 	}

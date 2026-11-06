@@ -791,7 +791,7 @@ export const en = {
   'node.action.override': 'Override the safety check (needs the override permission)',
   'node.action.starting': 'Starting…',
   'node.action.started': 'Started “{action}” on {node}.',
-  'node.action.removed': 'Removing {node}. The controller drains it and, for a control plane, removes its etcd member.',
+  'node.action.removed': 'Removing {node}. The controller drains it, removes its etcd member (control plane), powers the machine off and deletes its Kubernetes Node. The disk is not wiped.',
   'node.action.nodeLabel': 'Node',
   'node.action.actionLabel': 'Action',
   'node.action.progress': 'Progress',

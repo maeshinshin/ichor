@@ -57,7 +57,7 @@ inventing a new control plane.
 
 ## Overview
 
-```
+```text
 operator ──┬── ichor CLI ─────────┐
            └── browser ─▶ ichor-ui │
                                    ▼
@@ -434,7 +434,7 @@ webhook admits is never a downgrade, and never a pair the compatibility table re
 
 ### Bootstrap
 
-```
+```sh
 ichor init --preset standard [--cni-tunnel vxlan|geneve] [--ui-url URL]
 ```
 

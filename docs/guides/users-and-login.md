@@ -49,7 +49,7 @@ Turning users on needs three things:
 
 On a new cluster, pass the URL to `ichor init`:
 
-```
+```sh
 ichor init --ui-url https://ichor.example.com --admin-user admin ...
 ```
 
@@ -99,7 +99,7 @@ On an existing install, set `ichorUI.users.enabled` to `true` and
 `ichorUI.users.externalURL` to the https URL in the chart values, and create
 the first admin before every request starts to need a login:
 
-```
+```sh
 ichor user create admin --role admin --generate --bootstrap
 ```
 
@@ -254,7 +254,7 @@ A `Service` of type `LoadBalancer` (`ichorUI.service.type: LoadBalancer`) or a
 TCP passthrough terminates nothing, so clients see ichor-ui's own certificate
 and the name they typed. Supply your certificate:
 
-```
+```sh
 ichor init --ui-tls-secret ichor-ui-cert --ui-url https://ichor.example.com ...
 # or in the chart
 helm upgrade ichor ... --set ichorUI.tls.secretName=ichor-ui-cert
@@ -326,7 +326,7 @@ Give the URL with `--issuer` or `ICHOR_ISSUER`, and `--ca-file` (or
 `ICHOR_CA_FILE`) when a private CA signed ichor-ui's certificate. The commands
 print for people; `-o yaml` or `-o json` print the full response for scripts.
 
-```
+```sh
 ichor user list
 ichor user get alice
 ichor user create alice --display-name "Alice" --role viewer --generate
@@ -339,7 +339,7 @@ ichor user delete alice                        # asks; --yes skips
 
 `list` is a table, and a write prints one line naming what it did:
 
-```
+```console
 $ ichor user list
 NAME   DISPLAY NAME  EMAIL  ROLES   STATE        AGE
 admin  -             -      admin   active       2d
@@ -367,7 +367,7 @@ Kubernetes RBAC decides who may do what: the admin role for everything,
 
 To sign in from the terminal:
 
-```
+```sh
 ichor auth login --issuer https://ichor.example.com --audience ichor-ui
 ```
 
@@ -383,7 +383,7 @@ and `ichor user` command.
 
 To get a kubeconfig:
 
-```
+```sh
 ichor auth kubeconfig --issuer https://ichor.example.com --out ~/.kube/ichor.yaml
 ```
 
@@ -412,7 +412,7 @@ Talos role `os:reader`: `talosctl` can read a node (`get members`, `logs`,
 `dmesg`, `processes`) and the node refuses everything that changes it
 (`reboot`, `upgrade`, `reset`). It needs no access to the secrets bundle.
 
-```
+```sh
 ichor cluster talosconfig my-cluster --ttl 4h
 TALOSCONFIG=~/.talos/config.ichor-reader talosctl get members
 ```

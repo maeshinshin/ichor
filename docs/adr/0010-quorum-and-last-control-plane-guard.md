@@ -470,7 +470,7 @@ and fails if any call to a method named `Acquire` appears outside
 second call site (a throwaway function calling `clusterlock.New(...).
 Acquire(...)` directly) and confirming the failure:
 
-```
+```text
 taloscluster_controller.go:37: calls Acquire directly from scratchAcquireForGuardTest; disruptive
 operations must go through acquireDisruptiveLock -- the even-control-plane-count refusal lives there
 ```
@@ -595,7 +595,7 @@ function was added to `internal/controller` (and, separately, to
 `internal/webhook/v1alpha1`, to confirm the cross-directory glob really
 reaches it) and confirmed to fail --
 
-```
+```text
 countplanes_guard_test.go:114: talosoperation_controller.go:404: scratchSecondCountForGuardTest declares a
 TalosMachineList to count or select machines by hand; a control-plane count must go through
 deleteguard.CountApprovedControlPlanes -- if this is a different, legitimate purpose, add

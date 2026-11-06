@@ -2,13 +2,14 @@
 import '../styles/global.css'
 import { CodeCopy } from '@/components/CodeCopy'
 import { PageActions } from '@/components/PageActions'
+import { VersionBanner } from '@/components/VersionBanner'
 import { DocsShell } from '@/components/DocsShell'
 import { type Heading, TocAside, TocCollapsible } from '@/components/Toc'
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { absolute, base, buildNav, crumbs, docsVersion, flatten, getDocs, repoUrl } from '@/lib/docs'
+import { absolute, base, buildNav, crumbs, flatten, getDocs, isNext, repoUrl, root, version } from '@/lib/docs'
 import { ArrowLeft, ArrowRight, SquarePen } from 'lucide-preact'
 
 interface Props {
@@ -59,9 +60,10 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3)
     </script>
   </head>
   <body>
-    <DocsShell client:load nav={nav} current={current} base={base} version={docsVersion()} repoUrl={repoUrl}>
+    <DocsShell client:load nav={nav} current={current} base={base} root={root} version={version} repoUrl={repoUrl}>
       <div class="mx-auto grid w-full max-w-6xl gap-10 p-4 md:p-8 xl:grid-cols-[minmax(0,1fr)_14rem]">
         <article class="flex min-w-0 flex-col gap-6" data-pagefind-body>
+          <div class="hidden has-[[role=alert]]:block" data-pagefind-ignore><VersionBanner client:load version={version} root={root} /></div>
           <Breadcrumb data-pagefind-ignore>
             <BreadcrumbList>
               <BreadcrumbItem><BreadcrumbLink href={base}>Docs</BreadcrumbLink></BreadcrumbItem>
@@ -91,7 +93,7 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3)
             {editUrl && (
               <div>
                 <Button asChild variant="ghost" size="sm">
-                  <a href={editUrl}><SquarePen />Edit this page on GitHub</a>
+                  <a href={editUrl}><SquarePen />{isNext ? 'Edit this page on GitHub' : `View this page's source on GitHub (${version})`}</a>
                 </Button>
               </div>
             )}

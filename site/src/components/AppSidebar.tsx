@@ -1,5 +1,4 @@
 import { ChevronRight, ExternalLink } from 'lucide-preact'
-import { Badge } from '@/components/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
   Sidebar,
@@ -17,6 +16,7 @@ import {
   SidebarMenuSubItem,
 } from '@/components/ui/sidebar'
 
+import { VersionSwitcher } from '@/components/VersionSwitcher'
 import type { NavNode } from '@/lib/docs'
 
 const contains = (n: NavNode, current: string): boolean => n.href === current || !!n.children?.some((c) => contains(c, current))
@@ -107,14 +107,16 @@ function Section({ node, current }: { node: NavNode; current: string }) {
   )
 }
 
-export function AppSidebar({ nav, current, base, version, repoUrl }: { nav: NavNode[]; current: string; base: string; version: string; repoUrl: string }) {
+export function AppSidebar({ nav, current, base, root, version, repoUrl }: { nav: NavNode[]; current: string; base: string; root: string; version: string; repoUrl: string }) {
   return (
     <Sidebar>
       <SidebarHeader>
-        <a href={base} className="flex items-center gap-2 px-2 py-1 font-semibold">
-          Ichor
-          <Badge variant="secondary">{version}</Badge>
-        </a>
+        <div className="flex items-center gap-2 px-2 py-1">
+          <a href={base} className="font-semibold">
+            Ichor
+          </a>
+          <VersionSwitcher version={version} root={root} />
+        </div>
       </SidebarHeader>
       <SidebarContent>
         {nav.map((n) => (

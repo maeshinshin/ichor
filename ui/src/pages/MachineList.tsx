@@ -22,6 +22,7 @@ import { notifyWrite } from '@/lib/notify'
 import { matchesQuery } from '@/lib/filter'
 import { formatTimestamp } from '@/lib/format'
 import { useCanReclaim } from '@/lib/useCanReclaim'
+import { useCluster } from '@/lib/useCluster'
 import { useList } from '@/lib/useList'
 import { t } from '@/lib/i18n'
 import { Link } from '@/router'
@@ -34,7 +35,8 @@ export function MachineList() {
   const [query, setQuery] = useState('')
   const canReclaim = useCanReclaim()
   // What the role may do to a machine that waits for a decision; the machines share a namespace, so one is asked.
-  const perms = useMyPermissions(machines?.find((m) => m.approvalState !== MachineApprovalState.APPROVED)?.ref)
+  const { cluster } = useCluster()
+  const perms = useMyPermissions(machines?.find((m) => m.approvalState !== MachineApprovalState.APPROVED)?.ref, cluster?.ref)
 
   function replaceMachine(updated: Machine) {
     setMachines((prev) => prev?.map((m) => (sameRef(m, updated) ? updated : m)) ?? prev)
@@ -53,6 +55,8 @@ export function MachineList() {
   const pending = shown.filter((m) => m.approvalState !== MachineApprovalState.APPROVED && m.approvalState !== MachineApprovalState.REJECTED)
   const rejected = shown.filter((m) => m.approvalState === MachineApprovalState.REJECTED)
   const approved = shown.filter((m) => m.approvalState === MachineApprovalState.APPROVED)
+  // The Actions column only exists when the caller may decide on a machine.
+  const decide = mayApprove(perms) || mayReject(perms)
 
   return (
     <div class="space-y-6">
@@ -61,12 +65,14 @@ export function MachineList() {
         actions={
           <div class="flex gap-2">
             {canReclaim && <ReclaimDialog />}
-            <Button asChild size="sm">
-              <Link to="/nodes/add">
-                <PlusIcon data-icon="inline-start" aria-hidden="true" />
-                {t('nodes.add')}
-              </Link>
-            </Button>
+            {perms?.clusterUpdate && (
+              <Button asChild size="sm">
+                <Link to="/nodes/add">
+                  <PlusIcon data-icon="inline-start" aria-hidden="true" />
+                  {t('nodes.add')}
+                </Link>
+              </Button>
+            )}
           </div>
         }
       />
@@ -80,7 +86,7 @@ export function MachineList() {
                 <TableRow>
                   <TableHead>{t('col.identity')}</TableHead>
                   <TableHead className="hidden sm:table-cell">{t('col.endpoint')}</TableHead>
-                  <TableHead>{t('col.actions')}</TableHead>
+                  {decide && <TableHead>{t('col.actions')}</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -91,12 +97,14 @@ export function MachineList() {
                       <div class="whitespace-nowrap text-muted-foreground sm:hidden">{m.endpoint || '-'}</div>
                     </TableCell>
                     <TableCell className="hidden sm:table-cell">{m.endpoint || '-'}</TableCell>
+                    {decide && (
                     <TableCell>
                       <div class="flex gap-2 max-sm:flex-wrap">
                         {mayApprove(perms) && <ApproveDialog machine={m} onApproved={replaceMachine} />}
                         {mayReject(perms) && <RejectDialog machine={m} onRejected={reload} />}
                       </div>
                     </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>
@@ -113,7 +121,7 @@ export function MachineList() {
                 <TableRow>
                   <TableHead>{t('col.identity')}</TableHead>
                   <TableHead className="hidden sm:table-cell">{t('machines.colWhen')}</TableHead>
-                  <TableHead>{t('col.actions')}</TableHead>
+                  {decide && <TableHead>{t('col.actions')}</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -126,6 +134,7 @@ export function MachineList() {
                         itself, not just a one-shot RPC response, so it's still here the
                         next time anyone loads this list. */}
                     <TableCell className="hidden sm:table-cell">{formatTimestamp(m.approvalDecision?.at)}</TableCell>
+                    {decide && (
                     <TableCell>
                       <div class="flex gap-2 max-sm:flex-wrap">
                         {/* Rejection is reversible: approving a
@@ -135,6 +144,7 @@ export function MachineList() {
                         {mayReject(perms) && <RejectDialog machine={m} onRejected={reload} />}
                       </div>
                     </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

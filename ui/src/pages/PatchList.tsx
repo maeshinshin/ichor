@@ -41,6 +41,9 @@ export function PatchList() {
     matchesQuery(query, p.ref?.name, enumLabel(ConfigLayer, p.layer), p.documents.map((d) => d.kind).join(' ')),
   )
 
+  // The Actions column only exists when the caller may edit or delete a patch.
+  const rowActions = perms?.updatePatches === true || perms?.deletePatches === true
+
   return (
     <div>
       <PageTitle title={t('config.title')} description={t('patches.intro')} />
@@ -69,7 +72,7 @@ export function PatchList() {
                 <TableHead className="hidden md:table-cell">{t('patches.colTarget')}</TableHead>
                 <TableHead className="hidden md:table-cell">{t('patches.colMachines')}</TableHead>
                 <TableHead className="hidden md:table-cell">{t('patches.colDocuments')}</TableHead>
-                <TableHead>{t('col.actions')}</TableHead>
+                {rowActions && <TableHead>{t('col.actions')}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -108,6 +111,7 @@ export function PatchList() {
                       </div>
                     )}
                   </TableCell>
+                  {rowActions && (
                   <TableCell>
                     <div class="flex gap-2 max-md:flex-wrap">
                       {perms?.updatePatches && (
@@ -118,6 +122,7 @@ export function PatchList() {
                       {perms?.deletePatches && <DeleteDialog patch={p} onDeleted={reload} />}
                     </div>
                   </TableCell>
+                  )}
                 </LinkRow>
               ))}
             </TableBody>

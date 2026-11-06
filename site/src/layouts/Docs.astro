@@ -1,13 +1,14 @@
 ---
 import '../styles/global.css'
 import { CodeCopy } from '@/components/CodeCopy'
+import { PageActions } from '@/components/PageActions'
 import { DocsShell } from '@/components/DocsShell'
 import { type Heading, TocAside, TocCollapsible } from '@/components/Toc'
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { base, buildNav, crumbs, docsVersion, flatten, getDocs, repoUrl } from '@/lib/docs'
+import { absolute, base, buildNav, crumbs, docsVersion, flatten, getDocs, repoUrl } from '@/lib/docs'
 import { ArrowLeft, ArrowRight, SquarePen } from 'lucide-preact'
 
 interface Props {
@@ -17,8 +18,11 @@ interface Props {
   headings?: Heading[]
   editUrl?: string
   description?: string
+  /** Site path of this page's Markdown; pages without one have no page actions. */
+  mdUrl?: string
 }
-const { title, current, headings = [], editUrl, description } = Astro.props
+const { title, current, headings = [], editUrl, description, mdUrl } = Astro.props
+const canonical = absolute(current)
 
 const docs = await getDocs()
 const nav = buildNav(docs)
@@ -37,6 +41,8 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3)
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
     {description && <meta name="description" content={description} />}
+    <link rel="canonical" href={canonical} />
+    {mdUrl && <link rel="alternate" type="text/markdown" href={mdUrl} />}
     <title>{current === base ? 'Ichor documentation' : `${title} - Ichor`}</title>
     <link rel="icon" type="image/svg+xml" href={`${base}favicon.svg`} />
     <script is:inline>
@@ -73,7 +79,10 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3)
               )}
             </BreadcrumbList>
           </Breadcrumb>
-          <h1 class="text-3xl font-semibold tracking-tight" data-pagefind-weight="10">{title}</h1>
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <h1 class="text-3xl font-semibold tracking-tight" data-pagefind-weight="10">{title}</h1>
+            {mdUrl && <div class="shrink-0" data-pagefind-ignore><PageActions client:load title={title} url={canonical} mdUrl={mdUrl} /></div>}
+          </div>
           {toc.length > 0 && <div data-pagefind-ignore><TocCollapsible client:idle headings={toc} /></div>}
           <slot />
           <CodeCopy client:idle />

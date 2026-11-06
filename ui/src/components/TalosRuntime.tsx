@@ -327,30 +327,42 @@ function NetworkStateCard({ data, maintenance }: { data: GetNodeTalosRuntimeResp
       </Grid>
       {n.routesTruncated && <CardDescription>{t('rt.truncated')}</CardDescription>}
       <CardDescription>{t('rt.members')}</CardDescription>
-      <Grid heads={[t('talos.hostname'), t('talos.addresses'), t('talos.colType'), t('rt.colOs')]} empty={n.members.length === 0}>
+      <Grid heads={[t('talos.hostname'), t('talos.addresses'), t('talos.colType'), t('rt.colOs')]} phoneHidden={[1, 2, 3]} empty={n.members.length === 0}>
         {n.members.map((m, i) => (
           <TableRow key={i}>
-            <TableCell>{m.hostname || '-'}</TableCell>
-            <TableCell className="min-w-40 whitespace-normal break-all font-mono">{m.addresses.join(', ')}</TableCell>
-            <TableCell>{m.machineType || '-'}</TableCell>
-            <TableCell>{m.operatingSystem || '-'}</TableCell>
+            <TableCell className="max-md:whitespace-normal max-md:wrap-anywhere">
+              {m.hostname || '-'}
+              <div class="font-mono text-muted-foreground md:hidden">{m.addresses.join(', ')}</div>
+              <div class="text-muted-foreground md:hidden">
+                {m.machineType || '-'} · {m.operatingSystem || '-'}
+              </div>
+            </TableCell>
+            <TableCell className="min-w-40 whitespace-normal break-all font-mono max-md:hidden">{m.addresses.join(', ')}</TableCell>
+            <TableCell className="max-md:hidden">{m.machineType || '-'}</TableCell>
+            <TableCell className="max-md:hidden">{m.operatingSystem || '-'}</TableCell>
           </TableRow>
         ))}
       </Grid>
       {n.kubespanPeers.length > 0 && (
         <>
           <CardDescription>{t('rt.kubespan')}</CardDescription>
-          <Grid heads={[t('rt.colPeer'), t('rt.colEndpoint'), t('talos.colState'), t('rt.colRx'), t('rt.colTx'), t('rt.colHandshake')]}>
+          <Grid heads={[t('rt.colPeer'), t('rt.colEndpoint'), t('talos.colState'), t('rt.colRx'), t('rt.colTx'), t('rt.colHandshake')]} phoneHidden={[1, 3, 4, 5]}>
             {n.kubespanPeers.map((p, i) => (
               <TableRow key={i}>
-                <TableCell>{p.label || '-'}</TableCell>
-                <TableCell className="font-mono">{p.endpoint}</TableCell>
+                <TableCell className="max-md:whitespace-normal max-md:wrap-anywhere">
+                  {p.label || '-'}
+                  <div class="font-mono text-muted-foreground md:hidden">{p.endpoint}</div>
+                  <div class="text-muted-foreground md:hidden">
+                    {formatBytes(p.receiveBytes)} / {formatBytes(p.transmitBytes)} · {handshakeAge(p.lastHandshakeUnix, Date.now())}
+                  </div>
+                </TableCell>
+                <TableCell className="font-mono max-md:hidden">{p.endpoint}</TableCell>
                 <TableCell>
                   <ToneBadge tone={p.state === 'up' ? 'good' : 'neutral'}>{p.state}</ToneBadge>
                 </TableCell>
-                <TableCell>{formatBytes(p.receiveBytes)}</TableCell>
-                <TableCell>{formatBytes(p.transmitBytes)}</TableCell>
-                <TableCell>{handshakeAge(p.lastHandshakeUnix, Date.now())}</TableCell>
+                <TableCell className="max-md:hidden">{formatBytes(p.receiveBytes)}</TableCell>
+                <TableCell className="max-md:hidden">{formatBytes(p.transmitBytes)}</TableCell>
+                <TableCell className="max-md:hidden">{handshakeAge(p.lastHandshakeUnix, Date.now())}</TableCell>
               </TableRow>
             ))}
           </Grid>
@@ -365,13 +377,18 @@ function KernelCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; 
   if (!k) return null
   return (
     <Panel id="kernel" title={t('rt.kernel')} error={k.error} maintenance={maintenance}>
-      <Grid heads={[t('talos.colName'), t('node.colSize'), t('rt.colUsedBy'), t('talos.colState')]} empty={k.modules.length === 0}>
+      <Grid heads={[t('talos.colName'), t('node.colSize'), t('rt.colUsedBy'), t('talos.colState')]} phoneHidden={[2, 3]} empty={k.modules.length === 0}>
         {k.modules.map((m) => (
           <TableRow key={m.name}>
-            <TableCell className="font-mono">{m.name}</TableCell>
+            <TableCell className="font-mono max-md:whitespace-normal max-md:wrap-anywhere">
+              {m.name}
+              <div class="font-sans text-muted-foreground md:hidden">
+                {m.referenceCount} · {m.state || '-'}
+              </div>
+            </TableCell>
             <TableCell>{formatBytes(m.sizeBytes)}</TableCell>
-            <TableCell>{m.referenceCount}</TableCell>
-            <TableCell>{m.state || '-'}</TableCell>
+            <TableCell className="max-md:hidden">{m.referenceCount}</TableCell>
+            <TableCell className="max-md:hidden">{m.state || '-'}</TableCell>
           </TableRow>
         ))}
       </Grid>

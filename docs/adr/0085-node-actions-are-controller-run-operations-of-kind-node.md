@@ -46,3 +46,5 @@ A remove deletes the TalosMachine but not the Kubernetes Node. The node is not w
 Amendment 2026-11-05 (ADR 0130): a reset needs the typed `confirm` and the override, and no override reason; the plan says whether the override is needed, and the dialog shows only the checkbox. `spec.node.overrideReason` is deprecated and unused.
 
 Amendment 2026-11-06: `--confirm NAME` is the typed name given up front and counts as the confirmation, as typing it at the prompt does; `ichor node reset|remove NODE --confirm NODE` shows the plan and does not also ask `[y/N]`. `--yes` alone still does not replace the name. This matches `ichor restore --live --confirm` and `ichor machine reclaim --confirm`.
+
+Amendment 2026-11-06 (ADR 0135): a remove now powers the machine off and the controller deletes the Kubernetes Node; the paragraph above describes the earlier behaviour. If the Node does not go NotReady in time it is still left, with the Warning Event.

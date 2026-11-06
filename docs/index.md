@@ -13,6 +13,11 @@ or by writing the resources yourself.
 
 > Status: alpha (v0.1.0). Exercised end to end on Talos v1.14 test clusters, not yet on bare metal.
 
+The commands in these docs are written as if their tools are on your `PATH`.
+Run `nix develop` in a checkout to get them all, or install them yourself:
+[Before you begin](guides/getting-started.md#before-you-begin) lists which and
+at what versions.
+
 ## What Ichor manages
 
 - **Clusters and machines.** A node that sits in Talos maintenance mode is

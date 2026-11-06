@@ -88,7 +88,8 @@ install.
 
 ## Quick start
 
-From a checkout, inside `nix develop`, with a node booted from a Talos ISO
+From a checkout, with the tools on your `PATH` (`nix develop` provides them; see
+[Before you begin](docs/guides/getting-started.md#before-you-begin)), with a node booted from a Talos ISO
 (maintenance mode) and a registry the nodes can reach:
 
 ```

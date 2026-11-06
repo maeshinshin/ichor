@@ -109,7 +109,7 @@ func (s *Server) enrichOperation(ctx context.Context, out *pb.Operation, op *ich
 		return
 	}
 
-	s.nameMachines(ctx, out, op.Namespace)
+	names := s.nameMachines(ctx, out, op)
 
 	var install *ichorv1alpha1.IchorInstallation
 
@@ -121,19 +121,20 @@ func (s *Server) enrichOperation(ctx context.Context, out *pb.Operation, op *ich
 	}
 
 	out.Details, out.Summary = nil, ""
-	describeOperation(out, op, &cluster, install)
+	describeOperationNamed(out, op, &cluster, install, names)
 }
 
 // nameMachines fills each machine's display_name from its TalosMachine: hostname, else node name.
-// A machine the caller cannot list keeps just its name.
-func (s *Server) nameMachines(ctx context.Context, out *pb.Operation, namespace string) {
-	if len(out.GetMachines()) == 0 {
-		return
+// A machine the caller cannot list keeps just its name. It returns the names by machine, which a node
+// operation also needs before the controller has filled status.machines.
+func (s *Server) nameMachines(ctx context.Context, out *pb.Operation, op *ichorv1alpha1.TalosOperation) map[string]string {
+	if len(out.GetMachines()) == 0 && op.Spec.Node == nil {
+		return nil
 	}
 
 	var list ichorv1alpha1.TalosMachineList
-	if err := s.List(ctx, &list, client.InNamespace(namespace)); err != nil {
-		return
+	if err := s.List(ctx, &list, client.InNamespace(op.Namespace)); err != nil {
+		return nil
 	}
 
 	names := make(map[string]string, len(list.Items))
@@ -144,6 +145,8 @@ func (s *Server) nameMachines(ctx context.Context, out *pb.Operation, namespace 
 	for _, m := range out.GetMachines() {
 		m.DisplayName = names[m.GetName()]
 	}
+
+	return names
 }
 
 // fromTo is " from → to" when the starting version was recorded, else " to target".
@@ -168,6 +171,13 @@ func shortID(id string) string {
 //
 //nolint:gocyclo // one switch over the kinds, each a few lines
 func describeOperation(out *pb.Operation, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster, install *ichorv1alpha1.IchorInstallation) {
+	describeOperationNamed(out, op, cluster, install, nil)
+}
+
+// describeOperationNamed is describeOperation with the machine display names by TalosMachine name.
+//
+//nolint:gocyclo // one switch over the kinds, each a few lines
+func describeOperationNamed(out *pb.Operation, op *ichorv1alpha1.TalosOperation, cluster *ichorv1alpha1.TalosCluster, install *ichorv1alpha1.IchorInstallation, names map[string]string) {
 	out.StartedBy = op.Annotations[ichorv1alpha1.OperationStartedByAnnotation]
 	if op.Status.FinishedAt != nil {
 		out.FinishedAt = timestamppb.New(op.Status.FinishedAt.Time)
@@ -251,7 +261,7 @@ func describeOperation(out *pb.Operation, op *ichorv1alpha1.TalosOperation, clus
 			out.Summary = fmt.Sprintf("Apply configuration to %d machine%s", machines, plural(machines))
 		}
 	case ichorv1alpha1.TalosOperationKindNode:
-		describeNodeOp(out, op, add)
+		describeNodeOp(out, op, names, add)
 	case ichorv1alpha1.TalosOperationKindEtcdRestore:
 		out.Summary = "Restore etcd"
 
@@ -281,7 +291,7 @@ func plural(n int) string {
 	return "s"
 }
 
-func describeNodeOp(out *pb.Operation, op *ichorv1alpha1.TalosOperation, add func(k, v string)) {
+func describeNodeOp(out *pb.Operation, op *ichorv1alpha1.TalosOperation, names map[string]string, add func(k, v string)) {
 	n := op.Spec.Node
 	if n == nil {
 		out.Summary = "Node action"
@@ -290,6 +300,9 @@ func describeNodeOp(out *pb.Operation, op *ichorv1alpha1.TalosOperation, add fun
 
 	// The hostname when the machine list named it, else the machine's own name.
 	m := n.MachineRef.Name
+	if names[m] != "" {
+		m = names[m]
+	}
 
 	for _, om := range out.GetMachines() {
 		if om.GetName() == m && om.GetDisplayName() != "" {

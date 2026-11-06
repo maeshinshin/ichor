@@ -25,6 +25,10 @@ drift between what it rendered and what the node runs
 For the full design see [the architecture document](../design/architecture.md),
 section "Nodes".
 
+![The life of a machine. A node in maintenance mode is discovered and becomes a pending TalosMachine; a person approves it, or rejects it. The controller then configures it, and it becomes Ready. A Ready machine whose disk is wiped is provisioned again by itself; removing it drains the node, leaves etcd and resets it, and it reappears as pending. A node that another cluster configured is reset by a reclaim, typed with its UUID, and then is discovered again.](../images/machine-lifecycle.light.drawio.svg)
+
+*A machine moves forward by discovery, a person's approval and the controller's work; the person's steps are in blue.*
+
 ## Discovery
 
 Ichor does not boot machines. You bring a machine to Talos maintenance mode

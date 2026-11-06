@@ -33,6 +33,10 @@ aggregator CA ([ADR 0120](../adr/0120-etcd-ca-and-aggregator-ca-rotation.md)).
 The etcd members load the new CA by a reboot, one control plane at a time with a
 health check before each.
 
+![The stages of a CA rotation: Accepting, AwaitingCredentials, Issuing, Dropping, Finalizing and Completed, with what each does to the nodes. Until Issuing the old CA signs, both CAs are trusted and the old kubeconfig and talosconfig work; during AwaitingCredentials the operator takes new credentials. From Issuing the new CA signs and only the new credentials work, and the rotation can no longer be abandoned.](../images/ca-rotation.light.drawio.svg)
+
+*Deleting the operation abandons a rotation until Issuing, the point of no return for the default targets (the Talos and Kubernetes CAs).*
+
 ### The credential hand-off
 
 From the second pass the nodes serve certificates from the new CA, and a

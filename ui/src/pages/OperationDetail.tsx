@@ -122,7 +122,7 @@ export function OperationDetail({ name }: { name: string }) {
 
   const nodeLink = op.nodeMachine ? (
     <Button asChild variant="link" size="sm" className="h-auto max-w-full whitespace-normal break-all py-1 text-left">
-      <Link to={`/nodes/${op.nodeMachine.name}`}>{op.nodeMachine.name}</Link>
+      <Link to={`/nodes/${op.nodeMachine.name}`}>{op.details.find((d) => d.key === 'Machine')?.value || op.nodeMachine.name}</Link>
     </Button>
   ) : undefined
 

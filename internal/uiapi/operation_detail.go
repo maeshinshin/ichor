@@ -218,7 +218,13 @@ func describeOperationNamed(out *pb.Operation, op *ichorv1alpha1.TalosOperation,
 	case ichorv1alpha1.TalosOperationKindIchor:
 		out.Summary = "Upgrade Ichor"
 
-		if install != nil {
+		// The operation records no target, only the installation's live one; a completed operation may have
+		// been superseded since, so it is not shown as this operation's target.
+		if install != nil && op.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted {
+			if from := op.Annotations[ichorv1alpha1.OperationFromVersionAnnotation]; from != "" {
+				out.Summary += " from " + from
+			}
+		} else if install != nil {
 			add("Target Ichor version", install.Spec.Version)
 
 			// The stamped from-version outlives the upgrade; installedVersion only helps before it finishes.

@@ -75,10 +75,10 @@ export function InstallDiskPicker({
             : t('approve.installDiskHelp')}
       </p>
       {showImage && (
-        <>
+        <div class="space-y-1 pt-2">
           <Label htmlFor={`${idPrefix}-install-image`}>{t('approve.installImage')}</Label>
           <Input id={`${idPrefix}-install-image`} value={image} onInput={(e) => onImage((e.target as HTMLInputElement).value)} />
-        </>
+        </div>
       )}
     </section>
   )

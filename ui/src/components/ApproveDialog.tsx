@@ -31,7 +31,7 @@ import {
   isValidHostname,
   type DiskOption,
 } from '@/lib/installDisk'
-import { formatBytes } from '@/lib/format'
+import { formatBytes, hardwareName } from '@/lib/format'
 import type { TalosLink } from '@/gen/ichor/v1alpha1/talosdetails_pb'
 import {
   defaultLink,
@@ -75,6 +75,7 @@ export function ApproveDialog({
   const { busy: submitting, error: submitError, setError: setSubmitError, run } = useAction()
 
   const strong = isStrongIdentity(machine.identity)
+  const hardware = node?.hardware ? hardwareName(node.hardware.manufacturer, node.hardware.model) : ''
   const hostnameOk = isValidHostname(hostname)
   // The disks and NICs discovery recorded are the list to choose from; the node's own
   // reads fill in for a machine discovered before they were recorded.
@@ -182,9 +183,8 @@ export function ApproveDialog({
             {!nodeError && !node && <p class="text-muted-foreground">{t('common.loading')}</p>}
             {node?.hardware && (
               <p class="text-muted-foreground">
-                {t('approve.hardwareSummary', {
-                  manufacturer: node.hardware.manufacturer,
-                  model: node.hardware.model,
+                {t(hardware ? 'approve.hardwareSummary' : 'approve.hardwareBare', {
+                  name: hardware,
                   cores: node.hardware.cpuCores,
                   ram: formatBytes(node.hardware.memoryTotalBytes),
                 })}

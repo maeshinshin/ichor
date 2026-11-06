@@ -47,4 +47,4 @@ Amendment 2026-11-05 (ADR 0130): a reset needs the typed `confirm` and the overr
 
 Amendment 2026-11-06: `--confirm NAME` is the typed name given up front and counts as the confirmation, as typing it at the prompt does; `ichor node reset|remove NODE --confirm NODE` shows the plan and does not also ask `[y/N]`. `--yes` alone still does not replace the name. This matches `ichor restore --live --confirm` and `ichor machine reclaim --confirm`.
 
-Amendment 2026-11-06 (ADR 0135): a remove now powers the machine off and the controller deletes the Kubernetes Node; the paragraph above describes the earlier behaviour. If the Node does not go NotReady in time it is still left, with the Warning Event.
+Amendment 2026-11-06 (ADR 0135): remove and reset are one action. A remove now also wipes STATE and EPHEMERAL, powers the machine off (or reboots it) and deletes the Kubernetes Node; the split into `reset` and `remove` and the paragraph above describe the earlier behaviour.

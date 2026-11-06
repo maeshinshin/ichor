@@ -287,7 +287,7 @@ function EffectiveConfigSection({ namespace, name }: { namespace: string; name: 
             <TableBody>
               {group.map((v) => (
                 <TableRow key={v.path}>
-                  <TableCell className="font-mono whitespace-normal wrap-anywhere max-md:max-w-0 max-md:w-full">
+                  <TableCell className="font-mono whitespace-normal break-words max-md:w-full max-md:max-w-0 max-md:wrap-anywhere md:w-1/3">
                     {v.path}
                     <div class="font-sans text-muted-foreground md:hidden">{v.origin?.source || '-'}</div>
                     <div class="mt-1 text-foreground md:hidden">
@@ -312,7 +312,7 @@ function EffectiveConfigSection({ namespace, name }: { namespace: string; name: 
                       </>
                     )}
                   </TableCell>
-                  <TableCell className="whitespace-normal wrap-anywhere max-md:hidden">{v.origin?.source || '-'}</TableCell>
+                  <TableCell className="whitespace-nowrap max-md:hidden">{v.origin?.source || '-'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

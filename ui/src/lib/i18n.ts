@@ -1139,7 +1139,7 @@ export const en = {
   'backups.ok': 'Healthy',
   'backups.stale': 'Failing or stale',
   'backups.never': 'No snapshot yet',
-  'backups.hint': 'Snapshots are taken on each backup's schedule, or on demand with Back up now. Change the schedule, destination or retention by editing the TalosEtcdBackup.',
+  'backups.hint': 'Snapshots are taken on the schedule of each backup, or on demand with Back up now. Change the schedule, destination or retention by editing the TalosEtcdBackup.',
   'backups.colDestination': 'Destination',
   'backups.colRetention': 'Retention',
   'backups.keepLast': 'Newest {count}',

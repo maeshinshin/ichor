@@ -46,8 +46,9 @@ import (
 const DownloadVerb = "download"
 
 const (
-	resourceTalosMachines   = "talosmachines"
-	resourceTalosOperations = "talosoperations"
+	resourceTalosMachines      = "talosmachines"
+	resourceTalosOperations    = "talosoperations"
+	resourceTalosConfigPatches = "talosconfigpatches"
 )
 
 // Caps, enforced here whatever the caller asks for.
@@ -99,8 +100,8 @@ func (s *Server) acquireDownloadSlot() (func(), error) {
 // GetMyPermissions answers every flag the UI needs in one call, each a
 // SelfSubjectAccessReview as the caller (run concurrently): the three machine
 // downloads when a machine is given, the cluster's downloads and the actions the
-// UI hides from a role that lacks them (start, create, update) when a cluster is
-// given, and whether the caller may list users. The answer only decides what the
+// UI hides from a role that lacks them (start, create, update, delete, approve,
+// override) when a cluster or a machine is given, and whether the caller may list users. The answer only decides what the
 // UI shows; each action asks again.
 func (s *Server) GetMyPermissions(
 	ctx context.Context, req *connect.Request[pb.GetMyPermissionsRequest],
@@ -161,11 +162,6 @@ func (s *Server) GetMyPermissions(
 		start(&out.StartEtcdRestore, ichorv1alpha1.TalosOperationKindEtcdRestore)
 
 		g.Go(func() (err error) {
-			out.CreateOperations, err = s.may(ctx, "create", c.GetNamespace(), resourceTalosOperations, "", "")
-
-			return err
-		})
-		g.Go(func() (err error) {
 			out.UpdateBackups, err = s.may(ctx, "update", c.GetNamespace(), "talosetcdbackups", "", "")
 
 			return err
@@ -175,6 +171,39 @@ func (s *Server) GetMyPermissions(
 
 			return err
 		})
+	}
+
+	// The node, pending-machine and patch actions act in the cluster's namespace, else the machine's.
+	ns, machineName := "", ""
+	if c := req.Msg.GetCluster(); c != nil {
+		ns = c.GetNamespace()
+	} else if m := req.Msg.GetMachine(); m != nil {
+		ns = m.GetNamespace()
+	}
+
+	if m := req.Msg.GetMachine(); m != nil {
+		machineName = m.GetName()
+	}
+
+	if ns != "" {
+		ask := func(dst *bool, verb, resource, sub, name string) {
+			g.Go(func() (err error) {
+				*dst, err = s.may(ctx, verb, ns, resource, sub, name)
+
+				return err
+			})
+		}
+		group := ichorv1alpha1.TalosOperationKindNode + "-"
+		ask(&out.CreateOperations, "create", resourceTalosOperations, "", "")
+		ask(&out.StartNodeReset, ichorv1alpha1.OperationStartVerb, resourceTalosOperations, group+ichorv1alpha1.NodeActionReset, "")
+		ask(&out.StartNodeShutdown, ichorv1alpha1.OperationStartVerb, resourceTalosOperations, group+ichorv1alpha1.NodeActionShutdown, "")
+		ask(&out.OverrideMachines, OverrideVerb, resourceTalosMachines, "", machineName)
+		ask(&out.UpdateMachines, "update", resourceTalosMachines, "", machineName)
+		ask(&out.DeleteMachines, "delete", resourceTalosMachines, "", machineName)
+		ask(&out.ApproveMachines, ichorv1alpha1.MachineApproveVerb, resourceTalosMachines, ichorv1alpha1.MachineApprovalSubresource, machineName)
+		ask(&out.CreatePatches, "create", resourceTalosConfigPatches, "", "")
+		ask(&out.UpdatePatches, "update", resourceTalosConfigPatches, "", "")
+		ask(&out.DeletePatches, "delete", resourceTalosConfigPatches, "", "")
 	}
 
 	// The Users page needs no cluster: IchorUsers live in the backend's own namespace.

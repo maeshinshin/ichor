@@ -17,6 +17,7 @@ limitations under the License.
 package uiapi
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -171,13 +172,32 @@ func (s *Server) ListOperations(
 	filter := req.Msg.GetCluster()
 	out := &pb.ListOperationsResponse{}
 
+	var machines ichorv1alpha1.TalosMachineList
+	// A machine the caller cannot list leaves node operations named by its UID.
+	_ = s.List(ctx, &machines)
+
+	hostnames := make(map[types.NamespacedName]string, len(machines.Items))
+	for i := range machines.Items {
+		m := &machines.Items[i]
+		hostnames[client.ObjectKeyFromObject(m)] = cmp.Or(m.Spec.Hostname, m.Status.NodeName)
+	}
+
 	for i := range list.Items {
 		op := &list.Items[i]
 		if filter != nil && (op.Namespace != filter.GetNamespace() || op.Spec.ClusterRef.Name != filter.GetName()) {
 			continue
 		}
 
-		out.Operations = append(out.Operations, operationToPB(op))
+		o := operationToPB(op)
+
+		if n := op.Spec.Node; n != nil {
+			if name := hostnames[types.NamespacedName{Namespace: op.Namespace, Name: n.MachineRef.Name}]; name != "" {
+				o.Details, o.Summary = nil, ""
+				describeOperationNamed(o, op, nil, nil, map[string]string{n.MachineRef.Name: name})
+			}
+		}
+
+		out.Operations = append(out.Operations, o)
 	}
 
 	return connect.NewResponse(out), nil

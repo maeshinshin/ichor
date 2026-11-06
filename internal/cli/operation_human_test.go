@@ -590,9 +590,9 @@ func TestNodeActionHumanOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wantText(t, out.String(), "✓ removing node "+testMachineName+": the controller drains it and, for a control plane, removes its etcd member\n")
+	wantText(t, out.String(), "✓ removing node "+testMachineName+": the controller drains it, removes its etcd member (control plane), wipes it and deletes its Kubernetes Node\n")
 
-	for _, want := range []string{"Next\n", "kubectl delete node " + testMachineName} {
+	for _, want := range []string{"Next\n", "new pending machine", "powers it off"} {
 		if !strings.Contains(errw.String(), want) {
 			t.Errorf("remove stderr lacks %q:\n%s", want, errw.String())
 		}
@@ -611,7 +611,7 @@ func TestNodeActionAndOperationDeleteMachineFormatsAreUnchanged(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.HasPrefix(out.String(), "audit:\n") || !strings.Contains(errw.String(), "\nNext: the Kubernetes Node stays") {
+	if !strings.HasPrefix(out.String(), "audit:\n") || !strings.Contains(errw.String(), "\nNext: The controller drains the node") {
 		t.Errorf("stdout:\n%s\nstderr:\n%s", out.String(), errw.String())
 	}
 }

@@ -52,7 +52,7 @@ import { enumLabel } from '@/lib/enum'
 import type { ErrorShape } from '@/lib/errors'
 import { machineDisplayName } from '@/lib/machineName'
 import { formatTimestamp } from '@/lib/format'
-import { kubernetesStageProgress, operationState, progressCounts } from '@/lib/operations'
+import { kubernetesStageProgress, operationState, progressCounts, type OpKind } from '@/lib/operations'
 import { attentionItems, backupsValue, tileTargets, versionLabel, type TileTarget } from '@/lib/overview'
 import { installerUnverified, releaseNotice } from '@/lib/ichorVersion'
 import { opStateTone, type Tone } from '@/lib/status'
@@ -61,6 +61,7 @@ import { hasPatch, patchComponents, unavailableNotes, type TargetList } from '@/
 import { conditionTone } from '@/lib/conditions'
 import { useCluster } from '@/lib/useCluster'
 import { useMyPermissions } from '@/lib/useMyPermissions'
+import { clusterMenu, mayStart } from '@/lib/actions'
 import { t } from '@/lib/i18n'
 import { Link } from '@/router'
 
@@ -119,6 +120,9 @@ function Home({
   // The caller's "download" verb on talosclusters/talosconfig-reader; undefined offers nothing.
   const perms = useMyPermissions(undefined, ref)
   const wasBusy = useRef(false)
+  // What the caller's role may do; the actions it cannot are not offered (the server checks again).
+  const menu = clusterMenu(perms)
+  const may = (kind: OpKind) => mayStart(perms, kind)
 
   async function loadCandidates() {
     const read = (kind: OperationKind) => operationClient.listUpgradeTargets({ cluster: ref, kind }).catch(() => null)
@@ -208,36 +212,42 @@ function Home({
           <p class="break-words text-sm text-muted-foreground">{ref.name}</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <Button asChild size="sm">
-            <Link to="/nodes/add">
-              <PlusIcon data-icon="inline-start" aria-hidden="true" />
-              {t('cluster.addNode')}
-            </Link>
-          </Button>
-          {backups && backups.length > 0 && (
+          {perms?.clusterUpdate && (
+            <Button asChild size="sm">
+              <Link to="/nodes/add">
+                <PlusIcon data-icon="inline-start" aria-hidden="true" />
+                {t('cluster.addNode')}
+              </Link>
+            </Button>
+          )}
+          {perms?.updateBackups && backups && backups.length > 0 && (
             <BackupNow backup={backups[0]} onChanged={(next) => setBackups(backups.map((x) => (x.ref?.name === next.ref?.name ? next : x)))} />
           )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="icon-sm" variant="outline" aria-label={t('overview.more')}>
-                <EllipsisIcon />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setDialog('ca-rotation')}>
-                {t('overview.rotateCAs')}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setDialog('key-rotation')}>
-                {t('overview.rotateKeys')}
-              </DropdownMenuItem>
-              {perms?.talosconfigReader && (
-                <DropdownMenuItem onSelect={() => setDialog('reader-talosconfig')}>{t('readerTalosconfig.menu')}</DropdownMenuItem>
-              )}
-              <DropdownMenuItem variant="destructive" onSelect={() => setDialog('shutdown')}>
-                {t('overview.shutdownCluster')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {menu.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon-sm" variant="outline" aria-label={t('overview.more')}>
+                  <EllipsisIcon />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {menu.includes('ca-rotation') && (
+                  <DropdownMenuItem onSelect={() => setDialog('ca-rotation')}>{t('overview.rotateCAs')}</DropdownMenuItem>
+                )}
+                {menu.includes('key-rotation') && (
+                  <DropdownMenuItem onSelect={() => setDialog('key-rotation')}>{t('overview.rotateKeys')}</DropdownMenuItem>
+                )}
+                {menu.includes('reader-talosconfig') && (
+                  <DropdownMenuItem onSelect={() => setDialog('reader-talosconfig')}>{t('readerTalosconfig.menu')}</DropdownMenuItem>
+                )}
+                {menu.includes('shutdown') && (
+                  <DropdownMenuItem variant="destructive" onSelect={() => setDialog('shutdown')}>
+                    {t('overview.shutdownCluster')}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <StartOperationDialog kind="ca-rotation" cluster={ref} open={dialog === 'ca-rotation'} onOpenChange={(o) => !o && setDialog(null)} />
           <StartOperationDialog kind="key-rotation" cluster={ref} open={dialog === 'key-rotation'} onOpenChange={(o) => !o && setDialog(null)} />
           <StartOperationDialog kind="shutdown" cluster={ref} open={dialog === 'shutdown'} onOpenChange={(o) => !o && setDialog(null)} />
@@ -274,9 +284,11 @@ function Home({
                       {a.kind === 'config' && (
                         <>
                           <AlertTitle>{t('home.attnConfig', { n: a.count })}</AlertTitle>
-                          <AlertAction>
-                            <StartOperationDialog kind="config" cluster={ref} label={t('ops.action.apply')} size="xs" />
-                          </AlertAction>
+                          {may('config') && (
+                            <AlertAction>
+                              <StartOperationDialog kind="config" cluster={ref} label={t('ops.action.apply')} size="xs" />
+                            </AlertAction>
+                          )}
                         </>
                       )}
                       {a.kind === 'patch' && <AlertTitle>{t('home.attnPatch', { components: a.components.join(', ') })}</AlertTitle>}
@@ -313,7 +325,9 @@ function Home({
                                   <Link to={`/operations/${current.op.ref.name}`}>{t('home.open')}</Link>
                                 </Button>
                               )}
-                              <OperationControls op={current.op} onChanged={reloadCluster} onDeleted={reloadCluster} showDelete={false} />
+                              {perms?.createOperations && (
+                                <OperationControls op={current.op} onChanged={reloadCluster} onDeleted={reloadCluster} showDelete={false} />
+                              )}
                             </div>
                           </AlertDescription>
                         </>
@@ -449,12 +463,12 @@ function Home({
                 <ItemGroup>
                     <VersionRow name={t('ops.row.talos')} icon={CpuIcon} installed={cluster.talosVersion}>
                       {hasPatch(candidates.talos) && <Badge variant="secondary">{t('versions.patchAvailable')}</Badge>}
-                      <StartOperationDialog kind="talos" cluster={ref} current={cluster.talosVersion} label={t('ops.action.upgrade')} />
+                      {may('talos') && <StartOperationDialog kind="talos" cluster={ref} current={cluster.talosVersion} label={t('ops.action.upgrade')} />}
                     </VersionRow>
                     <ItemSeparator />
                     <VersionRow name={t('ops.row.kubernetes')} icon={ContainerIcon} installed={cluster.kubernetesVersion}>
                       {hasPatch(candidates.kubernetes) && <Badge variant="secondary">{t('versions.patchAvailable')}</Badge>}
-                      <StartOperationDialog kind="kubernetes" cluster={ref} current={cluster.kubernetesVersion} label={t('ops.action.upgrade')} />
+                      {may('kubernetes') && <StartOperationDialog kind="kubernetes" cluster={ref} current={cluster.kubernetesVersion} label={t('ops.action.upgrade')} />}
                     </VersionRow>
                     {!isCniUnmanaged(cluster.cniPreset) && (
                       <>
@@ -466,20 +480,20 @@ function Home({
                           target={cilium?.state === 'behind' ? cilium.target : undefined}
                         >
                           {cilium && cilium.state !== 'up-to-date' && <ToneBadge tone={stateTone(cilium.state)}>{t(stateKey(cilium.state))}</ToneBadge>}
-                          {cilium?.state === 'behind' && <CiliumUpgradeDialog cluster={ref} chart={cilium.target} size="sm" />}
+                          {cilium?.state === 'behind' && may('cni') && <CiliumUpgradeDialog cluster={ref} chart={cilium.target} size="sm" />}
                         </VersionRow>
                       </>
                     )}
                     <ItemSeparator />
                     <VersionRow name={t('ops.row.ichor')} icon={CloudCogIcon} installed={ichorVersion ?? t('ops.installedUnknown')}>
                       {release && <Badge variant="secondary">{t('version.released', { version: release })}</Badge>}
-                      <StartOperationDialog kind="ichor" cluster={ref} current={ichorVersion ?? ''} label={t('ops.action.upgrade')} />
+                      {may('ichor') && <StartOperationDialog kind="ichor" cluster={ref} current={ichorVersion ?? ''} label={t('ops.action.upgrade')} />}
                     </VersionRow>
                     {!isCniUnmanaged(cluster.cniPreset) && (
                       <>
                         <ItemSeparator />
                         <VersionRow name={t('ops.row.cni')} icon={NetworkIcon} installed={t(kubeProxy === 'replaced' ? 'ops.modeReplaced' : 'ops.modeEnabled')}>
-                          <StartOperationDialog kind="cni" cluster={ref} current={kubeProxy} label={t('ops.action.switch')} />
+                          {may('cni') && <StartOperationDialog kind="cni" cluster={ref} current={kubeProxy} label={t('ops.action.switch')} />}
                         </VersionRow>
                       </>
                     )}

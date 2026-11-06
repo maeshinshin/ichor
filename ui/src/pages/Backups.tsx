@@ -17,6 +17,8 @@ import { operationClient } from '@/lib/connect'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { formatBytes, formatTimestamp } from '@/lib/format'
 import { useCluster } from '@/lib/useCluster'
+import { useMyPermissions } from '@/lib/useMyPermissions'
+import { mayStart } from '@/lib/actions'
 import { t } from '@/lib/i18n'
 
 // Backups: the cluster's TalosEtcdBackups, the snapshots they hold, and restore.
@@ -27,6 +29,8 @@ export function Backups() {
   const [backups, setBackups] = useState<EtcdBackup[] | null>(null)
   const [error, setError] = useState<ErrorShape | null>(null)
   const ref = cluster?.ref
+  // What the caller's role may do; a button it cannot use is not shown (the server checks again).
+  const perms = useMyPermissions(undefined, ref)
 
   useEffect(() => {
     if (!ref) return
@@ -61,7 +65,7 @@ export function Backups() {
       <PageTitle
         title={t('backups.title')}
         description={ref.name}
-        actions={backups.length > 0 ? <RestoreDialog cluster={ref} disabled={all.length === 0} /> : undefined}
+        actions={backups.length > 0 && mayStart(perms, 'etcd-restore') ? <RestoreDialog cluster={ref} disabled={all.length === 0} /> : undefined}
       />
       {backups.length === 0 ? (
         <Card>
@@ -134,7 +138,7 @@ export function Backups() {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <BackupNow backup={b} onChanged={(next) => setBackups(backups.map((x) => (x.ref?.name === next.ref?.name ? next : x)))} />
+                        {perms?.updateBackups && <BackupNow backup={b} onChanged={(next) => setBackups(backups.map((x) => (x.ref?.name === next.ref?.name ? next : x)))} />}
                       </TableCell>
                     </TableRow>
                   )

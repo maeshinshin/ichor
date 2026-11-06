@@ -33,6 +33,10 @@ Roles are plain Kubernetes RBAC. Three ClusterRoles, `ichor-viewer`,
 `ichor:operator` and `ichor:admin`. None of them holds `secrets`, `impersonate`
 or `cluster-admin`.
 
+![The three roles as nested sets: viewer inside operator inside admin, with the subresource verbs each one adds (approve and download for the operator; start, override, reclaim, update and download for the admin). Beside them, the path of a hand-written resource: authentication, RBAC, the admission webhooks, then storage and reconciliation. No role holds secrets, impersonate or cluster-admin.](../images/roles.light.drawio.svg)
+
+*Each role includes the one inside it, and a hand-written resource gets the same checks as one made in the UI.*
+
 | Role | Can |
 |---|---|
 | `viewer` | Read the Ichor resources. No Secrets, no users. |

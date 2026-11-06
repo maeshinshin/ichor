@@ -124,13 +124,18 @@ function EtcdCard({ data, maintenance }: { data: GetNodeTalosRuntimeResponse; ma
               <AlertDescription className="break-words">{e.statusErrors.join('; ')}</AlertDescription>
             </Alert>
           )}
-          <Grid heads={[t('rt.colMember'), t('talos.hostname'), t('rt.colPeer'), t('rt.colClient'), '']} empty={e.members.length === 0}>
+          <Grid heads={[t('rt.colMember'), t('talos.hostname'), t('rt.colPeer'), t('rt.colClient'), '']} phoneHidden={[0, 2, 3]} empty={e.members.length === 0}>
             {e.members.map((m) => (
               <TableRow key={m.id}>
-                <TableCell className="font-mono">{m.id}</TableCell>
-                <TableCell>{m.hostname || '-'}</TableCell>
-                <TableCell className="min-w-40 whitespace-normal break-all font-mono">{m.peerUrls.join(', ') || '-'}</TableCell>
-                <TableCell className="min-w-40 whitespace-normal break-all font-mono">{m.clientUrls.join(', ') || '-'}</TableCell>
+                <TableCell className="font-mono max-md:hidden">{m.id}</TableCell>
+                <TableCell className="max-md:whitespace-normal max-md:wrap-anywhere">
+                  {m.hostname || '-'}
+                  <div class="font-mono text-muted-foreground md:hidden">{m.id}</div>
+                  <div class="font-mono text-muted-foreground md:hidden">{m.peerUrls.join(', ') || '-'}</div>
+                  <div class="font-mono text-muted-foreground md:hidden">{m.clientUrls.join(', ') || '-'}</div>
+                </TableCell>
+                <TableCell className="min-w-40 whitespace-normal break-all font-mono max-md:hidden">{m.peerUrls.join(', ') || '-'}</TableCell>
+                <TableCell className="min-w-40 whitespace-normal break-all font-mono max-md:hidden">{m.clientUrls.join(', ') || '-'}</TableCell>
                 <TableCell>
                   <div class="flex flex-wrap gap-1">
                     {m.leader && <Badge variant="secondary">{t('rt.leader')}</Badge>}
@@ -189,13 +194,19 @@ function ContainersCard({ data, maintenance }: { data: GetNodeTalosRuntimeRespon
   if (!c) return null
   return (
     <Panel id="containers" title={t('rt.containers')} error={c.error} maintenance={maintenance}>
-      <Grid heads={[t('rt.colRuntime'), t('rt.colPod'), t('talos.colName'), t('rt.colImage'), t('talos.colState')]} empty={c.containers.length === 0}>
+      <Grid heads={[t('rt.colRuntime'), t('rt.colPod'), t('talos.colName'), t('rt.colImage'), t('talos.colState')]} phoneHidden={[0, 1, 3]} empty={c.containers.length === 0}>
         {c.containers.map((x) => (
           <TableRow key={`${x.runtimeNamespace}/${x.id}`}>
-            <TableCell>{x.runtimeNamespace}</TableCell>
-            <TableCell className="min-w-40 whitespace-normal break-all font-mono">{x.pod || '-'}</TableCell>
-            <TableCell className="font-mono">{x.name || x.id}</TableCell>
-            <TableCell className="min-w-40 whitespace-normal break-all font-mono">{x.image}</TableCell>
+            <TableCell className="max-md:hidden">{x.runtimeNamespace}</TableCell>
+            <TableCell className="min-w-40 whitespace-normal break-all font-mono max-md:hidden">{x.pod || '-'}</TableCell>
+            <TableCell className="font-mono max-md:whitespace-normal max-md:wrap-anywhere">
+              {x.name || x.id}
+              <div class="text-muted-foreground md:hidden">
+                {x.runtimeNamespace} · {x.pod || '-'}
+              </div>
+              <div class="text-muted-foreground md:hidden">{x.image}</div>
+            </TableCell>
+            <TableCell className="min-w-40 whitespace-normal break-all font-mono max-md:hidden">{x.image}</TableCell>
             <TableCell>
               <Badge variant="outline">{x.status || '-'}</Badge>
             </TableCell>
@@ -247,19 +258,24 @@ function KubernetesCard({ data }: { data: GetNodeTalosRuntimeResponse }) {
               <AlertDescription className="break-words">{k.podsError}</AlertDescription>
             </Alert>
           ) : (
-            <Grid heads={[t('rt.colNamespace'), t('talos.colName'), t('rt.colPhase'), t('rt.colReady'), t('rt.colRestarts'), t('rt.colAge')]} empty={k.pods.length === 0}>
+            <Grid heads={[t('rt.colNamespace'), t('talos.colName'), t('rt.colPhase'), t('rt.colReady'), t('rt.colRestarts'), t('rt.colAge')]} phoneHidden={[0, 3, 4, 5]} empty={k.pods.length === 0}>
               {sortPods(k.pods).map((p) => (
                 <TableRow key={`${p.namespace}/${p.name}`}>
-                  <TableCell className="font-mono">{p.namespace}</TableCell>
-                  <TableCell className="min-w-40 whitespace-normal break-all font-mono">{p.name}</TableCell>
+                  <TableCell className="font-mono max-md:hidden">{p.namespace}</TableCell>
+                  <TableCell className="min-w-40 whitespace-normal break-all font-mono">
+                    {p.name}
+                    <div class="text-muted-foreground md:hidden">
+                      {p.namespace} · {p.readyContainers}/{p.totalContainers} · {p.restarts} · {formatAge(p.ageSeconds)}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <ToneBadge tone={podTone(p)}>{p.phase || '-'}</ToneBadge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="max-md:hidden">
                     {p.readyContainers}/{p.totalContainers}
                   </TableCell>
-                  <TableCell>{p.restarts}</TableCell>
-                  <TableCell>{formatAge(p.ageSeconds)}</TableCell>
+                  <TableCell className="max-md:hidden">{p.restarts}</TableCell>
+                  <TableCell className="max-md:hidden">{formatAge(p.ageSeconds)}</TableCell>
                 </TableRow>
               ))}
             </Grid>

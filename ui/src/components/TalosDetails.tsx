@@ -254,12 +254,16 @@ function ExtensionsSection({ data }: { data: GetNodeTalosDetailsResponse }) {
   return (
     <SectionCard id="extensions" title={t('talos.extensions')}>
       <Failed error={e.error}>
-        <Grid heads={[t('talos.colName'), t('talos.colVersion'), t('talos.colAuthor')]} empty={e.extensions.length === 0} none="talos.noExtensions">
+        <Grid heads={[t('talos.colName'), t('talos.colVersion'), t('talos.colAuthor')]} phoneHidden={[1, 2]} empty={e.extensions.length === 0} none="talos.noExtensions">
               {e.extensions.map((x) => (
                 <TableRow key={x.name}>
-                  <TableCell>{x.name}</TableCell>
-                  <TableCell>{display(x.version)}</TableCell>
-                  <TableCell>{display(x.author)}</TableCell>
+                  <TableCell className="max-md:whitespace-normal max-md:wrap-anywhere">
+                    {x.name}
+                    <div class="text-muted-foreground md:hidden">{display(x.version)}</div>
+                    <div class="text-muted-foreground md:hidden">{display(x.author)}</div>
+                  </TableCell>
+                  <TableCell className="max-md:hidden">{display(x.version)}</TableCell>
+                  <TableCell className="max-md:hidden">{display(x.author)}</TableCell>
                 </TableRow>
               ))}
         </Grid>

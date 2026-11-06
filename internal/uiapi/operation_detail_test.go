@@ -31,10 +31,11 @@ import (
 )
 
 const (
-	hostWorkerA  = "worker-a"
-	machineUUIDA = "uuid-a"
-	ichorV2      = "v0.2.0"
-	ichorV3      = "v0.3.0"
+	hostWorkerA    = "worker-a"
+	machineUUIDA   = "uuid-a"
+	ichorV2        = "v0.2.0"
+	ichorV3        = "v0.3.0"
+	ichorSummary23 = "Upgrade Ichor from v0.2.0 to v0.3.0"
 )
 
 func TestOperationSummaryPerKind(t *testing.T) {
@@ -66,7 +67,7 @@ func TestOperationSummaryPerKind(t *testing.T) {
 		{"k8s from", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindKubernetes}, ichorv1alpha1.TalosOperationStatus{},
 			"Upgrade Kubernetes v1.36.2 → v1.36.6"},
 		{"ichor", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindIchor}, ichorv1alpha1.TalosOperationStatus{},
-			"Upgrade Ichor from v0.2.0 to v0.3.0"},
+			ichorSummary23},
 		{"ca", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindCARotation}, ichorv1alpha1.TalosOperationStatus{},
 			"Rotate the cluster CAs"},
 		{"shutdown", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindShutdown}, ichorv1alpha1.TalosOperationStatus{},
@@ -185,7 +186,7 @@ func TestIchorSummaryKeepsTheFromVersionAfterTheUpgrade(t *testing.T) {
 	out := &pb.Operation{}
 	describeOperation(out, op, nil, install)
 
-	if out.GetSummary() != "Upgrade Ichor from v0.2.0 to v0.3.0" {
+	if out.GetSummary() != ichorSummary23 {
 		t.Fatalf("summary = %q", out.GetSummary())
 	}
 }
@@ -382,7 +383,7 @@ func TestIchorUpgradeShowsItsStampedTargetInEveryPhase(t *testing.T) {
 		out := &pb.Operation{}
 		describeOperation(out, op, nil, install)
 
-		if out.GetSummary() != "Upgrade Ichor from v0.2.0 to v0.3.0" {
+		if out.GetSummary() != ichorSummary23 {
 			t.Errorf("%s: summary = %q", phase, out.GetSummary())
 		}
 

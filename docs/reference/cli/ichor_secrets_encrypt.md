@@ -20,20 +20,20 @@ its blocks are overwritten; if the file was ever exposed, rotate the CAs.
 
 An encrypted file is a standard age file: 'age -d secrets.yaml' opens it.
 
-```
+```sh
 ichor secrets encrypt [CLUSTER] [flags]
 ```
 
 ### Options
 
-```
+```text
       --file string   the bundle file to encrypt, instead of a cluster's
   -h, --help          help for encrypt
 ```
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle; any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --kubeconfig string               path to the kubeconfig for the cluster's Kubernetes API; defaults to $KUBECONFIG, then ~/.kube/config
   -o, --output string                   output format: "yaml" or "json" for scripts; by default a command prints for people (commands without a human view print YAML)

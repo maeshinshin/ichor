@@ -23,13 +23,13 @@ The Talos endpoints are the cluster's control-plane machines (or --talos-endpoin
 talosconfig's). The file is written next to your current talosconfig with the suffix .ichor-reader (never over
 it), unless --out says otherwise. Use it with: TALOSCONFIG=<file> talosctl get members
 
-```
+```sh
 ichor cluster talosconfig NAME [flags]
 ```
 
 ### Options
 
-```
+```text
   -h, --help                      help for talosconfig
       --out string                where to write the talosconfig (default: your current talosconfig's path plus .ichor-reader)
       --talos-endpoints strings   the Talos API endpoints for the talosconfig (default: the cluster's control-plane machines, else your current talosconfig's)
@@ -38,7 +38,7 @@ ichor cluster talosconfig NAME [flags]
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle; any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
       --ichor-namespace string          namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")

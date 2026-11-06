@@ -7,13 +7,13 @@ description: "Change a user's display name, e-mail, roles or disabled flag (only
 
 Change a user's display name, e-mail, roles or disabled flag (only the flags you pass)
 
-```
+```sh
 ichor user update NAME [flags]
 ```
 
 ### Options
 
-```
+```text
       --disabled              disable (true) or enable (false) the user
       --display-name string   new display name
       --email string          new e-mail address
@@ -23,7 +23,7 @@ ichor user update NAME [flags]
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle; any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed the issuer's TLS certificate, added to the system roots (env ICHOR_CA_FILE)
       --issuer string                   external https URL of ichor-ui, which is Ichor's OIDC issuer (env ICHOR_ISSUER)

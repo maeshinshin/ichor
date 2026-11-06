@@ -22,7 +22,7 @@ help and completion. Set ICHOR_NO_UPDATE_NOTICE=1 to turn it off.
 
 ### Options
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle; any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
   -h, --help                            help for ichor
       --kubeconfig string               path to the kubeconfig for the cluster's Kubernetes API; defaults to $KUBECONFIG, then ~/.kube/config

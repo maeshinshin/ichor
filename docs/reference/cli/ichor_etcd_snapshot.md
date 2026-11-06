@@ -14,13 +14,13 @@ EVERY KUBERNETES SECRET in the cluster; keep it as you would the secrets themsel
 encrypted backups use a TalosEtcdBackup instead. The file is plaintext (not encrypted). Needs the "download" verb on
 talosmachines/etcd-snapshot. The file is written with mode 0600; -o - writes to standard output.
 
-```
+```sh
 ichor etcd snapshot --node CONTROL_PLANE [flags]
 ```
 
 ### Options
 
-```
+```text
   -h, --help            help for snapshot
       --node string     control plane TalosMachine to take the snapshot from
   -o, --output string   file to write (mode 0600); default the name the server suggests; - for standard output
@@ -28,7 +28,7 @@ ichor etcd snapshot --node CONTROL_PLANE [flags]
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle; any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
       --ichor-namespace string          namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")

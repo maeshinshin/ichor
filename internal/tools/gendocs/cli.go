@@ -44,7 +44,11 @@ func generateCLI(dir string) error {
 		return frontmatter(cmd.CommandPath(), cmd.Short)
 	}
 
-	return doc.GenMarkdownTreeCustom(root, dir, prepend, func(name string) string { return name })
+	if err := doc.GenMarkdownTreeCustom(root, dir, prepend, func(name string) string { return name }); err != nil {
+		return err
+	}
+
+	return labelFences(dir)
 }
 
 // disableAutoGenTag drops cobra's "Auto generated on <date>" footer, which would change every run.
@@ -54,6 +58,49 @@ func disableAutoGenTag(cmd *cobra.Command) {
 	for _, c := range cmd.Commands() {
 		disableAutoGenTag(c)
 	}
+}
+
+// labelFences gives the code blocks cobra writes a language, so the site highlights them: the usage
+// line and the examples are shell, the flag tables under the "Options" headings are plain text.
+func labelFences(dir string) error {
+	files, err := filepath.Glob(filepath.Join(dir, "*.md"))
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		b, err := os.ReadFile(file)
+		if err != nil {
+			return err
+		}
+
+		lines := strings.Split(string(b), "\n")
+		heading, inFence := "", false
+
+		for i, l := range lines {
+			switch {
+			case inFence:
+				inFence = l != "```"
+			case l == "```":
+				lang := "sh"
+				if strings.HasPrefix(heading, "### Options") {
+					lang = "text"
+				}
+
+				lines[i], inFence = "```"+lang, true
+			case strings.HasPrefix(l, "```"):
+				inFence = true
+			case strings.HasPrefix(l, "#"):
+				heading = l
+			}
+		}
+
+		if err := os.WriteFile(file, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // collect maps each page file name cobra will write to its command.

@@ -43,13 +43,13 @@ decrypt or whose checksum does not match is skipped and reported. With
 With --live the snapshot is read and decrypted by the controller; no secrets bundle or S3
 credentials are needed here.
 
-```
+```sh
 ichor restore (--live | --recover-cluster) [flags]
 ```
 
 ### Options
 
-```
+```text
       --backup string            with --live: the TalosEtcdBackup to restore from (default the cluster's only one)
       --ca-file string           PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
       --cluster string           name of the cluster (--recover-cluster: locates ~/.ichor/clusters/<name>/secrets.yaml, required; --live: default the only one)
@@ -75,7 +75,7 @@ ichor restore (--live | --recover-cluster) [flags]
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle; any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --kubeconfig string               path to the kubeconfig for the cluster's Kubernetes API; defaults to $KUBECONFIG, then ~/.kube/config
   -o, --output string                   output format: "yaml" or "json" for scripts; by default a command prints for people (commands without a human view print YAML)

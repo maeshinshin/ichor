@@ -14,19 +14,19 @@ that. It uses the cached ID token while it has 30 seconds left, then the cached
 refresh token, and starts a browser login only when kubectl says the session is
 interactive (KUBERNETES_EXEC_INFO).
 
-```
+```sh
 ichor auth token [flags]
 ```
 
 ### Options
 
-```
+```text
   -h, --help   help for token
 ```
 
 ### Options inherited from parent commands
 
-```
+```text
       --audience ichor auth login       token audience: ichor-kube (the kube-apiserver, default; ichor auth login once lets kubectl run without a terminal) or ichor-ui (ichor-ui itself) (default "ichor-kube")
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle; any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed the issuer's TLS certificate, added to the system roots (env ICHOR_CA_FILE)

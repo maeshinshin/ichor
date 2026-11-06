@@ -288,7 +288,14 @@ func describeNodeOp(out *pb.Operation, op *ichorv1alpha1.TalosOperation, add fun
 		return
 	}
 
+	// The hostname when the machine list named it, else the machine's own name.
 	m := n.MachineRef.Name
+
+	for _, om := range out.GetMachines() {
+		if om.GetName() == m && om.GetDisplayName() != "" {
+			m = om.GetDisplayName()
+		}
+	}
 
 	switch n.Action {
 	case ichorv1alpha1.NodeActionReboot:

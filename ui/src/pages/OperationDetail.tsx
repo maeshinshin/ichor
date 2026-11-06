@@ -249,10 +249,10 @@ export function OperationDetail({ name }: { name: string }) {
                   <TableRow>
                     <TableHead>{t('col.name')}</TableHead>
                     <TableHead>{t('ops.colState')}</TableHead>
-                    <TableHead>{t('ops.colStep')}</TableHead>
-                    <TableHead>{t('ops.startedAt')}</TableHead>
-                    <TableHead>{t('ops.finishedAt')}</TableHead>
-                    <TableHead>{t('ops.duration')}</TableHead>
+                    <TableHead className="max-md:hidden">{t('ops.colStep')}</TableHead>
+                    <TableHead className="max-md:hidden">{t('ops.startedAt')}</TableHead>
+                    <TableHead className="max-md:hidden">{t('ops.finishedAt')}</TableHead>
+                    <TableHead className="max-md:hidden">{t('ops.duration')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -262,15 +262,17 @@ export function OperationDetail({ name }: { name: string }) {
                         <Button asChild variant="link" size="sm">
                           <Link to={nodePath(m.name)}>{m.displayName || m.name}</Link>
                         </Button>
+                        <div class="whitespace-normal wrap-anywhere text-muted-foreground md:hidden">{[m.step, m.message].filter(Boolean).join(': ')}</div>
+                        <div class="text-muted-foreground md:hidden">{formatTimestamp(m.startedAt)} · {formatDuration(spanMs(toDate(m.startedAt), toDate(m.finishedAt), now, m.phase === 'Completed'))}</div>
                       </TableCell>
                       <TableCell>
                         {/* The controller's own word (InProgress, Completed), as received. */}
                         <ToneBadge tone={m.phase === 'Completed' ? 'good' : m.phase === 'InProgress' ? 'progress' : 'neutral'}>{m.phase}</ToneBadge>
                       </TableCell>
-                      <TableCell className="min-w-48 whitespace-normal break-words">{[m.step, m.message].filter(Boolean).join(': ') || '-'}</TableCell>
-                      <TableCell>{formatTimestamp(m.startedAt)}</TableCell>
-                      <TableCell>{formatTimestamp(m.finishedAt)}</TableCell>
-                      <TableCell>{formatDuration(spanMs(toDate(m.startedAt), toDate(m.finishedAt), now, m.phase === 'Completed'))}</TableCell>
+                      <TableCell className="min-w-48 whitespace-normal break-words max-md:hidden">{[m.step, m.message].filter(Boolean).join(': ') || '-'}</TableCell>
+                      <TableCell className="max-md:hidden">{formatTimestamp(m.startedAt)}</TableCell>
+                      <TableCell className="max-md:hidden">{formatTimestamp(m.finishedAt)}</TableCell>
+                      <TableCell className="max-md:hidden">{formatDuration(spanMs(toDate(m.startedAt), toDate(m.finishedAt), now, m.phase === 'Completed'))}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -300,24 +302,29 @@ export function OperationDetail({ name }: { name: string }) {
                     <TableRow>
                       <TableHead>{t('ops.eventTime')}</TableHead>
                       <TableHead>{t('ops.eventType')}</TableHead>
-                      <TableHead>{t('ops.eventObject')}</TableHead>
-                      <TableHead>{t('ops.eventReason')}</TableHead>
-                      <TableHead>{t('ops.eventMessage')}</TableHead>
+                      <TableHead className="max-md:hidden">{t('ops.eventObject')}</TableHead>
+                      <TableHead className="max-md:hidden">{t('ops.eventReason')}</TableHead>
+                      <TableHead className="max-md:hidden">{t('ops.eventMessage')}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {shownEvents.map((e, i) => (
                       <TableRow key={i}>
-                        <TableCell>{formatTimestamp(e.time)}</TableCell>
+                        <TableCell className="max-md:whitespace-normal">
+                          {formatTimestamp(e.time)}
+                          <div class="text-muted-foreground wrap-anywhere md:hidden">{`${e.objectKind}/${e.objectName}`}</div>
+                          <div class="text-muted-foreground wrap-anywhere md:hidden">{e.reason}</div>
+                          <div class="text-muted-foreground wrap-anywhere md:hidden">{e.message}</div>
+                        </TableCell>
                         <TableCell>
                           <Badge variant={e.type === 'Warning' ? 'destructive' : 'outline'}>
                             {e.type === 'Warning' && <CircleAlertIcon data-icon="inline-start" aria-hidden="true" />}
                             {e.type}
                           </Badge>
                         </TableCell>
-                        <TableCell>{`${e.objectKind}/${e.objectName}`}</TableCell>
-                        <TableCell>{e.reason}</TableCell>
-                        <TableCell className="min-w-64 whitespace-normal break-words">{e.message}</TableCell>
+                        <TableCell className="max-md:hidden">{`${e.objectKind}/${e.objectName}`}</TableCell>
+                        <TableCell className="max-md:hidden">{e.reason}</TableCell>
+                        <TableCell className="min-w-64 whitespace-normal break-words max-md:hidden">{e.message}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

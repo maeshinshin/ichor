@@ -49,10 +49,22 @@ const external = /^([a-z][a-z0-9+.-]*:|\/\/|\/|#)/i
 export function remarkDocsLinks({ base }) {
   return (tree, file) => {
     const from = dirname(file.path)
-    visit(tree, ['link', 'definition'], (node) => {
+    visit(tree, ['link', 'definition', 'image'], (node, index, parent) => {
       if (external.test(node.url)) return
+      const source = node.url
       try {
-        node.url = resolveLink(node.url, from, base)
+        node.url = resolveLink(source, from, base)
+        // A diagram is a pair, NAME.light.drawio.svg and NAME.dark.drawio.svg (ADR 0132, amendment): the Markdown
+        // names the light one, which is what GitHub shows, and the site shows the dark one in the dark theme.
+        // Each image links to its SVG, which opens at full size (the page column is narrower than the diagram).
+        if (node.type === 'image' && source.endsWith('.light.drawio.svg')) {
+          // The diagram keeps a readable size (640 px) on a narrow screen and scrolls inside its link, not the page.
+          node.data = { hProperties: { className: ['min-w-[640px]'] } }
+          const dark = { ...node, url: resolveLink(source.replace('.light.', '.dark.'), from, base) }
+          const open = (image, className) => ({ type: 'link', url: image.url, children: [image], data: { hProperties: { className: ['overflow-x-auto', ...className], target: '_blank', rel: ['noopener'], title: 'Open the diagram at full size' } } })
+          parent.children.splice(index, 1, open(node, ['block', 'dark:hidden']), open(dark, ['hidden', 'dark:block']))
+          return index + 2
+        }
       } catch (e) {
         file.fail(e.message, node)
       }
@@ -70,6 +82,10 @@ export function resolveLink(url, fromDir, base) {
   if (!existsSync(target)) throw new Error(`broken link "${url}" (no such file)`)
   if (!relative(docsRoot, target).startsWith('..') && target.endsWith('.md')) {
     return urlOf(base, routeOf(relative(docsRoot, target))) + (hash && `#${hash}`)
+  }
+  // Images in docs/ are served by the site itself (src/pages/[...slug].svg.ts and .png.ts), at the same path.
+  if (!relative(docsRoot, target).startsWith('..') && /\.(svg|png)$/.test(target)) {
+    return base + relative(docsRoot, target).split(sep).join('/') + (hash && `#${hash}`)
   }
   const kind = statSync(target).isDirectory() ? 'tree' : 'blob'
   return `${repoUrl}/${kind}/${gitRef}/${relative(repoRoot, target).split(sep).join('/')}${hash && `#${hash}`}`

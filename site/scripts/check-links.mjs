@@ -21,7 +21,7 @@ const idsOf = (file) => {
 const broken = new Set()
 for (const page of pages(dist)) {
   const html = readFileSync(page, 'utf8')
-  for (const [, href] of html.matchAll(/\shref="([^"]+)"/g)) {
+  for (const [, href] of html.matchAll(/\s(?:href|src)="([^"]+)"/g)) {
     if (!href.startsWith(base)) continue
     const [path, hash] = href.slice(base.length).split('#')
     const target = join(dist, decodeURI(path))

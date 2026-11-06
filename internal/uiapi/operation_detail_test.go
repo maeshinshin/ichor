@@ -362,3 +362,27 @@ func TestCompletedIchorUpgradeDoesNotShowTheLiveInstallationTarget(t *testing.T)
 		}
 	}
 }
+
+func TestListedNodeActionNamesTheMachineByHostname(t *testing.T) {
+	m := opMachine(machineUUIDA, "worker", nil, nil)
+	m.Spec.Hostname = hostWorkerA
+
+	op := &ichorv1alpha1.TalosOperation{
+		Name: "node-z", Namespace: opNS,
+		Spec: ichorv1alpha1.TalosOperationSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindNode,
+			Node: &ichorv1alpha1.TalosOperationNodeSpec{MachineRef: corev1.LocalObjectReference{Name: machineUUIDA}, Action: ichorv1alpha1.NodeActionReboot},
+		},
+	}
+
+	s, _ := opServer(t, append(opObjects(), m, op)...)
+
+	resp, err := s.ListOperations(context.Background(), connect.NewRequest(&pb.ListOperationsRequest{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(resp.Msg.GetOperations()) != 1 || resp.Msg.GetOperations()[0].GetSummary() != "Reboot node "+hostWorkerA {
+		t.Fatalf("operations = %v", resp.Msg.GetOperations())
+	}
+}

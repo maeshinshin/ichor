@@ -1,6 +1,8 @@
 // Pure helpers for the node actions menu. No import from "@/gen": these run
 // directly under `node --test`.
 
+import type { ActionPermissions } from './actions.ts'
+
 export type NodeActionId =
   | 'reboot'
   | 'shutdown'
@@ -35,12 +37,29 @@ export const nodeActions: readonly NodeActionDef[] = [
 // The services restart-service may restart: the same allowlist as the controller and the CRD.
 export const restartableServices = ['kubelet', 'containerd', 'cri'] as const
 
+// mayNodeAction: every node action but remove is a TalosOperation, so it needs create on talosoperations;
+// shutdown and reset also need their own start verb (reset also the override on the machine); remove
+// writes the machine (the allow-delete mark) and deletes it.
+export function mayNodeAction(p: ActionPermissions | undefined, id: NodeActionId): boolean {
+  if (!p) return false
+  switch (id) {
+    case 'remove':
+      return p.updateMachines && p.deleteMachines
+    case 'shutdown':
+      return p.createOperations && p.startNodeShutdown
+    case 'reset':
+      return p.createOperations && p.startNodeReset && p.overrideMachines
+    default:
+      return p.createOperations
+  }
+}
+
 // availableActions hides what cannot apply to the node: nothing for a machine that is not approved
-// or is already being removed, and the etcd actions on a worker. What a user's own permissions
-// allow is Kubernetes' to say; a refusal is shown as the server words it.
-export function availableActions(m: { approved: boolean; deleting: boolean; role: string }): NodeActionDef[] {
+// or is already being removed, the etcd actions on a worker, and what the caller's role may not do
+// (undefined permissions offer nothing). The server asks again; a refusal is shown as it words it.
+export function availableActions(m: { approved: boolean; deleting: boolean; role: string; perms: ActionPermissions | undefined }): NodeActionDef[] {
   if (!m.approved || m.deleting) return []
-  return nodeActions.filter((a) => !a.controlPlaneOnly || m.role === 'controlplane')
+  return nodeActions.filter((a) => (!a.controlPlaneOnly || m.role === 'controlplane') && mayNodeAction(m.perms, a.id))
 }
 
 export function nodeNameMatches(typed: string, name: string): boolean {

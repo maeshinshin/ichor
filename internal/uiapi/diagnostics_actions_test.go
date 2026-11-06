@@ -43,11 +43,19 @@ var _ = Describe("Action permissions", func() {
 			return rbacv1.PolicyRule{APIGroups: []string{group}, Resources: resources, Verbs: verbs}
 		}
 		read := rule([]string{resourceTalosClusters, resourceTalosOperations, "talosetcdbackups"}, "get", "list", "watch")
-		operator := []rbacv1.PolicyRule{read, rule([]string{resourceTalosOperations}, "create"), rule([]string{"talosetcdbackups"}, "update")}
+		operator := []rbacv1.PolicyRule{
+			read, rule([]string{resourceTalosOperations}, "create"), rule([]string{"talosetcdbackups"}, "update"),
+			rule([]string{resourceTalosMachines}, "update"), rule([]string{"talosmachines/approval"}, "approve"),
+			rule([]string{resourceTalosConfigPatches}, "create", "update", "delete"),
+		}
 		admin := append([]rbacv1.PolicyRule{
 			rule([]string{"ichorusers"}, "list"),
-			rule([]string{"talosoperations/ca-rotation", "talosoperations/key-rotation", "talosoperations/shutdown", "talosoperations/etcd-restore"}, "start"),
+			rule([]string{
+				"talosoperations/ca-rotation", "talosoperations/key-rotation", "talosoperations/shutdown", "talosoperations/etcd-restore",
+				"talosoperations/node-reset", "talosoperations/node-shutdown",
+			}, "start"),
 			rule([]string{"ichorinstallations/version"}, "update"),
+			rule([]string{resourceTalosMachines}, "delete", "override"),
 		}, operator...)
 
 		for user, rules := range map[string][]rbacv1.PolicyRule{actionsAdminUser: admin, actionsOperatorUser: operator, actionsViewerUser: {read}} {
@@ -79,6 +87,28 @@ var _ = Describe("Action permissions", func() {
 			Expect(flags{
 				m.GetListUsers(), m.GetCreateOperations(), m.GetStartCaRotation(), m.GetStartKeyRotation(), m.GetStartShutdown(),
 				m.GetStartEtcdRestore(), m.GetUpdateIchorVersion(), m.GetUpdateBackups(),
+			}).To(Equal(want), user)
+		}
+	})
+
+	It("reports what each role may do to nodes, pending machines and patches, from a machine alone", func() {
+		d, _, closeFn := newDiagnosticsServer(&fakeDownloadClient{}, k8sClient, nil)
+		defer closeFn()
+
+		type flags struct{ create, reset, shutdown, override, update, del, approve, createPatch, updatePatch, deletePatch bool }
+
+		for user, want := range map[string]flags{
+			actionsAdminUser:    {true, true, true, true, true, true, true, true, true, true},
+			actionsOperatorUser: {create: true, update: true, approve: true, createPatch: true, updatePatch: true, deletePatch: true},
+			actionsViewerUser:   {},
+		} {
+			resp, err := d.GetMyPermissions(ctx, asDiagUser(user, &pb.GetMyPermissionsRequest{Machine: objectRef(testNamespace, "any-machine")}))
+			Expect(err).NotTo(HaveOccurred(), user)
+
+			m := resp.Msg
+			Expect(flags{
+				m.GetCreateOperations(), m.GetStartNodeReset(), m.GetStartNodeShutdown(), m.GetOverrideMachines(), m.GetUpdateMachines(),
+				m.GetDeleteMachines(), m.GetApproveMachines(), m.GetCreatePatches(), m.GetUpdatePatches(), m.GetDeletePatches(),
 			}).To(Equal(want), user)
 		}
 	})

@@ -97,8 +97,9 @@ type GetMyPermissionsResponse struct {
 	// list_users is the "list" verb on ichorusers; the UI shows the Users page only
 	// when it is true. It needs no request field.
 	ListUsers bool `protobuf:"varint,7,opt,name=list_users,json=listUsers,proto3" json:"list_users,omitempty"`
-	// The flags below need the cluster; without it they are false. They let the UI
-	// hide the actions the caller's role cannot perform.
+	// The flags below need the cluster or the machine (the namespace they act in is
+	// the cluster's, else the machine's); without either they are false. They let the
+	// UI hide the actions the caller's role cannot perform.
 	// create_operations is the "create" verb on talosoperations (upgrades, config
 	// apply, node actions, pause/resume).
 	CreateOperations bool `protobuf:"varint,8,opt,name=create_operations,json=createOperations,proto3" json:"create_operations,omitempty"`
@@ -112,6 +113,22 @@ type GetMyPermissionsResponse struct {
 	UpdateIchorVersion bool `protobuf:"varint,13,opt,name=update_ichor_version,json=updateIchorVersion,proto3" json:"update_ichor_version,omitempty"`
 	// update_backups is the "update" verb on talosetcdbackups, which Back up now needs.
 	UpdateBackups bool `protobuf:"varint,14,opt,name=update_backups,json=updateBackups,proto3" json:"update_backups,omitempty"`
+	// start_node_reset and start_node_shutdown are the "start" verb on the
+	// talosoperations subresources node-reset and node-shutdown.
+	StartNodeReset    bool `protobuf:"varint,15,opt,name=start_node_reset,json=startNodeReset,proto3" json:"start_node_reset,omitempty"`
+	StartNodeShutdown bool `protobuf:"varint,16,opt,name=start_node_shutdown,json=startNodeShutdown,proto3" json:"start_node_shutdown,omitempty"`
+	// override_machines is the "override" verb on talosmachines (a node reset needs it).
+	OverrideMachines bool `protobuf:"varint,17,opt,name=override_machines,json=overrideMachines,proto3" json:"override_machines,omitempty"`
+	// update_machines and delete_machines are the "update" and "delete" verbs on
+	// talosmachines (removing a node needs both; rejecting a pending machine, update).
+	UpdateMachines bool `protobuf:"varint,18,opt,name=update_machines,json=updateMachines,proto3" json:"update_machines,omitempty"`
+	DeleteMachines bool `protobuf:"varint,19,opt,name=delete_machines,json=deleteMachines,proto3" json:"delete_machines,omitempty"`
+	// approve_machines is the "approve" verb on talosmachines/approval.
+	ApproveMachines bool `protobuf:"varint,20,opt,name=approve_machines,json=approveMachines,proto3" json:"approve_machines,omitempty"`
+	// create_patches, update_patches and delete_patches are those verbs on talosconfigpatches.
+	CreatePatches bool `protobuf:"varint,21,opt,name=create_patches,json=createPatches,proto3" json:"create_patches,omitempty"`
+	UpdatePatches bool `protobuf:"varint,22,opt,name=update_patches,json=updatePatches,proto3" json:"update_patches,omitempty"`
+	DeletePatches bool `protobuf:"varint,23,opt,name=delete_patches,json=deletePatches,proto3" json:"delete_patches,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -240,6 +257,69 @@ func (x *GetMyPermissionsResponse) GetUpdateIchorVersion() bool {
 func (x *GetMyPermissionsResponse) GetUpdateBackups() bool {
 	if x != nil {
 		return x.UpdateBackups
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetStartNodeReset() bool {
+	if x != nil {
+		return x.StartNodeReset
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetStartNodeShutdown() bool {
+	if x != nil {
+		return x.StartNodeShutdown
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetOverrideMachines() bool {
+	if x != nil {
+		return x.OverrideMachines
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetUpdateMachines() bool {
+	if x != nil {
+		return x.UpdateMachines
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetDeleteMachines() bool {
+	if x != nil {
+		return x.DeleteMachines
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetApproveMachines() bool {
+	if x != nil {
+		return x.ApproveMachines
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetCreatePatches() bool {
+	if x != nil {
+		return x.CreatePatches
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetUpdatePatches() bool {
+	if x != nil {
+		return x.UpdatePatches
+	}
+	return false
+}
+
+func (x *GetMyPermissionsResponse) GetDeletePatches() bool {
+	if x != nil {
+		return x.DeletePatches
 	}
 	return false
 }
@@ -759,7 +839,7 @@ const file_ichor_v1alpha1_diagnostics_proto_rawDesc = "" +
 	" ichor/v1alpha1/diagnostics.proto\x12\x0eichor.v1alpha1\x1a\x1bichor/v1alpha1/common.proto\"\x83\x01\n" +
 	"\x17GetMyPermissionsRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x123\n" +
-	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\xe8\x04\n" +
+	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"\xe1\a\n" +
 	"\x18GetMyPermissionsResponse\x12%\n" +
 	"\x0esupport_bundle\x18\x01 \x01(\bR\rsupportBundle\x12#\n" +
 	"\retcd_snapshot\x18\x02 \x01(\bR\fetcdSnapshot\x12%\n" +
@@ -776,7 +856,16 @@ const file_ichor_v1alpha1_diagnostics_proto_rawDesc = "" +
 	"\x0estart_shutdown\x18\v \x01(\bR\rstartShutdown\x12,\n" +
 	"\x12start_etcd_restore\x18\f \x01(\bR\x10startEtcdRestore\x120\n" +
 	"\x14update_ichor_version\x18\r \x01(\bR\x12updateIchorVersion\x12%\n" +
-	"\x0eupdate_backups\x18\x0e \x01(\bR\rupdateBackups\"\x82\x01\n" +
+	"\x0eupdate_backups\x18\x0e \x01(\bR\rupdateBackups\x12(\n" +
+	"\x10start_node_reset\x18\x0f \x01(\bR\x0estartNodeReset\x12.\n" +
+	"\x13start_node_shutdown\x18\x10 \x01(\bR\x11startNodeShutdown\x12+\n" +
+	"\x11override_machines\x18\x11 \x01(\bR\x10overrideMachines\x12'\n" +
+	"\x0fupdate_machines\x18\x12 \x01(\bR\x0eupdateMachines\x12'\n" +
+	"\x0fdelete_machines\x18\x13 \x01(\bR\x0edeleteMachines\x12)\n" +
+	"\x10approve_machines\x18\x14 \x01(\bR\x0fapproveMachines\x12%\n" +
+	"\x0ecreate_patches\x18\x15 \x01(\bR\rcreatePatches\x12%\n" +
+	"\x0eupdate_patches\x18\x16 \x01(\bR\rupdatePatches\x12%\n" +
+	"\x0edelete_patches\x18\x17 \x01(\bR\rdeletePatches\"\x82\x01\n" +
 	" DownloadReaderTalosconfigRequest\x123\n" +
 	"\acluster\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x12)\n" +
 	"\x10lifetime_seconds\x18\x02 \x01(\x03R\x0flifetimeSeconds\"v\n" +

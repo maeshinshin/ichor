@@ -7,20 +7,20 @@ description: "Replace an existing patch's spec (shows its impact first; confirms
 
 Replace an existing patch's spec (shows its impact first; confirms if it needs a reboot or reinstall)
 
-```
+```sh
 ichor patch update -f FILE [flags]
 ```
 
 ### Options
 
-```
+```text
   -f, --filename string   TalosConfigPatch manifest (YAML or JSON); - reads stdin (required)
   -h, --help              help for update
 ```
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle; any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
       --ichor-namespace string          namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")

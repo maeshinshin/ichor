@@ -7,19 +7,19 @@ description: "Let a paused operation continue; one paused by a failed step runs 
 
 Let a paused operation continue; one paused by a failed step runs that step again, so fix the cause first
 
-```
+```sh
 ichor operation resume NAME [flags]
 ```
 
 ### Options
 
-```
+```text
   -h, --help   help for resume
 ```
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle; any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
       --ichor-namespace string          namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")

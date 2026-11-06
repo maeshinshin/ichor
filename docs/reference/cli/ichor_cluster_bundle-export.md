@@ -20,20 +20,20 @@ After the file is written it is read back; only if it holds the live bundle does
 TalosCluster as exported, which clears its BundleBackupStale condition. The bundle is never printed.
 It refuses while a CA rotation is still under way, because the bundle is about to change.
 
-```
+```sh
 ichor cluster bundle-export NAME [flags]
 ```
 
 ### Options
 
-```
+```text
       --bundle-plaintext   store the bundle unencrypted (default: encrypted; an existing encrypted file keeps its passphrase)
   -h, --help               help for bundle-export
 ```
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle; any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
       --ichor-namespace string          namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")

@@ -15,20 +15,20 @@ validate against it, then starts the cni upgrade operation.
 Cilium moves only to the chart the running Ichor embeds, with the images that chart pins: a newer
 Cilium patch arrives with a newer Ichor release (upgrade Ichor first, then run this).
 
-```
+```sh
 ichor cni upgrade [flags]
 ```
 
 ### Options
 
-```
+```text
       --cluster string   the cluster (default: the only one in the namespace)
   -h, --help             help for upgrade
 ```
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle; any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
       --ichor-namespace string          namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")

@@ -14,20 +14,20 @@ The file has the API server address, the cluster CA certificate and an exec
 block that runs `ichor auth token`; there is nothing secret in it. With --ca-file the
 exec block carries the same --ca-file so kubectl trusts the issuer's private CA.
 
-```
+```sh
 ichor auth kubeconfig [flags]
 ```
 
 ### Options
 
-```
+```text
   -h, --help         help for kubeconfig
       --out string   file to write ("-" for stdout); default: the file name ichor-ui suggests, in the current directory
 ```
 
 ### Options inherited from parent commands
 
-```
+```text
       --audience ichor auth login       token audience: ichor-kube (the kube-apiserver, default; ichor auth login once lets kubectl run without a terminal) or ichor-ui (ichor-ui itself) (default "ichor-kube")
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle; any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed the issuer's TLS certificate, added to the system roots (env ICHOR_CA_FILE)

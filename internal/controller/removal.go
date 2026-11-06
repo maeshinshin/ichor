@@ -28,7 +28,6 @@ limitations under the License.
 package controller
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -108,6 +107,10 @@ func (r *TalosMachineReconciler) drainBlocked(ctx context.Context, m *ichorv1alp
 // the machine is requeued after drainRetryInterval, not sent to the error backoff.
 func (r *TalosMachineReconciler) reconcileDeletion(ctx context.Context, m *ichorv1alpha1.TalosMachine) (ctrl.Result, error) {
 	err := r.reconcileRemoval(ctx, m)
+	if _, waiting := errors.AsType[*removalWaitError](err); waiting {
+		return ctrl.Result{RequeueAfter: nodeWaitInterval}, nil
+	}
+
 	if _, blocked := errors.AsType[*drainBlockedError](err); blocked {
 		logf.FromContext(ctx).Info("drain blocked, retrying", "after", drainRetryInterval, "reason", err.Error())
 
@@ -168,18 +171,14 @@ func resetRequested(m *ichorv1alpha1.TalosMachine) bool {
 const reasonNodeStillHasClusterCredentials = "NodeStillHasClusterCredentials"
 
 // nodeStillHasClusterCredentialsMessage is explicit rather than folded into reasonRemovalApproved's message:
-// until something resets it, a removed machine's physical node still holds the cluster's PKI (ADR 0032).
-const nodeStillHasClusterCredentialsMessage = "control plane %q was removed from etcd, but its physical node was never reset " +
-	"and still holds this cluster's PKI; it cannot rejoin etcd, but do not repurpose or discard the hardware until it is reset. " +
-	nodeObjectStaysNote
+// until something resets it, a removed machine's disk still holds the cluster's PKI (ADR 0032). The
+// first %s is the Node step's note (ADR 0135).
+const nodeStillHasClusterCredentialsMessage = "control plane %q was removed from etcd (%s); its disk was never wiped " +
+	"and still holds this cluster's PKI; it cannot rejoin etcd, but reset it before you repurpose or discard the hardware"
 
 // workerStillHasClusterCredentialsMessage is the worker form: it was never an etcd member.
-const workerStillHasClusterCredentialsMessage = "worker %q was removed, but its physical node was never reset " +
-	"and still holds this cluster's PKI; do not repurpose or discard the hardware until it is reset. " +
-	nodeObjectStaysNote
-
-// nodeObjectStaysNote: the Kubernetes Node is not deleted, because the running kubelet would register it again.
-const nodeObjectStaysNote = "The Kubernetes Node stays while the machine runs; power it off or reset it, then delete the Node with kubectl delete node %[1]s"
+const workerStillHasClusterCredentialsMessage = "worker %q was removed (%s); its disk was never wiped " +
+	"and still holds this cluster's PKI; reset it before you repurpose or discard the hardware"
 
 // conditionTransitioning and its two reasons implement docs/design/architecture.md's "Nodes" section: even
 // counts are allowed only transiently during a change (3->4->3, never 3->2), shown as "transitioning", while
@@ -367,6 +366,12 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		return errors.New(msg) // an error, so Reconcile requeues: the node may only be rebooting
 	}
 
+	// A removal that already asked the machine to shut down only waits for its Node (ADR 0135): the
+	// drain and the etcd step are done, and a node that is off cannot be drained.
+	if !resetRequested(m) && r.shutdownRequested(ctx, nodeName) {
+		return r.finishUnwiped(ctx, &cluster, m, nodeName)
+	}
+
 	// Storage evacuation comes before the drain (architecture.md, "Nodes"), through the evacuateMachine the
 	// Talos upgrade uses. Its progress lives in the StorageEvacuation condition; a timeout stops the removal
 	// here. A dead control plane has no kubelet to evict pods or move replicas: neither would ever finish.
@@ -420,18 +425,45 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		}
 	}
 
-	reset := resetRequested(m)
-	if reset {
-		if err := r.resetNode(ctx, &cluster, m); err != nil {
-			log.Error(err, "resetting node")
-
-			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonResetFailed, err.Error())
-		}
-
-		r.markNodeReset(ctx, nodeName)
+	if !resetRequested(m) {
+		return r.finishUnwiped(ctx, &cluster, m, nodeName)
 	}
 
-	return r.completeRemoval(ctx, m, reset)
+	if err := r.resetNode(ctx, &cluster, m); err != nil {
+		log.Error(err, "resetting node")
+
+		return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonResetFailed, err.Error())
+	}
+
+	r.markNodeReset(ctx, nodeName)
+
+	return r.completeRemoval(ctx, m, true, nodeStep{})
+}
+
+// finishUnwiped is the end of a removal that does not reset: power the machine off, delete its Node (ADR 0135).
+func (r *TalosMachineReconciler) finishUnwiped(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, nodeName string,
+) error {
+	step, err := r.shutdownAndDeleteNode(ctx, cluster, m, nodeName)
+	if err != nil {
+		return err
+	}
+
+	return r.completeRemoval(ctx, m, false, step)
+}
+
+// shutdownRequested reports whether the removal already asked the machine behind nodeName to shut down.
+func (r *TalosMachineReconciler) shutdownRequested(ctx context.Context, nodeName string) bool {
+	if nodeName == "" {
+		return false
+	}
+
+	var node corev1.Node
+	if err := r.Get(ctx, types.NamespacedName{Name: nodeName}, &node); err != nil {
+		return false
+	}
+
+	return node.Annotations[nodeShutdownRequestedAnnotation] != ""
 }
 
 // checkRemovalCounts runs the control plane removal refusals that need no node: quorum and
@@ -501,7 +533,9 @@ func (r *TalosMachineReconciler) removalNodeName(
 // reset is true only when this removal opted into ADR 0042's Reset step and it succeeded: the Warning Event
 // that a decommissioned node still holds the cluster's PKI (ADR 0032) is skipped then, because Reset wiped
 // the STATE partition those credentials lived on.
-func (r *TalosMachineReconciler) completeRemoval(ctx context.Context, m *ichorv1alpha1.TalosMachine, reset bool) error {
+func (r *TalosMachineReconciler) completeRemoval(
+	ctx context.Context, m *ichorv1alpha1.TalosMachine, reset bool, step nodeStep,
+) error {
 	message := "the node was drained and removed"
 	if m.Spec.Role == roleControlPlane {
 		message = "removal passed the quorum, last-control-plane and declared-count checks, the node was " +
@@ -510,6 +544,8 @@ func (r *TalosMachineReconciler) completeRemoval(ctx context.Context, m *ichorv1
 
 	if reset {
 		message += "; the node was reset and is rebooting back to maintenance mode"
+	} else {
+		message += "; " + step.note
 	}
 
 	if err := r.removalCondition(ctx, m, metav1.ConditionTrue, reasonRemovalApproved, message); err != nil {
@@ -523,10 +559,7 @@ func (r *TalosMachineReconciler) completeRemoval(ctx context.Context, m *ichorv1
 			msg = workerStillHasClusterCredentialsMessage
 		}
 
-		// The Node is named after the host, not the machine object; Status.NodeName is the host's name.
-		name := cmp.Or(m.Status.NodeName, m.Name)
-
-		r.Recorder.Eventf(m, corev1.EventTypeWarning, reasonNodeStillHasClusterCredentials, msg, name)
+		r.Recorder.Eventf(m, corev1.EventTypeWarning, reasonNodeStillHasClusterCredentials, msg, m.Name, step.note)
 	}
 
 	controllerutil.RemoveFinalizer(m, machineRemovalFinalizer)

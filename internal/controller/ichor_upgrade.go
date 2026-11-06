@@ -191,7 +191,8 @@ func (r *TalosOperationReconciler) advanceIchor(
 	// Stamped once, in memory here and persisted by the setPhase below.
 	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindIchor && op.Status.ToVersion == "" {
 		var inst ichorv1alpha1.IchorInstallation
-		if err := r.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
+		// No installation: the executor below pauses the operation; the stamp waits for the next pass.
+		if err := client.IgnoreNotFound(r.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst)); err != nil {
 			return ctrl.Result{}, fmt.Errorf("reading IchorInstallation %q: %w", ichorv1alpha1.IchorInstallationName, err)
 		}
 

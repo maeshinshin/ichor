@@ -89,7 +89,14 @@ The kinds are `NOTE`, `TIP`, `IMPORTANT`, `WARNING` and `CAUTION`.
 ## Code
 
 Use fenced blocks with a language (` ```sh `, ` ```yaml `, ` ```go `). The site
-highlights them and adds a copy button; there is nothing to add by hand.
+highlights them (light and dark) and adds a copy button; there is nothing to add
+by hand.
+
+Every block must name its language, and `make docs-site` fails with the file
+and line of one that does not. Use `sh` for shell commands, `console` for a
+session that shows `$ ` prompts with their output, `yaml`, `json` and `go` for
+source, and `text` for plain output, diagrams and file trees. The generated
+pages under `reference/` are labeled by `make docs-reference`.
 
 ## What every page gets
 

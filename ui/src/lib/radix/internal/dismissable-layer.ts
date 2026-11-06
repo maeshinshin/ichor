@@ -34,10 +34,13 @@ export function useDismissableLayer(node: HTMLElement | null, options: Dismissab
       if (!event.defaultPrevented) latest.current.onDismiss?.()
     }
 
+    // A layer above this one (a select over a dialog) makes everything below inert, so a tap beside it lands on the page root and
+    // would count as outside for every layer: only the top layer decides
+    const isTop = () => layers[layers.length - 1] === node
     let pendingClick = () => {}
     const onPointerDown = (event: PointerEvent) => {
       document.removeEventListener("click", pendingClick)
-      if (isInside(event.target)) return
+      if (!isTop() || isInside(event.target)) return
       // Touch dismisses on the click that follows, so a scroll gesture outside keeps the layer open
       if (event.pointerType === "touch") {
         pendingClick = () => dismiss(event, "onPointerDownOutside")
@@ -45,7 +48,7 @@ export function useDismissableLayer(node: HTMLElement | null, options: Dismissab
       } else dismiss(event, "onPointerDownOutside")
     }
     const onFocusIn = (event: FocusEvent) => {
-      if (!isInside(event.target)) dismiss(event, "onFocusOutside")
+      if (isTop() && !isInside(event.target)) dismiss(event, "onFocusOutside")
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || layers[layers.length - 1] !== node) return

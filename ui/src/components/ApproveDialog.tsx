@@ -149,7 +149,7 @@ export function ApproveDialog({
       </DialogTrigger>
       <DialogContent className="grid-cols-1 sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{t('approve.title', { name: machineDisplayName(machine) })}</DialogTitle>
+          <DialogTitle>{t('approve.title', { name: machine.hostname || machine.nodeName || !machine.endpoint ? machineDisplayName(machine) : `${machineDisplayName(machine)} (${machine.endpoint})` })}</DialogTitle>
           <DialogDescription>{t('approve.description')}</DialogDescription>
         </DialogHeader>
 

@@ -22,21 +22,26 @@ export function ConditionList({ conditions }: { conditions: Condition[] }) {
           <TableRow>
             <TableHead>{t('condition.type')}</TableHead>
             <TableHead>{t('condition.status')}</TableHead>
-            <TableHead>{t('condition.reason')}</TableHead>
-            <TableHead>{t('condition.message')}</TableHead>
-            <TableHead>{t('condition.since')}</TableHead>
+            <TableHead className="max-md:hidden">{t('condition.reason')}</TableHead>
+            <TableHead className="max-md:hidden">{t('condition.message')}</TableHead>
+            <TableHead className="max-md:hidden">{t('condition.since')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {conditions.map((c) => (
             <TableRow key={c.type}>
-              <TableCell className="font-medium">{c.type}</TableCell>
+              <TableCell className="font-medium max-md:whitespace-normal">
+                {c.type}
+                <div class="font-normal text-muted-foreground md:hidden">{c.reason || '-'}</div>
+                <div class="font-normal text-muted-foreground md:hidden">{c.message || '-'}</div>
+                <div class="font-normal text-muted-foreground md:hidden">{c.lastTransitionTime ? formatDate(timestampDate(c.lastTransitionTime)) : '-'}</div>
+              </TableCell>
               <TableCell>
                 <ConditionBadge type={c.type} status={c.status} />
               </TableCell>
-              <TableCell className="text-muted-foreground">{c.reason || '-'}</TableCell>
-              <TableCell className="min-w-64 whitespace-normal">{c.message || '-'}</TableCell>
-              <TableCell className="text-muted-foreground">
+              <TableCell className="text-muted-foreground max-md:hidden">{c.reason || '-'}</TableCell>
+              <TableCell className="min-w-64 whitespace-normal max-md:hidden">{c.message || '-'}</TableCell>
+              <TableCell className="text-muted-foreground max-md:hidden">
                 {c.lastTransitionTime ? formatDate(timestampDate(c.lastTransitionTime)) : '-'}
               </TableCell>
             </TableRow>

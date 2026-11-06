@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import { FieldLabel } from '@/components/ui/field'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -480,7 +481,7 @@ function NodeActionDialog({
             )}
             {confirmName !== '' && (
               <div class="space-y-2">
-                <Label htmlFor="node-action-name">{shown === machine.name ? t('node.action.typeName', { name: machine.name }) : t('node.action.typeNameHost', { name: machine.name, host: shown })}</Label>
+                <FieldLabel htmlFor="node-action-name">{shown === machine.name ? t('node.action.typeName', { name: machine.name }) : t('node.action.typeNameHost', { name: machine.name, host: shown })}</FieldLabel>
                 <Input
                   id="node-action-name"
                   autoComplete="off"

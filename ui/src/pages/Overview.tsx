@@ -230,7 +230,7 @@ function Home({
                   <EllipsisIcon />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-auto min-w-48">
                 {menu.includes('ca-rotation') && (
                   <DropdownMenuItem onSelect={() => setDialog('ca-rotation')}>{t('overview.rotateCAs')}</DropdownMenuItem>
                 )}

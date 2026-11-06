@@ -19,13 +19,13 @@ read it from a file, for example:
 
 Needs the "download" verb on talosmachines/packet-capture. The file is written with mode 0600.
 
-```
+```sh
 ichor node pcap NODE [flags]
 ```
 
 ### Options
 
-```
+```text
       --duration duration   capture time (at most 5m) (default 30s)
       --filter string       BPF filter in "tcpdump -dd" format, or @FILE
   -h, --help                help for pcap
@@ -36,7 +36,7 @@ ichor node pcap NODE [flags]
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle (ADR 0127); any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
       --ichor-namespace string          namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")

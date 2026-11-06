@@ -15,13 +15,13 @@ It shows the plan and asks for confirmation unless --yes. For reset and remove t
 (or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
 (or deletes the machine); the controller does the work. Follow it with --follow.
 
-```
+```sh
 ichor etcd defrag [flags]
 ```
 
 ### Options
 
-```
+```text
       --allow-leader   allow defragmenting the etcd leader (writes pause for the whole cluster meanwhile)
       --follow         after creating the operation, follow its progress until it finishes
   -h, --help           help for defrag
@@ -30,7 +30,7 @@ ichor etcd defrag [flags]
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle (ADR 0127); any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
       --ichor-namespace string          namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")

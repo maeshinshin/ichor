@@ -59,13 +59,13 @@ adopt only reads the Talos nodes (using --talosconfig); it never applies
 configuration to them. Afterwards it advises a CA rotation, since adopted
 clusters keep the old CAs, but never starts one.
 
-```
+```sh
 ichor adopt [flags]
 ```
 
 ### Options
 
-```
+```text
       --accept-cilium-changes     accept the Ichor-owned Cilium settings the takeover will change on the running data plane (never IPAM or the tunnel protocol)
       --accept-cilium-diff        accept the differences between the live Cilium objects and the pinned chart
       --add-machine stringArray   address of a machine that already runs a configuration signed by this cluster's CAs but has no TalosMachine; adds it to the existing cluster instead of adopting the cluster (repeatable; ADR 0128)
@@ -89,7 +89,7 @@ ichor adopt [flags]
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle (ADR 0127); any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --kubeconfig string               path to the kubeconfig for the cluster's Kubernetes API; defaults to $KUBECONFIG, then ~/.kube/config
   -o, --output string                   output format: "yaml" or "json" for scripts; by default a command prints for people (commands without a human view print YAML)

@@ -15,20 +15,20 @@ it differs, which means an upgrade is pending). When the cluster cannot be
 reached, the CLI version is printed with a note on stderr and the exit code is 0.
 --client skips the cluster.
 
-```
+```sh
 ichor version [flags]
 ```
 
 ### Options
 
-```
+```text
       --client   print only the CLI version; do not contact the cluster
   -h, --help     help for version
 ```
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle (ADR 0127); any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --kubeconfig string               path to the kubeconfig for the cluster's Kubernetes API; defaults to $KUBECONFIG, then ~/.kube/config
   -o, --output string                   output format: "yaml" or "json" for scripts; by default a command prints for people (commands without a human view print YAML)

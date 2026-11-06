@@ -9,14 +9,14 @@ List, add or remove the addresses and ranges Ichor scans for new machines
 
 ### Options
 
-```
+```text
       --cluster string   TalosCluster (in --namespace) to edit; optional when the namespace has exactly one
   -h, --help             help for discovery
 ```
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle (ADR 0127); any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
       --ichor-namespace string          namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")

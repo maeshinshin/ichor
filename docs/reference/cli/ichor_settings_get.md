@@ -13,19 +13,19 @@ Show each setting with the value in force and its source: "spec" when the IchorI
 sets it, "deployment" when the flag or chart value applies. The default is a table;
 -o yaml or -o json print the full response.
 
-```
+```sh
 ichor settings get [flags]
 ```
 
 ### Options
 
-```
+```text
   -h, --help   help for get
 ```
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle (ADR 0127); any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --kubeconfig string               path to the kubeconfig for the cluster's Kubernetes API; defaults to $KUBECONFIG, then ~/.kube/config
   -o, --output string                   output format: "yaml" or "json" for scripts; by default a command prints for people (commands without a human view print YAML)

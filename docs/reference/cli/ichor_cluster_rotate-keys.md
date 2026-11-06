@@ -39,13 +39,13 @@ A snapshot taken before the rotation finished cannot be restored.
 It shows which control planes are reconfigured and in which order, and asks for confirmation unless --yes.
 --follow keeps reporting progress until the rotation completes.
 
-```
+```sh
 ichor cluster rotate-keys NAME [flags]
 ```
 
 ### Options
 
-```
+```text
       --follow                 keep reporting progress until the rotation completes or fails
   -h, --help                   help for rotate-keys
       --ignore-legacy-tokens   drop the old service-account key although token Secrets it signed still exist
@@ -55,7 +55,7 @@ ichor cluster rotate-keys NAME [flags]
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle (ADR 0127); any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
       --ichor-namespace string          namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")

@@ -14,19 +14,19 @@ controller does and prints every value with its origin layer. Secrets are
 masked ("***") by the same code ichor-ui uses -- this works without ichor-ui,
 reading the CRs and the secrets bundle with your own Kubernetes access.
 
-```
+```sh
 ichor config effective MACHINE [flags]
 ```
 
 ### Options
 
-```
+```text
   -h, --help   help for effective
 ```
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle (ADR 0127); any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
       --ichor-namespace string          namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")

@@ -38,13 +38,13 @@ The settings can come from a file instead of flags: -f init.yaml (an
 InitConfig; --print-config-template prints an example). A flag on the command
 line overrides the file; relative paths in the file are relative to it.
 
-```
+```sh
 ichor init [flags]
 ```
 
 ### Options
 
-```
+```text
       --admin-user string                  with --ui-url: name of the first admin (default admin); its generated password is printed once to stderr and must be changed at the first sign-in
       --bundle-plaintext                   store the secrets bundle unencrypted (default: encrypted with --bundle-passphrase-file, $ICHOR_BUNDLE_PASSPHRASE, or a passphrase generated on a terminal)
       --cluster string                     name of the TalosCluster to create (required)
@@ -81,7 +81,7 @@ ichor init [flags]
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle (ADR 0127); any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --kubeconfig string               path to the kubeconfig for the cluster's Kubernetes API; defaults to $KUBECONFIG, then ~/.kube/config
   -o, --output string                   output format: "yaml" or "json" for scripts; by default a command prints for people (commands without a human view print YAML)

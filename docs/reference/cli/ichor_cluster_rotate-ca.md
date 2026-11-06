@@ -56,13 +56,13 @@ It shows which machines are reconfigured and in which order, and asks for confir
 --follow keeps reporting progress until the rotation completes, through the Kubernetes API with the
 new kubeconfig (the ichor-ui tunnel does not survive the rotation).
 
-```
+```sh
 ichor cluster rotate-ca NAME [flags]
 ```
 
 ### Options
 
-```
+```text
       --all          replace all four CAs
       --ca strings   the CAs to replace: talos, kubernetes, etcd, kubernetes-aggregator (default: talos and kubernetes)
       --follow       after the credential hand-off, follow the rotation until it completes or fails (without it the command still does the hand-off, then returns)
@@ -71,7 +71,7 @@ ichor cluster rotate-ca NAME [flags]
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle (ADR 0127); any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
       --ichor-namespace string          namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")

@@ -7,13 +7,13 @@ description: "Create a user and set its first password (it must be changed at th
 
 Create a user and set its first password (it must be changed at the first sign-in)
 
-```
+```sh
 ichor user create NAME [flags]
 ```
 
 ### Options
 
-```
+```text
       --bootstrap             write the user and its password hash with your kubeconfig's own rights instead of through ichor-ui (for the first admin of an existing install)
       --display-name string   display name
       --email string          e-mail address (informational)
@@ -25,7 +25,7 @@ ichor user create NAME [flags]
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle (ADR 0127); any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed the issuer's TLS certificate, added to the system roots (env ICHOR_CA_FILE)
       --issuer string                   external https URL of ichor-ui, which is Ichor's OIDC issuer (env ICHOR_ISSUER)

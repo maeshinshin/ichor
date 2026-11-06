@@ -37,13 +37,13 @@ With --acknowledge the command also tells a waiting CA rotation that you have th
 checking that the new kubeconfig authenticates to the cluster: the rotation does not continue without
 it. 'ichor cluster rotate-ca' does all of this itself.
 
-```
+```sh
 ichor cluster credentials NAME [flags]
 ```
 
 ### Options
 
-```
+```text
       --acknowledge               after checking the new kubeconfig works, tell the CA rotation that is waiting for credentials to continue
       --bundle string             read the CAs from this secrets bundle file (bundle-export's output) instead of the cluster; works offline
       --force                     with --bundle: write the files even though the bundle's CAs differ from the stored secrets bundle; pass it when you know the file is the current bundle (for example after a restore)
@@ -58,7 +58,7 @@ ichor cluster credentials NAME [flags]
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle (ADR 0127); any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
       --ichor-namespace string          namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")

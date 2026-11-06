@@ -16,13 +16,13 @@ weak (missing UUID, serial number or permanent MAC) and for one already
 approved -- by ichor-ui, or, when ichor-ui is unreachable, by the same
 checks running in this process. It asks for confirmation unless --yes.
 
-```
+```sh
 ichor machine approve NAME --role controlplane|worker [flags]
 ```
 
 ### Options
 
-```
+```text
       --address strings           static address with prefix length, 192.168.1.10/24 (repeatable; needs --nic)
       --dns strings               DNS server address (repeatable; needs --nic)
       --ephemeral-disk string     put EPHEMERAL on its own disk: "wwid:ID", "serial:SERIAL", a /dev/disk/by-id/ path, a bus path such as /pci0000:00/..., or a device path such as /dev/sda
@@ -40,7 +40,7 @@ ichor machine approve NAME --role controlplane|worker [flags]
 
 ### Options inherited from parent commands
 
-```
+```text
       --bundle-passphrase-file string   file holding the passphrase of the local secrets bundle (ADR 0127); any readable path, e.g. /dev/fd/3; otherwise $ICHOR_BUNDLE_PASSPHRASE, then a prompt on a terminal. Never a value on the command line
       --ca-file string                  PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
       --ichor-namespace string          namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")

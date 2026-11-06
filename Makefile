@@ -516,6 +516,10 @@ ui-shots: ## Screenshot UI pages (desktop+phone, light+dark): make ui-shots OUT=
 docs-install: ## Install the docs site's dependencies (npm ci).
 	cd site && npm ci --ignore-scripts
 
+.PHONY: docs-diagrams
+docs-diagrams: ## Re-export the draw.io diagrams in docs/images (NAME.light.drawio.svg is the source) as the light and dark SVG pair: make docs-diagrams [SOURCE=docs/images/NAME.light.drawio.svg].
+	node hack/docs-diagrams.mjs $(SOURCE)
+
 .PHONY: docs-site
 docs-site: docs-install ## Build the docs site (the "next" version, docs/ of the working tree) into site/dist: Astro, the internal link check, then the Pagefind index.
 	cd site && npm run build

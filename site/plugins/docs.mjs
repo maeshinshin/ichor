@@ -4,8 +4,24 @@ import { existsSync, statSync } from 'node:fs'
 import { dirname, relative, resolve, sep } from 'node:path'
 import { visit } from 'unist-util-visit'
 
-/** The docs/ directory and the repository root it sits in (Astro runs with site/ as the working directory). */
-export const repoRoot = resolve(process.cwd(), '..')
+/**
+ * The version being built: `next` (the docs on main, the default) or a release tag `vX.Y.Z`
+ * (DOCS_VERSION). Its pages live under `<DOCS_BASE>/<version>/`; DOCS_BASE (default `/ichor`,
+ * `/` for a domain root) is where all versions sit together.
+ */
+export const version = process.env.DOCS_VERSION ?? 'next'
+export const isNext = version === 'next'
+/** Where all versions sit, without a trailing slash (empty at a domain root). */
+export const rootBase = (process.env.DOCS_BASE ?? '/ichor').replace(/\/+$/, '')
+export const versionBase = `${rootBase}/${version}`
+/** The git ref the docs of this version were written at: GitHub links out of docs/ point there. */
+export const gitRef = isNext ? 'main' : version
+
+/**
+ * The docs/ directory and the repository root it sits in (Astro runs with site/ as the working
+ * directory). DOCS_REPO is a checkout of a release tag to build its docs/ with this site's code.
+ */
+export const repoRoot = process.env.DOCS_REPO ? resolve(process.env.DOCS_REPO) : resolve(process.cwd(), '..')
 export const docsRoot = resolve(repoRoot, 'docs')
 export const repoUrl = 'https://github.com/maeshinshin/ichor'
 
@@ -56,7 +72,7 @@ export function resolveLink(url, fromDir, base) {
     return urlOf(base, routeOf(relative(docsRoot, target))) + (hash && `#${hash}`)
   }
   const kind = statSync(target).isDirectory() ? 'tree' : 'blob'
-  return `${repoUrl}/${kind}/main/${relative(repoRoot, target).split(sep).join('/')}${hash && `#${hash}`}`
+  return `${repoUrl}/${kind}/${gitRef}/${relative(repoRoot, target).split(sep).join('/')}${hash && `#${hash}`}`
 }
 
 /**

@@ -11,21 +11,28 @@ import { createServer } from 'node:http'
 import { extname, join, normalize } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 
-const [outDir, dist = 'site/dist'] = process.argv.slice(2)
+const [outDir, dist = 'site/dist-all'] = process.argv.slice(2)
 if (!outDir) {
   console.error('usage: node hack/docs-shots.mjs <outDir> [distDir]')
   process.exit(2)
 }
-const base = (process.env.DOCS_BASE ?? '/ichor').replace(/\/?$/, '/')
+const root = (process.env.DOCS_BASE ?? '/ichor').replace(/\/*$/, '/')
+const base = root + 'next/' // the pages under test; dist is the merged tree of all versions (make docs-site-all)
+const fakeNewer = { on: false } // serve a versions.json that lists a newer release, to see the old-version banner
 mkdirSync(outDir, { recursive: true })
 
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.wasm': 'application/wasm', '.md': 'text/markdown', '.txt': 'text/plain' }
 const server = createServer((req, res) => {
   const path = decodeURIComponent(new URL(req.url, 'http://x').pathname)
-  if (!path.startsWith(base)) return void res.writeHead(404).end()
-  let file = join(dist, normalize(path.slice(base.length)))
+  if (!path.startsWith(root)) return void res.writeHead(404).end()
+  let file = join(dist, normalize(path.slice(root.length)))
   if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html')
   if (!existsSync(file)) return void res.writeHead(404).end()
+  if (fakeNewer.on && path === root + 'versions.json') {
+    const vs = JSON.parse(readFileSync(file, 'utf8')).map((v) => ({ ...v, isLatest: false }))
+    vs.push({ name: 'v9.9.9', path: 'v9.9.9/', isLatest: true, isNext: false })
+    return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(vs))
+  }
   res.writeHead(200, { 'content-type': types[extname(file)] ?? 'application/octet-stream' }).end(readFileSync(file))
 })
 await new Promise((r) => server.listen(0, '127.0.0.1', r))
@@ -195,6 +202,63 @@ try {
       const bad = []
       for (const l of [...new Set(links)]) if ((await fetch(origin + l)).status !== 200) bad.push(l)
       check(links.length > 0 && !bad.length, `${tag}: ${links.length} internal links in getting-started, ${bad.length} broken ${bad.join(' ')}`)
+
+      // A code block's copy button (hovered), and what it copies.
+      await mouse(`document.querySelector('article pre + div button')`, 'move')
+      await sleep(300)
+      await shot(`${tag}-codeblock`)
+      await mouse(`document.querySelector('article pre + div button')`)
+      await sleep(300)
+      check((await clipboard()) === (await ev(`document.querySelector('article pre code').textContent`)), `${tag}: the code copy button copies the code`)
+
+      // Versions: versions.json, the redirects, the switcher, the banners and a per-version search.
+      const vs = await (await fetch(origin + root + 'versions.json')).json()
+      const latest = vs.find((v) => v.isLatest)
+      check(vs[0]?.name === 'next' && vs[0].isNext && vs.filter((v) => v.isLatest).length === 1, `${tag}: versions.json lists next and exactly one latest (${vs.map((v) => v.name)})`)
+      check((await (await fetch(origin + root)).text()).includes(`url=${root}${latest.path}`), `${tag}: the site root redirects to ${latest.name}`)
+      check((await fetch(origin + root + 'latest/guides/getting-started/')).status === 200, `${tag}: latest/ has a redirect for each page`)
+      check((await fetch(origin + root + latest.path + 'pagefind/pagefind.js')).status === 200, `${tag}: ${latest.name} has its own search index`)
+      const inMenu = (text) => `[...document.querySelectorAll('[data-slot=dropdown-menu-radio-item]')].find((e) => e.textContent.includes(${JSON.stringify(text)}))`
+      const switcher = `[...document.querySelectorAll('button[aria-label="Documentation version"]')].find((b) => b.getClientRects().length)`
+      await open('guides/getting-started/')
+      check(await ev(`document.querySelector('article [role=alert]')?.textContent.includes('Unreleased (main)')`), `${tag}: next shows the "Unreleased (main)" banner`)
+      await mouse(switcher)
+      check(await until(`!!${inMenu('v')}`, 'the version menu', 3000), `${tag}: the version switcher opens`)
+      check(await ev(`!!${inMenu('next (main)')} && !!${inMenu(`${latest.name} (latest)`)}`), `${tag}: the switcher lists next (main) and ${latest.name} (latest)`)
+      await shot(`${tag}-version-switcher`)
+      await mouse(inMenu(latest.name))
+      await until(`location.pathname === '${root}${latest.path}guides/getting-started/'`, 'the same page in the release', 5000)
+      check(await ev(`location.pathname`) === `${root}${latest.path}guides/getting-started/`, `${tag}: switching keeps the page path when it exists in ${latest.name}`)
+      await ready()
+      check(!(await ev(`!!document.querySelector('article [role=alert]')`)), `${tag}: the newest release has no banner`)
+      await open('adr/0132-the-docs-site-renders-docs-in-place-with-astro-preactcn-and-pagefind/')
+      const there = (await fetch(origin + root + latest.path + 'adr/0132-the-docs-site-renders-docs-in-place-with-astro-preactcn-and-pagefind/', { method: 'HEAD' })).ok
+      await mouse(switcher)
+      await until(`!!${inMenu('v')}`, 'the version menu', 3000)
+      await mouse(inMenu(latest.name))
+      await until(`location.pathname.startsWith('${root}${latest.path}')`, 'the release', 5000)
+      check(await ev(`location.pathname`) === `${root}${latest.path}${there ? 'adr/0132-the-docs-site-renders-docs-in-place-with-astro-preactcn-and-pagefind/' : ''}`, `${tag}: switching to a page ${latest.name} lacks goes to its overview (page there: ${there})`)
+      await ready()
+      await key('k', 2)
+      await until(`!!document.querySelector('[data-slot=command-input]')`, 'the search dialog', 3000)
+      await s('Input.insertText', { text: 'adopt' })
+      await until(`document.querySelectorAll('[data-slot=command-item]').length > 0`, 'search results')
+      await key('Enter')
+      await until(`!location.pathname.endsWith('${root}${latest.path}')`, 'a search result', 5000)
+      check((await ev(`location.pathname`)).startsWith(`${root}${latest.path}`), `${tag}: search in ${latest.name} stays in that version`)
+      await ready()
+      fakeNewer.on = true // a release newer than this build exists: the old-version banner
+      await s('Page.navigate', { url: `${origin}${root}${latest.path}guides/getting-started/` })
+      await sleep(300)
+      await ready()
+      await until(`!!document.querySelector('article [role=alert]')`, 'the old-version banner', 3000)
+      const banner = await ev(`document.querySelector('article [role=alert]')?.textContent`)
+      check(banner?.includes(`You are viewing the docs for ${latest.name}`) && banner.includes('The latest is v9.9.9'), `${tag}: an old version warns "${banner}"`)
+      await shot(`${tag}-old-version-banner`)
+      await open('guides/getting-started/')
+      await until(`document.querySelector('article [role=alert]')?.textContent.includes('v9.9.9')`, 'the latest release in the next banner', 3000)
+      check(await ev(`document.querySelector('article [role=alert]')?.textContent.includes('The latest release is v9.9.9')`), `${tag}: next's banner names the latest release`)
+      fakeNewer.on = false
 
       if (!mobile) {
         // The sidebar hides, the choice is remembered, the content widens.

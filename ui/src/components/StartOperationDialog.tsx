@@ -4,6 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
+import { CopyableName } from '@/components/CopyableName'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
@@ -301,7 +302,8 @@ export function StartOperationDialog({
 
       {plan && needsName && plan.blocked === '' && (
         <Field>
-          <FieldLabel htmlFor="op-confirm-name">{t('ops.dialog.typeName', { name: cluster.name })}</FieldLabel>
+          <CopyableName value={cluster.name} ariaLabel={t('ops.dialog.copyName')} />
+          <FieldLabel htmlFor="op-confirm-name">{t('ops.dialog.typeName')}</FieldLabel>
           <Input id="op-confirm-name" value={typed} onInput={(e) => setTyped((e.currentTarget as HTMLInputElement).value)} />
         </Field>
       )}

@@ -31,8 +31,10 @@ import (
 )
 
 const (
-	ichorV2 = "v0.2.0"
-	ichorV3 = "v0.3.0"
+	hostWorkerA  = "worker-a"
+	machineUUIDA = "uuid-a"
+	ichorV2      = "v0.2.0"
+	ichorV3      = "v0.3.0"
 )
 
 func TestOperationSummaryPerKind(t *testing.T) {
@@ -211,8 +213,8 @@ func TestCreatingAnIchorUpgradeStampsFromVersionAndStartedBy(t *testing.T) {
 }
 
 func TestGetOperationNamesMachinesByHostnameThenNodeName(t *testing.T) {
-	withHost := opMachine("uuid-a", "worker", nil, nil)
-	withHost.Spec.Hostname = "worker-a"
+	withHost := opMachine(machineUUIDA, "worker", nil, nil)
+	withHost.Spec.Hostname = hostWorkerA
 
 	withNode := opMachine("uuid-b", "worker", nil, nil)
 	withNode.Status.NodeName = "node-b"
@@ -223,7 +225,7 @@ func TestGetOperationNamesMachinesByHostnameThenNodeName(t *testing.T) {
 		Name: "talos-x", Namespace: opNS,
 		Spec: ichorv1alpha1.TalosOperationSpec{ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindTalos},
 		Status: ichorv1alpha1.TalosOperationStatus{Machines: []ichorv1alpha1.TalosOperationMachineStatus{
-			{Name: "uuid-a"}, {Name: "uuid-b"}, {Name: "uuid-c"},
+			{Name: machineUUIDA}, {Name: "uuid-b"}, {Name: "uuid-c"},
 		}},
 	}
 
@@ -246,16 +248,16 @@ func TestGetOperationNamesMachinesByHostnameThenNodeName(t *testing.T) {
 }
 
 func TestNodeActionSummaryNamesTheMachineByHostname(t *testing.T) {
-	m := opMachine("uuid-a", "worker", nil, nil)
-	m.Spec.Hostname = "worker-a"
+	m := opMachine(machineUUIDA, "worker", nil, nil)
+	m.Spec.Hostname = hostWorkerA
 
 	op := &ichorv1alpha1.TalosOperation{
 		Name: "node-x", Namespace: opNS,
 		Spec: ichorv1alpha1.TalosOperationSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindNode,
-			Node: &ichorv1alpha1.TalosOperationNodeSpec{MachineRef: corev1.LocalObjectReference{Name: "uuid-a"}, Action: ichorv1alpha1.NodeActionReboot},
+			Node: &ichorv1alpha1.TalosOperationNodeSpec{MachineRef: corev1.LocalObjectReference{Name: machineUUIDA}, Action: ichorv1alpha1.NodeActionReboot},
 		},
-		Status: ichorv1alpha1.TalosOperationStatus{Machines: []ichorv1alpha1.TalosOperationMachineStatus{{Name: "uuid-a"}}},
+		Status: ichorv1alpha1.TalosOperationStatus{Machines: []ichorv1alpha1.TalosOperationMachineStatus{{Name: machineUUIDA}}},
 	}
 
 	s, _ := opServer(t, append(opObjects(), m, op)...)
@@ -273,14 +275,14 @@ func TestNodeActionSummaryNamesTheMachineByHostname(t *testing.T) {
 // A freshly created, paused node operation has no status.machines yet; the machine is named from
 // spec.node.machineRef.
 func TestPausedNodeActionWithoutStatusNamesTheMachineByHostname(t *testing.T) {
-	m := opMachine("uuid-a", "worker", nil, nil)
-	m.Spec.Hostname = "worker-a"
+	m := opMachine(machineUUIDA, "worker", nil, nil)
+	m.Spec.Hostname = hostWorkerA
 
 	op := &ichorv1alpha1.TalosOperation{
 		Name: "node-y", Namespace: opNS,
 		Spec: ichorv1alpha1.TalosOperationSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindNode, Paused: true,
-			Node: &ichorv1alpha1.TalosOperationNodeSpec{MachineRef: corev1.LocalObjectReference{Name: "uuid-a"}, Action: ichorv1alpha1.NodeActionReboot},
+			Node: &ichorv1alpha1.TalosOperationNodeSpec{MachineRef: corev1.LocalObjectReference{Name: machineUUIDA}, Action: ichorv1alpha1.NodeActionReboot},
 		},
 	}
 
@@ -297,7 +299,7 @@ func TestPausedNodeActionWithoutStatusNamesTheMachineByHostname(t *testing.T) {
 	}
 
 	for _, d := range o.GetDetails() {
-		if d.GetKey() == "Machine" && d.GetValue() != "worker-a" {
+		if d.GetKey() == "Machine" && d.GetValue() != hostWorkerA {
 			t.Fatalf("Machine = %q", d.GetValue())
 		}
 	}

@@ -173,13 +173,18 @@ function ProcessesCard({ data, maintenance }: { data: GetNodeTalosRuntimeRespons
       error={p.error}
       maintenance={maintenance}
     >
-      <Grid heads={[t('rt.colPid'), t('talos.colName'), t('talos.colState'), t('rt.colThreads'), t('rt.colCpu'), t('rt.colRss')]} empty={p.processes.length === 0}>
+      <Grid heads={[t('rt.colPid'), t('talos.colName'), t('talos.colState'), t('rt.colThreads'), t('rt.colCpu'), t('rt.colRss')]} phoneHidden={[2, 3]} empty={p.processes.length === 0}>
         {sortProcesses(p.processes, by).map((x) => (
           <TableRow key={x.pid}>
             <TableCell>{x.pid}</TableCell>
-            <TableCell className="font-mono">{x.name}</TableCell>
-            <TableCell>{x.state}</TableCell>
-            <TableCell>{x.threads}</TableCell>
+            <TableCell className="font-mono max-md:whitespace-normal max-md:wrap-anywhere">
+              {x.name}
+              <div class="font-sans text-muted-foreground md:hidden">
+                {x.state} · {x.threads} {t('rt.colThreads')}
+              </div>
+            </TableCell>
+            <TableCell className="max-md:hidden">{x.state}</TableCell>
+            <TableCell className="max-md:hidden">{x.threads}</TableCell>
             <TableCell>{formatCpuSeconds(x.cpuSeconds)}</TableCell>
             <TableCell>{formatBytes(x.residentBytes)}</TableCell>
           </TableRow>
@@ -300,15 +305,23 @@ function NetworkStateCard({ data, maintenance }: { data: GetNodeTalosRuntimeResp
         <Field label={t('rt.timeMaxError')} value={n.timeStatus ? formatNanos(n.timeMaxErrorNanos) : ''} />
       </Fields>
       <CardDescription>{t('rt.routes')}</CardDescription>
-      <Grid heads={[t('rt.colDestination'), t('rt.colGateway'), t('rt.colLink'), t('rt.colTable'), t('rt.colProtocol'), t('rt.colPriority')]} empty={n.routes.length === 0}>
+      <Grid heads={[t('rt.colDestination'), t('rt.colGateway'), t('rt.colLink'), t('rt.colTable'), t('rt.colProtocol'), t('rt.colPriority')]} phoneHidden={[1, 2, 3, 4, 5]} empty={n.routes.length === 0}>
         {n.routes.map((r, i) => (
           <TableRow key={i}>
-            <TableCell className="font-mono">{r.destination}</TableCell>
-            <TableCell className="font-mono">{r.gateway || '-'}</TableCell>
-            <TableCell>{r.link || '-'}</TableCell>
-            <TableCell>{r.table}</TableCell>
-            <TableCell>{r.protocol}</TableCell>
-            <TableCell>{r.priority}</TableCell>
+            <TableCell className="font-mono max-md:whitespace-normal max-md:wrap-anywhere">
+              {r.destination}
+              <div class="text-muted-foreground md:hidden">
+                {t('rt.colGateway')} {r.gateway || '-'} · {t('rt.colLink')} {r.link || '-'}
+              </div>
+              <div class="text-muted-foreground md:hidden">
+                {t('rt.colTable')} {r.table} · {t('rt.colProtocol')} {r.protocol} · {t('rt.colPriority')} {r.priority}
+              </div>
+            </TableCell>
+            <TableCell className="font-mono max-md:hidden">{r.gateway || '-'}</TableCell>
+            <TableCell className="max-md:hidden">{r.link || '-'}</TableCell>
+            <TableCell className="max-md:hidden">{r.table}</TableCell>
+            <TableCell className="max-md:hidden">{r.protocol}</TableCell>
+            <TableCell className="max-md:hidden">{r.priority}</TableCell>
           </TableRow>
         ))}
       </Grid>

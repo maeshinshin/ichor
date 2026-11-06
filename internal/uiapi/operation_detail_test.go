@@ -66,7 +66,7 @@ func TestOperationSummaryPerKind(t *testing.T) {
 		{"k8s from", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindKubernetes}, ichorv1alpha1.TalosOperationStatus{},
 			"Upgrade Kubernetes v1.36.2 → v1.36.6"},
 		{"ichor", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindIchor}, ichorv1alpha1.TalosOperationStatus{},
-			"Upgrade Ichor v0.2.0 → v0.3.0"},
+			"Upgrade Ichor from v0.2.0 to v0.3.0"},
 		{"ca", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindCARotation}, ichorv1alpha1.TalosOperationStatus{},
 			"Rotate the cluster CAs"},
 		{"shutdown", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindShutdown}, ichorv1alpha1.TalosOperationStatus{},
@@ -180,11 +180,12 @@ func TestIchorSummaryKeepsTheFromVersionAfterTheUpgrade(t *testing.T) {
 	op := &ichorv1alpha1.TalosOperation{
 		Annotations: map[string]string{ichorv1alpha1.OperationFromVersionAnnotation: ichorV2},
 		Spec:        ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindIchor},
+		Status:      ichorv1alpha1.TalosOperationStatus{ToVersion: ichorV3, Phase: ichorv1alpha1.TalosOperationPhaseCompleted},
 	}
 	out := &pb.Operation{}
 	describeOperation(out, op, nil, install)
 
-	if out.GetSummary() != "Upgrade Ichor v0.2.0 → v0.3.0" {
+	if out.GetSummary() != "Upgrade Ichor from v0.2.0 to v0.3.0" {
 		t.Fatalf("summary = %q", out.GetSummary())
 	}
 }
@@ -360,6 +361,69 @@ func TestCompletedIchorUpgradeDoesNotShowTheLiveInstallationTarget(t *testing.T)
 		if d.GetKey() == "Target Ichor version" {
 			t.Fatalf("target shown: %q", d.GetValue())
 		}
+	}
+}
+
+// The stamp is the operation's own target in every phase, even when the installation has moved on since.
+func TestIchorUpgradeShowsItsStampedTargetInEveryPhase(t *testing.T) {
+	install := &ichorv1alpha1.IchorInstallation{
+		Spec: ichorv1alpha1.IchorInstallationSpec{Version: "v0.4.0"}, Status: ichorv1alpha1.IchorInstallationStatus{InstalledVersion: "v0.4.0"},
+	}
+
+	for _, phase := range []string{
+		ichorv1alpha1.TalosOperationPhasePending, ichorv1alpha1.TalosOperationPhaseInProgress,
+		ichorv1alpha1.TalosOperationPhasePaused, ichorv1alpha1.TalosOperationPhaseCompleted,
+	} {
+		op := &ichorv1alpha1.TalosOperation{
+			Annotations: map[string]string{ichorv1alpha1.OperationFromVersionAnnotation: ichorV2},
+			Spec:        ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindIchor},
+			Status:      ichorv1alpha1.TalosOperationStatus{Phase: phase, ToVersion: ichorV3},
+		}
+		out := &pb.Operation{}
+		describeOperation(out, op, nil, install)
+
+		if out.GetSummary() != "Upgrade Ichor from v0.2.0 to v0.3.0" {
+			t.Errorf("%s: summary = %q", phase, out.GetSummary())
+		}
+
+		var target string
+
+		for _, d := range out.GetDetails() {
+			if d.GetKey() == "Target Ichor version" {
+				target = d.GetValue()
+			}
+		}
+
+		if target != ichorV3 {
+			t.Errorf("%s: target = %q, want %s", phase, target, ichorV3)
+		}
+	}
+
+	op := &ichorv1alpha1.TalosOperation{
+		Spec:   ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindIchor},
+		Status: ichorv1alpha1.TalosOperationStatus{ToVersion: ichorV3},
+	}
+	out := &pb.Operation{}
+	describeOperation(out, op, nil, nil)
+
+	if out.GetSummary() != "Upgrade Ichor to v0.3.0" {
+		t.Errorf("no from: summary = %q", out.GetSummary())
+	}
+}
+
+// An unstamped (older) operation that is paused may not borrow the installation's live target either.
+func TestPausedUnstampedIchorUpgradeDoesNotShowTheLiveInstallationTarget(t *testing.T) {
+	install := &ichorv1alpha1.IchorInstallation{Spec: ichorv1alpha1.IchorInstallationSpec{Version: ichorV3}}
+	op := &ichorv1alpha1.TalosOperation{
+		Annotations: map[string]string{ichorv1alpha1.OperationFromVersionAnnotation: ichorV2},
+		Spec:        ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindIchor},
+		Status:      ichorv1alpha1.TalosOperationStatus{Phase: ichorv1alpha1.TalosOperationPhasePaused},
+	}
+	out := &pb.Operation{}
+	describeOperation(out, op, nil, install)
+
+	if out.GetSummary() != "Upgrade Ichor from v0.2.0" {
+		t.Fatalf("summary = %q", out.GetSummary())
 	}
 }
 

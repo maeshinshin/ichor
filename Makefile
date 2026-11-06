@@ -515,17 +515,23 @@ ui-shots: ## Screenshot UI pages (desktop+phone, light+dark): make ui-shots OUT=
 # site/, searched with Pagefind, published to GitHub Pages by
 # .github/workflows/docs.yml. DOCS_SITE and DOCS_BASE (default
 # https://maeshinshin.github.io and /ichor) move it, e.g. to a custom domain.
+# One build is one version at <DOCS_BASE>/<DOCS_VERSION>/ (next, the default, or
+# a release tag vX.Y.Z); docs-site-all builds them all.
 
 .PHONY: docs-install
 docs-install: ## Install the docs site's dependencies (npm ci).
 	cd site && npm ci --ignore-scripts
 
 .PHONY: docs-site
-docs-site: docs-install ## Build the docs site into site/dist: Astro, the internal link check, then the Pagefind index.
+docs-site: docs-install ## Build the docs site (the "next" version, docs/ of the working tree) into site/dist: Astro, the internal link check, then the Pagefind index.
 	cd site && npm run build
 
+.PHONY: docs-site-all
+docs-site-all: docs-install ## Build next and every release tag (v* tags) into site/dist-all, with versions.json and the latest/ redirects, as CI publishes it.
+	cd site && npm run build:all
+
 .PHONY: docs-dev
-docs-dev: docs-install ## Live preview of docs/ at http://localhost:4321/ichor/ (the search needs make docs-site).
+docs-dev: docs-install ## Live preview of docs/ at http://localhost:4321/ichor/next/ (the search needs make docs-site).
 	cd site && npm run dev
 
 .PHONY: docs-preview
@@ -533,7 +539,7 @@ docs-preview: ## Serve site/dist under its base path, as GitHub Pages would (run
 	cd site && npm run preview
 
 .PHONY: docs-check
-docs-check: docs-site ## Build the docs site, then drive it in headless Chromium (search, sidebar, links, phone width): make docs-check OUT=.docs-shots.
-	node hack/docs-shots.mjs "$(or $(OUT),.docs-shots)" site/dist
+docs-check: docs-site-all ## Build all versions of the docs site, then drive them in headless Chromium (search, sidebar, links, Copy page, version switcher and banner, phone width): make docs-check OUT=.docs-shots.
+	node hack/docs-shots.mjs "$(or $(OUT),.docs-shots)" site/dist-all
 
 include test/harness/harness.mk

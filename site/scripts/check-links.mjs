@@ -2,9 +2,10 @@
 // Runs on dist/ after `astro build`, so a Markdown-only edit that breaks a link cannot ship.
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { versionBase } from '../plugins/docs.mjs'
 
 const dist = 'dist'
-const base = (process.env.DOCS_BASE ?? '/ichor').replace(/\/?$/, '/')
+const base = `${versionBase}/`
 
 const pages = (dir) =>
   readdirSync(dir, { withFileTypes: true }).flatMap((e) =>

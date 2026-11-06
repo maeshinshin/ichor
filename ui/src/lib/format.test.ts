@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { clipValue, formatResource } from './format.ts'
+import { clipValue, formatResource, hardwareName } from './format.ts'
 
 test('clipValue keeps short values and clips long ones', () => {
   assert.equal(clipValue('abc'), 'abc')
@@ -17,4 +17,11 @@ test('formatResource shows memory and storage as sizes and cpu as cores', () => 
   assert.equal(formatResource('pods', '110'), '110')
   assert.equal(formatResource('memory', ''), '-')
   assert.equal(formatResource('memory', 'weird'), 'weird')
+})
+
+test('hardwareName leaves out an empty or placeholder manufacturer or model', () => {
+  assert.equal(hardwareName('KubeVirt', 'None'), 'KubeVirt')
+  assert.equal(hardwareName('Dell', 'PowerEdge R640'), 'Dell PowerEdge R640')
+  assert.equal(hardwareName('', ' '), '')
+  assert.equal(hardwareName('None', 'None'), '')
 })

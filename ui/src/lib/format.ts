@@ -90,3 +90,11 @@ export function formatCores(cores: number, sampled: boolean): string {
 export function clipValue(v: string, max = 200): string {
   return v.length > max ? `${v.slice(0, max)}…` : v
 }
+
+// The manufacturer and model as one name, leaving out an empty or placeholder part ("KubeVirt None" is "KubeVirt").
+export function hardwareName(manufacturer: string, model: string): string {
+  return [manufacturer, model]
+    .map(display)
+    .filter((v) => v !== '-')
+    .join(' ')
+}

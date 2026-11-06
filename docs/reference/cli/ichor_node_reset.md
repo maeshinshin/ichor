@@ -1,15 +1,15 @@
 ---
 title: "ichor node reset"
-description: "Remove a node from the cluster and wipe it (its STATE and EPHEMERAL partitions, or the whole disk with --wipe-mode); needs the override permission"
+description: "Deprecated, use `node remove --reboot`: remove a node from the cluster, wipe it (its STATE and EPHEMERAL partitions, or the whole disk with --wipe-mode) and reboot it; needs the override permission"
 ---
 
 ## ichor node reset
 
-Remove a node from the cluster and wipe it (its STATE and EPHEMERAL partitions, or the whole disk with --wipe-mode); needs the override permission
+Deprecated, use `node remove --reboot`: remove a node from the cluster, wipe it (its STATE and EPHEMERAL partitions, or the whole disk with --wipe-mode) and reboot it; needs the override permission
 
 ### Synopsis
 
-Remove a node from the cluster and wipe it (its STATE and EPHEMERAL partitions, or the whole disk with --wipe-mode); needs the override permission.
+Deprecated, use `node remove --reboot`: remove a node from the cluster, wipe it (its STATE and EPHEMERAL partitions, or the whole disk with --wipe-mode) and reboot it; needs the override permission.
 
 It shows the plan and asks for confirmation unless --yes. For reset and remove the typed node name
 (or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation

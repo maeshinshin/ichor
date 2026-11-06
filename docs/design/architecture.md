@@ -737,11 +737,11 @@ Removal is a finalizer-driven sequence: storage evacuation hook (if
 configured) → cordon and drain with a timeout → remove the etcd member if it's
 a control plane (refused if quorum would break, if the count would drop below
 `spec.controlPlane.count`, or if it's the last one) → graceful Talos reset →
-delete the Node, in that order. The machine reappears as pending and can be
-reused. A `node remove` action (ADR 0085) is different: it deletes the
-TalosMachine but not the Kubernetes Node, because the machine is not wiped and
-its kubelet would register the Node again; the plan ends with "power it off or
-reset it, then delete the Node", and the controller does not do that last step. `forceRemove` skips drain and reset for dead hardware. Control planes
+delete the Node, in that order (ADR 0135). The machine reappears as pending and can be
+reused, or, if it was removed with "power off", comes back when you power it on. Remove and
+reset are one action: `node remove` always wipes STATE and EPHEMERAL, and `ichor node reset`
+is its deprecated alias for `node remove --reboot`. A node that does not answer is removed
+without the wipe, its Node is deleted, and the Event says it was not wiped. `forceRemove` skips drain and reset for dead hardware. Control planes
 are replaced add-then-remove, never the other way round — a 3-node cluster
 replacing a member goes 3→4→3, never 3→2, because four members tolerate one
 failure while two tolerate none.

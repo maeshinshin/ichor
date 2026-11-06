@@ -1,15 +1,15 @@
 ---
 title: "ichor node remove"
-description: "Remove a node from the cluster: drain it and, for a control plane, remove its etcd member"
+description: "Remove a node from the cluster: drain it, wipe its STATE and EPHEMERAL partitions, power it off (or reboot it with --reboot) and delete its Kubernetes Node; needs the override permission"
 ---
 
 ## ichor node remove
 
-Remove a node from the cluster: drain it and, for a control plane, remove its etcd member
+Remove a node from the cluster: drain it, wipe its STATE and EPHEMERAL partitions, power it off (or reboot it with --reboot) and delete its Kubernetes Node; needs the override permission
 
 ### Synopsis
 
-Remove a node from the cluster: drain it and, for a control plane, remove its etcd member.
+Remove a node from the cluster: drain it, wipe its STATE and EPHEMERAL partitions, power it off (or reboot it with --reboot) and delete its Kubernetes Node; needs the override permission.
 
 It shows the plan and asks for confirmation unless --yes. For reset and remove the typed node name
 (or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
@@ -25,6 +25,7 @@ ichor node remove NODE [flags]
       --confirm string   the node's name, to go on without being asked to type it
       --follow           after creating the operation, follow its progress until it finishes
   -h, --help             help for remove
+      --reboot           after the wipe reboot the node into maintenance mode, so it can be added again, instead of powering it off
 ```
 
 ### Options inherited from parent commands

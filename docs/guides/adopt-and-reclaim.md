@@ -20,9 +20,9 @@ built and tested against fakes; its hardware cases are listed in the ADR and hav
 | Your machine or cluster | Command | Needs a reset? |
 |---|---|---|
 | A running cluster Ichor has never seen | `ichor adopt` (below) | No |
-| One more machine that already runs a configuration signed by a cluster Ichor manages (it joined with your own `talosctl apply-config`, or its `TalosMachine` was deleted) | `ichor adopt --cluster NAME --add-machine ADDRESS` | No |
+| One more machine that already runs a configuration signed by a cluster Ichor manages (it joined with your own `talosctl apply-config`, or its `TalosMachine` was deleted before ADR 0135: a remove used to leave the machine unwiped) | `ichor adopt --cluster NAME --add-machine ADDRESS` | No |
 | A machine another Talos cluster (or a config of its own) configured, and you hold its talosconfig | `ichor machine reclaim` or the UI "Reset and add" | Yes: `STATE` and `EPHEMERAL` |
-| A machine that was never configured, or whose `STATE` was wiped (booted from the ISO, in maintenance mode) | The normal Add node flow | No |
+| A machine that was never configured, or whose `STATE` was wiped (booted from the ISO, in maintenance mode), including one removed with `ichor node remove` (it is wiped; power it on if it was powered off) | The normal Add node flow | No |
 | A configured machine and no credential for it | None through the API: reinstall from the ISO, or wipe it with a kernel argument | Yes |
 
 How to tell the second row from the third: `ichor adopt --add-machine` reads the machine's
@@ -310,7 +310,7 @@ A machine that already runs a configuration signed by your cluster's own certifi
 authorities, but that Ichor has no `TalosMachine` for, cannot be found by discovery (it
 is not in maintenance mode) and must not be reset (a reset would wipe an etcd member or a
 joined kubelet for no reason). This is the usual state of a node you added with your own
-`talosctl apply-config` after the adoption, or of one whose `TalosMachine` you deleted.
+`talosctl apply-config` after the adoption, or of one whose `TalosMachine` you deleted by hand or removed before ADR 0135. A machine removed with `ichor node remove` (or the UI "Remove node") is wiped and shows up as a new pending machine instead.
 `ichor adopt --add-machine` registers it with the same safety as an adoption.
 
 ```sh

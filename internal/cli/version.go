@@ -151,7 +151,12 @@ func writeVersionHuman(w io.Writer, info versionInfo) error {
 		}
 
 		if img := s.InstallerImage; img != nil {
-			rows = append(rows, kv{"installer image", installerImageText(img)})
+			if img.Digest == "" && img.Verification == "" && img.SkipNext {
+				// No installer Job has run, so there is no image to describe: a dash, and the warning on its own line.
+				rows = append(rows, kv{"installer image", "-"}, kv{"", installerImageText(img)})
+			} else {
+				rows = append(rows, kv{"installer image", installerImageText(img)})
+			}
 		}
 	}
 

@@ -108,6 +108,31 @@ func TestVersionSkipWithoutAnInstallerImageHasNoStraySeparator(t *testing.T) {
 	}
 }
 
+// With no installer Job run, the warning must not run on from the "installer image" label: the label
+// shows a dash and the warning sits on a line of its own, aligned under the values.
+func TestVersionSkipWithoutAnInstallerImageSitsOnItsOwnLine(t *testing.T) {
+	scheme, err := cliScheme()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	inst := &ichorv1alpha1.IchorInstallation{
+		Name: ichorv1alpha1.IchorInstallationName,
+		Spec: ichorv1alpha1.IchorInstallationSpec{
+			Version:            noticeNewer,
+			InstallerSignature: &ichorv1alpha1.IchorInstallerSignature{Mode: ichorv1alpha1.InstallerSignatureSkip},
+		},
+		Status: ichorv1alpha1.IchorInstallationStatus{InstalledVersion: noticeNewer},
+	}
+
+	info, _ := collectVersion(context.Background(), fake.NewClientBuilder().WithScheme(scheme).WithObjects(inst).Build(), testCLIVersion)
+
+	out := renderVersion(t, info, outputHuman)
+	if !strings.Contains(out, "installer image -\n") || !strings.Contains(out, "\n"+strings.Repeat(" ", 16)+"the next upgrade will NOT check the signature\n") {
+		t.Errorf("skip with no installer image:\n%s", out)
+	}
+}
+
 func TestVersionShowsAnUncheckedInstallerImageLoudly(t *testing.T) {
 	scheme, err := cliScheme()
 	if err != nil {

@@ -245,6 +245,31 @@ func TestGetOperationNamesMachinesByHostnameThenNodeName(t *testing.T) {
 	}
 }
 
+func TestNodeActionSummaryNamesTheMachineByHostname(t *testing.T) {
+	m := opMachine("uuid-a", "worker", nil, nil)
+	m.Spec.Hostname = "worker-a"
+
+	op := &ichorv1alpha1.TalosOperation{
+		Name: "node-x", Namespace: opNS,
+		Spec: ichorv1alpha1.TalosOperationSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: opCluster}, Kind: ichorv1alpha1.TalosOperationKindNode,
+			Node: &ichorv1alpha1.TalosOperationNodeSpec{MachineRef: corev1.LocalObjectReference{Name: "uuid-a"}, Action: ichorv1alpha1.NodeActionReboot},
+		},
+		Status: ichorv1alpha1.TalosOperationStatus{Machines: []ichorv1alpha1.TalosOperationMachineStatus{{Name: "uuid-a"}}},
+	}
+
+	s, _ := opServer(t, append(opObjects(), m, op)...)
+
+	resp, err := s.GetOperation(context.Background(), connect.NewRequest(&pb.GetOperationRequest{Operation: objectRef(opNS, "node-x")}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := resp.Msg.GetOperation().GetSummary(); got != "Reboot node worker-a" {
+		t.Fatalf("summary = %q", got)
+	}
+}
+
 // "Installed Ichor version" is the version before the upgrade (the stamped from-version); once the
 // operation has Completed it is the old one, so the row goes (the summary keeps from → to).
 func TestIchorDetailsDropTheInstalledVersionOnceCompleted(t *testing.T) {

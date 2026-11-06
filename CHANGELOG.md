@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+### Features
+
+- `ichor init --merge-kubeconfig` merges the new cluster's admin kubeconfig into
+  yours as context `admin@NAME` and makes it current (ADR 0134); `init` always
+  ends by saying which kubeconfig to use.
+- A TalosOperation that upgrades Ichor records the version it goes to in
+  `status.toVersion`; the UI and CLI show "Upgrade Ichor from X to Y" for every
+  phase (ADR 0133).
+- ichor-ui shows only what your role can do: the Users page, Add node,
+  discovery edits, approve, patch and node actions are hidden from roles that
+  cannot use them.
+
+### UI
+
+- A typed confirmation shows the name it asks for as selectable text with a
+  copy button.
+- Node action dialogs and operations are titled with the hostname instead of
+  the machine UID.
+- Tables stack their columns on phones instead of scrolling sideways (nodes,
+  operations, backups, conditions, disks, network, routing, processes, Cilium
+  values and the effective config).
+- Select lists anchor to their trigger and keep its width; only the top layer
+  reacts to an outside press, and a touch tap outside dismisses it. These fix
+  selects and dialogs on iOS.
+
+### Notable fixes
+
+- `ichor version` prints the no-image skip warning on its own line.
+
 ## v0.1.0 (2026-11-06)
 
 First release. Alpha: exercised end to end on Talos v1.14 clusters running as
@@ -165,9 +196,6 @@ table accepts; a refusal passes only with the override verb
   `--print-config-template` prints an example; ADR 0117). `ichor init` also
   waits for ichor-ui to roll out before it returns, and no longer requires the
   hidden `--cni` flag.
-- `ichor init --merge-kubeconfig` merges the new cluster's admin kubeconfig into
-  yours as context `admin@NAME` and makes it current (ADR 0134); `init` always
-  ends by saying which kubeconfig to use.
 - `ichor init` shows its steps as a short list: a live spinner line with the
   elapsed time and the reason a pod is pending on a terminal, one line per
   change in a pipe or CI log. It honours `NO_COLOR` and `TERM=dumb`, prints a

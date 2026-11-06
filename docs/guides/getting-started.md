@@ -9,12 +9,43 @@ Ichor, using a local build. There is no published release yet, so the images
 are built from your tree and pushed to a registry your nodes can reach. For an
 existing Talos cluster see [Adopt and reclaim](adopt-and-reclaim.md) instead.
 
-## What you need
+## Before you begin
 
-- A checkout of this repository and [Nix](https://nixos.org/) with flakes.
-  Everything below runs inside `nix develop` (`nix develop -c <command>` runs
-  one command in it). It provides Go, Node, `crane`, `kustomize` and the other
-  tools; install nothing else.
+### The tools
+
+Every command in these docs is written as if its tools are on your `PATH`.
+There are two ways to get them.
+
+**Enter the dev shell (recommended).** With a checkout of this repository and
+[Nix](https://nixos.org/) with flakes, run `nix develop` in the checkout. It
+puts every tool on `PATH` at the versions `flake.nix` and `flake.lock` pin, and
+you install nothing else. To run one command in it without entering it, use
+`nix develop -c <command>`.
+
+**Or install the tools yourself.** The commands in the guides use these. The
+versions are the ones the dev shell resolves today; the exception is Go, which
+must be 1.27.3 or newer (`go.mod`).
+
+| Tool | Version | Used for |
+|---|---|---|
+| Go | 1.27.3 or newer | building the `ichor` CLI and the images (`make demo-images-build`) |
+| Node.js | 24 | building the UI, part of the same build |
+| GNU make | any recent | the `make` targets |
+| `crane` | v0.22.1 | pushing the images to your registry (`make demo-images-push`) |
+| `kubectl` | v1.37.1 | reading the cluster and applying the manifests the guides show |
+| `talosctl` | v1.14.3 | the few places a guide talks to a node directly, such as [hardening](hardening.md) |
+| `helm` | v4.3.1 | [installing Ichor with Helm](install-with-helm.md) |
+| `cosign` | v3.1.3 | verifying a release's signatures ([install with Helm](install-with-helm.md)) |
+| `openssl` | 3.x | the certificate check in [hardening](hardening.md) |
+
+The Makefile fetches its own helpers (`controller-gen`, `kustomize`,
+`setup-envtest`, `golangci-lint`) into `./bin` with Go at the versions it pins,
+so the first `make` needs network access. Developers of Ichor itself need more,
+and [CONTRIBUTING.md](../../CONTRIBUTING.md) lists it.
+
+### What you need
+
+- A checkout of this repository.
 - One machine (virtual or bare metal) booted from a Talos ISO into maintenance
   mode, with an address your workstation can reach on port 50000. This guide
   uses `192.168.1.50`. Talos needs at least 2 GiB of memory on a control plane.
@@ -36,7 +67,6 @@ them under your registry, and tell the nodes to fetch `ghcr.io` from it (step
 2). Pick a semantic version; `dev` is refused.
 
 ```sh
-nix develop
 make demo-images-build VERSION=v0.1.0
 make demo-images-push VERSION=v0.1.0 REGISTRY=192.168.1.10:5000
 ```

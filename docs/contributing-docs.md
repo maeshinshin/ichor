@@ -14,7 +14,11 @@ make docs-preview  # serve site/dist
 make docs-site-all # every version, as published, into site/dist-all
 ```
 
-Everything runs inside `nix develop`. `make docs-site` fails on a broken
+This guide's commands are the one place that assumes the dev shell: run them
+inside `nix develop`, or with the tools from
+[Before you begin](guides/getting-started.md#before-you-begin) on your `PATH`.
+When you write commands in a page, write them as if the tools are on `PATH`;
+do not put `nix develop` or `nix develop -c` in a command block. `make docs-site` fails on a broken
 internal link (a missing file, a missing page or a missing `#heading`), so a
 Markdown-only change cannot publish one.
 

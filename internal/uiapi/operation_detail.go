@@ -217,28 +217,34 @@ func describeOperationNamed(out *pb.Operation, op *ichorv1alpha1.TalosOperation,
 		}
 	case ichorv1alpha1.TalosOperationKindIchor:
 		out.Summary = "Upgrade Ichor"
+		from := op.Annotations[ichorv1alpha1.OperationFromVersionAnnotation]
+		to := op.Status.ToVersion
 
-		// The operation records no target, only the installation's live one; a completed operation may have
-		// been superseded since, so it is not shown as this operation's target.
-		if install != nil && op.Status.Phase == ichorv1alpha1.TalosOperationPhaseCompleted {
-			if from := op.Annotations[ichorv1alpha1.OperationFromVersionAnnotation]; from != "" {
-				out.Summary += " from " + from
-			}
-		} else if install != nil {
-			add("Target Ichor version", install.Spec.Version)
+		// An operation that started before status.toVersion existed has no stamp: while it is active the
+		// installation's live target is still its own; once finished or paused it may belong to a later
+		// upgrade, so no target is shown (ADR 0133).
+		active := op.Status.Phase != ichorv1alpha1.TalosOperationPhaseCompleted && op.Status.Phase != ichorv1alpha1.TalosOperationPhasePaused
+		if to == "" && install != nil && active {
+			to = install.Spec.Version
 
 			// The stamped from-version outlives the upgrade; installedVersion only helps before it finishes.
-			// The row says what runs now, so it is left out once the operation Completed.
-			from := op.Annotations[ichorv1alpha1.OperationFromVersionAnnotation]
 			if from == "" {
 				from = install.Status.InstalledVersion
 			}
 
-			out.Summary += fromTo(from, install.Spec.Version)
-
-			if from != "" && from != install.Spec.Version && op.Status.Phase != ichorv1alpha1.TalosOperationPhaseCompleted {
+			if from != "" && from != to {
 				add("Installed Ichor version", from)
 			}
+		}
+
+		if from != "" {
+			out.Summary += " from " + from
+		}
+
+		if to != "" {
+			out.Summary += " to " + to
+
+			add("Target Ichor version", to)
 		}
 	case ichorv1alpha1.TalosOperationKindCNI:
 		out.Summary = "Switch kube-proxy mode"

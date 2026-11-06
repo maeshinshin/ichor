@@ -3,7 +3,7 @@ import type { ComponentChildren } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { AppSidebar } from '@/components/AppSidebar'
 import { SearchDialog } from '@/components/SearchDialog'
-import { Badge } from '@/components/ui/badge'
+import { VersionSwitcher } from '@/components/VersionSwitcher'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
@@ -12,7 +12,7 @@ import type { NavNode } from '@/lib/docs'
 const sidebarKey = 'ichor-docs-sidebar'
 const themeKey = 'ichor-docs-theme'
 
-type Props = { nav: NavNode[]; current: string; base: string; version: string; repoUrl: string; children?: ComponentChildren }
+type Props = { nav: NavNode[]; current: string; base: string; root: string; version: string; repoUrl: string; children?: ComponentChildren }
 
 function ThemeToggle() {
   return (
@@ -37,7 +37,7 @@ function ThemeToggle() {
   )
 }
 
-function Header({ base, version, repoUrl, onSearch }: Pick<Props, 'base' | 'version' | 'repoUrl'> & { onSearch: () => void }) {
+function Header({ base, root, version, repoUrl, onSearch }: Pick<Props, 'base' | 'root' | 'version' | 'repoUrl'> & { onSearch: () => void }) {
   const [mac, setMac] = useState(false)
   useEffect(() => setMac(/mac|iphone|ipad/i.test(navigator.platform)), [])
   return (
@@ -45,10 +45,12 @@ function Header({ base, version, repoUrl, onSearch }: Pick<Props, 'base' | 'vers
       <SidebarTrigger />
       {/* The brand lives in the sidebar; show it here on phones (a drawer) and while the desktop sidebar is hidden.
           Shown by CSS, so the first paint already matches the stored state (html[data-sidebar]). */}
-      <a href={base} className="hidden items-center gap-2 font-semibold max-md:flex [[data-sidebar=closed]_&]:flex">
-        Ichor
-        <Badge variant="secondary">{version}</Badge>
-      </a>
+      <div className="hidden items-center gap-2 max-md:flex [[data-sidebar=closed]_&]:flex">
+        <a href={base} className="font-semibold">
+          Ichor
+        </a>
+        <VersionSwitcher version={version} root={root} />
+      </div>
       <div className="ml-auto flex items-center gap-2">
         <Button variant="outline" className="md:w-64 md:justify-start" onClick={onSearch} aria-label="Search the docs">
           <Search />
@@ -67,7 +69,7 @@ function Header({ base, version, repoUrl, onSearch }: Pick<Props, 'base' | 'vers
   )
 }
 
-export function DocsShell({ nav, current, base, version, repoUrl, children }: Props) {
+export function DocsShell({ nav, current, base, root, version, repoUrl, children }: Props) {
   const [open, setOpen] = useState(true)
   const [searching, setSearching] = useState(false)
 
@@ -103,9 +105,9 @@ export function DocsShell({ nav, current, base, version, repoUrl, children }: Pr
         }
       }}
     >
-      <AppSidebar nav={nav} current={current} base={base} version={version} repoUrl={repoUrl} />
+      <AppSidebar nav={nav} current={current} base={base} root={root} version={version} repoUrl={repoUrl} />
       <SidebarInset>
-        <Header base={base} version={version} repoUrl={repoUrl} onSearch={() => setSearching(true)} />
+        <Header base={base} root={root} version={version} repoUrl={repoUrl} onSearch={() => setSearching(true)} />
         {children}
       </SidebarInset>
       <SearchDialog base={base} open={searching} onOpenChange={setSearching} />

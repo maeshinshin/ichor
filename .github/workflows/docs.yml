@@ -2,14 +2,18 @@ name: Docs
 
 # Builds the documentation site (docs/ rendered by site/, ADR 0132) and
 # publishes it to GitHub Pages at https://maeshinshin.github.io/ichor/.
+# One run builds every version: main as /next/ and each release tag vX.Y.Z as
+# /vX.Y.Z/ (the tag's docs/, built with main's site/), plus versions.json and
+# the /latest/ redirects (make docs-site-all). A new tag publishes its docs and
+# adds itself to the version switcher of every older build.
 on:
   push:
     branches: [main]
     paths:
       - "docs/**"
       - "site/**"
-      - "CHANGELOG.md" # the version badge reads its newest heading
       - ".github/workflows/docs.yml"
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions: {}
@@ -23,26 +27,32 @@ jobs:
   build:
     name: Build the site
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
+      # Always main's code (a tag run must not build with the tag's site/, which older tags lack) and
+      # all tags, which are the versions.
       - name: Clone the code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
           persist-credentials: false
 
       - name: Install Nix
         uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
 
-      # npm ci, astro build, the internal link check, then the Pagefind index, into site/dist.
+      # For next and each release tag: npm ci, astro build, the internal link check and the Pagefind
+      # index; then versions.json (from the v* tags, newest first by semver) and the redirects, into site/dist-all.
       - name: Build
-        run: nix develop --command make docs-site
+        run: nix develop --command make docs-site-all
 
       - name: Upload the site
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
-          path: site/dist
+          path: site/dist-all
 
   deploy:
     name: Deploy to GitHub Pages

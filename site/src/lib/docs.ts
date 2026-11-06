@@ -1,21 +1,13 @@
 import { getCollection } from 'astro:content'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { absoluteMarkdown, repoUrl } from '../../plugins/docs.mjs'
+import { relative, resolve, sep } from 'node:path'
+import { absoluteMarkdown, docsRoot, gitRef, isNext, repoUrl, rootBase, version } from '../../plugins/docs.mjs'
 
-export { repoUrl }
+export { isNext, repoUrl, version }
+
+/** Where all versions of the docs sit, ending in `/`. */
+export const root = `${rootBase}/`
 
 export const base = import.meta.env.BASE_URL.replace(/\/?$/, '/')
-
-/** The release the docs describe: DOCS_VERSION, else the newest heading of CHANGELOG.md. */
-export function docsVersion(): string {
-  if (process.env.DOCS_VERSION) return process.env.DOCS_VERSION
-  try {
-    return /^## (v\S+)/m.exec(readFileSync(resolve(process.cwd(), '../CHANGELOG.md'), 'utf8'))?.[1] ?? 'dev'
-  } catch {
-    return 'dev'
-  }
-}
 
 export type Doc = {
   route: string
@@ -26,6 +18,7 @@ export type Doc = {
   label: string
   order?: number
   description?: string
+  /** `next` is edited on main; a release is frozen at its tag, so its page links to the file there. */
   editUrl: string
   body: string
   entry: Awaited<ReturnType<typeof getCollection<'docs'>>>[number]
@@ -65,7 +58,7 @@ export async function getDocs(): Promise<Doc[]> {
       label: entry.data.sidebar_label ?? title,
       order: entry.data.sidebar_order,
       description: entry.data.description,
-      editUrl: `${repoUrl}/edit/main/docs/${entry.filePath?.split('/docs/').pop()}`,
+      editUrl: `${repoUrl}/${isNext ? 'edit' : 'blob'}/${gitRef}/docs/${relative(docsRoot, resolve(process.cwd(), entry.filePath!)).split(sep).join('/')}`,
       body: entry.body ?? '',
       entry,
     }

@@ -8,6 +8,8 @@ test('a top-level route is a single current crumb', () => {
   assert.deepEqual(breadcrumbsFor('/config'), [{ label: 'config.title' }])
   assert.deepEqual(breadcrumbsFor('/cilium'), [{ label: 'nav.cilium' }])
   assert.deepEqual(breadcrumbsFor('/users'), [{ label: 'nav.users' }])
+  assert.deepEqual(breadcrumbsFor('/backups'), [{ label: 'nav.backups' }])
+  assert.deepEqual(breadcrumbsFor('/settings'), [{ label: 'nav.settings' }])
 })
 
 test('a detail route links its section and names the object', () => {

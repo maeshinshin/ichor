@@ -280,15 +280,27 @@ function EffectiveConfigSection({ namespace, name }: { namespace: string; name: 
             <TableHeader>
               <TableRow>
                 <TableHead>{t('node.colPath')}</TableHead>
-                <TableHead>{t('node.colValue')}</TableHead>
-                <TableHead>{t('node.colSource')}</TableHead>
+                <TableHead className="max-md:hidden">{t('node.colValue')}</TableHead>
+                <TableHead className="max-md:hidden">{t('node.colSource')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {group.map((v) => (
                 <TableRow key={v.path}>
-                  <TableCell className="font-mono">{v.path}</TableCell>
-                  <TableCell className="font-mono" title={v.value.length > 200 ? v.value : undefined}>
+                  <TableCell className="font-mono whitespace-normal wrap-anywhere max-md:max-w-0 max-md:w-full">
+                    {v.path}
+                    <div class="font-sans text-muted-foreground md:hidden">{v.origin?.source || '-'}</div>
+                    <div class="mt-1 text-foreground md:hidden">
+                      {clipValue(v.value)}
+                      {v.secret && (
+                        <>
+                          {' '}
+                          <Badge variant="outline">{t('node.secret')}</Badge>
+                        </>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-mono whitespace-normal wrap-anywhere max-md:hidden" title={v.value.length > 200 ? v.value : undefined}>
                     {clipValue(v.value)}
                     {/* The server masks any secret value before it reaches the browser
                         (EffectiveConfigValue.secret) - there is nothing here
@@ -300,7 +312,7 @@ function EffectiveConfigSection({ namespace, name }: { namespace: string; name: 
                       </>
                     )}
                   </TableCell>
-                  <TableCell>{v.origin?.source || '-'}</TableCell>
+                  <TableCell className="whitespace-normal wrap-anywhere max-md:hidden">{v.origin?.source || '-'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

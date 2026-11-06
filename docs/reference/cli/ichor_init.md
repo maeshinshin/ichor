@@ -60,6 +60,7 @@ ichor init [flags]
       --installer-digest string            pin Ichor's installer image to this digest (sha256:...) in the IchorInstallation instead of letting the controller resolve the version's tag; for a cluster whose controller cannot reach the registry (a demo behind a mirror)
       --kube-api-server-url string         with --ui-url: https URL of the Kubernetes API put in users' kubeconfigs (chart: ichorUI.users.kubeAPIServerURL)
       --kube-api-tls-server-name string    with --ui-url: tls-server-name in users' kubeconfigs (chart: ichorUI.users.kubeAPITLSServerName)
+      --merge-kubeconfig                   also merge the cluster-admin kubeconfig into your kubeconfig (--kubeconfig, else the first file of $KUBECONFIG, else ~/.kube/config) as context admin@CLUSTER, and make it current; a taken name gets a suffix
   -n, --namespace string                   namespace the TalosCluster, its TalosMachine and the secrets bundle Secret live in; Ichor's own install manifest always deploys its controller to "ichor-system" (default "ichor-system")
       --node-endpoint string               Talos API address (host:port) of the first node, currently in maintenance mode (required)
       --pod-subnets strings                pod CIDRs (spec.network.podSubnets; at most one per IP family); unset keeps Talos's default 10.244.0.0/16. Fixed once the cluster exists

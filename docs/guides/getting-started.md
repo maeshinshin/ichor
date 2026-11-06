@@ -194,6 +194,16 @@ reboots), bootstraps etcd, saves the kubeconfig next to the bundle, stores the
 bundle in the cluster, installs Ichor and waits for Ichor to take over Cilium.
 Expect several minutes.
 
+`--merge-kubeconfig` also merges the cluster-admin kubeconfig into your own
+(the first existing file of `$KUBECONFIG`, else `~/.kube/config`) as the
+context `admin@demo`, and makes it current, so `kubectl` and `ichor` work at
+once. Entries already there stay; a name that is taken gets a suffix
+(`admin@demo-1`) and init prints the final name
+([ADR 0134](../adr/0134-init-can-merge-the-new-cluster-into-the-users-kubeconfig.md)).
+Without the flag, init leaves your kubeconfig alone and prints the `export
+KUBECONFIG=` line to use. The examples below use that line; skip it if you
+merged.
+
 ### Turn on sign-in (optional, recommended)
 
 Without `--ui-url`, ichor-ui has no sign-in: `ichor init` starts it with

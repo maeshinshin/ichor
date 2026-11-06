@@ -165,6 +165,9 @@ table accepts; a refusal passes only with the override verb
   `--print-config-template` prints an example; ADR 0117). `ichor init` also
   waits for ichor-ui to roll out before it returns, and no longer requires the
   hidden `--cni` flag.
+- `ichor init --merge-kubeconfig` merges the new cluster's admin kubeconfig into
+  yours as context `admin@NAME` and makes it current (ADR 0134); `init` always
+  ends by saying which kubeconfig to use.
 - `ichor init` shows its steps as a short list: a live spinner line with the
   elapsed time and the reason a pod is pending on a terminal, one line per
   change in a pipe or CI log. It honours `NO_COLOR` and `TERM=dumb`, prints a

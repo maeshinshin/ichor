@@ -39,7 +39,7 @@ settings or when the deployment manages them (below).
 
 ## With the CLI
 
-```
+```sh
 ichor settings get
 ichor settings set users.tokenTTL=15m defaults.driftPolicy=autoCorrect
 ```
@@ -47,7 +47,7 @@ ichor settings set users.tokenTTL=15m defaults.driftPolicy=autoCorrect
 `ichor settings get` shows each setting, the value in force and its source
 (`spec` or `deployment`); `-o yaml` or `-o json` print the full response.
 
-```
+```console
 $ ichor settings get
 SETTING                VALUE        SOURCE
 version                v0.4.0       spec
@@ -65,7 +65,7 @@ autoPatch.window       -            -
 `ichor settings set` writes only the keys you name, and prints the table again
 with the new values:
 
-```
+```text
   users.tokenTTL=15m           token lifetime, 1m to 1h
   users.refreshLifetime=168h  refresh lifetime, 1h to 720h
   defaults.driftPolicy=warnOnly|autoCorrect   default for a new TalosCluster

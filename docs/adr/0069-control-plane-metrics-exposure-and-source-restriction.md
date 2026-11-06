@@ -65,7 +65,7 @@ for control-plane nodes (workers run none of these services).
 
 ## 3. The spec
 
-```
+```yaml
 spec.controlPlaneMetrics:      # optional pointer, unset = today's behaviour
   enabled: false               # default false
   allowedCIDRs: [10.20.0.0/16] # max 8, items <= 43 chars

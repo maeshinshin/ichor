@@ -36,7 +36,7 @@ reboots, and your kubeconfig and talosconfig keep working: no CA changes.
 
 ## Running it
 
-```
+```sh
 ichor cluster rotate-keys NAME
 ```
 

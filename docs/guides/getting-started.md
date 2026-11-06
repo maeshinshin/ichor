@@ -34,7 +34,7 @@ The install manifest that `ichor init` applies names its images
 them under your registry, and tell the nodes to fetch `ghcr.io` from it (step
 2). Pick a semantic version; `dev` is refused.
 
-```
+```sh
 nix develop
 make demo-images-build VERSION=v0.1.0
 make demo-images-push VERSION=v0.1.0 REGISTRY=192.168.1.10:5000
@@ -58,7 +58,7 @@ install manifest for that version inside it (the `installembed` build), which
 is what lets `ichor init` install Ichor without a network fetch. Use it
 instead of one from `go run ./cmd/ichor`, whose manifest is a placeholder:
 
-```
+```sh
 cp bin/img/ichor/ichor bin/ichor
 bin/ichor version --client
 ```
@@ -91,7 +91,7 @@ run its Job with (`CNIHandover` `InstallerImageUnresolved`). See
 `ichor init` makes the node the first control plane of a new cluster. It
 prompts before the irreversible step; `--yes` skips that.
 
-```
+```sh
 bin/ichor init \
   --cluster demo \
   --node-endpoint 192.168.1.50:50000 \
@@ -124,7 +124,7 @@ The same settings can come from a file instead of flags. `bin/ichor init -f
 init.yaml` reads an `InitConfig`; `bin/ichor init --print-config-template`
 prints a commented example. The command above is this file:
 
-```
+```yaml
 apiVersion: ichor.maesh.dev/v1alpha1
 kind: InitConfig
 cluster:
@@ -169,14 +169,14 @@ Without `--ui-url`, ichor-ui has no sign-in: `ichor init` starts it with
 the https URL at which your browser will reach ichor-ui, and a certificate for
 it:
 
-```
+```sh
   --ui-url https://192.168.1.60 --admin-user admin \
   --ui-tls-cert ui.crt --ui-tls-key ui.key
 ```
 
 In the file this is a `ui` block, next to `cluster` and `firstNode`:
 
-```
+```yaml
 ui:
   url: https://192.168.1.60
   adminUser: admin
@@ -191,7 +191,7 @@ of them. At the end init prints the generated password of the first admin to
 stderr, once. Save it. Because the kube-apiserver then needs new login
 settings, apply them:
 
-```
+```sh
 export KUBECONFIG=~/.ichor/clusters/demo/kubeconfig
 bin/ichor config apply --cluster demo --follow
 ```
@@ -206,7 +206,7 @@ maintenance mode by scanning addresses you give, and wait as pending machines
 until you approve them. Point the scan at them (`init` takes
 `--discover-address` and `--discover-cidr` too):
 
-```
+```sh
 bin/ichor cluster discovery add 192.168.1.51 --cluster demo
 bin/ichor machine list --cluster demo
 bin/ichor machine approve NAME --role worker --install-disk /dev/sda
@@ -216,7 +216,7 @@ bin/ichor machine approve NAME --role worker --install-disk /dev/sda
 confirmation unless `--yes`, then prints one line (`-o yaml` prints the
 machine as before):
 
-```
+```text
 ✓ approved fa70962a as worker in demo
 ```
 
@@ -231,7 +231,7 @@ to approve, so skip this step.
 
 ## 4. Check the cluster
 
-```
+```sh
 export KUBECONFIG=~/.ichor/clusters/demo/kubeconfig
 bin/ichor cluster status demo
 bin/ichor cluster get demo
@@ -240,7 +240,7 @@ bin/ichor version
 kubectl get nodes
 ```
 
-```
+```console
 $ bin/ichor cluster status demo
 demo · ichor-system
   Talos        v1.14.5
@@ -276,7 +276,7 @@ actions) and `operation get NAME --watch` keep one live line with the phase and
 message, and end it with the time the operation took. In a pipe or CI log they
 print a line per change instead:
 
-```
+```console
 $ bin/ichor operation list
 NAME                 KIND    PHASE         TARGET  MESSAGE                       AGE
 upgrade-talos-x7k2p  talos   … InProgress  demo    upgrading talos-cp2 (2 of 3)  12m
@@ -306,11 +306,11 @@ If you did not use `--ui-url`, there is no login: `ichor init` started
 ichor-ui with `--allow-unauthenticated`, so anyone who can reach it can make
 changes. Open it through a port-forward:
 
-```
+```sh
 bin/ichor ui
 ```
 
-```
+```text
 ✓ ichor-ui  https://localhost:8443/
   port-forward to ichor-system/ichor-ichor-ui-7d9c5b6f4-x2k8q · Ctrl-C to stop
 ```

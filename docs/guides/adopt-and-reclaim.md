@@ -47,7 +47,7 @@ last phase, and only after a zero-drift check.
 `--plan` reads the cluster and prints what adopt would do. It writes nothing,
 not even a Secret.
 
-```
+```sh
 ichor adopt --cluster prod --node 10.0.0.11 --recover-secrets \
   --recover-from 10.0.0.11 --plan
 ```
@@ -178,7 +178,7 @@ Taking over Cilium:
 
 Run the same command without `--plan`, plus the flags the plan told you to add:
 
-```
+```sh
 ichor adopt --cluster prod --node 10.0.0.11 --recover-secrets \
   --recover-from 10.0.0.11 --accept-cilium-diff --accept-cilium-changes
 ```
@@ -192,7 +192,7 @@ printed; add `-o yaml` (or `json`) to print them on stdout, in which case adopt
 keeps writing its `adopt: ...` lines on stderr as before. A run on a cluster with
 no CNI that Ichor has never seen looks like this:
 
-```
+```text
 Ichor adopt · prod
 namespace ichor-system · discovering from 10.0.0.11
 ✓ Read cluster — Talos v1.14.5 · Kubernetes v1.36.6 · 2 read · no TalosCluster yet
@@ -308,7 +308,7 @@ joined kubelet for no reason). This is the usual state of a node you added with 
 `talosctl apply-config` after the adoption, or of one whose `TalosMachine` you deleted.
 `ichor adopt --add-machine` registers it with the same safety as an adoption.
 
-```
+```sh
 ichor cluster credentials prod                      # a talosconfig for the cluster, if you have none
 ichor adopt --cluster prod --add-machine 10.0.0.21 --talosconfig ./talosconfig.ichor --plan
 ichor adopt --cluster prod --add-machine 10.0.0.21 --talosconfig ./talosconfig.ichor
@@ -357,7 +357,7 @@ that contains it, is listed in the cluster's `spec.discovery`.
 `add` and `remove` print one line, `list` a table of what is scanned and what
 each address or range has found so far (the API keeps no time of the last probe):
 
-```
+```console
 $ ichor cluster discovery add 192.168.1.51 --cluster demo
 ✓ added 192.168.1.51 to the discovery of demo
 
@@ -417,7 +417,7 @@ Both require you to type the machine's UUID. The wrong UUID sends nothing.
 This uses your own talosconfig for the machine. It is used for this command
 only, never stored or printed.
 
-```
+```sh
 ichor machine reclaim 10.0.0.21 --talosconfig ./foreign-talosconfig --cluster prod
 ```
 
@@ -425,7 +425,7 @@ It prints the machine's UUID, hostname, role, the cluster that will lose it,
 its disks and, for a control plane, the etcd members, then asks for the UUID.
 For scripts, pass `--confirm UUID` (`--yes` does not replace it).
 
-```
+```text
 w1 · 10.0.0.21
   Role         worker · Talos v1.13.2
   UUID         5b2c0d1e-7f44-4c35-9a0e-2f6f1c4b8e11
@@ -483,7 +483,7 @@ has it until you grant it. (The chart value `reclaim.enabled` and
    `rbac.helpers.enabled`) in the namespace Ichor runs in (default
    `ichor-system`):
 
-   ```
+   ```sh
    kubectl -n ichor-system create rolebinding reclaim-alice \
      --clusterrole=ichor-machine-reclaimer --user=ichor:alice
    ```

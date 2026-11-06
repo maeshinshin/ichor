@@ -188,6 +188,16 @@ func (r *TalosOperationReconciler) advanceIchor(
 		what = "the Cilium chart upgrade"
 	}
 
+	// Stamped once, in memory here and persisted by the setPhase below.
+	if op.Spec.Kind == ichorv1alpha1.TalosOperationKindIchor && op.Status.ToVersion == "" {
+		var inst ichorv1alpha1.IchorInstallation
+		if err := r.Get(ctx, types.NamespacedName{Name: ichorv1alpha1.IchorInstallationName}, &inst); err != nil {
+			return ctrl.Result{}, fmt.Errorf("reading IchorInstallation %q: %w", ichorv1alpha1.IchorInstallationName, err)
+		}
+
+		op.Status.ToVersion = inst.Spec.Version
+	}
+
 	done, err := r.Advance(ctx, cluster, nil, op)
 	if err != nil {
 		return ctrl.Result{}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused, pauseReason(err), err.Error())

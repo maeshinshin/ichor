@@ -134,18 +134,24 @@ function NetworkSection({ data }: { data: GetNodeTalosDetailsResponse }) {
           <Field label={t('talos.timeServers')} value={list(n.timeServers)} />
         </Fields>
         {n.links.length > 0 && (
-          <Grid heads={[t('node.colInterface'), t('node.colMac'), t('talos.colState'), t('talos.colMtu'), t('talos.colSpeed'), t('talos.colKind'), t('talos.colDriver')]}>
+          <Grid heads={[t('node.colInterface'), t('node.colMac'), t('talos.colState'), t('talos.colMtu'), t('talos.colSpeed'), t('talos.colKind'), t('talos.colDriver')]} phoneHidden={[1, 3, 4, 5, 6]}>
               {n.links.map((l) => (
                 <TableRow key={l.name}>
-                  <TableCell className="font-mono">{l.name}</TableCell>
-                  <TableCell className="font-mono">{display(l.mac)}</TableCell>
+                  <TableCell className="font-mono max-md:whitespace-normal max-md:wrap-anywhere">
+                    {l.name}
+                    <div class="font-sans text-muted-foreground md:hidden">{display(l.mac)}</div>
+                    <div class="font-sans text-muted-foreground md:hidden">
+                      {l.mtu || '-'} · {formatSpeed(l.speedMbit)} · {display(l.kind)} · {display(l.driver)}
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-mono max-md:hidden">{display(l.mac)}</TableCell>
                   <TableCell>
                     <ToneBadge tone={l.linkUp ? 'good' : 'neutral'}>{l.operationalState || (l.linkUp ? t('node.up') : t('node.down'))}</ToneBadge>
                   </TableCell>
-                  <TableCell>{l.mtu || '-'}</TableCell>
-                  <TableCell>{formatSpeed(l.speedMbit)}</TableCell>
-                  <TableCell>{display(l.kind)}</TableCell>
-                  <TableCell>{display(l.driver)}</TableCell>
+                  <TableCell className="max-md:hidden">{l.mtu || '-'}</TableCell>
+                  <TableCell className="max-md:hidden">{formatSpeed(l.speedMbit)}</TableCell>
+                  <TableCell className="max-md:hidden">{display(l.kind)}</TableCell>
+                  <TableCell className="max-md:hidden">{display(l.driver)}</TableCell>
                 </TableRow>
               ))}
           </Grid>
@@ -165,14 +171,20 @@ function StorageSection({ data }: { data: GetNodeTalosDetailsResponse }) {
     <>
       <SectionCard id="storage" title={t('node.disks')}>
         <Failed error={s.error}>
-          <Grid heads={[t('talos.colDevice'), t('talos.colModel'), t('talos.colSerial'), t('node.colSize'), t('talos.colType'), '']} empty={s.disks.length === 0}>
+          <Grid heads={[t('talos.colDevice'), t('talos.colModel'), t('talos.colSerial'), t('node.colSize'), t('talos.colType'), '']} phoneHidden={[1, 2, 4]} empty={s.disks.length === 0}>
                 {s.disks.map((d) => (
                   <TableRow key={d.id}>
-                    <TableCell className="font-mono">{d.devPath || d.id}</TableCell>
-                    <TableCell>{display(d.model)}</TableCell>
-                    <TableCell className="font-mono">{display(d.serial)}</TableCell>
+                    <TableCell className="font-mono max-md:whitespace-normal max-md:wrap-anywhere">
+                      {d.devPath || d.id}
+                      <div class="font-sans text-muted-foreground md:hidden">
+                        {display(d.model)} · {display(d.type)}
+                      </div>
+                      <div class="text-muted-foreground md:hidden">{display(d.serial)}</div>
+                    </TableCell>
+                    <TableCell className="max-md:hidden">{display(d.model)}</TableCell>
+                    <TableCell className="font-mono max-md:hidden">{display(d.serial)}</TableCell>
                     <TableCell>{formatBytes(d.sizeBytes)}</TableCell>
-                    <TableCell>{display(d.type)}</TableCell>
+                    <TableCell className="max-md:hidden">{display(d.type)}</TableCell>
                     <TableCell>
                       <div class="flex flex-wrap gap-1">
                         {d.systemDisk && <Badge variant="secondary">{t('talos.installDisk')}</Badge>}
@@ -194,17 +206,23 @@ function StorageSection({ data }: { data: GetNodeTalosDetailsResponse }) {
           </Button>
         }
       >
-          <Grid heads={[t('talos.colName'), t('talos.colType'), t('talos.colPhase'), t('talos.colMount'), t('node.colSize'), t('talos.colFilesystem')]} empty={volumes.length === 0}>
+          <Grid heads={[t('talos.colName'), t('talos.colType'), t('talos.colPhase'), t('talos.colMount'), t('node.colSize'), t('talos.colFilesystem')]} phoneHidden={[1, 3, 5]} empty={volumes.length === 0}>
                 {volumes.map((v) => (
                   <TableRow key={v.id}>
-                    <TableCell className="font-mono">{v.id}</TableCell>
-                    <TableCell>{display(v.type)}</TableCell>
+                    <TableCell className="font-mono max-md:whitespace-normal max-md:wrap-anywhere">
+                      {v.id}
+                      <div class="font-sans text-muted-foreground md:hidden">
+                        {display(v.type)} · {display(v.filesystem)} {v.encrypted && t('talos.encrypted')}
+                      </div>
+                      <div class="text-muted-foreground md:hidden">{display(v.mountLocation)}</div>
+                    </TableCell>
+                    <TableCell className="max-md:hidden">{display(v.type)}</TableCell>
                     <TableCell>
                       <Badge variant={v.errorMessage ? 'destructive' : 'outline'}>{display(v.phase)}</Badge>
                     </TableCell>
-                    <TableCell className="font-mono">{display(v.mountLocation)}</TableCell>
+                    <TableCell className="font-mono max-md:hidden">{display(v.mountLocation)}</TableCell>
                     <TableCell>{formatBytes(v.sizeBytes)}</TableCell>
-                    <TableCell>
+                    <TableCell className="max-md:hidden">
                       {display(v.filesystem)} {v.encrypted && <Badge variant="outline">{t('talos.encrypted')}</Badge>}
                     </TableCell>
                   </TableRow>

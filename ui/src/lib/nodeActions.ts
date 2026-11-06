@@ -9,7 +9,6 @@ export type NodeActionId =
   | 'restart-service'
   | 'etcd-defrag'
   | 'etcd-forfeit-leadership'
-  | 'reset'
   | 'remove'
 
 export type NodeActionDef = {
@@ -18,7 +17,7 @@ export type NodeActionDef = {
   destructive: boolean
   // typedName: the user types the node's name before the action can start.
   typedName: boolean
-  // override: the user must tick the override and needs the override permission (reset).
+  // override: the user must tick the override and needs the override permission (remove).
   override: boolean
   controlPlaneOnly: boolean
 }
@@ -30,25 +29,22 @@ export const nodeActions: readonly NodeActionDef[] = [
   { id: 'etcd-forfeit-leadership', destructive: false, typedName: false, override: false, controlPlaneOnly: true },
   { id: 'reboot', destructive: true, typedName: false, override: false, controlPlaneOnly: false },
   { id: 'shutdown', destructive: true, typedName: true, override: false, controlPlaneOnly: false },
-  { id: 'remove', destructive: true, typedName: true, override: false, controlPlaneOnly: false },
-  { id: 'reset', destructive: true, typedName: true, override: true, controlPlaneOnly: false },
+  { id: 'remove', destructive: true, typedName: true, override: true, controlPlaneOnly: false },
 ]
 
 // The services restart-service may restart: the same allowlist as the controller and the CRD.
 export const restartableServices = ['kubelet', 'containerd', 'cri'] as const
 
 // mayNodeAction: every node action but remove is a TalosOperation, so it needs create on talosoperations;
-// shutdown and reset also need their own start verb (reset also the override on the machine); remove
-// writes the machine (the allow-delete mark) and deletes it.
+// shutdown also needs its own start verb. Remove wipes the node (ADR 0135, which merged reset into it): it
+// writes the machine (the marks), deletes it, and needs the reset start verb and the override on the machine.
 export function mayNodeAction(p: ActionPermissions | undefined, id: NodeActionId): boolean {
   if (!p) return false
   switch (id) {
     case 'remove':
-      return p.updateMachines && p.deleteMachines
+      return p.updateMachines && p.deleteMachines && p.startNodeReset && p.overrideMachines
     case 'shutdown':
       return p.createOperations && p.startNodeShutdown
-    case 'reset':
-      return p.createOperations && p.startNodeReset && p.overrideMachines
     default:
       return p.createOperations
   }

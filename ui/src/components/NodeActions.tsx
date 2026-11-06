@@ -67,7 +67,6 @@ const wireAction: Record<NodeActionId, NodeAction> = {
   'restart-service': NodeAction.RESTART_SERVICE,
   'etcd-defrag': NodeAction.ETCD_DEFRAG,
   'etcd-forfeit-leadership': NodeAction.ETCD_FORFEIT_LEADERSHIP,
-  reset: NodeAction.RESET,
   remove: NodeAction.REMOVE,
 }
 
@@ -352,6 +351,8 @@ function NodeActionDialog({
   const [allowLeader, setAllowLeader] = useState(false)
   const [typed, setTyped] = useState('')
   const [overridden, setOverridden] = useState(false)
+  // What the node does after the wipe (remove only): power off, or reboot into maintenance mode to add it again.
+  const [afterWipe, setAfterWipe] = useState<'poweroff' | 'reboot'>('poweroff')
   const [plan, setPlan] = useState<PlanOperationResponse | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
@@ -364,6 +365,7 @@ function NodeActionDialog({
     allowLeader: def.id === 'etcd-defrag' && allowLeader,
     confirm,
     override: overridden ? {} : undefined,
+    reboot: def.id === 'remove' && afterWipe === 'reboot',
   })
 
   // The plan is asked for as soon as the dialog opens, and again when an option that changes it
@@ -380,7 +382,7 @@ function NodeActionDialog({
         if (latest.current === mine) setError(describeError(err))
       },
     )
-  }, [service, allowLeader])
+  }, [service, allowLeader, afterWipe])
 
   const confirmName = plan?.confirmName ?? ''
   const startable = canStart({
@@ -401,7 +403,12 @@ function NodeActionDialog({
     try {
       const label = t(`node.action.go.${def.id}`)
       if (def.id === 'remove') {
-        await machineClient.removeMachine({ machine: { namespace: machine.namespace, name: machine.name }, confirm: typed.trim() })
+        await machineClient.removeMachine({
+          machine: { namespace: machine.namespace, name: machine.name },
+          confirm: typed.trim(),
+          reboot: afterWipe === 'reboot',
+          override: {},
+        })
         notifyDone(t('node.action.removed', { node: shown }))
         onStarted()
         return
@@ -451,6 +458,21 @@ function NodeActionDialog({
           <div class="flex items-center gap-2 text-sm">
             <Checkbox id="node-action-leader" checked={allowLeader} onCheckedChange={(on: boolean | 'indeterminate') => setAllowLeader(on === true)} />
             <Label htmlFor="node-action-leader">{t('node.action.allowLeader')}</Label>
+          </div>
+        )}
+
+        {def.id === 'remove' && (
+          <div class="space-y-2">
+            <Label htmlFor="node-action-after">{t('node.action.afterWipe')}</Label>
+            <Select value={afterWipe} onValueChange={(v: string) => setAfterWipe(v === 'reboot' ? 'reboot' : 'poweroff')}>
+              <SelectTrigger id="node-action-after" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="poweroff">{t('node.action.afterWipe.poweroff')}</SelectItem>
+                <SelectItem value="reboot">{t('node.action.afterWipe.reboot')}</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         )}
 

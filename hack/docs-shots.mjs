@@ -1,7 +1,7 @@
 // Drives the built docs site (site/dist) in headless Chromium (from the dev shell) over the
 // DevTools protocol: serves dist under the Pages base, takes screenshots at desktop and phone
 // width in light and dark, and checks search, the hideable sidebar, relative links, the Copy page
-// menu (clipboard contents, the .md and llms routes), the heading links, the theme icon and that the
+// menu (clipboard contents, the .md and llms routes), the heading links, the theme icon, the draw.io diagrams in both themes and that the
 // phone layout does not scroll sideways. Exits 1 on a failed check. No npm dependency.
 //
 //   node hack/docs-shots.mjs <outDir> [distDir]     (make docs-check runs it after make docs-site)
@@ -44,6 +44,7 @@ const chrome = spawn(
   ['--headless=new', '--no-sandbox', '--disable-gpu', '--blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4', `--remote-debugging-port=${port}`, '--user-data-dir=' + join(outDir, '.profile'), 'about:blank'],
   { stdio: 'ignore' },
 )
+const diagrams = [['architecture-home', ''], ['architecture', 'design/architecture/'], ['machine-lifecycle', 'concepts/clusters-and-machines/'], ['ca-rotation', 'concepts/ca-and-key-rotation/'], ['roles', 'concepts/security/']]
 let failed = 0
 const check = (ok, what) => {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}`)
@@ -302,6 +303,21 @@ try {
         await ev(`[...document.querySelectorAll('button')].find((b) => b.textContent.includes('On this page'))?.click()`)
         await shot(`${tag}-toc`)
         check(await ev(`document.documentElement.scrollWidth <= window.innerWidth`), `${tag}: architecture page has no sideways scroll`)
+      }
+
+      // Diagrams (docs/images/*.drawio.svg): the page names the light image, the site adds the dark one and shows the
+      // one for the theme. Both must load, only one may be visible, and the page must not scroll sideways.
+      for (const [name, path] of diagrams) {
+        await open(path)
+        const imgs = `[...document.querySelectorAll('article img[src*=".drawio.svg"]')]`
+        const shown = `${imgs}.filter((i) => i.getClientRects().length)`
+        await until(`${imgs}.length === 2 && ${imgs}.every((i) => i.complete)`, `the ${name} images`, 5000)
+        check(await ev(`${imgs}.length === 2 && ${shown}.length === 1`), `${tag}: ${name} has a light and a dark image, one visible`)
+        check(await ev(`${shown}[0]?.src.endsWith('.${theme}.drawio.svg') && ${shown}[0].naturalWidth > 0`), `${tag}: ${name} shows its ${theme} image, loaded`)
+        check(await ev(`(${shown}[0]?.alt ?? '').length > 40 && !!${shown}[0].closest('p')?.nextElementSibling?.textContent.trim()`), `${tag}: ${name} has alt text and a caption`)
+        check(await ev(`document.documentElement.scrollWidth <= window.innerWidth`), `${tag}: ${name} page has no sideways scroll`)
+        await ev(`${shown}[0].scrollIntoView({ block: 'center' })`)
+        await shot(`${tag}-diagram-${name}`)
       }
     }
   }

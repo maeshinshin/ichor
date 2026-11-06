@@ -108,7 +108,7 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
       open={open}
       onOpenChange={(o) => !busy && reset(o)}
       trigger={
-        <Button size="sm" variant="destructive" disabled={disabled}>
+        <Button size="sm" variant="outline" disabled={disabled}>
           {t('restore.action')}
         </Button>
       }

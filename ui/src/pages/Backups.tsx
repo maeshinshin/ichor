@@ -4,7 +4,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { CodeBlock, CodeBlockActions, CodeBlockContent, CodeBlockCopyButton, CodeBlockHeader, CodeBlockLine, CodeBlockTitle } from '@/components/ui/code-block'
-import { Item, ItemContent, ItemDescription, ItemGroup, ItemSeparator, ItemTitle } from '@/components/ui/item'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { SectionCard } from '@/components/SectionCard'
 import { PageTitle } from '@/components/PageTitle'
@@ -124,6 +123,13 @@ export function Backups() {
                         {b.ref?.name}
                         <div class="font-mono font-normal text-muted-foreground md:hidden">{b.schedule}</div>
                         <div class="font-normal text-muted-foreground md:hidden">{lastText}</div>
+                        <div class="font-normal text-muted-foreground">
+                          {b.manualBackupPending
+                            ? t('backups.manualPending')
+                            : b.lastManualBackup
+                              ? t('backups.manualDone', { time: formatTimestamp(b.lastManualBackup) })
+                              : t('backups.manualNone')}
+                        </div>
                       </TableCell>
                       <TableCell className="hidden font-mono md:table-cell">{b.schedule}</TableCell>
                       <TableCell className="hidden font-mono md:table-cell">{destinationLabel(b.destination)}</TableCell>
@@ -146,32 +152,15 @@ export function Backups() {
                 })}
               </TableBody>
             </Table>
-            <ItemGroup>
-              {backups.map((b, i) => (
-                <div key={b.ref?.name}>
-                  {i > 0 && <ItemSeparator />}
-                  <Item>
-                    <ItemContent>
-                      <ItemTitle>{b.ref?.name}</ItemTitle>
-                      <ItemDescription>
-                        {b.manualBackupPending
-                          ? t('backups.manualPending')
-                          : b.lastManualBackup
-                            ? t('backups.manualDone', { time: formatTimestamp(b.lastManualBackup) })
-                            : t('backups.manualNone')}
-                      </ItemDescription>
-                    </ItemContent>
-                  </Item>
-                  {b.lastError && (
-                    <Alert variant="destructive">
-                      <TriangleAlertIcon />
-                      <AlertTitle>{t('backups.lastError')}</AlertTitle>
-                      <AlertDescription className="break-words">{b.lastError}</AlertDescription>
-                    </Alert>
-                  )}
-                </div>
-              ))}
-            </ItemGroup>
+            {backups.map((b) =>
+              b.lastError ? (
+                <Alert key={b.ref?.name} variant="destructive">
+                  <TriangleAlertIcon />
+                  <AlertTitle>{t('backups.lastError')}</AlertTitle>
+                  <AlertDescription className="break-words">{b.lastError}</AlertDescription>
+                </Alert>
+              ) : null,
+            )}
           </SectionCard>
           <SectionCard title={t('backups.snapshots')} description={t('backups.restoreHint')}>
             {all.length === 0 ? (

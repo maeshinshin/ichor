@@ -51,6 +51,24 @@ message GetMyPermissionsResponse {
   bool cluster_update = 5;
   // talosconfig_reader is the "download" verb on talosclusters/talosconfig-reader.
   bool talosconfig_reader = 6;
+  // list_users is the "list" verb on ichorusers; the UI shows the Users page only
+  // when it is true. It needs no request field.
+  bool list_users = 7;
+  // The flags below need the cluster; without it they are false. They let the UI
+  // hide the actions the caller's role cannot perform.
+  // create_operations is the "create" verb on talosoperations (upgrades, config
+  // apply, node actions, pause/resume).
+  bool create_operations = 8;
+  // start_* are the "start" verb on the talosoperations subresource of that kind.
+  bool start_ca_rotation = 9;
+  bool start_key_rotation = 10;
+  bool start_shutdown = 11;
+  bool start_etcd_restore = 12;
+  // update_ichor_version is the "update" verb on ichorinstallations/version, which
+  // an Ichor upgrade needs.
+  bool update_ichor_version = 13;
+  // update_backups is the "update" verb on talosetcdbackups, which Back up now needs.
+  bool update_backups = 14;
 }
 
 message DownloadReaderTalosconfigRequest {

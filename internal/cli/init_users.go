@@ -303,6 +303,16 @@ func initEpilogue(p *progress, opts initOptions, password string, ok bool) {
 	}
 
 	if ok {
-		p.Next("ichor cluster status "+opts.Cluster, "ichor machine list", "ichor ui")
+		cmds := []string{"ichor cluster status " + opts.Cluster, "ichor machine list", "ichor ui"}
+
+		if opts.mergedContext != "" {
+			p.Info(fmt.Sprintf("kubectl and ichor now use context %s", opts.mergedContext))
+		} else {
+			p.Info("kubectl and ichor need the new cluster's kubeconfig; `ichor init --merge-kubeconfig` merges it into yours")
+
+			cmds = append([]string{"export KUBECONFIG=~/.ichor/clusters/" + opts.Cluster + "/" + kubeconfigFilename}, cmds...)
+		}
+
+		p.Next(cmds...)
 	}
 }

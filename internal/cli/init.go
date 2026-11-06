@@ -306,6 +306,8 @@ func init() {
 	flags := initCmd.Flags()
 	bindInitFlags(flags, &initOpts, &initWaitTimeout)
 	flags.StringVarP(&initFile, "file", "f", "", "read the init settings from this "+initConfigKind+" file (see --print-config-template); a flag given on the command line overrides the file")
+	flags.BoolVar(&initOpts.MergeKubeconfig, "merge-kubeconfig", false,
+		"also merge the cluster-admin kubeconfig into your kubeconfig (--kubeconfig, else the first file of $KUBECONFIG, else ~/.kube/config) as context admin@CLUSTER, and make it current; a taken name gets a suffix")
 	flags.BoolVar(&initOpts.BundlePlaintext, bundlePlaintextFlag, false,
 		"store the secrets bundle unencrypted (default: encrypted with --bundle-passphrase-file, $"+bundlePassphraseEnv+", or a passphrase generated on a terminal)")
 	flags.BoolVar(&initPrintTemplate, "print-config-template", false, "print an example "+initConfigKind+" file and exit")

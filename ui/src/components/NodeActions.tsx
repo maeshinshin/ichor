@@ -270,6 +270,7 @@ function CaptureDialog({
           <DialogTitle>{t('capture.title', { name: machine.name })}</DialogTitle>
           <DialogDescription>{t('capture.description')}</DialogDescription>
         </DialogHeader>
+        <div className="-mx-4 max-h-[50dvh] overflow-y-auto px-4">
         <div class="space-y-4 text-sm">
           <div class="space-y-1">
             <Label htmlFor="capture-interface">{t('capture.interface')}</Label>
@@ -313,6 +314,7 @@ function CaptureDialog({
             <p class="text-xs text-muted-foreground">{t('capture.filterHint')}</p>
             {tried && errors.filter && <p class="text-xs text-destructive">{errors.filter}</p>}
           </div>
+        </div>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>

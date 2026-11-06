@@ -47,21 +47,9 @@ GitOps tools, and does not target air-gapped installs.
 
 ## How the pieces fit
 
-```text
-
 ![Architecture of Ichor. The browser, the ichor CLI and kubectl reach the Kubernetes API of the cluster that Ichor manages. Inside that cluster, in the ichor-system namespace, run ichor-ui, the ichor-controller with its admission webhooks, and the installer Jobs; they read and write Ichor's custom resources through the API. Only the controller configures the Talos machines, over the Talos API, including new machines in maintenance mode.](images/architecture.light.drawio.svg)
 
 *Ichor runs inside the cluster it manages, and every change goes through the Kubernetes API as a custom resource.*
-
-```
-operator ──┬── ichor CLI ─────────┐
-           └── browser ─▶ ichor-ui │
-                                   ▼
-                     kube-apiserver (CRs, Secrets, Leases)
-                                   ▲
-                                   │ reconcile
-                           ichor-controller ── Talos API ──▶ nodes
-```
 
 | Piece | Role |
 |---|---|

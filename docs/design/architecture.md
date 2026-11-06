@@ -59,13 +59,11 @@ inventing a new control plane.
 
 ## Overview
 
-```text
-
 ![Architecture of Ichor. The browser, the ichor CLI and kubectl reach the Kubernetes API of the cluster that Ichor manages. Inside that cluster, in the ichor-system namespace, run ichor-ui, the ichor-controller with its admission webhooks, and the installer Jobs; they read and write Ichor's custom resources through the API. Only the controller configures the Talos machines, over the Talos API, including new machines in maintenance mode.](../images/architecture.light.drawio.svg)
 
 *Ichor runs inside the cluster it manages; ichor-ui reads nodes and never writes to them, and the controller is the only writer.*
 
-```
+```text
 operator ──┬── ichor CLI ─────────┐
            └── browser ─▶ ichor-ui │
                                    ▼

@@ -337,3 +337,28 @@ func TestIchorDetailsDropTheInstalledVersionOnceCompleted(t *testing.T) {
 		t.Errorf("completed: installed = %q, want no row", got)
 	}
 }
+
+// A completed Ichor upgrade records only its from-version; the installation's live target may belong to
+// a later upgrade, so the summary and details leave the target out.
+func TestCompletedIchorUpgradeDoesNotShowTheLiveInstallationTarget(t *testing.T) {
+	install := &ichorv1alpha1.IchorInstallation{
+		Spec: ichorv1alpha1.IchorInstallationSpec{Version: ichorV3}, Status: ichorv1alpha1.IchorInstallationStatus{InstalledVersion: ichorV3},
+	}
+	op := &ichorv1alpha1.TalosOperation{
+		Annotations: map[string]string{ichorv1alpha1.OperationFromVersionAnnotation: ichorV2},
+		Spec:        ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindIchor},
+		Status:      ichorv1alpha1.TalosOperationStatus{Phase: ichorv1alpha1.TalosOperationPhaseCompleted},
+	}
+	out := &pb.Operation{}
+	describeOperation(out, op, nil, install)
+
+	if out.GetSummary() != "Upgrade Ichor from v0.2.0" {
+		t.Fatalf("summary = %q", out.GetSummary())
+	}
+
+	for _, d := range out.GetDetails() {
+		if d.GetKey() == "Target Ichor version" {
+			t.Fatalf("target shown: %q", d.GetValue())
+		}
+	}
+}

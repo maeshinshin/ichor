@@ -258,8 +258,8 @@ export function OperationDetail({ name }: { name: string }) {
                 <TableBody>
                   {op.machines.map((m) => (
                     <TableRow key={m.name}>
-                      <TableCell>
-                        <Button asChild variant="link" size="sm">
+                      <TableCell className="max-md:whitespace-normal">
+                        <Button asChild variant="link" size="sm" className="h-auto max-w-full whitespace-normal break-all py-1 text-left">
                           <Link to={nodePath(m.name)}>{m.displayName || m.name}</Link>
                         </Button>
                         <div class="whitespace-normal wrap-anywhere text-muted-foreground md:hidden">{[m.step, m.message].filter(Boolean).join(': ')}</div>

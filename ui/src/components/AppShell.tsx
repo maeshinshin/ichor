@@ -222,7 +222,7 @@ export function AppShell({
         <SidebarInset className="min-w-0">
           <header class="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 bg-background px-4">
             <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
+            <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4 data-vertical:self-center" />
             <Crumbs path={path} />
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <ClusterBar />

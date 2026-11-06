@@ -93,6 +93,24 @@ var _ = Describe("TalosOperationReconciler, kind ichor", func() {
 		Expect(fetchOperation(op).Status.FailureReason).To(ContainSubstring("has no cosign signature"))
 	})
 
+	It("stamps status.toVersion from the installation once, when the upgrade starts, and never rewrites it", func() {
+		inst := createInstallation("v0.3.0")
+		op := newIchorOp(newOpTestCluster().Name)
+		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: testIchorNamespace, Advance: func(
+			context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *ichorv1alpha1.TalosOperation,
+		) (bool, error) {
+			return false, nil
+		}}
+
+		mustReconcileOperation(r, op)
+		Expect(fetchOperation(op).Status.ToVersion).To(Equal("v0.3.0"))
+
+		inst.Spec.Version = "v0.4.0"
+		Expect(k8sClient.Update(ctx, inst)).To(Succeed())
+		mustReconcileOperation(r, op)
+		Expect(fetchOperation(op).Status.ToVersion).To(Equal("v0.3.0"))
+	})
+
 	It("completes with no machines once the executor is done", func() {
 		op := newIchorOp(newOpTestCluster().Name)
 		r := &TalosOperationReconciler{Client: k8sClient, APIReader: k8sClient, Advance: func(

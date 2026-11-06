@@ -1,6 +1,7 @@
 // Drives the built docs site (site/dist) in headless Chromium (from the dev shell) over the
 // DevTools protocol: serves dist under the Pages base, takes screenshots at desktop and phone
-// width in light and dark, and checks search, the hideable sidebar, relative links and that the
+// width in light and dark, and checks search, the hideable sidebar, relative links, the Copy page
+// menu (clipboard contents, the .md and llms routes), the heading links, the theme icon and that the
 // phone layout does not scroll sideways. Exits 1 on a failed check. No npm dependency.
 //
 //   node hack/docs-shots.mjs <outDir> [distDir]     (make docs-check runs it after make docs-site)
@@ -18,7 +19,7 @@ if (!outDir) {
 const base = (process.env.DOCS_BASE ?? '/ichor').replace(/\/?$/, '/')
 mkdirSync(outDir, { recursive: true })
 
-const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.wasm': 'application/wasm' }
+const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.wasm': 'application/wasm', '.md': 'text/markdown', '.txt': 'text/plain' }
 const server = createServer((req, res) => {
   const path = decodeURIComponent(new URL(req.url, 'http://x').pathname)
   if (!path.startsWith(base)) return void res.writeHead(404).end()
@@ -33,7 +34,7 @@ const origin = `http://127.0.0.1:${server.address().port}`
 const port = 9300 + Math.floor(Math.random() * 500)
 const chrome = spawn(
   process.env.CHROMIUM ?? 'chromium',
-  ['--headless=new', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${port}`, '--user-data-dir=' + join(outDir, '.profile'), 'about:blank'],
+  ['--headless=new', '--no-sandbox', '--disable-gpu', '--blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4', `--remote-debugging-port=${port}`, '--user-data-dir=' + join(outDir, '.profile'), 'about:blank'],
   { stdio: 'ignore' },
 )
 let failed = 0
@@ -69,6 +70,7 @@ try {
   const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true })
   const s = (m, p) => send(m, p, sessionId)
   await s('Page.enable')
+  await send('Browser.grantPermissions', { origin, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] })
 
   const ev = async (expression) => (await s('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result?.value
   const until = async (expression, what, ms = 10000) => {
@@ -91,6 +93,15 @@ try {
     await ready()
   }
   const click = (selector) => ev(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (e) e.click(); return !!e })()`)
+  // A real mouse click (or just a move) at the middle of the element `expr` evaluates to; Radix menus open on pointerdown.
+  const mouse = async (expr, type = 'click') => {
+    const p = await ev(`(() => { const e = ${expr}; if (!e) return null; e.scrollIntoView({ block: 'center' }); const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } })()`)
+    if (!p) return false
+    await s('Input.dispatchMouseEvent', { type: 'mouseMoved', ...p })
+    if (type === 'click') for (const t of ['mousePressed', 'mouseReleased']) await s('Input.dispatchMouseEvent', { type: t, ...p, button: 'left', buttons: t === 'mousePressed' ? 1 : 0, clickCount: 1 })
+    return true
+  }
+  const clipboard = () => ev(`navigator.clipboard.readText()`)
   const key = async (k, modifiers = 0) => {
     for (const type of ['keyDown', 'keyUp']) await s('Input.dispatchKeyEvent', { type, key: k, code: `Key${k.toUpperCase()}`, modifiers })
   }
@@ -108,6 +119,64 @@ try {
       check((await ev(`document.documentElement.classList.contains('dark')`)) === (theme === 'dark'), `${tag}: follows the system theme`)
       check(await ev(`document.documentElement.scrollWidth <= window.innerWidth`), `${tag}: no sideways scroll`)
       await shot(`${tag}-page`)
+
+      // The theme icon is chosen by CSS from the `dark` class, so the first paint already shows the right one.
+      const shownIcon = await ev(`(() => { const v = (n) => getComputedStyle(document.querySelector('header .lucide-' + n)).display !== 'none'; return v('sun') ? 'sun' : v('moon') ? 'moon' : '' })()`)
+      check(shownIcon === (theme === 'dark' ? 'sun' : 'moon'), `${tag}: the theme toggle shows the ${theme === 'dark' ? 'sun' : 'moon'} icon (${shownIcon})`)
+      check(/lucide-sun[^"]*hidden dark:block/.test(await (await fetch(origin + base + 'guides/rotate-keys/')).text()), `${tag}: the icon swap is in the server-rendered HTML`)
+
+      // Copy page: the menu, the Markdown on the clipboard, the static .md and llms routes.
+      const title = await ev(`document.querySelector('article h1').textContent`)
+      const md = await fetch(origin + base + 'guides/rotate-keys.md')
+      const mdText = await md.text()
+      check(md.status === 200 && mdText.startsWith(`# ${title}`), `${tag}: guides/rotate-keys.md is served and starts with "# ${title}"`)
+      const prose = mdText.replace(/^```[\s\S]*?^```/gm, '').replace(/`[^`]*`/g, '')
+      check(!/\]\((?!https?:)[^#)]/.test(prose), `${tag}: the Markdown has no relative links`)
+      for (const f of ['index.md', 'llms.txt', 'llms-full.txt']) check((await fetch(origin + base + f)).status === 200, `${tag}: ${f} returns 200`)
+      check((await (await fetch(origin + base + 'llms.txt')).text()).includes('/guides/rotate-keys.md)'), `${tag}: llms.txt links the page's .md`)
+      const item = (text) => `[...document.querySelectorAll('[data-slot=dropdown-menu-item]')].find((e) => e.textContent.includes(${JSON.stringify(text)}))`
+      const more = `document.querySelector('button[aria-label="More page actions"]')`
+      const menuOpen = () => until(`document.querySelectorAll('[data-slot=dropdown-menu-item]').length >= 3`, 'the Copy page menu', 3000)
+      check(await ev(`!![...document.querySelectorAll('article button')].find((b) => b.textContent.trim() === 'Copy page')`), `${tag}: the Copy page button exists`)
+      await mouse(more)
+      check(await menuOpen(), `${tag}: the Copy page menu opens`)
+      check(await ev(`['Copy as Markdown', 'View as Markdown', 'Copy link'].every((t) => [...document.querySelectorAll('[data-slot=dropdown-menu-item]')].some((e) => e.textContent.includes(t)))`), `${tag}: the menu lists Copy as Markdown, View as Markdown and Copy link`)
+      await shot(`${tag}-page-menu`)
+      await mouse(item('Copy as Markdown'))
+      await until(`!!document.querySelector('[data-sonner-toast]')`, 'the toast', 3000)
+      check(await ev(`!!document.querySelector('[data-sonner-toast]')`), `${tag}: a toast confirms the copy`)
+      const copied = await clipboard()
+      check(copied.startsWith(`# ${title}`) && copied === mdText, `${tag}: Copy as Markdown puts the page's Markdown (starting "# ${title}") on the clipboard`)
+      await mouse(more)
+      await menuOpen()
+      check(await ev(`${item('View as Markdown')}?.getAttribute('href') === '${base}guides/rotate-keys.md'`), `${tag}: View as Markdown links to the .md`)
+      check(!(await ev(`!!${item('Share')}`)), `${tag}: no Share item without the Web Share API`)
+      await mouse(item('Copy link'))
+      await sleep(300)
+      check((await clipboard()) === (process.env.DOCS_SITE ?? 'https://maeshinshin.github.io') + base + 'guides/rotate-keys/', `${tag}: Copy link copies the canonical URL`)
+
+      // Heading links: hidden until hover or focus, copy the URL with the anchor and move the address bar.
+      const anchor = `document.querySelector('article h2 a[data-heading-link]')`
+      const opacity = () => ev(`getComputedStyle(${anchor}).opacity`)
+      if (!mobile) {
+        await mouse(`document.querySelector('article h1')`, 'move')
+        await sleep(400)
+        const idle = await opacity()
+        check(idle === '0', `${tag}: heading links are hidden until hover (opacity ${idle})`)
+        await mouse(`${anchor}.parentElement`, 'move')
+        await sleep(300)
+        check((await opacity()) === '1', `${tag}: a heading link shows on hover`)
+        await shot(`${tag}-heading-hover`)
+      }
+      await ev(`${anchor}.focus()`)
+      await sleep(300)
+      check((await opacity()) === '1', `${tag}: a heading link shows on keyboard focus`)
+      const hash = await ev(`${anchor}.getAttribute('href')`)
+      await mouse(anchor)
+      await sleep(400)
+      check((await ev(`location.hash`)) === hash, `${tag}: clicking a heading link updates the address bar (${hash})`)
+      check((await clipboard()) === `${origin}${base}guides/rotate-keys/${hash}`, `${tag}: clicking a heading link copies the URL with ${hash}`)
+      await shot(`${tag}-heading-link`)
 
       // Search: the Pagefind index answers "rotate" with the key-rotation guide.
       await key('k', 2)

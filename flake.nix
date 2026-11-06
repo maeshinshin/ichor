@@ -38,6 +38,8 @@
               cni-plugins
               nodejs
               chromium # headless screenshots of the UI (hack/ui-shots.mjs, make ui-shots)
+              drawio # exports the docs diagrams to SVG (make docs-diagrams)
+              xvfb-run # draw.io is an Electron app and wants a display
               gnumake
               openssl # self-signed ichor-ui cert for the UI demo (test/harness/ui-demo/README.md)
               git

@@ -51,15 +51,16 @@ export function Failed({ error, children }: { error: string; children: Component
   )
 }
 
-// Grid is a table with a header row, or the empty note when there is nothing to list.
-export function Grid({ heads, empty, none = 'talos.none', children }: { heads: string[]; empty?: boolean; none?: Key; children: ComponentChildren }) {
+// Grid is a table with a header row, or the empty note when there is nothing to list. phoneHidden lists the
+// column indexes dropped below md; the caller repeats them stacked inside a kept cell (md:hidden).
+export function Grid({ heads, empty, none = 'talos.none', phoneHidden = [], children }: { heads: string[]; empty?: boolean; none?: Key; phoneHidden?: number[]; children: ComponentChildren }) {
   if (empty) return <EmptyNote icon={InboxIcon}>{t(none)}</EmptyNote>
   return (
     <Table>
       <TableHeader>
         <TableRow>
           {heads.map((h, i) => (
-            <TableHead key={i}>{h}</TableHead>
+            <TableHead key={i} className={phoneHidden.includes(i) ? 'max-md:hidden' : undefined}>{h}</TableHead>
           ))}
         </TableRow>
       </TableHeader>

@@ -97,11 +97,11 @@ export function Backups() {
                 <TableRow>
                   <TableHead>{t('backups.colName')}</TableHead>
                   <TableHead className="hidden md:table-cell">{t('backups.colSchedule')}</TableHead>
-                  <TableHead className="hidden xl:table-cell">{t('backups.colDestination')}</TableHead>
-                  <TableHead className="hidden xl:table-cell">{t('backups.colRetention')}</TableHead>
+                  <TableHead className="hidden 2xl:table-cell">{t('backups.colDestination')}</TableHead>
+                  <TableHead className="hidden 2xl:table-cell">{t('backups.colRetention')}</TableHead>
                   <TableHead className="hidden md:table-cell">{t('backups.colLast')}</TableHead>
-                  <TableHead className="hidden xl:table-cell">{t('backups.colSnapshots')}</TableHead>
-                  <TableHead className="hidden xl:table-cell">{t('backups.colSize')}</TableHead>
+                  <TableHead className="hidden 2xl:table-cell">{t('backups.colSnapshots')}</TableHead>
+                  <TableHead className="hidden 2xl:table-cell">{t('backups.colSize')}</TableHead>
                   <TableHead>{t('backups.colStatus')}</TableHead>
                   <TableHead />
                 </TableRow>
@@ -112,12 +112,12 @@ export function Backups() {
                   const lastText = b.lastSuccessTime ? formatTimestamp(b.lastSuccessTime) : last ? formatTimestamp(last.time) : t('backups.never')
                   return (
                     <TableRow key={b.ref?.name}>
-                      <TableCell className="font-medium whitespace-normal wrap-anywhere">
+                      <TableCell className="min-w-48 font-medium whitespace-normal wrap-anywhere">
                         {b.ref?.name}
                         <div class="font-mono font-normal text-muted-foreground md:hidden">{b.schedule}</div>
                         <div class="font-normal text-muted-foreground md:hidden">{lastText}</div>
-                        <div class="font-mono font-normal text-muted-foreground wrap-anywhere xl:hidden">{destinationLabel(b.destination)}</div>
-                        <div class="font-normal text-muted-foreground xl:hidden">
+                        <div class="font-mono font-normal text-muted-foreground wrap-anywhere 2xl:hidden">{destinationLabel(b.destination)}</div>
+                        <div class="font-normal text-muted-foreground 2xl:hidden">
                           {t('backups.keepLast', { count: b.keepLast })} · {b.snapshots.length} · {formatBytes(totalBytes(b.snapshots))}
                         </div>
                         <div class="font-normal text-muted-foreground">
@@ -129,11 +129,11 @@ export function Backups() {
                         </div>
                       </TableCell>
                       <TableCell className="hidden font-mono md:table-cell">{b.schedule}</TableCell>
-                      <TableCell className="hidden font-mono xl:table-cell">{destinationLabel(b.destination)}</TableCell>
-                      <TableCell className="hidden xl:table-cell">{t('backups.keepLast', { count: b.keepLast })}</TableCell>
+                      <TableCell className="hidden font-mono 2xl:table-cell">{destinationLabel(b.destination)}</TableCell>
+                      <TableCell className="hidden 2xl:table-cell">{t('backups.keepLast', { count: b.keepLast })}</TableCell>
                       <TableCell className="hidden md:table-cell">{lastText}</TableCell>
-                      <TableCell className="hidden xl:table-cell">{b.snapshots.length}</TableCell>
-                      <TableCell className="hidden xl:table-cell">{formatBytes(totalBytes(b.snapshots))}</TableCell>
+                      <TableCell className="hidden 2xl:table-cell">{b.snapshots.length}</TableCell>
+                      <TableCell className="hidden 2xl:table-cell">{formatBytes(totalBytes(b.snapshots))}</TableCell>
                       <TableCell>
                         {b.suspended ? (
                           <ToneBadge tone="neutral">{t('backups.suspended')}</ToneBadge>

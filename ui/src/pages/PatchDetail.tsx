@@ -22,6 +22,7 @@ import { enumLabel } from '@/lib/enum'
 import { notifyDone, notifyWrite } from '@/lib/notify'
 import { describeError, type ErrorShape } from '@/lib/errors'
 import { useCluster } from '@/lib/useCluster'
+import { useMyPermissions } from '@/lib/useMyPermissions'
 import { t, type Key } from '@/lib/i18n'
 import { PatchDocumentCard, type DocItem } from '@/components/PatchDocumentCard'
 import { defaultDocument, previewKey } from '@/lib/patchDocs'
@@ -76,6 +77,7 @@ export function PatchDetail({ name }: { name?: string }) {
   const namespace = current?.ref?.namespace
   const cluster = current?.ref ? { namespace: current.ref.namespace, name: current.ref.name } : undefined
   const isNew = name === undefined
+  const perms = useMyPermissions(undefined, cluster)
 
   const [loaded, setLoaded] = useState(isNew)
   const [loadError, setLoadError] = useState<ErrorShape | null>(null)
@@ -482,14 +484,16 @@ export function PatchDetail({ name }: { name?: string }) {
 
         <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="flex gap-2">
-            <Button disabled={!canSave || saving} onClick={save}>
-              {saving ? t('patch.saving') : isNew ? t('patch.create') : t('patch.save')}
-            </Button>
+            {(isNew ? perms?.createPatches : perms?.updatePatches) && (
+              <Button disabled={!canSave || saving} onClick={save}>
+                {saving ? t('patch.saving') : isNew ? t('patch.create') : t('patch.save')}
+              </Button>
+            )}
             <Button variant="ghost" onClick={() => navigate('/config')}>
               {t('common.cancel')}
             </Button>
           </div>
-          {!isNew && <DeleteButton namespace={namespace!} name={name!} />}
+          {!isNew && perms?.deletePatches && <DeleteButton namespace={namespace!} name={name!} />}
         </div>
       </div>
     </>

@@ -17,7 +17,9 @@ import { enumLabel } from '@/lib/enum'
 import { notifyDone } from '@/lib/notify'
 import { matchesQuery } from '@/lib/filter'
 import { targetKindOf } from '@/lib/patchTarget'
+import { useCluster } from '@/lib/useCluster'
 import { useList } from '@/lib/useList'
+import { useMyPermissions } from '@/lib/useMyPermissions'
 import { t } from '@/lib/i18n'
 import { Link } from '@/router'
 
@@ -29,6 +31,8 @@ import { Link } from '@/router'
 export function PatchList() {
   const { items: patches, error, reload } = useList(async () => (await patchClient.listPatches({})).patches)
   const [query, setQuery] = useState('')
+  const { cluster } = useCluster()
+  const perms = useMyPermissions(undefined, cluster?.ref ? { namespace: cluster.ref.namespace, name: cluster.ref.name } : undefined)
 
   if (error) return <ErrorAlert {...error} />
   if (!patches) return <PageSkeleton label={t('patches.loading')} />
@@ -41,12 +45,14 @@ export function PatchList() {
     <div>
       <PageTitle title={t('config.title')} description={t('patches.intro')} />
       <ListToolbar query={query} onQuery={setQuery} shown={rows.length} total={patches.length} onRefresh={reload} stock>
-        <Button asChild size="sm">
-          <Link to="/config/new">
-            <PlusIcon data-icon="inline-start" aria-hidden="true" />
-            {t('patches.new')}
-          </Link>
-        </Button>
+        {perms?.createPatches && (
+          <Button asChild size="sm">
+            <Link to="/config/new">
+              <PlusIcon data-icon="inline-start" aria-hidden="true" />
+              {t('patches.new')}
+            </Link>
+          </Button>
+        )}
       </ListToolbar>
       {patches.length === 0 ? (
         <EmptyNote icon={LayersIcon}>{t('patches.empty')}</EmptyNote>
@@ -104,10 +110,12 @@ export function PatchList() {
                   </TableCell>
                   <TableCell>
                     <div class="flex gap-2 max-md:flex-wrap">
-                      <Button asChild size="sm" variant="outline">
-                        <Link to={p.ref ? `/config/${p.ref.name}` : '/config'}>{t('patches.edit')}</Link>
-                      </Button>
-                      <DeleteDialog patch={p} onDeleted={reload} />
+                      {perms?.updatePatches && (
+                        <Button asChild size="sm" variant="outline">
+                          <Link to={p.ref ? `/config/${p.ref.name}` : '/config'}>{t('patches.edit')}</Link>
+                        </Button>
+                      )}
+                      {perms?.deletePatches && <DeleteDialog patch={p} onDeleted={reload} />}
                     </div>
                   </TableCell>
                 </LinkRow>

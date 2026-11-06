@@ -11,9 +11,9 @@ import {
   parseDuration,
   type Chunk,
 } from './diagnostics.ts'
+import { admin } from './roles.testdata.ts'
 
-const acts = { listUsers: true, createOperations: true, startCaRotation: true, startKeyRotation: true, startShutdown: true, startEtcdRestore: true, updateIchorVersion: true, updateBackups: true }
-const all = { ...acts, supportBundle: true, etcdSnapshot: true, packetCapture: true, clusterCredentials: true, clusterUpdate: true, talosconfigReader: true }
+const all = { ...admin, supportBundle: true, etcdSnapshot: true, packetCapture: true, clusterCredentials: true, clusterUpdate: true, talosconfigReader: true }
 const nothing = Object.fromEntries(Object.keys(all).map((k) => [k, false])) as typeof all
 
 test('a user with no permissions, or unknown ones, is offered nothing', () => {

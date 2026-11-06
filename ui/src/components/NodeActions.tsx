@@ -105,7 +105,7 @@ export function NodeActions({
 
   const [active, setActive] = useState<NodeActionDef | null>(null)
   const actions = availableActions(perms, controlPlane)
-  const nodeDefs = availableNodeActions({ approved, deleting, role: controlPlane ? 'controlplane' : 'worker' })
+  const nodeDefs = availableNodeActions({ approved, deleting, role: controlPlane ? 'controlplane' : 'worker', perms })
   const safeDefs = nodeDefs.filter((d) => !d.destructive)
   const dangerDefs = nodeDefs.filter((d) => d.destructive)
   if (actions.length === 0 && nodeDefs.length === 0) return null
@@ -175,7 +175,8 @@ export function NodeActions({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {active && (
+      {/* An action that stops being offered (the permissions changed) takes its open dialog with it. */}
+      {active && nodeDefs.some((d) => d.id === active.id) && (
         <NodeActionDialog
           key={active.id}
           def={active}

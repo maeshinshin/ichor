@@ -23,7 +23,9 @@ import { clusterClient, machineClient } from '@/lib/connect'
 import { checkDiscoveryTarget, discoveryOn, maskCidr } from '@/lib/discovery'
 import { describeError } from '@/lib/errors'
 import { notifyWrite } from '@/lib/notify'
+import { mayApprove } from '@/lib/actions'
 import { useCluster } from '@/lib/useCluster'
+import { useMyPermissions } from '@/lib/useMyPermissions'
 import { useCanReclaim } from '@/lib/useCanReclaim'
 import { t } from '@/lib/i18n'
 import { Link } from '@/router'
@@ -39,6 +41,7 @@ export function AddNode() {
   const [cluster, setCluster] = useState<Cluster | null>(null)
   const namespace = current?.ref?.namespace
   const name = current?.ref?.name
+  const perms = useMyPermissions(undefined, namespace && name ? { namespace, name } : undefined)
   const [machines, setMachines] = useState<Machine[]>([])
   // Addresses discovery reached that already run a Talos configuration (ADR 0103).
   const [configured, setConfigured] = useState<string[]>([])
@@ -130,7 +133,7 @@ export function AddNode() {
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">{m.endpoint || '-'}</TableCell>
                       <TableCell>
-                        <ApproveDialog machine={m} onApproved={reloadMachines} />
+                        {mayApprove(perms) && <ApproveDialog machine={m} onApproved={reloadMachines} />}
                       </TableCell>
                     </TableRow>
                   ))}

@@ -8,14 +8,24 @@ search. The same files read fine on GitHub.
 ## Preview
 
 ```sh
-make docs-dev     # live preview at http://localhost:4321/ichor/ (search needs the built site)
-make docs-site    # the real build into site/dist, with the search index
-make docs-preview # serve site/dist
+make docs-dev      # live preview at http://localhost:4321/ichor/next/ (search needs the built site)
+make docs-site     # the real build of the development docs into site/dist, with the search index
+make docs-preview  # serve site/dist
+make docs-site-all # every version, as published, into site/dist-all
 ```
 
 Everything runs inside `nix develop`. `make docs-site` fails on a broken
 internal link (a missing file, a missing page or a missing `#heading`), so a
 Markdown-only change cannot publish one.
+
+## Versions
+
+You only ever edit the Markdown on `main`. That is published as the
+development docs (`/next/`, "Unreleased (main)"). Each release tag `vX.Y.Z`
+publishes the `docs/` it was tagged with as `/vX.Y.Z/`, and `/latest/` and the
+site root lead to the newest release, so a release's docs are frozen by its tag
+and nothing is copied. The version menu in the header lists them from
+`versions.json`, which the workflow writes from the tags.
 
 ## Adding a page
 
@@ -80,3 +90,13 @@ The kinds are `NOTE`, `TIP`, `IMPORTANT`, `WARNING` and `CAUTION`.
 
 Use fenced blocks with a language (` ```sh `, ` ```yaml `, ` ```go `). The site
 highlights them and adds a copy button; there is nothing to add by hand.
+
+## What every page gets
+
+Nothing here is written by hand. Each page has a "Copy page" menu (copy the
+Markdown, view it, copy the link, share on devices that can), every `##` and
+`###` heading has a link icon that copies the address of that section, and the
+Markdown of every page is served as `<page>.md` next to it, with `/llms.txt`
+(an index) and `/llms-full.txt` (all pages) for tools that read the docs. The
+copied Markdown has its relative links rewritten to full URLs, so it still
+works outside the site.

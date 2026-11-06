@@ -599,7 +599,7 @@ function Tile({ label, icon: Icon, value, sub, badge, target }: { label: string;
         {value && <CardTitle>{value}</CardTitle>}
         <CardAction>
           {badge ? (
-            <Badge variant="destructive">
+            <Badge variant="destructive" className="h-auto max-w-full whitespace-normal">
               <CircleAlertIcon data-icon="inline-start" aria-hidden="true" />
               {badge}
             </Badge>

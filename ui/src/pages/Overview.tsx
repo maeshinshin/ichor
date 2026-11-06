@@ -318,18 +318,16 @@ function Home({
                       {(a.kind === 'opFailed' || a.kind === 'opPaused') && current && (
                         <>
                           <AlertTitle>{t(a.kind === 'opFailed' ? 'home.attnOpFailed' : 'home.attnOpPaused')}</AlertTitle>
-                          <AlertDescription>
-                            <div class="flex flex-wrap items-center gap-3">
-                              {current.op.ref && (
-                                <Button asChild variant="link" size="sm">
-                                  <Link to={`/operations/${current.op.ref.name}`}>{t('home.open')}</Link>
-                                </Button>
-                              )}
-                              {perms?.createOperations && (
-                                <OperationControls op={current.op} onChanged={reloadCluster} onDeleted={reloadCluster} showDelete={false} />
-                              )}
-                            </div>
-                          </AlertDescription>
+                          <AlertAction className="flex items-center gap-1">
+                            {current.op.ref && (
+                              <Button asChild variant="link" size="xs">
+                                <Link to={`/operations/${current.op.ref.name}`}>{t('home.open')}</Link>
+                              </Button>
+                            )}
+                            {perms?.createOperations && (
+                              <OperationControls op={current.op} onChanged={reloadCluster} onDeleted={reloadCluster} showDelete={false} />
+                            )}
+                          </AlertAction>
                         </>
                       )}
                   </Alert>

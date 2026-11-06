@@ -103,7 +103,7 @@ export function ReclaimDialog({
           {label ?? t('reclaim.button')}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[calc(100dvh-2rem)] grid-cols-1 overflow-y-auto sm:max-w-lg">
+      <DialogContent className="grid-cols-1 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('reclaim.title')}</DialogTitle>
           <DialogDescription>{t('reclaim.description')}</DialogDescription>
@@ -115,12 +115,13 @@ export function ReclaimDialog({
 
         {!reclaim && (
           <form
-            class="space-y-3 text-sm"
+            class="grid gap-4 text-sm"
             onSubmit={(e) => {
               e.preventDefault()
               if (canCreate) create()
             }}
           >
+            <div className="-mx-4 max-h-[50dvh] space-y-3 overflow-y-auto px-4">
             <div class="space-y-1">
               <Label htmlFor="reclaim-address">{t('reclaim.address')}</Label>
               <Input id="reclaim-address" value={address} onInput={(e) => setAddress((e.target as HTMLInputElement).value)} />
@@ -147,6 +148,7 @@ export function ReclaimDialog({
               <AlertDescription>{t('reclaim.storedWarning', { ttl: '15 minutes' })}</AlertDescription>
             </Alert>
             {error && <ErrorAlert {...error} />}
+            </div>
             <DialogFooter>
               <Button type="submit" disabled={!canCreate}>
                 {busy ? t('reclaim.creating') : t('reclaim.create')}
@@ -157,12 +159,13 @@ export function ReclaimDialog({
 
         {reclaim && (
           <form
-            class="space-y-3 text-sm"
+            class="grid gap-4 text-sm"
             onSubmit={(e) => {
               e.preventDefault()
               confirm()
             }}
           >
+            <div className="-mx-4 max-h-[50dvh] space-y-3 overflow-y-auto px-4">
             <Fields>
               <Field label={t('reclaim.address')}>{reclaim.address}</Field>
               <Field label={t('reclaim.phase')}>
@@ -219,6 +222,7 @@ export function ReclaimDialog({
               </Field>
             )}
             {error && <ErrorAlert {...error} />}
+            </div>
             <DialogFooter>
               {phase === 'AwaitingConfirmation' && !reclaim.confirmed && (
                 <Button type="submit" variant="destructive" disabled={busy || !uuidMatches(typed, uuid)}>

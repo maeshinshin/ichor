@@ -111,7 +111,7 @@ func renderMachineRemoved(name string) func(*human, *pb.RemoveMachineResponse) e
 }
 
 // nodeRemoveNext tells what a remove did and how to bring the machine back (ADR 0135).
-func nodeRemoveNext(errw io.Writer, name string, reboot bool) {
+func nodeRemoveNext(errw io.Writer, reboot bool) {
 	did := "The controller drains the node, removes its etcd member (control plane), wipes its STATE and EPHEMERAL partitions, powers it off and deletes its Kubernetes Node."
 	back := "to add it again: power it on; it boots into maintenance mode and shows up as a new pending machine, which you can approve"
 

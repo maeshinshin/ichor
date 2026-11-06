@@ -176,7 +176,7 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 			return err
 		}
 
-		nodeRemoveNext(errw, s.Machine, s.Reboot)
+		nodeRemoveNext(errw, s.Reboot)
 
 		return nil
 	}

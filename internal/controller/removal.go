@@ -430,13 +430,23 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		}
 	}
 
+	return r.resetAndFinish(ctx, &cluster, m, nodeName)
+}
+
+// resetAndFinish is the end of a removal: without the reset annotation the finalizer just goes; with it
+// the node is wiped, then its Kubernetes Node is deleted (ADR 0135).
+func (r *TalosMachineReconciler) resetAndFinish(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, nodeName string,
+) error {
+	log := logf.FromContext(ctx)
+
 	if !resetRequested(m) {
 		return r.completeRemoval(ctx, m, false, nodeStep{})
 	}
 
 	step := nodeStep{}
 
-	if err := r.resetNode(ctx, &cluster, m); err != nil {
+	if err := r.resetNode(ctx, cluster, m); err != nil {
 		// A node that is down cannot be wiped, and holding its removal would keep a dead machine in the
 		// cluster for good: it is removed unwiped, and the Event says so. A node that is up and fails
 		// to reset holds the removal.

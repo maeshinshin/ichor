@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "astro dev",
     "build:all": "node scripts/build-all.mjs",
-    "build": "astro build && node scripts/check-links.mjs && pagefind --site dist",
+    "build": "node scripts/check-fences.mjs && astro build && node scripts/check-links.mjs && pagefind --site dist",
     "preview": "astro preview",
     "astro": "astro"
   },

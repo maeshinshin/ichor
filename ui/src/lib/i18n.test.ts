@@ -11,6 +11,12 @@ test('no entry is empty', () => {
   for (const k of keys) assert.notEqual(en[k], '', k)
 })
 
+test('typed-confirmation labels leave the name out; the name is shown beside them as selectable text', () => {
+  for (const k of ['ops.dialog.typeName', 'node.action.typeName', 'node.action.typeNameHost'] as Key[]) {
+    assert.doesNotMatch(en[k], /\{name\}/, k)
+  }
+})
+
 test('every enum key is looked up by its proto value name', () => {
   assert.equal(enumName('HANDED_OVER'), 'Handed Over')
   assert.equal(enumName('NEW_FUTURE_VALUE'), undefined)

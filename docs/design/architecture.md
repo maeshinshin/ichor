@@ -57,13 +57,11 @@ inventing a new control plane.
 
 ## Overview
 
-```text
-
 ![Architecture of Ichor. The browser, the ichor CLI and kubectl reach the Kubernetes API of the cluster that Ichor manages. Inside that cluster, in the ichor-system namespace, run ichor-ui, the ichor-controller with its admission webhooks, and the installer Jobs; they read and write Ichor's custom resources through the API. Only the controller configures the Talos machines, over the Talos API, including new machines in maintenance mode.](../images/architecture.light.drawio.svg)
 
 *Ichor runs inside the cluster it manages; ichor-ui reads nodes and never writes to them, and the controller is the only writer.*
 
-```
+```text
 operator ──┬── ichor CLI ─────────┐
            └── browser ─▶ ichor-ui │
                                    ▼
@@ -688,7 +686,7 @@ Disks are identified by WWID, serial or by-id path, not `/dev/sdX` — but all
 three can be absent. Talos fills WWID and serial from sysfs, with a udev
 fallback only for `ata` and `scsi` transports, so NVMe is reliable while a plain
 `virtio-blk` disk usually has neither, and without one udev creates no by-id
-nodes look like. So identification falls back through WWID, serial, by-id path
+link either. So identification falls back through WWID, serial, by-id path
 and finally bus path, and "nothing stable to key on" is a state the approval
 form has to show rather than treat as an error.
 

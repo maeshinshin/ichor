@@ -151,9 +151,13 @@ type CreateReclaimRequest struct {
 	Force           bool   `protobuf:"varint,4,opt,name=force,proto3" json:"force,omitempty"`
 	ForceUngraceful bool   `protobuf:"varint,5,opt,name=force_ungraceful,json=forceUngraceful,proto3" json:"force_ungraceful,omitempty"`
 	// cluster is optional: the TalosCluster the machine should join.
-	Cluster       *ObjectRef `protobuf:"bytes,6,opt,name=cluster,proto3" json:"cluster,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Cluster *ObjectRef `protobuf:"bytes,6,opt,name=cluster,proto3" json:"cluster,omitempty"`
+	// use_cluster_credentials dials the machine with the credentials Ichor holds for cluster instead of a
+	// pasted talosconfig, for a machine of that cluster whose TalosMachine is gone. cluster is required and talosconfig
+	// must be empty.
+	UseClusterCredentials bool `protobuf:"varint,7,opt,name=use_cluster_credentials,json=useClusterCredentials,proto3" json:"use_cluster_credentials,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *CreateReclaimRequest) Reset() {
@@ -226,6 +230,13 @@ func (x *CreateReclaimRequest) GetCluster() *ObjectRef {
 		return x.Cluster
 	}
 	return nil
+}
+
+func (x *CreateReclaimRequest) GetUseClusterCredentials() bool {
+	if x != nil {
+		return x.UseClusterCredentials
+	}
+	return false
 }
 
 type CreateReclaimResponse struct {
@@ -845,14 +856,15 @@ const file_ichor_v1alpha1_reclaim_proto_rawDesc = "" +
 	"\x12CanReclaimResponse\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x18\n" +
 	"\aallowed\x18\x02 \x01(\bR\aallowed\x12'\n" +
-	"\x0fcluster_allowed\x18\x03 \x01(\bR\x0eclusterAllowed\"\xe2\x01\n" +
+	"\x0fcluster_allowed\x18\x03 \x01(\bR\x0eclusterAllowed\"\x9a\x02\n" +
 	"\x14CreateReclaimRequest\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\tR\aaddress\x12 \n" +
 	"\vtalosconfig\x18\x02 \x01(\fR\vtalosconfig\x12\x18\n" +
 	"\acontext\x18\x03 \x01(\tR\acontext\x12\x14\n" +
 	"\x05force\x18\x04 \x01(\bR\x05force\x12)\n" +
 	"\x10force_ungraceful\x18\x05 \x01(\bR\x0fforceUngraceful\x123\n" +
-	"\acluster\x18\x06 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\"J\n" +
+	"\acluster\x18\x06 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x126\n" +
+	"\x17use_cluster_credentials\x18\a \x01(\bR\x15useClusterCredentials\"J\n" +
 	"\x15CreateReclaimResponse\x121\n" +
 	"\areclaim\x18\x01 \x01(\v2\x17.ichor.v1alpha1.ReclaimR\areclaim\"H\n" +
 	"\x11GetReclaimRequest\x123\n" +

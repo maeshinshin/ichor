@@ -117,6 +117,46 @@ func TestCreateReclaimStoresSecretAndRegistersAddress(t *testing.T) {
 	}
 }
 
+// The cluster's own credentials need the cluster and no talosconfig, and write no Secret.
+func TestCreateReclaimWithClusterCredentialsWritesNoSecret(t *testing.T) {
+	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(discoveryCluster(nil)).Build()
+	s := &Server{Client: k8s, ControllerNamespace: testNS,
+		Impersonate: func(Identity) (client.Client, error) {
+			return reviewing(k8s, true, &[]authv1.ResourceAttributes{}), nil
+		}}
+	ctx := ContextWithIdentity(context.Background(), Identity{User: bgUser})
+
+	for name, req := range map[string]*pb.CreateReclaimRequest{
+		"no cluster":      {Address: testReclaimAddr, UseClusterCredentials: true},
+		"and a paste too": {Address: testReclaimAddr, UseClusterCredentials: true, Cluster: objectRef(testNS, "c"), Talosconfig: []byte("x")},
+	} {
+		if _, err := s.CreateReclaim(ctx, connect.NewRequest(req)); connect.CodeOf(err) != connect.CodeInvalidArgument {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+
+	res, err := s.CreateReclaim(ctx, connect.NewRequest(&pb.CreateReclaimRequest{
+		Address: testReclaimAddr, UseClusterCredentials: true, Cluster: objectRef(testNS, "c"),
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var mr ichorv1alpha1.MachineReclaim
+	if err := k8s.Get(ctx, types.NamespacedName{Namespace: testNS, Name: res.Msg.GetReclaim().GetRef().GetName()}, &mr); err != nil {
+		t.Fatal(err)
+	}
+
+	if !mr.Spec.ClusterCredentials || mr.Spec.CredentialSecretRef != "" || mr.Spec.ClusterRef == nil || mr.Spec.ClusterRef.Name != "c" {
+		t.Fatalf("request %+v", mr.Spec)
+	}
+
+	var secrets corev1.SecretList
+	if err := k8s.List(ctx, &secrets); err != nil || len(secrets.Items) != 0 {
+		t.Fatalf("a Secret was written: %v %v", secrets.Items, err)
+	}
+}
+
 func TestConfirmReclaimWritesOnlyConfirmFields(t *testing.T) {
 	before := &ichorv1alpha1.MachineReclaim{
 		Namespace: testNS, Name: "r",

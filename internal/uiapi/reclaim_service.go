@@ -135,7 +135,14 @@ func (s *Server) CreateReclaim(
 	m := req.Msg
 
 	address := strings.TrimSpace(m.GetAddress())
-	if address == "" || len(m.GetTalosconfig()) == 0 {
+	own := m.GetUseClusterCredentials() // the cluster's own credentials, nothing pasted
+
+	switch {
+	case address == "":
+		return nil, invalid("address is required")
+	case own && (len(m.GetTalosconfig()) != 0 || m.GetCluster().GetName() == ""):
+		return nil, invalid("use_cluster_credentials takes the cluster and no talosconfig")
+	case !own && len(m.GetTalosconfig()) == 0:
 		return nil, invalid("address and talosconfig are required")
 	}
 
@@ -174,6 +181,9 @@ func (s *Server) CreateReclaim(
 			Force: m.GetForce(), ForceUngraceful: m.GetForceUngraceful(),
 		},
 	}
+	if own {
+		mr.Spec.CredentialSecretRef, mr.Spec.ClusterCredentials = "", true
+	}
 	if c := m.GetCluster(); c.GetName() != "" {
 		mr.Spec.ClusterRef = &corev1.LocalObjectReference{Name: c.GetName()}
 	}
@@ -182,19 +192,10 @@ func (s *Server) CreateReclaim(
 		return nil, mapOperationWriteError("creating the reclaim in", types.NamespacedName{Namespace: s.ControllerNamespace}, err)
 	}
 
-	secret := &corev1.Secret{
-		Name: name, Namespace: s.ControllerNamespace,
-		Labels: map[string]string{ichorv1alpha1.ReclaimLabel: reclaimLabelValue},
-		OwnerReferences: []metav1.OwnerReference{{
-			APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: "MachineReclaim", Name: mr.Name, UID: mr.UID,
-		}},
-		Type: ichorv1alpha1.ReclaimCredentialSecretType,
-		Data: map[string][]byte{ichorv1alpha1.ReclaimCredentialKey: m.GetTalosconfig()},
-	}
-	// Written by the backend: users hold no Secret rights.
-	if err := s.Client.Create(ctx, secret); err != nil {
-		return nil, connect.NewError(connect.CodeInternal,
-			fmt.Errorf("reclaim %s was created but storing its credential failed", mr.Name))
+	if !own {
+		if err := s.storeReclaimCredential(ctx, mr, name, m.GetTalosconfig()); err != nil {
+			return nil, err
+		}
 	}
 
 	if c := m.GetCluster(); c.GetName() != "" {
@@ -204,6 +205,26 @@ func (s *Server) CreateReclaim(
 	}
 
 	return connect.NewResponse(&pb.CreateReclaimResponse{Reclaim: reclaimToPB(mr)}), nil
+}
+
+// storeReclaimCredential writes the pasted talosconfig as the request's Secret.
+func (s *Server) storeReclaimCredential(ctx context.Context, mr *ichorv1alpha1.MachineReclaim, name string, talosconfig []byte) error {
+	secret := &corev1.Secret{
+		Name: name, Namespace: s.ControllerNamespace,
+		Labels: map[string]string{ichorv1alpha1.ReclaimLabel: reclaimLabelValue},
+		OwnerReferences: []metav1.OwnerReference{{
+			APIVersion: ichorv1alpha1.GroupVersion.String(), Kind: "MachineReclaim", Name: mr.Name, UID: mr.UID,
+		}},
+		Type: ichorv1alpha1.ReclaimCredentialSecretType,
+		Data: map[string][]byte{ichorv1alpha1.ReclaimCredentialKey: talosconfig},
+	}
+	// Written by the backend: users hold no Secret rights.
+	if err := s.Client.Create(ctx, secret); err != nil {
+		return connect.NewError(connect.CodeInternal,
+			fmt.Errorf("reclaim %s was created but storing its credential failed", mr.Name))
+	}
+
+	return nil
 }
 
 // registerReclaimAddress appends the address to the cluster's discovery list when it is not there (the controller

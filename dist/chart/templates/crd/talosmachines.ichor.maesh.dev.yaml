@@ -241,7 +241,8 @@ spec:
                 type: object
               install:
                 description: |-
-                  install is where Talos installs itself on this machine (the design's `system` disk role). Unset renders no install configuration, which leaves a machine that boots from
+                  install is where Talos installs itself on this machine (the design's `system` disk role). Unset renders no
+                  install configuration, which leaves a machine that boots from
                   an installed disk alone but gives a maintenance-mode machine nothing to install onto.
                 properties:
                   disk:
@@ -563,7 +564,8 @@ spec:
               kubeletServingCertificate:
                 description: |-
                   kubeletServingCertificate is the latest kubelet serving certificate Ichor approved for this
-                  machine's node and the Kubernetes CA issued (spec.security.kubeletServingCertificates). Empty while the option is off or no request has been issued yet.
+                  machine's node and the Kubernetes CA issued (spec.security.kubeletServingCertificates). Empty while the option is
+                  off or no request has been issued yet.
                 properties:
                   issuedAt:
                     description: issuedAt is when the Kubernetes CA signed it (the

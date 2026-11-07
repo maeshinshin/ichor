@@ -120,7 +120,8 @@ spec:
                     type: string
                   imageVersion:
                     description: |-
-                      imageVersion is deprecated and unused. An earlier Ichor made the upgrade a Cilium patch with it. Cilium now moves only to the chart the running Ichor embeds (amendment 2026-11-04
+                      imageVersion is deprecated and unused. An earlier Ichor made the upgrade a Cilium patch with it. Cilium now moves
+                      only to the chart the running Ichor embeds (amendment 2026-11-04
                       (3)): the executor refuses an operation that sets it. Kept so the schema does not lose a field an
                       installed build had.
                     pattern: ^v[0-9]+\.[0-9]+\.[0-9]+$

@@ -498,7 +498,8 @@ spec:
                 type: object
               latestRelease:
                 description: |-
-                  latestRelease is the newest final release the controller found in the chart repository. Unset until the first check, and cleared while the check is off.
+                  latestRelease is the newest final release the controller found in the chart repository. Unset until the first
+                  check, and cleared while the check is off.
                 properties:
                   checkedAt:
                     description: checkedAt is when the last check finished, successful
@@ -527,7 +528,8 @@ spec:
                     type: string
                   cilium:
                     description: |-
-                      cilium is deprecated and unused. It held the Cilium patches whose images verified; Cilium now moves only to the chart the running Ichor embeds (amendment 2026-11-04 (3)), so
+                      cilium is deprecated and unused. It held the Cilium patches whose images verified; Cilium now moves only to the
+                      chart the running Ichor embeds (amendment 2026-11-04 (3)), so
                       the controller no longer writes it and clears what an earlier controller wrote. Kept so the schema does
                       not lose a field an installed build had.
                     items:

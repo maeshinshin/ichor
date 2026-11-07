@@ -23,7 +23,7 @@ User disks are not touched; they are listed, and encrypted ones are called out
 because their keys may be gone.
 
 Without --talosconfig, give --cluster NAME: the machine is then an orphan of that Ichor
-cluster (which wipes on remove, so it still
+cluster (its TalosMachine was deleted, which wipes on remove, so it still
 carries the cluster's configuration) and the controller wipes it with the credentials Ichor
 already holds for that cluster, deletes its Kubernetes Node and, afterwards, this command
 registers it as a pending machine. A machine that still has an approved TalosMachine is

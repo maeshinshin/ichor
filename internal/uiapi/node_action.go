@@ -133,8 +133,8 @@ func (s *Server) planNode(ctx context.Context, req *pb.NodeActionRequest) (*opPl
 	}
 
 	if wm := req.GetWipeMode(); wm != "" {
-		if action != ichorv1alpha1.NodeActionReset {
-			return nil, invalid("a wipe mode only goes with reset")
+		if action != ichorv1alpha1.NodeActionReset && action != nodeActionRemove {
+			return nil, invalid("a wipe mode only goes with reset and remove")
 		}
 
 		if wm != ichorv1alpha1.WipeModeSystemDisk && wm != ichorv1alpha1.WipeModeAll {
@@ -443,7 +443,7 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 }
 
 // RemoveMachine deletes an approved machine, which starts the removal flow of the controller: drain, etcd member
-// removal for a control plane, the reset (STATE and EPHEMERAL wiped,
+// removal for a control plane, the reset (STATE and EPHEMERAL wiped, or more with a wipe mode,
 // then power off or reboot), the Kubernetes Node, then the TalosMachine goes. The annotations that let the
 // delete through and ask for the reset are set here, for this one delete.
 func (s *Server) RemoveMachine(
@@ -452,7 +452,7 @@ func (s *Server) RemoveMachine(
 	ref := req.Msg.GetMachine()
 
 	p, err := s.planNode(ctx, &pb.NodeActionRequest{
-		Machine: ref, Action: pb.NodeAction_NODE_ACTION_REMOVE, Reboot: req.Msg.GetReboot(), Override: req.Msg.GetOverride(),
+		Machine: ref, Action: pb.NodeAction_NODE_ACTION_REMOVE, Reboot: req.Msg.GetReboot(), Override: req.Msg.GetOverride(), WipeMode: req.Msg.GetWipeMode(),
 	})
 	if err != nil {
 		return nil, err
@@ -478,6 +478,10 @@ func (s *Server) RemoveMachine(
 
 	metav1.SetMetaDataAnnotation(&m.ObjectMeta, deleteguard.AllowDeleteAnnotation, deleteguard.AllowDeleteValue)
 	metav1.SetMetaDataAnnotation(&m.ObjectMeta, deleteguard.ResetOnDeleteAnnotation, deleteguard.AllowDeleteValue)
+
+	if wm := req.Msg.GetWipeMode(); wm != "" {
+		metav1.SetMetaDataAnnotation(&m.ObjectMeta, deleteguard.ResetWipeModeAnnotation, wm)
+	}
 
 	if !req.Msg.GetReboot() {
 		metav1.SetMetaDataAnnotation(&m.ObjectMeta, deleteguard.ResetPowerOffAnnotation, deleteguard.AllowDeleteValue)

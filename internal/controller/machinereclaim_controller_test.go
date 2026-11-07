@@ -395,7 +395,12 @@ var _ = Describe("MachineReclaim Controller", func() {
 		key := create()
 		sent := toWaiting(key)
 
-		// Each failing probe costs 100 ms of clock; a reconcile therefore takes about the wait window.
+		// One probe per reconcile, whatever the machine's speed: the window ends right after the first probe and the
+		// interval never ticks. With a real-time window and ticker the number of probes, and so the fake clock
+		// each reconcile consumed, varied with scheduling and the deadline was overshot by more than a second.
+		r.WaitWindow, r.WaitInterval = time.Millisecond, time.Hour
+
+		// Each failing probe costs 100 ms of clock.
 		r.Probe = func(context.Context, string) (string, error) {
 			now = now.Add(100 * time.Millisecond)
 

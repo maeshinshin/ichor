@@ -32,6 +32,8 @@ type Known struct {
 	MachineUUIDs []string
 	// ClusterIDs are the Talos cluster IDs of every Ichor cluster.
 	ClusterIDs []string
+	// ClusterNames maps a Talos cluster ID to the name of its TalosCluster, for the hints that name it.
+	ClusterNames map[string]string
 }
 
 // Options are the operator's flags.
@@ -85,11 +87,19 @@ func Assess(in Inspection, known Known, opt Options) Plan {
 	// (its machine was removed before ADR 0135, which did not wipe it). Resetting it is allowed; the
 	// alternative that keeps its configuration is named, not forced.
 	if in.ClusterID != "" && containsFold(known.ClusterIDs, in.ClusterID) && !containsFold(known.MachineUUIDs, in.UUID) {
+		name := "NAME"
+
+		for id, n := range known.ClusterNames {
+			if strings.EqualFold(id, in.ClusterID) {
+				name = n
+			}
+		}
+
 		p.Warnings = append(p.Warnings, fmt.Sprintf(
 			"node belongs to cluster %q, which Ichor manages, but no approved machine of it has this UUID. "+
 				"The reset wipes it and it returns as a pending machine; to keep its configuration instead, "+
-				"add it with `ichor adopt --cluster NAME --add-machine %s`",
-			in.ClusterName, in.Address))
+				"add it with `ichor adopt --cluster %s --add-machine %s`",
+			in.ClusterName, name, in.Address))
 	}
 
 	p.Graceful = in.ClusterReachable && !opt.ForceUngraceful

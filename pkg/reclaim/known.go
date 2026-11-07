@@ -58,6 +58,12 @@ func LoadKnown(ctx context.Context, c client.Reader, ichorNamespace string) (Kno
 
 		if b.Cluster != nil && b.Cluster.ID != "" {
 			k.ClusterIDs = append(k.ClusterIDs, b.Cluster.ID)
+
+			if k.ClusterNames == nil {
+				k.ClusterNames = map[string]string{}
+			}
+
+			k.ClusterNames[b.Cluster.ID] = clusters.Items[i].Name
 		}
 	}
 

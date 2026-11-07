@@ -24,8 +24,9 @@ import (
 	"strings"
 )
 
-// Known is what Ichor already manages. A node whose identity or cluster ID is
-// in it is in state (iii) of ADR 0103 and is never reclaimed.
+// Known is what Ichor already manages. A node whose UUID is in MachineUUIDs is
+// in state (iii) of ADR 0103 and is never reclaimed. A node whose cluster ID is
+// in ClusterIDs but whose UUID is not is an orphan and may be (ADR 0136).
 type Known struct {
 	// MachineUUIDs are the SMBIOS UUIDs of every approved TalosMachine.
 	MachineUUIDs []string
@@ -76,13 +77,18 @@ func Assess(in Inspection, known Known, opt Options) Plan {
 	case in.UUID == "":
 		p.Refusals = append(p.Refusals, "the node reports no UUID, so there is nothing to confirm it by")
 	case containsFold(known.MachineUUIDs, in.UUID):
-		p.Refusals = append(p.Refusals, fmt.Sprintf("node %s is already an Ichor machine", in.UUID))
+		p.Refusals = append(p.Refusals, fmt.Sprintf(
+			"node %s is already an Ichor machine (approved); to wipe it, use Remove node (`ichor node remove`), which wipes it", in.UUID))
 	}
 
-	if in.ClusterID != "" && containsFold(known.ClusterIDs, in.ClusterID) {
-		p.Refusals = append(p.Refusals, fmt.Sprintf(
-			"node belongs to cluster %q, which Ichor already manages; a reset is not needed, add it to that Ichor cluster with "+
-				"`ichor adopt --cluster NAME --add-machine %s`", in.ClusterName, in.Address))
+	// ADR 0136: a node of a cluster Ichor manages that no approved TalosMachine stands for is an orphan
+	// (its machine was removed before ADR 0135, which did not wipe it). Resetting it is allowed; the
+	// alternative that keeps its configuration is named, not forced.
+	if in.ClusterID != "" && containsFold(known.ClusterIDs, in.ClusterID) && !containsFold(known.MachineUUIDs, in.UUID) {
+		p.Warnings = append(p.Warnings, fmt.Sprintf(
+			"node belongs to cluster %q, which Ichor manages, but no approved machine of it has this UUID. The reset wipes it and it "+
+				"returns as a pending machine; to keep its configuration instead, add it with `ichor adopt --cluster NAME --add-machine %s`",
+			in.ClusterName, in.Address))
 	}
 
 	p.Graceful = in.ClusterReachable && !opt.ForceUngraceful

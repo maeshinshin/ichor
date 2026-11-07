@@ -41,6 +41,7 @@ import (
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/release"
+	"github.com/maeshinshin/ichor/pkg/reclaim"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
@@ -356,6 +357,8 @@ func (st *adoptState) planPhase(deps adoptDeps) (*adoptPlanned, error) {
 	}
 
 	toCreate := reportPlans(deps.say, plans)
+	st.hintStartOver(deps.say, plans)
+
 	pl := &adoptPlanned{owned: reportOwned(deps.say, plans)}
 
 	pl.writable, pl.blocked = splitBlocked(st.nodes, plans)
@@ -1349,6 +1352,37 @@ func reportPlans(say adoptSay, plans []*adoptPlan) []*adoptPlan {
 	}
 
 	return toCreate
+}
+
+// renderedFromSpec are the documents Ichor itself renders from a TalosMachine's spec (hostname, the primary
+// link's alias and its DHCP configuration). A machine whose TalosMachine was deleted still carries them, and
+// they differ from a fresh render of a machine that has no such spec yet.
+var renderedFromSpec = []string{"HostnameConfig", "LinkAliasConfig", "DHCPv4Config"}
+
+// hintStartOver says, for a machine --add-machine could not take, how to start over instead of writing a
+// patch by hand: wipe it with machine reclaim, which accepts a machine of a managed cluster that has
+// no approved TalosMachine. It does not derive the TalosMachine's hostname and link choice from the node, so for
+// these documents the wipe is the way out, and the two refusals do not point at each other.
+func (st *adoptState) hintStartOver(say adoptSay, plans []*adoptPlan) {
+	if !st.adding {
+		return
+	}
+
+	for i, n := range st.nodes {
+		if !n.added || len(plans[i].UnrepresentablePaths) == 0 {
+			continue
+		}
+
+		why := ""
+		if !slices.ContainsFunc(plans[i].UnrepresentablePaths, func(p string) bool { return !hasPathPrefix(p, renderedFromSpec) }) {
+			why = "those are documents Ichor renders from a machine's TalosMachine spec (hostname, network link), which this machine's " +
+				"deleted TalosMachine had. "
+		}
+
+		say(adoptWarn, "machine %q: %sTo start over instead, wipe it with `ichor machine reclaim %s --cluster %s` (or the UI Reset and add); "+
+			"this wipes STATE and EPHEMERAL, deletes its Kubernetes Node, and the machine comes back as a pending machine to approve",
+			n.M.Name, why, reclaim.HostOnly(n.M.Spec.Endpoint), st.cluster.Name)
+	}
 }
 
 type specFieldHint struct{ prefix, hint string }

@@ -115,7 +115,7 @@ export function ReclaimDialog({
           {label ?? t('reclaim.button')}
         </Button>
       </DialogTrigger>
-      <DialogContent className="flex max-h-[calc(100dvh-2rem)] grid-cols-1 flex-col sm:max-w-lg">
+      <DialogContent className="scroll-fade-y grid-cols-1 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t(own ? 'reclaim.ownTitle' : 'reclaim.title')}</DialogTitle>
           <DialogDescription>{t(own ? 'reclaim.ownDescription' : 'reclaim.description')}</DialogDescription>
@@ -127,13 +127,13 @@ export function ReclaimDialog({
 
         {!reclaim && (
           <form
-            class="flex min-h-0 flex-1 flex-col gap-4 text-sm"
+            class="flex flex-col gap-4 text-sm"
             onSubmit={(e) => {
               e.preventDefault()
               if (canCreate) create()
             }}
           >
-            <div className="-mx-4 min-h-0 flex-1 space-y-3 overflow-y-auto px-4">
+            <div class="space-y-3">
             <div class="space-y-1">
               <Label htmlFor="reclaim-address">{t('reclaim.address')}</Label>
               <Input id="reclaim-address" value={address} onInput={(e) => setAddress((e.target as HTMLInputElement).value)} />
@@ -189,13 +189,13 @@ export function ReclaimDialog({
 
         {reclaim && (
           <form
-            class="flex min-h-0 flex-1 flex-col gap-4 text-sm"
+            class="flex flex-col gap-4 text-sm"
             onSubmit={(e) => {
               e.preventDefault()
               confirm()
             }}
           >
-            <div className="-mx-4 min-h-0 flex-1 space-y-3 overflow-y-auto px-4">
+            <div class="space-y-3">
             <dl class="grid grid-cols-2 gap-x-6 gap-y-4">
               <InfoField label={t('reclaim.address')}>{reclaim.address}</InfoField>
               <InfoField label={t('reclaim.phase')}>

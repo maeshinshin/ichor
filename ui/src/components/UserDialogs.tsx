@@ -133,14 +133,14 @@ export function CreateUserDialog({ onDone }: { onDone: () => void }) {
         {t('users.create')}
       </Button>
       <Dialog open={open} onOpenChange={change}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="scroll-fade-y sm:max-w-lg">
           {generated ? (
             <>
               <DialogHeader>
                 <DialogTitle>{t('users.created', { name: generated.name })}</DialogTitle>
                 <DialogDescription>{t('users.mustChange')}</DialogDescription>
               </DialogHeader>
-              <div className="-mx-4 max-h-[50dvh] overflow-y-auto px-4"><GeneratedPassword password={generated.password} /></div>
+              <div><GeneratedPassword password={generated.password} /></div>
               <DialogFooter>
                 <Button onClick={() => change(false)}>{t('common.close')}</Button>
               </DialogFooter>
@@ -151,7 +151,7 @@ export function CreateUserDialog({ onDone }: { onDone: () => void }) {
                 <DialogTitle>{t('users.createTitle')}</DialogTitle>
                 <DialogDescription>{t('users.createDescription')}</DialogDescription>
               </DialogHeader>
-              <div className="-mx-4 max-h-[50dvh] overflow-y-auto px-4">
+              <div>
               <FieldGroup>
                 <Field data-invalid={nameBad}>
                   <FieldLabel htmlFor="user-name">{t('users.name')}</FieldLabel>
@@ -212,11 +212,11 @@ export function EditUserDialog({ user, open, onOpenChange, onDone }: { user: Use
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="scroll-fade-y sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('users.editTitle', { name: user.name })}</DialogTitle>
         </DialogHeader>
-        <div className="-mx-4 max-h-[50dvh] overflow-y-auto px-4">
+        <div>
         <FieldGroup>
           <ProfileFields id="edit" displayName={displayName} email={email} setDisplayName={setDisplayName} setEmail={setEmail} />
           <RolePicker id="edit-role" roles={roles} onChange={setRoles} />
@@ -265,7 +265,7 @@ export function SetPasswordDialog({ user, open, onOpenChange }: { user: User; op
 
   return (
     <Dialog open={open} onOpenChange={change}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="scroll-fade-y sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('users.setPasswordTitle', { name: user.name })}</DialogTitle>
           <DialogDescription>{t('users.setPasswordDescription')}</DialogDescription>

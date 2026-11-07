@@ -147,7 +147,7 @@ export function ApproveDialog({
       <DialogTrigger asChild>
         <Button size="sm">{t('approve.button')}</Button>
       </DialogTrigger>
-      <DialogContent className="grid-cols-1 sm:max-w-lg">
+      <DialogContent className="scroll-fade-y grid-cols-1 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('approve.title', { name: machine.hostname || machine.nodeName || !machine.endpoint ? machineDisplayName(machine) : `${machineDisplayName(machine)} (${machine.endpoint})` })}</DialogTitle>
           <DialogDescription>{t('approve.description')}</DialogDescription>

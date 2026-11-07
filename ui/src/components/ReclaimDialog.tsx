@@ -95,6 +95,8 @@ export function ReclaimDialog({
   function onOpenChange(next: boolean) {
     setOpen(next)
     if (!next) {
+      // An inspection walked away from leaves nothing behind. Best effort: a caller who may not delete keeps the request.
+      if (ref && phase === 'AwaitingConfirmation' && !reclaim?.confirmed) void reclaimClient.cancelReclaim({ reclaim: ref }).catch(() => {})
       setTalosconfig('')
       setOwn(ownCredentials)
       setTyped('')

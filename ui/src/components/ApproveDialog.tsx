@@ -153,7 +153,6 @@ export function ApproveDialog({
           <DialogDescription>{t('approve.description')}</DialogDescription>
         </DialogHeader>
 
-        <div className="-mx-4 max-h-[50dvh] overflow-y-auto px-4">
         <div class="space-y-3 text-sm">
           <section>
             <h4 class="font-medium">{t('approve.identity')}</h4>
@@ -250,7 +249,6 @@ export function ApproveDialog({
           />
 
           {submitError && <ErrorAlert {...submitError} />}
-        </div>
         </div>
 
         <DialogFooter>

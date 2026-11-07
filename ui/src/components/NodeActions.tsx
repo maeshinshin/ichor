@@ -204,7 +204,7 @@ export function NodeActions({
       />
 
       <AlertDialog open={pending !== null} onOpenChange={(o) => !o && setPending(null)}>
-        <AlertDialogContent className="max-h-[calc(100dvh-2rem)] scroll-fade-y overflow-y-auto">
+        <AlertDialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <AlertDialogHeader>
             <AlertDialogTitle>{t('actions.warnTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
@@ -266,7 +266,7 @@ function CaptureDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="scroll-fade-y sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('capture.title', { name: machine.name })}</DialogTitle>
           <DialogDescription>{t('capture.description')}</DialogDescription>

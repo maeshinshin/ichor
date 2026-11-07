@@ -115,7 +115,7 @@ export function ReclaimDialog({
           {label ?? t('reclaim.button')}
         </Button>
       </DialogTrigger>
-      <DialogContent className="scroll-fade-y grid-cols-1 sm:max-w-lg">
+      <DialogContent className="grid-cols-1 sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t(own ? 'reclaim.ownTitle' : 'reclaim.title')}</DialogTitle>
           <DialogDescription>{t(own ? 'reclaim.ownDescription' : 'reclaim.description')}</DialogDescription>

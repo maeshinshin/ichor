@@ -76,7 +76,7 @@ export function ChangePasswordForm({ onCancel }: { onCancel?: () => void }) {
 export function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="scroll-fade-y sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('account.changePassword')}</DialogTitle>
           <DialogDescription>{t('account.passwordHint', { n: minPasswordLength })}</DialogDescription>

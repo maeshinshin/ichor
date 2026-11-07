@@ -360,10 +360,16 @@ func TestResetRequestWipeMode(t *testing.T) {
 }
 
 func TestAssess_OrphanOfManagedClusterWarnsAndDoesNotLoop(t *testing.T) {
-	p := Assess(worker(), Known{ClusterIDs: []string{testOldClusterID}}, Options{})
+	managed := Known{ClusterIDs: []string{testOldClusterID}, ClusterNames: map[string]string{testOldClusterID: "prod-a"}}
+	p := Assess(worker(), managed, Options{})
 
 	if err := p.Refused(); err != nil {
 		t.Fatalf("an orphan must not be refused: %v", err)
+	}
+
+	w := strings.Join(p.Warnings, ";")
+	if !strings.Contains(w, "--cluster prod-a --add-machine") || strings.Contains(w, "NAME") {
+		t.Fatalf("the hint must name the TalosCluster, got %v", p.Warnings)
 	}
 
 	if w := strings.Join(p.Warnings, ";"); !strings.Contains(w, "manages") || !strings.Contains(w, "--add-machine") {

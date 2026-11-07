@@ -47,7 +47,7 @@ export function ConfirmDialog({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           {description && <AlertDialogDescription>{description}</AlertDialogDescription>}
         </AlertDialogHeader>
-        {children && <div className="-mx-4 max-h-[50dvh] overflow-y-auto px-4">{children}</div>}
+        {children && <div className="-mx-4 max-h-[50dvh] space-y-4 overflow-y-auto px-4">{children}</div>}
         {footer ?? (
           <AlertDialogFooter>
             <AlertDialogCancel>{closeLabel ?? t('common.cancel')}</AlertDialogCancel>

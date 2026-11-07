@@ -141,3 +141,8 @@ This closes the open follow-up of finding 5 above and replaces its CLI decision.
 **Tests.** Envtest specs in `internal/controller/discovery_pending_test.go`: same identity and new certificate refreshes the fingerprint and inventory with the Event and without the trust annotation; the refreshed fingerprint, used as the provisioning builds its pin, accepts the node's new certificate and refuses another; a different UUID or a different serial at the address changes nothing and creates nothing; approved and rejected machines and a Node-backed address are not probed; an unchanged certificate writes nothing. The existing "skips the addresses of the cluster's machines" spec now uses an approved machine.
 
 **Hardware to re-run (E5).** `ichor machine reclaim` of a node whose pending machine exists, with the address in `spec.discovery`: within one discovery pass the machine shows the new fingerprint and disks and the `MaintenanceIdentityRefreshed` Event; approve then reaches Ready without the annotation. Repeat with the UI `MachineReclaim` and with a reset by hand (`talosctl reset` on the maintenance node).
+
+
+## Amendment (2026-11-07): a machine of a managed cluster that has no approved machine is reclaimable
+
+Reclaim no longer refuses a node that belongs to a cluster Ichor manages when no approved `TalosMachine` has its UUID; the refusal "which Ichor already manages ... add it with `ichor adopt --add-machine`" is a Warning now, and a blocked `--add-machine` machine says how to wipe it. The two refusals pointed at each other for a machine removed before ADR 0135. See ADR 0136.

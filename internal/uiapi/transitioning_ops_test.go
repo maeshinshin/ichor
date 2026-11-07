@@ -28,7 +28,7 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// ADR 0138: an operation parked because the control-plane count is even holds no lock, so it does not block
+// ADR 0137: an operation parked because the control-plane count is even holds no lock, so it does not block
 // the removal that ends the even count.
 
 func fourControlPlanes(op *ichorv1alpha1.TalosOperation) []client.Object {
@@ -43,7 +43,7 @@ func fourControlPlanes(op *ichorv1alpha1.TalosOperation) []client.Object {
 	cluster.Spec.ControlPlane.Count = 3
 
 	objs := []client.Object{cluster, opMachine("w1", "worker", nil, nil)}
-	for _, n := range []string{"cp1", "cp2", "cp3", "cp4"} {
+	for _, n := range []string{nodeTestCP, "cp2", "cp3", "cp4"} {
 		objs = append(objs, opMachine(n, "controlplane", nil, nil))
 	}
 
@@ -79,7 +79,7 @@ func TestRemoveControlPlaneIsNotBlockedByAnOperationParkedForTheEvenCount(t *tes
 func TestRemoveControlPlaneIsStillBlockedByARunningOrOtherwisePausedOperation(t *testing.T) {
 	for name, op := range map[string]*ichorv1alpha1.TalosOperation{
 		"paused by the operator": pausedOp("OperatorPaused"),
-		"running": func() *ichorv1alpha1.TalosOperation {
+		"in progress": func() *ichorv1alpha1.TalosOperation {
 			o := pausedOp("x")
 			o.Status.Phase, o.Status.Conditions = ichorv1alpha1.TalosOperationPhaseInProgress, nil
 

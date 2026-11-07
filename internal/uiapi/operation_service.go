@@ -822,7 +822,7 @@ func (s *Server) blockedReason(
 		return blocked, err
 	}
 
-	// The controller pauses any disruptive operation while the control-plane count is even (ADR 0138);
+	// The controller pauses any disruptive operation while the control-plane count is even (ADR 0137);
 	// creating one now would only park it, so the plan says what to do instead. An etcd restore is a
 	// recovery and goes through.
 	if p.kind != ichorv1alpha1.TalosOperationKindEtcdRestore {
@@ -871,7 +871,7 @@ const (
 )
 
 // pausedForTransitioning reports an operation the controller parked before it took the cluster lock because
-// the control-plane count is even (ADR 0138). It holds nothing and resumes by itself when the count is odd.
+// the control-plane count is even (ADR 0137). It holds nothing and resumes by itself when the count is odd.
 func pausedForTransitioning(o *ichorv1alpha1.TalosOperation) bool {
 	c := apimeta.FindStatusCondition(o.Status.Conditions, "Paused")
 

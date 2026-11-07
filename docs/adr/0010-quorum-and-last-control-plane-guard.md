@@ -760,3 +760,7 @@ was gone.
   and retry every 15s, the same as a blocked pod.
 - Not changed: storage evacuation still waits with an error (its own backoff),
   and `drainForReboot` (rollouts) is unaffected because it is not a removal.
+
+## Amendment (ADR 0137)
+
+An operation parked with `ClusterTransitioning` holds no lock and does not block the removal of a control plane; see ADR 0137.

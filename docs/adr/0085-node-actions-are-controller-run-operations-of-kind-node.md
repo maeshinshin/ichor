@@ -50,3 +50,7 @@ Amendment 2026-11-06: `--confirm NAME` is the typed name given up front and coun
 Amendment 2026-11-06 (ADR 0135): remove and reset are one action. A remove now also wipes STATE and EPHEMERAL, powers the machine off (or reboots it) and deletes the Kubernetes Node; the split into `reset` and `remove` and the paragraph above describe the earlier behaviour.
 
 Amendment 2026-11-07: the typed confirmation is one rule everywhere: the TalosMachine name (the UUID the UI dialog shows with a copy button), which is what the CRD rule (`confirm` equals `machineRef.name`) and `RemoveMachine` check. The 2026-11-06 amendment's `--confirm NODE` is corrected to `--confirm MACHINE`: the CLI prompt and refusal read "type the machine name <uuid> (node <host>)", and neither the CLI nor the server accepts the hostname or Node name as the confirmation any more. The NODE argument is unchanged and still takes the machine name, hostname or Node name.
+
+## Amendment (ADR 0137)
+
+An operation parked with `ClusterTransitioning` holds no lock and does not block the removal of a control plane; see ADR 0137.

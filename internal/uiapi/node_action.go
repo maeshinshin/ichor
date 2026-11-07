@@ -367,7 +367,7 @@ func (s *Server) nodeBlocked(ctx context.Context, np *nodePlan, cluster *ichorv1
 		}
 	}
 
-	// The removal of a control plane ends an even count, so an operation parked by that count (ADR 0138)
+	// The removal of a control plane ends an even count, so an operation parked by that count (ADR 0137)
 	// does not block it; a reset keeps the controller's pause and is pointed at the removal instead.
 	if action == ichorv1alpha1.NodeActionReset && isCP && transitioningCount(cps) {
 		return fmt.Sprintf("the cluster has %d approved control planes (even): a replacement is in progress. Remove the node instead, which ends it", cps), nil

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Fixes
+
+- Removing a control plane is no longer refused by an operation that is parked only
+  because the control-plane count is even (ADR 0137): the cure was blocked by the
+  thing it cures. Such an operation resumes by itself when the count is odd, and
+  planning a new operation while the count is even is refused with the way out
+  instead of creating one that is parked at once.
+
 ### Features
 
 - Orphans of a managed cluster are found and wiped from the UI (ADR 0136,

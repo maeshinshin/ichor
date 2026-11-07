@@ -146,6 +146,8 @@ func unhealthy(in Inspection, n int) Inspection {
 	return in
 }
 
+const testAaaaUUID = "aaaa-1"
+
 func TestAssess(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -159,11 +161,11 @@ func TestAssess(t *testing.T) {
 		{name: "worker of a reachable cluster is graceful", in: worker(), graceful: true},
 		{
 			name: "already an Ichor machine", in: worker(), refused: "already an Ichor machine",
-			known: Known{MachineUUIDs: []string{"aaaa-1"}},
+			known: Known{MachineUUIDs: []string{testAaaaUUID}},
 		},
 		{
 			name: "an approved machine is pointed at Remove node", in: worker(), refused: "Remove node",
-			known: Known{MachineUUIDs: []string{"aaaa-1"}, ClusterIDs: []string{testOldClusterID}},
+			known: Known{MachineUUIDs: []string{testAaaaUUID}, ClusterIDs: []string{testOldClusterID}},
 		},
 		{
 			// No approved TalosMachine has this UUID, so the node is an orphan of the cluster and
@@ -310,7 +312,7 @@ func TestWaitMaintenance(t *testing.T) {
 			return "", errors.New("connection refused")
 		}
 
-		return "aaaa-1", nil
+		return testAaaaUUID, nil
 	}
 
 	if err := WaitMaintenance(context.Background(), "10.0.0.5", testUUID, time.Millisecond, probe); err != nil {
@@ -368,7 +370,8 @@ func TestAssess_OrphanOfManagedClusterWarnsAndDoesNotLoop(t *testing.T) {
 		t.Fatalf("want a warning that names the cluster and the keep-it alternative, got %v", p.Warnings)
 	}
 
-	refused := Assess(worker(), Known{MachineUUIDs: []string{"aaaa-1"}, ClusterIDs: []string{testOldClusterID}}, Options{}).Refusals
+	known := Known{MachineUUIDs: []string{testAaaaUUID}, ClusterIDs: []string{testOldClusterID}}
+	refused := Assess(worker(), known, Options{}).Refusals
 	if r := strings.Join(refused, ";"); strings.Contains(r, "--add-machine") || strings.Contains(r, "adopt") {
 		t.Fatalf("the refusal of an approved machine must not send the user to adopt: %v", refused)
 	}

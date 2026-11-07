@@ -30,8 +30,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"

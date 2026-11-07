@@ -78,7 +78,7 @@ func Assess(in Inspection, known Known, opt Options) Plan {
 		p.Refusals = append(p.Refusals, "the node reports no UUID, so there is nothing to confirm it by")
 	case containsFold(known.MachineUUIDs, in.UUID):
 		p.Refusals = append(p.Refusals, fmt.Sprintf(
-			"node %s is already an Ichor machine (approved); to wipe it, use Remove node (`ichor node remove`), which wipes it", in.UUID))
+			"node %s is already an Ichor machine (approved); to wipe it, use Remove node (`ichor node remove`)", in.UUID))
 	}
 
 	// A node of a cluster Ichor manages that no approved TalosMachine stands for is an orphan
@@ -86,8 +86,9 @@ func Assess(in Inspection, known Known, opt Options) Plan {
 	// alternative that keeps its configuration is named, not forced.
 	if in.ClusterID != "" && containsFold(known.ClusterIDs, in.ClusterID) && !containsFold(known.MachineUUIDs, in.UUID) {
 		p.Warnings = append(p.Warnings, fmt.Sprintf(
-			"node belongs to cluster %q, which Ichor manages, but no approved machine of it has this UUID. The reset wipes it and it "+
-				"returns as a pending machine; to keep its configuration instead, add it with `ichor adopt --cluster NAME --add-machine %s`",
+			"node belongs to cluster %q, which Ichor manages, but no approved machine of it has this UUID. "+
+				"The reset wipes it and it returns as a pending machine; to keep its configuration instead, "+
+				"add it with `ichor adopt --cluster NAME --add-machine %s`",
 			in.ClusterName, in.Address))
 	}
 

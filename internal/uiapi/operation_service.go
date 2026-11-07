@@ -28,6 +28,7 @@ import (
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
 	"golang.org/x/mod/semver"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
@@ -821,6 +822,16 @@ func (s *Server) blockedReason(
 		return blocked, err
 	}
 
+	// The controller pauses any disruptive operation while the control-plane count is even;
+	// creating one now would only park it, so the plan says what to do instead. An etcd restore is a
+	// recovery and goes through.
+	if p.kind != ichorv1alpha1.TalosOperationKindEtcdRestore {
+		if c := apimeta.FindStatusCondition(cluster.Status.Conditions, conditionTransitioning); c != nil && c.Status == metav1.ConditionTrue {
+			return "the cluster has an even number of approved control planes (" + c.Message + "): a replacement is in progress and " +
+				"no operation can start until it ends. Remove a control plane (to go back down) or approve another one (to go up), then run this again", nil
+		}
+	}
+
 	if isDowngrade(p) {
 		return fmt.Sprintf("cannot downgrade %s from %s to %s: the executor refuses it, and the spec is not written", p.kind, p.resp.Current, p.resp.Target), nil
 	}
@@ -849,6 +860,28 @@ func (s *Server) blockedReason(
 // unfinishedOperation names the operation of the cluster that still runs, which blocks a new one.
 // A node shutdown that is resting in ShutDown holds nothing: the node stays off by design.
 func (s *Server) unfinishedOperation(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) (string, error) {
+	return s.unfinishedOperationFor(ctx, cluster, false)
+}
+
+// conditionTransitioning and reasonOperationTransitioning mirror the controller's names (removal.go,
+// talosoperation_controller.go).
+const (
+	conditionTransitioning       = "Transitioning"
+	reasonOperationTransitioning = "ClusterTransitioning"
+)
+
+// pausedForTransitioning reports an operation the controller parked before it took the cluster lock because
+// the control-plane count is even. It holds nothing and resumes by itself when the count is odd.
+func pausedForTransitioning(o *ichorv1alpha1.TalosOperation) bool {
+	c := apimeta.FindStatusCondition(o.Status.Conditions, "Paused")
+
+	return o.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused && o.Status.FailureReason == "" &&
+		c != nil && c.Reason == reasonOperationTransitioning
+}
+
+// unfinishedOperationFor is unfinishedOperation; resolvesTransition is set by the removal of a control
+// plane, which is what ends the even count, so an operation parked by that count does not block it.
+func (s *Server) unfinishedOperationFor(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, resolvesTransition bool) (string, error) {
 	var ops ichorv1alpha1.TalosOperationList
 	if err := s.List(ctx, &ops, client.InNamespace(cluster.Namespace)); err != nil {
 		return "", mapListError("operations", err)
@@ -871,6 +904,16 @@ func (s *Server) unfinishedOperation(ctx context.Context, cluster *ichorv1alpha1
 				"(see 'ichor operation get %s' and the installer Job's log); "+
 				"delete it with 'ichor operation delete %s', then run 'ichor upgrade ichor <version>' again",
 				o.Name, o.Name, o.Name), nil
+		}
+
+		if pausedForTransitioning(o) {
+			if resolvesTransition {
+				continue
+			}
+
+			return fmt.Sprintf("operation %q (%s) on this cluster waits for the control-plane count to be odd again (%s); "+
+				"it resumes by itself then. Remove or approve a control plane to end the replacement",
+				o.Name, o.Spec.Kind, apimeta.FindStatusCondition(o.Status.Conditions, "Paused").Message), nil
 		}
 
 		if o.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused {

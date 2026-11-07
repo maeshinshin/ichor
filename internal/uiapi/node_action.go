@@ -367,8 +367,16 @@ func (s *Server) nodeBlocked(ctx context.Context, np *nodePlan, cluster *ichorv1
 		}
 	}
 
-	return s.unfinishedOperation(ctx, cluster)
+	// The removal of a control plane ends an even count, so an operation parked by that count
+	// does not block it; a reset keeps the controller's pause and is pointed at the removal instead.
+	if action == ichorv1alpha1.NodeActionReset && isCP && transitioningCount(cps) {
+		return fmt.Sprintf("the cluster has %d approved control planes (even): a replacement is in progress. Remove the node instead, which ends it", cps), nil
+	}
+
+	return s.unfinishedOperationFor(ctx, cluster, action == nodeActionRemove && isCP)
 }
+
+func transitioningCount(cps int) bool { return cps > 0 && cps%2 == 0 }
 
 // createOperation creates op for cluster after a dry run, so a spec the API refuses is refused before anything else is written.
 func (s *Server) createOperation(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, op *ichorv1alpha1.TalosOperation) error {

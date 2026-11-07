@@ -3,6 +3,7 @@ import { TriangleAlertIcon } from 'lucide-preact'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -34,6 +35,7 @@ export function ReclaimDialog({
   const [address, setAddress] = useState(initialAddress)
   const [talosconfig, setTalosconfig] = useState('')
   const [context, setContext] = useState('')
+  const [own, setOwn] = useState(false)
   const [reclaim, setReclaim] = useState<Reclaim | null>(null)
   const [typed, setTyped] = useState('')
   const { busy, error, setError, run } = useAction()
@@ -62,9 +64,10 @@ export function ReclaimDialog({
     run(async () => {
       const res = await reclaimClient.createReclaim({
         address: address.trim(),
-        talosconfig: new TextEncoder().encode(talosconfig),
-        context: context.trim(),
+        talosconfig: own ? new Uint8Array() : new TextEncoder().encode(talosconfig),
+        context: own ? '' : context.trim(),
         cluster: clusterAllowed ? cluster : undefined,
+        useClusterCredentials: own,
       })
       setTalosconfig('')
       setReclaim(res.reclaim ?? null)
@@ -87,6 +90,7 @@ export function ReclaimDialog({
     setOpen(next)
     if (!next) {
       setTalosconfig('')
+      setOwn(false)
       setTyped('')
       setReclaim(null)
       setError(null)
@@ -94,7 +98,7 @@ export function ReclaimDialog({
   }
 
   const insp = reclaim?.inspection
-  const canCreate = address.trim() !== '' && talosconfig.trim() !== '' && !busy
+  const canCreate = address.trim() !== '' && (own || talosconfig.trim() !== '') && !busy
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -126,6 +130,19 @@ export function ReclaimDialog({
               <Label htmlFor="reclaim-address">{t('reclaim.address')}</Label>
               <Input id="reclaim-address" value={address} onInput={(e) => setAddress((e.target as HTMLInputElement).value)} />
             </div>
+            {clusterAllowed && (
+              <div class="flex items-center gap-2">
+                <Checkbox id="reclaim-own" checked={own} onCheckedChange={(on: boolean | 'indeterminate') => setOwn(on === true)} />
+                <Label htmlFor="reclaim-own">{t('reclaim.ownCredentials')}</Label>
+              </div>
+            )}
+            {own ? (
+              <Alert>
+                <TriangleAlertIcon />
+                <AlertDescription>{t('reclaim.ownWarning')}</AlertDescription>
+              </Alert>
+            ) : (
+              <>
             <div class="space-y-1">
               <Label htmlFor="reclaim-talosconfig">{t('reclaim.talosconfig')}</Label>
               <Textarea
@@ -147,6 +164,8 @@ export function ReclaimDialog({
               <TriangleAlertIcon />
               <AlertDescription>{t('reclaim.storedWarning', { ttl: '15 minutes' })}</AlertDescription>
             </Alert>
+              </>
+            )}
             {error && <ErrorAlert {...error} />}
             </div>
             <DialogFooter>

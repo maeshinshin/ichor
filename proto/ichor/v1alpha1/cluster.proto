@@ -197,6 +197,12 @@ message Cluster {
   repeated string service_subnets = 23;
   // cni_tunnel is spec.cni.tunnel (vxlan or geneve); empty means Cilium's default.
   string cni_tunnel = 24;
+  // orphan_addresses are the endpoints discovery reached that run a Talos configuration and sit at the
+  // address of a Kubernetes Node no TalosMachine accounts for (ADR 0136, amendment): probably a node of
+  // this cluster removed without a wipe. Like already_configured_addresses, derived from the latest
+  // Event per address and left out when a pending or approved TalosMachine of the cluster now has the
+  // address; set by GetCluster and AddDiscoveryAddress.
+  repeated string orphan_addresses = 25;
 }
 
 // ReleaseSet is one supported combination of versions (ADR 0113), embedded in the Ichor build.

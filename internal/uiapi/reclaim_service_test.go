@@ -226,3 +226,15 @@ func TestAccessLogDropsReclaimBodies(t *testing.T) {
 		t.Fatalf("access log lacks the expected lines: %s", out)
 	}
 }
+
+func TestReclaimToPBCarriesTheInspectionWarnings(t *testing.T) {
+	mr := &ichorv1alpha1.MachineReclaim{}
+	mr.Status.Inspection = &ichorv1alpha1.MachineReclaimInspection{
+		UUID: "u", Warnings: []string{"belongs to cluster x, which Ichor manages"},
+	}
+
+	got := reclaimToPB(mr).GetInspection().GetWarnings()
+	if len(got) != 1 || got[0] != "belongs to cluster x, which Ichor manages" {
+		t.Fatalf("warnings = %v", got)
+	}
+}

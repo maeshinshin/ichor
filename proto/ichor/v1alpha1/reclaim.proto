@@ -111,6 +111,9 @@ message ReclaimInspection {
   repeated ReclaimVolume volumes = 7;
   // refusals are the reasons the reset is refused; empty when it may go on.
   repeated string refusals = 8;
+  // warnings are shown beside the inspection and do not stop the reset; for an orphan of a managed
+  // cluster one names the alternative that keeps its configuration (ADR 0136).
+  repeated string warnings = 9;
 }
 
 message Reclaim {

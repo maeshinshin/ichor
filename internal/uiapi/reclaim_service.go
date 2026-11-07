@@ -428,7 +428,7 @@ func reclaimToPB(mr *ichorv1alpha1.MachineReclaim) *pb.Reclaim {
 	if in := mr.Status.Inspection; in != nil {
 		i := &pb.ReclaimInspection{
 			Uuid: in.UUID, Hostname: in.Hostname, Role: in.Role, ClusterName: in.ClusterName, ClusterId: in.ClusterID,
-			Refusals: in.Refusals,
+			Refusals: in.Refusals, Warnings: in.Warnings,
 		}
 		for _, m := range in.EtcdMembers {
 			i.EtcdMembers = append(i.EtcdMembers, m.Hostname)

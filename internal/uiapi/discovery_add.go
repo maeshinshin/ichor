@@ -23,6 +23,7 @@ import (
 	"net/netip"
 	"slices"
 	"strings"
+	"time"
 
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
@@ -30,6 +31,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/endpointguard"
 )
 
 // AddDiscoveryAddress appends one IPv4 address to spec.discovery.addresses and writes nothing else
@@ -59,45 +61,111 @@ func (s *Server) AddDiscoveryAddress(
 	}
 
 	c := ichorv1alpha1.TalosCluster{Namespace: ref.GetNamespace(), Name: ref.GetName()}
-	out.AlreadyConfiguredAddresses = s.alreadyConfiguredAddresses(ctx, &c)
+	s.fillDiscoveryFindings(ctx, out, &c)
 
 	return connect.NewResponse(&pb.AddDiscoveryAddressResponse{Cluster: out, Audit: audit}), nil
 }
 
-// The AlreadyConfigured Event internal/controller records when discovery reaches a Talos node that
-// already has a configuration (ADR 0103 section 2). Kept as literals: this package does not import
-// the controller.
+// The Events internal/controller records when discovery reaches a Talos node that already has a
+// configuration (ADR 0103 section 2; Orphan, ADR 0136 amendment). Kept as literals: this package does
+// not import the controller.
 const (
 	reasonAlreadyConfigured             = "AlreadyConfigured"
+	reasonOrphan                        = "Orphan"
 	annotationAlreadyConfiguredEndpoint = "ichor.maesh.dev/endpoint"
 )
 
-// alreadyConfiguredAddresses lists, sorted and without duplicates, the endpoints of c's
-// AlreadyConfigured Events. A failed Events read yields none: the field is advisory and must not fail
-// the call it rides on.
+// fillDiscoveryFindings sets out's AlreadyConfiguredAddresses and OrphanAddresses from c's current
+// state.
+func (s *Server) fillDiscoveryFindings(ctx context.Context, out *pb.Cluster, c *ichorv1alpha1.TalosCluster) {
+	out.AlreadyConfiguredAddresses, out.OrphanAddresses = s.discoveryFindings(ctx, c)
+}
+
+// alreadyConfiguredAddresses is the AlreadyConfigured half of discoveryFindings.
 func (s *Server) alreadyConfiguredAddresses(ctx context.Context, c *ichorv1alpha1.TalosCluster) []string {
+	configured, _ := s.discoveryFindings(ctx, c)
+
+	return configured
+}
+
+// discoveryFindings lists, sorted, the endpoints of c's AlreadyConfigured and Orphan Events. Events
+// expire and outlive the state they describe, so the list is derived from current state: only the
+// latest Event of an address counts (an address that was AlreadyConfigured and later Orphan, or the
+// reverse, is listed once, under the latest), and an address a pending or approved TalosMachine of c
+// now has is dropped (the machine came back, or was approved). A failed read yields none: the fields
+// are advisory and must not fail the call they ride on.
+func (s *Server) discoveryFindings(ctx context.Context, c *ichorv1alpha1.TalosCluster) (configured, orphans []string) {
 	var list corev1.EventList
 	if err := s.List(ctx, &list, client.InNamespace(c.Namespace)); err != nil {
-		return nil
+		return nil, nil
 	}
 
-	var out []string
+	type latest struct {
+		reason string
+		at     time.Time
+	}
+
+	byAddr := map[string]latest{}
 
 	for i := range list.Items {
 		ev := &list.Items[i]
-		if ev.Reason != reasonAlreadyConfigured || ev.InvolvedObject.Kind != "TalosCluster" ||
-			ev.InvolvedObject.Name != c.Name {
+		if (ev.Reason != reasonAlreadyConfigured && ev.Reason != reasonOrphan) ||
+			ev.InvolvedObject.Kind != "TalosCluster" || ev.InvolvedObject.Name != c.Name {
 			continue
 		}
 
-		if ep := ev.Annotations[annotationAlreadyConfiguredEndpoint]; ep != "" {
-			out = append(out, ep)
+		ep := ev.Annotations[annotationAlreadyConfiguredEndpoint]
+		if ep == "" {
+			continue
+		}
+
+		at := ev.LastTimestamp.Time
+		if at.IsZero() {
+			at = ev.EventTime.Time
+		}
+
+		if at.IsZero() {
+			at = ev.CreationTimestamp.Time
+		}
+
+		if prev, ok := byAddr[ep]; !ok || !at.Before(prev.at) {
+			byAddr[ep] = latest{reason: ev.Reason, at: at}
 		}
 	}
 
-	slices.Sort(out)
+	if len(byAddr) == 0 {
+		return nil, nil
+	}
 
-	return slices.Compact(out)
+	owned := map[string]bool{}
+
+	var machines ichorv1alpha1.TalosMachineList
+	if err := s.List(ctx, &machines, client.InNamespace(c.Namespace)); err == nil {
+		for i := range machines.Items {
+			m := &machines.Items[i]
+			if m.Spec.ClusterRef.Name == c.Name && m.Spec.ApprovalState != ichorv1alpha1.MachineApprovalStateRejected {
+				owned[endpointguard.HostOf(m.Spec.Endpoint)] = true
+				owned[endpointguard.HostOf(m.Status.ObservedEndpoint)] = true
+			}
+		}
+	}
+
+	for ep, l := range byAddr {
+		if owned[endpointguard.HostOf(ep)] {
+			continue
+		}
+
+		if l.reason == reasonOrphan {
+			orphans = append(orphans, ep)
+		} else {
+			configured = append(configured, ep)
+		}
+	}
+
+	slices.Sort(configured)
+	slices.Sort(orphans)
+
+	return configured, orphans
 }
 
 // ipv4Address trims s and accepts it only as a plain IPv4 address, which is all the CRD allows.

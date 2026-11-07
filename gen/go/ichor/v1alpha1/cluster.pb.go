@@ -1093,9 +1093,15 @@ type Cluster struct {
 	PodSubnets     []string `protobuf:"bytes,22,rep,name=pod_subnets,json=podSubnets,proto3" json:"pod_subnets,omitempty"`
 	ServiceSubnets []string `protobuf:"bytes,23,rep,name=service_subnets,json=serviceSubnets,proto3" json:"service_subnets,omitempty"`
 	// cni_tunnel is spec.cni.tunnel (vxlan or geneve); empty means Cilium's default.
-	CniTunnel     string `protobuf:"bytes,24,opt,name=cni_tunnel,json=cniTunnel,proto3" json:"cni_tunnel,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	CniTunnel string `protobuf:"bytes,24,opt,name=cni_tunnel,json=cniTunnel,proto3" json:"cni_tunnel,omitempty"`
+	// orphan_addresses are the endpoints discovery reached that run a Talos configuration and sit at the
+	// address of a Kubernetes Node no TalosMachine accounts for (ADR 0136, amendment): probably a node of
+	// this cluster removed without a wipe. Like already_configured_addresses, derived from the latest
+	// Event per address and left out when a pending or approved TalosMachine of the cluster now has the
+	// address; set by GetCluster and AddDiscoveryAddress.
+	OrphanAddresses []string `protobuf:"bytes,25,rep,name=orphan_addresses,json=orphanAddresses,proto3" json:"orphan_addresses,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *Cluster) Reset() {
@@ -1294,6 +1300,13 @@ func (x *Cluster) GetCniTunnel() string {
 		return x.CniTunnel
 	}
 	return ""
+}
+
+func (x *Cluster) GetOrphanAddresses() []string {
+	if x != nil {
+		return x.OrphanAddresses
+	}
+	return nil
 }
 
 // ReleaseSet is one supported combination of versions (ADR 0113), embedded in the Ichor build.
@@ -1552,7 +1565,7 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"\rHandoverState\x12\x1c\n" +
 	"\tcomponent\x18\x01 \x01(\tR\tcomponent\x123\n" +
 	"\x05phase\x18\x02 \x01(\x0e2\x1d.ichor.v1alpha1.HandoverPhaseR\x05phase\x12L\n" +
-	"\x14last_transition_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"\x88\t\n" +
+	"\x14last_transition_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x12lastTransitionTime\"\xb3\t\n" +
 	"\aCluster\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x12#\n" +
 	"\rtalos_version\x18\x02 \x01(\tR\ftalosVersion\x12-\n" +
@@ -1585,7 +1598,8 @@ const file_ichor_v1alpha1_cluster_proto_rawDesc = "" +
 	"podSubnets\x12'\n" +
 	"\x0fservice_subnets\x18\x17 \x03(\tR\x0eserviceSubnets\x12\x1d\n" +
 	"\n" +
-	"cni_tunnel\x18\x18 \x01(\tR\tcniTunnel\"\xbd\x01\n" +
+	"cni_tunnel\x18\x18 \x01(\tR\tcniTunnel\x12)\n" +
+	"\x10orphan_addresses\x18\x19 \x03(\tR\x0forphanAddresses\"\xbd\x01\n" +
 	"\n" +
 	"ReleaseSet\x12#\n" +
 	"\rtalos_version\x18\x01 \x01(\tR\ftalosVersion\x12)\n" +

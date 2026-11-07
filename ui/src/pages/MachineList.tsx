@@ -64,7 +64,7 @@ export function MachineList() {
         title={t('nodes.title')}
         actions={
           <div class="flex gap-2">
-            {canReclaim && <ReclaimDialog />}
+            {canReclaim && <ReclaimDialog cluster={cluster?.ref} />}
             {perms?.clusterUpdate && (
               <Button asChild size="sm">
                 <Link to="/nodes/add">

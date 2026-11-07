@@ -45,6 +45,8 @@ export function AddNode() {
   const [machines, setMachines] = useState<Machine[]>([])
   // Addresses discovery reached that already run a Talos configuration (ADR 0103).
   const [configured, setConfigured] = useState<string[]>([])
+  // Addresses of configured nodes that sit at a Kubernetes Node no machine accounts for: possible orphans (ADR 0136).
+  const [orphans, setOrphans] = useState<string[]>([])
 
   async function reloadMachines() {
     if (!namespace || !name) return
@@ -52,6 +54,7 @@ export function AddNode() {
       setMachines((await machineClient.listMachines({ cluster: { namespace, name } })).machines)
       const res = await clusterClient.getCluster({ cluster: { namespace, name } })
       setConfigured(res.cluster?.alreadyConfiguredAddresses ?? [])
+      setOrphans(res.cluster?.orphanAddresses ?? [])
     } catch {
       // The next poll tries again; the cluster itself loaded or the page shows its error.
     }
@@ -108,6 +111,7 @@ export function AddNode() {
           <Discovery
             cluster={cluster}
             configured={configured}
+            orphans={orphans}
             canEdit={perms?.clusterUpdate === true}
             onAdded={(c) => (c ? setCluster(c) : reloadCurrent())}
           />
@@ -190,11 +194,13 @@ function RemoveCidr({ cidr, onRemove }: { cidr: string; onRemove: () => Promise<
 function Discovery({
   cluster,
   configured,
+  orphans,
   canEdit,
   onAdded,
 }: {
   cluster: Cluster
   configured: readonly string[]
+  orphans: readonly string[]
   canEdit: boolean
   onAdded: (c: Cluster | undefined) => void
 }) {
@@ -315,6 +321,19 @@ function Discovery({
       </form>
       )}
       {error && <ErrorAlert {...error} />}
+      {orphans.map((a) => (
+        <Alert key={a}>
+          <TriangleAlertIcon />
+          <AlertDescription>
+            {t(canReclaim ? 'addNode.orphanCan' : 'addNode.orphan', { address: a })}
+            {canReclaim && (
+              <div class="mt-2">
+                <ReclaimDialog address={a} cluster={cluster.ref} ownCredentials label={t('reclaim.link')} />
+              </div>
+            )}
+          </AlertDescription>
+        </Alert>
+      ))}
       {configured.map((a) => (
         <Alert key={a}>
           <TriangleAlertIcon />

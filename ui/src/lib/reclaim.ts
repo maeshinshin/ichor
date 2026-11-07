@@ -11,3 +11,10 @@ export function uuidMatches(typed: string, uuid: string): boolean {
 export function reclaimSettled(phase: string): boolean {
   return ['Done', 'Failed', 'Expired'].includes(phase)
 }
+
+// usesClusterCredentials says whether a reclaim is asked with the cluster's own credentials: the person
+// ticked it (or the caller preset it for an orphan) and may update the cluster. Without that right the
+// server would refuse a request that names no talosconfig.
+export function usesClusterCredentials(own: boolean, clusterAllowed: boolean): boolean {
+  return own && clusterAllowed
+}

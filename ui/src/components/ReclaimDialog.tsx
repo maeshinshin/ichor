@@ -13,7 +13,7 @@ import { Field, Fields } from '@/components/PageHeader'
 import type { Reclaim } from '@/gen/ichor/v1alpha1/reclaim_pb'
 import { useAction } from '@/hooks/use-action'
 import { reclaimClient } from '@/lib/connect'
-import { reclaimSettled, uuidMatches } from '@/lib/reclaim'
+import { reclaimSettled, usesClusterCredentials, uuidMatches } from '@/lib/reclaim'
 import { useLoad } from '@/lib/useLoad'
 import { t } from '@/lib/i18n'
 
@@ -26,16 +26,19 @@ export function ReclaimDialog({
   address: initialAddress = '',
   cluster,
   label,
+  ownCredentials = false,
 }: {
   address?: string
   cluster?: { namespace: string; name: string }
   label?: string
+  // ownCredentials presets "It was removed from this cluster" (an orphan of the cluster, ADR 0136).
+  ownCredentials?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [address, setAddress] = useState(initialAddress)
   const [talosconfig, setTalosconfig] = useState('')
   const [context, setContext] = useState('')
-  const [own, setOwn] = useState(false)
+  const [wantOwn, setOwn] = useState(ownCredentials)
   const [reclaim, setReclaim] = useState<Reclaim | null>(null)
   const [typed, setTyped] = useState('')
   const { busy, error, setError, run } = useAction()
@@ -43,6 +46,7 @@ export function ReclaimDialog({
   // The cluster is offered only when the caller may update it; otherwise reclaim goes ahead without registering.
   const clusterAllowed = useLoad(cluster ? () => reclaimClient.canReclaim({ cluster }) : undefined, [cluster?.namespace, cluster?.name]).data?.clusterAllowed ?? false
 
+  const own = usesClusterCredentials(wantOwn, clusterAllowed)
   const ref = reclaim?.ref
   const phase = reclaim?.phase ?? ''
   const uuid = reclaim?.inspection?.uuid ?? ''
@@ -90,7 +94,7 @@ export function ReclaimDialog({
     setOpen(next)
     if (!next) {
       setTalosconfig('')
-      setOwn(false)
+      setOwn(ownCredentials)
       setTyped('')
       setReclaim(null)
       setError(null)
@@ -213,6 +217,14 @@ export function ReclaimDialog({
                   </div>
                 ))}
               </div>
+            )}
+            {insp && insp.warnings.length > 0 && (
+              <Alert>
+                <TriangleAlertIcon />
+                <AlertDescription>
+                  {t('reclaim.warnings')}: {insp.warnings.join('; ')}
+                </AlertDescription>
+              </Alert>
             )}
             {insp && insp.refusals.length > 0 && (
               <Alert variant="destructive">

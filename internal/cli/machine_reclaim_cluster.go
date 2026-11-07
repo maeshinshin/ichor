@@ -62,10 +62,8 @@ func runMachineReclaimOwn(ctx context.Context, d ownReclaimDeps, address string,
 	}
 
 	mr := &ichorv1alpha1.MachineReclaim{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "reclaim-", Namespace: d.Namespace,
-			Annotations: map[string]string{ichorv1alpha1.ReclaimRequestedByAnnotation: user},
-		},
+		GenerateName: "reclaim-", Namespace: d.Namespace,
+		Annotations: map[string]string{ichorv1alpha1.ReclaimRequestedByAnnotation: user},
 		Spec: ichorv1alpha1.MachineReclaimSpec{
 			Address: address, ClusterCredentials: true, ClusterRef: &corev1.LocalObjectReference{Name: f.Cluster},
 			Force: f.Force, ForceUngraceful: f.ForceUngraceful,

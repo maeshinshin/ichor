@@ -30,6 +30,9 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
+// ownClusterName is the managed cluster of these tests.
+const ownClusterName = "prod"
+
 // reclaimControllerStub plays the controller: a request that has no phase is inspected, and one with a confirmUUID is Done.
 func reclaimControllerStub(t *testing.T, refusals []string) (client.Client, *ichorv1alpha1.MachineReclaim) {
 	t.Helper()
@@ -54,7 +57,7 @@ func reclaimControllerStub(t *testing.T, refusals []string) (client.Client, *ich
 				default:
 					mr.Status.Phase = ichorv1alpha1.MachineReclaimAwaitingConfirmation
 					mr.Status.Inspection = &ichorv1alpha1.MachineReclaimInspection{
-						UUID: testUUID, Hostname: "w1", Role: "worker", ClusterName: "prod", ClusterID: "cid", ClusterReachable: true,
+						UUID: testUUID, Hostname: "w1", Role: testRoleWorker, ClusterName: ownClusterName, ClusterID: "cid", ClusterReachable: true,
 						Graceful: true, Refusals: refusals,
 					}
 				}
@@ -71,7 +74,7 @@ func reclaimControllerStub(t *testing.T, refusals []string) (client.Client, *ich
 
 func ownDeps(c client.Client, stdin string, out *bytes.Buffer, registered *[]string) ownReclaimDeps {
 	return ownReclaimDeps{
-		K8s: c, Namespace: "ichor-system", Who: func(context.Context) (string, error) { return "alice", nil },
+		K8s: c, Namespace: ichorControllerNamespace, Who: func(context.Context) (string, error) { return testUserAlice, nil },
 		Register: func(_ context.Context, a string) error { *registered = append(*registered, a); return nil },
 		In:       strings.NewReader(stdin), Out: out, Poll: time.Millisecond,
 	}
@@ -85,22 +88,22 @@ func TestOwnReclaimWipesAnOrphanAndRegistersIt(t *testing.T) {
 		registered []string
 	)
 
-	err := runMachineReclaimOwn(context.Background(), ownDeps(c, testUUID+"\n", &out, &registered), "10.0.0.5",
-		reclaimFlags{Cluster: "prod", Wait: time.Minute})
+	err := runMachineReclaimOwn(context.Background(), ownDeps(c, testUUID+"\n", &out, &registered), testEndpointAddr,
+		reclaimFlags{Cluster: ownClusterName, Wait: time.Minute})
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
 
 	sp := last.Spec
-	if !sp.ClusterCredentials || sp.CredentialSecretRef != "" || sp.ClusterRef == nil || sp.ClusterRef.Name != "prod" || sp.ConfirmUUID != testUUID {
+	if !sp.ClusterCredentials || sp.CredentialSecretRef != "" || sp.ClusterRef == nil || sp.ClusterRef.Name != ownClusterName || sp.ConfirmUUID != testUUID {
 		t.Fatalf("request %+v", sp)
 	}
 
-	if last.Annotations[ichorv1alpha1.ReclaimRequestedByAnnotation] != "alice" || last.Annotations[ichorv1alpha1.ReclaimConfirmedByAnnotation] != "alice" {
+	if last.Annotations[ichorv1alpha1.ReclaimRequestedByAnnotation] != testUserAlice || last.Annotations[ichorv1alpha1.ReclaimConfirmedByAnnotation] != testUserAlice {
 		t.Fatalf("audit annotations %v", last.Annotations)
 	}
 
-	if len(registered) != 1 || registered[0] != "10.0.0.5" {
+	if len(registered) != 1 || registered[0] != testEndpointAddr {
 		t.Fatalf("registered %v", registered)
 	}
 }
@@ -113,7 +116,7 @@ func TestOwnReclaimNeedsTheCluster(t *testing.T) {
 		registered []string
 	)
 
-	err := runMachineReclaimOwn(context.Background(), ownDeps(c, "", &out, &registered), "10.0.0.5", reclaimFlags{})
+	err := runMachineReclaimOwn(context.Background(), ownDeps(c, "", &out, &registered), testEndpointAddr, reclaimFlags{})
 	if err == nil || !strings.Contains(err.Error(), "--cluster NAME") {
 		t.Fatalf("%v", err)
 	}
@@ -129,8 +132,8 @@ func TestOwnReclaimRefusalPointsToRemoveNode(t *testing.T) {
 		registered []string
 	)
 
-	err := runMachineReclaimOwn(context.Background(), ownDeps(c, testUUID+"\n", &out, &registered), "10.0.0.5",
-		reclaimFlags{Cluster: "prod", Wait: time.Minute})
+	err := runMachineReclaimOwn(context.Background(), ownDeps(c, testUUID+"\n", &out, &registered), testEndpointAddr,
+		reclaimFlags{Cluster: ownClusterName, Wait: time.Minute})
 	if err == nil || !strings.Contains(err.Error(), "Remove node") || strings.Contains(err.Error(), "adopt") {
 		t.Fatalf("%v", err)
 	}

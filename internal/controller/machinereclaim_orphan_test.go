@@ -39,6 +39,8 @@ import (
 // ADR 0136: a machine of a cluster Ichor manages that has no approved TalosMachine (an orphan: removed
 // before ADR 0135, so never wiped) is wiped with the cluster's own credentials, and its Kubernetes Node
 // is deleted afterwards.
+const reclaimRequester = "alice"
+
 var _ = Describe("MachineReclaim of an orphan", func() {
 	const (
 		ns     = "ichor-system"
@@ -99,7 +101,7 @@ var _ = Describe("MachineReclaim of an orphan", func() {
 	request := func() types.NamespacedName {
 		mr := &ichorv1alpha1.MachineReclaim{
 			Name: fmt.Sprintf("orphan-mr-%d", seq), Namespace: ns,
-			Annotations: map[string]string{ichorv1alpha1.ReclaimRequestedByAnnotation: "alice"},
+			Annotations: map[string]string{ichorv1alpha1.ReclaimRequestedByAnnotation: reclaimRequester},
 			Spec: ichorv1alpha1.MachineReclaimSpec{
 				Address: testNodeAddr, ClusterCredentials: true,
 				ClusterRef: &corev1.LocalObjectReference{Name: cluster.Name},

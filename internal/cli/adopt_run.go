@@ -40,8 +40,8 @@ import (
 	ichorversion "github.com/maeshinshin/ichor/internal/version"
 	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
-	"github.com/maeshinshin/ichor/pkg/release"
 	"github.com/maeshinshin/ichor/pkg/reclaim"
+	"github.com/maeshinshin/ichor/pkg/release"
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 

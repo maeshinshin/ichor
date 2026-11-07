@@ -283,7 +283,8 @@ func renderClusterGet(h *human, cl *pb.Cluster) error {
 		kv{"Tunnel", cl.GetCniTunnel()}, kv{"Kube-proxy", cl.GetKubeProxyMode()})
 	h.Block("Control plane", kv{"Nodes", fmt.Sprint(cl.GetControlPlaneCount())}, kv{"Schedulable", yesNo(cl.GetControlPlaneSchedulable())})
 	h.Block("Discovery", kv{"Addresses", strings.Join(cl.GetDiscoveryAddresses(), ", ")}, kv{"Ranges", strings.Join(cl.GetDiscoveryCidrs(), ", ")},
-		kv{"Already running", strings.Join(cl.GetAlreadyConfiguredAddresses(), ", ")})
+		kv{"Already running", strings.Join(cl.GetAlreadyConfiguredAddresses(), ", ")},
+		kv{"Possible orphans", strings.Join(cl.GetOrphanAddresses(), ", ")})
 
 	if r := cl.GetRollout(); r != nil {
 		h.Block("Rollout", kv{labelKind, humanEnum(r.GetKind().String())}, kv{"Target", r.GetTargetVersion()},

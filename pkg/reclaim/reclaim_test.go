@@ -162,11 +162,13 @@ func TestAssess(t *testing.T) {
 			known: Known{MachineUUIDs: []string{"aaaa-1"}},
 		},
 		{
-			name: "already an Ichor cluster", in: worker(), refused: "already manages",
-			known: Known{ClusterIDs: []string{testOldClusterID}},
+			name: "an approved machine is pointed at Remove node", in: worker(), refused: "Remove node",
+			known: Known{MachineUUIDs: []string{"aaaa-1"}, ClusterIDs: []string{testOldClusterID}},
 		},
 		{
-			name: "a managed cluster's node is pointed at --add-machine", in: worker(), refused: "ichor adopt --cluster",
+			// No approved TalosMachine has this UUID, so the node is an orphan of the cluster and
+			// may be wiped. Neither refusal points at adopt: that would loop with adopt's own.
+			name: "an orphan of a managed cluster is reclaimable", in: worker(), graceful: true,
 			known: Known{ClusterIDs: []string{testOldClusterID}},
 		},
 		{name: "no uuid", in: func() Inspection { i := worker(); i.UUID = ""; return i }(), refused: "no UUID"},
@@ -352,5 +354,22 @@ func TestResetRequestWipeMode(t *testing.T) {
 		if len(r.SystemPartitionsToWipe) != 0 || len(r.UserDisksToWipe) != 0 {
 			t.Fatalf("%s: partitions or user disks named: %+v", mode, r)
 		}
+	}
+}
+
+func TestAssess_OrphanOfManagedClusterWarnsAndDoesNotLoop(t *testing.T) {
+	p := Assess(worker(), Known{ClusterIDs: []string{testOldClusterID}}, Options{})
+
+	if err := p.Refused(); err != nil {
+		t.Fatalf("an orphan must not be refused: %v", err)
+	}
+
+	if w := strings.Join(p.Warnings, ";"); !strings.Contains(w, "manages") || !strings.Contains(w, "--add-machine") {
+		t.Fatalf("want a warning that names the cluster and the keep-it alternative, got %v", p.Warnings)
+	}
+
+	refused := Assess(worker(), Known{MachineUUIDs: []string{"aaaa-1"}, ClusterIDs: []string{testOldClusterID}}, Options{}).Refusals
+	if r := strings.Join(refused, ";"); strings.Contains(r, "--add-machine") || strings.Contains(r, "adopt") {
+		t.Fatalf("the refusal of an approved machine must not send the user to adopt: %v", refused)
 	}
 }

@@ -278,6 +278,10 @@ message RemoveMachineRequest {
   // override is required: a remove wipes the node's STATE and EPHEMERAL partitions. The caller must
   // hold the override verb on the machine (ADR 0065, ADR 0130); no reason is asked for.
   Override override = 4;
+  // wipe_mode is what the remove wipes: empty is the STATE and EPHEMERAL partitions only, system-disk is
+  // the whole system disk (boot and EFI included, so the node boots a boot image again; what a SecureBoot
+  // reinstall needs), all also wipes every user disk. Same values as TalosOperation.spec.node.wipeMode.
+  string wipe_mode = 5;
 }
 
 message RemoveMachineResponse {

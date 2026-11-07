@@ -478,3 +478,50 @@ func TestRemoveMachineWithRebootDoesNotPowerOff(t *testing.T) {
 		}
 	}
 }
+
+// A remove takes the same wipe modes as a reset: the plan says what is wiped, a wrong mode is refused, and
+// RemoveMachine records the choice for the removal flow (the default records nothing).
+func TestRemoveMachineWipeMode(t *testing.T) {
+	for _, tc := range []struct{ mode, inPlan string }{
+		{"", "STATE and EPHEMERAL"},
+		{ichorv1alpha1.WipeModeSystemDisk, "whole system disk"},
+		{ichorv1alpha1.WipeModeAll, "every user disk"},
+	} {
+		t.Run("mode="+tc.mode, func(t *testing.T) {
+			s, k8s := opServer(t, opObjects()...)
+			var asked []authv1.ResourceAttributes
+			s.Impersonate = func(Identity) (client.Client, error) { return reviewing(k8s, true, &asked), nil }
+			ctx := context.WithValue(context.Background(), identityKey{}, Identity{User: bgUser})
+
+			plan := planNodeOK(t, s, connect.NewRequest(&pb.PlanOperationRequest{
+				Kind: pb.OperationKind_OPERATION_KIND_NODE,
+				Node: &pb.NodeActionRequest{Machine: objectRef(opNS, "w1"), Action: pb.NodeAction_NODE_ACTION_REMOVE, WipeMode: tc.mode},
+			}))
+			if !strings.Contains(strings.Join(plan.GetSteps(), "\n")+plan.GetWarning(), tc.inPlan) {
+				t.Fatalf("plan lacks %q: %q %q", tc.inPlan, plan.GetSteps(), plan.GetWarning())
+			}
+
+			if _, err := s.RemoveMachine(ctx, connect.NewRequest(&pb.RemoveMachineRequest{
+				Machine: objectRef(opNS, "w1"), Confirm: "w1", Override: &pb.Override{}, WipeMode: tc.mode,
+			})); err != nil {
+				t.Fatalf("remove: %v", err)
+			}
+
+			var m ichorv1alpha1.TalosMachine
+			if err := k8s.Get(ctx, types.NamespacedName{Namespace: opNS, Name: "w1"}, &m); err != nil {
+				t.Fatalf("get: %v", err)
+			}
+
+			if got := m.Annotations[deleteguard.ResetWipeModeAnnotation]; got != tc.mode {
+				t.Fatalf("wipe-mode annotation = %q, want %q", got, tc.mode)
+			}
+		})
+	}
+
+	s, _ := opServer(t, opObjects()...)
+	if _, err := s.RemoveMachine(context.Background(), connect.NewRequest(&pb.RemoveMachineRequest{
+		Machine: objectRef(opNS, "w1"), Confirm: "w1", Override: &pb.Override{}, WipeMode: "everything",
+	})); connect.CodeOf(err) != connect.CodeInvalidArgument {
+		t.Fatalf("unknown wipe mode = %v", err)
+	}
+}

@@ -1649,7 +1649,11 @@ type RemoveMachineRequest struct {
 	Reboot bool `protobuf:"varint,3,opt,name=reboot,proto3" json:"reboot,omitempty"`
 	// override is required: a remove wipes the node's STATE and EPHEMERAL partitions. The caller must
 	// hold the override verb on the machine (ADR 0065, ADR 0130); no reason is asked for.
-	Override      *Override `protobuf:"bytes,4,opt,name=override,proto3" json:"override,omitempty"`
+	Override *Override `protobuf:"bytes,4,opt,name=override,proto3" json:"override,omitempty"`
+	// wipe_mode is what the remove wipes: empty is the STATE and EPHEMERAL partitions only, system-disk is
+	// the whole system disk (boot and EFI included, so the node boots a boot image again; what a SecureBoot
+	// reinstall needs), all also wipes every user disk. Same values as TalosOperation.spec.node.wipeMode.
+	WipeMode      string `protobuf:"bytes,5,opt,name=wipe_mode,json=wipeMode,proto3" json:"wipe_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1710,6 +1714,13 @@ func (x *RemoveMachineRequest) GetOverride() *Override {
 		return x.Override
 	}
 	return nil
+}
+
+func (x *RemoveMachineRequest) GetWipeMode() string {
+	if x != nil {
+		return x.WipeMode
+	}
+	return ""
 }
 
 type RemoveMachineResponse struct {
@@ -1886,12 +1897,13 @@ const file_ichor_v1alpha1_machine_proto_rawDesc = "" +
 	"\alink_up\x18\x03 \x01(\bR\x06linkUp\x12\x1d\n" +
 	"\n" +
 	"speed_mbit\x18\x04 \x01(\x05R\tspeedMbit\x12\x16\n" +
-	"\x06driver\x18\x05 \x01(\tR\x06driver\"\xb3\x01\n" +
+	"\x06driver\x18\x05 \x01(\tR\x06driver\"\xd0\x01\n" +
 	"\x14RemoveMachineRequest\x123\n" +
 	"\amachine\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\amachine\x12\x18\n" +
 	"\aconfirm\x18\x02 \x01(\tR\aconfirm\x12\x16\n" +
 	"\x06reboot\x18\x03 \x01(\bR\x06reboot\x124\n" +
-	"\boverride\x18\x04 \x01(\v2\x18.ichor.v1alpha1.OverrideR\boverride\"J\n" +
+	"\boverride\x18\x04 \x01(\v2\x18.ichor.v1alpha1.OverrideR\boverride\x12\x1b\n" +
+	"\twipe_mode\x18\x05 \x01(\tR\bwipeMode\"J\n" +
 	"\x15RemoveMachineResponse\x121\n" +
 	"\x05audit\x18\x01 \x01(\v2\x1b.ichor.v1alpha1.AuditRecordR\x05audit*d\n" +
 	"\vMachineRole\x12\x1c\n" +

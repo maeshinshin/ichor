@@ -18,6 +18,7 @@ package controller
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -95,6 +96,25 @@ var _ = Describe("removal: reset, then delete the Kubernetes Node (ADR 0135)", f
 		Expect(nodeGone("rmnode-cp-off")).To(BeTrue())
 		Expect(machineGone(cps[0])).To(BeTrue())
 	})
+
+	for _, mode := range []string{"", ichorv1alpha1.WipeModeSystemDisk, ichorv1alpha1.WipeModeAll} {
+		It("passes the wipe mode "+fmt.Sprintf("%q", mode)+" of a remove to Talos", func() {
+			fake := &fakeTalosClient{nodeName: "rmnode-wipe"}
+			r, cps, _ := setup(fake)
+
+			got := fetchMachine(cps[0])
+			got.Annotations = map[string]string{resetOnDeleteAnnotation: resetOnDeleteValue}
+			if mode != "" {
+				got.Annotations[resetWipeModeAnnotation] = mode
+			}
+			Expect(k8sClient.Update(ctx, got)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, got)).To(Succeed())
+
+			_, err := reconcileMachine(r, cps[0])
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fake.resetModes).To(Equal([]string{mode}))
+		})
+	}
 
 	It("reboots into maintenance mode when asked, and deletes the Node of a worker", func() {
 		fake := &fakeTalosClient{nodeName: "rmnode-worker"}

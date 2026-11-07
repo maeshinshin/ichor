@@ -154,9 +154,9 @@ const (
 // NodeStillHasClusterCredentials said the node still holds the cluster's PKI.
 const resetOnDeleteAnnotation = deleteguard.ResetOnDeleteAnnotation
 
-// resetWipeModeAnnotation carries TalosOperation.spec.node.wipeMode of a reset to the removal flow,
+// resetWipeModeAnnotation carries TalosOperation.spec.node.wipeMode of a reset, or the wipe mode of a remove, to the removal flow,
 // which does the wipe: system-disk or all. Absent, the reset wipes STATE and EPHEMERAL (ADR 0042).
-const resetWipeModeAnnotation = "ichor.maesh.dev/reset-wipe-mode"
+const resetWipeModeAnnotation = deleteguard.ResetWipeModeAnnotation
 
 // resetOnDeleteValue is the only resetOnDeleteAnnotation value that opts in.
 const resetOnDeleteValue = "true"

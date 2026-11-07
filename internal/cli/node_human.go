@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
@@ -111,12 +112,30 @@ func renderMachineRemoved(name string) func(*human, *pb.RemoveMachineResponse) e
 }
 
 // nodeRemoveNext tells what a remove did and how to bring the machine back (ADR 0135).
-func nodeRemoveNext(errw io.Writer, reboot bool) {
-	did := "The controller drains the node, removes its etcd member (control plane), wipes its STATE and EPHEMERAL partitions, powers it off and deletes its Kubernetes Node."
+func nodeRemoveNext(errw io.Writer, reboot bool, wipeMode string) {
+	wiped := "its STATE and EPHEMERAL partitions"
+
+	switch wipeMode {
+	case ichorv1alpha1.WipeModeSystemDisk:
+		wiped = "its whole system disk"
+	case ichorv1alpha1.WipeModeAll:
+		wiped = "its system disk and every user disk"
+	}
+
+	did := "The controller drains the node, removes its etcd member (control plane), wipes " + wiped + ", powers it off and deletes its Kubernetes Node."
 	back := "to add it again: power it on; it boots into maintenance mode and shows up as a new pending machine, which you can approve"
 
+	if wipeMode != "" {
+		back = "to add it again: power it on; it starts from its boot image and shows up as a new pending machine, which you can approve"
+	}
+
 	if reboot {
-		did = "The controller drains the node, removes its etcd member (control plane), wipes its STATE and EPHEMERAL partitions, reboots it into maintenance mode and deletes its Kubernetes Node."
+		rebootInto := " into maintenance mode"
+		if wipeMode != "" {
+			rebootInto = " into its boot image"
+		}
+
+		did = "The controller drains the node, removes its etcd member (control plane), wipes " + wiped + ", reboots it" + rebootInto + " and deletes its Kubernetes Node."
 		back = "to add it again: it shows up as a new pending machine, which you can approve"
 	}
 

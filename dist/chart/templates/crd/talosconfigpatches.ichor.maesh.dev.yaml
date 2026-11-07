@@ -3365,8 +3365,9 @@ spec:
                       ? has(self.userVolumeConfig) : has(self.rawVolumeConfig)'
                 type: array
               layer:
-                description: layer is where this patch applies in the bottom-up stack;
-                  "system" is absent because Ichor generates that layer itself.
+                description: |-
+                  layer is where this patch applies in the bottom-up stack; "system" is absent because Ichor generates that layer
+                  itself.
                 enum:
                 - cluster
                 - role

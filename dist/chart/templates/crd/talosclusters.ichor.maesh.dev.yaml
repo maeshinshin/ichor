@@ -3637,7 +3637,8 @@ spec:
                   preset:
                     default: cilium
                     description: |-
-                      preset selects the CNI this cluster bootstraps. Cilium is the only CNI Ichor installs; unmanaged leaves the CNI of an adopted cluster exactly as it is, and
+                      preset selects the CNI this cluster bootstraps. Cilium is the only CNI Ichor installs; unmanaged leaves the CNI
+                      of an adopted cluster exactly as it is, and
                       the webhook accepts it on create only for an object carrying the adoption annotation. The
                       values flannel and custom are deprecated, unused and kept so the CRD never drops a value.
                     enum:
@@ -3705,9 +3706,9 @@ spec:
                     format: int32
                     type: integer
                   schedulable:
-                    description: schedulable controls whether control planes accept
-                      workloads; required with no default because nothing on the object
-                      can resolve an auto value before any machine exists.
+                    description: |-
+                      schedulable controls whether control planes accept workloads; required with no default because nothing on the
+                      object can resolve an auto value before any machine exists.
                     enum:
                     - "true"
                     - "false"
@@ -3857,7 +3858,8 @@ spec:
               registries:
                 description: |-
                   registries declares this cluster's private registry mirrors and where their pull
-                  credentials live, pushed to every node through the system layer (docs/design/architecture.md "Monitoring and registry mirrors"). Empty (the default) configures no
+                  credentials live, pushed to every node through the system layer (docs/design/architecture.md "Monitoring and
+                  registry mirrors"). Empty (the default) configures no
                   mirrors at all -- mirrors stay entirely optional. listType=map on host (rather
                   than a CEL uniqueness rule, same as status.conditions below) is what the structural schema
                   itself rejects a duplicate host under -- a CEL self.exists_one rule over this list was
@@ -4317,8 +4319,9 @@ spec:
                 pattern: ^v\d+\.\d+\.\d+$
                 type: string
               versionContract:
-                description: versionContract is required rather than defaulted, so
-                  that a machinery bump cannot silently change what gets applied (principle 4).
+                description: |-
+                  versionContract is required rather than defaulted, so that a machinery bump cannot silently change what gets
+                  applied (principle 4).
                 pattern: ^v\d+\.\d+$
                 type: string
             required:

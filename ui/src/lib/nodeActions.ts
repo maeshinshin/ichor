@@ -32,6 +32,15 @@ export const nodeActions: readonly NodeActionDef[] = [
   { id: 'remove', destructive: true, typedName: true, override: true, controlPlaneOnly: false },
 ]
 
+// What a remove wipes (ADR 0135): the Select's choices and the wipe mode each sends. The default sends
+// nothing (STATE and EPHEMERAL only); the names match TalosOperation.spec.node.wipeMode.
+export type WipeChoice = 'system-partitions' | 'system-disk' | 'all'
+export const wipeChoices: readonly WipeChoice[] = ['system-partitions', 'system-disk', 'all']
+
+export function wipeModeOf(c: WipeChoice): string {
+  return c === 'system-partitions' ? '' : c
+}
+
 // The services restart-service may restart: the same allowlist as the controller and the CRD.
 export const restartableServices = ['kubelet', 'containerd', 'cri'] as const
 

@@ -87,6 +87,7 @@ type MachineReclaimReconciler struct {
 // +kubebuilder:rbac:groups=ichor.maesh.dev,resources=ichorinstallations,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=get;list;watch;update;delete
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups="",resources=nodes,verbs=get;delete
 
 // Reconcile advances one MachineReclaim. A panic is turned into a plain error: its value could
 // quote what the code was holding, and nothing about a credential may reach a log.
@@ -157,7 +158,7 @@ func (r *MachineReclaimReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 // attend inspects the node, and when the user has typed the UUID, sends the reset.
 func (r *MachineReclaimReconciler) attend(ctx context.Context, mr *ichorv1alpha1.MachineReclaim, now time.Time) (ctrl.Result, error) {
-	cred, err := r.adoptCredential(ctx, mr)
+	cred, err := r.credential(ctx, mr)
 	if errors.Is(err, errSecretPending) {
 		// The UI API writes the request first and the Secret a moment later. If it never appears,
 		// the request expires at its TTL.
@@ -356,6 +357,8 @@ func (r *MachineReclaimReconciler) done(ctx context.Context, mr *ichorv1alpha1.M
 		result += "; add its address to a cluster's spec.discovery.addresses to register it"
 	}
 
+	result += r.deleteOrphanNode(ctx, mr)
+
 	mr.Status.Phase = ichorv1alpha1.MachineReclaimDone
 	mr.Status.Result = result
 
@@ -366,6 +369,45 @@ func (r *MachineReclaimReconciler) done(ctx context.Context, mr *ichorv1alpha1.M
 	r.audit(mr, corev1.EventTypeNormal, "ReclaimCompleted", result)
 
 	return ctrl.Result{RequeueAfter: time.Second}, nil
+}
+
+// deleteOrphanNode deletes the Kubernetes Node of a wiped machine that belonged to a cluster Ichor
+// manages, as Remove node does (ADR 0135, 0136); it returns a sentence for status.result, "" when the
+// machine was of no managed cluster. The machine is in maintenance mode by now, so its kubelet cannot
+// register the Node again. The Node is deleted only when its system UUID is the machine's: a Node of
+// the same name that is somebody else's stays.
+func (r *MachineReclaimReconciler) deleteOrphanNode(ctx context.Context, mr *ichorv1alpha1.MachineReclaim) string {
+	in := mr.Status.Inspection
+	if in == nil || in.ClusterID == "" || in.Hostname == "" {
+		return ""
+	}
+
+	known, err := reclaim.LoadKnown(ctx, r.Client, r.ControllerNamespace)
+	if err != nil || !slices.ContainsFunc(known.ClusterIDs, func(id string) bool { return strings.EqualFold(id, in.ClusterID) }) {
+		return ""
+	}
+
+	name := strings.ToLower(in.Hostname)
+
+	var node corev1.Node
+	if err := r.Get(ctx, client.ObjectKey{Name: name}, &node); err != nil {
+		if apierrors.IsNotFound(err) {
+			return "; it had no Kubernetes Node to delete"
+		}
+
+		return fmt.Sprintf("; the Kubernetes Node %[1]s could not be read, run kubectl delete node %[1]s", name)
+	}
+
+	if !strings.EqualFold(node.Status.NodeInfo.SystemUUID, in.UUID) {
+		return fmt.Sprintf("; the Kubernetes Node %[1]s was not deleted because its system UUID is not the machine's, "+
+			"run kubectl delete node %[1]s if it is the machine's", name)
+	}
+
+	if err := r.Delete(ctx, &node, client.Preconditions{UID: &node.UID}); client.IgnoreNotFound(err) != nil {
+		return fmt.Sprintf("; the Kubernetes Node %[1]s could not be deleted, run kubectl delete node %[1]s", name)
+	}
+
+	return fmt.Sprintf("; the Kubernetes Node %s was deleted", name)
 }
 
 func (r *MachineReclaimReconciler) fail(ctx context.Context, mr *ichorv1alpha1.MachineReclaim, msg string) (ctrl.Result, error) {
@@ -412,6 +454,31 @@ func (r *MachineReclaimReconciler) retain(ctx context.Context, mr *ichorv1alpha1
 	}
 
 	return ctrl.Result{}, client.IgnoreNotFound(r.Delete(ctx, mr))
+}
+
+// credential is what dials the node: the cluster's own admin credential for a request with
+// spec.clusterCredentials (ADR 0136: an orphan of that cluster, no pasted talosconfig), else the
+// request's pasted Secret.
+func (r *MachineReclaimReconciler) credential(ctx context.Context, mr *ichorv1alpha1.MachineReclaim) (reclaim.Credential, error) {
+	if !mr.Spec.ClusterCredentials {
+		return r.adoptCredential(ctx, mr)
+	}
+
+	if mr.Spec.ClusterRef == nil || mr.Spec.ClusterRef.Name == "" {
+		return reclaim.Credential{}, errors.New("clusterCredentials needs spec.clusterRef")
+	}
+
+	var cluster ichorv1alpha1.TalosCluster
+	if err := r.Get(ctx, client.ObjectKey{Namespace: mr.Namespace, Name: mr.Spec.ClusterRef.Name}, &cluster); err != nil {
+		return reclaim.Credential{}, fmt.Errorf("the cluster %q could not be read", mr.Spec.ClusterRef.Name)
+	}
+
+	bundle, err := loadBundle(ctx, r.Client, r.ControllerNamespace, &cluster)
+	if err != nil {
+		return reclaim.Credential{}, fmt.Errorf("the credentials of cluster %q could not be loaded", cluster.Name)
+	}
+
+	return reclaim.ClusterCredential(cluster.Name, bundle)
 }
 
 var errSecretPending = errors.New("the credential Secret does not exist yet")
@@ -476,6 +543,15 @@ func ownedBy(sec *corev1.Secret, mr *ichorv1alpha1.MachineReclaim) bool {
 // nothing. It records the deletion in memory; the caller writes status.
 func (r *MachineReclaimReconciler) deleteCredential(ctx context.Context, mr *ichorv1alpha1.MachineReclaim) {
 	var sec corev1.Secret
+
+	if mr.Spec.CredentialSecretRef == "" { // clusterCredentials: nothing was pasted
+		if mr.Status.Audit.CredentialDeletedAt == nil {
+			t := metav1.NewTime(nowFrom(r.Now))
+			mr.Status.Audit.CredentialDeletedAt = &t
+		}
+
+		return
+	}
 
 	key := client.ObjectKey{Namespace: mr.Namespace, Name: mr.Spec.CredentialSecretRef}
 	if err := r.Get(ctx, key, &sec); err != nil {

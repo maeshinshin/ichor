@@ -63,7 +63,8 @@ const (
 // MachineReclaimSpec is a one-shot, imperative request to wipe a machine that another Talos cluster
 // configured, so that it returns to maintenance mode. The controller never
 // writes it; the UI API writes confirmUUID for the user who typed it.
-// +kubebuilder:validation:XValidation:rule="self.address == oldSelf.address && self.credentialSecretRef == oldSelf.credentialSecretRef",message="address and credentialSecretRef cannot change; make a new request"
+// +kubebuilder:validation:XValidation:rule="self.address == oldSelf.address && has(self.credentialSecretRef) == has(oldSelf.credentialSecretRef) && (!has(self.credentialSecretRef) || self.credentialSecretRef == oldSelf.credentialSecretRef) && (has(self.clusterCredentials) && self.clusterCredentials) == (has(oldSelf.clusterCredentials) && oldSelf.clusterCredentials)",message="address, credentialSecretRef and clusterCredentials cannot change; make a new request"
+// +kubebuilder:validation:XValidation:rule="(has(self.clusterCredentials) && self.clusterCredentials) ? (!has(self.credentialSecretRef) && has(self.clusterRef)) : has(self.credentialSecretRef)",message="either credentialSecretRef (a foreign talosconfig) or clusterCredentials with clusterRef (the cluster's own credentials), not both"
 type MachineReclaimSpec struct {
 	// address is the one node to reclaim: an IP or host:port of its Talos API. Only this address is
 	// dialled; the endpoints in the talosconfig are ignored.
@@ -72,10 +73,16 @@ type MachineReclaimSpec struct {
 	Address string `json:"address"`
 
 	// credentialSecretRef names a Secret of type ichor.maesh.dev/foreign-talosconfig in this
-	// namespace. It is deleted when the request ends or expires.
-	// +kubebuilder:validation:MinLength=1
-	// +required
-	CredentialSecretRef string `json:"credentialSecretRef"`
+	// namespace. It is deleted when the request ends or expires. Empty only with clusterCredentials.
+	// +optional
+	CredentialSecretRef string `json:"credentialSecretRef,omitempty"`
+
+	// clusterCredentials dials the node with the credentials Ichor holds for the TalosCluster named
+	// by clusterRef instead of a pasted foreign talosconfig. It is for an orphan: a
+	// machine of that cluster whose TalosMachine is gone, so the person has no talosconfig for it.
+	// The same refusals apply, and a node that is not in that cluster is refused.
+	// +optional
+	ClusterCredentials bool `json:"clusterCredentials,omitempty"`
 
 	// contextName picks the talosconfig context; empty is the file's default.
 	// +optional

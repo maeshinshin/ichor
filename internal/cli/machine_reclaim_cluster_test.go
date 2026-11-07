@@ -142,3 +142,24 @@ func TestOwnReclaimRefusalPointsToRemoveNode(t *testing.T) {
 		t.Fatalf("a refused request must send nothing: %+v", last.Spec)
 	}
 }
+
+// A declined prompt (empty input) leaves no request behind.
+func TestOwnReclaimRemovesTheRequestWhenTheUUIDIsNotTyped(t *testing.T) {
+	c, _ := reclaimControllerStub(t, nil)
+
+	var (
+		out        bytes.Buffer
+		registered []string
+	)
+
+	err := runMachineReclaimOwn(context.Background(), ownDeps(c, "", &out, &registered), testEndpointAddr,
+		reclaimFlags{Cluster: ownClusterName, Wait: time.Minute})
+	if err == nil {
+		t.Fatal("expected the prompt to fail")
+	}
+
+	var list ichorv1alpha1.MachineReclaimList
+	if err := c.List(context.Background(), &list); err != nil || len(list.Items) != 0 {
+		t.Fatalf("left %d requests, %v", len(list.Items), err)
+	}
+}

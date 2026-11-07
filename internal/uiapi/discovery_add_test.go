@@ -18,10 +18,13 @@ package uiapi
 
 import (
 	"context"
+	"slices"
 	"testing"
+	"time"
 
 	"connectrpc.com/connect"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -120,5 +123,49 @@ func TestAddDiscoveryAddressRefusesBadInput(t *testing.T) {
 		if connect.CodeOf(err) != connect.CodeInvalidArgument {
 			t.Fatalf("%q: want InvalidArgument, got %v", bad, err)
 		}
+	}
+}
+
+func TestDiscoveryFindingsAreDerivedFromCurrentState(t *testing.T) {
+	c := discoveryCluster(nil)
+	now := metav1.Now()
+	ev := func(name, reason, ep string, ago time.Duration) *corev1.Event {
+		return &corev1.Event{
+			Name: name, Namespace: testNS, Annotations: map[string]string{annotationAlreadyConfiguredEndpoint: ep},
+			InvolvedObject: corev1.ObjectReference{Kind: "TalosCluster", Name: "c", Namespace: testNS},
+			Reason:         reason, LastTimestamp: metav1.NewTime(now.Add(-ago)),
+		}
+	}
+	machine := func(name, endpoint string, state string) *ichorv1alpha1.TalosMachine {
+		return &ichorv1alpha1.TalosMachine{Name: name, Namespace: testNS, Spec: ichorv1alpha1.TalosMachineSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: "c"}, Endpoint: endpoint, ApprovalState: state,
+		}}
+	}
+	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(c,
+		// foreign device: stays AlreadyConfigured.
+		ev("foreign", reasonAlreadyConfigured, "10.0.0.1:50000", time.Minute),
+		// an orphan.
+		ev("orphan", reasonOrphan, "10.0.0.2:50000", time.Minute),
+		// AlreadyConfigured long ago, Orphan since: listed once, as an orphan.
+		ev("old", reasonAlreadyConfigured, "10.0.0.3:50000", 3*time.Hour),
+		ev("new", reasonOrphan, "10.0.0.3:50000", time.Minute),
+		// stale: the machine became pending again at this address.
+		ev("stale", reasonAlreadyConfigured, "10.0.0.4:50000", 3*time.Hour),
+		machine("pending", "10.0.0.4:50000", ichorv1alpha1.MachineApprovalStatePending),
+		// stale orphan: an approved machine has it now.
+		ev("stale2", reasonOrphan, "10.0.0.5:50000", 3*time.Hour),
+		machine("approved", "10.0.0.5:50000", ichorv1alpha1.MachineApprovalStateApproved),
+		// a rejected machine does not hide the address.
+		ev("rej", reasonAlreadyConfigured, "10.0.0.6:50000", time.Minute),
+		machine("rejected", "10.0.0.6:50000", ichorv1alpha1.MachineApprovalStateRejected),
+	).Build()
+
+	configured, orphans := (&Server{Client: k8s}).discoveryFindings(context.Background(), c)
+	if !slices.Equal(configured, []string{"10.0.0.1:50000", "10.0.0.6:50000"}) {
+		t.Fatalf("already configured: %v", configured)
+	}
+
+	if !slices.Equal(orphans, []string{"10.0.0.2:50000", "10.0.0.3:50000"}) {
+		t.Fatalf("orphans: %v", orphans)
 	}
 }

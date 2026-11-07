@@ -9,11 +9,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { ErrorAlert } from '@/components/ErrorAlert'
-import { Field, Fields } from '@/components/PageHeader'
+import { Field } from '@/components/PageHeader'
 import type { Reclaim } from '@/gen/ichor/v1alpha1/reclaim_pb'
 import { useAction } from '@/hooks/use-action'
 import { reclaimClient } from '@/lib/connect'
-import { reclaimSettled, usesClusterCredentials, uuidMatches } from '@/lib/reclaim'
+import { reclaimPhaseLabel, reclaimSettled, usesClusterCredentials, uuidMatches } from '@/lib/reclaim'
 import { useLoad } from '@/lib/useLoad'
 import { t } from '@/lib/i18n'
 
@@ -113,12 +113,12 @@ export function ReclaimDialog({
       </DialogTrigger>
       <DialogContent className="grid-cols-1 sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{t('reclaim.title')}</DialogTitle>
-          <DialogDescription>{t('reclaim.description')}</DialogDescription>
+          <DialogTitle>{t(own ? 'reclaim.ownTitle' : 'reclaim.title')}</DialogTitle>
+          <DialogDescription>{t(own ? 'reclaim.ownDescription' : 'reclaim.description')}</DialogDescription>
         </DialogHeader>
         <Alert variant="destructive">
           <TriangleAlertIcon />
-          <AlertDescription>{t('reclaim.banner')}</AlertDescription>
+          <AlertDescription>{t(own ? 'reclaim.ownBanner' : 'reclaim.banner')}</AlertDescription>
         </Alert>
 
         {!reclaim && (
@@ -189,23 +189,27 @@ export function ReclaimDialog({
             }}
           >
             <div className="-mx-4 max-h-[50dvh] space-y-3 overflow-y-auto px-4">
-            <Fields>
+            <dl class="grid grid-cols-2 gap-x-6 gap-y-4">
               <Field label={t('reclaim.address')}>{reclaim.address}</Field>
               <Field label={t('reclaim.phase')}>
-                <Badge variant="outline">{phase || '-'}</Badge>
+                <Badge variant="outline" className="h-auto max-w-full whitespace-normal">
+                  {phase ? reclaimPhaseLabel(phase) : '-'}
+                </Badge>
               </Field>
               {insp && (
                 <>
                   <Field label={t('reclaim.foreignCluster')}>{insp.clusterName || '-'}</Field>
-                  <Field label={t('reclaim.uuid')}>
-                    <span class="font-mono break-all">{insp.uuid}</span>
-                  </Field>
                   <Field label={t('reclaim.hostname')}>{insp.hostname || '-'}</Field>
                   <Field label={t('reclaim.role')}>{insp.role || '-'}</Field>
                   <Field label={t('reclaim.etcd')}>{insp.etcdMembers.length ? insp.etcdMembers.join(', ') : '-'}</Field>
+                  <div class="col-span-2">
+                    <Field label={t('reclaim.uuid')}>
+                      <span class="select-all font-mono break-all">{insp.uuid}</span>
+                    </Field>
+                  </div>
                 </>
               )}
-            </Fields>
+            </dl>
             {reclaim.message && <p>{reclaim.message}</p>}
             {insp && insp.volumes.length > 0 && (
               <div class="space-y-1">

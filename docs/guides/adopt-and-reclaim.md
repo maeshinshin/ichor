@@ -436,6 +436,20 @@ cluster must be in the Ichor namespace, and you need the `reclaim` verb. In the 
 shows "It was removed from this cluster" on the Add node page; tick it and leave the talosconfig
 empty. A machine that still has an approved `TalosMachine` is refused: use Remove node.
 
+Discovery finds such a machine for you when its address is in the cluster's `spec.discovery`: a node
+that runs a Talos configuration at the address of a Kubernetes Node that no `TalosMachine` of the
+namespace accounts for (matched by the Node's system UUID) is reported as `Orphan`, not
+`AlreadyConfigured`. The Add node page lists it with Reset and add already set to the cluster's own
+credentials, and `ichor cluster get` shows it under "Possible orphans". Discovery cannot prove the
+machine is this cluster's (the probe is unauthenticated); the wipe can, because only this cluster's
+certificate authority can dial it. Nothing is wiped by the report, and a machine reported as
+`AlreadyConfigured` (a foreign device) is only reset by the pasted-talosconfig flow with its typed UUID. The
+lists on the page come from the latest report per address and drop an address that a pending or
+approved machine of the cluster has since taken, so a machine that became pending again no longer
+shows a Reset and add link. On the Nodes page, Reset and add also offers "It was removed from this
+cluster", and the inspection step shows the same warning as the CLI (the machine belongs to this
+cluster; `ichor adopt --add-machine` would keep its configuration instead).
+
 ### With the CLI
 
 This uses your own talosconfig for the machine. It is used for this command

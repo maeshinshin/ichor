@@ -29,3 +29,14 @@ The hardware run of ADR 0135 found a dead end. A machine removed with the pre-01
 - Not verified on hardware: the wipe of a real orphan (reset of a node whose cluster Ichor still manages, its Node deleted afterwards), the system UUID match on a real kubelet Node, and the CLI against a real controller.
 - A hostname that differs from the Kubernetes Node name (a custom `nodeName`) leaves the Node; the result names `kubectl delete node`.
 - An orphan that is still a working member of its cluster (a machine that was never removed from etcd) is reset gracefully; the person typed its UUID, and the warning says what keeps it.
+
+## Amendment (2026-11-07): discovery reports an orphan as Orphan
+
+Hardware verification found that discovery never flagged an orphan: `knownHosts` skipped the address of every Kubernetes Node (a member whose machine endpoint is stale), and an orphan still runs as a Node, so it was never probed and the Add node page had no entry for it. Decided:
+
+1. A Node whose `status.nodeInfo.systemUUID` is not the UUID (name or `spec.identity.uuid`, case-insensitive) of any `TalosMachine` in the namespace, and whose address no machine's `spec.endpoint` or `status.observedEndpoint` names, is an orphan candidate. Its address is probed instead of skipped. A Node without a system UUID is still treated as a member.
+2. A probe of a candidate that answers "already configured" records the Event reason `Orphan` (same endpoint annotation) instead of `AlreadyConfigured`; any other outcome goes through the normal registration. An address with no such Node, a foreign device, stays `AlreadyConfigured`. Neither Event wipes or changes anything; the unauthenticated probe cannot show the node is this cluster's, the wipe can (only the cluster's CA dials it), and the typed UUID is still the consent. Nothing in this change can reset a foreign machine.
+3. `Cluster.orphan_addresses` (field 25) lists orphans next to `already_configured_addresses`. Both are derived from the latest Event per address and drop an address that a non-rejected `TalosMachine` of the cluster now has, so a machine that became pending again, or was approved, no longer shows a stale link. The Add node page offers Reset and add with the cluster's own credentials preset for an orphan; the Nodes page passes the cluster to the dialog as the Add node link does.
+4. `ReclaimInspection.warnings` (field 9) carries the assessment's warnings (the orphan warning naming `adopt --add-machine`) to the UI inspection step.
+
+Risk: a member whose Node reports a system UUID that differs from its SMBIOS UUID would be reported as an orphan; it is a warning only and the reclaim would be refused for an approved machine's UUID only if the UUIDs matched, so the typed-UUID step still shows what the machine is.

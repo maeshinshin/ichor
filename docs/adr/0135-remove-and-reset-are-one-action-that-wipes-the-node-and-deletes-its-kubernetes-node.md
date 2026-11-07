@@ -2,7 +2,7 @@
 
 Status: Accepted · Date: 2026-11-07 · Design section: Nodes · Supersedes: the remove/reset split of 0085 and its amendment "the Kubernetes Node stays after a remove" · Builds on: 0032, 0042, 0065, 0130
 
-Decided: "Remove node" is the only way to take a node out of a cluster in the UI, and `ichor node remove NODE [--reboot]` in the CLI. It runs the existing removal flow (lock, quorum and count checks, storage evacuation, drain, etcd member removal for a control plane), then a graceful-as-today Talos Reset of STATE and EPHEMERAL, which ends with a power off (default) or a reboot into maintenance mode (`--reboot`, "After wiping" in the UI), then deletes the Kubernetes Node, then clears the finalizer. The wipe is no longer optional. It needs the typed machine name and the override permission, with no reason. The `reset` action, `ichor node reset` (now a deprecated alias of `remove --reboot`), `RemoveMachine` and every proto and CRD field stay; `RemoveMachine` and a `reset` operation both run this flow.
+Decided: "Remove node" is the only way to take a node out of a cluster in the UI, and `ichor node remove NODE [--reboot]` in the CLI. It runs the existing removal flow (lock, quorum and count checks, storage evacuation, drain, etcd member removal for a control plane), then a graceful-as-today Talos Reset of STATE and EPHEMERAL, which ends with a power off (default) or a reboot into maintenance mode (`--reboot`, "After wiping" in the UI), then deletes the Kubernetes Node, then clears the finalizer. The wipe is no longer optional. It needs the typed machine name and the override permission, with no reason. The `reset` action, `RemoveMachine` and every proto and CRD field stay (`ichor node reset` was removed on 2026-11-07, see the amendments below); `RemoveMachine` and a `reset` operation both run this flow.
 
 ## Context
 
@@ -10,7 +10,7 @@ ADR 0085 had two ways out: `reset` (wipe, reboot into maintenance, Node kept and
 
 ## Decision
 
-1. **One flow.** `RemoveMachine` sets `allow-delete`, `reset-on-delete` (ADR 0042) and, unless `reboot` is asked, `reset-power-off` on the machine, adds the removal finalizer and deletes it. A `reset` TalosOperation hands the machine to the same flow as before, with the new optional `spec.node.powerOff` mapped to `reset-power-off`; unset it reboots, which is what a reset always did, so installed operations and `ichor node reset` behave as before.
+1. **One flow.** `RemoveMachine` sets `allow-delete`, `reset-on-delete` (ADR 0042) and, unless `reboot` is asked, `reset-power-off` on the machine, adds the removal finalizer and deletes it. A `reset` TalosOperation hands the machine to the same flow as before, with the new optional `spec.node.powerOff` mapped to `reset-power-off`; unset it reboots, which is what a reset always did, so installed operations behave as before.
 2. **Power off or reboot.** `TalosClient.Reset(ctx, wipeMode, powerOff)` builds the request with `reclaim.ResetRequestWipe` and sets `Reboot = !powerOff`. Talos powers the node off after a Reset without `reboot` (`talosctl reset --reboot=false`, Talos v1.14 API `ResetRequest.reboot`). The Reset stays non-graceful from the node's side because the drain and the etcd leave already ran.
 3. **The Kubernetes Node.** After Talos accepted the Reset the controller waits (requeue every 10 s, at most 5 minutes counted from the moment the Removal condition became `ResetRequested`) until the Node is not Ready, deletes it, and clears the finalizer. A wiped machine has no credentials left, so its kubelet cannot register the Node again; the wait only covers the seconds between the request and the wipe, during which a running kubelet could. A resumed reconcile sees `ResetRequested` and goes straight to the wait, without draining a node that is wiping. If the Node is still Ready after the bound it is not deleted, is annotated as reset (so discovery stops counting its address, ADR 0042), the removal finishes, and a Warning Event `KubernetesNodeNotDeleted` names it with `kubectl delete node NAME`.
 4. **A node that does not answer.** If the Reset cannot be sent and the Node is missing or not Ready, the node is down: the removal goes on without the wipe, the Node is deleted, the Removal condition and a Warning Event `NodeStillHasClusterCredentials` say it was not wiped and its disk still holds the cluster's PKI. If the Reset fails on a node whose Node is Ready, the removal is held (`ResetFailed`) as before: a live node that will not reset is not dropped. A control plane below the declared count is still removable when its etcd member is dead (ADR 0106).
@@ -32,16 +32,13 @@ ADR 0085 had two ways out: `reset` (wipe, reboot into maintenance, Node kept and
 - `delete` on every Node is a broader RBAC verb than the controller had.
 - Machines removed before this change were not wiped; the adopt guide says how to add them again (`ichor adopt --add-machine`).
 
-
 ## Amendment (2026-11-07): machines removed before this change
 
 The risk "machines removed before this change were not wiped; the adopt guide says how to add them again (`ichor adopt --add-machine`)" held only for a machine whose configuration adopt could represent; one whose TalosMachine had a hostname and link choice was blocked by adopt and refused by reclaim. ADR 0136 lets `ichor machine reclaim ADDRESS --cluster NAME` (or the UI Reset and add) wipe such a machine with the cluster's own credentials and delete its Kubernetes Node.
 
-
 ## Amendment (2026-11-07): `ichor node reset` is removed
 
 2026-11-07: `ichor node reset` is removed; use `ichor node remove --reboot`. The command, its `--wipe-mode` flag and the CLI's reset helpers go with it. `RemoveMachine`, the `reset` action, `spec.node.wipeMode`, `spec.node.powerOff` and every proto and CRD field stay, so the API and the UI keep the reset operation.
-
 
 ## Amendment (2026-11-07): a remove chooses what it wipes
 

@@ -58,6 +58,10 @@ message CreateReclaimRequest {
   bool force_ungraceful = 5;
   // cluster is optional: the TalosCluster the machine should join.
   ObjectRef cluster = 6;
+  // use_cluster_credentials dials the machine with the credentials Ichor holds for cluster (ADR 0136) instead of a
+  // pasted talosconfig, for a machine of that cluster whose TalosMachine is gone. cluster is required and talosconfig
+  // must be empty.
+  bool use_cluster_credentials = 7;
 }
 
 message CreateReclaimResponse {

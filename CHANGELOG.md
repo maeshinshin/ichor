@@ -183,7 +183,7 @@ table accepts; a refusal passes only with the override verb
   ichor.maesh.dev/retry=true`, which the controller acts on once and removes
   (ADR 0095).
 - Cilium's optional features work through the Helm Job: Gateway API, ingress,
-  Hubble UI, clustermesh and BGP control plane no longer fail for missing rights.
+  Hubble UI, clustermesh and BGP control plane run with the rights they need.
   Values that cannot work are refused at admission with the reason:
   `gatewayAPI.enabled` needs kube-proxy replacement, and
   `clustermesh.useAPIServer` needs the `cronJob` certificate method (ADR 0099).
@@ -196,8 +196,8 @@ table accepts; a refusal passes only with the override verb
 - `ichor init -f init.yaml` reads the init settings from an `InitConfig` file
   instead of a long flag line (a flag overrides the file;
   `--print-config-template` prints an example; ADR 0117). `ichor init` also
-  waits for ichor-ui to roll out before it returns, and no longer requires the
-  hidden `--cni` flag.
+  waits for ichor-ui to roll out before it returns, and does not need the hidden
+  `--cni` flag.
 - `ichor init` shows its steps as a short list: a live spinner line with the
   elapsed time and the reason a pod is pending on a terminal, one line per
   change in a pipe or CI log. It honours `NO_COLOR` and `TERM=dumb`, prints a
@@ -234,18 +234,16 @@ table accepts; a refusal passes only with the override verb
   edits, approve, patch and node actions are hidden from roles that cannot use
   them.
 
-### Behaviour changes
+### Notes for anyone who ran a pre-release build
 
-These are decisions made late in the cycle. They matter if you ran a pre-release
-build or wrote scripts against one.
+Only for people who ran a pre-release build or wrote scripts against one.
 
-- No free-text reason is asked for anywhere (ADR 0130). `--override-reason`,
-  `ichor machine approve --reason`, `ichor machine reject --reason` and the
-  reason of `--skip-signature-check` are gone, the dialogs of the UI have no
-  reason box, and the CRDs no longer require one (`etcdRestore.reason`, and
-  `installerSignature.reason` with `mode: skip`). The fields stay in the schema,
-  deprecated and unused. The override verb, the typed confirmations and the
-  Events that record who did what are unchanged.
+- No free-text reason is asked for anywhere (ADR 0130). The UI has no reason
+  box, the CLI takes no `--override-reason`, `--reason` or reason for
+  `--skip-signature-check`, and the CRDs do not require one (`etcdRestore.reason`,
+  and `installerSignature.reason` with `mode: skip`). The fields stay in the
+  schema, deprecated and unused. The override verb, the typed confirmations and
+  the Events that record who did what still apply.
 - Changing the Cilium values needs the `update` verb on
   `talosclusters/cilium-values`, which only `ichor-admin` holds (ADR 0131). The
   chart accepts privileged pods and host paths, so whoever sets the values has
@@ -254,14 +252,7 @@ build or wrote scripts against one.
   The five `*.secretsNamespace.name` values are Ichor-owned and pinned to
   `cilium-secrets`, as is `tls.readSecretsOnlyFromSecretsNamespace=true`; a
   value for any of them is refused. The BGP control plane's secrets namespace
-  therefore moves from `kube-system` to `cilium-secrets`: move BGP
-  authentication Secrets there.
-- `ichor.maesh.dev/retry=true` is the only retry form. The time form of the
-  annotation from earlier builds is ignored (ADR 0095).
-- The Cilium Helm Job runs the installer by a verified digest, never a tag, so a
-  fresh install whose controller cannot resolve the tag in its registry needs
-  `ichor init --installer-digest sha256:...`, and an unsigned build needs
-  `ichor init --skip-signature-check` (ADR 0122).
+  is `cilium-secrets`: BGP authentication Secrets go there, not in `kube-system`.
 - The local secrets bundle is encrypted by default. `ichor init` prints a
   generated passphrase once on a terminal and waits for Enter; `ichor adopt
   --recover-secrets` seals the recovered bundle the same way. With no terminal and
@@ -276,28 +267,19 @@ build or wrote scripts against one.
   value; add a `CiliumNetworkPolicy` of your own, for which the network policies
   guide has an example. ichor-ui's `/metrics` is protected by its token check
   alone (ADR 0126).
-- The static policies no longer allow `world` egress for ichor-ui. An external
+- The static policies allow no `world` egress for ichor-ui. An external
   OIDC issuer is reached through an FQDN policy the controller writes from the
   issuer the ichor-ui Deployment names, which needs Cilium's L7 DNS proxy
   (`enable-l7-proxy`); with the proxy off the issuer is unreachable unless
   `dynamicTalosEgress` is turned off (ADR 0126).
 - `ichor upgrade ichor` verifies the installer image's signature. Development and
-  demo builds (`v0.0.N-gSHA`) are not signed and need `--skip-signature-check`, and, when the controller cannot resolve the tag in its registry,
-  `--installer-digest sha256:...`. The skip is recorded and never inherited by
+  demo builds (`v0.0.N-gSHA`) are not signed and need `--skip-signature-check`, and,
+  when the controller cannot resolve the tag in its registry, `--installer-digest sha256:...`. The skip is recorded and never inherited by
   the next upgrade (ADR 0122).
-- Image-only Cilium patches are gone. The Cilium upgrade dialog and `ichor cni
-  upgrade` offer the chart this Ichor embeds and nothing else, and automatic
-  patching (ADR 0116) selects no Cilium operation; a Cilium patch arrives with an
-  Ichor release (ADR 0115, 0116).
-- `ichor adopt -n` defaults to `ichor-system`, like every other command (it was
-  `default`) (ADR 0128).
-- `ichor machine reclaim` no longer deletes the stale pending `TalosMachine` of a
-  node it wiped; discovery refreshes it, so the command needs no `delete` right
-  on `talosmachines` (ADR 0128).
+- `ichor machine reclaim` needs no `delete` right on `talosmachines`: discovery
+  refreshes the stale pending `TalosMachine` of a node it wiped (ADR 0128).
 - `rotate-keys` refuses a `--token-settle` below 75 minutes, for the webhook, the
   CLI and the UI alike (ADR 0121).
-- Two operations on one cluster no longer run side by side: the second waits for
-  the first (ADR 0026).
 - A plain `ichor node remove` does not reinstall a SecureBoot node, which boots its
   installed system again; use `--wipe-mode system-disk` (ADR 0123).
 - `ichor machine approve` without sign-in on an `--allow-unauthenticated` install
@@ -308,11 +290,11 @@ build or wrote scripts against one.
 Found on hardware while building this release.
 
 - An HA cluster's Cilium operator stayed Pending on the one node that existed
-  and a failing Helm Job retried once a minute for ever; replicas now follow the
+  and a failing Helm Job retried once a minute for ever; replicas follow the
   nodes, the bootstrap manifest of `ichor init` renders for the one node it
   starts on, and the retry backs off (ADR 0113).
 - The etcd CA rotation hung because etcd does not reload its CA on a service
-  restart; members now reboot (ADR 0120). Key rotation dropped the old
+  restart; members reboot (ADR 0120). Key rotation dropped the old
   service-account key before pods had refreshed their tokens and crash-looped
   Ichor's own pods; the settle has a minimum and Ichor's pods are rolled first
   (ADR 0121).
@@ -320,13 +302,13 @@ Found on hardware while building this release.
   recreates the pending machine under the same name, the operation does not pause
   with a refused delete (ADR 0108).
 - `ichor machine reclaim` and `adopt --add-machine` on a node of another cluster:
-  a control plane whose etcd is not running no longer hangs the inspection (every
+  a control plane whose etcd is not running does not hang the inspection (every
   node call gives up after 20 seconds), and a node of another cluster gets the
   refusal that names `ichor machine reclaim` instead of a raw TLS error
   (ADR 0128).
-- A fresh install's NodeStarting message no longer shows the transient "STATE:
+- A fresh install's NodeStarting message does not show the transient "STATE:
   error evaluating disk locator" for the first minute, and a stale
-  `AdoptionHeld` condition no longer lingers after `hold-apply` is removed.
+  `AdoptionHeld` condition is cleared once `hold-apply` is removed.
 - ichor-ui: the Overview actions stay on while an operation runs and show the
   server's refusal.
 - An error is printed once, and the plaintext-bundle warning once per run.
@@ -344,13 +326,12 @@ Found on hardware while building this release.
 
 Security, found in review and on hardware:
 
-- Discovery no longer moves an approved machine's address. A converged machine
+- Discovery does not move an approved machine's address. A converged machine
   that fell back to maintenance mode followed any address that answered with its
   identity, so a spoofed twin could have been sent the full configuration. Only
   unapproved machines follow a discovery match (ADR 0076).
 - A control plane that is re-provisioning keeps the cluster lock until it has
-  stored its new configuration; before, another actor could take the lock
-  mid-step.
+  stored its new configuration, so no other actor can take the lock mid-step.
 - The Cilium Helm Job's installer is pinned by a verified digest (above), and the
   Job's ServiceAccount `ichor-cni` is scoped: it may change only the objects the
   pinned chart renders, by name, and holds what Cilium's optional features need
@@ -392,7 +373,12 @@ UI (ADR 0101).
   key rotation after its token-settle fix, the FQDN and metrics policies, the
   `os:reader` talosconfig, kubelet serving certificates and a signed installer
   upgrade have unit and envtest coverage but await a hardware run; the Cilium
-  takeover with `--cilium-values` and the flannel move were not run. Each ADR's
+  takeover with `--cilium-values` and the flannel move were not run. Remove node
+  (the wipe, power off or reboot into maintenance mode, and Node deletion; ADR
+  0135), `--wipe-mode system-disk` with a reboot, and orphan reclaim with the
+  cluster's own credentials plus Orphan discovery (ADR 0136) were exercised on
+  KubeVirt VMs. The even-control-plane auto-resume (ADR 0137) and a system-disk
+  wipe actually booting from the ISO were not verified on hardware. Each ADR's
   status line says what was verified.
 - Admission checks the Cilium values only as far as the object itself tells. The
   checks that need the machine configuration or the live cluster

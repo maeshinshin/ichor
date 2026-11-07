@@ -25,6 +25,7 @@ import (
 	"net/netip"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/constants"
@@ -53,7 +54,13 @@ const (
 	// ReasonAlreadyConfigured is the Event reason for a Talos node that already has a configuration
 	// (ADR 0103 section 2); internal/uiapi lists these.
 	ReasonAlreadyConfigured = "AlreadyConfigured"
-	// AnnotationAlreadyConfiguredEndpoint carries the node's endpoint on that Event.
+	// ReasonOrphan is the Event reason for a configured Talos node at the address of a Kubernetes Node that
+	// no TalosMachine of the namespace accounts for: probably an orphan of this cluster, a machine whose
+	// TalosMachine was deleted and that was never wiped (ADR 0136, amendment). Discovery cannot prove the
+	// node is this cluster's (the call is unauthenticated); reclaim with the cluster's own credentials
+	// does, because only this cluster's certificate authority can dial it. Nothing is wiped by the Event.
+	ReasonOrphan = "Orphan"
+	// AnnotationAlreadyConfiguredEndpoint carries the node's endpoint on that Event (and on Orphan).
 	AnnotationAlreadyConfiguredEndpoint = "ichor.maesh.dev/endpoint"
 )
 
@@ -97,6 +104,14 @@ type DiscoveryReconciler struct {
 func (r *DiscoveryReconciler) Discover(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, endpoint string,
 ) (*ichorv1alpha1.TalosMachine, error) {
+	return r.discover(ctx, cluster, endpoint, false)
+}
+
+// discover is Discover; orphanCandidate marks an address of a Kubernetes Node that no TalosMachine
+// accounts for, where a configured node is reported as Orphan instead of AlreadyConfigured.
+func (r *DiscoveryReconciler) discover(
+	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, endpoint string, orphanCandidate bool,
+) (*ichorv1alpha1.TalosMachine, error) {
 	log := logf.FromContext(ctx)
 
 	if r.MaintenanceClient == nil {
@@ -116,8 +131,9 @@ func (r *DiscoveryReconciler) Discover(
 	if errors.Is(err, ErrAlreadyConfigured) {
 		// A Talos API that rejects an unauthenticated call has a config already (ADR 0103 section 2).
 		// Nothing is created; the Event is how the UI and operators learn of it.
-		log.Info("discovered a Talos node that is already configured; not adding it", "endpoint", endpoint)
-		r.reportAlreadyConfigured(cluster, endpoint)
+		log.Info("discovered a Talos node that is already configured; not adding it", "endpoint", endpoint,
+			"orphanCandidate", orphanCandidate)
+		r.reportAlreadyConfigured(cluster, endpoint, orphanCandidate)
 
 		return nil, nil
 	}
@@ -316,8 +332,19 @@ func (r *DiscoveryReconciler) pinMaintenance(ctx context.Context, mc Maintenance
 
 // reportAlreadyConfigured records the AlreadyConfigured Event on cluster, with the endpoint in
 // the AnnotationEndpoint annotation so the UI API can list the addresses without parsing text.
-func (r *DiscoveryReconciler) reportAlreadyConfigured(cluster *ichorv1alpha1.TalosCluster, endpoint string) {
+func (r *DiscoveryReconciler) reportAlreadyConfigured(cluster *ichorv1alpha1.TalosCluster, endpoint string, orphan bool) {
 	if r.Recorder == nil {
+		return
+	}
+
+	if orphan {
+		r.Recorder.AnnotatedEventf(cluster, map[string]string{AnnotationAlreadyConfiguredEndpoint: endpoint},
+			corev1.EventTypeWarning, ReasonOrphan,
+			"%s runs a Talos configuration and has a Kubernetes Node, but no TalosMachine accounts for it: it may be "+
+				"a node of this cluster that was removed without a wipe; Ichor did not touch it. To start over, "+
+				"wipe it with the cluster's own credentials (ichor machine reclaim ADDRESS --cluster NAME, or Reset and add)",
+			endpoint)
+
 		return
 	}
 
@@ -424,7 +451,7 @@ func (r *DiscoveryReconciler) DiscoverAll(
 		return nil, nil
 	}
 
-	known, pending, err := r.knownHosts(ctx, cluster)
+	known, pending, orphans, err := r.knownHosts(ctx, cluster)
 	if err != nil {
 		return nil, err
 	}
@@ -451,7 +478,7 @@ func (r *DiscoveryReconciler) DiscoverAll(
 			}
 
 			// A failed probe is a miss, not an error for the pass (see above).
-			if m, err := r.Discover(cctx, cluster, endpoint); err == nil {
+			if m, err := r.discover(cctx, cluster, endpoint, orphans[endpointguard.HostOf(endpoint)]); err == nil {
 				found[i] = m
 			}
 
@@ -474,16 +501,19 @@ func (r *DiscoveryReconciler) DiscoverAll(
 // the machine. A host that an approved or rejected machine or a Node also has is only known.
 func (r *DiscoveryReconciler) knownHosts(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster,
-) (known, pending map[string]bool, err error) {
+) (known, pending, orphans map[string]bool, err error) {
 	var machines ichorv1alpha1.TalosMachineList
 	if err := r.List(ctx, &machines, client.InNamespace(cluster.Namespace)); err != nil {
-		return nil, nil, fmt.Errorf("listing TalosMachines: %w", err)
+		return nil, nil, nil, fmt.Errorf("listing TalosMachines: %w", err)
 	}
 
-	known, pending = map[string]bool{}, map[string]bool{}
+	known, pending, orphans = map[string]bool{}, map[string]bool{}, map[string]bool{}
+	uuids := map[string]bool{}
 
 	for i := range machines.Items {
 		m := &machines.Items[i]
+		uuids[strings.ToLower(m.Name)], uuids[strings.ToLower(m.Spec.Identity.UUID)] = true, true
+
 		if m.Spec.ClusterRef.Name != cluster.Name {
 			continue
 		}
@@ -499,7 +529,7 @@ func (r *DiscoveryReconciler) knownHosts(
 
 	var nodes corev1.NodeList
 	if err := r.List(ctx, &nodes); err != nil {
-		return nil, nil, fmt.Errorf("listing Nodes: %w", err)
+		return nil, nil, nil, fmt.Errorf("listing Nodes: %w", err)
 	}
 
 	for i := range nodes.Items {
@@ -509,15 +539,35 @@ func (r *DiscoveryReconciler) knownHosts(
 			continue
 		}
 
-		known[internalIP(&nodes.Items[i])] = true
+		ip := internalIP(&nodes.Items[i])
+		known[ip] = true
+
+		// A Node that no TalosMachine of the namespace accounts for (by UUID) is not a member Ichor
+		// manages: its address is probed, and a configured node there is reported as an orphan.
+		if u := strings.ToLower(nodes.Items[i].Status.NodeInfo.SystemUUID); u != "" && !uuids[u] {
+			orphans[ip] = true
+		}
 	}
 
 	delete(known, "")
 	delete(pending, "")
+	delete(orphans, "")
+
+	// A host a machine's own endpoint names is a member, whatever its Node says.
+	for i := range machines.Items {
+		m := &machines.Items[i]
+		delete(orphans, endpointguard.HostOf(m.Spec.Endpoint))
+		delete(orphans, endpointguard.HostOf(m.Status.ObservedEndpoint))
+	}
 
 	for h := range known {
 		delete(pending, h)
 	}
 
-	return known, pending, nil
+	// Orphan candidates are probed, so they are not skipped.
+	for h := range orphans {
+		delete(known, h)
+	}
+
+	return known, pending, orphans, nil
 }

@@ -694,3 +694,59 @@ var _ = Describe("DiscoveryReconciler.DiscoverAll known addresses", func() {
 		Expect(probes.endpoints).To(ConsistOf("198.51.100.20:50000"))
 	})
 })
+
+var _ = Describe("DiscoverAll orphans (ADR 0136, amendment)", func() {
+	nodeWithUUID := func(name, ip, uuid string) {
+		node := &corev1.Node{}
+		node.Name = name
+		Expect(k8sClient.Create(ctx, node)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, node) })
+
+		node.Status.Addresses = []corev1.NodeAddress{{Type: corev1.NodeInternalIP, Address: ip}}
+		node.Status.NodeInfo.SystemUUID = uuid
+		Expect(k8sClient.Status().Update(ctx, node)).To(Succeed())
+	}
+
+	It("probes a Node no TalosMachine accounts for and reports a configured node there as Orphan, not AlreadyConfigured", func() {
+		cluster := &ichorv1alpha1.TalosCluster{Name: "orphan-cluster", Namespace: tmNamespace,
+			Spec: ichorv1alpha1.TalosClusterSpec{Discovery: &ichorv1alpha1.TalosClusterDiscovery{
+				Addresses: []string{"198.51.100.30", "198.51.100.31", "198.51.100.32"},
+			}}}
+
+		// .30: a Node of a member (its TalosMachine has the UUID, a stale endpoint); .31: the orphan;
+		// .32: no Node at all (a foreign device).
+		m := &ichorv1alpha1.TalosMachine{
+			Name: "orphan-member-machine", Namespace: tmNamespace,
+			Spec: ichorv1alpha1.TalosMachineSpec{
+				ClusterRef:    corev1.LocalObjectReference{Name: cluster.Name},
+				Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: "orphan-member-uuid", Serial: "S1", MACAddresses: []string{testMAC}},
+				Endpoint:      "198.51.100.99:50000",
+				ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
+			},
+		}
+		Expect(k8sClient.Create(ctx, m)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, m) })
+
+		nodeWithUUID("orphan-member-node", "198.51.100.30", "ORPHAN-MEMBER-UUID")
+		nodeWithUUID("orphan-lost-node", "198.51.100.31", "orphan-lost-uuid")
+
+		probes := &probeRecorder{client: &fakeMaintenanceClient{err: fmt.Errorf("%w: rejected", ErrAlreadyConfigured)}}
+		recorder := record.NewFakeRecorder(10)
+		r := &DiscoveryReconciler{Client: k8sClient, Recorder: recorder, MaintenanceClient: probes.factory}
+
+		found, err := r.DiscoverAll(ctx, cluster)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(found).To(BeEmpty())
+		Expect(probes.endpoints).To(ConsistOf("198.51.100.31:50000", "198.51.100.32:50000"))
+
+		var events []string
+		for len(recorder.Events) > 0 {
+			events = append(events, <-recorder.Events)
+		}
+
+		Expect(events).To(ConsistOf(
+			And(ContainSubstring(ReasonOrphan), ContainSubstring("198.51.100.31:50000")),
+			And(ContainSubstring(ReasonAlreadyConfigured), ContainSubstring("198.51.100.32:50000")),
+		))
+	})
+})

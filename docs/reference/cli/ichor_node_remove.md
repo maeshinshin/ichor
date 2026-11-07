@@ -1,19 +1,25 @@
 ---
 title: "ichor node remove"
-description: "Remove a node from the cluster: drain it, wipe its STATE and EPHEMERAL partitions, power it off (or reboot it with --reboot) and delete its Kubernetes Node; needs the override permission"
+description: "Remove a node from the cluster: drain it, wipe it (STATE and EPHEMERAL, or more with --wipe-mode), power it off (or reboot it with --reboot) and delete its Kubernetes Node; needs the override permission"
 ---
 
 ## ichor node remove
 
-Remove a node from the cluster: drain it, wipe its STATE and EPHEMERAL partitions, power it off (or reboot it with --reboot) and delete its Kubernetes Node; needs the override permission
+Remove a node from the cluster: drain it, wipe it (STATE and EPHEMERAL, or more with --wipe-mode), power it off (or reboot it with --reboot) and delete its Kubernetes Node; needs the override permission
 
 ### Synopsis
 
-Remove a node from the cluster: drain it, wipe its STATE and EPHEMERAL partitions, power it off (or reboot it with --reboot) and delete its Kubernetes Node; needs the override permission.
+Remove a node from the cluster: drain it, wipe it (STATE and EPHEMERAL, or more with --wipe-mode), power it off (or reboot it with --reboot) and delete its Kubernetes Node; needs the override permission.
 
 It shows the plan and asks for confirmation unless --yes. For remove the typed machine name
 (the TalosMachine name, or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
 (or deletes the machine); the controller does the work. Follow it with --follow.
+
+remove --wipe-mode chooses what the wipe erases: system-partitions (the default) wipes the STATE and
+EPHEMERAL partitions, so the node boots its installed system again from a fresh state; system-disk
+wipes the whole system disk, boot and EFI included, so the node starts from its boot image (ISO or PXE)
+and installs afresh, which is how a node is moved onto SecureBoot images (docs/guides/hardening.md);
+all also wipes every user disk, destroying any data on them. system-disk and all are irreversible.
 
 ```sh
 ichor node remove NODE [flags]
@@ -22,10 +28,11 @@ ichor node remove NODE [flags]
 ### Options
 
 ```text
-      --confirm string   the machine name (the TalosMachine name, not the hostname), to go on without being asked to type it
-      --follow           after creating the operation, follow its progress until it finishes
-  -h, --help             help for remove
-      --reboot           after the wipe reboot the node into maintenance mode, so it can be added again, instead of powering it off
+      --confirm string     the machine name (the TalosMachine name, not the hostname), to go on without being asked to type it
+      --follow             after creating the operation, follow its progress until it finishes
+  -h, --help               help for remove
+      --reboot             after the wipe reboot the node into maintenance mode, so it can be added again, instead of powering it off
+      --wipe-mode string   what to wipe: system-partitions (STATE and EPHEMERAL), system-disk (the whole system disk) or all (system disk and every user disk) (default "system-partitions")
 ```
 
 ### Options inherited from parent commands

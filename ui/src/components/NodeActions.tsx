@@ -44,6 +44,9 @@ import { notifyDone } from '@/lib/notify'
 import {
   availableActions as availableNodeActions,
   canStart,
+  wipeChoices,
+  wipeModeOf,
+  type WipeChoice,
   restartableServices,
   type NodeActionDef,
   type NodeActionId,
@@ -353,6 +356,7 @@ function NodeActionDialog({
   const [overridden, setOverridden] = useState(false)
   // What the node does after the wipe (remove only): power off, or reboot into maintenance mode to add it again.
   const [afterWipe, setAfterWipe] = useState<'poweroff' | 'reboot'>('poweroff')
+  const [wipe, setWipe] = useState<WipeChoice>('system-partitions')
   const [plan, setPlan] = useState<PlanOperationResponse | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ErrorShape | null>(null)
@@ -366,6 +370,7 @@ function NodeActionDialog({
     confirm,
     override: overridden ? {} : undefined,
     reboot: def.id === 'remove' && afterWipe === 'reboot',
+    wipeMode: def.id === 'remove' ? wipeModeOf(wipe) : '',
   })
 
   // The plan is asked for as soon as the dialog opens, and again when an option that changes it
@@ -382,7 +387,7 @@ function NodeActionDialog({
         if (latest.current === mine) setError(describeError(err))
       },
     )
-  }, [service, allowLeader, afterWipe])
+  }, [service, allowLeader, afterWipe, wipe])
 
   const confirmName = plan?.confirmName ?? ''
   const startable = canStart({
@@ -407,6 +412,7 @@ function NodeActionDialog({
           machine: { namespace: machine.namespace, name: machine.name },
           confirm: typed.trim(),
           reboot: afterWipe === 'reboot',
+          wipeMode: wipeModeOf(wipe),
           override: {},
         })
         notifyDone(t('node.action.removed', { node: shown }))
@@ -458,6 +464,29 @@ function NodeActionDialog({
           <div class="flex items-center gap-2 text-sm">
             <Checkbox id="node-action-leader" checked={allowLeader} onCheckedChange={(on: boolean | 'indeterminate') => setAllowLeader(on === true)} />
             <Label htmlFor="node-action-leader">{t('node.action.allowLeader')}</Label>
+          </div>
+        )}
+
+        {def.id === 'remove' && (
+          <div class="space-y-2">
+            <Label htmlFor="node-action-wipe">{t('node.action.wipe')}</Label>
+            <Select value={wipe} onValueChange={(v: string) => setWipe(wipeChoices.find((c) => c === v) ?? 'system-partitions')}>
+              <SelectTrigger id="node-action-wipe" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {wipeChoices.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {t(`node.action.wipe.${c}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {wipe !== 'system-partitions' && (
+              <Alert variant="destructive">
+                <AlertDescription>{t(`node.action.wipe.note.${wipe}`)}</AlertDescription>
+              </Alert>
+            )}
           </div>
         )}
 

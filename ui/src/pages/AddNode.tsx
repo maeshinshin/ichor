@@ -78,7 +78,7 @@ export function AddNode() {
     <>
       <PageTitle
         title={t('addNode.pageTitle')}
-        description={t('kind.cluster')}
+        description={cluster.ref?.name}
         actions={
           <Button asChild size="sm" variant="outline">
             <Link to="/nodes">

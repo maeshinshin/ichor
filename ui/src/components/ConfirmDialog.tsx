@@ -42,12 +42,12 @@ export function ConfirmDialog({
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       {trigger && <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>}
-      <AlertDialogContent className="grid-cols-1 data-[size=default]:max-w-[calc(100%-2rem)] data-[size=default]:sm:max-w-lg">
+      <AlertDialogContent className="max-h-[calc(100dvh-2rem)] scroll-fade-y grid-cols-1 overflow-y-auto data-[size=default]:max-w-[calc(100%-2rem)] data-[size=default]:sm:max-w-lg">
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           {description && <AlertDialogDescription>{description}</AlertDialogDescription>}
         </AlertDialogHeader>
-        {children && <div className="-mx-4 max-h-[50dvh] space-y-4 overflow-y-auto px-4">{children}</div>}
+        {children && <div className="space-y-4">{children}</div>}
         {footer ?? (
           <AlertDialogFooter>
             <AlertDialogCancel>{closeLabel ?? t('common.cancel')}</AlertDialogCancel>

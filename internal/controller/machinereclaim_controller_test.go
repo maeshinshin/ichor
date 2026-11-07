@@ -143,7 +143,7 @@ var _ = Describe("MachineReclaim Controller", func() {
 
 		mr := &ichorv1alpha1.MachineReclaim{
 			Name: fmt.Sprintf("mr-%d", seq), Namespace: ns,
-			Annotations: map[string]string{ichorv1alpha1.ReclaimRequestedByAnnotation: "alice"},
+			Annotations: map[string]string{ichorv1alpha1.ReclaimRequestedByAnnotation: reclaimRequester},
 			Spec:        ichorv1alpha1.MachineReclaimSpec{Address: testNodeAddr, CredentialSecretRef: secret},
 		}
 		for _, m := range mutate {
@@ -236,7 +236,7 @@ var _ = Describe("MachineReclaim Controller", func() {
 		Expect(mr.Status.ExpiresAt.Sub(mr.CreationTimestamp.Time)).To(Equal(15 * time.Minute))
 		Expect(mr.Status.Inspection.UUID).To(Equal("uuid-1"))
 		Expect(mr.Status.Inspection.Volumes).To(HaveLen(1))
-		Expect(mr.Status.Audit.RequestedBy).To(Equal("alice"))
+		Expect(mr.Status.Audit.RequestedBy).To(Equal(reclaimRequester))
 		Expect(sawCred).To(BeTrue(), "the controller must hand the credential to the dialler")
 		Expect(node.resets.Load()).To(BeZero())
 

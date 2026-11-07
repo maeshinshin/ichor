@@ -73,6 +73,16 @@ func runMachineReclaimOwn(ctx context.Context, d ownReclaimDeps, address string,
 		return fmt.Errorf("machine reclaim: creating the request (needs the %q verb on machinereclaims): %w", ichorv1alpha1.ReclaimVerb, err)
 	}
 
+	// A request that is never confirmed (declined prompt, refusal, interrupted wait, wrong UUID) is removed again so
+	// inspections do not pile up. Nothing was reset before the confirmation, so deleting is safe.
+	confirmed := false
+
+	defer func() {
+		if !confirmed {
+			_ = d.K8s.Delete(context.WithoutCancel(ctx), mr)
+		}
+	}()
+
 	steps := newProgress(d.Out)
 
 	err = steps.Run("Inspect", func(s *step) (string, error) {
@@ -88,8 +98,6 @@ func runMachineReclaimOwn(ctx context.Context, d ownReclaimDeps, address string,
 	renderInspection(newHuman(d.Out), in, plan)
 
 	if len(plan.Refusals) > 0 {
-		_ = d.K8s.Delete(ctx, mr)
-
 		return fmt.Errorf("machine reclaim: refusing to reclaim: %s", strings.Join(plan.Refusals, "; "))
 	}
 
@@ -120,6 +128,8 @@ func runMachineReclaimOwn(ctx context.Context, d ownReclaimDeps, address string,
 	if err := d.K8s.Patch(ctx, mr, client.MergeFrom(base)); err != nil {
 		return fmt.Errorf("machine reclaim: confirming (the typed UUID must be the machine's): %w", err)
 	}
+
+	confirmed = true
 
 	if f.Wait <= 0 {
 		steps.Info("not waiting (--wait 0); the request is " + mr.Name)

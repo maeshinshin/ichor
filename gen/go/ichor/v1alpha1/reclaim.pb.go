@@ -556,6 +556,86 @@ func (x *ConfirmReclaimResponse) GetReclaim() *Reclaim {
 	return nil
 }
 
+type CancelReclaimRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Reclaim       *ObjectRef             `protobuf:"bytes,1,opt,name=reclaim,proto3" json:"reclaim,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelReclaimRequest) Reset() {
+	*x = CancelReclaimRequest{}
+	mi := &file_ichor_v1alpha1_reclaim_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelReclaimRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelReclaimRequest) ProtoMessage() {}
+
+func (x *CancelReclaimRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_reclaim_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelReclaimRequest.ProtoReflect.Descriptor instead.
+func (*CancelReclaimRequest) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_reclaim_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *CancelReclaimRequest) GetReclaim() *ObjectRef {
+	if x != nil {
+		return x.Reclaim
+	}
+	return nil
+}
+
+type CancelReclaimResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CancelReclaimResponse) Reset() {
+	*x = CancelReclaimResponse{}
+	mi := &file_ichor_v1alpha1_reclaim_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CancelReclaimResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CancelReclaimResponse) ProtoMessage() {}
+
+func (x *CancelReclaimResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_ichor_v1alpha1_reclaim_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CancelReclaimResponse.ProtoReflect.Descriptor instead.
+func (*CancelReclaimResponse) Descriptor() ([]byte, []int) {
+	return file_ichor_v1alpha1_reclaim_proto_rawDescGZIP(), []int{11}
+}
+
 type ReclaimVolume struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -568,7 +648,7 @@ type ReclaimVolume struct {
 
 func (x *ReclaimVolume) Reset() {
 	*x = ReclaimVolume{}
-	mi := &file_ichor_v1alpha1_reclaim_proto_msgTypes[10]
+	mi := &file_ichor_v1alpha1_reclaim_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -580,7 +660,7 @@ func (x *ReclaimVolume) String() string {
 func (*ReclaimVolume) ProtoMessage() {}
 
 func (x *ReclaimVolume) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_reclaim_proto_msgTypes[10]
+	mi := &file_ichor_v1alpha1_reclaim_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -593,7 +673,7 @@ func (x *ReclaimVolume) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReclaimVolume.ProtoReflect.Descriptor instead.
 func (*ReclaimVolume) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_reclaim_proto_rawDescGZIP(), []int{10}
+	return file_ichor_v1alpha1_reclaim_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ReclaimVolume) GetName() string {
@@ -645,7 +725,7 @@ type ReclaimInspection struct {
 
 func (x *ReclaimInspection) Reset() {
 	*x = ReclaimInspection{}
-	mi := &file_ichor_v1alpha1_reclaim_proto_msgTypes[11]
+	mi := &file_ichor_v1alpha1_reclaim_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -657,7 +737,7 @@ func (x *ReclaimInspection) String() string {
 func (*ReclaimInspection) ProtoMessage() {}
 
 func (x *ReclaimInspection) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_reclaim_proto_msgTypes[11]
+	mi := &file_ichor_v1alpha1_reclaim_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -670,7 +750,7 @@ func (x *ReclaimInspection) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReclaimInspection.ProtoReflect.Descriptor instead.
 func (*ReclaimInspection) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_reclaim_proto_rawDescGZIP(), []int{11}
+	return file_ichor_v1alpha1_reclaim_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ReclaimInspection) GetUuid() string {
@@ -758,7 +838,7 @@ type Reclaim struct {
 
 func (x *Reclaim) Reset() {
 	*x = Reclaim{}
-	mi := &file_ichor_v1alpha1_reclaim_proto_msgTypes[12]
+	mi := &file_ichor_v1alpha1_reclaim_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -770,7 +850,7 @@ func (x *Reclaim) String() string {
 func (*Reclaim) ProtoMessage() {}
 
 func (x *Reclaim) ProtoReflect() protoreflect.Message {
-	mi := &file_ichor_v1alpha1_reclaim_proto_msgTypes[12]
+	mi := &file_ichor_v1alpha1_reclaim_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -783,7 +863,7 @@ func (x *Reclaim) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Reclaim.ProtoReflect.Descriptor instead.
 func (*Reclaim) Descriptor() ([]byte, []int) {
-	return file_ichor_v1alpha1_reclaim_proto_rawDescGZIP(), []int{12}
+	return file_ichor_v1alpha1_reclaim_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *Reclaim) GetRef() *ObjectRef {
@@ -889,7 +969,10 @@ const file_ichor_v1alpha1_reclaim_proto_rawDesc = "" +
 	"\x04uuid\x18\x02 \x01(\tR\x04uuid\x12!\n" +
 	"\fcluster_name\x18\x03 \x01(\tR\vclusterName\"K\n" +
 	"\x16ConfirmReclaimResponse\x121\n" +
-	"\areclaim\x18\x01 \x01(\v2\x17.ichor.v1alpha1.ReclaimR\areclaim\"q\n" +
+	"\areclaim\x18\x01 \x01(\v2\x17.ichor.v1alpha1.ReclaimR\areclaim\"K\n" +
+	"\x14CancelReclaimRequest\x123\n" +
+	"\areclaim\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\areclaim\"\x17\n" +
+	"\x15CancelReclaimResponse\"q\n" +
 	"\rReclaimVolume\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\blocation\x18\x02 \x01(\tR\blocation\x12\x12\n" +
@@ -920,7 +1003,7 @@ const file_ichor_v1alpha1_reclaim_proto_rawDesc = "" +
 	"\x05force\x18\b \x01(\bR\x05force\x12)\n" +
 	"\x10force_ungraceful\x18\t \x01(\bR\x0fforceUngraceful\x12\x1c\n" +
 	"\tconfirmed\x18\n" +
-	" \x01(\bR\tconfirmed2\xd4\x03\n" +
+	" \x01(\bR\tconfirmed2\xb2\x04\n" +
 	"\x0eReclaimService\x12S\n" +
 	"\n" +
 	"CanReclaim\x12!.ichor.v1alpha1.CanReclaimRequest\x1a\".ichor.v1alpha1.CanReclaimResponse\x12\\\n" +
@@ -928,7 +1011,8 @@ const file_ichor_v1alpha1_reclaim_proto_rawDesc = "" +
 	"\n" +
 	"GetReclaim\x12!.ichor.v1alpha1.GetReclaimRequest\x1a\".ichor.v1alpha1.GetReclaimResponse\x12Y\n" +
 	"\fListReclaims\x12#.ichor.v1alpha1.ListReclaimsRequest\x1a$.ichor.v1alpha1.ListReclaimsResponse\x12_\n" +
-	"\x0eConfirmReclaim\x12%.ichor.v1alpha1.ConfirmReclaimRequest\x1a&.ichor.v1alpha1.ConfirmReclaimResponseB\xbd\x01\n" +
+	"\x0eConfirmReclaim\x12%.ichor.v1alpha1.ConfirmReclaimRequest\x1a&.ichor.v1alpha1.ConfirmReclaimResponse\x12\\\n" +
+	"\rCancelReclaim\x12$.ichor.v1alpha1.CancelReclaimRequest\x1a%.ichor.v1alpha1.CancelReclaimResponseB\xbd\x01\n" +
 	"\x12com.ichor.v1alpha1B\fReclaimProtoP\x01Z@github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1;ichorv1alpha1\xa2\x02\x03IXX\xaa\x02\x0eIchor.V1alpha1\xca\x02\x0eIchor\\V1alpha1\xe2\x02\x1aIchor\\V1alpha1\\GPBMetadata\xea\x02\x0fIchor::V1alpha1b\x06proto3"
 
 var (
@@ -943,7 +1027,7 @@ func file_ichor_v1alpha1_reclaim_proto_rawDescGZIP() []byte {
 	return file_ichor_v1alpha1_reclaim_proto_rawDescData
 }
 
-var file_ichor_v1alpha1_reclaim_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_ichor_v1alpha1_reclaim_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_ichor_v1alpha1_reclaim_proto_goTypes = []any{
 	(*CanReclaimRequest)(nil),      // 0: ichor.v1alpha1.CanReclaimRequest
 	(*CanReclaimResponse)(nil),     // 1: ichor.v1alpha1.CanReclaimResponse
@@ -955,40 +1039,45 @@ var file_ichor_v1alpha1_reclaim_proto_goTypes = []any{
 	(*ListReclaimsResponse)(nil),   // 7: ichor.v1alpha1.ListReclaimsResponse
 	(*ConfirmReclaimRequest)(nil),  // 8: ichor.v1alpha1.ConfirmReclaimRequest
 	(*ConfirmReclaimResponse)(nil), // 9: ichor.v1alpha1.ConfirmReclaimResponse
-	(*ReclaimVolume)(nil),          // 10: ichor.v1alpha1.ReclaimVolume
-	(*ReclaimInspection)(nil),      // 11: ichor.v1alpha1.ReclaimInspection
-	(*Reclaim)(nil),                // 12: ichor.v1alpha1.Reclaim
-	(*ObjectRef)(nil),              // 13: ichor.v1alpha1.ObjectRef
-	(*timestamppb.Timestamp)(nil),  // 14: google.protobuf.Timestamp
+	(*CancelReclaimRequest)(nil),   // 10: ichor.v1alpha1.CancelReclaimRequest
+	(*CancelReclaimResponse)(nil),  // 11: ichor.v1alpha1.CancelReclaimResponse
+	(*ReclaimVolume)(nil),          // 12: ichor.v1alpha1.ReclaimVolume
+	(*ReclaimInspection)(nil),      // 13: ichor.v1alpha1.ReclaimInspection
+	(*Reclaim)(nil),                // 14: ichor.v1alpha1.Reclaim
+	(*ObjectRef)(nil),              // 15: ichor.v1alpha1.ObjectRef
+	(*timestamppb.Timestamp)(nil),  // 16: google.protobuf.Timestamp
 }
 var file_ichor_v1alpha1_reclaim_proto_depIdxs = []int32{
-	13, // 0: ichor.v1alpha1.CanReclaimRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	13, // 1: ichor.v1alpha1.CreateReclaimRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
-	12, // 2: ichor.v1alpha1.CreateReclaimResponse.reclaim:type_name -> ichor.v1alpha1.Reclaim
-	13, // 3: ichor.v1alpha1.GetReclaimRequest.reclaim:type_name -> ichor.v1alpha1.ObjectRef
-	12, // 4: ichor.v1alpha1.GetReclaimResponse.reclaim:type_name -> ichor.v1alpha1.Reclaim
-	12, // 5: ichor.v1alpha1.ListReclaimsResponse.reclaims:type_name -> ichor.v1alpha1.Reclaim
-	13, // 6: ichor.v1alpha1.ConfirmReclaimRequest.reclaim:type_name -> ichor.v1alpha1.ObjectRef
-	12, // 7: ichor.v1alpha1.ConfirmReclaimResponse.reclaim:type_name -> ichor.v1alpha1.Reclaim
-	10, // 8: ichor.v1alpha1.ReclaimInspection.volumes:type_name -> ichor.v1alpha1.ReclaimVolume
-	13, // 9: ichor.v1alpha1.Reclaim.ref:type_name -> ichor.v1alpha1.ObjectRef
-	11, // 10: ichor.v1alpha1.Reclaim.inspection:type_name -> ichor.v1alpha1.ReclaimInspection
-	14, // 11: ichor.v1alpha1.Reclaim.expires_at:type_name -> google.protobuf.Timestamp
-	0,  // 12: ichor.v1alpha1.ReclaimService.CanReclaim:input_type -> ichor.v1alpha1.CanReclaimRequest
-	2,  // 13: ichor.v1alpha1.ReclaimService.CreateReclaim:input_type -> ichor.v1alpha1.CreateReclaimRequest
-	4,  // 14: ichor.v1alpha1.ReclaimService.GetReclaim:input_type -> ichor.v1alpha1.GetReclaimRequest
-	6,  // 15: ichor.v1alpha1.ReclaimService.ListReclaims:input_type -> ichor.v1alpha1.ListReclaimsRequest
-	8,  // 16: ichor.v1alpha1.ReclaimService.ConfirmReclaim:input_type -> ichor.v1alpha1.ConfirmReclaimRequest
-	1,  // 17: ichor.v1alpha1.ReclaimService.CanReclaim:output_type -> ichor.v1alpha1.CanReclaimResponse
-	3,  // 18: ichor.v1alpha1.ReclaimService.CreateReclaim:output_type -> ichor.v1alpha1.CreateReclaimResponse
-	5,  // 19: ichor.v1alpha1.ReclaimService.GetReclaim:output_type -> ichor.v1alpha1.GetReclaimResponse
-	7,  // 20: ichor.v1alpha1.ReclaimService.ListReclaims:output_type -> ichor.v1alpha1.ListReclaimsResponse
-	9,  // 21: ichor.v1alpha1.ReclaimService.ConfirmReclaim:output_type -> ichor.v1alpha1.ConfirmReclaimResponse
-	17, // [17:22] is the sub-list for method output_type
-	12, // [12:17] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	15, // 0: ichor.v1alpha1.CanReclaimRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	15, // 1: ichor.v1alpha1.CreateReclaimRequest.cluster:type_name -> ichor.v1alpha1.ObjectRef
+	14, // 2: ichor.v1alpha1.CreateReclaimResponse.reclaim:type_name -> ichor.v1alpha1.Reclaim
+	15, // 3: ichor.v1alpha1.GetReclaimRequest.reclaim:type_name -> ichor.v1alpha1.ObjectRef
+	14, // 4: ichor.v1alpha1.GetReclaimResponse.reclaim:type_name -> ichor.v1alpha1.Reclaim
+	14, // 5: ichor.v1alpha1.ListReclaimsResponse.reclaims:type_name -> ichor.v1alpha1.Reclaim
+	15, // 6: ichor.v1alpha1.ConfirmReclaimRequest.reclaim:type_name -> ichor.v1alpha1.ObjectRef
+	14, // 7: ichor.v1alpha1.ConfirmReclaimResponse.reclaim:type_name -> ichor.v1alpha1.Reclaim
+	15, // 8: ichor.v1alpha1.CancelReclaimRequest.reclaim:type_name -> ichor.v1alpha1.ObjectRef
+	12, // 9: ichor.v1alpha1.ReclaimInspection.volumes:type_name -> ichor.v1alpha1.ReclaimVolume
+	15, // 10: ichor.v1alpha1.Reclaim.ref:type_name -> ichor.v1alpha1.ObjectRef
+	13, // 11: ichor.v1alpha1.Reclaim.inspection:type_name -> ichor.v1alpha1.ReclaimInspection
+	16, // 12: ichor.v1alpha1.Reclaim.expires_at:type_name -> google.protobuf.Timestamp
+	0,  // 13: ichor.v1alpha1.ReclaimService.CanReclaim:input_type -> ichor.v1alpha1.CanReclaimRequest
+	2,  // 14: ichor.v1alpha1.ReclaimService.CreateReclaim:input_type -> ichor.v1alpha1.CreateReclaimRequest
+	4,  // 15: ichor.v1alpha1.ReclaimService.GetReclaim:input_type -> ichor.v1alpha1.GetReclaimRequest
+	6,  // 16: ichor.v1alpha1.ReclaimService.ListReclaims:input_type -> ichor.v1alpha1.ListReclaimsRequest
+	8,  // 17: ichor.v1alpha1.ReclaimService.ConfirmReclaim:input_type -> ichor.v1alpha1.ConfirmReclaimRequest
+	10, // 18: ichor.v1alpha1.ReclaimService.CancelReclaim:input_type -> ichor.v1alpha1.CancelReclaimRequest
+	1,  // 19: ichor.v1alpha1.ReclaimService.CanReclaim:output_type -> ichor.v1alpha1.CanReclaimResponse
+	3,  // 20: ichor.v1alpha1.ReclaimService.CreateReclaim:output_type -> ichor.v1alpha1.CreateReclaimResponse
+	5,  // 21: ichor.v1alpha1.ReclaimService.GetReclaim:output_type -> ichor.v1alpha1.GetReclaimResponse
+	7,  // 22: ichor.v1alpha1.ReclaimService.ListReclaims:output_type -> ichor.v1alpha1.ListReclaimsResponse
+	9,  // 23: ichor.v1alpha1.ReclaimService.ConfirmReclaim:output_type -> ichor.v1alpha1.ConfirmReclaimResponse
+	11, // 24: ichor.v1alpha1.ReclaimService.CancelReclaim:output_type -> ichor.v1alpha1.CancelReclaimResponse
+	19, // [19:25] is the sub-list for method output_type
+	13, // [13:19] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_ichor_v1alpha1_reclaim_proto_init() }
@@ -1003,7 +1092,7 @@ func file_ichor_v1alpha1_reclaim_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_ichor_v1alpha1_reclaim_proto_rawDesc), len(file_ichor_v1alpha1_reclaim_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

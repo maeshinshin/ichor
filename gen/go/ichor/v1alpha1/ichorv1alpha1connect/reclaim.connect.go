@@ -55,6 +55,9 @@ const (
 	// ReclaimServiceConfirmReclaimProcedure is the fully-qualified name of the ReclaimService's
 	// ConfirmReclaim RPC.
 	ReclaimServiceConfirmReclaimProcedure = "/ichor.v1alpha1.ReclaimService/ConfirmReclaim"
+	// ReclaimServiceCancelReclaimProcedure is the fully-qualified name of the ReclaimService's
+	// CancelReclaim RPC.
+	ReclaimServiceCancelReclaimProcedure = "/ichor.v1alpha1.ReclaimService/CancelReclaim"
 )
 
 // ReclaimServiceClient is a client for the ichor.v1alpha1.ReclaimService service.
@@ -72,6 +75,10 @@ type ReclaimServiceClient interface {
 	// ConfirmReclaim writes spec.confirmUUID, the one field it touches. The webhook
 	// rejects a UUID that differs from the inspected one.
 	ConfirmReclaim(context.Context, *connect.Request[v1alpha1.ConfirmReclaimRequest]) (*connect.Response[v1alpha1.ConfirmReclaimResponse], error)
+	// CancelReclaim deletes a request that the caller created and that is still
+	// awaiting confirmation (nothing was reset yet), so an inspection the person
+	// walked away from does not pile up. Any other request is refused.
+	CancelReclaim(context.Context, *connect.Request[v1alpha1.CancelReclaimRequest]) (*connect.Response[v1alpha1.CancelReclaimResponse], error)
 }
 
 // NewReclaimServiceClient constructs a client for the ichor.v1alpha1.ReclaimService service. By
@@ -115,6 +122,12 @@ func NewReclaimServiceClient(httpClient connect.HTTPClient, baseURL string, opts
 			connect.WithSchema(reclaimServiceMethods.ByName("ConfirmReclaim")),
 			connect.WithClientOptions(opts...),
 		),
+		cancelReclaim: connect.NewClient[v1alpha1.CancelReclaimRequest, v1alpha1.CancelReclaimResponse](
+			httpClient,
+			baseURL+ReclaimServiceCancelReclaimProcedure,
+			connect.WithSchema(reclaimServiceMethods.ByName("CancelReclaim")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -125,6 +138,7 @@ type reclaimServiceClient struct {
 	getReclaim     *connect.Client[v1alpha1.GetReclaimRequest, v1alpha1.GetReclaimResponse]
 	listReclaims   *connect.Client[v1alpha1.ListReclaimsRequest, v1alpha1.ListReclaimsResponse]
 	confirmReclaim *connect.Client[v1alpha1.ConfirmReclaimRequest, v1alpha1.ConfirmReclaimResponse]
+	cancelReclaim  *connect.Client[v1alpha1.CancelReclaimRequest, v1alpha1.CancelReclaimResponse]
 }
 
 // CanReclaim calls ichor.v1alpha1.ReclaimService.CanReclaim.
@@ -152,6 +166,11 @@ func (c *reclaimServiceClient) ConfirmReclaim(ctx context.Context, req *connect.
 	return c.confirmReclaim.CallUnary(ctx, req)
 }
 
+// CancelReclaim calls ichor.v1alpha1.ReclaimService.CancelReclaim.
+func (c *reclaimServiceClient) CancelReclaim(ctx context.Context, req *connect.Request[v1alpha1.CancelReclaimRequest]) (*connect.Response[v1alpha1.CancelReclaimResponse], error) {
+	return c.cancelReclaim.CallUnary(ctx, req)
+}
+
 // ReclaimServiceHandler is an implementation of the ichor.v1alpha1.ReclaimService service.
 type ReclaimServiceHandler interface {
 	// CanReclaim says whether reclaim is enabled and whether the caller holds the
@@ -167,6 +186,10 @@ type ReclaimServiceHandler interface {
 	// ConfirmReclaim writes spec.confirmUUID, the one field it touches. The webhook
 	// rejects a UUID that differs from the inspected one.
 	ConfirmReclaim(context.Context, *connect.Request[v1alpha1.ConfirmReclaimRequest]) (*connect.Response[v1alpha1.ConfirmReclaimResponse], error)
+	// CancelReclaim deletes a request that the caller created and that is still
+	// awaiting confirmation (nothing was reset yet), so an inspection the person
+	// walked away from does not pile up. Any other request is refused.
+	CancelReclaim(context.Context, *connect.Request[v1alpha1.CancelReclaimRequest]) (*connect.Response[v1alpha1.CancelReclaimResponse], error)
 }
 
 // NewReclaimServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -206,6 +229,12 @@ func NewReclaimServiceHandler(svc ReclaimServiceHandler, opts ...connect.Handler
 		connect.WithSchema(reclaimServiceMethods.ByName("ConfirmReclaim")),
 		connect.WithHandlerOptions(opts...),
 	)
+	reclaimServiceCancelReclaimHandler := connect.NewUnaryHandler(
+		ReclaimServiceCancelReclaimProcedure,
+		svc.CancelReclaim,
+		connect.WithSchema(reclaimServiceMethods.ByName("CancelReclaim")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/ichor.v1alpha1.ReclaimService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case ReclaimServiceCanReclaimProcedure:
@@ -218,6 +247,8 @@ func NewReclaimServiceHandler(svc ReclaimServiceHandler, opts ...connect.Handler
 			reclaimServiceListReclaimsHandler.ServeHTTP(w, r)
 		case ReclaimServiceConfirmReclaimProcedure:
 			reclaimServiceConfirmReclaimHandler.ServeHTTP(w, r)
+		case ReclaimServiceCancelReclaimProcedure:
+			reclaimServiceCancelReclaimHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -245,4 +276,8 @@ func (UnimplementedReclaimServiceHandler) ListReclaims(context.Context, *connect
 
 func (UnimplementedReclaimServiceHandler) ConfirmReclaim(context.Context, *connect.Request[v1alpha1.ConfirmReclaimRequest]) (*connect.Response[v1alpha1.ConfirmReclaimResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.ReclaimService.ConfirmReclaim is not implemented"))
+}
+
+func (UnimplementedReclaimServiceHandler) CancelReclaim(context.Context, *connect.Request[v1alpha1.CancelReclaimRequest]) (*connect.Response[v1alpha1.CancelReclaimResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("ichor.v1alpha1.ReclaimService.CancelReclaim is not implemented"))
 }

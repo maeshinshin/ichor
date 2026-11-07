@@ -22,7 +22,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file ichor/v1alpha1/reclaim.proto.
  */
 export const file_ichor_v1alpha1_reclaim: GenFile = /*@__PURE__*/
-  fileDesc("ChxpY2hvci92MWFscGhhMS9yZWNsYWltLnByb3RvEg5pY2hvci52MWFscGhhMSI/ChFDYW5SZWNsYWltUmVxdWVzdBIqCgdjbHVzdGVyGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIk8KEkNhblJlY2xhaW1SZXNwb25zZRIPCgdlbmFibGVkGAEgASgIEg8KB2FsbG93ZWQYAiABKAgSFwoPY2x1c3Rlcl9hbGxvd2VkGAMgASgIIsMBChRDcmVhdGVSZWNsYWltUmVxdWVzdBIPCgdhZGRyZXNzGAEgASgJEhMKC3RhbG9zY29uZmlnGAIgASgMEg8KB2NvbnRleHQYAyABKAkSDQoFZm9yY2UYBCABKAgSGAoQZm9yY2VfdW5ncmFjZWZ1bBgFIAEoCBIqCgdjbHVzdGVyGAYgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEh8KF3VzZV9jbHVzdGVyX2NyZWRlbnRpYWxzGAcgASgIIkEKFUNyZWF0ZVJlY2xhaW1SZXNwb25zZRIoCgdyZWNsYWltGAEgASgLMhcuaWNob3IudjFhbHBoYTEuUmVjbGFpbSI/ChFHZXRSZWNsYWltUmVxdWVzdBIqCgdyZWNsYWltGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIj4KEkdldFJlY2xhaW1SZXNwb25zZRIoCgdyZWNsYWltGAEgASgLMhcuaWNob3IudjFhbHBoYTEuUmVjbGFpbSIVChNMaXN0UmVjbGFpbXNSZXF1ZXN0IkEKFExpc3RSZWNsYWltc1Jlc3BvbnNlEikKCHJlY2xhaW1zGAEgAygLMhcuaWNob3IudjFhbHBoYTEuUmVjbGFpbSJnChVDb25maXJtUmVjbGFpbVJlcXVlc3QSKgoHcmVjbGFpbRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIMCgR1dWlkGAIgASgJEhQKDGNsdXN0ZXJfbmFtZRgDIAEoCSJCChZDb25maXJtUmVjbGFpbVJlc3BvbnNlEigKB3JlY2xhaW0YASABKAsyFy5pY2hvci52MWFscGhhMS5SZWNsYWltIlAKDVJlY2xhaW1Wb2x1bWUSDAoEbmFtZRgBIAEoCRIQCghsb2NhdGlvbhgCIAEoCRIMCgRzaXplGAMgASgEEhEKCWVuY3J5cHRlZBgEIAEoCCLVAQoRUmVjbGFpbUluc3BlY3Rpb24SDAoEdXVpZBgBIAEoCRIQCghob3N0bmFtZRgCIAEoCRIMCgRyb2xlGAMgASgJEhQKDGNsdXN0ZXJfbmFtZRgEIAEoCRISCgpjbHVzdGVyX2lkGAUgASgJEhQKDGV0Y2RfbWVtYmVycxgGIAMoCRIuCgd2b2x1bWVzGAcgAygLMh0uaWNob3IudjFhbHBoYTEuUmVjbGFpbVZvbHVtZRIQCghyZWZ1c2FscxgIIAMoCRIQCgh3YXJuaW5ncxgJIAMoCSKVAgoHUmVjbGFpbRImCgNyZWYYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSDwoHYWRkcmVzcxgCIAEoCRINCgVwaGFzZRgDIAEoCRIPCgdtZXNzYWdlGAQgASgJEjUKCmluc3BlY3Rpb24YBSABKAsyIS5pY2hvci52MWFscGhhMS5SZWNsYWltSW5zcGVjdGlvbhIOCgZyZXN1bHQYBiABKAkSLgoKZXhwaXJlc19hdBgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDQoFZm9yY2UYCCABKAgSGAoQZm9yY2VfdW5ncmFjZWZ1bBgJIAEoCBIRCgljb25maXJtZWQYCiABKAgy1AMKDlJlY2xhaW1TZXJ2aWNlElMKCkNhblJlY2xhaW0SIS5pY2hvci52MWFscGhhMS5DYW5SZWNsYWltUmVxdWVzdBoiLmljaG9yLnYxYWxwaGExLkNhblJlY2xhaW1SZXNwb25zZRJcCg1DcmVhdGVSZWNsYWltEiQuaWNob3IudjFhbHBoYTEuQ3JlYXRlUmVjbGFpbVJlcXVlc3QaJS5pY2hvci52MWFscGhhMS5DcmVhdGVSZWNsYWltUmVzcG9uc2USUwoKR2V0UmVjbGFpbRIhLmljaG9yLnYxYWxwaGExLkdldFJlY2xhaW1SZXF1ZXN0GiIuaWNob3IudjFhbHBoYTEuR2V0UmVjbGFpbVJlc3BvbnNlElkKDExpc3RSZWNsYWltcxIjLmljaG9yLnYxYWxwaGExLkxpc3RSZWNsYWltc1JlcXVlc3QaJC5pY2hvci52MWFscGhhMS5MaXN0UmVjbGFpbXNSZXNwb25zZRJfCg5Db25maXJtUmVjbGFpbRIlLmljaG9yLnYxYWxwaGExLkNvbmZpcm1SZWNsYWltUmVxdWVzdBomLmljaG9yLnYxYWxwaGExLkNvbmZpcm1SZWNsYWltUmVzcG9uc2VCvQEKEmNvbS5pY2hvci52MWFscGhhMUIMUmVjbGFpbVByb3RvUAFaQGdpdGh1Yi5jb20vbWFlc2hpbnNoaW4vaWNob3IvZ2VuL2dvL2ljaG9yL3YxYWxwaGExO2ljaG9ydjFhbHBoYTGiAgNJWFiqAg5JY2hvci5WMWFscGhhMcoCDkljaG9yXFYxYWxwaGEx4gIaSWNob3JcVjFhbHBoYTFcR1BCTWV0YWRhdGHqAg9JY2hvcjo6VjFhbHBoYTFiBnByb3RvMw", [file_google_protobuf_timestamp, file_ichor_v1alpha1_common]);
+  fileDesc("ChxpY2hvci92MWFscGhhMS9yZWNsYWltLnByb3RvEg5pY2hvci52MWFscGhhMSI/ChFDYW5SZWNsYWltUmVxdWVzdBIqCgdjbHVzdGVyGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIk8KEkNhblJlY2xhaW1SZXNwb25zZRIPCgdlbmFibGVkGAEgASgIEg8KB2FsbG93ZWQYAiABKAgSFwoPY2x1c3Rlcl9hbGxvd2VkGAMgASgIIsMBChRDcmVhdGVSZWNsYWltUmVxdWVzdBIPCgdhZGRyZXNzGAEgASgJEhMKC3RhbG9zY29uZmlnGAIgASgMEg8KB2NvbnRleHQYAyABKAkSDQoFZm9yY2UYBCABKAgSGAoQZm9yY2VfdW5ncmFjZWZ1bBgFIAEoCBIqCgdjbHVzdGVyGAYgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmEh8KF3VzZV9jbHVzdGVyX2NyZWRlbnRpYWxzGAcgASgIIkEKFUNyZWF0ZVJlY2xhaW1SZXNwb25zZRIoCgdyZWNsYWltGAEgASgLMhcuaWNob3IudjFhbHBoYTEuUmVjbGFpbSI/ChFHZXRSZWNsYWltUmVxdWVzdBIqCgdyZWNsYWltGAEgASgLMhkuaWNob3IudjFhbHBoYTEuT2JqZWN0UmVmIj4KEkdldFJlY2xhaW1SZXNwb25zZRIoCgdyZWNsYWltGAEgASgLMhcuaWNob3IudjFhbHBoYTEuUmVjbGFpbSIVChNMaXN0UmVjbGFpbXNSZXF1ZXN0IkEKFExpc3RSZWNsYWltc1Jlc3BvbnNlEikKCHJlY2xhaW1zGAEgAygLMhcuaWNob3IudjFhbHBoYTEuUmVjbGFpbSJnChVDb25maXJtUmVjbGFpbVJlcXVlc3QSKgoHcmVjbGFpbRgBIAEoCzIZLmljaG9yLnYxYWxwaGExLk9iamVjdFJlZhIMCgR1dWlkGAIgASgJEhQKDGNsdXN0ZXJfbmFtZRgDIAEoCSJCChZDb25maXJtUmVjbGFpbVJlc3BvbnNlEigKB3JlY2xhaW0YASABKAsyFy5pY2hvci52MWFscGhhMS5SZWNsYWltIkIKFENhbmNlbFJlY2xhaW1SZXF1ZXN0EioKB3JlY2xhaW0YASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYiFwoVQ2FuY2VsUmVjbGFpbVJlc3BvbnNlIlAKDVJlY2xhaW1Wb2x1bWUSDAoEbmFtZRgBIAEoCRIQCghsb2NhdGlvbhgCIAEoCRIMCgRzaXplGAMgASgEEhEKCWVuY3J5cHRlZBgEIAEoCCLVAQoRUmVjbGFpbUluc3BlY3Rpb24SDAoEdXVpZBgBIAEoCRIQCghob3N0bmFtZRgCIAEoCRIMCgRyb2xlGAMgASgJEhQKDGNsdXN0ZXJfbmFtZRgEIAEoCRISCgpjbHVzdGVyX2lkGAUgASgJEhQKDGV0Y2RfbWVtYmVycxgGIAMoCRIuCgd2b2x1bWVzGAcgAygLMh0uaWNob3IudjFhbHBoYTEuUmVjbGFpbVZvbHVtZRIQCghyZWZ1c2FscxgIIAMoCRIQCgh3YXJuaW5ncxgJIAMoCSKVAgoHUmVjbGFpbRImCgNyZWYYASABKAsyGS5pY2hvci52MWFscGhhMS5PYmplY3RSZWYSDwoHYWRkcmVzcxgCIAEoCRINCgVwaGFzZRgDIAEoCRIPCgdtZXNzYWdlGAQgASgJEjUKCmluc3BlY3Rpb24YBSABKAsyIS5pY2hvci52MWFscGhhMS5SZWNsYWltSW5zcGVjdGlvbhIOCgZyZXN1bHQYBiABKAkSLgoKZXhwaXJlc19hdBgHIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXASDQoFZm9yY2UYCCABKAgSGAoQZm9yY2VfdW5ncmFjZWZ1bBgJIAEoCBIRCgljb25maXJtZWQYCiABKAgysgQKDlJlY2xhaW1TZXJ2aWNlElMKCkNhblJlY2xhaW0SIS5pY2hvci52MWFscGhhMS5DYW5SZWNsYWltUmVxdWVzdBoiLmljaG9yLnYxYWxwaGExLkNhblJlY2xhaW1SZXNwb25zZRJcCg1DcmVhdGVSZWNsYWltEiQuaWNob3IudjFhbHBoYTEuQ3JlYXRlUmVjbGFpbVJlcXVlc3QaJS5pY2hvci52MWFscGhhMS5DcmVhdGVSZWNsYWltUmVzcG9uc2USUwoKR2V0UmVjbGFpbRIhLmljaG9yLnYxYWxwaGExLkdldFJlY2xhaW1SZXF1ZXN0GiIuaWNob3IudjFhbHBoYTEuR2V0UmVjbGFpbVJlc3BvbnNlElkKDExpc3RSZWNsYWltcxIjLmljaG9yLnYxYWxwaGExLkxpc3RSZWNsYWltc1JlcXVlc3QaJC5pY2hvci52MWFscGhhMS5MaXN0UmVjbGFpbXNSZXNwb25zZRJfCg5Db25maXJtUmVjbGFpbRIlLmljaG9yLnYxYWxwaGExLkNvbmZpcm1SZWNsYWltUmVxdWVzdBomLmljaG9yLnYxYWxwaGExLkNvbmZpcm1SZWNsYWltUmVzcG9uc2USXAoNQ2FuY2VsUmVjbGFpbRIkLmljaG9yLnYxYWxwaGExLkNhbmNlbFJlY2xhaW1SZXF1ZXN0GiUuaWNob3IudjFhbHBoYTEuQ2FuY2VsUmVjbGFpbVJlc3BvbnNlQr0BChJjb20uaWNob3IudjFhbHBoYTFCDFJlY2xhaW1Qcm90b1ABWkBnaXRodWIuY29tL21hZXNoaW5zaGluL2ljaG9yL2dlbi9nby9pY2hvci92MWFscGhhMTtpY2hvcnYxYWxwaGExogIDSVhYqgIOSWNob3IuVjFhbHBoYTHKAg5JY2hvclxWMWFscGhhMeICGkljaG9yXFYxYWxwaGExXEdQQk1ldGFkYXRh6gIPSWNob3I6OlYxYWxwaGExYgZwcm90bzM", [file_google_protobuf_timestamp, file_ichor_v1alpha1_common]);
 
 /**
  * @generated from message ichor.v1alpha1.CanReclaimRequest
@@ -265,6 +265,36 @@ export const ConfirmReclaimResponseSchema: GenMessage<ConfirmReclaimResponse> = 
   messageDesc(file_ichor_v1alpha1_reclaim, 9);
 
 /**
+ * @generated from message ichor.v1alpha1.CancelReclaimRequest
+ */
+export type CancelReclaimRequest = Message<"ichor.v1alpha1.CancelReclaimRequest"> & {
+  /**
+   * @generated from field: ichor.v1alpha1.ObjectRef reclaim = 1;
+   */
+  reclaim?: ObjectRef | undefined;
+};
+
+/**
+ * Describes the message ichor.v1alpha1.CancelReclaimRequest.
+ * Use `create(CancelReclaimRequestSchema)` to create a new message.
+ */
+export const CancelReclaimRequestSchema: GenMessage<CancelReclaimRequest> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_reclaim, 10);
+
+/**
+ * @generated from message ichor.v1alpha1.CancelReclaimResponse
+ */
+export type CancelReclaimResponse = Message<"ichor.v1alpha1.CancelReclaimResponse"> & {
+};
+
+/**
+ * Describes the message ichor.v1alpha1.CancelReclaimResponse.
+ * Use `create(CancelReclaimResponseSchema)` to create a new message.
+ */
+export const CancelReclaimResponseSchema: GenMessage<CancelReclaimResponse> = /*@__PURE__*/
+  messageDesc(file_ichor_v1alpha1_reclaim, 11);
+
+/**
  * @generated from message ichor.v1alpha1.ReclaimVolume
  */
 export type ReclaimVolume = Message<"ichor.v1alpha1.ReclaimVolume"> & {
@@ -294,7 +324,7 @@ export type ReclaimVolume = Message<"ichor.v1alpha1.ReclaimVolume"> & {
  * Use `create(ReclaimVolumeSchema)` to create a new message.
  */
 export const ReclaimVolumeSchema: GenMessage<ReclaimVolume> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_reclaim, 10);
+  messageDesc(file_ichor_v1alpha1_reclaim, 12);
 
 /**
  * @generated from message ichor.v1alpha1.ReclaimInspection
@@ -358,7 +388,7 @@ export type ReclaimInspection = Message<"ichor.v1alpha1.ReclaimInspection"> & {
  * Use `create(ReclaimInspectionSchema)` to create a new message.
  */
 export const ReclaimInspectionSchema: GenMessage<ReclaimInspection> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_reclaim, 11);
+  messageDesc(file_ichor_v1alpha1_reclaim, 13);
 
 /**
  * @generated from message ichor.v1alpha1.Reclaim
@@ -427,7 +457,7 @@ export type Reclaim = Message<"ichor.v1alpha1.Reclaim"> & {
  * Use `create(ReclaimSchema)` to create a new message.
  */
 export const ReclaimSchema: GenMessage<Reclaim> = /*@__PURE__*/
-  messageDesc(file_ichor_v1alpha1_reclaim, 12);
+  messageDesc(file_ichor_v1alpha1_reclaim, 14);
 
 /**
  * @generated from service ichor.v1alpha1.ReclaimService
@@ -483,6 +513,18 @@ export const ReclaimService: GenService<{
     methodKind: "unary";
     input: typeof ConfirmReclaimRequestSchema;
     output: typeof ConfirmReclaimResponseSchema;
+  },
+  /**
+   * CancelReclaim deletes a request that the caller created and that is still
+   * awaiting confirmation (nothing was reset yet), so an inspection the person
+   * walked away from does not pile up. Any other request is refused.
+   *
+   * @generated from rpc ichor.v1alpha1.ReclaimService.CancelReclaim
+   */
+  cancelReclaim: {
+    methodKind: "unary";
+    input: typeof CancelReclaimRequestSchema;
+    output: typeof CancelReclaimResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_ichor_v1alpha1_reclaim, 0);

@@ -136,7 +136,7 @@ package uiapi
 // (when OIDC is off it also creates and updates it; the webhook then judges the ServiceAccount, which
 // holds no reclaim verb until an operator binds ichor-machine-reclaimer to it: ADR 0107).
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=create
-// +kubebuilder:rbac:groups=ichor.maesh.dev,namespace=ichor-system,resources=machinereclaims,verbs=get;list;create;update
+// +kubebuilder:rbac:groups=ichor.maesh.dev,namespace=ichor-system,resources=machinereclaims,verbs=get;list;create;update;delete
 
 // /metrics (docs/adr/0108) is served only to a caller that proves a Kubernetes token and may `get` the
 // non-resource URL /metrics: the same TokenReview and SubjectAccessReview the controller's secure metrics

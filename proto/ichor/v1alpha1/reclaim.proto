@@ -29,6 +29,11 @@ service ReclaimService {
   // ConfirmReclaim writes spec.confirmUUID, the one field it touches. The webhook
   // rejects a UUID that differs from the inspected one.
   rpc ConfirmReclaim(ConfirmReclaimRequest) returns (ConfirmReclaimResponse);
+
+  // CancelReclaim deletes a request that the caller created and that is still
+  // awaiting confirmation (nothing was reset yet), so an inspection the person
+  // walked away from does not pile up. Any other request is refused.
+  rpc CancelReclaim(CancelReclaimRequest) returns (CancelReclaimResponse);
 }
 
 message CanReclaimRequest {
@@ -92,6 +97,12 @@ message ConfirmReclaimRequest {
 message ConfirmReclaimResponse {
   Reclaim reclaim = 1;
 }
+
+message CancelReclaimRequest {
+  ObjectRef reclaim = 1;
+}
+
+message CancelReclaimResponse {}
 
 message ReclaimVolume {
   string name = 1;

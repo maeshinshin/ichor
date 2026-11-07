@@ -238,3 +238,47 @@ func TestReclaimToPBCarriesTheInspectionWarnings(t *testing.T) {
 		t.Fatalf("warnings = %v", got)
 	}
 }
+
+func TestCancelReclaimDeletesOnlyTheCallersUnconfirmedRequest(t *testing.T) {
+	mk := func(name, by, phase, confirm string) *ichorv1alpha1.MachineReclaim {
+		return &ichorv1alpha1.MachineReclaim{
+			Namespace: testNS, Name: name,
+			Annotations: map[string]string{ichorv1alpha1.ReclaimRequestedByAnnotation: by},
+			Spec:        ichorv1alpha1.MachineReclaimSpec{Address: testReclaimAddr, ConfirmUUID: confirm},
+			Status:      ichorv1alpha1.MachineReclaimStatus{Phase: ichorv1alpha1.MachineReclaimPhase(phase)},
+		}
+	}
+	awaiting := string(ichorv1alpha1.MachineReclaimAwaitingConfirmation)
+	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(
+		mk("mine", bgUser, awaiting, ""), mk("theirs", userAlice, awaiting, ""),
+		mk("confirmed", bgUser, awaiting, "abc"), mk("resetting", bgUser, "Resetting", ""),
+	).Build()
+	s := &Server{Client: k8s, ControllerNamespace: testNS,
+		Impersonate: func(Identity) (client.Client, error) {
+			return reviewing(k8s, true, &[]authv1.ResourceAttributes{}), nil
+		}}
+	ctx := ContextWithIdentity(context.Background(), Identity{User: bgUser})
+	cancel := func(name string) error {
+		_, err := s.CancelReclaim(ctx, connect.NewRequest(&pb.CancelReclaimRequest{Reclaim: objectRef(testNS, name)}))
+		return err
+	}
+
+	if err := cancel("mine"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := cancel("theirs"); connect.CodeOf(err) != connect.CodePermissionDenied {
+		t.Errorf("another person's: %v", err)
+	}
+
+	for _, n := range []string{"confirmed", "resetting"} {
+		if err := cancel(n); connect.CodeOf(err) != connect.CodeFailedPrecondition {
+			t.Errorf("%s: %v", n, err)
+		}
+	}
+
+	var list ichorv1alpha1.MachineReclaimList
+	if err := k8s.List(context.Background(), &list); err != nil || len(list.Items) != 3 {
+		t.Fatalf("left %d, %v", len(list.Items), err)
+	}
+}

@@ -14,6 +14,12 @@
   pending or approved machine now has. The UI inspection shows the orphan warning
   the CLI prints (`ReclaimInspection.warnings`, `Cluster.orphan_addresses`;
   both fields appended). Nothing is wiped without the typed UUID.
+
+- `ichor node remove NODE --wipe-mode system-partitions|system-disk|all` and
+  the UI's "What to wipe" in Remove node choose what the wipe erases (ADR 0135
+  amendment): STATE and EPHEMERAL (default), the whole system disk (what a
+  SecureBoot reinstall needs, see the hardening guide), or the system disk and
+  every user disk. `RemoveMachineRequest` gains `wipe_mode`.
 - A machine removed before ADR 0135 (its `TalosMachine` deleted, the node not
   wiped, still carrying the cluster's configuration) can be wiped through
   Ichor (ADR 0136): `ichor machine reclaim ADDRESS --cluster NAME` without

@@ -250,6 +250,13 @@ func readLine(r io.Reader, w io.Writer, prompt string) (string, error) {
 	return strings.TrimSpace(line), nil
 }
 
+// nodeRemoveLong is the part of remove's help that the other node actions do not share.
+const nodeRemoveLong = `remove --wipe-mode chooses what the wipe erases: system-partitions (the default) wipes the STATE and
+EPHEMERAL partitions, so the node boots its installed system again from a fresh state; system-disk
+wipes the whole system disk, boot and EFI included, so the node starts from its boot image (ISO or PXE)
+and installs afresh, which is how a node is moved onto SecureBoot images (docs/guides/hardening.md);
+all also wipes every user disk, destroying any data on them. system-disk and all are irreversible.`
+
 func newNodeActionCmd(use, short string, action pb.NodeAction, args cobra.PositionalArgs, spec func(args []string) nodeActionSpec) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   use,
@@ -258,13 +265,7 @@ func newNodeActionCmd(use, short string, action pb.NodeAction, args cobra.Positi
 
 It shows the plan and asks for confirmation unless --yes. For remove the typed machine name
 (the TalosMachine name, or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
-(or deletes the machine); the controller does the work. Follow it with --follow.
-
-remove --wipe-mode chooses what the wipe erases: system-partitions (the default) wipes the STATE and
-EPHEMERAL partitions, so the node boots its installed system again from a fresh state; system-disk
-wipes the whole system disk, boot and EFI included, so the node starts from its boot image (ISO or PXE)
-and installs afresh, which is how a node is moved onto SecureBoot images (docs/guides/hardening.md);
-all also wipes every user disk, destroying any data on them. system-disk and all are irreversible.`,
+(or deletes the machine); the controller does the work. Follow it with --follow.`,
 		Args: args,
 		RunE: func(cmd *cobra.Command, a []string) error {
 			s := spec(a)
@@ -320,6 +321,7 @@ func init() {
 
 	nodeRemoveCmd.Flags().BoolVar(&nodeActionOpts.Reboot, "reboot", false,
 		"after the wipe reboot the node into maintenance mode, so it can be added again, instead of powering it off")
+	nodeRemoveCmd.Long += "\n\n" + nodeRemoveLong
 	nodeRemoveCmd.Flags().StringVar(&nodeActionOpts.WipeMode, "wipe-mode", wipeModeSystemPartitions,
 		"what to wipe: system-partitions (STATE and EPHEMERAL), system-disk (the whole system disk) or all (system disk and every user disk)")
 	nodeRemoveCmd.Flags().StringVar(&nodeActionOpts.Confirm, "confirm", "", "the machine name (the TalosMachine name, not the hostname), to go on without being asked to type it")

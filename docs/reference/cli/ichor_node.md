@@ -36,7 +36,7 @@ Show a node, tail its logs (needs ichor-ui), or reboot, shut down or remove it
 * [ichor node logs](ichor_node_logs.md)	 - Print a node's kernel or service log; --follow keeps streaming
 * [ichor node pcap](ichor_node_pcap.md)	 - Capture packets on a node's interface into a pcap file, for a bounded time and size
 * [ichor node reboot](ichor_node_reboot.md)	 - Reboot a node gracefully: cordon, drain, reboot, wait until it is Ready again
-* [ichor node remove](ichor_node_remove.md)	 - Remove a node from the cluster: drain it, wipe its STATE and EPHEMERAL partitions, power it off (or reboot it with --reboot) and delete its Kubernetes Node; needs the override permission
+* [ichor node remove](ichor_node_remove.md)	 - Remove a node from the cluster: drain it, wipe it (STATE and EPHEMERAL, or more with --wipe-mode), power it off (or reboot it with --reboot) and delete its Kubernetes Node; needs the override permission
 * [ichor node restart-service](ichor_node_restart-service.md)	 - Restart a Talos service on a node (kubelet, containerd or cri)
 * [ichor node shutdown](ichor_node_shutdown.md)	 - Shut a node down; it stays off until you power it on
 * [ichor node support-bundle](ichor_node_support-bundle.md)	 - Download a zip of a node's (or every node of a cluster's) logs, processes, mounts and Talos resources

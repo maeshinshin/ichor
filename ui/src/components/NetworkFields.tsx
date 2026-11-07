@@ -35,7 +35,7 @@ export function NetworkFields({
         <Label htmlFor={`${idPrefix}-nic`}>{t('network.nic')}</Label>
         {links.length > 0 ? (
           <Select value={form.mac || DEFAULT} onValueChange={(v) => set({ mac: v === DEFAULT ? '' : v })}>
-            <SelectTrigger id={`${idPrefix}-nic`} className="w-full">
+            <SelectTrigger id={`${idPrefix}-nic`} className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -67,7 +67,7 @@ export function NetworkFields({
           <div class="space-y-1">
             <Label htmlFor={`${idPrefix}-addressing`}>{t('network.addressing')}</Label>
             <Select value={form.addressing} onValueChange={(v) => set({ addressing: v as NetworkForm['addressing'] })}>
-              <SelectTrigger id={`${idPrefix}-addressing`} className="w-full">
+              <SelectTrigger id={`${idPrefix}-addressing`} className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

@@ -27,6 +27,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
@@ -39,6 +40,7 @@ var nodeActionOpts struct {
 	AllowLeader bool
 	Node        string
 	Reboot      bool
+	WipeMode    string
 }
 
 // nodeActionSpec is what one node action command asks for.
@@ -52,12 +54,29 @@ type nodeActionSpec struct {
 	Follow  bool
 	// Reboot is --reboot of remove: reboot into maintenance mode after the wipe instead of powering off.
 	Reboot bool
+	// WipeMode is --wipe-mode of remove: "" (system-partitions), system-disk or all; see wipeModeWire.
+	WipeMode string
+}
+
+// wipeModeSystemPartitions is the --wipe-mode name of the default wipe, STATE and EPHEMERAL only.
+const wipeModeSystemPartitions = "system-partitions"
+
+// wipeModeWire maps the --wipe-mode flag to the API's wipe mode, where the default is empty.
+func wipeModeWire(flag string) (string, error) {
+	switch flag {
+	case "", wipeModeSystemPartitions:
+		return "", nil
+	case ichorv1alpha1.WipeModeSystemDisk, ichorv1alpha1.WipeModeAll:
+		return flag, nil
+	}
+
+	return "", fmt.Errorf("--wipe-mode %q is not one of %s, %s, %s", flag, wipeModeSystemPartitions, ichorv1alpha1.WipeModeSystemDisk, ichorv1alpha1.WipeModeAll)
 }
 
 func (s nodeActionSpec) request(bg *pb.Override) *pb.NodeActionRequest {
 	return &pb.NodeActionRequest{
 		Machine: objectRef(apiOpts.Namespace, s.Machine), Action: s.Action, Service: s.Service,
-		AllowLeader: s.AllowLeader, Confirm: s.Confirm, Override: bg, Reboot: s.Reboot,
+		AllowLeader: s.AllowLeader, Confirm: s.Confirm, Override: bg, Reboot: s.Reboot, WipeMode: s.WipeMode,
 	}
 }
 
@@ -111,6 +130,13 @@ func needsTypedName(a pb.NodeAction) bool {
 // needs the machine name instead, typed here or given with --confirm, which replaces the question.
 func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, s nodeActionSpec) error {
 	bg := overrideOf(apiOpts)
+
+	wipe, err := wipeModeWire(s.WipeMode)
+	if err != nil {
+		return err
+	}
+
+	s.WipeMode = wipe
 
 	plan, err := c.Operation.PlanOperation(ctx, connect.NewRequest(&pb.PlanOperationRequest{
 		Kind: pb.OperationKind_OPERATION_KIND_NODE, Node: s.request(bg),
@@ -168,7 +194,7 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 
 	if s.Action == pb.NodeAction_NODE_ACTION_REMOVE {
 		resp, err := c.Machine.RemoveMachine(ctx, connect.NewRequest(&pb.RemoveMachineRequest{
-			Machine: objectRef(apiOpts.Namespace, s.Machine), Confirm: s.Confirm, Reboot: s.Reboot, Override: bg,
+			Machine: objectRef(apiOpts.Namespace, s.Machine), Confirm: s.Confirm, Reboot: s.Reboot, Override: bg, WipeMode: s.WipeMode,
 		}))
 		if err != nil {
 			return err
@@ -178,7 +204,7 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 			return err
 		}
 
-		nodeRemoveNext(errw, s.Reboot)
+		nodeRemoveNext(errw, s.Reboot, s.WipeMode)
 
 		return nil
 	}
@@ -232,11 +258,17 @@ func newNodeActionCmd(use, short string, action pb.NodeAction, args cobra.Positi
 
 It shows the plan and asks for confirmation unless --yes. For remove the typed machine name
 (the TalosMachine name, or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
-(or deletes the machine); the controller does the work. Follow it with --follow.`,
+(or deletes the machine); the controller does the work. Follow it with --follow.
+
+remove --wipe-mode chooses what the wipe erases: system-partitions (the default) wipes the STATE and
+EPHEMERAL partitions, so the node boots its installed system again from a fresh state; system-disk
+wipes the whole system disk, boot and EFI included, so the node starts from its boot image (ISO or PXE)
+and installs afresh, which is how a node is moved onto SecureBoot images (docs/guides/hardening.md);
+all also wipes every user disk, destroying any data on them. system-disk and all are irreversible.`,
 		Args: args,
 		RunE: func(cmd *cobra.Command, a []string) error {
 			s := spec(a)
-			s.Action, s.Follow, s.Confirm, s.Reboot = action, nodeActionOpts.Follow, nodeActionOpts.Confirm, nodeActionOpts.Reboot
+			s.Action, s.Follow, s.Confirm, s.Reboot, s.WipeMode = action, nodeActionOpts.Follow, nodeActionOpts.Confirm, nodeActionOpts.Reboot, nodeActionOpts.WipeMode
 
 			return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 				return runNodeAction(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), s)
@@ -256,7 +288,7 @@ var (
 		pb.NodeAction_NODE_ACTION_REBOOT, cobra.ExactArgs(1), machineArg)
 	nodeShutdownCmd = newNodeActionCmd("shutdown NODE", "Shut a node down; it stays off until you power it on",
 		pb.NodeAction_NODE_ACTION_SHUTDOWN, cobra.ExactArgs(1), machineArg)
-	nodeRemoveCmd = newNodeActionCmd("remove NODE", "Remove a node from the cluster: drain it, wipe its STATE and EPHEMERAL partitions, power it off (or reboot it with --reboot) and delete its Kubernetes Node; needs the override permission",
+	nodeRemoveCmd = newNodeActionCmd("remove NODE", "Remove a node from the cluster: drain it, wipe it (STATE and EPHEMERAL, or more with --wipe-mode), power it off (or reboot it with --reboot) and delete its Kubernetes Node; needs the override permission",
 		pb.NodeAction_NODE_ACTION_REMOVE, cobra.ExactArgs(1), machineArg)
 	nodeRestartServiceCmd = newNodeActionCmd("restart-service NODE SERVICE",
 		"Restart a Talos service on a node (kubelet, containerd or cri)",
@@ -288,5 +320,7 @@ func init() {
 
 	nodeRemoveCmd.Flags().BoolVar(&nodeActionOpts.Reboot, "reboot", false,
 		"after the wipe reboot the node into maintenance mode, so it can be added again, instead of powering it off")
+	nodeRemoveCmd.Flags().StringVar(&nodeActionOpts.WipeMode, "wipe-mode", wipeModeSystemPartitions,
+		"what to wipe: system-partitions (STATE and EPHEMERAL), system-disk (the whole system disk) or all (system disk and every user disk)")
 	nodeRemoveCmd.Flags().StringVar(&nodeActionOpts.Confirm, "confirm", "", "the machine name (the TalosMachine name, not the hostname), to go on without being asked to type it")
 }

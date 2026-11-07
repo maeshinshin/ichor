@@ -248,8 +248,10 @@ func CheckLastWorker(unschedulable bool, workersAfter int, override bool) error 
 }
 
 // ResetOnDeleteAnnotation, set to "true", makes the removal of a TalosMachine also reset its node;
-// ResetPowerOffAnnotation, set to "true", makes the node power off after the wipe instead of rebooting.
+// ResetPowerOffAnnotation, set to "true", makes the node power off after the wipe instead of rebooting;
+// ResetWipeModeAnnotation, system-disk or all, wipes more than STATE and EPHEMERAL (TalosOperation.spec.node.wipeMode).
 const (
 	ResetOnDeleteAnnotation = "ichor.maesh.dev/reset-on-delete"
 	ResetPowerOffAnnotation = "ichor.maesh.dev/reset-power-off"
+	ResetWipeModeAnnotation = "ichor.maesh.dev/reset-wipe-mode"
 )

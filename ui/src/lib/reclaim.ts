@@ -1,4 +1,5 @@
 // Pure helpers for the override reclaim dialog.
+import { en, t, type Key } from './i18n.ts'
 
 // uuidMatches is the typed consent: the text the person typed equals the node's UUID, ignoring case and
 // surrounding space. An empty UUID never matches, so a missing inspection cannot be confirmed.
@@ -17,4 +18,10 @@ export function reclaimSettled(phase: string): boolean {
 // server would refuse a request that names no talosconfig.
 export function usesClusterCredentials(own: boolean, clusterAllowed: boolean): boolean {
   return own && clusterAllowed
+}
+
+// reclaimPhaseLabel is the phase in words; a phase this build does not know is shown as received.
+export function reclaimPhaseLabel(phase: string): string {
+  const key = `reclaim.phase.${phase}`
+  return key in en ? t(key as Key) : phase
 }

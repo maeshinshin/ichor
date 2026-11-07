@@ -133,7 +133,7 @@ package uiapi
 // The MachineReclaim itself is written as the caller, so the ServiceAccount only reads and lists it
 // (when OIDC is off it also creates and updates it; the webhook then judges the ServiceAccount).
 // +kubebuilder:rbac:groups="",namespace=ichor-system,resources=secrets,verbs=create
-// +kubebuilder:rbac:groups=ichor.maesh.dev,namespace=ichor-system,resources=machinereclaims,verbs=get;list;create;update
+// +kubebuilder:rbac:groups=ichor.maesh.dev,namespace=ichor-system,resources=machinereclaims,verbs=get;list;create;update;delete
 
 // /metrics is served only to a caller that proves a Kubernetes token and may `get` the
 // non-resource URL /metrics: the same TokenReview and SubjectAccessReview the controller's secure metrics

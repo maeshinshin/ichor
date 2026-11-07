@@ -19,6 +19,7 @@ package uiapi
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"net/netip"
 	"slices"
@@ -413,6 +414,42 @@ func (s *Server) ConfirmReclaim(
 	}
 
 	return connect.NewResponse(&pb.ConfirmReclaimResponse{Reclaim: reclaimToPB(&mr)}), nil
+}
+
+// CancelReclaim deletes a request the caller created while it still awaits confirmation: nothing was reset, so
+// walking away from an inspection leaves nothing behind. The Secret goes with it (owner reference). A request in
+// any other phase, one confirmed, or one another person created is refused.
+func (s *Server) CancelReclaim(
+	ctx context.Context, req *connect.Request[pb.CancelReclaimRequest],
+) (*connect.Response[pb.CancelReclaimResponse], error) {
+	if err := s.reclaimGate(ctx); err != nil {
+		return nil, err
+	}
+
+	var mr ichorv1alpha1.MachineReclaim
+
+	key := namespacedName(req.Msg.GetReclaim())
+	if err := s.Get(ctx, key, &mr); err != nil {
+		return nil, mapGetError("reclaim "+key.String(), err)
+	}
+
+	user, err := s.reclaimUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	switch {
+	case mr.Annotations[ichorv1alpha1.ReclaimRequestedByAnnotation] != user:
+		return nil, connect.NewError(connect.CodePermissionDenied, errors.New("only the person who created a reclaim may cancel it"))
+	case mr.Status.Phase != ichorv1alpha1.MachineReclaimAwaitingConfirmation || mr.Spec.ConfirmUUID != "":
+		return nil, connect.NewError(connect.CodeFailedPrecondition, errors.New("only a reclaim still awaiting confirmation can be cancelled"))
+	}
+
+	if err := s.Delete(ctx, &mr, client.Preconditions{UID: &mr.UID}); client.IgnoreNotFound(err) != nil {
+		return nil, mapOperationWriteError("cancelling", key, err)
+	}
+
+	return connect.NewResponse(&pb.CancelReclaimResponse{}), nil
 }
 
 func reclaimToPB(mr *ichorv1alpha1.MachineReclaim) *pb.Reclaim {

@@ -112,6 +112,8 @@ export const en = {
   'reclaim.talosconfigFile': 'Or upload the file',
   'reclaim.context': 'Context (only when the file has several)',
   'reclaim.storedWarning': 'The pasted credential is stored in this cluster as a Secret for up to {ttl} and is deleted when the request ends. Anyone who can read Secrets in ichor-system can read it during that time.',
+  'reclaim.ownCredentials': 'It was removed from this cluster: use this cluster\'s own credentials (no talosconfig needed)',
+  'reclaim.ownWarning': 'Ichor dials the machine with the credentials it holds for this cluster. It is refused if a machine of this cluster still has this UUID (use Remove node for that); otherwise the machine is wiped, its Kubernetes Node is deleted and it comes back as a pending machine.',
   'reclaim.create': 'Inspect machine',
   'reclaim.creating': 'Inspecting…',
   'reclaim.phase': 'Phase',

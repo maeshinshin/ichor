@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
-import { FieldLabel } from '@/components/ui/field'
+import { FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
@@ -502,6 +502,7 @@ function NodeActionDialog({
                 <SelectItem value="reboot">{t('node.action.afterWipe.reboot')}</SelectItem>
               </SelectContent>
             </Select>
+            <FieldDescription>{t('node.action.afterWipeHint')}</FieldDescription>
           </div>
         )}
 

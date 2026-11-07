@@ -209,5 +209,9 @@ done
 if [ $fails = 1 ]; then
   echo "== failing tests =="
   for l in "${LABELS[@]}"; do grep -hE -e '--- FAIL' -e '\[FAIL\]' -e $'FAIL\t' "$OUT/$l.log" 2>/dev/null || true; done | sort -u
+  echo "== failure messages (Ginkgo [FAILED] blocks; the full logs are in $OUT/) =="
+  for l in "${LABELS[@]}"; do
+    sed 's/\x1b\[[0-9;]*m//g' "$OUT/$l.log" 2>/dev/null | grep -E -A8 -e '\[FAILED\]' -e '^\s+panic:' | head -80 | sed "s/^/$l: /" || true
+  done
 fi
 exit $fails

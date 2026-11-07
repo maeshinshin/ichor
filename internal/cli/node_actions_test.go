@@ -253,3 +253,35 @@ func TestNodeRemoveConfirmationIsTheMachineNameNotTheHostname(t *testing.T) {
 		t.Fatalf("--confirm with the machine name: %v", err)
 	}
 }
+
+func TestNodeRemoveWipeMode(t *testing.T) {
+	for flag, want := range map[string]string{
+		"": "", "system-partitions": "", "system-disk": "system-disk", "all": "all",
+	} {
+		got, err := wipeModeWire(flag)
+		if err != nil || got != want {
+			t.Errorf("wipeModeWire(%q) = %q, %v; want %q", flag, got, err, want)
+		}
+	}
+
+	if _, err := wipeModeWire("everything"); err == nil || !strings.Contains(err.Error(), "--wipe-mode") {
+		t.Fatalf("an unknown mode = %v", err)
+	}
+
+	c, k8s := nodeActionClients(t, false)
+	err := runNodeAction(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{},
+		nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_REMOVE, Confirm: testMachineName, WipeMode: "bogus"})
+	if err == nil || !strings.Contains(err.Error(), "--wipe-mode") || !present(k8s, testMachineName) {
+		t.Fatalf("a bad mode must stop before anything is written: %v", err)
+	}
+
+	var errw bytes.Buffer
+	if err := runNodeAction(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &errw,
+		nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_REMOVE, Confirm: testMachineName, WipeMode: "system-disk"}); err != nil {
+		t.Fatalf("system-disk remove: %v", err)
+	}
+
+	if !strings.Contains(errw.String(), "whole system disk") {
+		t.Fatalf("the plan and the next-steps text must say the whole disk is wiped:\n%s", errw.String())
+	}
+}

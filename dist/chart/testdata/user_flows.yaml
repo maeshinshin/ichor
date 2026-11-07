@@ -66,7 +66,7 @@ flows:
 - name: shut a cluster down
   role: admin
   needs: [talosoperations create, talosoperations/shutdown start]
-- name: reset or shut down a node (ichor node reset)
+- name: reset or shut down a node (the UI Reset, ichor node shutdown)
   role: admin
   needs: [talosoperations/node-reset start, talosoperations/node-shutdown start, talosmachines override]
 - name: reclaim a machine (ichor machine reclaim)

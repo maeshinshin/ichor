@@ -382,9 +382,10 @@ rendered only when set: `spec.security.secureBoot` (`Off`, `Preferred`,
 and holds the first configuration of a node without SecureBoot under `Required`;
 `spec.security.kernelLockdown` is checked against what each node reports; both
 surface as per-node and cluster conditions, and a node's state is read from its
-`SecurityState`, never changed in place. `ichor node reset --wipe-mode
-system-disk|all` wipes more than STATE and EPHEMERAL so a node can be installed
-afresh from the SecureBoot ISO.
+`SecurityState`, never changed in place. A reset with `spec.node.wipeMode`
+`system-disk` or `all` (a TalosOperation of kind node; the CLI has no flag for it)
+wipes more than STATE and EPHEMERAL so a node can be installed afresh from the
+SecureBoot ISO.
 `spec.security.kubeletServingCertificates` renders `serverTLSBootstrap` and the
 kube-apiserver's kubelet CA, and the controller approves each kubelet's
 serving-certificate request itself, only for that node's own names and addresses,
@@ -728,8 +729,8 @@ a control plane (refused if quorum would break, if the count would drop below
 `spec.controlPlane.count`, or if it's the last one) → graceful Talos reset →
 delete the Node, in that order. The machine reappears as pending and can be
 reused, or, if it was removed with "power off", comes back when you power it on. Remove and
-reset are one action: `node remove` always wipes STATE and EPHEMERAL, and `ichor node reset`
-is its deprecated alias for `node remove --reboot`. A node that does not answer is removed
+reset are one action: `node remove` always wipes STATE and EPHEMERAL, and `node remove --reboot`
+reboots the node afterwards; the `ichor node reset` command was removed on 2026-11-07. A node that does not answer is removed
 without the wipe, its Node is deleted, and the Event says it was not wiped. `forceRemove` skips drain and reset for dead hardware. Control planes
 are replaced add-then-remove, never the other way round — a 3-node cluster
 replacing a member goes 3→4→3, never 3→2, because four members tolerate one

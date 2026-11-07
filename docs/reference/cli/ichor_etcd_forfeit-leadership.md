@@ -11,7 +11,7 @@ Hand etcd leadership over from a control plane node that leads
 
 Hand etcd leadership over from a control plane node that leads.
 
-It shows the plan and asks for confirmation unless --yes. For reset and remove the typed machine name
+It shows the plan and asks for confirmation unless --yes. For remove the typed machine name
 (the TalosMachine name, or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
 (or deletes the machine); the controller does the work. Follow it with --follow.
 

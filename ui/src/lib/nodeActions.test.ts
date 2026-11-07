@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import type { ActionPermissions } from './actions.ts'
-import { availableActions, canStart, mayNodeAction, nodeActions, nodeNameMatches, restartableServices } from './nodeActions.ts'
+import { availableActions, canStart, wipeChoices, wipeModeOf, mayNodeAction, nodeActions, nodeNameMatches, restartableServices } from './nodeActions.ts'
 import { admin, operator, viewer } from './roles.testdata.ts'
 
 const ids = (role: string, perms: ActionPermissions | undefined) =>
@@ -94,4 +94,8 @@ test('a service restart needs a service from the allowlist', () => {
   assert.equal(canStart({ ...o, service: '' }), false)
   assert.equal(canStart({ ...o, service: 'etcd' }), false)
   assert.equal(canStart({ ...o, service: 'kubelet' }), true)
+})
+
+test('a remove wipes STATE and EPHEMERAL by default and sends the spec.node.wipeMode names for the bigger wipes', () => {
+  assert.deepEqual(wipeChoices.map(wipeModeOf), ['', 'system-disk', 'all'])
 })

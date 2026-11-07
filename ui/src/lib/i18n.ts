@@ -812,7 +812,6 @@ export const en = {
   'node.action.apiDown': 'The Kubernetes API will be unavailable',
   'node.action.typeName': 'Type the machine name to confirm',
   'node.action.typeNameHost': 'Type the machine name of node {host} to confirm',
-  'node.action.copyName': 'Copy machine name',
   'node.action.override': 'Override the safety check (needs the override permission)',
   'node.action.starting': 'Starting…',
   'node.action.started': 'Started “{action}” on {node}.',

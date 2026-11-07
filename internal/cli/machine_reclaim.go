@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -52,7 +53,7 @@ type reclaimFlags struct {
 var machineReclaimFlags reclaimFlags
 
 var machineReclaimCmd = &cobra.Command{
-	Use:   "reclaim ADDRESS --talosconfig FILE",
+	Use:   "reclaim ADDRESS (--talosconfig FILE | --cluster NAME)",
 	Short: "Reset a configured Talos machine of another cluster back to maintenance mode",
 	Long: `Reclaim a machine that already runs a configured Talos, so that Ichor can join it.
 
@@ -67,6 +68,13 @@ The reset wipes only the STATE and EPHEMERAL partitions and reboots.
 User disks are not touched; they are listed, and encrypted ones are called out
 because their keys may be gone.
 
+Without --talosconfig, give --cluster NAME: the machine is then an orphan of that Ichor
+cluster (its TalosMachine was deleted, which wipes on remove, so it still
+carries the cluster's configuration) and the controller wipes it with the credentials Ichor
+already holds for that cluster, deletes its Kubernetes Node and, afterwards, this command
+registers it as a pending machine. A machine that still has an approved TalosMachine is
+refused: use "ichor node remove". Needs the "reclaim" verb on machinereclaims.
+
 Consent is the machine's UUID, typed at the prompt or given as --confirm. --yes
 does not satisfy it.
 
@@ -79,7 +87,7 @@ and disks on that same machine (Event MaintenanceIdentityRefreshed); approve it 
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if talosconfigPath == "" {
-			return errors.New("machine reclaim: --talosconfig FILE is required (the operator's own credential for that machine)")
+			return runOwnReclaim(cmd, args[0])
 		}
 
 		raw, err := os.ReadFile(talosconfigPath)
@@ -110,6 +118,38 @@ and disks on that same machine (Event MaintenanceIdentityRefreshed); approve it 
 
 		return silenceIfShown(cmd, runMachineReclaim(cmd.Context(), deps, args[0], f))
 	},
+}
+
+// runOwnReclaim is the command without --talosconfig: the machine is an orphan of the cluster named by
+// --cluster and the controller wipes it with that cluster's own credentials.
+func runOwnReclaim(cmd *cobra.Command, address string) error {
+	cfg, err := loadKubeconfig(kubeconfigPath)
+	if err != nil {
+		return fmt.Errorf("machine reclaim: %w", err)
+	}
+
+	k8s, err := newKubeClientForConfig(cfg)
+	if err != nil {
+		return fmt.Errorf("machine reclaim: building the Kubernetes client: %w", err)
+	}
+
+	clientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		return fmt.Errorf("machine reclaim: %w", err)
+	}
+
+	f := machineReclaimFlags
+
+	return silenceIfShown(cmd, runMachineReclaimOwn(cmd.Context(), ownReclaimDeps{
+		K8s: k8s, Namespace: apiOpts.IchorNamespace,
+		Who: func(ctx context.Context) (string, error) {
+			return selfSubjectName(ctx, clientset.AuthenticationV1().SelfSubjectReviews())
+		},
+		Register: func(ctx context.Context, a string) error {
+			return registerDiscoveryAddress(ctx, k8s, apiOpts.Namespace, f.Cluster, a)
+		},
+		In: cmd.InOrStdin(), Out: cmd.OutOrStdout(), Poll: 2 * time.Second,
+	}, address, f))
 }
 
 // reclaimDeps are the effects runMachineReclaim has; tests replace them.

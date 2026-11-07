@@ -635,7 +635,10 @@ type ReclaimInspection struct {
 	EtcdMembers []string         `protobuf:"bytes,6,rep,name=etcd_members,json=etcdMembers,proto3" json:"etcd_members,omitempty"`
 	Volumes     []*ReclaimVolume `protobuf:"bytes,7,rep,name=volumes,proto3" json:"volumes,omitempty"`
 	// refusals are the reasons the reset is refused; empty when it may go on.
-	Refusals      []string `protobuf:"bytes,8,rep,name=refusals,proto3" json:"refusals,omitempty"`
+	Refusals []string `protobuf:"bytes,8,rep,name=refusals,proto3" json:"refusals,omitempty"`
+	// warnings are shown beside the inspection and do not stop the reset; for an orphan of a managed
+	// cluster one names the alternative that keeps its configuration.
+	Warnings      []string `protobuf:"bytes,9,rep,name=warnings,proto3" json:"warnings,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -722,6 +725,13 @@ func (x *ReclaimInspection) GetVolumes() []*ReclaimVolume {
 func (x *ReclaimInspection) GetRefusals() []string {
 	if x != nil {
 		return x.Refusals
+	}
+	return nil
+}
+
+func (x *ReclaimInspection) GetWarnings() []string {
+	if x != nil {
+		return x.Warnings
 	}
 	return nil
 }
@@ -884,7 +894,7 @@ const file_ichor_v1alpha1_reclaim_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1a\n" +
 	"\blocation\x18\x02 \x01(\tR\blocation\x12\x12\n" +
 	"\x04size\x18\x03 \x01(\x04R\x04size\x12\x1c\n" +
-	"\tencrypted\x18\x04 \x01(\bR\tencrypted\"\x91\x02\n" +
+	"\tencrypted\x18\x04 \x01(\bR\tencrypted\"\xad\x02\n" +
 	"\x11ReclaimInspection\x12\x12\n" +
 	"\x04uuid\x18\x01 \x01(\tR\x04uuid\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x12\n" +
@@ -894,7 +904,8 @@ const file_ichor_v1alpha1_reclaim_proto_rawDesc = "" +
 	"cluster_id\x18\x05 \x01(\tR\tclusterId\x12!\n" +
 	"\fetcd_members\x18\x06 \x03(\tR\vetcdMembers\x127\n" +
 	"\avolumes\x18\a \x03(\v2\x1d.ichor.v1alpha1.ReclaimVolumeR\avolumes\x12\x1a\n" +
-	"\brefusals\x18\b \x03(\tR\brefusals\"\xf5\x02\n" +
+	"\brefusals\x18\b \x03(\tR\brefusals\x12\x1a\n" +
+	"\bwarnings\x18\t \x03(\tR\bwarnings\"\xf5\x02\n" +
 	"\aReclaim\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\tR\aaddress\x12\x14\n" +

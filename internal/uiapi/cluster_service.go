@@ -58,7 +58,7 @@ func (s *Server) GetCluster(
 	}
 
 	out := clusterToPB(c)
-	out.AlreadyConfiguredAddresses = s.alreadyConfiguredAddresses(ctx, c)
+	s.fillDiscoveryFindings(ctx, out, c)
 
 	return connect.NewResponse(&pb.GetClusterResponse{Cluster: out}), nil
 }

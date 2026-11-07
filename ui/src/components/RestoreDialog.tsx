@@ -151,7 +151,7 @@ export function RestoreDialog({ cluster, disabled = false }: { cluster: { namesp
             </Alert>
           ) : (
             <Select value={chosen} onValueChange={setChosen}>
-              <SelectTrigger id="restore-snapshot" className="w-full">
+              <SelectTrigger id="restore-snapshot" className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

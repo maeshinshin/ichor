@@ -62,7 +62,7 @@ export function PatchDocumentCard({
             <Field>
               <FieldLabel>{t('patch.kindLabel')}</FieldLabel>
               <Select value={doc.kind} onValueChange={(v) => onChange({ kind: v, document: defaultDocument(v) })}>
-                <SelectTrigger className="w-full sm:w-64">
+                <SelectTrigger className="w-full sm:w-64 min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

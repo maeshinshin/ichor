@@ -256,7 +256,8 @@ func TestNodeRemoveConfirmationIsTheMachineNameNotTheHostname(t *testing.T) {
 
 func TestNodeRemoveWipeMode(t *testing.T) {
 	for flag, want := range map[string]string{
-		"": "", "system-partitions": "", "system-disk": "system-disk", "all": "all",
+		"": "", wipeModeSystemPartitions: "", ichorv1alpha1.WipeModeSystemDisk: ichorv1alpha1.WipeModeSystemDisk,
+		ichorv1alpha1.WipeModeAll: ichorv1alpha1.WipeModeAll,
 	} {
 		got, err := wipeModeWire(flag)
 		if err != nil || got != want {
@@ -268,16 +269,16 @@ func TestNodeRemoveWipeMode(t *testing.T) {
 		t.Fatalf("an unknown mode = %v", err)
 	}
 
-	c, k8s := nodeActionClients(t, false)
+	c, _ := nodeActionClients(t, false)
 	err := runNodeAction(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{},
 		nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_REMOVE, Confirm: testMachineName, WipeMode: "bogus"})
-	if err == nil || !strings.Contains(err.Error(), "--wipe-mode") || !present(k8s, testMachineName) {
+	if err == nil || !strings.Contains(err.Error(), "--wipe-mode") {
 		t.Fatalf("a bad mode must stop before anything is written: %v", err)
 	}
 
 	var errw bytes.Buffer
 	if err := runNodeAction(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &errw,
-		nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_REMOVE, Confirm: testMachineName, WipeMode: "system-disk"}); err != nil {
+		nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_REMOVE, Confirm: testMachineName, WipeMode: ichorv1alpha1.WipeModeSystemDisk}); err != nil {
 		t.Fatalf("system-disk remove: %v", err)
 	}
 

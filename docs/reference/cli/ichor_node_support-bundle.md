@@ -47,5 +47,5 @@ ichor node support-bundle [NODE] [flags]
 
 ### SEE ALSO
 
-* [ichor node](ichor_node.md)	 - Show a node, tail its logs (needs ichor-ui), or reboot, shut down, reset or remove it
+* [ichor node](ichor_node.md)	 - Show a node, tail its logs (needs ichor-ui), or reboot, shut down or remove it
 

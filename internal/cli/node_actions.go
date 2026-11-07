@@ -38,7 +38,6 @@ var nodeActionOpts struct {
 	Confirm     string
 	AllowLeader bool
 	Node        string
-	WipeMode    string
 	Reboot      bool
 }
 
@@ -48,11 +47,9 @@ type nodeActionSpec struct {
 	Action      pb.NodeAction
 	Service     string
 	AllowLeader bool
-	// Confirm is the machine name, typed or passed with --confirm; required for reset and remove.
+	// Confirm is the machine name, typed or passed with --confirm; required for remove.
 	Confirm string
 	Follow  bool
-	// WipeMode is --wipe-mode of reset: system-disk or all; empty wipes STATE and EPHEMERAL only.
-	WipeMode string
 	// Reboot is --reboot of remove: reboot into maintenance mode after the wipe instead of powering off.
 	Reboot bool
 }
@@ -60,7 +57,7 @@ type nodeActionSpec struct {
 func (s nodeActionSpec) request(bg *pb.Override) *pb.NodeActionRequest {
 	return &pb.NodeActionRequest{
 		Machine: objectRef(apiOpts.Namespace, s.Machine), Action: s.Action, Service: s.Service,
-		AllowLeader: s.AllowLeader, Confirm: s.Confirm, Override: bg, WipeMode: s.WipeMode, Reboot: s.Reboot,
+		AllowLeader: s.AllowLeader, Confirm: s.Confirm, Override: bg, Reboot: s.Reboot,
 	}
 }
 
@@ -97,8 +94,6 @@ func nodeHeadline(s nodeActionSpec) string {
 		return "Defragment etcd on"
 	case pb.NodeAction_NODE_ACTION_ETCD_FORFEIT_LEADERSHIP:
 		return "Hand etcd leadership over from"
-	case pb.NodeAction_NODE_ACTION_RESET:
-		return "RESET and remove"
 	case pb.NodeAction_NODE_ACTION_REMOVE:
 		return "REMOVE and wipe"
 	case pb.NodeAction_NODE_ACTION_UNSPECIFIED:
@@ -109,11 +104,11 @@ func nodeHeadline(s nodeActionSpec) string {
 
 // needsTypedName is true for the actions that cannot be undone and so make the user type the name.
 func needsTypedName(a pb.NodeAction) bool {
-	return a == pb.NodeAction_NODE_ACTION_RESET || a == pb.NodeAction_NODE_ACTION_REMOVE
+	return a == pb.NodeAction_NODE_ACTION_REMOVE
 }
 
-// runNodeAction plans, confirms and starts one node action. --yes skips the y/N question; reset
-// and remove need the machine name instead, typed here or given with --confirm, which replaces the question.
+// runNodeAction plans, confirms and starts one node action. --yes skips the y/N question; remove
+// needs the machine name instead, typed here or given with --confirm, which replaces the question.
 func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, s nodeActionSpec) error {
 	bg := overrideOf(apiOpts)
 
@@ -143,7 +138,7 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 
 	text := nodePlanText(s, plan.Msg)
 
-	// The typed name is the consent for reset and remove: typed at the prompt or given as --confirm
+	// The typed name is the consent for remove: typed at the prompt or given as --confirm
 	// (as restore --live and machine reclaim do), it replaces the y/N question; --yes alone does not.
 	switch {
 	case needsTypedName(s.Action) && s.Confirm != "":
@@ -235,14 +230,13 @@ func newNodeActionCmd(use, short string, action pb.NodeAction, args cobra.Positi
 		Short: short,
 		Long: short + `.
 
-It shows the plan and asks for confirmation unless --yes. For reset and remove the typed machine name
+It shows the plan and asks for confirmation unless --yes. For remove the typed machine name
 (the TalosMachine name, or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
 (or deletes the machine); the controller does the work. Follow it with --follow.`,
 		Args: args,
 		RunE: func(cmd *cobra.Command, a []string) error {
 			s := spec(a)
 			s.Action, s.Follow, s.Confirm, s.Reboot = action, nodeActionOpts.Follow, nodeActionOpts.Confirm, nodeActionOpts.Reboot
-			s.WipeMode = nodeActionOpts.WipeMode
 
 			return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 				return runNodeAction(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), s)
@@ -262,9 +256,6 @@ var (
 		pb.NodeAction_NODE_ACTION_REBOOT, cobra.ExactArgs(1), machineArg)
 	nodeShutdownCmd = newNodeActionCmd("shutdown NODE", "Shut a node down; it stays off until you power it on",
 		pb.NodeAction_NODE_ACTION_SHUTDOWN, cobra.ExactArgs(1), machineArg)
-	nodeResetCmd = newNodeActionCmd("reset NODE",
-		"Deprecated, use `node remove --reboot`: remove a node from the cluster, wipe it (its STATE and EPHEMERAL partitions, or the whole disk with --wipe-mode) and reboot it; needs the override permission",
-		pb.NodeAction_NODE_ACTION_RESET, cobra.ExactArgs(1), machineArg)
 	nodeRemoveCmd = newNodeActionCmd("remove NODE", "Remove a node from the cluster: drain it, wipe its STATE and EPHEMERAL partitions, power it off (or reboot it with --reboot) and delete its Kubernetes Node; needs the override permission",
 		pb.NodeAction_NODE_ACTION_REMOVE, cobra.ExactArgs(1), machineArg)
 	nodeRestartServiceCmd = newNodeActionCmd("restart-service NODE SERVICE",
@@ -284,7 +275,7 @@ var (
 )
 
 func init() {
-	nodeCmd.AddCommand(nodeRebootCmd, nodeShutdownCmd, nodeResetCmd, nodeRemoveCmd, nodeRestartServiceCmd)
+	nodeCmd.AddCommand(nodeRebootCmd, nodeShutdownCmd, nodeRemoveCmd, nodeRestartServiceCmd)
 	etcdCmd.AddCommand(etcdDefragCmd, etcdForfeitCmd)
 
 	for _, c := range []*cobra.Command{etcdDefragCmd, etcdForfeitCmd} {
@@ -295,13 +286,7 @@ func init() {
 	etcdDefragCmd.Flags().BoolVar(&nodeActionOpts.AllowLeader, "allow-leader", false,
 		"allow defragmenting the etcd leader (writes pause for the whole cluster meanwhile)")
 
-	nodeResetCmd.Flags().StringVar(&nodeActionOpts.WipeMode, "wipe-mode", "",
-		"wipe more than STATE and EPHEMERAL: system-disk (the whole system disk, so the node boots its boot image again and can be installed afresh) or all (also every user disk)")
-
 	nodeRemoveCmd.Flags().BoolVar(&nodeActionOpts.Reboot, "reboot", false,
 		"after the wipe reboot the node into maintenance mode, so it can be added again, instead of powering it off")
-
-	for _, c := range []*cobra.Command{nodeResetCmd, nodeRemoveCmd} {
-		c.Flags().StringVar(&nodeActionOpts.Confirm, "confirm", "", "the machine name (the TalosMachine name, not the hostname), to go on without being asked to type it")
-	}
+	nodeRemoveCmd.Flags().StringVar(&nodeActionOpts.Confirm, "confirm", "", "the machine name (the TalosMachine name, not the hostname), to go on without being asked to type it")
 }

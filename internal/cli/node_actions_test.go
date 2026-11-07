@@ -34,7 +34,7 @@ func nodeActionClients(t *testing.T, yes bool) (*apiClients, client.Client) {
 	t.Helper()
 
 	setAPITestFlags(t, yes)
-	apiOpts.Override = true // a remove and a reset both need it
+	apiOpts.Override = true // a remove needs it
 
 	k8s := reviewAs(true, fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(opTestObjects()...).Build())
 
@@ -49,7 +49,7 @@ func present(k8s client.Client, name string) bool {
 }
 
 func TestNodeCommandsAreRegistered(t *testing.T) {
-	for _, name := range []string{"reboot", "shutdown", "reset", "remove", "restart-service"} {
+	for _, name := range []string{"reboot", "shutdown", "remove", "restart-service"} {
 		if c, _, err := nodeCmd.Find([]string{name}); err != nil || c == nil || c.Name() != name {
 			t.Errorf("ichor node %s is not registered: %v", name, err)
 		}
@@ -126,14 +126,14 @@ func TestNodeRestartServiceAndEtcdRefusalsAreStatedBeforeAnyPrompt(t *testing.T)
 	}
 }
 
-func TestNodeResetNeedsOverride(t *testing.T) {
+func TestNodeRemoveNeedsOverride(t *testing.T) {
 	c, _ := nodeActionClients(t, true)
 	apiOpts.Override = false
 
 	err := runNodeAction(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{},
-		nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_RESET, Confirm: testMachineName})
+		nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_REMOVE, Confirm: testMachineName})
 	if err == nil || !strings.Contains(err.Error(), "--override") {
-		t.Fatalf("reset without override = %v", err)
+		t.Fatalf("remove without override = %v", err)
 	}
 }
 
@@ -181,50 +181,33 @@ func TestNodeRemoveWithYesStillNeedsConfirm(t *testing.T) {
 
 // --confirm NAME is the typed name given up front (ADR 0085): like typing it at the prompt it is the
 // consent, so it does not also ask "Proceed? [y/N]" (restore --live and machine reclaim treat it alike).
-func TestNodeResetAndRemoveWithConfirmDoNotAskAgain(t *testing.T) {
-	for _, action := range []pb.NodeAction{pb.NodeAction_NODE_ACTION_RESET, pb.NodeAction_NODE_ACTION_REMOVE} {
-		c, _ := nodeActionClients(t, false)
-		apiOpts.Override = true
+func TestNodeRemoveWithConfirmDoNotAskAgain(t *testing.T) {
+	c, _ := nodeActionClients(t, false)
+	apiOpts.Override = true
 
-		var errw bytes.Buffer
+	var errw bytes.Buffer
 
-		err := runNodeAction(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &errw,
-			nodeActionSpec{Machine: testMachineName, Action: action, Confirm: testMachineName})
-		// The fake API cannot answer reset's SelfSubjectAccessReview, so only the question matters here.
-		if err != nil && (strings.Contains(err.Error(), "aborted") || strings.Contains(err.Error(), "reading confirmation")) {
-			t.Fatalf("%v: --confirm alone must be enough: %v\n%s", action, err, errw.String())
-		}
+	err := runNodeAction(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &errw,
+		nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_REMOVE, Confirm: testMachineName})
+	if err != nil && (strings.Contains(err.Error(), "aborted") || strings.Contains(err.Error(), "reading confirmation")) {
+		t.Fatalf("--confirm alone must be enough: %v\n%s", err, errw.String())
+	}
 
-		if strings.Contains(errw.String(), "Proceed?") || errw.Len() == 0 {
-			t.Fatalf("%v: the plan is shown and nothing is asked:\n%s", action, errw.String())
-		}
+	if strings.Contains(errw.String(), "Proceed?") || errw.Len() == 0 {
+		t.Fatalf("the plan is shown and nothing is asked:\n%s", errw.String())
 	}
 }
 
-// --wipe-mode belongs to reset alone and reaches the request.
-func TestNodeResetWipeModeFlag(t *testing.T) {
-	if nodeResetCmd.Flags().Lookup("wipe-mode") == nil {
-		t.Fatal("ichor node reset has no --wipe-mode")
-	}
-
-	if nodeRemoveCmd.Flags().Lookup("wipe-mode") != nil || nodeRebootCmd.Flags().Lookup("wipe-mode") != nil {
-		t.Fatal("--wipe-mode is for reset only")
-	}
-
-	req := nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_RESET, WipeMode: "system-disk"}.request(nil)
-	if req.GetWipeMode() != "system-disk" {
-		t.Fatalf("request = %+v", req)
-	}
-}
-
-// ichor node reset is the deprecated alias of node remove --reboot (ADR 0135).
-func TestNodeRemoveHasRebootAndResetIsDeprecated(t *testing.T) {
+// ichor node reset is gone (ADR 0135 and its 2026-11-07 amendment): node remove --reboot replaces it.
+func TestNodeResetIsRemoved(t *testing.T) {
 	if nodeRemoveCmd.Flags().Lookup("reboot") == nil {
 		t.Error("ichor node remove has no --reboot")
 	}
 
-	if !strings.Contains(nodeResetCmd.Short, "Deprecated") || !strings.Contains(nodeResetCmd.Short, "node remove --reboot") {
-		t.Errorf("node reset must point at node remove --reboot: %q", nodeResetCmd.Short)
+	for _, c := range nodeCmd.Commands() {
+		if c.Name() == "reset" {
+			t.Errorf("ichor node reset is still registered: %q", c.Short)
+		}
 	}
 }
 

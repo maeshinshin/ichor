@@ -11,7 +11,7 @@ Restart a Talos service on a node (kubelet, containerd or cri)
 
 Restart a Talos service on a node (kubelet, containerd or cri).
 
-It shows the plan and asks for confirmation unless --yes. For reset and remove the typed machine name
+It shows the plan and asks for confirmation unless --yes. For remove the typed machine name
 (the TalosMachine name, or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
 (or deletes the machine); the controller does the work. Follow it with --follow.
 
@@ -44,5 +44,5 @@ ichor node restart-service NODE SERVICE [flags]
 
 ### SEE ALSO
 
-* [ichor node](ichor_node.md)	 - Show a node, tail its logs (needs ichor-ui), or reboot, shut down, reset or remove it
+* [ichor node](ichor_node.md)	 - Show a node, tail its logs (needs ichor-ui), or reboot, shut down or remove it
 

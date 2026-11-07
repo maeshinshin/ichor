@@ -51,7 +51,7 @@ type nodeLogsOptions struct {
 // talks to a node itself (docs/adr/0047), so there is no local fallback.
 var nodeCmd = &cobra.Command{
 	Use:   "node",
-	Short: "Show a node, tail its logs (needs ichor-ui), or reboot, shut down, reset or remove it",
+	Short: "Show a node, tail its logs (needs ichor-ui), or reboot, shut down or remove it",
 }
 
 var nodeGetCmd = &cobra.Command{

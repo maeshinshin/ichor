@@ -41,7 +41,7 @@ help and completion. Set ICHOR_NO_UPDATE_NOTICE=1 to turn it off.
 * [ichor etcd](ichor_etcd.md)	 - Download an etcd snapshot from, or run an etcd maintenance action on, a control plane node
 * [ichor init](ichor_init.md)	 - Bootstrap a brand-new Talos cluster's first control plane
 * [ichor machine](ichor_machine.md)	 - List, inspect, approve or reject machines
-* [ichor node](ichor_node.md)	 - Show a node, tail its logs (needs ichor-ui), or reboot, shut down, reset or remove it
+* [ichor node](ichor_node.md)	 - Show a node, tail its logs (needs ichor-ui), or reboot, shut down or remove it
 * [ichor operation](ichor_operation.md)	 - List, follow, pause, resume or delete the operations (upgrades, shutdowns) of a cluster
 * [ichor patch](ichor_patch.md)	 - List, inspect, create, update, delete or preview TalosConfigPatches
 * [ichor restore](ichor_restore.md)	 - Restore etcd from a backup snapshot: into the running cluster (--live) or after losing it (--recover-cluster)

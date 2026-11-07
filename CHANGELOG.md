@@ -4,6 +4,18 @@
 
 ### Features
 
+- A machine removed without a wipe (its `TalosMachine` deleted, the node not
+  wiped, still carrying the cluster's configuration) can be wiped through
+  Ichor: `ichor machine reclaim ADDRESS --cluster NAME` without
+  `--talosconfig`, or the UI's Reset and add with "It was removed from this
+  cluster", uses the credentials Ichor holds for that cluster, wipes STATE and
+  EPHEMERAL, deletes the machine's Kubernetes Node and leaves it as a pending
+  machine. The same quorum and last-control-plane refusals apply; a machine
+  that still has an approved `TalosMachine` is refused with a pointer to Remove
+  node. `MachineReclaim` gains `spec.clusterCredentials` and
+  `spec.credentialSecretRef` is optional with it. `ichor adopt --add-machine`
+  of a blocked machine now also says how to wipe it instead, so the two
+  refusals no longer point at each other.
 - "Remove node" and reset are one action. `ichor node remove NODE`
   (the UI's "Remove node") drains the node, removes its etcd member (control
   plane), wipes STATE and EPHEMERAL, then powers the machine off, or reboots it

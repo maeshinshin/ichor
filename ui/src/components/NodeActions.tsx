@@ -36,7 +36,6 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
-import { CopyableName } from '@/components/CopyableName'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { NodeAction, OperationKind, type PlanOperationResponse } from '@/gen/ichor/v1alpha1/operation_pb'
 import { machineClient, nodeClient, operationClient } from '@/lib/connect'
@@ -536,7 +535,7 @@ function NodeActionDialog({
             )}
             {confirmName !== '' && (
               <div class="space-y-2">
-                <CopyableName value={machine.name} ariaLabel={t('node.action.copyName')} />
+                <code class="block font-mono text-sm break-all select-all">{machine.name}</code>
                 <FieldLabel htmlFor="node-action-name">{shown === machine.name ? t('node.action.typeName') : t('node.action.typeNameHost', { host: shown })}</FieldLabel>
                 <Input
                   id="node-action-name"

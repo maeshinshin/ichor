@@ -13,7 +13,6 @@
   pending or approved machine now has. The UI inspection shows the orphan warning
   the CLI prints (`ReclaimInspection.warnings`, `Cluster.orphan_addresses`;
   both fields appended). Nothing is wiped without the typed UUID.
-
 - `ichor node remove NODE --wipe-mode system-partitions|system-disk|all` and
   the UI's "What to wipe" in Remove node choose what the wipe erases: STATE and EPHEMERAL (default), the whole system disk (what a
   SecureBoot reinstall needs, see the hardening guide), or the system disk and
@@ -54,8 +53,8 @@
 - `ichor node reset` is removed (2026-11-07). Use
   `ichor node remove NODE --reboot`, which wipes STATE and EPHEMERAL and reboots
   the node into maintenance mode; its `--confirm` and `--override` work as
-  before. `--wipe-mode` goes with the command. The `reset` operation and its
-  `wipeMode` field stay in the API.
+  before. `ichor node reset`'s `--wipe-mode` moved to `ichor node remove` (see
+  Features). The `reset` operation and its `wipeMode` field stay in the API.
 
 ### UI
 
@@ -72,7 +71,7 @@
 
 ### Notable fixes
 
-- The typed confirmation of `ichor node remove|reset` is the machine name everywhere (the TalosMachine name the UI dialog shows), not the hostname: `--confirm` takes it, the prompt and the refusal say "the machine name <uuid> (node <host>)", and the server no longer accepts the hostname. NODE still takes the machine name, hostname or Node name.
+- The typed confirmation of `ichor node remove` is the machine name everywhere (the TalosMachine name the UI dialog shows), not the hostname: `--confirm` takes it, the prompt and the refusal say "the machine name <uuid> (node <host>)", and the server no longer accepts the hostname. NODE still takes the machine name, hostname or Node name.
 - `ichor version` prints the no-image skip warning on its own line.
 
 ## v0.1.0 (2026-11-06)

@@ -228,6 +228,27 @@ var _ = Describe("TalosOperationReconciler", func() {
 		expectPausedBecause(got, reasonOperationTransitioning)
 	})
 
+	It("resumes by itself when the control-plane count is odd again", func() {
+		cluster := newOpTestCluster()
+		newOpTestMachine(cluster.Name, "controlplane", "ar-cp1")
+		newOpTestMachine(cluster.Name, "controlplane", "ar-cp2")
+		op := newOpTestOperation(cluster.Name)
+
+		r, fake := newOpTestReconciler(nil)
+
+		mustReconcileOperation(r, op)
+		expectPausedBecause(fetchOperation(op), reasonOperationTransitioning)
+		Expect(fake.calls).To(BeEmpty())
+
+		newOpTestMachine(cluster.Name, "controlplane", "ar-cp3")
+		mustReconcileOperation(r, op)
+
+		got := fetchOperation(op)
+		Expect(got.Status.Phase).NotTo(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(apimeta.FindStatusCondition(got.Status.Conditions, conditionOperationPaused)).To(BeNil())
+		Expect(fake.calls).NotTo(BeEmpty())
+	})
+
 	It("pauses with ClusterLockHeld and never calls Advance when another identity holds the cluster lock", func() {
 		cluster := newOpTestCluster()
 		newOpTestMachine(cluster.Name, "controlplane", "lh-cp1")

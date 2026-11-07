@@ -296,7 +296,7 @@ export function PatchDetail({ name }: { name?: string }) {
                     applyTargetFields(targetFieldsFor(layerKeyOf(l), undefined))
                   }}
                 >
-                  <SelectTrigger id="patch-layer" className="w-full">
+                  <SelectTrigger id="patch-layer" className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
                     <SelectValue placeholder={t('patch.selectLayer')} />
                   </SelectTrigger>
                   <SelectContent>
@@ -323,7 +323,7 @@ export function PatchDetail({ name }: { name?: string }) {
                 <Field>
                   <FieldLabel htmlFor="patch-target-role">{t('patch.target')}</FieldLabel>
                   <Select value={role} onValueChange={setRole}>
-                    <SelectTrigger id="patch-target-role" className="w-full">
+                    <SelectTrigger id="patch-target-role" className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
                       <SelectValue placeholder={t('approve.selectRole')} />
                     </SelectTrigger>
                     <SelectContent>
@@ -351,7 +351,7 @@ export function PatchDetail({ name }: { name?: string }) {
                 <Field>
                   <FieldLabel htmlFor="patch-target-machine">{t('patch.target')}</FieldLabel>
                   <Select value={machineRef} onValueChange={setMachineRef}>
-                    <SelectTrigger id="patch-target-machine" className="w-full">
+                    <SelectTrigger id="patch-target-machine" className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
                       <SelectValue placeholder={t('patch.selectMachine')} />
                     </SelectTrigger>
                     <SelectContent>

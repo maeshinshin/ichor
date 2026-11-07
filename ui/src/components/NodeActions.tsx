@@ -277,7 +277,7 @@ function CaptureDialog({
             <Label htmlFor="capture-interface">{t('capture.interface')}</Label>
             {names.length > 0 ? (
               <Select value={iface} onValueChange={setIface}>
-                <SelectTrigger id="capture-interface" className="w-full">
+                <SelectTrigger id="capture-interface" className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -445,7 +445,7 @@ function NodeActionDialog({
           <div class="space-y-2">
             <Label htmlFor="node-action-service">{t('node.action.service')}</Label>
             <Select value={service} onValueChange={setService}>
-              <SelectTrigger id="node-action-service" className="w-full">
+              <SelectTrigger id="node-action-service" className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -470,7 +470,7 @@ function NodeActionDialog({
           <div class="space-y-2">
             <Label htmlFor="node-action-wipe">{t('node.action.wipe')}</Label>
             <Select value={wipe} onValueChange={(v: string) => setWipe(wipeChoices.find((c) => c === v) ?? 'system-partitions')}>
-              <SelectTrigger id="node-action-wipe" className="w-full">
+              <SelectTrigger id="node-action-wipe" className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -493,7 +493,7 @@ function NodeActionDialog({
           <div class="space-y-2">
             <Label htmlFor="node-action-after">{t('node.action.afterWipe')}</Label>
             <Select value={afterWipe} onValueChange={(v: string) => setAfterWipe(v === 'reboot' ? 'reboot' : 'poweroff')}>
-              <SelectTrigger id="node-action-after" className="w-full">
+              <SelectTrigger id="node-action-after" className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

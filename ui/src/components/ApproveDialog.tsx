@@ -196,7 +196,7 @@ export function ApproveDialog({
           <section class="space-y-1">
             <Label htmlFor="approve-role">{t('approve.role')}</Label>
             <Select value={role ? String(role) : ''} onValueChange={(v) => setRole(Number(v) as MachineRole)}>
-              <SelectTrigger id="approve-role" className="w-full">
+              <SelectTrigger id="approve-role" className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
                 <SelectValue placeholder={t('approve.selectRole')} />
               </SelectTrigger>
               <SelectContent>

@@ -55,6 +55,13 @@ spec:
                   dialled; the endpoints in the talosconfig are ignored.
                 minLength: 1
                 type: string
+              clusterCredentials:
+                description: |-
+                  clusterCredentials dials the node with the credentials Ichor holds for the TalosCluster named
+                  by clusterRef instead of a pasted foreign talosconfig. It is for an orphan: a
+                  machine of that cluster whose TalosMachine is gone, so the person has no talosconfig for it.
+                  The same refusals apply, and a node that is not in that cluster is refused.
+                type: boolean
               clusterRef:
                 description: |-
                   clusterRef optionally names the TalosCluster (same namespace) the machine is meant to join
@@ -88,8 +95,7 @@ spec:
               credentialSecretRef:
                 description: |-
                   credentialSecretRef names a Secret of type ichor.maesh.dev/foreign-talosconfig in this
-                  namespace. It is deleted when the request ends or expires.
-                minLength: 1
+                  namespace. It is deleted when the request ends or expires. Empty only with clusterCredentials.
                 type: string
               force:
                 description: |-
@@ -110,12 +116,19 @@ spec:
                   rule: duration(self) > duration('0s') && duration(self) <= duration('60m')
             required:
             - address
-            - credentialSecretRef
             type: object
             x-kubernetes-validations:
-            - message: address and credentialSecretRef cannot change; make a new request
-              rule: self.address == oldSelf.address && self.credentialSecretRef ==
-                oldSelf.credentialSecretRef
+            - message: address, credentialSecretRef and clusterCredentials cannot
+                change; make a new request
+              rule: self.address == oldSelf.address && has(self.credentialSecretRef)
+                == has(oldSelf.credentialSecretRef) && (!has(self.credentialSecretRef)
+                || self.credentialSecretRef == oldSelf.credentialSecretRef) && (has(self.clusterCredentials)
+                && self.clusterCredentials) == (has(oldSelf.clusterCredentials) &&
+                oldSelf.clusterCredentials)
+            - message: either credentialSecretRef (a foreign talosconfig) or clusterCredentials
+                with clusterRef (the cluster's own credentials), not both
+              rule: '(has(self.clusterCredentials) && self.clusterCredentials) ? (!has(self.credentialSecretRef)
+                && has(self.clusterRef)) : has(self.credentialSecretRef)'
           status:
             description: status defines the observed state of MachineReclaim
             properties:

@@ -24,8 +24,7 @@
   no longer leaves a running, unwiped node behind. A node that does not answer
   is removed unwiped, its Node is deleted and an Event says so; a Node that
   stays Ready is left with a Warning Event naming the `kubectl delete node`
-  step. `ichor node reset` stays as a deprecated alias of `node remove
-  --reboot`. The controller needs `delete` on Nodes.
+  step. The controller needs `delete` on Nodes.
 - `ichor init --merge-kubeconfig` merges the new cluster's admin kubeconfig into
   yours as context `admin@NAME` and makes it current (ADR 0134); `init` always
   ends by saying which kubeconfig to use.
@@ -35,6 +34,14 @@
 - ichor-ui shows only what your role can do: the Users page, Add node,
   discovery edits, approve, patch and node actions are hidden from roles that
   cannot use them.
+
+### Removed
+
+- `ichor node reset` is removed (ADR 0135 amendment, 2026-11-07). Use
+  `ichor node remove NODE --reboot`, which wipes STATE and EPHEMERAL and reboots
+  the node into maintenance mode; its `--confirm` and `--override` work as
+  before. `--wipe-mode` goes with the command. The `reset` operation and its
+  `wipeMode` field stay in the API.
 
 ### UI
 

@@ -36,3 +36,8 @@ ADR 0085 had two ways out: `reset` (wipe, reboot into maintenance, Node kept and
 ## Amendment (2026-11-07): machines removed before this change
 
 The risk "machines removed before this change were not wiped; the adopt guide says how to add them again (`ichor adopt --add-machine`)" held only for a machine whose configuration adopt could represent; one whose TalosMachine had a hostname and link choice was blocked by adopt and refused by reclaim. ADR 0136 lets `ichor machine reclaim ADDRESS --cluster NAME` (or the UI Reset and add) wipe such a machine with the cluster's own credentials and delete its Kubernetes Node.
+
+
+## Amendment (2026-11-07): `ichor node reset` is removed
+
+2026-11-07: `ichor node reset` is removed; use `ichor node remove --reboot`. The command, its `--wipe-mode` flag and the CLI's reset helpers go with it. `RemoveMachine`, the `reset` action, `spec.node.wipeMode`, `spec.node.powerOff` and every proto and CRD field stay, so the API and the UI keep the reset operation.

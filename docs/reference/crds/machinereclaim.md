@@ -26,12 +26,13 @@ Version v1alpha1: has a `status` subresource.
 |---|---|---|---|
 | `spec` | `object` | yes | spec defines the desired state of MachineReclaim |
 | `spec.address` | `string` | yes | address is the one node to reclaim: an IP or host:port of its Talos API. Only this address is dialled; the endpoints in the talosconfig are ignored. |
+| `spec.clusterCredentials` | `boolean` | no | clusterCredentials dials the node with the credentials Ichor holds for the TalosCluster named by clusterRef instead of a pasted foreign talosconfig (ADR 0136). It is for an orphan: a machine of that cluster whose TalosMachine is gone, so the person has no talosconfig for it. The same refusals apply, and a node that is not in that cluster is refused. |
 | `spec.clusterRef` | `object` | no | clusterRef optionally names the TalosCluster (same namespace) the machine is meant to join after the reset. The controller never writes it or that cluster; the UI API adds the address to the cluster's discovery addresses on the user's behalf when it creates the request. |
 | `spec.clusterRef.name` | `string` | no | Name of the referent. This field is effectively required, but due to backwards compatibility is allowed to be empty. Instances of this type with an empty value here are almost certainly wrong. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names Default: `""`. |
 | `spec.confirmClusterName` | `string` | no | confirmClusterName is the foreign cluster's name as typed by the user; only needed with force. |
 | `spec.confirmUUID` | `string` | no | confirmUUID is the node's UUID as typed by the user. Empty until then; the webhook rejects a value that differs from status.inspection.uuid. |
 | `spec.contextName` | `string` | no | contextName picks the talosconfig context; empty is the file's default. |
-| `spec.credentialSecretRef` | `string` | yes | credentialSecretRef names a Secret of type ichor.maesh.dev/foreign-talosconfig in this namespace. It is deleted when the request ends or expires. |
+| `spec.credentialSecretRef` | `string` | no | credentialSecretRef names a Secret of type ichor.maesh.dev/foreign-talosconfig in this namespace. It is deleted when the request ends or expires. Empty only with clusterCredentials. |
 | `spec.force` | `boolean` | no | force allows a control plane whose removal breaks the foreign etcd quorum or is the last of its cluster. It also needs confirmClusterName. |
 | `spec.forceUngraceful` | `boolean` | no | forceUngraceful sends a non-graceful reset, for a foreign cluster that is dead. |
 | `spec.ttl` | `string` | no | ttl is how long the request and its credential live. Default 15 minutes, at most 60. Default: `"15m"`. |

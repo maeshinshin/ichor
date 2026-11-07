@@ -4,12 +4,14 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { ErrorAlert } from '@/components/ErrorAlert'
-import { Field } from '@/components/PageHeader'
+import { Field as InfoField } from '@/components/PageHeader'
+import { Field, FieldContent, FieldDescription, FieldLabel } from '@/components/ui/field'
+import { CopyableName } from '@/components/CopyableName'
 import type { Reclaim } from '@/gen/ichor/v1alpha1/reclaim_pb'
 import { useAction } from '@/hooks/use-action'
 import { reclaimClient } from '@/lib/connect'
@@ -111,7 +113,7 @@ export function ReclaimDialog({
           {label ?? t('reclaim.button')}
         </Button>
       </DialogTrigger>
-      <DialogContent className="grid-cols-1 sm:max-w-lg">
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] grid-cols-1 flex-col sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t(own ? 'reclaim.ownTitle' : 'reclaim.title')}</DialogTitle>
           <DialogDescription>{t(own ? 'reclaim.ownDescription' : 'reclaim.description')}</DialogDescription>
@@ -123,22 +125,25 @@ export function ReclaimDialog({
 
         {!reclaim && (
           <form
-            class="grid gap-4 text-sm"
+            class="flex min-h-0 flex-1 flex-col gap-4 text-sm"
             onSubmit={(e) => {
               e.preventDefault()
               if (canCreate) create()
             }}
           >
-            <div className="-mx-4 max-h-[50dvh] space-y-3 overflow-y-auto px-4">
+            <div className="-mx-4 min-h-0 flex-1 space-y-3 overflow-y-auto px-4">
             <div class="space-y-1">
               <Label htmlFor="reclaim-address">{t('reclaim.address')}</Label>
               <Input id="reclaim-address" value={address} onInput={(e) => setAddress((e.target as HTMLInputElement).value)} />
             </div>
             {clusterAllowed && (
-              <div class="flex items-center gap-2">
+              <Field orientation="horizontal">
                 <Checkbox id="reclaim-own" checked={own} onCheckedChange={(on: boolean | 'indeterminate') => setOwn(on === true)} />
-                <Label htmlFor="reclaim-own">{t('reclaim.ownCredentials')}</Label>
-              </div>
+                <FieldContent>
+                  <FieldLabel htmlFor="reclaim-own">{t('reclaim.ownCredentials')}</FieldLabel>
+                  <FieldDescription>{t('reclaim.ownCredentialsHint')}</FieldDescription>
+                </FieldContent>
+              </Field>
             )}
             {own ? (
               <Alert>
@@ -182,30 +187,30 @@ export function ReclaimDialog({
 
         {reclaim && (
           <form
-            class="grid gap-4 text-sm"
+            class="flex min-h-0 flex-1 flex-col gap-4 text-sm"
             onSubmit={(e) => {
               e.preventDefault()
               confirm()
             }}
           >
-            <div className="-mx-4 max-h-[50dvh] space-y-3 overflow-y-auto px-4">
+            <div className="-mx-4 min-h-0 flex-1 space-y-3 overflow-y-auto px-4">
             <dl class="grid grid-cols-2 gap-x-6 gap-y-4">
-              <Field label={t('reclaim.address')}>{reclaim.address}</Field>
-              <Field label={t('reclaim.phase')}>
+              <InfoField label={t('reclaim.address')}>{reclaim.address}</InfoField>
+              <InfoField label={t('reclaim.phase')}>
                 <Badge variant="outline" className="h-auto max-w-full whitespace-normal">
                   {phase ? reclaimPhaseLabel(phase) : '-'}
                 </Badge>
-              </Field>
+              </InfoField>
               {insp && (
                 <>
-                  <Field label={t('reclaim.foreignCluster')}>{insp.clusterName || '-'}</Field>
-                  <Field label={t('reclaim.hostname')}>{insp.hostname || '-'}</Field>
-                  <Field label={t('reclaim.role')}>{insp.role || '-'}</Field>
-                  <Field label={t('reclaim.etcd')}>{insp.etcdMembers.length ? insp.etcdMembers.join(', ') : '-'}</Field>
+                  <InfoField label={t('reclaim.foreignCluster')}>{insp.clusterName || '-'}</InfoField>
+                  <InfoField label={t('reclaim.hostname')}>{insp.hostname || '-'}</InfoField>
+                  <InfoField label={t('reclaim.role')}>{insp.role || '-'}</InfoField>
+                  <InfoField label={t('reclaim.etcd')}>{insp.etcdMembers.length ? insp.etcdMembers.join(', ') : '-'}</InfoField>
                   <div class="col-span-2">
-                    <Field label={t('reclaim.uuid')}>
-                      <span class="select-all font-mono break-all">{insp.uuid}</span>
-                    </Field>
+                    <InfoField label={t('reclaim.uuid')}>
+                      <CopyableName value={insp.uuid} ariaLabel={t('reclaim.copyUuid')} />
+                    </InfoField>
                   </div>
                 </>
               )}
@@ -252,13 +257,20 @@ export function ReclaimDialog({
             )}
             {phase === 'WaitingForMaintenance' && <p>{t('reclaim.waiting')}</p>}
             {reclaim.result && (
-              <Field label={t('reclaim.result')}>
+              <InfoField label={t('reclaim.result')}>
                 <span class="font-mono">{reclaim.result}</span>
-              </Field>
+              </InfoField>
             )}
             {error && <ErrorAlert {...error} />}
             </div>
             <DialogFooter>
+              {!(phase === 'AwaitingConfirmation' && !reclaim.confirmed) && (
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">
+                    {t('common.close')}
+                  </Button>
+                </DialogClose>
+              )}
               {phase === 'AwaitingConfirmation' && !reclaim.confirmed && (
                 <Button type="submit" variant="destructive" disabled={busy || !uuidMatches(typed, uuid)}>
                   {busy ? t('reclaim.confirming') : t('reclaim.confirm')}

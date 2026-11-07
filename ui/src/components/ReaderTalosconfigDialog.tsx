@@ -50,7 +50,7 @@ export function ReaderTalosconfigDialog({
       <Field>
         <FieldLabel htmlFor="reader-talosconfig-lifetime">{t('readerTalosconfig.lifetime')}</FieldLabel>
         <Select value={lifetime} onValueChange={setLifetime}>
-          <SelectTrigger id="reader-talosconfig-lifetime" className="w-full">
+          <SelectTrigger id="reader-talosconfig-lifetime" className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

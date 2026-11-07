@@ -200,7 +200,7 @@ export function StartOperationDialog({
                 setTarget(v)
               }}
             >
-              <SelectTrigger id={`op-target-${kind}`} className="w-full">
+              <SelectTrigger id={`op-target-${kind}`} className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

@@ -194,7 +194,7 @@ function DurationField({
         <SourceBadge source={source} />
       </FieldLabel>
       <Select value={value} onValueChange={onChange} disabled={disabled}>
-        <SelectTrigger id={id} className="w-full">
+        <SelectTrigger id={id} className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -225,7 +225,7 @@ function DefaultsCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r:
           <SourceBadge source={sourceOf(res, 'driftPolicy')} />
         </FieldLabel>
         <Select value={form.driftPolicy} onValueChange={(v) => setForm({ ...form, driftPolicy: v })} disabled={locked || busy}>
-          <SelectTrigger id="settings-drift-policy" className="w-full">
+          <SelectTrigger id="settings-drift-policy" className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -266,7 +266,7 @@ function UpdatesCard({ res, onSaved }: { res: GetSettingsResponse; onSaved: (r: 
           <SourceBadge source={source} />
         </FieldLabel>
         <Select value={choice} onValueChange={setChoice} disabled={locked || busy}>
-          <SelectTrigger id="settings-update-check" className="w-full">
+          <SelectTrigger id="settings-update-check" className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

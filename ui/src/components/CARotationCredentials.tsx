@@ -94,7 +94,7 @@ export function CARotationCredentials({
             <Field>
               <FieldLabel htmlFor="creds-lifetime">{t('creds.lifetime')}</FieldLabel>
               <Select value={lifetime} onValueChange={setLifetime}>
-                <SelectTrigger id="creds-lifetime" className="w-full">
+                <SelectTrigger id="creds-lifetime" className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

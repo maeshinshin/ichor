@@ -56,7 +56,7 @@ export function DiskRoleFields({
       <div class="space-y-1">
         <Label htmlFor={`${idPrefix}-ephemeral`}>{t('disks.ephemeral')}</Label>
         <Select value={form.ephemeral || NONE} onValueChange={(v) => onChange({ ...form, ephemeral: v === NONE ? '' : v })}>
-          <SelectTrigger id={`${idPrefix}-ephemeral`} className="w-full">
+          <SelectTrigger id={`${idPrefix}-ephemeral`} className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -78,7 +78,7 @@ export function DiskRoleFields({
           />
           <Label htmlFor={`${idPrefix}-vol-${i}-disk`}>{t('disks.volumeDisk')}</Label>
           <Select value={v.key || NONE} onValueChange={(k) => setVolume(i, { key: k === NONE ? '' : k })}>
-            <SelectTrigger id={`${idPrefix}-vol-${i}-disk`} className="w-full">
+            <SelectTrigger id={`${idPrefix}-vol-${i}-disk`} className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
               <SelectValue placeholder={t('disks.selectDisk')} />
             </SelectTrigger>
             <SelectContent>

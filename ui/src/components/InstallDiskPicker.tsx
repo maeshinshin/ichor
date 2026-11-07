@@ -42,7 +42,7 @@ export function InstallDiskPicker({
       <Label htmlFor={`${idPrefix}-install-disk`}>{t('approve.installDisk')}</Label>
       {disks.length > 0 ? (
         <Select value={value || 'none'} onValueChange={(v) => onValue(v === 'none' ? '' : v)}>
-          <SelectTrigger id={`${idPrefix}-install-disk`} className="w-full">
+          <SelectTrigger id={`${idPrefix}-install-disk`} className="w-full min-w-0 *:data-[slot=select-value]:block *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

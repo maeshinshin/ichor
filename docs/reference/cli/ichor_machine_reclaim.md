@@ -22,6 +22,13 @@ The reset wipes only the STATE and EPHEMERAL partitions and reboots.
 User disks are not touched; they are listed, and encrypted ones are called out
 because their keys may be gone.
 
+Without --talosconfig, give --cluster NAME: the machine is then an orphan of that Ichor
+cluster (which wipes on remove, so it still
+carries the cluster's configuration) and the controller wipes it with the credentials Ichor
+already holds for that cluster, deletes its Kubernetes Node and, afterwards, this command
+registers it as a pending machine. A machine that still has an approved TalosMachine is
+refused: use "ichor node remove". Needs the "reclaim" verb on machinereclaims.
+
 Consent is the machine's UUID, typed at the prompt or given as --confirm. --yes
 does not satisfy it.
 
@@ -33,7 +40,7 @@ minutes) discovery re-probes the node and records the new maintenance certificat
 and disks on that same machine (Event MaintenanceIdentityRefreshed); approve it after that.
 
 ```sh
-ichor machine reclaim ADDRESS --talosconfig FILE [flags]
+ichor machine reclaim ADDRESS (--talosconfig FILE | --cluster NAME) [flags]
 ```
 
 ### Options

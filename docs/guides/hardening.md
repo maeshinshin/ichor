@@ -281,9 +281,8 @@ node, for three reasons Talos gives: a GRUB install cannot become UKI, key
 enrolment happens in the firmware, and a TPM disk key is bound to the SecureBoot
 state (PCR 7). The path, one node at a time, as for disk encryption: set the
 mode (and the confirm annotation for `Required`); take an etcd backup; reset the
-node with a full system-disk wipe (a TalosOperation of kind `node` with action `reset`
-and `spec.node.wipeMode: system-disk`, created with kubectl or the API: `ichor node reset`
-no longer exists); boot
+node with a full system-disk wipe (`ichor node remove NODE --wipe-mode system-disk --reboot`, or
+"What to wipe: The whole system disk" in the UI's Remove node); boot
 the machine from the SecureBoot ISO of this cluster's schematic and Talos version
 with the firmware in setup mode (the keys are enrolled automatically; on bare
 metal choose "Enroll Secure Boot keys: auto" in the boot menu); approve it again;
@@ -291,19 +290,18 @@ wait for `SecureBoot=True` before the next node, control planes one at a time
 with etcd quorum intact. Keep the UKI and PCR signing keys if you build your own
 images: losing them stops the next UKI booting and the encrypted disks unlocking.
 
-**Why the plain reset is not enough here.** A reset without `wipeMode` wipes only
-STATE and EPHEMERAL, and so does `ichor node remove`. The installed boot partition stays, so a
+**Why the default wipe is not enough here.** A remove or reset without a wipe mode wipes only
+STATE and EPHEMERAL. The installed boot partition stays, so a
 machine whose system disk comes first in the boot order boots its installed UKI
 again, into maintenance mode, and the SecureBoot ISO is never started: nothing is
-reinstalled, the node only takes the configuration again (seen on hardware). `wipeMode: system-disk` erases the whole system disk, boot and EFI
-included, so the firmware falls through to the ISO; `wipeMode: all` also erases
+reinstalled, the node only takes the configuration again (seen on hardware). `--wipe-mode system-disk` (`wipeMode: system-disk` on a reset operation) erases the whole system disk, boot and EFI
+included, so the firmware falls through to the ISO; `--wipe-mode all` also erases
 every user disk (use it only when their data is expendable). Keep the ISO attached
-or first in the boot order before you reset. Without Ichor's wipe, the same effect
+or first in the boot order before you remove the node. Without Ichor's wipe, the same effect
 comes from `talosctl reset --wipe-mode all` through the admin path, or from putting
-the ISO first in the boot order. After the reset the machine is looked for again
+the ISO first in the boot order. After the wipe the machine is looked for again
 every 15 seconds for 3 minutes, so it shows up as a pending machine soon after it
-has booted. The Kubernetes Node object of the reset node stays; it is used again if the
-machine rejoins under the same name, otherwise delete it.
+has booted. The remove deletes the node's Kubernetes Node object.
 
 ## Kubelet serving certificates
 

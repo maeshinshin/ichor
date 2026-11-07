@@ -141,6 +141,7 @@ TEST_E2E_KUBECONFIG ?= $(LOCALBIN)/test-e2e.kubeconfig
 
 .PHONY: setup-test-e2e
 setup-test-e2e: ## Provision the throwaway qemu Talos cluster CI's e2e job runs against; publishes KUBECONFIG and ICHOR_E2E_TALOS_NODES
+	mkdir -p $(LOCALBIN)
 	KUBECONFIG=$(TEST_E2E_KUBECONFIG) talosctl cluster create qemu --name ichor-test-e2e --workers 1 | tee $(LOCALBIN)/test-e2e-create.log
 	@if [ -n "$$GITHUB_ENV" ]; then echo "KUBECONFIG=$(TEST_E2E_KUBECONFIG)" >> "$$GITHUB_ENV"; fi
 	# shortcut: scrapes the worker's address out of "talosctl cluster create"'s

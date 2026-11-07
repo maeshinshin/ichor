@@ -357,11 +357,7 @@ UI.
   key rotation after its token-settle fix, the FQDN and metrics policies, the
   `os:reader` talosconfig, kubelet serving certificates and a signed installer
   upgrade have unit and envtest coverage but await a hardware run; the Cilium
-  takeover with `--cilium-values` and the flannel move were not run. Remove node
-  (the wipe, power off or reboot into maintenance mode, and Node deletion), `--wipe-mode system-disk` with a reboot, and orphan reclaim with the
-  cluster's own credentials plus Orphan discovery were exercised on
-  nodes. The even-control-plane auto-resume and a system-disk
-  wipe actually booting from the ISO were not verified on hardware.
+  takeover with `--cilium-values` and the flannel move were not run.
 - Admission checks the Cilium values only as far as the object itself tells. The
   checks that need the machine configuration or the live cluster
   (`bpf.masquerade` with `forwardKubeDNSToHost`, KubePrism in replaced mode, the

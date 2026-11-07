@@ -1,90 +1,6 @@
 # Changelog
 
-## Unreleased
-
-### Fixes
-
-- Removing a control plane is no longer refused by an operation that is parked only
-  because the control-plane count is even (ADR 0137): the cure was blocked by the
-  thing it cures. Such an operation resumes by itself when the count is odd, and
-  planning a new operation while the count is even is refused with the way out
-  instead of creating one that is parked at once.
-
-### Features
-
-- Orphans of a managed cluster are found and wiped from the UI (ADR 0136,
-  amendment). Discovery reports a configured node at the address of a Kubernetes
-  Node that no `TalosMachine` accounts for as `Orphan` (a distinct Event; a
-  foreign device stays `AlreadyConfigured`) and the Add node page lists it with
-  Reset and add set to the cluster's own credentials. The Nodes page's Reset and
-  add now offers "It was removed from this cluster" and registers the address.
-  The lists are derived from the latest report per address and drop addresses a
-  pending or approved machine now has. The UI inspection shows the orphan warning
-  the CLI prints (`ReclaimInspection.warnings`, `Cluster.orphan_addresses`;
-  both fields appended). Nothing is wiped without the typed UUID.
-- `ichor node remove NODE --wipe-mode system-partitions|system-disk|all` and
-  the UI's "What to wipe" in Remove node choose what the wipe erases (ADR 0135
-  amendment): STATE and EPHEMERAL (default), the whole system disk (what a
-  SecureBoot reinstall needs, see the hardening guide), or the system disk and
-  every user disk. `RemoveMachineRequest` gains `wipe_mode`.
-- A machine removed before ADR 0135 (its `TalosMachine` deleted, the node not
-  wiped, still carrying the cluster's configuration) can be wiped through
-  Ichor (ADR 0136): `ichor machine reclaim ADDRESS --cluster NAME` without
-  `--talosconfig`, or the UI's Reset and add with "It was removed from this
-  cluster", uses the credentials Ichor holds for that cluster, wipes STATE and
-  EPHEMERAL, deletes the machine's Kubernetes Node and leaves it as a pending
-  machine. The same quorum and last-control-plane refusals apply; a machine
-  that still has an approved `TalosMachine` is refused with a pointer to Remove
-  node. `MachineReclaim` gains `spec.clusterCredentials` and
-  `spec.credentialSecretRef` is optional with it. `ichor adopt --add-machine`
-  of a blocked machine now also says how to wipe it instead, so the two
-  refusals no longer point at each other.
-- "Remove node" and reset are one action (ADR 0135). `ichor node remove NODE`
-  (the UI's "Remove node") drains the node, removes its etcd member (control
-  plane), wipes STATE and EPHEMERAL, then powers the machine off, or reboots it
-  into maintenance mode with `--reboot` ("After wiping" in the UI), and deletes
-  its Kubernetes Node. It needs the typed name and the override permission, and
-  no longer leaves a running, unwiped node behind. A node that does not answer
-  is removed unwiped, its Node is deleted and an Event says so; a Node that
-  stays Ready is left with a Warning Event naming the `kubectl delete node`
-  step. The controller needs `delete` on Nodes.
-- `ichor init --merge-kubeconfig` merges the new cluster's admin kubeconfig into
-  yours as context `admin@NAME` and makes it current (ADR 0134); `init` always
-  ends by saying which kubeconfig to use.
-- A TalosOperation that upgrades Ichor records the version it goes to in
-  `status.toVersion`; the UI and CLI show "Upgrade Ichor from X to Y" for every
-  phase (ADR 0133).
-- ichor-ui shows only what your role can do: the Users page, Add node,
-  discovery edits, approve, patch and node actions are hidden from roles that
-  cannot use them.
-
-### Removed
-
-- `ichor node reset` is removed (ADR 0135 amendment, 2026-11-07). Use
-  `ichor node remove NODE --reboot`, which wipes STATE and EPHEMERAL and reboots
-  the node into maintenance mode; its `--confirm` and `--override` work as
-  before. `ichor node reset`'s `--wipe-mode` moved to `ichor node remove` (see
-  Features). The `reset` operation and its `wipeMode` field stay in the API.
-
-### UI
-
-- A typed confirmation shows the name it asks for as selectable text with a
-  copy button.
-- Node action dialogs and operations are titled with the hostname instead of
-  the machine UID.
-- Tables stack their columns on phones instead of scrolling sideways (nodes,
-  operations, backups, conditions, disks, network, routing, processes, Cilium
-  values and the effective config).
-- Select lists anchor to their trigger and keep its width; only the top layer
-  reacts to an outside press, and a touch tap outside dismisses it. These fix
-  selects and dialogs on iOS.
-
-### Notable fixes
-
-- The typed confirmation of `ichor node remove` is the machine name everywhere (the TalosMachine name the UI dialog shows), not the hostname: `--confirm` takes it, the prompt and the refusal say "the machine name <uuid> (node <host>)", and the server no longer accepts the hostname. NODE still takes the machine name, hostname or Node name.
-- `ichor version` prints the no-image skip warning on its own line.
-
-## v0.1.0 (2026-11-06)
+## v0.1.0 (2026-11-07)
 
 First release. Alpha: exercised end to end on Talos v1.14 clusters running as
 KubeVirt VMs, not yet on bare metal.
@@ -115,13 +31,31 @@ table accepts; a refusal passes only with the override verb
 - Discovery and approval: a node in maintenance mode is found by address or
   range, shows up as pending, and joins when approved in the UI or with
   `ichor machine approve`. Approval can set the NIC, addressing and disk roles
-  (ADR 0092).
+  (ADR 0092). Discovery reports a configured node at the address of a Kubernetes
+  Node that no `TalosMachine` accounts for as `Orphan`, a distinct Event.
+- Removing a node wipes it (ADR 0135). `ichor node remove NODE` (the UI's "Remove
+  node") needs the typed machine name and the override permission. It drains the
+  node, removes its etcd member (control plane), wipes STATE and EPHEMERAL, then
+  powers the machine off, or reboots it into maintenance mode with `--reboot`
+  ("After wiping" in the UI), and deletes its Kubernetes Node. `--wipe-mode
+  system-partitions|system-disk|all` (the UI's "What to wipe") chooses what the
+  wipe erases: STATE and EPHEMERAL (default), the whole system disk (so a
+  SecureBoot node can be installed afresh from the ISO, see the hardening guide),
+  or the system disk and every user disk. `--confirm` takes the machine name (the
+  TalosMachine name the UI dialog shows), not the hostname; NODE takes the machine
+  name, hostname or Node name. A node that does not answer is removed unwiped, its
+  Node is deleted and an Event says so; a Node that stays Ready is left with a
+  Warning Event naming the `kubectl delete node` step. The controller needs
+  `delete` on Nodes.
 - Typed machine configuration: patches built on the Talos machinery types, no
   raw YAML. Drift is reported; changes that need a reboot roll out as one
   operation, a node at a time (ADR 0080).
 - Upgrades of Talos, Kubernetes, Cilium and Ichor itself, one node at a time
   with etcd quorum in mind; a failed step pauses the operation (ADR 0059,
-  0115). Cilium moves only to the chart this Ichor embeds (below).
+  0115). Cilium moves only to the chart this Ichor embeds (below). A
+  TalosOperation that upgrades Ichor records the version it goes to in
+  `status.toVersion`, and the UI and CLI show "Upgrade Ichor from X to Y" in every
+  phase (ADR 0133).
 - Automatic patch upgrades, off by default, inside a daily window you set
   (ADR 0116).
 - A notice in the UI and in `ichor version` when a newer Ichor release is
@@ -151,6 +85,21 @@ table accepts; a refusal passes only with the override verb
   was deleted) without a reset; `--cilium-values` carries your Helm values into
   a Cilium takeover; a cluster on another CNI is refused with the options
   written down (Ichor does not migrate it) (ADR 0128).
+- A machine that was removed without a wipe (its `TalosMachine` deleted, the node
+  still carrying the cluster's configuration) can be wiped through Ichor (ADR
+  0136): `ichor machine reclaim ADDRESS --cluster NAME` without `--talosconfig`,
+  or the UI's Reset and add with "It was removed from this cluster", uses the
+  credentials Ichor holds for that cluster, wipes STATE and EPHEMERAL, deletes the
+  machine's Kubernetes Node and leaves it as a pending machine. The same quorum
+  and last-control-plane refusals apply; a machine that still has an approved
+  `TalosMachine` is refused with a pointer to Remove node. Orphans (see Discovery
+  and approval) are listed on the Add node page with Reset and add set to the
+  cluster's own credentials, and the Nodes page's Reset and add offers "It was
+  removed from this cluster". The lists drop addresses that a pending or approved
+  machine has, the UI inspection shows the orphan warning the CLI prints, and
+  nothing is wiped without the typed UUID. `MachineReclaim` takes
+  `spec.clusterCredentials`, and `spec.credentialSecretRef` is optional with it.
+  `ichor adopt --add-machine` of a blocked machine says how to wipe it too.
 - Cilium as the only CNI, kept as a Helm release; its values, upgrades and
   kube-proxy mode are managed from the UI or `ichor cni` (ADR 0098, 0099).
   Cilium is pinned to the chart embedded in the running Ichor: a cluster moves
@@ -178,9 +127,6 @@ table accepts; a refusal passes only with the override verb
   that did not boot with SecureBoot, and per-node and cluster `SecureBoot` and
   `KernelLockdown` conditions plus the Talos details in the UI show what each node
   reports. Ichor never changes a node's SecureBoot state in place (ADR 0123).
-- `ichor node reset --wipe-mode system-disk|all` wipes the whole system disk (all
-  also the user disks), so a node can be installed afresh from the SecureBoot ISO;
-  the plain reset still wipes STATE and EPHEMERAL only (ADR 0042, 0123).
 - The installer image of an Ichor upgrade runs by digest and its keyless release
   signature is verified, offline against an embedded Sigstore root, before the
   installer Job is created. `ichor upgrade ichor` and `ichor init` take
@@ -218,11 +164,11 @@ table accepts; a refusal passes only with the override verb
   short-lived (1 hour, at most 12) `os:reader` talosconfig for `talosctl`,
   without access to the secrets bundle; each request is an Event with the
   user's name (ADR 0124).
-- After a node reset, discovery looks again every 15 seconds for 3 minutes and
-  wakes on the Node, so a wiped machine shows up as pending soon after it is
-  back in maintenance mode; a pending machine whose node was reset has its pinned maintenance
-  certificate and inventory refreshed by discovery, so `ichor machine reclaim`
-  no longer deletes it (ADR 0107, 0128).
+- After a node is wiped, discovery looks again every 15 seconds for 3 minutes and
+  wakes on the Node, so the machine shows up as pending soon after it is back in
+  maintenance mode; a pending machine whose node was wiped has its pinned
+  maintenance certificate and inventory refreshed by discovery, so
+  `ichor machine reclaim` does not delete it (ADR 0107, 0128).
 - Admission enforces what the UI checks, so a CR written with `kubectl` gets no
   shortcut (ADR 0129). The `TalosCluster` webhook validates
   `spec.cni.cilium.values` (schema, unknown and Ichor-owned keys, size, the
@@ -244,6 +190,9 @@ table accepts; a refusal passes only with the override verb
 - `make remote-gate` runs the full test gate as sharded Jobs in a Kubernetes
   cluster, with infrastructure failures reported apart from test failures.
 - Release artifacts are built with `make release VERSION=v0.1.0`.
+- `ichor init --merge-kubeconfig` merges the new cluster's admin kubeconfig into
+  yours as context `admin@NAME` and makes it current (ADR 0134); `init` always
+  ends by saying which kubeconfig to use.
 - `ichor init -f init.yaml` reads the init settings from an `InitConfig` file
   instead of a long flag line (a flag overrides the file;
   `--print-config-template` prints an example; ADR 0117). `ichor init` also
@@ -268,6 +217,22 @@ table accepts; a refusal passes only with the override verb
   with the phase and message and end it with ✓ Completed or ✗ Failed and the
   time taken, or a line per change in a pipe. The exit codes and the resume
   hint are unchanged.
+
+### UI
+
+- A typed confirmation shows the name it asks for as selectable text with a
+  copy button.
+- Node action dialogs and operations are titled with the hostname, not the
+  machine UID.
+- Tables stack their columns on phones instead of scrolling sideways (nodes,
+  operations, backups, conditions, disks, network, routing, processes, Cilium
+  values and the effective config).
+- Select lists anchor to their trigger and keep its width; only the top layer
+  reacts to an outside press, and a touch tap outside dismisses it, so selects
+  and dialogs work on iOS.
+- ichor-ui shows only what your role can do: the Users page, Add node, discovery
+  edits, approve, patch and node actions are hidden from roles that cannot use
+  them.
 
 ### Behaviour changes
 
@@ -327,13 +292,13 @@ build or wrote scripts against one.
 - `ichor adopt -n` defaults to `ichor-system`, like every other command (it was
   `default`) (ADR 0128).
 - `ichor machine reclaim` no longer deletes the stale pending `TalosMachine` of a
-  node it reset; discovery refreshes it, so the command needs no `delete` right
+  node it wiped; discovery refreshes it, so the command needs no `delete` right
   on `talosmachines` (ADR 0128).
 - `rotate-keys` refuses a `--token-settle` below 75 minutes, for the webhook, the
   CLI and the UI alike (ADR 0121).
 - Two operations on one cluster no longer run side by side: the second waits for
   the first (ADR 0026).
-- A plain `ichor node reset` does not reinstall a SecureBoot node, which boots its
+- A plain `ichor node remove` does not reinstall a SecureBoot node, which boots its
   installed system again; use `--wipe-mode system-disk` (ADR 0123).
 - `ichor machine approve` without sign-in on an `--allow-unauthenticated` install
   is refused for lack of the `approve` right; pass `--local` or sign in (ADR 0108).
@@ -351,9 +316,9 @@ Found on hardware while building this release.
   service-account key before pods had refreshed their tokens and crash-looped
   Ichor's own pods; the settle has a minimum and Ichor's pods are rolled first
   (ADR 0121).
-- `ichor node reset` no longer pauses with a refused delete when discovery
-  recreates the pending machine under the same name; the operation follows the
-  machine it started on by UID (ADR 0108).
+- A node removal follows the machine it started on by UID: when discovery
+  recreates the pending machine under the same name, the operation does not pause
+  with a refused delete (ADR 0108).
 - `ichor machine reclaim` and `adopt --add-machine` on a node of another cluster:
   a control plane whose etcd is not running no longer hangs the inspection (every
   node call gives up after 20 seconds), and a node of another cluster gets the
@@ -362,14 +327,20 @@ Found on hardware while building this release.
 - A fresh install's NodeStarting message no longer shows the transient "STATE:
   error evaluating disk locator" for the first minute, and a stale
   `AdoptionHeld` condition no longer lingers after `hold-apply` is removed.
-- ichor-ui: list tables and dialogs fit a phone, the Overview actions stay on
-  while an operation runs and show the server's refusal.
+- ichor-ui: the Overview actions stay on while an operation runs and show the
+  server's refusal.
 - An error is printed once, and the plaintext-bundle warning once per run.
-- `ichor node reset` and `node remove` take `--confirm NAME` as the confirmation
+- `ichor node remove` takes `--confirm NAME` as the confirmation
   without a second prompt; `ichor cluster rotate-ca --help` says it does
   the credential hand-off with or without `--follow`; `ichor init` creates the
   `cilium-secrets` namespace before the objects that live in it; the follow of
   an Ichor upgrade rides out ichor-ui's denial of requests while it rolls out.
+- A control-plane removal is not blocked by an operation that is parked only
+  because the control-plane count is even (ADR 0137), which would otherwise block
+  the cure it needs. Such an operation resumes by itself when the count is odd,
+  and planning a new operation while the count is even is refused with the way
+  out instead of creating one that is parked at once.
+- `ichor version` prints the no-image skip warning on its own line.
 
 Security, found in review and on hardware:
 

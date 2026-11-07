@@ -20,3 +20,6 @@ ui/dist
 
 # The installer image embeds this tree's install manifest; make docker-build-installer writes it.
 !internal/installmanifest/install.yaml
+
+!pkg/cni/cilium/chart/*.tgz
+!internal/imagesig/trusted_root.json

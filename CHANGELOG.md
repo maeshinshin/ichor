@@ -4,6 +4,15 @@
 
 ### Features
 
+- Orphans of a managed cluster are found and wiped from the UI. Discovery reports a configured node at the address of a Kubernetes
+  Node that no `TalosMachine` accounts for as `Orphan` (a distinct Event; a
+  foreign device stays `AlreadyConfigured`) and the Add node page lists it with
+  Reset and add set to the cluster's own credentials. The Nodes page's Reset and
+  add now offers "It was removed from this cluster" and registers the address.
+  The lists are derived from the latest report per address and drop addresses a
+  pending or approved machine now has. The UI inspection shows the orphan warning
+  the CLI prints (`ReclaimInspection.warnings`, `Cluster.orphan_addresses`;
+  both fields appended). Nothing is wiped without the typed UUID.
 - A machine removed without a wipe (its `TalosMachine` deleted, the node not
   wiped, still carrying the cluster's configuration) can be wiped through
   Ichor: `ichor machine reclaim ADDRESS --cluster NAME` without

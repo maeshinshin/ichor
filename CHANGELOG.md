@@ -373,12 +373,7 @@ UI (ADR 0101).
   key rotation after its token-settle fix, the FQDN and metrics policies, the
   `os:reader` talosconfig, kubelet serving certificates and a signed installer
   upgrade have unit and envtest coverage but await a hardware run; the Cilium
-  takeover with `--cilium-values` and the flannel move were not run. Remove node
-  (the wipe, power off or reboot into maintenance mode, and Node deletion; ADR
-  0135), `--wipe-mode system-disk` with a reboot, and orphan reclaim with the
-  cluster's own credentials plus Orphan discovery (ADR 0136) were exercised on
-  KubeVirt VMs. The even-control-plane auto-resume (ADR 0137) and a system-disk
-  wipe actually booting from the ISO were not verified on hardware. Each ADR's
+  takeover with `--cilium-values` and the flannel move were not run. Each ADR's
   status line says what was verified.
 - Admission checks the Cilium values only as far as the object itself tells. The
   checks that need the machine configuration or the live cluster

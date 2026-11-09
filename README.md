@@ -70,7 +70,7 @@ including adding more machines and signing in to the UI.
 
 ## Documentation
 
-The docs are published at <https://maeshinshin.github.io/ichor/>. In the
+The docs are published at <https://ichor.maesh.dev/>. In the
 repository:
 
 - [Getting started](docs/guides/getting-started.md)

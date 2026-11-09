@@ -502,8 +502,8 @@ prints, and the UI shows as a dismissible notice (condition
 starts a rotation.
 
 Ichor can also be installed with Helm: `helm install` of the chart
-in `dist/chart` (published as `oci://ghcr.io/maeshinshin/charts/ichor` once a
-release tag is pushed) installs Ichor, not a cluster. `ichor adopt` then
+in `dist/chart` (published as the Helm repository `https://ichor.maesh.dev/charts` and as
+`oci://ghcr.io/maeshinshin/charts/ichor` once a release tag is pushed) installs Ichor, not a cluster. `ichor adopt` then
 detects the Helm release, skips its own install step, never creates an
 `IchorInstallation`, requires Ichor's version to equal the CLI's, and registers
 the cluster. A Helm-installed Ichor is upgraded with `helm upgrade`. The chart

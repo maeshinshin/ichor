@@ -13,15 +13,21 @@ with `ichor adopt`. The chart does not ship Cilium.
 
 ## Where the chart lives
 
-The chart is published as an OCI artifact, with the images next to it, by a
-workflow that runs when a `v*` tag is pushed:
+The chart is published by a workflow that runs when a `v*` tag is pushed, as a
+Helm repository on the docs site and as an OCI artifact, with the images next
+to it. Both hold the same signed archive:
+
+```sh
+helm repo add ichor https://ichor.maesh.dev/charts
+helm repo update
+```
 
 ```text
 oci://ghcr.io/maeshinshin/charts/ichor
 ```
 
-No release has been tagged yet, so that address has nothing in it today. Until
-the first release, install from a checkout:
+No release has been tagged yet, so both have nothing in them today. Until the
+first release, install from a checkout:
 
 ```sh
 helm install ichor ./dist/chart --namespace ichor-system --create-namespace \
@@ -40,10 +46,13 @@ yourself.
 For a cluster that already has a pod network:
 
 ```sh
-helm install ichor oci://ghcr.io/maeshinshin/charts/ichor --version X.Y.Z \
+helm install ichor ichor/ichor --version X.Y.Z \
   --namespace ichor-system --create-namespace
 ichor adopt --cluster NAME --node ADDR --recover-secrets --recover-from ADDR
 ```
+
+The OCI form installs the same chart without adding the repository:
+`helm install ichor oci://ghcr.io/maeshinshin/charts/ichor --version X.Y.Z …`.
 
 Values worth knowing (see `dist/chart/values.yaml` for all of them):
 
@@ -63,7 +72,7 @@ Adopt does not apply the network policies on a Helm install. When they apply,
 it tells you to run:
 
 ```sh
-helm upgrade ichor oci://ghcr.io/maeshinshin/charts/ichor --version X.Y.Z \
+helm upgrade ichor ichor/ichor --version X.Y.Z \
   --namespace ichor-system --reuse-values --set networkPolicy.cilium.enabled=true
 ```
 
@@ -97,7 +106,7 @@ you name a scraper. With the chart, set
 `networkPolicy.cilium.metricsNamespaces` (and `metricsPodLabels`):
 
 ```sh
-helm upgrade ichor oci://ghcr.io/maeshinshin/charts/ichor --version X.Y.Z \
+helm upgrade ichor ichor/ichor --version X.Y.Z \
   --namespace ichor-system --reuse-values \
   --set 'networkPolicy.cilium.metricsNamespaces={monitoring}' \
   --set 'networkPolicy.cilium.metricsPodLabels.app\.kubernetes\.io/name=prometheus'
@@ -276,7 +285,7 @@ sequence is:
 
 ```sh
 ichor cni bootstrap --kubeconfig FILE --kube-proxy enabled|replaced [--tunnel vxlan|geneve] [--cilium-values FILE]
-helm install ichor oci://ghcr.io/maeshinshin/charts/ichor --version X.Y.Z \
+helm install ichor ichor/ichor --version X.Y.Z \
   --namespace ichor-system --create-namespace
 ichor adopt --cluster NAME --node ADDR --recover-secrets --recover-from ADDR
 ```

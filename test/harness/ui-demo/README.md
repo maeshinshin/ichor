@@ -60,7 +60,7 @@ Measured (single control plane + one worker, `ceph-block`, no ichor-ui):
 export ICHOR_E2E_KUBE_CONTEXT=$C ICHOR_UI_DEMO_PREFIX=$P
 go build -o bin/kubevirt-harness ./test/harness/kubevirt
 
-# 1. registry + images (no container runtime: crane appends the binaries to a distroless base)
+# 1. registry + images (no container runtime: ko builds them, crane pushes them)
 sed s/__PREFIX__/$P/ test/harness/ui-demo/registry.yaml | kubectl --context $C -n ichor-e2e apply -f -
 REG=$(kubectl --context $C -n ichor-e2e get svc $P-registry -o jsonpath={.spec.clusterIP})
 kubectl --context $C -n ichor-e2e port-forward svc/$P-registry 5000:5000 &   # leave it running while you push
@@ -150,7 +150,7 @@ through a containerd mirror for `ghcr.io`, the controller does not. So the upgra
 (`--skip-signature-check`); the Job then pulls `ghcr.io/maeshinshin/ichor-installer@$D` through the mirror. The CLI,
 `ichor version` and the UI say loudly that the check was skipped.
 
-`demo-images` leaves the git tree unchanged and fails if a binary is not freshly built with that `VERSION`;
+`demo-images` leaves the git tree unchanged;
 `bin/img/ichor/ichor` is the CLI it built, so upgrade with that one (there is no `bin/ichor`).
 
 Gotchas: the endpoint is the VM's pod IP and changes if the VM restarts (re-run init);
@@ -185,6 +185,6 @@ Deleting the VMs removes the inner cluster and everything in it.
   with `ICHOR_UI_DEMO_WORKER_MEMORY=1536Mi` (Talos minimum is 1 GiB for a worker, 2 GiB for a
   control plane); `ICHOR_UI_DEMO_CP_MEMORY` sets the control plane.
 - Run `make demo-images` from a separate worktree for each agent or user. Two builds in one
-  checkout overwrite each other's `dist/install.yaml` and `bin/img`.
+  checkout overwrite each other's `dist/install.yaml` and `bin/img` and `bin/oci`.
 - On this KubeVirt harness Cilium's default VXLAN tunnel does not pass traffic between VMs; use the geneve tunnel protocol (`ichor init --cni cilium --cni-tunnel geneve`, recorded as `spec.cni.tunnel`).
 - For a multi-control-plane demo, point the outer LoadBalancer Service at one control plane VM (or only the joined ones); a selector matching VMs still in maintenance mode gives intermittent connection refused.

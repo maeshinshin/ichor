@@ -24,7 +24,7 @@ drift between what it rendered and what the node runs.
 For the full design see [the architecture document](../design/architecture.md),
 section "Nodes".
 
-![The life of a machine. A node in maintenance mode is discovered and becomes a pending TalosMachine; a person approves it, or rejects it (a rejected machine is not discovered again as pending, but a person can still approve it). The controller then configures it, and it becomes Ready. A Ready machine whose disk is wiped is provisioned again by itself; removing it drains the node and leaves etcd, and if the node is reset it reappears as pending. A node that another cluster configured is reset by a reclaim, typed with its UUID, and then is discovered again.](../images/machine-lifecycle.light.drawio.svg)
+![The life of a machine. A node in maintenance mode is discovered and becomes a pending TalosMachine; a person approves it, or rejects it (a rejected machine is not discovered again as pending, but a person can still approve it). The controller then configures it, and it becomes Ready. A Ready machine whose disk is wiped is provisioned again by itself; removing it drains the node and leaves etcd, and if the node is also reset (when asked) it reappears as pending. A node that another cluster configured is reset by a reclaim, typed with its UUID, and then is discovered again.](../images/machine-lifecycle.light.drawio.svg)
 
 *A machine moves forward by discovery, a person's approval and the controller's work; the person's steps are in blue.*
 

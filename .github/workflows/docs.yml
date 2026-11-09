@@ -1,7 +1,7 @@
 name: Docs
 
 # Builds the documentation site (docs/ rendered by site/) and
-# publishes it to GitHub Pages at https://maeshinshin.github.io/ichor/.
+# publishes it to GitHub Pages at https://ichor.maesh.dev/.
 # One run builds every version: main as /next/ and each release tag vX.Y.Z as
 # /vX.Y.Z/ (the tag's docs/, built with main's site/), plus versions.json and
 # the /latest/ redirects (make docs-site-all). A new tag publishes its docs and
@@ -47,6 +47,9 @@ jobs:
       # For next and each release tag: npm ci, astro build, the internal link check and the Pagefind
       # index; then versions.json (from the v* tags, newest first by semver) and the redirects, into site/dist-all.
       - name: Build
+        env:
+          DOCS_SITE: https://ichor.maesh.dev
+          DOCS_BASE: /
         run: nix develop --command make docs-site-all
 
       - name: Upload the site

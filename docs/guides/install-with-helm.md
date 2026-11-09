@@ -11,6 +11,27 @@ controller and its RBAC, the webhooks, the UI and the optional Cilium policies.
 Registering a cluster needs your talosconfig and secrets bundle, so that stays
 with `ichor adopt`. The chart does not ship Cilium.
 
+## What the install needs
+
+Installing the chart and managing a cluster are two steps, and the chart asks
+for little.
+
+| Condition | What happens |
+|---|---|
+| Kubernetes 1.30 or later, Helm 3 | The chart declares `kubeVersion >=1.30.0-0`; Helm refuses an older cluster. |
+| A working pod network | The chart's pods need one. If every node is NotReady with "cni plugin not initialized", the chart refuses to install and tells you to run `ichor cni bootstrap` first (see [A cluster with no CNI](#a-cluster-with-no-cni)). A cluster with at least one Ready node passes. |
+| Cilium as the CNI | Not needed to install. With Cilium, the chart also renders Ichor's network policies (see [Network policies](#network-policies)). |
+| Another CNI (flannel, Calico, ...) | The chart installs and runs; it does not touch your CNI and renders no network policies, so `ichor-system` is not isolated by Ichor. `ichor adopt` later refuses such a cluster unless you pass `--cni-unmanaged`, which leaves the CNI exactly as it is and refuses `ichor cni` commands for the cluster. Ichor does not migrate a CNI. |
+| A talosconfig, a secrets bundle, a kubeconfig | Not needed to install. The chart never takes them; they go to `ichor adopt`, which needs Talos v1.12 or later on every node (see [Adopt a running cluster](adopt-and-reclaim.md#what-you-need)). |
+| OIDC or Ichor users | Not needed to install. With neither, ichor-ui has no sign-in and serves read-only calls only (see [Users and login](users-and-login.md)). |
+
+Until you run `ichor adopt` no cluster is registered with Ichor. The
+controller runs, but it reacts only to its own custom resources, and there is
+no `TalosCluster` yet, so it reads no credential, contacts no node and writes
+nothing to one. ichor-ui is up and shows no cluster. The same holds if you run
+`ichor adopt` without the secrets bundle: adopt refuses before it writes
+anything, so Ichor stays installed but unable to manage the nodes.
+
 ## Where the chart lives
 
 The chart is published by a workflow that runs when a `v*` tag is pushed, as a

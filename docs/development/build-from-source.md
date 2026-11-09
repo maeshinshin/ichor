@@ -27,6 +27,7 @@ must be 1.27.3 or newer (`go.mod`).
 | Tool | Version | Used for |
 |---|---|---|
 | Go | 1.27.3 or newer | building the `ichor` CLI and the images (`make demo-images-build`) |
+| `ko` | v0.19.1 | building the images, with no container runtime (`make demo-images-build`) |
 | Node.js | 24 | building the UI, part of the same build |
 | GNU make | any recent | the `make` targets |
 | `crane` | v0.22.1 | pushing the images to your registry (`make demo-images-push`) |
@@ -67,11 +68,11 @@ make demo-images-build VERSION=v0.1.0
 make demo-images-push VERSION=v0.1.0 REGISTRY=192.168.1.10:5000
 ```
 
-`demo-images-build` builds the UI and the install manifest, then compiles three
-linux/amd64 binaries into `bin/img/`. `demo-images-push` layers each on a
-pinned distroless base and pushes `ichor-controller`, `ichor-ui` and
-`ichor-installer` to `192.168.1.10:5000/maeshinshin/` with `crane`, printing
-each digest. It talks plain HTTP to the registry by default; set
+`demo-images-build` builds the UI and the install manifest, then has `ko`
+compile three images (linux/amd64 and linux/arm64, on a pinned distroless base,
+configured in `.ko.yaml`) into `bin/oci/`. `demo-images-push` pushes
+`ichor-controller`, `ichor-ui` and `ichor-installer` to
+`192.168.1.10:5000/maeshinshin/` with `crane`, printing each index digest. It talks plain HTTP to the registry by default; set
 `CRANE_INSECURE=` (empty) for one with TLS. These two steps leave the install
 manifest naming the images by tag. `make demo-images VERSION=... REGISTRY=...`
 does both in one go the way a release does: it pushes `ichor-controller` and
@@ -80,7 +81,7 @@ manifest with `ichor-controller:VERSION@sha256:...` and
 `ichor-ui:VERSION@sha256:...`, and only then builds and pushes the installer
 image that embeds it.
 
-The same build leaves the CLI at `bin/img/ichor/ichor`. It carries the
+The installer build also leaves the CLI at `bin/img/ichor/ichor`. It carries the
 install manifest for that version inside it (the `installembed` build), which
 is what lets `ichor init` install Ichor without a network fetch. Use it
 instead of one from `go run ./cmd/ichor`, whose manifest is a placeholder:

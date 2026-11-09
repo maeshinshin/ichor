@@ -56,6 +56,14 @@ archives:
       - CHANGELOG.md
       - THIRD-PARTY-NOTICES
 
+# One checksums file (ichor_<version>_checksums.txt, sha256) covers every archive; the release workflow
+# signs it keyless with cosign (the signature bundle is attached beside it). A local snapshot needs --skip=sign.
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args: ["sign-blob", "--yes", "--bundle=${signature}", "${artifact}"]
+
 changelog:
   sort: asc
   groups:

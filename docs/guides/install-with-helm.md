@@ -31,7 +31,7 @@ The chart's default images are `ghcr.io/maeshinshin/ichor-controller` and
 built yourself, see [Build from source](../development/build-from-source.md#install-your-own-chart).
 The chart `version` has no leading `v` (for example
 `0.1.0`); `appVersion` and the image tags have it (`v0.1.0`). The published
-images are linux/amd64 only. Helm is not provided by Ichor; [install it](https://helm.sh/docs/intro/install/)
+images are multi-arch (linux/amd64 and linux/arm64). Helm is not provided by Ichor; [install it](https://helm.sh/docs/intro/install/)
 yourself.
 
 ## Install

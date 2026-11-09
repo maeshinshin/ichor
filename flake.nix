@@ -27,7 +27,8 @@
               protoc-gen-go
               protoc-gen-connect-go
               goreleaser
-              go-containerregistry # crane: pushes images without a container runtime (test/harness/ui-demo)
+              ko # builds the three images without a container runtime (.ko.yaml)
+              go-containerregistry # crane: pushes the images ko lays out, and logs in to the registry
               govulncheck
               cosign # keyless signing of the release images and chart
               syft # SBOMs of the release images

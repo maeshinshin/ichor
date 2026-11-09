@@ -1,0 +1,23 @@
+# The three images, built by `make images-*` (ko). VERSION must be set in the environment.
+# Pinned by digest (a moving tag would change a release silently); Renovate bumps it.
+defaultBaseImage: gcr.io/distroless/static:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329
+defaultPlatforms:
+  - linux/amd64
+  - linux/arm64
+builds:
+  - id: ichor-controller
+    main: ./cmd
+    env: [CGO_ENABLED=0]
+    ldflags:
+      - -s -w -X github.com/maeshinshin/ichor/internal/version.Version={{.Env.VERSION}}
+  - id: ichor-ui
+    main: ./cmd/ichor-ui
+    env: [CGO_ENABLED=0]
+    flags: [-tags, uiembed]
+    ldflags: [-s -w]
+  - id: ichor-installer
+    main: ./cmd/ichor
+    env: [CGO_ENABLED=0]
+    flags: [-tags, installembed]
+    ldflags:
+      - -s -w -X github.com/maeshinshin/ichor/internal/version.Version={{.Env.VERSION}}

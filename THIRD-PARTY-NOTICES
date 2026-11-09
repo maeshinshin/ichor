@@ -10,9 +10,9 @@ Ichor includes the components below, each under its own licence, and their licen
 The Source Code Form of each module below, at exactly the version named, is available from the
 upstream repository (the version tag) and from the Go module proxy (https://proxy.golang.org).
 
-- github.com/cosi-project/runtime@v1.16.3
+- github.com/cosi-project/runtime@v1.17.0
     Repository: https://github.com/cosi-project/runtime
-    Module proxy: https://proxy.golang.org/github.com/cosi-project/runtime/@v/v1.16.3.zip
+    Module proxy: https://proxy.golang.org/github.com/cosi-project/runtime/@v/v1.17.0.zip
 - github.com/cyphar/filepath-securejoin@v0.7.0
     Repository: https://github.com/cyphar/filepath-securejoin
     Module proxy: https://proxy.golang.org/github.com/cyphar/filepath-securejoin/@v/v0.7.0.zip
@@ -463,7 +463,7 @@ For more information, see https://www.bis.doc.gov
 
 See also https://www.apache.org/dev/crypto.html and/or seek legal counsel.
 
-github.com/go-openapi/jsonpointer@v1.0.1: NOTICE
+github.com/go-openapi/jsonpointer@v1.0.2: NOTICE
 
 Copyright 2015-2025 go-swagger maintainers
 
@@ -505,7 +505,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-github.com/go-openapi/jsonreference@v1.0.2: NOTICE
+github.com/go-openapi/jsonreference@v1.0.3: NOTICE
 
 Copyright 2015-2025 go-swagger maintainers
 
@@ -747,7 +747,7 @@ Copyright 2011-2019 Canonical Ltd
 Copyright 2025 The go-yaml Project Contributors
 http://www.apache.org/licenses/LICENSE-2.0
 
-google.golang.org/grpc@v1.84.0: NOTICE.txt
+google.golang.org/grpc@v1.85.0: NOTICE.txt
 
 Copyright 2014 gRPC authors.
 
@@ -1034,7 +1034,7 @@ Apache License
    limitations under the License.
 
 Components:
-- cel.dev/expr@v0.25.2
+- cel.dev/expr@v0.25.3
 - connectrpc.com/connect@v1.21.0
     Copyright 2021-2025 The Connect Authors
 - github.com/Masterminds/goutils@v1.1.1
@@ -1048,10 +1048,10 @@ Components:
 - github.com/go-logr/logr@v1.4.4
 - github.com/go-logr/stdr@v1.2.2
 - github.com/go-logr/zapr@v1.3.0
-- github.com/go-openapi/analysis@v1.0.0
+- github.com/go-openapi/analysis@v1.0.1
 - github.com/go-openapi/errors@v0.22.9
-- github.com/go-openapi/jsonpointer@v1.0.1
-- github.com/go-openapi/jsonreference@v1.0.2
+- github.com/go-openapi/jsonpointer@v1.0.2
+- github.com/go-openapi/jsonreference@v1.0.3
 - github.com/go-openapi/loads@v0.25.3
 - github.com/go-openapi/runtime/server-middleware@v0.33.3
 - github.com/go-openapi/runtime@v0.33.3
@@ -1069,7 +1069,7 @@ Components:
 - github.com/go-openapi/swag/typeutils@v0.29.2
 - github.com/go-openapi/swag/yamlutils@v0.29.2
 - github.com/go-openapi/swag@v0.29.2
-- github.com/go-openapi/validate@v1.0.0
+- github.com/go-openapi/validate@v1.0.1
 - github.com/google/btree@v1.1.3
 - github.com/google/cel-go@v0.31.0
     Copyright (c) 2018 The Go Authors. All rights reserved.
@@ -1140,9 +1140,9 @@ Components:
 - go.yaml.in/yaml/v4@v4.0.0-rc.6
     Copyright 2025 - The go-yaml Project Contributors
 - gomodules.xyz/jsonpatch/v2@v2.4.0
-- google.golang.org/genproto/googleapis/api@v0.0.0-20261019180522-ce908d29299b
+- google.golang.org/genproto/googleapis/api@v0.0.0-20261026165753-2ffab32bce7e
 - google.golang.org/genproto/googleapis/rpc@v0.0.0-20261019180522-ce908d29299b
-- google.golang.org/grpc@v1.84.0
+- google.golang.org/grpc@v1.85.0
 - gopkg.in/go-jose/go-jose.v2@v2.6.3
 - gopkg.in/yaml.v2@v2.4.0
 - helm.sh/helm/v3@v3.21.4
@@ -2324,7 +2324,7 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 Components:
-- github.com/klauspost/compress@v1.20.2
+- github.com/klauspost/compress@v1.20.3
     Copyright (c) 2012 The Go Authors. All rights reserved.
     Copyright (c) 2019 Klaus Post. All rights reserved.
     Copyright 2016-2017 The New York Times Company
@@ -2559,7 +2559,7 @@ Components:
 - dario.cat/mergo@v1.0.1
     Copyright (c) 2013 Dario Castañé. All rights reserved.
     Copyright (c) 2012 The Go Authors. All rights reserved.
-- github.com/ProtonMail/go-crypto@v1.4.1
+- github.com/ProtonMail/go-crypto@v1.5.2
     Copyright (c) 2009 The Go Authors. All rights reserved.
 - github.com/chai2010/gettext-go@v1.0.2
     Copyright 2013 ChaiShushan <chaishushan{AT}gmail.com>. All rights reserved.
@@ -2846,7 +2846,7 @@ ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Components:
-- github.com/grpc-ecosystem/grpc-gateway/v2@v2.32.0
+- github.com/grpc-ecosystem/grpc-gateway/v2@v2.33.0
     Copyright (c) 2015, Gengo, Inc. All rights reserved.
 
 --------------------------------------------------------------------------------
@@ -3091,7 +3091,7 @@ rights granted to you under this License for this implementation of Go
 shall terminate as of the date such litigation is filed.
 
 Components:
-- github.com/ProtonMail/go-crypto@v1.4.1
+- github.com/ProtonMail/go-crypto@v1.5.2
 - golang.org/x/crypto@v0.58.0
 - golang.org/x/exp@v0.0.0-20261014143641-f0251eb4aa3e
 - golang.org/x/mod@v0.42.0
@@ -3348,7 +3348,7 @@ FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 IN THE SOFTWARE.
 
 Components:
-- github.com/ProtonMail/gopenpgp/v3@v3.4.1
+- github.com/ProtonMail/gopenpgp/v3@v3.5.2
     Copyright (c) 2019 Proton Technologies AG
 - github.com/go-gorp/gorp/v3@v3.1.0
     Copyright (c) 2012 James Cooper <james@bitmechanic.com>
@@ -3626,7 +3626,7 @@ Components:
     Copyright (c) 2013-present Cole Bemis
 
 MPL-2.0: see section 1.
-- github.com/cosi-project/runtime@v1.16.3
+- github.com/cosi-project/runtime@v1.17.0
 - github.com/cyphar/filepath-securejoin@v0.7.0
 - github.com/hashicorp/errwrap@v1.1.0
 - github.com/hashicorp/go-multierror@v1.1.1

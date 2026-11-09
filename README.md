@@ -61,16 +61,18 @@ Install Ichor with Helm, then register the cluster with `ichor adopt`:
 
 ```sh
 helm repo add ichor https://ichor.maesh.dev/charts
-helm install ichor ichor/ichor --version ${VERSION} \
+helm install ichor ichor/ichor --version 0.1.0 \
   --namespace ichor-system --create-namespace
 ```
 
-Conditions: Kubernetes 1.30 or later and a working pod network (the chart
-refuses a cluster whose nodes are all NotReady for lack of a CNI). Cilium and
-any talosconfig or secrets bundle are not needed to install. Until `ichor
-adopt` runs, Ichor is installed but manages no nodes. On a CNI other than
-Cilium, adopt needs `--cni-unmanaged`. Details:
-[Install Ichor with Helm](docs/guides/install-with-helm.md).
+Conditions:
+
+- Kubernetes 1.30 or later and a working pod network.
+- Cilium, a talosconfig and a secrets bundle are not needed to install.
+- Ichor manages no nodes until you run `ichor adopt`.
+- On a CNI other than Cilium, adopt needs `--cni-unmanaged`; the CNI is left as it is.
+
+Details: [Install Ichor with Helm](docs/guides/install-with-helm.md).
 
 ## Documentation
 

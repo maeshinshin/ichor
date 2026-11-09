@@ -9,6 +9,8 @@ name: Release
 #   publish       pushes the installer and the chart by digest, signs (cosign keyless), verifies the signatures with the
 #                 controller's own verifier, attaches an SBOM and a provenance attestation;
 #                 runs in the protected "release" environment, as publish-core does (a required reviewer approves both)
+#   cli           goreleaser builds the ichor CLI archives with the install manifest that pins those digests, signs the
+#                 checksums (cosign keyless) and attaches both to the GitHub release; the only job that writes contents
 on:
   push:
     tags: ["v*"]
@@ -265,8 +267,7 @@ jobs:
             bin/verifyimage "${ref%@*}" "${ref#*@}" "${TAG}"
           done < bin/digests.txt
 
-      # The release's CLI is built outside this workflow (goreleaser, make release); its install manifest names the
-      # controller and ichor-ui images by the digests recorded here (ICHOR_IMAGE_DIGESTS).
+      # The cli job embeds these digests in the CLI's install manifest (ICHOR_IMAGE_DIGESTS).
       - name: Upload the digests of the release
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -332,3 +333,33 @@ jobs:
           subject-digest: ${{ steps.digests.outputs.ichor-installer }}
           sbom-path: bin/ichor-installer.spdx.json
           push-to-registry: true
+
+  cli:
+    name: Build the CLI and attach it to the release
+    needs: publish
+    permissions:
+      contents: write # create the GitHub release and upload the assets
+      id-token: write # keyless cosign of the checksums
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0 # goreleaser's changelog reads the history
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+
+      - name: Download the digests of the release
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-image-digests
+          path: bin
+
+      - name: Build, sign the checksums and publish the CLI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ICHOR_IMAGE_DIGESTS: bin/digests.txt
+        run: nix develop --command goreleaser release --clean

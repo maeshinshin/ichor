@@ -18,4 +18,4 @@ runs:
     # The devShell closure has no GC root otherwise, so the collection above would delete it.
     - name: Keep the devShell out of garbage collection
       shell: bash
-      run: nix develop --profile /nix/var/nix/profiles/devshell --command true
+      run: nix develop --profile "$RUNNER_TEMP/devshell" --command true

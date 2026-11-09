@@ -16,6 +16,7 @@ jobs:
     timeout-minutes: 30
     env:
       IMG: controller:latest
+      IMG_UI: ichor-ui:latest
     steps:
       - name: Clone the code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -48,8 +49,8 @@ jobs:
         run: |
           go mod tidy -diff
           go mod verify
-          make docker-build
-          kind load docker-image "$IMG"
+          make docker-build docker-build-ichor-ui
+          kind load docker-image "$IMG" "$IMG_UI"
 
       - name: Install Helm
         run: make install-helm
@@ -63,7 +64,7 @@ jobs:
 
       - name: Deploy manager via Helm
         run: |
-          make helm-deploy
+          make helm-deploy HELM_EXTRA_ARGS="--set ichorUI.image.repository=${IMG_UI%:*} --set ichorUI.image.tag=${IMG_UI##*:}"
 
       - name: Check Helm release status
         run: |

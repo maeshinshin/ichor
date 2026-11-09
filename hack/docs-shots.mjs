@@ -161,7 +161,7 @@ try {
       check(!(await ev(`!!${item('Share')}`)), `${tag}: no Share item without the Web Share API`)
       await mouse(item('Copy link'))
       await sleep(300)
-      check((await clipboard()) === (process.env.DOCS_SITE ?? 'https://maeshinshin.github.io') + base + 'guides/rotate-keys/', `${tag}: Copy link copies the canonical URL`)
+      check((await clipboard()) === (process.env.DOCS_SITE ?? 'https://ichor.maesh.dev') + base + 'guides/rotate-keys/', `${tag}: Copy link copies the canonical URL`)
 
       // Heading links: hidden until hover or focus, copy the URL with the anchor and move the address bar.
       const anchor = `document.querySelector('article h2 a[data-heading-link]')`

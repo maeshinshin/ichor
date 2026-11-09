@@ -52,9 +52,6 @@ jobs:
       # For next and each release tag: npm ci, astro build, the internal link check and the Pagefind
       # index; then versions.json (from the v* tags, newest first by semver) and the redirects, into site/dist-all.
       - name: Build
-        env:
-          DOCS_SITE: https://ichor.maesh.dev
-          DOCS_BASE: /
         run: nix develop --command make docs-site-all
 
       # The release's own archives, so the digests baked into them stay; a tag whose chart is not in

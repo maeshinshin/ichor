@@ -4,8 +4,10 @@ name: Docs
 # publishes it to GitHub Pages at https://ichor.maesh.dev/.
 # One run builds every version: main as /next/ and each release tag vX.Y.Z as
 # /vX.Y.Z/ (the tag's docs/, built with main's site/), plus versions.json and
-# the /latest/ redirects (make docs-site-all). A new tag publishes its docs and
-# adds itself to the version switcher of every older build.
+# the /latest/ redirects (make docs-site-all), and the Helm repository at /charts/
+# (each release's signed chart, pulled from ghcr). A new tag publishes after its
+# Release run succeeds, so the chart exists, and adds itself to the version switcher
+# of every older build.
 on:
   push:
     branches: [main]
@@ -13,7 +15,9 @@ on:
       - "docs/**"
       - "site/**"
       - ".github/workflows/docs.yml"
-    tags: ["v*"]
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   workflow_dispatch:
 
 permissions: {}
@@ -26,6 +30,7 @@ concurrency:
 jobs:
   build:
     name: Build the site
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -51,6 +56,21 @@ jobs:
           DOCS_SITE: https://ichor.maesh.dev
           DOCS_BASE: /
         run: nix develop --command make docs-site-all
+
+      # The release's own archives, so the digests baked into them stay; a tag whose chart is not in
+      # ghcr (no release, a failed publish) is skipped. The index is written even when empty, so
+      # `helm repo add` works before the first release.
+      - name: Helm repository
+        run: |
+          nix develop --command bash -euo pipefail <<'EOF'
+          mkdir -p site/dist-all/charts
+          for tag in $(git tag -l "v*"); do
+            [[ $tag =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
+            helm pull oci://ghcr.io/maeshinshin/charts/ichor --version "${tag#v}" -d site/dist-all/charts \
+              || echo "::warning::no chart for $tag in ghcr, left out of the Helm repository"
+          done
+          helm repo index site/dist-all/charts --url https://ichor.maesh.dev/charts
+          EOF
 
       - name: Upload the site
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

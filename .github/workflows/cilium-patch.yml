@@ -31,6 +31,18 @@ jobs:
       - name: Set up Nix
         uses: ./.github/actions/nix
 
+      - name: Cache the Go tools in bin/
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          # Only what the Makefile installs; bin/ also holds build outputs that must not come back stale.
+          path: |
+            bin/kustomize*
+            bin/controller-gen*
+            bin/setup-envtest*
+            bin/golangci-lint*
+            bin/k8s
+          key: bin-${{ runner.os }}-${{ github.job }}-${{ hashFiles('Makefile', '.custom-gcl.yml') }}
+
       # Exits 0 without a change when the pinned chart is already the newest patch of its minor; refuses
       # (non-zero, no change) when the images of the new patch are not signed by Cilium's release workflow.
       - name: Move the pins to the newest patch

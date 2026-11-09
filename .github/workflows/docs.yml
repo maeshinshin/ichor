@@ -41,8 +41,8 @@ jobs:
           fetch-tags: true
           persist-credentials: false
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+      - name: Set up Nix
+        uses: ./.github/actions/nix
 
       # For next and each release tag: npm ci, astro build, the internal link check and the Pagefind
       # index; then versions.json (from the v* tags, newest first by semver) and the redirects, into site/dist-all.

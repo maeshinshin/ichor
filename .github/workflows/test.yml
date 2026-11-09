@@ -20,8 +20,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+      - name: Set up Nix
+        uses: ./.github/actions/nix
 
       - name: Verify the devShell Go floor
         run: |
@@ -75,8 +75,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+      - name: Set up Nix
+        uses: ./.github/actions/nix
 
       # "fmt" is part of this, not an extra step: controller-gen/mirrorgen's raw output
       # isn't always import-sorted the way gofmt leaves it (observed for real -- a bare

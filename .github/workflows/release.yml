@@ -2,7 +2,7 @@ name: Release
 
 # One workflow for the images and the chart. A v* tag runs, in order:
 #   verify        the same checks as a PR (module drift, lint, tests, govulncheck, npm audit); contents: read
-#   build         compiles the controller and ichor-ui binaries and the signature verifier; contents: read, no registry token
+#   build         compiles the controller and ichor-ui images (ko) and the signature verifier; contents: read, no registry token
 #   publish-core  pushes the controller and ichor-ui images and records their digests; the only registry token so far
 #   installer     renders the install manifest and the chart with those digests, then compiles the installer image's
 #                 binary with that manifest embedded, so a signed installer never deploys a retagged controller or UI; contents: read, no registry token, fetches Go modules
@@ -67,9 +67,9 @@ jobs:
       - name: Install Nix
         uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
 
-      # linux/amd64 only, as demo-images builds. The binaries are layered on the pinned distroless base in the
-      # publish-core job. The installer binary is built later, once the digests of these two images exist.
-      - name: Build the image binaries
+      # ko lays out linux/amd64 and linux/arm64 indexes on the pinned distroless base; the publish-core job pushes
+      # them. The installer image is built later, once the digests of these two images exist.
+      - name: Build the images
         env:
           TAG: ${{ github.ref_name }}
         run: nix develop --command make images-build-core VERSION="${TAG}"
@@ -84,7 +84,7 @@ jobs:
         with:
           name: release-build
           path: |
-            bin/img/
+            bin/oci/
             bin/verifyimage
           retention-days: 1
           if-no-files-found: error
@@ -156,8 +156,8 @@ jobs:
           name: release-digests
           path: bin
 
-      # The install manifest names ichor-controller and ichor-ui as <repo>:<tag>@<digest>; images.sh refuses to embed
-      # a manifest that does not. The installer binary embeds it.
+      # The install manifest names ichor-controller and ichor-ui as <repo>:<tag>@<digest> (build-installer fails
+      # without their digests). The installer image embeds it.
       - name: Render the install manifest with the digests and build the installer
         env:
           TAG: ${{ github.ref_name }}
@@ -174,7 +174,7 @@ jobs:
         with:
           name: release-installer
           path: |
-            bin/img/ichor/
+            bin/oci/ichor-installer/
             bin/chart/
           retention-days: 1
           if-no-files-found: error

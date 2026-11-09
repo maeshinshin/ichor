@@ -13,7 +13,8 @@ jobs:
       contents: read
     name: Run on Ubuntu
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # A cold run (no Go caches) takes about 30 minutes; the cache is only saved by a run that finishes.
+    timeout-minutes: 45
     steps:
       - name: Clone the code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -22,6 +23,16 @@ jobs:
 
       - name: Install Nix
         uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+
+      - name: Cache Go modules and builds
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            ~/.cache/golangci-lint
+          key: lint-go-${{ hashFiles('go.sum') }}
+          restore-keys: lint-go-
 
       - name: Check linter configuration
         run: nix develop --command make lint-config

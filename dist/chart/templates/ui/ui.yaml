@@ -100,8 +100,6 @@ spec:
         - --kube-api-tls-server-name={{ . }}
         {{- end }}
         {{- end }}
-        command:
-        - /ichor-ui
         image: "{{ .Values.ichorUI.image.repository }}{{- if not (contains "@" .Values.ichorUI.image.repository) }}:{{ .Values.ichorUI.image.tag | default .Chart.AppVersion }}{{- end }}"
         {{- with .Values.ichorUI.image.pullPolicy }}
         imagePullPolicy: {{ . }}

@@ -129,8 +129,6 @@ spec:
         # config/default/cert_metrics_manager_patch.yaml.
         - --metrics-cert-path=/tmp/k8s-metrics-server/metrics-certs
         {{- end }}
-        command:
-        - /manager
         env:
 {{- if or .Values.manager.env (and (kindIs "map" .Values.manager.envOverrides) (not (empty .Values.manager.envOverrides))) }}
           {{- if .Values.manager.env }}

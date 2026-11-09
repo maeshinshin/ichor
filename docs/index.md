@@ -13,10 +13,10 @@ or by writing the resources yourself.
 
 > Status: alpha (v0.1.0). Exercised end to end on Talos v1.14 test clusters, not yet on bare metal.
 
-The commands in these docs are written as if their tools are on your `PATH`.
-Run `nix develop` in a checkout to get them all, or install them yourself:
-[Before you begin](guides/getting-started.md#before-you-begin) lists which and
-at what versions.
+The commands in these docs use the `ichor` CLI, which each release publishes as
+an archive; [Getting started](guides/getting-started.md#1-install-the-cli)
+installs it. Building from source is covered in
+[Build from source](development/build-from-source.md).
 
 ## What Ichor manages
 
@@ -86,8 +86,8 @@ The complete list is in the [changelog](https://github.com/maeshinshin/ichor/blo
 
 ## Where to go next
 
-- [Getting started](guides/getting-started.md): from a build to a one-node
-  cluster and the first sign-in.
+- [Getting started](guides/getting-started.md): from the released CLI to a
+  one-node cluster and the first sign-in.
 - [Install with Helm](guides/install-with-helm.md) and
   [Adopt and reclaim](guides/adopt-and-reclaim.md): install Ichor on an existing
   cluster, or bring existing Talos machines in.

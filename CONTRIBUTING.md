@@ -8,6 +8,9 @@ go version   # 1.27.3 or newer
 make help
 ```
 
+To build the CLI and the images from a checkout and run them on a Talos machine,
+see [Build from source](docs/development/build-from-source.md).
+
 All tools (Go, Node, kubebuilder, talosctl, helm, buf, goreleaser, QEMU, …)
 come from `flake.nix`. If something is missing, add it there rather than
 installing it some other way.

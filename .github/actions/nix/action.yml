@@ -1,0 +1,21 @@
+name: Nix with a cached store
+description: Install Nix and restore or save the devShell closure with the GitHub Actions cache.
+
+runs:
+  using: composite
+  steps:
+    - name: Install Nix
+      uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
+
+    - name: Cache the Nix store
+      uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
+      with:
+        primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
+        restore-prefixes-first-match: nix-${{ runner.os }}-
+        # Garbage collection keeps the cache well under the 10 GB per-repository limit.
+        gc-max-store-size-linux: 5G
+
+    # The devShell closure has no GC root otherwise, so the collection above would delete it.
+    - name: Keep the devShell out of garbage collection
+      shell: bash
+      run: nix develop --profile /nix/var/nix/profiles/devshell --command true

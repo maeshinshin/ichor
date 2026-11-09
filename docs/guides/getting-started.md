@@ -25,19 +25,40 @@ images yourself, see [Build from source](../development/build-from-source.md).
 Each [release](https://github.com/maeshinshin/ichor/releases) has one archive
 per platform, `ichor_<version>_<os>_<arch>.tar.gz`, and a checksums file,
 `ichor_<version>_checksums.txt`. Download the archive for your platform, check
-it against the checksums and put `ichor` on your `PATH`:
+it against the checksums and put `ichor` on your `PATH`.
+
+Set the release and your platform once:
 
 ```sh
 VERSION=0.1.0   # the release, without the leading v
 OS=linux        # linux or darwin
 ARCH=amd64      # amd64 or arm64
 BASE=https://github.com/maeshinshin/ichor/releases/download/v${VERSION}
+```
 
+Download the archive and the checksums file:
+
+```sh
 curl -fsSLO "${BASE}/ichor_${VERSION}_${OS}_${ARCH}.tar.gz"
 curl -fsSLO "${BASE}/ichor_${VERSION}_checksums.txt"
+```
+
+Check the archive against the checksums:
+
+```sh
 grep " ichor_${VERSION}_${OS}_${ARCH}.tar.gz\$" "ichor_${VERSION}_checksums.txt" | sha256sum -c -
+```
+
+Unpack it and put `ichor` on your `PATH`:
+
+```sh
 tar -xzf "ichor_${VERSION}_${OS}_${ARCH}.tar.gz" ichor
-install -m 0755 ichor ~/.local/ichor
+install -m 0755 ichor ~/.local/bin/ichor
+```
+
+Check that it runs:
+
+```sh
 ichor version --client
 ```
 

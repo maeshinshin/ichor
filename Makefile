@@ -429,7 +429,7 @@ helm-package: ## Package the chart into CHART_DIST (bin/chart) with CHART_VERSIO
 	$(HELM) package "$$work/ichor" --version $(CHART_VERSION) --app-version $(APP_VERSION) --destination $(CHART_DIST)
 
 
-# The image names the install manifest carries (test/harness/ui-demo/images.sh LIVE, and demo-images above).
+# The image names the install manifest carries (IMAGE_TAG_CTL and IMAGE_TAG_UI above).
 RELEASE_REGISTRY ?= ghcr.io/maeshinshin
 RELEASE_DIR ?= bin/release
 

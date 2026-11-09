@@ -74,7 +74,7 @@ Three deliverables come out of one repository:
 `api/` (CRD types) and `proto/` (Connect definitions) are the shared contracts.
 Deliverables don't import each other; shared code lives under `pkg/`. The
 controller's entry point stays at kubebuilder's `cmd/main.go`, which the
-generated Dockerfile and Makefile are tied to; the CLI and the UI backend are
+generated Makefile is tied to; the CLI and the UI backend are
 added beside it. The Kustomize base under `config/` is the source of truth for
 manifests, and the Helm chart in `dist/chart` is generated from it.
 

@@ -216,7 +216,7 @@ func verifiesWith(token []byte, pub any) bool {
 		return false
 	}
 
-	sig, err := jose.ParseSigned(string(token), serviceAccountSigningAlgs)
+	sig, err := jose.ParseSignedCompact(string(token), serviceAccountSigningAlgs)
 	if err != nil {
 		return false
 	}

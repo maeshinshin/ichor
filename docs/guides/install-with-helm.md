@@ -26,19 +26,12 @@ helm repo update
 oci://ghcr.io/maeshinshin/charts/ichor
 ```
 
-No release has been tagged yet, so both have nothing in them today. Until the
-first release, install from a checkout:
-
-```sh
-helm install ichor ./dist/chart --namespace ichor-system --create-namespace \
-  --set manager.image.repository=REPO --set ichorUI.image.repository=REPO
-```
-
-The default image repositories are `ghcr.io/maeshinshin/ichor-controller` and
-`ghcr.io/maeshinshin/ichor-ui`, which will not exist until the first release
-either, so set your own. The chart `version` has no leading `v` (for example
+The chart's default images are `ghcr.io/maeshinshin/ichor-controller` and
+`ghcr.io/maeshinshin/ichor-ui`, by digest. To install a chart and images you
+built yourself, see [Build from source](../development/build-from-source.md#install-your-own-chart).
+The chart `version` has no leading `v` (for example
 `0.1.0`); `appVersion` and the image tags have it (`v0.1.0`). The published
-images are linux/amd64 only. Helm is not provided by Ichor; install it
+images are linux/amd64 only. Helm is not provided by Ichor; [install it](https://helm.sh/docs/intro/install/)
 yourself.
 
 ## Install

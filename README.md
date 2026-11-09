@@ -39,34 +39,28 @@ Kubernetes resources. You work with them through a CLI, a web UI, or plain
 
 ## Quick start
 
-There is no published release yet, so you build from a checkout. You need
-[Nix](https://nixos.org/) with flakes, one machine booted from a Talos ISO into
-maintenance mode, and a container registry the machine can pull from.
+You need one machine booted from a Talos ISO into maintenance mode. Download
+the CLI from the [latest release](https://github.com/maeshinshin/ichor/releases)
+(`ichor_<version>_<os>_<arch>.tar.gz`, with a checksums file), put `ichor` on
+your `PATH`, then:
 
 ```sh
-git clone https://github.com/maeshinshin/ichor
-cd ichor
-nix develop
-
-# Build the images and the CLI, and push the images to your registry.
-make demo-images VERSION=v0.1.0 REGISTRY=192.168.1.10:5000
-
 # Turn the machine into the first control plane of a new cluster.
-bin/img/ichor/ichor init \
+ichor init \
   --cluster demo \
   --node-endpoint 192.168.1.50:50000 \
   --endpoint-type node --endpoint-address 192.168.1.50 \
   --install-disk /dev/sda \
-  --preset single \
-  --registry-mirror ghcr.io=http://192.168.1.10:5000
+  --preset single
 
 # Look at what you have.
-bin/img/ichor/ichor cluster get demo
+ichor cluster get demo
 ```
 
 [Getting started](docs/guides/getting-started.md) walks through every step,
-including adding more machines and signing in to the UI.
-`ichor <command> --help` documents the rest.
+including the download and checksum check, adding more machines and signing in
+to the UI. `ichor <command> --help` documents the rest. To build the CLI and
+the images yourself, see [Build from source](docs/development/build-from-source.md).
 
 ## Documentation
 
@@ -79,6 +73,7 @@ repository:
 - [Users and login](docs/guides/users-and-login.md)
 - [Hardening](docs/guides/hardening.md)
 - [Rotating keys](docs/guides/rotate-keys.md)
+- [Build from source](docs/development/build-from-source.md)
 - [Design](docs/design/architecture.md)
 
 ## Security

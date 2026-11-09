@@ -4,117 +4,61 @@ sidebar_order: 1
 
 # Getting started
 
-This guide takes you from a checkout to a running one-node cluster managed by
-Ichor, using a local build. There is no published release yet, so the images
-are built from your tree and pushed to a registry your nodes can reach. For an
-existing Talos cluster see [Adopt and reclaim](adopt-and-reclaim.md) instead.
+This guide takes you from a downloaded `ichor` CLI to a running one-node
+cluster managed by Ichor. For an existing Talos cluster see
+[Adopt and reclaim](adopt-and-reclaim.md) instead. To build the CLI and the
+images yourself, see [Build from source](../development/build-from-source.md).
 
 ## Before you begin
 
-### The tools
-
-Every command in these docs is written as if its tools are on your `PATH`.
-There are two ways to get them.
-
-**Enter the dev shell (recommended).** With a checkout of this repository and
-[Nix](https://nixos.org/) with flakes, run `nix develop` in the checkout. It
-puts every tool on `PATH` at the versions `flake.nix` and `flake.lock` pin, and
-you install nothing else. To run one command in it without entering it, use
-`nix develop -c <command>`.
-
-**Or install the tools yourself.** The commands in the guides use these. The
-versions are the ones the dev shell resolves today; the exception is Go, which
-must be 1.27.3 or newer (`go.mod`).
-
-| Tool | Version | Used for |
-|---|---|---|
-| Go | 1.27.3 or newer | building the `ichor` CLI and the images (`make demo-images-build`) |
-| Node.js | 24 | building the UI, part of the same build |
-| GNU make | any recent | the `make` targets |
-| `crane` | v0.22.1 | pushing the images to your registry (`make demo-images-push`) |
-| `kubectl` | v1.37.1 | reading the cluster and applying the manifests the guides show |
-| `talosctl` | v1.14.3 | the few places a guide talks to a node directly, such as [hardening](hardening.md) |
-| `helm` | v4.3.1 | [installing Ichor with Helm](install-with-helm.md) |
-| `cosign` | v3.1.3 | verifying a release's signatures ([install with Helm](install-with-helm.md)) |
-| `openssl` | 3.x | the certificate check in [hardening](hardening.md) |
-
-The Makefile fetches its own helpers (`controller-gen`, `kustomize`,
-`setup-envtest`, `golangci-lint`) into `./bin` with Go at the versions it pins,
-so the first `make` needs network access. Developers of Ichor itself need more,
-and [CONTRIBUTING.md](../../CONTRIBUTING.md) lists it.
-
-### What you need
-
-- A checkout of this repository.
 - One machine (virtual or bare metal) booted from a Talos ISO into maintenance
   mode, with an address your workstation can reach on port 50000. This guide
   uses `192.168.1.50`. Talos needs at least 2 GiB of memory on a control plane.
   Ichor does not boot machines.
-- A container registry that your workstation can push to and that every node
-  can pull from. A plain-HTTP registry on your LAN is enough for a first try
-  (`registry:2` works; [`test/harness/ui-demo/registry.yaml`](../../test/harness/ui-demo/registry.yaml)
-  is a Deployment of one). This guide uses `192.168.1.10:5000`.
-- The nodes need internet access for the Talos installer image and for
-  Cilium's images. Air-gapped installs are out of scope.
+- Network access from the machine to `ghcr.io` (Ichor's images), and for the
+  Talos installer image and Cilium's images. Air-gapped installs are out of
+  scope.
+- A Linux or macOS workstation (amd64 or arm64) that can reach the machine.
 
-## 1. Build the images and the CLI
+## 1. Install the CLI
 
-The install manifest that `ichor init` applies names its images
-`ghcr.io/maeshinshin/ichor-controller:VERSION` and
-`ghcr.io/maeshinshin/ichor-ui:VERSION`. You build those images yourself, push
-them under your registry, and tell the nodes to fetch `ghcr.io` from it (step
-2). Pick a semantic version; `dev` is refused.
+Each [release](https://github.com/maeshinshin/ichor/releases) has one archive
+per platform, `ichor_<version>_<os>_<arch>.tar.gz`, and a checksums file,
+`ichor_<version>_checksums.txt`. Download the archive for your platform, check
+it against the checksums and put `ichor` on your `PATH`:
 
 ```sh
-make demo-images-build VERSION=v0.1.0
-make demo-images-push VERSION=v0.1.0 REGISTRY=192.168.1.10:5000
+VERSION=0.1.0   # the release, without the leading v
+OS=linux        # linux or darwin
+ARCH=amd64      # amd64 or arm64
+BASE=https://github.com/maeshinshin/ichor/releases/download/v${VERSION}
+
+curl -fsSLO "${BASE}/ichor_${VERSION}_${OS}_${ARCH}.tar.gz"
+curl -fsSLO "${BASE}/ichor_${VERSION}_checksums.txt"
+grep " ichor_${VERSION}_${OS}_${ARCH}.tar.gz\$" "ichor_${VERSION}_checksums.txt" | sha256sum -c -
+tar -xzf "ichor_${VERSION}_${OS}_${ARCH}.tar.gz" ichor
+install -m 0755 ichor ~/.local/ichor
+ichor version --client
 ```
 
-`demo-images-build` builds the UI and the install manifest, then compiles three
-linux/amd64 binaries into `bin/img/`. `demo-images-push` layers each on a
-pinned distroless base and pushes `ichor-controller`, `ichor-ui` and
-`ichor-installer` to `192.168.1.10:5000/maeshinshin/` with `crane`, printing
-each digest. It talks plain HTTP to the registry by default; set
-`CRANE_INSECURE=` (empty) for one with TLS. These two steps leave the install
-manifest naming the images by tag. `make demo-images VERSION=... REGISTRY=...`
-does both in one go the way a release does: it pushes `ichor-controller` and
-`ichor-ui` first, writes their digests to `bin/digests.txt`, renders the install
-manifest with `ichor-controller:VERSION@sha256:...` and
-`ichor-ui:VERSION@sha256:...`, and only then builds and pushes the installer
-image that embeds it.
+On macOS use `shasum -a 256 -c -` in place of `sha256sum -c -`. `~/.local/bin`
+must be on your `PATH`; `/usr/local/bin` (with `sudo`) works too.
 
-The same build leaves the CLI at `bin/img/ichor/ichor`. It carries the
-install manifest for that version inside it (the `installembed` build), which
-is what lets `ichor init` install Ichor without a network fetch. Use it
-instead of one from `go run ./cmd/ichor`, whose manifest is a placeholder:
+The checksums file is signed keyless with [cosign](https://docs.sigstore.dev/cosign/system_configuration/installation/)
+by the release workflow. To check the signature as well:
 
 ```sh
-cp bin/img/ichor/ichor bin/ichor
-bin/ichor version --client
+curl -fsSLO "${BASE}/ichor_${VERSION}_checksums.txt.sigstore.json"
+cosign verify-blob "ichor_${VERSION}_checksums.txt" \
+  --bundle "ichor_${VERSION}_checksums.txt.sigstore.json" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github.com/maeshinshin/ichor/\.github/workflows/release\.yml@refs/tags/v.*$'
 ```
 
-`make build-ichor-embed` also embeds a manifest, but it takes the image names
-from `IMG` and `IMG_UI`, which default to `controller:latest` and
-`ichor-ui:latest`; pass them as in the `demo-images-build` recipe if you use it.
-`make help` lists the other targets.
-
-To build the release artifacts for a tag instead, run
-`make release VERSION=v0.1.0`. It writes `bin/release/ichor` (the CLI with its
-install manifest embedded), `bin/release/install.yaml`,
-`bin/release/network-policies.yaml` and the chart tgz to `bin/release/`, with
-images named `ghcr.io/maeshinshin/<name>:v0.1.0`. `RELEASE_REGISTRY=<registry>/<namespace>`
-changes that image prefix (the default is `ghcr.io/maeshinshin`). It pushes
-nothing, so the `demo-images` steps above are still how you build and push
-the images.
-
-Images you build yourself carry no signature. A cluster installed from them can
-be upgraded later with `ichor upgrade ichor VERSION --skip-signature-check`,
-which Ichor records. `ichor init` takes the same two flags, `--installer-digest sha256:...`
-(the digest of the installer image you pushed, from `DIGEST_FILE`) and
-`--skip-signature-check`; give them when the cluster's controller cannot reach the
-registry the installer image comes from, or the Cilium hand-over finds no digest to
-run its Job with (`CNIHandover` `InstallerImageUnresolved`). See
-[The installer image on an upgrade](install-with-helm.md#the-installer-image-on-an-upgrade).
+The CLI carries the install manifest of its release, which names the
+controller and ichor-ui images of that release by digest. `ichor init` applies
+it without a network fetch, so the installed Ichor is always the version of the
+CLI.
 
 ## 2. Create the cluster
 
@@ -122,13 +66,12 @@ run its Job with (`CNIHandover` `InstallerImageUnresolved`). See
 prompts before the irreversible step; `--yes` skips that.
 
 ```sh
-bin/ichor init \
+ichor init \
   --cluster demo \
   --node-endpoint 192.168.1.50:50000 \
   --endpoint-type node --endpoint-address 192.168.1.50 \
   --install-disk /dev/sda \
-  --preset single \
-  --registry-mirror ghcr.io=http://192.168.1.10:5000
+  --preset single
 ```
 
 - `--cluster`, `--node-endpoint`, `--endpoint-address` and `--install-disk`
@@ -142,16 +85,15 @@ bin/ichor init \
   later). `single` is one schedulable node; `compact-ha` is three schedulable
   control planes.
 - `--registry-mirror HOST=URL` writes an anonymous mirror into the machine
-  config (`spec.registries`). Here it makes the node fetch
-  `ghcr.io/maeshinshin/...` from your registry, so the images you pushed in
-  step 1 are the ones that run. It is repeatable.
+  config (`spec.registries`), for nodes that cannot reach a registry directly.
+  It is repeatable and not needed here.
 - On virtual networks that pass geneve but not vxlan, add
   `--cni-tunnel geneve` for Cilium.
 - `ichor init --help` lists the rest (pod and service subnets, disk selectors,
   discovery addresses).
 
-The same settings can come from a file instead of flags. `bin/ichor init -f
-init.yaml` reads an `InitConfig`; `bin/ichor init --print-config-template`
+The same settings can come from a file instead of flags. `ichor init -f
+init.yaml` reads an `InitConfig`; `ichor init --print-config-template`
 prints a commented example. The command above is this file:
 
 ```yaml
@@ -163,8 +105,6 @@ cluster:
   endpoint:
     type: node
     address: 192.168.1.50
-  registryMirrors:
-    ghcr.io: http://192.168.1.10:5000
 firstNode:
   endpoint: 192.168.1.50:50000
   installDisk: /dev/sda
@@ -232,7 +172,7 @@ settings, apply them:
 
 ```sh
 export KUBECONFIG=~/.ichor/clusters/demo/kubeconfig
-bin/ichor config apply --cluster demo --follow
+ichor config apply --cluster demo --follow
 ```
 
 With one control plane the Kubernetes API is down for about a minute while it
@@ -246,9 +186,9 @@ until you approve them. Point the scan at them (`init` takes
 `--discover-address` and `--discover-cidr` too):
 
 ```sh
-bin/ichor cluster discovery add 192.168.1.51 --cluster demo
-bin/ichor machine list --cluster demo
-bin/ichor machine approve NAME --role worker --install-disk /dev/sda
+ichor cluster discovery add 192.168.1.51 --cluster demo
+ichor machine list --cluster demo
+ichor machine approve NAME --role worker --install-disk /dev/sda
 ```
 
 `NAME` is the pending machine from the list. The command asks for
@@ -270,17 +210,20 @@ to approve, so skip this step.
 
 ## 4. Check the cluster
 
+The commands below use [`kubectl`](https://kubernetes.io/docs/tasks/tools/) once,
+to list the nodes.
+
 ```sh
 export KUBECONFIG=~/.ichor/clusters/demo/kubeconfig
-bin/ichor cluster status demo
-bin/ichor cluster get demo
-bin/ichor machine list --cluster demo
-bin/ichor version
+ichor cluster status demo
+ichor cluster get demo
+ichor machine list --cluster demo
+ichor version
 kubectl get nodes
 ```
 
 ```console
-$ bin/ichor cluster status demo
+$ ichor cluster status demo
 demo · ichor-system
   Talos        v1.14.5
   Kubernetes   v1.36.6
@@ -288,11 +231,11 @@ demo · ichor-system
   Endpoint     192.168.1.50 (node)
   Health       ✓ ready
 
-$ bin/ichor machine list --cluster demo
+$ ichor machine list --cluster demo
 NAME      ROLE           APPROVAL  READY  ENDPOINT            NODE     AGE
 fa70962a  control-plane  approved  ✓      192.168.1.50:50000  demo-cp  5m
 
-$ bin/ichor version
+$ ichor version
 ichor        v0.1.0
 installed    v0.1.0
 new installs Talos v1.14.5 · Kubernetes v1.36.6 · Cilium 1.20.4 (contract v1.14)
@@ -302,7 +245,7 @@ new installs Talos v1.14.5 · Kubernetes v1.36.6 · Cilium 1.20.4 (contract v1.1
 `cluster get` adds the network, CNI, control plane, certificate expiry and
 every condition (with ✓, `!`, ✗ or … in front). Every machine should be Ready
 (✓). `ichor version` shows the CLI and the installed Ichor version; they should
-both say `v0.1.0`.
+both say the release you installed.
 
 The CLI prints for people. In a script, add `-o yaml` or `-o json` to any
 command for the full response. A table never truncates a cell, and colour
@@ -316,11 +259,11 @@ message, and end it with the time the operation took. In a pipe or CI log they
 print a line per change instead:
 
 ```console
-$ bin/ichor operation list
+$ ichor operation list
 NAME                 KIND    PHASE         TARGET  MESSAGE                       AGE
 upgrade-talos-x7k2p  talos   … InProgress  demo    upgrading talos-cp2 (2 of 3)  12m
 config-r2d9m         config  ✓ Completed   demo    -                             3d
-$ bin/ichor upgrade talos --follow --yes
+$ ichor upgrade talos --follow --yes
 Upgrade Talos v1.14.3 → v1.14.5
 operation upgrade-talos-x7k2p · cluster demo
 … talos — InProgress · 0/3 machines · upgrading talos-cp1
@@ -346,7 +289,7 @@ ichor-ui with `--allow-unauthenticated`, so anyone who can reach it can make
 changes. Open it through a port-forward:
 
 ```sh
-bin/ichor ui
+ichor ui
 ```
 
 ```text

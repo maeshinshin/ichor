@@ -37,6 +37,7 @@ const dirs: Record<string, { label: string; order: number; newestFirst?: boolean
   guides: { label: 'Guides', order: 20 },
   concepts: { label: 'Concepts', order: 30 },
   design: { label: 'Design', order: 40 },
+  development: { label: 'Development', order: 45 },
   reference: { label: 'Reference', order: 60 },
   cli: { label: 'CLI', order: 50 },
   crds: { label: 'Custom resources', order: 50 },

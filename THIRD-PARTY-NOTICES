@@ -23,9 +23,9 @@ upstream repository (the version tag) and from the Go module proxy (https://prox
 - github.com/hashicorp/go-multierror@v1.1.1
     Repository: https://github.com/hashicorp/go-multierror
     Module proxy: https://proxy.golang.org/github.com/hashicorp/go-multierror/@v/v1.1.1.zip
-- github.com/siderolabs/crypto@v0.6.5
+- github.com/siderolabs/crypto@v0.6.6
     Repository: https://github.com/siderolabs/crypto
-    Module proxy: https://proxy.golang.org/github.com/siderolabs/crypto/@v/v0.6.5.zip
+    Module proxy: https://proxy.golang.org/github.com/siderolabs/crypto/@v/v0.6.6.zip
 - github.com/siderolabs/gen@v0.8.8
     Repository: https://github.com/siderolabs/gen
     Module proxy: https://proxy.golang.org/github.com/siderolabs/gen/@v/v0.8.8.zip
@@ -547,7 +547,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-github.com/go-openapi/runtime@v0.33.3: NOTICE
+github.com/go-openapi/runtime@v0.33.4: NOTICE
 
 Copyright 2015-2025 go-swagger maintainers
 
@@ -661,7 +661,7 @@ Copyright 2012-2015 The Prometheus Authors
 This product includes software developed at
 SoundCloud Ltd. (http://soundcloud.com/).
 
-github.com/prometheus/common@v0.72.0: NOTICE
+github.com/prometheus/common@v0.72.1: NOTICE
 
 Common libraries shared by Prometheus Go components.
 Copyright 2015 The Prometheus Authors
@@ -691,7 +691,7 @@ The Apache Software Foundation (/).
 
 SPDX-License-Identifier: Apache-2.0
 
-go.yaml.in/yaml/v2@v2.4.4: NOTICE
+go.yaml.in/yaml/v2@v2.4.5: NOTICE
 
 Copyright 2011-2016 Canonical Ltd.
 
@@ -707,7 +707,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-go.yaml.in/yaml/v3@v3.0.5: NOTICE
+go.yaml.in/yaml/v3@v3.0.6: NOTICE
 
 Copyright 2011-2016 Canonical Ltd.
 
@@ -723,7 +723,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-go.yaml.in/yaml/v4@v4.0.0-rc.6: NOTICE
+go.yaml.in/yaml/v4@v4.0.0: NOTICE
 
 The following files were ported to Go from C files of libyaml, and thus are
 still covered by their original MIT license, with the additional copyright
@@ -1035,16 +1035,16 @@ Apache License
 
 Components:
 - cel.dev/expr@v0.25.3
-- connectrpc.com/connect@v1.21.0
+- connectrpc.com/connect@v1.21.1
     Copyright 2021-2025 The Connect Authors
 - github.com/Masterminds/goutils@v1.1.1
-- github.com/containerd/go-cni@v1.1.13
-- github.com/containernetworking/cni@v1.3.0
+- github.com/containerd/go-cni@v1.1.14
+- github.com/containernetworking/cni@v1.3.1
 - github.com/coreos/go-oidc/v3@v3.21.0
 - github.com/coreos/go-oidc@v2.5.0+incompatible
 - github.com/docker/cli@v29.7.2+incompatible
     Copyright 2013-2017 Docker, Inc.
-- github.com/go-jose/go-jose/v4@v4.1.6
+- github.com/go-jose/go-jose/v4@v4.1.9
 - github.com/go-logr/logr@v1.4.4
 - github.com/go-logr/stdr@v1.2.2
 - github.com/go-logr/zapr@v1.3.0
@@ -1053,8 +1053,8 @@ Components:
 - github.com/go-openapi/jsonpointer@v1.0.2
 - github.com/go-openapi/jsonreference@v1.0.3
 - github.com/go-openapi/loads@v0.25.3
-- github.com/go-openapi/runtime/server-middleware@v0.33.3
-- github.com/go-openapi/runtime@v0.33.3
+- github.com/go-openapi/runtime/server-middleware@v0.33.4
+- github.com/go-openapi/runtime@v0.33.4
 - github.com/go-openapi/spec@v1.0.1
 - github.com/go-openapi/strfmt@v0.27.4
 - github.com/go-openapi/swag/cmdutils@v0.29.2
@@ -1074,9 +1074,9 @@ Components:
 - github.com/google/cel-go@v0.31.0
     Copyright (c) 2018 The Go Authors. All rights reserved.
 - github.com/google/certificate-transparency-go@v1.4.0
-- github.com/google/gnostic-models@v0.7.0
+- github.com/google/gnostic-models@v0.7.1
 - github.com/google/go-containerregistry@v0.22.1
-- github.com/google/pprof@v0.0.0-20260604005048-7023385849c0
+- github.com/google/pprof@v0.0.0-20261105003125-4bf881d7fb0b
 - github.com/inconshreveable/mousetrap@v1.1.0
     Copyright 2022 Alan Shreve (@inconshreveable)
 - github.com/kylelemons/godebug@v1.1.0
@@ -1097,21 +1097,21 @@ Components:
     Copyright 2016 The Linux Foundation.
 - github.com/opencontainers/runtime-spec@v1.3.0
     Copyright 2015 The Linux Foundation.
-- github.com/petermattis/goid@v0.0.0-20260713124913-97594f28f5ca
+- github.com/petermattis/goid@v0.0.0-20261108111446-7b06cb8d5a54
 - github.com/pquerna/cachecontrol@v0.1.0
 - github.com/prometheus/client_golang@v1.25.0
 - github.com/prometheus/client_model@v0.6.3
-- github.com/prometheus/common@v0.72.0
+- github.com/prometheus/common@v0.72.1
 - github.com/prometheus/procfs@v0.22.0
 - github.com/santhosh-tekuri/jsonschema/v6@v6.0.3
 - github.com/sasha-s/go-deadlock@v0.3.9
 - github.com/sassoftware/relic/v8@v8.2.0
 - github.com/shibumi/go-pathspec@v1.3.0
 - github.com/sigstore/protobuf-specs@v0.5.2
-- github.com/sigstore/rekor-tiles/v2@v2.4.0
+- github.com/sigstore/rekor-tiles/v2@v2.4.1
 - github.com/sigstore/rekor@v1.5.5
 - github.com/sigstore/sigstore-go@v1.4.0
-- github.com/sigstore/sigstore@v1.11.1
+- github.com/sigstore/sigstore@v1.11.3
 - github.com/sigstore/timestamp-authority/v2@v2.2.0
 - github.com/spf13/cobra@v1.10.2
 - github.com/theupdateframework/go-tuf/v2@v2.4.2
@@ -1136,29 +1136,29 @@ Components:
 - go.opentelemetry.io/otel@v1.47.0
     Copyright 2009 The Go Authors.
 - go.opentelemetry.io/proto/otlp@v1.11.1
-- go.yaml.in/yaml/v2@v2.4.4
-- go.yaml.in/yaml/v4@v4.0.0-rc.6
+- go.yaml.in/yaml/v2@v2.4.5
+- go.yaml.in/yaml/v4@v4.0.0
     Copyright 2025 - The go-yaml Project Contributors
 - gomodules.xyz/jsonpatch/v2@v2.4.0
-- google.golang.org/genproto/googleapis/api@v0.0.0-20261026165753-2ffab32bce7e
-- google.golang.org/genproto/googleapis/rpc@v0.0.0-20261019180522-ce908d29299b
+- google.golang.org/genproto/googleapis/api@v0.0.0-20261104224025-d1e00e9f33ab
+- google.golang.org/genproto/googleapis/rpc@v0.0.0-20261104224025-d1e00e9f33ab
 - google.golang.org/grpc@v1.85.0
 - gopkg.in/go-jose/go-jose.v2@v2.6.3
 - gopkg.in/yaml.v2@v2.4.0
 - helm.sh/helm/v3@v3.21.4
     Copyright 2016 The Kubernetes Authors All Rights Reserved
-- k8s.io/api@v0.36.2
-- k8s.io/apiextensions-apiserver@v0.36.2
-- k8s.io/apimachinery@v0.36.2
-- k8s.io/apiserver@v0.36.2
-- k8s.io/cli-runtime@v0.36.2
-- k8s.io/client-go@v0.36.2
-- k8s.io/component-base@v0.36.2
+- k8s.io/api@v0.36.6
+- k8s.io/apiextensions-apiserver@v0.36.6
+- k8s.io/apimachinery@v0.36.6
+- k8s.io/apiserver@v0.36.6
+- k8s.io/cli-runtime@v0.36.6
+- k8s.io/client-go@v0.36.6
+- k8s.io/component-base@v0.36.6
 - k8s.io/kube-openapi@v0.0.0-20260317180543-43fb72c5454a
-- k8s.io/kubectl@v0.36.2
-- k8s.io/kubelet@v0.36.0
-- k8s.io/streaming@v0.36.2
-- k8s.io/utils@v0.0.0-20260210185600-b8788abfbbc2
+- k8s.io/kubectl@v0.36.6
+- k8s.io/kubelet@v0.36.6
+- k8s.io/streaming@v0.36.6
+- k8s.io/utils@v0.0.0-20261023123148-ca04ba58ecab
 - oras.land/oras-go/v2@v2.7.0
     Copyright 2021 ORAS Authors.
 - sigs.k8s.io/apiserver-network-proxy/konnectivity-client@v0.34.0
@@ -1168,7 +1168,7 @@ Components:
 - sigs.k8s.io/randfill@v1.0.0
     Copyright 2014 The gofuzz Authors
     Copyright 2025 The Kubernetes Authors
-- sigs.k8s.io/structured-merge-diff/v6@v6.3.2
+- sigs.k8s.io/structured-merge-diff/v6@v6.3.3
 - @bufbuild/protobuf@2.16.0
 - @connectrpc/connect-web@2.2.0
 - @connectrpc/connect@2.2.0
@@ -1416,7 +1416,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
    limitations under the License.
 
 Components:
-- github.com/cyberphone/json-canonicalization@v0.0.0-20241213102144-19d51d7fe467
+- github.com/cyberphone/json-canonicalization@v0.0.0-20261011152517-32a48195b9b2
     Copyright 2018 Anders Rundgren
 
 --------------------------------------------------------------------------------
@@ -1656,7 +1656,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Components:
-- sigs.k8s.io/json@v0.0.0-20250730193827-2d320260d730
+- sigs.k8s.io/json@v0.0.0-20260909141634-11ed52e25bc5
     Copyright (c) 2009 The Go Authors. All rights reserved.
 
 --------------------------------------------------------------------------------
@@ -1709,7 +1709,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 Components:
-- go.yaml.in/yaml/v3@v3.0.5
+- go.yaml.in/yaml/v3@v3.0.6
     Copyright (c) 2006-2010 Kirill Simonov
     Copyright (c) 2006-2011 Kirill Simonov
     Copyright (c) 2011-2019 Canonical Ltd
@@ -2391,7 +2391,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Components:
-- github.com/digitorus/timestamp@v0.0.0-20231217203849-220c5c2851b7
+- github.com/digitorus/timestamp@v0.0.0-20260914073129-b4b58b92aa51
     Copyright (c) 2017, Digitorus B.V. All rights reserved.
 
 --------------------------------------------------------------------------------
@@ -2556,12 +2556,12 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Components:
-- dario.cat/mergo@v1.0.1
+- dario.cat/mergo@v1.0.2
     Copyright (c) 2013 Dario Castañé. All rights reserved.
     Copyright (c) 2012 The Go Authors. All rights reserved.
 - github.com/ProtonMail/go-crypto@v1.5.2
     Copyright (c) 2009 The Go Authors. All rights reserved.
-- github.com/chai2010/gettext-go@v1.0.2
+- github.com/chai2010/gettext-go@v1.0.3
     Copyright 2013 ChaiShushan <chaishushan{AT}gmail.com>. All rights reserved.
 - github.com/cyphar/filepath-securejoin@v0.7.0
     Copyright (C) 2014-2015 Docker Inc & Go Authors. All rights reserved.
@@ -2628,7 +2628,7 @@ Components:
     Copyright 2009 The Go Authors.
 - golang.org/x/mod@v0.42.0
     Copyright 2009 The Go Authors.
-- golang.org/x/net@v0.61.0
+- golang.org/x/net@v0.62.0
     Copyright 2009 The Go Authors.
 - golang.org/x/oauth2@v0.37.0
     Copyright 2009 The Go Authors.
@@ -2812,7 +2812,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Components:
-- github.com/cloudflare/circl@v1.6.4
+- github.com/cloudflare/circl@v1.6.5
     Copyright (c) 2019 Cloudflare. All rights reserved.
     Copyright (c) 2009 The Go Authors. All rights reserved.
 
@@ -3095,7 +3095,7 @@ Components:
 - golang.org/x/crypto@v0.58.0
 - golang.org/x/exp@v0.0.0-20261014143641-f0251eb4aa3e
 - golang.org/x/mod@v0.42.0
-- golang.org/x/net@v0.61.0
+- golang.org/x/net@v0.62.0
 - golang.org/x/sync@v0.24.0
 - golang.org/x/sys@v0.49.0
 - golang.org/x/term@v0.47.0
@@ -3152,7 +3152,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 
 Components:
-- github.com/Azure/go-ansiterm@v0.0.0-20250102033503-faa5f7b0171c
+- github.com/Azure/go-ansiterm@v0.0.0-20261013165250-51075c6ea6bc
     Copyright (c) 2015 Microsoft Corporation
 - github.com/BurntSushi/toml@v1.6.0
     Copyright (c) 2013 TOML authors
@@ -3180,9 +3180,9 @@ Components:
     Copyright (c) 2020 Matt Sherman
 - github.com/cpuguy83/go-md2man/v2@v2.0.7
     Copyright (c) 2014 Brian Goff
-- github.com/digitorus/pkcs7@v0.0.0-20260821105541-05f79448fa77
+- github.com/digitorus/pkcs7@v0.0.0-20261104125046-a476de3098e4
     Copyright (c) 2015 Andrew Smith
-- github.com/docker/docker-credential-helpers@v0.9.5
+- github.com/docker/docker-credential-helpers@v0.9.12
     Copyright (c) 2016 David Calavera
 - github.com/emicklei/go-restful/v3@v3.13.0
     Copyright (c) 2012,2013 Ernest Micklei
@@ -3192,12 +3192,12 @@ Components:
     Copyright (c) 2013 Fatih Arslan
 - github.com/felixge/httpsnoop@v1.1.0
     Copyright (c) 2016 Felix Geisendörfer (felix@debuggable.com)
-- github.com/fxamacker/cbor/v2@v2.9.1
+- github.com/fxamacker/cbor/v2@v2.9.6
     Copyright (c) 2019-present Faye Amacker
 - github.com/gertd/go-pluralize@v0.2.1
     Copyright (c) 2019 Gert Drapers
     Copyright (c) 2013 Blake Embrey (hello@blakeembrey.com)
-- github.com/go-errors/errors@v1.4.2
+- github.com/go-errors/errors@v1.5.1
     Copyright (c) 2015 Conrad Irwin <conrad@bugsnag.com>
 - github.com/go-task/slim-sprig/v3@v3.0.0
     Copyright (C) 2013-2020 Masterminds
@@ -3213,7 +3213,7 @@ Components:
     Copyright (c) 2013, Jason Moiron
 - github.com/json-iterator/go@v1.1.12
     Copyright (c) 2016 json-iterator
-- github.com/klauspost/cpuid/v2@v2.4.0
+- github.com/klauspost/cpuid/v2@v2.4.2
     Copyright (c) 2015 Klaus Post
 - github.com/lann/builder@v0.0.0-20180802200727-47ae307949d0
     Copyright (c) 2014-2015 Lann Martin
@@ -3221,11 +3221,11 @@ Components:
     Copyright (c) 2013 Michael Hendricks
 - github.com/lib/pq@v1.12.3
     Copyright (c) 2011-2013, 'pq' Contributors. Portions Copyright (c) 2011 Blake Mizerany
-- github.com/mattn/go-colorable@v0.1.15
+- github.com/mattn/go-colorable@v0.1.16
     Copyright (c) 2016 Yasuhiro Matsumoto
-- github.com/mattn/go-isatty@v0.0.22
+- github.com/mattn/go-isatty@v0.0.24
     Copyright (c) Yasuhiro MATSUMOTO <mattn.jp@gmail.com>
-- github.com/mattn/go-runewidth@v0.0.24
+- github.com/mattn/go-runewidth@v0.0.31
     Copyright (c) 2016 Yasuhiro Matsumoto
 - github.com/mitchellh/copystructure@v1.2.0
     Copyright (c) 2014 Mitchell Hashimoto
@@ -3241,7 +3241,7 @@ Components:
     Copyright (c) 2013-2014 Onsi Fakhouri
 - github.com/peterbourgon/diskv@v2.0.1+incompatible
     Copyright (c) 2011-2012 Peter Bourgon
-- github.com/philhofer/fwd@v1.2.0
+- github.com/philhofer/fwd@v1.2.1
     Copyright (c) 2014-2015, Philip Hofer
 - github.com/robfig/cron/v3@v3.0.1
     Copyright (C) 2012 Rob Figueiredo All Rights Reserved.
@@ -3257,7 +3257,7 @@ Components:
     Copyright (c) 2014 Simon Eskildsen
 - github.com/spf13/cast@v1.10.0
     Copyright (c) 2014 Steve Francia
-- github.com/tinylib/msgp@v1.6.4
+- github.com/tinylib/msgp@v1.6.5
     Copyright (c) 2014 Philip Hofer
     Portions Copyright (c) 2009 The Go Authors (license at http://golang.org) where indicated
 - github.com/x448/float16@v0.8.4
@@ -3407,7 +3407,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 Components:
-- go.yaml.in/yaml/v2@v2.4.4
+- go.yaml.in/yaml/v2@v2.4.5
     Copyright (c) 2006 Kirill Simonov
 - gopkg.in/yaml.v2@v2.4.0
     Copyright (c) 2006 Kirill Simonov
@@ -3630,7 +3630,7 @@ MPL-2.0: see section 1.
 - github.com/cyphar/filepath-securejoin@v0.7.0
 - github.com/hashicorp/errwrap@v1.1.0
 - github.com/hashicorp/go-multierror@v1.1.1
-- github.com/siderolabs/crypto@v0.6.5
+- github.com/siderolabs/crypto@v0.6.6
 - github.com/siderolabs/gen@v0.8.8
 - github.com/siderolabs/go-api-signature@v0.3.13
 - github.com/siderolabs/go-pointer@v1.0.1

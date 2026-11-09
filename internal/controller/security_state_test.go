@@ -23,7 +23,6 @@ import (
 	"github.com/cosi-project/runtime/pkg/resource/meta"
 	"github.com/cosi-project/runtime/pkg/state"
 	"github.com/cosi-project/runtime/pkg/state/impl/inmem"
-	"github.com/cosi-project/runtime/pkg/state/impl/namespaced"
 	runtimeres "github.com/siderolabs/talos/pkg/machinery/resources/runtime"
 )
 
@@ -37,7 +36,7 @@ const testPCRFingerprint = "ef:01"
 func newSecurityCOSI(t *testing.T) state.State {
 	t.Helper()
 
-	st := state.WrapCore(namespaced.NewState(inmem.Build))
+	st := state.WrapCore(inmem.NewState())
 
 	for _, def := range []meta.ResourceDefinitionSpec{
 		runtimeres.SecurityStateExtension{}.ResourceDefinition(),

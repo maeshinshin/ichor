@@ -27,7 +27,6 @@ import (
 	"github.com/cosi-project/runtime/pkg/resource/meta"
 	"github.com/cosi-project/runtime/pkg/state"
 	"github.com/cosi-project/runtime/pkg/state/impl/inmem"
-	"github.com/cosi-project/runtime/pkg/state/impl/namespaced"
 	"github.com/siderolabs/talos/pkg/machinery/resources/network"
 	"github.com/siderolabs/talos/pkg/machinery/resources/runtime"
 	"github.com/siderolabs/talos/pkg/machinery/resources/secrets"
@@ -85,7 +84,7 @@ func TestRedactKernelLog(t *testing.T) {
 func newResourceState(t *testing.T, sensitive bool) state.State {
 	t.Helper()
 
-	st := state.WrapCore(namespaced.NewState(inmem.Build))
+	st := state.WrapCore(inmem.NewState())
 	ctx := context.Background()
 
 	put := func(def meta.ResourceDefinitionSpec) {

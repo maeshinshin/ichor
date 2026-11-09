@@ -21,6 +21,18 @@ jobs:
       - name: Set up Nix
         uses: ./.github/actions/nix
 
+      - name: Cache the Go tools in bin/
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          # Only what the Makefile installs; bin/ also holds build outputs that must not come back stale.
+          path: |
+            bin/kustomize*
+            bin/controller-gen*
+            bin/setup-envtest*
+            bin/golangci-lint*
+            bin/k8s
+          key: bin-${{ runner.os }}-${{ github.job }}-${{ hashFiles('Makefile', '.custom-gcl.yml') }}
+
       # `setup-test-e2e` is expected to stand up the cluster and publish a
       # kubeconfig for it via $GITHUB_ENV (KUBECONFIG=<path>) so later steps
       # can reach it; the e2e run below must not create its own cluster.

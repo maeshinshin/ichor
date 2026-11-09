@@ -15,18 +15,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      IMG: controller:latest
-      IMG_UI: ichor-ui:latest
+      IMG: kind.local/ichor-controller:latest
+      IMG_UI: kind.local/ichor-ui:latest
     steps:
       - name: Clone the code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
 
-      - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-        with:
-          go-version-file: go.mod
+      - name: Install Nix
+        uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # 31.11.3
 
       # Pinned version and checksum (the runner is linux/amd64); Renovate does not bump this, change both together.
       - name: Install kind
@@ -47,10 +45,8 @@ jobs:
 
       - name: Prepare ichor
         run: |
-          go mod tidy -diff
-          go mod verify
-          make docker-build docker-build-ichor-ui
-          kind load docker-image "$IMG" "$IMG_UI"
+          nix develop --command bash -c "go mod tidy -diff && go mod verify"
+          nix develop --command make images-kind
 
       - name: Install Helm
         run: make install-helm

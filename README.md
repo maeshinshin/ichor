@@ -31,7 +31,7 @@ Kubernetes resources. You work with them through a CLI, a web UI, or plain
 
 ## Components
 
-| | |
+| Component | What it does |
 |---|---|
 | `ichor` | The CLI. Creates the first node, adopts existing clusters, and does everything the UI does. |
 | `ichor-controller` | Reconciles the custom resources. The only component that talks to Talos nodes. |
@@ -39,13 +39,22 @@ Kubernetes resources. You work with them through a CLI, a web UI, or plain
 
 ## Quick start
 
-You need one machine booted from a Talos ISO into maintenance mode. Download
-the CLI from the [latest release](https://github.com/maeshinshin/ichor/releases)
-(`ichor_<version>_<os>_<arch>.tar.gz`, with a checksums file), put `ichor` on
-your `PATH`, then:
+You need one machine booted from a Talos ISO into maintenance mode. Install the
+`ichor` CLI from a release, then turn the machine into the first control plane
+of a new cluster:
 
 ```sh
-# Turn the machine into the first control plane of a new cluster.
+VERSION=0.1.0
+OS=$(uname -s | tr A-Z a-z)                                   # linux or darwin
+ARCH=$(uname -m | sed -e 's/x86_64/amd64/' -e 's/aarch64/arm64/')
+BASE=https://github.com/maeshinshin/ichor/releases/download/v${VERSION}
+
+curl -fLO "${BASE}/ichor_${VERSION}_${OS}_${ARCH}.tar.gz"
+curl -fLO "${BASE}/ichor_${VERSION}_checksums.txt"
+sha256sum --check --ignore-missing "ichor_${VERSION}_checksums.txt"   # macOS: shasum -a 256 --check --ignore-missing
+tar -xzf "ichor_${VERSION}_${OS}_${ARCH}.tar.gz" ichor
+install -m 0755 ichor ~/.local/bin/ichor
+
 ichor init \
   --cluster demo \
   --node-endpoint 192.168.1.50:50000 \
@@ -53,8 +62,15 @@ ichor init \
   --install-disk /dev/sda \
   --preset single
 
-# Look at what you have.
 ichor cluster get demo
+```
+
+Or, on a cluster that already runs Talos, install Ichor with Helm:
+
+```sh
+helm repo add ichor https://ichor.maesh.dev/charts
+helm install ichor ichor/ichor --version ${VERSION} \
+  --namespace ichor-system --create-namespace
 ```
 
 [Getting started](docs/guides/getting-started.md) walks through every step,

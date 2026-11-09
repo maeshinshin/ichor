@@ -517,7 +517,7 @@ ui-shots: ## Screenshot UI pages (desktop+phone, light+dark): make ui-shots OUT=
 # Documentation site: the Markdown in docs/ rendered by Astro in
 # site/, searched with Pagefind, published to GitHub Pages by
 # .github/workflows/docs.yml. DOCS_SITE and DOCS_BASE (default
-# https://maeshinshin.github.io and /ichor) move it, as docs.yml does for ichor.maesh.dev.
+# https://ichor.maesh.dev and /) move it, e.g. for a fork.
 # One build is one version at <DOCS_BASE>/<DOCS_VERSION>/ (next, the default, or
 # a release tag vX.Y.Z); docs-site-all builds them all.
 

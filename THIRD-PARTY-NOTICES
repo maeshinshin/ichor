@@ -23,9 +23,6 @@ upstream repository (the version tag) and from the Go module proxy (https://prox
 - github.com/hashicorp/go-multierror@v1.1.1
     Repository: https://github.com/hashicorp/go-multierror
     Module proxy: https://proxy.golang.org/github.com/hashicorp/go-multierror/@v/v1.1.1.zip
-- github.com/letsencrypt/boulder@v0.20260309.0
-    Repository: https://github.com/letsencrypt/boulder
-    Module proxy: https://proxy.golang.org/github.com/letsencrypt/boulder/@v/v0.20260309.0.zip
 - github.com/siderolabs/crypto@v0.6.5
     Repository: https://github.com/siderolabs/crypto
     Module proxy: https://proxy.golang.org/github.com/siderolabs/crypto/@v/v0.6.5.zip
@@ -444,7 +441,7 @@ Copyright 2014 CoreOS, Inc
 This product includes software developed at CoreOS, Inc.
 (http://www.coreos.com/).
 
-github.com/docker/cli@v29.5.3+incompatible: NOTICE
+github.com/docker/cli@v29.7.2+incompatible: NOTICE
 
 Docker
 Copyright 2012-2017 Docker, Inc.
@@ -635,7 +632,7 @@ github.com/open-policy-agent/cert-controller@v0.16.0: NOTICE
 cert-controller
 Copyright 2018-2020 The Gatekeeper Authors
 
-github.com/prometheus/client_golang@v1.23.2: NOTICE
+github.com/prometheus/client_golang@v1.25.0: NOTICE
 
 Prometheus instrumentation library for Go applications
 Copyright 2012-2015 The Prometheus Authors
@@ -656,7 +653,7 @@ http://github.com/golang/protobuf/
 Copyright 2010 The Go Authors
 See source code for license details.
 
-github.com/prometheus/client_model@v0.6.2: NOTICE
+github.com/prometheus/client_model@v0.6.3: NOTICE
 
 Data model artifacts for Prometheus.
 Copyright 2012-2015 The Prometheus Authors
@@ -664,7 +661,7 @@ Copyright 2012-2015 The Prometheus Authors
 This product includes software developed at
 SoundCloud Ltd. (http://soundcloud.com/).
 
-github.com/prometheus/common@v0.67.5: NOTICE
+github.com/prometheus/common@v0.72.0: NOTICE
 
 Common libraries shared by Prometheus Go components.
 Copyright 2015 The Prometheus Authors
@@ -672,7 +669,7 @@ Copyright 2015 The Prometheus Authors
 This product includes software developed at
 SoundCloud Ltd. (http://soundcloud.com/).
 
-github.com/prometheus/procfs@v0.20.1: NOTICE
+github.com/prometheus/procfs@v0.22.0: NOTICE
 
 procfs provides functions to retrieve system, kernel and process
 metrics from the pseudo-filesystem proc.
@@ -1045,9 +1042,9 @@ Components:
 - github.com/containernetworking/cni@v1.3.0
 - github.com/coreos/go-oidc/v3@v3.21.0
 - github.com/coreos/go-oidc@v2.5.0+incompatible
-- github.com/docker/cli@v29.5.3+incompatible
+- github.com/docker/cli@v29.7.2+incompatible
     Copyright 2013-2017 Docker, Inc.
-- github.com/go-jose/go-jose/v4@v4.1.4
+- github.com/go-jose/go-jose/v4@v4.1.6
 - github.com/go-logr/logr@v1.4.4
 - github.com/go-logr/stdr@v1.2.2
 - github.com/go-logr/zapr@v1.3.0
@@ -1059,7 +1056,7 @@ Components:
 - github.com/go-openapi/runtime/server-middleware@v0.33.3
 - github.com/go-openapi/runtime@v0.33.3
 - github.com/go-openapi/spec@v1.0.1
-- github.com/go-openapi/strfmt@v0.27.3
+- github.com/go-openapi/strfmt@v0.27.4
 - github.com/go-openapi/swag/cmdutils@v0.29.2
 - github.com/go-openapi/swag/conv@v0.29.2
 - github.com/go-openapi/swag/fileutils@v0.29.2
@@ -1076,10 +1073,10 @@ Components:
 - github.com/google/btree@v1.1.3
 - github.com/google/cel-go@v0.31.0
     Copyright (c) 2018 The Go Authors. All rights reserved.
-- github.com/google/certificate-transparency-go@v1.3.3
+- github.com/google/certificate-transparency-go@v1.4.0
 - github.com/google/gnostic-models@v0.7.0
-- github.com/google/go-containerregistry@v0.21.7
-- github.com/google/pprof@v0.0.0-20260402051712-545e8a4df936
+- github.com/google/go-containerregistry@v0.22.1
+- github.com/google/pprof@v0.0.0-20260604005048-7023385849c0
 - github.com/inconshreveable/mousetrap@v1.1.0
     Copyright 2022 Alan Shreve (@inconshreveable)
 - github.com/kylelemons/godebug@v1.1.0
@@ -1102,20 +1099,20 @@ Components:
     Copyright 2015 The Linux Foundation.
 - github.com/petermattis/goid@v0.0.0-20260713124913-97594f28f5ca
 - github.com/pquerna/cachecontrol@v0.1.0
-- github.com/prometheus/client_golang@v1.23.2
-- github.com/prometheus/client_model@v0.6.2
-- github.com/prometheus/common@v0.67.5
-- github.com/prometheus/procfs@v0.20.1
+- github.com/prometheus/client_golang@v1.25.0
+- github.com/prometheus/client_model@v0.6.3
+- github.com/prometheus/common@v0.72.0
+- github.com/prometheus/procfs@v0.22.0
 - github.com/santhosh-tekuri/jsonschema/v6@v6.0.3
 - github.com/sasha-s/go-deadlock@v0.3.9
-- github.com/sassoftware/relic@v7.2.1+incompatible
+- github.com/sassoftware/relic/v8@v8.2.0
 - github.com/shibumi/go-pathspec@v1.3.0
-- github.com/sigstore/protobuf-specs@v0.5.1
-- github.com/sigstore/rekor-tiles/v2@v2.3.0
-- github.com/sigstore/rekor@v1.5.3
-- github.com/sigstore/sigstore-go@v1.3.0
-- github.com/sigstore/sigstore@v1.10.8
-- github.com/sigstore/timestamp-authority/v2@v2.1.3
+- github.com/sigstore/protobuf-specs@v0.5.2
+- github.com/sigstore/rekor-tiles/v2@v2.4.0
+- github.com/sigstore/rekor@v1.5.5
+- github.com/sigstore/sigstore-go@v1.4.0
+- github.com/sigstore/sigstore@v1.11.1
+- github.com/sigstore/timestamp-authority/v2@v2.2.0
 - github.com/spf13/cobra@v1.10.2
 - github.com/theupdateframework/go-tuf/v2@v2.4.2
     Copyright 2024 The Update Framework Authors
@@ -2336,7 +2333,7 @@ Components:
     Copyright 2016 The filepathx Authors
 
 --------------------------------------------------------------------------------
-BSD-2-Clause (variant 1 of 5)
+BSD-2-Clause (variant 1 of 6)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2367,7 +2364,7 @@ Components:
     Copyright (c) 2015, Dave Cheney <dave@cheney.net> All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-2-Clause (variant 2 of 5)
+BSD-2-Clause (variant 2 of 6)
 --------------------------------------------------------------------------------
 
 BSD 2-Clause License
@@ -2398,7 +2395,7 @@ Components:
     Copyright (c) 2017, Digitorus B.V. All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-2-Clause (variant 3 of 5)
+BSD-2-Clause (variant 3 of 6)
 --------------------------------------------------------------------------------
 
 BSD 2-Clause License
@@ -2432,7 +2429,7 @@ Components:
     Copyright (c) 2019, Jeff Wendling All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-2-Clause (variant 4 of 5)
+BSD-2-Clause (variant 4 of 6)
 --------------------------------------------------------------------------------
 
 Blackfriday is distributed under the Simplified BSD License:
@@ -2469,7 +2466,38 @@ Components:
 - github.com/russross/blackfriday/v2@v2.1.0
 
 --------------------------------------------------------------------------------
-BSD-2-Clause (variant 5 of 5)
+BSD-2-Clause (variant 5 of 6)
+--------------------------------------------------------------------------------
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Components:
+- github.com/redis/go-redis/extra/redisotel/v9@v9.5.3
+    Copyright (c) 2013 The github.com/redis/go-redis Authors. All rights reserved.
+
+--------------------------------------------------------------------------------
+BSD-2-Clause (variant 6 of 6)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2498,7 +2526,7 @@ Components:
     Copyright (c) 2013 The Gorilla WebSocket Authors. All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 1 of 12)
+BSD-3-Clause (variant 1 of 13)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2538,7 +2566,7 @@ Components:
 - github.com/cyphar/filepath-securejoin@v0.7.0
     Copyright (C) 2014-2015 Docker Inc & Go Authors. All rights reserved.
     Copyright (C) 2017-2024 SUSE LLC. All rights reserved.
-- github.com/fsnotify/fsnotify@v1.9.0
+- github.com/fsnotify/fsnotify@v1.10.1
     Copyright © 2012 The Go Authors. All rights reserved.
     Copyright © fsnotify Authors. All rights reserved.
 - github.com/google/go-cmp@v0.7.0
@@ -2562,7 +2590,7 @@ Components:
     Copyright (c) 2018 The Go Authors. All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 2 of 12)
+BSD-3-Clause (variant 2 of 13)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2602,7 +2630,7 @@ Components:
     Copyright 2009 The Go Authors.
 - golang.org/x/net@v0.61.0
     Copyright 2009 The Go Authors.
-- golang.org/x/oauth2@v0.36.0
+- golang.org/x/oauth2@v0.37.0
     Copyright 2009 The Go Authors.
 - golang.org/x/sync@v0.24.0
     Copyright 2009 The Go Authors.
@@ -2612,7 +2640,7 @@ Components:
     Copyright 2009 The Go Authors.
 - golang.org/x/text@v0.43.0
     Copyright 2009 The Go Authors.
-- golang.org/x/time@v0.15.0
+- golang.org/x/time@v0.16.0
     Copyright 2009 The Go Authors.
 - golang.org/x/tools@v0.52.0
     Copyright 2009 The Go Authors.
@@ -2620,7 +2648,7 @@ Components:
     Copyright 2009 The Go Authors.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 3 of 12)
+BSD-3-Clause (variant 3 of 13)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2655,7 +2683,7 @@ Components:
     Copyright (c) 2014, Evan Phoenix All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 4 of 12)
+BSD-3-Clause (variant 4 of 13)
 --------------------------------------------------------------------------------
 
 Authors. All rights reserved.
@@ -2691,7 +2719,42 @@ Components:
     Copyright (c) 2012 Péter Surányi. Portions Copyright (c) 2009 The Go
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 5 of 12)
+BSD-3-Clause (variant 5 of 13)
+--------------------------------------------------------------------------------
+
+BSD 3-Clause License
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Components:
+- github.com/miekg/dns@v1.1.62
+    Copyright (c) 2009, The Go Authors. Extensions copyright (c) 2011, Miek Gieben. All rights reserved.
+
+--------------------------------------------------------------------------------
+BSD-3-Clause (variant 6 of 13)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2754,7 +2817,7 @@ Components:
     Copyright (c) 2009 The Go Authors. All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 6 of 12)
+BSD-3-Clause (variant 7 of 13)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -2787,7 +2850,7 @@ Components:
     Copyright (c) 2015, Gengo, Inc. All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 7 of 12)
+BSD-3-Clause (variant 8 of 13)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2826,7 +2889,7 @@ Components:
     Copyright 2008 Google Inc.  All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 8 of 12)
+BSD-3-Clause (variant 9 of 13)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2860,7 +2923,7 @@ Components:
     Copyright (c) 2014-2020 Prime Directive, Inc. All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 9 of 12)
+BSD-3-Clause (variant 10 of 13)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2896,7 +2959,7 @@ Components:
     Copyright 2022 Filippo Valsorda
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 10 of 12)
+BSD-3-Clause (variant 11 of 13)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2931,7 +2994,7 @@ Components:
     Copyright (c) 2012-2023 The ANTLR Project. All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 11 of 12)
+BSD-3-Clause (variant 12 of 13)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2968,7 +3031,7 @@ Components:
     Copyright (c) 2011, Open Knowledge Foundation Ltd. All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 12 of 12)
+BSD-3-Clause (variant 13 of 13)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -3037,7 +3100,7 @@ Components:
 - golang.org/x/sys@v0.49.0
 - golang.org/x/term@v0.47.0
 - golang.org/x/text@v0.43.0
-- golang.org/x/time@v0.15.0
+- golang.org/x/time@v0.16.0
 - golang.org/x/tools@v0.52.0
 - google.golang.org/protobuf@v1.36.12
 - Go standard library go1.27.3
@@ -3107,8 +3170,6 @@ Components:
     Copyright (C) 2013 Blake Mizerany
 - github.com/blang/semver/v4@v4.0.0
     Copyright (c) 2014 Benedikt Lang <github at benediktlang.de>
-- github.com/blang/semver@v3.5.1+incompatible
-    Copyright (c) 2014 Benedikt Lang <github at benediktlang.de>
 - github.com/cenkalti/backoff/v4@v4.3.0
     Copyright (c) 2014 Cenk Altı
 - github.com/cenkalti/backoff/v5@v5.0.3
@@ -3119,7 +3180,7 @@ Components:
     Copyright (c) 2020 Matt Sherman
 - github.com/cpuguy83/go-md2man/v2@v2.0.7
     Copyright (c) 2014 Brian Goff
-- github.com/digitorus/pkcs7@v0.0.0-20230818184609-3a137a874352
+- github.com/digitorus/pkcs7@v0.0.0-20260821105541-05f79448fa77
     Copyright (c) 2015 Andrew Smith
 - github.com/docker/docker-credential-helpers@v0.9.5
     Copyright (c) 2016 David Calavera
@@ -3131,7 +3192,7 @@ Components:
     Copyright (c) 2013 Fatih Arslan
 - github.com/felixge/httpsnoop@v1.1.0
     Copyright (c) 2016 Felix Geisendörfer (felix@debuggable.com)
-- github.com/fxamacker/cbor/v2@v2.9.0
+- github.com/fxamacker/cbor/v2@v2.9.1
     Copyright (c) 2019-present Faye Amacker
 - github.com/gertd/go-pluralize@v0.2.1
     Copyright (c) 2019 Gert Drapers
@@ -3190,7 +3251,7 @@ Components:
     Copyright (C) 2014-2021 by Ruben Vermeersch <ruben@rocketeer.be>
 - github.com/ryanuber/go-glob@v1.0.0
     Copyright (c) 2014 Ryan Uber
-- github.com/secure-systems-lab/go-securesystemslib@v0.11.0
+- github.com/secure-systems-lab/go-securesystemslib@v0.11.1
     Copyright (c) 2021 NYU Secure Systems Lab
 - github.com/sirupsen/logrus@v1.10.2
     Copyright (c) 2014 Simon Eskildsen
@@ -3199,9 +3260,6 @@ Components:
 - github.com/tinylib/msgp@v1.6.4
     Copyright (c) 2014 Philip Hofer
     Portions Copyright (c) 2009 The Go Authors (license at http://golang.org) where indicated
-- github.com/titanous/rocacheck@v0.0.0-20171023193734-afe73141d399
-    Copyright (c) 2017, Jonathan Rudenberg
-    Copyright (c) 2017, CRoCS, EnigmaBridge Ltd.
 - github.com/x448/float16@v0.8.4
     Copyright (c) 2019 Montgomery Edwards⁴⁴⁸ and Faye Amacker
 - github.com/xlab/treeprint@v1.2.0
@@ -3572,8 +3630,6 @@ MPL-2.0: see section 1.
 - github.com/cyphar/filepath-securejoin@v0.7.0
 - github.com/hashicorp/errwrap@v1.1.0
 - github.com/hashicorp/go-multierror@v1.1.1
-- github.com/letsencrypt/boulder@v0.20260309.0
-    Copyright 2016 ISRG.  All rights reserved.
 - github.com/siderolabs/crypto@v0.6.5
 - github.com/siderolabs/gen@v0.8.8
 - github.com/siderolabs/go-api-signature@v0.3.13
@@ -3596,7 +3652,7 @@ Packages bundled into the UI:
 
 - @bufbuild/protobuf@2.16.0 (https://github.com/bufbuild/protobuf-es)
     declared as (Apache-2.0 AND BSD-3-Clause) in its package.json; the package ships no licence file
-    Licence: BSD-3-Clause (variant 7 of 12) (text in section 3)
+    Licence: BSD-3-Clause (variant 8 of 13) (text in section 3)
     Copyright 2008 Google Inc.  All rights reserved.
     Licence: Apache-2.0 (variant 1 of 4) (text in section 3)
 - @connectrpc/connect-web@2.2.0 (https://github.com/connectrpc/connect-es)

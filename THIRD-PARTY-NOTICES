@@ -3174,9 +3174,9 @@ Components:
     Copyright (c) 2013 Mitchell Hashimoto
 - github.com/monochromegane/go-gitignore@v0.0.0-20200626010858-205db1a8cc00
     Copyright (c) [2015] [go-gitignore]
-- github.com/onsi/ginkgo/v2@v2.28.1
+- github.com/onsi/ginkgo/v2@v2.34.0
     Copyright (c) 2013-2014 Onsi Fakhouri
-- github.com/onsi/gomega@v1.39.1
+- github.com/onsi/gomega@v1.44.0
     Copyright (c) 2013-2014 Onsi Fakhouri
 - github.com/peterbourgon/diskv@v2.0.1+incompatible
     Copyright (c) 2011-2012 Peter Bourgon

@@ -12,8 +12,8 @@ require (
 	github.com/go-logr/stdr v1.2.2
 	github.com/google/go-containerregistry v0.21.7
 	github.com/minio/minio-go/v7 v7.4.1
-	github.com/onsi/ginkgo/v2 v2.28.1
-	github.com/onsi/gomega v1.39.1
+	github.com/onsi/ginkgo/v2 v2.34.0
+	github.com/onsi/gomega v1.44.0
 	github.com/open-policy-agent/cert-controller v0.16.0
 	github.com/opencontainers/runtime-spec v1.3.0
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c

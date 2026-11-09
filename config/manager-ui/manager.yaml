@@ -31,9 +31,7 @@ spec:
           type: RuntimeDefault
       priorityClassName: ichor-critical
       containers:
-      - command:
-        - /ichor-ui
-        args:
+      - args:
           - --addr=:8443
         image: ichor-ui:latest
         name: ichor-ui

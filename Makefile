@@ -17,12 +17,6 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-# CONTAINER_TOOL defines the container tool to be used for building images.
-# Be aware that the target commands are only tested with Docker which is
-# scaffolded by default. However, you might want to replace it to use other
-# tools. (i.e. podman)
-CONTAINER_TOOL ?= docker
-
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
 SHELL = /usr/bin/env bash -o pipefail
@@ -182,68 +176,79 @@ build-ichor-embed: build-installer ## Build the ichor CLI with Ichor's own insta
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd
 
-# If you wish to build the manager image targeting other platforms you can use the --platform flag.
-# (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
-# More info: https://docs.docker.com/develop/develop-images/build_enhancements/
-.PHONY: docker-build
-docker-build: ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build --build-arg VERSION=$(VERSION) -t ${IMG} .
-
-.PHONY: docker-build-installer
-docker-build-installer: build-installer ## Build the installer image: the ichor binary with this tree's install manifest embedded.
-	cp dist/install.yaml internal/installmanifest/install.yaml
-	cp dist/network-policies.yaml internal/installmanifest/network-policies.yaml
-	$(CONTAINER_TOOL) build -f Dockerfile.installer --build-arg VERSION=$(VERSION) -t ${IMG_INSTALLER} .
+# The images are built by ko (.ko.yaml: linux/amd64 and linux/arm64 indexes, no container runtime). A layout in
+# OCI_DIR/<name> is the compiled image; crane pushes it as it is, so the digest printed is the index digest.
+OCI_DIR ?= bin/oci
+## Registry host (and port) the images are pushed to: REGISTRY/maeshinshin/<name>:VERSION.
+REGISTRY ?=
+## A plain-HTTP local registry by default; the release workflow sets it empty for ghcr.io.
+CRANE_INSECURE ?= --insecure
+# ko-layout NAME IMPORT_PATH: compile one image into OCI_DIR/NAME without a registry (registry.invalid is a placeholder: nothing is pushed).
+define ko-layout
+@test "$(VERSION)" != dev || { echo "VERSION must not be 'dev', e.g. VERSION=v0.0.8-abc1234" >&2; exit 1; }
+rm -rf $(OCI_DIR)/$(1)
+VERSION="$(VERSION)" KO_DOCKER_REPO=registry.invalid ko build --bare --push=false --oci-layout-path $(OCI_DIR)/$(1) $(2)
+endef
+# crane-push NAME: push OCI_DIR/NAME as REGISTRY/maeshinshin/NAME:VERSION and append its repo@digest line to DIGEST_FILE.
+define crane-push
+crane push $(CRANE_INSECURE) $(OCI_DIR)/$(1) "$(REGISTRY)/maeshinshin/$(1):$(VERSION)" | tee -a "$(DIGEST_FILE)"
+endef
 
 # The digest flow: the installer image embeds the install manifest, so it is built last,
 # from a manifest that names the controller and ichor-ui images by digest (IMAGE_DIGESTS, below). Each step is a
 # target so the release workflow can run them in separate jobs; demo-images runs them all.
 IMAGE_TAG_CTL = ghcr.io/maeshinshin/ichor-controller:$(VERSION)
 IMAGE_TAG_UI = ghcr.io/maeshinshin/ichor-ui:$(VERSION)
-## File of "<repo>@<digest>" lines (images.sh's DIGEST_FILE) that build-installer and helm-package pin the controller and ichor-ui images with.
+## File of "<repo>@<digest>" lines (the images-push-* targets write it) that build-installer and helm-package pin the controller and ichor-ui images with.
 IMAGE_DIGESTS ?=
 DIGEST_FILE ?= bin/digests.txt
 
 .PHONY: demo-images
-demo-images: ## Build the three demo images with crane and push them to REGISTRY (VERSION=v0.0.8-abc1234 REGISTRY=localhost:5000); the install manifest names the controller and UI images by digest (DIGEST_FILE=bin/digests.txt); the tree stays unchanged.
-	@# CRANE_INSECURE (default --insecure, for a local registry) is read by images.sh; the release workflow sets it empty.
+demo-images: ## Build the three images with ko and push them to REGISTRY (VERSION=v0.0.8-abc1234 REGISTRY=localhost:5000), both platforms; the install manifest names the controller and UI images by digest (DIGEST_FILE=bin/digests.txt); the tree stays unchanged.
 	$(MAKE) images-build-core VERSION="$(VERSION)"
 	$(MAKE) images-push-core VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" DIGEST_FILE="$(DIGEST_FILE)"
 	$(MAKE) images-build-installer VERSION="$(VERSION)" IMAGE_DIGESTS="$(DIGEST_FILE)"
 	$(MAKE) images-push-installer VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" DIGEST_FILE="$(DIGEST_FILE)"
 
 .PHONY: images-build-core
-images-build-core: ui-build ## Compile the controller and ichor-ui binaries into bin/img (no registry).
-	VERSION="$(VERSION)" test/harness/ui-demo/images.sh build-core
+images-build-core: ui-build ## Compile the controller and ichor-ui images into OCI_DIR (no registry).
+	$(call ko-layout,ichor-controller,./cmd)
+	$(call ko-layout,ichor-ui,./cmd/ichor-ui)
 
 .PHONY: images-push-core
-images-push-core: ## Layer the controller and ichor-ui binaries on the pinned base and push them (DIGEST_FILE receives their repo@digest lines).
-	VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" DIGEST_FILE="$(DIGEST_FILE)" test/harness/ui-demo/images.sh push-core
+images-push-core: ## Push the controller and ichor-ui images from images-build-core (DIGEST_FILE receives their repo@digest lines).
+	mkdir -p "$$(dirname "$(DIGEST_FILE)")"
+	: > "$(DIGEST_FILE)"
+	$(call crane-push,ichor-controller)
+	$(call crane-push,ichor-ui)
 
 .PHONY: images-build-installer
-images-build-installer: ## Render the install manifest with the digests in IMAGE_DIGESTS, embed it and compile the installer into bin/img.
-	test -s "$(IMAGE_DIGESTS)"
+images-build-installer: ## Render the install manifest with the digests in IMAGE_DIGESTS (or tags, if empty), embed it and compile the installer image into OCI_DIR.
 	$(MAKE) build-installer IMG=$(IMAGE_TAG_CTL) IMG_UI=$(IMAGE_TAG_UI) IMAGE_DIGESTS="$(IMAGE_DIGESTS)"
-	VERSION="$(VERSION)" IMAGE_DIGESTS="$(IMAGE_DIGESTS)" test/harness/ui-demo/images.sh build-installer
+	cp dist/install.yaml internal/installmanifest/install.yaml
+	cp dist/network-policies.yaml internal/installmanifest/network-policies.yaml
+	$(call ko-layout,ichor-installer,./cmd/ichor)
+	@# The same CLI, static, for the demo and hardware tests (they run it from bin/img/ichor/ichor).
+	CGO_ENABLED=0 go build -tags installembed -trimpath -ldflags "-s -w $(LDFLAGS)" -o bin/img/ichor/ichor ./cmd/ichor
 
 .PHONY: images-push-installer
-images-push-installer: ## Layer the installer binary on the pinned base and push it (its repo@digest line is appended to DIGEST_FILE).
-	VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" DIGEST_FILE="$(DIGEST_FILE)" test/harness/ui-demo/images.sh push-installer
+images-push-installer: ## Push the installer image from images-build-installer (its repo@digest line is appended to DIGEST_FILE).
+	$(call crane-push,ichor-installer)
 
 # The two-step flow with tags in the manifest (no digests): build, then push to a registry of your own
-# (docs/guides/getting-started.md). The release workflow uses the digest flow above.
+# (docs/development/build-from-source.md). The release workflow uses the digest flow above.
 .PHONY: demo-images-build
-demo-images-build: ui-build ## Compile the three image binaries into bin/img, the install manifest naming the images by tag (no registry).
-	$(MAKE) build-installer IMG=$(IMAGE_TAG_CTL) IMG_UI=$(IMAGE_TAG_UI)
-	VERSION="$(VERSION)" test/harness/ui-demo/images.sh build
+demo-images-build: images-build-core ## Compile the three images into OCI_DIR, the install manifest naming the images by tag (no registry).
+	$(MAKE) images-build-installer VERSION="$(VERSION)"
 
 .PHONY: demo-images-push
-demo-images-push: ## Layer the binaries from demo-images-build on the pinned base and push them (DIGEST_FILE=<path> receives repo@digest lines).
-	VERSION="$(VERSION)" REGISTRY="$(REGISTRY)" DIGEST_FILE="$(DIGEST_FILE)" test/harness/ui-demo/images.sh push
+demo-images-push: images-push-core images-push-installer ## Push the images from demo-images-build (DIGEST_FILE=<path> receives repo@digest lines).
 
-.PHONY: docker-build-ichor-ui
-docker-build-ichor-ui: ## Build docker image with ichor-ui, the real UI embedded (not the placeholder).
-	$(CONTAINER_TOOL) build -f Dockerfile.ichor-ui -t ${IMG_UI} .
+.PHONY: images-kind
+images-kind: ui-build ## Build the controller and ichor-ui for this machine and load them into the kind cluster (KIND_CLUSTER_NAME) as kind.local/<name>:latest.
+	for n in ichor-controller:./cmd ichor-ui:./cmd/ichor-ui; do \
+	  VERSION="$(VERSION)" KO_DOCKER_REPO=kind.local/$${n%%:*} ko build --bare --platform linux/$$(go env GOARCH) $${n#*:}; \
+	done
 
 ## Where build-installer writes install.yaml and network-policies.yaml.
 INSTALL_OUT ?= dist

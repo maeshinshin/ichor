@@ -4,6 +4,14 @@ description: Install Nix and restore or save the devShell closure with the GitHu
 runs:
   using: composite
   steps:
+    # The runner's preinstalled toolchains fill the disk before goreleaser builds; no job here uses them.
+    - name: Free disk space
+      shell: bash
+      run: |
+        df -h /
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost /opt/hostedtoolcache/CodeQL "$AGENT_TOOLSDIRECTORY"
+        df -h /
+
     - name: Install Nix
       uses: nixbuild/nix-quick-install-action@9f63be77f412a248c9d9a65a4c82cf066cdf8f0c # v35
       with:

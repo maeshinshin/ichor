@@ -1251,6 +1251,7 @@ func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace 
 	}
 
 	in.Cluster.CertSANs, in.Cluster.Registries = c.Spec.CertSANs, c.Spec.Registries
+	in.Cluster.OmitDefaultNodeLabels = c.Spec.ControlPlane.OmitDefaultNodeLabels
 
 	if c.Spec.Network != nil {
 		in.Cluster.PodSubnets, in.Cluster.ServiceSubnets = c.Spec.Network.PodSubnets, c.Spec.Network.ServiceSubnets

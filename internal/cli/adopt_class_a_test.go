@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"slices"
 	"strings"
@@ -86,11 +87,21 @@ func classAFixture(t *testing.T, version string) (cp, wk []byte) {
 func classAFlow(t *testing.T, talosVersion string, cp, wk []byte) (*flowEnv, adoptDeps) {
 	t.Helper()
 
+	return classAFlowOf(t, talosVersion, map[string][]byte{flowCPAddr: cp, flowWKAddr: wk}, []ClusterMember{
+		{Hostname: "cp", Addresses: []string{flowCPAddr}, Role: roleControlPlane},
+		{Hostname: "wk", Addresses: []string{flowWKAddr}, Role: testRoleWorker},
+	})
+}
+
+// classAFlowOf is classAFlow for any set of nodes: live maps each address to its configuration.
+func classAFlowOf(t *testing.T, talosVersion string, live map[string][]byte, members []ClusterMember) (*flowEnv, adoptDeps) {
+	t.Helper()
+
 	env := newFlowEnv(t, cniCilium, nil)
-	env.live = map[string][]byte{flowCPAddr: cp, flowWKAddr: wk}
+	env.live = live
 	env.k8s = fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
 
-	provider, err := configloader.NewFromBytes(cp)
+	provider, err := configloader.NewFromBytes(live[members[0].Addresses[0]])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,15 +111,10 @@ func classAFlow(t *testing.T, talosVersion string, cp, wk []byte) (*flowEnv, ado
 		t.Fatal(err)
 	}
 
-	members := []ClusterMember{
-		{Hostname: "cp", Addresses: []string{flowCPAddr}, Role: roleControlPlane},
-		{Hostname: "wk", Addresses: []string{flowWKAddr}, Role: testRoleWorker},
-	}
-
 	deps := env.deps(t)
 	deps.Bundle = bundle
 	deps.CNIUnmanaged = true
-	deps.Seed = flowCPAddr
+	deps.Seed = members[0].Addresses[0]
 	deps.ReleaseWait = 50 * time.Millisecond
 	deps.DialTalos = func(_ context.Context, endpoint string) (talosConfigReader, error) {
 		return &membersReader{current: env.live[endpoint], version: talosVersion, members: members}, nil
@@ -194,6 +200,19 @@ func TestAdoptMapsClassAValuesOfAForeignCluster(t *testing.T) {
 				t.Errorf("spec.certSANs = %v, want %v", cluster.Spec.CertSANs, want)
 			}
 
+			var patches ichorv1alpha1.TalosConfigPatchList
+			if err := env.k8s.List(context.Background(), &patches); err != nil {
+				t.Fatal(err)
+			}
+
+			for _, p := range patches.Items {
+				if slices.ContainsFunc(p.Spec.Documents, func(d ichorv1alpha1.TalosConfigPatchDocument) bool {
+					return d.Config != nil && d.Config.MachineConfig != nil && len(d.Config.MachineConfig.MachineCertSANs) > 0
+				}) {
+					t.Errorf("patch %s captures certSANs although every node agrees", p.Name)
+				}
+			}
+
 			if !jsonEqual(cluster.Spec.Registries, tc.registries) {
 				t.Errorf("spec.registries = %+v, want %+v", cluster.Spec.Registries, tc.registries)
 			}
@@ -244,28 +263,28 @@ func TestAdoptKeepsUnrepresentableRegistryDriftClassC(t *testing.T) {
 	}
 }
 
-// Nodes whose certSANs differ are not blocked: spec.certSANs is the union, and the plan lists what
-// each node gains for consent (ADR 0141).
-func TestAdoptTakesTheUnionOfDifferingCertSANs(t *testing.T) {
-	cp, wk := classAFixture(t, "v114")
-	wk = []byte(strings.ReplaceAll(string(wk), "- cp.example.test", "- other.example.test"))
+// Control planes whose machine.certSANs differ are not blocked and need no consent: each node's own
+// list beyond the cluster's is captured into its patch, so nothing on a node changes (ADR 0143).
+func TestAdoptCapturesEachNodesDifferingCertSANs(t *testing.T) {
+	cp, _ := classAFixture(t, "v114")
+	addrs := []string{flowCPAddr, "10.0.0.12", "10.0.0.13"}
+	live, members := map[string][]byte{}, make([]ClusterMember, 0, len(addrs))
 
-	env, deps := classAFlow(t, ver1143, cp, wk)
-
-	out := planOutput(t, env, deps, false)
-	for _, want := range []string{
-		"Ichor-owned settings its first render will change (need consent): machine.certSANs",
-		"spec.certSANs, rendered on every node, is the union of the nodes' lists: 10.5.0.2, cp.example.test, other.example.test",
-		"machine \"uuid-" + flowCPAddr + "\": its certificate gains the subject alternative names other.example.test",
-		"machine \"uuid-" + flowWKAddr + "\": its certificate gains the subject alternative names cp.example.test",
-	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("plan lacks %q:\n%s", want, out)
-		}
+	for i, addr := range addrs {
+		// Only machine.certSANs differs; the kube-apiserver's SANs are the same on every control plane.
+		own := strings.Replace(string(cp), "    certSANs:\n        - 10.5.0.2\n        - cp.example.test\n",
+			fmt.Sprintf("    certSANs:\n        - 10.5.0.2\n        - cp.example.test\n        - cp%d.example.test\n", i), 1)
+		live[addr] = []byte(own)
+		members = append(members, ClusterMember{Hostname: fmt.Sprintf("cp%d", i), Addresses: []string{addr}, Role: roleControlPlane})
 	}
 
-	if strings.Contains(out, "cannot patch automatically") {
-		t.Fatalf("differing SANs still block:\n%s", out)
+	env, deps := classAFlowOf(t, ver1143, live, members)
+
+	out := planOutput(t, env, deps, false)
+	for _, bad := range []string{"cannot patch automatically", "need consent", "gains the subject alternative names"} {
+		if strings.Contains(out, bad) {
+			t.Fatalf("the plan reports %q:\n%s", bad, out)
+		}
 	}
 
 	deps.PlanOnly, deps.AssumeYes = false, true
@@ -276,25 +295,33 @@ func TestAdoptTakesTheUnionOfDifferingCertSANs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if want := []string{classAIP, classACPSAN, "other.example.test"}; !slices.Equal(cluster.Spec.CertSANs, want) {
-		t.Errorf("spec.certSANs = %v, want %v", cluster.Spec.CertSANs, want)
-	}
-}
-
-// A node that states a SAN the cluster's list lacks would lose it, so it stays blocked (the add-machine flow's
-// TestAdoptAddMachineBlockedMachineIsNotNothingToAdopt covers the plan end to end).
-func TestAdoptBlocksANodeThatWouldLoseACertSAN(t *testing.T) {
-	st := &adoptState{cluster: &ichorv1alpha1.TalosCluster{Spec: ichorv1alpha1.TalosClusterSpec{CertSANs: []string{classAIP}}}}
-	n := &adoptNode{M: &ichorv1alpha1.TalosMachine{}, Facts: &TalosFacts{CertSANs: []string{classAIP, classACPSAN}}}
-
-	if _, covered := st.sansGained(n); covered {
-		t.Fatal("a node with a SAN outside spec.certSANs was treated as covered")
+	if want := []string{classAIP, classACPSAN}; !slices.Equal(cluster.Spec.CertSANs, want) {
+		t.Errorf("spec.certSANs = %v, want the control planes' shared kube-apiserver list %v", cluster.Spec.CertSANs, want)
 	}
 
-	n.Facts.CertSANs = []string{classAIP}
+	for i, addr := range addrs {
+		var p ichorv1alpha1.TalosConfigPatch
+		if err := env.k8s.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: "adopt-uuid-" + addr}, &p); err != nil {
+			t.Fatal(err)
+		}
 
-	if gained, covered := st.sansGained(n); !covered || len(gained) != 0 {
-		t.Fatalf("a node stating a subset: gained %v, covered %v", gained, covered)
+		var got []string
+		for _, d := range p.Spec.Documents {
+			if d.Config != nil && d.Config.MachineConfig != nil {
+				got = append(got, d.Config.MachineConfig.MachineCertSANs...)
+			}
+		}
+
+		if want := []string{fmt.Sprintf("cp%d.example.test", i)}; !slices.Equal(got, want) {
+			t.Errorf("%s: the patch's machine.certSANs = %v, want %v (what spec.certSANs does not render)", addr, got, want)
+		}
+	}
+
+	deps.PlanOnly, deps.AssumeYes = true, false
+	env.stderr.Reset()
+
+	if again := planOutput(t, env, deps, false); strings.Count(again, "already matches a fresh render") != 3 {
+		t.Errorf("the rerun plan does not match all three machines:\n%s", again)
 	}
 }
 

@@ -160,7 +160,9 @@ func (s *Sigstore) Verify(ctx context.Context, img Image, id Identity) error {
 	var errs []error
 
 	for _, d := range im.Manifests {
-		if d.ArtifactType != bundleMediaType || d.Annotations[predicateKey] != signPredicate {
+		// Some registries (ghcr.io) list referrers without artifactType and annotations. A bare entry is
+		// judged from its manifest, as cosign does; a listed one that is not a signature is skipped.
+		if d.ArtifactType != "" && d.Annotations[predicateKey] != "" && !isSignature(d.ArtifactType, d.Annotations) {
 			continue
 		}
 
@@ -168,6 +170,10 @@ func (s *Sigstore) Verify(ctx context.Context, img Image, id Identity) error {
 		if err != nil {
 			errs = append(errs, err)
 
+			continue
+		}
+
+		if b == nil {
 			continue
 		}
 
@@ -263,8 +269,13 @@ func (s *Sigstore) repository(repo string) (name.Repository, error) {
 	return r, nil
 }
 
+// isSignature is whether an artifact type and annotations are those of a cosign signature bundle.
+func isSignature(artifactType string, annotations map[string]string) bool {
+	return artifactType == bundleMediaType && annotations[predicateKey] == signPredicate
+}
+
 // bundle reads the Sigstore bundle of a signature referrer: the layer of its manifest with the bundle
-// media type.
+// media type. It returns nil, nil when the manifest is not a cosign signature (an SBOM, an attestation).
 func (s *Sigstore) bundle(ctx context.Context, repo name.Repository, digest v1.Hash) (*bundle.Bundle, error) {
 	desc, err := remote.Get(repo.Digest(digest.String()), s.opts(ctx)...)
 	if err != nil {
@@ -274,6 +285,10 @@ func (s *Sigstore) bundle(ctx context.Context, repo name.Repository, digest v1.H
 	var m v1.Manifest
 	if err := json.Unmarshal(desc.Manifest, &m); err != nil {
 		return nil, fmt.Errorf("parsing the signature manifest %s: %w", digest, err)
+	}
+
+	if !isSignature(m.ArtifactType, m.Annotations) {
+		return nil, nil //nolint:nilnil // not a signature is not an error
 	}
 
 	for _, l := range m.Layers {

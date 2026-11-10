@@ -43,6 +43,8 @@ const (
 	classAHost   = "docker.io"
 	classADisk   = "/dev/vda"
 	classAMirror = "https://mirror.example.test:5000"
+	classAIP     = "10.5.0.2"
+	classACPSAN  = "cp.example.test"
 )
 
 const classAMirrorDoc = `---
@@ -188,7 +190,7 @@ func TestAdoptMapsClassAValuesOfAForeignCluster(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			if want := []string{"10.5.0.2", "cp.example.test"}; !slices.Equal(cluster.Spec.CertSANs, want) {
+			if want := []string{classAIP, classACPSAN}; !slices.Equal(cluster.Spec.CertSANs, want) {
 				t.Errorf("spec.certSANs = %v, want %v", cluster.Spec.CertSANs, want)
 			}
 
@@ -226,9 +228,8 @@ func TestAdoptMapsClassAValuesOfAForeignCluster(t *testing.T) {
 	}
 }
 
-// What has no representation stays class C with a hint: registry credentials never go into spec,
-// and a worker whose SANs differ cannot be flattened into one cluster list.
-func TestAdoptKeepsUnrepresentableRegistryAndSANDriftClassC(t *testing.T) {
+// What has no representation stays class C with a hint: registry credentials never go into spec.
+func TestAdoptKeepsUnrepresentableRegistryDriftClassC(t *testing.T) {
 	cp, wk := classAFixture(t, "v114")
 
 	env, deps := classAFlow(t, ver1143, append(cp, classAAuthDoc...), append(slices.Clone(wk), classAAuthDoc...))
@@ -241,15 +242,59 @@ func TestAdoptKeepsUnrepresentableRegistryAndSANDriftClassC(t *testing.T) {
 	if strings.Contains(out, "not-a-real-password") {
 		t.Fatalf("a credential reached the output:\n%s", out)
 	}
+}
 
-	cp, wk = classAFixture(t, "v114")
+// Nodes whose certSANs differ are not blocked: spec.certSANs is the union, and the plan lists what
+// each node gains for consent (ADR 0141).
+func TestAdoptTakesTheUnionOfDifferingCertSANs(t *testing.T) {
+	cp, wk := classAFixture(t, "v114")
 	wk = []byte(strings.ReplaceAll(string(wk), "- cp.example.test", "- other.example.test"))
 
-	env, deps = classAFlow(t, ver1143, cp, wk)
+	env, deps := classAFlow(t, ver1143, cp, wk)
 
-	out = planOutput(t, env, deps, true)
-	if !strings.Contains(out, "cannot patch automatically") || !strings.Contains(out, "spec.certSANs") {
-		t.Fatalf("differing SANs were not kept as class C with the hint:\n%s", out)
+	out := planOutput(t, env, deps, false)
+	for _, want := range []string{
+		"Ichor-owned settings its first render will change (need consent): machine.certSANs",
+		"spec.certSANs, rendered on every node, is the union of the nodes' lists: 10.5.0.2, cp.example.test, other.example.test",
+		"machine \"uuid-" + flowCPAddr + "\": its certificate gains the subject alternative names other.example.test",
+		"machine \"uuid-" + flowWKAddr + "\": its certificate gains the subject alternative names cp.example.test",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("plan lacks %q:\n%s", want, out)
+		}
+	}
+
+	if strings.Contains(out, "cannot patch automatically") {
+		t.Fatalf("differing SANs still block:\n%s", out)
+	}
+
+	deps.PlanOnly, deps.AssumeYes = false, true
+	_ = runAdopt(context.Background(), "d1", testNamespace, deps)
+
+	var cluster ichorv1alpha1.TalosCluster
+	if err := env.k8s.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: "d1"}, &cluster); err != nil {
+		t.Fatal(err)
+	}
+
+	if want := []string{classAIP, classACPSAN, "other.example.test"}; !slices.Equal(cluster.Spec.CertSANs, want) {
+		t.Errorf("spec.certSANs = %v, want %v", cluster.Spec.CertSANs, want)
+	}
+}
+
+// A node that states a SAN the cluster's list lacks would lose it, so it stays blocked (the add-machine flow's
+// TestAdoptAddMachineBlockedMachineIsNotNothingToAdopt covers the plan end to end).
+func TestAdoptBlocksANodeThatWouldLoseACertSAN(t *testing.T) {
+	st := &adoptState{cluster: &ichorv1alpha1.TalosCluster{Spec: ichorv1alpha1.TalosClusterSpec{CertSANs: []string{classAIP}}}}
+	n := &adoptNode{M: &ichorv1alpha1.TalosMachine{}, Facts: &TalosFacts{CertSANs: []string{classAIP, classACPSAN}}}
+
+	if _, covered := st.sansGained(n); covered {
+		t.Fatal("a node with a SAN outside spec.certSANs was treated as covered")
+	}
+
+	n.Facts.CertSANs = []string{classAIP}
+
+	if gained, covered := st.sansGained(n); !covered || len(gained) != 0 {
+		t.Fatalf("a node stating a subset: gained %v, covered %v", gained, covered)
 	}
 }
 

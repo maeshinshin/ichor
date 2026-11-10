@@ -145,9 +145,35 @@ func (st *adoptState) own(n *adoptNode) ownership {
 	if n.Facts != nil {
 		name, _ := cilium.FindInlineManifest(inlineEntries(n.Facts))
 		o.CiliumInline = name != ""
+		_, o.SANsCovered = st.sansGained(n)
 	}
 
 	return o
+}
+
+// sansGained are the spec.certSANs the node does not state yet (machine.certSANs, and for a
+// control plane the kube-apiserver's), and whether it states none that spec.certSANs lacks.
+func (st *adoptState) sansGained(n *adoptNode) (gained []string, covered bool) {
+	have := [][]string{n.Facts.CertSANs}
+	if n.controlPlane() {
+		have = append(have, n.Facts.APIServerCertSANs)
+	}
+
+	covered = true
+
+	for _, h := range have {
+		for _, s := range h {
+			covered = covered && slices.Contains(st.cluster.Spec.CertSANs, s)
+		}
+
+		for _, s := range st.cluster.Spec.CertSANs {
+			if !slices.Contains(h, s) && !slices.Contains(gained, s) {
+				gained = append(gained, s)
+			}
+		}
+	}
+
+	return gained, covered
 }
 
 // needsTakeover: a managed Cilium that Ichor did not install itself.
@@ -360,6 +386,10 @@ func (st *adoptState) planPhase(deps adoptDeps) (*adoptPlanned, error) {
 	st.hintStartOver(deps.say, plans)
 
 	pl := &adoptPlanned{owned: reportOwned(deps.say, plans)}
+
+	if slices.ContainsFunc(plans, func(p *adoptPlan) bool { return len(p.SANsGained) > 0 }) {
+		deps.say(adoptWarn, "spec.certSANs, rendered on every node, is the union of the nodes' lists: %s", strings.Join(st.cluster.Spec.CertSANs, ", "))
+	}
 
 	pl.writable, pl.blocked = splitBlocked(st.nodes, plans)
 	pl.held = st.heldNodes(pl.writable)
@@ -958,6 +988,10 @@ func (st *adoptState) plan(deps adoptDeps) ([]*adoptPlan, error) {
 			return nil, err
 		}
 
+		if slices.ContainsFunc(p.Owned, func(o string) bool { return hasPathPrefix(o, ownedCertSANsPaths) }) {
+			p.SANsGained, _ = st.sansGained(n)
+		}
+
 		plans = append(plans, p)
 	}
 
@@ -1007,6 +1041,10 @@ func reportOwned(say adoptSay, plans []*adoptPlan) int {
 
 		say(adoptWarn, "machine %q: Ichor-owned settings its first render will change (need consent): %s",
 			p.Machine, strings.Join(p.Owned, ", "))
+
+		if len(p.SANsGained) > 0 {
+			say(adoptWarn, "machine %q: its certificate gains the subject alternative names %s", p.Machine, strings.Join(p.SANsGained, ", "))
+		}
 	}
 
 	return total
@@ -1402,8 +1440,8 @@ const (
 		"same mirrors, and one overridePath value for all of a host's endpoints"
 	registryAuthHint = "registry credentials are never copied into Ichor: create the TalosCluster yourself with spec.registries[].authSecretRef " +
 		"(a Secret in the controller's namespace holding password, auth or identityToken), then run adopt again"
-	certSANsHint = "set TalosCluster spec.certSANs to the node's list; every node must state the same machine.certSANs, and every control plane " +
-		"the same kube-apiserver SANs"
+	certSANsHint = "this node states a SAN that TalosCluster spec.certSANs lacks, and every node is rendered with the cluster's list: add it " +
+		"to spec.certSANs (adopt of a new cluster takes the union of the nodes' lists, and the SANs a node gains are listed for consent)"
 )
 
 var specFieldHints = []specFieldHint{

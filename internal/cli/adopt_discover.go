@@ -269,7 +269,7 @@ func clusterFromNodes(name, namespace, talosVersion string, nodes []*adoptNode) 
 		c.Spec.Network = &ichorv1alpha1.TalosClusterNetwork{PodSubnets: f.PodSubnets, ServiceSubnets: f.ServiceSubnets}
 	}
 
-	c.Spec.CertSANs = agreedCertSANs(nodes)
+	c.Spec.CertSANs = unionCertSANs(nodes)
 	c.Spec.Registries = agreedRegistries(nodes)
 
 	if cands := contractCandidates(talosVersion); len(cands) > 0 {
@@ -279,23 +279,21 @@ func clusterFromNodes(name, namespace, talosVersion string, nodes []*adoptNode) 
 	return c, nil
 }
 
-// agreedCertSANs is spec.certSANs: the extra SANs when every node states the same machine.certSANs
-// and every control plane the same kube-apiserver SANs. Anything else maps to nothing, so the
-// difference stays visible as drift (class C) instead of being flattened into one list.
-func agreedCertSANs(nodes []*adoptNode) []string {
-	var want []string
+// unionCertSANs is spec.certSANs: every SAN any node states in machine.certSANs, and any control
+// plane in its kube-apiserver SANs, in first-seen order. Nodes that agree give their shared list
+// unchanged; a node missing some gains them, which the plan lists for consent (ADR 0141).
+func unionCertSANs(nodes []*adoptNode) []string {
+	var out []string
 
-	for i, n := range readNodes(nodes) {
-		if i == 0 {
-			want = n.Facts.CertSANs
-		}
-
-		if !slices.Equal(want, n.Facts.CertSANs) || (n.controlPlane() && !slices.Equal(want, n.Facts.APIServerCertSANs)) {
-			return nil
+	for _, n := range readNodes(nodes) {
+		for _, s := range append(slices.Clone(n.Facts.CertSANs), n.Facts.APIServerCertSANs...) {
+			if !slices.Contains(out, s) {
+				out = append(out, s)
+			}
 		}
 	}
 
-	return slices.Clone(want)
+	return out
 }
 
 // agreedRegistries is spec.registries: the mirrors when every node states the same ones and none

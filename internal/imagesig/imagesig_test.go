@@ -169,6 +169,8 @@ type fakeRegistry struct {
 	subject   string
 	referrers []map[string]any
 	blobs     map[string][]byte
+	// bare makes the referrers listing drop artifactType and annotations, as ghcr.io does.
+	bare bool
 }
 
 const fakeRepo = "maeshinshin/ichor-installer"
@@ -179,10 +181,19 @@ func (f *fakeRegistry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	case r.URL.Path == "/v2/"+fakeRepo+"/referrers/"+f.subject:
 		w.Header().Set("Content-Type", "application/vnd.oci.image.index.v1+json")
+		listed := f.referrers
+		if f.bare {
+			listed = nil
+
+			for _, d := range f.referrers {
+				listed = append(listed, map[string]any{keyMediaType: d[keyMediaType], keyDigest: d[keyDigest], keySize: d[keySize]})
+			}
+		}
+
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"schemaVersion": 2,
 			keyMediaType:    "application/vnd.oci.image.index.v1+json",
-			"manifests":     f.referrers,
+			"manifests":     listed,
 		})
 	case strings.HasPrefix(r.URL.Path, "/v2/"+fakeRepo+"/manifests/") || strings.HasPrefix(r.URL.Path, "/v2/"+fakeRepo+"/blobs/"):
 		digest := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
@@ -217,6 +228,8 @@ func signatureReferrer(t *testing.T, f *fakeRegistry, bundleBody []byte) map[str
 	manifest, err := json.Marshal(map[string]any{
 		"schemaVersion": 2,
 		keyMediaType:    "application/vnd.oci.image.manifest.v1+json",
+		"artifactType":  bundleMediaType,
+		"annotations":   map[string]any{predicateKey: signPredicate},
 		"config":        map[string]any{keyMediaType: "application/vnd.oci.empty.v1+json", keySize: 2, keyDigest: digestOf([]byte("{}"))},
 		"layers": []any{map[string]any{
 			keyMediaType: bundleMediaType, keySize: len(bundleBody), keyDigest: layer,
@@ -278,6 +291,33 @@ func TestVerifyRefusesASignatureThatDoesNotVerify(t *testing.T) {
 	err := verifyAgainst(t, f, srv)
 	if err == nil || !strings.Contains(err.Error(), "is not signed by") {
 		t.Fatalf("a signature that does not parse: err = %v", err)
+	}
+}
+
+func TestVerifyReadsTheManifestWhenTheListingIsBare(t *testing.T) {
+	srv, f := newFakeRegistry(t)
+	f.bare = true
+	f.referrers = []map[string]any{signatureReferrer(t, f, []byte(`{keyMediaType:"not a bundle"}`))}
+
+	// It reaches the bundle (and fails to parse it) instead of reporting no signature.
+	err := verifyAgainst(t, f, srv)
+	if err == nil || !strings.Contains(err.Error(), "is not signed by") {
+		t.Fatalf("a bare listing: err = %v", err)
+	}
+}
+
+func TestVerifyIgnoresBareReferrersThatAreNotCosignSignatures(t *testing.T) {
+	srv, f := newFakeRegistry(t)
+	f.bare = true
+
+	manifest := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","annotations":{"` + predicateKey + `":"https://slsa.dev/provenance/v1"}}`)
+	md := digestOf(manifest)
+	f.blobs[md] = manifest
+	f.referrers = []map[string]any{{keyMediaType: "application/vnd.oci.image.manifest.v1+json", keyDigest: md, keySize: len(manifest)}}
+
+	err := verifyAgainst(t, f, srv)
+	if err == nil || !strings.Contains(err.Error(), "has no cosign signature") {
+		t.Fatalf("a bare attestation: err = %v", err)
 	}
 }
 

@@ -23,6 +23,7 @@ import (
 
 	"github.com/siderolabs/talos/pkg/machinery/config/configloader"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	mnetwork "github.com/siderolabs/talos/pkg/machinery/config/types/network"
 	mruntime "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -36,6 +37,7 @@ import (
 const (
 	kindSysctlConfig       = "SysctlConfig"
 	kindKernelModuleConfig = "KernelModuleConfig"
+	kindResolverConfig     = "ResolverConfig"
 
 	// pathNetworkInterfaces is the legacy network block of a node whose Talos config predates the
 	// multi-document form; spec.network renders the new form, so the block is captured as a patch.
@@ -166,14 +168,27 @@ func buildAdoptPlan(
 	owned, rest := own.split(paths)
 	plan.Owned = owned
 
-	wantSysctl, wantKernelModule, wantInterfaces, legacy := groupChangedPaths(rest)
+	wantSysctl, wantKernelModule, wantInterfaces, wantResolver, legacy := groupChangedPaths(rest)
+
+	// spec.network.dnsServers already renders the ResolverConfig and the render refuses a patch that
+	// carries one too (ADR 0138), so a difference there stays unrepresentable: set it in the spec.
+	if wantResolver && m.Spec.Network != nil && len(m.Spec.Network.DNSServers) > 0 {
+		wantResolver = false
+
+		for _, p := range rest {
+			if strings.HasPrefix(p, kindResolverConfig+".") {
+				legacy = append(legacy, p)
+			}
+		}
+	}
+
 	plan.UnrepresentablePaths = legacy
 
-	if !wantSysctl && !wantKernelModule && !wantInterfaces {
+	if !wantSysctl && !wantKernelModule && !wantInterfaces && !wantResolver {
 		return plan, nil
 	}
 
-	docs, err := captureDocuments(currentCfg, wantSysctl, wantKernelModule, wantInterfaces)
+	docs, err := captureDocuments(currentCfg, wantSysctl, wantKernelModule, wantInterfaces, wantResolver)
 	if err != nil {
 		return nil, fmt.Errorf("adopt: capturing machine %q's current documents: %w", m.Name, err)
 	}
@@ -243,7 +258,7 @@ func refuseJWTAuthenticators(machine string, currentCfg []byte) error {
 // rooting convention: a standalone document's paths are rooted at its kind
 // name, everything else (the legacy Config document's "machine.*",
 // "cluster.*" and top-level scalars) is not.
-func groupChangedPaths(paths []string) (wantSysctl, wantKernelModule, wantInterfaces bool, legacy []string) {
+func groupChangedPaths(paths []string) (wantSysctl, wantKernelModule, wantInterfaces, wantResolver bool, legacy []string) {
 	for _, p := range paths {
 		if p == pathNetworkInterfaces {
 			wantInterfaces = true
@@ -261,12 +276,14 @@ func groupChangedPaths(paths []string) (wantSysctl, wantKernelModule, wantInterf
 			wantSysctl = true
 		case kindKernelModuleConfig:
 			wantKernelModule = true
+		case kindResolverConfig:
+			wantResolver = true
 		default:
 			legacy = append(legacy, p)
 		}
 	}
 
-	return wantSysctl, wantKernelModule, wantInterfaces, legacy
+	return wantSysctl, wantKernelModule, wantInterfaces, wantResolver, legacy
 }
 
 // captureDocuments decodes currentCfg with machinery's own loader and
@@ -274,8 +291,8 @@ func groupChangedPaths(paths []string) (wantSysctl, wantKernelModule, wantInterf
 // conversions) into TalosConfigPatchDocuments. Neither kind carries secret
 // material, so a whole-document capture is safe (unlike the legacy Config
 // document; see buildAdoptPlan's doc comment).
-func captureDocuments(currentCfg []byte, wantSysctl, wantKernelModule, wantInterfaces bool) ([]ichorv1alpha1.TalosConfigPatchDocument, error) {
-	if !wantSysctl && !wantKernelModule && !wantInterfaces {
+func captureDocuments(currentCfg []byte, wantSysctl, wantKernelModule, wantInterfaces, wantResolver bool) ([]ichorv1alpha1.TalosConfigPatchDocument, error) {
+	if !wantSysctl && !wantKernelModule && !wantInterfaces && !wantResolver {
 		return nil, nil
 	}
 
@@ -327,6 +344,17 @@ func captureDocuments(currentCfg []byte, wantSysctl, wantKernelModule, wantInter
 			}
 
 			docs = append(docs, ichorv1alpha1.TalosConfigPatchDocument{Kind: kindKernelModuleConfig, KernelModuleConfig: conv})
+		case *mnetwork.ResolverConfigV1Alpha1:
+			if !wantResolver {
+				continue
+			}
+
+			conv, err := typedconfig.ResolverConfigV1Alpha1FromMachinery(v)
+			if err != nil {
+				return nil, fmt.Errorf("converting ResolverConfig: %w", err)
+			}
+
+			docs = append(docs, ichorv1alpha1.TalosConfigPatchDocument{Kind: kindResolverConfig, ResolverConfig: conv})
 		}
 	}
 
@@ -381,7 +409,7 @@ func probeVersionContract(
 
 			paths, err = controller.ChangedPaths(currentCfg, baseline)
 			if err == nil {
-				_, _, _, probe.UnrepresentablePaths = groupChangedPaths(paths)
+				_, _, _, _, probe.UnrepresentablePaths = groupChangedPaths(paths)
 			}
 		}
 

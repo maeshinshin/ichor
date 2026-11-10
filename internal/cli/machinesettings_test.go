@@ -36,7 +36,7 @@ const (
 
 func TestNetworkFromFlags(t *testing.T) {
 	good := machineApproveOptions{
-		NIC: testNIC, Addresses: []string{testStaticAddr}, Gateway: testGateway, DNS: []string{"1.1.1.1"}, VLAN: 20,
+		NIC: testNIC, Addresses: []string{testStaticAddr}, Gateway: testGateway, DNS: []string{testDNSPrimary}, VLAN: 20,
 	}
 
 	got, err := networkFromFlags(good)
@@ -60,7 +60,7 @@ func TestNetworkFromFlags(t *testing.T) {
 	for _, bad := range []machineApproveOptions{
 		{Addresses: []string{testStaticAddr}},
 		{Gateway: testGateway},
-		{DNS: []string{"1.1.1.1"}},
+		{DNS: []string{testDNSPrimary}},
 		{VLAN: 5},
 		{NIC: testNIC, Gateway: testGateway},
 	} {

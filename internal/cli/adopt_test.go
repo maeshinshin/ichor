@@ -293,7 +293,8 @@ func TestBuildAdoptPlan_LegacyDiffIsNeverAutoPatched(t *testing.T) {
 }
 
 func TestGroupChangedPaths(t *testing.T) {
-	wantSysctl, wantKernelModule, _, legacy := groupChangedPaths([]string{
+	wantSysctl, wantKernelModule, _, wantResolver, legacy := groupChangedPaths([]string{
+		"ResolverConfig.nameservers",
 		"SysctlConfig.params.net\\.ipv4\\.ip_forward",
 		"KernelModuleConfig.name",
 		"cluster.network.cni.name",
@@ -306,6 +307,10 @@ func TestGroupChangedPaths(t *testing.T) {
 
 	if !wantKernelModule {
 		t.Error("expected wantKernelModule = true")
+	}
+
+	if !wantResolver {
+		t.Error("expected wantResolver = true")
 	}
 
 	if len(legacy) != 2 {

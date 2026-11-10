@@ -33,7 +33,7 @@ const plain = (s: string) =>
     .trim()
 
 /** Section names and order for the directories the docs have today; any other directory is Title-Cased and listed after them. */
-const dirs: Record<string, { label: string; order: number; newestFirst?: boolean }> = {
+const dirs: Record<string, { label: string; order: number }> = {
   guides: { label: 'Guides', order: 20 },
   concepts: { label: 'Concepts', order: 30 },
   design: { label: 'Design', order: 40 },
@@ -82,18 +82,16 @@ function tree(docs: Doc[]): Tree {
 
 const count = (t: Tree): number => (t.page ? 1 : 0) + [...t.kids.values()].reduce((a, k) => a + count(k), 0)
 
-function nodes(t: Tree, parent: string): NavNode[] {
-  const newestFirst = dirs[parent]?.newestFirst
+function nodes(t: Tree): NavNode[] {
   const rank = ([seg, k]: [string, Tree]) =>
     k.page?.order ?? (k.kids.size ? (dirs[seg]?.order ?? 50) : 1000)
   const items = [...t.kids.entries()].sort(
     (a, b) =>
-      rank(a) - rank(b) ||
-      (newestFirst ? b[0].localeCompare(a[0]) : (a[1].page?.label ?? a[0]).localeCompare(b[1].page?.label ?? b[0], 'en', { numeric: true })),
+      rank(a) - rank(b) || (a[1].page?.label ?? a[0]).localeCompare(b[1].page?.label ?? b[0], 'en', { numeric: true }),
   )
   return items.map(([seg, k]) => {
     if (!k.kids.size) return { label: k.page!.label, href: k.page!.url }
-    const children = nodes(k, seg)
+    const children = nodes(k)
     if (k.page) children.unshift({ label: k.page.label, href: k.page.url })
     return {
       label: k.page?.entry.data.sidebar_label ?? dirs[seg]?.label ?? titleCase(seg),
@@ -106,7 +104,7 @@ function nodes(t: Tree, parent: string): NavNode[] {
 /** Sidebar: the root page and loose root pages first, then one group per directory. */
 export function buildNav(docs: Doc[]): NavNode[] {
   const t = tree(docs)
-  const all = nodes(t, '')
+  const all = nodes(t)
   const loose = all.filter((n) => !n.children)
   const groups = all.filter((n) => n.children)
   const overview: NavNode[] = t.page ? [{ label: t.page.entry.data.sidebar_label ?? 'Overview', href: t.page.url }] : []

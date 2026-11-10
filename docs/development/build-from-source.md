@@ -22,11 +22,11 @@ you install nothing else. To run one command in it without entering it, use
 
 **Or install the tools yourself.** The commands in the guides use these. The
 versions are the ones the dev shell resolves today; the exception is Go, which
-must be 1.27.3 or newer (`go.mod`).
+must be 1.27.4 or newer (`go.mod`).
 
 | Tool | Version | Used for |
 |---|---|---|
-| Go | 1.27.3 or newer | building the `ichor` CLI and the images (`make demo-images-build`) |
+| Go | 1.27.4 or newer | building the `ichor` CLI and the images (`make demo-images-build`) |
 | `ko` | v0.19.1 | building the images, with no container runtime (`make demo-images-build`) |
 | Node.js | 24 | building the UI, part of the same build |
 | GNU make | any recent | the `make` targets |

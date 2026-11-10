@@ -12,11 +12,29 @@
       devShells = forAllSystems (system:
         let
           pkgs = nixpkgs.legacyPackages.${system};
+          # shortcut: prebuilt go.dev binary instead of the nixpkgs build, because nixpkgs-unstable still has go_1_27 at 1.27.3
+          # (GO-2026-6859 is fixed in 1.27.4, nixpkgs#586269); drop it and use pkgs.go_1_27 once nixpkgs carries 1.27.4.
+          goArch = { x86_64-linux = "amd64"; aarch64-linux = "arm64"; }.${system};
+          goHash = {
+            x86_64-linux = "sha256-ciZzbCM5cZzaKPvzpU1xqmO87+N26YzvAANCaNqySEA=";
+            aarch64-linux = "sha256-M5JYKYiic6h6tQQ+4bLJwXosPABYC/kybEei4KqurJI=";
+          }.${system};
+          go = pkgs.stdenvNoCC.mkDerivation {
+            pname = "go";
+            version = "1.27.4";
+            src = pkgs.fetchurl {
+              url = "https://go.dev/dl/go1.27.4.linux-${goArch}.tar.gz";
+              hash = goHash;
+            };
+            dontBuild = true;
+            dontFixup = true;
+            installPhase = "cp -r . $out";
+          };
         in
         {
           default = pkgs.mkShell {
             packages = with pkgs; [
-              go_1_27
+              go
               kubebuilder
               cobra-cli
               talosctl

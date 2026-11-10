@@ -31,6 +31,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/release"
+	"github.com/siderolabs/talos/pkg/machinery/constants"
 )
 
 // adoptNode is one machine adopt looks at: the (possibly not yet written) TalosMachine plus what
@@ -271,6 +272,7 @@ func clusterFromNodes(name, namespace, talosVersion string, nodes []*adoptNode) 
 
 	c.Spec.CertSANs = agreedCertSANs(nodes)
 	c.Spec.Registries = agreedRegistries(nodes)
+	c.Spec.ControlPlane.OmitDefaultNodeLabels = controlPlanesLackExcludeLabel(nodes)
 
 	if cands := contractCandidates(talosVersion); len(cands) > 0 {
 		c.Spec.VersionContract = cands[0]
@@ -314,6 +316,19 @@ func agreedCertSANs(nodes []*adoptNode) []string {
 	}
 
 	return nil
+}
+
+// controlPlanesLackExcludeLabel is spec.controlPlane.omitDefaultNodeLabels: true when no control
+// plane carries Talos's default exclude-from-external-load-balancers label. Adding it would take
+// the nodes out of Service type=LoadBalancer membership, so adopt keeps them as they are (ADR 0144).
+func controlPlanesLackExcludeLabel(nodes []*adoptNode) bool {
+	cps := slices.DeleteFunc(readNodes(nodes), func(n *adoptNode) bool { return !n.controlPlane() })
+
+	return len(cps) > 0 && !slices.ContainsFunc(cps, func(n *adoptNode) bool {
+		_, has := n.Facts.NodeLabels[constants.LabelExcludeFromExternalLB]
+
+		return has
+	})
 }
 
 // agreedRegistries is spec.registries: the mirrors when every node states the same ones and none

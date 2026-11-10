@@ -192,6 +192,10 @@ func machImportAlias(pkgPath string) string {
 		return "kubeletv1"
 	case pkgBlock:
 		return "mblock"
+	case pkgNethelpers:
+		return "mnethelpers"
+	case pkgNetwork:
+		return "mnetwork"
 	case pkgResourcesBlock:
 		return "rblock"
 	case pkgCel:

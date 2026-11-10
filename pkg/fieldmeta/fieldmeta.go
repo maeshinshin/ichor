@@ -328,6 +328,11 @@ var rules = []rule{
 	{prefix: "VLANConfig", safe: true},
 	{prefix: "DHCPv4Config", safe: true},
 	{prefix: "ResolverConfig.nameservers", safe: true},
+	// apiVersion and kind are the document's identity: they show up as changed exactly when
+	// the document appears or goes, i.e. when its nameservers do, so a patch that only sets
+	// nameservers must not demand a reboot because of them.
+	{prefix: "ResolverConfig.apiVersion", safe: true},
+	{prefix: "ResolverConfig.kind", safe: true},
 }
 
 func matchesPrefix(path, prefix string) bool {

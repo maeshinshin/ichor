@@ -799,6 +799,16 @@ type MountSpec struct {
 	MountDisableAccessTime *bool `json:"disableAccessTime,omitempty"`
 }
 
+// Talos: NameserverConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
+type NameserverConfig struct {
+	// +required
+	Address string `json:"address"`
+	// +optional
+	Protocol string `json:"protocol,omitempty"`
+	// +optional
+	TLSServerName string `json:"tlsServerName,omitempty"`
+}
+
 // Talos: NetworkConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type NetworkConfig struct {
 	// +optional
@@ -953,6 +963,26 @@ type RegistryTLSConfig struct {
 	TLSInsecureSkipVerify *bool `json:"insecureSkipVerify,omitempty"`
 }
 
+// Talos: ResolverConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
+type ResolverConfigV1Alpha1 struct {
+	// +optional
+	ResolverNameservers []*NameserverConfig `json:"nameservers,omitempty"`
+	// +optional
+	ResolverSearchDomains *SearchDomainsConfig `json:"searchDomains,omitempty"`
+	// +optional
+	ResolverHostDNS *ResolverHostDNSConfig `json:"hostDNS,omitempty"`
+}
+
+// Talos: HostDNSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
+type ResolverHostDNSConfig struct {
+	// +optional
+	HostDNSEnabled *bool `json:"enabled,omitempty"`
+	// +optional
+	HostDNSForwardKubeDNSToHost *bool `json:"forwardKubeDNSToHost,omitempty"`
+	// +optional
+	HostDNSResolveMemberNames *bool `json:"resolveMemberNames,omitempty"`
+}
+
 // Talos: ResourcesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type ResourcesConfig struct {
 	// +optional
@@ -1001,6 +1031,14 @@ type ScrubConfig struct {
 	ScrubEnabled *bool `json:"enabled,omitempty"`
 	// +optional
 	ScrubInterval string `json:"interval,omitempty"`
+}
+
+// Talos: SearchDomainsConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
+type SearchDomainsConfig struct {
+	// +optional
+	SearchDomains []string `json:"domains,omitempty"`
+	// +optional
+	SearchDisableDefault *bool `json:"disableDefault,omitempty"`
 }
 
 // Talos: SysctlConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/runtime/sysctlconfig

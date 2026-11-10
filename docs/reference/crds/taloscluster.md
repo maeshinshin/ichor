@@ -475,7 +475,7 @@ Version v1alpha1: has a `status` subresource.
 | `spec.cni.custom.documents[].kernelModuleConfig` **(deprecated)** | `object` | no | kernelModuleConfig is a Talos KernelModuleConfig document; populated when kind is "KernelModuleConfig". |
 | `spec.cni.custom.documents[].kernelModuleConfig.name` **(deprecated)** | `string` | yes |  |
 | `spec.cni.custom.documents[].kernelModuleConfig.parameters` **(deprecated)** | `[]string` | no |  |
-| `spec.cni.custom.documents[].kind` **(deprecated)** | `string` | yes | kind selects which of the fields below is populated. Allowed values: `SysctlConfig`, `KernelModuleConfig`, `Config`, `VolumeConfig`, `UserVolumeConfig`, `RawVolumeConfig`. |
+| `spec.cni.custom.documents[].kind` **(deprecated)** | `string` | yes | kind selects which of the fields below is populated. Allowed values: `SysctlConfig`, `KernelModuleConfig`, `Config`, `VolumeConfig`, `UserVolumeConfig`, `RawVolumeConfig`, `ResolverConfig`. |
 | `spec.cni.custom.documents[].rawVolumeConfig` **(deprecated)** | `object` | no | rawVolumeConfig is a Talos RawVolumeConfig document (an unformatted partition for a CSI provisioner); populated when kind is "RawVolumeConfig". |
 | `spec.cni.custom.documents[].rawVolumeConfig.encryption` **(deprecated)** | `object` | no | Talos: EncryptionSpec |
 | `spec.cni.custom.documents[].rawVolumeConfig.encryption.allowDiscards` **(deprecated)** | `boolean` | no |  |
@@ -501,6 +501,18 @@ Version v1alpha1: has a `status` subresource.
 | `spec.cni.custom.documents[].rawVolumeConfig.provisioning.grow` **(deprecated)** | `boolean` | no |  |
 | `spec.cni.custom.documents[].rawVolumeConfig.provisioning.maxSize` **(deprecated)** | `string` | no |  |
 | `spec.cni.custom.documents[].rawVolumeConfig.provisioning.minSize` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].resolverConfig` **(deprecated)** | `object` | no | resolverConfig is a Talos ResolverConfig document (DNS nameservers and search domains); populated when kind is "ResolverConfig". |
+| `spec.cni.custom.documents[].resolverConfig.hostDNS` **(deprecated)** | `object` | no | Talos: HostDNSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig |
+| `spec.cni.custom.documents[].resolverConfig.hostDNS.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].resolverConfig.hostDNS.forwardKubeDNSToHost` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].resolverConfig.hostDNS.resolveMemberNames` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].resolverConfig.nameservers` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].resolverConfig.nameservers[].address` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].resolverConfig.nameservers[].protocol` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].resolverConfig.nameservers[].tlsServerName` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].resolverConfig.searchDomains` **(deprecated)** | `object` | no | Talos: SearchDomainsConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig |
+| `spec.cni.custom.documents[].resolverConfig.searchDomains.disableDefault` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].resolverConfig.searchDomains.domains` **(deprecated)** | `[]string` | no |  |
 | `spec.cni.custom.documents[].sysctlConfig` **(deprecated)** | `object` | no | sysctlConfig is a Talos SysctlConfig document; populated when kind is "SysctlConfig". |
 | `spec.cni.custom.documents[].sysctlConfig.params` **(deprecated)** | `map[string]string` | yes |  |
 | `spec.cni.custom.documents[].userVolumeConfig` **(deprecated)** | `object` | no | userVolumeConfig is a Talos UserVolumeConfig document; populated when kind is "UserVolumeConfig". |

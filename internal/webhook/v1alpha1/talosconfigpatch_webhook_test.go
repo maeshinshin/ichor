@@ -66,7 +66,7 @@ func dryRenderValidator(t *testing.T, objs ...runtime.Object) *TalosConfigPatchC
 			ClusterRef:    corev1.LocalObjectReference{Name: "c"},
 			Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: "u1"},
 			Endpoint:      "10.0.0.10:50000",
-			Role:          "controlplane",
+			Role:          roleControlPlane,
 			ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
 		},
 	}
@@ -167,6 +167,57 @@ func TestTalosConfigPatchDryRender(t *testing.T) {
 
 		if _, err := v3.ValidateCreate(ctx, p); err != nil {
 			t.Fatalf("want admitted, got %v", err)
+		}
+	})
+}
+
+func resolverPatch(name string, addrs ...string) *ichorv1alpha1.TalosConfigPatch {
+	r := &typedconfig.ResolverConfigV1Alpha1{}
+	for _, a := range addrs {
+		r.ResolverNameservers = append(r.ResolverNameservers, &typedconfig.NameserverConfig{Address: a})
+	}
+
+	return &ichorv1alpha1.TalosConfigPatch{
+		Name: name, Namespace: dryRenderNS,
+		Spec: ichorv1alpha1.TalosConfigPatchSpec{
+			ClusterRef: corev1.LocalObjectReference{Name: "c"},
+			Layer:      "cluster",
+			Documents:  []ichorv1alpha1.TalosConfigPatchDocument{{Kind: "ResolverConfig", ResolverConfig: r}},
+		},
+	}
+}
+
+func TestTalosConfigPatchResolverConfig(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("a good ResolverConfig is admitted", func(t *testing.T) {
+		if _, err := dryRenderValidator(t).ValidateCreate(ctx, resolverPatch("dns", "9.9.9.9")); err != nil {
+			t.Fatalf("want admitted, got %v", err)
+		}
+	})
+
+	t.Run("a nameserver that is not an address is refused", func(t *testing.T) {
+		if _, err := dryRenderValidator(t).ValidateCreate(ctx, resolverPatch("bad", "not-an-ip")); err == nil {
+			t.Fatal("want refused")
+		}
+	})
+
+	t.Run("a machine that already renders a ResolverConfig from its spec refuses one", func(t *testing.T) {
+		m := &ichorv1alpha1.TalosMachine{
+			Name: "cp2", Namespace: dryRenderNS,
+			Spec: ichorv1alpha1.TalosMachineSpec{
+				ClusterRef:    corev1.LocalObjectReference{Name: "c"},
+				Identity:      ichorv1alpha1.TalosMachineIdentity{UUID: "u2"},
+				Endpoint:      "10.0.0.11:50000",
+				Role:          roleControlPlane,
+				ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
+				Network:       &ichorv1alpha1.TalosMachineNetwork{MAC: "aa:bb:cc:dd:ee:ff", Addressing: "dhcp", DNSServers: []string{"1.1.1.1"}},
+			},
+		}
+
+		_, err := dryRenderValidator(t, m).ValidateCreate(ctx, resolverPatch("dns", "9.9.9.9"))
+		if err == nil || !strings.Contains(err.Error(), "spec.network.dnsServers") {
+			t.Fatalf("want the dnsServers conflict, got %v", err)
 		}
 	})
 }

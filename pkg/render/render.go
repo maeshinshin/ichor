@@ -362,6 +362,10 @@ func baseConfig(
 		return nil, fmt.Errorf("render: generating base config: %w", err)
 	}
 
+	if cluster.Spec.ControlPlane.OmitDefaultNodeLabels && machineType == machine.TypeControlPlane {
+		return dropDefaultNodeLabels(cfg, contract)
+	}
+
 	return cfg, nil
 }
 

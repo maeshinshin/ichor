@@ -56,6 +56,15 @@ type TalosClusterControlPlane struct {
 	// +kubebuilder:validation:Enum="true";"false"
 	// +required
 	Schedulable string `json:"schedulable"`
+
+	// omitDefaultNodeLabels renders the control planes without the labels Talos's generator adds
+	// to them (node-role.kubernetes.io/control-plane and
+	// node.kubernetes.io/exclude-from-external-load-balancers). `ichor adopt` sets it when the
+	// control planes it takes over do not carry them, so that adopting does not change the
+	// nodes: the exclude label removes a node from Service type=LoadBalancer membership. A
+	// cluster Ichor creates leaves it unset and gets Talos's defaults.
+	// +optional
+	OmitDefaultNodeLabels bool `json:"omitDefaultNodeLabels,omitempty"`
 }
 
 // TalosClusterCNICilium holds the user layer of Cilium's Helm values. Ichor merges

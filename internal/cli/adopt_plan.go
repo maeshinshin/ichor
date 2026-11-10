@@ -116,11 +116,9 @@ func (o ownership) split(paths []string) (owned, rest []string) {
 //
 // Only SysctlConfig and KernelModuleConfig documents are ever captured
 // automatically. The legacy v1alpha1 Config document is deliberately never
-// captured: TalosConfigPatchDocument's schema requires machine.token,
-// machine.type and machine.certSANs on any Config document, machine.token
-// mirrors the secrets bundle (the same material pkg/render's own leak test
-// tracks), and there is no sparse way to patch only e.g. cluster.network
-// without also restating it. Differences confined to that
+// captured: the mirror has no machine.token (secret material, which mirrorgen drops),
+// machine.type and machine.certSANs are omitempty, and there is no sparse way to patch
+// only e.g. cluster.network without also restating it. Differences confined to that
 // document come back as UnrepresentablePaths instead of a patch, and
 // buildAdoptPlan's own zero-drift check (below) is what actually enforces
 // this: it never returns a Patch unless applying it reproduces currentCfg

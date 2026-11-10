@@ -293,7 +293,7 @@ func TestBuildAdoptPlan_LegacyDiffIsNeverAutoPatched(t *testing.T) {
 }
 
 func TestGroupChangedPaths(t *testing.T) {
-	wantSysctl, wantKernelModule, legacy := groupChangedPaths([]string{
+	wantSysctl, wantKernelModule, _, legacy := groupChangedPaths([]string{
 		"SysctlConfig.params.net\\.ipv4\\.ip_forward",
 		"KernelModuleConfig.name",
 		"cluster.network.cni.name",

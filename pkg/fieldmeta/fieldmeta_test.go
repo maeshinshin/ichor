@@ -43,6 +43,7 @@ const (
 	// Uncovered on purpose: architecture.md says assigning a previously
 	// unused disk to these roles does not need a reset.
 	pathUserVolumeConfigSelector = "UserVolumeConfig.provisioning.diskSelector.match"
+	pathResolverHostDNS          = "ResolverConfig.hostDNS.enabled"
 	pathRawVolumeConfigSelector  = "RawVolumeConfig.provisioning.diskSelector.match"
 )
 
@@ -149,8 +150,13 @@ func TestAssess_Rules(t *testing.T) {
 		{name: "VLANConfig is safe", match: "VLANConfig.vlanID", nonMatch: pathLinkAliasSelector},
 		{name: "DHCPv4Config is safe", match: "DHCPv4Config.routeMetric", nonMatch: pathLinkAliasSelector},
 		{
+			name: "ResolverConfig.apiVersion is safe", match: "ResolverConfig.apiVersion",
+			nonMatch: pathResolverHostDNS,
+		},
+		{name: "ResolverConfig.kind is safe", match: "ResolverConfig.kind", nonMatch: pathResolverHostDNS},
+		{
 			name: "ResolverConfig.nameservers is safe", match: "ResolverConfig.nameservers",
-			nonMatch: "ResolverConfig.hostDNS.enabled",
+			nonMatch: pathResolverHostDNS,
 		},
 		// The rules "multi-document and registry paths" addendum verified against the
 		// Talos v1.14.3 source.

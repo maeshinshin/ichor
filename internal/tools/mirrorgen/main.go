@@ -23,6 +23,9 @@ const (
 	pkgRuntime  = "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
 	pkgV1Alpha1 = "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
 	pkgMeta     = "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
+	// pkgNetwork holds the network document kinds (ResolverConfig first).
+	pkgNetwork    = "github.com/siderolabs/talos/pkg/machinery/config/types/network"
+	pkgNethelpers = "github.com/siderolabs/talos/pkg/machinery/nethelpers"
 	// pkgBlock holds the volume config document kinds (phase 3: disk roles).
 	pkgBlock = "github.com/siderolabs/talos/pkg/machinery/config/types/block"
 	// pkgResourcesBlock is a different package from pkgBlock (also named
@@ -85,6 +88,8 @@ var roots = []rootKind{
 	{pkgBlock, "VolumeConfigV1Alpha1", "VolumeConfig", "mblock.VolumeConfigKind", apiVersionV1Alpha1},
 	{pkgBlock, "UserVolumeConfigV1Alpha1", "UserVolumeConfig", "mblock.UserVolumeConfigKind", apiVersionV1Alpha1},
 	{pkgBlock, "RawVolumeConfigV1Alpha1", "RawVolumeConfig", "mblock.RawVolumeConfigKind", apiVersionV1Alpha1},
+	// Network documents. ResolverConfig carries only nameservers and search domains: no secret material.
+	{pkgNetwork, "ResolverConfigV1Alpha1", "ResolverConfig", "mnetwork.ResolverKind", apiVersionV1Alpha1},
 }
 
 // substKind says how a substituted-by-type field converts to and from its
@@ -138,6 +143,8 @@ var substTable = map[string]substKind{
 	pkgResourcesBlock + ".VolumeType":             substScalar,
 	pkgResourcesBlock + ".FilesystemType":         substScalar,
 	pkgResourcesBlock + ".EncryptionProviderType": substScalar,
+	// nethelpers.DNSProtocol: an int enum behind a TextMarshaler (Do53/DoT/DoH), like VolumeType.
+	pkgNethelpers + ".DNSProtocol": substScalar,
 }
 
 // fieldOverride names the upstream type one specific field mirrors as,
@@ -309,6 +316,8 @@ var typeRenames = map[string]string{
 	pkgBlock + ".EncryptionKeyKMS":    "VolumeEncryptionKeyKMS",
 	pkgBlock + ".EncryptionKeyTPM":    "VolumeEncryptionKeyTPM",
 	pkgBlock + ".EncryptionKeyNodeID": "VolumeEncryptionKeyNodeID",
+	// network documents: the newer package takes the prefix, as block does.
+	pkgNetwork + ".HostDNSConfig": "ResolverHostDNSConfig",
 }
 
 func fatalf(format string, args ...any) {
@@ -328,7 +337,7 @@ func generate() *generator {
 			packages.NeedSyntax | packages.NeedDeps | packages.NeedImports,
 	}
 
-	pkgs, err := packages.Load(cfg, pkgRuntime, pkgV1Alpha1, pkgBlock, pkgCoreV1, pkgSpecs, pkgAuditV1, pkgAPIServerV1, pkgKubeletV1)
+	pkgs, err := packages.Load(cfg, pkgRuntime, pkgV1Alpha1, pkgBlock, pkgNetwork, pkgCoreV1, pkgSpecs, pkgAuditV1, pkgAPIServerV1, pkgKubeletV1)
 	if err != nil {
 		fatalf("loading packages: %v", err)
 	}

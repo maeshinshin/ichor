@@ -1,6 +1,6 @@
 name: Release
 
-# One workflow for the images and the chart. A v* tag runs, in order:
+# One workflow for the images and the chart. A v* tag runs verify and build in parallel; publish-core waits for both, so nothing is pushed before both pass:
 #   verify        the same checks as a PR (module drift, lint, tests, govulncheck, npm audit); contents: read
 #   build         compiles the controller and ichor-ui images (ko) and the signature verifier; contents: read, no registry token
 #   publish-core  pushes the controller and ichor-ui images and records their digests; the only registry token so far
@@ -55,7 +55,6 @@ jobs:
 
   build:
     name: Build the controller and UI binaries
-    needs: verify
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -95,7 +94,7 @@ jobs:
 
   publish-core:
     name: Push the controller and UI images
-    needs: build
+    needs: [verify, build]
     # The "release" environment, as in publish: create it in the repository settings with required reviewers.
     environment: release
     permissions:

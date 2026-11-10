@@ -64,13 +64,16 @@ var _ = Describe("IssuerTrustReconciler", func() {
 		return ks
 	}
 
+	// The previous spec's Service may still hold the ClusterIP for a moment after its delete.
 	service := func(ip string) {
-		ExpectWithOffset(1, k8sClient.Create(ctx, &corev1.Service{
-			Namespace: itNamespace, Name: itService,
-			Spec: corev1.ServiceSpec{
-				ClusterIP: ip, Ports: []corev1.ServicePort{{Name: "https", Port: oidctrust.InternalPort}},
-			},
-		})).To(Succeed())
+		EventuallyWithOffset(1, func() error {
+			return k8sClient.Create(ctx, &corev1.Service{
+				Namespace: itNamespace, Name: itService,
+				Spec: corev1.ServiceSpec{
+					ClusterIP: ip, Ports: []corev1.ServicePort{{Name: "https", Port: oidctrust.InternalPort}},
+				},
+			})
+		}, "20s", "200ms").Should(Succeed())
 	}
 
 	BeforeEach(func() {

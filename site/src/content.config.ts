@@ -7,7 +7,8 @@ import { docsRoot, routeOf } from '../plugins/docs.mjs'
 // is the first `# ` heading, the order is alphabetical.
 const docs = defineCollection({
   loader: glob({
-    pattern: '**/*.md',
+    // adr/ (the decision records) stays in the repo and is not published.
+    pattern: ['**/*.md', '!adr/**'],
     base: docsRoot,
     generateId: ({ entry }) => routeOf(entry) || 'index',
   }),

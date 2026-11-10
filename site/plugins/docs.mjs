@@ -25,7 +25,7 @@ export const repoRoot = process.env.DOCS_REPO ? resolve(process.env.DOCS_REPO) :
 export const docsRoot = resolve(repoRoot, 'docs')
 export const repoUrl = 'https://github.com/maeshinshin/ichor'
 
-/** `adr/README.md` -> `adr`, `index.md` -> ``, `guides/x.md` -> `guides/x`. */
+/** `guides/README.md` -> `guides`, `index.md` -> ``, `guides/x.md` -> `guides/x`. */
 export function routeOf(relPath) {
   return relPath
     .split(sep)
@@ -80,7 +80,8 @@ export function resolveLink(url, fromDir, base) {
   const [path, hash = ''] = url.split('#')
   const target = resolve(fromDir, decodeURI(path))
   if (!existsSync(target)) throw new Error(`broken link "${url}" (no such file)`)
-  if (!relative(docsRoot, target).startsWith('..') && target.endsWith('.md')) {
+  // docs/adr is not published, so a link into it goes to GitHub like any other repository file.
+  if (!relative(docsRoot, target).startsWith('..') && target.endsWith('.md') && !relative(docsRoot, target).startsWith(`adr${sep}`)) {
     return urlOf(base, routeOf(relative(docsRoot, target))) + (hash && `#${hash}`)
   }
   // Images in docs/ are served by the site itself (src/pages/[...slug].svg.ts and .png.ts), at the same path.

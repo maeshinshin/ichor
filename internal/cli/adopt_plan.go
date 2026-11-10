@@ -24,6 +24,7 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/configloader"
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	mruntime "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
+	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -35,6 +36,10 @@ import (
 const (
 	kindSysctlConfig       = "SysctlConfig"
 	kindKernelModuleConfig = "KernelModuleConfig"
+
+	// pathNetworkInterfaces is the legacy network block of a node whose Talos config predates the
+	// multi-document form; spec.network renders the new form, so the block is captured as a patch.
+	pathNetworkInterfaces = "machine.network.interfaces"
 )
 
 // adoptPlan is what buildAdoptPlan found for one machine: the
@@ -161,14 +166,14 @@ func buildAdoptPlan(
 	owned, rest := own.split(paths)
 	plan.Owned = owned
 
-	wantSysctl, wantKernelModule, legacy := groupChangedPaths(rest)
+	wantSysctl, wantKernelModule, wantInterfaces, legacy := groupChangedPaths(rest)
 	plan.UnrepresentablePaths = legacy
 
-	if !wantSysctl && !wantKernelModule {
+	if !wantSysctl && !wantKernelModule && !wantInterfaces {
 		return plan, nil
 	}
 
-	docs, err := captureDocuments(currentCfg, wantSysctl, wantKernelModule)
+	docs, err := captureDocuments(currentCfg, wantSysctl, wantKernelModule, wantInterfaces)
 	if err != nil {
 		return nil, fmt.Errorf("adopt: capturing machine %q's current documents: %w", m.Name, err)
 	}
@@ -201,6 +206,9 @@ func buildAdoptPlan(
 
 	if _, notOwned := own.split(left); len(notOwned) == 0 {
 		plan.Patch = &candidate
+	} else if wantInterfaces {
+		// The captured block did not reproduce the node (e.g. a WireGuard key the mirror drops).
+		plan.UnrepresentablePaths = append(plan.UnrepresentablePaths, pathNetworkInterfaces)
 	}
 
 	return plan, nil
@@ -235,8 +243,14 @@ func refuseJWTAuthenticators(machine string, currentCfg []byte) error {
 // rooting convention: a standalone document's paths are rooted at its kind
 // name, everything else (the legacy Config document's "machine.*",
 // "cluster.*" and top-level scalars) is not.
-func groupChangedPaths(paths []string) (wantSysctl, wantKernelModule bool, legacy []string) {
+func groupChangedPaths(paths []string) (wantSysctl, wantKernelModule, wantInterfaces bool, legacy []string) {
 	for _, p := range paths {
+		if p == pathNetworkInterfaces {
+			wantInterfaces = true
+
+			continue
+		}
+
 		kind := p
 		if before, _, ok := strings.Cut(p, "."); ok {
 			kind = before
@@ -252,7 +266,7 @@ func groupChangedPaths(paths []string) (wantSysctl, wantKernelModule bool, legac
 		}
 	}
 
-	return wantSysctl, wantKernelModule, legacy
+	return wantSysctl, wantKernelModule, wantInterfaces, legacy
 }
 
 // captureDocuments decodes currentCfg with machinery's own loader and
@@ -260,8 +274,8 @@ func groupChangedPaths(paths []string) (wantSysctl, wantKernelModule bool, legac
 // conversions) into TalosConfigPatchDocuments. Neither kind carries secret
 // material, so a whole-document capture is safe (unlike the legacy Config
 // document; see buildAdoptPlan's doc comment).
-func captureDocuments(currentCfg []byte, wantSysctl, wantKernelModule bool) ([]ichorv1alpha1.TalosConfigPatchDocument, error) {
-	if !wantSysctl && !wantKernelModule {
+func captureDocuments(currentCfg []byte, wantSysctl, wantKernelModule, wantInterfaces bool) ([]ichorv1alpha1.TalosConfigPatchDocument, error) {
+	if !wantSysctl && !wantKernelModule && !wantInterfaces {
 		return nil, nil
 	}
 
@@ -271,6 +285,23 @@ func captureDocuments(currentCfg []byte, wantSysctl, wantKernelModule bool) ([]i
 	}
 
 	var docs []ichorv1alpha1.TalosConfigPatchDocument
+
+	// Only the interfaces subtree of the legacy Config document, never the document: it carries
+	// the machine and cluster secrets.
+	//nolint:staticcheck // the legacy block is what the node runs
+	if raw := provider.RawV1Alpha1(); wantInterfaces && raw != nil && raw.MachineConfig != nil && raw.MachineConfig.MachineNetwork != nil {
+		conv, err := typedconfig.ConfigFromMachinery(&mv1alpha1.Config{
+			ConfigVersion: mv1alpha1.Version,
+			MachineConfig: &mv1alpha1.MachineConfig{MachineNetwork: &mv1alpha1.NetworkConfig{
+				NetworkInterfaces: raw.MachineConfig.MachineNetwork.NetworkInterfaces,
+			}},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("converting machine.network.interfaces: %w", err)
+		}
+
+		docs = append(docs, ichorv1alpha1.TalosConfigPatchDocument{Kind: "Config", Config: conv})
+	}
 
 	for _, d := range provider.Documents() {
 		switch v := d.(type) {
@@ -350,7 +381,7 @@ func probeVersionContract(
 
 			paths, err = controller.ChangedPaths(currentCfg, baseline)
 			if err == nil {
-				_, _, probe.UnrepresentablePaths = groupChangedPaths(paths)
+				_, _, _, probe.UnrepresentablePaths = groupChangedPaths(paths)
 			}
 		}
 

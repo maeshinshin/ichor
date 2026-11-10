@@ -124,6 +124,7 @@ type adoptWriteCluster struct {
 type adoptWriteMachine struct {
 	Address     string
 	Role        string
+	Hostname    string
 	InstallDisk string
 	// InstallImage and InstallWipe are the installer image and wipe flag the node's configuration states.
 	InstallImage string
@@ -460,6 +461,7 @@ func (w *adoptWriter) machines(ctx context.Context, clusterName string) error {
 				},
 				Endpoint:      m.Address,
 				Role:          m.Role,
+				Hostname:      m.Hostname,
 				Install:       install,
 				ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
 			},

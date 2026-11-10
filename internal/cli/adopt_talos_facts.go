@@ -118,6 +118,8 @@ type TalosFacts struct {
 	KubePrism        KubePrismFacts
 	InlineManifests  []InlineManifestFact
 	Install          InstallFacts
+	// Hostname is the static hostname (HostnameConfig.hostname, machine.network.hostname); "" when none.
+	Hostname string
 
 	// CertSANs is machine.certSANs; APIServerCertSANs is the kube-apiserver's
 	// (KubeAPIServerConfig.certExtraSANs, cluster.apiServer.certSANs), empty on a worker.
@@ -176,6 +178,10 @@ func ReadTalosFacts(cfgBytes []byte) (*TalosFacts, error) {
 
 	if a := provider.K8sAPIServerConfig(); a != nil {
 		f.APIServerCertSANs = a.CertSANs()
+	}
+
+	if h := provider.NetworkHostnameConfig(); h != nil {
+		f.Hostname = h.Hostname()
 	}
 
 	f.Registries = registryFacts(provider)

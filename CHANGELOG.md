@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.1.1 (2026-11-11)
+
+Documentation and release pipeline only. Nothing in the operator, the CLI or
+ichor-ui changed, so there are no behaviour changes for users.
+
+### Docs
+
+- The decision records stay in the repository under `docs/adr`, but the docs
+  site no longer publishes them.
+- Tables on the docs site wrap at word boundaries in every column.
+
+### CI
+
+- The release workflow runs verify and build in parallel and pushes only after
+  both pass.
+
 ## v0.1.0 (2026-11-07)
 
 First release. Alpha: exercised end to end on Talos v1.14 test clusters, not yet on bare metal.

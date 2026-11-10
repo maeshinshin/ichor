@@ -79,10 +79,6 @@ foreign-cilium-chart: ## Fetch the pinned Cilium 1.19 chart the foreign-cluster 
 	curl -fsSL -o pkg/cni/cilium/chart/cilium-$(FOREIGN_CILIUM_CHART_VERSION).tgz https://helm.cilium.io/cilium-$(FOREIGN_CILIUM_CHART_VERSION).tgz
 	echo "$(FOREIGN_CILIUM_CHART_SHA256)  pkg/cni/cilium/chart/cilium-$(FOREIGN_CILIUM_CHART_VERSION).tgz" | sha256sum -c -
 
-.PHONY: adr-index
-adr-index: ## Regenerate docs/adr/README.md's index table from each ADR's own Decided:/Status: line.
-	go run ./internal/tools/adrindex
-
 .PHONY: docs-reference
 docs-reference: ## Regenerate docs/reference/cli (from the ichor command tree) and docs/reference/crds (from config/crd/bases); run after manifests.
 	go run ./internal/tools/gendocs

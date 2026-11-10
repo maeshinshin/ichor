@@ -58,6 +58,9 @@ type adoptPlan struct {
 	// listed for consent and do not block.
 	Owned []string
 
+	// SANsGained are the certSANs the first render adds to this node (class B, ADR 0141).
+	SANsGained []string
+
 	// Skipped, when set, is why adopt did not look at this machine at all.
 	Skipped string
 }
@@ -71,6 +74,9 @@ type ownership struct {
 	KubeProxyReplaced bool
 	// CiliumInline makes the inline-manifest paths Ichor's (the node carries a Cilium inline entry).
 	CiliumInline bool
+	// SANsCovered: every SAN the node states is in spec.certSANs, so rendering the cluster's list
+	// only adds names. A node that would lose one stays class C.
+	SANsCovered bool
 }
 
 var (
@@ -78,6 +84,7 @@ var (
 	ownedKubePrismPrefix  = []string{"machine.features.kubePrism", "KubePrismConfig"}
 	ownedKubeProxyPrefix  = []string{"cluster.proxy", "KubeProxyConfig"}
 	ownedInlineManifestPf = []string{"cluster.inlineManifests", "KubeInlineManifestConfig"}
+	ownedCertSANsPaths    = []string{"machine.certSANs", "cluster.apiServer.certSANs", "KubeAPIServerConfig.certExtraSANs"}
 )
 
 // underPath reports whether p is pf or a path below it.
@@ -91,6 +98,10 @@ func hasPathPrefix(p string, prefixes []string) bool {
 
 // owned reports whether path is a class B path.
 func (o ownership) owned(path string) bool {
+	if o.SANsCovered && hasPathPrefix(path, ownedCertSANsPaths) {
+		return true
+	}
+
 	if !o.Managed {
 		return false
 	}

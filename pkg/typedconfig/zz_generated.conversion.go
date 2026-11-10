@@ -25,8 +25,10 @@ import (
 	mcel "github.com/siderolabs/talos/pkg/machinery/cel"
 	mblock "github.com/siderolabs/talos/pkg/machinery/config/types/block"
 	mmeta "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
+	mnetwork "github.com/siderolabs/talos/pkg/machinery/config/types/network"
 	mruntime "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
+	mnethelpers "github.com/siderolabs/talos/pkg/machinery/nethelpers"
 	rblock "github.com/siderolabs/talos/pkg/machinery/resources/block"
 	corev1 "k8s.io/api/core/v1"
 	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
@@ -2854,6 +2856,46 @@ func MountSpecFromMachinery(src *mblock.MountSpec) (*MountSpec, error) {
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mnetwork.NameserverConfig type.
+func (m *NameserverConfig) ToMachinery() (*mnetwork.NameserverConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.NameserverConfig{}
+	v1, err := mirrorToMachineryScalar[mmeta.Addr](m.Address)
+	if err != nil {
+		return nil, fmt.Errorf("NameserverConfig.address"+": %w", err)
+	}
+	out.Address = v1
+	v2, err := mirrorToMachineryScalar[mnethelpers.DNSProtocol](m.Protocol)
+	if err != nil {
+		return nil, fmt.Errorf("NameserverConfig.protocol"+": %w", err)
+	}
+	out.Protocol = v2
+	out.TLSServerName = m.TLSServerName
+	return out, nil
+}
+
+// NameserverConfigFromMachinery converts a machinery mnetwork.NameserverConfig document to the mirror type.
+func NameserverConfigFromMachinery(src *mnetwork.NameserverConfig) (*NameserverConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &NameserverConfig{}
+	v1, err := machineryToMirrorScalar(src.Address)
+	if err != nil {
+		return nil, fmt.Errorf("NameserverConfig.address"+": %w", err)
+	}
+	out.Address = v1
+	v2, err := machineryToMirrorScalar(src.Protocol)
+	if err != nil {
+		return nil, fmt.Errorf("NameserverConfig.protocol"+": %w", err)
+	}
+	out.Protocol = v2
+	out.TLSServerName = src.TLSServerName
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.NetworkConfig type.
 func (m *NetworkConfig) ToMachinery() (*mv1alpha1.NetworkConfig, error) {
 	if m == nil {
@@ -3405,6 +3447,97 @@ func RegistryTLSConfigFromMachinery(src *mv1alpha1.RegistryTLSConfig) (*Registry
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mnetwork.ResolverConfigV1Alpha1 type.
+func (m *ResolverConfigV1Alpha1) ToMachinery() (*mnetwork.ResolverConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.ResolverConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.ResolverKind, MetaAPIVersion: "v1alpha1"}
+	if m.ResolverNameservers != nil {
+		c1 := make([]mnetwork.NameserverConfig, len(m.ResolverNameservers))
+		for k1, e1 := range m.ResolverNameservers {
+			t2, err := (e1).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("ResolverConfigV1Alpha1.nameservers"+": %w", err)
+			}
+			if t2 != nil {
+				c1[k1] = *t2
+			}
+		}
+		out.ResolverNameservers = c1
+	}
+	t2, err := (m.ResolverSearchDomains).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ResolverConfigV1Alpha1.searchDomains"+": %w", err)
+	}
+	if t2 != nil {
+		out.ResolverSearchDomains = *t2
+	}
+	t3, err := (m.ResolverHostDNS).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ResolverConfigV1Alpha1.hostDNS"+": %w", err)
+	}
+	if t3 != nil {
+		out.ResolverHostDNS = *t3
+	}
+	return out, nil
+}
+
+// ResolverConfigV1Alpha1FromMachinery converts a machinery mnetwork.ResolverConfigV1Alpha1 document to the mirror type.
+func ResolverConfigV1Alpha1FromMachinery(src *mnetwork.ResolverConfigV1Alpha1) (*ResolverConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ResolverConfigV1Alpha1{}
+	if src.ResolverNameservers != nil {
+		c1 := make([]*NameserverConfig, len(src.ResolverNameservers))
+		for k1, e1 := range src.ResolverNameservers {
+			t2, err := NameserverConfigFromMachinery(&(e1))
+			if err != nil {
+				return nil, fmt.Errorf("ResolverConfigV1Alpha1.nameservers"+": %w", err)
+			}
+			c1[k1] = t2
+		}
+		out.ResolverNameservers = c1
+	}
+	t2, err := SearchDomainsConfigFromMachinery(&(src.ResolverSearchDomains))
+	if err != nil {
+		return nil, fmt.Errorf("ResolverConfigV1Alpha1.searchDomains"+": %w", err)
+	}
+	out.ResolverSearchDomains = t2
+	t3, err := ResolverHostDNSConfigFromMachinery(&(src.ResolverHostDNS))
+	if err != nil {
+		return nil, fmt.Errorf("ResolverConfigV1Alpha1.hostDNS"+": %w", err)
+	}
+	out.ResolverHostDNS = t3
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.HostDNSConfig type.
+func (m *ResolverHostDNSConfig) ToMachinery() (*mnetwork.HostDNSConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.HostDNSConfig{}
+	out.HostDNSEnabled = m.HostDNSEnabled
+	out.HostDNSForwardKubeDNSToHost = m.HostDNSForwardKubeDNSToHost
+	out.HostDNSResolveMemberNames = m.HostDNSResolveMemberNames
+	return out, nil
+}
+
+// ResolverHostDNSConfigFromMachinery converts a machinery mnetwork.HostDNSConfig document to the mirror type.
+func ResolverHostDNSConfigFromMachinery(src *mnetwork.HostDNSConfig) (*ResolverHostDNSConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ResolverHostDNSConfig{}
+	out.HostDNSEnabled = src.HostDNSEnabled
+	out.HostDNSForwardKubeDNSToHost = src.HostDNSForwardKubeDNSToHost
+	out.HostDNSResolveMemberNames = src.HostDNSResolveMemberNames
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.ResourcesConfig type.
 func (m *ResourcesConfig) ToMachinery() (*mv1alpha1.ResourcesConfig, error) {
 	if m == nil {
@@ -3596,6 +3729,40 @@ func ScrubConfigFromMachinery(src *mblock.ScrubConfig) (*ScrubConfig, error) {
 		return nil, fmt.Errorf("ScrubConfig.interval"+": %w", err)
 	}
 	out.ScrubInterval = v2
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.SearchDomainsConfig type.
+func (m *SearchDomainsConfig) ToMachinery() (*mnetwork.SearchDomainsConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.SearchDomainsConfig{}
+	if m.SearchDomains != nil {
+		c1 := make([]string, len(m.SearchDomains))
+		for k1, e1 := range m.SearchDomains {
+			c1[k1] = e1
+		}
+		out.SearchDomains = mnetwork.SearchDomainList(c1)
+	}
+	out.SearchDisableDefault = m.SearchDisableDefault
+	return out, nil
+}
+
+// SearchDomainsConfigFromMachinery converts a machinery mnetwork.SearchDomainsConfig document to the mirror type.
+func SearchDomainsConfigFromMachinery(src *mnetwork.SearchDomainsConfig) (*SearchDomainsConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &SearchDomainsConfig{}
+	if src.SearchDomains != nil {
+		c1 := make([]string, len(src.SearchDomains))
+		for k1, e1 := range src.SearchDomains {
+			c1[k1] = e1
+		}
+		out.SearchDomains = c1
+	}
+	out.SearchDisableDefault = src.SearchDisableDefault
 	return out, nil
 }
 

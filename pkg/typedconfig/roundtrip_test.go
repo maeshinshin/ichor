@@ -17,6 +17,7 @@ limitations under the License.
 package typedconfig
 
 import (
+	"net/netip"
 	"testing"
 	"time"
 
@@ -25,8 +26,10 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/cel/celenv"
 	mblock "github.com/siderolabs/talos/pkg/machinery/config/types/block"
 	mmeta "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
+	mnetwork "github.com/siderolabs/talos/pkg/machinery/config/types/network"
 	mruntime "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
+	"github.com/siderolabs/talos/pkg/machinery/nethelpers"
 	rblock "github.com/siderolabs/talos/pkg/machinery/resources/block"
 	yaml "go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
@@ -331,4 +334,20 @@ func assertRoundTrip[M any](t *testing.T, orig *M, fromMachinery func() (machine
 	if string(wantYAML) != string(gotYAML) {
 		t.Fatalf("round trip not YAML-identical:\n--- want ---\n%s\n--- got ---\n%s", wantYAML, gotYAML)
 	}
+}
+
+func TestRoundTripResolverConfig(t *testing.T) {
+	orig := mnetwork.NewResolverConfigV1Alpha1()
+	orig.ResolverNameservers = []mnetwork.NameserverConfig{
+		{Address: mmeta.Addr{Addr: netip.MustParseAddr("10.0.0.1")}},
+		{
+			Address:       mmeta.Addr{Addr: netip.MustParseAddr("1.1.1.1")},
+			Protocol:      nethelpers.DNSProtocolDNSOverTLS,
+			TLSServerName: "cloudflare-dns.com",
+		},
+	}
+
+	assertRoundTrip(t, orig, func() (machineryConverter[mnetwork.ResolverConfigV1Alpha1], error) {
+		return ResolverConfigV1Alpha1FromMachinery(orig)
+	})
 }

@@ -47,11 +47,11 @@ type TalosConfigPatchTarget struct {
 // document is. mirrorgen's roots (internal/tools/mirrorgen/main.go) names the same kinds this
 // enum does; TestAllowListMatchesCRDEnum there checks the two agree, since a kubebuilder marker
 // is plain text and can't reference that Go value directly.
-// +kubebuilder:validation:XValidation:rule="(has(self.sysctlConfig) ? 1 : 0) + (has(self.kernelModuleConfig) ? 1 : 0) + (has(self.config) ? 1 : 0) + (has(self.volumeConfig) ? 1 : 0) + (has(self.userVolumeConfig) ? 1 : 0) + (has(self.rawVolumeConfig) ? 1 : 0) == 1",message="exactly one of sysctlConfig, kernelModuleConfig, config, volumeConfig, userVolumeConfig or rawVolumeConfig must be set"
-// +kubebuilder:validation:XValidation:rule="self.kind == 'SysctlConfig' ? has(self.sysctlConfig) : self.kind == 'KernelModuleConfig' ? has(self.kernelModuleConfig) : self.kind == 'Config' ? has(self.config) : self.kind == 'VolumeConfig' ? has(self.volumeConfig) : self.kind == 'UserVolumeConfig' ? has(self.userVolumeConfig) : has(self.rawVolumeConfig)",message="kind must match the populated field"
+// +kubebuilder:validation:XValidation:rule="(has(self.sysctlConfig) ? 1 : 0) + (has(self.kernelModuleConfig) ? 1 : 0) + (has(self.config) ? 1 : 0) + (has(self.volumeConfig) ? 1 : 0) + (has(self.userVolumeConfig) ? 1 : 0) + (has(self.rawVolumeConfig) ? 1 : 0) + (has(self.resolverConfig) ? 1 : 0) == 1",message="exactly one of sysctlConfig, kernelModuleConfig, config, volumeConfig, userVolumeConfig, rawVolumeConfig or resolverConfig must be set"
+// +kubebuilder:validation:XValidation:rule="self.kind == 'SysctlConfig' ? has(self.sysctlConfig) : self.kind == 'KernelModuleConfig' ? has(self.kernelModuleConfig) : self.kind == 'Config' ? has(self.config) : self.kind == 'VolumeConfig' ? has(self.volumeConfig) : self.kind == 'UserVolumeConfig' ? has(self.userVolumeConfig) : self.kind == 'RawVolumeConfig' ? has(self.rawVolumeConfig) : has(self.resolverConfig)",message="kind must match the populated field"
 type TalosConfigPatchDocument struct {
 	// kind selects which of the fields below is populated.
-	// +kubebuilder:validation:Enum=SysctlConfig;KernelModuleConfig;Config;VolumeConfig;UserVolumeConfig;RawVolumeConfig
+	// +kubebuilder:validation:Enum=SysctlConfig;KernelModuleConfig;Config;VolumeConfig;UserVolumeConfig;RawVolumeConfig;ResolverConfig
 	// +unionDiscriminator
 	// +required
 	Kind string `json:"kind"`
@@ -81,6 +81,10 @@ type TalosConfigPatchDocument struct {
 	// provisioner); populated when kind is "RawVolumeConfig".
 	// +optional
 	RawVolumeConfig *typedconfig.RawVolumeConfigV1Alpha1 `json:"rawVolumeConfig,omitempty"`
+
+	// resolverConfig is a Talos ResolverConfig document (DNS nameservers and search domains); populated when kind is "ResolverConfig".
+	// +optional
+	ResolverConfig *typedconfig.ResolverConfigV1Alpha1 `json:"resolverConfig,omitempty"`
 }
 
 // TalosConfigPatchSpec defines the desired state of TalosConfigPatch.

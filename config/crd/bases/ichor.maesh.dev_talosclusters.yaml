@@ -3000,6 +3000,7 @@ spec:
                               - VolumeConfig
                               - UserVolumeConfig
                               - RawVolumeConfig
+                              - ResolverConfig
                               type: string
                             rawVolumeConfig:
                               description: |-
@@ -3133,6 +3134,99 @@ spec:
                                   type: object
                               required:
                               - name
+                              type: object
+                            resolverConfig:
+                              description: resolverConfig is a Talos ResolverConfig
+                                document (DNS nameservers and search domains); populated
+                                when kind is "ResolverConfig".
+                              properties:
+                                hostDNS:
+                                  description: |-
+                                    Configuration for host DNS resolver.
+
+                                    This configures a local DNS caching resolver on the host to improve DNS resolution performance and reliability.
+                                  properties:
+                                    enabled:
+                                      type: boolean
+                                    forwardKubeDNSToHost:
+                                      type: boolean
+                                    resolveMemberNames:
+                                      type: boolean
+                                  type: object
+                                nameservers:
+                                  description: |-
+                                    A list of nameservers (DNS servers) to use for resolving domain names.
+
+                                    Nameservers are used to resolve domain names on the host, and they are also
+                                    propagated to Kubernetes DNS (CoreDNS) for use by pods running on the cluster.
+
+                                    This overrides any nameservers obtained via DHCP or platform configuration.
+                                    Default configuration is to use 1.1.1.1 and 8.8.8.8 as nameservers.
+                                  items:
+                                    description: NameserverConfig represents a single
+                                      nameserver configuration.
+                                    properties:
+                                      address:
+                                        description: The IP address of the nameserver.
+                                        type: string
+                                      protocol:
+                                        description: |-
+                                          A DNS protocol to use.
+
+                                          The default protocol is plain DNS (`Do53`) (DNS over TCP/UDP). Set this to
+                                          `DoT` to use DNS over TLS (RFC 7858) on TCP port 853, or `DoH` to use DNS
+                                          over HTTPS (RFC 8484) on TCP port 443 with the `/dns-query` URL path. Both
+                                          `DoT` and `DoH` deliver encrypted queries to this nameserver.
+
+                                          Note: encrypted DNS protocols require a correct system clock to validate
+                                          certificates. If NTP is configured with hostnames that need to be resolved
+                                          through DoT/DoH, the boot may stall: NTP needs DNS, and TLS needs valid
+                                          time. Either rely on the hardware clock, configure NTP servers by IP, or
+                                          keep at least one plain-DNS fallback nameserver.
+                                        type: string
+                                      tlsServerName:
+                                        description: |-
+                                          TLS server name to validate the nameserver certificate against.
+
+                                          This field should be set if the protocol is set to `DoT` or `DoH`.
+                                          The value is used both as the SNI sent during the TLS handshake and as the
+                                          name verified against the server certificate. For `DoH`, it is also used as
+                                          the host portion of the request URL (`https://<tlsServerName>/dns-query`)
+                                          while the connection itself is established to the configured `address`.
+                                        type: string
+                                    required:
+                                    - address
+                                    type: object
+                                  type: array
+                                searchDomains:
+                                  description: |-
+                                    Configuration for search domains (in /etc/resolv.conf).
+
+                                    The default is to derive search domains from the hostname FQDN.
+                                  properties:
+                                    disableDefault:
+                                      description: |-
+                                        Disable default search domain configuration from hostname FQDN.
+
+                                        When set to true, the system will not derive search domains from the hostname FQDN.
+                                        This allows for a custom configuration of search domains without any defaults.
+                                      type: boolean
+                                    domains:
+                                      description: |-
+                                        A list of search domains to be used for DNS resolution.
+
+                                        Search domains are appended to unqualified domain names during DNS resolution.
+                                        For example, if "example.com" is a search domain and a user tries to resolve
+                                        "host", the system will attempt to resolve "host.example.com".
+
+                                        If set, this overrides any search domains obtained via DHCP or platform configuration.
+                                        An empty list (`domains: []`) clears search domains obtained from DHCP or platform,
+                                        while leaving this field unset inherits them.
+                                        The default configuration derives the search domain from the hostname FQDN.
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
                               type: object
                             sysctlConfig:
                               description: sysctlConfig is a Talos SysctlConfig document;
@@ -3573,19 +3667,20 @@ spec:
                           type: object
                           x-kubernetes-validations:
                           - message: exactly one of sysctlConfig, kernelModuleConfig,
-                              config, volumeConfig, userVolumeConfig or rawVolumeConfig
-                              must be set
+                              config, volumeConfig, userVolumeConfig, rawVolumeConfig
+                              or resolverConfig must be set
                             rule: '(has(self.sysctlConfig) ? 1 : 0) + (has(self.kernelModuleConfig)
                               ? 1 : 0) + (has(self.config) ? 1 : 0) + (has(self.volumeConfig)
                               ? 1 : 0) + (has(self.userVolumeConfig) ? 1 : 0) + (has(self.rawVolumeConfig)
-                              ? 1 : 0) == 1'
+                              ? 1 : 0) + (has(self.resolverConfig) ? 1 : 0) == 1'
                           - message: kind must match the populated field
                             rule: 'self.kind == ''SysctlConfig'' ? has(self.sysctlConfig)
                               : self.kind == ''KernelModuleConfig'' ? has(self.kernelModuleConfig)
                               : self.kind == ''Config'' ? has(self.config) : self.kind
                               == ''VolumeConfig'' ? has(self.volumeConfig) : self.kind
                               == ''UserVolumeConfig'' ? has(self.userVolumeConfig)
-                              : has(self.rawVolumeConfig)'
+                              : self.kind == ''RawVolumeConfig'' ? has(self.rawVolumeConfig)
+                              : has(self.resolverConfig)'
                         type: array
                       source:
                         description: source points Argo CD at the chart or manifests

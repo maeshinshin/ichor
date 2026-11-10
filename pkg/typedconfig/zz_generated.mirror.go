@@ -1263,6 +1263,36 @@ type MountSpec struct {
 	MountDisableAccessTime *bool `json:"disableAccessTime,omitempty"`
 }
 
+// NameserverConfig represents a single nameserver configuration.
+type NameserverConfig struct {
+	// The IP address of the nameserver.
+	// +required
+	Address string `json:"address"`
+	// A DNS protocol to use.
+	//
+	// The default protocol is plain DNS (`Do53`) (DNS over TCP/UDP). Set this to
+	// `DoT` to use DNS over TLS (RFC 7858) on TCP port 853, or `DoH` to use DNS
+	// over HTTPS (RFC 8484) on TCP port 443 with the `/dns-query` URL path. Both
+	// `DoT` and `DoH` deliver encrypted queries to this nameserver.
+	//
+	// Note: encrypted DNS protocols require a correct system clock to validate
+	// certificates. If NTP is configured with hostnames that need to be resolved
+	// through DoT/DoH, the boot may stall: NTP needs DNS, and TLS needs valid
+	// time. Either rely on the hardware clock, configure NTP servers by IP, or
+	// keep at least one plain-DNS fallback nameserver.
+	// +optional
+	Protocol string `json:"protocol,omitempty"`
+	// TLS server name to validate the nameserver certificate against.
+	//
+	// This field should be set if the protocol is set to `DoT` or `DoH`.
+	// The value is used both as the SNI sent during the TLS handshake and as the
+	// name verified against the server certificate. For `DoH`, it is also used as
+	// the host portion of the request URL (`https://<tlsServerName>/dns-query`)
+	// while the connection itself is established to the configured `address`.
+	// +optional
+	TLSServerName string `json:"tlsServerName,omitempty"`
+}
+
 // NetworkConfig represents the machine's networking config values. Deprecated: all fields in NetworkConfig are deprecated, use corresponding multi-doc config types instead.
 type NetworkConfig struct {
 	// docgen:nodoc Deprecated: use `HostnameConfig` instead.
@@ -1517,6 +1547,39 @@ type RegistryTLSConfig struct {
 	TLSInsecureSkipVerify *bool `json:"insecureSkipVerify,omitempty"`
 }
 
+// ResolverConfigV1Alpha1 is a config document to configure DNS resolving.
+type ResolverConfigV1Alpha1 struct {
+	// A list of nameservers (DNS servers) to use for resolving domain names.
+	//
+	// Nameservers are used to resolve domain names on the host, and they are also
+	// propagated to Kubernetes DNS (CoreDNS) for use by pods running on the cluster.
+	//
+	// This overrides any nameservers obtained via DHCP or platform configuration.
+	// Default configuration is to use 1.1.1.1 and 8.8.8.8 as nameservers.
+	// +optional
+	ResolverNameservers []*NameserverConfig `json:"nameservers,omitempty"`
+	// Configuration for search domains (in /etc/resolv.conf).
+	//
+	// The default is to derive search domains from the hostname FQDN.
+	// +optional
+	ResolverSearchDomains *SearchDomainsConfig `json:"searchDomains,omitempty"`
+	// Configuration for host DNS resolver.
+	//
+	// This configures a local DNS caching resolver on the host to improve DNS resolution performance and reliability.
+	// +optional
+	ResolverHostDNS *ResolverHostDNSConfig `json:"hostDNS,omitempty"`
+}
+
+// HostDNSConfig represents host DNS configuration.
+type ResolverHostDNSConfig struct {
+	// +optional
+	HostDNSEnabled *bool `json:"enabled,omitempty"`
+	// +optional
+	HostDNSForwardKubeDNSToHost *bool `json:"forwardKubeDNSToHost,omitempty"`
+	// +optional
+	HostDNSResolveMemberNames *bool `json:"resolveMemberNames,omitempty"`
+}
+
 // ResourcesConfig represents the pod resources.
 type ResourcesConfig struct {
 	// Requests configures the reserved cpu/memory resources.
@@ -1582,6 +1645,28 @@ type ScrubConfig struct {
 	// The interval at which the volume is scrubbed, overriding the global scrub interval.
 	// +optional
 	ScrubInterval string `json:"interval,omitempty"`
+}
+
+// SearchDomainsConfig represents search domains configuration.
+type SearchDomainsConfig struct {
+	// A list of search domains to be used for DNS resolution.
+	//
+	// Search domains are appended to unqualified domain names during DNS resolution.
+	// For example, if "example.com" is a search domain and a user tries to resolve
+	// "host", the system will attempt to resolve "host.example.com".
+	//
+	// If set, this overrides any search domains obtained via DHCP or platform configuration.
+	// An empty list (`domains: []`) clears search domains obtained from DHCP or platform,
+	// while leaving this field unset inherits them.
+	// The default configuration derives the search domain from the hostname FQDN.
+	// +optional
+	SearchDomains []string `json:"domains,omitempty"`
+	// Disable default search domain configuration from hostname FQDN.
+	//
+	// When set to true, the system will not derive search domains from the hostname FQDN.
+	// This allows for a custom configuration of search domains without any defaults.
+	// +optional
+	SearchDisableDefault *bool `json:"disableDefault,omitempty"`
 }
 
 // SysctlConfigV1Alpha1 configures Linux kernel sysctl values.

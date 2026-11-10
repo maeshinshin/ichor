@@ -276,6 +276,7 @@ var documentFieldKey = map[string]string{
 	"VolumeConfig":       "volumeConfig",
 	"UserVolumeConfig":   "userVolumeConfig",
 	"RawVolumeConfig":    "rawVolumeConfig",
+	"ResolverConfig":     "resolverConfig",
 }
 
 // documentFromPB decodes a wire PatchDocument's opaque JSON into the typed

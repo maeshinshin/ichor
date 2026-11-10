@@ -415,3 +415,12 @@ func TestExplainUnrepresentable_LegacyPaths(t *testing.T) {
 		t.Errorf("every path above has a spec field, but the report says to write a patch:\n%s", got)
 	}
 }
+
+// ResolverConfig differences point at the two places nameservers can now be written.
+func TestExplainUnrepresentable_ResolverConfig(t *testing.T) {
+	got := strings.Join(explainUnrepresentable([]string{"ResolverConfig.apiVersion", "ResolverConfig.kind", "ResolverConfig.nameservers"}), "\n")
+
+	if !strings.Contains(got, "spec.network.dnsServers") || !strings.Contains(got, "ResolverConfig document") || strings.Contains(got, "by hand") {
+		t.Errorf("hint does not name the DNS places:\n%s", got)
+	}
+}

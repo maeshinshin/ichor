@@ -1422,6 +1422,7 @@ var specFieldHints = []specFieldHint{
 	{"machine.certSANs", certSANsHint},
 	{"cluster.apiServer.certSANs", certSANsHint},
 	{"KubeAPIServerConfig.certExtraSANs", certSANsHint},
+	{"ResolverConfig", "write the node's nameservers in one place: TalosMachine spec.network.dnsServers, or a TalosConfigPatch with a ResolverConfig document (a machine with both is refused)"},
 	{"KubeFlannelCNIConfig", cniHint},
 	{"cluster.network.cni", cniHint},
 }

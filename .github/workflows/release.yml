@@ -286,11 +286,12 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
+      # The chart is not an image and syft cannot read a Helm OCI artifact, so it gets no SBOM.
       - name: Generate the SBOMs
         run: |
           while read -r ref; do
             nix develop --command syft "$ref" -o "spdx-json=bin/$(basename "${ref%@*}").spdx.json"
-          done < bin/digests.txt
+          done < <(grep -v '/charts/' bin/digests.txt)
 
       - name: Attest provenance, controller
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2

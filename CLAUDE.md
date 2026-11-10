@@ -1,7 +1,8 @@
 # Working on Ichor
 
 Read `docs/design/architecture.md` first; it's the source of truth. Conventions
-are in `CONTRIBUTING.md`.
+are in `CONTRIBUTING.md`. Record a non-obvious decision in the PR description
+and, if it changes the design, in the architecture doc.
 
 Tooling for agents:
 

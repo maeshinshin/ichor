@@ -133,6 +133,8 @@ lint failures are not yours.
   has to pass.
 - Say in the PR description which docs you consulted and which version.
 
+- Record a non-obvious decision in the PR description and, if it changes the
+  design, in `docs/design/architecture.md`.
 ## Tests
 
 - `make test` runs unit tests and envtest; `make ui-ci` runs the UI's typecheck,

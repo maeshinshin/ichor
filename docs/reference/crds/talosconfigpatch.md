@@ -460,7 +460,7 @@ Version v1alpha1: has a `status` subresource.
 | `spec.documents[].kernelModuleConfig` | `object` | no | kernelModuleConfig is a Talos KernelModuleConfig document; populated when kind is "KernelModuleConfig". |
 | `spec.documents[].kernelModuleConfig.name` | `string` | yes |  |
 | `spec.documents[].kernelModuleConfig.parameters` | `[]string` | no |  |
-| `spec.documents[].kind` | `string` | yes | kind selects which of the fields below is populated. Allowed values: `SysctlConfig`, `KernelModuleConfig`, `Config`, `VolumeConfig`, `UserVolumeConfig`, `RawVolumeConfig`. |
+| `spec.documents[].kind` | `string` | yes | kind selects which of the fields below is populated. Allowed values: `SysctlConfig`, `KernelModuleConfig`, `Config`, `VolumeConfig`, `UserVolumeConfig`, `RawVolumeConfig`, `ResolverConfig`. |
 | `spec.documents[].rawVolumeConfig` | `object` | no | rawVolumeConfig is a Talos RawVolumeConfig document (an unformatted partition for a CSI provisioner); populated when kind is "RawVolumeConfig". |
 | `spec.documents[].rawVolumeConfig.encryption` | `object` | no | Talos: EncryptionSpec |
 | `spec.documents[].rawVolumeConfig.encryption.allowDiscards` | `boolean` | no |  |
@@ -486,6 +486,18 @@ Version v1alpha1: has a `status` subresource.
 | `spec.documents[].rawVolumeConfig.provisioning.grow` | `boolean` | no |  |
 | `spec.documents[].rawVolumeConfig.provisioning.maxSize` | `string` | no |  |
 | `spec.documents[].rawVolumeConfig.provisioning.minSize` | `string` | no |  |
+| `spec.documents[].resolverConfig` | `object` | no | resolverConfig is a Talos ResolverConfig document (DNS nameservers and search domains); populated when kind is "ResolverConfig". |
+| `spec.documents[].resolverConfig.hostDNS` | `object` | no | Talos: HostDNSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig |
+| `spec.documents[].resolverConfig.hostDNS.enabled` | `boolean` | no |  |
+| `spec.documents[].resolverConfig.hostDNS.forwardKubeDNSToHost` | `boolean` | no |  |
+| `spec.documents[].resolverConfig.hostDNS.resolveMemberNames` | `boolean` | no |  |
+| `spec.documents[].resolverConfig.nameservers` | `[]object` | no |  |
+| `spec.documents[].resolverConfig.nameservers[].address` | `string` | yes |  |
+| `spec.documents[].resolverConfig.nameservers[].protocol` | `string` | no |  |
+| `spec.documents[].resolverConfig.nameservers[].tlsServerName` | `string` | no |  |
+| `spec.documents[].resolverConfig.searchDomains` | `object` | no | Talos: SearchDomainsConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig |
+| `spec.documents[].resolverConfig.searchDomains.disableDefault` | `boolean` | no |  |
+| `spec.documents[].resolverConfig.searchDomains.domains` | `[]string` | no |  |
 | `spec.documents[].sysctlConfig` | `object` | no | sysctlConfig is a Talos SysctlConfig document; populated when kind is "SysctlConfig". |
 | `spec.documents[].sysctlConfig.params` | `map[string]string` | yes |  |
 | `spec.documents[].userVolumeConfig` | `object` | no | userVolumeConfig is a Talos UserVolumeConfig document; populated when kind is "UserVolumeConfig". |

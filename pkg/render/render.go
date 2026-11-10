@@ -288,7 +288,7 @@ func BuildConfig(
 	// enables it applies there and is left out of workers.
 	ordered = dropTalosAPIAccess(ordered, m)
 
-	cfg, err = applyPatches(cfg, contract, ordered)
+	cfg, err = applyPatches(cfg, contract, m, ordered)
 	if err != nil {
 		return nil, fmt.Errorf("render: applying patches: %w", err)
 	}
@@ -522,12 +522,40 @@ func rewriteConfigs(
 	return out
 }
 
+const kindResolverConfig = "ResolverConfig"
+
+// refuseResolverConflict refuses a machine whose spec.network.dnsServers already renders a
+// ResolverConfig while a selected patch carries one too: two writers of the same document would
+// merge by list position, so the result would depend on patch order. Failing here also makes the
+// patch webhook refuse it (the render fails only with the patch). ADR 0138.
+func refuseResolverConflict(m *ichorv1alpha1.TalosMachine, ordered []*ichorv1alpha1.TalosConfigPatch) error {
+	if m.Spec.Network == nil || len(m.Spec.Network.DNSServers) == 0 {
+		return nil
+	}
+
+	for _, p := range ordered {
+		if slices.ContainsFunc(p.Spec.Documents, func(d ichorv1alpha1.TalosConfigPatchDocument) bool {
+			return d.Kind == kindResolverConfig
+		}) {
+			return fmt.Errorf("render: patch %q carries a %s but machine %q sets spec.network.dnsServers; "+
+				"set the DNS servers in one place", p.Name, kindResolverConfig, m.Name)
+		}
+	}
+
+	return nil
+}
+
 // applyPatches merges each patch's documents onto cfg in the given order,
 // one patch at a time, so that a later patch's non-zero fields win over an
 // earlier one's (Configuration reconcile step 2).
 func applyPatches(
-	cfg coreconfig.Provider, contract *coreconfig.VersionContract, ordered []*ichorv1alpha1.TalosConfigPatch,
+	cfg coreconfig.Provider, contract *coreconfig.VersionContract, m *ichorv1alpha1.TalosMachine,
+	ordered []*ichorv1alpha1.TalosConfigPatch,
 ) (coreconfig.Provider, error) {
+	if err := refuseResolverConflict(m, ordered); err != nil {
+		return nil, err
+	}
+
 	patches := make([]configpatcher.Patch, 0, len(ordered))
 
 	for _, p := range ordered {
@@ -638,6 +666,8 @@ func DocumentFromPatch(d ichorv1alpha1.TalosConfigPatchDocument) (config.Documen
 		return wrapDocument("userVolumeConfig")(d.UserVolumeConfig.ToMachinery())
 	case "RawVolumeConfig":
 		return wrapDocument("rawVolumeConfig")(d.RawVolumeConfig.ToMachinery())
+	case kindResolverConfig:
+		return wrapDocument("resolverConfig")(d.ResolverConfig.ToMachinery())
 	default:
 		return nil, fmt.Errorf("unknown document kind %q", d.Kind)
 	}

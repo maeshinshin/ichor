@@ -1997,6 +1997,7 @@ spec:
                       - VolumeConfig
                       - UserVolumeConfig
                       - RawVolumeConfig
+                      - ResolverConfig
                       type: string
                     rawVolumeConfig:
                       description: |-
@@ -2082,6 +2083,46 @@ spec:
                           type: object
                       required:
                       - name
+                      type: object
+                    resolverConfig:
+                      description: resolverConfig is a Talos ResolverConfig document
+                        (DNS nameservers and search domains); populated when kind
+                        is "ResolverConfig".
+                      properties:
+                        hostDNS:
+                          description: 'Talos: HostDNSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
+                          properties:
+                            enabled:
+                              type: boolean
+                            forwardKubeDNSToHost:
+                              type: boolean
+                            resolveMemberNames:
+                              type: boolean
+                          type: object
+                        nameservers:
+                          items:
+                            description: 'Talos: NameserverConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
+                            properties:
+                              address:
+                                type: string
+                              protocol:
+                                type: string
+                              tlsServerName:
+                                type: string
+                            required:
+                            - address
+                            type: object
+                          type: array
+                        searchDomains:
+                          description: 'Talos: SearchDomainsConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
+                          properties:
+                            disableDefault:
+                              type: boolean
+                            domains:
+                              items:
+                                type: string
+                              type: array
+                          type: object
                       type: object
                     sysctlConfig:
                       description: sysctlConfig is a Talos SysctlConfig document;
@@ -2342,17 +2383,19 @@ spec:
                   type: object
                   x-kubernetes-validations:
                   - message: exactly one of sysctlConfig, kernelModuleConfig, config,
-                      volumeConfig, userVolumeConfig or rawVolumeConfig must be set
+                      volumeConfig, userVolumeConfig, rawVolumeConfig or resolverConfig
+                      must be set
                     rule: '(has(self.sysctlConfig) ? 1 : 0) + (has(self.kernelModuleConfig)
                       ? 1 : 0) + (has(self.config) ? 1 : 0) + (has(self.volumeConfig)
                       ? 1 : 0) + (has(self.userVolumeConfig) ? 1 : 0) + (has(self.rawVolumeConfig)
-                      ? 1 : 0) == 1'
+                      ? 1 : 0) + (has(self.resolverConfig) ? 1 : 0) == 1'
                   - message: kind must match the populated field
                     rule: 'self.kind == ''SysctlConfig'' ? has(self.sysctlConfig)
                       : self.kind == ''KernelModuleConfig'' ? has(self.kernelModuleConfig)
                       : self.kind == ''Config'' ? has(self.config) : self.kind ==
                       ''VolumeConfig'' ? has(self.volumeConfig) : self.kind == ''UserVolumeConfig''
-                      ? has(self.userVolumeConfig) : has(self.rawVolumeConfig)'
+                      ? has(self.userVolumeConfig) : self.kind == ''RawVolumeConfig''
+                      ? has(self.rawVolumeConfig) : has(self.resolverConfig)'
                 type: array
               layer:
                 description: |-

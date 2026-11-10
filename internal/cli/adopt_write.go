@@ -104,6 +104,8 @@ type adoptWriteCluster struct {
 
 	ControlPlaneCount int32
 	Schedulable       string
+	// OmitDefaultNodeLabels is spec.controlPlane.omitDefaultNodeLabels.
+	OmitDefaultNodeLabels bool
 
 	// CNIPreset is cilium or unmanaged; TalosCNI (default|none) applies to unmanaged only.
 	CNIPreset string
@@ -349,7 +351,7 @@ func (w *adoptWriter) cluster0() *ichorv1alpha1.TalosCluster {
 			KubernetesVersion: f.KubernetesVersion,
 			VersionContract:   f.VersionContract,
 			SecretsRef:        corev1.LocalObjectReference{Name: secretsRefName(f.Name)},
-			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: f.ControlPlaneCount, Schedulable: f.Schedulable},
+			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: f.ControlPlaneCount, Schedulable: f.Schedulable, OmitDefaultNodeLabels: f.OmitDefaultNodeLabels},
 			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: f.CNIPreset, KubeProxy: f.KubeProxy, Tunnel: f.Tunnel},
 			CertSANs:          f.CertSANs,
 			Registries:        f.Registries,
@@ -401,6 +403,7 @@ func (w *adoptWriter) cluster(ctx context.Context) (string, error) {
 			jsonEqual(h.Spec.Network, want.Spec.Network) &&
 			slices.Equal(h.Spec.CertSANs, want.Spec.CertSANs) &&
 			jsonEqual(h.Spec.Registries, want.Spec.Registries) &&
+			h.Spec.ControlPlane.OmitDefaultNodeLabels == want.Spec.ControlPlane.OmitDefaultNodeLabels &&
 			h.Spec.Endpoint == want.Spec.Endpoint
 	})
 

@@ -124,6 +124,8 @@ type TalosFacts struct {
 	// CertSANs is machine.certSANs; APIServerCertSANs is the kube-apiserver's
 	// (KubeAPIServerConfig.certExtraSANs, cluster.apiServer.certSANs), empty on a worker.
 	CertSANs, APIServerCertSANs []string
+	// NodeLabels are the node labels the configuration sets (KubeNodeConfig.labels, machine.nodeLabels).
+	NodeLabels map[string]string
 	// Registries are the mirror settings, sorted by host. Auth and TLS are not read: they have no
 	// spec representation and stay in the diff.
 	Registries []RegistryMirrorFact
@@ -178,6 +180,10 @@ func ReadTalosFacts(cfgBytes []byte) (*TalosFacts, error) {
 
 	if a := provider.K8sAPIServerConfig(); a != nil {
 		f.APIServerCertSANs = a.CertSANs()
+	}
+
+	if n := provider.K8sNodeConfig(); n != nil {
+		f.NodeLabels = n.Labels()
 	}
 
 	if h := provider.NetworkHostnameConfig(); h != nil {

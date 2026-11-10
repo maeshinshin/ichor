@@ -91,7 +91,7 @@ function Section({ node, current }: { node: NavNode; current: string }) {
       </SidebarGroup>
     )
   }
-  // A long section (the decision records) starts closed unless the current page is in it.
+  // A long section starts closed unless the current page is in it.
   return (
     <Collapsible defaultOpen={contains(node, current)} className="group/collapsible">
       <SidebarGroup>

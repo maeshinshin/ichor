@@ -239,13 +239,13 @@ try {
       check(await ev(`location.pathname`) === `${root}${latest.path}guides/getting-started/`, `${tag}: switching keeps the page path when it exists in ${latest.name}`)
       await ready()
       check(!(await ev(`!!document.querySelector('article [role=alert]')`)), `${tag}: the newest release has no banner`)
-      await open('adr/0132-the-docs-site-renders-docs-in-place-with-astro-preactcn-and-pagefind/')
-      const there = (await fetch(origin + root + latest.path + 'adr/0132-the-docs-site-renders-docs-in-place-with-astro-preactcn-and-pagefind/', { method: 'HEAD' })).ok
+      await open('contributing-docs/')
+      const there = (await fetch(origin + root + latest.path + 'contributing-docs/', { method: 'HEAD' })).ok
       await mouse(switcher)
       await until(`!!${inMenu('v')}`, 'the version menu', 3000)
       await mouse(inMenu(latest.name))
       await until(`location.pathname.startsWith('${root}${latest.path}')`, 'the release', 5000)
-      check(await ev(`location.pathname`) === `${root}${latest.path}${there ? 'adr/0132-the-docs-site-renders-docs-in-place-with-astro-preactcn-and-pagefind/' : ''}`, `${tag}: switching to a page ${latest.name} lacks goes to its overview (page there: ${there})`)
+      check(await ev(`location.pathname`) === `${root}${latest.path}${there ? 'contributing-docs/' : ''}`, `${tag}: switching to a page ${latest.name} lacks goes to its overview (page there: ${there})`)
       await ready()
       await key('k', 2)
       await until(`!!document.querySelector('[data-slot=command-input]')`, 'the search dialog', 3000)
@@ -288,7 +288,7 @@ try {
         check(await ev(`!!document.querySelector('article pre + div [aria-label="Copy code"]')`), `${tag}: code blocks have a copy button`)
         check(await ev(`!!document.querySelector('article [data-slot=alert]')`), `${tag}: a GitHub alert renders as an Alert`)
         await shot(`${tag}-contributing`)
-        for (const [name, path] of [['home', ''], ['concept', 'concepts/cni/'], ['cli', 'reference/cli/ichor_adopt/'], ['crd', 'reference/crds/taloscluster/'], ['adr-index', 'adr/']]) {
+        for (const [name, path] of [['home', ''], ['concept', 'concepts/cni/'], ['cli', 'reference/cli/ichor_adopt/'], ['crd', 'reference/crds/taloscluster/']]) {
           await open(path)
           await shot(`${tag}-${name}`)
         }

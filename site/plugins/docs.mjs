@@ -25,7 +25,7 @@ export const repoRoot = process.env.DOCS_REPO ? resolve(process.env.DOCS_REPO) :
 export const docsRoot = resolve(repoRoot, 'docs')
 export const repoUrl = 'https://github.com/maeshinshin/ichor'
 
-/** `adr/README.md` -> `adr`, `index.md` -> ``, `guides/x.md` -> `guides/x`. */
+/** `guides/README.md` -> `guides`, `index.md` -> ``, `guides/x.md` -> `guides/x`. */
 export function routeOf(relPath) {
   return relPath
     .split(sep)

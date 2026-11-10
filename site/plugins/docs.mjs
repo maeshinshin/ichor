@@ -5,7 +5,7 @@ import { dirname, relative, resolve, sep } from 'node:path'
 import { visit } from 'unist-util-visit'
 
 /**
- * The version being built: `next` (the docs on main, the default) or a release tag `vX.Y.Z`
+ * The version being built: `next` (the docs on main, the default) or a minor release line `vX.Y`
  * (DOCS_VERSION). Its pages live under `<DOCS_BASE>/<version>/`; DOCS_BASE (default `/`,
  * `/` for a domain root) is where all versions sit together.
  */
@@ -15,7 +15,7 @@ export const isNext = version === 'next'
 export const rootBase = (process.env.DOCS_BASE ?? '/').replace(/\/+$/, '')
 export const versionBase = `${rootBase}/${version}`
 /** The git ref the docs of this version were written at: GitHub links out of docs/ point there. */
-export const gitRef = isNext ? 'main' : version
+export const gitRef = process.env.DOCS_GITREF ?? (isNext ? 'main' : version)
 
 /**
  * The docs/ directory and the repository root it sits in (Astro runs with site/ as the working

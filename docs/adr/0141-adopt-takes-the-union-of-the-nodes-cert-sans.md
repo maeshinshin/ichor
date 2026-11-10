@@ -1,6 +1,6 @@
 # 0141. Adopt takes the union of the nodes' certSANs into spec.certSANs
 
-Status: Accepted · Date: 2026-11-10 · Design section: Bootstrap
+Status: Superseded by ADR 0143 · Date: 2026-11-10 · Design section: Bootstrap
 
 Decided: `ichor adopt` sets a new cluster's `spec.certSANs` to the union of every node's `machine.certSANs` and every control plane's `cluster.apiServer.certSANs` (first-seen order), instead of requiring all of them to agree. A node that lacks some of the union gains them: those paths are class B (Ichor-owned, need consent) and the plan names the SANs each node gains. A node that states a SAN `spec.certSANs` lacks would lose it, and stays class C (blocks).
 

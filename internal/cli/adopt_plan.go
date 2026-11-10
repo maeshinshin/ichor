@@ -42,6 +42,11 @@ const (
 	// pathNetworkInterfaces is the legacy network block of a node whose Talos config predates the
 	// multi-document form; spec.network renders the new form, so the block is captured as a patch.
 	pathNetworkInterfaces = "machine.network.interfaces"
+
+	// pathMachineCertSANs and pathAPIServerCertSANs are a node's own SAN lists. They are captured
+	// into its patch when they differ from the cluster's, so no certificate changes (ADR 0143).
+	pathMachineCertSANs   = "machine.certSANs"
+	pathAPIServerCertSANs = "cluster.apiServer.certSANs"
 )
 
 // adoptPlan is what buildAdoptPlan found for one machine: the
@@ -58,9 +63,6 @@ type adoptPlan struct {
 	// listed for consent and do not block.
 	Owned []string
 
-	// SANsGained are the certSANs the first render adds to this node (class B, ADR 0141).
-	SANsGained []string
-
 	// Skipped, when set, is why adopt did not look at this machine at all.
 	Skipped string
 }
@@ -74,9 +76,6 @@ type ownership struct {
 	KubeProxyReplaced bool
 	// CiliumInline makes the inline-manifest paths Ichor's (the node carries a Cilium inline entry).
 	CiliumInline bool
-	// SANsCovered: every SAN the node states is in spec.certSANs, so rendering the cluster's list
-	// only adds names. A node that would lose one stays class C.
-	SANsCovered bool
 }
 
 var (
@@ -84,7 +83,6 @@ var (
 	ownedKubePrismPrefix  = []string{"machine.features.kubePrism", "KubePrismConfig"}
 	ownedKubeProxyPrefix  = []string{"cluster.proxy", "KubeProxyConfig"}
 	ownedInlineManifestPf = []string{"cluster.inlineManifests", "KubeInlineManifestConfig"}
-	ownedCertSANsPaths    = []string{"machine.certSANs", "cluster.apiServer.certSANs", "KubeAPIServerConfig.certExtraSANs"}
 )
 
 // underPath reports whether p is pf or a path below it.
@@ -98,10 +96,6 @@ func hasPathPrefix(p string, prefixes []string) bool {
 
 // owned reports whether path is a class B path.
 func (o ownership) owned(path string) bool {
-	if o.SANsCovered && hasPathPrefix(path, ownedCertSANsPaths) {
-		return true
-	}
-
 	if !o.Managed {
 		return false
 	}
@@ -179,7 +173,7 @@ func buildAdoptPlan(
 	owned, rest := own.split(paths)
 	plan.Owned = owned
 
-	wantSysctl, wantKernelModule, wantInterfaces, wantResolver, legacy := groupChangedPaths(rest)
+	wantSysctl, wantKernelModule, captured, wantResolver, legacy := groupChangedPaths(rest)
 
 	// spec.network.dnsServers already renders the ResolverConfig and the render refuses a patch that
 	// carries one too (ADR 0138), so a difference there stays unrepresentable: set it in the spec.
@@ -195,11 +189,11 @@ func buildAdoptPlan(
 
 	plan.UnrepresentablePaths = legacy
 
-	if !wantSysctl && !wantKernelModule && !wantInterfaces && !wantResolver {
+	if !wantSysctl && !wantKernelModule && len(captured) == 0 && !wantResolver {
 		return plan, nil
 	}
 
-	docs, err := captureDocuments(currentCfg, wantSysctl, wantKernelModule, wantInterfaces, wantResolver)
+	docs, err := captureDocuments(currentCfg, wantSysctl, wantKernelModule, captured, wantResolver, cluster.Spec.CertSANs)
 	if err != nil {
 		return nil, fmt.Errorf("adopt: capturing machine %q's current documents: %w", m.Name, err)
 	}
@@ -232,9 +226,10 @@ func buildAdoptPlan(
 
 	if _, notOwned := own.split(left); len(notOwned) == 0 {
 		plan.Patch = &candidate
-	} else if wantInterfaces {
-		// The captured block did not reproduce the node (e.g. a WireGuard key the mirror drops).
-		plan.UnrepresentablePaths = append(plan.UnrepresentablePaths, pathNetworkInterfaces)
+	} else {
+		// The captured blocks did not reproduce the node (e.g. a WireGuard key the mirror drops, or a SAN
+		// the cluster's list adds that a patch cannot take away).
+		plan.UnrepresentablePaths = append(plan.UnrepresentablePaths, captured...)
 	}
 
 	return plan, nil
@@ -269,10 +264,10 @@ func refuseJWTAuthenticators(machine string, currentCfg []byte) error {
 // rooting convention: a standalone document's paths are rooted at its kind
 // name, everything else (the legacy Config document's "machine.*",
 // "cluster.*" and top-level scalars) is not.
-func groupChangedPaths(paths []string) (wantSysctl, wantKernelModule, wantInterfaces, wantResolver bool, legacy []string) {
+func groupChangedPaths(paths []string) (wantSysctl, wantKernelModule bool, captured []string, wantResolver bool, legacy []string) {
 	for _, p := range paths {
-		if p == pathNetworkInterfaces {
-			wantInterfaces = true
+		if slices.Contains([]string{pathNetworkInterfaces, pathMachineCertSANs, pathAPIServerCertSANs}, p) {
+			captured = append(captured, p)
 
 			continue
 		}
@@ -294,7 +289,13 @@ func groupChangedPaths(paths []string) (wantSysctl, wantKernelModule, wantInterf
 		}
 	}
 
-	return wantSysctl, wantKernelModule, wantInterfaces, wantResolver, legacy
+	return wantSysctl, wantKernelModule, captured, wantResolver, legacy
+}
+
+// sansBeyond are the node's SANs that spec.certSANs does not render: a patch's list is appended to
+// the rendered one, never merged into it.
+func sansBeyond(node, spec []string) []string {
+	return slices.DeleteFunc(slices.Clone(node), func(s string) bool { return slices.Contains(spec, s) })
 }
 
 // captureDocuments decodes currentCfg with machinery's own loader and
@@ -302,8 +303,8 @@ func groupChangedPaths(paths []string) (wantSysctl, wantKernelModule, wantInterf
 // conversions) into TalosConfigPatchDocuments. Neither kind carries secret
 // material, so a whole-document capture is safe (unlike the legacy Config
 // document; see buildAdoptPlan's doc comment).
-func captureDocuments(currentCfg []byte, wantSysctl, wantKernelModule, wantInterfaces, wantResolver bool) ([]ichorv1alpha1.TalosConfigPatchDocument, error) {
-	if !wantSysctl && !wantKernelModule && !wantInterfaces && !wantResolver {
+func captureDocuments(currentCfg []byte, wantSysctl, wantKernelModule bool, captured []string, wantResolver bool, specSANs []string) ([]ichorv1alpha1.TalosConfigPatchDocument, error) {
+	if !wantSysctl && !wantKernelModule && len(captured) == 0 && !wantResolver {
 		return nil, nil
 	}
 
@@ -314,18 +315,27 @@ func captureDocuments(currentCfg []byte, wantSysctl, wantKernelModule, wantInter
 
 	var docs []ichorv1alpha1.TalosConfigPatchDocument
 
-	// Only the interfaces subtree of the legacy Config document, never the document: it carries
-	// the machine and cluster secrets.
+	// Only the captured subtrees of the legacy Config document (interfaces, certSANs), never the
+	// document: it carries the machine and cluster secrets.
 	//nolint:staticcheck // the legacy block is what the node runs
-	if raw := provider.RawV1Alpha1(); wantInterfaces && raw != nil && raw.MachineConfig != nil && raw.MachineConfig.MachineNetwork != nil {
-		conv, err := typedconfig.ConfigFromMachinery(&mv1alpha1.Config{
-			ConfigVersion: mv1alpha1.Version,
-			MachineConfig: &mv1alpha1.MachineConfig{MachineNetwork: &mv1alpha1.NetworkConfig{
-				NetworkInterfaces: raw.MachineConfig.MachineNetwork.NetworkInterfaces,
-			}},
-		})
+	if raw := provider.RawV1Alpha1(); len(captured) > 0 && raw != nil && raw.MachineConfig != nil {
+		sub := &mv1alpha1.Config{ConfigVersion: mv1alpha1.Version, MachineConfig: &mv1alpha1.MachineConfig{}}
+
+		if slices.Contains(captured, pathNetworkInterfaces) && raw.MachineConfig.MachineNetwork != nil {
+			sub.MachineConfig.MachineNetwork = &mv1alpha1.NetworkConfig{NetworkInterfaces: raw.MachineConfig.MachineNetwork.NetworkInterfaces}
+		}
+
+		if slices.Contains(captured, pathMachineCertSANs) {
+			sub.MachineConfig.MachineCertSANs = sansBeyond(raw.MachineConfig.MachineCertSANs, specSANs)
+		}
+
+		if slices.Contains(captured, pathAPIServerCertSANs) && raw.ClusterConfig != nil && raw.ClusterConfig.APIServerConfig != nil {
+			sub.ClusterConfig = &mv1alpha1.ClusterConfig{APIServerConfig: &mv1alpha1.APIServerConfig{ExtraCertSANs: sansBeyond(raw.ClusterConfig.APIServerConfig.ExtraCertSANs, specSANs)}}
+		}
+
+		conv, err := typedconfig.ConfigFromMachinery(sub)
 		if err != nil {
-			return nil, fmt.Errorf("converting machine.network.interfaces: %w", err)
+			return nil, fmt.Errorf("converting %s: %w", strings.Join(captured, ", "), err)
 		}
 
 		docs = append(docs, ichorv1alpha1.TalosConfigPatchDocument{Kind: "Config", Config: conv})

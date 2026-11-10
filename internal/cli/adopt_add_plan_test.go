@@ -26,13 +26,19 @@ import (
 	"github.com/maeshinshin/ichor/pkg/render"
 )
 
-// newcomerOfOtherCluster makes addr answer with a configuration rendered from a copy of the cluster
-// whose spec.certSANs differ: drift adopt cannot capture in a patch (class C).
+// newcomerWithSANDrift gives the cluster a spec.certSANs and makes addr answer with a configuration
+// rendered without it: a SAN the node lacks, which a patch cannot take away (class C).
 func (e *flowEnv) newcomerWithSANDrift(t *testing.T, addr string, bundle *secrets.Bundle) {
 	t.Helper()
 
 	other := e.cluster.DeepCopy()
-	other.Spec.CertSANs = []string{"drift.example.test"}
+
+	e.cluster.Spec.CertSANs = []string{"drift.example.test"}
+	if err := e.k8s.Update(context.Background(), e.cluster); err != nil {
+		t.Fatal(err)
+	}
+
+	*e.writes = nil // the set-up is not a write of adopt
 
 	m := newTestMachine(e.cluster.Name)
 	m.Name, m.Spec.Role, m.Spec.Endpoint = "uuid-"+addr, testRoleWorker, addr

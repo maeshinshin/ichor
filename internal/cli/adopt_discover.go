@@ -269,7 +269,7 @@ func clusterFromNodes(name, namespace, talosVersion string, nodes []*adoptNode) 
 		c.Spec.Network = &ichorv1alpha1.TalosClusterNetwork{PodSubnets: f.PodSubnets, ServiceSubnets: f.ServiceSubnets}
 	}
 
-	c.Spec.CertSANs = unionCertSANs(nodes)
+	c.Spec.CertSANs = agreedCertSANs(nodes)
 	c.Spec.Registries = agreedRegistries(nodes)
 
 	if cands := contractCandidates(talosVersion); len(cands) > 0 {
@@ -279,21 +279,41 @@ func clusterFromNodes(name, namespace, talosVersion string, nodes []*adoptNode) 
 	return c, nil
 }
 
-// unionCertSANs is spec.certSANs: every SAN any node states in machine.certSANs, and any control
-// plane in its kube-apiserver SANs, in first-seen order. Nodes that agree give their shared list
-// unchanged; a node missing some gains them, which the plan lists for consent (ADR 0141).
-func unionCertSANs(nodes []*adoptNode) []string {
-	var out []string
+// agreedCertSANs is spec.certSANs. The kube-apiserver SANs are rendered only from it, so when every
+// control plane states the same ones that list is it. Otherwise it is the machine.certSANs every node
+// states, or nothing. What a node states beyond or besides it is captured into the node's own patch
+// (ADR 0143), so no certificate changes.
+func agreedCertSANs(nodes []*adoptNode) []string {
+	var api, machine []string
 
-	for _, n := range readNodes(nodes) {
-		for _, s := range append(slices.Clone(n.Facts.CertSANs), n.Facts.APIServerCertSANs...) {
-			if !slices.Contains(out, s) {
-				out = append(out, s)
-			}
+	apiAgrees, machineAgrees := true, true
+
+	for i, n := range readNodes(nodes) {
+		if i == 0 {
+			machine = n.Facts.CertSANs
 		}
+
+		machineAgrees = machineAgrees && slices.Equal(machine, n.Facts.CertSANs)
+
+		if !n.controlPlane() {
+			continue
+		}
+
+		if api == nil {
+			api = n.Facts.APIServerCertSANs
+		}
+
+		apiAgrees = apiAgrees && slices.Equal(api, n.Facts.APIServerCertSANs)
 	}
 
-	return out
+	switch {
+	case apiAgrees && len(api) > 0:
+		return slices.Clone(api)
+	case machineAgrees:
+		return slices.Clone(machine)
+	}
+
+	return nil
 }
 
 // agreedRegistries is spec.registries: the mirrors when every node states the same ones and none

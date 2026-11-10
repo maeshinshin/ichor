@@ -6,7 +6,7 @@ import { defineConfig } from 'astro/config'
 import { remarkCallouts, remarkDocsLinks, remarkDropTitle, versionBase } from './plugins/docs.mjs'
 
 // The defaults are the published site, https://ichor.maesh.dev/; DOCS_SITE and DOCS_BASE move it (a fork).
-// One build is one version of the docs, at <DOCS_BASE>/<DOCS_VERSION>/ (next, or a tag vX.Y.Z).
+// One build is one version of the docs, at <DOCS_BASE>/<DOCS_VERSION>/ (next, or a minor line vX.Y).
 const site = process.env.DOCS_SITE ?? 'https://ichor.maesh.dev'
 const base = versionBase
 const baseSlash = `${base}/`

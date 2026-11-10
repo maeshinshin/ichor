@@ -556,7 +556,7 @@ func readNode(ctx context.Context, deps adoptDeps, n *adoptNode, fresh bool) err
 	}
 
 	if fresh {
-		return completeNode(n)
+		return completeNode(n, func(f string, a ...any) { deps.say(adoptWarn, f, a...) })
 	}
 
 	return nil
@@ -1286,7 +1286,7 @@ func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace 
 
 // writeMachineOf is the write phase's view of one node adopt creates a TalosMachine for.
 func writeMachineOf(n *adoptNode) adoptWriteMachine {
-	m := adoptWriteMachine{Address: n.M.Spec.Endpoint, Role: n.M.Spec.Role, InstallDisk: n.InstallDisk}
+	m := adoptWriteMachine{Address: n.M.Spec.Endpoint, Role: n.M.Spec.Role, Hostname: n.M.Spec.Hostname, InstallDisk: n.InstallDisk}
 	if inst := n.M.Spec.Install; inst != nil {
 		m.InstallImage, m.InstallWipe = inst.Image, inst.Wipe
 	}

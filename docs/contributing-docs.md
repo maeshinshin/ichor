@@ -24,12 +24,15 @@ Markdown-only change cannot publish one.
 
 ## Versions
 
-You only ever edit the Markdown on `main`. That is published as the
-development docs (`/next/`, "Unreleased (main)"). Each release tag `vX.Y.Z`
-publishes the `docs/` it was tagged with as `/vX.Y.Z/`, and `/latest/` and the
-site root lead to the newest release, so a release's docs are frozen by its tag
-and nothing is copied. The version menu in the header lists them from
-`versions.json`, which the workflow writes from the tags.
+`main` is published as the development docs (`/next/`, "Unreleased (main)").
+Each minor release line has one copy, `/vX.Y/`, built from the branch
+`release-X.Y`, or from the newest tag `vX.Y.*` while that branch does not exist.
+A docs fix for a released line goes to `release-X.Y` (cherry-pick it from main,
+or open the PR against that branch); the site republishes on the push, so no
+patch tag is needed for docs. `/vX.Y.Z/` links of earlier releases redirect to
+the same page under `/vX.Y/`, and `/latest/` and the site root lead to the
+newest line. The version menu in the header lists the lines, with the patch
+release each one documents, from `versions.json`, which the workflow writes.
 
 ## Adding a page
 

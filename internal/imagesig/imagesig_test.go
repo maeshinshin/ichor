@@ -31,6 +31,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/go-containerregistry/pkg/v1/random"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/sigstore/sigstore-go/pkg/testing/ca"
 )
 
@@ -205,7 +206,7 @@ func (f *fakeRegistry) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/vnd.oci.image.manifest.v1+json")
+		w.Header().Set("Content-Type", string(types.OCIManifestSchema1))
 		_, _ = w.Write(data)
 	default:
 		http.NotFound(w, r)
@@ -227,7 +228,7 @@ func signatureReferrer(t *testing.T, f *fakeRegistry, bundleBody []byte) map[str
 
 	manifest, err := json.Marshal(map[string]any{
 		"schemaVersion": 2,
-		keyMediaType:    "application/vnd.oci.image.manifest.v1+json",
+		keyMediaType:    string(types.OCIManifestSchema1),
 		"artifactType":  bundleMediaType,
 		"annotations":   map[string]any{predicateKey: signPredicate},
 		"config":        map[string]any{keyMediaType: "application/vnd.oci.empty.v1+json", keySize: 2, keyDigest: digestOf([]byte("{}"))},
@@ -243,7 +244,7 @@ func signatureReferrer(t *testing.T, f *fakeRegistry, bundleBody []byte) map[str
 	f.blobs[md] = manifest
 
 	return map[string]any{
-		keyMediaType:   "application/vnd.oci.image.manifest.v1+json",
+		keyMediaType:   string(types.OCIManifestSchema1),
 		keyDigest:      md,
 		keySize:        len(manifest),
 		"artifactType": bundleMediaType,
@@ -313,7 +314,7 @@ func TestVerifyIgnoresBareReferrersThatAreNotCosignSignatures(t *testing.T) {
 	manifest := []byte(`{"schemaVersion":2,"mediaType":"application/vnd.oci.image.manifest.v1+json","annotations":{"` + predicateKey + `":"https://slsa.dev/provenance/v1"}}`)
 	md := digestOf(manifest)
 	f.blobs[md] = manifest
-	f.referrers = []map[string]any{{keyMediaType: "application/vnd.oci.image.manifest.v1+json", keyDigest: md, keySize: len(manifest)}}
+	f.referrers = []map[string]any{{keyMediaType: string(types.OCIManifestSchema1), keyDigest: md, keySize: len(manifest)}}
 
 	err := verifyAgainst(t, f, srv)
 	if err == nil || !strings.Contains(err.Error(), "has no cosign signature") {

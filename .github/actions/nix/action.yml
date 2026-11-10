@@ -1,6 +1,11 @@
 name: Nix with a cached store
 description: Install Nix and restore or save the devShell closure with the GitHub Actions cache.
 
+inputs:
+  cache:
+    description: Restore and save the Nix store in the Actions cache; release jobs turn it off so they never read a cache written by other workflows.
+    default: 'true'
+
 runs:
   using: composite
   steps:
@@ -20,6 +25,7 @@ runs:
           keep-outputs = true
 
     - name: Cache the Nix store
+      if: inputs.cache == 'true'
       uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
       with:
         primary-key: nix-${{ runner.os }}-${{ hashFiles('flake.nix', 'flake.lock') }}
@@ -29,6 +35,7 @@ runs:
 
     # Garbage collection would delete the devShell closure and the flake inputs: root both until the cache is saved.
     - name: Keep the devShell and the flake inputs out of garbage collection
+      if: inputs.cache == 'true'
       shell: bash
       run: |
         nix develop --profile "$RUNNER_TEMP/devshell" --command true

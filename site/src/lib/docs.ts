@@ -41,7 +41,6 @@ const dirs: Record<string, { label: string; order: number; newestFirst?: boolean
   reference: { label: 'Reference', order: 60 },
   cli: { label: 'CLI', order: 50 },
   crds: { label: 'Custom resources', order: 50 },
-  adr: { label: 'Decisions', order: 90, newestFirst: true },
 }
 const titleCase = (s: string) => s.replace(/[-_]/g, ' ').replace(/^./, (c) => c.toUpperCase())
 

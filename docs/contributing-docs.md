@@ -41,9 +41,9 @@ all that is needed:
   directory's own page, and `docs/index.md`
   is the home page.
 - **The section** is the directory. `guides/` is Guides, `design/` is Concepts,
-  `reference/` is Reference and `adr/` is Decisions (newest first, collapsed
-  until you are in it). Any other directory becomes a section of its own, listed
+  `reference/` is Reference. Any other directory becomes a section of its own, listed
   after those; a directory inside a section becomes a collapsible group.
+  `adr/` holds the decision records, kept in the repository and not published on the site.
 - **The title** is the front matter `title`, else the first `# ` heading. The
   site prints it as the page heading, so the Markdown's own `#` line is not
   shown twice.

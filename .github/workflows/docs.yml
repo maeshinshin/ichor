@@ -2,15 +2,16 @@ name: Docs
 
 # Builds the documentation site (docs/ rendered by site/) and
 # publishes it to GitHub Pages at https://ichor.maesh.dev/.
-# One run builds every version: main as /next/ and each release tag vX.Y.Z as
-# /vX.Y.Z/ (the tag's docs/, built with main's site/), plus versions.json and
-# the /latest/ redirects (make docs-site-all), and the Helm repository at /charts/
+# One run builds every version: main as /next/ and each minor line vX.Y as /vX.Y/
+# (docs/ of the branch release-X.Y, else of the newest tag vX.Y.*, built with main's site/),
+# plus versions.json, the /latest/ redirects and a redirect from each old /vX.Y.Z/ path
+# (make docs-site-all), and the Helm repository at /charts/
 # (each release's signed chart, pulled from ghcr). A new tag publishes after its
 # Release run succeeds, so the chart exists, and adds itself to the version switcher
-# of every older build.
+# of every older build. A push to a release-X.Y branch republishes its docs without a tag.
 on:
   push:
-    branches: [main]
+    branches: [main, "release-*"]
     paths:
       - "docs/**"
       - "site/**"

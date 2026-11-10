@@ -1,5 +1,52 @@
 # Changelog
 
+## v0.2.0 (2026-11-11)
+
+`ichor adopt` now works on an ordinary existing Talos cluster. Before this
+release a normal three-control-plane cluster was blocked on six configuration
+paths and nothing could be adopted. Verified on three-control-plane Talos VMs:
+the plan reports zero unrepresentable paths, the adoption finishes unattended,
+and each node's machine configuration is byte-identical before and after.
+
+### Adopt
+
+- Adopt takes the node's hostname into the `TalosMachine`.
+- Adopt captures the node's legacy `machine.network.interfaces`, its
+  `ResolverConfig` and its own `machine.certSANs` into the machine's
+  `TalosConfigPatch`. The node's own configuration is not changed and no node
+  needs a reboot.
+- A cluster whose control planes lack Talos's default
+  `node.kubernetes.io/exclude-from-external-load-balancers` label keeps lacking
+  it. Adopt sets the new `TalosCluster` field
+  `spec.controlPlane.omitDefaultNodeLabels` automatically; labels you set in
+  `spec.nodeLabels` or in patches still apply.
+
+### Configuration
+
+- A `TalosConfigPatch` can carry a `ResolverConfig` document (DNS nameservers,
+  search domains, host DNS).
+- New in the API: `TalosCluster` `spec.controlPlane.omitDefaultNodeLabels`.
+
+### Docs
+
+- The site publishes one copy per minor release line (`/v0.1/`, `/next/`), so
+  documentation fixes reach readers without a new release. Old per-tag URLs
+  redirect.
+
+### CI
+
+- The release workflow verifies and builds in parallel.
+
+### Not covered
+
+- Adopt does not convert a node's legacy network configuration to the
+  multi-document form; the node keeps the legacy form until you change it.
+- WireGuard devices in a legacy network configuration are refused.
+- On the v1.14 contract, kube-apiserver SANs that differ between control planes
+  still block adoption.
+- A cluster whose control planes disagree about the default node labels is not
+  detected; the nodes that lack the label keep blocking.
+
 ## v0.1.1 (2026-11-11)
 
 Documentation and release pipeline only. Nothing in the operator, the CLI or

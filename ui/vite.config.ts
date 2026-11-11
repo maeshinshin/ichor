@@ -1,5 +1,6 @@
 import preact from '@preact/preset-vite'
 import tailwindcss from '@tailwindcss/vite'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 
@@ -13,7 +14,18 @@ const proxy = api ? { '/ichor.': proxyTo, '/auth/config': proxyTo } : undefined
 export default defineConfig({
   server: { proxy },
   preview: { proxy },
-  plugins: [preact(), tailwindcss()],
+  plugins: [
+    preact(),
+    tailwindcss(),
+    {
+      // Serves the repository's THIRD-PARTY-NOTICES at /THIRD-PARTY-NOTICES.txt of the built UI.
+      name: 'third-party-notices',
+      generateBundle() {
+        const source = readFileSync(fileURLToPath(new URL('../THIRD-PARTY-NOTICES', import.meta.url)), 'utf8')
+        this.emitFile({ type: 'asset', fileName: 'THIRD-PARTY-NOTICES.txt', source })
+      },
+    },
+  ],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

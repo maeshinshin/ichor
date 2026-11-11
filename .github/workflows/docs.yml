@@ -8,7 +8,8 @@ name: Docs
 # (make docs-site-all), and the Helm repository at /charts/
 # (each release's signed chart, pulled from ghcr). A new tag publishes after its
 # Release run succeeds, so the chart exists, and adds itself to the version switcher
-# of every older build. A push to a release-X.Y branch republishes its docs without a tag.
+# of every older build. A push to a release-X.Y branch republishes its docs without a tag: Pages takes
+# deployments from main only, so that push runs the republish job, which dispatches this workflow on main.
 on:
   push:
     branches: [main, "release-*"]
@@ -31,7 +32,11 @@ concurrency:
 jobs:
   build:
     name: Build the site
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    # Only main, a dispatch (which the republish job sends for main) and a successful Release build here.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -90,3 +95,19 @@ jobs:
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+  # A release-X.Y push cannot deploy (Pages takes main only), so it asks GitHub to run this workflow on main.
+  # That run is a workflow_dispatch, which this condition excludes, so nothing chains.
+  republish:
+    name: Run the docs on main after a release-branch push
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release-')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write # create the workflow_dispatch run on main; the only permission this job has
+    steps:
+      - name: Dispatch the workflow on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run docs.yml --ref main

@@ -127,21 +127,36 @@ func (p *progress) Header(title, summary string) {
 
 // Warn prints a warning that is not tied to a step.
 func (p *progress) Warn(msg string) {
-	p.notice(p.paint(sgrYellow, markWarn), msg)
+	p.notice(markWarn, sgrYellow, msg, "")
 }
 
 // Info prints a plain note that is not tied to a step.
 func (p *progress) Info(msg string) {
-	p.notice(" ", p.paint(sgrDim, msg))
+	p.notice(" ", "", msg, sgrDim)
 }
 
-func (p *progress) notice(mark, msg string) {
+func (p *progress) notice(mark, markSGR, msg, msgSGR string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	p.eraseLocked()
 	p.gapLocked("note")
-	p.out(p.indent() + mark + " " + msg + "\n")
+
+	// Wrapping measures plain text, so the colours go on each line after it. A log keeps one line.
+	lines := []string{msg}
+	if p.tty {
+		lines = wrapLines(msg, p.size()-1-len([]rune(p.indent()))-2) // less the indent and the mark's space
+	}
+
+	for i, l := range lines {
+		lead := p.indent() + "  " // a continuation lines up under the text
+		if i == 0 {
+			lead = p.indent() + p.paint(markSGR, mark) + " "
+		}
+
+		p.out(lead + p.paint(msgSGR, l) + "\n")
+	}
+
 	p.drawLocked()
 }
 
@@ -634,6 +649,30 @@ func truncate(s string, n int) string {
 	default:
 		return string(r[:n-1]) + "…"
 	}
+}
+
+// wrapLines breaks s at spaces into lines of at most width runes. A word longer than width keeps a
+// line of its own, uncut: it is usually a path or a field name the reader has to copy. A width of
+// zero or less leaves s whole.
+func wrapLines(s string, width int) []string {
+	if width <= 0 || len([]rune(s)) <= width {
+		return []string{s}
+	}
+
+	words := strings.Split(s, " ")
+	lines := []string{}
+	cur := words[0]
+
+	for _, w := range words[1:] {
+		if len([]rune(cur))+1+len([]rune(w)) <= width {
+			cur += " " + w
+		} else {
+			lines = append(lines, cur)
+			cur = w
+		}
+	}
+
+	return append(lines, cur)
 }
 
 // firstSentence is s up to its first ". " (a scheduler message goes on with detail nobody needs

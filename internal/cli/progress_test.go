@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -336,6 +337,46 @@ func TestProgress_TerminalTruncatesTheLiveLineToTheWidth(t *testing.T) {
 
 	if !strings.Contains(buf.String(), strings.Repeat("y", 100)) {
 		t.Errorf("the final detail was cut")
+	}
+}
+
+// A notice wraps on a terminal, its continuation lines under the text; a log keeps it on one line.
+func TestProgress_NoticeWrapsOnATerminalOnly(t *testing.T) {
+	const msg = "adopt keeps the Talos config of every node it finds, so check each one before continuing"
+
+	p, buf, _ := newTestProgress(true, false, 40)
+	p.Warn(msg)
+
+	want := "  ! adopt keeps the Talos config of\n" +
+		"    every node it finds, so check each\n" +
+		"    one before continuing\n"
+	wantText(t, buf.String(), want)
+
+	plain, pbuf, _ := newTestProgress(false, false, 40)
+	plain.Warn(msg)
+	wantText(t, pbuf.String(), "! "+msg+"\n")
+}
+
+func TestWrapLines(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		in    string
+		width int
+		want  []string
+	}{
+		{"a short string is one line", "a warning", 20, []string{"a warning"}},
+		{"wraps at a space", "adopt wants the cluster name first", 16, []string{"adopt wants the", "cluster name", "first"}},
+		{"an over-long token keeps its own line", "see /var/lib/ichor/clusters/prod/secrets.yaml now", 20, []string{"see", "/var/lib/ichor/clusters/prod/secrets.yaml", "now"}},
+		{"width zero leaves the string whole", "a b c", 0, []string{"a b c"}},
+		{"a negative width leaves the string whole", "x y z", -3, []string{"x y z"}},
+		{"multiple spaces are kept", "a   b", 10, []string{"a   b"}},
+		{"empty input is one empty line", "", 10, []string{""}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := wrapLines(tc.in, tc.width); !slices.Equal(got, tc.want) {
+				t.Errorf("wrapLines(%q, %d) = %q, want %q", tc.in, tc.width, got, tc.want)
+			}
+		})
 	}
 }
 

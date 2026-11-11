@@ -1415,8 +1415,8 @@ const (
 	registryAuthHint = "registry credentials are never copied into Ichor: create the TalosCluster yourself with spec.registries[].authSecretRef " +
 		"(a Secret in the controller's namespace holding password, auth or identityToken), then run adopt again"
 	certSANsHint = "this node's SAN list could not be captured into its patch: it lacks a SAN that TalosCluster spec.certSANs " +
-		"(rendered on every node) adds, or its kube-apiserver SANs are only in a KubeAPIServerConfig document; " +
-		"set spec.certSANs to the node's list"
+		"(rendered on every node) adds, or its kube-apiserver SANs beyond the ones every control plane shares are only in a " +
+		"KubeAPIServerConfig document; remove the SAN from spec.certSANs, or give every control plane the same kube-apiserver SANs"
 )
 
 var specFieldHints = []specFieldHint{

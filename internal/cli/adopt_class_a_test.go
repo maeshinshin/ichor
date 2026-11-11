@@ -267,7 +267,7 @@ func TestAdoptKeepsUnrepresentableRegistryDriftClassC(t *testing.T) {
 // list beyond the cluster's is captured into its patch, so nothing on a node changes (ADR 0143).
 func TestAdoptCapturesEachNodesDifferingCertSANs(t *testing.T) {
 	cp, _ := classAFixture(t, "v114")
-	addrs := []string{flowCPAddr, "10.0.0.12", "10.0.0.13"}
+	addrs := []string{flowCPAddr, addAddr, "10.0.0.13"}
 	live, members := map[string][]byte{}, make([]ClusterMember, 0, len(addrs))
 
 	for i, addr := range addrs {
@@ -344,5 +344,139 @@ func TestDiskFromExpression(t *testing.T) {
 		if got := diskFromExpression(in); got != want {
 			t.Errorf("diskFromExpression(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// userCluster rewrites a v1.13 control plane into the shape a real cluster showed: machine.certSANs
+// holds only localhost, cluster.apiServer.certSANs is absent, and one interface carries an address,
+// a default route and a control-plane virtual IP.
+func userCluster(t *testing.T, cp []byte) []byte {
+	t.Helper()
+
+	out := string(cp)
+	for _, r := range [][2]string{
+		{"    certSANs:\n        - 10.5.0.2\n        - cp.example.test\n", "    certSANs:\n        - localhost\n" +
+			"    network:\n        interfaces:\n            - interface: enp1s0\n              addresses:\n                  - 10.0.1.5/16\n" +
+			"              routes:\n                  - network: 0.0.0.0/0\n                    gateway: 10.0.0.1\n" +
+			"              vip:\n                  ip: 10.0.1.100\n"},
+		{"        certSANs:\n            - 10.5.0.2\n            - cp.example.test\n", ""},
+	} {
+		if !strings.Contains(out, r[0]) {
+			t.Fatalf("fixture lacks %q", r[0])
+		}
+
+		out = strings.Replace(out, r[0], r[1], 1)
+	}
+
+	return []byte(out)
+}
+
+func userClusterFlow(t *testing.T, talosVersion string, mutate func(i int, cfg string) string) (*flowEnv, adoptDeps, []string) {
+	t.Helper()
+
+	cp, _ := classAFixture(t, "v113")
+	addrs := []string{flowCPAddr, addAddr, "10.0.0.13"}
+	live, members := map[string][]byte{}, make([]ClusterMember, 0, len(addrs))
+
+	for i, addr := range addrs {
+		cfg := string(userCluster(t, cp))
+		if mutate != nil {
+			cfg = mutate(i, cfg)
+		}
+
+		live[addr] = []byte(cfg)
+		members = append(members, ClusterMember{Hostname: fmt.Sprintf("cp%d", i), Addresses: []string{addr}, Role: roleControlPlane})
+	}
+
+	env, deps := classAFlowOf(t, talosVersion, live, members)
+
+	return env, deps, addrs
+}
+
+// Nodes whose machine.certSANs hold a SAN that their kube-apiserver SANs lack must not put it into
+// spec.certSANs, which renders into both: every node keeps it in its own patch, with its interfaces and
+// the virtual IP, and nothing is left to differ (ADR 0143).
+func TestAdoptKeepsSpecCertSANsToWhatEveryNodeSharesInBothPlaces(t *testing.T) {
+	env, deps, addrs := userClusterFlow(t, "v1.13.1", nil)
+
+	if out := planOutput(t, env, deps, false); strings.Contains(out, "cannot patch automatically") {
+		t.Fatalf("the plan is blocked:\n%s", out)
+	}
+
+	deps.PlanOnly, deps.AssumeYes = false, true
+	_ = runAdopt(context.Background(), "d1", testNamespace, deps)
+
+	var cluster ichorv1alpha1.TalosCluster
+	if err := env.k8s.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: "d1"}, &cluster); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(cluster.Spec.CertSANs) != 0 {
+		t.Errorf("spec.certSANs = %v, want empty", cluster.Spec.CertSANs)
+	}
+
+	for _, addr := range addrs {
+		var p ichorv1alpha1.TalosConfigPatch
+		if err := env.k8s.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: "adopt-uuid-" + addr}, &p); err != nil {
+			t.Fatal(err)
+		}
+
+		var sans []string
+
+		var ifaces []*ichorv1alpha1.TalosConfigPatchDocument
+
+		for _, d := range p.Spec.Documents {
+			if d.Config == nil || d.Config.MachineConfig == nil {
+				continue
+			}
+
+			sans = append(sans, d.Config.MachineConfig.MachineCertSANs...)
+
+			if n := d.Config.MachineConfig.MachineNetwork; n != nil && len(n.NetworkInterfaces) == 1 {
+				i := n.NetworkInterfaces[0]
+				if i.DeviceInterface != "enp1s0" || len(i.DeviceRoutes) != 1 || i.DeviceVIPConfig == nil || i.DeviceVIPConfig.SharedIP != "10.0.1.100" {
+					t.Errorf("%s: the captured interface lost its routes or vip: %+v", addr, i)
+				}
+
+				ifaces = append(ifaces, &d)
+			}
+		}
+
+		if !slices.Equal(sans, []string{"localhost"}) || len(ifaces) != 1 {
+			t.Errorf("%s: patch machine.certSANs = %v, interfaces documents = %d; want [localhost] and 1", addr, sans, len(ifaces))
+		}
+	}
+
+	deps.PlanOnly, deps.AssumeYes = true, false
+	env.stderr.Reset()
+
+	again := planOutput(t, env, deps, false)
+	if strings.Contains(again, "drift found") || strings.Count(again, "already matches a fresh render") != 3 {
+		t.Errorf("the rerun plan reports drift:\n%s", again)
+	}
+}
+
+// On a v1.14 contract the kube-apiserver SANs live in KubeAPIServerConfig, which a patch cannot carry:
+// a node with one beyond what every node shares blocks, and only that path is named.
+func TestAdoptBlocksOnlyTheAPIServerSANsThatCannotBeCaptured(t *testing.T) {
+	cp, _ := classAFixture(t, "v114")
+	addrs := []string{flowCPAddr, addAddr}
+	live, members := map[string][]byte{}, make([]ClusterMember, 0, len(addrs))
+
+	for i, addr := range addrs {
+		cfg := string(cp)
+		if i == 0 {
+			cfg = strings.Replace(cfg, "certExtraSANs:\n    - 10.5.0.2\n    - cp.example.test\n", "certExtraSANs:\n    - 10.5.0.2\n    - cp.example.test\n    - extra.example.test\n", 1)
+		}
+
+		live[addr] = []byte(cfg)
+		members = append(members, ClusterMember{Hostname: fmt.Sprintf("cp%d", i), Addresses: []string{addr}, Role: roleControlPlane})
+	}
+
+	env, deps := classAFlowOf(t, ver1143, live, members)
+
+	out := planOutput(t, env, deps, false)
+	if !strings.Contains(out, "blocked") || !strings.Contains(out, "KubeAPIServerConfig.certExtraSANs") || strings.Contains(out, "machine.network.interfaces") {
+		t.Errorf("the plan does not name only the kube-apiserver SANs:\n%s", out)
 	}
 }

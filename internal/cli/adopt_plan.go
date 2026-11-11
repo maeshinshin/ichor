@@ -228,8 +228,13 @@ func buildAdoptPlan(
 		plan.Patch = &candidate
 	} else {
 		// The captured blocks did not reproduce the node (e.g. a WireGuard key the mirror drops, or a SAN
-		// the cluster's list adds that a patch cannot take away).
-		plan.UnrepresentablePaths = append(plan.UnrepresentablePaths, captured...)
+		// the cluster's list adds that a patch cannot take away): name what is still different, not
+		// everything that was captured.
+		for _, p := range notOwned {
+			if !slices.Contains(plan.UnrepresentablePaths, p) {
+				plan.UnrepresentablePaths = append(plan.UnrepresentablePaths, p)
+			}
+		}
 	}
 
 	return plan, nil

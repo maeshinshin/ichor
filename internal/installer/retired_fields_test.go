@@ -131,7 +131,7 @@ func upgradeCRD(t *testing.T, old *unstructured.Unstructured, targetPath string)
 // installer's CRD check allows the removal, the API server prunes the retired fields and no
 // validation rejects the object for carrying them.
 func TestStoredTalosClusterWithRetiredFieldsSurvivesTheCRDUpgrade(t *testing.T) {
-	// testdata is the TalosCluster CRD as it was before the removal (git show c7902de:config/crd/bases/...).
+	// testdata is the TalosCluster CRD as it was before the removal (git show c7902de:config/crd/bases/..., descriptions omitted).
 	old := loadCRD(t, "testdata/talosclusters-before-retirement.yaml")
 	installOldCRD(t, old)
 

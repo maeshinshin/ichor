@@ -4,7 +4,7 @@
 
 ```sh
 nix develop
-go version   # 1.27.3 or newer
+go version   # 1.27.4 or newer
 make help
 ```
 
@@ -26,7 +26,7 @@ golangci-lint is lower than the targeted Go version" on every later run, inside
 the shell or not. If you see that, `rm -rf bin` and run it again inside
 `nix develop`.
 
-Check with `./bin/golangci-lint version`: it has to say `built with go1.27.3`
+Check with `./bin/golangci-lint version`: it has to say `built with go1.27.4`
 (or whatever `flake.nix` pins now). If it names an older Go, the cache is
 poisoned and your work was never linted, so check this before concluding that
 lint failures are not yours.

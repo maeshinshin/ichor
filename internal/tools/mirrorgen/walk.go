@@ -64,16 +64,16 @@ type structDef struct {
 	// be renamed to match.
 	machName string
 	pkgPath  string // machinery package path this struct comes from
-	doc      string
 	fields   []*fieldDef
 	isRoot   bool
 	rootKind rootKind
+	// pages holds the reference page of every root this struct is reachable from.
+	pages map[string]bool
 }
 
 type fieldDef struct {
 	name     string // Go field name, shared between mirror and machinery sides
 	jsonName string
-	doc      string
 	optional bool
 	mapping  *typeMapping
 }
@@ -404,8 +404,6 @@ func (g *generator) structMapping(named *types.Named, st *types.Struct) *typeMap
 	g.structs[named] = def // register before recursing, in case of cycles
 	g.order = append(g.order, def)
 
-	def.doc = g.typeDoc(named)
-
 	for i := range st.NumFields() {
 		fld := st.Field(i)
 		tag := st.Tag(i)
@@ -459,7 +457,6 @@ func (g *generator) structMapping(named *types.Named, st *types.Struct) *typeMap
 		def.fields = append(def.fields, &fieldDef{
 			name:     fld.Name(),
 			jsonName: yamlName,
-			doc:      g.fieldDoc(name, fld.Name()),
 			optional: omitempty || sparseFields[fieldKey],
 			mapping:  mapping,
 		})

@@ -3,12 +3,59 @@ package main
 import (
 	"fmt"
 	"os"
+	"path"
 	"slices"
 	"strings"
+
+	"github.com/maeshinshin/ichor/pkg/release"
 )
 
 func (d *structDef) machExpr() string {
 	return machImportAlias(d.pkgPath) + "." + d.machName
+}
+
+// referencePage is the Talos configuration reference page of one root kind, for the pinned version contract.
+func referencePage(r rootKind) string {
+	return fmt.Sprintf("https://docs.siderolabs.com/talos/%s/reference/configuration/%s/%s",
+		release.Pinned.VersionContract, path.Base(r.pkgPath), strings.ToLower(r.kind))
+}
+
+// addPage records page on d and on every struct reachable from it.
+func (d *structDef) addPage(page string) {
+	if d.pages[page] {
+		return
+	}
+
+	if d.pages == nil {
+		d.pages = map[string]bool{}
+	}
+
+	d.pages[page] = true
+
+	for _, f := range d.fields {
+		for m := f.mapping; m != nil; m = m.elem {
+			if m.structDef != nil {
+				m.structDef.addPage(page)
+			}
+		}
+	}
+}
+
+// reference is the one-line pointer to the upstream symbol (field is its YAML name, "" for the type).
+// A struct shared by several root kinds has no single page, so it gets the symbol alone.
+func (d *structDef) reference(field string) string {
+	sym := d.machName
+	if field != "" {
+		sym += "." + field
+	}
+
+	for page := range d.pages {
+		if len(d.pages) == 1 {
+			return "Talos: " + sym + " — " + page
+		}
+	}
+
+	return "Talos: " + sym
 }
 
 // mirrorTypeExprOf is the Go type expression for m on the generated mirror
@@ -301,7 +348,11 @@ func emitContainerConvert(b *strings.Builder, m *typeMapping, src, dst string, t
 
 // --- file writers -----------------------------------------------------
 
-const header = `/*
+const header = `// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+/*
 Copyright 2026 maeshinshin.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -352,16 +403,12 @@ import (
 func writeMirrorStruct(b *strings.Builder, def *structDef) {
 	b.WriteString("\n")
 
-	if def.doc != "" {
-		writeDocComment(b, "", def.doc)
-	}
+	fmt.Fprintf(b, "// %s\n", def.reference(""))
 
 	fmt.Fprintf(b, "type %s struct {\n", def.name)
 
 	for _, f := range def.fields {
-		if f.doc != "" {
-			writeDocComment(b, "\t", f.doc)
-		}
+		fmt.Fprintf(b, "\t// %s\n", def.reference(f.jsonName))
 
 		if f.optional {
 			fmt.Fprintf(b, "\t// +optional\n")
@@ -378,16 +425,6 @@ func writeMirrorStruct(b *strings.Builder, def *structDef) {
 	}
 
 	b.WriteString("}\n")
-}
-
-func writeDocComment(b *strings.Builder, indent, doc string) {
-	for line := range strings.SplitSeq(doc, "\n") {
-		if line == "" {
-			fmt.Fprintf(b, "%s//\n", indent)
-		} else {
-			fmt.Fprintf(b, "%s// %s\n", indent, line)
-		}
-	}
 }
 
 func (g *generator) writeConversion(filename string) {

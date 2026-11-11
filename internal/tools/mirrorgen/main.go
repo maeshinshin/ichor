@@ -334,7 +334,7 @@ func fatalf(format string, args ...any) {
 func generate() *generator {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesInfo |
-			packages.NeedSyntax | packages.NeedDeps | packages.NeedImports,
+			packages.NeedDeps | packages.NeedImports,
 	}
 
 	pkgs, err := packages.Load(cfg, pkgRuntime, pkgV1Alpha1, pkgBlock, pkgNetwork, pkgCoreV1, pkgSpecs, pkgAuditV1, pkgAPIServerV1, pkgKubeletV1)
@@ -363,6 +363,7 @@ func generate() *generator {
 		def := g.structs[named]
 		def.isRoot = true
 		def.rootKind = r
+		def.addPage(referencePage(r))
 	}
 
 	return g

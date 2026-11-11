@@ -91,6 +91,7 @@ docs-reference: ## Regenerate docs/reference/cli (from the ichor command tree) a
 generate: controller-gen ## Generate mirror types (go generate) plus DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	go generate ./...
 	"$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.go.txt",year=$(YEAR) paths="$(CONTROLLER_GEN_PATHS)"
+	"$(CONTROLLER_GEN)" object:headerFile="hack/boilerplate.typedconfig.go.txt",year=$(YEAR) paths="./pkg/typedconfig"
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.

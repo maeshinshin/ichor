@@ -340,6 +340,23 @@ func TestProgress_TerminalTruncatesTheLiveLineToTheWidth(t *testing.T) {
 	}
 }
 
+// A warning and an info note are separate blocks on a terminal; notices of one kind stay together.
+func TestProgress_NoticeKindsAreSeparatedByBlankLines(t *testing.T) {
+	p, buf, _ := newTestProgress(true, false, 80)
+
+	p.Warn("first warning")
+	p.Warn("second warning")
+	p.Info("a note")
+	p.Info("another note")
+
+	want := "  ! first warning\n" +
+		"  ! second warning\n" +
+		"\n" +
+		"    a note\n" +
+		"    another note\n"
+	wantText(t, buf.String(), want)
+}
+
 // A notice wraps on a terminal, its continuation lines under the text; a log keeps it on one line.
 func TestProgress_NoticeWrapsOnATerminalOnly(t *testing.T) {
 	const msg = "adopt keeps the Talos config of every node it finds, so check each one before continuing"

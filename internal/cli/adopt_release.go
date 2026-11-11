@@ -26,6 +26,7 @@ import (
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -39,6 +40,10 @@ const (
 
 	conditionReady        = "Ready"
 	conditionAdoptionHeld = "AdoptionHeld"
+
+	// reasonRebootRequired is the Ready=False reason the controller sets on a machine whose pending
+	// change needs a reboot (talosmachine_controller.go).
+	reasonRebootRequired = "RebootRequired"
 )
 
 // caRotationAdvice is the recommendation, word for word. Advice only: nothing here
@@ -136,8 +141,16 @@ func releaseHold(
 
 		released++
 
-		if err := waitMachineReleased(ctx, deps, key); err != nil {
+		reboot, err := waitMachineReleased(ctx, deps, key)
+		if err != nil {
 			return released, err
+		}
+
+		// The hold is already off and nothing reboots a node on its own, so go on to the next
+		// machine; a rerun of adopt skips the machines whose hold is gone.
+		if reboot {
+			_, _ = fmt.Fprintf(deps.Stderr, "adopt: machine %q needs a reboot to apply a pending change; run `ichor config apply --cluster %s`; adopt goes on with the other machines\n",
+				m.Name, clusterName)
 		}
 	}
 
@@ -170,8 +183,9 @@ func clusterPatches(ctx context.Context, c client.Client, namespace, clusterName
 	return out, nil
 }
 
-// waitMachineReleased polls until the machine is Ready and no longer held.
-func waitMachineReleased(ctx context.Context, deps adoptDeps, key types.NamespacedName) error {
+// waitMachineReleased polls until the machine is Ready and no longer held. It returns true early
+// when the machine reports Ready=False/RebootRequired: that waits for the operator, not for time.
+func waitMachineReleased(ctx context.Context, deps adoptDeps, key types.NamespacedName) (bool, error) {
 	wait := cmp.Or(deps.ReleaseWait, defaultReleaseWait)
 	interval := cmp.Or(deps.Interval, defaultReleaseInterval)
 
@@ -184,12 +198,18 @@ func waitMachineReleased(ctx context.Context, deps adoptDeps, key types.Namespac
 		err := deps.K8s.Get(ctx, key, &m)
 		if err == nil && apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionReady) &&
 			!apimeta.IsStatusConditionTrue(m.Status.Conditions, conditionAdoptionHeld) {
-			return nil
+			return false, nil
+		}
+
+		if c := apimeta.FindStatusCondition(m.Status.Conditions, conditionReady); err == nil && c != nil &&
+			c.Status == metav1.ConditionFalse && c.Reason == reasonRebootRequired {
+			return true, nil
 		}
 
 		if sleepCtx(ctx, interval) != nil {
-			return fmt.Errorf("adopt: machine %q did not become Ready within %s after its hold was released; "+
-				"the machines after it stay held", key.Name, wait)
+			return false, fmt.Errorf("adopt: machine %q did not become Ready within %s after its hold was released; "+
+				"the machines after it stay held; if it reports a pending change, run `ichor config apply`; "+
+				"adopt can be run again, it skips the machines already released", key.Name, wait)
 		}
 	}
 }

@@ -110,11 +110,11 @@ jobs:
       # they match what `make build`/`make test` (which both depend on fmt too) actually
       # produce.
       - name: Regenerate manifests and mirror types
-        run: nix develop --command make manifests generate fmt docs-reference
+        run: nix develop --command make manifests generate fmt docs-reference third-party-notices
 
       - name: Fail if regenerating produced a diff
         run: |
           if ! git diff --exit-code; then
-            echo "::error::Generated files are out of date with their source (api/v1alpha1 types and/or +kubebuilder:rbac markers). Run 'make manifests generate fmt' locally and commit the result." >&2
+            echo "::error::Generated files are out of date with their source (api/v1alpha1 types, +kubebuilder:rbac markers, go.mod or ui/package-lock.json). Run 'make manifests generate fmt docs-reference third-party-notices' locally and commit the result." >&2
             exit 1
           fi

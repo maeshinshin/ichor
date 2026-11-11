@@ -1,186 +1,94 @@
-version: v1alpha1 # Indicates the schema used to decode the contents.
-debug: false # Enable verbose logging to the console.
+version: v1alpha1
+debug: false
 persist: true
-# Provides machine specific configuration options.
 machine:
-    type: worker # Defines the role of the machine within the cluster.
-    token: 0ww775.88asloipqrhpcs31 # The `token` is used by a machine to join the PKI of the cluster.
-    # The root certificate authority of the PKI.
+    type: worker
+    token: 0ww775.88asloipqrhpcs31
     ca:
         crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJQekNCOHFBREFnRUNBaEVBajFMQjUyaUNmN3lYdnFvamJabVVIVEFGQmdNclpYQXdFREVPTUF3R0ExVUUKQ2hNRmRHRnNiM013SGhjTk1qWXhNREk1TURVek5URTFXaGNOTXpZeE1ESTJNRFV6TlRFMVdqQVFNUTR3REFZRApWUVFLRXdWMFlXeHZjekFxTUFVR0F5dGxjQU1oQUhLVjBhQWd0OXR3ekFTcGo5eVVnUUV1UUUvSHVySGdKcEtjCjFtM3RuQXlibzJFd1h6QU9CZ05WSFE4QkFmOEVCQU1DQW9Rd0hRWURWUjBsQkJZd0ZBWUlLd1lCQlFVSEF3RUcKQ0NzR0FRVUZCd01DTUE4R0ExVWRFd0VCL3dRRk1BTUJBZjh3SFFZRFZSME9CQllFRlBXNnhZTjl4MWF5a0YzTgpkZlRteGhBclRmeldNQVVHQXl0bGNBTkJBSU5HRllwZCsxTFBocnIxaEFKZkVlL3YraGZuNmkxc3RJaTVvL3hPCjhTcVI1YVFtd2lzUndJQTV6LzQ2VlVxT2hhWS9Va0UyVDduaVl4T21QZjN0ZGcwPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
         key: ""
-    # Extra certificate subject alternative names for the machine's certificate.
     certSANs:
         - 10.5.0.2
         - cp.example.test
-    # Features describe individual Talos features that can be switched on or off.
     features:
-        diskQuotaSupport: true # Enable XFS project quota support for EPHEMERAL partition and user disks.
-    
-    # # Configures the logging system.
-    # logging:
-    #     # Logging destination.
-    #     destinations:
-    #         - endpoint: tcp://1.2.3.4:12345 # Where to send logs. Supported protocols are "tcp" and "udp".
-    #           format: json_lines # Logs format.
-    # logging:
-    #     # Logging destination.
-    #     destinations:
-    #         - endpoint: udp://127.0.0.1:12345 # Where to send logs. Supported protocols are "tcp" and "udp".
-    #           format: json_lines # Logs format.
-    #           # Extra tags (key-value) pairs to attach to every log message sent.
-    #           extraTags:
-    #             machine: worker-1
-
-    # # Configures the seccomp profiles for the machine.
-    # seccompProfiles:
-    #     - name: audit.json # The `name` field is used to provide the file name of the seccomp profile.
-    #       # The `value` field is used to provide the seccomp profile.
-    #       value:
-    #         defaultAction: SCMP_ACT_LOG
-# Provides cluster specific configuration options.
+        diskQuotaSupport: true
 cluster:
-    token: 2bpwmi.0o4fo4z3uwslapht # The [bootstrap token](https://kubernetes.io/docs/reference/access-authn-authz/bootstrap-tokens/) used to join the cluster.
-    
-    # # Etcd specific configuration options.
-    # etcd:
-    #     image: registry.k8s.io/etcd:v3.7.2 # The container image used to create the etcd service.
-    #     # The `ca` is the root certificate authority of the PKI.
-    #     ca:
-    #         crt: LS0tIEVYQU1QTEUgQ0VSVElGSUNBVEUgLS0t
-    #         key: LS0tIEVYQU1QTEUgS0VZIC0tLQ==
-    #     # Extra arguments to supply to etcd.
-    #     extraArgs:
-    #         election-timeout: "5000"
-    #     # The `advertisedSubnets` field configures the networks to pick etcd advertised IP from.
-    #     advertisedSubnets:
-    #         - 10.0.0.0/8
-
-    # # External cloud provider configuration.
-    # externalCloudProvider:
-    #     enabled: true # Enable external cloud provider.
-    #     # A list of urls that point to additional manifests for an external cloud provider.
-    #     manifests:
-    #         - https://raw.githubusercontent.com/kubernetes/cloud-provider-aws/v1.20.0-alpha.0/manifests/rbac.yaml
-    #         - https://raw.githubusercontent.com/kubernetes/cloud-provider-aws/v1.20.0-alpha.0/manifests/aws-cloud-controller-manager-daemonset.yaml
-
-    # # Settings for admin kubeconfig generation.
-    # adminKubeconfig:
-    #     certLifetime: 1h0m0s # Admin kubeconfig certificate lifetime (default is 1 year).
+    token: 2bpwmi.0o4fo4z3uwslapht
 ---
 apiVersion: v1alpha1
 kind: DiscoveryServiceConfig
-name: default # Name of the discovery service configuration.
-endpoint: https://discovery.talos.dev/ # Discovery service endpoint to use.
+name: default
+endpoint: https://discovery.talos.dev/
 ---
 apiVersion: v1alpha1
 kind: DiscoveryIdentityConfig
-clusterID: OXvu/kGnB/D6ZJdHxPNbrDDEORs2ur6UeqnLQPYIWhw= # Globally unique identifier for this cluster (base64 encoded random 32 bytes).
-clusterSecret: QgZcnQgFPDD782QcETBcmOAGvgMBkwK99SgUgaYJUNU= # Shared secret of cluster (base64 encoded random 32 bytes).
+clusterID: OXvu/kGnB/D6ZJdHxPNbrDDEORs2ur6UeqnLQPYIWhw=
+clusterSecret: QgZcnQgFPDD782QcETBcmOAGvgMBkwK99SgUgaYJUNU=
 ---
 apiVersion: v1alpha1
 kind: UnattendedInstallConfig
-# The installer describes the source of the installation.
 installer:
-    image: factory.talos.dev/metal-installer/376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba:v1.14.3 # Allows for supplying the image used to perform the installation.
-# The provisioning describes how the installation disk should be provisioned.
+    image: factory.talos.dev/metal-installer/376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba:v1.14.3
 provisioning:
-    # Matches disks to initialize as physical volumes.
     diskSelector:
-        match: disk.dev_path == "/dev/vda" # CEL expression matching a disk.
-    wipe: false # Indicates if the installation disk should be wiped at installation time.
+        match: disk.dev_path == "/dev/vda"
+    wipe: false
 ---
 apiVersion: v1alpha1
 kind: ResolverConfig
-# Configuration for host DNS resolver.
 hostDNS:
-    enabled: true # Enable host DNS caching resolver.
-    forwardKubeDNSToHost: true # Use the host DNS resolver as upstream for Kubernetes CoreDNS pods.
+    enabled: true
+    forwardKubeDNSToHost: true
 ---
 apiVersion: v1alpha1
 kind: VolumeConfig
-name: EPHEMERAL # Name of the volume.
-# The mount describes additional mount options.
+name: EPHEMERAL
 mount:
-    secure: true # Enable secure mount options (nosuid, nodev).
-
-# # The encryption describes how the volume is encrypted.
-# encryption:
-#     provider: luks2 # Encryption provider to use for the encryption.
-#     # Defines the encryption keys generation and storage method.
-#     keys:
-#         - slot: 0 # Key slot number for LUKS2 encryption.
-#           # Key which value is stored in the configuration file.
-#           static:
-#             passphrase: exampleKey # Defines the static passphrase value.
-#           
-#           # # KMS managed encryption key.
-#           # kms:
-#           #     endpoint: https://192.168.88.21:4443 # KMS endpoint to Seal/Unseal the key.
-#         - slot: 1 # Key slot number for LUKS2 encryption.
-#           # KMS managed encryption key.
-#           kms:
-#             endpoint: https://example-kms-endpoint.com # KMS endpoint to Seal/Unseal the key.
-#     cipher: aes-xts-plain64 # Cipher to use for the encryption. Depends on the encryption provider.
-#     blockSize: 4096 # Defines the encryption sector size.
-#     # Additional --perf parameters for the LUKS2 encryption.
-#     options:
-#         - no_read_workqueue
-#         - no_write_workqueue
+    secure: true
 ---
 apiVersion: v1alpha1
 kind: FilesystemTrimConfig
-interval: 168h0m0s # The interval at which the filesystems are trimmed.
+interval: 168h0m0s
 ---
 apiVersion: v1alpha1
 kind: SecurityProfileConfig
-workloadIsolation: true # Enable workload isolation (run the container plane inside the sandbox namespace).
+workloadIsolation: true
 ---
 apiVersion: v1alpha1
 kind: RegistryMirrorConfig
-name: docker.io # Registry name to apply the mirror configuration to.
-# List of mirror endpoints for the registry.
+name: docker.io
 endpoints:
-    - url: https://mirror.example.test:5000 # The URL of the registry mirror endpoint.
+    - url: https://mirror.example.test:5000
 ---
 apiVersion: v1alpha1
 kind: HostnameConfig
-auto: stable # A method to automatically generate a hostname for the machine.
-
-# # A static hostname to set for the machine.
-# hostname: controlplane1
-# hostname: controlplane1.example.org
+auto: stable
 ---
 apiVersion: v1alpha1
 kind: KubeClusterConfig
-clusterName: d1 # The cluster name.
-endpoint: https://10.5.0.2:6443 # The Kubernetes API endpoint.
+clusterName: d1
+endpoint: https://10.5.0.2:6443
 ---
 apiVersion: v1alpha1
 kind: KubeNodeConfig
-# The `nodeIP` field is used to configure `--node-ip` flag for the kubelet.
 nodeIP: {}
 ---
 apiVersion: v1alpha1
 kind: KubeletConfig
-image: ghcr.io/siderolabs/kubelet:v1.36.6 # The container image used to run the kubelet component.
-# Provide extra configuration for the kubelet.
+image: ghcr.io/siderolabs/kubelet:v1.36.6
 config: {}
-defaultRuntimeSeccompProfileEnabled: true # Enable container runtime default Seccomp profile.
+defaultRuntimeSeccompProfileEnabled: true
 ---
 apiVersion: v1alpha1
 kind: KubeNetworkConfig
-dnsDomain: cluster.local # The domain used by Kubernetes DNS.
-# The pod subnet (CIDR), this can be a single value or two values for dual-stack clusters.
+dnsDomain: cluster.local
 podSubnets:
     - 10.244.0.0/16
-# The service subnet (CIDR), this can be a single value or two values for dual-stack clusters.
 serviceSubnets:
     - 10.96.0.0/12
 ---
 apiVersion: v1alpha1
 kind: KubeAPIServerCAConfig
-# The list of accepted CA certificates for the Kubernetes API server.
 acceptedCAs:
     - |
       -----BEGIN CERTIFICATE-----
@@ -197,4 +105,4 @@ acceptedCAs:
 ---
 apiVersion: v1alpha1
 kind: KubePrismConfig
-port: 7445 # KubePrism port.
+port: 7445

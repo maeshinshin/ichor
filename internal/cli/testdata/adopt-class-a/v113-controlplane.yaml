@@ -1,15 +1,12 @@
-version: v1alpha1 # Indicates the schema used to decode the contents.
-debug: false # Enable verbose logging to the console.
+version: v1alpha1
+debug: false
 persist: true
-# Provides machine specific configuration options.
 machine:
-    type: controlplane # Defines the role of the machine within the cluster.
-    token: n89w5n.rvz8riyr18h5c29s # The `token` is used by a machine to join the PKI of the cluster.
-    # The root certificate authority of the PKI.
+    type: controlplane
+    token: n89w5n.rvz8riyr18h5c29s
     ca:
         crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJQakNCOGFBREFnRUNBaEFYVTZYWmJuMSsrS01LQzZwVWN4VFBNQVVHQXl0bGNEQVFNUTR3REFZRFZRUUsKRXdWMFlXeHZjekFlRncweU5qRXdNamt3TlRNMU1qRmFGdzB6TmpFd01qWXdOVE0xTWpGYU1CQXhEakFNQmdOVgpCQW9UQlhSaGJHOXpNQ293QlFZREsyVndBeUVBalZyaytVN3dRWVFIM1RWYmxrUC9ORE1RVkxoZXBFcXJSYjFwCi9PUzQ3SEdqWVRCZk1BNEdBMVVkRHdFQi93UUVBd0lDaERBZEJnTlZIU1VFRmpBVUJnZ3JCZ0VGQlFjREFRWUkKS3dZQkJRVUhBd0l3RHdZRFZSMFRBUUgvQkFVd0F3RUIvekFkQmdOVkhRNEVGZ1FVck5pOExsRHIxSDZ3aGcrTQp5MFZ0dTkzQzdNY3dCUVlESzJWd0EwRUFKZVRxMjVVa0krZzVCVXpUdHEvUklkMkU2YWhEVGl1RU8vTlhmV2pICnpZa2FmUmRKM3ZlRU9hMWowM0VtcmVMc2NML2M0NHk5YzdBUXNKWDRsd3UxRHc9PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
         key: LS0tLS1CRUdJTiBFRDI1NTE5IFBSSVZBVEUgS0VZLS0tLS0KTUM0Q0FRQXdCUVlESzJWd0JDSUVJQnU2c2ZwbEJicXJKN1BiaTVBcGRaQW1Mc0gyNitBQzcyT0haa2xZOU83ZwotLS0tLUVORCBFRDI1NTE5IFBSSVZBVEUgS0VZLS0tLS0K
-    # Extra certificate subject alternative names for the machine's certificate.
     certSANs:
         - 10.5.0.2
         - cp.example.test
@@ -22,9 +19,8 @@ machine:
         image: factory.talos.dev/metal-installer/376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba:v1.14.3
         wipe: false
         grubUseUKICmdline: true
-    # Features describe individual Talos features that can be switched on or off.
     features:
-        diskQuotaSupport: true # Enable XFS project quota support for EPHEMERAL partition and user disks.
+        diskQuotaSupport: true
         kubePrism:
             enabled: true
             port: 7445
@@ -33,34 +29,11 @@ machine:
             forwardKubeDNSToHost: true
     nodeLabels:
         node.kubernetes.io/exclude-from-external-load-balancers: ""
-    
-    # # Configures the logging system.
-    # logging:
-    #     # Logging destination.
-    #     destinations:
-    #         - endpoint: tcp://1.2.3.4:12345 # Where to send logs. Supported protocols are "tcp" and "udp".
-    #           format: json_lines # Logs format.
-    # logging:
-    #     # Logging destination.
-    #     destinations:
-    #         - endpoint: udp://127.0.0.1:12345 # Where to send logs. Supported protocols are "tcp" and "udp".
-    #           format: json_lines # Logs format.
-    #           # Extra tags (key-value) pairs to attach to every log message sent.
-    #           extraTags:
-    #             machine: worker-1
-
-    # # Configures the seccomp profiles for the machine.
-    # seccompProfiles:
-    #     - name: audit.json # The `name` field is used to provide the file name of the seccomp profile.
-    #       # The `value` field is used to provide the seccomp profile.
-    #       value:
-    #         defaultAction: SCMP_ACT_LOG
-# Provides cluster specific configuration options.
 cluster:
     id: xQo9SrwQh0UuLptuzUHn43h6sB5pAX3ReXfep1NZsio=
     secret: xv4Rwrl+xgZ3QFXWSSGUPhenlrkGlzbhHXPh6caULOM=
     controlPlane:
-        endpoint: https://10.5.0.2:6443 # Endpoint represents the endpoint URL parsed out of the machine config.
+        endpoint: https://10.5.0.2:6443
     clusterName: d1
     network:
         dnsDomain: cluster.local
@@ -68,7 +41,7 @@ cluster:
             - 10.244.0.0/16
         serviceSubnets:
             - 10.96.0.0/12
-    token: fd9d3l.am32flga6c8bdiuv # The [bootstrap token](https://kubernetes.io/docs/reference/access-authn-authz/bootstrap-tokens/) used to join the cluster.
+    token: fd9d3l.am32flga6c8bdiuv
     secretboxEncryptionSecret: ArVDXhJ+rnyjvR425ZufgLzZZrYvIc6Rr+54JpE/3gA=
     ca:
         crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJpakNDQVRDZ0F3SUJBZ0lSQUlqMnFUOGtoU2llS2daSnZtQ3JFa0F3Q2dZSUtvWkl6ajBFQXdJd0ZURVQKTUJFR0ExVUVDaE1LYTNWaVpYSnVaWFJsY3pBZUZ3MHlOakV3TWprd05UTTFNakZhRncwek5qRXdNall3TlRNMQpNakZhTUJVeEV6QVJCZ05WQkFvVENtdDFZbVZ5Ym1WMFpYTXdXVEFUQmdjcWhrak9QUUlCQmdncWhrak9QUU1CCkJ3TkNBQVN5MDJIOW9FRlZpYm5LNi8rWVA4TDlnaUdBcVpvdmVCa3UvemFCcWsrV0QrNWFnODlDRU9iSlpONXEKeFJzU2ljZm9KL1VBYUhRS2VuWk5qUlZLM0c2Tm8yRXdYekFPQmdOVkhROEJBZjhFQkFNQ0FvUXdIUVlEVlIwbApCQll3RkFZSUt3WUJCUVVIQXdFR0NDc0dBUVVGQndNQ01BOEdBMVVkRXdFQi93UUZNQU1CQWY4d0hRWURWUjBPCkJCWUVGSDhhanQrRVpMMUVKRjNaOE9rNm9LcDVsMTFCTUFvR0NDcUdTTTQ5QkFNQ0EwZ0FNRVVDSUdwQzQ5NmoKcS82YXNQYm4xZFN0QkN5TXduODdHaGFLU2FSWk1VT0VzWjduQWlFQTRlaXYvWnl1VG1wOG8vay94Vy8rZGlETQo2cXBCM1V6b0tzYytNYzFsQnJvPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
@@ -117,43 +90,17 @@ cluster:
             kubernetes:
                 disabled: true
             service: {}
-    # Etcd specific configuration options.
     etcd:
-        # The `ca` is the root certificate authority of the PKI.
         ca:
             crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJmakNDQVNTZ0F3SUJBZ0lSQUs3eTBJU2NDMWJrWFlpem5kMzl1NTB3Q2dZSUtvWkl6ajBFQXdJd0R6RU4KTUFzR0ExVUVDaE1FWlhSalpEQWVGdzB5TmpFd01qa3dOVE0xTWpGYUZ3MHpOakV3TWpZd05UTTFNakZhTUE4eApEVEFMQmdOVkJBb1RCR1YwWTJRd1dUQVRCZ2NxaGtqT1BRSUJCZ2dxaGtqT1BRTUJCd05DQUFSZnRUcVN4bWEyCmZBZ1E5K1YyTWcwUE1kR0JZNUk5V1NZM3hXZFRBYjFRS2JhNUxEWjlkVjBiZVdva3ZiQWdHZjVoRE9pZnBmL1AKRmhGdng2SU1TT3BObzJFd1h6QU9CZ05WSFE4QkFmOEVCQU1DQW9Rd0hRWURWUjBsQkJZd0ZBWUlLd1lCQlFVSApBd0VHQ0NzR0FRVUZCd01DTUE4R0ExVWRFd0VCL3dRRk1BTUJBZjh3SFFZRFZSME9CQllFRlBwRS9hVFYzK01oCnNuV0JpdXhHTmwvUHBNTmdNQW9HQ0NxR1NNNDlCQU1DQTBnQU1FVUNJQlV1eWJiZVptMDkwczJYbFY2N3NteFUKQXA5STlqZm5XUzgrNWRJV09INTdBaUVBaDgwRVYxaUFxTUFtanAzOWRZNVFjVHJWYTdXMFR2ellPcXdPNXJqbwplTzg9Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
             key: LS0tLS1CRUdJTiBFQyBQUklWQVRFIEtFWS0tLS0tCk1IY0NBUUVFSUVaSTFKcmtDK00wUG90eHJWand3VkJlZlR2ZlVOZDJ0VGw2Mng2cEd3SGlvQW9HQ0NxR1NNNDkKQXdFSG9VUURRZ0FFWDdVNmtzWm10bndJRVBmbGRqSU5EekhSZ1dPU1BWa21OOFZuVXdHOVVDbTJ1U3cyZlhWZApHM2xxSkwyd0lCbitZUXpvbjZYL3p4WVJiOGVpREVqcVRRPT0KLS0tLS1FTkQgRUMgUFJJVkFURSBLRVktLS0tLQo=
-        
-        # # The container image used to create the etcd service.
-        # image: registry.k8s.io/etcd:v3.7.2
-
-        # # The `advertisedSubnets` field configures the networks to pick etcd advertised IP from.
-        # advertisedSubnets:
-        #     - 10.0.0.0/8
-    
-    # # External cloud provider configuration.
-    # externalCloudProvider:
-    #     enabled: true # Enable external cloud provider.
-    #     # A list of urls that point to additional manifests for an external cloud provider.
-    #     manifests:
-    #         - https://raw.githubusercontent.com/kubernetes/cloud-provider-aws/v1.20.0-alpha.0/manifests/rbac.yaml
-    #         - https://raw.githubusercontent.com/kubernetes/cloud-provider-aws/v1.20.0-alpha.0/manifests/aws-cloud-controller-manager-daemonset.yaml
-
-    # # Settings for admin kubeconfig generation.
-    # adminKubeconfig:
-    #     certLifetime: 1h0m0s # Admin kubeconfig certificate lifetime (default is 1 year).
 ---
 apiVersion: v1alpha1
 kind: RegistryMirrorConfig
-name: docker.io # Registry name to apply the mirror configuration to.
-# List of mirror endpoints for the registry.
+name: docker.io
 endpoints:
-    - url: https://mirror.example.test:5000 # The URL of the registry mirror endpoint.
+    - url: https://mirror.example.test:5000
 ---
 apiVersion: v1alpha1
 kind: HostnameConfig
-auto: stable # A method to automatically generate a hostname for the machine.
-
-# # A static hostname to set for the machine.
-# hostname: controlplane1
-# hostname: controlplane1.example.org
+auto: stable

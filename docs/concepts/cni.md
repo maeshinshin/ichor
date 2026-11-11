@@ -15,7 +15,7 @@ section "Cilium".
 ## How Cilium gets there
 
 A new cluster boots with Cilium rendered from the chart that is embedded in the
-`ichor` binary (v0.1.0 embeds chart 1.20.4) and passed to Talos as an inline
+`ichor` binary (`ichor version` prints the Cilium chart version it embeds) and passed to Talos as an inline
 manifest.
 Once the Cilium DaemonSet is ready, a Job (`ichor-cni`) adopts those objects
 as the Helm release `cilium`, and the controller removes the inline manifest

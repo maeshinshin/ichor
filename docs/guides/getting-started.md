@@ -30,7 +30,7 @@ it against the checksums and put `ichor` on your `PATH`.
 Set the release and your platform once:
 
 ```sh
-VERSION=0.1.0   # the release, without the leading v
+VERSION={{version}}   # the release, without the leading v
 OS=linux        # linux or darwin
 ARCH=amd64      # amd64 or arm64
 BASE=https://github.com/maeshinshin/ichor/releases/download/v${VERSION}
@@ -257,8 +257,8 @@ NAME      ROLE           APPROVAL  READY  ENDPOINT            NODE     AGE
 fa70962a  control-plane  approved  ✓      192.168.1.50:50000  demo-cp  5m
 
 $ ichor version
-ichor        v0.1.0
-installed    v0.1.0
+ichor        v{{version}}
+installed    v{{version}}
 new installs Talos v1.14.5 · Kubernetes v1.36.6 · Cilium 1.20.4 (contract v1.14)
 ```
 

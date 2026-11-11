@@ -34,6 +34,11 @@ the same page under `/vX.Y/`, and `/latest/` and the site root lead to the
 newest line. The version menu in the header lists the lines, with the patch
 release each one documents, from `versions.json`, which the workflow writes.
 
+A page that tells the reader which release to install writes it as `{{version}}`
+(no leading `v`), which the build replaces with the patch release that copy
+documents (for `/next/`, the newest tag). Do not write a release number in prose.
+`README.md` is not built, so it has literals; `make test` fails if they are older than the newest tag.
+
 ## Adding a page
 
 Create `docs/<section>/<name>.md`, starting with a `# Title` heading. That is

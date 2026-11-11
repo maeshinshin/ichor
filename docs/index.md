@@ -11,7 +11,7 @@ Nodes, machine configuration, upgrades and etcd backups are Kubernetes
 resources, and you work with them through the `ichor` CLI, the ichor-ui web UI,
 or by writing the resources yourself.
 
-> Status: alpha (v0.1.0). Exercised end to end on Talos v1.14 test clusters, not yet on bare metal.
+> Status: alpha.
 
 The commands in these docs use the `ichor` CLI, which each release publishes as
 an archive; [Getting started](guides/getting-started.md#1-install-the-cli)
@@ -62,7 +62,7 @@ resource, so validation, RBAC and audit are the same whichever way it arrived.
 The design is in the [architecture document](design/architecture.md), and every
 decision is recorded.
 
-## What is in v0.1.0
+## What Ichor does
 
 - Discovery and approval of machines, with NIC, addressing and disk roles set at
   approval.

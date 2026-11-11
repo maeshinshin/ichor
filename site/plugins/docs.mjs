@@ -1,5 +1,6 @@
 // Markdown plumbing for rendering ../docs as written for GitHub (no copies, no
 // front matter required). Shared by astro.config.mjs and src/content.config.ts.
+import { execFileSync } from 'node:child_process'
 import { existsSync, statSync } from 'node:fs'
 import { dirname, relative, resolve, sep } from 'node:path'
 import { visit } from 'unist-util-visit'
@@ -16,6 +17,28 @@ export const rootBase = (process.env.DOCS_BASE ?? '/').replace(/\/+$/, '')
 export const versionBase = `${rootBase}/${version}`
 /** The git ref the docs of this version were written at: GitHub links out of docs/ point there. */
 export const gitRef = process.env.DOCS_GITREF ?? (isNext ? 'main' : version)
+
+/**
+ * The release the docs document, without the leading `v`: DOCS_RELEASE (build-all sets it to the patch of
+ * the line), else the newest `vX.Y.Z` tag, so `next` shows the newest release, never the unreleased one.
+ * Pages write it as `{{version}}`.
+ */
+export const release = (
+  process.env.DOCS_RELEASE ??
+  execFileSync('git', ['tag', '-l', 'v*'], { encoding: 'utf8' })
+    .split('\n')
+    .filter((t) => /^v\d+\.\d+\.\d+$/.test(t))
+    .map((t) => t.slice(1))
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    .pop() ??
+  'X.Y.Z'
+).replace(/^v/, '')
+export const withVersion = (s) => s.replaceAll('{{version}}', release)
+
+/** `{{version}}` in text, inline code and code blocks becomes the release being documented. */
+export function remarkVersion() {
+  return (tree) => visit(tree, ['text', 'inlineCode', 'code'], (n) => { n.value = withVersion(n.value) })
+}
 
 /**
  * The docs/ directory and the repository root it sits in (Astro runs with site/ as the working

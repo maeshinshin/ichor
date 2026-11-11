@@ -130,11 +130,13 @@ func (d adoptDeps) epilogue(cluster, namespace string, e adoptEnd) {
 		d.say(adoptWarn, "%s", caRotationAdvice)
 	}
 
+	d.say(adoptInfo, "the machines are now managed by Ichor: change their configuration through Ichor (a TalosConfigPatch, or `ichor config apply`), not on the node")
+
 	if d.Steps == nil {
 		return
 	}
 
-	d.Steps.Next("ichor cluster status "+cluster+nsFlag(namespace), "ichor machine list"+nsFlag(namespace))
+	d.Steps.Next("ichor cluster status "+cluster+nsFlag(namespace), "ichor machine list"+nsFlag(namespace), "ichor ui")
 }
 
 // adoptSummary is the second line of adopt's header.

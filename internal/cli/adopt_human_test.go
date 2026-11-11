@@ -81,9 +81,11 @@ func TestRunAdopt_StepsOnAPlainWriter(t *testing.T) {
 		"✓ Release holds — ",
 		doneInPrefix,
 		"! " + caRotationAdvice,
+		"the machines are now managed by Ichor",
 		"Next",
 		"ichor cluster status " + f.env.cluster.Name + " -n " + testNamespace,
 		"ichor machine list -n " + testNamespace,
+		"ichor ui",
 	}
 
 	assertInOrder(t, out, want)

@@ -317,11 +317,22 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		return fmt.Sprintf("%d created, %d unchanged", len(res.Created), len(res.Unchanged)), nil
 	})
 	if err != nil {
+		// Every write is create-or-skip-if-identical, so a rerun only adds what is missing; an
+		// object that differs is refused the same way again.
+		if !errors.Is(err, errAdoptDiffers) {
+			deps.say(adoptWarn, "adoption stopped part-way: run the same `ichor adopt` again to continue where it stopped")
+		}
+
 		return err
 	}
 
 	complete, err := st.finishAdopt(ctx, deps, clusterName, namespace, pl.held)
 	if err != nil {
+		// Both phases leave the not yet released machines held, and a rerun picks them up by their
+		// hold annotation (heldNodes, releaseHold skips the released ones).
+		deps.say(adoptWarn, "adoption stopped part-way: run the same `ichor adopt` again to continue where it stopped; "+
+			"nothing was applied to the machines that are still held")
+
 		return err
 	}
 

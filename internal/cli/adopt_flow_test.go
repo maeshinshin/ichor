@@ -538,6 +538,10 @@ func TestAdoptDiscoversANewCluster(t *testing.T) {
 		t.Fatalf("runAdopt = %v, want the Ready timeout\n%s", err, env.stderr.String())
 	}
 
+	if out := env.stderr.String(); !strings.Contains(out, "run the same `ichor adopt` again to continue where it stopped") {
+		t.Errorf("a failed release does not say it can be re-run:\n%s", out)
+	}
+
 	var got ichorv1alpha1.TalosCluster
 	if err := env.k8s.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: env.cluster.Name}, &got); err != nil {
 		t.Fatal(err)

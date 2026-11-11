@@ -57,3 +57,6 @@ internal/installmanifest/network-policies.yaml
 gate.done
 remote-gate-out/
 .docs-shots/
+
+# ko bundles these into the images (make images-*).
+kodata/

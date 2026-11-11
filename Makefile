@@ -188,6 +188,7 @@ CRANE_INSECURE ?= --insecure
 define ko-layout
 @test "$(VERSION)" != dev || { echo "VERSION must not be 'dev', e.g. VERSION=v0.0.8-abc1234" >&2; exit 1; }
 rm -rf $(OCI_DIR)/$(1)
+mkdir -p $(2)/kodata && cp LICENSE NOTICE $(2)/kodata/
 VERSION="$(VERSION)" KO_DOCKER_REPO=registry.invalid ko build --bare --push=false --oci-layout-path $(OCI_DIR)/$(1) $(2)
 endef
 # crane-push NAME: push OCI_DIR/NAME as REGISTRY/maeshinshin/NAME:VERSION and append its repo@digest line to DIGEST_FILE.
@@ -411,7 +412,7 @@ CHART_DIST ?= bin/chart
 .PHONY: helm-package
 helm-package: ## Package the chart into CHART_DIST (bin/chart) with CHART_VERSION and APP_VERSION. IMAGE_DIGESTS pins the default controller and ichor-ui images by digest.
 	@# With digests the default repositories become <repo>:<tag>@<digest> (the templates add no tag to a repository with an @), in a temp copy.
-	@work=$$(mktemp -d) && trap 'rm -rf "$$work"' EXIT && cp -r $(HELM_CHART_DIR) "$$work/ichor" && \
+	@work=$$(mktemp -d) && trap 'rm -rf "$$work"' EXIT && cp -r $(HELM_CHART_DIR) "$$work/ichor" && cp LICENSE NOTICE "$$work/ichor/" && \
 	if [ -n "$(IMAGE_DIGESTS)" ]; then \
 	  for n in ichor-controller ichor-ui; do \
 	    pin=$$(hack/pin-image.sh "$(IMAGE_DIGESTS)" $$n ghcr.io/maeshinshin/$$n:$(APP_VERSION)) && \

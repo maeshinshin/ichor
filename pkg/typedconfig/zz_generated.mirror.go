@@ -31,526 +31,388 @@ import (
 
 // Talos: APIServerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type APIServerConfig struct {
-	// Talos: APIServerConfig.image — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ContainerImage string `json:"image,omitempty"`
-	// Talos: APIServerConfig.extraArgs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ExtraArgsConfig map[string][]string `json:"extraArgs,omitempty"`
-	// Talos: APIServerConfig.extraVolumes — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ExtraVolumesConfig []*VolumeMountConfig `json:"extraVolumes,omitempty"`
-	// Talos: APIServerConfig.env — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	EnvConfig map[string]string `json:"env,omitempty"`
-	// Talos: APIServerConfig.certSANs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ExtraCertSANs []string `json:"certSANs,omitempty"`
-	// Talos: APIServerConfig.disablePodSecurityPolicy — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DisablePodSecurityPolicyConfig *bool `json:"disablePodSecurityPolicy,omitempty"`
-	// Talos: APIServerConfig.admissionControl — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	AdmissionControlConfig []*AdmissionPluginConfig `json:"admissionControl,omitempty"`
-	// Talos: APIServerConfig.auditPolicy — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	AuditPolicyConfig *auditv1.Policy `json:"auditPolicy,omitempty"`
-	// Talos: APIServerConfig.resources — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ResourcesConfig *ResourcesConfig `json:"resources,omitempty"`
-	// Talos: APIServerConfig.authorizationConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	AuthorizationConfigConfig []*AuthorizationConfigAuthorizerConfig `json:"authorizationConfig,omitempty"`
 }
 
 // Talos: AdminKubeconfigConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type AdminKubeconfigConfig struct {
-	// Talos: AdminKubeconfigConfig.certLifetime — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	AdminKubeconfigCertLifetime string `json:"certLifetime,omitempty"`
 }
 
 // Talos: AdmissionPluginConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type AdmissionPluginConfig struct {
-	// Talos: AdmissionPluginConfig.name — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	PluginName string `json:"name"`
 }
 
 // Talos: AuthorizationConfigAuthorizerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type AuthorizationConfigAuthorizerConfig struct {
-	// Talos: AuthorizationConfigAuthorizerConfig.type — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	AuthorizerType string `json:"type"`
-	// Talos: AuthorizationConfigAuthorizerConfig.name — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	AuthorizerName string `json:"name"`
-	// Talos: AuthorizationConfigAuthorizerConfig.webhook — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	AuthorizerWebhook *apiserverv1.WebhookConfiguration `json:"webhook,omitempty"`
 }
 
 // Talos: Bond — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type Bond struct {
-	// Talos: Bond.interfaces — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	BondInterfaces []string `json:"interfaces"`
-	// Talos: Bond.deviceSelectors — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondDeviceSelectors []*NetworkDeviceSelector `json:"deviceSelectors,omitempty"`
-	// Talos: Bond.arpIPTarget — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondARPIPTarget []string `json:"arpIPTarget,omitempty"`
-	// Talos: Bond.mode — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	BondMode string `json:"mode"`
-	// Talos: Bond.xmitHashPolicy — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondHashPolicy string `json:"xmitHashPolicy,omitempty"`
-	// Talos: Bond.lacpRate — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondLACPRate string `json:"lacpRate,omitempty"`
-	// Talos: Bond.adActorSystem — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondADActorSystem string `json:"adActorSystem,omitempty"`
-	// Talos: Bond.arpValidate — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondARPValidate string `json:"arpValidate,omitempty"`
-	// Talos: Bond.arpAllTargets — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondARPAllTargets string `json:"arpAllTargets,omitempty"`
-	// Talos: Bond.primary — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondPrimary string `json:"primary,omitempty"`
-	// Talos: Bond.primaryReselect — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondPrimaryReselect string `json:"primaryReselect,omitempty"`
-	// Talos: Bond.failOverMac — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondFailOverMac string `json:"failOverMac,omitempty"`
-	// Talos: Bond.adSelect — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondADSelect string `json:"adSelect,omitempty"`
-	// Talos: Bond.miimon — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondMIIMon uint32 `json:"miimon,omitempty"`
-	// Talos: Bond.updelay — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondUpDelay uint32 `json:"updelay,omitempty"`
-	// Talos: Bond.downdelay — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondDownDelay uint32 `json:"downdelay,omitempty"`
-	// Talos: Bond.arpInterval — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondARPInterval uint32 `json:"arpInterval,omitempty"`
-	// Talos: Bond.resendIgmp — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondResendIGMP uint32 `json:"resendIgmp,omitempty"`
-	// Talos: Bond.minLinks — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondMinLinks uint32 `json:"minLinks,omitempty"`
-	// Talos: Bond.lpInterval — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondLPInterval uint32 `json:"lpInterval,omitempty"`
-	// Talos: Bond.packetsPerSlave — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondPacketsPerSlave uint32 `json:"packetsPerSlave,omitempty"`
-	// Talos: Bond.numPeerNotif — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondNumPeerNotif uint8 `json:"numPeerNotif,omitempty"`
-	// Talos: Bond.tlbDynamicLb — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondTLBDynamicLB uint8 `json:"tlbDynamicLb,omitempty"`
-	// Talos: Bond.allSlavesActive — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondAllSlavesActive uint8 `json:"allSlavesActive,omitempty"`
-	// Talos: Bond.useCarrier — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondUseCarrier *bool `json:"useCarrier,omitempty"`
-	// Talos: Bond.adActorSysPrio — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondADActorSysPrio uint16 `json:"adActorSysPrio,omitempty"`
-	// Talos: Bond.adUserPortKey — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondADUserPortKey uint16 `json:"adUserPortKey,omitempty"`
-	// Talos: Bond.peerNotifyDelay — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BondPeerNotifyDelay uint32 `json:"peerNotifyDelay,omitempty"`
 }
 
 // Talos: Bridge — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type Bridge struct {
-	// Talos: Bridge.interfaces — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	BridgedInterfaces []string `json:"interfaces"`
-	// Talos: Bridge.stp — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BridgeSTP *STP `json:"stp,omitempty"`
-	// Talos: Bridge.vlan — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BridgeVLAN *BridgeVLAN `json:"vlan,omitempty"`
 }
 
 // Talos: BridgePort — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type BridgePort struct {
-	// Talos: BridgePort.master — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BridgePortMaster string `json:"master,omitempty"`
 }
 
 // Talos: BridgeVLAN — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type BridgeVLAN struct {
-	// Talos: BridgeVLAN.vlanFiltering — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BridgeVLANFiltering *bool `json:"vlanFiltering,omitempty"`
 }
 
 // Talos: CNIConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type CNIConfig struct {
-	// Talos: CNIConfig.name — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	CNIName string `json:"name,omitempty"`
-	// Talos: CNIConfig.urls — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	CNIUrls []string `json:"urls,omitempty"`
-	// Talos: CNIConfig.flannel — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	CNIFlannel *FlannelCNIConfig `json:"flannel,omitempty"`
 }
 
 // Talos: ClusterConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type ClusterConfig struct {
-	// Talos: ClusterConfig.id — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ClusterID string `json:"id,omitempty"`
-	// Talos: ClusterConfig.controlPlane — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ControlPlane *ControlPlaneConfig `json:"controlPlane,omitempty"`
-	// Talos: ClusterConfig.clusterName — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ClusterName string `json:"clusterName,omitempty"`
-	// Talos: ClusterConfig.network — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ClusterNetwork *ClusterNetworkConfig `json:"network,omitempty"`
-	// Talos: ClusterConfig.acceptedCAs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ClusterAcceptedCAs []*PEMEncodedCertificate `json:"acceptedCAs,omitempty"`
-	// Talos: ClusterConfig.apiServer — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	APIServerConfig *APIServerConfig `json:"apiServer,omitempty"`
-	// Talos: ClusterConfig.controllerManager — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ControllerManagerConfig *ControllerManagerConfig `json:"controllerManager,omitempty"`
-	// Talos: ClusterConfig.proxy — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ProxyConfig *ProxyConfig `json:"proxy,omitempty"`
-	// Talos: ClusterConfig.scheduler — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	SchedulerConfig *SchedulerConfig `json:"scheduler,omitempty"`
-	// Talos: ClusterConfig.discovery — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ClusterDiscoveryConfig *ClusterDiscoveryConfig `json:"discovery,omitempty"`
-	// Talos: ClusterConfig.etcd — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	EtcdConfig *EtcdConfig `json:"etcd,omitempty"`
-	// Talos: ClusterConfig.coreDNS — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	CoreDNSConfig *CoreDNS `json:"coreDNS,omitempty"`
-	// Talos: ClusterConfig.externalCloudProvider — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ExternalCloudProviderConfig *ExternalCloudProviderConfig `json:"externalCloudProvider,omitempty"`
-	// Talos: ClusterConfig.extraManifests — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ExtraManifests []string `json:"extraManifests,omitempty"`
-	// Talos: ClusterConfig.extraManifestHeaders — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ExtraManifestHeaders map[string]string `json:"extraManifestHeaders,omitempty"`
-	// Talos: ClusterConfig.inlineManifests — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ClusterInlineManifests []*ClusterInlineManifest `json:"inlineManifests,omitempty"`
-	// Talos: ClusterConfig.adminKubeconfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	AdminKubeconfigConfig *AdminKubeconfigConfig `json:"adminKubeconfig,omitempty"`
-	// Talos: ClusterConfig.allowSchedulingOnMasters — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	AllowSchedulingOnMasters *bool `json:"allowSchedulingOnMasters,omitempty"`
-	// Talos: ClusterConfig.allowSchedulingOnControlPlanes — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	AllowSchedulingOnControlPlanes *bool `json:"allowSchedulingOnControlPlanes,omitempty"`
 }
 
 // Talos: ClusterDiscoveryConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type ClusterDiscoveryConfig struct {
-	// Talos: ClusterDiscoveryConfig.enabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DiscoveryEnabled *bool `json:"enabled,omitempty"`
-	// Talos: ClusterDiscoveryConfig.registries — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	DiscoveryRegistries *DiscoveryRegistriesConfig `json:"registries"`
 }
 
 // Talos: ClusterInlineManifest — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type ClusterInlineManifest struct {
-	// Talos: ClusterInlineManifest.name — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	InlineManifestName string `json:"name"`
-	// Talos: ClusterInlineManifest.contents — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	InlineManifestContents string `json:"contents"`
 }
 
 // Talos: ClusterNetworkConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type ClusterNetworkConfig struct {
-	// Talos: ClusterNetworkConfig.cni — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	CNI *CNIConfig `json:"cni,omitempty"`
-	// Talos: ClusterNetworkConfig.dnsDomain — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	DNSDomain string `json:"dnsDomain"`
-	// Talos: ClusterNetworkConfig.podSubnets — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	PodSubnet []string `json:"podSubnets"`
-	// Talos: ClusterNetworkConfig.serviceSubnets — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	ServiceSubnet []string `json:"serviceSubnets"`
 }
 
 // Talos: Config — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type Config struct {
-	// Talos: Config.version — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	ConfigVersion string `json:"version"`
-	// Talos: Config.debug — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ConfigDebug *bool `json:"debug,omitempty"`
-	// Talos: Config.persist — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ConfigPersist *bool `json:"persist,omitempty"`
-	// Talos: Config.machine — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineConfig *MachineConfig `json:"machine,omitempty"`
-	// Talos: Config.cluster — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ClusterConfig *ClusterConfig `json:"cluster,omitempty"`
 }
 
 // Talos: ControlPlaneConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type ControlPlaneConfig struct {
-	// Talos: ControlPlaneConfig.endpoint — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	Endpoint *string `json:"endpoint"`
-	// Talos: ControlPlaneConfig.localAPIServerPort — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	LocalAPIServerPort int `json:"localAPIServerPort,omitempty"`
 }
 
 // Talos: ControllerManagerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type ControllerManagerConfig struct {
-	// Talos: ControllerManagerConfig.image — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ContainerImage string `json:"image,omitempty"`
-	// Talos: ControllerManagerConfig.extraArgs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ExtraArgsConfig map[string][]string `json:"extraArgs,omitempty"`
-	// Talos: ControllerManagerConfig.extraVolumes — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ExtraVolumesConfig []*VolumeMountConfig `json:"extraVolumes,omitempty"`
-	// Talos: ControllerManagerConfig.env — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	EnvConfig map[string]string `json:"env,omitempty"`
-	// Talos: ControllerManagerConfig.resources — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ResourcesConfig *ResourcesConfig `json:"resources,omitempty"`
 }
 
 // Talos: CoreDNS — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type CoreDNS struct {
-	// Talos: CoreDNS.disabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	CoreDNSDisabled *bool `json:"disabled,omitempty"`
-	// Talos: CoreDNS.image — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	CoreDNSImage string `json:"image,omitempty"`
 }
 
 // Talos: DHCPOptions — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type DHCPOptions struct {
-	// Talos: DHCPOptions.routeMetric — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	DHCPRouteMetric uint32 `json:"routeMetric"`
-	// Talos: DHCPOptions.ipv4 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DHCPIPv4 *bool `json:"ipv4,omitempty"`
-	// Talos: DHCPOptions.ipv6 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DHCPIPv6 *bool `json:"ipv6,omitempty"`
-	// Talos: DHCPOptions.duidv6 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DHCPDUIDv6 string `json:"duidv6,omitempty"`
 }
 
 // Talos: Device — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type Device struct {
-	// Talos: Device.interface — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DeviceInterface string `json:"interface,omitempty"`
-	// Talos: Device.deviceSelector — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DeviceSelector *NetworkDeviceSelector `json:"deviceSelector,omitempty"`
-	// Talos: Device.addresses — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DeviceAddresses []string `json:"addresses,omitempty"`
-	// Talos: Device.cidr — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DeviceCIDR string `json:"cidr,omitempty"`
-	// Talos: Device.routes — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DeviceRoutes []*Route `json:"routes,omitempty"`
-	// Talos: Device.bond — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DeviceBond *Bond `json:"bond,omitempty"`
-	// Talos: Device.bridge — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DeviceBridge *Bridge `json:"bridge,omitempty"`
-	// Talos: Device.bridgePort — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DeviceBridgePort *BridgePort `json:"bridgePort,omitempty"`
-	// Talos: Device.vlans — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DeviceVlans []*Vlan `json:"vlans,omitempty"`
-	// Talos: Device.mtu — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DeviceMTU int `json:"mtu,omitempty"`
-	// Talos: Device.dhcp — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DeviceDHCP *bool `json:"dhcp,omitempty"`
-	// Talos: Device.ignore — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DeviceIgnore *bool `json:"ignore,omitempty"`
-	// Talos: Device.dummy — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DeviceDummy *bool `json:"dummy,omitempty"`
-	// Talos: Device.dhcpOptions — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DeviceDHCPOptions *DHCPOptions `json:"dhcpOptions,omitempty"`
-	// Talos: Device.wireguard — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DeviceWireguardConfig *DeviceWireguardConfig `json:"wireguard,omitempty"`
-	// Talos: Device.vip — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DeviceVIPConfig *DeviceVIPConfig `json:"vip,omitempty"`
 }
 
 // Talos: DeviceVIPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type DeviceVIPConfig struct {
-	// Talos: DeviceVIPConfig.ip — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	SharedIP string `json:"ip,omitempty"`
-	// Talos: DeviceVIPConfig.equinixMetal — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	EquinixMetalConfig *VIPEquinixMetalConfig `json:"equinixMetal,omitempty"`
-	// Talos: DeviceVIPConfig.hcloud — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	HCloudConfig *VIPHCloudConfig `json:"hcloud,omitempty"`
 }
 
 // Talos: DeviceWireguardConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type DeviceWireguardConfig struct {
-	// Talos: DeviceWireguardConfig.listenPort — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	WireguardListenPort int `json:"listenPort,omitempty"`
-	// Talos: DeviceWireguardConfig.firewallMark — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	WireguardFirewallMark int `json:"firewallMark,omitempty"`
-	// Talos: DeviceWireguardConfig.peers — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	WireguardPeers []*DeviceWireguardPeer `json:"peers,omitempty"`
 }
 
 // Talos: DeviceWireguardPeer — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type DeviceWireguardPeer struct {
-	// Talos: DeviceWireguardPeer.publicKey — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	WireguardPublicKey string `json:"publicKey,omitempty"`
-	// Talos: DeviceWireguardPeer.endpoint — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	WireguardEndpoint string `json:"endpoint,omitempty"`
-	// Talos: DeviceWireguardPeer.persistentKeepaliveInterval — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	WireguardPersistentKeepaliveInterval string `json:"persistentKeepaliveInterval,omitempty"`
-	// Talos: DeviceWireguardPeer.allowedIPs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	WireguardAllowedIPs []string `json:"allowedIPs,omitempty"`
 }
 
 // Talos: DiscoveryRegistriesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type DiscoveryRegistriesConfig struct {
-	// Talos: DiscoveryRegistriesConfig.kubernetes — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	RegistryKubernetes *RegistryKubernetesConfig `json:"kubernetes"`
-	// Talos: DiscoveryRegistriesConfig.service — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	RegistryService *RegistryServiceConfig `json:"service"`
 }
 
 // Talos: DiskPartition — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type DiskPartition struct {
-	// Talos: DiskPartition.size — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DiskSize string `json:"size,omitempty"`
-	// Talos: DiskPartition.mountpoint — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DiskMountPoint string `json:"mountpoint,omitempty"`
 }
 
 // Talos: DiskSelector
 type DiskSelector struct {
-	// Talos: DiskSelector.match
 	// +optional
 	Match string `json:"match,omitempty"`
 }
 
 // Talos: EncryptionConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type EncryptionConfig struct {
-	// Talos: EncryptionConfig.provider — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	EncryptionProvider string `json:"provider"`
-	// Talos: EncryptionConfig.keys — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	EncryptionKeys []*EncryptionKey `json:"keys"`
-	// Talos: EncryptionConfig.cipher — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	EncryptionCipher string `json:"cipher,omitempty"`
-	// Talos: EncryptionConfig.keySize — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	EncryptionKeySize uint `json:"keySize,omitempty"`
-	// Talos: EncryptionConfig.blockSize — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	EncryptionBlockSize uint64 `json:"blockSize,omitempty"`
-	// Talos: EncryptionConfig.options — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	EncryptionPerfOptions []string `json:"options,omitempty"`
 }
 
 // Talos: EncryptionKey — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type EncryptionKey struct {
-	// Talos: EncryptionKey.nodeID — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KeyNodeID *EncryptionKeyNodeID `json:"nodeID,omitempty"`
-	// Talos: EncryptionKey.kms — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KeyKMS *EncryptionKeyKMS `json:"kms,omitempty"`
-	// Talos: EncryptionKey.slot — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	KeySlot int `json:"slot"`
-	// Talos: EncryptionKey.tpm — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KeyTPM *EncryptionKeyTPM `json:"tpm,omitempty"`
 }
 
 // Talos: EncryptionKeyKMS — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type EncryptionKeyKMS struct {
-	// Talos: EncryptionKeyKMS.endpoint — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	KMSEndpoint string `json:"endpoint"`
 }
@@ -561,927 +423,706 @@ type EncryptionKeyNodeID struct {
 
 // Talos: EncryptionKeyTPM — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type EncryptionKeyTPM struct {
-	// Talos: EncryptionKeyTPM.checkSecurebootStatusOnEnroll — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	TPMCheckSecurebootStatusOnEnroll *bool `json:"checkSecurebootStatusOnEnroll,omitempty"`
 }
 
 // Talos: EncryptionKeyTPMOptions
 type EncryptionKeyTPMOptions struct {
-	// Talos: EncryptionKeyTPMOptions.pcrs
 	// +optional
 	PCRs []int `json:"pcrs,omitempty"`
 }
 
 // Talos: EncryptionSpec
 type EncryptionSpec struct {
-	// Talos: EncryptionSpec.provider
 	// +required
 	EncryptionProvider string `json:"provider"`
-	// Talos: EncryptionSpec.keys
 	// +required
 	EncryptionKeys []*VolumeEncryptionKey `json:"keys"`
-	// Talos: EncryptionSpec.cipher
 	// +optional
 	EncryptionCipher string `json:"cipher,omitempty"`
-	// Talos: EncryptionSpec.keySize
 	// +optional
 	EncryptionKeySize uint `json:"keySize,omitempty"`
-	// Talos: EncryptionSpec.blockSize
 	// +optional
 	EncryptionBlockSize uint64 `json:"blockSize,omitempty"`
-	// Talos: EncryptionSpec.options
 	// +optional
 	EncryptionPerfOptions []string `json:"options,omitempty"`
-	// Talos: EncryptionSpec.allowDiscards
 	// +optional
 	EncryptionAllowDiscards *bool `json:"allowDiscards,omitempty"`
 }
 
 // Talos: EtcdConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type EtcdConfig struct {
-	// Talos: EtcdConfig.image — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ContainerImage string `json:"image,omitempty"`
-	// Talos: EtcdConfig.extraArgs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	EtcdExtraArgs map[string][]string `json:"extraArgs,omitempty"`
-	// Talos: EtcdConfig.subnet — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	EtcdSubnet string `json:"subnet,omitempty"`
-	// Talos: EtcdConfig.advertisedSubnets — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	EtcdAdvertisedSubnets []string `json:"advertisedSubnets,omitempty"`
-	// Talos: EtcdConfig.listenSubnets — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	EtcdListenSubnets []string `json:"listenSubnets,omitempty"`
 }
 
 // Talos: ExternalCloudProviderConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type ExternalCloudProviderConfig struct {
-	// Talos: ExternalCloudProviderConfig.enabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ExternalEnabled *bool `json:"enabled,omitempty"`
-	// Talos: ExternalCloudProviderConfig.manifests — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ExternalManifests []string `json:"manifests,omitempty"`
 }
 
 // Talos: ExtraHost — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type ExtraHost struct {
-	// Talos: ExtraHost.ip — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	HostIP string `json:"ip"`
-	// Talos: ExtraHost.aliases — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	HostAliases []string `json:"aliases"`
 }
 
 // Talos: ExtraMount — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type ExtraMount struct {
-	// Talos: ExtraMount.destination — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	Destination string `json:"destination"`
-	// Talos: ExtraMount.type — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	Type string `json:"type,omitempty"`
-	// Talos: ExtraMount.source — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	Source string `json:"source,omitempty"`
-	// Talos: ExtraMount.options — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	Options []string `json:"options,omitempty"`
-	// Talos: ExtraMount.uidMappings — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	UIDMappings []*LinuxIDMapping `json:"uidMappings,omitempty"`
-	// Talos: ExtraMount.gidMappings — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	GIDMappings []*LinuxIDMapping `json:"gidMappings,omitempty"`
 }
 
 // Talos: FeaturesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type FeaturesConfig struct {
-	// Talos: FeaturesConfig.rbac — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	RBAC *bool `json:"rbac,omitempty"`
-	// Talos: FeaturesConfig.stableHostname — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	StableHostname *bool `json:"stableHostname,omitempty"`
-	// Talos: FeaturesConfig.kubernetesTalosAPIAccess — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubernetesTalosAPIAccessConfig *KubernetesTalosAPIAccessConfig `json:"kubernetesTalosAPIAccess,omitempty"`
-	// Talos: FeaturesConfig.apidCheckExtKeyUsage — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ApidCheckExtKeyUsage *bool `json:"apidCheckExtKeyUsage,omitempty"`
-	// Talos: FeaturesConfig.diskQuotaSupport — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DiskQuotaSupport *bool `json:"diskQuotaSupport,omitempty"`
-	// Talos: FeaturesConfig.kubePrism — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubePrismSupport *KubePrism `json:"kubePrism,omitempty"`
-	// Talos: FeaturesConfig.hostDNS — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	HostDNSSupport *HostDNSConfig `json:"hostDNS,omitempty"`
-	// Talos: FeaturesConfig.imageCache — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ImageCacheSupport *ImageCacheConfig `json:"imageCache,omitempty"`
-	// Talos: FeaturesConfig.nodeAddressSortAlgorithm — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	FeatureNodeAddressSortAlgorithm string `json:"nodeAddressSortAlgorithm,omitempty"`
 }
 
 // Talos: FilesystemSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
 type FilesystemSpec struct {
-	// Talos: FilesystemSpec.type — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
 	// +optional
 	FilesystemType string `json:"type,omitempty"`
-	// Talos: FilesystemSpec.projectQuotaSupport — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
 	// +optional
 	ProjectQuotaSupportConfig *bool `json:"projectQuotaSupport,omitempty"`
-	// Talos: FilesystemSpec.xfs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
 	// +optional
 	XFSSpec *XFSSpec `json:"xfs,omitempty"`
 }
 
 // Talos: FlannelCNIConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type FlannelCNIConfig struct {
-	// Talos: FlannelCNIConfig.extraArgs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	FlanneldExtraArgs []string `json:"extraArgs,omitempty"`
-	// Talos: FlannelCNIConfig.kubeNetworkPoliciesEnabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	FlannelKubeNetworkPoliciesEnabled *bool `json:"kubeNetworkPoliciesEnabled,omitempty"`
 }
 
 // Talos: HostDNSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type HostDNSConfig struct {
-	// Talos: HostDNSConfig.enabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	HostDNSConfigEnabled *bool `json:"enabled,omitempty"`
-	// Talos: HostDNSConfig.forwardKubeDNSToHost — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	HostDNSForwardKubeDNSToHost *bool `json:"forwardKubeDNSToHost,omitempty"`
-	// Talos: HostDNSConfig.resolveMemberNames — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	HostDNSResolveMemberNames *bool `json:"resolveMemberNames,omitempty"`
 }
 
 // Talos: ImageCacheConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type ImageCacheConfig struct {
-	// Talos: ImageCacheConfig.localEnabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	CacheLocalEnabled *bool `json:"localEnabled,omitempty"`
 }
 
 // Talos: InstallConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type InstallConfig struct {
-	// Talos: InstallConfig.disk — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	InstallDisk string `json:"disk,omitempty"`
-	// Talos: InstallConfig.diskSelector — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	InstallDiskSelector *InstallDiskSelector `json:"diskSelector,omitempty"`
-	// Talos: InstallConfig.extraKernelArgs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	InstallExtraKernelArgs []string `json:"extraKernelArgs,omitempty"`
-	// Talos: InstallConfig.image — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	InstallImage string `json:"image,omitempty"`
-	// Talos: InstallConfig.extensions — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	InstallExtensions []*InstallExtensionConfig `json:"extensions,omitempty"`
-	// Talos: InstallConfig.bootloader — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	InstallBootloader *bool `json:"bootloader,omitempty"`
-	// Talos: InstallConfig.wipe — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	InstallWipe *bool `json:"wipe"`
-	// Talos: InstallConfig.legacyBIOSSupport — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	InstallLegacyBIOSSupport *bool `json:"legacyBIOSSupport,omitempty"`
-	// Talos: InstallConfig.grubUseUKICmdline — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	InstallGrubUseUKICmdline *bool `json:"grubUseUKICmdline,omitempty"`
 }
 
 // Talos: InstallDiskSelector — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type InstallDiskSelector struct {
-	// Talos: InstallDiskSelector.size — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	Size *string `json:"size,omitempty"`
-	// Talos: InstallDiskSelector.name — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	Name string `json:"name,omitempty"`
-	// Talos: InstallDiskSelector.model — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	Model string `json:"model,omitempty"`
-	// Talos: InstallDiskSelector.serial — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	Serial string `json:"serial,omitempty"`
-	// Talos: InstallDiskSelector.modalias — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	Modalias string `json:"modalias,omitempty"`
-	// Talos: InstallDiskSelector.uuid — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	UUID string `json:"uuid,omitempty"`
-	// Talos: InstallDiskSelector.wwid — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	WWID string `json:"wwid,omitempty"`
-	// Talos: InstallDiskSelector.type — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	Type string `json:"type,omitempty"`
-	// Talos: InstallDiskSelector.busPath — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	BusPath string `json:"busPath,omitempty"`
 }
 
 // Talos: InstallExtensionConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type InstallExtensionConfig struct {
-	// Talos: InstallExtensionConfig.image — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	ExtensionImage string `json:"image"`
 }
 
 // Talos: KernelConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type KernelConfig struct {
-	// Talos: KernelConfig.modules — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KernelModules []*KernelModuleConfig `json:"modules,omitempty"`
 }
 
 // Talos: KernelModuleConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type KernelModuleConfig struct {
-	// Talos: KernelModuleConfig.name — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	ModuleName string `json:"name"`
-	// Talos: KernelModuleConfig.parameters — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ModuleParameters []string `json:"parameters,omitempty"`
 }
 
 // Talos: KernelModuleConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/runtime/kernelmoduleconfig
 type KernelModuleConfigV1Alpha1 struct {
-	// Talos: KernelModuleConfigV1Alpha1.name — https://docs.siderolabs.com/talos/v1.14/reference/configuration/runtime/kernelmoduleconfig
 	// +required
 	MetaName string `json:"name"`
-	// Talos: KernelModuleConfigV1Alpha1.parameters — https://docs.siderolabs.com/talos/v1.14/reference/configuration/runtime/kernelmoduleconfig
 	// +optional
 	ModuleParameters []string `json:"parameters,omitempty"`
 }
 
 // Talos: KubePrism — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type KubePrism struct {
-	// Talos: KubePrism.enabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ServerEnabled *bool `json:"enabled,omitempty"`
-	// Talos: KubePrism.port — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ServerPort int `json:"port,omitempty"`
 }
 
 // Talos: KubeSpanFilters — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type KubeSpanFilters struct {
-	// Talos: KubeSpanFilters.endpoints — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeSpanFiltersEndpoints []string `json:"endpoints,omitempty"`
-	// Talos: KubeSpanFilters.excludeAdvertisedNetworks — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeSpanFiltersExcludeAdvertisedNetworks []string `json:"excludeAdvertisedNetworks,omitempty"`
 }
 
 // Talos: KubeletConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type KubeletConfig struct {
-	// Talos: KubeletConfig.image — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeletImage string `json:"image,omitempty"`
-	// Talos: KubeletConfig.clusterDNS — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeletClusterDNS []string `json:"clusterDNS,omitempty"`
-	// Talos: KubeletConfig.extraArgs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeletExtraArgs map[string][]string `json:"extraArgs,omitempty"`
-	// Talos: KubeletConfig.extraMounts — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeletExtraMounts []*ExtraMount `json:"extraMounts,omitempty"`
-	// Talos: KubeletConfig.credentialProviderConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeletCredentialProviderConfig *kubeletv1.CredentialProviderConfig `json:"credentialProviderConfig,omitempty"`
-	// Talos: KubeletConfig.defaultRuntimeSeccompProfileEnabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeletDefaultRuntimeSeccompProfileEnabled *bool `json:"defaultRuntimeSeccompProfileEnabled,omitempty"`
-	// Talos: KubeletConfig.registerWithFQDN — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeletRegisterWithFQDN *bool `json:"registerWithFQDN,omitempty"`
-	// Talos: KubeletConfig.nodeIP — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeletNodeIP *KubeletNodeIPConfig `json:"nodeIP,omitempty"`
-	// Talos: KubeletConfig.skipNodeRegistration — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeletSkipNodeRegistration *bool `json:"skipNodeRegistration,omitempty"`
-	// Talos: KubeletConfig.disableManifestsDirectory — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeletDisableManifestsDirectory *bool `json:"disableManifestsDirectory,omitempty"`
 }
 
 // Talos: KubeletNodeIPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type KubeletNodeIPConfig struct {
-	// Talos: KubeletNodeIPConfig.validSubnets — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeletNodeIPValidSubnets []string `json:"validSubnets,omitempty"`
 }
 
 // Talos: KubernetesTalosAPIAccessConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type KubernetesTalosAPIAccessConfig struct {
-	// Talos: KubernetesTalosAPIAccessConfig.enabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	AccessEnabled *bool `json:"enabled,omitempty"`
-	// Talos: KubernetesTalosAPIAccessConfig.allowedRoles — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	AccessAllowedRoles []string `json:"allowedRoles,omitempty"`
-	// Talos: KubernetesTalosAPIAccessConfig.allowedKubernetesNamespaces — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	AccessAllowedKubernetesNamespaces []string `json:"allowedKubernetesNamespaces,omitempty"`
 }
 
 // Talos: LinuxIDMapping — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type LinuxIDMapping struct {
-	// Talos: LinuxIDMapping.containerID — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	ContainerID uint32 `json:"containerID"`
-	// Talos: LinuxIDMapping.hostID — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	HostID uint32 `json:"hostID"`
-	// Talos: LinuxIDMapping.size — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	Size uint32 `json:"size"`
 }
 
 // Talos: LoggingConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type LoggingConfig struct {
-	// Talos: LoggingConfig.destinations — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	LoggingDestinations []*LoggingDestination `json:"destinations"`
 }
 
 // Talos: LoggingDestination — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type LoggingDestination struct {
-	// Talos: LoggingDestination.endpoint — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	LoggingEndpoint *string `json:"endpoint"`
-	// Talos: LoggingDestination.format — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	LoggingFormat string `json:"format"`
-	// Talos: LoggingDestination.extraTags — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	LoggingExtraTags map[string]string `json:"extraTags,omitempty"`
 }
 
 // Talos: MachineConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type MachineConfig struct {
-	// Talos: MachineConfig.type — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineType string `json:"type,omitempty"`
-	// Talos: MachineConfig.acceptedCAs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineAcceptedCAs []*PEMEncodedCertificate `json:"acceptedCAs,omitempty"`
-	// Talos: MachineConfig.certSANs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineCertSANs []string `json:"certSANs,omitempty"`
-	// Talos: MachineConfig.controlPlane — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineControlPlane *MachineControlPlaneConfig `json:"controlPlane,omitempty"`
-	// Talos: MachineConfig.kubelet — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineKubelet *KubeletConfig `json:"kubelet,omitempty"`
-	// Talos: MachineConfig.network — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineNetwork *NetworkConfig `json:"network,omitempty"`
-	// Talos: MachineConfig.disks — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineDisks []*MachineDisk `json:"disks,omitempty"`
-	// Talos: MachineConfig.install — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineInstall *InstallConfig `json:"install,omitempty"`
-	// Talos: MachineConfig.files — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineFiles []*MachineFile `json:"files,omitempty"`
-	// Talos: MachineConfig.env — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineEnv map[string]string `json:"env,omitempty"`
-	// Talos: MachineConfig.time — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineTime *TimeConfig `json:"time,omitempty"`
-	// Talos: MachineConfig.sysctls — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineSysctls map[string]string `json:"sysctls,omitempty"`
-	// Talos: MachineConfig.sysfs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineSysfs map[string]string `json:"sysfs,omitempty"`
-	// Talos: MachineConfig.registries — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineRegistries *RegistriesConfig `json:"registries,omitempty"`
-	// Talos: MachineConfig.systemDiskEncryption — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineSystemDiskEncryption *SystemDiskEncryptionConfig `json:"systemDiskEncryption,omitempty"`
-	// Talos: MachineConfig.features — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineFeatures *FeaturesConfig `json:"features,omitempty"`
-	// Talos: MachineConfig.udev — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineUdev *UdevConfig `json:"udev,omitempty"`
-	// Talos: MachineConfig.logging — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineLogging *LoggingConfig `json:"logging,omitempty"`
-	// Talos: MachineConfig.kernel — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineKernel *KernelConfig `json:"kernel,omitempty"`
-	// Talos: MachineConfig.seccompProfiles — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineSeccompProfiles []*MachineSeccompProfile `json:"seccompProfiles,omitempty"`
-	// Talos: MachineConfig.nodeLabels — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineNodeLabels map[string]string `json:"nodeLabels,omitempty"`
-	// Talos: MachineConfig.nodeAnnotations — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineNodeAnnotations map[string]string `json:"nodeAnnotations,omitempty"`
-	// Talos: MachineConfig.nodeTaints — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineNodeTaints map[string]string `json:"nodeTaints,omitempty"`
 }
 
 // Talos: MachineControlPlaneConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type MachineControlPlaneConfig struct {
-	// Talos: MachineControlPlaneConfig.controllerManager — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineControllerManager *MachineControllerManagerConfig `json:"controllerManager,omitempty"`
-	// Talos: MachineControlPlaneConfig.scheduler — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineScheduler *MachineSchedulerConfig `json:"scheduler,omitempty"`
 }
 
 // Talos: MachineControllerManagerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type MachineControllerManagerConfig struct {
-	// Talos: MachineControllerManagerConfig.disabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineControllerManagerDisabled *bool `json:"disabled,omitempty"`
 }
 
 // Talos: MachineDisk — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type MachineDisk struct {
-	// Talos: MachineDisk.device — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DeviceName string `json:"device,omitempty"`
-	// Talos: MachineDisk.partitions — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	DiskPartitions []*DiskPartition `json:"partitions,omitempty"`
 }
 
 // Talos: MachineFile — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type MachineFile struct {
-	// Talos: MachineFile.content — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	FileContent string `json:"content"`
-	// Talos: MachineFile.permissions — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	FilePermissions string `json:"permissions"`
-	// Talos: MachineFile.path — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	FilePath string `json:"path"`
-	// Talos: MachineFile.op — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	FileOp string `json:"op"`
 }
 
 // Talos: MachineSchedulerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type MachineSchedulerConfig struct {
-	// Talos: MachineSchedulerConfig.disabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MachineSchedulerDisabled *bool `json:"disabled,omitempty"`
 }
 
 // Talos: MachineSeccompProfile — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type MachineSeccompProfile struct {
-	// Talos: MachineSeccompProfile.name — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	MachineSeccompProfileName string `json:"name"`
-	// Talos: MachineSeccompProfile.value — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	MachineSeccompProfileValue *SeccompProfile `json:"value"`
 }
 
 // Talos: MountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig
 type MountSpec struct {
-	// Talos: MountSpec.secure — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig
 	// +optional
 	MountSecure *bool `json:"secure,omitempty"`
-	// Talos: MountSpec.disableAccessTime — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig
 	// +optional
 	MountDisableAccessTime *bool `json:"disableAccessTime,omitempty"`
 }
 
 // Talos: NameserverConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
 type NameserverConfig struct {
-	// Talos: NameserverConfig.address — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
 	// +required
 	Address string `json:"address"`
-	// Talos: NameserverConfig.protocol — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
 	// +optional
 	Protocol string `json:"protocol,omitempty"`
-	// Talos: NameserverConfig.tlsServerName — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
 	// +optional
 	TLSServerName string `json:"tlsServerName,omitempty"`
 }
 
 // Talos: NetworkConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type NetworkConfig struct {
-	// Talos: NetworkConfig.hostname — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	NetworkHostname string `json:"hostname,omitempty"`
-	// Talos: NetworkConfig.interfaces — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	NetworkInterfaces []*Device `json:"interfaces,omitempty"`
-	// Talos: NetworkConfig.nameservers — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	NameServers []string `json:"nameservers,omitempty"`
-	// Talos: NetworkConfig.searchDomains — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	Searches []string `json:"searchDomains,omitempty"`
-	// Talos: NetworkConfig.extraHostEntries — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ExtraHostEntries []*ExtraHost `json:"extraHostEntries,omitempty"`
-	// Talos: NetworkConfig.kubespan — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	NetworkKubeSpan *NetworkKubeSpan `json:"kubespan,omitempty"`
-	// Talos: NetworkConfig.disableSearchDomain — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	NetworkDisableSearchDomain *bool `json:"disableSearchDomain,omitempty"`
 }
 
 // Talos: NetworkDeviceSelector — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type NetworkDeviceSelector struct {
-	// Talos: NetworkDeviceSelector.busPath — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	NetworkDeviceBus string `json:"busPath,omitempty"`
-	// Talos: NetworkDeviceSelector.hardwareAddr — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	NetworkDeviceHardwareAddress string `json:"hardwareAddr,omitempty"`
-	// Talos: NetworkDeviceSelector.permanentAddr — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	NetworkDevicePermanentAddress string `json:"permanentAddr,omitempty"`
-	// Talos: NetworkDeviceSelector.pciID — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	NetworkDevicePCIID string `json:"pciID,omitempty"`
-	// Talos: NetworkDeviceSelector.driver — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	NetworkDeviceKernelDriver string `json:"driver,omitempty"`
-	// Talos: NetworkDeviceSelector.physical — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	NetworkDevicePhysical *bool `json:"physical,omitempty"`
 }
 
 // Talos: NetworkKubeSpan — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type NetworkKubeSpan struct {
-	// Talos: NetworkKubeSpan.enabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeSpanEnabled *bool `json:"enabled,omitempty"`
-	// Talos: NetworkKubeSpan.advertiseKubernetesNetworks — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeSpanAdvertiseKubernetesNetworks *bool `json:"advertiseKubernetesNetworks,omitempty"`
-	// Talos: NetworkKubeSpan.allowDownPeerBypass — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeSpanAllowDownPeerBypass *bool `json:"allowDownPeerBypass,omitempty"`
-	// Talos: NetworkKubeSpan.harvestExtraEndpoints — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeSpanHarvestExtraEndpoints *bool `json:"harvestExtraEndpoints,omitempty"`
-	// Talos: NetworkKubeSpan.mtu — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeSpanMTU *uint32 `json:"mtu,omitempty"`
-	// Talos: NetworkKubeSpan.filters — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	KubeSpanFilters *KubeSpanFilters `json:"filters,omitempty"`
 }
 
 // Talos: PEMEncodedCertificate — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type PEMEncodedCertificate struct {
-	// Talos: PEMEncodedCertificate.crt — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	Crt []byte `json:"crt"`
 }
 
 // Talos: PEMEncodedCertificateAndKey — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type PEMEncodedCertificateAndKey struct {
-	// Talos: PEMEncodedCertificateAndKey.crt — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	Crt []byte `json:"crt"`
-	// Talos: PEMEncodedCertificateAndKey.key — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	Key []byte `json:"key"`
 }
 
 // Talos: ProvisioningSpec
 type ProvisioningSpec struct {
-	// Talos: ProvisioningSpec.diskSelector
 	// +optional
 	DiskSelectorSpec *DiskSelector `json:"diskSelector,omitempty"`
-	// Talos: ProvisioningSpec.grow
 	// +optional
 	ProvisioningGrow *bool `json:"grow,omitempty"`
-	// Talos: ProvisioningSpec.minSize
 	// +optional
 	ProvisioningMinSize string `json:"minSize,omitempty"`
-	// Talos: ProvisioningSpec.maxSize
 	// +optional
 	ProvisioningMaxSize string `json:"maxSize,omitempty"`
 }
 
 // Talos: ProxyConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type ProxyConfig struct {
-	// Talos: ProxyConfig.disabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	Disabled *bool `json:"disabled,omitempty"`
-	// Talos: ProxyConfig.image — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ContainerImage string `json:"image,omitempty"`
-	// Talos: ProxyConfig.mode — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ModeConfig string `json:"mode,omitempty"`
-	// Talos: ProxyConfig.extraArgs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ExtraArgsConfig map[string][]string `json:"extraArgs,omitempty"`
 }
 
 // Talos: RawVolumeConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/rawvolumeconfig
 type RawVolumeConfigV1Alpha1 struct {
-	// Talos: RawVolumeConfigV1Alpha1.name — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/rawvolumeconfig
 	// +required
 	MetaName string `json:"name"`
-	// Talos: RawVolumeConfigV1Alpha1.provisioning — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/rawvolumeconfig
 	// +optional
 	ProvisioningSpec *ProvisioningSpec `json:"provisioning,omitempty"`
-	// Talos: RawVolumeConfigV1Alpha1.encryption — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/rawvolumeconfig
 	// +optional
 	EncryptionSpec *EncryptionSpec `json:"encryption,omitempty"`
 }
 
 // Talos: RegistriesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type RegistriesConfig struct {
-	// Talos: RegistriesConfig.mirrors — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	RegistryMirrors map[string]*RegistryMirrorConfig `json:"mirrors,omitempty"`
-	// Talos: RegistriesConfig.config — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	RegistryConfig map[string]*RegistryConfig `json:"config,omitempty"`
 }
 
 // Talos: RegistryAuthConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type RegistryAuthConfig struct {
-	// Talos: RegistryAuthConfig.username — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	RegistryUsername string `json:"username,omitempty"`
 }
 
 // Talos: RegistryConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type RegistryConfig struct {
-	// Talos: RegistryConfig.tls — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	RegistryTLS *RegistryTLSConfig `json:"tls,omitempty"`
-	// Talos: RegistryConfig.auth — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	RegistryAuth *RegistryAuthConfig `json:"auth,omitempty"`
 }
 
 // Talos: RegistryKubernetesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type RegistryKubernetesConfig struct {
-	// Talos: RegistryKubernetesConfig.disabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	RegistryDisabled *bool `json:"disabled,omitempty"`
 }
 
 // Talos: RegistryMirrorConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type RegistryMirrorConfig struct {
-	// Talos: RegistryMirrorConfig.endpoints — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	MirrorEndpoints []string `json:"endpoints"`
-	// Talos: RegistryMirrorConfig.overridePath — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MirrorOverridePath *bool `json:"overridePath,omitempty"`
-	// Talos: RegistryMirrorConfig.skipFallback — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	MirrorSkipFallback *bool `json:"skipFallback,omitempty"`
 }
 
 // Talos: RegistryServiceConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type RegistryServiceConfig struct {
-	// Talos: RegistryServiceConfig.disabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	RegistryDisabled *bool `json:"disabled,omitempty"`
-	// Talos: RegistryServiceConfig.endpoint — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	RegistryEndpoint string `json:"endpoint,omitempty"`
 }
 
 // Talos: RegistryTLSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type RegistryTLSConfig struct {
-	// Talos: RegistryTLSConfig.clientIdentity — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	TLSClientIdentity *PEMEncodedCertificateAndKey `json:"clientIdentity,omitempty"`
-	// Talos: RegistryTLSConfig.ca — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	TLSCA []byte `json:"ca,omitempty"`
-	// Talos: RegistryTLSConfig.insecureSkipVerify — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	TLSInsecureSkipVerify *bool `json:"insecureSkipVerify,omitempty"`
 }
 
 // Talos: ResolverConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
 type ResolverConfigV1Alpha1 struct {
-	// Talos: ResolverConfigV1Alpha1.nameservers — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
 	// +optional
 	ResolverNameservers []*NameserverConfig `json:"nameservers,omitempty"`
-	// Talos: ResolverConfigV1Alpha1.searchDomains — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
 	// +optional
 	ResolverSearchDomains *SearchDomainsConfig `json:"searchDomains,omitempty"`
-	// Talos: ResolverConfigV1Alpha1.hostDNS — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
 	// +optional
 	ResolverHostDNS *ResolverHostDNSConfig `json:"hostDNS,omitempty"`
 }
 
 // Talos: HostDNSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
 type ResolverHostDNSConfig struct {
-	// Talos: HostDNSConfig.enabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
 	// +optional
 	HostDNSEnabled *bool `json:"enabled,omitempty"`
-	// Talos: HostDNSConfig.forwardKubeDNSToHost — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
 	// +optional
 	HostDNSForwardKubeDNSToHost *bool `json:"forwardKubeDNSToHost,omitempty"`
-	// Talos: HostDNSConfig.resolveMemberNames — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
 	// +optional
 	HostDNSResolveMemberNames *bool `json:"resolveMemberNames,omitempty"`
 }
 
 // Talos: ResourcesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type ResourcesConfig struct {
-	// Talos: ResourcesConfig.requests — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	Requests corev1.ResourceList `json:"requests,omitempty"`
-	// Talos: ResourcesConfig.limits — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	Limits corev1.ResourceList `json:"limits,omitempty"`
 }
 
 // Talos: Route — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type Route struct {
-	// Talos: Route.network — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	RouteNetwork string `json:"network"`
-	// Talos: Route.gateway — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	RouteGateway string `json:"gateway"`
-	// Talos: Route.source — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	RouteSource string `json:"source,omitempty"`
-	// Talos: Route.metric — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	RouteMetric uint32 `json:"metric,omitempty"`
-	// Talos: Route.mtu — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	RouteMTU uint32 `json:"mtu,omitempty"`
 }
 
 // Talos: STP — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type STP struct {
-	// Talos: STP.enabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	STPEnabled *bool `json:"enabled,omitempty"`
 }
 
 // Talos: SchedulerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type SchedulerConfig struct {
-	// Talos: SchedulerConfig.image — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ContainerImage string `json:"image,omitempty"`
-	// Talos: SchedulerConfig.extraArgs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ExtraArgsConfig map[string][]string `json:"extraArgs,omitempty"`
-	// Talos: SchedulerConfig.extraVolumes — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ExtraVolumesConfig []*VolumeMountConfig `json:"extraVolumes,omitempty"`
-	// Talos: SchedulerConfig.env — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	EnvConfig map[string]string `json:"env,omitempty"`
-	// Talos: SchedulerConfig.resources — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	ResourcesConfig *ResourcesConfig `json:"resources,omitempty"`
 }
 
 // Talos: ScrubConfig
 type ScrubConfig struct {
-	// Talos: ScrubConfig.enabled
 	// +optional
 	ScrubEnabled *bool `json:"enabled,omitempty"`
-	// Talos: ScrubConfig.interval
 	// +optional
 	ScrubInterval string `json:"interval,omitempty"`
 }
 
 // Talos: SearchDomainsConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
 type SearchDomainsConfig struct {
-	// Talos: SearchDomainsConfig.domains — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
 	// +optional
 	SearchDomains []string `json:"domains,omitempty"`
-	// Talos: SearchDomainsConfig.disableDefault — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig
 	// +optional
 	SearchDisableDefault *bool `json:"disableDefault,omitempty"`
 }
 
 // Talos: SysctlConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/runtime/sysctlconfig
 type SysctlConfigV1Alpha1 struct {
-	// Talos: SysctlConfigV1Alpha1.params — https://docs.siderolabs.com/talos/v1.14/reference/configuration/runtime/sysctlconfig
 	// +required
 	Params map[string]string `json:"params"`
 }
 
 // Talos: SystemDiskEncryptionConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type SystemDiskEncryptionConfig struct {
-	// Talos: SystemDiskEncryptionConfig.state — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	StatePartition *EncryptionConfig `json:"state,omitempty"`
-	// Talos: SystemDiskEncryptionConfig.ephemeral — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	EphemeralPartition *EncryptionConfig `json:"ephemeral,omitempty"`
 }
 
 // Talos: SystemVolumeFilesystemSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig
 type SystemVolumeFilesystemSpec struct {
-	// Talos: SystemVolumeFilesystemSpec.xfs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig
 	// +optional
 	XFSSpec *XFSSpec `json:"xfs,omitempty"`
 }
 
 // Talos: TimeConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type TimeConfig struct {
-	// Talos: TimeConfig.disabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	TimeDisabled *bool `json:"disabled,omitempty"`
-	// Talos: TimeConfig.servers — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	TimeServers []string `json:"servers,omitempty"`
-	// Talos: TimeConfig.bootTimeout — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	TimeBootTimeout string `json:"bootTimeout,omitempty"`
 }
 
 // Talos: TrimConfig
 type TrimConfig struct {
-	// Talos: TrimConfig.enabled
 	// +optional
 	TrimEnabled *bool `json:"enabled,omitempty"`
-	// Talos: TrimConfig.interval
 	// +optional
 	TrimInterval string `json:"interval,omitempty"`
 }
 
 // Talos: UdevConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type UdevConfig struct {
-	// Talos: UdevConfig.rules — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	UdevRules []string `json:"rules,omitempty"`
 }
 
 // Talos: UserMountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
 type UserMountSpec struct {
-	// Talos: UserMountSpec.disableAccessTime — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
 	// +optional
 	MountDisableAccessTime *bool `json:"disableAccessTime,omitempty"`
-	// Talos: UserMountSpec.secure — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
 	// +optional
 	MountSecure *bool `json:"secure,omitempty"`
 }
 
 // Talos: UserVolumeConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
 type UserVolumeConfigV1Alpha1 struct {
-	// Talos: UserVolumeConfigV1Alpha1.name — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
 	// +required
 	MetaName string `json:"name"`
-	// Talos: UserVolumeConfigV1Alpha1.volumeType — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
 	// +optional
 	VolumeType *string `json:"volumeType,omitempty"`
-	// Talos: UserVolumeConfigV1Alpha1.provisioning — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
 	// +optional
 	ProvisioningSpec *ProvisioningSpec `json:"provisioning,omitempty"`
-	// Talos: UserVolumeConfigV1Alpha1.filesystem — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
 	// +optional
 	FilesystemSpec *FilesystemSpec `json:"filesystem,omitempty"`
-	// Talos: UserVolumeConfigV1Alpha1.encryption — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
 	// +optional
 	EncryptionSpec *EncryptionSpec `json:"encryption,omitempty"`
-	// Talos: UserVolumeConfigV1Alpha1.mount — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
 	// +optional
 	MountSpec *UserMountSpec `json:"mount,omitempty"`
-	// Talos: UserVolumeConfigV1Alpha1.trim — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
 	// +optional
 	TrimSpec *TrimConfig `json:"trim,omitempty"`
-	// Talos: UserVolumeConfigV1Alpha1.scrub — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig
 	// +optional
 	ScrubSpec *ScrubConfig `json:"scrub,omitempty"`
 }
@@ -1496,79 +1137,58 @@ type VIPHCloudConfig struct {
 
 // Talos: Vlan — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type Vlan struct {
-	// Talos: Vlan.addresses — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	VlanAddresses []string `json:"addresses,omitempty"`
-	// Talos: Vlan.cidr — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	VlanCIDR string `json:"cidr,omitempty"`
-	// Talos: Vlan.routes — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	VlanRoutes []*Route `json:"routes"`
-	// Talos: Vlan.dhcp — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	VlanDHCP *bool `json:"dhcp,omitempty"`
-	// Talos: Vlan.vlanId — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	VlanID uint16 `json:"vlanId"`
-	// Talos: Vlan.mtu — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	VlanMTU uint32 `json:"mtu,omitempty"`
-	// Talos: Vlan.vip — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	VlanVIP *DeviceVIPConfig `json:"vip,omitempty"`
-	// Talos: Vlan.dhcpOptions — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	VlanDHCPOptions *DHCPOptions `json:"dhcpOptions,omitempty"`
 }
 
 // Talos: VolumeConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig
 type VolumeConfigV1Alpha1 struct {
-	// Talos: VolumeConfigV1Alpha1.name — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig
 	// +required
 	MetaName string `json:"name"`
-	// Talos: VolumeConfigV1Alpha1.provisioning — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig
 	// +optional
 	ProvisioningSpec *ProvisioningSpec `json:"provisioning,omitempty"`
-	// Talos: VolumeConfigV1Alpha1.filesystem — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig
 	// +optional
 	FilesystemSpec *SystemVolumeFilesystemSpec `json:"filesystem,omitempty"`
-	// Talos: VolumeConfigV1Alpha1.encryption — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig
 	// +optional
 	EncryptionSpec *EncryptionSpec `json:"encryption,omitempty"`
-	// Talos: VolumeConfigV1Alpha1.mount — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig
 	// +optional
 	MountSpec *MountSpec `json:"mount,omitempty"`
-	// Talos: VolumeConfigV1Alpha1.trim — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig
 	// +optional
 	TrimSpec *TrimConfig `json:"trim,omitempty"`
-	// Talos: VolumeConfigV1Alpha1.scrub — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig
 	// +optional
 	ScrubSpec *ScrubConfig `json:"scrub,omitempty"`
 }
 
 // Talos: EncryptionKey
 type VolumeEncryptionKey struct {
-	// Talos: EncryptionKey.slot
 	// +required
 	KeySlot int `json:"slot"`
-	// Talos: EncryptionKey.nodeID
 	// +optional
 	KeyNodeID *VolumeEncryptionKeyNodeID `json:"nodeID,omitempty"`
-	// Talos: EncryptionKey.kms
 	// +optional
 	KeyKMS *VolumeEncryptionKeyKMS `json:"kms,omitempty"`
-	// Talos: EncryptionKey.tpm
 	// +optional
 	KeyTPM *VolumeEncryptionKeyTPM `json:"tpm,omitempty"`
-	// Talos: EncryptionKey.lockToState
 	// +optional
 	KeyLockToSTATE *bool `json:"lockToState,omitempty"`
 }
 
 // Talos: EncryptionKeyKMS
 type VolumeEncryptionKeyKMS struct {
-	// Talos: EncryptionKeyKMS.endpoint
 	// +required
 	KMSEndpoint string `json:"endpoint"`
 }
@@ -1579,30 +1199,24 @@ type VolumeEncryptionKeyNodeID struct {
 
 // Talos: EncryptionKeyTPM
 type VolumeEncryptionKeyTPM struct {
-	// Talos: EncryptionKeyTPM.options
 	// +optional
 	TPMOptions *EncryptionKeyTPMOptions `json:"options,omitempty"`
-	// Talos: EncryptionKeyTPM.checkSecurebootStatusOnEnroll
 	// +optional
 	TPMCheckSecurebootStatusOnEnroll *bool `json:"checkSecurebootStatusOnEnroll,omitempty"`
 }
 
 // Talos: VolumeMountConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type VolumeMountConfig struct {
-	// Talos: VolumeMountConfig.hostPath — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	VolumeHostPath string `json:"hostPath"`
-	// Talos: VolumeMountConfig.mountPath — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +required
 	VolumeMountPath string `json:"mountPath"`
-	// Talos: VolumeMountConfig.readonly — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 	// +optional
 	VolumeReadOnly bool `json:"readonly,omitempty"`
 }
 
 // Talos: XFSSpec
 type XFSSpec struct {
-	// Talos: XFSSpec.minAllocationGroupSize
 	// +optional
 	MinAllocationGroupSizeConfig string `json:"minAllocationGroupSize,omitempty"`
 }

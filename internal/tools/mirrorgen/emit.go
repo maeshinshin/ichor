@@ -4,20 +4,41 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
+	"regexp"
+	"runtime"
 	"slices"
 	"strings"
-
-	"github.com/maeshinshin/ichor/pkg/release"
 )
 
 func (d *structDef) machExpr() string {
 	return machImportAlias(d.pkgPath) + "." + d.machName
 }
 
+var versionContractRE = regexp.MustCompile(`VersionContract:\s*"(v[0-9.]+)"`)
+
+// pinnedVersionContract reads release.Pinned.VersionContract from source: importing pkg/release would make
+// the generator depend on the package it generates.
+func pinnedVersionContract() string {
+	_, self, _, _ := runtime.Caller(0)
+
+	src, err := os.ReadFile(filepath.Join(filepath.Dir(self), "..", "..", "..", "pkg", "release", "release.go"))
+	if err != nil {
+		fatalf("reading the pinned version contract: %v", err)
+	}
+
+	m := versionContractRE.FindSubmatch(src)
+	if m == nil {
+		fatalf("no VersionContract literal in pkg/release/release.go")
+	}
+
+	return string(m[1])
+}
+
 // referencePage is the Talos configuration reference page of one root kind, for the pinned version contract.
 func referencePage(r rootKind) string {
 	return fmt.Sprintf("https://docs.siderolabs.com/talos/%s/reference/configuration/%s/%s",
-		release.Pinned.VersionContract, path.Base(r.pkgPath), strings.ToLower(r.kind))
+		pinnedVersionContract(), path.Base(r.pkgPath), strings.ToLower(r.kind))
 }
 
 // addPage records page on d and on every struct reachable from it.
@@ -41,21 +62,16 @@ func (d *structDef) addPage(page string) {
 	}
 }
 
-// reference is the one-line pointer to the upstream symbol (field is its YAML name, "" for the type).
+// reference is the one-line pointer to the upstream type.
 // A struct shared by several root kinds has no single page, so it gets the symbol alone.
-func (d *structDef) reference(field string) string {
-	sym := d.machName
-	if field != "" {
-		sym += "." + field
-	}
-
+func (d *structDef) reference() string {
 	for page := range d.pages {
 		if len(d.pages) == 1 {
-			return "Talos: " + sym + " — " + page
+			return "Talos: " + d.machName + " — " + page
 		}
 	}
 
-	return "Talos: " + sym
+	return "Talos: " + d.machName
 }
 
 // mirrorTypeExprOf is the Go type expression for m on the generated mirror
@@ -403,12 +419,11 @@ import (
 func writeMirrorStruct(b *strings.Builder, def *structDef) {
 	b.WriteString("\n")
 
-	fmt.Fprintf(b, "// %s\n", def.reference(""))
+	fmt.Fprintf(b, "// %s\n", def.reference())
 
 	fmt.Fprintf(b, "type %s struct {\n", def.name)
 
 	for _, f := range def.fields {
-		fmt.Fprintf(b, "\t// %s\n", def.reference(f.jsonName))
 
 		if f.optional {
 			fmt.Fprintf(b, "\t// +optional\n")

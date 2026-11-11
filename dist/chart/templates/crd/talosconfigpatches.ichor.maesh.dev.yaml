@@ -89,16 +89,13 @@ spec:
                         when kind is "Config".
                       properties:
                         cluster:
-                          description: 'Talos: Config.cluster — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                          description: 'Talos: ClusterConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                           properties:
                             acceptedCAs:
-                              description: 'Talos: ClusterConfig.acceptedCAs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               items:
                                 description: 'Talos: PEMEncodedCertificate — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                 properties:
                                   crt:
-                                    description: 'Talos: PEMEncodedCertificate.crt
-                                      — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     format: byte
                                     type: string
                                 required:
@@ -106,42 +103,32 @@ spec:
                                 type: object
                               type: array
                             adminKubeconfig:
-                              description: 'Talos: ClusterConfig.adminKubeconfig —
-                                https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: AdminKubeconfigConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 certLifetime:
-                                  description: 'Talos: AdminKubeconfigConfig.certLifetime
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: string
                               type: object
                             allowSchedulingOnControlPlanes:
-                              description: 'Talos: ClusterConfig.allowSchedulingOnControlPlanes
-                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               type: boolean
                             allowSchedulingOnMasters:
-                              description: 'Talos: ClusterConfig.allowSchedulingOnMasters
-                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               type: boolean
                             apiServer:
-                              description: 'Talos: ClusterConfig.apiServer — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: APIServerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 admissionControl:
-                                  description: 'Talos: APIServerConfig.admissionControl
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     description: 'Talos: AdmissionPluginConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     properties:
                                       name:
-                                        description: 'Talos: AdmissionPluginConfig.name
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                     required:
                                     - name
                                     type: object
                                   type: array
                                 auditPolicy:
-                                  description: 'Talos: APIServerConfig.auditPolicy
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  description: |-
+                                    Policy defines the configuration of audit logging, and the rules for how different request
+                                    categories are logged.
                                   properties:
                                     apiVersion:
                                       description: |-
@@ -318,23 +305,15 @@ spec:
                                   - rules
                                   type: object
                                 authorizationConfig:
-                                  description: 'Talos: APIServerConfig.authorizationConfig
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     description: 'Talos: AuthorizationConfigAuthorizerConfig
                                       — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     properties:
                                       name:
-                                        description: 'Talos: AuthorizationConfigAuthorizerConfig.name
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                       type:
-                                        description: 'Talos: AuthorizationConfigAuthorizerConfig.type
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                       webhook:
-                                        description: 'Talos: AuthorizationConfigAuthorizerConfig.webhook
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         properties:
                                           authorizedTTL:
                                             description: |-
@@ -469,45 +448,30 @@ spec:
                                     type: object
                                   type: array
                                 certSANs:
-                                  description: 'Talos: APIServerConfig.certSANs —
-                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     type: string
                                   type: array
                                 disablePodSecurityPolicy:
-                                  description: 'Talos: APIServerConfig.disablePodSecurityPolicy
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                                 env:
                                   additionalProperties:
                                     type: string
-                                  description: 'Talos: APIServerConfig.env — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: object
                                 extraArgs:
                                   additionalProperties:
                                     items:
                                       type: string
                                     type: array
-                                  description: 'Talos: APIServerConfig.extraArgs —
-                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: object
                                 extraVolumes:
-                                  description: 'Talos: APIServerConfig.extraVolumes
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     description: 'Talos: VolumeMountConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     properties:
                                       hostPath:
-                                        description: 'Talos: VolumeMountConfig.hostPath
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                       mountPath:
-                                        description: 'Talos: VolumeMountConfig.mountPath
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                       readonly:
-                                        description: 'Talos: VolumeMountConfig.readonly
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: boolean
                                     required:
                                     - hostPath
@@ -515,11 +479,9 @@ spec:
                                     type: object
                                   type: array
                                 image:
-                                  description: 'Talos: APIServerConfig.image — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: string
                                 resources:
-                                  description: 'Talos: APIServerConfig.resources —
-                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  description: 'Talos: ResourcesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   properties:
                                     limits:
                                       additionalProperties:
@@ -528,8 +490,8 @@ spec:
                                         - type: string
                                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                         x-kubernetes-int-or-string: true
-                                      description: 'Talos: ResourcesConfig.limits
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                      description: ResourceList is a set of (resource
+                                        name, quantity) pairs.
                                       type: object
                                     requests:
                                       additionalProperties:
@@ -538,63 +500,45 @@ spec:
                                         - type: string
                                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                         x-kubernetes-int-or-string: true
-                                      description: 'Talos: ResourcesConfig.requests
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                      description: ResourceList is a set of (resource
+                                        name, quantity) pairs.
                                       type: object
                                   type: object
                               type: object
                             clusterName:
-                              description: 'Talos: ClusterConfig.clusterName — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               type: string
                             controlPlane:
-                              description: 'Talos: ClusterConfig.controlPlane — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: ControlPlaneConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 endpoint:
-                                  description: 'Talos: ControlPlaneConfig.endpoint
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: string
                                 localAPIServerPort:
-                                  description: 'Talos: ControlPlaneConfig.localAPIServerPort
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: integer
                               required:
                               - endpoint
                               type: object
                             controllerManager:
-                              description: 'Talos: ClusterConfig.controllerManager
-                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: ControllerManagerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 env:
                                   additionalProperties:
                                     type: string
-                                  description: 'Talos: ControllerManagerConfig.env
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: object
                                 extraArgs:
                                   additionalProperties:
                                     items:
                                       type: string
                                     type: array
-                                  description: 'Talos: ControllerManagerConfig.extraArgs
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: object
                                 extraVolumes:
-                                  description: 'Talos: ControllerManagerConfig.extraVolumes
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     description: 'Talos: VolumeMountConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     properties:
                                       hostPath:
-                                        description: 'Talos: VolumeMountConfig.hostPath
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                       mountPath:
-                                        description: 'Talos: VolumeMountConfig.mountPath
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                       readonly:
-                                        description: 'Talos: VolumeMountConfig.readonly
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: boolean
                                     required:
                                     - hostPath
@@ -602,12 +546,9 @@ spec:
                                     type: object
                                   type: array
                                 image:
-                                  description: 'Talos: ControllerManagerConfig.image
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: string
                                 resources:
-                                  description: 'Talos: ControllerManagerConfig.resources
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  description: 'Talos: ResourcesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   properties:
                                     limits:
                                       additionalProperties:
@@ -616,8 +557,8 @@ spec:
                                         - type: string
                                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                         x-kubernetes-int-or-string: true
-                                      description: 'Talos: ResourcesConfig.limits
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                      description: ResourceList is a set of (resource
+                                        name, quantity) pairs.
                                       type: object
                                     requests:
                                       additionalProperties:
@@ -626,52 +567,42 @@ spec:
                                         - type: string
                                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                         x-kubernetes-int-or-string: true
-                                      description: 'Talos: ResourcesConfig.requests
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                      description: ResourceList is a set of (resource
+                                        name, quantity) pairs.
                                       type: object
                                   type: object
                               type: object
                             coreDNS:
-                              description: 'Talos: ClusterConfig.coreDNS — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: CoreDNS — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 disabled:
-                                  description: 'Talos: CoreDNS.disabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                                 image:
-                                  description: 'Talos: CoreDNS.image — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: string
                               type: object
                             discovery:
-                              description: 'Talos: ClusterConfig.discovery — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: ClusterDiscoveryConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 enabled:
-                                  description: 'Talos: ClusterDiscoveryConfig.enabled
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                                 registries:
-                                  description: 'Talos: ClusterDiscoveryConfig.registries
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  description: 'Talos: DiscoveryRegistriesConfig —
+                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   properties:
                                     kubernetes:
-                                      description: 'Talos: DiscoveryRegistriesConfig.kubernetes
+                                      description: 'Talos: RegistryKubernetesConfig
                                         — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       properties:
                                         disabled:
-                                          description: 'Talos: RegistryKubernetesConfig.disabled
-                                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                           type: boolean
                                       type: object
                                     service:
-                                      description: 'Talos: DiscoveryRegistriesConfig.service
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                      description: 'Talos: RegistryServiceConfig —
+                                        https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       properties:
                                         disabled:
-                                          description: 'Talos: RegistryServiceConfig.disabled
-                                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                           type: boolean
                                         endpoint:
-                                          description: 'Talos: RegistryServiceConfig.endpoint
-                                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                           type: string
                                       type: object
                                   required:
@@ -682,11 +613,9 @@ spec:
                               - registries
                               type: object
                             etcd:
-                              description: 'Talos: ClusterConfig.etcd — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: EtcdConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 advertisedSubnets:
-                                  description: 'Talos: EtcdConfig.advertisedSubnets
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     type: string
                                   type: array
@@ -695,32 +624,22 @@ spec:
                                     items:
                                       type: string
                                     type: array
-                                  description: 'Talos: EtcdConfig.extraArgs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: object
                                 image:
-                                  description: 'Talos: EtcdConfig.image — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: string
                                 listenSubnets:
-                                  description: 'Talos: EtcdConfig.listenSubnets —
-                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     type: string
                                   type: array
                                 subnet:
-                                  description: 'Talos: EtcdConfig.subnet — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: string
                               type: object
                             externalCloudProvider:
-                              description: 'Talos: ClusterConfig.externalCloudProvider
-                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: ExternalCloudProviderConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 enabled:
-                                  description: 'Talos: ExternalCloudProviderConfig.enabled
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                                 manifests:
-                                  description: 'Talos: ExternalCloudProviderConfig.manifests
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     type: string
                                   type: array
@@ -728,31 +647,20 @@ spec:
                             extraManifestHeaders:
                               additionalProperties:
                                 type: string
-                              description: 'Talos: ClusterConfig.extraManifestHeaders
-                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               type: object
                             extraManifests:
-                              description: 'Talos: ClusterConfig.extraManifests —
-                                https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               items:
                                 type: string
                               type: array
                             id:
-                              description: 'Talos: ClusterConfig.id — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               type: string
                             inlineManifests:
-                              description: 'Talos: ClusterConfig.inlineManifests —
-                                https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               items:
                                 description: 'Talos: ClusterInlineManifest — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                 properties:
                                   contents:
-                                    description: 'Talos: ClusterInlineManifest.contents
-                                      — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     type: string
                                   name:
-                                    description: 'Talos: ClusterInlineManifest.name
-                                      — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     type: string
                                 required:
                                 - contents
@@ -760,48 +668,35 @@ spec:
                                 type: object
                               type: array
                             network:
-                              description: 'Talos: ClusterConfig.network — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: ClusterNetworkConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 cni:
-                                  description: 'Talos: ClusterNetworkConfig.cni —
-                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  description: 'Talos: CNIConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   properties:
                                     flannel:
-                                      description: 'Talos: CNIConfig.flannel — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                      description: 'Talos: FlannelCNIConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       properties:
                                         extraArgs:
-                                          description: 'Talos: FlannelCNIConfig.extraArgs
-                                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                           items:
                                             type: string
                                           type: array
                                         kubeNetworkPoliciesEnabled:
-                                          description: 'Talos: FlannelCNIConfig.kubeNetworkPoliciesEnabled
-                                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                           type: boolean
                                       type: object
                                     name:
-                                      description: 'Talos: CNIConfig.name — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: string
                                     urls:
-                                      description: 'Talos: CNIConfig.urls — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       items:
                                         type: string
                                       type: array
                                   type: object
                                 dnsDomain:
-                                  description: 'Talos: ClusterNetworkConfig.dnsDomain
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: string
                                 podSubnets:
-                                  description: 'Talos: ClusterNetworkConfig.podSubnets
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     type: string
                                   type: array
                                 serviceSubnets:
-                                  description: 'Talos: ClusterNetworkConfig.serviceSubnets
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     type: string
                                   type: array
@@ -811,58 +706,43 @@ spec:
                               - serviceSubnets
                               type: object
                             proxy:
-                              description: 'Talos: ClusterConfig.proxy — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: ProxyConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 disabled:
-                                  description: 'Talos: ProxyConfig.disabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                                 extraArgs:
                                   additionalProperties:
                                     items:
                                       type: string
                                     type: array
-                                  description: 'Talos: ProxyConfig.extraArgs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: object
                                 image:
-                                  description: 'Talos: ProxyConfig.image — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: string
                                 mode:
-                                  description: 'Talos: ProxyConfig.mode — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: string
                               type: object
                             scheduler:
-                              description: 'Talos: ClusterConfig.scheduler — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: SchedulerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 env:
                                   additionalProperties:
                                     type: string
-                                  description: 'Talos: SchedulerConfig.env — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: object
                                 extraArgs:
                                   additionalProperties:
                                     items:
                                       type: string
                                     type: array
-                                  description: 'Talos: SchedulerConfig.extraArgs —
-                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: object
                                 extraVolumes:
-                                  description: 'Talos: SchedulerConfig.extraVolumes
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     description: 'Talos: VolumeMountConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     properties:
                                       hostPath:
-                                        description: 'Talos: VolumeMountConfig.hostPath
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                       mountPath:
-                                        description: 'Talos: VolumeMountConfig.mountPath
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                       readonly:
-                                        description: 'Talos: VolumeMountConfig.readonly
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: boolean
                                     required:
                                     - hostPath
@@ -870,11 +750,9 @@ spec:
                                     type: object
                                   type: array
                                 image:
-                                  description: 'Talos: SchedulerConfig.image — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: string
                                 resources:
-                                  description: 'Talos: SchedulerConfig.resources —
-                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  description: 'Talos: ResourcesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   properties:
                                     limits:
                                       additionalProperties:
@@ -883,8 +761,8 @@ spec:
                                         - type: string
                                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                         x-kubernetes-int-or-string: true
-                                      description: 'Talos: ResourcesConfig.limits
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                      description: ResourceList is a set of (resource
+                                        name, quantity) pairs.
                                       type: object
                                     requests:
                                       additionalProperties:
@@ -893,26 +771,22 @@ spec:
                                         - type: string
                                         pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                                         x-kubernetes-int-or-string: true
-                                      description: 'Talos: ResourcesConfig.requests
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                      description: ResourceList is a set of (resource
+                                        name, quantity) pairs.
                                       type: object
                                   type: object
                               type: object
                           type: object
                         debug:
-                          description: 'Talos: Config.debug — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                           type: boolean
                         machine:
-                          description: 'Talos: Config.machine — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                          description: 'Talos: MachineConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                           properties:
                             acceptedCAs:
-                              description: 'Talos: MachineConfig.acceptedCAs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               items:
                                 description: 'Talos: PEMEncodedCertificate — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                 properties:
                                   crt:
-                                    description: 'Talos: PEMEncodedCertificate.crt
-                                      — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     format: byte
                                     type: string
                                 required:
@@ -920,53 +794,39 @@ spec:
                                 type: object
                               type: array
                             certSANs:
-                              description: 'Talos: MachineConfig.certSANs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               items:
                                 type: string
                               type: array
                             controlPlane:
-                              description: 'Talos: MachineConfig.controlPlane — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: MachineControlPlaneConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 controllerManager:
-                                  description: 'Talos: MachineControlPlaneConfig.controllerManager
+                                  description: 'Talos: MachineControllerManagerConfig
                                     — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   properties:
                                     disabled:
-                                      description: 'Talos: MachineControllerManagerConfig.disabled
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: boolean
                                   type: object
                                 scheduler:
-                                  description: 'Talos: MachineControlPlaneConfig.scheduler
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  description: 'Talos: MachineSchedulerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   properties:
                                     disabled:
-                                      description: 'Talos: MachineSchedulerConfig.disabled
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: boolean
                                   type: object
                               type: object
                             disks:
-                              description: 'Talos: MachineConfig.disks — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               items:
                                 description: 'Talos: MachineDisk — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                 properties:
                                   device:
-                                    description: 'Talos: MachineDisk.device — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     type: string
                                   partitions:
-                                    description: 'Talos: MachineDisk.partitions —
-                                      https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     items:
                                       description: 'Talos: DiskPartition — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       properties:
                                         mountpoint:
-                                          description: 'Talos: DiskPartition.mountpoint
-                                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                           type: string
                                         size:
-                                          description: 'Talos: DiskPartition.size
-                                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                           type: string
                                       type: object
                                     type: array
@@ -975,105 +835,71 @@ spec:
                             env:
                               additionalProperties:
                                 type: string
-                              description: 'Talos: MachineConfig.env — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               type: object
                             features:
-                              description: 'Talos: MachineConfig.features — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: FeaturesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 apidCheckExtKeyUsage:
-                                  description: 'Talos: FeaturesConfig.apidCheckExtKeyUsage
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                                 diskQuotaSupport:
-                                  description: 'Talos: FeaturesConfig.diskQuotaSupport
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                                 hostDNS:
-                                  description: 'Talos: FeaturesConfig.hostDNS — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  description: 'Talos: HostDNSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   properties:
                                     enabled:
-                                      description: 'Talos: HostDNSConfig.enabled —
-                                        https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: boolean
                                     forwardKubeDNSToHost:
-                                      description: 'Talos: HostDNSConfig.forwardKubeDNSToHost
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: boolean
                                     resolveMemberNames:
-                                      description: 'Talos: HostDNSConfig.resolveMemberNames
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: boolean
                                   type: object
                                 imageCache:
-                                  description: 'Talos: FeaturesConfig.imageCache —
-                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  description: 'Talos: ImageCacheConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   properties:
                                     localEnabled:
-                                      description: 'Talos: ImageCacheConfig.localEnabled
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: boolean
                                   type: object
                                 kubePrism:
-                                  description: 'Talos: FeaturesConfig.kubePrism —
-                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  description: 'Talos: KubePrism — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   properties:
                                     enabled:
-                                      description: 'Talos: KubePrism.enabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: boolean
                                     port:
-                                      description: 'Talos: KubePrism.port — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: integer
                                   type: object
                                 kubernetesTalosAPIAccess:
-                                  description: 'Talos: FeaturesConfig.kubernetesTalosAPIAccess
+                                  description: 'Talos: KubernetesTalosAPIAccessConfig
                                     — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   properties:
                                     allowedKubernetesNamespaces:
-                                      description: 'Talos: KubernetesTalosAPIAccessConfig.allowedKubernetesNamespaces
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       items:
                                         type: string
                                       type: array
                                     allowedRoles:
-                                      description: 'Talos: KubernetesTalosAPIAccessConfig.allowedRoles
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       items:
                                         type: string
                                       type: array
                                     enabled:
-                                      description: 'Talos: KubernetesTalosAPIAccessConfig.enabled
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: boolean
                                   type: object
                                 nodeAddressSortAlgorithm:
-                                  description: 'Talos: FeaturesConfig.nodeAddressSortAlgorithm
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: string
                                 rbac:
-                                  description: 'Talos: FeaturesConfig.rbac — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                                 stableHostname:
-                                  description: 'Talos: FeaturesConfig.stableHostname
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                               type: object
                             files:
-                              description: 'Talos: MachineConfig.files — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               items:
                                 description: 'Talos: MachineFile — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                 properties:
                                   content:
-                                    description: 'Talos: MachineFile.content — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     type: string
                                   op:
-                                    description: 'Talos: MachineFile.op — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     type: string
                                   path:
-                                    description: 'Talos: MachineFile.path — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     type: string
                                   permissions:
-                                    description: 'Talos: MachineFile.permissions —
-                                      https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     type: string
                                 required:
                                 - content
@@ -1083,109 +909,70 @@ spec:
                                 type: object
                               type: array
                             install:
-                              description: 'Talos: MachineConfig.install — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: InstallConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 bootloader:
-                                  description: 'Talos: InstallConfig.bootloader —
-                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                                 disk:
-                                  description: 'Talos: InstallConfig.disk — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: string
                                 diskSelector:
-                                  description: 'Talos: InstallConfig.diskSelector
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  description: 'Talos: InstallDiskSelector — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   properties:
                                     busPath:
-                                      description: 'Talos: InstallDiskSelector.busPath
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: string
                                     modalias:
-                                      description: 'Talos: InstallDiskSelector.modalias
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: string
                                     model:
-                                      description: 'Talos: InstallDiskSelector.model
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: string
                                     name:
-                                      description: 'Talos: InstallDiskSelector.name
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: string
                                     serial:
-                                      description: 'Talos: InstallDiskSelector.serial
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: string
                                     size:
-                                      description: 'Talos: InstallDiskSelector.size
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: string
                                     type:
-                                      description: 'Talos: InstallDiskSelector.type
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: string
                                     uuid:
-                                      description: 'Talos: InstallDiskSelector.uuid
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: string
                                     wwid:
-                                      description: 'Talos: InstallDiskSelector.wwid
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: string
                                   type: object
                                 extensions:
-                                  description: 'Talos: InstallConfig.extensions —
-                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     description: 'Talos: InstallExtensionConfig —
                                       https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     properties:
                                       image:
-                                        description: 'Talos: InstallExtensionConfig.image
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                     required:
                                     - image
                                     type: object
                                   type: array
                                 extraKernelArgs:
-                                  description: 'Talos: InstallConfig.extraKernelArgs
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     type: string
                                   type: array
                                 grubUseUKICmdline:
-                                  description: 'Talos: InstallConfig.grubUseUKICmdline
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                                 image:
-                                  description: 'Talos: InstallConfig.image — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: string
                                 legacyBIOSSupport:
-                                  description: 'Talos: InstallConfig.legacyBIOSSupport
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                                 wipe:
-                                  description: 'Talos: InstallConfig.wipe — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                               required:
                               - wipe
                               type: object
                             kernel:
-                              description: 'Talos: MachineConfig.kernel — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: KernelConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 modules:
-                                  description: 'Talos: KernelConfig.modules — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     description: 'Talos: KernelModuleConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     properties:
                                       name:
-                                        description: 'Talos: KernelModuleConfig.name
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                       parameters:
-                                        description: 'Talos: KernelModuleConfig.parameters
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         items:
                                           type: string
                                         type: array
@@ -1195,17 +982,17 @@ spec:
                                   type: array
                               type: object
                             kubelet:
-                              description: 'Talos: MachineConfig.kubelet — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: KubeletConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 clusterDNS:
-                                  description: 'Talos: KubeletConfig.clusterDNS —
-                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     type: string
                                   type: array
                                 credentialProviderConfig:
-                                  description: 'Talos: KubeletConfig.credentialProviderConfig
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  description: |-
+                                    CredentialProviderConfig is the configuration containing information about
+                                    each exec credential provider. Kubelet reads this configuration from disk and enables
+                                    each provider as specified by the CredentialProvider type.
                                   properties:
                                     apiVersion:
                                       description: |-
@@ -1397,49 +1184,32 @@ spec:
                                   - providers
                                   type: object
                                 defaultRuntimeSeccompProfileEnabled:
-                                  description: 'Talos: KubeletConfig.defaultRuntimeSeccompProfileEnabled
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                                 disableManifestsDirectory:
-                                  description: 'Talos: KubeletConfig.disableManifestsDirectory
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                                 extraArgs:
                                   additionalProperties:
                                     items:
                                       type: string
                                     type: array
-                                  description: 'Talos: KubeletConfig.extraArgs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: object
                                 extraMounts:
-                                  description: 'Talos: KubeletConfig.extraMounts —
-                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     description: 'Talos: ExtraMount — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     properties:
                                       destination:
-                                        description: 'Talos: ExtraMount.destination
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                       gidMappings:
-                                        description: 'Talos: ExtraMount.gidMappings
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         items:
                                           description: 'Talos: LinuxIDMapping — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                           properties:
                                             containerID:
-                                              description: 'Talos: LinuxIDMapping.containerID
-                                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               format: int32
                                               type: integer
                                             hostID:
-                                              description: 'Talos: LinuxIDMapping.hostID
-                                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               format: int32
                                               type: integer
                                             size:
-                                              description: 'Talos: LinuxIDMapping.size
-                                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               format: int32
                                               type: integer
                                           required:
@@ -1449,36 +1219,24 @@ spec:
                                           type: object
                                         type: array
                                       options:
-                                        description: 'Talos: ExtraMount.options —
-                                          https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         items:
                                           type: string
                                         type: array
                                       source:
-                                        description: 'Talos: ExtraMount.source — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                       type:
-                                        description: 'Talos: ExtraMount.type — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                       uidMappings:
-                                        description: 'Talos: ExtraMount.uidMappings
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         items:
                                           description: 'Talos: LinuxIDMapping — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                           properties:
                                             containerID:
-                                              description: 'Talos: LinuxIDMapping.containerID
-                                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               format: int32
                                               type: integer
                                             hostID:
-                                              description: 'Talos: LinuxIDMapping.hostID
-                                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               format: int32
                                               type: integer
                                             size:
-                                              description: 'Talos: LinuxIDMapping.size
-                                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               format: int32
                                               type: integer
                                           required:
@@ -1492,49 +1250,34 @@ spec:
                                     type: object
                                   type: array
                                 image:
-                                  description: 'Talos: KubeletConfig.image — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: string
                                 nodeIP:
-                                  description: 'Talos: KubeletConfig.nodeIP — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  description: 'Talos: KubeletNodeIPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   properties:
                                     validSubnets:
-                                      description: 'Talos: KubeletNodeIPConfig.validSubnets
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       items:
                                         type: string
                                       type: array
                                   type: object
                                 registerWithFQDN:
-                                  description: 'Talos: KubeletConfig.registerWithFQDN
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                                 skipNodeRegistration:
-                                  description: 'Talos: KubeletConfig.skipNodeRegistration
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                               type: object
                             logging:
-                              description: 'Talos: MachineConfig.logging — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: LoggingConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 destinations:
-                                  description: 'Talos: LoggingConfig.destinations
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     description: 'Talos: LoggingDestination — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     properties:
                                       endpoint:
-                                        description: 'Talos: LoggingDestination.endpoint
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                       extraTags:
                                         additionalProperties:
                                           type: string
-                                        description: 'Talos: LoggingDestination.extraTags
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: object
                                       format:
-                                        description: 'Talos: LoggingDestination.format
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                     required:
                                     - endpoint
@@ -1545,25 +1288,19 @@ spec:
                               - destinations
                               type: object
                             network:
-                              description: 'Talos: MachineConfig.network — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: NetworkConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 disableSearchDomain:
-                                  description: 'Talos: NetworkConfig.disableSearchDomain
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                                 extraHostEntries:
-                                  description: 'Talos: NetworkConfig.extraHostEntries
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     description: 'Talos: ExtraHost — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     properties:
                                       aliases:
-                                        description: 'Talos: ExtraHost.aliases — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         items:
                                           type: string
                                         type: array
                                       ip:
-                                        description: 'Talos: ExtraHost.ip — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                     required:
                                     - aliases
@@ -1571,305 +1308,195 @@ spec:
                                     type: object
                                   type: array
                                 hostname:
-                                  description: 'Talos: NetworkConfig.hostname — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: string
                                 interfaces:
-                                  description: 'Talos: NetworkConfig.interfaces —
-                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     description: 'Talos: Device — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     properties:
                                       addresses:
-                                        description: 'Talos: Device.addresses — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         items:
                                           type: string
                                         type: array
                                       bond:
-                                        description: 'Talos: Device.bond — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        description: 'Talos: Bond — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         properties:
                                           adActorSysPrio:
-                                            description: 'Talos: Bond.adActorSysPrio
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: integer
                                           adActorSystem:
-                                            description: 'Talos: Bond.adActorSystem
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                           adSelect:
-                                            description: 'Talos: Bond.adSelect — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                           adUserPortKey:
-                                            description: 'Talos: Bond.adUserPortKey
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: integer
                                           allSlavesActive:
-                                            description: 'Talos: Bond.allSlavesActive
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: integer
                                           arpAllTargets:
-                                            description: 'Talos: Bond.arpAllTargets
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                           arpIPTarget:
-                                            description: 'Talos: Bond.arpIPTarget
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             items:
                                               type: string
                                             type: array
                                           arpInterval:
-                                            description: 'Talos: Bond.arpInterval
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             format: int32
                                             type: integer
                                           arpValidate:
-                                            description: 'Talos: Bond.arpValidate
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                           deviceSelectors:
-                                            description: 'Talos: Bond.deviceSelectors
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             items:
                                               description: 'Talos: NetworkDeviceSelector
                                                 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               properties:
                                                 busPath:
-                                                  description: 'Talos: NetworkDeviceSelector.busPath
-                                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                   type: string
                                                 driver:
-                                                  description: 'Talos: NetworkDeviceSelector.driver
-                                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                   type: string
                                                 hardwareAddr:
-                                                  description: 'Talos: NetworkDeviceSelector.hardwareAddr
-                                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                   type: string
                                                 pciID:
-                                                  description: 'Talos: NetworkDeviceSelector.pciID
-                                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                   type: string
                                                 permanentAddr:
-                                                  description: 'Talos: NetworkDeviceSelector.permanentAddr
-                                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                   type: string
                                                 physical:
-                                                  description: 'Talos: NetworkDeviceSelector.physical
-                                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                   type: boolean
                                               type: object
                                             type: array
                                           downdelay:
-                                            description: 'Talos: Bond.downdelay —
-                                              https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             format: int32
                                             type: integer
                                           failOverMac:
-                                            description: 'Talos: Bond.failOverMac
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                           interfaces:
-                                            description: 'Talos: Bond.interfaces —
-                                              https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             items:
                                               type: string
                                             type: array
                                           lacpRate:
-                                            description: 'Talos: Bond.lacpRate — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                           lpInterval:
-                                            description: 'Talos: Bond.lpInterval —
-                                              https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             format: int32
                                             type: integer
                                           miimon:
-                                            description: 'Talos: Bond.miimon — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             format: int32
                                             type: integer
                                           minLinks:
-                                            description: 'Talos: Bond.minLinks — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             format: int32
                                             type: integer
                                           mode:
-                                            description: 'Talos: Bond.mode — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                           numPeerNotif:
-                                            description: 'Talos: Bond.numPeerNotif
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: integer
                                           packetsPerSlave:
-                                            description: 'Talos: Bond.packetsPerSlave
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             format: int32
                                             type: integer
                                           peerNotifyDelay:
-                                            description: 'Talos: Bond.peerNotifyDelay
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             format: int32
                                             type: integer
                                           primary:
-                                            description: 'Talos: Bond.primary — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                           primaryReselect:
-                                            description: 'Talos: Bond.primaryReselect
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                           resendIgmp:
-                                            description: 'Talos: Bond.resendIgmp —
-                                              https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             format: int32
                                             type: integer
                                           tlbDynamicLb:
-                                            description: 'Talos: Bond.tlbDynamicLb
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: integer
                                           updelay:
-                                            description: 'Talos: Bond.updelay — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             format: int32
                                             type: integer
                                           useCarrier:
-                                            description: 'Talos: Bond.useCarrier —
-                                              https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: boolean
                                           xmitHashPolicy:
-                                            description: 'Talos: Bond.xmitHashPolicy
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                         required:
                                         - interfaces
                                         - mode
                                         type: object
                                       bridge:
-                                        description: 'Talos: Device.bridge — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        description: 'Talos: Bridge — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         properties:
                                           interfaces:
-                                            description: 'Talos: Bridge.interfaces
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             items:
                                               type: string
                                             type: array
                                           stp:
-                                            description: 'Talos: Bridge.stp — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                            description: 'Talos: STP — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             properties:
                                               enabled:
-                                                description: 'Talos: STP.enabled —
-                                                  https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                 type: boolean
                                             type: object
                                           vlan:
-                                            description: 'Talos: Bridge.vlan — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                            description: 'Talos: BridgeVLAN — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             properties:
                                               vlanFiltering:
-                                                description: 'Talos: BridgeVLAN.vlanFiltering
-                                                  — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                 type: boolean
                                             type: object
                                         required:
                                         - interfaces
                                         type: object
                                       bridgePort:
-                                        description: 'Talos: Device.bridgePort — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        description: 'Talos: BridgePort — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         properties:
                                           master:
-                                            description: 'Talos: BridgePort.master
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                         type: object
                                       cidr:
-                                        description: 'Talos: Device.cidr — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                       deviceSelector:
-                                        description: 'Talos: Device.deviceSelector
+                                        description: 'Talos: NetworkDeviceSelector
                                           — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         properties:
                                           busPath:
-                                            description: 'Talos: NetworkDeviceSelector.busPath
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                           driver:
-                                            description: 'Talos: NetworkDeviceSelector.driver
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                           hardwareAddr:
-                                            description: 'Talos: NetworkDeviceSelector.hardwareAddr
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                           pciID:
-                                            description: 'Talos: NetworkDeviceSelector.pciID
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                           permanentAddr:
-                                            description: 'Talos: NetworkDeviceSelector.permanentAddr
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                           physical:
-                                            description: 'Talos: NetworkDeviceSelector.physical
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: boolean
                                         type: object
                                       dhcp:
-                                        description: 'Talos: Device.dhcp — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: boolean
                                       dhcpOptions:
-                                        description: 'Talos: Device.dhcpOptions —
-                                          https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        description: 'Talos: DHCPOptions — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         properties:
                                           duidv6:
-                                            description: 'Talos: DHCPOptions.duidv6
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                           ipv4:
-                                            description: 'Talos: DHCPOptions.ipv4
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: boolean
                                           ipv6:
-                                            description: 'Talos: DHCPOptions.ipv6
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: boolean
                                           routeMetric:
-                                            description: 'Talos: DHCPOptions.routeMetric
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             format: int32
                                             type: integer
                                         required:
                                         - routeMetric
                                         type: object
                                       dummy:
-                                        description: 'Talos: Device.dummy — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: boolean
                                       ignore:
-                                        description: 'Talos: Device.ignore — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: boolean
                                       interface:
-                                        description: 'Talos: Device.interface — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: string
                                       mtu:
-                                        description: 'Talos: Device.mtu — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: integer
                                       routes:
-                                        description: 'Talos: Device.routes — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         items:
                                           description: 'Talos: Route — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                           properties:
                                             gateway:
-                                              description: 'Talos: Route.gateway —
-                                                https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               type: string
                                             metric:
-                                              description: 'Talos: Route.metric —
-                                                https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               format: int32
                                               type: integer
                                             mtu:
-                                              description: 'Talos: Route.mtu — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               format: int32
                                               type: integer
                                             network:
-                                              description: 'Talos: Route.network —
-                                                https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               type: string
                                             source:
-                                              description: 'Talos: Route.source —
-                                                https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               type: string
                                           required:
                                           - gateway
@@ -1877,92 +1504,64 @@ spec:
                                           type: object
                                         type: array
                                       vip:
-                                        description: 'Talos: Device.vip — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        description: 'Talos: DeviceVIPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         properties:
                                           equinixMetal:
-                                            description: 'Talos: DeviceVIPConfig.equinixMetal
+                                            description: 'Talos: VIPEquinixMetalConfig
                                               — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: object
                                           hcloud:
-                                            description: 'Talos: DeviceVIPConfig.hcloud
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                            description: 'Talos: VIPHCloudConfig —
+                                              https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: object
                                           ip:
-                                            description: 'Talos: DeviceVIPConfig.ip
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                         type: object
                                       vlans:
-                                        description: 'Talos: Device.vlans — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         items:
                                           description: 'Talos: Vlan — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                           properties:
                                             addresses:
-                                              description: 'Talos: Vlan.addresses
-                                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               items:
                                                 type: string
                                               type: array
                                             cidr:
-                                              description: 'Talos: Vlan.cidr — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               type: string
                                             dhcp:
-                                              description: 'Talos: Vlan.dhcp — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               type: boolean
                                             dhcpOptions:
-                                              description: 'Talos: Vlan.dhcpOptions
-                                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                              description: 'Talos: DHCPOptions — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               properties:
                                                 duidv6:
-                                                  description: 'Talos: DHCPOptions.duidv6
-                                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                   type: string
                                                 ipv4:
-                                                  description: 'Talos: DHCPOptions.ipv4
-                                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                   type: boolean
                                                 ipv6:
-                                                  description: 'Talos: DHCPOptions.ipv6
-                                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                   type: boolean
                                                 routeMetric:
-                                                  description: 'Talos: DHCPOptions.routeMetric
-                                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                   format: int32
                                                   type: integer
                                               required:
                                               - routeMetric
                                               type: object
                                             mtu:
-                                              description: 'Talos: Vlan.mtu — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               format: int32
                                               type: integer
                                             routes:
-                                              description: 'Talos: Vlan.routes — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               items:
                                                 description: 'Talos: Route — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                 properties:
                                                   gateway:
-                                                    description: 'Talos: Route.gateway
-                                                      — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                     type: string
                                                   metric:
-                                                    description: 'Talos: Route.metric
-                                                      — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                     format: int32
                                                     type: integer
                                                   mtu:
-                                                    description: 'Talos: Route.mtu
-                                                      — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                     format: int32
                                                     type: integer
                                                   network:
-                                                    description: 'Talos: Route.network
-                                                      — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                     type: string
                                                   source:
-                                                    description: 'Talos: Route.source
-                                                      — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                     type: string
                                                 required:
                                                 - gateway
@@ -1970,23 +1569,21 @@ spec:
                                                 type: object
                                               type: array
                                             vip:
-                                              description: 'Talos: Vlan.vip — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                              description: 'Talos: DeviceVIPConfig
+                                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               properties:
                                                 equinixMetal:
-                                                  description: 'Talos: DeviceVIPConfig.equinixMetal
+                                                  description: 'Talos: VIPEquinixMetalConfig
                                                     — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                   type: object
                                                 hcloud:
-                                                  description: 'Talos: DeviceVIPConfig.hcloud
+                                                  description: 'Talos: VIPHCloudConfig
                                                     — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                   type: object
                                                 ip:
-                                                  description: 'Talos: DeviceVIPConfig.ip
-                                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                   type: string
                                               type: object
                                             vlanId:
-                                              description: 'Talos: Vlan.vlanId — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               type: integer
                                           required:
                                           - routes
@@ -1994,40 +1591,27 @@ spec:
                                           type: object
                                         type: array
                                       wireguard:
-                                        description: 'Talos: Device.wireguard — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        description: 'Talos: DeviceWireguardConfig
+                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         properties:
                                           firewallMark:
-                                            description: 'Talos: DeviceWireguardConfig.firewallMark
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: integer
                                           listenPort:
-                                            description: 'Talos: DeviceWireguardConfig.listenPort
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: integer
                                           peers:
-                                            description: 'Talos: DeviceWireguardConfig.peers
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             items:
                                               description: 'Talos: DeviceWireguardPeer
                                                 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                               properties:
                                                 allowedIPs:
-                                                  description: 'Talos: DeviceWireguardPeer.allowedIPs
-                                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                   items:
                                                     type: string
                                                   type: array
                                                 endpoint:
-                                                  description: 'Talos: DeviceWireguardPeer.endpoint
-                                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                   type: string
                                                 persistentKeepaliveInterval:
-                                                  description: 'Talos: DeviceWireguardPeer.persistentKeepaliveInterval
-                                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                   type: string
                                                 publicKey:
-                                                  description: 'Talos: DeviceWireguardPeer.publicKey
-                                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                   type: string
                                               type: object
                                             type: array
@@ -2035,55 +1619,37 @@ spec:
                                     type: object
                                   type: array
                                 kubespan:
-                                  description: 'Talos: NetworkConfig.kubespan — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  description: 'Talos: NetworkKubeSpan — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   properties:
                                     advertiseKubernetesNetworks:
-                                      description: 'Talos: NetworkKubeSpan.advertiseKubernetesNetworks
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: boolean
                                     allowDownPeerBypass:
-                                      description: 'Talos: NetworkKubeSpan.allowDownPeerBypass
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: boolean
                                     enabled:
-                                      description: 'Talos: NetworkKubeSpan.enabled
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: boolean
                                     filters:
-                                      description: 'Talos: NetworkKubeSpan.filters
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                      description: 'Talos: KubeSpanFilters — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       properties:
                                         endpoints:
-                                          description: 'Talos: KubeSpanFilters.endpoints
-                                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                           items:
                                             type: string
                                           type: array
                                         excludeAdvertisedNetworks:
-                                          description: 'Talos: KubeSpanFilters.excludeAdvertisedNetworks
-                                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                           items:
                                             type: string
                                           type: array
                                       type: object
                                     harvestExtraEndpoints:
-                                      description: 'Talos: NetworkKubeSpan.harvestExtraEndpoints
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: boolean
                                     mtu:
-                                      description: 'Talos: NetworkKubeSpan.mtu — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       format: int32
                                       type: integer
                                   type: object
                                 nameservers:
-                                  description: 'Talos: NetworkConfig.nameservers —
-                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     type: string
                                   type: array
                                 searchDomains:
-                                  description: 'Talos: NetworkConfig.searchDomains
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     type: string
                                   type: array
@@ -2091,56 +1657,43 @@ spec:
                             nodeAnnotations:
                               additionalProperties:
                                 type: string
-                              description: 'Talos: MachineConfig.nodeAnnotations —
-                                https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               type: object
                             nodeLabels:
                               additionalProperties:
                                 type: string
-                              description: 'Talos: MachineConfig.nodeLabels — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               type: object
                             nodeTaints:
                               additionalProperties:
                                 type: string
-                              description: 'Talos: MachineConfig.nodeTaints — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               type: object
                             registries:
-                              description: 'Talos: MachineConfig.registries — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: RegistriesConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 config:
                                   additionalProperties:
                                     description: 'Talos: RegistryConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     properties:
                                       auth:
-                                        description: 'Talos: RegistryConfig.auth —
+                                        description: 'Talos: RegistryAuthConfig —
                                           https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         properties:
                                           username:
-                                            description: 'Talos: RegistryAuthConfig.username
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: string
                                         type: object
                                       tls:
-                                        description: 'Talos: RegistryConfig.tls —
-                                          https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                        description: 'Talos: RegistryTLSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         properties:
                                           ca:
-                                            description: 'Talos: RegistryTLSConfig.ca
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             format: byte
                                             type: string
                                           clientIdentity:
-                                            description: 'Talos: RegistryTLSConfig.clientIdentity
+                                            description: 'Talos: PEMEncodedCertificateAndKey
                                               — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             properties:
                                               crt:
-                                                description: 'Talos: PEMEncodedCertificateAndKey.crt
-                                                  — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                 format: byte
                                                 type: string
                                               key:
-                                                description: 'Talos: PEMEncodedCertificateAndKey.key
-                                                  — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                 format: byte
                                                 type: string
                                             required:
@@ -2148,51 +1701,63 @@ spec:
                                             - key
                                             type: object
                                           insecureSkipVerify:
-                                            description: 'Talos: RegistryTLSConfig.insecureSkipVerify
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: boolean
                                         type: object
                                     type: object
-                                  description: 'Talos: RegistriesConfig.config — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: object
                                 mirrors:
                                   additionalProperties:
                                     description: 'Talos: RegistryMirrorConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     properties:
                                       endpoints:
-                                        description: 'Talos: RegistryMirrorConfig.endpoints
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         items:
                                           type: string
                                         type: array
                                       overridePath:
-                                        description: 'Talos: RegistryMirrorConfig.overridePath
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: boolean
                                       skipFallback:
-                                        description: 'Talos: RegistryMirrorConfig.skipFallback
-                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         type: boolean
                                     required:
                                     - endpoints
                                     type: object
-                                  description: 'Talos: RegistriesConfig.mirrors —
-                                    https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: object
                               type: object
                             seccompProfiles:
-                              description: 'Talos: MachineConfig.seccompProfiles —
-                                https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               items:
                                 description: 'Talos: MachineSeccompProfile — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                 properties:
                                   name:
-                                    description: 'Talos: MachineSeccompProfile.name
-                                      — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                     type: string
                                   value:
-                                    description: 'Talos: MachineSeccompProfile.value
-                                      — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                    description: |-
+                                      SeccompProfile is MachineSeccompProfile.MachineSeccompProfileValue's mirror
+                                      type (internal/tools/mirrorgen/main.go's fieldOverrides): byte-for-byte the
+                                      same fields and JSON tags as specs.LinuxSeccomp (github.com/opencontainers/
+                                      runtime-spec), under a local name so DeepCopyInto/DeepCopy can be
+                                      hand-written below. The generic conversion helpers in substitution.go and
+                                      the generated CRD schema are unaffected by the rename -- both work off the
+                                      JSON shape, which is identical.
+
+                                      Why hand-written: specs.LinuxSeccomp has pointer and slice fields but,
+                                      unlike the other four field overrides (all Kubernetes API types), no
+                                      DeepCopy of its own; controller-gen's object:generate step assumes one
+                                      exists for any struct-shaped field type it doesn't otherwise recognize,
+                                      and errors at compile time rather than generation time when it doesn't.
+                                      The methods can't live on specs.LinuxSeccomp directly -- Go forbids
+                                      methods on types from another package -- and can't live one level up, on
+                                      MachineSeccompProfile itself, either: MachineConfig holds
+                                      MachineSeccompProfiles []*MachineSeccompProfile, and controller-gen's
+                                      generated code for a slice of pointers to a type with a *known* DeepCopy
+                                      method assumes a value-typed element and double-dereferences, which
+                                      doesn't compile. Putting the hand-written methods here, one level down,
+                                      avoids both problems: SeccompProfile is reached only through a plain
+                                      pointer field, never through a pointer slice.
+
+                                      deepCopyLinuxSeccomp and deepCopyLinuxSyscall below copy their known
+                                      pointer/slice fields by name rather than reflecting over the upstream
+                                      type, so they go stale -- silently, by sharing instead of copying -- if
+                                      specs-go ever adds one. seccomp_test.go's TestLinuxSeccompShape guards
+                                      against that by pinning the exact field set each one assumes.
                                     properties:
                                       architectures:
                                         items:
@@ -2271,66 +1836,48 @@ spec:
                             sysctls:
                               additionalProperties:
                                 type: string
-                              description: 'Talos: MachineConfig.sysctls — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               type: object
                             sysfs:
                               additionalProperties:
                                 type: string
-                              description: 'Talos: MachineConfig.sysfs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               type: object
                             systemDiskEncryption:
-                              description: 'Talos: MachineConfig.systemDiskEncryption
-                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: SystemDiskEncryptionConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 ephemeral:
-                                  description: 'Talos: SystemDiskEncryptionConfig.ephemeral
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  description: 'Talos: EncryptionConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   properties:
                                     blockSize:
-                                      description: 'Talos: EncryptionConfig.blockSize
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       format: int64
                                       type: integer
                                     cipher:
-                                      description: 'Talos: EncryptionConfig.cipher
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: string
                                     keySize:
-                                      description: 'Talos: EncryptionConfig.keySize
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: integer
                                     keys:
-                                      description: 'Talos: EncryptionConfig.keys —
-                                        https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       items:
                                         description: 'Talos: EncryptionKey — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         properties:
                                           kms:
-                                            description: 'Talos: EncryptionKey.kms
+                                            description: 'Talos: EncryptionKeyKMS
                                               — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             properties:
                                               endpoint:
-                                                description: 'Talos: EncryptionKeyKMS.endpoint
-                                                  — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                 type: string
                                             required:
                                             - endpoint
                                             type: object
                                           nodeID:
-                                            description: 'Talos: EncryptionKey.nodeID
+                                            description: 'Talos: EncryptionKeyNodeID
                                               — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: object
                                           slot:
-                                            description: 'Talos: EncryptionKey.slot
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: integer
                                           tpm:
-                                            description: 'Talos: EncryptionKey.tpm
+                                            description: 'Talos: EncryptionKeyTPM
                                               — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             properties:
                                               checkSecurebootStatusOnEnroll:
-                                                description: 'Talos: EncryptionKeyTPM.checkSecurebootStatusOnEnroll
-                                                  — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                 type: boolean
                                             type: object
                                         required:
@@ -2338,68 +1885,49 @@ spec:
                                         type: object
                                       type: array
                                     options:
-                                      description: 'Talos: EncryptionConfig.options
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       items:
                                         type: string
                                       type: array
                                     provider:
-                                      description: 'Talos: EncryptionConfig.provider
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: string
                                   required:
                                   - keys
                                   - provider
                                   type: object
                                 state:
-                                  description: 'Talos: SystemDiskEncryptionConfig.state
-                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                                  description: 'Talos: EncryptionConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   properties:
                                     blockSize:
-                                      description: 'Talos: EncryptionConfig.blockSize
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       format: int64
                                       type: integer
                                     cipher:
-                                      description: 'Talos: EncryptionConfig.cipher
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: string
                                     keySize:
-                                      description: 'Talos: EncryptionConfig.keySize
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: integer
                                     keys:
-                                      description: 'Talos: EncryptionConfig.keys —
-                                        https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       items:
                                         description: 'Talos: EncryptionKey — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                         properties:
                                           kms:
-                                            description: 'Talos: EncryptionKey.kms
+                                            description: 'Talos: EncryptionKeyKMS
                                               — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             properties:
                                               endpoint:
-                                                description: 'Talos: EncryptionKeyKMS.endpoint
-                                                  — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                 type: string
                                             required:
                                             - endpoint
                                             type: object
                                           nodeID:
-                                            description: 'Talos: EncryptionKey.nodeID
+                                            description: 'Talos: EncryptionKeyNodeID
                                               — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: object
                                           slot:
-                                            description: 'Talos: EncryptionKey.slot
-                                              — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             type: integer
                                           tpm:
-                                            description: 'Talos: EncryptionKey.tpm
+                                            description: 'Talos: EncryptionKeyTPM
                                               — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                             properties:
                                               checkSecurebootStatusOnEnroll:
-                                                description: 'Talos: EncryptionKeyTPM.checkSecurebootStatusOnEnroll
-                                                  — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                                 type: boolean
                                             type: object
                                         required:
@@ -2407,14 +1935,10 @@ spec:
                                         type: object
                                       type: array
                                     options:
-                                      description: 'Talos: EncryptionConfig.options
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       items:
                                         type: string
                                       type: array
                                     provider:
-                                      description: 'Talos: EncryptionConfig.provider
-                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                       type: string
                                   required:
                                   - keys
@@ -2422,38 +1946,31 @@ spec:
                                   type: object
                               type: object
                             time:
-                              description: 'Talos: MachineConfig.time — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: TimeConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 bootTimeout:
-                                  description: 'Talos: TimeConfig.bootTimeout — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: string
                                 disabled:
-                                  description: 'Talos: TimeConfig.disabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   type: boolean
                                 servers:
-                                  description: 'Talos: TimeConfig.servers — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     type: string
                                   type: array
                               type: object
                             type:
-                              description: 'Talos: MachineConfig.type — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               type: string
                             udev:
-                              description: 'Talos: MachineConfig.udev — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
+                              description: 'Talos: UdevConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                               properties:
                                 rules:
-                                  description: 'Talos: UdevConfig.rules — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                                   items:
                                     type: string
                                   type: array
                               type: object
                           type: object
                         persist:
-                          description: 'Talos: Config.persist — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                           type: boolean
                         version:
-                          description: 'Talos: Config.version — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config'
                           type: string
                       required:
                       - version
@@ -2463,11 +1980,8 @@ spec:
                         document; populated when kind is "KernelModuleConfig".
                       properties:
                         name:
-                          description: 'Talos: KernelModuleConfigV1Alpha1.name — https://docs.siderolabs.com/talos/v1.14/reference/configuration/runtime/kernelmoduleconfig'
                           type: string
                         parameters:
-                          description: 'Talos: KernelModuleConfigV1Alpha1.parameters
-                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/runtime/kernelmoduleconfig'
                           items:
                             type: string
                           type: array
@@ -2491,56 +2005,45 @@ spec:
                         provisioner); populated when kind is "RawVolumeConfig".
                       properties:
                         encryption:
-                          description: 'Talos: RawVolumeConfigV1Alpha1.encryption
-                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/rawvolumeconfig'
+                          description: 'Talos: EncryptionSpec'
                           properties:
                             allowDiscards:
-                              description: 'Talos: EncryptionSpec.allowDiscards'
                               type: boolean
                             blockSize:
-                              description: 'Talos: EncryptionSpec.blockSize'
                               format: int64
                               type: integer
                             cipher:
-                              description: 'Talos: EncryptionSpec.cipher'
                               type: string
                             keySize:
-                              description: 'Talos: EncryptionSpec.keySize'
                               type: integer
                             keys:
-                              description: 'Talos: EncryptionSpec.keys'
                               items:
                                 description: 'Talos: EncryptionKey'
                                 properties:
                                   kms:
-                                    description: 'Talos: EncryptionKey.kms'
+                                    description: 'Talos: EncryptionKeyKMS'
                                     properties:
                                       endpoint:
-                                        description: 'Talos: EncryptionKeyKMS.endpoint'
                                         type: string
                                     required:
                                     - endpoint
                                     type: object
                                   lockToState:
-                                    description: 'Talos: EncryptionKey.lockToState'
                                     type: boolean
                                   nodeID:
-                                    description: 'Talos: EncryptionKey.nodeID'
+                                    description: 'Talos: EncryptionKeyNodeID'
                                     type: object
                                   slot:
-                                    description: 'Talos: EncryptionKey.slot'
                                     type: integer
                                   tpm:
-                                    description: 'Talos: EncryptionKey.tpm'
+                                    description: 'Talos: EncryptionKeyTPM'
                                     properties:
                                       checkSecurebootStatusOnEnroll:
-                                        description: 'Talos: EncryptionKeyTPM.checkSecurebootStatusOnEnroll'
                                         type: boolean
                                       options:
-                                        description: 'Talos: EncryptionKeyTPM.options'
+                                        description: 'Talos: EncryptionKeyTPMOptions'
                                         properties:
                                           pcrs:
-                                            description: 'Talos: EncryptionKeyTPMOptions.pcrs'
                                             items:
                                               type: integer
                                             type: array
@@ -2551,39 +2054,31 @@ spec:
                                 type: object
                               type: array
                             options:
-                              description: 'Talos: EncryptionSpec.options'
                               items:
                                 type: string
                               type: array
                             provider:
-                              description: 'Talos: EncryptionSpec.provider'
                               type: string
                           required:
                           - keys
                           - provider
                           type: object
                         name:
-                          description: 'Talos: RawVolumeConfigV1Alpha1.name — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/rawvolumeconfig'
                           type: string
                         provisioning:
-                          description: 'Talos: RawVolumeConfigV1Alpha1.provisioning
-                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/rawvolumeconfig'
+                          description: 'Talos: ProvisioningSpec'
                           properties:
                             diskSelector:
-                              description: 'Talos: ProvisioningSpec.diskSelector'
+                              description: 'Talos: DiskSelector'
                               properties:
                                 match:
-                                  description: 'Talos: DiskSelector.match'
                                   type: string
                               type: object
                             grow:
-                              description: 'Talos: ProvisioningSpec.grow'
                               type: boolean
                             maxSize:
-                              description: 'Talos: ProvisioningSpec.maxSize'
                               type: string
                             minSize:
-                              description: 'Talos: ProvisioningSpec.minSize'
                               type: string
                           type: object
                       required:
@@ -2595,50 +2090,35 @@ spec:
                         is "ResolverConfig".
                       properties:
                         hostDNS:
-                          description: 'Talos: ResolverConfigV1Alpha1.hostDNS — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
+                          description: 'Talos: HostDNSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
                           properties:
                             enabled:
-                              description: 'Talos: HostDNSConfig.enabled — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
                               type: boolean
                             forwardKubeDNSToHost:
-                              description: 'Talos: HostDNSConfig.forwardKubeDNSToHost
-                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
                               type: boolean
                             resolveMemberNames:
-                              description: 'Talos: HostDNSConfig.resolveMemberNames
-                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
                               type: boolean
                           type: object
                         nameservers:
-                          description: 'Talos: ResolverConfigV1Alpha1.nameservers
-                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
                           items:
                             description: 'Talos: NameserverConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
                             properties:
                               address:
-                                description: 'Talos: NameserverConfig.address — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
                                 type: string
                               protocol:
-                                description: 'Talos: NameserverConfig.protocol — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
                                 type: string
                               tlsServerName:
-                                description: 'Talos: NameserverConfig.tlsServerName
-                                  — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
                                 type: string
                             required:
                             - address
                             type: object
                           type: array
                         searchDomains:
-                          description: 'Talos: ResolverConfigV1Alpha1.searchDomains
-                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
+                          description: 'Talos: SearchDomainsConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
                           properties:
                             disableDefault:
-                              description: 'Talos: SearchDomainsConfig.disableDefault
-                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
                               type: boolean
                             domains:
-                              description: 'Talos: SearchDomainsConfig.domains — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig'
                               items:
                                 type: string
                               type: array
@@ -2651,7 +2131,6 @@ spec:
                         params:
                           additionalProperties:
                             type: string
-                          description: 'Talos: SysctlConfigV1Alpha1.params — https://docs.siderolabs.com/talos/v1.14/reference/configuration/runtime/sysctlconfig'
                           type: object
                       required:
                       - params
@@ -2661,56 +2140,45 @@ spec:
                         populated when kind is "UserVolumeConfig".
                       properties:
                         encryption:
-                          description: 'Talos: UserVolumeConfigV1Alpha1.encryption
-                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
+                          description: 'Talos: EncryptionSpec'
                           properties:
                             allowDiscards:
-                              description: 'Talos: EncryptionSpec.allowDiscards'
                               type: boolean
                             blockSize:
-                              description: 'Talos: EncryptionSpec.blockSize'
                               format: int64
                               type: integer
                             cipher:
-                              description: 'Talos: EncryptionSpec.cipher'
                               type: string
                             keySize:
-                              description: 'Talos: EncryptionSpec.keySize'
                               type: integer
                             keys:
-                              description: 'Talos: EncryptionSpec.keys'
                               items:
                                 description: 'Talos: EncryptionKey'
                                 properties:
                                   kms:
-                                    description: 'Talos: EncryptionKey.kms'
+                                    description: 'Talos: EncryptionKeyKMS'
                                     properties:
                                       endpoint:
-                                        description: 'Talos: EncryptionKeyKMS.endpoint'
                                         type: string
                                     required:
                                     - endpoint
                                     type: object
                                   lockToState:
-                                    description: 'Talos: EncryptionKey.lockToState'
                                     type: boolean
                                   nodeID:
-                                    description: 'Talos: EncryptionKey.nodeID'
+                                    description: 'Talos: EncryptionKeyNodeID'
                                     type: object
                                   slot:
-                                    description: 'Talos: EncryptionKey.slot'
                                     type: integer
                                   tpm:
-                                    description: 'Talos: EncryptionKey.tpm'
+                                    description: 'Talos: EncryptionKeyTPM'
                                     properties:
                                       checkSecurebootStatusOnEnroll:
-                                        description: 'Talos: EncryptionKeyTPM.checkSecurebootStatusOnEnroll'
                                         type: boolean
                                       options:
-                                        description: 'Talos: EncryptionKeyTPM.options'
+                                        description: 'Talos: EncryptionKeyTPMOptions'
                                         properties:
                                           pcrs:
-                                            description: 'Talos: EncryptionKeyTPMOptions.pcrs'
                                             items:
                                               type: integer
                                             type: array
@@ -2721,94 +2189,72 @@ spec:
                                 type: object
                               type: array
                             options:
-                              description: 'Talos: EncryptionSpec.options'
                               items:
                                 type: string
                               type: array
                             provider:
-                              description: 'Talos: EncryptionSpec.provider'
                               type: string
                           required:
                           - keys
                           - provider
                           type: object
                         filesystem:
-                          description: 'Talos: UserVolumeConfigV1Alpha1.filesystem
-                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
+                          description: 'Talos: FilesystemSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
                           properties:
                             projectQuotaSupport:
-                              description: 'Talos: FilesystemSpec.projectQuotaSupport
-                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
                               type: boolean
                             type:
-                              description: 'Talos: FilesystemSpec.type — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
                               type: string
                             xfs:
-                              description: 'Talos: FilesystemSpec.xfs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
+                              description: 'Talos: XFSSpec'
                               properties:
                                 minAllocationGroupSize:
-                                  description: 'Talos: XFSSpec.minAllocationGroupSize'
                                   type: string
                               type: object
                           type: object
                         mount:
-                          description: 'Talos: UserVolumeConfigV1Alpha1.mount — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
+                          description: 'Talos: UserMountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
                           properties:
                             disableAccessTime:
-                              description: 'Talos: UserMountSpec.disableAccessTime
-                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
                               type: boolean
                             secure:
-                              description: 'Talos: UserMountSpec.secure — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
                               type: boolean
                           type: object
                         name:
-                          description: 'Talos: UserVolumeConfigV1Alpha1.name — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
                           type: string
                         provisioning:
-                          description: 'Talos: UserVolumeConfigV1Alpha1.provisioning
-                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
+                          description: 'Talos: ProvisioningSpec'
                           properties:
                             diskSelector:
-                              description: 'Talos: ProvisioningSpec.diskSelector'
+                              description: 'Talos: DiskSelector'
                               properties:
                                 match:
-                                  description: 'Talos: DiskSelector.match'
                                   type: string
                               type: object
                             grow:
-                              description: 'Talos: ProvisioningSpec.grow'
                               type: boolean
                             maxSize:
-                              description: 'Talos: ProvisioningSpec.maxSize'
                               type: string
                             minSize:
-                              description: 'Talos: ProvisioningSpec.minSize'
                               type: string
                           type: object
                         scrub:
-                          description: 'Talos: UserVolumeConfigV1Alpha1.scrub — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
+                          description: 'Talos: ScrubConfig'
                           properties:
                             enabled:
-                              description: 'Talos: ScrubConfig.enabled'
                               type: boolean
                             interval:
-                              description: 'Talos: ScrubConfig.interval'
                               type: string
                           type: object
                         trim:
-                          description: 'Talos: UserVolumeConfigV1Alpha1.trim — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
+                          description: 'Talos: TrimConfig'
                           properties:
                             enabled:
-                              description: 'Talos: TrimConfig.enabled'
                               type: boolean
                             interval:
-                              description: 'Talos: TrimConfig.interval'
                               type: string
                           type: object
                         volumeType:
-                          description: 'Talos: UserVolumeConfigV1Alpha1.volumeType
-                            — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/uservolumeconfig'
                           type: string
                       required:
                       - name
@@ -2819,55 +2265,45 @@ spec:
                         placed on its own disk); populated when kind is "VolumeConfig".
                       properties:
                         encryption:
-                          description: 'Talos: VolumeConfigV1Alpha1.encryption — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig'
+                          description: 'Talos: EncryptionSpec'
                           properties:
                             allowDiscards:
-                              description: 'Talos: EncryptionSpec.allowDiscards'
                               type: boolean
                             blockSize:
-                              description: 'Talos: EncryptionSpec.blockSize'
                               format: int64
                               type: integer
                             cipher:
-                              description: 'Talos: EncryptionSpec.cipher'
                               type: string
                             keySize:
-                              description: 'Talos: EncryptionSpec.keySize'
                               type: integer
                             keys:
-                              description: 'Talos: EncryptionSpec.keys'
                               items:
                                 description: 'Talos: EncryptionKey'
                                 properties:
                                   kms:
-                                    description: 'Talos: EncryptionKey.kms'
+                                    description: 'Talos: EncryptionKeyKMS'
                                     properties:
                                       endpoint:
-                                        description: 'Talos: EncryptionKeyKMS.endpoint'
                                         type: string
                                     required:
                                     - endpoint
                                     type: object
                                   lockToState:
-                                    description: 'Talos: EncryptionKey.lockToState'
                                     type: boolean
                                   nodeID:
-                                    description: 'Talos: EncryptionKey.nodeID'
+                                    description: 'Talos: EncryptionKeyNodeID'
                                     type: object
                                   slot:
-                                    description: 'Talos: EncryptionKey.slot'
                                     type: integer
                                   tpm:
-                                    description: 'Talos: EncryptionKey.tpm'
+                                    description: 'Talos: EncryptionKeyTPM'
                                     properties:
                                       checkSecurebootStatusOnEnroll:
-                                        description: 'Talos: EncryptionKeyTPM.checkSecurebootStatusOnEnroll'
                                         type: boolean
                                       options:
-                                        description: 'Talos: EncryptionKeyTPM.options'
+                                        description: 'Talos: EncryptionKeyTPMOptions'
                                         properties:
                                           pcrs:
-                                            description: 'Talos: EncryptionKeyTPMOptions.pcrs'
                                             items:
                                               type: integer
                                             type: array
@@ -2878,81 +2314,65 @@ spec:
                                 type: object
                               type: array
                             options:
-                              description: 'Talos: EncryptionSpec.options'
                               items:
                                 type: string
                               type: array
                             provider:
-                              description: 'Talos: EncryptionSpec.provider'
                               type: string
                           required:
                           - keys
                           - provider
                           type: object
                         filesystem:
-                          description: 'Talos: VolumeConfigV1Alpha1.filesystem — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig'
+                          description: 'Talos: SystemVolumeFilesystemSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig'
                           properties:
                             xfs:
-                              description: 'Talos: SystemVolumeFilesystemSpec.xfs
-                                — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig'
+                              description: 'Talos: XFSSpec'
                               properties:
                                 minAllocationGroupSize:
-                                  description: 'Talos: XFSSpec.minAllocationGroupSize'
                                   type: string
                               type: object
                           type: object
                         mount:
-                          description: 'Talos: VolumeConfigV1Alpha1.mount — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig'
+                          description: 'Talos: MountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig'
                           properties:
                             disableAccessTime:
-                              description: 'Talos: MountSpec.disableAccessTime — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig'
                               type: boolean
                             secure:
-                              description: 'Talos: MountSpec.secure — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig'
                               type: boolean
                           type: object
                         name:
-                          description: 'Talos: VolumeConfigV1Alpha1.name — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig'
                           type: string
                         provisioning:
-                          description: 'Talos: VolumeConfigV1Alpha1.provisioning —
-                            https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig'
+                          description: 'Talos: ProvisioningSpec'
                           properties:
                             diskSelector:
-                              description: 'Talos: ProvisioningSpec.diskSelector'
+                              description: 'Talos: DiskSelector'
                               properties:
                                 match:
-                                  description: 'Talos: DiskSelector.match'
                                   type: string
                               type: object
                             grow:
-                              description: 'Talos: ProvisioningSpec.grow'
                               type: boolean
                             maxSize:
-                              description: 'Talos: ProvisioningSpec.maxSize'
                               type: string
                             minSize:
-                              description: 'Talos: ProvisioningSpec.minSize'
                               type: string
                           type: object
                         scrub:
-                          description: 'Talos: VolumeConfigV1Alpha1.scrub — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig'
+                          description: 'Talos: ScrubConfig'
                           properties:
                             enabled:
-                              description: 'Talos: ScrubConfig.enabled'
                               type: boolean
                             interval:
-                              description: 'Talos: ScrubConfig.interval'
                               type: string
                           type: object
                         trim:
-                          description: 'Talos: VolumeConfigV1Alpha1.trim — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/volumeconfig'
+                          description: 'Talos: TrimConfig'
                           properties:
                             enabled:
-                              description: 'Talos: TrimConfig.enabled'
                               type: boolean
                             interval:
-                              description: 'Talos: TrimConfig.interval'
                               type: string
                           type: object
                       required:

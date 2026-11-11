@@ -6,4 +6,6 @@ This product includes software developed by Sidero Labs, Inc.
 License 2.0. Files derived from that project retain their MPL-2.0 headers and
 are listed below.
 
-(none yet)
+pkg/typedconfig/zz_generated.conversion.go
+pkg/typedconfig/zz_generated.deepcopy.go
+pkg/typedconfig/zz_generated.mirror.go

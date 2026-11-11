@@ -7,9 +7,6 @@ manages (`ichor adopt --add-machine`), and resetting one machine that another
 cluster configured so it can join an Ichor cluster (`ichor machine reclaim`, or
 the UI).
 
-Status: built and hardware-verified on Talos v1.14 (2026-10-30). Not yet run on bare metal.
-The `--add-machine` and `--cilium-values` (takeover) options and the reclaim and refusal text are built and tested against fakes; their hardware cases have not been run.
-
 ## What you have in front of you
 
 | Your machine or cluster | Command | Needs a reset? |

@@ -252,7 +252,7 @@ ichor-ui's OIDC issuer) is allowed by policies the controller writes from the
 objects and the Deployment that name it, with `toFQDNs` for names, and the controller's metrics port is open to a namespace
 only when the operator names one.
 
-Verified on hardware: a host-network kube-apiserver reaches a
+A host-network kube-apiserver reaches a
 Service ClusterIP; Talos applies the issuer document without a reboot but the
 kube-apiserver restarts (15 to 45 s without `/readyz` per node), which is why
 the rollout is one control plane at a time. Talos does not validate
@@ -689,7 +689,7 @@ disk is the exception to "a document per role": it is
 device path as a last resort), rendered as `UnattendedInstallConfig` from the
 v1.14 contract and as `machine.install` before it.
 
-Two things about editing a disk role after the fact, both verified against
+Two things about editing a disk role after the fact, both follow from
 Talos's volume manager. **A changed selector on a volume that already exists
 does nothing, and nothing says so**: Talos locates EPHEMERAL by its partition
 label before it ever consults the selector, and config validation accepts the
@@ -736,7 +736,7 @@ are replaced add-then-remove, never the other way round — a 3-node cluster
 replacing a member goes 3→4→3, never 3→2, because four members tolerate one
 failure while two tolerate none.
 
-Four things about that sequence, each verified against Talos 1.14.3's source
+Four things about that sequence, each read from Talos 1.14.3's source
 and each easy to get fatally wrong:
 
 - **The reset must name the partitions to wipe.** With its default mode and no
@@ -847,7 +847,7 @@ order: upgrade the Cilium release through the `ichor-cni` Job, verify on all
 nodes, then turn the Talos side off.
 
 Turning the old side off is a deletion Ichor has to perform, not a
-consequence of the config change. Verified against Talos v1.14.3:
+consequence of the config change. In Talos v1.14.3,
 `ManifestController` renders the kube-proxy objects only while proxying is
 enabled, but `ManifestApplyController` has no delete path, only a server-side
 `Apply`. Flipping the setting stops Talos managing kube-proxy and leaves the

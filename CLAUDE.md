@@ -16,7 +16,7 @@ Tooling for agents:
 
 Rules that are easy to get wrong:
 
-- Work inside `nix develop`. Go must be 1.27.3 or newer. Add missing tools to
+- Work inside `nix develop`. Go must be 1.27.4 or newer. Add missing tools to
   `flake.nix`; don't install them any other way.
 - Scaffold with the tools (`kubebuilder`, `cobra-cli`, `npx shadcn@latest add
   @preactcn/…`), never by hand. Build and generate with the Makefile targets

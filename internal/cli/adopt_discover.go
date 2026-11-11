@@ -281,41 +281,35 @@ func clusterFromNodes(name, namespace, talosVersion string, nodes []*adoptNode) 
 	return c, nil
 }
 
-// agreedCertSANs is spec.certSANs. The kube-apiserver SANs are rendered only from it, so when every
-// control plane states the same ones that list is it. Otherwise it is the machine.certSANs every node
-// states, or nothing. What a node states beyond or besides it is captured into the node's own patch
-// (ADR 0143), so no certificate changes.
+// agreedCertSANs is spec.certSANs. The render feeds that one list into both machine.certSANs and the
+// kube-apiserver SANs of every node, and a patch can add a SAN but not take one away, so it holds only
+// the SANs every node has in both places. What a node has beyond it is captured into the node's own
+// patch (ADR 0143), so no certificate changes.
 func agreedCertSANs(nodes []*adoptNode) []string {
-	var api, machine []string
+	var (
+		sans  []string
+		first = true
+	)
 
-	apiAgrees, machineAgrees := true, true
+	keep := func(list []string) {
+		if first {
+			sans, first = slices.Clone(list), false
 
-	for i, n := range readNodes(nodes) {
-		if i == 0 {
-			machine = n.Facts.CertSANs
+			return
 		}
 
-		machineAgrees = machineAgrees && slices.Equal(machine, n.Facts.CertSANs)
-
-		if !n.controlPlane() {
-			continue
-		}
-
-		if api == nil {
-			api = n.Facts.APIServerCertSANs
-		}
-
-		apiAgrees = apiAgrees && slices.Equal(api, n.Facts.APIServerCertSANs)
+		sans = slices.DeleteFunc(sans, func(s string) bool { return !slices.Contains(list, s) })
 	}
 
-	switch {
-	case apiAgrees && len(api) > 0:
-		return slices.Clone(api)
-	case machineAgrees:
-		return slices.Clone(machine)
+	for _, n := range readNodes(nodes) {
+		keep(n.Facts.CertSANs)
+
+		if n.controlPlane() {
+			keep(n.Facts.APIServerCertSANs)
+		}
 	}
 
-	return nil
+	return sans
 }
 
 // controlPlanesLackExcludeLabel is spec.controlPlane.omitDefaultNodeLabels: true when no control

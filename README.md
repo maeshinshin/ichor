@@ -4,8 +4,7 @@ Manage [Talos Linux](https://www.talos.dev/) clusters from Kubernetes. Nodes,
 machine configuration, upgrades and etcd backups are Kubernetes resources, which
 you work with through a CLI, a web UI or plain `kubectl`.
 
-> **Status: alpha.** Exercised end to end on Talos v1.14 test clusters, not yet
-> on bare metal.
+> **Status: alpha.**
 
 ## Quick start
 
@@ -14,7 +13,7 @@ You need one machine booted from a Talos ISO into maintenance mode.
 1. Choose the release and your platform:
 
    ```sh
-   VERSION=0.1.0
+   VERSION=0.2.0
    OS=linux      # linux or darwin
    ARCH=amd64    # amd64 or arm64
    BASE=https://github.com/maeshinshin/ichor/releases/download/v${VERSION}
@@ -61,7 +60,7 @@ Install Ichor with Helm, then register the cluster with `ichor adopt`:
 
 ```sh
 helm repo add ichor https://ichor.maesh.dev/charts
-helm install ichor ichor/ichor --version 0.1.0 \
+helm install ichor ichor/ichor --version 0.2.0 \
   --namespace ichor-system --create-namespace
 ```
 

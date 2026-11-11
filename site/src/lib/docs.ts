@@ -1,6 +1,6 @@
 import { getCollection } from 'astro:content'
 import { relative, resolve, sep } from 'node:path'
-import { absoluteMarkdown, docsRoot, gitRef, isNext, repoUrl, rootBase, version } from '../../plugins/docs.mjs'
+import { absoluteMarkdown, docsRoot, gitRef, isNext, repoUrl, rootBase, version, withVersion } from '../../plugins/docs.mjs'
 
 export { isNext, repoUrl, version }
 
@@ -134,7 +134,7 @@ export const absolute = (path: string) => new URL(path, import.meta.env.SITE).hr
  */
 export function pageMarkdown(d: Doc): string {
   const file = resolve(process.cwd(), d.entry.filePath!)
-  const md = absoluteMarkdown(d.body.trim(), file, base, import.meta.env.SITE, absolute(d.url))
+  const md = absoluteMarkdown(withVersion(d.body.trim()), file, base, import.meta.env.SITE, absolute(d.url))
   const first = /^(#{1,6}) (.*)$/m.exec(md.split('\n', 1)[0])
   if (first?.[1] === '#') return `${md}\n`
   // The generated CLI pages open with `## ichor adopt`, the title again: promote it.

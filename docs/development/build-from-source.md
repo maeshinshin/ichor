@@ -64,8 +64,8 @@ The install manifest that `ichor init` applies names its images
 them under your registry, and tell the nodes to fetch `ghcr.io` from it (next section). Pick a semantic version; `dev` is refused.
 
 ```sh
-make demo-images-build VERSION=v0.1.0
-make demo-images-push VERSION=v0.1.0 REGISTRY=192.168.1.10:5000
+make demo-images-build VERSION=vX.Y.Z
+make demo-images-push VERSION=vX.Y.Z REGISTRY=192.168.1.10:5000
 ```
 
 `demo-images-build` builds the UI and the install manifest, then has `ko`
@@ -97,10 +97,10 @@ from `IMG` and `IMG_UI`, which default to `controller:latest` and
 `make help` lists the other targets.
 
 To build the release artifacts for a tag instead, run
-`make release VERSION=v0.1.0`. It writes `bin/release/ichor` (the CLI with its
+`make release VERSION=vX.Y.Z`. It writes `bin/release/ichor` (the CLI with its
 install manifest embedded), `bin/release/install.yaml`,
 `bin/release/network-policies.yaml` and the chart tgz to `bin/release/`, with
-images named `ghcr.io/maeshinshin/<name>:v0.1.0`. `RELEASE_REGISTRY=<registry>/<namespace>`
+images named `ghcr.io/maeshinshin/<name>:vX.Y.Z`. `RELEASE_REGISTRY=<registry>/<namespace>`
 changes that image prefix (the default is `ghcr.io/maeshinshin`). It pushes
 nothing, so the `demo-images` steps above are still how you build and push
 the images.

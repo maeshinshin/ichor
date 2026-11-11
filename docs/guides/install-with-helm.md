@@ -3,9 +3,6 @@
 This guide installs Ichor itself with `helm install` and then registers an
 existing Talos cluster with `ichor adopt`.
 
-Status: built and hardware-verified (cases E1 to E7 on Talos v1.14
-nodes, 2026-10-30). Not yet run on bare metal.
-
 The chart installs Ichor, not a cluster: CRDs (kept on uninstall), the
 controller and its RBAC, the webhooks, the UI and the optional Cilium policies.
 Registering a cluster needs your talosconfig and secrets bundle, so that stays
@@ -51,7 +48,7 @@ The chart's default images are `ghcr.io/maeshinshin/ichor-controller` and
 `ghcr.io/maeshinshin/ichor-ui`, by digest. To install a chart and images you
 built yourself, see [Build from source](../development/build-from-source.md#install-your-own-chart).
 The chart `version` has no leading `v` (for example
-`0.1.0`); `appVersion` and the image tags have it (`v0.1.0`). The published
+`{{version}}`); `appVersion` and the image tags have it (`v{{version}}`). The published
 images are multi-arch (linux/amd64 and linux/arm64). Helm is not provided by Ichor; [install it](https://helm.sh/docs/intro/install/)
 yourself.
 

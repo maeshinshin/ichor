@@ -41,10 +41,10 @@ const lines = [...new Set(tags.map((t) => t.replace(/\.\d+$/, '')))].map((name) 
 rmSync(out, { recursive: true, force: true })
 mkdirSync(out, { recursive: true })
 
-function build(name, repoDir, gitRef) {
+function build(name, repoDir, gitRef, patch) {
   rmSync('dist', { recursive: true, force: true })
   rmSync('.astro', { recursive: true, force: true }) // the content cache must not carry pages of another version
-  run('npm', ['run', 'build'], { env: { ...process.env, DOCS_VERSION: name, ...(repoDir && { DOCS_REPO: repoDir, DOCS_GITREF: gitRef }) } })
+  run('npm', ['run', 'build'], { env: { ...process.env, DOCS_VERSION: name, DOCS_RELEASE: patch, ...(repoDir && { DOCS_REPO: repoDir, DOCS_GITREF: gitRef }) } })
   renameSync('dist', join(out, name))
 }
 
@@ -56,7 +56,7 @@ for (const l of lines) {
   const dir = mkdtempSync(join(tmpdir(), `ichor-docs-${l.name}-`))
   try {
     run('sh', ['-c', 'git -C .. archive "$1" | tar -x -C "$2"', 'sh', l.ref, dir])
-    build(l.name, dir, l.gitRef)
+    build(l.name, dir, l.gitRef, l.patch)
     releases.push(l)
   } catch (e) {
     console.error(`::warning::the docs of ${l.name} (${l.ref}) did not build and are left out: ${e.message}`)

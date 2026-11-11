@@ -4,9 +4,7 @@
 
 `ichor adopt` now works on an ordinary existing Talos cluster. Before this
 release a normal three-control-plane cluster was blocked on six configuration
-paths and nothing could be adopted. Verified on three-control-plane Talos VMs:
-the plan reports zero unrepresentable paths, the adoption finishes unattended,
-and each node's machine configuration is byte-identical before and after.
+paths and nothing could be adopted.
 
 ### Adopt
 
@@ -65,7 +63,7 @@ ichor-ui changed, so there are no behaviour changes for users.
 
 ## v0.1.0 (2026-11-07)
 
-First release. Alpha: exercised end to end on Talos v1.14 test clusters, not yet on bare metal.
+First release. Alpha.
 
 Ichor manages [Talos Linux](https://www.talos.dev/) clusters from Kubernetes.
 Nodes, machine configuration, upgrades and etcd backups are custom resources
@@ -117,7 +115,7 @@ table accepts; a refusal passes only with the override verb.
 - Automatic patch upgrades, off by default, inside a daily window you set.
 - A notice in the UI and in `ichor version` when a newer Ichor release is
   published; it can be switched off.
-- CA rotation for the Talos API and Kubernetes API CAs, in verified passes
+- CA rotation for the Talos API and Kubernetes API CAs, in passes
   that wait for your new credentials. `--ca etcd` and
   `--ca kubernetes-aggregator` (or `--all`) also replace the etcd CA and the
   aggregator CA. The etcd members load the new CA by a reboot, one
@@ -339,7 +337,7 @@ Only for people who ran a pre-release build or wrote scripts against one.
 
 ### Notable fixes
 
-Found on hardware while building this release.
+Found while building this release.
 
 - An HA cluster's Cilium operator stayed Pending on the one node that existed
   and a failing Helm Job retried once a minute for ever; replicas follow the
@@ -374,7 +372,7 @@ Found on hardware while building this release.
   out instead of creating one that is parked at once.
 - `ichor version` prints the no-image skip warning on its own line.
 
-Security, found in review and on hardware:
+Security, found in review:
 
 - Discovery does not move an approved machine's address. A converged machine
   that fell back to maintenance mode followed any address that answered with its
@@ -416,11 +414,6 @@ UI.
 - Images and the embedded CLI build are linux/amd64 only.
 - IPv6 and PXE provisioning are not supported. Ichor does not boot machines;
   air-gapped installs are out of scope.
-- Hardware coverage is partial. The etcd CA rotation by reboot, the
-  key rotation after its token-settle fix, the FQDN and metrics policies, the
-  `os:reader` talosconfig, kubelet serving certificates and a signed installer
-  upgrade have unit and envtest coverage but await a hardware run; the Cilium
-  takeover with `--cilium-values` and the flannel move were not run.
 - Admission checks the Cilium values only as far as the object itself tells. The
   checks that need the machine configuration or the live cluster
   (`bpf.masquerade` with `forwardKubeDNSToHost`, KubePrism in replaced mode, the

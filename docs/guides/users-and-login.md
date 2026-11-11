@@ -6,7 +6,7 @@ is,
 which builds
 for logins from an external identity provider.
 
-Status: accepted and was verified on hardware. The steps below are
+Status: accepted. The steps below are
 what it decides, plus the CLI flags the implementation added (`--ca-file`,
 `--out`, `--bootstrap`).
 

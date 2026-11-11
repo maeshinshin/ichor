@@ -127,20 +127,21 @@ func (p *progress) Header(title, summary string) {
 
 // Warn prints a warning that is not tied to a step.
 func (p *progress) Warn(msg string) {
-	p.notice(markWarn, sgrYellow, msg, "")
+	p.notice("warn", markWarn, sgrYellow, msg, "")
 }
 
 // Info prints a plain note that is not tied to a step.
 func (p *progress) Info(msg string) {
-	p.notice(" ", "", msg, sgrDim)
+	p.notice("info", " ", "", msg, sgrDim)
 }
 
-func (p *progress) notice(mark, markSGR, msg, msgSGR string) {
+// notice prints one notice. kind is its block: a blank line separates two different kinds.
+func (p *progress) notice(kind, mark, markSGR, msg, msgSGR string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	p.eraseLocked()
-	p.gapLocked("note")
+	p.gapLocked(kind)
 
 	// Wrapping measures plain text, so the colours go on each line after it. A log keeps one line.
 	lines := []string{msg}

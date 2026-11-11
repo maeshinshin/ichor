@@ -190,6 +190,7 @@ CRANE_INSECURE ?= --insecure
 # ko-layout NAME IMPORT_PATH: compile one image into OCI_DIR/NAME without a registry (registry.invalid is a placeholder: nothing is pushed).
 define ko-layout
 @test "$(VERSION)" != dev || { echo "VERSION must not be 'dev', e.g. VERSION=v0.0.8-abc1234" >&2; exit 1; }
+mkdir -p $(2)/kodata && cp THIRD-PARTY-NOTICES $(2)/kodata/
 rm -rf $(OCI_DIR)/$(1)
 VERSION="$(VERSION)" KO_DOCKER_REPO=registry.invalid ko build --bare --push=false --oci-layout-path $(OCI_DIR)/$(1) $(2)
 endef
@@ -422,6 +423,7 @@ helm-package: ## Package the chart into CHART_DIST (bin/chart) with CHART_VERSIO
 	    grep -qF "$$pin" "$$work/ichor/values.yaml" || { echo "helm-package: the chart has no default $$n image to pin" >&2; exit 1; }; \
 	  done; \
 	fi && \
+	cp THIRD-PARTY-NOTICES "$$work/ichor/" && \
 	$(HELM) package "$$work/ichor" --version $(CHART_VERSION) --app-version $(APP_VERSION) --destination $(CHART_DIST)
 
 

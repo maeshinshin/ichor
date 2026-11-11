@@ -49,6 +49,8 @@ archives:
   - formats: [tar.gz]
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    files:
+      - THIRD-PARTY-NOTICES
 
 # One checksums file (ichor_<version>_checksums.txt, sha256) covers every archive; the release workflow
 # signs it keyless with cosign (the signature bundle is attached beside it). A local snapshot needs --skip=sign.

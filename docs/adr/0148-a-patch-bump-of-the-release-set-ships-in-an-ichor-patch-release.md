@@ -1,8 +1,8 @@
 # 0148. A patch bump of the release set ships in an Ichor patch release
 
-Status: Accepted · Date: 2026-11-11 · Design section: Upgrades · Touches: 0113, 0115, 0119
+Status: Accepted · Date: 2026-11-11 · Design section: Upgrades · Touches: 0113, 0115, 0119, 0142
 
-Decided: a change to the pinned Talos, Kubernetes or Cilium PATCH version ships in an Ichor PATCH release (v0.x.y while Ichor is pre-1.0, vX.Y.Z after), and a change to their MINOR or MAJOR version ships in an Ichor MINOR release, because it changes the behaviour a fresh install gets. The pinned set is the fresh-install default only (ADR 0115); bumping it moves no cluster Ichor already manages, which is why a patch bump is safe in a patch release. A patch bump changes no CRD field and no API shape; if it would, the release is a minor one. A security fix in one of the three is the usual case and does not wait for the next minor.
+Decided: a change to the pinned Talos, Kubernetes or Cilium PATCH version ships in an Ichor PATCH release (v0.x.y while Ichor is pre-1.0, vX.Y.Z after), and a change to their MINOR or MAJOR version ships in an Ichor MINOR release, because it changes the behaviour a fresh install gets. The pinned set is the fresh-install default only (ADR 0115); bumping it moves no cluster Ichor already manages, which is why a patch bump is safe in a patch release. A patch bump changes no CRD field and no API shape; if it would, the release is a minor one. A security fix in one of the three is the usual case and does not wait for the next minor. Patch releases are cut from the branch `release-X.Y`, to which the change is cherry-picked from `main`.
 
 ## Context
 
@@ -15,6 +15,14 @@ ADR 0113 made each Ichor build pin one set of Talos, Kubernetes and Cilium versi
 3. **A patch bump is not an API change.** A patch bump of the set changes no CRD field, no CRD schema and no proto message. If moving the Talos machinery module (`go.mod`) makes `make generate` or `make manifests` change `api/`, `config/crd/bases`, `dist/chart/templates/crd` or `proto/`, the release is not a patch release, whatever the version numbers say, and it ships as a minor.
 4. **Security fixes ship at once.** A fix in Talos, Kubernetes or Cilium that lands as a patch is cut as an Ichor patch release when its bump is merged. It does not wait for work queued for the next minor. ADR 0119's daily Cilium bump opens the pull request for Cilium; Talos and Kubernetes are moved by a person in the places listed below. Either way a person reads the upstream notes before merging.
 5. **The changelog says what the set is.** A release whose set changed has an "Install defaults" section, in the form of v0.1.0's: the table of the three versions a first install gets, and for a patch release one sentence that says which moved ("Talos v1.14.5 to v1.14.6; nothing running moves"). A release whose set did not change leaves the section out, as v0.2.0 does.
+
+## Release branches
+
+- `main` is the next minor release. All feature work lands on `main`.
+- `release-X.Y` is the line for that minor's patch releases (the branch ADR 0142 builds the docs line from). A change that belongs in a patch release lands on `main` first, is cherry-picked to `release-X.Y`, and the patch tag is cut there.
+- The split happens when the first change that belongs only to the next minor is ready to land. Until then `main` and the current minor's line are the same thing, and `release-X.Y` is fast-forwarded to the tagged point.
+- A patch bump of the release set is exactly the kind of change that is cherry-picked to `release-X.Y`.
+- A cherry-pick has a different commit id on the release line than on `main`. That is expected.
 
 ## Where the set lives
 

@@ -212,8 +212,12 @@ ichor machine list --cluster demo
 ichor machine approve NAME --role worker --install-disk /dev/sda
 ```
 
-`NAME` is the pending machine from the list. The command asks for
-confirmation unless `--yes`, then prints one line (`-o yaml` prints the
+`NAME` is the pending machine from the list. A machine is named after its
+hardware UUID, so the list shows the first eight characters of it, as long as
+those are unique; pass that short name as it is, or the full UUID. If a short
+name fits more than one machine, the command refuses and lists the candidates.
+The other commands that take a machine name accept the short name too. The
+command asks for confirmation unless `--yes`, then prints one line (`-o yaml` prints the
 machine as before):
 
 ```text
@@ -269,8 +273,9 @@ every condition (with ✓, `!`, ✗ or … in front). Every machine should be Re
 both say the release you installed.
 
 The CLI prints for people. In a script, add `-o yaml` or `-o json` to any
-command for the full response. A table never truncates a cell, and colour
-appears only on a terminal (set `NO_COLOR` to turn it off).
+command for the full response. A table cell is never cut off, but a long
+machine name is shown in short form (see step 3); `-o yaml` prints it whole.
+Colour appears only on a terminal (set `NO_COLOR` to turn it off).
 
 The same goes for the operations. `ichor operation list` shows each one with a
 glyph for its phase and what it is doing; `ichor operation get NAME` adds the

@@ -3,16 +3,10 @@
 Read `docs/design/architecture.md` first; it's the source of truth. Conventions
 are in `CONTRIBUTING.md`.
 
-Tooling for agents:
-
-- Ponytail is installed and runs in `ultra` mode (`/ponytail ultra` if it isn't).
-  Before writing code, go down its ladder: does this need to exist, does the
-  standard library or an installed dependency already do it, can it be one
-  line. Mark deferred shortcuts with `ponytail:` comments and run
-  `/ponytail-review` on your diff before opening a PR.
-- Use Serena for code navigation and editing: find symbols and references
-  with its tools instead of grepping, and edit at the symbol level instead of
-  rewriting files. Activate the project at the start of a session.
+Before writing code, ask whether it needs to exist, whether the standard
+library or an installed dependency already does it, and whether it can be one
+line. Mark a deferred shortcut with a `shortcut:` comment naming its limit and
+when to drop it.
 
 Rules that are easy to get wrong:
 
@@ -22,8 +16,8 @@ Rules that are easy to get wrong:
   @preactcn/…`), never by hand. Build and generate with the Makefile targets
   (`make help` lists them). Never call controller-gen/kustomize/envtest
   directly.
-- Look up the docs for the exact library version in use (Context7 is set up
-  for this) before writing code against it. Don't code from memory.
+- Read the documentation for the exact library version in use before writing
+  code against it. Don't code from memory.
 - Don't read or reference Sidero Omni — code, docs, release notes or UI. This
   is a clean-room implementation.
 - Machine config is typed only (`TalosConfigPatch.spec.documents[]` with the

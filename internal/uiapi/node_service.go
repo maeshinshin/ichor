@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"slices"
 	"sync"
 
 	"connectrpc.com/connect"
@@ -28,6 +29,7 @@ import (
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -169,6 +171,25 @@ func (s *Server) StreamNodeLogs(
 		return invalid("machines is required")
 	}
 
+	if len(refs) > maxLogMachines {
+		return invalid("at most %d machines per log stream", maxLogMachines)
+	}
+
+	// The same machine twice would double its lines and its connections.
+	seen := map[types.NamespacedName]bool{}
+	refs = slices.DeleteFunc(slices.Clone(refs), func(r *pb.ObjectRef) bool {
+		dup := seen[namespacedName(r)]
+		seen[namespacedName(r)] = true
+
+		return dup
+	})
+
+	release, err := s.acquireLogSlots(len(refs))
+	if err != nil {
+		return err
+	}
+	defer release()
+
 	service := req.Msg.GetService()
 
 	opts := logOptions(req.Msg)
@@ -180,6 +201,10 @@ func (s *Server) StreamNodeLogs(
 	send := func(ref *pb.ObjectRef, line LogLine) error {
 		mu.Lock()
 		defer mu.Unlock()
+
+		if service == "" { // the kernel log carries the boot command line, with its talos.config token
+			line.Message = string(redactKernelLog([]byte(line.Message)))
+		}
 
 		tok = tok.advance(namespacedName(ref).String(), line)
 

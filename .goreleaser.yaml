@@ -64,11 +64,10 @@ signs:
     signature: "${artifact}.sigstore.json"
     args: ["sign-blob", "--yes", "--bundle=${signature}", "${artifact}"]
 
-# The release body is the tag's section of CHANGELOG.md (the release workflow passes it with
-# --release-notes). A generated commit log needs the previous tag to be an ancestor of this one, which
-# the re-cut tags are not, so it fell back to the whole history.
-changelog:
-  disable: true
+# The release body is the tag's section of CHANGELOG.md, which the release workflow passes with
+# --release-notes. There is no changelog block on purpose: disabling the changelog would make
+# goreleaser ignore that flag too, and a generated commit log needs the previous tag to be an
+# ancestor of this one, which a tag cut from a release branch is not.
 
 release:
   # Name the repo explicitly so goreleaser doesn't need to read it from

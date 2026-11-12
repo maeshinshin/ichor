@@ -188,4 +188,5 @@ Talos machinery (the typedconfig and union generators' output) is MPL-2.0: it
 carries the MPL header and `// Copyright 2026 maeshinshin.`, never an Apache
 block as well, and takes it from the generator, not by hand. A generated
 manifest or reference page that cannot carry a header (the Talos CRDs and their
-docs) is named in `NOTICE` instead. Add any new such file to `NOTICE`.
+docs) is named in `NOTICE` instead. Add any new such file to `NOTICE`;
+`internal/tools/noticecheck` fails when a file has the wrong treatment.

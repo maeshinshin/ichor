@@ -1,12 +1,16 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": ["Decisions: docs/adr/0151-renovate-and-the-daily-vulnerability-scan.md. Renovate reads only the managers listed here, so the Cilium chart pins in the Makefile and pkg/cni/cilium stay with hack/bump-cilium-patch.sh (ADR 0119)."],
   "extends": ["config:recommended", "helpers:pinGitHubActionDigests", "docker:pinDigests"],
+  "semanticCommits": "enabled",
   "enabledManagers": ["gomod", "npm", "github-actions", "nix", "custom.regex"],
   "schedule": ["before 6am on monday"],
   "prConcurrentLimit": 3,
   "prHourlyLimit": 2,
   "minimumReleaseAge": "3 days",
+  "minimumReleaseAgeBehaviour": "timestamp-optional",
   "labels": ["dependencies"],
+  "postUpdateOptions": ["gomodTidy"],
   "lockFileMaintenance": { "enabled": true, "schedule": ["before 6am on the first day of the month"] },
   "vulnerabilityAlerts": { "schedule": ["at any time"], "labels": ["security"] },
   "nix": { "enabled": true },
@@ -20,11 +24,31 @@
     }
   ],
   "packageRules": [
-    { "matchManagers": ["github-actions"], "groupName": "github actions" },
+    {
+      "description": "Majors of anything wait for a tick on the dependency dashboard, so they open one at a time and never in a burst",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    { "matchManagers": ["github-actions"], "matchUpdateTypes": ["minor", "patch", "digest", "pin", "pinDigest"], "groupName": "github actions" },
     { "matchManagers": ["custom.regex"], "groupName": "container base images" },
-    { "matchManagers": ["npm"], "matchUpdateTypes": ["minor", "patch"], "groupName": "ui npm minor and patch" },
+    { "matchManagers": ["npm"], "matchFileNames": ["ui/**"], "matchUpdateTypes": ["minor", "patch"], "groupName": "ui npm minor and patch" },
+    { "matchManagers": ["npm"], "matchFileNames": ["site/**"], "matchUpdateTypes": ["minor", "patch"], "groupName": "site npm minor and patch" },
     { "matchManagers": ["gomod"], "matchUpdateTypes": ["minor", "patch"], "groupName": "go modules minor and patch" },
-    { "matchManagers": ["gomod"], "matchPackageNames": ["k8s.io/**", "sigs.k8s.io/**"], "groupName": "kubernetes libraries" },
-    { "matchManagers": ["gomod"], "matchPackageNames": ["github.com/siderolabs/**"], "groupName": "talos machinery" }
+    {
+      "description": "The release set (ADR 0148): the Talos machinery module must equal pkg/release Pinned.Talos, and the Kubernetes libraries and controller-runtime move together. Cilium is not a Go module: its chart pins belong to hack/bump-cilium-patch.sh and no manager here reads them.",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["github.com/siderolabs/talos/**", "k8s.io/**", "!k8s.io/utils", "!k8s.io/klog/**", "!k8s.io/kube-openapi", "sigs.k8s.io/controller-runtime"],
+      "groupName": "release set: talos and kubernetes",
+      "addLabels": ["release-set"],
+      "automerge": false,
+      "prBodyNotes": ["This moves a module of the pinned release set. ADR 0148 decides which Ichor release it ships in; `Pinned` in `pkg/release/release.go` must move with it (the release tests fail until it does), and a change to `api/`, the CRDs or `proto/` makes it a minor release."]
+    },
+    {
+      "description": "A Kubernetes or api-machinery major can break the CRD (fields are append-only)",
+      "matchManagers": ["gomod"],
+      "matchUpdateTypes": ["major"],
+      "matchPackageNames": ["k8s.io/**", "sigs.k8s.io/**"],
+      "automerge": false
+    }
   ]
 }

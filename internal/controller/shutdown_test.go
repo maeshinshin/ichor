@@ -27,8 +27,10 @@ import (
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 	policyv1 "k8s.io/api/policy/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -321,6 +323,24 @@ var _ = Describe("TalosOperation shutdown", func() {
 		got = f.reconcile(upgrade)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
 		Expect(advancer.calls).NotTo(BeEmpty())
+	})
+
+	It("defers a removal while the cluster is shutting down and asks to be tried again, since nothing else wakes it", func() {
+		f := newShutdownFixture()
+		f.reconcile(f.newOp(ichorv1alpha1.TalosOperationKindShutdown))
+
+		cp := fetchMachine(f.cps[0])
+		controllerutil.AddFinalizer(cp, machineRemovalFinalizer)
+		Expect(k8sClient.Update(ctx, cp)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, cp)).To(Succeed())
+
+		mr := &TalosMachineReconciler{Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace}
+		res, err := reconcileMachine(mr, cp)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(nodeWaitInterval))
+		Expect(apimeta.FindStatusCondition(fetchMachine(cp).Status.Conditions, conditionRemoval)).To(
+			HaveField("Message", ContainSubstring("removal deferred")))
+		Expect(controllerutil.ContainsFinalizer(fetchMachine(cp), machineRemovalFinalizer)).To(BeTrue())
 	})
 
 	It("lets only one shutdown run per cluster", func() {

@@ -64,22 +64,10 @@ signs:
     signature: "${artifact}.sigstore.json"
     args: ["sign-blob", "--yes", "--bundle=${signature}", "${artifact}"]
 
-changelog:
-  sort: asc
-  groups:
-    - title: Features
-      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
-      order: 0
-    - title: Fixes
-      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
-      order: 1
-    - title: Others
-      order: 999
-  filters:
-    exclude:
-      - "^docs:"
-      - "^test:"
-      - "^chore:"
+# The release body is the tag's section of CHANGELOG.md, which the release workflow passes with
+# --release-notes. There is no changelog block on purpose: disabling the changelog would make
+# goreleaser ignore that flag too, and a generated commit log needs the previous tag to be an
+# ancestor of this one, which a tag cut from a release branch is not.
 
 release:
   # No git remote is configured on purpose (see CLAUDE.md); name the repo

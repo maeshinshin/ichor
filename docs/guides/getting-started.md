@@ -236,6 +236,37 @@ approval the controller renders and applies the configuration; the node
 installs Talos, reboots and joins. With the `single` preset there is nothing
 to approve, so skip this step.
 
+If you turned sign-in on, the first of these commands prints this line on
+stderr, and so do the commands in step 4:
+
+```text
+ichor: ichor-ui requires OIDC and there is no usable ichor-ui login; using your own kubeconfig and RBAC in this process instead (to use ichor-ui, run ichor auth login --issuer https://… --audience ichor-ui)
+```
+
+It means the CLI could not reach ichor-ui through a login, so it runs the
+command itself with your kubeconfig and your Kubernetes permissions. The
+command still works, and the steps below run the same way. To go through
+ichor-ui and its users instead, sign in once. The `--issuer` is the
+`--ui-url` you chose:
+
+```sh
+ichor auth login --issuer https://192.168.1.60 --audience ichor-ui
+```
+
+This opens your browser at the login page, so the URL must be reachable from
+this machine. If ichor-ui has no certificate of its own, it uses one from the
+Ichor serving CA, which your machine does not trust. Export that CA and pass it
+to the login:
+
+```sh
+kubectl -n ichor-system get configmap ichor-ui-ca -o jsonpath='{.data.ca\.crt}' > ichor-ca.crt
+ichor auth login --issuer https://192.168.1.60 --audience ichor-ui --ca-file ichor-ca.crt
+```
+
+The warning stops once the login is cached. [Users and login](users-and-login.md)
+explains the CA and `--ca-file`, which the other `ichor auth` and `ichor user`
+commands take too.
+
 ## 4. Check the cluster
 
 The commands below use [`kubectl`](https://kubernetes.io/docs/tasks/tools/) once,
@@ -274,6 +305,8 @@ new installs Talos v1.14.5 · Kubernetes v1.36.6 · Cilium 1.20.4 (contract v1.1
 every condition (with ✓, `!`, ✗ or … in front). Every machine should be Ready
 (✓). `ichor version` shows the CLI and the installed Ichor version; they should
 both say the release you installed.
+With sign-in on, these commands also print the sign-in line from step 3 on
+stderr. The output below leaves it out.
 
 The CLI prints for people. In a script, add `-o yaml` or `-o json` to any
 command for the full response. A table cell is never cut off, but a long

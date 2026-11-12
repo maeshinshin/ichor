@@ -7,21 +7,18 @@ Decided: `ichor gitops export`'s allow-list of CR kinds and of the fields it wri
 ## Context
 
 ADR 0024 built the CNI hand-over reconciler and its CR field
-(`TalosClusterCNI.Handover`) but explicitly left `ichor gitops handoff cni`
-to a later unit: "the CLI command that would flip a manual cluster to
-adopted is explicitly another agent's work and is not built here." The
-design document's "GitOps and Argo CD" section separately describes
-`ichor gitops export` as writing the same repository skeleton `ichor init
---gitops-dir` writes, but for a cluster that already exists. This unit
-builds both CLI subcommands.
+(`TalosClusterCNI.Handover`); `ichor gitops handoff cni` is the CLI command that
+flips a manual cluster to adopted. The design document's "GitOps and Argo CD"
+section separately describes `ichor gitops export` as writing the same
+repository skeleton `ichor init --gitops-dir` writes, but for a cluster that
+already exists. This ADR covers both CLI subcommands.
 
-Two things make `export` harder than "serialize every CR": a `TalosOperation`
-CRD is being built by another agent concurrently and does not exist in this
-package yet, so nothing can reference it directly; and the design requires
-warning when a resource `export` is about to skip is already tracked by
-Argo CD or Flux outside of Ichor, which needs two different detection
-mechanisms (`argocd-cm`'s own tracking method, Flux's managed-fields
-signal) rather than one.
+Two things make `export` harder than "serialize every CR": the CR kinds that do
+not belong in Git (a `TalosOperation` is a record of an imperative action) have
+to stay out without `export` naming them; and the design requires warning when a
+resource `export` is about to skip is already tracked by Argo CD or Flux outside
+of Ichor, which needs two different detection mechanisms (`argocd-cm`'s own
+tracking method, Flux's managed-fields signal) rather than one.
 
 ## Decision: an allow-list, not a deny-list, for what `export` writes
 
@@ -78,8 +75,7 @@ Two independent checks, because the two tools mark ownership differently:
 
 `runGitopsHandoff` (`internal/cli/gitops_handoff.go`) fetches the named
 `TalosCluster` and, if `spec.cni.handover` is not already `"automatic"`,
-patches it to `"automatic"`. That is the entire command. Reading
-`internal/controller/cnihandover_controller.go` confirms this is sufficient:
+patches it to `"automatic"`. That is the entire command. This is sufficient:
 `CNIHandoverReconciler.Reconcile` already branches on this exact field, and
 only `automatic` mode polls the CNI's Argo CD `Application` and eventually
 flips the `CNIHandover` condition. `handoff` never talks to Argo CD, never
@@ -97,14 +93,12 @@ field-patch branch -- is the only change `gitops handoff` needs.
 
 ## Decision: export writes the declared form of each CR, not the live object
 
-The first version marshalled the objects it had read from the cluster as-is.
-Against a real cluster that put `status`, `resourceVersion`, `uid`,
-`generation`, `creationTimestamp`, `managedFields` and friends into Git (and,
-because a list result carries no `TypeMeta`, wrote no `apiVersion`/`kind`
-either). `resourceVersion` makes Argo CD's apply fail its optimistic-concurrency
-check and `uid` makes the files unrestorable on another cluster. The fake-client
-tests could not see this because a freshly built fixture has none of those
-fields set.
+Marshalling the objects read from the cluster as-is would put `status`,
+`resourceVersion`, `uid`, `generation`, `creationTimestamp`, `managedFields` and
+friends into Git (and, because a list result carries no `TypeMeta`, no
+`apiVersion`/`kind` either). `resourceVersion` makes Argo CD's apply fail its
+optimistic-concurrency check and `uid` makes the files unrestorable on another
+cluster. So `export` writes the declared form of each CR.
 
 `declaredForm` (`internal/cli/gitops_export.go`) is the single place every
 exported CR passes through, after `runGitopsExport` has collected them,
@@ -120,8 +114,7 @@ annotations `kubectl.kubernetes.io/last-applied-configuration` and
 `argocd.argoproj.io/tracking-id` (they record how the object reached this
 cluster; a restored cluster would claim an Application it is not in).
 
-What about "the labels and annotations Ichor writes at runtime"? Reading the
-code, Ichor writes none on its own CRs: the controller never calls
+What about "the labels and annotations Ichor writes at runtime"? Ichor writes none on its own CRs: the controller never calls
 `SetLabels`/`SetAnnotations` or assigns into `Labels`/`Annotations` on a
 `Talos*` object (the design section is about labels on Kubernetes `Node`s and
 the storage system's node objects, which export never lists). Every
@@ -148,15 +141,15 @@ reading `argocd-cm`, and with annotation tracking (the default) it is absent.
 object for CRs, since they are now plain maps; the guard that matters is
 unchanged, `export` never lists a Secret.
 
-The three near-identical `exportConfigPatches`/`exportStorages`/
-`exportEtcdBackups` became one `exportClusterKinds`, driven by a table of
-(file prefix, list type, `clusterRef` accessor). `exportMachines` stays
-separate: it has the approval check and the tracked warning.
+One `exportClusterKinds`, driven by a table of (file prefix, list type,
+`clusterRef` accessor), serves `TalosConfigPatch`, `TalosStorage` and
+`TalosEtcdBackup`. `exportMachines` stays separate: it has the approval check
+and the tracked warning.
 
-"Ichor warns if it sees them tracked" (architecture.md) is not implemented.
-`gitopstracking.IsTracked` is called only for unapproved `TalosMachine`s;
-nothing looks for runtime labels or annotations in tracked Node or storage
-objects. Not built here.
+"Ichor warns if it sees them tracked" (architecture.md) is not implemented for
+runtime labels or annotations: `gitopstracking.IsTracked` is called only for
+unapproved `TalosMachine`s, and nothing looks for runtime labels or annotations
+in tracked Node or storage objects.
 
 ## Consequences
 
@@ -169,11 +162,7 @@ objects. Not built here.
   no CNI `Application` in the skeleton: a custom CNI has no `pkg/cni.Preset`
   implementation to compute one from (ADR 0013), the same way `ichor init
   --argocd` already leaves it out for a custom preset.
-- Amended: `TalosEtcdBackup` (ADR 0047) joined the allow-list, listed by
-  `exportEtcdBackups` the same way `exportStorages` lists `TalosStorage`.
-- Not built here: PR mode (design phase 8), strict mode, override, and
-  `ichor ui` port-forwarding -- none of which this unit's two commands touch.
-- `docs/adr/README.md`'s index briefly shows a gap at 0026/0027: those
-  numbers are reserved for other agents' concurrent work in sibling
-  worktrees and are expected to land before this branch merges, closing the
-  sequence `index_test.go`'s `TestNumbersAreContiguous` checks for.
+- Amended: `TalosEtcdBackup` (ADR 0047) joined the allow-list, listed
+  through `exportClusterKinds` like `TalosStorage`.
+- Not part of this decision: PR mode (design phase 8), strict mode, override, and
+  `ichor ui` port-forwarding.

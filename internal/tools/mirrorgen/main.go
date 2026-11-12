@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"go/types"
 	"os"
+	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -378,6 +379,10 @@ func generate() *generator {
 
 func main() {
 	g := generate()
+
+	if problems := g.payloadProblems(droppedPayloads); len(problems) > 0 {
+		fatalf("a shipped kind would be accepted with its content discarded:\n  %s", strings.Join(problems, "\n  "))
+	}
 
 	g.report()
 	g.writeMirror("zz_generated.mirror.go")

@@ -19,6 +19,8 @@ limitations under the License.
 // common fields.
 package embedded
 
+import mmeta "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
+
 // Common is embedded in Outer.
 type Common struct {
 	Up  *bool  `yaml:"up,omitempty"`
@@ -30,4 +32,16 @@ type Outer struct {
 	Name   string `yaml:"name"`
 	Common `yaml:",inline"`
 	Extra  string `yaml:"extra,omitempty"`
+}
+
+// WithPayload keeps its typed fields and loses one free-form field.
+type WithPayload struct {
+	Name string             `yaml:"name"`
+	Raw  mmeta.Unstructured `yaml:"raw"`
+}
+
+// OnlyPayload is a document that is nothing but a free-form field.
+type OnlyPayload struct {
+	mmeta.Meta `yaml:",inline"`
+	Raw        mmeta.Unstructured `yaml:"raw"`
 }

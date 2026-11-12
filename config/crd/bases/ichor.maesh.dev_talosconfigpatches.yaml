@@ -640,10 +640,6 @@ spec:
                                     type: string
                                   type: array
                               type: object
-                            extraManifestHeaders:
-                              additionalProperties:
-                                type: string
-                              type: object
                             extraManifests:
                               items:
                                 type: string
@@ -1682,20 +1678,6 @@ spec:
                                           ca:
                                             format: byte
                                             type: string
-                                          clientIdentity:
-                                            description: 'github.com/siderolabs/crypto/x509:
-                                              PEMEncodedCertificateAndKey'
-                                            properties:
-                                              crt:
-                                                format: byte
-                                                type: string
-                                              key:
-                                                format: byte
-                                                type: string
-                                            required:
-                                            - crt
-                                            - key
-                                            type: object
                                           insecureSkipVerify:
                                             type: boolean
                                         type: object

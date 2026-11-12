@@ -618,6 +618,7 @@ func unionSource(roots []rootKind) string {
 // the one field it names, and nothing else.
 // +kubebuilder:validation:MinProperties=2
 // +kubebuilder:validation:MaxProperties=2
+// +kubebuilder:object:generate=false
 `)
 
 	b.WriteString("type TalosConfigPatchDocument struct {\n")
@@ -639,8 +640,43 @@ func unionSource(roots []rootKind) string {
 	}
 
 	b.WriteString("}\n")
+	b.WriteString(unionDeepCopy(roots))
 	b.WriteString(unionValidate(roots))
 	b.WriteString(unionConvert(roots))
+
+	return b.String()
+}
+
+// unionDeepCopy returns the DeepCopyInto and DeepCopy methods of TalosConfigPatchDocument. They are written here and
+// not by controller-gen so that the Talos type and field names they hold stay in this MPL-2.0 file: controller-gen
+// gives every file of a package one header, and api/v1alpha1/zz_generated.deepcopy.go is Apache-2.0.
+func unionDeepCopy(roots []rootKind) string {
+	var b strings.Builder
+
+	b.WriteString(`
+// DeepCopyInto copies the receiver into out. in must be non-nil.
+func (in *TalosConfigPatchDocument) DeepCopyInto(out *TalosConfigPatchDocument) {
+	*out = *in
+`)
+
+	for _, r := range roots {
+		fmt.Fprintf(&b, "\tif in.%[1]s != nil {\n\t\tin, out := &in.%[1]s, &out.%[1]s\n\t\t*out = new(typedconfig.%[2]s)\n\t\t(*in).DeepCopyInto(*out)\n\t}\n", r.kind, r.typeName)
+	}
+
+	b.WriteString(`}
+
+// DeepCopy returns a copy of the receiver.
+func (in *TalosConfigPatchDocument) DeepCopy() *TalosConfigPatchDocument {
+	if in == nil {
+		return nil
+	}
+
+	out := new(TalosConfigPatchDocument)
+	in.DeepCopyInto(out)
+
+	return out
+}
+`)
 
 	return b.String()
 }

@@ -35,6 +35,7 @@ import (
 // the one field it names, and nothing else.
 // +kubebuilder:validation:MinProperties=2
 // +kubebuilder:validation:MaxProperties=2
+// +kubebuilder:object:generate=false
 type TalosConfigPatchDocument struct {
 	// kind selects which of the fields below is populated.
 	// +kubebuilder:validation:Enum=SysctlConfig;KernelModuleConfig;Config;VolumeConfig;UserVolumeConfig;RawVolumeConfig;ResolverConfig;BGPInstanceConfig;BlackholeRouteConfig;BondConfig;BridgeConfig;ContainerConfig;DHCPv6Config;DummyLinkConfig;EnvironmentConfig;EtcFileConfig;EthernetConfig;EventSinkConfig;ExistingVolumeConfig;ExtensionServiceConfig;ExternalVolumeConfig;FilesystemScrubConfig;FilesystemTrimConfig;HTTPProbeConfig;ImageCacheConfig;ImageVerificationConfig;KmsgLogConfig;KubeAPIServerConfig;KubeClusterConfig;KubeControllerManagerConfig;KubeCoreDNSConfig;KubeInlineManifestConfig;KubeNetworkConfig;KubeNodeConfig;KubePrismConfig;KubeSpanConfig;KubeSpanEndpointsConfig;KubeTalosAPIAccessConfig;LVMLogicalVolumeConfig;LVMVolumeGroupConfig;Layer2VIPConfig;OOMConfig;PCIDriverRebindConfig;RAIDArrayConfig;RegistryMirrorConfig;RoutingRuleConfig;StaticHostConfig;SwapVolumeConfig;SysfsConfig;TCPProbeConfig;TimeSyncConfig;TrustedRootsConfig;UdevRulesConfig;VRFConfig;VethConfig;WatchdogTimerConfig;ZswapConfig
@@ -271,6 +272,308 @@ type TalosConfigPatchDocument struct {
 	// zswapConfig is a Talos ZswapConfig document; populated when kind is "ZswapConfig".
 	// +optional
 	ZswapConfig *typedconfig.ZswapConfigV1Alpha1 `json:"zswapConfig,omitempty"`
+}
+
+// DeepCopyInto copies the receiver into out. in must be non-nil.
+func (in *TalosConfigPatchDocument) DeepCopyInto(out *TalosConfigPatchDocument) {
+	*out = *in
+	if in.SysctlConfig != nil {
+		in, out := &in.SysctlConfig, &out.SysctlConfig
+		*out = new(typedconfig.SysctlConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KernelModuleConfig != nil {
+		in, out := &in.KernelModuleConfig, &out.KernelModuleConfig
+		*out = new(typedconfig.KernelModuleConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.Config != nil {
+		in, out := &in.Config, &out.Config
+		*out = new(typedconfig.Config)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.VolumeConfig != nil {
+		in, out := &in.VolumeConfig, &out.VolumeConfig
+		*out = new(typedconfig.VolumeConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.UserVolumeConfig != nil {
+		in, out := &in.UserVolumeConfig, &out.UserVolumeConfig
+		*out = new(typedconfig.UserVolumeConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.RawVolumeConfig != nil {
+		in, out := &in.RawVolumeConfig, &out.RawVolumeConfig
+		*out = new(typedconfig.RawVolumeConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.ResolverConfig != nil {
+		in, out := &in.ResolverConfig, &out.ResolverConfig
+		*out = new(typedconfig.ResolverConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.BGPInstanceConfig != nil {
+		in, out := &in.BGPInstanceConfig, &out.BGPInstanceConfig
+		*out = new(typedconfig.BGPInstanceConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.BlackholeRouteConfig != nil {
+		in, out := &in.BlackholeRouteConfig, &out.BlackholeRouteConfig
+		*out = new(typedconfig.BlackholeRouteConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.BondConfig != nil {
+		in, out := &in.BondConfig, &out.BondConfig
+		*out = new(typedconfig.BondConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.BridgeConfig != nil {
+		in, out := &in.BridgeConfig, &out.BridgeConfig
+		*out = new(typedconfig.BridgeConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.ContainerConfig != nil {
+		in, out := &in.ContainerConfig, &out.ContainerConfig
+		*out = new(typedconfig.ContainerConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.DHCPv6Config != nil {
+		in, out := &in.DHCPv6Config, &out.DHCPv6Config
+		*out = new(typedconfig.DHCPv6ConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.DummyLinkConfig != nil {
+		in, out := &in.DummyLinkConfig, &out.DummyLinkConfig
+		*out = new(typedconfig.DummyLinkConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.EnvironmentConfig != nil {
+		in, out := &in.EnvironmentConfig, &out.EnvironmentConfig
+		*out = new(typedconfig.EnvironmentV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.EtcFileConfig != nil {
+		in, out := &in.EtcFileConfig, &out.EtcFileConfig
+		*out = new(typedconfig.EtcFileConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.EthernetConfig != nil {
+		in, out := &in.EthernetConfig, &out.EthernetConfig
+		*out = new(typedconfig.EthernetConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.EventSinkConfig != nil {
+		in, out := &in.EventSinkConfig, &out.EventSinkConfig
+		*out = new(typedconfig.EventSinkV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.ExistingVolumeConfig != nil {
+		in, out := &in.ExistingVolumeConfig, &out.ExistingVolumeConfig
+		*out = new(typedconfig.ExistingVolumeConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.ExtensionServiceConfig != nil {
+		in, out := &in.ExtensionServiceConfig, &out.ExtensionServiceConfig
+		*out = new(typedconfig.ServiceConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.ExternalVolumeConfig != nil {
+		in, out := &in.ExternalVolumeConfig, &out.ExternalVolumeConfig
+		*out = new(typedconfig.ExternalVolumeConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.FilesystemScrubConfig != nil {
+		in, out := &in.FilesystemScrubConfig, &out.FilesystemScrubConfig
+		*out = new(typedconfig.FilesystemScrubConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.FilesystemTrimConfig != nil {
+		in, out := &in.FilesystemTrimConfig, &out.FilesystemTrimConfig
+		*out = new(typedconfig.FilesystemTrimConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.HTTPProbeConfig != nil {
+		in, out := &in.HTTPProbeConfig, &out.HTTPProbeConfig
+		*out = new(typedconfig.HTTPProbeConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.ImageCacheConfig != nil {
+		in, out := &in.ImageCacheConfig, &out.ImageCacheConfig
+		*out = new(typedconfig.ImageCacheConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.ImageVerificationConfig != nil {
+		in, out := &in.ImageVerificationConfig, &out.ImageVerificationConfig
+		*out = new(typedconfig.ImageVerificationConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KmsgLogConfig != nil {
+		in, out := &in.KmsgLogConfig, &out.KmsgLogConfig
+		*out = new(typedconfig.KmsgLogV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KubeAPIServerConfig != nil {
+		in, out := &in.KubeAPIServerConfig, &out.KubeAPIServerConfig
+		*out = new(typedconfig.KubeAPIServerConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KubeClusterConfig != nil {
+		in, out := &in.KubeClusterConfig, &out.KubeClusterConfig
+		*out = new(typedconfig.KubeClusterConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KubeControllerManagerConfig != nil {
+		in, out := &in.KubeControllerManagerConfig, &out.KubeControllerManagerConfig
+		*out = new(typedconfig.KubeControllerManagerConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KubeCoreDNSConfig != nil {
+		in, out := &in.KubeCoreDNSConfig, &out.KubeCoreDNSConfig
+		*out = new(typedconfig.KubeCoreDNSConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KubeInlineManifestConfig != nil {
+		in, out := &in.KubeInlineManifestConfig, &out.KubeInlineManifestConfig
+		*out = new(typedconfig.KubeInlineManifestConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KubeNetworkConfig != nil {
+		in, out := &in.KubeNetworkConfig, &out.KubeNetworkConfig
+		*out = new(typedconfig.KubeNetworkConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KubeNodeConfig != nil {
+		in, out := &in.KubeNodeConfig, &out.KubeNodeConfig
+		*out = new(typedconfig.KubeNodeConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KubePrismConfig != nil {
+		in, out := &in.KubePrismConfig, &out.KubePrismConfig
+		*out = new(typedconfig.KubePrismConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KubeSpanConfig != nil {
+		in, out := &in.KubeSpanConfig, &out.KubeSpanConfig
+		*out = new(typedconfig.KubeSpanConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KubeSpanEndpointsConfig != nil {
+		in, out := &in.KubeSpanEndpointsConfig, &out.KubeSpanEndpointsConfig
+		*out = new(typedconfig.KubespanEndpointsConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KubeTalosAPIAccessConfig != nil {
+		in, out := &in.KubeTalosAPIAccessConfig, &out.KubeTalosAPIAccessConfig
+		*out = new(typedconfig.KubeTalosAPIAccessConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.LVMLogicalVolumeConfig != nil {
+		in, out := &in.LVMLogicalVolumeConfig, &out.LVMLogicalVolumeConfig
+		*out = new(typedconfig.LVMLogicalVolumeConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.LVMVolumeGroupConfig != nil {
+		in, out := &in.LVMVolumeGroupConfig, &out.LVMVolumeGroupConfig
+		*out = new(typedconfig.LVMVolumeGroupConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.Layer2VIPConfig != nil {
+		in, out := &in.Layer2VIPConfig, &out.Layer2VIPConfig
+		*out = new(typedconfig.Layer2VIPConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.OOMConfig != nil {
+		in, out := &in.OOMConfig, &out.OOMConfig
+		*out = new(typedconfig.OOMV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.PCIDriverRebindConfig != nil {
+		in, out := &in.PCIDriverRebindConfig, &out.PCIDriverRebindConfig
+		*out = new(typedconfig.PCIDriverRebindConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.RAIDArrayConfig != nil {
+		in, out := &in.RAIDArrayConfig, &out.RAIDArrayConfig
+		*out = new(typedconfig.RAIDArrayConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.RegistryMirrorConfig != nil {
+		in, out := &in.RegistryMirrorConfig, &out.RegistryMirrorConfig
+		*out = new(typedconfig.RegistryMirrorConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.RoutingRuleConfig != nil {
+		in, out := &in.RoutingRuleConfig, &out.RoutingRuleConfig
+		*out = new(typedconfig.RoutingRuleConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.StaticHostConfig != nil {
+		in, out := &in.StaticHostConfig, &out.StaticHostConfig
+		*out = new(typedconfig.StaticHostConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.SwapVolumeConfig != nil {
+		in, out := &in.SwapVolumeConfig, &out.SwapVolumeConfig
+		*out = new(typedconfig.SwapVolumeConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.SysfsConfig != nil {
+		in, out := &in.SysfsConfig, &out.SysfsConfig
+		*out = new(typedconfig.SysfsConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.TCPProbeConfig != nil {
+		in, out := &in.TCPProbeConfig, &out.TCPProbeConfig
+		*out = new(typedconfig.TCPProbeConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.TimeSyncConfig != nil {
+		in, out := &in.TimeSyncConfig, &out.TimeSyncConfig
+		*out = new(typedconfig.TimeSyncConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.TrustedRootsConfig != nil {
+		in, out := &in.TrustedRootsConfig, &out.TrustedRootsConfig
+		*out = new(typedconfig.TrustedRootsConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.UdevRulesConfig != nil {
+		in, out := &in.UdevRulesConfig, &out.UdevRulesConfig
+		*out = new(typedconfig.UdevRulesConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.VRFConfig != nil {
+		in, out := &in.VRFConfig, &out.VRFConfig
+		*out = new(typedconfig.VRFConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.VethConfig != nil {
+		in, out := &in.VethConfig, &out.VethConfig
+		*out = new(typedconfig.VethConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.WatchdogTimerConfig != nil {
+		in, out := &in.WatchdogTimerConfig, &out.WatchdogTimerConfig
+		*out = new(typedconfig.WatchdogTimerV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.ZswapConfig != nil {
+		in, out := &in.ZswapConfig, &out.ZswapConfig
+		*out = new(typedconfig.ZswapConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+}
+
+// DeepCopy returns a copy of the receiver.
+func (in *TalosConfigPatchDocument) DeepCopy() *TalosConfigPatchDocument {
+	if in == nil {
+		return nil
+	}
+
+	out := new(TalosConfigPatchDocument)
+	in.DeepCopyInto(out)
+
+	return out
 }
 
 // TalosConfigPatchDocumentFieldKey returns the JSON name of the field a kind selects, and false for a kind

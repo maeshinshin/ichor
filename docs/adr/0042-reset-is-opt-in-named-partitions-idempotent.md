@@ -27,7 +27,7 @@ call and recorded two facts, not guesses:
 > requested before the controller can crash -- otherwise a resumed
 > reconcile fires a second concurrent reset at the same node.
 
-Both are design-level constraints this unit has to satisfy, not implement
+Both are design-level constraints this ADR has to satisfy, not implement
 around.
 
 ## Decision
@@ -43,7 +43,7 @@ to reuse for something else. Its absence changes nothing from ADR 0032:
 etcd member removed, finalizer cleared, `NodeStillHasClusterCredentials`
 fired exactly as before.
 
-### `TalosClient` grows one more method, verified against machinery v1.14.3's own source
+### `TalosClient` grows one more method, adapting machinery v1.14.3's `ResetGeneric`
 
 `Reset(ctx context.Context) error` adapts `*client.Client.ResetGeneric`
 with a fixed, never-caller-configurable request:
@@ -102,7 +102,7 @@ untouched and still credentialed.
 
 Reset is fire-and-forget -- the RPC returns once Talos has accepted the
 request and started the wipe-and-reboot sequence in a background
-goroutine (confirmed by reading `v1alpha1_server.go`'s `Reset` handler:
+goroutine (`v1alpha1_server.go`'s `Reset` handler:
 `go func() { s.Controller.Run(resetCtx, runtime.SequenceReset, &opts) }()`
 runs after the response is already built), not once the sequence
 finishes. `resetNode` therefore checks `conditionRemoval`'s own status
@@ -114,10 +114,8 @@ concurrent reset": a crash after this write means the next reconcile
 sees the condition already `True` and returns without calling `Reset`
 again at all.
 
-Two notes against calling `Reset` twice, read from Talos's own source
-(not inferred), for whoever next has to reason about how dangerous a
-near-simultaneous double-call actually would have been if this check
-were ever bypassed: `Controller.Run` takes a `priorityLock` before
+Two facts from Talos's own source bear on how dangerous a
+near-simultaneous double-call would be if this check were ever bypassed: `Controller.Run` takes a `priorityLock` before
 running any sequence, so a second `SequenceReset` arriving while the
 first is still in flight blocks (up to a minute) rather than racing the
 first on the same disk; and once a first Reset actually completes with
@@ -126,9 +124,7 @@ admin certificate any second attempt would authenticate with is no
 longer trusted at all -- the second call fails closed rather than
 repeating the wipe. Neither of these is why this ADR's own check exists
 (the architecture doc's instruction is unconditional, and this project
-does not rely on a dependency's internal locking as its own safety net),
-but both explain why no real-hardware attempt at forcing a genuine double
-Reset was expected to find anything more alarming than a clean refusal.
+does not rely on a dependency's internal locking as its own safety net).
 
 ### The Warning Event is wrong once Reset actually succeeded, so it is skipped
 
@@ -157,40 +153,6 @@ this ADR did not change.
   dialed at all): opting into Reset when the node is unreachable simply
   fails at the dial, same as any other Talos call in this file, and holds
   the finalizer exactly like any other failed step.
-
-## Real-hardware verification
-
-Run on 2026-10-26 against the 3-node HA cluster (Talos v1.14.3,
-`ichor-e2e` namespace, the real controller binary running as a pod, ADR
-0007). One node, `ichor-e2e-ha-1`, was used for both cases in turn: it had
-already left etcd in an earlier run (etcd listed only `ha-0`), so deleting
-its `TalosMachine` exercised the drain, the etcd-already-gone path and,
-when opted in, Reset, without touching quorum. A `TalosMachine` is created
-approved with `allow-delete`, waited on until the removal finalizer is
-present, then deleted. State was read over the Talos API from a pod, with
-the cluster's own admin credentials.
-
-- **Without the annotation.** Before: `ha-1` `machinestatus` stage
-  `running`, `STATE` and `EPHEMERAL` volumes `ready`. After the delete
-  completed: a new `NodeStillHasClusterCredentials` Warning Event on the new
-  object (new UID), and the node was unchanged -- stage `running`, `STATE`
-  and `EPHEMERAL` still `ready`, the admin credentials still authenticating.
-  This is what "opt-in" means: nothing is wiped and the Event keeps firing.
-- **With `ichor.maesh.dev/reset-on-delete: "true"`.** The delete completed
-  and no `NodeStillHasClusterCredentials` Event was emitted for the new
-  object (the Event list held exactly the two earlier ones). The node came
-  back in stage `maintenance` with `STATE` `missing` (`META` still `ready`),
-  and the admin credentials were refused with `x509: certificate signed by
-  unknown authority`: it no longer holds the cluster's PKI, and the disk was
-  not reinstalled (the node rebooted to maintenance rather than needing an
-  install), as the named-partitions design intends. `EPHEMERAL` is not
-  listed in maintenance; it was `ready` before.
-
-Not observed: the `Removal` condition's `ResetRequested` reason (the object
-is gone once the finalizer clears and nobody was watching mid-flight), the
-`ResetFailed` hold (no failing node was available), and the
-second-call-is-a-no-op path against a live node. Those stay covered by
-`internal/controller/reset_test.go` only.
 
 ## Amendment 2026-11-05: an optional full wipe
 

@@ -442,6 +442,13 @@ release: ## Build the local release artifacts for VERSION=vX.Y.Z into bin/releas
 	cp dist/install.yaml dist/network-policies.yaml $(RELEASE_DIR)/
 	$(MAKE) helm-package CHART_VERSION=$(VERSION:v%=%) APP_VERSION=$(VERSION) CHART_DIST=$(RELEASE_DIR)
 
+# The empty group \2 keeps sed from reading \1 and the version's first digit as \10.
+.PHONY: release-prep
+release-prep: ## Before pushing the tag vX.Y.Z (VERSION=vX.Y.Z): set the release number in README.md, and fail if CHANGELOG.md has no "## vX.Y.Z " section. Tags and pushes nothing.
+	@echo "$(VERSION)" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$$' || { echo "release-prep: VERSION must be a final semver tag with a leading v, like v0.1.0 (got '$(VERSION)')" >&2; exit 1; }
+	@grep -q '^## $(VERSION) ' CHANGELOG.md || { echo "release-prep: CHANGELOG.md has no section starting '## $(VERSION) '; the release workflow takes the release notes from it" >&2; exit 1; }
+	sed -i -E 's/(VERSION=|--version )()[0-9]+\.[0-9]+\.[0-9]+/\1\2$(VERSION:v%=%)/' README.md
+
 .PHONY: helm-status
 helm-status: ## Show Helm release status.
 	$(HELM) status $(HELM_RELEASE) --namespace $(HELM_NAMESPACE)

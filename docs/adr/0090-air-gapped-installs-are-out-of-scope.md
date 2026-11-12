@@ -7,8 +7,8 @@ Decided: air-gapped environments are no longer a requirement, so `ichor images l
 ## Context
 
 The design carried air-gap support as an optional feature: mirrors, an installer image override, a self-hosted Image
-Factory and `ichor images list` to print what had to be mirrored. The maintainer decided that no air-gapped
-environment needs to be supported. Features that exist only for it are cost without a user.
+Factory and `ichor images list` to print what had to be mirrored. Air-gapped
+environments are not a supported target. Features that exist only for it are cost without a user.
 
 ## Decision
 

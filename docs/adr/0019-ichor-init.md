@@ -16,7 +16,7 @@ ichor init --preset standard --cni cilium [--argocd --repo URL --path clusters/N
 This phase builds steps 1-5. Step 6 (hand-over) is excluded on purpose: it
 is a continuous reconciliation loop against Argo CD's own status (watch,
 poll, retry), not a one-shot action a CLI invocation can perform and then
-exit. It belongs to the controller, as a later unit's work.
+exit. It belongs to the controller.
 
 ## Decision: VIP recommended, insecure apply's assumption stated
 
@@ -36,8 +36,8 @@ means here, per architecture.md's "Trust" section.
 
 The design's original step 3 said `cluster.inlineManifests` carries "Ichor
 itself, the CNI (unless flannel), and, with `--argocd`, Argo CD plus a
-root Application." Building it showed that claim does not hold once you
-ask *why* each one needs to be there:
+root Application." That claim does not hold once you ask *why* each one
+needs to be there:
 
 - The CNI genuinely has to be inlined: a node is not Ready and nothing can
   be scheduled before a CNI exists, and nothing else can put one there
@@ -91,7 +91,7 @@ things that are ready for use once Argo CD exists some other way: the
 repository credentials Secret, and (with `--gitops-dir`) the root
 Application. `initArgoCD` prints this plainly before doing either --
 naming the Argo CD version range (v3.5.x+) this command's
-Application/sync-option shapes were verified against -- specifically so
+Application/sync-option shapes target -- specifically so
 an operator who ran `--argocd` does not assume it means Argo CD is
 running.
 
@@ -137,18 +137,18 @@ controller's namespace and the `TalosCluster`'s as two separate flags.
 Architecture.md's "Nodes" section names five roles: `system` (the install
 target), `ephemeral`, `storage`, `userVolume` and `unused`. At the time
 this phase started, only `system` had anywhere to go -- `machine.install`
--- so that is what shipped first: a required `--install-disk` flag,
+-- so it is a required `--install-disk` flag,
 folded into the same `Config`-kind patch as the inline manifests
 (`buildInlineManifestsPatch`), with real values for
 `machine.type`/`machine.certSANs` (the node's own role and address), not
 placeholders, since this document is authored directly rather than
 reconstructed from a diff.
 
-The other three roles became representable once another unit extended
-the mirror allow-list with `VolumeConfig`, `UserVolumeConfig` and
-`RawVolumeConfig` (and `pkg/render.DocumentFromPatch` was extended here,
-mechanically, to actually convert the three new `TalosConfigPatchDocument`
-kinds -- the allow-list alone did not make them renderable). `init` now
+The other three roles are representable because the mirror allow-list
+includes `VolumeConfig`, `UserVolumeConfig` and `RawVolumeConfig` (ADR 0012),
+and `pkg/render.DocumentFromPatch` converts the three new
+`TalosConfigPatchDocument` kinds -- the allow-list alone does not make them
+renderable. `init` now
 exposes one optional CEL-selector flag per role
 (`--ephemeral-disk-selector`, `--storage-disk-selector`,
 `--user-volume-disk-selector`, each paired with an optional `*-volume-name`
@@ -166,13 +166,11 @@ bootstrap patch:
   hardware.
 - **`ephemeral`'s name is fixed** (`constants.EphemeralPartitionLabel`,
   `"EPHEMERAL"`): Talos validates a system `VolumeConfig`'s name against
-  its own known set, confirmed by reading `volume_config.go`'s
-  `validateVolumeConstraints`, not assumed.
+  its own known set (`volume_config.go`'s `validateVolumeConstraints`).
 - **`storage`/`userVolume` need a size hint.** Talos's own
   `ProvisioningSpec.Validate` rejects a `RawVolumeConfig`/`UserVolumeConfig`
   with neither `minSize` nor `maxSize` set ("min size or max size is
-  required") -- confirmed by running it and reading the error, not by
-  memory. Each gets `minSize: "0"` (a real, non-empty size, not an unset
+  required"). Each gets `minSize: "0"` (a real, non-empty size, not an unset
   field -- `ByteSize.IsZero()` checks for a nil/absent value, and `"0"`
   parses to a present zero) and no `maxSize`, so it grows to fill its own
   disk.
@@ -185,27 +183,8 @@ bootstrap patch:
   discouraged shared one -- so there is nothing here that needs a
   negative value, and the shared-disk case is not built.
 - **No disk encryption flag.** `EncryptionKey.KeyStatic` was dropped from
-  the mirror type as secret material (same day, by the unit extending the
-  allow-list); the remaining key kinds (KMS, TPM, node ID) are each their
-  own integration, out of scope here.
-
-## Decision: a known, pre-existing test collision in a file this unit does not own
-
-Verifying this work (`make build test lint`) surfaced one `internal/controller`
-test failure: `discovery_test.go`'s `uuidRejected` and
-`taloscluster_controller_test.go`'s `uuidClusterReconcile` are both the
-literal `"70707070-7070-7070-7070-707070707070"`, written independently by
-different units sharing the same envtest API server within one Ginkgo
-run -- whichever spec runs first creates a `TalosMachine` with that name,
-and the other's own `Create` then fails with `AlreadyExists`. Confirmed
-reproducible (same failing spec across two runs with different random
-seeds, ruling out an ordering-dependent flake) and confirmed unrelated to
-this unit's own diff (neither file is touched by any commit in this ADR's
-history). `internal/controller` is out of this unit's scope to edit, so
-this is recorded here rather than fixed: `make test` is green for every
-package this ADR's work touches (`internal/cli`, `pkg/cni`, `pkg/gitops`,
-`pkg/render`, `internal/installmanifest`), and fails only on this one,
-pre-existing, out-of-scope collision.
+  the mirror type as secret material (ADR 0003); the remaining key kinds (KMS,
+  TPM, node ID) are each their own integration, not offered here.
 
 ## Consequences
 
@@ -229,9 +208,4 @@ pre-existing, out-of-scope collision.
   user volume gets what's left) is not built; architecture.md calls it
   "discouraged" for exactly the I/O-contention reason that makes it a
   reasonable thing to leave for whoever actually needs it.
-- `two UUID literals colliding across internal/controller/discovery_test.go
-  and taloscluster_controller_test.go` is a known, reported, unfixed bug
-  outside this unit's scope; whoever next touches either file should pick
-  a different literal for one of them.
-
 - `--discover-address` and `--discover-cidr` (repeatable) fill `spec.discovery` with the same IPv4 and /24-or-smaller limits the CRD enforces, so nodes booted into maintenance mode after init are found without a hand patch (ADR 0011); unset leaves discovery off.

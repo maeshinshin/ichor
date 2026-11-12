@@ -355,7 +355,9 @@ func (f *filler) fillJSON(v reflect.Value, depth int) {
 
 	f.n++
 
-	if v.Kind() != reflect.Pointer && v.CanAddr() && (hasMethod(v.Addr().Type(), "UnmarshalJSON") || v.Addr().Type().Implements(textUnmarshaler)) {
+	p := reflect.PointerTo(v.Type())
+	selfDecoding := hasMethod(p, "UnmarshalJSON") || p.Implements(textUnmarshaler)
+	if v.Kind() != reflect.Pointer && selfDecoding {
 		for _, s := range jsonSamples {
 			x := reflect.New(v.Type())
 			if json.Unmarshal([]byte(s), x.Interface()) != nil || x.Elem().IsZero() {

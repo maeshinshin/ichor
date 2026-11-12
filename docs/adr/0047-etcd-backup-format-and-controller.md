@@ -94,9 +94,9 @@ them belong with the chart's monitoring option.
 
 ## Deferred
 
-- Only S3; no GCS/Azure/local. Path-style vs virtual-host is minio-go's
-  auto-detection; no override field.
-- No deep verification (opening the bbolt file); a periodic restore test in
+- `shortcut:` only S3, no GCS/Azure/local; path-style vs virtual-host is minio-go's
+  auto-detection with no override field. Add a destination type when a user needs another store.
+- `shortcut:` no deep verification (opening the bbolt file); a periodic restore test in
   e2e is the real proof, per the design.
 - Snapshots are staged on local disk (one snapshot of space in the `emptyDir`); a
   streaming multipart upload would avoid that but cannot un-upload a bad snapshot.

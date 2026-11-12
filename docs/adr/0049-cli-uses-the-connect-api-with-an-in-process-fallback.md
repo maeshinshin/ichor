@@ -71,9 +71,9 @@ with unknown fields rejected; `uiapi.PatchToWire` is the one conversion.
 the latest token, the Go twin of `ui/src/lib/resumableStream.ts`; the same
 caveat about a few repeated or missed lines applies (ADR 0018). The API has
 no "snapshot" mode, so without `--follow` the command stops after
-`--idle-timeout` (3s) without a new line. A `follow` field on
-`StreamNodeLogsRequest` would replace the idle timer; it needs a `proto/`
-change and is not part of this ADR.
+`--idle-timeout` (3s) without a new line. `shortcut:` the idle timer
+stands in for a `follow` field on `StreamNodeLogsRequest`, which needs a `proto/`
+change; add the field when the API next changes.
 
 ## Not done
 

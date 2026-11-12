@@ -40,7 +40,8 @@ the target is not written twice. To make that failure rare, `CreateOperation` re
    create operations changes nothing.
 
 Left: the spec update succeeding and the real `Create` failing (a race with another operation, an apiserver
-error). The message says what was done; a retry finishes it.
+error). The message says what was done; a retry finishes it. A failed first attempt thus leaves the spec already
+naming the new version, and starting the command again creates a new operation without rewriting the spec.
 
 A tracked spec (ADR 0051) is refused with a message saying to merge the change in the repository and then start the
 operation with the version the spec now names, which is a start without a spec write. Opening a pull request for
@@ -65,9 +66,8 @@ pause and delete operations and edit the cluster spec, and the API server's audi
 (ADR 0062's rule). `AuditRecord.actor` is the user, or `ichor-cli` on the fallback. The ServiceAccount's ClusterRole
 gets `talosclusters update`, `talosoperations get/list/create/update/delete` and `ichorinstallations get/update`
 (markers, `make manifests-ichor-ui`, the chart template); with OIDC on they are not used for these calls, with
-OIDC off they are what "anyone who reaches the UI may do anything" (ADR 0058, point 4) means. The unit tests
-inject a client that refuses `Create`/`Update`/`Delete` as the caller and assert `PermissionDenied` and that nothing
-was written.
+OIDC off they are what "anyone who reaches the UI may do anything" (ADR 0058, point 4) means.  A write the caller's RBAC refuses returns `PermissionDenied` and
+nothing is written.
 
 ## Decision 5: confirmation and the plan
 
@@ -84,8 +84,8 @@ cluster name to be typed.
 Two shapes were weighed for the plan: computing it in the client from `ListMachines` (duplicates the controller's
 ordering in TypeScript and Go) or one server function. The ordering is one function, `upgrade.SortByOrder` in
 `pkg/upgrade`, called by the executor (rollouts and shutdown) and by the plan, so the order a person confirms is the
-order that runs. `TestPlanOperationOrderMatchesTheExecutorsCandidateOrder` holds the two together. The plan had first
-sorted a shutdown by name alone; the executor orders it by the same label, so the plan now does too.
+order that runs. A shutdown is sorted by the same label in the plan and
+in the executor.
 
 ## Decision 6: commands
 
@@ -93,8 +93,7 @@ sorted a shutdown by name alone; the executor orders it by the same label, so th
 NAME`, `ichor operation list|get|pause|resume|delete` (alias `op`). The version may be given without the leading
 `v`. `--cluster` (default: the only cluster in the namespace), `--max-unavailable`, `--follow` (poll until it ends;
 a pause caused by a failed machine is an error exit), `get --watch`. The start, pause, resume and delete commands
-are marked as writes for the version-skew check (ADR 0059, point 6). Scaffolded with `cobra-cli add` in a scratch
-module and moved (ADR 0014). `ichor upgrade ichor` also names a cluster: the operation backbone needs one for its
+are marked as writes for the version-skew check (ADR 0059, point 6).  `ichor upgrade ichor` also names a cluster: the operation backbone needs one for its
 lock, though the target is `IchorInstallation.spec.version`.
 
 ## Decision 7: the `ca-rotation` kind (ADR 0063)
@@ -128,7 +127,7 @@ the stage is shown, not a per-machine view inside a stage (`status.machines` alr
 `/operations` (list: kind, cluster, state, progress, pause/resume/delete) and `/operations/:namespace/:name` (the
 state of each machine, the failure reason with the statement that nothing retries and nothing is rolled back). The
 start buttons are on the cluster page. All wording is in `en`/`ja` (the type forces both). Pure logic is in
-`ui/src/lib/operations.ts` with tests.
+`ui/src/lib/operations.ts`.
 
 ## Not done
 
@@ -137,23 +136,9 @@ start buttons are on the cluster page. All wording is in `en`/`ja` (the type for
 - Override for these writes (ADR 0064).
 - A stream instead of polling; a per-machine log of what the executor is doing (the status has phase only).
 - Clearing a failed machine so the operation resumes (ADR 0026 left that open); the screens say to delete and
-  start again.
-- No end-to-end run against a cluster; the service is tested over a fake client and the CLI over both the
-  in-process and the httptest backends.
+  start again. `operation resume` on an operation paused after a failed machine is accepted but has no effect.
 
-## E2E observation (2026-10-26)
-
-All three commands were run through the CLI's in-process fallback (the UI was not deployed): `upgrade kubernetes`,
-`cni kube-proxy replaced`, `cluster shutdown`, with `--yes`, `--follow` and without. `operation get`, `operation
-delete` and `operation resume` also ran. See ADRs 0057, 0066 and 0067 for what each did.
-
-- The plan text and the `n` answer worked for all three; nothing was written on `n`.
-- `--follow` printed the status and exited with an error when the operation paused after a failure, as designed.
-- `operation resume` on an operation paused after a failed machine did nothing (it stayed `Paused` with the same
-  failure for ten minutes), which matches "delete and start again", but the command accepts it silently.
-- The spec-first order showed its cost: after a failed first attempt the spec already named the new version.
-  Starting the command again created a new operation without rewriting the spec, as described.
-- The UI screens and `operation list` / `get --watch` were not exercised.
+## Later changes
 
 - `--follow` / `--watch` (one shared helper, `retryTransient`) retry transient API errors (connection refused/reset, Unavailable, EOF, timeouts) with backoff for up to 10 minutes, printing `API unreachable, retrying`, and re-open a dead ichor-ui tunnel. NotFound, PermissionDenied and the like still end the command.
 - `PlanOperation` blocks a version target older than the current one (Talos, Kubernetes, Ichor), so `CreateOperation` never writes a downgrade into the spec before the executor refuses it.

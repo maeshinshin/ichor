@@ -86,12 +86,11 @@ without it is not established here.
 `core-install.yaml` does not create one, and the Application reports
 `InvalidSpecError` until the user does.
 
-**Tunnel protocol.** Some networks drop VXLAN (UDP 8472) between nodes,
-including the outer cluster Ichor's end-to-end harness runs on. With Cilium's
-default tunnel, pod-to-pod traffic between nodes then fails: cluster DNS times
-out and Argo CD's repo-server resolves nothing. `tunnelProtocol: geneve` fixes
-it, which is why the tunnel protocol is selectable (ADR 0098); the same value
-goes in both the bootstrap install and the Application.
+**Tunnel protocol.** Some networks drop VXLAN (UDP 8472) between nodes, so the
+tunnel protocol is selectable and geneve is available (ADR 0098). With Cilium's
+default tunnel on such a network, pod-to-pod traffic between nodes fails: cluster
+DNS times out and Argo CD's repo-server resolves nothing. The same
+`tunnelProtocol` value goes in both the bootstrap install and the Application.
 
 ## Argo CD alone versus Argo CD with Kokumi
 

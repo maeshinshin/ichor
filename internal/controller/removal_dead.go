@@ -71,7 +71,7 @@ func (r *TalosMachineReconciler) deadEtcdMember(
 	if !etcdMemberPresent(members, nodeName) {
 		// Gone from etcd already: either this removal took it out on an earlier round (it recorded
 		// that it was proceeding for a dead member), or the name does not match and nothing is known.
-		if c := apimeta.FindStatusCondition(m.Status.Conditions, conditionRemoval); c != nil && c.Reason == reasonDeadMemberRemoval {
+		if c := apimeta.FindStatusCondition(m.Status.Conditions, conditionRemoval); c != nil && wentOnForDeadMember(c.Reason) {
 			return "already removed from etcd by this removal", true
 		}
 
@@ -97,4 +97,12 @@ func (r *TalosMachineReconciler) deadEtcdMember(
 	}
 
 	return fmt.Sprintf("healthy (member %d sees leader %d)", st.MemberID, st.LeaderID), false
+}
+
+// wentOnForDeadMember reports whether reason, the Removal condition's, shows that an earlier round of this
+// removal passed the count check for a dead member and carried on: the later steps replace the reason
+// DeadMemberRemoval, and a round that resumes after the member left etcd must still know why it proceeds.
+// (A reset that Talos accepted is handled before the count check and needs no entry here.)
+func wentOnForDeadMember(reason string) bool {
+	return reason == reasonDeadMemberRemoval || reason == reasonResetFailed
 }

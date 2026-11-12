@@ -26,6 +26,14 @@ jobs:
       - name: Install Nix
         uses: ./.github/actions/nix
 
+      - name: Cache Go modules and builds
+        uses: ./.github/actions/go-cache
+        with:
+          name: chart
+
+      - name: Cache npm downloads
+        uses: ./.github/actions/npm-cache
+
       # Pinned version and checksum (the runner is linux/amd64); Renovate does not bump this, change both together.
       - name: Install kind
         env:

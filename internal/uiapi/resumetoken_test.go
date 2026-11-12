@@ -17,6 +17,7 @@ limitations under the License.
 package uiapi
 
 import (
+	"encoding/base64"
 	"testing"
 	"time"
 )
@@ -73,5 +74,23 @@ func TestDecodeResumeTokenTreatsEmptyAndGarbageAsFresh(t *testing.T) {
 
 	if got := decodeResumeToken("not-a-valid-token!!"); len(got) != 0 {
 		t.Fatalf("garbage token: got %v, want empty, not an error", got)
+	}
+}
+
+// Every shape a client can send must come back usable: advance writes to the map.
+func TestDecodeResumeTokenNeverReturnsAnUnusableToken(t *testing.T) {
+	for name, raw := range map[string]string{
+		"null": "null", "array": "[]", "number": "1", "string": `"x"`, "empty object": "{}",
+		"null checkpoint": `{"default/m1":null}`, "wrong checkpoint type": `{"default/m1":1}`,
+	} {
+		tok := decodeResumeToken(base64.RawURLEncoding.EncodeToString([]byte(raw)))
+		if tok == nil {
+			t.Fatalf("%s: got a nil token", name)
+		}
+
+		tok = tok.advance("default/m1", LogLine{Time: time.Unix(1, 0), Message: "a"})
+		if tok["default/m1"].Time.IsZero() {
+			t.Fatalf("%s: advance did not record the line", name)
+		}
 	}
 }

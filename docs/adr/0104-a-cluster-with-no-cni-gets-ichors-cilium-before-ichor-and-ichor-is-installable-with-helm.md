@@ -138,7 +138,7 @@ A controller or UI that needs the `IchorInstallation` object to exist must toler
 
 ## Consequences
 
-- ADR 0103's no-CNI row, test D5 and open question 3 are superseded; `talosCNI: none` stays valid for clusters whose own CNI is applied by hand.
+- ADR 0103's no-CNI row and open question 3 are superseded; `talosCNI: none` stays valid for clusters whose own CNI is applied by hand.
 - A new path writes to a cluster before any Ichor object exists: the adopt CLI installs Cilium with the operator's credential, announced in the plan and part of consent. It adds one node-visible change (Cilium becomes the cluster's CNI) but no machine-config change, and no write to a node.
 - Adopt now has two orders: Cilium-first for a no-CNI cluster, install-first otherwise. The shared code is `cilium.Bootstrap`.
 - `ichor init` and adopt can no longer hang silently on a missing pod network.

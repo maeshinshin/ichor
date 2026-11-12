@@ -20,4 +20,3 @@ The page from ADR 0039 was correct but bare: four fields, a JSON box per documen
 
 - New: `ui/src/components/PatchDocumentCard.tsx`, `ui/src/lib/patchDocs.ts` and its test. No preactcn component was added.
 - No API or proto change.
-- "No documents yet" for an existing patch was investigated: `GetPatch` returns the documents (covered by `internal/uiapi/patch_service_test.go`) and the page maps them; no defect in the load path was found in the repository.

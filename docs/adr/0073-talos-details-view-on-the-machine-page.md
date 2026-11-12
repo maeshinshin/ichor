@@ -29,5 +29,5 @@ The machine page showed hardware, disks, links and usage. Operators also need to
 ## Consequences
 
 - One more read per page view against each node (five short calls); there is no polling.
-- The `NodeTalosClient` interface grows five methods; fakes return canned sections, and the secret-shape tests cover the response and the mapping functions.
+- The `NodeTalosClient` interface grows five methods.
 - `ichor` CLI's in-process fallback answers `Unavailable` for this RPC, like `GetNode`.

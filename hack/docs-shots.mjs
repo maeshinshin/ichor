@@ -6,7 +6,7 @@
 //
 //   node hack/docs-shots.mjs <outDir> [distDir]     (make docs-check runs it after make docs-site)
 import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { extname, join, normalize } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -20,6 +20,39 @@ const root = (process.env.DOCS_BASE ?? '/ichor').replace(/\/*$/, '/')
 const base = root + 'next/' // the pages under test; dist is the merged tree of all versions (make docs-site-all)
 const fakeNewer = { on: false } // serve a versions.json that lists a newer release, to see the old-version banner
 mkdirSync(outDir, { recursive: true })
+
+// The pages the checks open, relative to base. Each is asserted on by its content (the search target, the links,
+// the phone drawer, the code and alert checks) or is a screenshot, so the routes are listed here once. A route that
+// is not in the built next tree stops the run before the browser starts; the diagram pages are found in the HTML.
+const at = {
+  home: '',
+  rotateKeys: 'guides/rotate-keys/',
+  gettingStarted: 'guides/getting-started/',
+  architecture: 'design/architecture/',
+  contributing: 'development/contributing-docs/',
+  concept: 'concepts/cni/',
+  cli: 'reference/cli/ichor_adopt/',
+  crd: 'reference/crds/taloscluster/',
+}
+const mdOf = (route) => (route ? route.replace(/\/$/, '') : 'index') + '.md'
+const built = [] // every route of dist/next, '' for the home page, else 'a/b/' for a directory with an index.html
+const walk = (dir, route) => {
+  if (existsSync(join(dir, 'index.html'))) built.push(route)
+  for (const e of readdirSync(dir, { withFileTypes: true })) if (e.isDirectory()) walk(join(dir, e.name), `${route}${e.name}/`)
+}
+if (!existsSync(join(dist, 'next'))) {
+  console.error(`docs-shots: no next version in ${dist}; run make docs-site-all (or docs-site) first`)
+  process.exit(1)
+}
+walk(join(dist, 'next'), '')
+const missing = Object.entries(at).filter(([, route]) => !built.includes(route))
+for (const [key, route] of missing) console.error(`docs-shots: no page at route "${route}" (at.${key} in hack/docs-shots.mjs): the page moved or was removed, so point at.${key} at its new route`)
+if (missing.length) process.exit(1)
+const diagrams = built.filter((route) => /<img\b[^>]*\.drawio\.svg/.test(readFileSync(join(dist, 'next', route, 'index.html'), 'utf8')))
+if (!diagrams.length) {
+  console.error(`docs-shots: no page of ${dist}/next embeds a .drawio.svg image`)
+  process.exit(1)
+}
 
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.wasm': 'application/wasm', '.md': 'text/markdown', '.txt': 'text/plain' }
 const server = createServer((req, res) => {
@@ -44,7 +77,6 @@ const chrome = spawn(
   ['--headless=new', '--no-sandbox', '--disable-gpu', '--blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4', `--remote-debugging-port=${port}`, '--user-data-dir=' + join(outDir, '.profile'), 'about:blank'],
   { stdio: 'ignore' },
 )
-const diagrams = [['architecture-home', ''], ['architecture', 'design/architecture/'], ['machine-lifecycle', 'concepts/clusters-and-machines/'], ['ca-rotation', 'concepts/ca-and-key-rotation/'], ['roles', 'concepts/security/']]
 let failed = 0
 const check = (ok, what) => {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${what}`)
@@ -146,7 +178,7 @@ try {
       await go(origin + base)
       await ev('localStorage.clear()')
 
-      await open('guides/rotate-keys/')
+      await open(at.rotateKeys)
       check((await ev(`document.documentElement.classList.contains('dark')`)) === (theme === 'dark'), `${tag}: follows the system theme`)
       check(await ev(`document.documentElement.scrollWidth <= window.innerWidth`), `${tag}: no sideways scroll`)
       await shot(`${tag}-page`)
@@ -154,17 +186,17 @@ try {
       // The theme icon is chosen by CSS from the `dark` class, so the first paint already shows the right one.
       const shownIcon = await ev(`(() => { const v = (n) => getComputedStyle(document.querySelector('header .lucide-' + n)).display !== 'none'; return v('sun') ? 'sun' : v('moon') ? 'moon' : '' })()`)
       check(shownIcon === (theme === 'dark' ? 'sun' : 'moon'), `${tag}: the theme toggle shows the ${theme === 'dark' ? 'sun' : 'moon'} icon (${shownIcon})`)
-      check(/lucide-sun[^"]*hidden dark:block/.test(await (await fetch(origin + base + 'guides/rotate-keys/')).text()), `${tag}: the icon swap is in the server-rendered HTML`)
+      check(/lucide-sun[^"]*hidden dark:block/.test(await (await fetch(origin + base + at.rotateKeys)).text()), `${tag}: the icon swap is in the server-rendered HTML`)
 
       // Copy page: the menu, the Markdown on the clipboard, the static .md and llms routes.
       const title = await ev(`document.querySelector('article h1').textContent`)
-      const md = await fetch(origin + base + 'guides/rotate-keys.md')
+      const md = await fetch(origin + base + mdOf(at.rotateKeys))
       const mdText = await md.text()
-      check(md.status === 200 && mdText.startsWith(`# ${title}`), `${tag}: guides/rotate-keys.md is served and starts with "# ${title}"`)
+      check(md.status === 200 && mdText.startsWith(`# ${title}`), `${tag}: ${mdOf(at.rotateKeys)} is served and starts with "# ${title}"`)
       const prose = mdText.replace(/^```[\s\S]*?^```/gm, '').replace(/`[^`]*`/g, '')
       check(!/\]\((?!https?:)[^#)]/.test(prose), `${tag}: the Markdown has no relative links`)
       for (const f of ['index.md', 'llms.txt', 'llms-full.txt']) check((await fetch(origin + base + f)).status === 200, `${tag}: ${f} returns 200`)
-      check((await (await fetch(origin + base + 'llms.txt')).text()).includes('/guides/rotate-keys.md)'), `${tag}: llms.txt links the page's .md`)
+      check((await (await fetch(origin + base + 'llms.txt')).text()).includes('/' + mdOf(at.rotateKeys) + ')'), `${tag}: llms.txt links the page's .md`)
       const item = (text) => `[...document.querySelectorAll('[data-slot=dropdown-menu-item]')].find((e) => e.textContent.includes(${JSON.stringify(text)}))`
       const more = `document.querySelector('button[aria-label="More page actions"]')`
       const menuOpen = () => until(`document.querySelectorAll('[data-slot=dropdown-menu-item]').length >= 3`, 'the Copy page menu', 3000)
@@ -180,11 +212,11 @@ try {
       check(copied.startsWith(`# ${title}`) && copied === mdText, `${tag}: Copy as Markdown puts the page's Markdown (starting "# ${title}") on the clipboard`)
       await mouse(more)
       await menuOpen()
-      check(await ev(`${item('View as Markdown')}?.getAttribute('href') === '${base}guides/rotate-keys.md'`), `${tag}: View as Markdown links to the .md`)
+      check(await ev(`${item('View as Markdown')}?.getAttribute('href') === '${base}${mdOf(at.rotateKeys)}'`), `${tag}: View as Markdown links to the .md`)
       check(!(await ev(`!!${item('Share')}`)), `${tag}: no Share item without the Web Share API`)
       await mouse(item('Copy link'))
       await sleep(300)
-      check((await clipboard()) === (process.env.DOCS_SITE ?? 'https://ichor.maesh.dev') + base + 'guides/rotate-keys/', `${tag}: Copy link copies the canonical URL`)
+      check((await clipboard()) === (process.env.DOCS_SITE ?? 'https://ichor.maesh.dev') + base + at.rotateKeys, `${tag}: Copy link copies the canonical URL`)
 
       // Heading links: hidden until hover or focus, copy the URL with the anchor and move the address bar.
       const anchor = `document.querySelector('article h2 a[data-heading-link]')`
@@ -206,7 +238,7 @@ try {
       await mouse(anchor)
       await sleep(400)
       check((await ev(`location.hash`)) === hash, `${tag}: clicking a heading link updates the address bar (${hash})`)
-      check((await clipboard()) === `${origin}${base}guides/rotate-keys/${hash}`, `${tag}: clicking a heading link copies the URL with ${hash}`)
+      check((await clipboard()) === `${origin}${base}${at.rotateKeys}${hash}`, `${tag}: clicking a heading link copies the URL with ${hash}`)
       await shot(`${tag}-heading-link`)
 
       // Search: the Pagefind index answers "rotate" with the key-rotation guide.
@@ -217,11 +249,11 @@ try {
       check((await ev(`document.querySelectorAll('[data-slot=command-item]').length`)) > 0, `${tag}: search for "rotate" has results`)
       await shot(`${tag}-search`)
       await key('Enter')
-      check(await until(`location.pathname.startsWith(${JSON.stringify(base)}) && !location.pathname.endsWith('/guides/rotate-keys/') || location.hash !== ''`, 'navigation from a result', 5000), `${tag}: Enter opens the result`)
+      check(await until(`location.pathname.startsWith(${JSON.stringify(base)}) && !location.pathname.endsWith('/${at.rotateKeys}') || location.hash !== ''`, 'navigation from a result', 5000), `${tag}: Enter opens the result`)
       await ready()
 
       // Relative links between Markdown files became site URLs that resolve.
-      await open('guides/getting-started/')
+      await open(at.gettingStarted)
       const links = await ev(`[...document.querySelectorAll('article a[href^="${base}"]')].map((a) => a.getAttribute('href').split('#')[0])`)
       const bad = []
       for (const l of [...new Set(links)]) if ((await fetch(origin + l)).status !== 200) bad.push(l)
@@ -247,28 +279,28 @@ try {
       const latest = vs.find((v) => v.isLatest)
       check(vs[0]?.name === 'next' && vs[0].isNext && vs.filter((v) => v.isLatest).length === 1, `${tag}: versions.json lists next and exactly one latest (${vs.map((v) => v.name)})`)
       check((await (await fetch(origin + root)).text()).includes(`url=${root}${latest.path}`), `${tag}: the site root redirects to ${latest.name}`)
-      check((await fetch(origin + root + 'latest/guides/getting-started/')).status === 200, `${tag}: latest/ has a redirect for each page`)
+      check((await fetch(origin + root + 'latest/' + at.gettingStarted)).status === 200, `${tag}: latest/ has a redirect for each page`)
       check((await fetch(origin + root + latest.path + 'pagefind/pagefind.js')).status === 200, `${tag}: ${latest.name} has its own search index`)
       const inMenu = (text) => `[...document.querySelectorAll('[data-slot=dropdown-menu-radio-item]')].find((e) => e.textContent.includes(${JSON.stringify(text)}))`
       const switcher = `[...document.querySelectorAll('button[aria-label="Documentation version"]')].find((b) => b.getClientRects().length)`
-      await open('guides/getting-started/')
+      await open(at.gettingStarted)
       check(await ev(`document.querySelector('article [role=alert]')?.textContent.includes('Unreleased (main)')`), `${tag}: next shows the "Unreleased (main)" banner`)
       await mouse(switcher)
       check(await until(`!!${inMenu('v')}`, 'the version menu', 3000), `${tag}: the version switcher opens`)
       check(await ev(`!!${inMenu('next (main)')} && !!${inMenu(`${latest.name} (latest)`)}`), `${tag}: the switcher lists next (main) and ${latest.name} (latest)`)
       await shot(`${tag}-version-switcher`)
       await mouse(inMenu(latest.name))
-      await until(`location.pathname === '${root}${latest.path}guides/getting-started/'`, 'the same page in the release', 5000)
-      check(await ev(`location.pathname`) === `${root}${latest.path}guides/getting-started/`, `${tag}: switching keeps the page path when it exists in ${latest.name}`)
+      await until(`location.pathname === '${root}${latest.path}${at.gettingStarted}'`, 'the same page in the release', 5000)
+      check(await ev(`location.pathname`) === `${root}${latest.path}${at.gettingStarted}`, `${tag}: switching keeps the page path when it exists in ${latest.name}`)
       await ready()
       check(!(await ev(`!!document.querySelector('article [role=alert]')`)), `${tag}: the newest release has no banner`)
-      await open('design/architecture/')
-      const there = (await fetch(origin + root + latest.path + 'design/architecture/', { method: 'HEAD' })).ok
+      await open(at.architecture)
+      const there = (await fetch(origin + root + latest.path + at.architecture, { method: 'HEAD' })).ok
       await mouse(switcher)
       await until(`!!${inMenu('v')}`, 'the version menu', 3000)
       await mouse(inMenu(latest.name))
       await until(`location.pathname.startsWith('${root}${latest.path}')`, 'the release', 5000)
-      check(await ev(`location.pathname`) === `${root}${latest.path}${there ? 'design/architecture/' : ''}`, `${tag}: switching to a page ${latest.name} lacks goes to its overview (page there: ${there})`)
+      check(await ev(`location.pathname`) === `${root}${latest.path}${there ? at.architecture : ''}`, `${tag}: switching to a page ${latest.name} lacks goes to its overview (page there: ${there})`)
       await ready()
       await key('k', 2)
       await until(`!!document.querySelector('[data-slot=command-input]')`, 'the search dialog', 3000)
@@ -279,13 +311,13 @@ try {
       check((await ev(`location.pathname`)).startsWith(`${root}${latest.path}`), `${tag}: search in ${latest.name} stays in that version`)
       await ready()
       fakeNewer.on = true // a release newer than this build exists: the old-version banner
-      await go(`${origin}${root}${latest.path}guides/getting-started/`)
+      await go(`${origin}${root}${latest.path}${at.gettingStarted}`)
       await ready()
       await until(`!!document.querySelector('article [role=alert]')`, 'the old-version banner', 3000)
       const banner = await ev(`document.querySelector('article [role=alert]')?.textContent`)
       check(banner?.includes(`You are viewing the docs for ${latest.name}`) && banner.includes('The latest is v9.9.9'), `${tag}: an old version warns "${banner}"`)
       await shot(`${tag}-old-version-banner`)
-      await open('guides/getting-started/')
+      await open(at.gettingStarted)
       await until(`document.querySelector('article [role=alert]')?.textContent.includes('v9.9.9')`, 'the latest release in the next banner', 3000)
       check(await ev(`document.querySelector('article [role=alert]')?.textContent.includes('The latest release is v9.9.9')`), `${tag}: next's banner names the latest release`)
       fakeNewer.on = false
@@ -298,25 +330,25 @@ try {
         await sleep(500)
         check((await w()) > before, `${tag}: content widens when the sidebar is hidden`)
         await shot(`${tag}-sidebar-hidden`)
-        await open('guides/rotate-keys/')
+        await open(at.rotateKeys)
         await until(`document.querySelector('[data-slot=sidebar]')?.dataset.state === 'collapsed'`, 'the remembered sidebar state')
         check(await ev(`document.querySelector('[data-slot=sidebar]')?.dataset.state === 'collapsed'`), `${tag}: hidden sidebar is remembered`)
         await key('b', 2)
         await until(`document.querySelector('[data-slot=sidebar]')?.dataset.state === 'expanded'`, 'Ctrl-B', 3000)
         check(await ev(`document.querySelector('[data-slot=sidebar]')?.dataset.state === 'expanded'`), `${tag}: Ctrl-B shows the sidebar again`)
         // Code blocks get a copy button and GitHub alerts render as the preactcn Alert.
-        await open('development/contributing-docs/')
+        await open(at.contributing)
         await until(`!!document.querySelector('article pre + div [aria-label="Copy code"]')`, 'the copy button', 3000)
         check(await ev(`!!document.querySelector('article pre + div [aria-label="Copy code"]')`), `${tag}: code blocks have a copy button`)
         check(await ev(`!!document.querySelector('article [data-slot=alert]')`), `${tag}: a GitHub alert renders as an Alert`)
         await shot(`${tag}-contributing`)
-        for (const [name, path] of [['home', ''], ['concept', 'concepts/cni/'], ['cli', 'reference/cli/ichor_adopt/'], ['crd', 'reference/crds/taloscluster/']]) {
-          await open(path)
+        for (const name of ['home', 'concept', 'cli', 'crd']) {
+          await open(at[name])
           await shot(`${tag}-${name}`)
         }
       } else {
         // Phone: the sidebar is a drawer, "On this page" a collapsible above the article.
-        await open('design/architecture/')
+        await open(at.architecture)
         await click('[data-slot=sidebar-trigger]')
         check(await until(`!!document.querySelector('[data-mobile=true]')`, 'the drawer'), `${tag}: the menu button opens the drawer`)
         await shot(`${tag}-drawer`)
@@ -329,8 +361,9 @@ try {
 
       // Diagrams (docs/images/*.drawio.svg): the page names the light image, the site adds the dark one and shows the
       // one for the theme. Both must load, only one may be visible, and the page must not scroll sideways.
-      for (const [name, path] of diagrams) {
-        await open(path)
+      for (const route of diagrams) {
+        const name = route.replace(/\/$/, '').replaceAll('/', '-') || 'home'
+        await open(route)
         const imgs = `[...document.querySelectorAll('article img[src*=".drawio.svg"]')]`
         const shown = `${imgs}.filter((i) => i.getClientRects().length)`
         await until(`${imgs}.length === 2 && ${imgs}.every((i) => i.complete)`, `the ${name} images`, 5000)

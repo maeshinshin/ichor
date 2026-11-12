@@ -63,6 +63,10 @@ type TalosConfigPatchCustomValidator struct {
 
 // ValidateCreate implements admission.Validator.
 func (v *TalosConfigPatchCustomValidator) ValidateCreate(ctx context.Context, obj *ichorv1alpha1.TalosConfigPatch) (admission.Warnings, error) {
+	if err := refuseCredentials(nil, obj.Spec.Documents, "spec.documents"); err != nil {
+		return nil, err
+	}
+
 	return v.validate(ctx, obj)
 }
 
@@ -75,6 +79,10 @@ func (v *TalosConfigPatchCustomValidator) validate(ctx context.Context, p *ichor
 func (v *TalosConfigPatchCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosConfigPatch) (admission.Warnings, error) {
 	if !newObj.DeletionTimestamp.IsZero() {
 		return nil, nil // a finalizer removal must not be refused
+	}
+
+	if err := refuseCredentials(oldObj.Spec.Documents, newObj.Spec.Documents, "spec.documents"); err != nil {
+		return nil, err
 	}
 
 	// The Talos API access rule is for what the update writes: a patch stored before it existed

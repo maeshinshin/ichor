@@ -89,6 +89,8 @@ Published at <https://ichor.maesh.dev/>; in the repository:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+Ichor is developed with [Claude Code](https://www.claude.com/product/claude-code).
+
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

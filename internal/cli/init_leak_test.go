@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 
@@ -49,6 +50,18 @@ func bundleMaterialFromHome(t *testing.T) []string {
 	}
 
 	return bundleSecretMaterial(bundle)
+}
+
+// onRead calls f when the prompt first reads its answer.
+type onRead struct {
+	io.Reader
+	f func()
+}
+
+func (r onRead) Read(p []byte) (int, error) {
+	r.f()
+
+	return r.Reader.Read(p)
 }
 
 // TestInitNeverLeaksSecrets forces nine routes through runInit --
@@ -130,9 +143,15 @@ func TestInitNeverLeaksSecrets(t *testing.T) {
 		assertNoLeak(t, nil, stdout, stderr, err)
 	})
 
+	// A run that fails before the node is sent anything removes its bundle file, so these two read the
+	// bundle at the moment of the failure.
 	t.Run("maintenance dial failed", func(t *testing.T) {
+		var material []string
+
 		stdout, stderr, err := run(t, nil, func(d *initDeps) {
 			d.DialMaintenance = func(context.Context, string) (maintenanceApplier, error) {
+				material = bundleMaterialFromHome(t)
+
 				return nil, errors.New("connection refused")
 			}
 		})
@@ -141,7 +160,7 @@ func TestInitNeverLeaksSecrets(t *testing.T) {
 			t.Fatal("expected an error, got nil")
 		}
 
-		assertNoLeak(t, bundleMaterialFromHome(t), stdout, stderr, err)
+		assertNoLeak(t, material, stdout, stderr, err)
 	})
 
 	t.Run("insecure apply failed", func(t *testing.T) {
@@ -202,16 +221,18 @@ func TestInitNeverLeaksSecrets(t *testing.T) {
 	})
 
 	t.Run("confirmation declined", func(t *testing.T) {
+		var material []string
+
 		stdout, stderr, err := run(t, nil, func(d *initDeps) {
 			d.AssumeYes = false
-			d.Stdin = strings.NewReader("n\n")
+			d.Stdin = onRead{strings.NewReader("n\n"), func() { material = bundleMaterialFromHome(t) }}
 		})
 
 		if err == nil {
 			t.Fatal("expected an error, got nil")
 		}
 
-		assertNoLeak(t, bundleMaterialFromHome(t), stdout, stderr, err)
+		assertNoLeak(t, material, stdout, stderr, err)
 	})
 
 	t.Run("successful run (yaml output)", func(t *testing.T) {

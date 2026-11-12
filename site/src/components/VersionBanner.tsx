@@ -28,7 +28,7 @@ export function VersionBanner({ version, root }: { version: string; root: string
       </Alert>
     )
   }
-  if (!latest || latest.name === version) return null
+  if (!latest || latest.name === version || latest.patches?.[0]?.name === version) return null // the newest patch of the latest line is current
   return (
     <Alert>
       <Info />

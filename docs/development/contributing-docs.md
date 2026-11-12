@@ -29,10 +29,9 @@ Each minor release line has one copy, `/vX.Y/`, built from the branch
 `release-X.Y`, or from the newest tag `vX.Y.*` while that branch does not exist.
 A docs fix for a released line goes to `release-X.Y` (cherry-pick it from main,
 or open the PR against that branch); the site republishes on the push, so no
-patch tag is needed for docs. `/vX.Y.Z/` links of earlier releases redirect to
-the same page under `/vX.Y/`, and `/latest/` and the site root lead to the
-newest line. The version menu in the header lists the lines, with the patch
-release each one documents, from `versions.json`, which the workflow writes.
+patch tag is needed for docs. Each tag also has a frozen copy, `/vX.Y.Z/`, built
+from that tag (a tag whose docs do not build redirects to `/vX.Y/`), and `/latest/` and the site root lead to the
+newest line. The version menu in the header lists the lines and, under the minor being read, its patches, from `versions.json`, which the workflow writes.
 
 A page that tells the reader which release to install writes it as `{{version}}`
 (no leading `v`), which the build replaces with the patch release that copy

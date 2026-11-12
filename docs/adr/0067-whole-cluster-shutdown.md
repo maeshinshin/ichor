@@ -10,7 +10,7 @@ controller re-checks an unreachable node every 30 seconds (ADR 0060) and does no
 is missing is stopping, in an order that does no harm, and keeping Ichor itself from "repairing" the cluster while it is
 being stopped or started.
 
-Facts checked in Talos v1.14.3 (`internal/app/machined/...`):
+Facts from the Talos v1.14.3 source (`internal/app/machined/...`):
 
 - `Server.Shutdown` (`v1alpha1_server.go`) starts `SequenceShutdown` in a goroutine and returns at once: the RPC
   acknowledges the request, not the stop.
@@ -63,7 +63,8 @@ spec: {clusterRef: {name: <cluster>}, kind: shutdown}
    schedulable (a small cluster) their pods are killed by Talos stopping them, which is the point of a shutdown. No
    leader-last order: a sequence with quorum lost half way needs a controller alive after the API is gone, and a
    shutdown stops etcd cleanly on every member anyway (nothing to transfer). Quorum is lost in this stage and only in
-   it.
+   it. The order in which Talos finishes stopping is not the order the requests were sent in, so the
+   controller's own node, asked last, need not be the last to stop.
 
 A machine that does not answer when first looked at is recorded and not asked (it is already down). Upgrade holds are
 ignored: they exclude a machine from a rollout, not from stopping the cluster. Only approved machines are stopped.
@@ -81,8 +82,9 @@ The mark is derived, not stored: a `TalosOperation` of kind `shutdown` on the cl
 controller's (reboot-needing change, removal, including the removal that completes a 3-4-3 replacement) and the
 operation controller's (every upgrade kind) -- calls it before anything else and returns a `shuttingDownError`. The
 callers report `ClusterShuttingDown` (a machine's `Ready` or `Removal` condition; an upgrade operation goes `Paused`
-and retries every 30 seconds, so it resumes by itself when the mark goes). `TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite`
-still holds.
+and retries every 30 seconds, so it resumes by itself when the mark goes). 
+
+The operation-in-flight check of ADR 0068 also refuses to start another operation while a shutdown is not finished.
 
 Derived because nothing can leave it stale and deleting the operation is the escape hatch for a shutdown that cannot
 finish (a machine that never comes back). A shutdown is blocked only by another shutdown that has already recorded a
@@ -112,38 +114,21 @@ cluster is off; the next successful snapshot after power-on clears it, so it was
 - Not covered: a node reported unreachable by a network fault is treated as stopped and not asked; a worker whose
   drain is stuck behind a PodDisruptionBudget keeps stage 1 waiting (Talos's own drain timeout applies; delete the
   operation to give up).
-- Not tested here, deliberately: real machines (no real node or `kubectl` is touched by the tests).
+- A cluster whose nodes get new addresses on power-on cannot be brought back by a shutdown: every address recorded
+  in a shut-down cluster (etcd peer URLs, the cluster endpoint, the machine endpoints, the certificate SANs) is the
+  old address, so a multi-member etcd cannot re-form quorum after a power cycle on such a network. Shutdown and
+  power-on need node addresses that survive a stop and start.
+
 
 - `ichor cluster shutdown` and the UI button landed in ADR 0068.
 
-## E2E observation (2026-10-26, through `ichor cluster shutdown`)
+## Amendment (the drain, Talos v1.14.3)
 
-- Confirmation text: "SHUT DOWN cluster ... Every machine is POWERED OFF and stays off until you start it again ...
-  workers first, drained and stopped together, then the control planes at once: 1. worker  2. cp, cp, cp".
-- Started 19:09:20. The worker's node ended at 19:09:37 (about 17 s), the Kubernetes API was gone at about 19:10:11,
-  control planes `ha-0` and `ha-2` stopped by 19:10:50 and `ha-1` by 19:11:24. So the worker went first and the
-  control planes after it. **The controller's own node (`ha-0`) was not the last to stop**; the order in which Talos
-  finishes stopping is not the order the requests were sent in, and the operation's status could not be read
-  afterwards (etcd was off), so what the order of the requests was was not observed.
-- Starting an upgrade while the shutdown was `InProgress` was refused by `ichor upgrade kubernetes 1.37.1`:
-  `failed_precondition: operation "shutdown-qdr77" (shutdown) on this cluster is not finished (phase "InProgress")`
-  (the operation-in-flight check of ADR 0068, not the `ClusterShuttingDown` pause of `acquireDisruptiveLock`).
-- **Power-on did not complete, and this harness cannot test it as it is.** Starting the nodes again created new
-  launcher pods with different pod IPs (`10.244.1.44/.96/.90/.197` became `10.244.1.250`, `10.244.0.54`,
-  `10.244.1.144`, `10.244.2.150`). Every address in the cluster (etcd peer URLs, the cluster endpoint, the
-  TalosMachine endpoints, the certificate SANs) is the old pod IP, so a three-member etcd cannot form quorum after
-  a power cycle on this network. In addition no Talos port (50000, 6443, 10250) answered on the new addresses for
-  more than 20 minutes after the start, and I had no console to see why. "The operation becomes `Completed` by
-  itself" was therefore **not observed**. A test needs node addresses that survive a stop and start (a secondary
-  interface with static addresses, which the outer cluster does not have, or a single-node cluster).
-
-## Amendment (drain assumption re-checked, Talos v1.14.3)
-
-`Shutdown(force=false)` draining is confirmed in the source: `Sequencer.Shutdown`
+`Shutdown(force=false)` drains: `Sequencer.Shutdown`
 (`internal/app/machined/pkg/runtime/v1alpha1/v1alpha1_sequencer.go:363-381`) appends `CordonAndDrainNode` when the
 request is not forced and node registration is not skipped, and the shutting-down stage cordons the node
-(`controllers/k8s/node_cordoned_spec.go:73-76`). Nothing was changed here. The assumption that `Reboot` drains the same
-way, which ADR 0080 had also made, was wrong and is fixed there: Ichor drains before its own reboots.
+(`controllers/k8s/node_cordoned_spec.go:73-76`).  `Reboot` does not drain the same
+way (ADR 0080 fixes that assumption): Ichor drains before its own reboots.
 
 - Addendum (ADR 0086): the wait for a machine to return dials `DialEndpoint()`, so a node that came back at a new address is seen once the address is recorded in status.
 

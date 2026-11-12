@@ -69,7 +69,7 @@ No new mechanism. The annotation `ichor.maesh.dev/credentials-handoff` is not ve
 
 ## Consequences
 
-- A `kubectl patch` of invalid `spec.cni.cilium.values` is refused at admission with the same messages as the UI. The `bpf.masquerade` / hostDNS refusal is still the UI's and the CLI's alone until the controller re-checks before the Job. Hardware verification is needed for it only in so far as the UI's own refusal is unchanged.
+- A `kubectl patch` of invalid `spec.cni.cilium.values` is refused at admission with the same messages as the UI. The `bpf.masquerade` / hostDNS refusal is still the UI's and the CLI's alone until the controller re-checks before the Job.
 - A new `ValidatingWebhookConfiguration` entry `vichoruser-v1alpha1.kb.io` in `config/webhook/manifests.yaml` and `dist/chart/templates/webhook/validating-webhook-configuration.yaml`. With `failurePolicy: Fail`, a down manager refuses `IchorUser` writes within 5 s, as it does for the other kinds; the override certificate can remove the configuration.
 - An Ichor user who holds `ichorusers` update rights through a custom RoleBinding can no longer grant more than they hold with `kubectl` either.
 - Uninstall: deleting the namespace works (system identities are exempt); `kubectl delete ichoruser` of the last admin by a non-system identity is refused, and the override certificate does it.
@@ -95,7 +95,7 @@ The grant rule in decision 2 (and ADR 0108) was a literal match on the requester
 
 ## Amendment 2026-11-05: reverting a refused or failed edit clears the condition
 
-Found on hardware (lane H): after an edit was refused (`InvalidValues`) or its Job failed (`JobFailed`), reverting the values to exactly the applied ones left `CNIValuesApplied` False and `status.cni.jobFailures` set for good, because the reconcile returned at "the applied hash equals the wanted hash" before it wrote anything. That path now sets `CNIValuesApplied` True with reason `Applied` (the success path's reason and message) and clears `jobFailures` and `jobFailuresHash`, and writes status only when one of them changes. No Job runs, the lock is not taken and `spec` is not touched.
+After an edit was refused (`InvalidValues`) or its Job failed (`JobFailed`), reverting the values to exactly the applied ones left `CNIValuesApplied` False and `status.cni.jobFailures` set for good, because the reconcile returned at "the applied hash equals the wanted hash" before it wrote anything. That path now sets `CNIValuesApplied` True with reason `Applied` (the success path's reason and message) and clears `jobFailures` and `jobFailuresHash`, and writes status only when one of them changes. No Job runs, the lock is not taken and `spec` is not touched.
 
 ## Amendment 2026-11-05: changing the Cilium values is an admin's right (ADR 0131)
 

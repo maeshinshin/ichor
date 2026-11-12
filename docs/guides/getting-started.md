@@ -49,11 +49,14 @@ Check the archive against the checksums:
 grep " ichor_${VERSION}_${OS}_${ARCH}.tar.gz\$" "ichor_${VERSION}_checksums.txt" | sha256sum -c -
 ```
 
-Unpack it and put `ichor` on your `PATH`:
+Unpack all of it, into a directory of its own, and put `ichor` on your `PATH`.
+The archive also holds LICENSE, NOTICE, THIRD-PARTY-NOTICES, README.md and
+CHANGELOG.md, so they end up beside the binary:
 
 ```sh
-tar -xzf "ichor_${VERSION}_${OS}_${ARCH}.tar.gz" ichor
-install -m 0755 ichor ~/.local/bin/ichor
+mkdir -p "ichor-${VERSION}"
+tar -xzf "ichor_${VERSION}_${OS}_${ARCH}.tar.gz" -C "ichor-${VERSION}"
+install -m 0755 "ichor-${VERSION}/ichor" ~/.local/bin/ichor
 ```
 
 Check that it runs:

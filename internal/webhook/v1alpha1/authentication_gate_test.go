@@ -17,9 +17,12 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"strings"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	authzv1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -44,6 +47,22 @@ func bindRole(name, user string, rules ...rbacv1.PolicyRule) {
 		RoleRef:  rbacv1.RoleRef{APIGroup: rbacv1.GroupName, Kind: kindClusterRole, Name: name},
 		Subjects: []rbacv1.Subject{{APIGroup: rbacv1.GroupName, Kind: kindUser, Name: user}},
 	}))).To(Succeed())
+
+	// The apiserver's RBAC authorizer learns of a new binding a moment after the create returns, and a
+	// call made as the user sooner is refused as forbidden. Wait until the user holds the role's last rule.
+	last := rules[len(rules)-1]
+	resource, subresource, _ := strings.Cut(last.Resources[0], "/")
+
+	Eventually(func(g Gomega) {
+		sar := &authzv1.SubjectAccessReview{Spec: authzv1.SubjectAccessReviewSpec{
+			User: user,
+			ResourceAttributes: &authzv1.ResourceAttributes{
+				Group: last.APIGroups[0], Resource: resource, Subresource: subresource, Verb: last.Verbs[0],
+			},
+		}}
+		g.Expect(k8sClient.Create(ctx, sar)).To(Succeed())
+		g.Expect(sar.Status.Allowed).To(BeTrue())
+	}).Should(Succeed())
 }
 
 // Changing spec.authentication needs update on talosclusters/authentication,

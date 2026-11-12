@@ -1,6 +1,6 @@
 # 0142. The docs site publishes one copy per minor release line
 
-Status: Accepted · Date: 2026-11-11 · Design section: Documentation
+Status: Accepted, in part superseded by ADR 0147 (the redirect pages and the version menu) · Date: 2026-11-11 · Design section: Documentation
 
 Decided: the docs site has `/vX.Y/` per minor line instead of `/vX.Y.Z/` per tag. It is built from the branch `release-X.Y` when that exists, else from the newest tag `vX.Y.*`. `/next/` stays main, and `/latest/` and the site root lead to the newest line. Every published tag path `/vX.Y.Z/<page>/` redirects to `/vX.Y/<page>/`. The version menu lists lines with the patch they document (`v0.1 (v0.1.1)`); `versions.json` gains a `patch` field.
 

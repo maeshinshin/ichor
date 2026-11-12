@@ -123,6 +123,9 @@ const toc = headings.filter((h) => h.depth === 2 || h.depth === 3)
         </article>
         <aside>{toc.length > 0 && <TocAside client:idle headings={toc} />}</aside>
       </div>
+      <footer class="mx-auto w-full max-w-6xl border-t p-4 text-sm text-muted-foreground md:px-8" data-pagefind-ignore>
+        Ichor is licensed under the Apache License 2.0. The generated CRD reference pages contain content derived from Talos (Sidero Labs, Inc.), which is licensed under the Mozilla Public License 2.0; the source of those pages is at <a class="underline" href={repoUrl}>{repoUrl.replace('https://', '')}</a>, at the Git tag that matches this version of the docs (main, for next). <a class="underline" href={`${root}NOTICE.txt`}>NOTICE</a>, <a class="underline" href={`${root}LICENSE.txt`}>LICENSE</a>, <a class="underline" href={`${root}THIRD-PARTY-NOTICES.txt`}>THIRD-PARTY-NOTICES</a>.
+      </footer>
     </DocsShell>
   </body>
 </html>

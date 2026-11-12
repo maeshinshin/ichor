@@ -8,6 +8,7 @@
 //   <out>/latest/...    redirects to the newest minor (or to next when there is none)
 //   <out>/index.html    redirect to latest; llms.txt and llms-full.txt of latest at the root
 //   <out>/versions.json the list the version switcher fetches at runtime
+//   <out>/NOTICE.txt, LICENSE.txt, THIRD-PARTY-NOTICES.txt   the repository's notice files, which every page footer links to
 //
 // A line's docs/ is exported with `git archive` of that ref into a temporary directory and read through DOCS_REPO, so
 // links out of docs/ are checked against that ref too. The ref's own site/ (older tags have none) is not
@@ -75,6 +76,9 @@ writeFileSync(
   join(out, 'versions.json'),
   JSON.stringify([{ name: 'next', path: 'next/', isLatest: false, isNext: true }, ...releases.map((l) => ({ name: l.name, path: `${l.name}/`, patch: l.patch, patches: l.patches, isLatest: l.name === latest, isNext: false }))], null, 2) + '\n',
 )
+
+// The licence notices travel with the site: the footer of every page links to these, from main's tree (the build's own).
+for (const f of ['NOTICE', 'LICENSE', 'THIRD-PARTY-NOTICES']) copyFileSync(join('..', f), join(out, `${f}.txt`)) // .txt, so a browser shows it as text
 
 const redirect = (to) =>
   `<!doctype html><html lang="en"><meta charset="utf-8"><title>Redirecting</title><link rel="canonical" href="${to}"><meta http-equiv="refresh" content="0; url=${to}"><script>location.replace(${JSON.stringify(to)} + location.hash)</script><a href="${to}">${to}</a></html>\n`

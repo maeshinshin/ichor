@@ -2,7 +2,9 @@ package main
 
 import (
 	"go/types"
+	"path"
 	"reflect"
+	"slices"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
@@ -169,44 +171,65 @@ func qualifiedName(n *types.Named) string {
 	return pkg.Path() + "." + n.Obj().Name()
 }
 
+// importsUsed is every machinery package machImportAlias handed out an alias for, alias to path: the import
+// block of zz_generated.conversion.go. An alias is either the one written in the switch (a name that other
+// code and the hand-written helpers already use) or "m" ("r" under resources/) plus the package's last path element.
+var importsUsed = map[string]string{}
+
 // machImportAlias returns the import alias this generator uses for a
 // machinery package path, for qualifying generated type expressions.
 func machImportAlias(pkgPath string) string {
+	alias := ""
+
 	switch pkgPath {
 	case pkgRuntime:
-		return "mruntime"
+		alias = "mruntime"
 	case pkgV1Alpha1:
-		return "mv1alpha1"
+		alias = "mv1alpha1"
 	case pkgMeta:
-		return "mmeta"
+		alias = "mmeta"
 	case "github.com/siderolabs/crypto/x509":
-		return "mx509"
+		alias = "mx509"
 	case "time":
 		return "time"
+	case "net/netip":
+		alias = "netip"
 	case pkgCoreV1:
-		return "corev1"
+		alias = "corev1"
 	case pkgSpecs:
-		return "specs"
+		alias = "specs"
 	case pkgAuditV1:
-		return "auditv1"
+		alias = "auditv1"
 	case pkgAPIServerV1:
-		return "apiserverv1"
+		alias = "apiserverv1"
 	case pkgKubeletV1:
-		return "kubeletv1"
+		alias = "kubeletv1"
 	case pkgBlock:
-		return "mblock"
+		alias = "mblock"
 	case pkgNethelpers:
-		return "mnethelpers"
+		alias = "mnethelpers"
 	case pkgNetwork:
-		return "mnetwork"
+		alias = "mnetwork"
 	case pkgResourcesBlock:
-		return "rblock"
+		alias = "rblock"
 	case pkgCel:
-		return "mcel"
+		alias = "mcel"
 	default:
-		fatalf("package %s has no registered import alias; add one in walk.go", pkgPath)
-		return ""
+		// Talos's resources tree repeats the names of its config/types tree (block, storage), so the two
+		// trees take different prefixes.
+		alias = "m" + path.Base(pkgPath)
+		if strings.Contains(pkgPath, "/machinery/resources/") {
+			alias = "r" + path.Base(pkgPath)
+		}
 	}
+
+	if other, ok := importsUsed[alias]; ok && other != pkgPath {
+		fatalf("import alias %s is taken by %s and wanted by %s; add a case for one of them in walk.go", alias, other, pkgPath)
+	}
+
+	importsUsed[alias] = pkgPath
+
+	return alias
 }
 
 func (g *generator) qualify(n *types.Named) string {
@@ -368,9 +391,9 @@ func (g *generator) overrideMapping(fieldKey string, ov fieldOverride) *typeMapp
 
 	_, isMap := named.Underlying().(*types.Map)
 
-	mirrorExpr := g.qualify(named)
-	if ov.localWrapper != "" {
-		mirrorExpr = ov.localWrapper
+	mirrorExpr := ov.localWrapper
+	if mirrorExpr == "" {
+		mirrorExpr = g.qualify(named)
 	}
 
 	return &typeMapping{
@@ -407,6 +430,17 @@ func (g *generator) structMapping(named *types.Named, st *types.Struct) *typeMap
 	g.structs[named] = def // register before recursing, in case of cycles
 	g.order = append(g.order, def)
 
+	g.addFields(def, named, st)
+
+	return &typeMapping{kind: kStruct, structDef: def}
+}
+
+// addFields appends the fields of st, a struct declared as named, to def. A struct embedded with
+// `yaml:",inline"` has its fields written at the top level of the embedding document, so they are
+// flattened into def (the CRD then has the shape of the Talos document) and promoted back on conversion:
+// the generated code names them as out.LinkUp, which Go resolves through the embedded value. Each field
+// is looked up in secretFields, fieldOverrides and sparseFields under the struct that declares it.
+func (g *generator) addFields(def *structDef, named *types.Named, st *types.Struct) {
 	for i := range st.NumFields() {
 		fld := st.Field(i)
 		tag := st.Tag(i)
@@ -416,7 +450,23 @@ func (g *generator) structMapping(named *types.Named, st *types.Struct) *typeMap
 				continue // document identity; the root's constructor sets it instead
 			}
 
-			fatalf("unexpected anonymous field %s in %s; extend generator", fld.Type(), name)
+			if !yamlInline(tag) {
+				fatalf("anonymous field %s in %s is not inlined (no yaml inline option); extend generator", fld.Type(), def.name)
+			}
+
+			emb, _ := fld.Type().(*types.Named) // a pointer embed is nil until set, so conversion could not promote through it
+			if emb == nil {
+				fatalf("inlined field %s in %s is not a struct value; extend generator", fld.Type(), def.name)
+			}
+
+			est, ok := emb.Underlying().(*types.Struct)
+			if !ok {
+				fatalf("inlined field %s in %s is not a struct; extend generator", fld.Type(), def.name)
+			}
+
+			g.addFields(def, emb, est)
+
+			continue
 		}
 
 		yamlName, omitempty, skip := parseYAMLTag(tag, fld.Name())
@@ -424,12 +474,16 @@ func (g *generator) structMapping(named *types.Named, st *types.Struct) *typeMap
 			continue
 		}
 
+		if !fld.Exported() {
+			fatalf("%s has the unexported field %s, so it has no structural representation; add its type to substTable in main.go", named.Obj().Name(), fld.Name())
+		}
+
 		// Keyed on named.Obj().Name() -- the real machinery type name --
-		// not the possibly-renamed mirror name in "name": secretFields and
+		// not the possibly-renamed mirror name in "def.name": secretFields and
 		// fieldOverrides are both written against machinery's own type
 		// names (that's what a contributor reads when deciding whether a
 		// field needs a row), and typeRenames exists precisely because a
-		// mirror name can differ from it. Keying on "name" here silently
+		// mirror name can differ from it. Keying on the mirror name silently
 		// stops matching the moment a type gets renamed -- which is
 		// exactly what happened to block.EncryptionKey.KeyStatic (renamed
 		// to VolumeEncryptionKey) until this was fixed.
@@ -437,7 +491,7 @@ func (g *generator) structMapping(named *types.Named, st *types.Struct) *typeMap
 
 		if why, ok := secretFields[fieldKey]; ok {
 			g.droppedSecret = append(g.droppedSecret, droppedSecretField{
-				Struct: name, Field: fld.Name(), YAML: yamlName, Why: why,
+				Struct: def.name, Field: fld.Name(), YAML: yamlName, Why: why,
 				Scalar: isScalarType(fld.Type()),
 			})
 
@@ -452,9 +506,15 @@ func (g *generator) structMapping(named *types.Named, st *types.Struct) *typeMap
 		}
 
 		if mapping.kind == kDropped {
-			g.dropped = append(g.dropped, droppedField{Struct: name, Field: fld.Name(), YAML: yamlName})
+			g.dropped = append(g.dropped, droppedField{Struct: def.name, Field: fld.Name(), YAML: yamlName})
 
 			continue
+		}
+
+		for _, f := range def.fields {
+			if f.name == fld.Name() || f.jsonName == yamlName {
+				fatalf("field %s (yaml %q) of %s collides with %s (yaml %q) in %s", fld.Name(), yamlName, named.Obj().Name(), f.name, f.jsonName, def.name)
+			}
 		}
 
 		def.fields = append(def.fields, &fieldDef{
@@ -464,8 +524,13 @@ func (g *generator) structMapping(named *types.Named, st *types.Struct) *typeMap
 			mapping:  mapping,
 		})
 	}
+}
 
-	return &typeMapping{kind: kStruct, structDef: def}
+// yamlInline reports whether a field tag carries the yaml "inline" option.
+func yamlInline(tag string) bool {
+	_, opts, _ := strings.Cut(reflect.StructTag(tag).Get("yaml"), ",")
+
+	return slices.Contains(strings.Split(opts, ","), "inline")
 }
 
 // parseYAMLTag reads the `yaml:"..."` tag machinery puts on every field and

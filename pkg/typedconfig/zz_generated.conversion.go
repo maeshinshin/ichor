@@ -10,6 +10,7 @@ package typedconfig
 
 import (
 	"fmt"
+	"time"
 
 	mx509 "github.com/siderolabs/crypto/x509"
 	mcel "github.com/siderolabs/talos/pkg/machinery/cel"
@@ -24,7 +25,6 @@ import (
 	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
 	kubeletv1 "k8s.io/kubelet/config/v1"
-	"time"
 )
 
 // ToMachinery converts m to the machinery mv1alpha1.APIServerConfig type.

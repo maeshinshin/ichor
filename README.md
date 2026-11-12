@@ -14,7 +14,7 @@ You need one machine booted from a Talos ISO into maintenance mode.
 1. Choose the release and your platform:
 
    ```sh
-   VERSION=0.1.0
+   VERSION=0.1.2
    OS=linux      # linux or darwin
    ARCH=amd64    # amd64 or arm64
    BASE=https://github.com/maeshinshin/ichor/releases/download/v${VERSION}
@@ -61,7 +61,7 @@ Install Ichor with Helm, then register the cluster with `ichor adopt`:
 
 ```sh
 helm repo add ichor https://ichor.maesh.dev/charts
-helm install ichor ichor/ichor --version 0.1.0 \
+helm install ichor ichor/ichor --version 0.1.2 \
   --namespace ichor-system --create-namespace
 ```
 

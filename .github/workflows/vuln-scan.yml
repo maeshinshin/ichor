@@ -1,0 +1,36 @@
+name: Vulnerability scan
+
+# The checks release.yml runs before a tag, run every day on main, so a new advisory is seen when it is published
+# and not when the next pull request goes red. A failed run is the alert: GitHub notifies whoever last changed
+# the schedule below. Not run for release-* branches.
+on:
+  schedule:
+    - cron: "41 4 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  scan:
+    name: govulncheck and npm audit on main
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Set up Nix
+        uses: ./.github/actions/nix
+
+      - name: govulncheck
+        run: nix develop --command govulncheck ./...
+
+      # Runs even when govulncheck failed, so one run reports both.
+      - name: npm audit (production dependencies, high and above)
+        if: ${{ !cancelled() }}
+        run: nix develop --command bash -c "cd ui && npm audit --omit=dev --audit-level=high"

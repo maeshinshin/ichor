@@ -27,4 +27,3 @@ Talos's maintenance API serves the two resources that matter: `talosctl get disk
 
 - A pending machine that is known to discovery (its endpoint is already on a TalosMachine) is not probed again by the sweep, so its lists are recorded at creation or at its next new address. A refresh on a timer would be a new reconcile path for pending machines, which the reconciler does not have.
 - The list is a snapshot. A disk attached after discovery is not in it until the node is probed again, and the form then offers the typed path only when the list is empty.
-- No end-to-end run on a real node was done for this change: the probe's reads are the Talos v1.14.3 resources the documented commands read, and the unit tests use an in-memory COSI state.

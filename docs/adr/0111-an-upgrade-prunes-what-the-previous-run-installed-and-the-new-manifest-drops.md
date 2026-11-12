@@ -18,7 +18,7 @@ The installer (ADR 0059) applies the target manifest with server-side apply unde
 
 **The owner check.** At delete time each candidate is read again. It is deleted only if it carries the mark, or, for the renamed ClusterRole, the app name label. Anything else is kept and the installer logs the kept object.
 
-**The prunable kinds.** ClusterRole, ClusterRoleBinding, Role, RoleBinding, ServiceAccount, Service, Deployment, MutatingWebhookConfiguration, ValidatingWebhookConfiguration, ValidatingAdmissionPolicy and ValidatingAdmissionPolicyBinding. Each is one the installer's role already holds delete on; a test fails if that stops being true.
+**The prunable kinds.** ClusterRole, ClusterRoleBinding, Role, RoleBinding, ServiceAccount, Service, Deployment, MutatingWebhookConfiguration, ValidatingWebhookConfiguration, ValidatingAdmissionPolicy and ValidatingAdmissionPolicyBinding. Each is one the installer's role already holds delete on.
 
 **Never pruned:**
 - CustomResourceDefinitions: deleting one deletes every custom resource of its kind.

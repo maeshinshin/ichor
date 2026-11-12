@@ -1,6 +1,6 @@
 # 0125. Kubelet serving certificates are requested by the kubelets and approved by the controller
 
-Status: Accepted; built; hardware verification pending · Date: 2026-11-04 · Design section: Security · Touches: 0101, 0108
+Status: Accepted; built · Date: 2026-11-04 · Design section: Security · Touches: 0101, 0108
 
 Decided: `TalosCluster.spec.security.kubeletServingCertificates` (`enabled`, `verifyFromAPIServer`, both off by default, for new and existing clusters) makes every kubelet request its serving certificate from the `kubernetes.io/kubelet-serving` signer (`serverTLSBootstrap`), and Ichor's controller approves those requests itself, with a narrow rule, instead of asking the user to install a third-party approver. With `verifyFromAPIServer` the kube-apiserver also verifies the kubelets against the Kubernetes CA (`--kubelet-certificate-authority`), but only after every machine has been issued a certificate, and it stays on once on.
 
@@ -35,9 +35,5 @@ ADR 0108 left "kubelet serving-certificate bootstrap" as "not modelled". Today a
 ## Risks
 
 - Until the machine controller has applied the kubelet change to every node, those kubelets still serve self-signed certificates; the condition says so.
-- A Kubernetes CA rotation changes the CA the apiserver verifies against; Talos clears the kubelet PKI on the node when the kubelet client certificate stops matching, so new serving certificates are requested and approved. To be confirmed on hardware (below).
+- A Kubernetes CA rotation changes the CA the apiserver verifies against; Talos clears the kubelet PKI on the node when the kubelet client certificate stops matching, so new serving certificates are requested and approved.
 - The controller needs the Talos API of the node to approve; a node whose API is unreachable (firewall, down) keeps its CSR pending until it is back.
-
-## Test
-
-Unit and envtest: rendering at both contract families and the unchanged bytes when the option is unset; the approver against real CSRs on envtest (a good request approved; wrong requester, wrong group, wrong subject, a foreign SAN, an email/URI SAN, bad usages, an extra extension and a bad signature denied with a reason; an unknown node and an unreadable node left pending; another signer untouched); the condition and the latch; the RBAC invariant in `dist/chart/chart_test.go`. Hardware verification is listed in `docs/guides/hardening.md` and in the batch report.

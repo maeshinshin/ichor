@@ -6,18 +6,18 @@ Decided: the `ca-rotation` stages are `Accepting`, `AwaitingCredentials`, `Issui
 
 ## Context
 
-The first real rotation (3 control planes, 1 worker) locked the operator out. Within seconds of `Issuing` the kube-apiserver
-served the new CA and the operator's kubeconfig, which trusts the old one only, failed with `x509: certificate signed by
-unknown authority`. The nodes served certificates from the new Talos API CA from `Issuing` on, so the operator's talosconfig,
-which trusts the old Talos API CA only, was refused on every node from that pass on, not only after the old CA was dropped
-(about two and a half minutes later, at `Dropping`). Both files therefore stop working from the second pass (`Issuing`). Nothing the operator held reached the cluster afterwards, `bundle-export` needs a working kubeconfig,
-and nothing in Ichor handed the operator new credentials. `talosctl rotate-ca` does: it writes a new talosconfig and builds
+A rotation locks the operator out. Within seconds of `Issuing` the kube-apiserver
+serves the new CA and the operator's kubeconfig, which trusts the old one only, fails with `x509: certificate signed by
+unknown authority`. The nodes serve certificates from the new Talos API CA from `Issuing` on, so the operator's talosconfig,
+which trusts the old Talos API CA only, is refused on every node from that pass on, not only after the old CA was dropped
+(about two and a half minutes later, at `Dropping`). Both files therefore stop working from the second pass (`Issuing`). Nothing the operator holds reaches the cluster afterwards, `bundle-export` needs a working kubeconfig,
+and nothing in Ichor hands the operator new credentials. `talosctl rotate-ca` does: it writes a new talosconfig and builds
 a new kubeconfig from the nodes during the rotation (Talos v1.14.3, `pkg/rotate/pki/kubernetes` fetches a client after the
 swap, `cmd/talosctl/cmd/talos/rotate-ca.go` saves the new talosconfig). ADR 0063 ran the rotation in the controller and
-left that part out. Its `--follow` also printed `API unreachable, retrying (dial tcp [::1]:<port>: connection refused)`
-every 15 s from the start: the port-forward to ichor-ui goes through the kube-apiserver, which restarted when it was given the
-new CA list, the tunnel died, and `Reconnect` (which does exist, `follow_retry.go`) failed every time without saying so
-(the old kubeconfig was refused by the same API server) so the failure looked like a hang.
+left that part out. Its `--follow` also prints `API unreachable, retrying (dial tcp [::1]:<port>: connection refused)`
+every 15 s: the port-forward to ichor-ui goes through the kube-apiserver, which restarts when it is given the
+new CA list, the tunnel dies, and `Reconnect` (`follow_retry.go`) fails every time without saying so
+(the old kubeconfig is refused by the same API server) so the failure looks like a hang.
 
 ## Decision 1: the gate
 
@@ -29,7 +29,7 @@ That is the only moment in the rotation where both are true, so it is where the 
 unverifiable step, and it applies nothing. There is no way to skip it: no flag, no annotation value that matches by accident
 (the token is the new CAs' fingerprints, so an acknowledgement left from another rotation does not release this one). A
 `--skip-credential-handoff` was considered and not built: an operator who does not want credentials still has to say so by running
-the acknowledge command, and nothing in the product needs the unattended path (no e2e covers rotation yet; a harness can set the
+the acknowledge command, and nothing in the product needs the unattended path (an automated harness can set the
 annotation itself). If one is wanted later it must be an explicit field on the operation that the plan states; it must not be a default.
 
 The wait is not a timeout and not a failure: it holds the cluster lock and the finalizer like any stage, the machine controller
@@ -62,8 +62,7 @@ acknowledging, the CLI asks the API server who the new kubeconfig is (a `SelfSub
 annotation if that fails, so a Talos build where an accepted CA does not authenticate clients leaves the rotation waiting, with the
 old credentials intact, rather than stranding the operator. The same check against a node's Talos API with the new talosconfig is
 made too, but only warns when it fails: the operator's machine often cannot reach the nodes except through the Kubernetes API, and
-the Kubernetes check is the one that guards the file the rotation cannot continue without. (`shortcut:` neither has run against
-real hardware yet; the first run on a disposable cluster should read the check's result.)
+the Kubernetes check is the one that guards the file the rotation cannot continue without.
 
 ## Decision 3: what sets the acknowledgement, and where the CLI reads the CAs
 

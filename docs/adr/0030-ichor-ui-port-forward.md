@@ -10,7 +10,7 @@ architecture.md's "CLI and UI" section is explicit: "In the first release the
 UI is reached through `ichor ui` (a port-forward) ... `ichor ui`
 re-establishes its port-forward to another pod when the current one goes
 away." `cmd/ichor-ui` (the server) and `internal/uiapi` (its handlers) already
-exist; nothing about reaching it from the CLI did until this unit. The chart
+exist; nothing reached it from the CLI before `ichor ui`. The chart
 (`dist/chart/values.yaml`'s `ichorUI.replicas: 2`) assumes more than one pod
 exists specifically so a drain or a rollout never takes the UI down -- `ichor
 ui` has to actually survive that, not just document that it should.
@@ -59,8 +59,8 @@ real cluster: `transport/spdy.RoundTripperFor` plus
 an already-present dependency is used rather than rewritten). `uiDeps.Forward` is the
 seam: `runUI`'s own tests (`internal/cli/ui_run_test.go`) pass a fake that
 never opens a socket, only drives the ready/error/context-done paths
-`selectPod`'s decision depends on -- proving the reforward behavior and
-the user-visible messages without a real cluster, the same
+`selectPod`'s decision depends on, so the reforward behavior and
+the user-visible messages need no real cluster -- the same
 dependency-injection shape `initDeps`/`adoptDeps` already use for Talos
 and Kubernetes calls elsewhere in this package.
 
@@ -72,16 +72,14 @@ hand-rolling the usual `xdg-open`/`open`/`rundll32` OS switch, promoting it
 from an indirect to a direct `require` in `go.mod` (also pulling
 `github.com/gorilla/websocket` and `github.com/moby/spdystream` into
 `go.sum`, both already-transitive dependencies of `k8s.io/client-go`'s
-`tools/portforward`/`transport/spdy` packages this unit imports directly for
-the first time).
+`tools/portforward`/`transport/spdy` packages this package imports directly).
 
 ## Consequences
 
 - `ichor ui` authenticates as whoever runs it, through `--kubeconfig`, the
   same as every other `ichor` subcommand -- no ServiceAccount or RBAC is
-  added by this unit; `pods/portforward`, `pods` get/list and `services`
+  added; `pods/portforward`, `pods` get/list and `services`
   get on the ichor-ui namespace are the cluster operator's own permissions
   to grant, same as `kubectl port-forward` needs.
-- Not built here: anything in `cmd/ichor-ui` or `internal/uiapi` (read only,
-  per this unit's own instructions) -- `ichor ui` only ever reaches as far
-  as the TCP tunnel; what runs over it is already built.
+- `ichor ui` only ever reaches as far as the TCP tunnel; it changes nothing in
+  `cmd/ichor-ui` or `internal/uiapi`, which is what runs over it.

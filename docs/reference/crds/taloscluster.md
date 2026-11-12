@@ -44,6 +44,98 @@ Version v1alpha1: has a `status` subresource.
 | `spec.cni.cilium.values` | `object (free-form)` | no | values is the user layer of Cilium's Helm values. Effective values are Ichor's defaults, then these deep-merged on top, then the Ichor-owned keys (ipam.mode, securityContext.capabilities.ciliumAgent, securityContext.capabilities.cleanCiliumState, cgroup.autoMount.enabled, cgroup.hostRoot, k8sServiceHost, k8sServicePort, kubeProxyReplacement, tunnelProtocol); a value for an owned key is a validation error. The merged values must stay under 64 KiB. |
 | `spec.cni.custom` **(deprecated)** | `object` | no | custom is deprecated, unused; kept so the CRD never drops a field. It declared the chart/manifest source and Talos-side settings for a user-supplied CNI. |
 | `spec.cni.custom.documents` **(deprecated)** | `[]object` | no | documents are the Talos-side config documents this CNI needs, applied as a cluster-layer patch -- e.g. disabling kube-proxy when kubeProxy is "replaced". |
+| `spec.cni.custom.documents[].bgpInstanceConfig` **(deprecated)** | `object` | no | bgpInstanceConfig is a Talos BGPInstanceConfig document; populated when kind is "BGPInstanceConfig". |
+| `spec.cni.custom.documents[].bgpInstanceConfig.advertise` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.importRoutes` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.importRoutes[].bgpInstance` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.importRoutes[].prefixes` **(deprecated)** | `[]string` | yes |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.installRoutes` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.localASN` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.maxPaths` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.multipath` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.neighbors` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.neighbors[].address` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.neighbors[].bfd` **(deprecated)** | `object` | no | Talos: BGPBFDConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/bgpinstanceconfig |
+| `spec.cni.custom.documents[].bgpInstanceConfig.neighbors[].bfd.detectMultiplier` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.neighbors[].bfd.receiveInterval` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.neighbors[].bfd.transmitInterval` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.neighbors[].holdTime` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.neighbors[].link` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.neighbors[].localASN` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.neighbors[].passive` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.neighbors[].peerASN` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.routeSource` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.routerID` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].bgpInstanceConfig.vrf` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].blackholeRouteConfig` **(deprecated)** | `object` | no | blackholeRouteConfig is a Talos BlackholeRouteConfig document; populated when kind is "BlackholeRouteConfig". |
+| `spec.cni.custom.documents[].blackholeRouteConfig.metric` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].blackholeRouteConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].bondConfig` **(deprecated)** | `object` | no | bondConfig is a Talos BondConfig document; populated when kind is "BondConfig". |
+| `spec.cni.custom.documents[].bondConfig.adActorSysPrio` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.adLACPActive` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.adSelect` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.adUserPortKey` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.addresses` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].bondConfig.addresses[].address` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].bondConfig.addresses[].routePriority` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.allSlavesActive` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.arpAllTargets` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.arpInterval` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.arpIpTargets` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].bondConfig.arpValidate` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.bondMode` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.downdelay` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.failOverMac` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.hardwareAddr` **(deprecated)** | `string (byte)` | no |  |
+| `spec.cni.custom.documents[].bondConfig.lacpRate` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.links` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].bondConfig.lpInterval` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.miimon` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.minLinks` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.missedMax` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.multicast` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].bondConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].bondConfig.nsIp6Targets` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].bondConfig.numPeerNotif` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.packetsPerSlave` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.peerNotifDelay` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.primaryReselect` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.resendIGMP` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.routes` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].bondConfig.routes[].destination` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].bondConfig.routes[].gateway` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].bondConfig.routes[].metric` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.routes[].mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.routes[].source` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].bondConfig.routes[].table` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.tlbLogicalLb` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.up` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].bondConfig.updelay` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bondConfig.useCarrier` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].bondConfig.xmitHashPolicy` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bridgeConfig` **(deprecated)** | `object` | no | bridgeConfig is a Talos BridgeConfig document; populated when kind is "BridgeConfig". |
+| `spec.cni.custom.documents[].bridgeConfig.addresses` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].bridgeConfig.addresses[].address` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].bridgeConfig.addresses[].routePriority` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bridgeConfig.hardwareAddr` **(deprecated)** | `string (byte)` | no |  |
+| `spec.cni.custom.documents[].bridgeConfig.links` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].bridgeConfig.mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bridgeConfig.multicast` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].bridgeConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].bridgeConfig.routes` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].bridgeConfig.routes[].destination` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].bridgeConfig.routes[].gateway` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].bridgeConfig.routes[].metric` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bridgeConfig.routes[].mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bridgeConfig.routes[].source` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].bridgeConfig.routes[].table` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].bridgeConfig.stp` **(deprecated)** | `object` | no | Talos: BridgeSTPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/bridgeconfig |
+| `spec.cni.custom.documents[].bridgeConfig.stp.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].bridgeConfig.up` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].bridgeConfig.vlan` **(deprecated)** | `object` | no | Talos: BridgeVLANConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/bridgeconfig |
+| `spec.cni.custom.documents[].bridgeConfig.vlan.filtering` **(deprecated)** | `boolean` | no |  |
 | `spec.cni.custom.documents[].config` **(deprecated)** | `object` | no | config is a Talos v1alpha1 Config document; populated when kind is "Config". |
 | `spec.cni.custom.documents[].config.cluster` **(deprecated)** | `object` | no | Talos: ClusterConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
 | `spec.cni.custom.documents[].config.cluster.acceptedCAs` **(deprecated)** | `[]object` | no |  |
@@ -468,10 +560,247 @@ Version v1alpha1: has a `status` subresource.
 | `spec.cni.custom.documents[].config.machine.udev.rules` **(deprecated)** | `[]string` | no |  |
 | `spec.cni.custom.documents[].config.persist` **(deprecated)** | `boolean` | no |  |
 | `spec.cni.custom.documents[].config.version` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].containerConfig` **(deprecated)** | `object` | no | containerConfig is a Talos ContainerConfig document; populated when kind is "ContainerConfig". |
+| `spec.cni.custom.documents[].containerConfig.args` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].containerConfig.dependsOn` **(deprecated)** | `object` | no | Talos: ContainerDependsOn — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.cni.custom.documents[].containerConfig.dependsOn.containers` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].containerConfig.dependsOn.networks` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].containerConfig.dependsOn.paths` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].containerConfig.dependsOn.time` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].containerConfig.entrypoint` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].containerConfig.environment` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].containerConfig.image` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].containerConfig.mounts` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].containerConfig.mounts[].hostPath` **(deprecated)** | `object` | no | Talos: HostPathMount — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.cni.custom.documents[].containerConfig.mounts[].hostPath.destination` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].containerConfig.mounts[].hostPath.options` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].containerConfig.mounts[].hostPath.source` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].containerConfig.mounts[].tmpfs` **(deprecated)** | `object` | no | Talos: TmpfsMount — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.cni.custom.documents[].containerConfig.mounts[].tmpfs.destination` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].containerConfig.mounts[].tmpfs.options` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].containerConfig.mounts[].tmpfs.size` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].containerConfig.mounts[].userVolume` **(deprecated)** | `object` | no | Talos: UserVolumeMount — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.cni.custom.documents[].containerConfig.mounts[].userVolume.destination` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].containerConfig.mounts[].userVolume.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].containerConfig.mounts[].userVolume.options` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].containerConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].containerConfig.network` **(deprecated)** | `object` | no | Talos: ContainerNetwork — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.cni.custom.documents[].containerConfig.network.mode` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].containerConfig.resources` **(deprecated)** | `object` | no | Talos: ContainerResources — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.cni.custom.documents[].containerConfig.resources.limits` **(deprecated)** | `object` | no | Talos: ContainerResourceLimits — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.cni.custom.documents[].containerConfig.resources.limits.cpu` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].containerConfig.resources.limits.memory` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].containerConfig.runAs` **(deprecated)** | `object` | no | Talos: ContainerRunAs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.cni.custom.documents[].containerConfig.runAs.gid` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].containerConfig.runAs.uid` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].containerConfig.security` **(deprecated)** | `object` | no | Talos: ContainerSecurity — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.cni.custom.documents[].containerConfig.security.capabilities` **(deprecated)** | `object` | no | Talos: ContainerCapabilities — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.cni.custom.documents[].containerConfig.security.capabilities.add` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].containerConfig.security.capabilities.drop` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].containerConfig.security.machinedAccess` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].containerConfig.security.profile` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].containerConfig.workingDir` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].dhcpv6Config` **(deprecated)** | `object` | no | dhcpv6Config is a Talos DHCPv6Config document; populated when kind is "DHCPv6Config". |
+| `spec.cni.custom.documents[].dhcpv6Config.clientIdentifier` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].dhcpv6Config.duidRaw` **(deprecated)** | `string (byte)` | no |  |
+| `spec.cni.custom.documents[].dhcpv6Config.ignoreHostname` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].dhcpv6Config.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].dhcpv6Config.routeMetric` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].dummyLinkConfig` **(deprecated)** | `object` | no | dummyLinkConfig is a Talos DummyLinkConfig document; populated when kind is "DummyLinkConfig". |
+| `spec.cni.custom.documents[].dummyLinkConfig.addresses` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].dummyLinkConfig.addresses[].address` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].dummyLinkConfig.addresses[].routePriority` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].dummyLinkConfig.hardwareAddr` **(deprecated)** | `string (byte)` | no |  |
+| `spec.cni.custom.documents[].dummyLinkConfig.mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].dummyLinkConfig.multicast` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].dummyLinkConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].dummyLinkConfig.routes` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].dummyLinkConfig.routes[].destination` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].dummyLinkConfig.routes[].gateway` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].dummyLinkConfig.routes[].metric` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].dummyLinkConfig.routes[].mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].dummyLinkConfig.routes[].source` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].dummyLinkConfig.routes[].table` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].dummyLinkConfig.up` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].environmentConfig` **(deprecated)** | `object` | no | environmentConfig is a Talos EnvironmentConfig document; populated when kind is "EnvironmentConfig". |
+| `spec.cni.custom.documents[].environmentConfig.variables` **(deprecated)** | `map[string]string` | yes |  |
+| `spec.cni.custom.documents[].etcFileConfig` **(deprecated)** | `object` | no | etcFileConfig is a Talos EtcFileConfig document; populated when kind is "EtcFileConfig". |
+| `spec.cni.custom.documents[].etcFileConfig.contents` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].etcFileConfig.mode` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].etcFileConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].ethernetConfig` **(deprecated)** | `object` | no | ethernetConfig is a Talos EthernetConfig document; populated when kind is "EthernetConfig". |
+| `spec.cni.custom.documents[].ethernetConfig.channels` **(deprecated)** | `object` | no | Talos: EthernetChannelsConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/ethernetconfig |
+| `spec.cni.custom.documents[].ethernetConfig.channels.combined` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].ethernetConfig.channels.other` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].ethernetConfig.channels.rx` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].ethernetConfig.channels.tx` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].ethernetConfig.features` **(deprecated)** | `map[string]boolean` | no |  |
+| `spec.cni.custom.documents[].ethernetConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].ethernetConfig.rings` **(deprecated)** | `object` | no | Talos: EthernetRingsConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/ethernetconfig |
+| `spec.cni.custom.documents[].ethernetConfig.rings.cqe-size` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].ethernetConfig.rings.rx` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].ethernetConfig.rings.rx-buf-len` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].ethernetConfig.rings.rx-jumbo` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].ethernetConfig.rings.rx-mini` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].ethernetConfig.rings.rx-push` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].ethernetConfig.rings.tcp-data-split` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].ethernetConfig.rings.tx` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].ethernetConfig.rings.tx-push` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].ethernetConfig.rings.tx-push-buf-len` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].ethernetConfig.wakeOnLan` **(deprecated)** | `[]integer` | no |  |
+| `spec.cni.custom.documents[].eventSinkConfig` **(deprecated)** | `object` | no | eventSinkConfig is a Talos EventSinkConfig document; populated when kind is "EventSinkConfig". |
+| `spec.cni.custom.documents[].eventSinkConfig.endpoint` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].existingVolumeConfig` **(deprecated)** | `object` | no | existingVolumeConfig is a Talos ExistingVolumeConfig document; populated when kind is "ExistingVolumeConfig". |
+| `spec.cni.custom.documents[].existingVolumeConfig.discovery` **(deprecated)** | `object` | no | Talos: VolumeDiscoverySpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/existingvolumeconfig |
+| `spec.cni.custom.documents[].existingVolumeConfig.discovery.volumeSelector` **(deprecated)** | `object` | no | Talos: VolumeSelector — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/existingvolumeconfig |
+| `spec.cni.custom.documents[].existingVolumeConfig.discovery.volumeSelector.match` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].existingVolumeConfig.mount` **(deprecated)** | `object` | no | Talos: ExistingMountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/existingvolumeconfig |
+| `spec.cni.custom.documents[].existingVolumeConfig.mount.disableAccessTime` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].existingVolumeConfig.mount.readOnly` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].existingVolumeConfig.mount.secure` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].existingVolumeConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].existingVolumeConfig.scrub` **(deprecated)** | `object` | no | Talos: ScrubConfig |
+| `spec.cni.custom.documents[].existingVolumeConfig.scrub.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].existingVolumeConfig.scrub.interval` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].existingVolumeConfig.trim` **(deprecated)** | `object` | no | Talos: TrimConfig |
+| `spec.cni.custom.documents[].existingVolumeConfig.trim.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].existingVolumeConfig.trim.interval` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].extensionServiceConfig` **(deprecated)** | `object` | no | extensionServiceConfig is a Talos ExtensionServiceConfig document; populated when kind is "ExtensionServiceConfig". |
+| `spec.cni.custom.documents[].extensionServiceConfig.configFiles` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].extensionServiceConfig.configFiles[].content` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].extensionServiceConfig.configFiles[].mountPath` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].extensionServiceConfig.environment` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].extensionServiceConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].externalVolumeConfig` **(deprecated)** | `object` | no | externalVolumeConfig is a Talos ExternalVolumeConfig document; populated when kind is "ExternalVolumeConfig". |
+| `spec.cni.custom.documents[].externalVolumeConfig.filesystemType` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].externalVolumeConfig.mount` **(deprecated)** | `object` | no | Talos: ExternalMountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/externalvolumeconfig |
+| `spec.cni.custom.documents[].externalVolumeConfig.mount.disableAccessTime` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].externalVolumeConfig.mount.readOnly` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].externalVolumeConfig.mount.secure` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].externalVolumeConfig.mount.virtiofs` **(deprecated)** | `object` | no | Talos: VirtiofsMountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/externalvolumeconfig |
+| `spec.cni.custom.documents[].externalVolumeConfig.mount.virtiofs.tag` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].externalVolumeConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].filesystemScrubConfig` **(deprecated)** | `object` | no | filesystemScrubConfig is a Talos FilesystemScrubConfig document; populated when kind is "FilesystemScrubConfig". |
+| `spec.cni.custom.documents[].filesystemScrubConfig.interval` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].filesystemTrimConfig` **(deprecated)** | `object` | no | filesystemTrimConfig is a Talos FilesystemTrimConfig document; populated when kind is "FilesystemTrimConfig". |
+| `spec.cni.custom.documents[].filesystemTrimConfig.interval` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].httpProbeConfig` **(deprecated)** | `object` | no | httpProbeConfig is a Talos HTTPProbeConfig document; populated when kind is "HTTPProbeConfig". |
+| `spec.cni.custom.documents[].httpProbeConfig.failureThreshold` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].httpProbeConfig.interval` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].httpProbeConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].httpProbeConfig.timeout` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].httpProbeConfig.url` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].imageCacheConfig` **(deprecated)** | `object` | no | imageCacheConfig is a Talos ImageCacheConfig document; populated when kind is "ImageCacheConfig". |
+| `spec.cni.custom.documents[].imageCacheConfig.local` **(deprecated)** | `object` | yes | Talos: LocalImageCacheConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/cri/imagecacheconfig |
+| `spec.cni.custom.documents[].imageCacheConfig.local.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].imageVerificationConfig` **(deprecated)** | `object` | no | imageVerificationConfig is a Talos ImageVerificationConfig document; populated when kind is "ImageVerificationConfig". |
+| `spec.cni.custom.documents[].imageVerificationConfig.rules` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].imageVerificationConfig.rules[].deny` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].imageVerificationConfig.rules[].image` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].imageVerificationConfig.rules[].keyless` **(deprecated)** | `object` | no | Talos: ImageKeylessVerifierV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/security/imageverificationconfig |
+| `spec.cni.custom.documents[].imageVerificationConfig.rules[].keyless.issuer` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].imageVerificationConfig.rules[].keyless.subject` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].imageVerificationConfig.rules[].keyless.subjectRegex` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].imageVerificationConfig.rules[].publicKey` **(deprecated)** | `object` | no | Talos: ImagePublicKeyVerifierV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/security/imageverificationconfig |
+| `spec.cni.custom.documents[].imageVerificationConfig.rules[].publicKey.certificate` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].imageVerificationConfig.rules[].skip` **(deprecated)** | `boolean` | no |  |
 | `spec.cni.custom.documents[].kernelModuleConfig` **(deprecated)** | `object` | no | kernelModuleConfig is a Talos KernelModuleConfig document; populated when kind is "KernelModuleConfig". |
 | `spec.cni.custom.documents[].kernelModuleConfig.name` **(deprecated)** | `string` | yes |  |
 | `spec.cni.custom.documents[].kernelModuleConfig.parameters` **(deprecated)** | `[]string` | no |  |
-| `spec.cni.custom.documents[].kind` **(deprecated)** | `string` | yes | kind selects which of the fields below is populated. Allowed values: `SysctlConfig`, `KernelModuleConfig`, `Config`, `VolumeConfig`, `UserVolumeConfig`, `RawVolumeConfig`, `ResolverConfig`. |
+| `spec.cni.custom.documents[].kind` **(deprecated)** | `string` | yes | kind selects which of the fields below is populated. Allowed values: `SysctlConfig`, `KernelModuleConfig`, `Config`, `VolumeConfig`, `UserVolumeConfig`, `RawVolumeConfig`, `ResolverConfig`, `BGPInstanceConfig`, `BlackholeRouteConfig`, `BondConfig`, `BridgeConfig`, `ContainerConfig`, `DHCPv6Config`, `DummyLinkConfig`, `EnvironmentConfig`, `EtcFileConfig`, `EthernetConfig`, `EventSinkConfig`, `ExistingVolumeConfig`, `ExtensionServiceConfig`, `ExternalVolumeConfig`, `FilesystemScrubConfig`, `FilesystemTrimConfig`, `HTTPProbeConfig`, `ImageCacheConfig`, `ImageVerificationConfig`, `KmsgLogConfig`, `KubeAPIServerConfig`, `KubeClusterConfig`, `KubeControllerManagerConfig`, `KubeCoreDNSConfig`, `KubeInlineManifestConfig`, `KubeNetworkConfig`, `KubeNodeConfig`, `KubePrismConfig`, `KubeSpanConfig`, `KubeSpanEndpointsConfig`, `KubeTalosAPIAccessConfig`, `LVMLogicalVolumeConfig`, `LVMVolumeGroupConfig`, `Layer2VIPConfig`, `OOMConfig`, `PCIDriverRebindConfig`, `RAIDArrayConfig`, `RegistryMirrorConfig`, `RoutingRuleConfig`, `StaticHostConfig`, `SwapVolumeConfig`, `SysfsConfig`, `TCPProbeConfig`, `TimeSyncConfig`, `TrustedRootsConfig`, `UdevRulesConfig`, `VRFConfig`, `VethConfig`, `WatchdogTimerConfig`, `ZswapConfig`. |
+| `spec.cni.custom.documents[].kmsgLogConfig` **(deprecated)** | `object` | no | kmsgLogConfig is a Talos KmsgLogConfig document; populated when kind is "KmsgLogConfig". |
+| `spec.cni.custom.documents[].kmsgLogConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].kmsgLogConfig.url` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].kubeAPIServerConfig` **(deprecated)** | `object` | no | kubeAPIServerConfig is a Talos KubeAPIServerConfig document; populated when kind is "KubeAPIServerConfig". |
+| `spec.cni.custom.documents[].kubeAPIServerConfig.apiPort` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].kubeAPIServerConfig.certExtraSANs` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].kubeAPIServerConfig.env` **(deprecated)** | `map[string]string` | no |  |
+| `spec.cni.custom.documents[].kubeAPIServerConfig.extraArgs` **(deprecated)** | `map[string][]string` | no |  |
+| `spec.cni.custom.documents[].kubeAPIServerConfig.image` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].kubeAPIServerConfig.resources` **(deprecated)** | `object` | no | Talos: ResourcesConfig |
+| `spec.cni.custom.documents[].kubeAPIServerConfig.resources.limits` **(deprecated)** | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
+| `spec.cni.custom.documents[].kubeAPIServerConfig.resources.requests` **(deprecated)** | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
+| `spec.cni.custom.documents[].kubeAPIServerConfig.startupProbes` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].kubeClusterConfig` **(deprecated)** | `object` | no | kubeClusterConfig is a Talos KubeClusterConfig document; populated when kind is "KubeClusterConfig". |
+| `spec.cni.custom.documents[].kubeClusterConfig.clusterName` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].kubeClusterConfig.endpoint` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].kubeControllerManagerConfig` **(deprecated)** | `object` | no | kubeControllerManagerConfig is a Talos KubeControllerManagerConfig document; populated when kind is "KubeControllerManagerConfig". |
+| `spec.cni.custom.documents[].kubeControllerManagerConfig.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].kubeControllerManagerConfig.env` **(deprecated)** | `map[string]string` | no |  |
+| `spec.cni.custom.documents[].kubeControllerManagerConfig.extraArgs` **(deprecated)** | `map[string][]string` | no |  |
+| `spec.cni.custom.documents[].kubeControllerManagerConfig.image` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].kubeControllerManagerConfig.resources` **(deprecated)** | `object` | no | Talos: ResourcesConfig |
+| `spec.cni.custom.documents[].kubeControllerManagerConfig.resources.limits` **(deprecated)** | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
+| `spec.cni.custom.documents[].kubeControllerManagerConfig.resources.requests` **(deprecated)** | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
+| `spec.cni.custom.documents[].kubeCoreDNSConfig` **(deprecated)** | `object` | no | kubeCoreDNSConfig is a Talos KubeCoreDNSConfig document; populated when kind is "KubeCoreDNSConfig". |
+| `spec.cni.custom.documents[].kubeCoreDNSConfig.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].kubeCoreDNSConfig.image` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].kubeInlineManifestConfig` **(deprecated)** | `object` | no | kubeInlineManifestConfig is a Talos KubeInlineManifestConfig document; populated when kind is "KubeInlineManifestConfig". |
+| `spec.cni.custom.documents[].kubeInlineManifestConfig.manifest` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].kubeInlineManifestConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].kubeNetworkConfig` **(deprecated)** | `object` | no | kubeNetworkConfig is a Talos KubeNetworkConfig document; populated when kind is "KubeNetworkConfig". |
+| `spec.cni.custom.documents[].kubeNetworkConfig.dnsDomain` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].kubeNetworkConfig.nodeCIDRMaskSizeIPv4` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].kubeNetworkConfig.nodeCIDRMaskSizeIPv6` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].kubeNetworkConfig.podSubnets` **(deprecated)** | `[]string` | yes |  |
+| `spec.cni.custom.documents[].kubeNetworkConfig.serviceSubnets` **(deprecated)** | `[]string` | yes |  |
+| `spec.cni.custom.documents[].kubeNodeConfig` **(deprecated)** | `object` | no | kubeNodeConfig is a Talos KubeNodeConfig document; populated when kind is "KubeNodeConfig". |
+| `spec.cni.custom.documents[].kubeNodeConfig.annotations` **(deprecated)** | `map[string]string` | no |  |
+| `spec.cni.custom.documents[].kubeNodeConfig.labels` **(deprecated)** | `map[string]string` | no |  |
+| `spec.cni.custom.documents[].kubeNodeConfig.nodeIP` **(deprecated)** | `object` | yes | Talos: NodeIPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/k8s/kubenodeconfig |
+| `spec.cni.custom.documents[].kubeNodeConfig.nodeIP.validSubnets` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].kubeNodeConfig.registerWithFQDN` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].kubeNodeConfig.skipNodeRegistration` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].kubeNodeConfig.taints` **(deprecated)** | `map[string]string` | no |  |
+| `spec.cni.custom.documents[].kubePrismConfig` **(deprecated)** | `object` | no | kubePrismConfig is a Talos KubePrismConfig document; populated when kind is "KubePrismConfig". |
+| `spec.cni.custom.documents[].kubePrismConfig.port` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].kubePrismConfig.tlsServerName` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].kubeSpanConfig` **(deprecated)** | `object` | no | kubeSpanConfig is a Talos KubeSpanConfig document; populated when kind is "KubeSpanConfig". |
+| `spec.cni.custom.documents[].kubeSpanConfig.advertiseKubernetesNetworks` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].kubeSpanConfig.allowDownPeerBypass` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].kubeSpanConfig.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].kubeSpanConfig.filters` **(deprecated)** | `object` | no | Talos: KubeSpanFiltersConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/kubespanconfig |
+| `spec.cni.custom.documents[].kubeSpanConfig.filters.endpoints` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].kubeSpanConfig.filters.excludeAdvertisedNetworks` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].kubeSpanConfig.harvestExtraEndpoints` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].kubeSpanConfig.mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].kubeSpanEndpointsConfig` **(deprecated)** | `object` | no | kubeSpanEndpointsConfig is a Talos KubeSpanEndpointsConfig document; populated when kind is "KubeSpanEndpointsConfig". |
+| `spec.cni.custom.documents[].kubeSpanEndpointsConfig.extraAnnouncedEndpoints` **(deprecated)** | `[]string` | yes |  |
+| `spec.cni.custom.documents[].kubeTalosAPIAccessConfig` **(deprecated)** | `object` | no | kubeTalosAPIAccessConfig is a Talos KubeTalosAPIAccessConfig document; populated when kind is "KubeTalosAPIAccessConfig". |
+| `spec.cni.custom.documents[].kubeTalosAPIAccessConfig.allowedKubernetesNamespaces` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].kubeTalosAPIAccessConfig.allowedRoles` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].layer2VIPConfig` **(deprecated)** | `object` | no | layer2VIPConfig is a Talos Layer2VIPConfig document; populated when kind is "Layer2VIPConfig". |
+| `spec.cni.custom.documents[].layer2VIPConfig.link` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].layer2VIPConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].lvmLogicalVolumeConfig` **(deprecated)** | `object` | no | lvmLogicalVolumeConfig is a Talos LVMLogicalVolumeConfig document; populated when kind is "LVMLogicalVolumeConfig". |
+| `spec.cni.custom.documents[].lvmLogicalVolumeConfig.mirrors` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].lvmLogicalVolumeConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].lvmLogicalVolumeConfig.provisioning` **(deprecated)** | `object` | yes | Talos: LVMLogicalVolumeProvisioningSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/storage/lvmlogicalvolumeconfig |
+| `spec.cni.custom.documents[].lvmLogicalVolumeConfig.provisioning.maxSize` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].lvmLogicalVolumeConfig.provisioning.minSize` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].lvmLogicalVolumeConfig.provisioning.volumeGroup` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].lvmLogicalVolumeConfig.stripes` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].lvmLogicalVolumeConfig.type` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].lvmVolumeGroupConfig` **(deprecated)** | `object` | no | lvmVolumeGroupConfig is a Talos LVMVolumeGroupConfig document; populated when kind is "LVMVolumeGroupConfig". |
+| `spec.cni.custom.documents[].lvmVolumeGroupConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].lvmVolumeGroupConfig.provisioning` **(deprecated)** | `object` | yes | Talos: ProvisioningSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/storage/lvmvolumegroupconfig |
+| `spec.cni.custom.documents[].lvmVolumeGroupConfig.provisioning.volumeSelector` **(deprecated)** | `object` | no | Talos: LVMVolumeSelectorSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/storage/lvmvolumegroupconfig |
+| `spec.cni.custom.documents[].lvmVolumeGroupConfig.provisioning.volumeSelector.match` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].oomConfig` **(deprecated)** | `object` | no | oomConfig is a Talos OOMConfig document; populated when kind is "OOMConfig". |
+| `spec.cni.custom.documents[].oomConfig.cgroupRankingExpression` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].oomConfig.sampleInterval` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].oomConfig.strictCgroupClassOrdering` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].oomConfig.triggerExpression` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].pciDriverRebindConfig` **(deprecated)** | `object` | no | pciDriverRebindConfig is a Talos PCIDriverRebindConfig document; populated when kind is "PCIDriverRebindConfig". |
+| `spec.cni.custom.documents[].pciDriverRebindConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].pciDriverRebindConfig.targetDriver` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].raidArrayConfig` **(deprecated)** | `object` | no | raidArrayConfig is a Talos RAIDArrayConfig document; populated when kind is "RAIDArrayConfig". |
+| `spec.cni.custom.documents[].raidArrayConfig.level` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].raidArrayConfig.metadata` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].raidArrayConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].raidArrayConfig.provisioning` **(deprecated)** | `object` | yes | Talos: RAIDProvisioningSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/storage/raidarrayconfig |
+| `spec.cni.custom.documents[].raidArrayConfig.provisioning.volumeSelector` **(deprecated)** | `object` | yes | Talos: RAIDVolumeSelector — https://docs.siderolabs.com/talos/v1.14/reference/configuration/storage/raidarrayconfig |
+| `spec.cni.custom.documents[].raidArrayConfig.provisioning.volumeSelector.match` **(deprecated)** | `string` | no |  |
 | `spec.cni.custom.documents[].rawVolumeConfig` **(deprecated)** | `object` | no | rawVolumeConfig is a Talos RawVolumeConfig document (an unformatted partition for a CSI provisioner); populated when kind is "RawVolumeConfig". |
 | `spec.cni.custom.documents[].rawVolumeConfig.encryption` **(deprecated)** | `object` | no | Talos: EncryptionSpec |
 | `spec.cni.custom.documents[].rawVolumeConfig.encryption.allowDiscards` **(deprecated)** | `boolean` | no |  |
@@ -497,6 +826,12 @@ Version v1alpha1: has a `status` subresource.
 | `spec.cni.custom.documents[].rawVolumeConfig.provisioning.grow` **(deprecated)** | `boolean` | no |  |
 | `spec.cni.custom.documents[].rawVolumeConfig.provisioning.maxSize` **(deprecated)** | `string` | no |  |
 | `spec.cni.custom.documents[].rawVolumeConfig.provisioning.minSize` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].registryMirrorConfig` **(deprecated)** | `object` | no | registryMirrorConfig is a Talos RegistryMirrorConfig document; populated when kind is "RegistryMirrorConfig". |
+| `spec.cni.custom.documents[].registryMirrorConfig.endpoints` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].registryMirrorConfig.endpoints[].overridePath` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].registryMirrorConfig.endpoints[].url` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].registryMirrorConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].registryMirrorConfig.skipFallback` **(deprecated)** | `boolean` | no |  |
 | `spec.cni.custom.documents[].resolverConfig` **(deprecated)** | `object` | no | resolverConfig is a Talos ResolverConfig document (DNS nameservers and search domains); populated when kind is "ResolverConfig". |
 | `spec.cni.custom.documents[].resolverConfig.hostDNS` **(deprecated)** | `object` | no | Talos: HostDNSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig |
 | `spec.cni.custom.documents[].resolverConfig.hostDNS.enabled` **(deprecated)** | `boolean` | no |  |
@@ -509,8 +844,67 @@ Version v1alpha1: has a `status` subresource.
 | `spec.cni.custom.documents[].resolverConfig.searchDomains` **(deprecated)** | `object` | no | Talos: SearchDomainsConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig |
 | `spec.cni.custom.documents[].resolverConfig.searchDomains.disableDefault` **(deprecated)** | `boolean` | no |  |
 | `spec.cni.custom.documents[].resolverConfig.searchDomains.domains` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].routingRuleConfig` **(deprecated)** | `object` | no | routingRuleConfig is a Talos RoutingRuleConfig document; populated when kind is "RoutingRuleConfig". |
+| `spec.cni.custom.documents[].routingRuleConfig.action` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].routingRuleConfig.dst` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].routingRuleConfig.fwMark` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].routingRuleConfig.fwMask` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].routingRuleConfig.iifName` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].routingRuleConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].routingRuleConfig.oifName` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].routingRuleConfig.src` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].routingRuleConfig.table` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].staticHostConfig` **(deprecated)** | `object` | no | staticHostConfig is a Talos StaticHostConfig document; populated when kind is "StaticHostConfig". |
+| `spec.cni.custom.documents[].staticHostConfig.hostnames` **(deprecated)** | `[]string` | yes |  |
+| `spec.cni.custom.documents[].staticHostConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].swapVolumeConfig` **(deprecated)** | `object` | no | swapVolumeConfig is a Talos SwapVolumeConfig document; populated when kind is "SwapVolumeConfig". |
+| `spec.cni.custom.documents[].swapVolumeConfig.encryption` **(deprecated)** | `object` | no | Talos: EncryptionSpec |
+| `spec.cni.custom.documents[].swapVolumeConfig.encryption.allowDiscards` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].swapVolumeConfig.encryption.blockSize` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].swapVolumeConfig.encryption.cipher` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].swapVolumeConfig.encryption.keySize` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].swapVolumeConfig.encryption.keys` **(deprecated)** | `[]object` | yes |  |
+| `spec.cni.custom.documents[].swapVolumeConfig.encryption.keys[].kms` **(deprecated)** | `object` | no | Talos: EncryptionKeyKMS |
+| `spec.cni.custom.documents[].swapVolumeConfig.encryption.keys[].kms.endpoint` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].swapVolumeConfig.encryption.keys[].lockToState` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].swapVolumeConfig.encryption.keys[].nodeID` **(deprecated)** | `object` | no | Talos: EncryptionKeyNodeID |
+| `spec.cni.custom.documents[].swapVolumeConfig.encryption.keys[].slot` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].swapVolumeConfig.encryption.keys[].tpm` **(deprecated)** | `object` | no | Talos: EncryptionKeyTPM |
+| `spec.cni.custom.documents[].swapVolumeConfig.encryption.keys[].tpm.checkSecurebootStatusOnEnroll` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].swapVolumeConfig.encryption.keys[].tpm.options` **(deprecated)** | `object` | no | Talos: EncryptionKeyTPMOptions |
+| `spec.cni.custom.documents[].swapVolumeConfig.encryption.keys[].tpm.options.pcrs` **(deprecated)** | `[]integer` | no |  |
+| `spec.cni.custom.documents[].swapVolumeConfig.encryption.options` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].swapVolumeConfig.encryption.provider` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].swapVolumeConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].swapVolumeConfig.provisioning` **(deprecated)** | `object` | no | Talos: ProvisioningSpec |
+| `spec.cni.custom.documents[].swapVolumeConfig.provisioning.diskSelector` **(deprecated)** | `object` | no | Talos: DiskSelector |
+| `spec.cni.custom.documents[].swapVolumeConfig.provisioning.diskSelector.match` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].swapVolumeConfig.provisioning.grow` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].swapVolumeConfig.provisioning.maxSize` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].swapVolumeConfig.provisioning.minSize` **(deprecated)** | `string` | no |  |
 | `spec.cni.custom.documents[].sysctlConfig` **(deprecated)** | `object` | no | sysctlConfig is a Talos SysctlConfig document; populated when kind is "SysctlConfig". |
 | `spec.cni.custom.documents[].sysctlConfig.params` **(deprecated)** | `map[string]string` | yes |  |
+| `spec.cni.custom.documents[].sysfsConfig` **(deprecated)** | `object` | no | sysfsConfig is a Talos SysfsConfig document; populated when kind is "SysfsConfig". |
+| `spec.cni.custom.documents[].sysfsConfig.params` **(deprecated)** | `map[string]string` | yes |  |
+| `spec.cni.custom.documents[].tcpProbeConfig` **(deprecated)** | `object` | no | tcpProbeConfig is a Talos TCPProbeConfig document; populated when kind is "TCPProbeConfig". |
+| `spec.cni.custom.documents[].tcpProbeConfig.endpoint` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].tcpProbeConfig.failureThreshold` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].tcpProbeConfig.interval` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].tcpProbeConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].tcpProbeConfig.timeout` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].timeSyncConfig` **(deprecated)** | `object` | no | timeSyncConfig is a Talos TimeSyncConfig document; populated when kind is "TimeSyncConfig". |
+| `spec.cni.custom.documents[].timeSyncConfig.bootTimeout` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].timeSyncConfig.enabled` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].timeSyncConfig.ntp` **(deprecated)** | `object` | no | Talos: NTPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/timesyncconfig |
+| `spec.cni.custom.documents[].timeSyncConfig.ntp.servers` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].timeSyncConfig.ntp.useNTS` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].timeSyncConfig.ptp` **(deprecated)** | `object` | no | Talos: PTPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/timesyncconfig |
+| `spec.cni.custom.documents[].timeSyncConfig.ptp.devices` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].trustedRootsConfig` **(deprecated)** | `object` | no | trustedRootsConfig is a Talos TrustedRootsConfig document; populated when kind is "TrustedRootsConfig". |
+| `spec.cni.custom.documents[].trustedRootsConfig.certificates` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].trustedRootsConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].udevRulesConfig` **(deprecated)** | `object` | no | udevRulesConfig is a Talos UdevRulesConfig document; populated when kind is "UdevRulesConfig". |
+| `spec.cni.custom.documents[].udevRulesConfig.rules` **(deprecated)** | `[]string` | no |  |
 | `spec.cni.custom.documents[].userVolumeConfig` **(deprecated)** | `object` | no | userVolumeConfig is a Talos UserVolumeConfig document; populated when kind is "UserVolumeConfig". |
 | `spec.cni.custom.documents[].userVolumeConfig.encryption` **(deprecated)** | `object` | no | Talos: EncryptionSpec |
 | `spec.cni.custom.documents[].userVolumeConfig.encryption.allowDiscards` **(deprecated)** | `boolean` | no |  |
@@ -551,6 +945,36 @@ Version v1alpha1: has a `status` subresource.
 | `spec.cni.custom.documents[].userVolumeConfig.trim.enabled` **(deprecated)** | `boolean` | no |  |
 | `spec.cni.custom.documents[].userVolumeConfig.trim.interval` **(deprecated)** | `string` | no |  |
 | `spec.cni.custom.documents[].userVolumeConfig.volumeType` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].vethConfig` **(deprecated)** | `object` | no | vethConfig is a Talos VethConfig document; populated when kind is "VethConfig". |
+| `spec.cni.custom.documents[].vethConfig.addresses` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].vethConfig.addresses[].address` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].vethConfig.addresses[].routePriority` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].vethConfig.mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].vethConfig.multicast` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].vethConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].vethConfig.peer` **(deprecated)** | `object` | yes | Talos: VethPeerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/vethconfig |
+| `spec.cni.custom.documents[].vethConfig.peer.addresses` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].vethConfig.peer.addresses[].address` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].vethConfig.peer.addresses[].routePriority` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].vethConfig.peer.mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].vethConfig.peer.multicast` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].vethConfig.peer.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].vethConfig.peer.routes` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].vethConfig.peer.routes[].destination` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].vethConfig.peer.routes[].gateway` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].vethConfig.peer.routes[].metric` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].vethConfig.peer.routes[].mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].vethConfig.peer.routes[].source` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].vethConfig.peer.routes[].table` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].vethConfig.peer.up` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].vethConfig.routes` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].vethConfig.routes[].destination` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].vethConfig.routes[].gateway` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].vethConfig.routes[].metric` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].vethConfig.routes[].mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].vethConfig.routes[].source` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].vethConfig.routes[].table` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].vethConfig.up` **(deprecated)** | `boolean` | no |  |
 | `spec.cni.custom.documents[].volumeConfig` **(deprecated)** | `object` | no | volumeConfig is a Talos VolumeConfig document (a system volume, e.g. STATE or EPHEMERAL, placed on its own disk); populated when kind is "VolumeConfig". |
 | `spec.cni.custom.documents[].volumeConfig.encryption` **(deprecated)** | `object` | no | Talos: EncryptionSpec |
 | `spec.cni.custom.documents[].volumeConfig.encryption.allowDiscards` **(deprecated)** | `boolean` | no |  |
@@ -588,6 +1012,30 @@ Version v1alpha1: has a `status` subresource.
 | `spec.cni.custom.documents[].volumeConfig.trim` **(deprecated)** | `object` | no | Talos: TrimConfig |
 | `spec.cni.custom.documents[].volumeConfig.trim.enabled` **(deprecated)** | `boolean` | no |  |
 | `spec.cni.custom.documents[].volumeConfig.trim.interval` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].vrfConfig` **(deprecated)** | `object` | no | vrfConfig is a Talos VRFConfig document; populated when kind is "VRFConfig". |
+| `spec.cni.custom.documents[].vrfConfig.addresses` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].vrfConfig.addresses[].address` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].vrfConfig.addresses[].routePriority` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].vrfConfig.hardwareAddr` **(deprecated)** | `string (byte)` | no |  |
+| `spec.cni.custom.documents[].vrfConfig.links` **(deprecated)** | `[]string` | no |  |
+| `spec.cni.custom.documents[].vrfConfig.mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].vrfConfig.multicast` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].vrfConfig.name` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].vrfConfig.routes` **(deprecated)** | `[]object` | no |  |
+| `spec.cni.custom.documents[].vrfConfig.routes[].destination` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].vrfConfig.routes[].gateway` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].vrfConfig.routes[].metric` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].vrfConfig.routes[].mtu` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].vrfConfig.routes[].source` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].vrfConfig.routes[].table` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].vrfConfig.table` **(deprecated)** | `integer` | yes |  |
+| `spec.cni.custom.documents[].vrfConfig.up` **(deprecated)** | `boolean` | no |  |
+| `spec.cni.custom.documents[].watchdogTimerConfig` **(deprecated)** | `object` | no | watchdogTimerConfig is a Talos WatchdogTimerConfig document; populated when kind is "WatchdogTimerConfig". |
+| `spec.cni.custom.documents[].watchdogTimerConfig.device` **(deprecated)** | `string` | yes |  |
+| `spec.cni.custom.documents[].watchdogTimerConfig.timeout` **(deprecated)** | `string` | no |  |
+| `spec.cni.custom.documents[].zswapConfig` **(deprecated)** | `object` | no | zswapConfig is a Talos ZswapConfig document; populated when kind is "ZswapConfig". |
+| `spec.cni.custom.documents[].zswapConfig.maxPoolPercent` **(deprecated)** | `integer` | no |  |
+| `spec.cni.custom.documents[].zswapConfig.shrinkerEnabled` **(deprecated)** | `boolean` | no |  |
 | `spec.cni.custom.source` **(deprecated)** | `object` | yes | source points Argo CD at the chart or manifests for this CNI. |
 | `spec.cni.custom.source.chart` **(deprecated)** | `string` | no | chart is a Helm chart name within repoURL; set instead of path. |
 | `spec.cni.custom.source.path` **(deprecated)** | `string` | no | path is a directory within repoURL holding plain manifests; set instead of chart. |

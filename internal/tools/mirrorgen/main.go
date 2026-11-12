@@ -26,6 +26,8 @@ const (
 	pkgMeta     = "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
 	// pkgNetwork holds the network document kinds (ResolverConfig first).
 	pkgNetwork    = "github.com/siderolabs/talos/pkg/machinery/config/types/network"
+	pkgK8s        = "github.com/siderolabs/talos/pkg/machinery/config/types/k8s"
+	pkgStorage    = "github.com/siderolabs/talos/pkg/machinery/config/types/storage"
 	pkgNethelpers = "github.com/siderolabs/talos/pkg/machinery/nethelpers"
 	// pkgBlock holds the volume config document kinds (phase 3: disk roles).
 	pkgBlock = "github.com/siderolabs/talos/pkg/machinery/config/types/block"
@@ -109,6 +111,10 @@ var substTable = map[string]substKind{
 	"time.Duration":                         substScalar,
 	pkgMeta + ".Addr":                       substScalar,
 	pkgMeta + ".Prefix":                     substScalar,
+	pkgMeta + ".URL":                        substScalar,
+	"net/netip.Addr":                        substScalar,
+	"net/netip.AddrPort":                    substScalar,
+	"net/netip.Prefix":                      substScalar,
 	pkgMeta + ".AddrPort":                   substScalar,
 	pkgMeta + ".ArgValue":                   substArgValue,
 	pkgV1Alpha1 + ".DiskSize":               substScalar,
@@ -315,6 +321,9 @@ var typeRenames = map[string]string{
 	pkgBlock + ".EncryptionKeyNodeID": "VolumeEncryptionKeyNodeID",
 	// network documents: the newer package takes the prefix, as block does.
 	pkgNetwork + ".HostDNSConfig": "ResolverHostDNSConfig",
+	// k8s and storage documents: the newer package takes the prefix of its own area.
+	pkgK8s + ".ResourcesConfig":      "KubeResourcesConfig",
+	pkgStorage + ".ProvisioningSpec": "StorageProvisioningSpec",
 }
 
 func fatalf(format string, args ...any) {

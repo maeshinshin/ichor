@@ -25,8 +25,15 @@ import (
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 	"github.com/siderolabs/talos/pkg/machinery/config/config"
 	mblock "github.com/siderolabs/talos/pkg/machinery/config/types/block"
+	mcontainer "github.com/siderolabs/talos/pkg/machinery/config/types/container"
+	mcri "github.com/siderolabs/talos/pkg/machinery/config/types/cri"
+	mhardware "github.com/siderolabs/talos/pkg/machinery/config/types/hardware"
+	mk8s "github.com/siderolabs/talos/pkg/machinery/config/types/k8s"
 	mnetwork "github.com/siderolabs/talos/pkg/machinery/config/types/network"
 	mruntime "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
+	mextensions "github.com/siderolabs/talos/pkg/machinery/config/types/runtime/extensions"
+	msecurity "github.com/siderolabs/talos/pkg/machinery/config/types/security"
+	mstorage "github.com/siderolabs/talos/pkg/machinery/config/types/storage"
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
 )
 
@@ -40,7 +47,7 @@ import (
 // +kubebuilder:validation:MaxProperties=2
 type TalosConfigPatchDocument struct {
 	// kind selects which of the fields below is populated.
-	// +kubebuilder:validation:Enum=SysctlConfig;KernelModuleConfig;Config;VolumeConfig;UserVolumeConfig;RawVolumeConfig;ResolverConfig
+	// +kubebuilder:validation:Enum=SysctlConfig;KernelModuleConfig;Config;VolumeConfig;UserVolumeConfig;RawVolumeConfig;ResolverConfig;BGPInstanceConfig;BlackholeRouteConfig;BondConfig;BridgeConfig;ContainerConfig;DHCPv6Config;DummyLinkConfig;EnvironmentConfig;EtcFileConfig;EthernetConfig;EventSinkConfig;ExistingVolumeConfig;ExtensionServiceConfig;ExternalVolumeConfig;FilesystemScrubConfig;FilesystemTrimConfig;HTTPProbeConfig;ImageCacheConfig;ImageVerificationConfig;KmsgLogConfig;KubeAPIServerConfig;KubeClusterConfig;KubeControllerManagerConfig;KubeCoreDNSConfig;KubeInlineManifestConfig;KubeNetworkConfig;KubeNodeConfig;KubePrismConfig;KubeSpanConfig;KubeSpanEndpointsConfig;KubeTalosAPIAccessConfig;LVMLogicalVolumeConfig;LVMVolumeGroupConfig;Layer2VIPConfig;OOMConfig;PCIDriverRebindConfig;RAIDArrayConfig;RegistryMirrorConfig;RoutingRuleConfig;StaticHostConfig;SwapVolumeConfig;SysfsConfig;TCPProbeConfig;TimeSyncConfig;TrustedRootsConfig;UdevRulesConfig;VRFConfig;VethConfig;WatchdogTimerConfig;ZswapConfig
 	// +unionDiscriminator
 	// +required
 	Kind string `json:"kind"`
@@ -74,6 +81,206 @@ type TalosConfigPatchDocument struct {
 	// resolverConfig is a Talos ResolverConfig document (DNS nameservers and search domains); populated when kind is "ResolverConfig".
 	// +optional
 	ResolverConfig *typedconfig.ResolverConfigV1Alpha1 `json:"resolverConfig,omitempty"`
+
+	// bgpInstanceConfig is a Talos BGPInstanceConfig document; populated when kind is "BGPInstanceConfig".
+	// +optional
+	BGPInstanceConfig *typedconfig.BGPInstanceConfigV1Alpha1 `json:"bgpInstanceConfig,omitempty"`
+
+	// blackholeRouteConfig is a Talos BlackholeRouteConfig document; populated when kind is "BlackholeRouteConfig".
+	// +optional
+	BlackholeRouteConfig *typedconfig.BlackholeRouteConfigV1Alpha1 `json:"blackholeRouteConfig,omitempty"`
+
+	// bondConfig is a Talos BondConfig document; populated when kind is "BondConfig".
+	// +optional
+	BondConfig *typedconfig.BondConfigV1Alpha1 `json:"bondConfig,omitempty"`
+
+	// bridgeConfig is a Talos BridgeConfig document; populated when kind is "BridgeConfig".
+	// +optional
+	BridgeConfig *typedconfig.BridgeConfigV1Alpha1 `json:"bridgeConfig,omitempty"`
+
+	// containerConfig is a Talos ContainerConfig document; populated when kind is "ContainerConfig".
+	// +optional
+	ContainerConfig *typedconfig.ContainerConfigV1Alpha1 `json:"containerConfig,omitempty"`
+
+	// dhcpv6Config is a Talos DHCPv6Config document; populated when kind is "DHCPv6Config".
+	// +optional
+	DHCPv6Config *typedconfig.DHCPv6ConfigV1Alpha1 `json:"dhcpv6Config,omitempty"`
+
+	// dummyLinkConfig is a Talos DummyLinkConfig document; populated when kind is "DummyLinkConfig".
+	// +optional
+	DummyLinkConfig *typedconfig.DummyLinkConfigV1Alpha1 `json:"dummyLinkConfig,omitempty"`
+
+	// environmentConfig is a Talos EnvironmentConfig document; populated when kind is "EnvironmentConfig".
+	// +optional
+	EnvironmentConfig *typedconfig.EnvironmentV1Alpha1 `json:"environmentConfig,omitempty"`
+
+	// etcFileConfig is a Talos EtcFileConfig document; populated when kind is "EtcFileConfig".
+	// +optional
+	EtcFileConfig *typedconfig.EtcFileConfigV1Alpha1 `json:"etcFileConfig,omitempty"`
+
+	// ethernetConfig is a Talos EthernetConfig document; populated when kind is "EthernetConfig".
+	// +optional
+	EthernetConfig *typedconfig.EthernetConfigV1Alpha1 `json:"ethernetConfig,omitempty"`
+
+	// eventSinkConfig is a Talos EventSinkConfig document; populated when kind is "EventSinkConfig".
+	// +optional
+	EventSinkConfig *typedconfig.EventSinkV1Alpha1 `json:"eventSinkConfig,omitempty"`
+
+	// existingVolumeConfig is a Talos ExistingVolumeConfig document; populated when kind is "ExistingVolumeConfig".
+	// +optional
+	ExistingVolumeConfig *typedconfig.ExistingVolumeConfigV1Alpha1 `json:"existingVolumeConfig,omitempty"`
+
+	// extensionServiceConfig is a Talos ExtensionServiceConfig document; populated when kind is "ExtensionServiceConfig".
+	// +optional
+	ExtensionServiceConfig *typedconfig.ServiceConfigV1Alpha1 `json:"extensionServiceConfig,omitempty"`
+
+	// externalVolumeConfig is a Talos ExternalVolumeConfig document; populated when kind is "ExternalVolumeConfig".
+	// +optional
+	ExternalVolumeConfig *typedconfig.ExternalVolumeConfigV1Alpha1 `json:"externalVolumeConfig,omitempty"`
+
+	// filesystemScrubConfig is a Talos FilesystemScrubConfig document; populated when kind is "FilesystemScrubConfig".
+	// +optional
+	FilesystemScrubConfig *typedconfig.FilesystemScrubConfigV1Alpha1 `json:"filesystemScrubConfig,omitempty"`
+
+	// filesystemTrimConfig is a Talos FilesystemTrimConfig document; populated when kind is "FilesystemTrimConfig".
+	// +optional
+	FilesystemTrimConfig *typedconfig.FilesystemTrimConfigV1Alpha1 `json:"filesystemTrimConfig,omitempty"`
+
+	// httpProbeConfig is a Talos HTTPProbeConfig document; populated when kind is "HTTPProbeConfig".
+	// +optional
+	HTTPProbeConfig *typedconfig.HTTPProbeConfigV1Alpha1 `json:"httpProbeConfig,omitempty"`
+
+	// imageCacheConfig is a Talos ImageCacheConfig document; populated when kind is "ImageCacheConfig".
+	// +optional
+	ImageCacheConfig *typedconfig.ImageCacheConfigV1Alpha1 `json:"imageCacheConfig,omitempty"`
+
+	// imageVerificationConfig is a Talos ImageVerificationConfig document; populated when kind is "ImageVerificationConfig".
+	// +optional
+	ImageVerificationConfig *typedconfig.ImageVerificationConfigV1Alpha1 `json:"imageVerificationConfig,omitempty"`
+
+	// kmsgLogConfig is a Talos KmsgLogConfig document; populated when kind is "KmsgLogConfig".
+	// +optional
+	KmsgLogConfig *typedconfig.KmsgLogV1Alpha1 `json:"kmsgLogConfig,omitempty"`
+
+	// kubeAPIServerConfig is a Talos KubeAPIServerConfig document; populated when kind is "KubeAPIServerConfig".
+	// +optional
+	KubeAPIServerConfig *typedconfig.KubeAPIServerConfigV1Alpha1 `json:"kubeAPIServerConfig,omitempty"`
+
+	// kubeClusterConfig is a Talos KubeClusterConfig document; populated when kind is "KubeClusterConfig".
+	// +optional
+	KubeClusterConfig *typedconfig.KubeClusterConfigV1Alpha1 `json:"kubeClusterConfig,omitempty"`
+
+	// kubeControllerManagerConfig is a Talos KubeControllerManagerConfig document; populated when kind is "KubeControllerManagerConfig".
+	// +optional
+	KubeControllerManagerConfig *typedconfig.KubeControllerManagerConfigV1Alpha1 `json:"kubeControllerManagerConfig,omitempty"`
+
+	// kubeCoreDNSConfig is a Talos KubeCoreDNSConfig document; populated when kind is "KubeCoreDNSConfig".
+	// +optional
+	KubeCoreDNSConfig *typedconfig.KubeCoreDNSConfigV1Alpha1 `json:"kubeCoreDNSConfig,omitempty"`
+
+	// kubeInlineManifestConfig is a Talos KubeInlineManifestConfig document; populated when kind is "KubeInlineManifestConfig".
+	// +optional
+	KubeInlineManifestConfig *typedconfig.KubeInlineManifestConfigV1Alpha1 `json:"kubeInlineManifestConfig,omitempty"`
+
+	// kubeNetworkConfig is a Talos KubeNetworkConfig document; populated when kind is "KubeNetworkConfig".
+	// +optional
+	KubeNetworkConfig *typedconfig.KubeNetworkConfigV1Alpha1 `json:"kubeNetworkConfig,omitempty"`
+
+	// kubeNodeConfig is a Talos KubeNodeConfig document; populated when kind is "KubeNodeConfig".
+	// +optional
+	KubeNodeConfig *typedconfig.KubeNodeConfigV1Alpha1 `json:"kubeNodeConfig,omitempty"`
+
+	// kubePrismConfig is a Talos KubePrismConfig document; populated when kind is "KubePrismConfig".
+	// +optional
+	KubePrismConfig *typedconfig.KubePrismConfigV1Alpha1 `json:"kubePrismConfig,omitempty"`
+
+	// kubeSpanConfig is a Talos KubeSpanConfig document; populated when kind is "KubeSpanConfig".
+	// +optional
+	KubeSpanConfig *typedconfig.KubeSpanConfigV1Alpha1 `json:"kubeSpanConfig,omitempty"`
+
+	// kubeSpanEndpointsConfig is a Talos KubeSpanEndpointsConfig document; populated when kind is "KubeSpanEndpointsConfig".
+	// +optional
+	KubeSpanEndpointsConfig *typedconfig.KubespanEndpointsConfigV1Alpha1 `json:"kubeSpanEndpointsConfig,omitempty"`
+
+	// kubeTalosAPIAccessConfig is a Talos KubeTalosAPIAccessConfig document; populated when kind is "KubeTalosAPIAccessConfig".
+	// +optional
+	KubeTalosAPIAccessConfig *typedconfig.KubeTalosAPIAccessConfigV1Alpha1 `json:"kubeTalosAPIAccessConfig,omitempty"`
+
+	// lvmLogicalVolumeConfig is a Talos LVMLogicalVolumeConfig document; populated when kind is "LVMLogicalVolumeConfig".
+	// +optional
+	LVMLogicalVolumeConfig *typedconfig.LVMLogicalVolumeConfigV1Alpha1 `json:"lvmLogicalVolumeConfig,omitempty"`
+
+	// lvmVolumeGroupConfig is a Talos LVMVolumeGroupConfig document; populated when kind is "LVMVolumeGroupConfig".
+	// +optional
+	LVMVolumeGroupConfig *typedconfig.LVMVolumeGroupConfigV1Alpha1 `json:"lvmVolumeGroupConfig,omitempty"`
+
+	// layer2VIPConfig is a Talos Layer2VIPConfig document; populated when kind is "Layer2VIPConfig".
+	// +optional
+	Layer2VIPConfig *typedconfig.Layer2VIPConfigV1Alpha1 `json:"layer2VIPConfig,omitempty"`
+
+	// oomConfig is a Talos OOMConfig document; populated when kind is "OOMConfig".
+	// +optional
+	OOMConfig *typedconfig.OOMV1Alpha1 `json:"oomConfig,omitempty"`
+
+	// pciDriverRebindConfig is a Talos PCIDriverRebindConfig document; populated when kind is "PCIDriverRebindConfig".
+	// +optional
+	PCIDriverRebindConfig *typedconfig.PCIDriverRebindConfigV1Alpha1 `json:"pciDriverRebindConfig,omitempty"`
+
+	// raidArrayConfig is a Talos RAIDArrayConfig document; populated when kind is "RAIDArrayConfig".
+	// +optional
+	RAIDArrayConfig *typedconfig.RAIDArrayConfigV1Alpha1 `json:"raidArrayConfig,omitempty"`
+
+	// registryMirrorConfig is a Talos RegistryMirrorConfig document; populated when kind is "RegistryMirrorConfig".
+	// +optional
+	RegistryMirrorConfig *typedconfig.RegistryMirrorConfigV1Alpha1 `json:"registryMirrorConfig,omitempty"`
+
+	// routingRuleConfig is a Talos RoutingRuleConfig document; populated when kind is "RoutingRuleConfig".
+	// +optional
+	RoutingRuleConfig *typedconfig.RoutingRuleConfigV1Alpha1 `json:"routingRuleConfig,omitempty"`
+
+	// staticHostConfig is a Talos StaticHostConfig document; populated when kind is "StaticHostConfig".
+	// +optional
+	StaticHostConfig *typedconfig.StaticHostConfigV1Alpha1 `json:"staticHostConfig,omitempty"`
+
+	// swapVolumeConfig is a Talos SwapVolumeConfig document; populated when kind is "SwapVolumeConfig".
+	// +optional
+	SwapVolumeConfig *typedconfig.SwapVolumeConfigV1Alpha1 `json:"swapVolumeConfig,omitempty"`
+
+	// sysfsConfig is a Talos SysfsConfig document; populated when kind is "SysfsConfig".
+	// +optional
+	SysfsConfig *typedconfig.SysfsConfigV1Alpha1 `json:"sysfsConfig,omitempty"`
+
+	// tcpProbeConfig is a Talos TCPProbeConfig document; populated when kind is "TCPProbeConfig".
+	// +optional
+	TCPProbeConfig *typedconfig.TCPProbeConfigV1Alpha1 `json:"tcpProbeConfig,omitempty"`
+
+	// timeSyncConfig is a Talos TimeSyncConfig document; populated when kind is "TimeSyncConfig".
+	// +optional
+	TimeSyncConfig *typedconfig.TimeSyncConfigV1Alpha1 `json:"timeSyncConfig,omitempty"`
+
+	// trustedRootsConfig is a Talos TrustedRootsConfig document; populated when kind is "TrustedRootsConfig".
+	// +optional
+	TrustedRootsConfig *typedconfig.TrustedRootsConfigV1Alpha1 `json:"trustedRootsConfig,omitempty"`
+
+	// udevRulesConfig is a Talos UdevRulesConfig document; populated when kind is "UdevRulesConfig".
+	// +optional
+	UdevRulesConfig *typedconfig.UdevRulesConfigV1Alpha1 `json:"udevRulesConfig,omitempty"`
+
+	// vrfConfig is a Talos VRFConfig document; populated when kind is "VRFConfig".
+	// +optional
+	VRFConfig *typedconfig.VRFConfigV1Alpha1 `json:"vrfConfig,omitempty"`
+
+	// vethConfig is a Talos VethConfig document; populated when kind is "VethConfig".
+	// +optional
+	VethConfig *typedconfig.VethConfigV1Alpha1 `json:"vethConfig,omitempty"`
+
+	// watchdogTimerConfig is a Talos WatchdogTimerConfig document; populated when kind is "WatchdogTimerConfig".
+	// +optional
+	WatchdogTimerConfig *typedconfig.WatchdogTimerV1Alpha1 `json:"watchdogTimerConfig,omitempty"`
+
+	// zswapConfig is a Talos ZswapConfig document; populated when kind is "ZswapConfig".
+	// +optional
+	ZswapConfig *typedconfig.ZswapConfigV1Alpha1 `json:"zswapConfig,omitempty"`
 }
 
 // TalosConfigPatchDocumentFieldKey returns the JSON name of the field a kind selects, and false for a kind
@@ -94,6 +301,106 @@ func TalosConfigPatchDocumentFieldKey(kind string) (string, bool) {
 		return "rawVolumeConfig", true
 	case "ResolverConfig":
 		return "resolverConfig", true
+	case "BGPInstanceConfig":
+		return "bgpInstanceConfig", true
+	case "BlackholeRouteConfig":
+		return "blackholeRouteConfig", true
+	case "BondConfig":
+		return "bondConfig", true
+	case "BridgeConfig":
+		return "bridgeConfig", true
+	case "ContainerConfig":
+		return "containerConfig", true
+	case "DHCPv6Config":
+		return "dhcpv6Config", true
+	case "DummyLinkConfig":
+		return "dummyLinkConfig", true
+	case "EnvironmentConfig":
+		return "environmentConfig", true
+	case "EtcFileConfig":
+		return "etcFileConfig", true
+	case "EthernetConfig":
+		return "ethernetConfig", true
+	case "EventSinkConfig":
+		return "eventSinkConfig", true
+	case "ExistingVolumeConfig":
+		return "existingVolumeConfig", true
+	case "ExtensionServiceConfig":
+		return "extensionServiceConfig", true
+	case "ExternalVolumeConfig":
+		return "externalVolumeConfig", true
+	case "FilesystemScrubConfig":
+		return "filesystemScrubConfig", true
+	case "FilesystemTrimConfig":
+		return "filesystemTrimConfig", true
+	case "HTTPProbeConfig":
+		return "httpProbeConfig", true
+	case "ImageCacheConfig":
+		return "imageCacheConfig", true
+	case "ImageVerificationConfig":
+		return "imageVerificationConfig", true
+	case "KmsgLogConfig":
+		return "kmsgLogConfig", true
+	case "KubeAPIServerConfig":
+		return "kubeAPIServerConfig", true
+	case "KubeClusterConfig":
+		return "kubeClusterConfig", true
+	case "KubeControllerManagerConfig":
+		return "kubeControllerManagerConfig", true
+	case "KubeCoreDNSConfig":
+		return "kubeCoreDNSConfig", true
+	case "KubeInlineManifestConfig":
+		return "kubeInlineManifestConfig", true
+	case "KubeNetworkConfig":
+		return "kubeNetworkConfig", true
+	case "KubeNodeConfig":
+		return "kubeNodeConfig", true
+	case "KubePrismConfig":
+		return "kubePrismConfig", true
+	case "KubeSpanConfig":
+		return "kubeSpanConfig", true
+	case "KubeSpanEndpointsConfig":
+		return "kubeSpanEndpointsConfig", true
+	case "KubeTalosAPIAccessConfig":
+		return "kubeTalosAPIAccessConfig", true
+	case "LVMLogicalVolumeConfig":
+		return "lvmLogicalVolumeConfig", true
+	case "LVMVolumeGroupConfig":
+		return "lvmVolumeGroupConfig", true
+	case "Layer2VIPConfig":
+		return "layer2VIPConfig", true
+	case "OOMConfig":
+		return "oomConfig", true
+	case "PCIDriverRebindConfig":
+		return "pciDriverRebindConfig", true
+	case "RAIDArrayConfig":
+		return "raidArrayConfig", true
+	case "RegistryMirrorConfig":
+		return "registryMirrorConfig", true
+	case "RoutingRuleConfig":
+		return "routingRuleConfig", true
+	case "StaticHostConfig":
+		return "staticHostConfig", true
+	case "SwapVolumeConfig":
+		return "swapVolumeConfig", true
+	case "SysfsConfig":
+		return "sysfsConfig", true
+	case "TCPProbeConfig":
+		return "tcpProbeConfig", true
+	case "TimeSyncConfig":
+		return "timeSyncConfig", true
+	case "TrustedRootsConfig":
+		return "trustedRootsConfig", true
+	case "UdevRulesConfig":
+		return "udevRulesConfig", true
+	case "VRFConfig":
+		return "vrfConfig", true
+	case "VethConfig":
+		return "vethConfig", true
+	case "WatchdogTimerConfig":
+		return "watchdogTimerConfig", true
+	case "ZswapConfig":
+		return "zswapConfig", true
 	default:
 		return "", false
 	}
@@ -137,6 +444,206 @@ func (d *TalosConfigPatchDocument) Validate() error {
 
 	if d.ResolverConfig != nil {
 		set = append(set, "resolverConfig")
+	}
+
+	if d.BGPInstanceConfig != nil {
+		set = append(set, "bgpInstanceConfig")
+	}
+
+	if d.BlackholeRouteConfig != nil {
+		set = append(set, "blackholeRouteConfig")
+	}
+
+	if d.BondConfig != nil {
+		set = append(set, "bondConfig")
+	}
+
+	if d.BridgeConfig != nil {
+		set = append(set, "bridgeConfig")
+	}
+
+	if d.ContainerConfig != nil {
+		set = append(set, "containerConfig")
+	}
+
+	if d.DHCPv6Config != nil {
+		set = append(set, "dhcpv6Config")
+	}
+
+	if d.DummyLinkConfig != nil {
+		set = append(set, "dummyLinkConfig")
+	}
+
+	if d.EnvironmentConfig != nil {
+		set = append(set, "environmentConfig")
+	}
+
+	if d.EtcFileConfig != nil {
+		set = append(set, "etcFileConfig")
+	}
+
+	if d.EthernetConfig != nil {
+		set = append(set, "ethernetConfig")
+	}
+
+	if d.EventSinkConfig != nil {
+		set = append(set, "eventSinkConfig")
+	}
+
+	if d.ExistingVolumeConfig != nil {
+		set = append(set, "existingVolumeConfig")
+	}
+
+	if d.ExtensionServiceConfig != nil {
+		set = append(set, "extensionServiceConfig")
+	}
+
+	if d.ExternalVolumeConfig != nil {
+		set = append(set, "externalVolumeConfig")
+	}
+
+	if d.FilesystemScrubConfig != nil {
+		set = append(set, "filesystemScrubConfig")
+	}
+
+	if d.FilesystemTrimConfig != nil {
+		set = append(set, "filesystemTrimConfig")
+	}
+
+	if d.HTTPProbeConfig != nil {
+		set = append(set, "httpProbeConfig")
+	}
+
+	if d.ImageCacheConfig != nil {
+		set = append(set, "imageCacheConfig")
+	}
+
+	if d.ImageVerificationConfig != nil {
+		set = append(set, "imageVerificationConfig")
+	}
+
+	if d.KmsgLogConfig != nil {
+		set = append(set, "kmsgLogConfig")
+	}
+
+	if d.KubeAPIServerConfig != nil {
+		set = append(set, "kubeAPIServerConfig")
+	}
+
+	if d.KubeClusterConfig != nil {
+		set = append(set, "kubeClusterConfig")
+	}
+
+	if d.KubeControllerManagerConfig != nil {
+		set = append(set, "kubeControllerManagerConfig")
+	}
+
+	if d.KubeCoreDNSConfig != nil {
+		set = append(set, "kubeCoreDNSConfig")
+	}
+
+	if d.KubeInlineManifestConfig != nil {
+		set = append(set, "kubeInlineManifestConfig")
+	}
+
+	if d.KubeNetworkConfig != nil {
+		set = append(set, "kubeNetworkConfig")
+	}
+
+	if d.KubeNodeConfig != nil {
+		set = append(set, "kubeNodeConfig")
+	}
+
+	if d.KubePrismConfig != nil {
+		set = append(set, "kubePrismConfig")
+	}
+
+	if d.KubeSpanConfig != nil {
+		set = append(set, "kubeSpanConfig")
+	}
+
+	if d.KubeSpanEndpointsConfig != nil {
+		set = append(set, "kubeSpanEndpointsConfig")
+	}
+
+	if d.KubeTalosAPIAccessConfig != nil {
+		set = append(set, "kubeTalosAPIAccessConfig")
+	}
+
+	if d.LVMLogicalVolumeConfig != nil {
+		set = append(set, "lvmLogicalVolumeConfig")
+	}
+
+	if d.LVMVolumeGroupConfig != nil {
+		set = append(set, "lvmVolumeGroupConfig")
+	}
+
+	if d.Layer2VIPConfig != nil {
+		set = append(set, "layer2VIPConfig")
+	}
+
+	if d.OOMConfig != nil {
+		set = append(set, "oomConfig")
+	}
+
+	if d.PCIDriverRebindConfig != nil {
+		set = append(set, "pciDriverRebindConfig")
+	}
+
+	if d.RAIDArrayConfig != nil {
+		set = append(set, "raidArrayConfig")
+	}
+
+	if d.RegistryMirrorConfig != nil {
+		set = append(set, "registryMirrorConfig")
+	}
+
+	if d.RoutingRuleConfig != nil {
+		set = append(set, "routingRuleConfig")
+	}
+
+	if d.StaticHostConfig != nil {
+		set = append(set, "staticHostConfig")
+	}
+
+	if d.SwapVolumeConfig != nil {
+		set = append(set, "swapVolumeConfig")
+	}
+
+	if d.SysfsConfig != nil {
+		set = append(set, "sysfsConfig")
+	}
+
+	if d.TCPProbeConfig != nil {
+		set = append(set, "tcpProbeConfig")
+	}
+
+	if d.TimeSyncConfig != nil {
+		set = append(set, "timeSyncConfig")
+	}
+
+	if d.TrustedRootsConfig != nil {
+		set = append(set, "trustedRootsConfig")
+	}
+
+	if d.UdevRulesConfig != nil {
+		set = append(set, "udevRulesConfig")
+	}
+
+	if d.VRFConfig != nil {
+		set = append(set, "vrfConfig")
+	}
+
+	if d.VethConfig != nil {
+		set = append(set, "vethConfig")
+	}
+
+	if d.WatchdogTimerConfig != nil {
+		set = append(set, "watchdogTimerConfig")
+	}
+
+	if d.ZswapConfig != nil {
+		set = append(set, "zswapConfig")
 	}
 
 	if len(set) == 1 && set[0] == want {
@@ -207,6 +714,356 @@ func (d *TalosConfigPatchDocument) Document() (config.Document, error) {
 		}
 
 		return doc, nil
+	case "BGPInstanceConfig":
+		doc, err := d.BGPInstanceConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("bgpInstanceConfig: %w", err)
+		}
+
+		return doc, nil
+	case "BlackholeRouteConfig":
+		doc, err := d.BlackholeRouteConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("blackholeRouteConfig: %w", err)
+		}
+
+		return doc, nil
+	case "BondConfig":
+		doc, err := d.BondConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("bondConfig: %w", err)
+		}
+
+		return doc, nil
+	case "BridgeConfig":
+		doc, err := d.BridgeConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("bridgeConfig: %w", err)
+		}
+
+		return doc, nil
+	case "ContainerConfig":
+		doc, err := d.ContainerConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("containerConfig: %w", err)
+		}
+
+		return doc, nil
+	case "DHCPv6Config":
+		doc, err := d.DHCPv6Config.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("dhcpv6Config: %w", err)
+		}
+
+		return doc, nil
+	case "DummyLinkConfig":
+		doc, err := d.DummyLinkConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("dummyLinkConfig: %w", err)
+		}
+
+		return doc, nil
+	case "EnvironmentConfig":
+		doc, err := d.EnvironmentConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("environmentConfig: %w", err)
+		}
+
+		return doc, nil
+	case "EtcFileConfig":
+		doc, err := d.EtcFileConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("etcFileConfig: %w", err)
+		}
+
+		return doc, nil
+	case "EthernetConfig":
+		doc, err := d.EthernetConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("ethernetConfig: %w", err)
+		}
+
+		return doc, nil
+	case "EventSinkConfig":
+		doc, err := d.EventSinkConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("eventSinkConfig: %w", err)
+		}
+
+		return doc, nil
+	case "ExistingVolumeConfig":
+		doc, err := d.ExistingVolumeConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("existingVolumeConfig: %w", err)
+		}
+
+		return doc, nil
+	case "ExtensionServiceConfig":
+		doc, err := d.ExtensionServiceConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("extensionServiceConfig: %w", err)
+		}
+
+		return doc, nil
+	case "ExternalVolumeConfig":
+		doc, err := d.ExternalVolumeConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("externalVolumeConfig: %w", err)
+		}
+
+		return doc, nil
+	case "FilesystemScrubConfig":
+		doc, err := d.FilesystemScrubConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("filesystemScrubConfig: %w", err)
+		}
+
+		return doc, nil
+	case "FilesystemTrimConfig":
+		doc, err := d.FilesystemTrimConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("filesystemTrimConfig: %w", err)
+		}
+
+		return doc, nil
+	case "HTTPProbeConfig":
+		doc, err := d.HTTPProbeConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("httpProbeConfig: %w", err)
+		}
+
+		return doc, nil
+	case "ImageCacheConfig":
+		doc, err := d.ImageCacheConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("imageCacheConfig: %w", err)
+		}
+
+		return doc, nil
+	case "ImageVerificationConfig":
+		doc, err := d.ImageVerificationConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("imageVerificationConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KmsgLogConfig":
+		doc, err := d.KmsgLogConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kmsgLogConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KubeAPIServerConfig":
+		doc, err := d.KubeAPIServerConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubeAPIServerConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KubeClusterConfig":
+		doc, err := d.KubeClusterConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubeClusterConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KubeControllerManagerConfig":
+		doc, err := d.KubeControllerManagerConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubeControllerManagerConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KubeCoreDNSConfig":
+		doc, err := d.KubeCoreDNSConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubeCoreDNSConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KubeInlineManifestConfig":
+		doc, err := d.KubeInlineManifestConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubeInlineManifestConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KubeNetworkConfig":
+		doc, err := d.KubeNetworkConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubeNetworkConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KubeNodeConfig":
+		doc, err := d.KubeNodeConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubeNodeConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KubePrismConfig":
+		doc, err := d.KubePrismConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubePrismConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KubeSpanConfig":
+		doc, err := d.KubeSpanConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubeSpanConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KubeSpanEndpointsConfig":
+		doc, err := d.KubeSpanEndpointsConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubeSpanEndpointsConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KubeTalosAPIAccessConfig":
+		doc, err := d.KubeTalosAPIAccessConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubeTalosAPIAccessConfig: %w", err)
+		}
+
+		return doc, nil
+	case "LVMLogicalVolumeConfig":
+		doc, err := d.LVMLogicalVolumeConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("lvmLogicalVolumeConfig: %w", err)
+		}
+
+		return doc, nil
+	case "LVMVolumeGroupConfig":
+		doc, err := d.LVMVolumeGroupConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("lvmVolumeGroupConfig: %w", err)
+		}
+
+		return doc, nil
+	case "Layer2VIPConfig":
+		doc, err := d.Layer2VIPConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("layer2VIPConfig: %w", err)
+		}
+
+		return doc, nil
+	case "OOMConfig":
+		doc, err := d.OOMConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("oomConfig: %w", err)
+		}
+
+		return doc, nil
+	case "PCIDriverRebindConfig":
+		doc, err := d.PCIDriverRebindConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("pciDriverRebindConfig: %w", err)
+		}
+
+		return doc, nil
+	case "RAIDArrayConfig":
+		doc, err := d.RAIDArrayConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("raidArrayConfig: %w", err)
+		}
+
+		return doc, nil
+	case "RegistryMirrorConfig":
+		doc, err := d.RegistryMirrorConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("registryMirrorConfig: %w", err)
+		}
+
+		return doc, nil
+	case "RoutingRuleConfig":
+		doc, err := d.RoutingRuleConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("routingRuleConfig: %w", err)
+		}
+
+		return doc, nil
+	case "StaticHostConfig":
+		doc, err := d.StaticHostConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("staticHostConfig: %w", err)
+		}
+
+		return doc, nil
+	case "SwapVolumeConfig":
+		doc, err := d.SwapVolumeConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("swapVolumeConfig: %w", err)
+		}
+
+		return doc, nil
+	case "SysfsConfig":
+		doc, err := d.SysfsConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("sysfsConfig: %w", err)
+		}
+
+		return doc, nil
+	case "TCPProbeConfig":
+		doc, err := d.TCPProbeConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("tcpProbeConfig: %w", err)
+		}
+
+		return doc, nil
+	case "TimeSyncConfig":
+		doc, err := d.TimeSyncConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("timeSyncConfig: %w", err)
+		}
+
+		return doc, nil
+	case "TrustedRootsConfig":
+		doc, err := d.TrustedRootsConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("trustedRootsConfig: %w", err)
+		}
+
+		return doc, nil
+	case "UdevRulesConfig":
+		doc, err := d.UdevRulesConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("udevRulesConfig: %w", err)
+		}
+
+		return doc, nil
+	case "VRFConfig":
+		doc, err := d.VRFConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("vrfConfig: %w", err)
+		}
+
+		return doc, nil
+	case "VethConfig":
+		doc, err := d.VethConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("vethConfig: %w", err)
+		}
+
+		return doc, nil
+	case "WatchdogTimerConfig":
+		doc, err := d.WatchdogTimerConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("watchdogTimerConfig: %w", err)
+		}
+
+		return doc, nil
+	case "ZswapConfig":
+		doc, err := d.ZswapConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("zswapConfig: %w", err)
+		}
+
+		return doc, nil
 	default:
 		return nil, fmt.Errorf("unknown document kind %q", d.Kind)
 	}
@@ -265,6 +1122,356 @@ func TalosConfigPatchDocumentFromMachinery(doc config.Document) (TalosConfigPatc
 		}
 
 		return TalosConfigPatchDocument{Kind: "ResolverConfig", ResolverConfig: m}, nil
+	case *mnetwork.BGPInstanceConfigV1Alpha1:
+		m, err := typedconfig.BGPInstanceConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("bgpInstanceConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "BGPInstanceConfig", BGPInstanceConfig: m}, nil
+	case *mnetwork.BlackholeRouteConfigV1Alpha1:
+		m, err := typedconfig.BlackholeRouteConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("blackholeRouteConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "BlackholeRouteConfig", BlackholeRouteConfig: m}, nil
+	case *mnetwork.BondConfigV1Alpha1:
+		m, err := typedconfig.BondConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("bondConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "BondConfig", BondConfig: m}, nil
+	case *mnetwork.BridgeConfigV1Alpha1:
+		m, err := typedconfig.BridgeConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("bridgeConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "BridgeConfig", BridgeConfig: m}, nil
+	case *mcontainer.ContainerConfigV1Alpha1:
+		m, err := typedconfig.ContainerConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("containerConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "ContainerConfig", ContainerConfig: m}, nil
+	case *mnetwork.DHCPv6ConfigV1Alpha1:
+		m, err := typedconfig.DHCPv6ConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("dhcpv6Config: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "DHCPv6Config", DHCPv6Config: m}, nil
+	case *mnetwork.DummyLinkConfigV1Alpha1:
+		m, err := typedconfig.DummyLinkConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("dummyLinkConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "DummyLinkConfig", DummyLinkConfig: m}, nil
+	case *mruntime.EnvironmentV1Alpha1:
+		m, err := typedconfig.EnvironmentV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("environmentConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "EnvironmentConfig", EnvironmentConfig: m}, nil
+	case *mruntime.EtcFileConfigV1Alpha1:
+		m, err := typedconfig.EtcFileConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("etcFileConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "EtcFileConfig", EtcFileConfig: m}, nil
+	case *mnetwork.EthernetConfigV1Alpha1:
+		m, err := typedconfig.EthernetConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("ethernetConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "EthernetConfig", EthernetConfig: m}, nil
+	case *mruntime.EventSinkV1Alpha1:
+		m, err := typedconfig.EventSinkV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("eventSinkConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "EventSinkConfig", EventSinkConfig: m}, nil
+	case *mblock.ExistingVolumeConfigV1Alpha1:
+		m, err := typedconfig.ExistingVolumeConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("existingVolumeConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "ExistingVolumeConfig", ExistingVolumeConfig: m}, nil
+	case *mextensions.ServiceConfigV1Alpha1:
+		m, err := typedconfig.ServiceConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("extensionServiceConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "ExtensionServiceConfig", ExtensionServiceConfig: m}, nil
+	case *mblock.ExternalVolumeConfigV1Alpha1:
+		m, err := typedconfig.ExternalVolumeConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("externalVolumeConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "ExternalVolumeConfig", ExternalVolumeConfig: m}, nil
+	case *mblock.FilesystemScrubConfigV1Alpha1:
+		m, err := typedconfig.FilesystemScrubConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("filesystemScrubConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "FilesystemScrubConfig", FilesystemScrubConfig: m}, nil
+	case *mblock.FilesystemTrimConfigV1Alpha1:
+		m, err := typedconfig.FilesystemTrimConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("filesystemTrimConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "FilesystemTrimConfig", FilesystemTrimConfig: m}, nil
+	case *mnetwork.HTTPProbeConfigV1Alpha1:
+		m, err := typedconfig.HTTPProbeConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("httpProbeConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "HTTPProbeConfig", HTTPProbeConfig: m}, nil
+	case *mcri.ImageCacheConfigV1Alpha1:
+		m, err := typedconfig.ImageCacheConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("imageCacheConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "ImageCacheConfig", ImageCacheConfig: m}, nil
+	case *msecurity.ImageVerificationConfigV1Alpha1:
+		m, err := typedconfig.ImageVerificationConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("imageVerificationConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "ImageVerificationConfig", ImageVerificationConfig: m}, nil
+	case *mruntime.KmsgLogV1Alpha1:
+		m, err := typedconfig.KmsgLogV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kmsgLogConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KmsgLogConfig", KmsgLogConfig: m}, nil
+	case *mk8s.KubeAPIServerConfigV1Alpha1:
+		m, err := typedconfig.KubeAPIServerConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubeAPIServerConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubeAPIServerConfig", KubeAPIServerConfig: m}, nil
+	case *mk8s.KubeClusterConfigV1Alpha1:
+		m, err := typedconfig.KubeClusterConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubeClusterConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubeClusterConfig", KubeClusterConfig: m}, nil
+	case *mk8s.KubeControllerManagerConfigV1Alpha1:
+		m, err := typedconfig.KubeControllerManagerConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubeControllerManagerConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubeControllerManagerConfig", KubeControllerManagerConfig: m}, nil
+	case *mk8s.KubeCoreDNSConfigV1Alpha1:
+		m, err := typedconfig.KubeCoreDNSConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubeCoreDNSConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubeCoreDNSConfig", KubeCoreDNSConfig: m}, nil
+	case *mk8s.KubeInlineManifestConfigV1Alpha1:
+		m, err := typedconfig.KubeInlineManifestConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubeInlineManifestConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubeInlineManifestConfig", KubeInlineManifestConfig: m}, nil
+	case *mk8s.KubeNetworkConfigV1Alpha1:
+		m, err := typedconfig.KubeNetworkConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubeNetworkConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubeNetworkConfig", KubeNetworkConfig: m}, nil
+	case *mk8s.KubeNodeConfigV1Alpha1:
+		m, err := typedconfig.KubeNodeConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubeNodeConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubeNodeConfig", KubeNodeConfig: m}, nil
+	case *mk8s.KubePrismConfigV1Alpha1:
+		m, err := typedconfig.KubePrismConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubePrismConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubePrismConfig", KubePrismConfig: m}, nil
+	case *mnetwork.KubeSpanConfigV1Alpha1:
+		m, err := typedconfig.KubeSpanConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubeSpanConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubeSpanConfig", KubeSpanConfig: m}, nil
+	case *mnetwork.KubespanEndpointsConfigV1Alpha1:
+		m, err := typedconfig.KubespanEndpointsConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubeSpanEndpointsConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubeSpanEndpointsConfig", KubeSpanEndpointsConfig: m}, nil
+	case *mk8s.KubeTalosAPIAccessConfigV1Alpha1:
+		m, err := typedconfig.KubeTalosAPIAccessConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubeTalosAPIAccessConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubeTalosAPIAccessConfig", KubeTalosAPIAccessConfig: m}, nil
+	case *mstorage.LVMLogicalVolumeConfigV1Alpha1:
+		m, err := typedconfig.LVMLogicalVolumeConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("lvmLogicalVolumeConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "LVMLogicalVolumeConfig", LVMLogicalVolumeConfig: m}, nil
+	case *mstorage.LVMVolumeGroupConfigV1Alpha1:
+		m, err := typedconfig.LVMVolumeGroupConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("lvmVolumeGroupConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "LVMVolumeGroupConfig", LVMVolumeGroupConfig: m}, nil
+	case *mnetwork.Layer2VIPConfigV1Alpha1:
+		m, err := typedconfig.Layer2VIPConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("layer2VIPConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "Layer2VIPConfig", Layer2VIPConfig: m}, nil
+	case *mruntime.OOMV1Alpha1:
+		m, err := typedconfig.OOMV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("oomConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "OOMConfig", OOMConfig: m}, nil
+	case *mhardware.PCIDriverRebindConfigV1Alpha1:
+		m, err := typedconfig.PCIDriverRebindConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("pciDriverRebindConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "PCIDriverRebindConfig", PCIDriverRebindConfig: m}, nil
+	case *mstorage.RAIDArrayConfigV1Alpha1:
+		m, err := typedconfig.RAIDArrayConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("raidArrayConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "RAIDArrayConfig", RAIDArrayConfig: m}, nil
+	case *mcri.RegistryMirrorConfigV1Alpha1:
+		m, err := typedconfig.RegistryMirrorConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("registryMirrorConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "RegistryMirrorConfig", RegistryMirrorConfig: m}, nil
+	case *mnetwork.RoutingRuleConfigV1Alpha1:
+		m, err := typedconfig.RoutingRuleConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("routingRuleConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "RoutingRuleConfig", RoutingRuleConfig: m}, nil
+	case *mnetwork.StaticHostConfigV1Alpha1:
+		m, err := typedconfig.StaticHostConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("staticHostConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "StaticHostConfig", StaticHostConfig: m}, nil
+	case *mblock.SwapVolumeConfigV1Alpha1:
+		m, err := typedconfig.SwapVolumeConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("swapVolumeConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "SwapVolumeConfig", SwapVolumeConfig: m}, nil
+	case *mruntime.SysfsConfigV1Alpha1:
+		m, err := typedconfig.SysfsConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("sysfsConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "SysfsConfig", SysfsConfig: m}, nil
+	case *mnetwork.TCPProbeConfigV1Alpha1:
+		m, err := typedconfig.TCPProbeConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("tcpProbeConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "TCPProbeConfig", TCPProbeConfig: m}, nil
+	case *mnetwork.TimeSyncConfigV1Alpha1:
+		m, err := typedconfig.TimeSyncConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("timeSyncConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "TimeSyncConfig", TimeSyncConfig: m}, nil
+	case *msecurity.TrustedRootsConfigV1Alpha1:
+		m, err := typedconfig.TrustedRootsConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("trustedRootsConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "TrustedRootsConfig", TrustedRootsConfig: m}, nil
+	case *mruntime.UdevRulesConfigV1Alpha1:
+		m, err := typedconfig.UdevRulesConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("udevRulesConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "UdevRulesConfig", UdevRulesConfig: m}, nil
+	case *mnetwork.VRFConfigV1Alpha1:
+		m, err := typedconfig.VRFConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("vrfConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "VRFConfig", VRFConfig: m}, nil
+	case *mnetwork.VethConfigV1Alpha1:
+		m, err := typedconfig.VethConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("vethConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "VethConfig", VethConfig: m}, nil
+	case *mruntime.WatchdogTimerV1Alpha1:
+		m, err := typedconfig.WatchdogTimerV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("watchdogTimerConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "WatchdogTimerConfig", WatchdogTimerConfig: m}, nil
+	case *mblock.ZswapConfigV1Alpha1:
+		m, err := typedconfig.ZswapConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("zswapConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "ZswapConfig", ZswapConfig: m}, nil
 	default:
 		return TalosConfigPatchDocument{}, fmt.Errorf("no document kind for %T", doc)
 	}

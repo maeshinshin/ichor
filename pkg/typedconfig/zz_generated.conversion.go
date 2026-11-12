@@ -10,17 +10,27 @@ package typedconfig
 
 import (
 	"fmt"
+	"net/netip"
 	"time"
 
 	mx509 "github.com/siderolabs/crypto/x509"
 	mcel "github.com/siderolabs/talos/pkg/machinery/cel"
+	mconfig "github.com/siderolabs/talos/pkg/machinery/config/config"
 	mblock "github.com/siderolabs/talos/pkg/machinery/config/types/block"
+	mcontainer "github.com/siderolabs/talos/pkg/machinery/config/types/container"
+	mcri "github.com/siderolabs/talos/pkg/machinery/config/types/cri"
+	mhardware "github.com/siderolabs/talos/pkg/machinery/config/types/hardware"
+	mk8s "github.com/siderolabs/talos/pkg/machinery/config/types/k8s"
 	mmeta "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
 	mnetwork "github.com/siderolabs/talos/pkg/machinery/config/types/network"
 	mruntime "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
+	mextensions "github.com/siderolabs/talos/pkg/machinery/config/types/runtime/extensions"
+	msecurity "github.com/siderolabs/talos/pkg/machinery/config/types/security"
+	mstorage "github.com/siderolabs/talos/pkg/machinery/config/types/storage"
 	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
 	mnethelpers "github.com/siderolabs/talos/pkg/machinery/nethelpers"
 	rblock "github.com/siderolabs/talos/pkg/machinery/resources/block"
+	rstorage "github.com/siderolabs/talos/pkg/machinery/resources/storage"
 	corev1 "k8s.io/api/core/v1"
 	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
@@ -167,6 +177,36 @@ func APIServerConfigFromMachinery(src *mv1alpha1.APIServerConfig) (*APIServerCon
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mnetwork.AddressConfig type.
+func (m *AddressConfig) ToMachinery() (*mnetwork.AddressConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.AddressConfig{}
+	v1, err := mirrorToMachineryScalar[netip.Prefix](m.AddressAddress)
+	if err != nil {
+		return nil, fmt.Errorf("AddressConfig.address"+": %w", err)
+	}
+	out.AddressAddress = v1
+	out.AddressPriority = m.AddressPriority
+	return out, nil
+}
+
+// AddressConfigFromMachinery converts a machinery mnetwork.AddressConfig document to the mirror type.
+func AddressConfigFromMachinery(src *mnetwork.AddressConfig) (*AddressConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &AddressConfig{}
+	v1, err := machineryToMirrorScalar(src.AddressAddress)
+	if err != nil {
+		return nil, fmt.Errorf("AddressConfig.address"+": %w", err)
+	}
+	out.AddressAddress = v1
+	out.AddressPriority = src.AddressPriority
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.AdminKubeconfigConfig type.
 func (m *AdminKubeconfigConfig) ToMachinery() (*mv1alpha1.AdminKubeconfigConfig, error) {
 	if m == nil {
@@ -248,6 +288,268 @@ func AuthorizationConfigAuthorizerConfigFromMachinery(src *mv1alpha1.Authorizati
 		}
 		out.AuthorizerWebhook = &v3
 	}
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.BGPBFDConfig type.
+func (m *BGPBFDConfig) ToMachinery() (*mnetwork.BGPBFDConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.BGPBFDConfig{}
+	v1, err := mirrorToMachineryScalar[time.Duration](m.BFDTransmitInterval)
+	if err != nil {
+		return nil, fmt.Errorf("BGPBFDConfig.transmitInterval"+": %w", err)
+	}
+	out.BFDTransmitInterval = v1
+	v2, err := mirrorToMachineryScalar[time.Duration](m.BFDReceiveInterval)
+	if err != nil {
+		return nil, fmt.Errorf("BGPBFDConfig.receiveInterval"+": %w", err)
+	}
+	out.BFDReceiveInterval = v2
+	out.BFDDetectMultiplier = m.BFDDetectMultiplier
+	return out, nil
+}
+
+// BGPBFDConfigFromMachinery converts a machinery mnetwork.BGPBFDConfig document to the mirror type.
+func BGPBFDConfigFromMachinery(src *mnetwork.BGPBFDConfig) (*BGPBFDConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &BGPBFDConfig{}
+	v1, err := machineryToMirrorScalar(src.BFDTransmitInterval)
+	if err != nil {
+		return nil, fmt.Errorf("BGPBFDConfig.transmitInterval"+": %w", err)
+	}
+	out.BFDTransmitInterval = v1
+	v2, err := machineryToMirrorScalar(src.BFDReceiveInterval)
+	if err != nil {
+		return nil, fmt.Errorf("BGPBFDConfig.receiveInterval"+": %w", err)
+	}
+	out.BFDReceiveInterval = v2
+	out.BFDDetectMultiplier = src.BFDDetectMultiplier
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.BGPImportRoute type.
+func (m *BGPImportRoute) ToMachinery() (*mnetwork.BGPImportRoute, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.BGPImportRoute{}
+	out.ImportBGPInstance = m.ImportBGPInstance
+	if m.ImportPrefixes != nil {
+		c2 := make([]mmeta.Prefix, len(m.ImportPrefixes))
+		for k2, e2 := range m.ImportPrefixes {
+			v3, err := mirrorToMachineryScalar[mmeta.Prefix](e2)
+			if err != nil {
+				return nil, fmt.Errorf("BGPImportRoute.prefixes"+": %w", err)
+			}
+			c2[k2] = v3
+		}
+		out.ImportPrefixes = c2
+	}
+	return out, nil
+}
+
+// BGPImportRouteFromMachinery converts a machinery mnetwork.BGPImportRoute document to the mirror type.
+func BGPImportRouteFromMachinery(src *mnetwork.BGPImportRoute) (*BGPImportRoute, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &BGPImportRoute{}
+	out.ImportBGPInstance = src.ImportBGPInstance
+	if src.ImportPrefixes != nil {
+		c2 := make([]string, len(src.ImportPrefixes))
+		for k2, e2 := range src.ImportPrefixes {
+			v3, err := machineryToMirrorScalar(e2)
+			if err != nil {
+				return nil, fmt.Errorf("BGPImportRoute.prefixes"+": %w", err)
+			}
+			c2[k2] = v3
+		}
+		out.ImportPrefixes = c2
+	}
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.BGPInstanceConfigV1Alpha1 type.
+func (m *BGPInstanceConfigV1Alpha1) ToMachinery() (*mnetwork.BGPInstanceConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.BGPInstanceConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.BGPInstanceKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.BGPVRF = m.BGPVRF
+	out.BGPLocalASN = m.BGPLocalASN
+	v4, err := mirrorToMachineryScalar[mmeta.Addr](m.BGPRouterID)
+	if err != nil {
+		return nil, fmt.Errorf("BGPInstanceConfigV1Alpha1.routerID"+": %w", err)
+	}
+	out.BGPRouterID = v4
+	v5, err := mirrorToMachineryScalar[mmeta.Addr](m.BGPRouteSource)
+	if err != nil {
+		return nil, fmt.Errorf("BGPInstanceConfigV1Alpha1.routeSource"+": %w", err)
+	}
+	out.BGPRouteSource = v5
+	out.BGPAdvertise = m.BGPAdvertise
+	out.BGPMultipath = m.BGPMultipath
+	out.BGPMaxPaths = m.BGPMaxPaths
+	out.BGPInstallRoutes = m.BGPInstallRoutes
+	if m.BGPImportRoutes != nil {
+		c10 := make([]mnetwork.BGPImportRoute, len(m.BGPImportRoutes))
+		for k10, e10 := range m.BGPImportRoutes {
+			t11, err := (e10).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("BGPInstanceConfigV1Alpha1.importRoutes"+": %w", err)
+			}
+			if t11 != nil {
+				c10[k10] = *t11
+			}
+		}
+		out.BGPImportRoutes = c10
+	}
+	if m.BGPNeighborConfigs != nil {
+		c11 := make([]mnetwork.BGPNeighborConfig, len(m.BGPNeighborConfigs))
+		for k11, e11 := range m.BGPNeighborConfigs {
+			t12, err := (e11).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("BGPInstanceConfigV1Alpha1.neighbors"+": %w", err)
+			}
+			if t12 != nil {
+				c11[k11] = *t12
+			}
+		}
+		out.BGPNeighborConfigs = c11
+	}
+	return out, nil
+}
+
+// BGPInstanceConfigV1Alpha1FromMachinery converts a machinery mnetwork.BGPInstanceConfigV1Alpha1 document to the mirror type.
+func BGPInstanceConfigV1Alpha1FromMachinery(src *mnetwork.BGPInstanceConfigV1Alpha1) (*BGPInstanceConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &BGPInstanceConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.BGPVRF = src.BGPVRF
+	out.BGPLocalASN = src.BGPLocalASN
+	v4, err := machineryToMirrorScalar(src.BGPRouterID)
+	if err != nil {
+		return nil, fmt.Errorf("BGPInstanceConfigV1Alpha1.routerID"+": %w", err)
+	}
+	out.BGPRouterID = v4
+	v5, err := machineryToMirrorScalar(src.BGPRouteSource)
+	if err != nil {
+		return nil, fmt.Errorf("BGPInstanceConfigV1Alpha1.routeSource"+": %w", err)
+	}
+	out.BGPRouteSource = v5
+	out.BGPAdvertise = src.BGPAdvertise
+	out.BGPMultipath = src.BGPMultipath
+	out.BGPMaxPaths = src.BGPMaxPaths
+	out.BGPInstallRoutes = src.BGPInstallRoutes
+	if src.BGPImportRoutes != nil {
+		c10 := make([]*BGPImportRoute, len(src.BGPImportRoutes))
+		for k10, e10 := range src.BGPImportRoutes {
+			t11, err := BGPImportRouteFromMachinery(&(e10))
+			if err != nil {
+				return nil, fmt.Errorf("BGPInstanceConfigV1Alpha1.importRoutes"+": %w", err)
+			}
+			c10[k10] = t11
+		}
+		out.BGPImportRoutes = c10
+	}
+	if src.BGPNeighborConfigs != nil {
+		c11 := make([]*BGPNeighborConfig, len(src.BGPNeighborConfigs))
+		for k11, e11 := range src.BGPNeighborConfigs {
+			t12, err := BGPNeighborConfigFromMachinery(&(e11))
+			if err != nil {
+				return nil, fmt.Errorf("BGPInstanceConfigV1Alpha1.neighbors"+": %w", err)
+			}
+			c11[k11] = t12
+		}
+		out.BGPNeighborConfigs = c11
+	}
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.BGPNeighborConfig type.
+func (m *BGPNeighborConfig) ToMachinery() (*mnetwork.BGPNeighborConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.BGPNeighborConfig{}
+	v1, err := mirrorToMachineryScalar[mmeta.Addr](m.NeighborAddressConfig)
+	if err != nil {
+		return nil, fmt.Errorf("BGPNeighborConfig.address"+": %w", err)
+	}
+	out.NeighborAddressConfig = v1
+	out.NeighborLinkConfig = m.NeighborLinkConfig
+	out.NeighborPeerASN = m.NeighborPeerASN
+	out.NeighborLocalASN = m.NeighborLocalASN
+	out.NeighborPassive = m.NeighborPassive
+	v6, err := mirrorToMachineryScalar[time.Duration](m.NeighborHoldTime)
+	if err != nil {
+		return nil, fmt.Errorf("BGPNeighborConfig.holdTime"+": %w", err)
+	}
+	out.NeighborHoldTime = v6
+	t7, err := (m.NeighborBFDConfig).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("BGPNeighborConfig.bfd"+": %w", err)
+	}
+	out.NeighborBFDConfig = t7
+	return out, nil
+}
+
+// BGPNeighborConfigFromMachinery converts a machinery mnetwork.BGPNeighborConfig document to the mirror type.
+func BGPNeighborConfigFromMachinery(src *mnetwork.BGPNeighborConfig) (*BGPNeighborConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &BGPNeighborConfig{}
+	v1, err := machineryToMirrorScalar(src.NeighborAddressConfig)
+	if err != nil {
+		return nil, fmt.Errorf("BGPNeighborConfig.address"+": %w", err)
+	}
+	out.NeighborAddressConfig = v1
+	out.NeighborLinkConfig = src.NeighborLinkConfig
+	out.NeighborPeerASN = src.NeighborPeerASN
+	out.NeighborLocalASN = src.NeighborLocalASN
+	out.NeighborPassive = src.NeighborPassive
+	v6, err := machineryToMirrorScalar(src.NeighborHoldTime)
+	if err != nil {
+		return nil, fmt.Errorf("BGPNeighborConfig.holdTime"+": %w", err)
+	}
+	out.NeighborHoldTime = v6
+	t7, err := BGPBFDConfigFromMachinery(src.NeighborBFDConfig)
+	if err != nil {
+		return nil, fmt.Errorf("BGPNeighborConfig.bfd"+": %w", err)
+	}
+	out.NeighborBFDConfig = t7
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.BlackholeRouteConfigV1Alpha1 type.
+func (m *BlackholeRouteConfigV1Alpha1) ToMachinery() (*mnetwork.BlackholeRouteConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.BlackholeRouteConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.BlackholeRouteKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.RouteMetric = m.RouteMetric
+	return out, nil
+}
+
+// BlackholeRouteConfigV1Alpha1FromMachinery converts a machinery mnetwork.BlackholeRouteConfigV1Alpha1 document to the mirror type.
+func BlackholeRouteConfigV1Alpha1FromMachinery(src *mnetwork.BlackholeRouteConfigV1Alpha1) (*BlackholeRouteConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &BlackholeRouteConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.RouteMetric = src.RouteMetric
 	return out, nil
 }
 
@@ -347,6 +649,251 @@ func BondFromMachinery(src *mv1alpha1.Bond) (*Bond, error) {
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mnetwork.BondConfigV1Alpha1 type.
+func (m *BondConfigV1Alpha1) ToMachinery() (*mnetwork.BondConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.BondConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.BondKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.HardwareAddressConfig = mnethelpers.HardwareAddr(m.HardwareAddressConfig)
+	out.BondLinks = m.BondLinks
+	if m.BondMode != nil {
+		var p4Val mnethelpers.BondMode
+		p4Val = mnethelpers.BondMode(*m.BondMode)
+		out.BondMode = &p4Val
+	}
+	out.BondMIIMon = m.BondMIIMon
+	out.BondUpDelay = m.BondUpDelay
+	out.BondDownDelay = m.BondDownDelay
+	out.BondUseCarrier = m.BondUseCarrier
+	if m.BondXmitHashPolicy != nil {
+		var p9Val mnethelpers.BondXmitHashPolicy
+		p9Val = mnethelpers.BondXmitHashPolicy(*m.BondXmitHashPolicy)
+		out.BondXmitHashPolicy = &p9Val
+	}
+	out.BondARPInterval = m.BondARPInterval
+	if m.BondARPIPTargets != nil {
+		c11 := make([]netip.Addr, len(m.BondARPIPTargets))
+		for k11, e11 := range m.BondARPIPTargets {
+			v12, err := mirrorToMachineryScalar[netip.Addr](e11)
+			if err != nil {
+				return nil, fmt.Errorf("BondConfigV1Alpha1.arpIpTargets"+": %w", err)
+			}
+			c11[k11] = v12
+		}
+		out.BondARPIPTargets = c11
+	}
+	if m.BondNSIP6Targets != nil {
+		c12 := make([]netip.Addr, len(m.BondNSIP6Targets))
+		for k12, e12 := range m.BondNSIP6Targets {
+			v13, err := mirrorToMachineryScalar[netip.Addr](e12)
+			if err != nil {
+				return nil, fmt.Errorf("BondConfigV1Alpha1.nsIp6Targets"+": %w", err)
+			}
+			c12[k12] = v13
+		}
+		out.BondNSIP6Targets = c12
+	}
+	if m.BondARPValidate != nil {
+		var p13Val mnethelpers.ARPValidate
+		p13Val = mnethelpers.ARPValidate(*m.BondARPValidate)
+		out.BondARPValidate = &p13Val
+	}
+	if m.BondARPAllTargets != nil {
+		var p14Val mnethelpers.ARPAllTargets
+		p14Val = mnethelpers.ARPAllTargets(*m.BondARPAllTargets)
+		out.BondARPAllTargets = &p14Val
+	}
+	if m.BondLACPRate != nil {
+		var p15Val mnethelpers.LACPRate
+		p15Val = mnethelpers.LACPRate(*m.BondLACPRate)
+		out.BondLACPRate = &p15Val
+	}
+	if m.BondFailOverMAC != nil {
+		var p16Val mnethelpers.FailOverMAC
+		p16Val = mnethelpers.FailOverMAC(*m.BondFailOverMAC)
+		out.BondFailOverMAC = &p16Val
+	}
+	if m.BondADSelect != nil {
+		var p17Val mnethelpers.ADSelect
+		p17Val = mnethelpers.ADSelect(*m.BondADSelect)
+		out.BondADSelect = &p17Val
+	}
+	out.BondADActorSysPrio = m.BondADActorSysPrio
+	out.BondADUserPortKey = m.BondADUserPortKey
+	if m.BondADLACPActive != nil {
+		var p20Val mnethelpers.ADLACPActive
+		p20Val = mnethelpers.ADLACPActive(*m.BondADLACPActive)
+		out.BondADLACPActive = &p20Val
+	}
+	if m.BondPrimaryReselect != nil {
+		var p21Val mnethelpers.PrimaryReselect
+		p21Val = mnethelpers.PrimaryReselect(*m.BondPrimaryReselect)
+		out.BondPrimaryReselect = &p21Val
+	}
+	out.BondResendIGMP = m.BondResendIGMP
+	out.BondMinLinks = m.BondMinLinks
+	out.BondLPInterval = m.BondLPInterval
+	out.BondPacketsPerSlave = m.BondPacketsPerSlave
+	out.BondNumPeerNotif = m.BondNumPeerNotif
+	out.BondTLBDynamicLB = m.BondTLBDynamicLB
+	out.BondAllSlavesActive = m.BondAllSlavesActive
+	out.BondPeerNotifyDelay = m.BondPeerNotifyDelay
+	out.BondMissedMax = m.BondMissedMax
+	out.LinkUp = m.LinkUp
+	out.LinkMTU = m.LinkMTU
+	if m.LinkAddresses != nil {
+		c33 := make([]mnetwork.AddressConfig, len(m.LinkAddresses))
+		for k33, e33 := range m.LinkAddresses {
+			t34, err := (e33).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("BondConfigV1Alpha1.addresses"+": %w", err)
+			}
+			if t34 != nil {
+				c33[k33] = *t34
+			}
+		}
+		out.LinkAddresses = c33
+	}
+	if m.LinkRoutes != nil {
+		c34 := make([]mnetwork.RouteConfig, len(m.LinkRoutes))
+		for k34, e34 := range m.LinkRoutes {
+			t35, err := (e34).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("BondConfigV1Alpha1.routes"+": %w", err)
+			}
+			if t35 != nil {
+				c34[k34] = *t35
+			}
+		}
+		out.LinkRoutes = c34
+	}
+	out.LinkMulticast = m.LinkMulticast
+	return out, nil
+}
+
+// BondConfigV1Alpha1FromMachinery converts a machinery mnetwork.BondConfigV1Alpha1 document to the mirror type.
+func BondConfigV1Alpha1FromMachinery(src *mnetwork.BondConfigV1Alpha1) (*BondConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &BondConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.HardwareAddressConfig = []byte(src.HardwareAddressConfig)
+	out.BondLinks = src.BondLinks
+	if src.BondMode != nil {
+		var p4Val uint8
+		p4Val = uint8(*src.BondMode)
+		out.BondMode = &p4Val
+	}
+	out.BondMIIMon = src.BondMIIMon
+	out.BondUpDelay = src.BondUpDelay
+	out.BondDownDelay = src.BondDownDelay
+	out.BondUseCarrier = src.BondUseCarrier
+	if src.BondXmitHashPolicy != nil {
+		var p9Val uint8
+		p9Val = uint8(*src.BondXmitHashPolicy)
+		out.BondXmitHashPolicy = &p9Val
+	}
+	out.BondARPInterval = src.BondARPInterval
+	if src.BondARPIPTargets != nil {
+		c11 := make([]string, len(src.BondARPIPTargets))
+		for k11, e11 := range src.BondARPIPTargets {
+			v12, err := machineryToMirrorScalar(e11)
+			if err != nil {
+				return nil, fmt.Errorf("BondConfigV1Alpha1.arpIpTargets"+": %w", err)
+			}
+			c11[k11] = v12
+		}
+		out.BondARPIPTargets = c11
+	}
+	if src.BondNSIP6Targets != nil {
+		c12 := make([]string, len(src.BondNSIP6Targets))
+		for k12, e12 := range src.BondNSIP6Targets {
+			v13, err := machineryToMirrorScalar(e12)
+			if err != nil {
+				return nil, fmt.Errorf("BondConfigV1Alpha1.nsIp6Targets"+": %w", err)
+			}
+			c12[k12] = v13
+		}
+		out.BondNSIP6Targets = c12
+	}
+	if src.BondARPValidate != nil {
+		var p13Val uint32
+		p13Val = uint32(*src.BondARPValidate)
+		out.BondARPValidate = &p13Val
+	}
+	if src.BondARPAllTargets != nil {
+		var p14Val uint32
+		p14Val = uint32(*src.BondARPAllTargets)
+		out.BondARPAllTargets = &p14Val
+	}
+	if src.BondLACPRate != nil {
+		var p15Val uint8
+		p15Val = uint8(*src.BondLACPRate)
+		out.BondLACPRate = &p15Val
+	}
+	if src.BondFailOverMAC != nil {
+		var p16Val uint8
+		p16Val = uint8(*src.BondFailOverMAC)
+		out.BondFailOverMAC = &p16Val
+	}
+	if src.BondADSelect != nil {
+		var p17Val uint8
+		p17Val = uint8(*src.BondADSelect)
+		out.BondADSelect = &p17Val
+	}
+	out.BondADActorSysPrio = src.BondADActorSysPrio
+	out.BondADUserPortKey = src.BondADUserPortKey
+	if src.BondADLACPActive != nil {
+		var p20Val uint8
+		p20Val = uint8(*src.BondADLACPActive)
+		out.BondADLACPActive = &p20Val
+	}
+	if src.BondPrimaryReselect != nil {
+		var p21Val uint8
+		p21Val = uint8(*src.BondPrimaryReselect)
+		out.BondPrimaryReselect = &p21Val
+	}
+	out.BondResendIGMP = src.BondResendIGMP
+	out.BondMinLinks = src.BondMinLinks
+	out.BondLPInterval = src.BondLPInterval
+	out.BondPacketsPerSlave = src.BondPacketsPerSlave
+	out.BondNumPeerNotif = src.BondNumPeerNotif
+	out.BondTLBDynamicLB = src.BondTLBDynamicLB
+	out.BondAllSlavesActive = src.BondAllSlavesActive
+	out.BondPeerNotifyDelay = src.BondPeerNotifyDelay
+	out.BondMissedMax = src.BondMissedMax
+	out.LinkUp = src.LinkUp
+	out.LinkMTU = src.LinkMTU
+	if src.LinkAddresses != nil {
+		c33 := make([]*AddressConfig, len(src.LinkAddresses))
+		for k33, e33 := range src.LinkAddresses {
+			t34, err := AddressConfigFromMachinery(&(e33))
+			if err != nil {
+				return nil, fmt.Errorf("BondConfigV1Alpha1.addresses"+": %w", err)
+			}
+			c33[k33] = t34
+		}
+		out.LinkAddresses = c33
+	}
+	if src.LinkRoutes != nil {
+		c34 := make([]*RouteConfig, len(src.LinkRoutes))
+		for k34, e34 := range src.LinkRoutes {
+			t35, err := RouteConfigFromMachinery(&(e34))
+			if err != nil {
+				return nil, fmt.Errorf("BondConfigV1Alpha1.routes"+": %w", err)
+			}
+			c34[k34] = t35
+		}
+		out.LinkRoutes = c34
+	}
+	out.LinkMulticast = src.LinkMulticast
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.Bridge type.
 func (m *Bridge) ToMachinery() (*mv1alpha1.Bridge, error) {
 	if m == nil {
@@ -387,6 +934,109 @@ func BridgeFromMachinery(src *mv1alpha1.Bridge) (*Bridge, error) {
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mnetwork.BridgeConfigV1Alpha1 type.
+func (m *BridgeConfigV1Alpha1) ToMachinery() (*mnetwork.BridgeConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.BridgeConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.BridgeKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.HardwareAddressConfig = mnethelpers.HardwareAddr(m.HardwareAddressConfig)
+	out.BridgeLinks = m.BridgeLinks
+	t4, err := (m.BridgeSTP).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("BridgeConfigV1Alpha1.stp"+": %w", err)
+	}
+	if t4 != nil {
+		out.BridgeSTP = *t4
+	}
+	t5, err := (m.BridgeVLAN).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("BridgeConfigV1Alpha1.vlan"+": %w", err)
+	}
+	if t5 != nil {
+		out.BridgeVLAN = *t5
+	}
+	out.LinkUp = m.LinkUp
+	out.LinkMTU = m.LinkMTU
+	if m.LinkAddresses != nil {
+		c8 := make([]mnetwork.AddressConfig, len(m.LinkAddresses))
+		for k8, e8 := range m.LinkAddresses {
+			t9, err := (e8).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("BridgeConfigV1Alpha1.addresses"+": %w", err)
+			}
+			if t9 != nil {
+				c8[k8] = *t9
+			}
+		}
+		out.LinkAddresses = c8
+	}
+	if m.LinkRoutes != nil {
+		c9 := make([]mnetwork.RouteConfig, len(m.LinkRoutes))
+		for k9, e9 := range m.LinkRoutes {
+			t10, err := (e9).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("BridgeConfigV1Alpha1.routes"+": %w", err)
+			}
+			if t10 != nil {
+				c9[k9] = *t10
+			}
+		}
+		out.LinkRoutes = c9
+	}
+	out.LinkMulticast = m.LinkMulticast
+	return out, nil
+}
+
+// BridgeConfigV1Alpha1FromMachinery converts a machinery mnetwork.BridgeConfigV1Alpha1 document to the mirror type.
+func BridgeConfigV1Alpha1FromMachinery(src *mnetwork.BridgeConfigV1Alpha1) (*BridgeConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &BridgeConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.HardwareAddressConfig = []byte(src.HardwareAddressConfig)
+	out.BridgeLinks = src.BridgeLinks
+	t4, err := BridgeSTPConfigFromMachinery(&(src.BridgeSTP))
+	if err != nil {
+		return nil, fmt.Errorf("BridgeConfigV1Alpha1.stp"+": %w", err)
+	}
+	out.BridgeSTP = t4
+	t5, err := BridgeVLANConfigFromMachinery(&(src.BridgeVLAN))
+	if err != nil {
+		return nil, fmt.Errorf("BridgeConfigV1Alpha1.vlan"+": %w", err)
+	}
+	out.BridgeVLAN = t5
+	out.LinkUp = src.LinkUp
+	out.LinkMTU = src.LinkMTU
+	if src.LinkAddresses != nil {
+		c8 := make([]*AddressConfig, len(src.LinkAddresses))
+		for k8, e8 := range src.LinkAddresses {
+			t9, err := AddressConfigFromMachinery(&(e8))
+			if err != nil {
+				return nil, fmt.Errorf("BridgeConfigV1Alpha1.addresses"+": %w", err)
+			}
+			c8[k8] = t9
+		}
+		out.LinkAddresses = c8
+	}
+	if src.LinkRoutes != nil {
+		c9 := make([]*RouteConfig, len(src.LinkRoutes))
+		for k9, e9 := range src.LinkRoutes {
+			t10, err := RouteConfigFromMachinery(&(e9))
+			if err != nil {
+				return nil, fmt.Errorf("BridgeConfigV1Alpha1.routes"+": %w", err)
+			}
+			c9[k9] = t10
+		}
+		out.LinkRoutes = c9
+	}
+	out.LinkMulticast = src.LinkMulticast
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.BridgePort type.
 func (m *BridgePort) ToMachinery() (*mv1alpha1.BridgePort, error) {
 	if m == nil {
@@ -407,6 +1057,26 @@ func BridgePortFromMachinery(src *mv1alpha1.BridgePort) (*BridgePort, error) {
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mnetwork.BridgeSTPConfig type.
+func (m *BridgeSTPConfig) ToMachinery() (*mnetwork.BridgeSTPConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.BridgeSTPConfig{}
+	out.BridgeSTPEnabled = m.BridgeSTPEnabled
+	return out, nil
+}
+
+// BridgeSTPConfigFromMachinery converts a machinery mnetwork.BridgeSTPConfig document to the mirror type.
+func BridgeSTPConfigFromMachinery(src *mnetwork.BridgeSTPConfig) (*BridgeSTPConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &BridgeSTPConfig{}
+	out.BridgeSTPEnabled = src.BridgeSTPEnabled
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.BridgeVLAN type.
 func (m *BridgeVLAN) ToMachinery() (*mv1alpha1.BridgeVLAN, error) {
 	if m == nil {
@@ -423,6 +1093,26 @@ func BridgeVLANFromMachinery(src *mv1alpha1.BridgeVLAN) (*BridgeVLAN, error) {
 		return nil, nil
 	}
 	out := &BridgeVLAN{}
+	out.BridgeVLANFiltering = src.BridgeVLANFiltering
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.BridgeVLANConfig type.
+func (m *BridgeVLANConfig) ToMachinery() (*mnetwork.BridgeVLANConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.BridgeVLANConfig{}
+	out.BridgeVLANFiltering = m.BridgeVLANFiltering
+	return out, nil
+}
+
+// BridgeVLANConfigFromMachinery converts a machinery mnetwork.BridgeVLANConfig document to the mirror type.
+func BridgeVLANConfigFromMachinery(src *mnetwork.BridgeVLANConfig) (*BridgeVLANConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &BridgeVLANConfig{}
 	out.BridgeVLANFiltering = src.BridgeVLANFiltering
 	return out, nil
 }
@@ -775,6 +1465,353 @@ func ConfigFromMachinery(src *mv1alpha1.Config) (*Config, error) {
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mextensions.ConfigFile type.
+func (m *ConfigFile) ToMachinery() (*mextensions.ConfigFile, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mextensions.ConfigFile{}
+	out.ConfigFileContent = m.ConfigFileContent
+	out.ConfigFileMountPath = m.ConfigFileMountPath
+	return out, nil
+}
+
+// ConfigFileFromMachinery converts a machinery mextensions.ConfigFile document to the mirror type.
+func ConfigFileFromMachinery(src *mextensions.ConfigFile) (*ConfigFile, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ConfigFile{}
+	out.ConfigFileContent = src.ConfigFileContent
+	out.ConfigFileMountPath = src.ConfigFileMountPath
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mcontainer.ContainerCapabilities type.
+func (m *ContainerCapabilities) ToMachinery() (*mcontainer.ContainerCapabilities, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mcontainer.ContainerCapabilities{}
+	out.CapabilitiesAddConfig = m.CapabilitiesAddConfig
+	out.CapabilitiesDropConfig = m.CapabilitiesDropConfig
+	return out, nil
+}
+
+// ContainerCapabilitiesFromMachinery converts a machinery mcontainer.ContainerCapabilities document to the mirror type.
+func ContainerCapabilitiesFromMachinery(src *mcontainer.ContainerCapabilities) (*ContainerCapabilities, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ContainerCapabilities{}
+	out.CapabilitiesAddConfig = src.CapabilitiesAddConfig
+	out.CapabilitiesDropConfig = src.CapabilitiesDropConfig
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mcontainer.ContainerConfigV1Alpha1 type.
+func (m *ContainerConfigV1Alpha1) ToMachinery() (*mcontainer.ContainerConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mcontainer.ContainerConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mcontainer.ContainerConfigKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.ContainerImage = m.ContainerImage
+	out.ContainerEntrypoint = m.ContainerEntrypoint
+	out.ContainerArgs = m.ContainerArgs
+	out.ContainerWorkingDir = m.ContainerWorkingDir
+	t6, err := (m.RunAsConfig).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ContainerConfigV1Alpha1.runAs"+": %w", err)
+	}
+	out.RunAsConfig = t6
+	out.ContainerEnvironment = m.ContainerEnvironment
+	if m.MountsConfig != nil {
+		c8 := make([]mcontainer.ContainerMount, len(m.MountsConfig))
+		for k8, e8 := range m.MountsConfig {
+			t9, err := (e8).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("ContainerConfigV1Alpha1.mounts"+": %w", err)
+			}
+			if t9 != nil {
+				c8[k8] = *t9
+			}
+		}
+		out.MountsConfig = c8
+	}
+	t9, err := (m.SecurityConfig).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ContainerConfigV1Alpha1.security"+": %w", err)
+	}
+	out.SecurityConfig = t9
+	t10, err := (m.NetworkConfig).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ContainerConfigV1Alpha1.network"+": %w", err)
+	}
+	out.NetworkConfig = t10
+	t11, err := (m.ResourcesConfig).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ContainerConfigV1Alpha1.resources"+": %w", err)
+	}
+	out.ResourcesConfig = t11
+	t12, err := (m.DependsOnConfig).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ContainerConfigV1Alpha1.dependsOn"+": %w", err)
+	}
+	out.DependsOnConfig = t12
+	return out, nil
+}
+
+// ContainerConfigV1Alpha1FromMachinery converts a machinery mcontainer.ContainerConfigV1Alpha1 document to the mirror type.
+func ContainerConfigV1Alpha1FromMachinery(src *mcontainer.ContainerConfigV1Alpha1) (*ContainerConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ContainerConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.ContainerImage = src.ContainerImage
+	out.ContainerEntrypoint = src.ContainerEntrypoint
+	out.ContainerArgs = src.ContainerArgs
+	out.ContainerWorkingDir = src.ContainerWorkingDir
+	t6, err := ContainerRunAsFromMachinery(src.RunAsConfig)
+	if err != nil {
+		return nil, fmt.Errorf("ContainerConfigV1Alpha1.runAs"+": %w", err)
+	}
+	out.RunAsConfig = t6
+	out.ContainerEnvironment = src.ContainerEnvironment
+	if src.MountsConfig != nil {
+		c8 := make([]*ContainerMount, len(src.MountsConfig))
+		for k8, e8 := range src.MountsConfig {
+			t9, err := ContainerMountFromMachinery(&(e8))
+			if err != nil {
+				return nil, fmt.Errorf("ContainerConfigV1Alpha1.mounts"+": %w", err)
+			}
+			c8[k8] = t9
+		}
+		out.MountsConfig = c8
+	}
+	t9, err := ContainerSecurityFromMachinery(src.SecurityConfig)
+	if err != nil {
+		return nil, fmt.Errorf("ContainerConfigV1Alpha1.security"+": %w", err)
+	}
+	out.SecurityConfig = t9
+	t10, err := ContainerNetworkFromMachinery(src.NetworkConfig)
+	if err != nil {
+		return nil, fmt.Errorf("ContainerConfigV1Alpha1.network"+": %w", err)
+	}
+	out.NetworkConfig = t10
+	t11, err := ContainerResourcesFromMachinery(src.ResourcesConfig)
+	if err != nil {
+		return nil, fmt.Errorf("ContainerConfigV1Alpha1.resources"+": %w", err)
+	}
+	out.ResourcesConfig = t11
+	t12, err := ContainerDependsOnFromMachinery(src.DependsOnConfig)
+	if err != nil {
+		return nil, fmt.Errorf("ContainerConfigV1Alpha1.dependsOn"+": %w", err)
+	}
+	out.DependsOnConfig = t12
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mcontainer.ContainerDependsOn type.
+func (m *ContainerDependsOn) ToMachinery() (*mcontainer.ContainerDependsOn, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mcontainer.ContainerDependsOn{}
+	out.PathsConfig = m.PathsConfig
+	out.NetworksConfig = m.NetworksConfig
+	out.TimeConfig = m.TimeConfig
+	out.ContainersConfig = m.ContainersConfig
+	return out, nil
+}
+
+// ContainerDependsOnFromMachinery converts a machinery mcontainer.ContainerDependsOn document to the mirror type.
+func ContainerDependsOnFromMachinery(src *mcontainer.ContainerDependsOn) (*ContainerDependsOn, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ContainerDependsOn{}
+	out.PathsConfig = src.PathsConfig
+	out.NetworksConfig = src.NetworksConfig
+	out.TimeConfig = src.TimeConfig
+	out.ContainersConfig = src.ContainersConfig
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mcontainer.ContainerMount type.
+func (m *ContainerMount) ToMachinery() (*mcontainer.ContainerMount, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mcontainer.ContainerMount{}
+	t1, err := (m.UserVolumeMount).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ContainerMount.userVolume"+": %w", err)
+	}
+	out.UserVolumeMount = t1
+	t2, err := (m.TmpfsMount).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ContainerMount.tmpfs"+": %w", err)
+	}
+	out.TmpfsMount = t2
+	t3, err := (m.HostPathMount).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ContainerMount.hostPath"+": %w", err)
+	}
+	out.HostPathMount = t3
+	return out, nil
+}
+
+// ContainerMountFromMachinery converts a machinery mcontainer.ContainerMount document to the mirror type.
+func ContainerMountFromMachinery(src *mcontainer.ContainerMount) (*ContainerMount, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ContainerMount{}
+	t1, err := UserVolumeMountFromMachinery(src.UserVolumeMount)
+	if err != nil {
+		return nil, fmt.Errorf("ContainerMount.userVolume"+": %w", err)
+	}
+	out.UserVolumeMount = t1
+	t2, err := TmpfsMountFromMachinery(src.TmpfsMount)
+	if err != nil {
+		return nil, fmt.Errorf("ContainerMount.tmpfs"+": %w", err)
+	}
+	out.TmpfsMount = t2
+	t3, err := HostPathMountFromMachinery(src.HostPathMount)
+	if err != nil {
+		return nil, fmt.Errorf("ContainerMount.hostPath"+": %w", err)
+	}
+	out.HostPathMount = t3
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mcontainer.ContainerNetwork type.
+func (m *ContainerNetwork) ToMachinery() (*mcontainer.ContainerNetwork, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mcontainer.ContainerNetwork{}
+	out.NetworkMode = mconfig.ContainerNetworkMode(m.NetworkMode)
+	return out, nil
+}
+
+// ContainerNetworkFromMachinery converts a machinery mcontainer.ContainerNetwork document to the mirror type.
+func ContainerNetworkFromMachinery(src *mcontainer.ContainerNetwork) (*ContainerNetwork, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ContainerNetwork{}
+	out.NetworkMode = string(src.NetworkMode)
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mcontainer.ContainerResourceLimits type.
+func (m *ContainerResourceLimits) ToMachinery() (*mcontainer.ContainerResourceLimits, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mcontainer.ContainerResourceLimits{}
+	out.CPU = m.CPU
+	out.Memory = m.Memory
+	return out, nil
+}
+
+// ContainerResourceLimitsFromMachinery converts a machinery mcontainer.ContainerResourceLimits document to the mirror type.
+func ContainerResourceLimitsFromMachinery(src *mcontainer.ContainerResourceLimits) (*ContainerResourceLimits, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ContainerResourceLimits{}
+	out.CPU = src.CPU
+	out.Memory = src.Memory
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mcontainer.ContainerResources type.
+func (m *ContainerResources) ToMachinery() (*mcontainer.ContainerResources, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mcontainer.ContainerResources{}
+	t1, err := (m.Limits).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ContainerResources.limits"+": %w", err)
+	}
+	out.Limits = t1
+	return out, nil
+}
+
+// ContainerResourcesFromMachinery converts a machinery mcontainer.ContainerResources document to the mirror type.
+func ContainerResourcesFromMachinery(src *mcontainer.ContainerResources) (*ContainerResources, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ContainerResources{}
+	t1, err := ContainerResourceLimitsFromMachinery(src.Limits)
+	if err != nil {
+		return nil, fmt.Errorf("ContainerResources.limits"+": %w", err)
+	}
+	out.Limits = t1
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mcontainer.ContainerRunAs type.
+func (m *ContainerRunAs) ToMachinery() (*mcontainer.ContainerRunAs, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mcontainer.ContainerRunAs{}
+	out.RunAsUID = m.RunAsUID
+	out.RunAsGID = m.RunAsGID
+	return out, nil
+}
+
+// ContainerRunAsFromMachinery converts a machinery mcontainer.ContainerRunAs document to the mirror type.
+func ContainerRunAsFromMachinery(src *mcontainer.ContainerRunAs) (*ContainerRunAs, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ContainerRunAs{}
+	out.RunAsUID = src.RunAsUID
+	out.RunAsGID = src.RunAsGID
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mcontainer.ContainerSecurity type.
+func (m *ContainerSecurity) ToMachinery() (*mcontainer.ContainerSecurity, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mcontainer.ContainerSecurity{}
+	out.SecurityProfile = mconfig.ContainerSecurityProfile(m.SecurityProfile)
+	t2, err := (m.SecurityCapabilities).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ContainerSecurity.capabilities"+": %w", err)
+	}
+	out.SecurityCapabilities = t2
+	out.SecurityMachinedAccess = m.SecurityMachinedAccess
+	return out, nil
+}
+
+// ContainerSecurityFromMachinery converts a machinery mcontainer.ContainerSecurity document to the mirror type.
+func ContainerSecurityFromMachinery(src *mcontainer.ContainerSecurity) (*ContainerSecurity, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ContainerSecurity{}
+	out.SecurityProfile = string(src.SecurityProfile)
+	t2, err := ContainerCapabilitiesFromMachinery(src.SecurityCapabilities)
+	if err != nil {
+		return nil, fmt.Errorf("ContainerSecurity.capabilities"+": %w", err)
+	}
+	out.SecurityCapabilities = t2
+	out.SecurityMachinedAccess = src.SecurityMachinedAccess
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.ControlPlaneConfig type.
 func (m *ControlPlaneConfig) ToMachinery() (*mv1alpha1.ControlPlaneConfig, error) {
 	if m == nil {
@@ -936,6 +1973,43 @@ func DHCPOptionsFromMachinery(src *mv1alpha1.DHCPOptions) (*DHCPOptions, error) 
 	out.DHCPIPv4 = src.DHCPIPv4
 	out.DHCPIPv6 = src.DHCPIPv6
 	out.DHCPDUIDv6 = src.DHCPDUIDv6
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.DHCPv6ConfigV1Alpha1 type.
+func (m *DHCPv6ConfigV1Alpha1) ToMachinery() (*mnetwork.DHCPv6ConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.DHCPv6ConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.DHCPv6Kind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.ConfigRouteMetric = m.ConfigRouteMetric
+	out.ConfigIgnoreHostname = m.ConfigIgnoreHostname
+	if m.ConfigClientIdentifier != nil {
+		var p4Val mnethelpers.ClientIdentifier
+		p4Val = mnethelpers.ClientIdentifier(*m.ConfigClientIdentifier)
+		out.ConfigClientIdentifier = &p4Val
+	}
+	out.ConfigDUIDRaw = mnethelpers.HardwareAddr(m.ConfigDUIDRaw)
+	return out, nil
+}
+
+// DHCPv6ConfigV1Alpha1FromMachinery converts a machinery mnetwork.DHCPv6ConfigV1Alpha1 document to the mirror type.
+func DHCPv6ConfigV1Alpha1FromMachinery(src *mnetwork.DHCPv6ConfigV1Alpha1) (*DHCPv6ConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &DHCPv6ConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.ConfigRouteMetric = src.ConfigRouteMetric
+	out.ConfigIgnoreHostname = src.ConfigIgnoreHostname
+	if src.ConfigClientIdentifier != nil {
+		var p4Val int
+		p4Val = int(*src.ConfigClientIdentifier)
+		out.ConfigClientIdentifier = &p4Val
+	}
+	out.ConfigDUIDRaw = []byte(src.ConfigDUIDRaw)
 	return out, nil
 }
 
@@ -1303,6 +2377,83 @@ func DiskSelectorFromMachinery(src *mblock.DiskSelector) (*DiskSelector, error) 
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mnetwork.DummyLinkConfigV1Alpha1 type.
+func (m *DummyLinkConfigV1Alpha1) ToMachinery() (*mnetwork.DummyLinkConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.DummyLinkConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.DummyLinkKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.HardwareAddressConfig = mnethelpers.HardwareAddr(m.HardwareAddressConfig)
+	out.LinkUp = m.LinkUp
+	out.LinkMTU = m.LinkMTU
+	if m.LinkAddresses != nil {
+		c5 := make([]mnetwork.AddressConfig, len(m.LinkAddresses))
+		for k5, e5 := range m.LinkAddresses {
+			t6, err := (e5).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("DummyLinkConfigV1Alpha1.addresses"+": %w", err)
+			}
+			if t6 != nil {
+				c5[k5] = *t6
+			}
+		}
+		out.LinkAddresses = c5
+	}
+	if m.LinkRoutes != nil {
+		c6 := make([]mnetwork.RouteConfig, len(m.LinkRoutes))
+		for k6, e6 := range m.LinkRoutes {
+			t7, err := (e6).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("DummyLinkConfigV1Alpha1.routes"+": %w", err)
+			}
+			if t7 != nil {
+				c6[k6] = *t7
+			}
+		}
+		out.LinkRoutes = c6
+	}
+	out.LinkMulticast = m.LinkMulticast
+	return out, nil
+}
+
+// DummyLinkConfigV1Alpha1FromMachinery converts a machinery mnetwork.DummyLinkConfigV1Alpha1 document to the mirror type.
+func DummyLinkConfigV1Alpha1FromMachinery(src *mnetwork.DummyLinkConfigV1Alpha1) (*DummyLinkConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &DummyLinkConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.HardwareAddressConfig = []byte(src.HardwareAddressConfig)
+	out.LinkUp = src.LinkUp
+	out.LinkMTU = src.LinkMTU
+	if src.LinkAddresses != nil {
+		c5 := make([]*AddressConfig, len(src.LinkAddresses))
+		for k5, e5 := range src.LinkAddresses {
+			t6, err := AddressConfigFromMachinery(&(e5))
+			if err != nil {
+				return nil, fmt.Errorf("DummyLinkConfigV1Alpha1.addresses"+": %w", err)
+			}
+			c5[k5] = t6
+		}
+		out.LinkAddresses = c5
+	}
+	if src.LinkRoutes != nil {
+		c6 := make([]*RouteConfig, len(src.LinkRoutes))
+		for k6, e6 := range src.LinkRoutes {
+			t7, err := RouteConfigFromMachinery(&(e6))
+			if err != nil {
+				return nil, fmt.Errorf("DummyLinkConfigV1Alpha1.routes"+": %w", err)
+			}
+			c6[k6] = t7
+		}
+		out.LinkRoutes = c6
+	}
+	out.LinkMulticast = src.LinkMulticast
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.EncryptionConfig type.
 func (m *EncryptionConfig) ToMachinery() (*mv1alpha1.EncryptionConfig, error) {
 	if m == nil {
@@ -1543,6 +2694,52 @@ func EncryptionSpecFromMachinery(src *mblock.EncryptionSpec) (*EncryptionSpec, e
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mruntime.EnvironmentV1Alpha1 type.
+func (m *EnvironmentV1Alpha1) ToMachinery() (*mruntime.EnvironmentV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mruntime.EnvironmentV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mruntime.EnvironmentConfigKind, MetaAPIVersion: "v1alpha1"}
+	out.EnvironmentVariables = m.EnvironmentVariables
+	return out, nil
+}
+
+// EnvironmentV1Alpha1FromMachinery converts a machinery mruntime.EnvironmentV1Alpha1 document to the mirror type.
+func EnvironmentV1Alpha1FromMachinery(src *mruntime.EnvironmentV1Alpha1) (*EnvironmentV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &EnvironmentV1Alpha1{}
+	out.EnvironmentVariables = src.EnvironmentVariables
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mruntime.EtcFileConfigV1Alpha1 type.
+func (m *EtcFileConfigV1Alpha1) ToMachinery() (*mruntime.EtcFileConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mruntime.EtcFileConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mruntime.EtcFileConfigKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.FileMode = mruntime.EtcFileMode(m.FileMode)
+	out.Contents = m.Contents
+	return out, nil
+}
+
+// EtcFileConfigV1Alpha1FromMachinery converts a machinery mruntime.EtcFileConfigV1Alpha1 document to the mirror type.
+func EtcFileConfigV1Alpha1FromMachinery(src *mruntime.EtcFileConfigV1Alpha1) (*EtcFileConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &EtcFileConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.FileMode = uint32(src.FileMode)
+	out.Contents = src.Contents
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.EtcdConfig type.
 func (m *EtcdConfig) ToMachinery() (*mv1alpha1.EtcdConfig, error) {
 	if m == nil {
@@ -1591,6 +2788,237 @@ func EtcdConfigFromMachinery(src *mv1alpha1.EtcdConfig) (*EtcdConfig, error) {
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mnetwork.EthernetChannelsConfig type.
+func (m *EthernetChannelsConfig) ToMachinery() (*mnetwork.EthernetChannelsConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.EthernetChannelsConfig{}
+	out.RX = m.RX
+	out.TX = m.TX
+	out.Other = m.Other
+	out.Combined = m.Combined
+	return out, nil
+}
+
+// EthernetChannelsConfigFromMachinery converts a machinery mnetwork.EthernetChannelsConfig document to the mirror type.
+func EthernetChannelsConfigFromMachinery(src *mnetwork.EthernetChannelsConfig) (*EthernetChannelsConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &EthernetChannelsConfig{}
+	out.RX = src.RX
+	out.TX = src.TX
+	out.Other = src.Other
+	out.Combined = src.Combined
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.EthernetConfigV1Alpha1 type.
+func (m *EthernetConfigV1Alpha1) ToMachinery() (*mnetwork.EthernetConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.EthernetConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.EthernetKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.FeaturesConfig = m.FeaturesConfig
+	t3, err := (m.RingsConfig).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("EthernetConfigV1Alpha1.rings"+": %w", err)
+	}
+	out.RingsConfig = t3
+	t4, err := (m.ChannelsConfig).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("EthernetConfigV1Alpha1.channels"+": %w", err)
+	}
+	out.ChannelsConfig = t4
+	if m.WakeOnLANConfig != nil {
+		c5 := make([]mnethelpers.WOLMode, len(m.WakeOnLANConfig))
+		for k5, e5 := range m.WakeOnLANConfig {
+			c5[k5] = mnethelpers.WOLMode(e5)
+		}
+		out.WakeOnLANConfig = c5
+	}
+	return out, nil
+}
+
+// EthernetConfigV1Alpha1FromMachinery converts a machinery mnetwork.EthernetConfigV1Alpha1 document to the mirror type.
+func EthernetConfigV1Alpha1FromMachinery(src *mnetwork.EthernetConfigV1Alpha1) (*EthernetConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &EthernetConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.FeaturesConfig = src.FeaturesConfig
+	t3, err := EthernetRingsConfigFromMachinery(src.RingsConfig)
+	if err != nil {
+		return nil, fmt.Errorf("EthernetConfigV1Alpha1.rings"+": %w", err)
+	}
+	out.RingsConfig = t3
+	t4, err := EthernetChannelsConfigFromMachinery(src.ChannelsConfig)
+	if err != nil {
+		return nil, fmt.Errorf("EthernetConfigV1Alpha1.channels"+": %w", err)
+	}
+	out.ChannelsConfig = t4
+	if src.WakeOnLANConfig != nil {
+		c5 := make([]int, len(src.WakeOnLANConfig))
+		for k5, e5 := range src.WakeOnLANConfig {
+			c5[k5] = int(e5)
+		}
+		out.WakeOnLANConfig = c5
+	}
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.EthernetRingsConfig type.
+func (m *EthernetRingsConfig) ToMachinery() (*mnetwork.EthernetRingsConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.EthernetRingsConfig{}
+	out.RX = m.RX
+	out.TX = m.TX
+	out.RXMini = m.RXMini
+	out.RXJumbo = m.RXJumbo
+	out.RXBufLen = m.RXBufLen
+	out.CQESize = m.CQESize
+	out.TXPush = m.TXPush
+	out.RXPush = m.RXPush
+	out.TXPushBufLen = m.TXPushBufLen
+	out.TCPDataSplit = m.TCPDataSplit
+	return out, nil
+}
+
+// EthernetRingsConfigFromMachinery converts a machinery mnetwork.EthernetRingsConfig document to the mirror type.
+func EthernetRingsConfigFromMachinery(src *mnetwork.EthernetRingsConfig) (*EthernetRingsConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &EthernetRingsConfig{}
+	out.RX = src.RX
+	out.TX = src.TX
+	out.RXMini = src.RXMini
+	out.RXJumbo = src.RXJumbo
+	out.RXBufLen = src.RXBufLen
+	out.CQESize = src.CQESize
+	out.TXPush = src.TXPush
+	out.RXPush = src.RXPush
+	out.TXPushBufLen = src.TXPushBufLen
+	out.TCPDataSplit = src.TCPDataSplit
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mruntime.EventSinkV1Alpha1 type.
+func (m *EventSinkV1Alpha1) ToMachinery() (*mruntime.EventSinkV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mruntime.EventSinkV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mruntime.EventSinkKind, MetaAPIVersion: "v1alpha1"}
+	out.Endpoint = m.Endpoint
+	return out, nil
+}
+
+// EventSinkV1Alpha1FromMachinery converts a machinery mruntime.EventSinkV1Alpha1 document to the mirror type.
+func EventSinkV1Alpha1FromMachinery(src *mruntime.EventSinkV1Alpha1) (*EventSinkV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &EventSinkV1Alpha1{}
+	out.Endpoint = src.Endpoint
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.ExistingMountSpec type.
+func (m *ExistingMountSpec) ToMachinery() (*mblock.ExistingMountSpec, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.ExistingMountSpec{}
+	out.MountReadOnly = m.MountReadOnly
+	out.MountDisableAccessTime = m.MountDisableAccessTime
+	out.MountSecure = m.MountSecure
+	return out, nil
+}
+
+// ExistingMountSpecFromMachinery converts a machinery mblock.ExistingMountSpec document to the mirror type.
+func ExistingMountSpecFromMachinery(src *mblock.ExistingMountSpec) (*ExistingMountSpec, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ExistingMountSpec{}
+	out.MountReadOnly = src.MountReadOnly
+	out.MountDisableAccessTime = src.MountDisableAccessTime
+	out.MountSecure = src.MountSecure
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.ExistingVolumeConfigV1Alpha1 type.
+func (m *ExistingVolumeConfigV1Alpha1) ToMachinery() (*mblock.ExistingVolumeConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.ExistingVolumeConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mblock.ExistingVolumeConfigKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	t2, err := (m.VolumeDiscoverySpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ExistingVolumeConfigV1Alpha1.discovery"+": %w", err)
+	}
+	if t2 != nil {
+		out.VolumeDiscoverySpec = *t2
+	}
+	t3, err := (m.MountSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ExistingVolumeConfigV1Alpha1.mount"+": %w", err)
+	}
+	if t3 != nil {
+		out.MountSpec = *t3
+	}
+	t4, err := (m.TrimSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ExistingVolumeConfigV1Alpha1.trim"+": %w", err)
+	}
+	out.TrimSpec = t4
+	t5, err := (m.ScrubSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ExistingVolumeConfigV1Alpha1.scrub"+": %w", err)
+	}
+	out.ScrubSpec = t5
+	return out, nil
+}
+
+// ExistingVolumeConfigV1Alpha1FromMachinery converts a machinery mblock.ExistingVolumeConfigV1Alpha1 document to the mirror type.
+func ExistingVolumeConfigV1Alpha1FromMachinery(src *mblock.ExistingVolumeConfigV1Alpha1) (*ExistingVolumeConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ExistingVolumeConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	t2, err := VolumeDiscoverySpecFromMachinery(&(src.VolumeDiscoverySpec))
+	if err != nil {
+		return nil, fmt.Errorf("ExistingVolumeConfigV1Alpha1.discovery"+": %w", err)
+	}
+	out.VolumeDiscoverySpec = t2
+	t3, err := ExistingMountSpecFromMachinery(&(src.MountSpec))
+	if err != nil {
+		return nil, fmt.Errorf("ExistingVolumeConfigV1Alpha1.mount"+": %w", err)
+	}
+	out.MountSpec = t3
+	t4, err := TrimConfigFromMachinery(src.TrimSpec)
+	if err != nil {
+		return nil, fmt.Errorf("ExistingVolumeConfigV1Alpha1.trim"+": %w", err)
+	}
+	out.TrimSpec = t4
+	t5, err := ScrubConfigFromMachinery(src.ScrubSpec)
+	if err != nil {
+		return nil, fmt.Errorf("ExistingVolumeConfigV1Alpha1.scrub"+": %w", err)
+	}
+	out.ScrubSpec = t5
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.ExternalCloudProviderConfig type.
 func (m *ExternalCloudProviderConfig) ToMachinery() (*mv1alpha1.ExternalCloudProviderConfig, error) {
 	if m == nil {
@@ -1610,6 +3038,83 @@ func ExternalCloudProviderConfigFromMachinery(src *mv1alpha1.ExternalCloudProvid
 	out := &ExternalCloudProviderConfig{}
 	out.ExternalEnabled = src.ExternalEnabled
 	out.ExternalManifests = src.ExternalManifests
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.ExternalMountSpec type.
+func (m *ExternalMountSpec) ToMachinery() (*mblock.ExternalMountSpec, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.ExternalMountSpec{}
+	out.MountReadOnly = m.MountReadOnly
+	out.MountDisableAccessTime = m.MountDisableAccessTime
+	out.MountSecure = m.MountSecure
+	t4, err := (m.MountVirtiofs).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ExternalMountSpec.virtiofs"+": %w", err)
+	}
+	out.MountVirtiofs = t4
+	return out, nil
+}
+
+// ExternalMountSpecFromMachinery converts a machinery mblock.ExternalMountSpec document to the mirror type.
+func ExternalMountSpecFromMachinery(src *mblock.ExternalMountSpec) (*ExternalMountSpec, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ExternalMountSpec{}
+	out.MountReadOnly = src.MountReadOnly
+	out.MountDisableAccessTime = src.MountDisableAccessTime
+	out.MountSecure = src.MountSecure
+	t4, err := VirtiofsMountSpecFromMachinery(src.MountVirtiofs)
+	if err != nil {
+		return nil, fmt.Errorf("ExternalMountSpec.virtiofs"+": %w", err)
+	}
+	out.MountVirtiofs = t4
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.ExternalVolumeConfigV1Alpha1 type.
+func (m *ExternalVolumeConfigV1Alpha1) ToMachinery() (*mblock.ExternalVolumeConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.ExternalVolumeConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mblock.ExternalVolumeConfigKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	v2, err := mirrorToMachineryScalar[rblock.FilesystemType](m.FilesystemType)
+	if err != nil {
+		return nil, fmt.Errorf("ExternalVolumeConfigV1Alpha1.filesystemType"+": %w", err)
+	}
+	out.FilesystemType = v2
+	t3, err := (m.MountSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ExternalVolumeConfigV1Alpha1.mount"+": %w", err)
+	}
+	if t3 != nil {
+		out.MountSpec = *t3
+	}
+	return out, nil
+}
+
+// ExternalVolumeConfigV1Alpha1FromMachinery converts a machinery mblock.ExternalVolumeConfigV1Alpha1 document to the mirror type.
+func ExternalVolumeConfigV1Alpha1FromMachinery(src *mblock.ExternalVolumeConfigV1Alpha1) (*ExternalVolumeConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ExternalVolumeConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	v2, err := machineryToMirrorScalar(src.FilesystemType)
+	if err != nil {
+		return nil, fmt.Errorf("ExternalVolumeConfigV1Alpha1.filesystemType"+": %w", err)
+	}
+	out.FilesystemType = v2
+	t3, err := ExternalMountSpecFromMachinery(&(src.MountSpec))
+	if err != nil {
+		return nil, fmt.Errorf("ExternalVolumeConfigV1Alpha1.mount"+": %w", err)
+	}
+	out.MountSpec = t3
 	return out, nil
 }
 
@@ -1777,6 +3282,35 @@ func FeaturesConfigFromMachinery(src *mv1alpha1.FeaturesConfig) (*FeaturesConfig
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mblock.FilesystemScrubConfigV1Alpha1 type.
+func (m *FilesystemScrubConfigV1Alpha1) ToMachinery() (*mblock.FilesystemScrubConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.FilesystemScrubConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mblock.FilesystemScrubConfigKind, MetaAPIVersion: "v1alpha1"}
+	v1, err := mirrorToMachineryScalar[time.Duration](m.ScrubInterval)
+	if err != nil {
+		return nil, fmt.Errorf("FilesystemScrubConfigV1Alpha1.interval"+": %w", err)
+	}
+	out.ScrubInterval = v1
+	return out, nil
+}
+
+// FilesystemScrubConfigV1Alpha1FromMachinery converts a machinery mblock.FilesystemScrubConfigV1Alpha1 document to the mirror type.
+func FilesystemScrubConfigV1Alpha1FromMachinery(src *mblock.FilesystemScrubConfigV1Alpha1) (*FilesystemScrubConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &FilesystemScrubConfigV1Alpha1{}
+	v1, err := machineryToMirrorScalar(src.ScrubInterval)
+	if err != nil {
+		return nil, fmt.Errorf("FilesystemScrubConfigV1Alpha1.interval"+": %w", err)
+	}
+	out.ScrubInterval = v1
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mblock.FilesystemSpec type.
 func (m *FilesystemSpec) ToMachinery() (*mblock.FilesystemSpec, error) {
 	if m == nil {
@@ -1817,6 +3351,35 @@ func FilesystemSpecFromMachinery(src *mblock.FilesystemSpec) (*FilesystemSpec, e
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mblock.FilesystemTrimConfigV1Alpha1 type.
+func (m *FilesystemTrimConfigV1Alpha1) ToMachinery() (*mblock.FilesystemTrimConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.FilesystemTrimConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mblock.FilesystemTrimConfigKind, MetaAPIVersion: "v1alpha1"}
+	v1, err := mirrorToMachineryScalar[time.Duration](m.TrimInterval)
+	if err != nil {
+		return nil, fmt.Errorf("FilesystemTrimConfigV1Alpha1.interval"+": %w", err)
+	}
+	out.TrimInterval = v1
+	return out, nil
+}
+
+// FilesystemTrimConfigV1Alpha1FromMachinery converts a machinery mblock.FilesystemTrimConfigV1Alpha1 document to the mirror type.
+func FilesystemTrimConfigV1Alpha1FromMachinery(src *mblock.FilesystemTrimConfigV1Alpha1) (*FilesystemTrimConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &FilesystemTrimConfigV1Alpha1{}
+	v1, err := machineryToMirrorScalar(src.TrimInterval)
+	if err != nil {
+		return nil, fmt.Errorf("FilesystemTrimConfigV1Alpha1.interval"+": %w", err)
+	}
+	out.TrimInterval = v1
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.FlannelCNIConfig type.
 func (m *FlannelCNIConfig) ToMachinery() (*mv1alpha1.FlannelCNIConfig, error) {
 	if m == nil {
@@ -1836,6 +3399,59 @@ func FlannelCNIConfigFromMachinery(src *mv1alpha1.FlannelCNIConfig) (*FlannelCNI
 	out := &FlannelCNIConfig{}
 	out.FlanneldExtraArgs = src.FlanneldExtraArgs
 	out.FlannelKubeNetworkPoliciesEnabled = src.FlannelKubeNetworkPoliciesEnabled
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.HTTPProbeConfigV1Alpha1 type.
+func (m *HTTPProbeConfigV1Alpha1) ToMachinery() (*mnetwork.HTTPProbeConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.HTTPProbeConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.HTTPProbeKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	v2, err := mirrorToMachineryScalar[time.Duration](m.ProbeInterval)
+	if err != nil {
+		return nil, fmt.Errorf("HTTPProbeConfigV1Alpha1.interval"+": %w", err)
+	}
+	out.ProbeInterval = v2
+	out.ProbeFailureThreshold = m.ProbeFailureThreshold
+	v4, err := mirrorToMachineryScalar[mmeta.URL](m.HTTPEndpoint)
+	if err != nil {
+		return nil, fmt.Errorf("HTTPProbeConfigV1Alpha1.url"+": %w", err)
+	}
+	out.HTTPEndpoint = v4
+	v5, err := mirrorToMachineryScalar[time.Duration](m.HTTPTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("HTTPProbeConfigV1Alpha1.timeout"+": %w", err)
+	}
+	out.HTTPTimeout = v5
+	return out, nil
+}
+
+// HTTPProbeConfigV1Alpha1FromMachinery converts a machinery mnetwork.HTTPProbeConfigV1Alpha1 document to the mirror type.
+func HTTPProbeConfigV1Alpha1FromMachinery(src *mnetwork.HTTPProbeConfigV1Alpha1) (*HTTPProbeConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &HTTPProbeConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	v2, err := machineryToMirrorScalar(src.ProbeInterval)
+	if err != nil {
+		return nil, fmt.Errorf("HTTPProbeConfigV1Alpha1.interval"+": %w", err)
+	}
+	out.ProbeInterval = v2
+	out.ProbeFailureThreshold = src.ProbeFailureThreshold
+	v4, err := machineryToMirrorScalar(src.HTTPEndpoint)
+	if err != nil {
+		return nil, fmt.Errorf("HTTPProbeConfigV1Alpha1.url"+": %w", err)
+	}
+	out.HTTPEndpoint = v4
+	v5, err := machineryToMirrorScalar(src.HTTPTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("HTTPProbeConfigV1Alpha1.timeout"+": %w", err)
+	}
+	out.HTTPTimeout = v5
 	return out, nil
 }
 
@@ -1863,6 +3479,30 @@ func HostDNSConfigFromMachinery(src *mv1alpha1.HostDNSConfig) (*HostDNSConfig, e
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mcontainer.HostPathMount type.
+func (m *HostPathMount) ToMachinery() (*mcontainer.HostPathMount, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mcontainer.HostPathMount{}
+	out.MountSource = m.MountSource
+	out.MountDestination = m.MountDestination
+	out.MountOpts = m.MountOpts
+	return out, nil
+}
+
+// HostPathMountFromMachinery converts a machinery mcontainer.HostPathMount document to the mirror type.
+func HostPathMountFromMachinery(src *mcontainer.HostPathMount) (*HostPathMount, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &HostPathMount{}
+	out.MountSource = src.MountSource
+	out.MountDestination = src.MountDestination
+	out.MountOpts = src.MountOpts
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.ImageCacheConfig type.
 func (m *ImageCacheConfig) ToMachinery() (*mv1alpha1.ImageCacheConfig, error) {
 	if m == nil {
@@ -1880,6 +3520,168 @@ func ImageCacheConfigFromMachinery(src *mv1alpha1.ImageCacheConfig) (*ImageCache
 	}
 	out := &ImageCacheConfig{}
 	out.CacheLocalEnabled = src.CacheLocalEnabled
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mcri.ImageCacheConfigV1Alpha1 type.
+func (m *ImageCacheConfigV1Alpha1) ToMachinery() (*mcri.ImageCacheConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mcri.ImageCacheConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mcri.ImageCacheConfig, MetaAPIVersion: "v1alpha1"}
+	t1, err := (m.LocalConfig).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ImageCacheConfigV1Alpha1.local"+": %w", err)
+	}
+	if t1 != nil {
+		out.LocalConfig = *t1
+	}
+	return out, nil
+}
+
+// ImageCacheConfigV1Alpha1FromMachinery converts a machinery mcri.ImageCacheConfigV1Alpha1 document to the mirror type.
+func ImageCacheConfigV1Alpha1FromMachinery(src *mcri.ImageCacheConfigV1Alpha1) (*ImageCacheConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ImageCacheConfigV1Alpha1{}
+	t1, err := LocalImageCacheConfigFromMachinery(&(src.LocalConfig))
+	if err != nil {
+		return nil, fmt.Errorf("ImageCacheConfigV1Alpha1.local"+": %w", err)
+	}
+	out.LocalConfig = t1
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery msecurity.ImageKeylessVerifierV1Alpha1 type.
+func (m *ImageKeylessVerifierV1Alpha1) ToMachinery() (*msecurity.ImageKeylessVerifierV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &msecurity.ImageKeylessVerifierV1Alpha1{}
+	out.KeylessIssuer = m.KeylessIssuer
+	out.KeylessSubject = m.KeylessSubject
+	out.KeylessSubjectRegex = m.KeylessSubjectRegex
+	return out, nil
+}
+
+// ImageKeylessVerifierV1Alpha1FromMachinery converts a machinery msecurity.ImageKeylessVerifierV1Alpha1 document to the mirror type.
+func ImageKeylessVerifierV1Alpha1FromMachinery(src *msecurity.ImageKeylessVerifierV1Alpha1) (*ImageKeylessVerifierV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ImageKeylessVerifierV1Alpha1{}
+	out.KeylessIssuer = src.KeylessIssuer
+	out.KeylessSubject = src.KeylessSubject
+	out.KeylessSubjectRegex = src.KeylessSubjectRegex
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery msecurity.ImagePublicKeyVerifierV1Alpha1 type.
+func (m *ImagePublicKeyVerifierV1Alpha1) ToMachinery() (*msecurity.ImagePublicKeyVerifierV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &msecurity.ImagePublicKeyVerifierV1Alpha1{}
+	out.ConfigCertificate = m.ConfigCertificate
+	return out, nil
+}
+
+// ImagePublicKeyVerifierV1Alpha1FromMachinery converts a machinery msecurity.ImagePublicKeyVerifierV1Alpha1 document to the mirror type.
+func ImagePublicKeyVerifierV1Alpha1FromMachinery(src *msecurity.ImagePublicKeyVerifierV1Alpha1) (*ImagePublicKeyVerifierV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ImagePublicKeyVerifierV1Alpha1{}
+	out.ConfigCertificate = src.ConfigCertificate
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery msecurity.ImageVerificationConfigV1Alpha1 type.
+func (m *ImageVerificationConfigV1Alpha1) ToMachinery() (*msecurity.ImageVerificationConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &msecurity.ImageVerificationConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: msecurity.ImageVerificationConfigKind, MetaAPIVersion: "v1alpha1"}
+	if m.ConfigRules != nil {
+		c1 := make([]msecurity.ImageVerificationRuleV1Alpha1, len(m.ConfigRules))
+		for k1, e1 := range m.ConfigRules {
+			t2, err := (e1).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("ImageVerificationConfigV1Alpha1.rules"+": %w", err)
+			}
+			if t2 != nil {
+				c1[k1] = *t2
+			}
+		}
+		out.ConfigRules = msecurity.ImageVerificationRules(c1)
+	}
+	return out, nil
+}
+
+// ImageVerificationConfigV1Alpha1FromMachinery converts a machinery msecurity.ImageVerificationConfigV1Alpha1 document to the mirror type.
+func ImageVerificationConfigV1Alpha1FromMachinery(src *msecurity.ImageVerificationConfigV1Alpha1) (*ImageVerificationConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ImageVerificationConfigV1Alpha1{}
+	if src.ConfigRules != nil {
+		c1 := make([]*ImageVerificationRuleV1Alpha1, len(src.ConfigRules))
+		for k1, e1 := range src.ConfigRules {
+			t2, err := ImageVerificationRuleV1Alpha1FromMachinery(&(e1))
+			if err != nil {
+				return nil, fmt.Errorf("ImageVerificationConfigV1Alpha1.rules"+": %w", err)
+			}
+			c1[k1] = t2
+		}
+		out.ConfigRules = c1
+	}
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery msecurity.ImageVerificationRuleV1Alpha1 type.
+func (m *ImageVerificationRuleV1Alpha1) ToMachinery() (*msecurity.ImageVerificationRuleV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &msecurity.ImageVerificationRuleV1Alpha1{}
+	out.RuleImagePattern = m.RuleImagePattern
+	out.RuleSkip = m.RuleSkip
+	out.RuleDeny = m.RuleDeny
+	t4, err := (m.RuleKeylessVerifier).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ImageVerificationRuleV1Alpha1.keyless"+": %w", err)
+	}
+	out.RuleKeylessVerifier = t4
+	t5, err := (m.RulePublicKeyVerifier).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("ImageVerificationRuleV1Alpha1.publicKey"+": %w", err)
+	}
+	out.RulePublicKeyVerifier = t5
+	return out, nil
+}
+
+// ImageVerificationRuleV1Alpha1FromMachinery converts a machinery msecurity.ImageVerificationRuleV1Alpha1 document to the mirror type.
+func ImageVerificationRuleV1Alpha1FromMachinery(src *msecurity.ImageVerificationRuleV1Alpha1) (*ImageVerificationRuleV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ImageVerificationRuleV1Alpha1{}
+	out.RuleImagePattern = src.RuleImagePattern
+	out.RuleSkip = src.RuleSkip
+	out.RuleDeny = src.RuleDeny
+	t4, err := ImageKeylessVerifierV1Alpha1FromMachinery(src.RuleKeylessVerifier)
+	if err != nil {
+		return nil, fmt.Errorf("ImageVerificationRuleV1Alpha1.keyless"+": %w", err)
+	}
+	out.RuleKeylessVerifier = t4
+	t5, err := ImagePublicKeyVerifierV1Alpha1FromMachinery(src.RulePublicKeyVerifier)
+	if err != nil {
+		return nil, fmt.Errorf("ImageVerificationRuleV1Alpha1.publicKey"+": %w", err)
+	}
+	out.RulePublicKeyVerifier = t5
 	return out, nil
 }
 
@@ -2106,6 +3908,346 @@ func KernelModuleConfigV1Alpha1FromMachinery(src *mruntime.KernelModuleConfigV1A
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mruntime.KmsgLogV1Alpha1 type.
+func (m *KmsgLogV1Alpha1) ToMachinery() (*mruntime.KmsgLogV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mruntime.KmsgLogV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mruntime.KmsgLogKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	v2, err := mirrorToMachineryScalar[mmeta.URL](m.KmsgLogURL)
+	if err != nil {
+		return nil, fmt.Errorf("KmsgLogV1Alpha1.url"+": %w", err)
+	}
+	out.KmsgLogURL = v2
+	return out, nil
+}
+
+// KmsgLogV1Alpha1FromMachinery converts a machinery mruntime.KmsgLogV1Alpha1 document to the mirror type.
+func KmsgLogV1Alpha1FromMachinery(src *mruntime.KmsgLogV1Alpha1) (*KmsgLogV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KmsgLogV1Alpha1{}
+	out.MetaName = src.MetaName
+	v2, err := machineryToMirrorScalar(src.KmsgLogURL)
+	if err != nil {
+		return nil, fmt.Errorf("KmsgLogV1Alpha1.url"+": %w", err)
+	}
+	out.KmsgLogURL = v2
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mk8s.KubeAPIServerConfigV1Alpha1 type.
+func (m *KubeAPIServerConfigV1Alpha1) ToMachinery() (*mk8s.KubeAPIServerConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.KubeAPIServerConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mk8s.KubeAPIServerConfig, MetaAPIVersion: "v1alpha1"}
+	out.PodImage = m.PodImage
+	if m.PodArgs != nil {
+		c2 := make(map[string]mmeta.ArgValue, len(m.PodArgs))
+		for k2, e2 := range m.PodArgs {
+			v3, err := argValueToMachinery(e2)
+			if err != nil {
+				return nil, fmt.Errorf("KubeAPIServerConfigV1Alpha1.extraArgs"+": %w", err)
+			}
+			c2[k2] = v3
+		}
+		out.PodArgs = mmeta.Args(c2)
+	}
+	out.PodEnv = m.PodEnv
+	t4, err := (m.PodResources).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("KubeAPIServerConfigV1Alpha1.resources"+": %w", err)
+	}
+	if t4 != nil {
+		out.PodResources = *t4
+	}
+	out.PodAPIPort = m.PodAPIPort
+	out.PodCertExtraSANs = m.PodCertExtraSANs
+	out.PodStartupProbes = m.PodStartupProbes
+	return out, nil
+}
+
+// KubeAPIServerConfigV1Alpha1FromMachinery converts a machinery mk8s.KubeAPIServerConfigV1Alpha1 document to the mirror type.
+func KubeAPIServerConfigV1Alpha1FromMachinery(src *mk8s.KubeAPIServerConfigV1Alpha1) (*KubeAPIServerConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeAPIServerConfigV1Alpha1{}
+	out.PodImage = src.PodImage
+	if src.PodArgs != nil {
+		c2 := make(map[string][]string, len(src.PodArgs))
+		for k2, e2 := range src.PodArgs {
+			v3, err := argValueFromMachinery(e2)
+			if err != nil {
+				return nil, fmt.Errorf("KubeAPIServerConfigV1Alpha1.extraArgs"+": %w", err)
+			}
+			c2[k2] = v3
+		}
+		out.PodArgs = c2
+	}
+	out.PodEnv = src.PodEnv
+	t4, err := KubeResourcesConfigFromMachinery(&(src.PodResources))
+	if err != nil {
+		return nil, fmt.Errorf("KubeAPIServerConfigV1Alpha1.resources"+": %w", err)
+	}
+	out.PodResources = t4
+	out.PodAPIPort = src.PodAPIPort
+	out.PodCertExtraSANs = src.PodCertExtraSANs
+	out.PodStartupProbes = src.PodStartupProbes
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mk8s.KubeClusterConfigV1Alpha1 type.
+func (m *KubeClusterConfigV1Alpha1) ToMachinery() (*mk8s.KubeClusterConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.KubeClusterConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mk8s.KubeClusterConfig, MetaAPIVersion: "v1alpha1"}
+	out.ClusterNameConfig = m.ClusterNameConfig
+	v2, err := mirrorToMachineryScalar[mmeta.URL](m.ClusterEndpointConfig)
+	if err != nil {
+		return nil, fmt.Errorf("KubeClusterConfigV1Alpha1.endpoint"+": %w", err)
+	}
+	out.ClusterEndpointConfig = v2
+	return out, nil
+}
+
+// KubeClusterConfigV1Alpha1FromMachinery converts a machinery mk8s.KubeClusterConfigV1Alpha1 document to the mirror type.
+func KubeClusterConfigV1Alpha1FromMachinery(src *mk8s.KubeClusterConfigV1Alpha1) (*KubeClusterConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeClusterConfigV1Alpha1{}
+	out.ClusterNameConfig = src.ClusterNameConfig
+	v2, err := machineryToMirrorScalar(src.ClusterEndpointConfig)
+	if err != nil {
+		return nil, fmt.Errorf("KubeClusterConfigV1Alpha1.endpoint"+": %w", err)
+	}
+	out.ClusterEndpointConfig = v2
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mk8s.KubeControllerManagerConfigV1Alpha1 type.
+func (m *KubeControllerManagerConfigV1Alpha1) ToMachinery() (*mk8s.KubeControllerManagerConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.KubeControllerManagerConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mk8s.KubeControllerManagerConfig, MetaAPIVersion: "v1alpha1"}
+	out.PodEnabled = m.PodEnabled
+	out.PodImage = m.PodImage
+	if m.PodArgs != nil {
+		c3 := make(map[string]mmeta.ArgValue, len(m.PodArgs))
+		for k3, e3 := range m.PodArgs {
+			v4, err := argValueToMachinery(e3)
+			if err != nil {
+				return nil, fmt.Errorf("KubeControllerManagerConfigV1Alpha1.extraArgs"+": %w", err)
+			}
+			c3[k3] = v4
+		}
+		out.PodArgs = mmeta.Args(c3)
+	}
+	out.PodEnv = m.PodEnv
+	t5, err := (m.PodResources).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("KubeControllerManagerConfigV1Alpha1.resources"+": %w", err)
+	}
+	if t5 != nil {
+		out.PodResources = *t5
+	}
+	return out, nil
+}
+
+// KubeControllerManagerConfigV1Alpha1FromMachinery converts a machinery mk8s.KubeControllerManagerConfigV1Alpha1 document to the mirror type.
+func KubeControllerManagerConfigV1Alpha1FromMachinery(src *mk8s.KubeControllerManagerConfigV1Alpha1) (*KubeControllerManagerConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeControllerManagerConfigV1Alpha1{}
+	out.PodEnabled = src.PodEnabled
+	out.PodImage = src.PodImage
+	if src.PodArgs != nil {
+		c3 := make(map[string][]string, len(src.PodArgs))
+		for k3, e3 := range src.PodArgs {
+			v4, err := argValueFromMachinery(e3)
+			if err != nil {
+				return nil, fmt.Errorf("KubeControllerManagerConfigV1Alpha1.extraArgs"+": %w", err)
+			}
+			c3[k3] = v4
+		}
+		out.PodArgs = c3
+	}
+	out.PodEnv = src.PodEnv
+	t5, err := KubeResourcesConfigFromMachinery(&(src.PodResources))
+	if err != nil {
+		return nil, fmt.Errorf("KubeControllerManagerConfigV1Alpha1.resources"+": %w", err)
+	}
+	out.PodResources = t5
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mk8s.KubeCoreDNSConfigV1Alpha1 type.
+func (m *KubeCoreDNSConfigV1Alpha1) ToMachinery() (*mk8s.KubeCoreDNSConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.KubeCoreDNSConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mk8s.KubeCoreDNSConfig, MetaAPIVersion: "v1alpha1"}
+	out.PodEnabled = m.PodEnabled
+	out.PodImage = m.PodImage
+	return out, nil
+}
+
+// KubeCoreDNSConfigV1Alpha1FromMachinery converts a machinery mk8s.KubeCoreDNSConfigV1Alpha1 document to the mirror type.
+func KubeCoreDNSConfigV1Alpha1FromMachinery(src *mk8s.KubeCoreDNSConfigV1Alpha1) (*KubeCoreDNSConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeCoreDNSConfigV1Alpha1{}
+	out.PodEnabled = src.PodEnabled
+	out.PodImage = src.PodImage
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mk8s.KubeInlineManifestConfigV1Alpha1 type.
+func (m *KubeInlineManifestConfigV1Alpha1) ToMachinery() (*mk8s.KubeInlineManifestConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.KubeInlineManifestConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mk8s.KubeInlineManifestConfig, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.ManifestSpec = m.ManifestSpec
+	return out, nil
+}
+
+// KubeInlineManifestConfigV1Alpha1FromMachinery converts a machinery mk8s.KubeInlineManifestConfigV1Alpha1 document to the mirror type.
+func KubeInlineManifestConfigV1Alpha1FromMachinery(src *mk8s.KubeInlineManifestConfigV1Alpha1) (*KubeInlineManifestConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeInlineManifestConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.ManifestSpec = src.ManifestSpec
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mk8s.KubeNetworkConfigV1Alpha1 type.
+func (m *KubeNetworkConfigV1Alpha1) ToMachinery() (*mk8s.KubeNetworkConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.KubeNetworkConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mk8s.KubeNetworkConfig, MetaAPIVersion: "v1alpha1"}
+	out.NetworkDNSDomain = m.NetworkDNSDomain
+	if m.NetworkPodSubnets != nil {
+		c2 := make([]mmeta.Prefix, len(m.NetworkPodSubnets))
+		for k2, e2 := range m.NetworkPodSubnets {
+			v3, err := mirrorToMachineryScalar[mmeta.Prefix](e2)
+			if err != nil {
+				return nil, fmt.Errorf("KubeNetworkConfigV1Alpha1.podSubnets"+": %w", err)
+			}
+			c2[k2] = v3
+		}
+		out.NetworkPodSubnets = c2
+	}
+	if m.NetworkServiceSubnets != nil {
+		c3 := make([]mmeta.Prefix, len(m.NetworkServiceSubnets))
+		for k3, e3 := range m.NetworkServiceSubnets {
+			v4, err := mirrorToMachineryScalar[mmeta.Prefix](e3)
+			if err != nil {
+				return nil, fmt.Errorf("KubeNetworkConfigV1Alpha1.serviceSubnets"+": %w", err)
+			}
+			c3[k3] = v4
+		}
+		out.NetworkServiceSubnets = c3
+	}
+	out.NetworkNodeCIDRMaskSizeIPv4 = m.NetworkNodeCIDRMaskSizeIPv4
+	out.NetworkNodeCIDRMaskSizeIPv6 = m.NetworkNodeCIDRMaskSizeIPv6
+	return out, nil
+}
+
+// KubeNetworkConfigV1Alpha1FromMachinery converts a machinery mk8s.KubeNetworkConfigV1Alpha1 document to the mirror type.
+func KubeNetworkConfigV1Alpha1FromMachinery(src *mk8s.KubeNetworkConfigV1Alpha1) (*KubeNetworkConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeNetworkConfigV1Alpha1{}
+	out.NetworkDNSDomain = src.NetworkDNSDomain
+	if src.NetworkPodSubnets != nil {
+		c2 := make([]string, len(src.NetworkPodSubnets))
+		for k2, e2 := range src.NetworkPodSubnets {
+			v3, err := machineryToMirrorScalar(e2)
+			if err != nil {
+				return nil, fmt.Errorf("KubeNetworkConfigV1Alpha1.podSubnets"+": %w", err)
+			}
+			c2[k2] = v3
+		}
+		out.NetworkPodSubnets = c2
+	}
+	if src.NetworkServiceSubnets != nil {
+		c3 := make([]string, len(src.NetworkServiceSubnets))
+		for k3, e3 := range src.NetworkServiceSubnets {
+			v4, err := machineryToMirrorScalar(e3)
+			if err != nil {
+				return nil, fmt.Errorf("KubeNetworkConfigV1Alpha1.serviceSubnets"+": %w", err)
+			}
+			c3[k3] = v4
+		}
+		out.NetworkServiceSubnets = c3
+	}
+	out.NetworkNodeCIDRMaskSizeIPv4 = src.NetworkNodeCIDRMaskSizeIPv4
+	out.NetworkNodeCIDRMaskSizeIPv6 = src.NetworkNodeCIDRMaskSizeIPv6
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mk8s.KubeNodeConfigV1Alpha1 type.
+func (m *KubeNodeConfigV1Alpha1) ToMachinery() (*mk8s.KubeNodeConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.KubeNodeConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mk8s.KubeNodeConfig, MetaAPIVersion: "v1alpha1"}
+	out.SkipNodeRegistrationConfig = m.SkipNodeRegistrationConfig
+	out.RegisterWithFQDNConfig = m.RegisterWithFQDNConfig
+	t3, err := (m.NodeIPConfig).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("KubeNodeConfigV1Alpha1.nodeIP"+": %w", err)
+	}
+	if t3 != nil {
+		out.NodeIPConfig = *t3
+	}
+	out.LabelsConfig = m.LabelsConfig
+	out.AnnotationsConfig = m.AnnotationsConfig
+	out.TaintsConfig = m.TaintsConfig
+	return out, nil
+}
+
+// KubeNodeConfigV1Alpha1FromMachinery converts a machinery mk8s.KubeNodeConfigV1Alpha1 document to the mirror type.
+func KubeNodeConfigV1Alpha1FromMachinery(src *mk8s.KubeNodeConfigV1Alpha1) (*KubeNodeConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeNodeConfigV1Alpha1{}
+	out.SkipNodeRegistrationConfig = src.SkipNodeRegistrationConfig
+	out.RegisterWithFQDNConfig = src.RegisterWithFQDNConfig
+	t3, err := NodeIPConfigFromMachinery(&(src.NodeIPConfig))
+	if err != nil {
+		return nil, fmt.Errorf("KubeNodeConfigV1Alpha1.nodeIP"+": %w", err)
+	}
+	out.NodeIPConfig = t3
+	out.LabelsConfig = src.LabelsConfig
+	out.AnnotationsConfig = src.AnnotationsConfig
+	out.TaintsConfig = src.TaintsConfig
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.KubePrism type.
 func (m *KubePrism) ToMachinery() (*mv1alpha1.KubePrism, error) {
 	if m == nil {
@@ -2128,6 +4270,106 @@ func KubePrismFromMachinery(src *mv1alpha1.KubePrism) (*KubePrism, error) {
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mk8s.KubePrismConfigV1Alpha1 type.
+func (m *KubePrismConfigV1Alpha1) ToMachinery() (*mk8s.KubePrismConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.KubePrismConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mk8s.KubePrismConfig, MetaAPIVersion: "v1alpha1"}
+	out.PortConfig = m.PortConfig
+	out.TLSServerNameConfig = m.TLSServerNameConfig
+	return out, nil
+}
+
+// KubePrismConfigV1Alpha1FromMachinery converts a machinery mk8s.KubePrismConfigV1Alpha1 document to the mirror type.
+func KubePrismConfigV1Alpha1FromMachinery(src *mk8s.KubePrismConfigV1Alpha1) (*KubePrismConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubePrismConfigV1Alpha1{}
+	out.PortConfig = src.PortConfig
+	out.TLSServerNameConfig = src.TLSServerNameConfig
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mk8s.ResourcesConfig type.
+func (m *KubeResourcesConfig) ToMachinery() (*mk8s.ResourcesConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.ResourcesConfig{}
+	v1, err := mirrorToMachineryUnstructured(m.Requests)
+	if err != nil {
+		return nil, fmt.Errorf("KubeResourcesConfig.requests"+": %w", err)
+	}
+	out.Requests = v1
+	v2, err := mirrorToMachineryUnstructured(m.Limits)
+	if err != nil {
+		return nil, fmt.Errorf("KubeResourcesConfig.limits"+": %w", err)
+	}
+	out.Limits = v2
+	return out, nil
+}
+
+// KubeResourcesConfigFromMachinery converts a machinery mk8s.ResourcesConfig document to the mirror type.
+func KubeResourcesConfigFromMachinery(src *mk8s.ResourcesConfig) (*KubeResourcesConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeResourcesConfig{}
+	v1, err := machineryToMirrorUnstructured[corev1.ResourceList](src.Requests)
+	if err != nil {
+		return nil, fmt.Errorf("KubeResourcesConfig.requests"+": %w", err)
+	}
+	out.Requests = v1
+	v2, err := machineryToMirrorUnstructured[corev1.ResourceList](src.Limits)
+	if err != nil {
+		return nil, fmt.Errorf("KubeResourcesConfig.limits"+": %w", err)
+	}
+	out.Limits = v2
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.KubeSpanConfigV1Alpha1 type.
+func (m *KubeSpanConfigV1Alpha1) ToMachinery() (*mnetwork.KubeSpanConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.KubeSpanConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.KubeSpanKind, MetaAPIVersion: "v1alpha1"}
+	out.ConfigEnabled = m.ConfigEnabled
+	out.ConfigAdvertiseKubernetesNetworks = m.ConfigAdvertiseKubernetesNetworks
+	out.ConfigAllowDownPeerBypass = m.ConfigAllowDownPeerBypass
+	out.ConfigHarvestExtraEndpoints = m.ConfigHarvestExtraEndpoints
+	out.ConfigMTU = m.ConfigMTU
+	t6, err := (m.ConfigFilters).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("KubeSpanConfigV1Alpha1.filters"+": %w", err)
+	}
+	out.ConfigFilters = t6
+	return out, nil
+}
+
+// KubeSpanConfigV1Alpha1FromMachinery converts a machinery mnetwork.KubeSpanConfigV1Alpha1 document to the mirror type.
+func KubeSpanConfigV1Alpha1FromMachinery(src *mnetwork.KubeSpanConfigV1Alpha1) (*KubeSpanConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeSpanConfigV1Alpha1{}
+	out.ConfigEnabled = src.ConfigEnabled
+	out.ConfigAdvertiseKubernetesNetworks = src.ConfigAdvertiseKubernetesNetworks
+	out.ConfigAllowDownPeerBypass = src.ConfigAllowDownPeerBypass
+	out.ConfigHarvestExtraEndpoints = src.ConfigHarvestExtraEndpoints
+	out.ConfigMTU = src.ConfigMTU
+	t6, err := KubeSpanFiltersConfigFromMachinery(src.ConfigFilters)
+	if err != nil {
+		return nil, fmt.Errorf("KubeSpanConfigV1Alpha1.filters"+": %w", err)
+	}
+	out.ConfigFilters = t6
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.KubeSpanFilters type.
 func (m *KubeSpanFilters) ToMachinery() (*mv1alpha1.KubeSpanFilters, error) {
 	if m == nil {
@@ -2147,6 +4389,71 @@ func KubeSpanFiltersFromMachinery(src *mv1alpha1.KubeSpanFilters) (*KubeSpanFilt
 	out := &KubeSpanFilters{}
 	out.KubeSpanFiltersEndpoints = src.KubeSpanFiltersEndpoints
 	out.KubeSpanFiltersExcludeAdvertisedNetworks = src.KubeSpanFiltersExcludeAdvertisedNetworks
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.KubeSpanFiltersConfig type.
+func (m *KubeSpanFiltersConfig) ToMachinery() (*mnetwork.KubeSpanFiltersConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.KubeSpanFiltersConfig{}
+	out.ConfigEndpoints = m.ConfigEndpoints
+	if m.ConfigExcludeAdvertisedNetworks != nil {
+		c2 := make([]mmeta.Prefix, len(m.ConfigExcludeAdvertisedNetworks))
+		for k2, e2 := range m.ConfigExcludeAdvertisedNetworks {
+			v3, err := mirrorToMachineryScalar[mmeta.Prefix](e2)
+			if err != nil {
+				return nil, fmt.Errorf("KubeSpanFiltersConfig.excludeAdvertisedNetworks"+": %w", err)
+			}
+			c2[k2] = v3
+		}
+		out.ConfigExcludeAdvertisedNetworks = c2
+	}
+	return out, nil
+}
+
+// KubeSpanFiltersConfigFromMachinery converts a machinery mnetwork.KubeSpanFiltersConfig document to the mirror type.
+func KubeSpanFiltersConfigFromMachinery(src *mnetwork.KubeSpanFiltersConfig) (*KubeSpanFiltersConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeSpanFiltersConfig{}
+	out.ConfigEndpoints = src.ConfigEndpoints
+	if src.ConfigExcludeAdvertisedNetworks != nil {
+		c2 := make([]string, len(src.ConfigExcludeAdvertisedNetworks))
+		for k2, e2 := range src.ConfigExcludeAdvertisedNetworks {
+			v3, err := machineryToMirrorScalar(e2)
+			if err != nil {
+				return nil, fmt.Errorf("KubeSpanFiltersConfig.excludeAdvertisedNetworks"+": %w", err)
+			}
+			c2[k2] = v3
+		}
+		out.ConfigExcludeAdvertisedNetworks = c2
+	}
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mk8s.KubeTalosAPIAccessConfigV1Alpha1 type.
+func (m *KubeTalosAPIAccessConfigV1Alpha1) ToMachinery() (*mk8s.KubeTalosAPIAccessConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.KubeTalosAPIAccessConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mk8s.KubeTalosAPIAccessConfig, MetaAPIVersion: "v1alpha1"}
+	out.AccessAllowedRoles = m.AccessAllowedRoles
+	out.AccessAllowedKubernetesNamespaces = m.AccessAllowedKubernetesNamespaces
+	return out, nil
+}
+
+// KubeTalosAPIAccessConfigV1Alpha1FromMachinery converts a machinery mk8s.KubeTalosAPIAccessConfigV1Alpha1 document to the mirror type.
+func KubeTalosAPIAccessConfigV1Alpha1FromMachinery(src *mk8s.KubeTalosAPIAccessConfigV1Alpha1) (*KubeTalosAPIAccessConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeTalosAPIAccessConfigV1Alpha1{}
+	out.AccessAllowedRoles = src.AccessAllowedRoles
+	out.AccessAllowedKubernetesNamespaces = src.AccessAllowedKubernetesNamespaces
 	return out, nil
 }
 
@@ -2294,6 +4601,210 @@ func KubernetesTalosAPIAccessConfigFromMachinery(src *mv1alpha1.KubernetesTalosA
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mnetwork.KubespanEndpointsConfigV1Alpha1 type.
+func (m *KubespanEndpointsConfigV1Alpha1) ToMachinery() (*mnetwork.KubespanEndpointsConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.KubespanEndpointsConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.KubespanEndpointsKind, MetaAPIVersion: "v1alpha1"}
+	if m.ExtraAnnouncedEndpointsConfig != nil {
+		c1 := make([]netip.AddrPort, len(m.ExtraAnnouncedEndpointsConfig))
+		for k1, e1 := range m.ExtraAnnouncedEndpointsConfig {
+			v2, err := mirrorToMachineryScalar[netip.AddrPort](e1)
+			if err != nil {
+				return nil, fmt.Errorf("KubespanEndpointsConfigV1Alpha1.extraAnnouncedEndpoints"+": %w", err)
+			}
+			c1[k1] = v2
+		}
+		out.ExtraAnnouncedEndpointsConfig = c1
+	}
+	return out, nil
+}
+
+// KubespanEndpointsConfigV1Alpha1FromMachinery converts a machinery mnetwork.KubespanEndpointsConfigV1Alpha1 document to the mirror type.
+func KubespanEndpointsConfigV1Alpha1FromMachinery(src *mnetwork.KubespanEndpointsConfigV1Alpha1) (*KubespanEndpointsConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubespanEndpointsConfigV1Alpha1{}
+	if src.ExtraAnnouncedEndpointsConfig != nil {
+		c1 := make([]string, len(src.ExtraAnnouncedEndpointsConfig))
+		for k1, e1 := range src.ExtraAnnouncedEndpointsConfig {
+			v2, err := machineryToMirrorScalar(e1)
+			if err != nil {
+				return nil, fmt.Errorf("KubespanEndpointsConfigV1Alpha1.extraAnnouncedEndpoints"+": %w", err)
+			}
+			c1[k1] = v2
+		}
+		out.ExtraAnnouncedEndpointsConfig = c1
+	}
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mstorage.LVMLogicalVolumeConfigV1Alpha1 type.
+func (m *LVMLogicalVolumeConfigV1Alpha1) ToMachinery() (*mstorage.LVMLogicalVolumeConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mstorage.LVMLogicalVolumeConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mstorage.LVMLogicalVolumeConfigKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.LVType = rstorage.LVMLogicalVolumeType(m.LVType)
+	out.LVMirrors = m.LVMirrors
+	out.LVStripes = m.LVStripes
+	t5, err := (m.Provisioning).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("LVMLogicalVolumeConfigV1Alpha1.provisioning"+": %w", err)
+	}
+	if t5 != nil {
+		out.Provisioning = *t5
+	}
+	return out, nil
+}
+
+// LVMLogicalVolumeConfigV1Alpha1FromMachinery converts a machinery mstorage.LVMLogicalVolumeConfigV1Alpha1 document to the mirror type.
+func LVMLogicalVolumeConfigV1Alpha1FromMachinery(src *mstorage.LVMLogicalVolumeConfigV1Alpha1) (*LVMLogicalVolumeConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &LVMLogicalVolumeConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.LVType = int(src.LVType)
+	out.LVMirrors = src.LVMirrors
+	out.LVStripes = src.LVStripes
+	t5, err := LVMLogicalVolumeProvisioningSpecFromMachinery(&(src.Provisioning))
+	if err != nil {
+		return nil, fmt.Errorf("LVMLogicalVolumeConfigV1Alpha1.provisioning"+": %w", err)
+	}
+	out.Provisioning = t5
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mstorage.LVMLogicalVolumeProvisioningSpec type.
+func (m *LVMLogicalVolumeProvisioningSpec) ToMachinery() (*mstorage.LVMLogicalVolumeProvisioningSpec, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mstorage.LVMLogicalVolumeProvisioningSpec{}
+	out.VolumeGroup = m.VolumeGroup
+	v2, err := mirrorToMachineryScalar[mblock.ByteSize](m.ProvisioningMinSize)
+	if err != nil {
+		return nil, fmt.Errorf("LVMLogicalVolumeProvisioningSpec.minSize"+": %w", err)
+	}
+	out.ProvisioningMinSize = v2
+	v3, err := mirrorToMachineryScalar[mblock.Size](m.ProvisioningMaxSize)
+	if err != nil {
+		return nil, fmt.Errorf("LVMLogicalVolumeProvisioningSpec.maxSize"+": %w", err)
+	}
+	out.ProvisioningMaxSize = v3
+	return out, nil
+}
+
+// LVMLogicalVolumeProvisioningSpecFromMachinery converts a machinery mstorage.LVMLogicalVolumeProvisioningSpec document to the mirror type.
+func LVMLogicalVolumeProvisioningSpecFromMachinery(src *mstorage.LVMLogicalVolumeProvisioningSpec) (*LVMLogicalVolumeProvisioningSpec, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &LVMLogicalVolumeProvisioningSpec{}
+	out.VolumeGroup = src.VolumeGroup
+	v2, err := machineryToMirrorScalar(src.ProvisioningMinSize)
+	if err != nil {
+		return nil, fmt.Errorf("LVMLogicalVolumeProvisioningSpec.minSize"+": %w", err)
+	}
+	out.ProvisioningMinSize = v2
+	v3, err := machineryToMirrorScalar(src.ProvisioningMaxSize)
+	if err != nil {
+		return nil, fmt.Errorf("LVMLogicalVolumeProvisioningSpec.maxSize"+": %w", err)
+	}
+	out.ProvisioningMaxSize = v3
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mstorage.LVMVolumeGroupConfigV1Alpha1 type.
+func (m *LVMVolumeGroupConfigV1Alpha1) ToMachinery() (*mstorage.LVMVolumeGroupConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mstorage.LVMVolumeGroupConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mstorage.LVMVolumeGroupConfigKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	t2, err := (m.ProvisioningSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("LVMVolumeGroupConfigV1Alpha1.provisioning"+": %w", err)
+	}
+	if t2 != nil {
+		out.ProvisioningSpec = *t2
+	}
+	return out, nil
+}
+
+// LVMVolumeGroupConfigV1Alpha1FromMachinery converts a machinery mstorage.LVMVolumeGroupConfigV1Alpha1 document to the mirror type.
+func LVMVolumeGroupConfigV1Alpha1FromMachinery(src *mstorage.LVMVolumeGroupConfigV1Alpha1) (*LVMVolumeGroupConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &LVMVolumeGroupConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	t2, err := StorageProvisioningSpecFromMachinery(&(src.ProvisioningSpec))
+	if err != nil {
+		return nil, fmt.Errorf("LVMVolumeGroupConfigV1Alpha1.provisioning"+": %w", err)
+	}
+	out.ProvisioningSpec = t2
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mstorage.LVMVolumeSelectorSpec type.
+func (m *LVMVolumeSelectorSpec) ToMachinery() (*mstorage.LVMVolumeSelectorSpec, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mstorage.LVMVolumeSelectorSpec{}
+	v1, err := mirrorToMachineryScalar[mcel.Expression](m.Match)
+	if err != nil {
+		return nil, fmt.Errorf("LVMVolumeSelectorSpec.match"+": %w", err)
+	}
+	out.Match = v1
+	return out, nil
+}
+
+// LVMVolumeSelectorSpecFromMachinery converts a machinery mstorage.LVMVolumeSelectorSpec document to the mirror type.
+func LVMVolumeSelectorSpecFromMachinery(src *mstorage.LVMVolumeSelectorSpec) (*LVMVolumeSelectorSpec, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &LVMVolumeSelectorSpec{}
+	v1, err := machineryToMirrorScalar(src.Match)
+	if err != nil {
+		return nil, fmt.Errorf("LVMVolumeSelectorSpec.match"+": %w", err)
+	}
+	out.Match = v1
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.Layer2VIPConfigV1Alpha1 type.
+func (m *Layer2VIPConfigV1Alpha1) ToMachinery() (*mnetwork.Layer2VIPConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.Layer2VIPConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.Layer2VIPKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.LinkName = m.LinkName
+	return out, nil
+}
+
+// Layer2VIPConfigV1Alpha1FromMachinery converts a machinery mnetwork.Layer2VIPConfigV1Alpha1 document to the mirror type.
+func Layer2VIPConfigV1Alpha1FromMachinery(src *mnetwork.Layer2VIPConfigV1Alpha1) (*Layer2VIPConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &Layer2VIPConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.LinkName = src.LinkName
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.LinuxIDMapping type.
 func (m *LinuxIDMapping) ToMachinery() (*mv1alpha1.LinuxIDMapping, error) {
 	if m == nil {
@@ -2315,6 +4826,26 @@ func LinuxIDMappingFromMachinery(src *mv1alpha1.LinuxIDMapping) (*LinuxIDMapping
 	out.ContainerID = src.ContainerID
 	out.HostID = src.HostID
 	out.Size = src.Size
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mcri.LocalImageCacheConfig type.
+func (m *LocalImageCacheConfig) ToMachinery() (*mcri.LocalImageCacheConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mcri.LocalImageCacheConfig{}
+	out.ConfigEnabled = m.ConfigEnabled
+	return out, nil
+}
+
+// LocalImageCacheConfigFromMachinery converts a machinery mcri.LocalImageCacheConfig document to the mirror type.
+func LocalImageCacheConfigFromMachinery(src *mcri.LocalImageCacheConfig) (*LocalImageCacheConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &LocalImageCacheConfig{}
+	out.ConfigEnabled = src.ConfigEnabled
 	return out, nil
 }
 
@@ -2844,6 +5375,28 @@ func MountSpecFromMachinery(src *mblock.MountSpec) (*MountSpec, error) {
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mnetwork.NTPConfig type.
+func (m *NTPConfig) ToMachinery() (*mnetwork.NTPConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.NTPConfig{}
+	out.Servers = m.Servers
+	out.UseNTS = m.UseNTS
+	return out, nil
+}
+
+// NTPConfigFromMachinery converts a machinery mnetwork.NTPConfig document to the mirror type.
+func NTPConfigFromMachinery(src *mnetwork.NTPConfig) (*NTPConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &NTPConfig{}
+	out.Servers = src.Servers
+	out.UseNTS = src.UseNTS
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mnetwork.NameserverConfig type.
 func (m *NameserverConfig) ToMachinery() (*mnetwork.NameserverConfig, error) {
 	if m == nil {
@@ -3032,6 +5585,100 @@ func NetworkKubeSpanFromMachinery(src *mv1alpha1.NetworkKubeSpan) (*NetworkKubeS
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mk8s.NodeIPConfig type.
+func (m *NodeIPConfig) ToMachinery() (*mk8s.NodeIPConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.NodeIPConfig{}
+	out.NodeIPValidSubnets = m.NodeIPValidSubnets
+	return out, nil
+}
+
+// NodeIPConfigFromMachinery converts a machinery mk8s.NodeIPConfig document to the mirror type.
+func NodeIPConfigFromMachinery(src *mk8s.NodeIPConfig) (*NodeIPConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &NodeIPConfig{}
+	out.NodeIPValidSubnets = src.NodeIPValidSubnets
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mruntime.OOMV1Alpha1 type.
+func (m *OOMV1Alpha1) ToMachinery() (*mruntime.OOMV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mruntime.OOMV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mruntime.OOMKind, MetaAPIVersion: "v1alpha1"}
+	v1, err := mirrorToMachineryScalar[mcel.Expression](m.OOMTriggerExpression)
+	if err != nil {
+		return nil, fmt.Errorf("OOMV1Alpha1.triggerExpression"+": %w", err)
+	}
+	out.OOMTriggerExpression = v1
+	v2, err := mirrorToMachineryScalar[mcel.Expression](m.OOMCgroupRankingExpression)
+	if err != nil {
+		return nil, fmt.Errorf("OOMV1Alpha1.cgroupRankingExpression"+": %w", err)
+	}
+	out.OOMCgroupRankingExpression = v2
+	out.OOMStrictCgroupClassOrdering = m.OOMStrictCgroupClassOrdering
+	v4, err := mirrorToMachineryScalar[time.Duration](m.OOMSampleInterval)
+	if err != nil {
+		return nil, fmt.Errorf("OOMV1Alpha1.sampleInterval"+": %w", err)
+	}
+	out.OOMSampleInterval = v4
+	return out, nil
+}
+
+// OOMV1Alpha1FromMachinery converts a machinery mruntime.OOMV1Alpha1 document to the mirror type.
+func OOMV1Alpha1FromMachinery(src *mruntime.OOMV1Alpha1) (*OOMV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &OOMV1Alpha1{}
+	v1, err := machineryToMirrorScalar(src.OOMTriggerExpression)
+	if err != nil {
+		return nil, fmt.Errorf("OOMV1Alpha1.triggerExpression"+": %w", err)
+	}
+	out.OOMTriggerExpression = v1
+	v2, err := machineryToMirrorScalar(src.OOMCgroupRankingExpression)
+	if err != nil {
+		return nil, fmt.Errorf("OOMV1Alpha1.cgroupRankingExpression"+": %w", err)
+	}
+	out.OOMCgroupRankingExpression = v2
+	out.OOMStrictCgroupClassOrdering = src.OOMStrictCgroupClassOrdering
+	v4, err := machineryToMirrorScalar(src.OOMSampleInterval)
+	if err != nil {
+		return nil, fmt.Errorf("OOMV1Alpha1.sampleInterval"+": %w", err)
+	}
+	out.OOMSampleInterval = v4
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mhardware.PCIDriverRebindConfigV1Alpha1 type.
+func (m *PCIDriverRebindConfigV1Alpha1) ToMachinery() (*mhardware.PCIDriverRebindConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mhardware.PCIDriverRebindConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mhardware.PCIDriverRebindConfig, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.PCITargetDriver = m.PCITargetDriver
+	return out, nil
+}
+
+// PCIDriverRebindConfigV1Alpha1FromMachinery converts a machinery mhardware.PCIDriverRebindConfigV1Alpha1 document to the mirror type.
+func PCIDriverRebindConfigV1Alpha1FromMachinery(src *mhardware.PCIDriverRebindConfigV1Alpha1) (*PCIDriverRebindConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &PCIDriverRebindConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.PCITargetDriver = src.PCITargetDriver
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mx509.PEMEncodedCertificate type.
 func (m *PEMEncodedCertificate) ToMachinery() (*mx509.PEMEncodedCertificate, error) {
 	if m == nil {
@@ -3049,6 +5696,26 @@ func PEMEncodedCertificateFromMachinery(src *mx509.PEMEncodedCertificate) (*PEME
 	}
 	out := &PEMEncodedCertificate{}
 	out.Crt = src.Crt
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.PTPConfig type.
+func (m *PTPConfig) ToMachinery() (*mnetwork.PTPConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.PTPConfig{}
+	out.Devices = m.Devices
+	return out, nil
+}
+
+// PTPConfigFromMachinery converts a machinery mnetwork.PTPConfig document to the mirror type.
+func PTPConfigFromMachinery(src *mnetwork.PTPConfig) (*PTPConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &PTPConfig{}
+	out.Devices = src.Devices
 	return out, nil
 }
 
@@ -3147,6 +5814,101 @@ func ProxyConfigFromMachinery(src *mv1alpha1.ProxyConfig) (*ProxyConfig, error) 
 		}
 		out.ExtraArgsConfig = c4
 	}
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mstorage.RAIDArrayConfigV1Alpha1 type.
+func (m *RAIDArrayConfigV1Alpha1) ToMachinery() (*mstorage.RAIDArrayConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mstorage.RAIDArrayConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mstorage.RAIDArrayConfigKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.Level = rstorage.MDLevel(m.Level)
+	out.MetadataFormat = rstorage.MDMetadata(m.MetadataFormat)
+	t4, err := (m.ProvisioningSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("RAIDArrayConfigV1Alpha1.provisioning"+": %w", err)
+	}
+	if t4 != nil {
+		out.ProvisioningSpec = *t4
+	}
+	return out, nil
+}
+
+// RAIDArrayConfigV1Alpha1FromMachinery converts a machinery mstorage.RAIDArrayConfigV1Alpha1 document to the mirror type.
+func RAIDArrayConfigV1Alpha1FromMachinery(src *mstorage.RAIDArrayConfigV1Alpha1) (*RAIDArrayConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &RAIDArrayConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.Level = int(src.Level)
+	out.MetadataFormat = int(src.MetadataFormat)
+	t4, err := RAIDProvisioningSpecFromMachinery(&(src.ProvisioningSpec))
+	if err != nil {
+		return nil, fmt.Errorf("RAIDArrayConfigV1Alpha1.provisioning"+": %w", err)
+	}
+	out.ProvisioningSpec = t4
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mstorage.RAIDProvisioningSpec type.
+func (m *RAIDProvisioningSpec) ToMachinery() (*mstorage.RAIDProvisioningSpec, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mstorage.RAIDProvisioningSpec{}
+	t1, err := (m.RAIDVolumeSelector).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("RAIDProvisioningSpec.volumeSelector"+": %w", err)
+	}
+	if t1 != nil {
+		out.RAIDVolumeSelector = *t1
+	}
+	return out, nil
+}
+
+// RAIDProvisioningSpecFromMachinery converts a machinery mstorage.RAIDProvisioningSpec document to the mirror type.
+func RAIDProvisioningSpecFromMachinery(src *mstorage.RAIDProvisioningSpec) (*RAIDProvisioningSpec, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &RAIDProvisioningSpec{}
+	t1, err := RAIDVolumeSelectorFromMachinery(&(src.RAIDVolumeSelector))
+	if err != nil {
+		return nil, fmt.Errorf("RAIDProvisioningSpec.volumeSelector"+": %w", err)
+	}
+	out.RAIDVolumeSelector = t1
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mstorage.RAIDVolumeSelector type.
+func (m *RAIDVolumeSelector) ToMachinery() (*mstorage.RAIDVolumeSelector, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mstorage.RAIDVolumeSelector{}
+	v1, err := mirrorToMachineryScalar[mcel.Expression](m.Match)
+	if err != nil {
+		return nil, fmt.Errorf("RAIDVolumeSelector.match"+": %w", err)
+	}
+	out.Match = v1
+	return out, nil
+}
+
+// RAIDVolumeSelectorFromMachinery converts a machinery mstorage.RAIDVolumeSelector document to the mirror type.
+func RAIDVolumeSelectorFromMachinery(src *mstorage.RAIDVolumeSelector) (*RAIDVolumeSelector, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &RAIDVolumeSelector{}
+	v1, err := machineryToMirrorScalar(src.Match)
+	if err != nil {
+		return nil, fmt.Errorf("RAIDVolumeSelector.match"+": %w", err)
+	}
+	out.Match = v1
 	return out, nil
 }
 
@@ -3315,6 +6077,36 @@ func RegistryConfigFromMachinery(src *mv1alpha1.RegistryConfig) (*RegistryConfig
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mcri.RegistryEndpoint type.
+func (m *RegistryEndpoint) ToMachinery() (*mcri.RegistryEndpoint, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mcri.RegistryEndpoint{}
+	v1, err := mirrorToMachineryScalar[mmeta.URL](m.EndpointURL)
+	if err != nil {
+		return nil, fmt.Errorf("RegistryEndpoint.url"+": %w", err)
+	}
+	out.EndpointURL = v1
+	out.EndpointOverridePath = m.EndpointOverridePath
+	return out, nil
+}
+
+// RegistryEndpointFromMachinery converts a machinery mcri.RegistryEndpoint document to the mirror type.
+func RegistryEndpointFromMachinery(src *mcri.RegistryEndpoint) (*RegistryEndpoint, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &RegistryEndpoint{}
+	v1, err := machineryToMirrorScalar(src.EndpointURL)
+	if err != nil {
+		return nil, fmt.Errorf("RegistryEndpoint.url"+": %w", err)
+	}
+	out.EndpointURL = v1
+	out.EndpointOverridePath = src.EndpointOverridePath
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.RegistryKubernetesConfig type.
 func (m *RegistryKubernetesConfig) ToMachinery() (*mv1alpha1.RegistryKubernetesConfig, error) {
 	if m == nil {
@@ -3356,6 +6148,53 @@ func RegistryMirrorConfigFromMachinery(src *mv1alpha1.RegistryMirrorConfig) (*Re
 	out.MirrorEndpoints = src.MirrorEndpoints
 	out.MirrorOverridePath = src.MirrorOverridePath
 	out.MirrorSkipFallback = src.MirrorSkipFallback
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mcri.RegistryMirrorConfigV1Alpha1 type.
+func (m *RegistryMirrorConfigV1Alpha1) ToMachinery() (*mcri.RegistryMirrorConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mcri.RegistryMirrorConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mcri.RegistryMirrorConfig, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	if m.RegistryEndpoints != nil {
+		c2 := make([]mcri.RegistryEndpoint, len(m.RegistryEndpoints))
+		for k2, e2 := range m.RegistryEndpoints {
+			t3, err := (e2).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("RegistryMirrorConfigV1Alpha1.endpoints"+": %w", err)
+			}
+			if t3 != nil {
+				c2[k2] = *t3
+			}
+		}
+		out.RegistryEndpoints = c2
+	}
+	out.RegistrySkipFallback = m.RegistrySkipFallback
+	return out, nil
+}
+
+// RegistryMirrorConfigV1Alpha1FromMachinery converts a machinery mcri.RegistryMirrorConfigV1Alpha1 document to the mirror type.
+func RegistryMirrorConfigV1Alpha1FromMachinery(src *mcri.RegistryMirrorConfigV1Alpha1) (*RegistryMirrorConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &RegistryMirrorConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	if src.RegistryEndpoints != nil {
+		c2 := make([]*RegistryEndpoint, len(src.RegistryEndpoints))
+		for k2, e2 := range src.RegistryEndpoints {
+			t3, err := RegistryEndpointFromMachinery(&(e2))
+			if err != nil {
+				return nil, fmt.Errorf("RegistryMirrorConfigV1Alpha1.endpoints"+": %w", err)
+			}
+			c2[k2] = t3
+		}
+		out.RegistryEndpoints = c2
+	}
+	out.RegistrySkipFallback = src.RegistrySkipFallback
 	return out, nil
 }
 
@@ -3560,6 +6399,113 @@ func RouteFromMachinery(src *mv1alpha1.Route) (*Route, error) {
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mnetwork.RouteConfig type.
+func (m *RouteConfig) ToMachinery() (*mnetwork.RouteConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.RouteConfig{}
+	v1, err := mirrorToMachineryScalar[mmeta.Prefix](m.RouteDestination)
+	if err != nil {
+		return nil, fmt.Errorf("RouteConfig.destination"+": %w", err)
+	}
+	out.RouteDestination = v1
+	v2, err := mirrorToMachineryScalar[mmeta.Addr](m.RouteGateway)
+	if err != nil {
+		return nil, fmt.Errorf("RouteConfig.gateway"+": %w", err)
+	}
+	out.RouteGateway = v2
+	v3, err := mirrorToMachineryScalar[mmeta.Addr](m.RouteSource)
+	if err != nil {
+		return nil, fmt.Errorf("RouteConfig.source"+": %w", err)
+	}
+	out.RouteSource = v3
+	out.RouteMetric = m.RouteMetric
+	out.RouteMTU = m.RouteMTU
+	out.RouteTable = mnethelpers.RoutingTable(m.RouteTable)
+	return out, nil
+}
+
+// RouteConfigFromMachinery converts a machinery mnetwork.RouteConfig document to the mirror type.
+func RouteConfigFromMachinery(src *mnetwork.RouteConfig) (*RouteConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &RouteConfig{}
+	v1, err := machineryToMirrorScalar(src.RouteDestination)
+	if err != nil {
+		return nil, fmt.Errorf("RouteConfig.destination"+": %w", err)
+	}
+	out.RouteDestination = v1
+	v2, err := machineryToMirrorScalar(src.RouteGateway)
+	if err != nil {
+		return nil, fmt.Errorf("RouteConfig.gateway"+": %w", err)
+	}
+	out.RouteGateway = v2
+	v3, err := machineryToMirrorScalar(src.RouteSource)
+	if err != nil {
+		return nil, fmt.Errorf("RouteConfig.source"+": %w", err)
+	}
+	out.RouteSource = v3
+	out.RouteMetric = src.RouteMetric
+	out.RouteMTU = src.RouteMTU
+	out.RouteTable = uint32(src.RouteTable)
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.RoutingRuleConfigV1Alpha1 type.
+func (m *RoutingRuleConfigV1Alpha1) ToMachinery() (*mnetwork.RoutingRuleConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.RoutingRuleConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.RoutingRuleKind, MetaAPIVersion: "v1alpha1"}
+	out.RulePriority = m.RulePriority
+	v2, err := mirrorToMachineryScalar[mmeta.Prefix](m.RuleSrc)
+	if err != nil {
+		return nil, fmt.Errorf("RoutingRuleConfigV1Alpha1.src"+": %w", err)
+	}
+	out.RuleSrc = v2
+	v3, err := mirrorToMachineryScalar[mmeta.Prefix](m.RuleDst)
+	if err != nil {
+		return nil, fmt.Errorf("RoutingRuleConfigV1Alpha1.dst"+": %w", err)
+	}
+	out.RuleDst = v3
+	out.RuleTable = mnethelpers.RoutingTable(m.RuleTable)
+	out.RuleAction = mnethelpers.RoutingRuleAction(m.RuleAction)
+	out.RuleIIFName = m.RuleIIFName
+	out.RuleOIFName = m.RuleOIFName
+	out.RuleFwMark = m.RuleFwMark
+	out.RuleFwMask = m.RuleFwMask
+	return out, nil
+}
+
+// RoutingRuleConfigV1Alpha1FromMachinery converts a machinery mnetwork.RoutingRuleConfigV1Alpha1 document to the mirror type.
+func RoutingRuleConfigV1Alpha1FromMachinery(src *mnetwork.RoutingRuleConfigV1Alpha1) (*RoutingRuleConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &RoutingRuleConfigV1Alpha1{}
+	out.RulePriority = src.RulePriority
+	v2, err := machineryToMirrorScalar(src.RuleSrc)
+	if err != nil {
+		return nil, fmt.Errorf("RoutingRuleConfigV1Alpha1.src"+": %w", err)
+	}
+	out.RuleSrc = v2
+	v3, err := machineryToMirrorScalar(src.RuleDst)
+	if err != nil {
+		return nil, fmt.Errorf("RoutingRuleConfigV1Alpha1.dst"+": %w", err)
+	}
+	out.RuleDst = v3
+	out.RuleTable = uint32(src.RuleTable)
+	out.RuleAction = uint8(src.RuleAction)
+	out.RuleIIFName = src.RuleIIFName
+	out.RuleOIFName = src.RuleOIFName
+	out.RuleFwMark = src.RuleFwMark
+	out.RuleFwMask = src.RuleFwMask
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.STP type.
 func (m *STP) ToMachinery() (*mv1alpha1.STP, error) {
 	if m == nil {
@@ -3722,6 +6668,151 @@ func SearchDomainsConfigFromMachinery(src *mnetwork.SearchDomainsConfig) (*Searc
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mextensions.ServiceConfigV1Alpha1 type.
+func (m *ServiceConfigV1Alpha1) ToMachinery() (*mextensions.ServiceConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mextensions.ServiceConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mextensions.ServiceConfigKind, MetaAPIVersion: "v1alpha1"}
+	out.ServiceName = m.ServiceName
+	if m.ServiceConfigFiles != nil {
+		c2 := make([]mextensions.ConfigFile, len(m.ServiceConfigFiles))
+		for k2, e2 := range m.ServiceConfigFiles {
+			t3, err := (e2).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("ServiceConfigV1Alpha1.configFiles"+": %w", err)
+			}
+			if t3 != nil {
+				c2[k2] = *t3
+			}
+		}
+		out.ServiceConfigFiles = mextensions.ConfigFileList(c2)
+	}
+	out.ServiceEnvironment = m.ServiceEnvironment
+	return out, nil
+}
+
+// ServiceConfigV1Alpha1FromMachinery converts a machinery mextensions.ServiceConfigV1Alpha1 document to the mirror type.
+func ServiceConfigV1Alpha1FromMachinery(src *mextensions.ServiceConfigV1Alpha1) (*ServiceConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ServiceConfigV1Alpha1{}
+	out.ServiceName = src.ServiceName
+	if src.ServiceConfigFiles != nil {
+		c2 := make([]*ConfigFile, len(src.ServiceConfigFiles))
+		for k2, e2 := range src.ServiceConfigFiles {
+			t3, err := ConfigFileFromMachinery(&(e2))
+			if err != nil {
+				return nil, fmt.Errorf("ServiceConfigV1Alpha1.configFiles"+": %w", err)
+			}
+			c2[k2] = t3
+		}
+		out.ServiceConfigFiles = c2
+	}
+	out.ServiceEnvironment = src.ServiceEnvironment
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.StaticHostConfigV1Alpha1 type.
+func (m *StaticHostConfigV1Alpha1) ToMachinery() (*mnetwork.StaticHostConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.StaticHostConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.StaticHostKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.Hostnames = m.Hostnames
+	return out, nil
+}
+
+// StaticHostConfigV1Alpha1FromMachinery converts a machinery mnetwork.StaticHostConfigV1Alpha1 document to the mirror type.
+func StaticHostConfigV1Alpha1FromMachinery(src *mnetwork.StaticHostConfigV1Alpha1) (*StaticHostConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &StaticHostConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.Hostnames = src.Hostnames
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mstorage.ProvisioningSpec type.
+func (m *StorageProvisioningSpec) ToMachinery() (*mstorage.ProvisioningSpec, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mstorage.ProvisioningSpec{}
+	t1, err := (m.VolumeSelector).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("StorageProvisioningSpec.volumeSelector"+": %w", err)
+	}
+	if t1 != nil {
+		out.VolumeSelector = *t1
+	}
+	return out, nil
+}
+
+// StorageProvisioningSpecFromMachinery converts a machinery mstorage.ProvisioningSpec document to the mirror type.
+func StorageProvisioningSpecFromMachinery(src *mstorage.ProvisioningSpec) (*StorageProvisioningSpec, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &StorageProvisioningSpec{}
+	t1, err := LVMVolumeSelectorSpecFromMachinery(&(src.VolumeSelector))
+	if err != nil {
+		return nil, fmt.Errorf("StorageProvisioningSpec.volumeSelector"+": %w", err)
+	}
+	out.VolumeSelector = t1
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.SwapVolumeConfigV1Alpha1 type.
+func (m *SwapVolumeConfigV1Alpha1) ToMachinery() (*mblock.SwapVolumeConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.SwapVolumeConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mblock.SwapVolumeConfigKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	t2, err := (m.ProvisioningSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("SwapVolumeConfigV1Alpha1.provisioning"+": %w", err)
+	}
+	if t2 != nil {
+		out.ProvisioningSpec = *t2
+	}
+	t3, err := (m.EncryptionSpec).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("SwapVolumeConfigV1Alpha1.encryption"+": %w", err)
+	}
+	if t3 != nil {
+		out.EncryptionSpec = *t3
+	}
+	return out, nil
+}
+
+// SwapVolumeConfigV1Alpha1FromMachinery converts a machinery mblock.SwapVolumeConfigV1Alpha1 document to the mirror type.
+func SwapVolumeConfigV1Alpha1FromMachinery(src *mblock.SwapVolumeConfigV1Alpha1) (*SwapVolumeConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &SwapVolumeConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	t2, err := ProvisioningSpecFromMachinery(&(src.ProvisioningSpec))
+	if err != nil {
+		return nil, fmt.Errorf("SwapVolumeConfigV1Alpha1.provisioning"+": %w", err)
+	}
+	out.ProvisioningSpec = t2
+	t3, err := EncryptionSpecFromMachinery(&(src.EncryptionSpec))
+	if err != nil {
+		return nil, fmt.Errorf("SwapVolumeConfigV1Alpha1.encryption"+": %w", err)
+	}
+	out.EncryptionSpec = t3
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mruntime.SysctlConfigV1Alpha1 type.
 func (m *SysctlConfigV1Alpha1) ToMachinery() (*mruntime.SysctlConfigV1Alpha1, error) {
 	if m == nil {
@@ -3739,6 +6830,27 @@ func SysctlConfigV1Alpha1FromMachinery(src *mruntime.SysctlConfigV1Alpha1) (*Sys
 		return nil, nil
 	}
 	out := &SysctlConfigV1Alpha1{}
+	out.Params = src.Params
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mruntime.SysfsConfigV1Alpha1 type.
+func (m *SysfsConfigV1Alpha1) ToMachinery() (*mruntime.SysfsConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mruntime.SysfsConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mruntime.SysfsConfigKind, MetaAPIVersion: "v1alpha1"}
+	out.Params = m.Params
+	return out, nil
+}
+
+// SysfsConfigV1Alpha1FromMachinery converts a machinery mruntime.SysfsConfigV1Alpha1 document to the mirror type.
+func SysfsConfigV1Alpha1FromMachinery(src *mruntime.SysfsConfigV1Alpha1) (*SysfsConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &SysfsConfigV1Alpha1{}
 	out.Params = src.Params
 	return out, nil
 }
@@ -3809,6 +6921,51 @@ func SystemVolumeFilesystemSpecFromMachinery(src *mblock.SystemVolumeFilesystemS
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mnetwork.TCPProbeConfigV1Alpha1 type.
+func (m *TCPProbeConfigV1Alpha1) ToMachinery() (*mnetwork.TCPProbeConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.TCPProbeConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.TCPProbeKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	v2, err := mirrorToMachineryScalar[time.Duration](m.ProbeInterval)
+	if err != nil {
+		return nil, fmt.Errorf("TCPProbeConfigV1Alpha1.interval"+": %w", err)
+	}
+	out.ProbeInterval = v2
+	out.ProbeFailureThreshold = m.ProbeFailureThreshold
+	out.TCPEndpoint = m.TCPEndpoint
+	v5, err := mirrorToMachineryScalar[time.Duration](m.TCPTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("TCPProbeConfigV1Alpha1.timeout"+": %w", err)
+	}
+	out.TCPTimeout = v5
+	return out, nil
+}
+
+// TCPProbeConfigV1Alpha1FromMachinery converts a machinery mnetwork.TCPProbeConfigV1Alpha1 document to the mirror type.
+func TCPProbeConfigV1Alpha1FromMachinery(src *mnetwork.TCPProbeConfigV1Alpha1) (*TCPProbeConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &TCPProbeConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	v2, err := machineryToMirrorScalar(src.ProbeInterval)
+	if err != nil {
+		return nil, fmt.Errorf("TCPProbeConfigV1Alpha1.interval"+": %w", err)
+	}
+	out.ProbeInterval = v2
+	out.ProbeFailureThreshold = src.ProbeFailureThreshold
+	out.TCPEndpoint = src.TCPEndpoint
+	v5, err := machineryToMirrorScalar(src.TCPTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("TCPProbeConfigV1Alpha1.timeout"+": %w", err)
+	}
+	out.TCPTimeout = v5
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.TimeConfig type.
 func (m *TimeConfig) ToMachinery() (*mv1alpha1.TimeConfig, error) {
 	if m == nil {
@@ -3838,6 +6995,81 @@ func TimeConfigFromMachinery(src *mv1alpha1.TimeConfig) (*TimeConfig, error) {
 		return nil, fmt.Errorf("TimeConfig.bootTimeout"+": %w", err)
 	}
 	out.TimeBootTimeout = v3
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.TimeSyncConfigV1Alpha1 type.
+func (m *TimeSyncConfigV1Alpha1) ToMachinery() (*mnetwork.TimeSyncConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.TimeSyncConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.TimeSyncKind, MetaAPIVersion: "v1alpha1"}
+	out.TimeEnabled = m.TimeEnabled
+	v2, err := mirrorToMachineryScalar[time.Duration](m.TimeBootTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("TimeSyncConfigV1Alpha1.bootTimeout"+": %w", err)
+	}
+	out.TimeBootTimeout = v2
+	t3, err := (m.TimeNTP).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("TimeSyncConfigV1Alpha1.ntp"+": %w", err)
+	}
+	out.TimeNTP = t3
+	t4, err := (m.TimePTP).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("TimeSyncConfigV1Alpha1.ptp"+": %w", err)
+	}
+	out.TimePTP = t4
+	return out, nil
+}
+
+// TimeSyncConfigV1Alpha1FromMachinery converts a machinery mnetwork.TimeSyncConfigV1Alpha1 document to the mirror type.
+func TimeSyncConfigV1Alpha1FromMachinery(src *mnetwork.TimeSyncConfigV1Alpha1) (*TimeSyncConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &TimeSyncConfigV1Alpha1{}
+	out.TimeEnabled = src.TimeEnabled
+	v2, err := machineryToMirrorScalar(src.TimeBootTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("TimeSyncConfigV1Alpha1.bootTimeout"+": %w", err)
+	}
+	out.TimeBootTimeout = v2
+	t3, err := NTPConfigFromMachinery(src.TimeNTP)
+	if err != nil {
+		return nil, fmt.Errorf("TimeSyncConfigV1Alpha1.ntp"+": %w", err)
+	}
+	out.TimeNTP = t3
+	t4, err := PTPConfigFromMachinery(src.TimePTP)
+	if err != nil {
+		return nil, fmt.Errorf("TimeSyncConfigV1Alpha1.ptp"+": %w", err)
+	}
+	out.TimePTP = t4
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mcontainer.TmpfsMount type.
+func (m *TmpfsMount) ToMachinery() (*mcontainer.TmpfsMount, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mcontainer.TmpfsMount{}
+	out.MountDestination = m.MountDestination
+	out.MountSize = m.MountSize
+	out.MountOpts = m.MountOpts
+	return out, nil
+}
+
+// TmpfsMountFromMachinery converts a machinery mcontainer.TmpfsMount document to the mirror type.
+func TmpfsMountFromMachinery(src *mcontainer.TmpfsMount) (*TmpfsMount, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &TmpfsMount{}
+	out.MountDestination = src.MountDestination
+	out.MountSize = src.MountSize
+	out.MountOpts = src.MountOpts
 	return out, nil
 }
 
@@ -3871,6 +7103,29 @@ func TrimConfigFromMachinery(src *mblock.TrimConfig) (*TrimConfig, error) {
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery msecurity.TrustedRootsConfigV1Alpha1 type.
+func (m *TrustedRootsConfigV1Alpha1) ToMachinery() (*msecurity.TrustedRootsConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &msecurity.TrustedRootsConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: msecurity.TrustedRootsConfig, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.Certificates = m.Certificates
+	return out, nil
+}
+
+// TrustedRootsConfigV1Alpha1FromMachinery converts a machinery msecurity.TrustedRootsConfigV1Alpha1 document to the mirror type.
+func TrustedRootsConfigV1Alpha1FromMachinery(src *msecurity.TrustedRootsConfigV1Alpha1) (*TrustedRootsConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &TrustedRootsConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.Certificates = src.Certificates
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.UdevConfig type.
 func (m *UdevConfig) ToMachinery() (*mv1alpha1.UdevConfig, error) {
 	if m == nil {
@@ -3887,6 +7142,27 @@ func UdevConfigFromMachinery(src *mv1alpha1.UdevConfig) (*UdevConfig, error) {
 		return nil, nil
 	}
 	out := &UdevConfig{}
+	out.UdevRules = src.UdevRules
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mruntime.UdevRulesConfigV1Alpha1 type.
+func (m *UdevRulesConfigV1Alpha1) ToMachinery() (*mruntime.UdevRulesConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mruntime.UdevRulesConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mruntime.UdevRulesConfigKind, MetaAPIVersion: "v1alpha1"}
+	out.UdevRules = m.UdevRules
+	return out, nil
+}
+
+// UdevRulesConfigV1Alpha1FromMachinery converts a machinery mruntime.UdevRulesConfigV1Alpha1 document to the mirror type.
+func UdevRulesConfigV1Alpha1FromMachinery(src *mruntime.UdevRulesConfigV1Alpha1) (*UdevRulesConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &UdevRulesConfigV1Alpha1{}
 	out.UdevRules = src.UdevRules
 	return out, nil
 }
@@ -4020,6 +7296,30 @@ func UserVolumeConfigV1Alpha1FromMachinery(src *mblock.UserVolumeConfigV1Alpha1)
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mcontainer.UserVolumeMount type.
+func (m *UserVolumeMount) ToMachinery() (*mcontainer.UserVolumeMount, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mcontainer.UserVolumeMount{}
+	out.VolumeName = m.VolumeName
+	out.MountDestination = m.MountDestination
+	out.MountOpts = m.MountOpts
+	return out, nil
+}
+
+// UserVolumeMountFromMachinery converts a machinery mcontainer.UserVolumeMount document to the mirror type.
+func UserVolumeMountFromMachinery(src *mcontainer.UserVolumeMount) (*UserVolumeMount, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &UserVolumeMount{}
+	out.VolumeName = src.VolumeName
+	out.MountDestination = src.MountDestination
+	out.MountOpts = src.MountOpts
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mv1alpha1.VIPEquinixMetalConfig type.
 func (m *VIPEquinixMetalConfig) ToMachinery() (*mv1alpha1.VIPEquinixMetalConfig, error) {
 	if m == nil {
@@ -4053,6 +7353,268 @@ func VIPHCloudConfigFromMachinery(src *mv1alpha1.VIPHCloudConfig) (*VIPHCloudCon
 		return nil, nil
 	}
 	out := &VIPHCloudConfig{}
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.VRFConfigV1Alpha1 type.
+func (m *VRFConfigV1Alpha1) ToMachinery() (*mnetwork.VRFConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.VRFConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.VRFKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.HardwareAddressConfig = mnethelpers.HardwareAddr(m.HardwareAddressConfig)
+	out.VRFLinks = m.VRFLinks
+	out.VRFTable = mnethelpers.RoutingTable(m.VRFTable)
+	out.LinkUp = m.LinkUp
+	out.LinkMTU = m.LinkMTU
+	if m.LinkAddresses != nil {
+		c7 := make([]mnetwork.AddressConfig, len(m.LinkAddresses))
+		for k7, e7 := range m.LinkAddresses {
+			t8, err := (e7).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("VRFConfigV1Alpha1.addresses"+": %w", err)
+			}
+			if t8 != nil {
+				c7[k7] = *t8
+			}
+		}
+		out.LinkAddresses = c7
+	}
+	if m.LinkRoutes != nil {
+		c8 := make([]mnetwork.RouteConfig, len(m.LinkRoutes))
+		for k8, e8 := range m.LinkRoutes {
+			t9, err := (e8).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("VRFConfigV1Alpha1.routes"+": %w", err)
+			}
+			if t9 != nil {
+				c8[k8] = *t9
+			}
+		}
+		out.LinkRoutes = c8
+	}
+	out.LinkMulticast = m.LinkMulticast
+	return out, nil
+}
+
+// VRFConfigV1Alpha1FromMachinery converts a machinery mnetwork.VRFConfigV1Alpha1 document to the mirror type.
+func VRFConfigV1Alpha1FromMachinery(src *mnetwork.VRFConfigV1Alpha1) (*VRFConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &VRFConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.HardwareAddressConfig = []byte(src.HardwareAddressConfig)
+	out.VRFLinks = src.VRFLinks
+	out.VRFTable = uint32(src.VRFTable)
+	out.LinkUp = src.LinkUp
+	out.LinkMTU = src.LinkMTU
+	if src.LinkAddresses != nil {
+		c7 := make([]*AddressConfig, len(src.LinkAddresses))
+		for k7, e7 := range src.LinkAddresses {
+			t8, err := AddressConfigFromMachinery(&(e7))
+			if err != nil {
+				return nil, fmt.Errorf("VRFConfigV1Alpha1.addresses"+": %w", err)
+			}
+			c7[k7] = t8
+		}
+		out.LinkAddresses = c7
+	}
+	if src.LinkRoutes != nil {
+		c8 := make([]*RouteConfig, len(src.LinkRoutes))
+		for k8, e8 := range src.LinkRoutes {
+			t9, err := RouteConfigFromMachinery(&(e8))
+			if err != nil {
+				return nil, fmt.Errorf("VRFConfigV1Alpha1.routes"+": %w", err)
+			}
+			c8[k8] = t9
+		}
+		out.LinkRoutes = c8
+	}
+	out.LinkMulticast = src.LinkMulticast
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.VethConfigV1Alpha1 type.
+func (m *VethConfigV1Alpha1) ToMachinery() (*mnetwork.VethConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.VethConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mnetwork.VethKind, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	t2, err := (m.VethPeer).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("VethConfigV1Alpha1.peer"+": %w", err)
+	}
+	if t2 != nil {
+		out.VethPeer = *t2
+	}
+	out.LinkUp = m.LinkUp
+	out.LinkMTU = m.LinkMTU
+	if m.LinkAddresses != nil {
+		c5 := make([]mnetwork.AddressConfig, len(m.LinkAddresses))
+		for k5, e5 := range m.LinkAddresses {
+			t6, err := (e5).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("VethConfigV1Alpha1.addresses"+": %w", err)
+			}
+			if t6 != nil {
+				c5[k5] = *t6
+			}
+		}
+		out.LinkAddresses = c5
+	}
+	if m.LinkRoutes != nil {
+		c6 := make([]mnetwork.RouteConfig, len(m.LinkRoutes))
+		for k6, e6 := range m.LinkRoutes {
+			t7, err := (e6).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("VethConfigV1Alpha1.routes"+": %w", err)
+			}
+			if t7 != nil {
+				c6[k6] = *t7
+			}
+		}
+		out.LinkRoutes = c6
+	}
+	out.LinkMulticast = m.LinkMulticast
+	return out, nil
+}
+
+// VethConfigV1Alpha1FromMachinery converts a machinery mnetwork.VethConfigV1Alpha1 document to the mirror type.
+func VethConfigV1Alpha1FromMachinery(src *mnetwork.VethConfigV1Alpha1) (*VethConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &VethConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	t2, err := VethPeerConfigFromMachinery(&(src.VethPeer))
+	if err != nil {
+		return nil, fmt.Errorf("VethConfigV1Alpha1.peer"+": %w", err)
+	}
+	out.VethPeer = t2
+	out.LinkUp = src.LinkUp
+	out.LinkMTU = src.LinkMTU
+	if src.LinkAddresses != nil {
+		c5 := make([]*AddressConfig, len(src.LinkAddresses))
+		for k5, e5 := range src.LinkAddresses {
+			t6, err := AddressConfigFromMachinery(&(e5))
+			if err != nil {
+				return nil, fmt.Errorf("VethConfigV1Alpha1.addresses"+": %w", err)
+			}
+			c5[k5] = t6
+		}
+		out.LinkAddresses = c5
+	}
+	if src.LinkRoutes != nil {
+		c6 := make([]*RouteConfig, len(src.LinkRoutes))
+		for k6, e6 := range src.LinkRoutes {
+			t7, err := RouteConfigFromMachinery(&(e6))
+			if err != nil {
+				return nil, fmt.Errorf("VethConfigV1Alpha1.routes"+": %w", err)
+			}
+			c6[k6] = t7
+		}
+		out.LinkRoutes = c6
+	}
+	out.LinkMulticast = src.LinkMulticast
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mnetwork.VethPeerConfig type.
+func (m *VethPeerConfig) ToMachinery() (*mnetwork.VethPeerConfig, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mnetwork.VethPeerConfig{}
+	out.VethPeerName = m.VethPeerName
+	out.LinkUp = m.LinkUp
+	out.LinkMTU = m.LinkMTU
+	if m.LinkAddresses != nil {
+		c4 := make([]mnetwork.AddressConfig, len(m.LinkAddresses))
+		for k4, e4 := range m.LinkAddresses {
+			t5, err := (e4).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("VethPeerConfig.addresses"+": %w", err)
+			}
+			if t5 != nil {
+				c4[k4] = *t5
+			}
+		}
+		out.LinkAddresses = c4
+	}
+	if m.LinkRoutes != nil {
+		c5 := make([]mnetwork.RouteConfig, len(m.LinkRoutes))
+		for k5, e5 := range m.LinkRoutes {
+			t6, err := (e5).ToMachinery()
+			if err != nil {
+				return nil, fmt.Errorf("VethPeerConfig.routes"+": %w", err)
+			}
+			if t6 != nil {
+				c5[k5] = *t6
+			}
+		}
+		out.LinkRoutes = c5
+	}
+	out.LinkMulticast = m.LinkMulticast
+	return out, nil
+}
+
+// VethPeerConfigFromMachinery converts a machinery mnetwork.VethPeerConfig document to the mirror type.
+func VethPeerConfigFromMachinery(src *mnetwork.VethPeerConfig) (*VethPeerConfig, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &VethPeerConfig{}
+	out.VethPeerName = src.VethPeerName
+	out.LinkUp = src.LinkUp
+	out.LinkMTU = src.LinkMTU
+	if src.LinkAddresses != nil {
+		c4 := make([]*AddressConfig, len(src.LinkAddresses))
+		for k4, e4 := range src.LinkAddresses {
+			t5, err := AddressConfigFromMachinery(&(e4))
+			if err != nil {
+				return nil, fmt.Errorf("VethPeerConfig.addresses"+": %w", err)
+			}
+			c4[k4] = t5
+		}
+		out.LinkAddresses = c4
+	}
+	if src.LinkRoutes != nil {
+		c5 := make([]*RouteConfig, len(src.LinkRoutes))
+		for k5, e5 := range src.LinkRoutes {
+			t6, err := RouteConfigFromMachinery(&(e5))
+			if err != nil {
+				return nil, fmt.Errorf("VethPeerConfig.routes"+": %w", err)
+			}
+			c5[k5] = t6
+		}
+		out.LinkRoutes = c5
+	}
+	out.LinkMulticast = src.LinkMulticast
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.VirtiofsMountSpec type.
+func (m *VirtiofsMountSpec) ToMachinery() (*mblock.VirtiofsMountSpec, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.VirtiofsMountSpec{}
+	out.VirtiofsTag = m.VirtiofsTag
+	return out, nil
+}
+
+// VirtiofsMountSpecFromMachinery converts a machinery mblock.VirtiofsMountSpec document to the mirror type.
+func VirtiofsMountSpecFromMachinery(src *mblock.VirtiofsMountSpec) (*VirtiofsMountSpec, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &VirtiofsMountSpec{}
+	out.VirtiofsTag = src.VirtiofsTag
 	return out, nil
 }
 
@@ -4215,6 +7777,36 @@ func VolumeConfigV1Alpha1FromMachinery(src *mblock.VolumeConfigV1Alpha1) (*Volum
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mblock.VolumeDiscoverySpec type.
+func (m *VolumeDiscoverySpec) ToMachinery() (*mblock.VolumeDiscoverySpec, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.VolumeDiscoverySpec{}
+	t1, err := (m.VolumeSelectorConfig).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("VolumeDiscoverySpec.volumeSelector"+": %w", err)
+	}
+	if t1 != nil {
+		out.VolumeSelectorConfig = *t1
+	}
+	return out, nil
+}
+
+// VolumeDiscoverySpecFromMachinery converts a machinery mblock.VolumeDiscoverySpec document to the mirror type.
+func VolumeDiscoverySpecFromMachinery(src *mblock.VolumeDiscoverySpec) (*VolumeDiscoverySpec, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &VolumeDiscoverySpec{}
+	t1, err := VolumeSelectorFromMachinery(&(src.VolumeSelectorConfig))
+	if err != nil {
+		return nil, fmt.Errorf("VolumeDiscoverySpec.volumeSelector"+": %w", err)
+	}
+	out.VolumeSelectorConfig = t1
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mblock.EncryptionKey type.
 func (m *VolumeEncryptionKey) ToMachinery() (*mblock.EncryptionKey, error) {
 	if m == nil {
@@ -4359,6 +7951,65 @@ func VolumeMountConfigFromMachinery(src *mv1alpha1.VolumeMountConfig) (*VolumeMo
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mblock.VolumeSelector type.
+func (m *VolumeSelector) ToMachinery() (*mblock.VolumeSelector, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.VolumeSelector{}
+	v1, err := mirrorToMachineryScalar[mcel.Expression](m.Match)
+	if err != nil {
+		return nil, fmt.Errorf("VolumeSelector.match"+": %w", err)
+	}
+	out.Match = v1
+	return out, nil
+}
+
+// VolumeSelectorFromMachinery converts a machinery mblock.VolumeSelector document to the mirror type.
+func VolumeSelectorFromMachinery(src *mblock.VolumeSelector) (*VolumeSelector, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &VolumeSelector{}
+	v1, err := machineryToMirrorScalar(src.Match)
+	if err != nil {
+		return nil, fmt.Errorf("VolumeSelector.match"+": %w", err)
+	}
+	out.Match = v1
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mruntime.WatchdogTimerV1Alpha1 type.
+func (m *WatchdogTimerV1Alpha1) ToMachinery() (*mruntime.WatchdogTimerV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mruntime.WatchdogTimerV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mruntime.WatchdogTimerKind, MetaAPIVersion: "v1alpha1"}
+	out.WatchdogDevice = m.WatchdogDevice
+	v2, err := mirrorToMachineryScalar[time.Duration](m.WatchdogTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("WatchdogTimerV1Alpha1.timeout"+": %w", err)
+	}
+	out.WatchdogTimeout = v2
+	return out, nil
+}
+
+// WatchdogTimerV1Alpha1FromMachinery converts a machinery mruntime.WatchdogTimerV1Alpha1 document to the mirror type.
+func WatchdogTimerV1Alpha1FromMachinery(src *mruntime.WatchdogTimerV1Alpha1) (*WatchdogTimerV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &WatchdogTimerV1Alpha1{}
+	out.WatchdogDevice = src.WatchdogDevice
+	v2, err := machineryToMirrorScalar(src.WatchdogTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("WatchdogTimerV1Alpha1.timeout"+": %w", err)
+	}
+	out.WatchdogTimeout = v2
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mblock.XFSSpec type.
 func (m *XFSSpec) ToMachinery() (*mblock.XFSSpec, error) {
 	if m == nil {
@@ -4384,5 +8035,28 @@ func XFSSpecFromMachinery(src *mblock.XFSSpec) (*XFSSpec, error) {
 		return nil, fmt.Errorf("XFSSpec.minAllocationGroupSize"+": %w", err)
 	}
 	out.MinAllocationGroupSizeConfig = v1
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mblock.ZswapConfigV1Alpha1 type.
+func (m *ZswapConfigV1Alpha1) ToMachinery() (*mblock.ZswapConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mblock.ZswapConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mblock.ZswapConfigKind, MetaAPIVersion: "v1alpha1"}
+	out.MaxPoolPercentConfig = m.MaxPoolPercentConfig
+	out.ShrinkerEnabledConfig = m.ShrinkerEnabledConfig
+	return out, nil
+}
+
+// ZswapConfigV1Alpha1FromMachinery converts a machinery mblock.ZswapConfigV1Alpha1 document to the mirror type.
+func ZswapConfigV1Alpha1FromMachinery(src *mblock.ZswapConfigV1Alpha1) (*ZswapConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &ZswapConfigV1Alpha1{}
+	out.MaxPoolPercentConfig = src.MaxPoolPercentConfig
+	out.ShrinkerEnabledConfig = src.ShrinkerEnabledConfig
 	return out, nil
 }

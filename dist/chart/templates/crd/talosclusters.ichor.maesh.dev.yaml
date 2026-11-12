@@ -217,6 +217,287 @@ spec:
                           maxProperties: 2
                           minProperties: 2
                           properties:
+                            bgpInstanceConfig:
+                              description: bgpInstanceConfig is a Talos BGPInstanceConfig
+                                document; populated when kind is "BGPInstanceConfig".
+                              properties:
+                                advertise:
+                                  items:
+                                    type: string
+                                  type: array
+                                importRoutes:
+                                  items:
+                                    description: 'Talos: BGPImportRoute — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/bgpinstanceconfig'
+                                    properties:
+                                      bgpInstance:
+                                        type: string
+                                      prefixes:
+                                        items:
+                                          type: string
+                                        type: array
+                                    required:
+                                    - bgpInstance
+                                    - prefixes
+                                    type: object
+                                  type: array
+                                installRoutes:
+                                  type: boolean
+                                localASN:
+                                  format: int32
+                                  type: integer
+                                maxPaths:
+                                  type: integer
+                                multipath:
+                                  type: boolean
+                                name:
+                                  type: string
+                                neighbors:
+                                  items:
+                                    description: 'Talos: BGPNeighborConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/bgpinstanceconfig'
+                                    properties:
+                                      address:
+                                        type: string
+                                      bfd:
+                                        description: 'Talos: BGPBFDConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/bgpinstanceconfig'
+                                        properties:
+                                          detectMultiplier:
+                                            type: integer
+                                          receiveInterval:
+                                            type: string
+                                          transmitInterval:
+                                            type: string
+                                        type: object
+                                      holdTime:
+                                        type: string
+                                      link:
+                                        type: string
+                                      localASN:
+                                        format: int32
+                                        type: integer
+                                      passive:
+                                        type: boolean
+                                      peerASN:
+                                        format: int32
+                                        type: integer
+                                    type: object
+                                  type: array
+                                routeSource:
+                                  type: string
+                                routerID:
+                                  type: string
+                                vrf:
+                                  type: string
+                              required:
+                              - localASN
+                              - name
+                              type: object
+                            blackholeRouteConfig:
+                              description: blackholeRouteConfig is a Talos BlackholeRouteConfig
+                                document; populated when kind is "BlackholeRouteConfig".
+                              properties:
+                                metric:
+                                  format: int32
+                                  type: integer
+                                name:
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                            bondConfig:
+                              description: bondConfig is a Talos BondConfig document;
+                                populated when kind is "BondConfig".
+                              properties:
+                                adActorSysPrio:
+                                  type: integer
+                                adLACPActive:
+                                  type: integer
+                                adSelect:
+                                  type: integer
+                                adUserPortKey:
+                                  type: integer
+                                addresses:
+                                  items:
+                                    description: 'Talos: AddressConfig'
+                                    properties:
+                                      address:
+                                        type: string
+                                      routePriority:
+                                        format: int32
+                                        type: integer
+                                    required:
+                                    - address
+                                    type: object
+                                  type: array
+                                allSlavesActive:
+                                  type: integer
+                                arpAllTargets:
+                                  format: int32
+                                  type: integer
+                                arpInterval:
+                                  format: int32
+                                  type: integer
+                                arpIpTargets:
+                                  items:
+                                    type: string
+                                  type: array
+                                arpValidate:
+                                  format: int32
+                                  type: integer
+                                bondMode:
+                                  type: integer
+                                downdelay:
+                                  format: int32
+                                  type: integer
+                                failOverMac:
+                                  type: integer
+                                hardwareAddr:
+                                  format: byte
+                                  type: string
+                                lacpRate:
+                                  type: integer
+                                links:
+                                  items:
+                                    type: string
+                                  type: array
+                                lpInterval:
+                                  format: int32
+                                  type: integer
+                                miimon:
+                                  format: int32
+                                  type: integer
+                                minLinks:
+                                  format: int32
+                                  type: integer
+                                missedMax:
+                                  type: integer
+                                mtu:
+                                  format: int32
+                                  type: integer
+                                multicast:
+                                  type: boolean
+                                name:
+                                  type: string
+                                nsIp6Targets:
+                                  items:
+                                    type: string
+                                  type: array
+                                numPeerNotif:
+                                  type: integer
+                                packetsPerSlave:
+                                  format: int32
+                                  type: integer
+                                peerNotifDelay:
+                                  format: int32
+                                  type: integer
+                                primaryReselect:
+                                  type: integer
+                                resendIGMP:
+                                  format: int32
+                                  type: integer
+                                routes:
+                                  items:
+                                    description: 'Talos: RouteConfig'
+                                    properties:
+                                      destination:
+                                        type: string
+                                      gateway:
+                                        type: string
+                                      metric:
+                                        format: int32
+                                        type: integer
+                                      mtu:
+                                        format: int32
+                                        type: integer
+                                      source:
+                                        type: string
+                                      table:
+                                        format: int32
+                                        type: integer
+                                    type: object
+                                  type: array
+                                tlbLogicalLb:
+                                  type: integer
+                                up:
+                                  type: boolean
+                                updelay:
+                                  format: int32
+                                  type: integer
+                                useCarrier:
+                                  type: boolean
+                                xmitHashPolicy:
+                                  type: integer
+                              required:
+                              - name
+                              type: object
+                            bridgeConfig:
+                              description: bridgeConfig is a Talos BridgeConfig document;
+                                populated when kind is "BridgeConfig".
+                              properties:
+                                addresses:
+                                  items:
+                                    description: 'Talos: AddressConfig'
+                                    properties:
+                                      address:
+                                        type: string
+                                      routePriority:
+                                        format: int32
+                                        type: integer
+                                    required:
+                                    - address
+                                    type: object
+                                  type: array
+                                hardwareAddr:
+                                  format: byte
+                                  type: string
+                                links:
+                                  items:
+                                    type: string
+                                  type: array
+                                mtu:
+                                  format: int32
+                                  type: integer
+                                multicast:
+                                  type: boolean
+                                name:
+                                  type: string
+                                routes:
+                                  items:
+                                    description: 'Talos: RouteConfig'
+                                    properties:
+                                      destination:
+                                        type: string
+                                      gateway:
+                                        type: string
+                                      metric:
+                                        format: int32
+                                        type: integer
+                                      mtu:
+                                        format: int32
+                                        type: integer
+                                      source:
+                                        type: string
+                                      table:
+                                        format: int32
+                                        type: integer
+                                    type: object
+                                  type: array
+                                stp:
+                                  description: 'Talos: BridgeSTPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/bridgeconfig'
+                                  properties:
+                                    enabled:
+                                      type: boolean
+                                  type: object
+                                up:
+                                  type: boolean
+                                vlan:
+                                  description: 'Talos: BridgeVLANConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/bridgeconfig'
+                                  properties:
+                                    filtering:
+                                      type: boolean
+                                  type: object
+                              required:
+                              - name
+                              type: object
                             config:
                               description: config is a Talos v1alpha1 Config document;
                                 populated when kind is "Config".
@@ -2136,6 +2417,504 @@ spec:
                               required:
                               - version
                               type: object
+                            containerConfig:
+                              description: containerConfig is a Talos ContainerConfig
+                                document; populated when kind is "ContainerConfig".
+                              properties:
+                                args:
+                                  items:
+                                    type: string
+                                  type: array
+                                dependsOn:
+                                  description: 'Talos: ContainerDependsOn — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig'
+                                  properties:
+                                    containers:
+                                      items:
+                                        type: string
+                                      type: array
+                                    networks:
+                                      items:
+                                        type: string
+                                      type: array
+                                    paths:
+                                      items:
+                                        type: string
+                                      type: array
+                                    time:
+                                      type: boolean
+                                  type: object
+                                entrypoint:
+                                  items:
+                                    type: string
+                                  type: array
+                                environment:
+                                  items:
+                                    type: string
+                                  type: array
+                                image:
+                                  type: string
+                                mounts:
+                                  items:
+                                    description: 'Talos: ContainerMount — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig'
+                                    properties:
+                                      hostPath:
+                                        description: 'Talos: HostPathMount — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig'
+                                        properties:
+                                          destination:
+                                            type: string
+                                          options:
+                                            items:
+                                              type: string
+                                            type: array
+                                          source:
+                                            type: string
+                                        required:
+                                        - destination
+                                        - source
+                                        type: object
+                                      tmpfs:
+                                        description: 'Talos: TmpfsMount — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig'
+                                        properties:
+                                          destination:
+                                            type: string
+                                          options:
+                                            items:
+                                              type: string
+                                            type: array
+                                          size:
+                                            type: string
+                                        required:
+                                        - destination
+                                        type: object
+                                      userVolume:
+                                        description: 'Talos: UserVolumeMount — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig'
+                                        properties:
+                                          destination:
+                                            type: string
+                                          name:
+                                            type: string
+                                          options:
+                                            items:
+                                              type: string
+                                            type: array
+                                        required:
+                                        - destination
+                                        - name
+                                        type: object
+                                    type: object
+                                  type: array
+                                name:
+                                  type: string
+                                network:
+                                  description: 'Talos: ContainerNetwork — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig'
+                                  properties:
+                                    mode:
+                                      type: string
+                                  type: object
+                                resources:
+                                  description: 'Talos: ContainerResources — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig'
+                                  properties:
+                                    limits:
+                                      description: 'Talos: ContainerResourceLimits
+                                        — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig'
+                                      properties:
+                                        cpu:
+                                          type: string
+                                        memory:
+                                          type: string
+                                      type: object
+                                  type: object
+                                runAs:
+                                  description: 'Talos: ContainerRunAs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig'
+                                  properties:
+                                    gid:
+                                      format: int32
+                                      type: integer
+                                    uid:
+                                      format: int32
+                                      type: integer
+                                  type: object
+                                security:
+                                  description: 'Talos: ContainerSecurity — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig'
+                                  properties:
+                                    capabilities:
+                                      description: 'Talos: ContainerCapabilities —
+                                        https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig'
+                                      properties:
+                                        add:
+                                          items:
+                                            type: string
+                                          type: array
+                                        drop:
+                                          items:
+                                            type: string
+                                          type: array
+                                      type: object
+                                    machinedAccess:
+                                      type: boolean
+                                    profile:
+                                      type: string
+                                  type: object
+                                workingDir:
+                                  type: string
+                              required:
+                              - image
+                              - name
+                              type: object
+                            dhcpv6Config:
+                              description: dhcpv6Config is a Talos DHCPv6Config document;
+                                populated when kind is "DHCPv6Config".
+                              properties:
+                                clientIdentifier:
+                                  type: integer
+                                duidRaw:
+                                  format: byte
+                                  type: string
+                                ignoreHostname:
+                                  type: boolean
+                                name:
+                                  type: string
+                                routeMetric:
+                                  format: int32
+                                  type: integer
+                              required:
+                              - name
+                              type: object
+                            dummyLinkConfig:
+                              description: dummyLinkConfig is a Talos DummyLinkConfig
+                                document; populated when kind is "DummyLinkConfig".
+                              properties:
+                                addresses:
+                                  items:
+                                    description: 'Talos: AddressConfig'
+                                    properties:
+                                      address:
+                                        type: string
+                                      routePriority:
+                                        format: int32
+                                        type: integer
+                                    required:
+                                    - address
+                                    type: object
+                                  type: array
+                                hardwareAddr:
+                                  format: byte
+                                  type: string
+                                mtu:
+                                  format: int32
+                                  type: integer
+                                multicast:
+                                  type: boolean
+                                name:
+                                  type: string
+                                routes:
+                                  items:
+                                    description: 'Talos: RouteConfig'
+                                    properties:
+                                      destination:
+                                        type: string
+                                      gateway:
+                                        type: string
+                                      metric:
+                                        format: int32
+                                        type: integer
+                                      mtu:
+                                        format: int32
+                                        type: integer
+                                      source:
+                                        type: string
+                                      table:
+                                        format: int32
+                                        type: integer
+                                    type: object
+                                  type: array
+                                up:
+                                  type: boolean
+                              required:
+                              - name
+                              type: object
+                            environmentConfig:
+                              description: environmentConfig is a Talos EnvironmentConfig
+                                document; populated when kind is "EnvironmentConfig".
+                              properties:
+                                variables:
+                                  additionalProperties:
+                                    type: string
+                                  type: object
+                              required:
+                              - variables
+                              type: object
+                            etcFileConfig:
+                              description: etcFileConfig is a Talos EtcFileConfig
+                                document; populated when kind is "EtcFileConfig".
+                              properties:
+                                contents:
+                                  type: string
+                                mode:
+                                  format: int32
+                                  type: integer
+                                name:
+                                  type: string
+                              required:
+                              - contents
+                              - mode
+                              - name
+                              type: object
+                            ethernetConfig:
+                              description: ethernetConfig is a Talos EthernetConfig
+                                document; populated when kind is "EthernetConfig".
+                              properties:
+                                channels:
+                                  description: 'Talos: EthernetChannelsConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/ethernetconfig'
+                                  properties:
+                                    combined:
+                                      format: int32
+                                      type: integer
+                                    other:
+                                      format: int32
+                                      type: integer
+                                    rx:
+                                      format: int32
+                                      type: integer
+                                    tx:
+                                      format: int32
+                                      type: integer
+                                  type: object
+                                features:
+                                  additionalProperties:
+                                    type: boolean
+                                  type: object
+                                name:
+                                  type: string
+                                rings:
+                                  description: 'Talos: EthernetRingsConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/ethernetconfig'
+                                  properties:
+                                    cqe-size:
+                                      format: int32
+                                      type: integer
+                                    rx:
+                                      format: int32
+                                      type: integer
+                                    rx-buf-len:
+                                      format: int32
+                                      type: integer
+                                    rx-jumbo:
+                                      format: int32
+                                      type: integer
+                                    rx-mini:
+                                      format: int32
+                                      type: integer
+                                    rx-push:
+                                      type: boolean
+                                    tcp-data-split:
+                                      type: boolean
+                                    tx:
+                                      format: int32
+                                      type: integer
+                                    tx-push:
+                                      type: boolean
+                                    tx-push-buf-len:
+                                      format: int32
+                                      type: integer
+                                  type: object
+                                wakeOnLan:
+                                  items:
+                                    type: integer
+                                  type: array
+                              required:
+                              - name
+                              type: object
+                            eventSinkConfig:
+                              description: eventSinkConfig is a Talos EventSinkConfig
+                                document; populated when kind is "EventSinkConfig".
+                              properties:
+                                endpoint:
+                                  type: string
+                              required:
+                              - endpoint
+                              type: object
+                            existingVolumeConfig:
+                              description: existingVolumeConfig is a Talos ExistingVolumeConfig
+                                document; populated when kind is "ExistingVolumeConfig".
+                              properties:
+                                discovery:
+                                  description: 'Talos: VolumeDiscoverySpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/existingvolumeconfig'
+                                  properties:
+                                    volumeSelector:
+                                      description: 'Talos: VolumeSelector — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/existingvolumeconfig'
+                                      properties:
+                                        match:
+                                          type: string
+                                      type: object
+                                  type: object
+                                mount:
+                                  description: 'Talos: ExistingMountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/existingvolumeconfig'
+                                  properties:
+                                    disableAccessTime:
+                                      type: boolean
+                                    readOnly:
+                                      type: boolean
+                                    secure:
+                                      type: boolean
+                                  type: object
+                                name:
+                                  type: string
+                                scrub:
+                                  description: 'Talos: ScrubConfig'
+                                  properties:
+                                    enabled:
+                                      type: boolean
+                                    interval:
+                                      type: string
+                                  type: object
+                                trim:
+                                  description: 'Talos: TrimConfig'
+                                  properties:
+                                    enabled:
+                                      type: boolean
+                                    interval:
+                                      type: string
+                                  type: object
+                              required:
+                              - name
+                              type: object
+                            extensionServiceConfig:
+                              description: extensionServiceConfig is a Talos ExtensionServiceConfig
+                                document; populated when kind is "ExtensionServiceConfig".
+                              properties:
+                                configFiles:
+                                  items:
+                                    description: 'Talos: ConfigFile — https://docs.siderolabs.com/talos/v1.14/reference/configuration/extensions/extensionserviceconfig'
+                                    properties:
+                                      content:
+                                        type: string
+                                      mountPath:
+                                        type: string
+                                    required:
+                                    - content
+                                    - mountPath
+                                    type: object
+                                  type: array
+                                environment:
+                                  items:
+                                    type: string
+                                  type: array
+                                name:
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                            externalVolumeConfig:
+                              description: externalVolumeConfig is a Talos ExternalVolumeConfig
+                                document; populated when kind is "ExternalVolumeConfig".
+                              properties:
+                                filesystemType:
+                                  type: string
+                                mount:
+                                  description: 'Talos: ExternalMountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/externalvolumeconfig'
+                                  properties:
+                                    disableAccessTime:
+                                      type: boolean
+                                    readOnly:
+                                      type: boolean
+                                    secure:
+                                      type: boolean
+                                    virtiofs:
+                                      description: 'Talos: VirtiofsMountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/externalvolumeconfig'
+                                      properties:
+                                        tag:
+                                          type: string
+                                      required:
+                                      - tag
+                                      type: object
+                                  type: object
+                                name:
+                                  type: string
+                              required:
+                              - filesystemType
+                              - name
+                              type: object
+                            filesystemScrubConfig:
+                              description: filesystemScrubConfig is a Talos FilesystemScrubConfig
+                                document; populated when kind is "FilesystemScrubConfig".
+                              properties:
+                                interval:
+                                  type: string
+                              type: object
+                            filesystemTrimConfig:
+                              description: filesystemTrimConfig is a Talos FilesystemTrimConfig
+                                document; populated when kind is "FilesystemTrimConfig".
+                              properties:
+                                interval:
+                                  type: string
+                              type: object
+                            httpProbeConfig:
+                              description: httpProbeConfig is a Talos HTTPProbeConfig
+                                document; populated when kind is "HTTPProbeConfig".
+                              properties:
+                                failureThreshold:
+                                  type: integer
+                                interval:
+                                  type: string
+                                name:
+                                  type: string
+                                timeout:
+                                  type: string
+                                url:
+                                  type: string
+                              required:
+                              - name
+                              - url
+                              type: object
+                            imageCacheConfig:
+                              description: imageCacheConfig is a Talos ImageCacheConfig
+                                document; populated when kind is "ImageCacheConfig".
+                              properties:
+                                local:
+                                  description: 'Talos: LocalImageCacheConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/cri/imagecacheconfig'
+                                  properties:
+                                    enabled:
+                                      type: boolean
+                                  type: object
+                              required:
+                              - local
+                              type: object
+                            imageVerificationConfig:
+                              description: imageVerificationConfig is a Talos ImageVerificationConfig
+                                document; populated when kind is "ImageVerificationConfig".
+                              properties:
+                                rules:
+                                  items:
+                                    description: 'Talos: ImageVerificationRuleV1Alpha1
+                                      — https://docs.siderolabs.com/talos/v1.14/reference/configuration/security/imageverificationconfig'
+                                    properties:
+                                      deny:
+                                        type: boolean
+                                      image:
+                                        type: string
+                                      keyless:
+                                        description: 'Talos: ImageKeylessVerifierV1Alpha1
+                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/security/imageverificationconfig'
+                                        properties:
+                                          issuer:
+                                            type: string
+                                          subject:
+                                            type: string
+                                          subjectRegex:
+                                            type: string
+                                        type: object
+                                      publicKey:
+                                        description: 'Talos: ImagePublicKeyVerifierV1Alpha1
+                                          — https://docs.siderolabs.com/talos/v1.14/reference/configuration/security/imageverificationconfig'
+                                        properties:
+                                          certificate:
+                                            type: string
+                                        type: object
+                                      skip:
+                                        type: boolean
+                                    type: object
+                                  type: array
+                              type: object
                             kernelModuleConfig:
                               description: kernelModuleConfig is a Talos KernelModuleConfig
                                 document; populated when kind is "KernelModuleConfig".
@@ -2160,7 +2939,433 @@ spec:
                               - UserVolumeConfig
                               - RawVolumeConfig
                               - ResolverConfig
+                              - BGPInstanceConfig
+                              - BlackholeRouteConfig
+                              - BondConfig
+                              - BridgeConfig
+                              - ContainerConfig
+                              - DHCPv6Config
+                              - DummyLinkConfig
+                              - EnvironmentConfig
+                              - EtcFileConfig
+                              - EthernetConfig
+                              - EventSinkConfig
+                              - ExistingVolumeConfig
+                              - ExtensionServiceConfig
+                              - ExternalVolumeConfig
+                              - FilesystemScrubConfig
+                              - FilesystemTrimConfig
+                              - HTTPProbeConfig
+                              - ImageCacheConfig
+                              - ImageVerificationConfig
+                              - KmsgLogConfig
+                              - KubeAPIServerConfig
+                              - KubeClusterConfig
+                              - KubeControllerManagerConfig
+                              - KubeCoreDNSConfig
+                              - KubeInlineManifestConfig
+                              - KubeNetworkConfig
+                              - KubeNodeConfig
+                              - KubePrismConfig
+                              - KubeSpanConfig
+                              - KubeSpanEndpointsConfig
+                              - KubeTalosAPIAccessConfig
+                              - LVMLogicalVolumeConfig
+                              - LVMVolumeGroupConfig
+                              - Layer2VIPConfig
+                              - OOMConfig
+                              - PCIDriverRebindConfig
+                              - RAIDArrayConfig
+                              - RegistryMirrorConfig
+                              - RoutingRuleConfig
+                              - StaticHostConfig
+                              - SwapVolumeConfig
+                              - SysfsConfig
+                              - TCPProbeConfig
+                              - TimeSyncConfig
+                              - TrustedRootsConfig
+                              - UdevRulesConfig
+                              - VRFConfig
+                              - VethConfig
+                              - WatchdogTimerConfig
+                              - ZswapConfig
                               type: string
+                            kmsgLogConfig:
+                              description: kmsgLogConfig is a Talos KmsgLogConfig
+                                document; populated when kind is "KmsgLogConfig".
+                              properties:
+                                name:
+                                  type: string
+                                url:
+                                  type: string
+                              required:
+                              - name
+                              - url
+                              type: object
+                            kubeAPIServerConfig:
+                              description: kubeAPIServerConfig is a Talos KubeAPIServerConfig
+                                document; populated when kind is "KubeAPIServerConfig".
+                              properties:
+                                apiPort:
+                                  type: integer
+                                certExtraSANs:
+                                  items:
+                                    type: string
+                                  type: array
+                                env:
+                                  additionalProperties:
+                                    type: string
+                                  type: object
+                                extraArgs:
+                                  additionalProperties:
+                                    items:
+                                      type: string
+                                    type: array
+                                  type: object
+                                image:
+                                  type: string
+                                resources:
+                                  description: 'Talos: ResourcesConfig'
+                                  properties:
+                                    limits:
+                                      additionalProperties:
+                                        anyOf:
+                                        - type: integer
+                                        - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                      description: ResourceList is a set of (resource
+                                        name, quantity) pairs.
+                                      type: object
+                                    requests:
+                                      additionalProperties:
+                                        anyOf:
+                                        - type: integer
+                                        - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                      description: ResourceList is a set of (resource
+                                        name, quantity) pairs.
+                                      type: object
+                                  type: object
+                                startupProbes:
+                                  type: boolean
+                              required:
+                              - image
+                              type: object
+                            kubeClusterConfig:
+                              description: kubeClusterConfig is a Talos KubeClusterConfig
+                                document; populated when kind is "KubeClusterConfig".
+                              properties:
+                                clusterName:
+                                  type: string
+                                endpoint:
+                                  type: string
+                              required:
+                              - clusterName
+                              - endpoint
+                              type: object
+                            kubeControllerManagerConfig:
+                              description: kubeControllerManagerConfig is a Talos
+                                KubeControllerManagerConfig document; populated when
+                                kind is "KubeControllerManagerConfig".
+                              properties:
+                                enabled:
+                                  type: boolean
+                                env:
+                                  additionalProperties:
+                                    type: string
+                                  type: object
+                                extraArgs:
+                                  additionalProperties:
+                                    items:
+                                      type: string
+                                    type: array
+                                  type: object
+                                image:
+                                  type: string
+                                resources:
+                                  description: 'Talos: ResourcesConfig'
+                                  properties:
+                                    limits:
+                                      additionalProperties:
+                                        anyOf:
+                                        - type: integer
+                                        - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                      description: ResourceList is a set of (resource
+                                        name, quantity) pairs.
+                                      type: object
+                                    requests:
+                                      additionalProperties:
+                                        anyOf:
+                                        - type: integer
+                                        - type: string
+                                        pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                        x-kubernetes-int-or-string: true
+                                      description: ResourceList is a set of (resource
+                                        name, quantity) pairs.
+                                      type: object
+                                  type: object
+                              required:
+                              - image
+                              type: object
+                            kubeCoreDNSConfig:
+                              description: kubeCoreDNSConfig is a Talos KubeCoreDNSConfig
+                                document; populated when kind is "KubeCoreDNSConfig".
+                              properties:
+                                enabled:
+                                  type: boolean
+                                image:
+                                  type: string
+                              type: object
+                            kubeInlineManifestConfig:
+                              description: kubeInlineManifestConfig is a Talos KubeInlineManifestConfig
+                                document; populated when kind is "KubeInlineManifestConfig".
+                              properties:
+                                manifest:
+                                  type: string
+                                name:
+                                  type: string
+                              required:
+                              - manifest
+                              - name
+                              type: object
+                            kubeNetworkConfig:
+                              description: kubeNetworkConfig is a Talos KubeNetworkConfig
+                                document; populated when kind is "KubeNetworkConfig".
+                              properties:
+                                dnsDomain:
+                                  type: string
+                                nodeCIDRMaskSizeIPv4:
+                                  type: integer
+                                nodeCIDRMaskSizeIPv6:
+                                  type: integer
+                                podSubnets:
+                                  items:
+                                    type: string
+                                  type: array
+                                serviceSubnets:
+                                  items:
+                                    type: string
+                                  type: array
+                              required:
+                              - dnsDomain
+                              - podSubnets
+                              - serviceSubnets
+                              type: object
+                            kubeNodeConfig:
+                              description: kubeNodeConfig is a Talos KubeNodeConfig
+                                document; populated when kind is "KubeNodeConfig".
+                              properties:
+                                annotations:
+                                  additionalProperties:
+                                    type: string
+                                  type: object
+                                labels:
+                                  additionalProperties:
+                                    type: string
+                                  type: object
+                                nodeIP:
+                                  description: 'Talos: NodeIPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/k8s/kubenodeconfig'
+                                  properties:
+                                    validSubnets:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                registerWithFQDN:
+                                  type: boolean
+                                skipNodeRegistration:
+                                  type: boolean
+                                taints:
+                                  additionalProperties:
+                                    type: string
+                                  type: object
+                              required:
+                              - nodeIP
+                              type: object
+                            kubePrismConfig:
+                              description: kubePrismConfig is a Talos KubePrismConfig
+                                document; populated when kind is "KubePrismConfig".
+                              properties:
+                                port:
+                                  type: integer
+                                tlsServerName:
+                                  type: string
+                              required:
+                              - port
+                              type: object
+                            kubeSpanConfig:
+                              description: kubeSpanConfig is a Talos KubeSpanConfig
+                                document; populated when kind is "KubeSpanConfig".
+                              properties:
+                                advertiseKubernetesNetworks:
+                                  type: boolean
+                                allowDownPeerBypass:
+                                  type: boolean
+                                enabled:
+                                  type: boolean
+                                filters:
+                                  description: 'Talos: KubeSpanFiltersConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/kubespanconfig'
+                                  properties:
+                                    endpoints:
+                                      items:
+                                        type: string
+                                      type: array
+                                    excludeAdvertisedNetworks:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                                harvestExtraEndpoints:
+                                  type: boolean
+                                mtu:
+                                  format: int32
+                                  type: integer
+                              type: object
+                            kubeSpanEndpointsConfig:
+                              description: kubeSpanEndpointsConfig is a Talos KubeSpanEndpointsConfig
+                                document; populated when kind is "KubeSpanEndpointsConfig".
+                              properties:
+                                extraAnnouncedEndpoints:
+                                  items:
+                                    type: string
+                                  type: array
+                              required:
+                              - extraAnnouncedEndpoints
+                              type: object
+                            kubeTalosAPIAccessConfig:
+                              description: kubeTalosAPIAccessConfig is a Talos KubeTalosAPIAccessConfig
+                                document; populated when kind is "KubeTalosAPIAccessConfig".
+                              properties:
+                                allowedKubernetesNamespaces:
+                                  items:
+                                    type: string
+                                  type: array
+                                allowedRoles:
+                                  items:
+                                    type: string
+                                  type: array
+                              type: object
+                            layer2VIPConfig:
+                              description: layer2VIPConfig is a Talos Layer2VIPConfig
+                                document; populated when kind is "Layer2VIPConfig".
+                              properties:
+                                link:
+                                  type: string
+                                name:
+                                  type: string
+                              required:
+                              - link
+                              - name
+                              type: object
+                            lvmLogicalVolumeConfig:
+                              description: lvmLogicalVolumeConfig is a Talos LVMLogicalVolumeConfig
+                                document; populated when kind is "LVMLogicalVolumeConfig".
+                              properties:
+                                mirrors:
+                                  format: int32
+                                  type: integer
+                                name:
+                                  type: string
+                                provisioning:
+                                  description: 'Talos: LVMLogicalVolumeProvisioningSpec
+                                    — https://docs.siderolabs.com/talos/v1.14/reference/configuration/storage/lvmlogicalvolumeconfig'
+                                  properties:
+                                    maxSize:
+                                      type: string
+                                    minSize:
+                                      type: string
+                                    volumeGroup:
+                                      type: string
+                                  required:
+                                  - volumeGroup
+                                  type: object
+                                stripes:
+                                  format: int32
+                                  type: integer
+                                type:
+                                  type: integer
+                              required:
+                              - name
+                              - provisioning
+                              - type
+                              type: object
+                            lvmVolumeGroupConfig:
+                              description: lvmVolumeGroupConfig is a Talos LVMVolumeGroupConfig
+                                document; populated when kind is "LVMVolumeGroupConfig".
+                              properties:
+                                name:
+                                  type: string
+                                provisioning:
+                                  description: 'Talos: ProvisioningSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/storage/lvmvolumegroupconfig'
+                                  properties:
+                                    volumeSelector:
+                                      description: 'Talos: LVMVolumeSelectorSpec —
+                                        https://docs.siderolabs.com/talos/v1.14/reference/configuration/storage/lvmvolumegroupconfig'
+                                      properties:
+                                        match:
+                                          type: string
+                                      type: object
+                                  type: object
+                              required:
+                              - name
+                              - provisioning
+                              type: object
+                            oomConfig:
+                              description: oomConfig is a Talos OOMConfig document;
+                                populated when kind is "OOMConfig".
+                              properties:
+                                cgroupRankingExpression:
+                                  type: string
+                                sampleInterval:
+                                  type: string
+                                strictCgroupClassOrdering:
+                                  type: boolean
+                                triggerExpression:
+                                  type: string
+                              type: object
+                            pciDriverRebindConfig:
+                              description: pciDriverRebindConfig is a Talos PCIDriverRebindConfig
+                                document; populated when kind is "PCIDriverRebindConfig".
+                              properties:
+                                name:
+                                  type: string
+                                targetDriver:
+                                  type: string
+                              required:
+                              - name
+                              - targetDriver
+                              type: object
+                            raidArrayConfig:
+                              description: raidArrayConfig is a Talos RAIDArrayConfig
+                                document; populated when kind is "RAIDArrayConfig".
+                              properties:
+                                level:
+                                  type: integer
+                                metadata:
+                                  type: integer
+                                name:
+                                  type: string
+                                provisioning:
+                                  description: 'Talos: RAIDProvisioningSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/storage/raidarrayconfig'
+                                  properties:
+                                    volumeSelector:
+                                      description: 'Talos: RAIDVolumeSelector — https://docs.siderolabs.com/talos/v1.14/reference/configuration/storage/raidarrayconfig'
+                                      properties:
+                                        match:
+                                          type: string
+                                      type: object
+                                  required:
+                                  - volumeSelector
+                                  type: object
+                              required:
+                              - level
+                              - name
+                              - provisioning
+                              type: object
                             rawVolumeConfig:
                               description: |-
                                 rawVolumeConfig is a Talos RawVolumeConfig document (an unformatted partition for a CSI
@@ -2246,6 +3451,29 @@ spec:
                               required:
                               - name
                               type: object
+                            registryMirrorConfig:
+                              description: registryMirrorConfig is a Talos RegistryMirrorConfig
+                                document; populated when kind is "RegistryMirrorConfig".
+                              properties:
+                                endpoints:
+                                  items:
+                                    description: 'Talos: RegistryEndpoint — https://docs.siderolabs.com/talos/v1.14/reference/configuration/cri/registrymirrorconfig'
+                                    properties:
+                                      overridePath:
+                                        type: boolean
+                                      url:
+                                        type: string
+                                    required:
+                                    - url
+                                    type: object
+                                  type: array
+                                name:
+                                  type: string
+                                skipFallback:
+                                  type: boolean
+                              required:
+                              - name
+                              type: object
                             resolverConfig:
                               description: resolverConfig is a Talos ResolverConfig
                                 document (DNS nameservers and search domains); populated
@@ -2286,6 +3514,133 @@ spec:
                                       type: array
                                   type: object
                               type: object
+                            routingRuleConfig:
+                              description: routingRuleConfig is a Talos RoutingRuleConfig
+                                document; populated when kind is "RoutingRuleConfig".
+                              properties:
+                                action:
+                                  type: integer
+                                dst:
+                                  type: string
+                                fwMark:
+                                  format: int32
+                                  type: integer
+                                fwMask:
+                                  format: int32
+                                  type: integer
+                                iifName:
+                                  type: string
+                                name:
+                                  type: string
+                                oifName:
+                                  type: string
+                                src:
+                                  type: string
+                                table:
+                                  format: int32
+                                  type: integer
+                              required:
+                              - name
+                              - table
+                              type: object
+                            staticHostConfig:
+                              description: staticHostConfig is a Talos StaticHostConfig
+                                document; populated when kind is "StaticHostConfig".
+                              properties:
+                                hostnames:
+                                  items:
+                                    type: string
+                                  type: array
+                                name:
+                                  type: string
+                              required:
+                              - hostnames
+                              - name
+                              type: object
+                            swapVolumeConfig:
+                              description: swapVolumeConfig is a Talos SwapVolumeConfig
+                                document; populated when kind is "SwapVolumeConfig".
+                              properties:
+                                encryption:
+                                  description: 'Talos: EncryptionSpec'
+                                  properties:
+                                    allowDiscards:
+                                      type: boolean
+                                    blockSize:
+                                      format: int64
+                                      type: integer
+                                    cipher:
+                                      type: string
+                                    keySize:
+                                      type: integer
+                                    keys:
+                                      items:
+                                        description: 'Talos: EncryptionKey'
+                                        properties:
+                                          kms:
+                                            description: 'Talos: EncryptionKeyKMS'
+                                            properties:
+                                              endpoint:
+                                                type: string
+                                            required:
+                                            - endpoint
+                                            type: object
+                                          lockToState:
+                                            type: boolean
+                                          nodeID:
+                                            description: 'Talos: EncryptionKeyNodeID'
+                                            type: object
+                                          slot:
+                                            type: integer
+                                          tpm:
+                                            description: 'Talos: EncryptionKeyTPM'
+                                            properties:
+                                              checkSecurebootStatusOnEnroll:
+                                                type: boolean
+                                              options:
+                                                description: 'Talos: EncryptionKeyTPMOptions'
+                                                properties:
+                                                  pcrs:
+                                                    items:
+                                                      type: integer
+                                                    type: array
+                                                type: object
+                                            type: object
+                                        required:
+                                        - slot
+                                        type: object
+                                      type: array
+                                    options:
+                                      items:
+                                        type: string
+                                      type: array
+                                    provider:
+                                      type: string
+                                  required:
+                                  - keys
+                                  - provider
+                                  type: object
+                                name:
+                                  type: string
+                                provisioning:
+                                  description: 'Talos: ProvisioningSpec'
+                                  properties:
+                                    diskSelector:
+                                      description: 'Talos: DiskSelector'
+                                      properties:
+                                        match:
+                                          type: string
+                                      type: object
+                                    grow:
+                                      type: boolean
+                                    maxSize:
+                                      type: string
+                                    minSize:
+                                      type: string
+                                  type: object
+                              required:
+                              - name
+                              type: object
                             sysctlConfig:
                               description: sysctlConfig is a Talos SysctlConfig document;
                                 populated when kind is "SysctlConfig".
@@ -2296,6 +3651,83 @@ spec:
                                   type: object
                               required:
                               - params
+                              type: object
+                            sysfsConfig:
+                              description: sysfsConfig is a Talos SysfsConfig document;
+                                populated when kind is "SysfsConfig".
+                              properties:
+                                params:
+                                  additionalProperties:
+                                    type: string
+                                  type: object
+                              required:
+                              - params
+                              type: object
+                            tcpProbeConfig:
+                              description: tcpProbeConfig is a Talos TCPProbeConfig
+                                document; populated when kind is "TCPProbeConfig".
+                              properties:
+                                endpoint:
+                                  type: string
+                                failureThreshold:
+                                  type: integer
+                                interval:
+                                  type: string
+                                name:
+                                  type: string
+                                timeout:
+                                  type: string
+                              required:
+                              - endpoint
+                              - name
+                              type: object
+                            timeSyncConfig:
+                              description: timeSyncConfig is a Talos TimeSyncConfig
+                                document; populated when kind is "TimeSyncConfig".
+                              properties:
+                                bootTimeout:
+                                  type: string
+                                enabled:
+                                  type: boolean
+                                ntp:
+                                  description: 'Talos: NTPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/timesyncconfig'
+                                  properties:
+                                    servers:
+                                      items:
+                                        type: string
+                                      type: array
+                                    useNTS:
+                                      type: boolean
+                                  type: object
+                                ptp:
+                                  description: 'Talos: PTPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/timesyncconfig'
+                                  properties:
+                                    devices:
+                                      items:
+                                        type: string
+                                      type: array
+                                  type: object
+                              type: object
+                            trustedRootsConfig:
+                              description: trustedRootsConfig is a Talos TrustedRootsConfig
+                                document; populated when kind is "TrustedRootsConfig".
+                              properties:
+                                certificates:
+                                  type: string
+                                name:
+                                  type: string
+                              required:
+                              - certificates
+                              - name
+                              type: object
+                            udevRulesConfig:
+                              description: udevRulesConfig is a Talos UdevRulesConfig
+                                document; populated when kind is "UdevRulesConfig".
+                              properties:
+                                rules:
+                                  items:
+                                    type: string
+                                  type: array
                               type: object
                             userVolumeConfig:
                               description: userVolumeConfig is a Talos UserVolumeConfig
@@ -2421,6 +3853,106 @@ spec:
                               required:
                               - name
                               type: object
+                            vethConfig:
+                              description: vethConfig is a Talos VethConfig document;
+                                populated when kind is "VethConfig".
+                              properties:
+                                addresses:
+                                  items:
+                                    description: 'Talos: AddressConfig'
+                                    properties:
+                                      address:
+                                        type: string
+                                      routePriority:
+                                        format: int32
+                                        type: integer
+                                    required:
+                                    - address
+                                    type: object
+                                  type: array
+                                mtu:
+                                  format: int32
+                                  type: integer
+                                multicast:
+                                  type: boolean
+                                name:
+                                  type: string
+                                peer:
+                                  description: 'Talos: VethPeerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/vethconfig'
+                                  properties:
+                                    addresses:
+                                      items:
+                                        description: 'Talos: AddressConfig'
+                                        properties:
+                                          address:
+                                            type: string
+                                          routePriority:
+                                            format: int32
+                                            type: integer
+                                        required:
+                                        - address
+                                        type: object
+                                      type: array
+                                    mtu:
+                                      format: int32
+                                      type: integer
+                                    multicast:
+                                      type: boolean
+                                    name:
+                                      type: string
+                                    routes:
+                                      items:
+                                        description: 'Talos: RouteConfig'
+                                        properties:
+                                          destination:
+                                            type: string
+                                          gateway:
+                                            type: string
+                                          metric:
+                                            format: int32
+                                            type: integer
+                                          mtu:
+                                            format: int32
+                                            type: integer
+                                          source:
+                                            type: string
+                                          table:
+                                            format: int32
+                                            type: integer
+                                        type: object
+                                      type: array
+                                    up:
+                                      type: boolean
+                                  required:
+                                  - name
+                                  type: object
+                                routes:
+                                  items:
+                                    description: 'Talos: RouteConfig'
+                                    properties:
+                                      destination:
+                                        type: string
+                                      gateway:
+                                        type: string
+                                      metric:
+                                        format: int32
+                                        type: integer
+                                      mtu:
+                                        format: int32
+                                        type: integer
+                                      source:
+                                        type: string
+                                      table:
+                                        format: int32
+                                        type: integer
+                                    type: object
+                                  type: array
+                                up:
+                                  type: boolean
+                              required:
+                              - name
+                              - peer
+                              type: object
                             volumeConfig:
                               description: |-
                                 volumeConfig is a Talos VolumeConfig document (a system volume, e.g. STATE or EPHEMERAL,
@@ -2540,6 +4072,87 @@ spec:
                                   type: object
                               required:
                               - name
+                              type: object
+                            vrfConfig:
+                              description: vrfConfig is a Talos VRFConfig document;
+                                populated when kind is "VRFConfig".
+                              properties:
+                                addresses:
+                                  items:
+                                    description: 'Talos: AddressConfig'
+                                    properties:
+                                      address:
+                                        type: string
+                                      routePriority:
+                                        format: int32
+                                        type: integer
+                                    required:
+                                    - address
+                                    type: object
+                                  type: array
+                                hardwareAddr:
+                                  format: byte
+                                  type: string
+                                links:
+                                  items:
+                                    type: string
+                                  type: array
+                                mtu:
+                                  format: int32
+                                  type: integer
+                                multicast:
+                                  type: boolean
+                                name:
+                                  type: string
+                                routes:
+                                  items:
+                                    description: 'Talos: RouteConfig'
+                                    properties:
+                                      destination:
+                                        type: string
+                                      gateway:
+                                        type: string
+                                      metric:
+                                        format: int32
+                                        type: integer
+                                      mtu:
+                                        format: int32
+                                        type: integer
+                                      source:
+                                        type: string
+                                      table:
+                                        format: int32
+                                        type: integer
+                                    type: object
+                                  type: array
+                                table:
+                                  format: int32
+                                  type: integer
+                                up:
+                                  type: boolean
+                              required:
+                              - name
+                              - table
+                              type: object
+                            watchdogTimerConfig:
+                              description: watchdogTimerConfig is a Talos WatchdogTimerConfig
+                                document; populated when kind is "WatchdogTimerConfig".
+                              properties:
+                                device:
+                                  type: string
+                                timeout:
+                                  type: string
+                              required:
+                              - device
+                              type: object
+                            zswapConfig:
+                              description: zswapConfig is a Talos ZswapConfig document;
+                                populated when kind is "ZswapConfig".
+                              properties:
+                                maxPoolPercent:
+                                  type: integer
+                                shrinkerEnabled:
+                                  type: boolean
                               type: object
                           required:
                           - kind

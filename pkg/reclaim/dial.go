@@ -216,7 +216,7 @@ func inspectEtcd(ctx context.Context, api etcdAPI, timeout time.Duration, in *In
 // markLocalMember records the dialled node's own member ID and judges its
 // health by its own etcd status (the Talos API reads only the node it is
 // sent to). Other members are judged by whether their peer port answers, set
-// by the caller. ponytail: a member whose peer port is firewalled from the
+// by the caller. shortcut: a member whose peer port is firewalled from the
 // controller counts as unhealthy, which errs toward refusing; --force overrides.
 func markLocalMember(ctx context.Context, api etcdAPI, timeout time.Duration, in *Inspection) {
 	resp, err := bounded(ctx, timeout, "etcd status", func(c context.Context) (*machine.EtcdStatusResponse, error) {
@@ -260,7 +260,7 @@ func memberReachable(ctx context.Context, peerURLs []string) bool {
 
 // volumes lists what the reset leaves behind: user volumes (by their "u-" ID),
 // and anything probed on a disk other than the system disk, except partition
-// tables. ponytail: a volume on the system disk that is neither a user volume
+// tables. shortcut: a volume on the system disk that is neither a user volume
 // nor Talos's own is not listed; Talos's own partitions are the only thing the
 // installer puts there.
 func (n *machineryNode) volumes(ctx context.Context) ([]Volume, error) {

@@ -119,7 +119,7 @@ func discoverMachines(ctx context.Context, deps adoptDeps, clusterName, namespac
 // checkMembership refuses an adoption whose discovered membership and the workload cluster's
 // Nodes disagree: a node that registered but is not yet in Talos discovery would otherwise be
 // silently left out. It runs before anything is written. A nil target skips the check.
-// ponytail: an existing TalosCluster's machines are not cross-checked; their endpoints need not
+// shortcut: an existing TalosCluster's machines are not cross-checked; their endpoints need not
 // be Node addresses and unapproved machines are legitimate.
 func checkMembership(ctx context.Context, target client.Reader, machines []*ichorv1alpha1.TalosMachine, members []ClusterMember) error {
 	if target == nil {

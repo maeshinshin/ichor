@@ -44,7 +44,7 @@ const (
 	// material in. It lives in the controller's namespace.
 	OIDCTrustConfigMap = "ichor-oidc-trust"
 
-	// OIDCTrustKeyDiscoveryURL and OIDCTrustKeyCA are its keys. ponytail: only the two
+	// OIDCTrustKeyDiscoveryURL and OIDCTrustKeyCA are its keys. shortcut: only the two
 	// values are fixed, not the keys; these are the render side's reading of them.
 	OIDCTrustKeyDiscoveryURL = "discoveryURL"
 	OIDCTrustKeyCA           = "ca.crt"
@@ -183,7 +183,7 @@ func validateAuthenticationConfiguration(cfg *apiserverv1.AuthenticationConfigur
 	}
 
 	// No disallowed issuers: the service-account issuer is the control-plane endpoint, which no
-	// OIDC provider URL here can be in practice. ponytail: pass it if that ever bites.
+	// OIDC provider URL here can be in practice. shortcut: pass it if that ever bites.
 	compiler := authenticationcel.NewDefaultCompiler()
 	if errs := validation.ValidateAuthenticationConfiguration(compiler, &internal, nil); len(errs) > 0 {
 		return fmt.Errorf("the authentication configuration is invalid: %w", errs.ToAggregate())

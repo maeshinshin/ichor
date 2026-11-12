@@ -103,7 +103,7 @@ func NewReencryptSecrets() ReencryptSecretsFunc {
 // (etcd3 store GuaranteedUpdate: `!origState.stale && bytes.Equal(data, origState.data)`), so a changed
 // resourceVersion in the response is exactly a Secret that was moved to the current key.
 //
-// ponytail: one sweep is sequential and bounded only by ctx; a cluster with hundreds of thousands of Secrets
+// shortcut: one sweep is sequential and bounded only by ctx; a cluster with hundreds of thousands of Secrets
 // restarts its sweep every reconcile and may never finish. A continue token kept in status would fix that.
 func reencryptSweep(ctx context.Context, cs kubernetes.Interface) (ReencryptResult, error) {
 	var res ReencryptResult

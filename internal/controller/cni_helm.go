@@ -405,7 +405,7 @@ func cniJobImage(ctx context.Context, images InstallerImages, inst *ichorv1alpha
 		return inst.Spec.InstallerRepository + "@" + rec.Digest, nil
 	}
 
-	// ponytail: not recorded in status.installerImage (a Helm-only install has no IchorInstallation to
+	// shortcut: not recorded in status.installerImage (a Helm-only install has no IchorInstallation to
 	// record in); each new Job verifies again.
 	img, err := pinInstallerImage(ctx, images, inst)
 	if err != nil {

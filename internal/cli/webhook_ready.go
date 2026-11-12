@@ -15,7 +15,7 @@ import (
 )
 
 // The controller Deployment and the Service of its admission webhooks, as Ichor's manifest and
-// chart name them. ponytail: a Helm release with another name or namespace is not looked up by
+// chart name them. shortcut: a Helm release with another name or namespace is not looked up by
 // label; the wait then times out with the message below.
 const (
 	controllerDeploymentName = "ichor-controller-manager"
@@ -47,7 +47,7 @@ func webhookServerNotReady(ctx context.Context, c client.Reader) error {
 
 	err := c.List(ctx, &slices, client.InNamespace(ichorControllerNamespace),
 		client.MatchingLabels{discoveryv1.LabelServiceName: webhookServiceName})
-	// ponytail: an operator who may not read EndpointSlices relies on the Deployment alone.
+	// shortcut: an operator who may not read EndpointSlices relies on the Deployment alone.
 	if apierrors.IsForbidden(err) {
 		return nil
 	}

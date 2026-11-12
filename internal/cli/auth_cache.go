@@ -174,7 +174,7 @@ func deleteAuthCacheIssuer(dir, issuer, audience string) (int, error) {
 }
 
 // lockAuthCache takes an exclusive flock on <key>.lock so concurrent kubectl
-// runs refresh (and log in) once. ponytail: flock is Unix-only; Windows
+// runs refresh (and log in) once. shortcut: flock is Unix-only; Windows
 // support needs LockFileEx when the CLI ships there.
 func lockAuthCache(dir, key string) (func(), error) {
 	if err := ensureAuthDir(dir); err != nil {

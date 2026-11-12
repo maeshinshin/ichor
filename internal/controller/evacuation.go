@@ -43,7 +43,7 @@ const defaultEvacuationTimeout = 10 * time.Minute
 
 // defaultLonghornNamespace is Longhorn's documented default install namespace.
 //
-// ponytail: TalosStorageSpec carries no namespace field, so a Longhorn in another namespace cannot be
+// shortcut: TalosStorageSpec carries no namespace field, so a Longhorn in another namespace cannot be
 // evacuated. Add one to TalosStorageSpec if that is ever needed; nothing else assumes "longhorn-system".
 const defaultLonghornNamespace = "longhorn-system"
 

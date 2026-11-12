@@ -33,7 +33,7 @@ import (
 
 const (
 	// apiServerPort is the port every Talos control plane's kube-apiserver listens on (the legacy
-	// cluster.apiServer.localPort / KubeAPIServerConfig default). ponytail: a custom local port is
+	// cluster.apiServer.localPort / KubeAPIServerConfig default). shortcut: a custom local port is
 	// not read back; the probe would fail closed and pause the operation.
 	apiServerPort = "6443"
 

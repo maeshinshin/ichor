@@ -753,7 +753,7 @@ func (r *TalosOperationReconciler) awaitRemoval(ctx context.Context, op *ichorv1
 
 	err := readerOrClient(r.APIReader, r.Client).Get(ctx, types.NamespacedName{Namespace: op.Namespace, Name: op.Spec.Node.MachineRef.Name}, m)
 
-	// ponytail: an operation recorded before machineUID existed has none and follows the name.
+	// shortcut: an operation recorded before machineUID existed has none and follows the name.
 	if uid := op.Status.Node.MachineUID; apierrors.IsNotFound(err) || (err == nil && uid != "" && m.UID != uid) {
 		r.markMachine(op, op.Spec.Node.MachineRef.Name, ichorv1alpha1.TalosOperationMachinePhaseCompleted)
 		op.Status.Node.Message = "the machine was removed and its node reset"

@@ -320,7 +320,7 @@ func (s *Server) dialNode(
 		return tc, closeFn, true, nil
 	}
 
-	// ponytail: a Hardware read doubles as the trust probe; a cheaper
+	// shortcut: a Hardware read doubles as the trust probe; a cheaper
 	// dedicated call would need a new NodeTalosClient method.
 	if m.Status.AppliedConfigHash != "" {
 		return tc, closeFn, false, nil

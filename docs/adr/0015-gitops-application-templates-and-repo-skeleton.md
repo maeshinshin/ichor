@@ -11,20 +11,21 @@ Phase 4 needed two things out of `pkg/gitops`: a way to build Argo CD
 out (server-side apply for large CRD groups, `ignoreDifferences` keyed by
 `managedFieldsManagers`, sync-wave ordering), and a way to write the
 repository skeleton `ichor gitops export` lays out (`bootstrap/`, `apps/`,
-`clusters/<name>/`). Neither `ichor init` nor `ichor gitops export` is built
-yet; this package only needs to give them something to call.
+`clusters/<name>/`). This package gives `ichor init` and `ichor gitops export`
+something to call.
 
 ### Should Argo CD's own Go types be a dependency?
 
-Before writing a struct, check whether a dependency already provides it. Argo CD publishes its `Application` CRD type at
-`github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1`. It was tried
-directly, not assumed:
+Before writing a struct, check whether a dependency already provides it. Argo CD
+publishes its `Application` CRD type at
+`github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1`, but it cannot be
+imported as a library:
 
 ```sh
 go get github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1@latest
 ```
 
-This fails outright. The package imports `util/git` and `util/exec`, which
+`go get` fails outright. The package imports `util/git` and `util/exec`, which
 pull in `github.com/argoproj/argo-cd/gitops-engine` through a path that has
 no `go.mod` at the revision argo-cd's own `go.mod` pins (`go: ... invalid
 version: missing .../gitops-engine/go.mod at revision 97ad5b59a627`) — a
@@ -39,20 +40,18 @@ cluster.
 **Decision: hand-roll the subset of the schema this package needs.** It
 is small (apiVersion/kind, project, source(s), destination, syncPolicy,
 ignoreDifferences) and stable enough to maintain against the public docs
-(checked against `argo-cd.readthedocs.io/en/stable/`, which resolved to the
-v3.5.6 docs as of this writing) without a parallel catalogue drifting the
+(against `argo-cd.readthedocs.io/en/stable/`, the v3.5.6 docs) without a parallel catalogue drifting the
 way `pkg/typedconfig` worried about for machinery. `pkg/gitops/doc.go`
 records the specific failure so a future upgrade attempt doesn't have to
 re-discover it.
 
-### A landmine found building it: controller-gen scans the whole repo
+### controller-gen treats any type with embedded TypeMeta and ObjectMeta as a kind
 
-The first version of `Application` embedded `metav1.TypeMeta` and
-`metav1.ObjectMeta` anonymously, the obvious shape for a Kubernetes-ish
-type. `make build` then silently generated
-`config/crd/bases/_applications.yaml` — a CRD named `applications.` with an
-empty group and an empty version, picked up by `dist/chart`'s own invariant
-test. The cause: controller-gen's CRD generator
+Embedding `metav1.TypeMeta` and `metav1.ObjectMeta` anonymously in `Application`
+is the obvious shape for a Kubernetes-ish type, but `make build` would then
+silently generate `config/crd/bases/_applications.yaml` — a CRD named
+`applications.` with an empty group and an empty version, picked up by
+`dist/chart`'s own invariant test. The cause: controller-gen's CRD generator
 (`sigs.k8s.io/controller-tools/pkg/crd/gen.go`, `FindKubeKinds`) treats
 *any* type in *any* package under `paths="./..."` as a candidate Kubernetes
 kind if it has both fields embedded, with no marker required to opt in —
@@ -125,7 +124,7 @@ clusters/<cluster>/<file>    <- one per Skeleton.CRs entry
 decision.** The design says `apps/argocd/`, `apps/cni/` and `apps/ichor/`
 are always present, `apps/storage/` and `apps/monitoring/` only when
 selected — but *deciding* which components a given cluster has is `ichor
-init`/`ichor gitops export`'s job, built in a different unit of work. 
+init`/`ichor gitops export`'s job, a separate decision.
 `Skeleton.Apps` is a plain `map[string]*Application`; `Write` renders
 whatever keys it's given, in sorted order, and no key is privileged.
 
@@ -137,11 +136,11 @@ goes through `sigs.k8s.io/yaml`, which round-trips through
 go-yaml's own map marshaling (also sorted) — so even values nested inside
 `CRs` (e.g. a raw `map[string]any` CR) marshal to the same bytes regardless
 of how they were built. `pkg/gitops/skeleton_test.go`'s
-`TestSkeleton_Write_Deterministic` writes the same `Skeleton` value 22
-times (two named runs plus 20 more in a loop, since Go's map randomization
-is probabilistic per-process) and diffs every file byte-for-byte.
+`TestSkeleton_Write_Deterministic` writes the same `Skeleton` value
+repeatedly (Go's map randomization is probabilistic per process) and diffs
+every file byte-for-byte.
 
-**Credentials never reach a file.** Three independent layers, each tested:
+**Credentials never reach a file.** Three independent layers, each pinned by a test:
 
 1. **Nothing to put them in.** `Skeleton` and `Options` have no field typed
    to hold a credential or the secrets bundle — there is no parameter a
@@ -162,7 +161,7 @@ is probabilistic per-process) and diffs every file byte-for-byte.
 
 ### Boundary with `pkg/cni`
 
-`pkg/cni` (a different unit of work) owns the CNI preset's own Application
+`pkg/cni` owns the CNI preset's own Application
 content — which Helm chart, which values, which release name so hand-over
 produces no diff. This package provides the mechanism it builds on top of:
 `gitops.New` for the Application shape and its baked-in fixes, `SyncWaveCNI`
@@ -170,34 +169,31 @@ for where it sits in the hand-over order, and `Skeleton.Apps["cni"]` as
 where its output lands in the repo tree. Nothing CNI-specific — not a preset
 name, not a chart reference — lives in `pkg/gitops`.
 
-**Update (ADR 0019's `ichor init` work): `pkg/cni.Preset.ArgoCDApplication`
-now returns `*gitops.Application` directly, built through `gitops.New`,**
-rather than `*unstructured.Unstructured` with its own hand-assembled map
-(ADR 0013's update records the `pkg/cni` side of this). `pkg/cni` depends
-on `pkg/gitops` as a result — the direction this ADR's "nothing CNI-specific
-lives in `pkg/gitops`" sentence above did not rule out; it is `pkg/gitops`
-depending on `pkg/cni`, or CNI-specific content living in `pkg/gitops`,
-that would be backwards. The practical effect is that every Application
-`pkg/cni` builds now goes through this package's own guards (the `RepoURL`
-credential check, the `ServerSideApply`/`ignoreDifferences` pairing) instead
-of a caller having to notice an `unstructured.Unstructured` carries none of
-them, and `ichor init --gitops-dir` writes `pkg/cni/cilium`'s Application
-straight into `Skeleton.Apps["cni"]` with no conversion step.
+**`pkg/cni.Preset.ArgoCDApplication` returns `*gitops.Application` directly**
+(ADR 0019's `ichor init` work), built through `gitops.New`, rather than
+`*unstructured.Unstructured` with its own hand-assembled map (ADR 0013 records
+the `pkg/cni` side of this). `pkg/cni` depends on `pkg/gitops` as a result —
+the direction this ADR's "nothing CNI-specific lives in `pkg/gitops`" sentence
+above does not rule out; it is `pkg/gitops` depending on `pkg/cni`, or
+CNI-specific content living in `pkg/gitops`, that would be backwards. The
+practical effect is that every Application `pkg/cni` builds goes through this
+package's own guards (the `RepoURL` credential check, the
+`ServerSideApply`/`ignoreDifferences` pairing) instead of a caller having to
+notice an `unstructured.Unstructured` carries none of them, and
+`ichor init --gitops-dir` writes `pkg/cni/cilium`'s Application straight into
+`Skeleton.Apps["cni"]` with no conversion step.
 
-This did need one addition here: `ApplicationSourceHelm` gained a `Values`
-field (`spec.source.helm.values`, inline Helm values as a YAML string —
-argo-cd.readthedocs.io's Helm page, retrieved 2026-10-25) to carry what
-Cilium's unstructured map previously put at the same path. `ReleaseName`
-and `ValueFiles` were already there for a `--gitops-dir`-authored
-`ApplicationSource`; `Values` is for a preset that already rendered its
-own values document and has nothing to reference by path.
+`ApplicationSourceHelm` carries a `Values` field (`spec.source.helm.values`,
+inline Helm values as a YAML string — argo-cd.readthedocs.io's Helm page) for
+what Cilium's unstructured map previously put at the same path. `ReleaseName`
+and `ValueFiles` serve a `--gitops-dir`-authored `ApplicationSource`; `Values`
+is for a preset that already rendered its own values document and has nothing
+to reference by path.
 
-One pitfall from the task brief is explicitly **not** addressed here: Cilium
-generating its Hubble certificates through a CronJob rather than Helm (so
-sync doesn't see a diff every time). That is Cilium-preset content, i.e.
-`pkg/cni`'s manifests, not anything about how an `Application` or the repo
-skeleton is shaped — `pkg/gitops` has nothing to add there beyond what's
-already written down here for `pkg/cni` to read.
+Cilium generating its Hubble certificates through a CronJob rather than Helm
+(so sync doesn't see a diff every time) is not this package's concern. That is
+Cilium-preset content, i.e. `pkg/cni`'s manifests (ADR 0013), not anything
+about how an `Application` or the repo skeleton is shaped.
 
 ## Consequences
 
@@ -223,19 +219,19 @@ already written down here for `pkg/cni` to read.
 
 ## Amendment: one root Application over apps/ and the cluster CRs
 
-Hardware run against Argo CD v3.5.6 found two defects in the skeleton:
+The skeleton has two properties against Argo CD v3.5.6:
 
-- The root Application had `path: clusters/<name>`, so `apps/*/application.yaml`
-  (the CNI hand-over Application) was never applied. The root is now
-  `path: .` with `directory.recurse: true` and
+- The root Application is `path: .` with `directory.recurse: true` and
   `directory.include: {apps/*/application.yaml,clusters/<name>/*.yaml}`
-  (`ApplicationSourceDir.Include`). One Application, no extra file; Ichor's
-  CRs and the apps stay separate by directory, and `bootstrap/root-app.yaml`
-  and other clusters' directories are not synced. A second app-of-apps for
-  `apps/` was rejected as one more file and one more sync to get wrong.
-- `ichor init --gitops-dir` wrote the live typed objects (no
-  `apiVersion`/`kind`, with `managedFields`, `uid`, ...), which syncs zero
-  resources. Init now passes its CRs through `declareCRs`, the same function
-  `ichor gitops export` uses, so both write identical declared-form files
-  and the same names (`talos-machine-<name>.yaml`,
-  `talos-config-patch-<name>.yaml`).
+  (`ApplicationSourceDir.Include`), so the `apps/*/application.yaml` files (the
+  CNI hand-over Application) are applied together with the cluster's CRs. A
+  root with `path: clusters/<name>` never applies `apps/`. One Application, no
+  extra file; Ichor's CRs and the apps stay separate by directory, and
+  `bootstrap/root-app.yaml` and other clusters' directories are not synced. A
+  second app-of-apps for `apps/` was rejected as one more file and one more
+  sync to get wrong.
+- `ichor init --gitops-dir` writes declared-form CRs, not the live typed
+  objects (no `apiVersion`/`kind`, with `managedFields`, `uid`, ...), which sync
+  zero resources. Init passes its CRs through `declareCRs`, the same function
+  `ichor gitops export` uses, so both write identical declared-form files and
+  the same names (`talos-machine-<name>.yaml`, `talos-config-patch-<name>.yaml`).

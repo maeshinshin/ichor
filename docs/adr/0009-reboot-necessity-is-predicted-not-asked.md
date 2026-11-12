@@ -19,7 +19,7 @@ of it; `DryRun` is a bool on the same request; and the response carries `Mode`
 reads exactly like Talos offering to answer the question itself, per node and
 per version, which would be strictly better than predicting it.
 
-It was verified before anything was deleted, and the answer is no.
+Talos does not answer it.
 
 **`AUTO` is a hardcoded alias for `NO_REBOOT`.** From Talos v1.14.3,
 `internal/app/machined/internal/server/v1alpha1/v1alpha1_server.go`:
@@ -31,10 +31,10 @@ case machine.ApplyConfigurationRequest_AUTO:
 ```
 
 Nothing in that RPC ever sets `Mode = REBOOT`, and the switch never looks at
-the diff. `ModeDetails` is a static string. Confirmed empirically against a
-real node: three dry runs — one changing only a DNS nameserver, one changing
-only the installer image tag, one applying a whole worker configuration —
-returned byte-identical `Mode` and `ModeDetails`.
+the diff. `ModeDetails` is a static string. Three dry runs against a node — one
+changing only a DNS nameserver, one changing only the installer image tag, one
+applying a whole worker configuration — return byte-identical `Mode` and
+`ModeDetails`.
 
 The real decision lives elsewhere. Each subsystem's own controller reacts to
 the already-written configuration asynchronously and asks for a reboot through
@@ -57,10 +57,9 @@ Two places need it, and neither can dry-run:
   reboot-causing apply. Learning the answer from Talos after applying is too
   late by construction.
 
-So the design's wording — the mode is derived from the diff — stands, and now
-has evidence behind it rather than being the only idea anyone had.
+So the design's wording — the mode is derived from the diff — stands.
 
-Two findings from the same investigation are worth acting on separately:
+Two further properties of the apply API are worth acting on separately:
 
 - **`Warnings` on the apply response is genuinely useful**, just not for this.
   It comes from `ValidateAtRuntime` and surfaces deprecated-field migration
@@ -68,9 +67,9 @@ Two findings from the same investigation are worth acting on separately:
   plane, a cluster ID or secret missing when discovery is on) and
   `KubeNodeConfig` label mismatches. The reconciler should surface it in status
   rather than dropping it.
-- **Dry run is genuinely side-effect free.** Verified: a node's
-  `MachineStatus` version and timestamp were unchanged after a batch of dry
-  runs, not even rewritten with the same value. So it is safe to use for the
+- **Dry run is genuinely side-effect free.** A node's `MachineStatus` version
+  and timestamp are unchanged after dry runs, not even rewritten with the same
+  value. So it is safe to use for the
   impact preview's *validation* half, even though it cannot answer the reboot
   half.
 
@@ -87,30 +86,14 @@ Two findings from the same investigation are worth acting on separately:
 - The reconciler should pass `DryRun` first for validation and warnings, then
   apply for real — two calls, with the mode decided by the table in between.
 
-## A note for the e2e harness, found along the way
-
-A real apply of a full worker configuration to a node in maintenance mode
-starts Talos's `UnattendedInstallController`, which installs to disk and then
-asks for a reboot through `RebootRequest`. On the e2e harness both test
-nodes went unreachable at that point — TCP resets rather than timeouts, so the
-kernel was up with nothing listening — and did not return within the test
-window. Cluster pods were confirmed to have egress to `factory.talos.dev`, so
-it is not obviously a network block, and it was not root-caused.
-
-**Resolved.** It was not the install: Talos's certificate
-controller blocks apid on a reachable control-plane endpoint for *worker*
-nodes only, so an isolated worker never starts apid at all. A control-plane
-config comes up normally. The details, and the four other harness
-requirements the same investigation turned up, are in ADR 0007.
-
 ## Addendum: multi-document and registry paths
 
 The table originally knew only the legacy `Config` paths and two standalone
 kinds, so every other path fell to reboot-required. Ichor's own render hit
-that: adding `TalosCluster.spec.registries` was refused with `RebootRequired`
-(seen in ADR 0061's test). The v1.14.3 source was read to separate what Talos
-applies live from what it does not. A rule was added only where the consumer
-was found; the default is unchanged.
+that: adding `TalosCluster.spec.registries` was refused with `RebootRequired`.
+In the v1.14.3 source, what Talos applies live is separated from what it does
+not by the controller that consumes the field. A rule exists only where that
+consumer is identified; the default is unchanged.
 
 Ichor's default render at the v1.14 contract (control plane and worker) is the
 legacy `Config` document (`machine.*`, `cluster.*`) plus the standalone kinds
@@ -156,10 +139,10 @@ fields itself with an explicit no-reboot apply). The explicit `.image` entries
 in `pkg/fieldmeta` carve them out of their document's rule, and a test pins
 all five. The legacy `cluster.apiServer.image`, `cluster.controllerManager.image`
 and `cluster.scheduler.image` are still covered by the older `cluster.*` safe
-rules, so on a pre-1.14 contract the same hazard exists; it predates this
-addendum and is left for its own decision.
+rules, so on a pre-1.14 contract the same hazard exists. That is a separate
+decision and is not made here.
 
-**Read but not verified, so left at the default:** `KubeProxyConfig` (the open
+**Left at the default, because the consuming behaviour is not established:** `KubeProxyConfig` (the open
 question about the kube-proxy DaemonSet stands), `KubeletConfig` fields other
 than the image and `machine.kubelet.*` (kubelet restart behaviour not traced),
 `KubeNodeConfig.nodeIP`, `ResolverConfig.hostDNS`, `HostnameConfig`,
@@ -176,4 +159,4 @@ fieldmeta stays path-only, so `HostnameConfig.*` and `machine.network.hostname` 
 
 ## Addendum: registry auth and TLS apply without a reboot
 
-The first addendum kept registry auth at reboot-required because machinery's doc comment on `RegistryConfig.RegistryAuth` (`pkg/machinery/config/types/v1alpha1/v1alpha1_types.go`:2058) says "changes to the registry auth will not be picked up by the CRI containerd plugin without a reboot". The v1.14.3 machined source shows that comment is stale. Auth is written into the CRI config file (`GenerateCRIConfig`, `containerd.go`:24-50), which containerd reads only at start; but `ServiceController.reconcile` (`internal/app/machined/pkg/controllers/cri/service.go`:84-112) restarts the CRI service whenever the `SpecVersion` of that file (or the base runtime spec) changes, and `CRIConfigController` (`controllers/files/cri_config.go`:139-180) re-renders it on every registries change. Running pods keep running while containerd restarts. TLS and mirrors become hosts.toml files and need no restart at all. So `machine.registries.config`, `RegistryAuthConfig`, `RegistryTLSConfig` and `RegistryMirrorConfig` are now safe (the legacy host key contains dots, so the rule is the whole subtree). Unverified: Talos versions older than v1.14.3 were not read; Ichor targets v1.14.
+Machinery's doc comment on `RegistryConfig.RegistryAuth` (`pkg/machinery/config/types/v1alpha1/v1alpha1_types.go`:2058) says "changes to the registry auth will not be picked up by the CRI containerd plugin without a reboot", which would make registry auth reboot-required. That comment is stale in the v1.14.3 machined source: auth is written into the CRI config file (`GenerateCRIConfig`, `containerd.go`:24-50), which containerd reads only at start; but `ServiceController.reconcile` (`internal/app/machined/pkg/controllers/cri/service.go`:84-112) restarts the CRI service whenever the `SpecVersion` of that file (or the base runtime spec) changes, and `CRIConfigController` (`controllers/files/cri_config.go`:139-180) re-renders it on every registries change. Running pods keep running while containerd restarts. TLS and mirrors become hosts.toml files and need no restart at all. So `machine.registries.config`, `RegistryAuthConfig`, `RegistryTLSConfig` and `RegistryMirrorConfig` are safe (the legacy host key contains dots, so the rule is the whole subtree). This describes Talos v1.14.3; Ichor targets v1.14.

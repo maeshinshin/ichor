@@ -250,7 +250,7 @@ Limits: a controller pod rescheduled as a new pod has a new emptyDir and no file
 
 ## RBAC: the Cilium Job keeps the hubble Role mirror; escalate by name is added for the other Cilium Roles
 
-Helm's escalation check refuses to create a Role or ClusterRole that grants a rule its caller does not hold. ichor-cni holds the Secret rights of the chart's `hubble-generate-certs` Role, rule for rule (`hubble_role.yaml`, mirrored in the chart copy, ADR 0103 amendment 2).
+Helm's escalation check refuses to create a Role or ClusterRole that grants a rule its caller does not hold. ichor-cni holds the Secret rights of the chart's `hubble-generate-certs` Role, rule for rule (`hubble_role.yaml`, mirrored in the chart copy, ADR 0103, 1.2).
 
 Relying on `bind` and `escalate` by `resourceNames` alone does not work: the escalation check does not honor `resourceNames` on `escalate` for a Role that is being created, and a `create` verb on Secrets cannot be name-scoped, so the Cilium 1.19.10 takeover fails with `roles.rbac.authorization.k8s.io "hubble-generate-certs" is forbidden: ... attempting to grant RBAC permissions not currently held: {APIGroups:[""], Resources:["secrets"], Verbs:["create"]}`. The mirror is required for the create.
 

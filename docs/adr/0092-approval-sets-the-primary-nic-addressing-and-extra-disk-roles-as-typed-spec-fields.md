@@ -64,10 +64,8 @@ node with a second disk could not put EPHEMERAL or a data volume on it.
 - Bonds. The design says a bond takes members by name or alias and a MAC form emits one alias per member; that needs a
   second link, a mode and a `BondConfig`, and is its own change.
 - The `storage` role (needs a `TalosStorage` preset, ADR 0050), `unused` (no document to render) and `RawVolumeConfig`.
-- Whether Talos still runs its default DHCP on a link that has a `LinkConfig` but no `DHCPv4Config` was not traced in
-  `operator_config.go`; static addressing is rendered as written and not checked against a node.
-- No end-to-end run on a real node. The documents are validated by Talos's own machinery at render time and
-  the golden tests check their content at v1.14, v1.13 and v1.11.
+- Whether Talos still runs its default DHCP on a link that has a `LinkConfig` but no `DHCPv4Config` is not known;
+  static addressing is rendered as written. The documents are validated by Talos's own machinery at render time.
 - The "accepted, no effect" report for an edited EPHEMERAL selector on an installed node (design, Nodes) is not part
   of this change; `VolumeConfig.provisioning` is already classified install-time-only.
 - The details RPC only reports links of a maintenance-mode node through the insecure API, so a node whose Talos API is

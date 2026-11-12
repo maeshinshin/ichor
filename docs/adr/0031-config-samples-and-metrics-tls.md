@@ -7,7 +7,7 @@ Decided: made `config/samples/*.yaml` minimal, valid and apply-tested instead of
 ## Context
 
 Two kubebuilder-scaffolded remnants, both still exactly as kubebuilder wrote
-them, were found during a review pass: `config/samples/*.yaml` (five files,
+them: `config/samples/*.yaml` (five files,
 every one still `# TODO(user): Add fields here`) and
 `config/prometheus/monitor.yaml` (`insecureSkipVerify: true`, with a comment
 pointing at an opt-in TLS patch). Both ship — `config/samples/` is read by
@@ -46,10 +46,7 @@ original scaffold did: one Ginkgo `It` per sample file, each actually
 `Create`d against the suite's own envtest apiserver (the same one
 `validation_test.go` already runs against), so a later required-field
 addition to any of the five kinds fails this suite the moment `config/
-samples/` falls behind, rather than silently. Verified empirically, not
-just by inspection: reverting one sample back to the TODO placeholder and
-running the suite failed exactly that spec, naming the file, while the
-other four passed.
+samples/` falls behind, rather than silently.
 
 ## Decision: the metrics endpoint gets a real certificate, via cert-controller's second rotator
 
@@ -66,19 +63,17 @@ documented fix would not have worked. The Helm chart's `certManager.enabled`
 toggle (despite its name, not an actual cert-manager integration — see
 below) had the identical defect one layer worse: nothing in `manager.yaml`
 mounted a metrics-cert volume or passed `--metrics-cert-path` regardless of
-the toggle, and — found only by actually rendering the chart with the flag
-on, not by reading the templates — the ServiceMonitor's own TLS block
+the toggle, and the ServiceMonitor's own TLS block
 referenced the unprefixed `metrics-server-cert` while the fixed name
 `cmd/main.go` would need to use is `ichor-metrics-server-cert`, the same
 `ichor-` prefix every other fixed-name resource in this project already
 carries.
 
-**Investigated before building anything**: whether `cert-controller`
-(already running in-process for the webhook certificate, ADR 0006) can
-rotate a second certificate, since that is the smallest possible fix if it
-can — no new dependency, no new mechanism, just a second instance of one
-already depended on. `pkg/rotator.CertRotator.ControllerName`'s own doc
-comment in the vendored source settles it: "allows registering multiple
+**`cert-controller` can rotate a second certificate.** It already runs
+in-process for the webhook certificate (ADR 0006), so a second instance is
+the smallest possible fix: no new dependency, no new mechanism.
+`pkg/rotator.CertRotator.ControllerName`'s own doc
+comment in the vendored source says so: "allows registering multiple
 cert-rotator controllers... unless rotating multiple certificate secrets."
 Reading `AddRotator` confirms why: every field it needs (`reader`, `writer`,
 the readiness channels) lives on the `CertRotator` value itself, not in
@@ -89,7 +84,7 @@ controller on the manager under that name.
 
 The second known gotcha ADR 0006 already recorded for the webhook
 certificate — `cert-controller` v0.16.0 has no `Create` path, only `Update`,
-confirmed again here by reading `pkg/rotator.writeSecret` itself — applies
+as `pkg/rotator.writeSecret` shows — applies
 identically to a second certificate: its Secret must already exist, empty,
 before the rotator's first reconcile. `config/default/
 metrics_server_cert_secret.yaml` and the chart's `extras/
@@ -109,14 +104,12 @@ rotator's own reasoning (ADR 0006's amendment, principle 6): two replicas
 racing to generate a CA on a cold start is a problem regardless of which
 Secret is being written.
 
-**The cold-start race, measured rather than guessed at (amendment, same
-date)**: an earlier draft of this ADR called this "inherited as-is" without
-pinning down whether the webhook certificate actually has it, because
-`cmd/main.go`'s own comment on the webhook rotator claims "the webhook
+**The cold-start race.** `cmd/main.go`'s comment on the webhook rotator
+used to claim "the webhook
 handlers are registered only once the rotator reports the certificate is
 in place, so the webhook server never starts serving with nothing to
-present." Read against `sigs.k8s.io/controller-runtime@v0.24.1`'s actual
-manager internals, that comment is wrong about the mechanism, though not
+present." Against `sigs.k8s.io/controller-runtime@v0.24.1`'s actual
+manager internals, that is wrong about the mechanism, though not
 about the outcome:
 
 - `(*controllerManager).Start` (`pkg/manager/internal.go`) runs
@@ -144,78 +137,60 @@ about the outcome:
   restart.
 
 Put together: on a cold start (Secret shipped empty, no `data` yet,
-exactly `config/webhook/secret.yaml`'s and this unit's
+exactly `config/webhook/secret.yaml`'s and
 `metrics_server_cert_secret.yaml`'s own shape), the webhook server's
 `Start` races the `CertRotator`'s `Start` to be the first to touch the
 cert file — the deferred `SetupTalosClusterWebhookWithManager` call
 changes *when admission logic starts enforcing*, not whether the
 listener can come up without a cert. **The webhook certificate has this
-race**, contrary to its own inline comment; ADR 0031 fixes that comment.
-**The race is not new, and is not silently accepted here for the first
-time**: ADR 0006's own "Consequences" section already documents and
+race**, contrary to its former inline comment, which now states the actual mechanism.
+**The race is not new**: ADR 0006's own "Consequences" section already documents and
 accepts it, framed around the Secret being *deleted* ("the pod
 crash-loops... That is the intended direction of failure") — the same
-mechanism covers the Secret existing-but-empty case this unit's reading
-surfaces, it just isn't named there explicitly. `failurePolicy: Fail`
+mechanism covers the Secret existing-but-empty case, it just isn't named
+there explicitly. `failurePolicy: Fail`
 (`config/webhook/manifests.yaml`) means every write matching the webhook's
 rules is refused for as long as the race keeps losing, which is squarely
 what ADR 0006 already decided to accept rather than fail open.
 
 **The metrics certificate's failure mode is worse than "a scrape fails
-visibly"**, correcting an earlier draft of this ADR: the metrics server is
+visibly"**: the metrics server is
 a `manager.Runnable` through the identical `HTTPServers` group, so losing
 its own cold-start race doesn't just leave Prometheus unable to verify a
 certificate -- it fails `mgr.Start()` itself and crash-loops the *entire*
 controller, deletion protection included, the same as a lost webhook race
-would. This is the real, now-measured reason item 2 below keeps
+would. This is the reason the amendment below keeps
 `metricsCert.enabled` off by default rather than flipping it to always-on.
 
-**On the name "certManager" — renamed to `metricsCert` (amendment, same date)**:
-the chart's toggle was first shipped as `certManager.enabled`, kept under
-its original name on the reasoning that renaming a published Helm value is
-a breaking interface change out of proportion to a documentation/wiring
-fix. That reasoning doesn't hold: Ichor has never shipped a release
-(`.goreleaser.yaml` only runs `goreleaser check`; the chart has never left
-this repository), so there is no installed chart anywhere whose values
-file would break — the migration cost is zero right now and only grows
-from here. The name was also actively misleading, not just inaccurate:
-anyone reading `certManager: enabled: true` reaches for cert-manager,
-which plays no part in this at all — `open-policy-agent/cert-controller`
-rotates its own certificate in-process. Renamed to `metricsCert.enabled`
+**The name `metricsCert`, not `certManager`**: the chart's toggle was first
+called `certManager.enabled`. Anyone reading `certManager: enabled: true`
+reaches for cert-manager, which plays no part in this at all:
+`open-policy-agent/cert-controller` rotates its own certificate in-process.
+The name was actively misleading, and no release had shipped the old name,
+so renaming cost nothing. The toggle is `metricsCert.enabled`
 (`dist/chart/values.yaml`, `templates/manager/manager.yaml`,
 `templates/extras/metrics-server-cert.yaml`,
-`templates/prometheus/controller-manager-metrics-monitor.yaml`,
-`chart_test.go`'s `TestMetricsCertEnabled`, renamed from
-`TestMetricsCertManagerEnabled`), with a line in `values.yaml`'s own
-comment stating plainly why this isn't cert-manager, so the next reader
-doesn't have to rediscover it.
+`templates/prometheus/controller-manager-metrics-monitor.yaml`), and
+`values.yaml`'s comment states plainly why this isn't cert-manager.
 
 Both the kustomize opt-in chain (`../prometheus`, `metrics_server_cert_
 secret.yaml`, `cert_metrics_manager_patch.yaml`, `monitor_tls_patch.yaml`)
 and the chart's (`metricsCert.enabled`, `prometheus.enabled`) stay off by
-default, unchanged from before this unit — the decision here is that
-opting in now produces a working, verifiable TLS setup instead of a
+default. Opting in produces a working TLS setup instead of a
 rejected admission request or (for the chart) a `ServiceMonitor` quietly
-referencing a `Secret` that was never created. Verified for kustomize by
-temporarily uncommenting the full opt-in chain and running `make
-build-installer`, confirming the rendered Secret, Deployment volume/arg and
-`ServiceMonitor` TLS block all agree, then reverting; verified for the
-chart by `helm template --set metricsCert.enabled=true --set
-prometheus.enabled=true` and a new test,
-`dist/chart/chart_test.go`'s `TestMetricsCertEnabled`, which renders
-with the flag on and asserts the Secret and the three places the
-`ServiceMonitor` names it all agree — exactly the mismatch this unit found
-and fixed, now guarded against regressing silently. Why the default stays
-off despite the rename is its own question, answered in the amendment
-below, not assumed here.
+referencing a `Secret` that was never created: the Secret, the Deployment's
+volume and argument, and the three places the `ServiceMonitor` names the
+Secret must all agree, and `dist/chart/chart_test.go`'s
+`TestMetricsCertEnabled` pins that down. Why the default stays off is
+answered in the amendment below.
 
 ## Amendment (same date): why `metricsCert.enabled` stays off by default
 
-Asked directly: since `cert-controller` is already running in-process
+Since `cert-controller` is already running in-process
 unconditionally for the webhook certificate, could the second rotator run
 unconditionally too, making a real metrics certificate the default instead
-of an opt-in? Checked what "default" actually means first, since the
-answer would be different if metrics scraping itself were off: it isn't.
+of an opt-in? The answer would differ if metrics scraping itself were off,
+but it isn't.
 `dist/chart/values.yaml`'s `metrics.enabled` defaults to `true`, and
 `config/default/kustomization.yaml`'s `manager_metrics_patch.yaml` patch
 (which sets `--metrics-bind-address=:8443`) is *not* one of the commented,
@@ -226,7 +201,7 @@ chart and kustomize; a real certificate would not be provisioned for a
 feature nobody turned on.
 
 That rules out "wasted on a disabled feature" as the reason to stay
-opt-in. The measured reason is the race just confirmed above: defaulting
+opt-in. The reason is the race described above: defaulting
 `--metrics-cert-path` to non-empty makes the metrics server's own
 `Runnable` start checking for a cert file that, on a cold cluster, the
 rotator has not written yet — and because that `Runnable` sits in the same
@@ -249,7 +224,7 @@ safe by the webhook certificate's own identical shape.
 
 **Decision: stays opt-in.** Revisit if cert-controller ever gains the
 ability to signal "not ready yet" to the metrics server's own listener
-construction (it does not today -- confirmed above, a one-time `os.Stat`
+construction (it does not today: a one-time `os.Stat`
 with no retry and no readiness hook), which would let a cold start wait
 instead of crash-loop.
 
@@ -287,10 +262,8 @@ cert file already exists, and if not, logs the exact, confirmed mechanism
 and that it resolves on its own once the rotator's write reaches the
 Secret and the mounted volume. The chart's `values.yaml` carries the same
 note next to `webhook.enabled`, for whoever reads values before looking at
-pod logs. No test pins the log line itself down (a one-time startup
-message, not behavior with a caller to break) — the thing worth getting
-right is that the message states both halves (expected-on-fresh-install,
-and what resolves it), checked by hand against the function's own text.
+pod logs. The message states both halves: expected on a fresh install, and what
+resolves it.
 
 ## Consequences
 
@@ -310,11 +283,11 @@ and what resolves it), checked by hand against the function's own text.
   volume/mount/arg) instead of only toggling the `ServiceMonitor`'s TLS
   block against a `Secret` that was never created.
 - The chart's toggle is `metricsCert.enabled`, not `certManager.enabled`;
-  nothing in this project's history ever shipped the old name to a real
-  installation (ADR 0031's own amendment), so no migration note is needed.
+  no release ever shipped the old name,
+  so no migration note is needed.
 - `cmd/main.go`'s webhook-rotator comment no longer claims handler
   registration prevents the webhook server's listener from racing the
-  rotator's first write; it states the actual, measured mechanism and
+  rotator's first write; it states the actual mechanism and
   points at ADR 0006's already-accepted crash-loop consequence instead.
 - `cmd/main.go`'s `logCertStatusBeforeStart` logs, once per enabled server,
   right before `mgr.Start()`, whether that server's certificate file
@@ -325,5 +298,3 @@ and what resolves it), checked by hand against the function's own text.
   considered and rejected, since it would trade this loud, self-healing
   failure for a silent one that can reject every DELETE forever if the
   rotator's own write ever fails for an unrelated reason.
-- `internal/controller/`, `internal/cli/`, `internal/uiapi/`, `pkg/`,
-  `test/`, `ui/` and `proto/` are untouched by this unit.

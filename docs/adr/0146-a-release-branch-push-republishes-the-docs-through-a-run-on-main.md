@@ -6,7 +6,7 @@ Decided: GitHub Pages takes the docs deployment from `main` only, so the docs wo
 
 ## Context
 
-ADR 0142 made a push to `release-*` trigger the docs workflow. The build then succeeded and `actions/deploy-pages` failed on that branch, and two runs (one from `main`, one from a release branch, close together) lost one deployment between them. The workaround was a manual `gh workflow run docs.yml --ref main`.
+ADR 0142 made a push to `release-*` trigger the docs workflow. The build succeeds on that branch and `actions/deploy-pages` fails there, because the `github-pages` environment accepts deployments from `main` only. Two runs close together (one from `main`, one from a release branch) also compete for one deployment slot.
 
 ## Decisions
 

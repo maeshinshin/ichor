@@ -230,7 +230,10 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	// Step 1: generate the secrets bundle and back it up locally before
 	// anything else happens -- losing it after this point is the one
 	// mistake this command cannot undo for the operator.
-	var bundle *secrets.Bundle
+	var (
+		bundle      *secrets.Bundle
+		savedBundle string
+	)
 
 	err = steps.Run("Secrets bundle", func(s *step) (string, error) {
 		contract, err := coreconfig.ParseContractFromVersion(opts.VersionContract)
@@ -247,6 +250,8 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 			return "", fmt.Errorf("init: saving the secrets bundle: %w", err)
 		}
 
+		savedBundle = bundlePath
+
 		// The cluster's only root of trust: without it and the Secret in the cluster, nothing can
 		// be recovered. The call to action stays on the line, in yellow on a terminal.
 		if opts.BundlePassphrase == "" {
@@ -260,6 +265,12 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	if err != nil {
 		return err
 	}
+
+	// Until ApplyInsecure is called, no node holds this bundle and the file is nothing to keep: a
+	// failed run (a wrong address, a declined prompt) leaves nothing that blocks the rerun. From the
+	// call on, whether it succeeds or not, the node may hold the bundle and the file stays. Only a file
+	// this run wrote is ever removed: refuseExistingBundle passed before it was saved.
+	defer discardBundleBeforeApply(&deps, &savedBundle, &err)()
 
 	// Step 3: render the first control plane's configuration.
 	candidates := candidatePatches(cluster, machine, cniBoot, opts.NodeEndpoint, opts.DiskRoles)
@@ -327,6 +338,41 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	}
 
 	return waitForUIReady(ctx, k8sClient, deps)
+}
+
+// discardBundleBeforeApply makes deps note whether ApplyInsecure is called, and returns the function to
+// defer: it removes the bundle file at *path when the run failed (*err) and the node was never sent the
+// configuration. Once ApplyInsecure has been called, whatever it returned, the file stays.
+func discardBundleBeforeApply(deps *initDeps, path *string, err *error) func() {
+	applied := false
+	dial := deps.DialMaintenance
+
+	deps.DialMaintenance = func(ctx context.Context, endpoint string) (maintenanceApplier, error) {
+		m, dialErr := dial(ctx, endpoint)
+		if dialErr != nil {
+			return nil, dialErr
+		}
+
+		return applyRecorder{m, &applied}, nil
+	}
+
+	return func() {
+		if *err != nil && !applied {
+			discardBundleFile(*path)
+		}
+	}
+}
+
+// applyRecorder notes that ApplyInsecure was called, whatever it returned.
+type applyRecorder struct {
+	maintenanceApplier
+	called *bool
+}
+
+func (a applyRecorder) ApplyInsecure(ctx context.Context, cfg []byte) error {
+	*a.called = true
+
+	return a.maintenanceApplier.ApplyInsecure(ctx, cfg)
 }
 
 // initInstall is the second half of init, once the API server answers: Ichor's own install

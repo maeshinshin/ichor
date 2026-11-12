@@ -2,8 +2,8 @@
 
 Ichor can keep its own users, so people can sign in to ichor-ui and get their
 own kubeconfig with no shared secret. This guide covers the steps. The design
-is,
-which builds
+is in [ADR 0094](../adr/0094-ichor-users-its-own-oidc-issuer-roles-and-per-user-kubeconfigs.md),
+which builds on [ADR 0058](../adr/0058-oidc-login-and-kubernetes-impersonation-for-ichor-ui.md)
 for logins from an external identity provider.
 
 Status: accepted. The steps below are

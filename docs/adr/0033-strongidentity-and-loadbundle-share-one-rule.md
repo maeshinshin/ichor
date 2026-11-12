@@ -59,19 +59,16 @@ another.
 - `internal/uiapi/machine_service.go`'s call site already has a
   `TalosMachineIdentity` in hand (`m.Spec.Identity`), so it calls the
   method directly: `m.Spec.Identity.IsStrongIdentity()`.
-  `internal/uiapi/identity.go` and its own `TestStrongIdentity` are
-  deleted outright -- there is nothing left for that file to do, and the
-  test (five cases covering every missing-element combination) moved to
-  `api/v1alpha1/talosmachine_identity_test.go`, the one place the rule's
-  truth table needs covering now.
+  `internal/uiapi/identity.go` is deleted outright -- there is nothing left
+  for that file to do -- and the rule's truth table is covered in
+  `api/v1alpha1/talosmachine_identity_test.go`, its one home.
 - `internal/controller/discovery.go`'s call site has a `HardwareIdentity`
   (its own, pre-CRD representation of what `Discover` read off the wire),
   not yet a `TalosMachineIdentity` -- that conversion only happens a few
   lines later, once this very check has passed. `strongIdentity(hw
   HardwareIdentity) bool` stays as a thin wrapper that builds the
-  three-field struct and calls the method, so the existing call site
-  (`discovery.go:126`) and its own test (`discovery_test.go`) needed no
-  changes beyond the function body.
+  three-field struct and calls the method, so the call site
+  in `discovery.go` is unchanged.
 
 Two call sites, as before; one rule, where there were two.
 
@@ -101,57 +98,41 @@ differently and that choice is each caller's own to keep:
 - `internal/uiapi/bundle.go`'s `loadBundle` reads in the `TalosCluster`'s
   own namespace.
 
-This asymmetry already existed before this change and is left exactly as
-it was: this ADR centralizes the read-and-decode-without-leaking logic,
+This asymmetry is deliberate and unchanged: this ADR centralizes the read-and-decode-without-leaking logic,
 not the namespace-resolution policy, which is a separate question neither
 caller's own code or tests raised as broken.
 
 `SecretKey` is the one literal value now. `internal/controller` and
 `internal/uiapi` each keep a package-local `bundleSecretKey = secretsbundle.SecretKey`
-alias, purely so their own existing test fixtures (which build a
-`corev1.Secret` keyed on the package-level name) did not need editing --
-an alias cannot drift from the constant it points at, so this is not a
-second definition.
+alias, so their test fixtures can keep keying a `corev1.Secret` on the
+package-level name -- an alias cannot drift from the constant it points at,
+so this is not a second definition.
 
-### A leak test `internal/secretsbundle` needed, and `internal/uiapi` never had
+### `Load` never puts the Secret's contents in an error
 
-`internal/secretsbundle/secretsbundle_test.go` adds `Load`'s own direct
-tests, independent of either caller: a round trip, "Secret not found",
-"key missing", and -- the one that actually matters --
-"malformed YAML", which encodes a real, freshly-generated bundle, corrupts
-the bytes just enough to fail decoding, and asserts none of the bundle's
-secret material (bootstrap token, trustd token, cluster ID/secret, every
-cert/key pair) appears in the resulting error. This is the same technique
-`internal/controller/leak_test.go`'s seven routes and `pkg/render`'s nine
-already use for the same property.
-
-`internal/controller`'s existing leak test continues to exercise this
-exact same code through `loadBundle`'s new one-line delegation, unchanged.
-`internal/uiapi` gains the guarantee structurally -- its `loadBundle` now
-runs the one decoder that is directly tested -- without needing a leak
-test of its own, which it never had before this.
+`Load`'s errors are structural: Secret not found, key missing, malformed
+YAML. None includes the bundle's secret material (bootstrap token, trustd
+token, cluster ID/secret, any cert or key) in its message. Both callers
+inherit that one property from the shared decoder, rather than each
+upholding it in its own copy. `internal/secretsbundle` carries the direct
+tests for it, including a malformed-YAML case that checks no secret
+material appears in the error.
 
 ## Consequences
 
-- `internal/uiapi/identity.go` and `internal/uiapi/identity_test.go` are
-  deleted; `api/v1alpha1/talosmachine_identity_test.go` is new.
+- `internal/uiapi/identity.go` and its test are gone; the rule's test lives
+  in `api/v1alpha1`.
 - `internal/controller/bundle.go` and `internal/uiapi/bundle.go` both
   shrink to a namespace/name resolution plus a call into
   `internal/secretsbundle.Load`; their own `shortcut:` comments
   justifying the duplication are removed, since the duplication they
   excused no longer exists.
 - `internal/cli/bundlefile.go` keeps its own, third `bundleSecretKey`
-  constant (`= "secrets.yaml"`), unexamined and unchanged here: it reads
-  and writes the local `~/.ichor/clusters/<name>/secrets.yaml` backup
-  file, not a Kubernetes Secret, and `internal/cli` is out of scope for
-  this change. Its own comment, which currently points at
-  "`internal/controller/bundle.go`'s `bundleSecretKey`," is now slightly
-  stale (that constant is an alias to `internal/secretsbundle.SecretKey`,
-  not the definition) -- left as a known, minor staleness for whoever
-  next touches that file, not fixed here.
+  constant (`= "secrets.yaml"`): it reads and writes the local
+  `~/.ichor/clusters/<name>/secrets.yaml` backup file, not a Kubernetes
+  Secret, so it does not use `internal/secretsbundle`.
 - The frontend's own `isStrongIdentity()` (`docs/adr/0021`,
   TypeScript, client-side display only -- a warning badge on the
   approval dialog, not an authorization decision) is a third
   reimplementation of the same rule, in a different language and runtime
-  this change cannot share code with. Left as-is, for the same
-  out-of-scope reason.
+  that cannot share code with the Go rule.

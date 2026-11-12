@@ -15,18 +15,15 @@ every extension and overlay image they reference has to be mirrored too
 ... A mirror that holds the five images above and nothing else looks
 complete and fails at the first schematic that asks for an extension."
 
-This unit's own acceptance criteria required answering, not assuming,
-whether Ichor can resolve a catalog's or a schematic's contents into
-concrete image references -- and forbade solving it by connecting to
-anything: "実際にレジストリへ接続しないこと ... 接続が必要な設計になるな
-ら、それは差し戻し案件です" (never connect to a registry; a design that
-needs to is grounds for rejection).
+The question is whether Ichor can resolve a catalog's or a schematic's
+contents into concrete image references. The command must not solve it by
+connecting to anything: it never contacts a registry, and a design that
+needs to is rejected.
 
 ## Research
 
-Checked against the `siderolabs/image-factory` repository directly
-(`docs/api.md`, `docs/sources.md`, `docs/air-gapped.md`,
-`hack/copy-artifacts.sh`, 2026-10-26):
+The `siderolabs/image-factory` repository's `docs/api.md`,
+`docs/sources.md`, `docs/air-gapped.md` and `hack/copy-artifacts.sh` show:
 
 - **The schematic itself is opaque to Ichor.** `TalosClusterSchematic`
   (`api/v1alpha1/taloscluster_types.go`) stores only Image Factory's
@@ -47,8 +44,7 @@ Checked against the `siderolabs/image-factory` repository directly
 
 So resolving "what does this schematic actually need mirrored" needs at
 least one network call no matter which path is taken -- Image Factory's
-API, or pulling a catalog image -- and this command's acceptance criteria
-rule out both.
+API, or pulling a catalog image -- and this command is offline by design.
 
 ## Decision
 

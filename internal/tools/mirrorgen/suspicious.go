@@ -30,10 +30,12 @@ import (
 // AESCBC-named sibling had, then four credential fields (registry auth,
 // cloud API tokens, a WireGuard private key) that were never flagged at
 // all because nothing was looking for them until a human went looking by
-// hand. It reports, rather than drops: a false positive here is a line in
-// `go generate`'s output a human reads once, not a field silently removed
-// from the CRD because its name happened to contain "key".
-var suspiciousKeywords = []string{"secret", "token", "key", "password", "passphrase", "privatekey"}
+// hand. It never drops anything by itself: a false positive is a line in
+// reviewedSurvivors with a reason, not a field silently removed from the CRD
+// because its name happened to contain "key". It does fail
+// TestSuspiciousSurvivorsAreReviewed, so a new match cannot ship unread.
+var suspiciousKeywords = []string{"secret", "token", "key", "password", "passphrase", "privatekey",
+	"credential", "auth", "header", "bearer", "cookie"}
 
 // suspiciousField reports whether name or jsonName contains one of
 // suspiciousKeywords, case-insensitively.
@@ -49,34 +51,71 @@ func suspiciousField(name, jsonName string) bool {
 	return false
 }
 
-// suspiciousSurvivors lists every field that made it into the mirror (so,
-// not already dropped by secretFields or the meta.Unstructured rule) whose
-// name suggests it carries a secret, for g.report() to print. It is
-// deliberately not used to drop anything on its own -- see the package
-// doc on suspiciousKeywords for why -- and is checked against secretFields
-// by the same "machinery struct name + Go field name" key secretFields
-// itself is matched on (structDef.machName, not the possibly-renamed
-// mirror name), for the same reason that match has to use the machinery
-// name: a field already in secretFields, under a since-renamed struct,
-// must not reappear here as if it were new.
-func (g *generator) suspiciousSurvivors() []string {
-	var out []string
+// reviewedSurvivors lists the fields suspiciousKeywords matches that a human
+// read and judged not to carry a credential, keyed "machinery struct.Go
+// field" like secretFields, with the reason. Adding a row is the review: a
+// new match fails TestSuspiciousSurvivorsAreReviewed until it is either
+// dropped through secretFields or listed here, and a row whose field no
+// longer exists fails the same test so the list cannot rot.
+var reviewedSurvivors = map[string]string{
+	"APIServerConfig.AuthorizationConfigConfig":             "authorizer list; a webhook authorizer names a kubeconfig file path on the node, not its contents",
+	"AuthorizationConfigAuthorizerConfig.AuthorizerName":    "authorizer name",
+	"AuthorizationConfigAuthorizerConfig.AuthorizerType":    "authorizer type, an enum",
+	"AuthorizationConfigAuthorizerConfig.AuthorizerWebhook": "webhook authorizer settings; the kubeconfig is a file path on the node, not its contents",
+	"Bond.BondADUserPortKey":                                "LACP aggregator port key, a number",
+	"DeviceWireguardPeer.WireguardPublicKey":                "WireGuard public key, not secret",
+	"EncryptionConfig.EncryptionKeySize":                    "cipher key size in bits, a number",
+	"EncryptionConfig.EncryptionKeys":                       "list of key sources; the static passphrase source is dropped (EncryptionKey.KeyStatic), the rest carry no secret",
+	"EncryptionSpec.EncryptionKeySize":                      "cipher key size in bits, a number",
+	"EncryptionSpec.EncryptionKeys":                         "list of key sources; the static passphrase source is dropped (EncryptionKey.KeyStatic), the rest carry no secret",
+	"EncryptionKey.KeyKMS":                                  "KMS endpoint URL; the key stays in the KMS",
+	"EncryptionKey.KeyLockToSTATE":                          "boolean",
+	"EncryptionKey.KeyNodeID":                               "empty marker; the key is derived on the node",
+	"EncryptionKey.KeySlot":                                 "key slot number",
+	"EncryptionKey.KeyTPM":                                  "TPM-sealed key source; options only, the key stays in the TPM",
+	"FeaturesConfig.ApidCheckExtKeyUsage":                   "boolean about certificate extended key usage",
+	"KubeletConfig.KubeletCredentialProviderConfig":         "lists credential provider plugins (name, image matches, command, args, env); the plugin fetches the credentials at pull time",
+	"RegistryConfig.RegistryAuth":                           "holds only the username once the password, auth and identityToken members are dropped",
+}
+
+// survivor is one field of the mirror that suspiciousKeywords matches.
+type survivor struct {
+	key  string // "machinery struct.Go field", as secretFields and reviewedSurvivors are keyed
+	yaml string
+}
+
+// suspiciousFields lists every field that made it into the mirror (so, not
+// already dropped by secretFields or the meta.Unstructured rule) whose name
+// matches suspiciousKeywords, one entry per key, sorted. A key is "machinery
+// struct name + Go field name" (structDef.machName, not the possibly-renamed
+// mirror name), the same key secretFields is matched on, for the same reason:
+// a field already in secretFields, under a since-renamed struct, must not
+// reappear here as if it were new.
+func (g *generator) suspiciousFields() []survivor {
+	var out []survivor
 
 	for _, def := range g.order {
 		for _, f := range def.fields {
-			if !suspiciousField(f.name, f.jsonName) {
+			key := def.machName + "." + f.name
+			if _, ok := secretFields[key]; ok || !suspiciousField(f.name, f.jsonName) {
 				continue
 			}
 
-			if _, ok := secretFields[def.machName+"."+f.name]; ok {
-				continue
-			}
-
-			out = append(out, def.machName+"."+f.name+" (yaml \""+f.jsonName+"\")")
+			out = append(out, survivor{key, f.jsonName})
 		}
 	}
 
-	slices.Sort(out)
+	slices.SortFunc(out, func(a, b survivor) int { return strings.Compare(a.key, b.key) })
 
-	return out
+	return slices.CompactFunc(out, func(a, b survivor) bool { return a.key == b.key })
+}
+
+// suspiciousSurvivors is suspiciousFields without the reviewedSurvivors, for
+// g.report() to print and TestSuspiciousSurvivorsAreReviewed to fail on.
+func (g *generator) suspiciousSurvivors() []survivor {
+	return slices.DeleteFunc(g.suspiciousFields(), func(s survivor) bool {
+		_, ok := reviewedSurvivors[s.key]
+
+		return ok
+	})
 }

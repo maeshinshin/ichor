@@ -1,12 +1,12 @@
 # 0106. HA findings: a patch is dry-rendered at admission, a restore refuses an in-cluster backup store, an unreachable node says so, and a dead control plane can be removed
 
-Status: Accepted; hardware-verified (H2 and H7 re-verified 2026-10-30) · Date: 2026-10-30 · Design section: Configuration, Backup and restore, Nodes · Touches: 0003, 0065
+Status: Accepted · Date: 2026-10-30 · Design section: Configuration, Backup and restore, Nodes · Touches: 0003, 0065
 
 Decided: a `TalosConfigPatch` is dry-rendered by a validating webhook (create and update) against every approved machine of its cluster that it selects, with the controller's own `render.Render`, and refused with the render error when the render would fail and did not already fail without the patch; the generated `Config` mirror makes `machine`, `cluster`, `machine.type` and `machine.certSANs` optional (an additive loosening) so a sparse `Config` document no longer repeats them and no longer reads as "needs a reboot"; `ichor restore --live` and the `TalosEtcdBackup` condition `StoreInCluster` refuse or warn when the backup endpoint is inside the cluster being restored; a `TalosMachine` whose node cannot be read reports `Ready=False` `NodeUnreachable` with the endpoint and, when the Kubernetes Node shows another InternalIP, the likely new address (spec is never changed); `ichor node remove` of a control plane below the declared count is allowed when its etcd member is unhealthy or unreachable.
 
 ## Context
 
-A hardware run on an Ichor-made three control plane cluster found four gaps (P2, P3, P4, H7). Each section below is one decision; later sections are added by the commit that implements them.
+Four gaps in an Ichor-made three control plane cluster are closed here (P2, P3, P4, H7). Each section below is one decision.
 
 ## Decisions
 
@@ -36,24 +36,10 @@ A node whose IP changed kept `Ready=True` `Converged` with the stale endpoint. T
 - The plan (`internal/uiapi/node_action.go`, `ichor node remove`, UI) cannot read etcd, so it allows the removal when the machine's `Ready` is False with reason `NodeUnreachable` (section 3), with a warning in the plan; the controller still decides. `node reset` keeps the count check, because a reset needs the node.
 - The admission webhook (`ValidateDelete`) only ever checked quorum, not the declared count, and is unchanged.
 
-## Hardware results (2026-10-30)
+### 5. An endpoint that answers as another node is reported
 
-HA lane on an Ichor-made three control plane cluster (e2e harness).
+A machine whose endpoint answers as another node is reported as `EndpointIdentityMismatch`.
 
-- H1 bring-up, H3 one-control-plane-at-a-time rollout, H4 Kubernetes v1.37.1 to v1.37.2 and H5 CA rotation on three control planes passed.
-- H2 control plane loss: the API stayed available (0 hard failures). A halted node could not rejoin on the e2e harness because its pod IP changed. A single-replica controller or UI takes about 6 to 7 minutes to reschedule.
-- H6 `restore --live` passes with an out-of-cluster S3; an in-cluster S3 is now refused (section 2).
-- H7 dead control plane replacement is now allowed (11ac8f3e, section 4); re-verified below.
+## Consequences
 
-### Re-verification of H2 and H7 (2026-10-30, build `v0.0.1793300581-daa68524`)
-
-Fresh Ichor-made cluster: `ichor init --preset compact-ha --cni cilium --cni-tunnel geneve --endpoint-type loadBalancer --endpoint-address <LB>` (an outer LoadBalancer Service selecting the harness group label, port 6443), Talos v1.14.3, Kubernetes v1.37.1, three control planes plus a fourth (`ICHOR_UI_DEMO_HA=extra`). The nodes boot the disk first (harness change `0e218b96`). The Cilium LB also balanced to nodes still in maintenance mode, so the endpoint answered only intermittently until all three control planes were up (bring-up only); the later steps used a control plane's address directly once cp4 joined the group.
-
-- **H7 passed.** A healthy control plane (cp2) below the declared count: `ichor node remove ichor-e2e-hb-cp2 --yes` was refused: "node remove: control planes 3 -> 2, below the declared count of 3; either approve a replacement control plane first (then remove this one), or lower spec.controlPlane.count first (to 1, 3 or 5) if you mean to shrink the cluster". Then cp3 was halted for good (19:35:46); `NodeUnreachable` after about 3 minutes. `ichor node remove ichor-e2e-hb-cp3 --yes --confirm ichor-e2e-hb-cp3` (19:39:01) printed the plan with "does not answer, so it is removed although that leaves fewer control planes than the declared 3 ... Approve a replacement afterwards". The controller logged and emitted the Warning Event `DeadMemberRemoved` at 19:39:22 ("removing control plane ... below the declared count of 3: its etcd member is unreachable (rpc error: code = DeadlineExceeded ...); approve a replacement to get back to the declared count"), skipped the drain and evacuation, removed the etcd member and deleted the TalosMachine; two members were left by 19:39:48 (47 s after the command; no wait for a drain). The Kubernetes Node `ichor-e2e-hb-cp3` stays `NotReady,SchedulingDisabled`, as the plan says.
-- cp4 (`ICHOR_UI_DEMO_HA=extra`): its address added to `spec.discovery.addresses` at 19:41:15, the pending machine approved as a control plane at 19:41:20; three Ready nodes (cp, cp2, cp4) 370 s after the approval; `etcd members` showed cp, cp2 and cp4 (three members, none a learner), all answering with one leader, so the replacement joined etcd.
-- Observation (not fixed): the cluster keeps probing every `spec.discovery.addresses` entry after the machines are approved and emits a `AlreadyConfigured` Warning Event on the TalosCluster for each address every few minutes, including the stale pod IP of a node that has left (10.244.1.59). It is noise here; on a network where addresses are reused it would probe an unrelated host.
-
-## Later additions
-
-- **Endpoint identity check** (a45bafe3): a machine whose endpoint answers as another node is reported as `EndpointIdentityMismatch`.
-- **NodeUnreachable** (77b7b6ac, section 3): verified on the demo; the hint was correct and `Ready` returned after `spec.endpoint` was updated.
+- The cluster keeps probing every `spec.discovery.addresses` entry after the machines are approved and emits an `AlreadyConfigured` Warning Event on the TalosCluster for each address every few minutes, including the stale address of a node that has left. On a network where addresses are reused it would probe an unrelated host. This is not changed here.

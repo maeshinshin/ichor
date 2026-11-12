@@ -107,6 +107,9 @@ type generator struct {
 	droppedSecret []droppedSecretField
 	subst         map[string]bool // qualified type names substituted, for the report
 	overridden    []string        // "Struct.Field" entries from fieldOverrides actually used, for the report
+	roots         []rootKind      // the shipped kinds, in union field order
+	notes         []string        // shipped kinds no longer classed accept, for the report
+	pending       []string        // accept kinds not shipped yet, for the report
 }
 
 func newGenerator(pkgs []*packages.Package) *generator {

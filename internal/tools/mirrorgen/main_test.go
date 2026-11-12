@@ -31,15 +31,14 @@ import (
 // to this package.
 const crdPath = "../../../config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml"
 
-// TestAllowListMatchesCRDEnum checks that roots (the generator's
-// allow-list) and the CRD's documents[].kind enum (api/v1alpha1's half of
-// the pair, see the comment on rootKind) name exactly the same kinds. Run
-// "make manifests" before this test; it reads the real generated CRD
-// rather than a second hand-maintained copy of the enum.
-func TestAllowListMatchesCRDEnum(t *testing.T) {
-	want := make([]string, 0, len(roots))
-	for _, r := range roots {
-		want = append(want, r.kind)
+// TestShippedMatchesCRDEnum checks that shipped (the generator's list) and the CRD's documents[].kind enum
+// name exactly the same kinds. Run "make manifests" before this test; it reads the real generated CRD. A
+// kind dropped from shipped but still in the committed CRD fails here until the CRD is regenerated, and
+// the regenerated CRD then shows the removed enum value in the diff.
+func TestShippedMatchesCRDEnum(t *testing.T) {
+	want := make([]string, 0, len(shipped))
+	for _, s := range shipped {
+		want = append(want, ichorName(s.kind))
 	}
 
 	slices.Sort(want)
@@ -79,7 +78,7 @@ func TestAllowListMatchesCRDEnum(t *testing.T) {
 		slices.Sort(got)
 
 		if !slices.Equal(want, got) {
-			t.Errorf("version %s: CRD documents[].kind enum %v does not match mirrorgen's allow-list %v", v.Name, got, want)
+			t.Errorf("version %s: CRD documents[].kind enum %v does not match mirrorgen's shipped kinds %v", v.Name, got, want)
 		}
 	}
 }

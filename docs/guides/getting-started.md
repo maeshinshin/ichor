@@ -65,7 +65,7 @@ ichor version --client
 On macOS use `shasum -a 256 -c -` in place of `sha256sum -c -`. `~/.local/bin`
 must be on your `PATH`; `/usr/local/bin` (with `sudo`) works too.
 
-The checksums file is signed keyless with [cosign](https://docs.sigstore.dev/cosign/system_configuration/installation/)
+The checksums file is signed keyless with [cosign](https://docs.sigstore.dev/cosign/system_config/installation/)
 by the release workflow. To check the signature as well:
 
 ```sh

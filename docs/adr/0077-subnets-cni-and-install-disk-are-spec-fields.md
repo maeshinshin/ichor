@@ -50,9 +50,8 @@ The rendered hash is unchanged for a flannel cluster, for any cluster with no `s
 for a machine with neither. It changes in two cases.
 
 - A v1.14 cluster with a non-flannel preset: the rendered config no longer has `KubeFlannelCNIConfig`. The diff has
-  `KubeFlannelCNIConfig.*` paths, which `pkg/fieldmeta` classifies as reboot-required (no rule, the safe default). I did
-  not verify that removing the document is reboot-free on a node and did not guess it. The machine controller never
-  reboots by itself: `refuseReboot` sets Ready false and leaves the node as it is. So there is no surprise reboot, but
+  `KubeFlannelCNIConfig.*` paths, which `pkg/fieldmeta` classifies as reboot-required (it has no rule for `KubeFlannelCNIConfig.*`, so the
+  safe default applies). The machine controller never reboots by itself: `refuseReboot` sets Ready false and leaves the node as it is. So there is no surprise reboot, but
   such a machine reports "needs a reboot" until the operator applies the new config (`talosctl apply-config --mode
   no-reboot` after checking, or a planned reboot). The flannel DaemonSet Talos created at bootstrap is not pruned by
   Talos on its own either way. Talos's own flannel next to Cilium was the fault being fixed.
@@ -69,7 +68,8 @@ for a machine with neither. It changes in two cases.
 ## Not done
 
 - Cert SANs, the DNS domain, install wipe and extra kernel arguments still have no field (certSANs stays in the init
-  bootstrap patch as a legacy `Config`; whether that is accepted next to the v1.14 documents was not re-checked here).
+  bootstrap patch as a legacy `Config`; whether Talos accepts that next to the v1.14 documents is an open question).
 - No TalosOperation resets a node to apply a changed install disk.
 - The disk list in the approval form comes from `GetNode`, so for a machine that no one can reach it is a typed path.
-- Whether removing `KubeFlannelCNIConfig` is no-reboot in Talos v1.14.3 is unverified; it would let that rule be safe.
+- Whether Talos v1.14.3 can apply the removal of `KubeFlannelCNIConfig` without a reboot is not known; until it is, the
+  safe default (reboot-required) stands.

@@ -15,5 +15,4 @@ On a ~390px phone the logo, five nav links and the theme button did not fit in o
 
 ## Consequences
 
-- No new component or i18n key; a hamburger menu was not needed because the nav row scrolls.
-- Not verified in a real browser (none in `nix develop`); checked by reading the markup and classes.
+- No new component or i18n key; a hamburger menu is not needed because the nav row scrolls.

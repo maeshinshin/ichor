@@ -6,16 +6,15 @@ Decided: `adopt` reads approved machines only; for the v1.14 documents Ichor can
 
 ## Context
 
-A real-cluster test on Talos v1.14.3 could not reach zero drift. Two findings.
+Adopting a cluster that runs Talos v1.14.3 could not reach zero drift. Two findings.
 
-1. `ichor adopt` reported `KubeNetworkConfig`, `UnattendedInstallConfig` and `KubeFlannelCNIConfig` (in another run:
-   pod subnets, service subnets, cert SANs, `UnattendedInstallConfig`) as fields it "cannot patch automatically", and
-   the tester fell back to `versionContract` v1.13, where the default pod subnet 10.244/16 then collided with the outer
-   network.
+1. `ichor adopt` reported `KubeNetworkConfig`, `UnattendedInstallConfig` and `KubeFlannelCNIConfig` (also: pod
+   subnets, service subnets, cert SANs) as fields it "cannot patch automatically". The only way out was
+   `versionContract` v1.13, where the default pod subnet 10.244/16 can collide with the node network.
 2. `adopt` dialed every `TalosMachine` of the cluster, including a pending machine in maintenance mode, and failed with
-   a TLS error. The tester had to disable discovery, delete the machine, adopt, and re-enable discovery.
+   a TLS error. The only way out was to disable discovery, delete the machine, adopt, and re-enable discovery.
 
-## What is true (Talos machinery v1.14.3, Ichor at this commit)
+## What is true (Talos machinery v1.14.3)
 
 - `pkg/render.baseConfig` calls `generate.NewInput` with only the secrets bundle, the version contract and the
   control-plane scheduling option. It passes no pod or service subnet, no install disk or image, no certificate SANs and

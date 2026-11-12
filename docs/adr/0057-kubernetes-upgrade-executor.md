@@ -33,7 +33,7 @@ follows.
   typed configuration in the first place.
 - `go-kubernetes`'s `ssa.Manager` and `manifests` are reusable as a library, but adding the module moves
   `k8s.io/api`, `apimachinery`, `client-go`, `cli-runtime`, `component-base`, `kubectl` from v0.36.0 to v0.36.2
-  (tried with `go get` and reverted) for every package in the repository, to save about forty lines.
+  for every package in the repository, to save about forty lines.
 
 So: not reused as a whole, and not as a dependency. What is reused is what it proves: the apply mode, the
 pre-pull RPC and namespaces, the order (control planes, then workers) and the bootstrap-manifest sync as the last
@@ -86,25 +86,32 @@ yet true is "still settling"; past 20 minutes from the marker the step errors an
    only APIs requested since that API server started, and one API server answers the scrape.
 
 **Bootstrap manifests and kube-proxy** run once, in the control plane whose verification finds every
-`kube-apiserver` pod on the target and Ready (observed state, no control-plane list, so
-`countplanes_guard_test.go` is untouched): `KubernetesAdmin.SyncBootstrapManifests` server-side-applies the
+`kube-apiserver` pod on the target and Ready (observed state, no control-plane list): `KubernetesAdmin.SyncBootstrapManifests` server-side-applies the
 node's `k8s.Manifest` resources under Talos's own field manager (`talos`) through an admin kubeconfig from the
 Talos API. The controller's own ServiceAccount therefore gets no write access to ClusterRoles, DaemonSets or
 CRDs; it gains `get` on DaemonSets, and `get;list` on Pods and Nodes it already had. When `spec.cni.kubeProxy` is
 `replaced` nothing about kube-proxy is checked (no DaemonSet is shipped); otherwise the step waits for the
 `kube-proxy` DaemonSet to carry the target and finish rolling out. This is before the workers, not after the
-kubelets as in `upgrade-k8s`; kube-proxy may be newer than a kubelet but not than the API server. `shortcut:`
+kubelets as in `upgrade-k8s`; kube-proxy may be newer than a kubelet but not than the API server. Deferred:
 no pruning and no inventory, unlike `ssa.Manager`; an object a later Talos stops shipping stays until removed.
 
-**A rendering bug found on the way** (fixed in `pkg/render`): `spec.kubernetesVersion` is `vX.Y.Z` (the CRD
-pattern) but `generate.NewInput` expects it without the `v` and adds its own, so every component image rendered
-as `...:vv1.36.0`. The `v` is now trimmed before the call, with a regression test.
+**Component image tags.** `spec.kubernetesVersion` is `vX.Y.Z` (the CRD pattern) but `generate.NewInput`
+expects it without the `v` and adds its own, so `pkg/render` trims the `v` before the call; otherwise every
+component image would render as `...:vv1.36.0`.
+
+**Deadlines.** Each Talos call in the step has its own deadline, not the 15 s `etcdDialTimeout`. The apply of
+a control-plane image change blocks while Talos restarts the static pods, so it is bounded by
+`upgradeCallTimeout`, the same shape as ADR 0043. The same holds for the kube-proxy switch and CA rotation
+applies.
+
+**Confirmation.** `ichor upgrade kubernetes` states the cluster, the from and to versions, the machine count and
+the order (control planes one at a time, then workers, at most `maxUnavailable` at once) before writing anything;
+declining writes nothing.
 
 ## Consequences
 
 - `TalosClient` gains `PullImage`, `Kubeconfig` and `BootstrapManifests`; `KubernetesAdmin` is the seam for the
-  two cluster-wide actions, with a fake in the tests. The real admin client (kubeconfig, SSA, `/metrics`) is
-  covered by the repository's tests only through the pure parser; it has not been run against a cluster.
+  two cluster-wide actions, with a fake in the tests.
 - `upgrade.KubernetesSkew` has its first caller; `KubernetesMinorOf` and `RemovedAPIsInUse` are new.
 - `pkg/fieldmeta` still lacks reboot rules for the multi-document Kubernetes component kinds. Any machine whose
   rendered config changes one of those kinds outside an operation is reported `RebootRequired`; left as is on
@@ -116,31 +123,13 @@ as `...:vv1.36.0`. The `v` is now trimmed before the call, with a regression tes
   controller, and the step resumes from the node's state.
 - Deferred: the `Ichor` kind is still unwired.
 
-## E2E observation (2026-10-26, through `ichor upgrade kubernetes`)
+## Later changes
 
-e2e harness, 3 control planes + 1 worker, Talos v1.14.3, Cilium 1.18.0 (`handover: disabled`), controller run
-in the cluster. No newer patch than v1.37.1 exists on registry.k8s.io, so the cluster booted at v1.36.4 and the
-target was v1.36.5. The cluster's configs were rendered by Ichor itself (all four machines `Converged`, i.e. zero
-drift) at `versionContract` v1.13: at v1.14 the typed patches cannot express pod/service subnets, the install disk
-or "no flannel" (those are separate documents, rejected when combined with the legacy `Config` fields).
-
-- The confirmation text appeared as designed: "Upgrade Kubernetes on cluster ... from v1.36.4 to v1.36.5 ...
-  4 machine(s) (3 control plane, 1 worker): control planes one at a time, then workers (at most 1 at once), in this
-  order: ...". Answering `n` aborted with nothing written.
-- **The `vv` fix holds**: after the first control plane, `kube-apiserver`, `kube-controller-manager` and
-  `kube-scheduler` ran `registry.k8s.io/...:v1.36.5`, the kubelet reported v1.36.5, the three pods were Ready.
-- **Bug (not fixed here; `internal/controller` belongs to another change): the step fails with
-  `rpc error: code = DeadlineExceeded` from `ApplyNoReboot`.** `begin` runs the version query, the removed-API
-  scrape, the dry run and the apply all under the one 15 s `etcdDialTimeout` context (`dialCtx`). Two runs, the
-  first failed on the first control plane (nothing changed on the node), the second succeeded on it and failed on
-  the second. Each leaves the operation `Paused`; a failed machine is not retried (ADR 0026), delete and start
-  again. The apply of a control-plane image change blocks while Talos restarts the static pods, the same shape as
-  the `upgradeCallTimeout` bug in ADR 0043. Needs its own bound for the apply. Stopped after the second failure;
-  the cluster was finished with `talosctl upgrade-k8s`, which is outside the product.
-- Not observed: the bootstrap-manifest sync and the worker step (the operation never got past the second control
-  plane).
-- Fixed: each Talos call in `begin` (and the kube-proxy switch and CA rotation applies) now has its own deadline, the apply bounded by `upgradeCallTimeout`.
-
-- Addendum: the executors write the machine condition through a re-read with retry on conflict (`setMachineCondition`), so the machine reconciler writing the same status during the long calls no longer pauses the first machine. Finding, not fixed: this executor applies the control-plane images and the kubelet of one node together, where `upgrade-k8s` upgrades every control plane first and the kubelets afterwards, so on a minor upgrade the first node's kubelet is newer than the apiservers it reaches through the endpoint (see the report on endpoint type `node`).
-- Addendum (ADR 0087): fixed. The executor now runs in four stages (apiservers, then controller-manager and scheduler, then kube-proxy and the bootstrap-manifest sync, then kubelets), so the manifest sync no longer waits for "the last control plane" and no kubelet is ever newer than an API server.
+- The executors write the machine condition through a re-read with retry on conflict (`setMachineCondition`),
+  so the machine reconciler writing the same status during the long calls does not pause the first machine.
+- Applying one node's control-plane images and kubelet together would leave the first node's kubelet newer than
+  the apiservers it reaches through the endpoint on a minor upgrade. ADR 0087 therefore runs the executor in four
+  stages (apiservers, then controller-manager and scheduler, then kube-proxy and the bootstrap-manifest sync, then
+  kubelets), so the manifest sync does not wait for "the last control plane" and no kubelet is ever newer than an
+  API server.
 - Amendment (ADR 0113): the target of a Kubernetes upgrade is the release set's Kubernetes, and other targets are refused before anything is written. The rollout runs this step after the Talos step, and after any configuration step the executor needs for an unrelated pending change. The executor's pairing and skew checks are unchanged.

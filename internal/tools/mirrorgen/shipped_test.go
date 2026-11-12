@@ -145,3 +145,33 @@ func TestFieldName(t *testing.T) {
 		}
 	}
 }
+
+// TestUnionHasNoCELAndChecksEveryKind: the union bounds a document by property count, never by a CEL rule
+// that grows with the number of kinds (the API server rejects a CRD whose rule cost passes its limit), and
+// Validate has a case and a field test for every shipped kind.
+func TestUnionHasNoCELAndChecksEveryKind(t *testing.T) {
+	roots, _, err := deriveRoots(talosRegistry(t), kindClasses, shipped)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	src := unionSource(roots)
+
+	if strings.Contains(src, "XValidation") {
+		t.Error("the union carries a CEL rule")
+	}
+
+	for _, want := range []string{"MinProperties=2\n", "MaxProperties=2\n"} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the union lost +kubebuilder:validation:%s", want)
+		}
+	}
+
+	for _, r := range roots {
+		for _, want := range []string{"case \"" + r.kind + "\":\n\t\twant = \"" + fieldName(r.kind) + "\"", "if d." + r.kind + " != nil {"} {
+			if !strings.Contains(src, want) {
+				t.Errorf("Validate does not check %s: missing %q", r.kind, want)
+			}
+		}
+	}
+}

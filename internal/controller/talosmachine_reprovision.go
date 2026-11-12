@@ -68,7 +68,7 @@ func (r *TalosMachineReconciler) reprovisioned(
 // the maintenance API with the approved identity, so its etcd data is gone. The member is removed through another
 // approved control
 // plane, the same call a dead-member removal makes, and etcd refuses it without a quorum; the caller
-// holds the cluster lock. ponytail: only the first other control plane is asked.
+// holds the cluster lock. shortcut: only the first other control plane is asked.
 func (r *TalosMachineReconciler) removeStaleEtcdMember(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) (reason, message string) {

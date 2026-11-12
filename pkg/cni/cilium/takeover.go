@@ -231,7 +231,7 @@ func LiveValues(rel *release.Release) (map[string]any, error) {
 
 // LiveValuesFromUser is LiveValues for a Cilium with no release record (case C):
 // the values the operator gave to `helm template`, merged with the embedded
-// chart's defaults. ponytail: assumes the live chart's defaults for the owned
+// chart's defaults. shortcut: assumes the live chart's defaults for the owned
 // keys equal the pinned chart's, true across the allowed minors for every owned
 // key; the diff gate would show anything else.
 func LiveValuesFromUser(user map[string]any) (map[string]any, error) {
@@ -422,7 +422,7 @@ func OwnedKeyConflicts(live map[string]any, kubeProxy cni.KubeProxyMode, tunnel 
 // secretsNamespaceOfFeatureOff reports whether path is the secretsNamespace name of a Cilium feature
 // (ingress, Gateway API, Envoy config, BGP) that is off in live: the chart's default for an unused
 // feature (BGP's is kube-system) is no conflict. The TLS namespace has no switch.
-// ponytail: Envoy config's switch is not read back from a Talos inline manifest (its ConfigMap key is
+// shortcut: Envoy config's switch is not read back from a Talos inline manifest (its ConfigMap key is
 // also set by ingress and Gateway API), so it counts as off there; its chart default is Cilium's own namespace.
 func secretsNamespaceOfFeatureOff(live map[string]any, path string) bool {
 	block, _, ok := strings.Cut(path, ".secretsNamespace.")
@@ -648,7 +648,7 @@ func splitObjects(manifest []byte) ([]map[string]any, error) {
 }
 
 // clusterScoped are the kinds the Cilium chart renders without a namespace.
-// ponytail: a fixed list instead of a RESTMapper keeps the library free of a
+// shortcut: a fixed list instead of a RESTMapper keeps the library free of a
 // cluster connection; an unlisted kind would be looked up in kube-system and
 // reported ObjectMissing, a safe failure.
 var clusterScoped = map[string]bool{
@@ -734,7 +734,7 @@ func pruneMap(meta map[string]any, field string, keys []string) {
 
 // serverDefaulted are fields the API server fills in when a manifest leaves
 // them out; as live-only paths they are noise, not a difference.
-// ponytail: a short list of the defaults the Cilium chart's workloads hit; a
+// shortcut: a short list of the defaults the Cilium chart's workloads hit; a
 // missed default is a reported false positive, which --accept-cilium-diff covers.
 var serverDefaulted = map[string]bool{
 	"terminationMessagePath": true, "terminationMessagePolicy": true, "dnsPolicy": true,

@@ -920,7 +920,7 @@ func (st *adoptState) chooseContract(deps adoptDeps) error {
 		return nil
 	}
 
-	// ponytail: probed on one control plane, not on every node; a node that differs shows up as
+	// shortcut: probed on one control plane, not on every node; a node that differs shows up as
 	// class C in its own plan.
 	n := st.firstNode()
 

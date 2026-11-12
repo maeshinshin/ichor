@@ -57,7 +57,7 @@ func restConfig(ctx context.Context, talos TalosClient) (*rest.Config, error) {
 // SyncBootstrapManifests server-side-applies the node's bootstrap manifest set under Talos's own
 // field manager, so ownership carries over from the apply Talos did at bootstrap.
 //
-// ponytail: no pruning and no inventory. talosctl upgrade-k8s (go-kubernetes' ssa.Manager) also
+// shortcut: no pruning and no inventory. talosctl upgrade-k8s (go-kubernetes' ssa.Manager) also
 // deletes objects that dropped out of the set and waits for each to reconcile; here an object a
 // later Talos version stops shipping stays until removed by hand, and the caller checks only
 // kube-proxy's rollout. Depending on go-kubernetes for that bumps the k8s.io/* modules the whole

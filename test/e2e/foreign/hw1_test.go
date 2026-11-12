@@ -89,7 +89,7 @@ func TestF5HelmTemplateNoCNI(t *testing.T) {
 	if out, err := local(t, 2*time.Minute, "helm", "install", "ichor", chart, "--dry-run", "--kubeconfig", c.LocalKube, "-n", crNS, "--create-namespace"); err != nil || strings.Contains(out, "this cluster has no CNI") {
 		t.Errorf("helm install --dry-run failed or tripped the preflight: %v", err)
 	}
-	// ponytail: a server-side dry run does lookups; its outcome is recorded, not asserted.
+	// shortcut: a server-side dry run does lookups; its outcome is recorded, not asserted.
 	_, _ = local(t, 2*time.Minute, "helm", "install", "ichor", chart, "--dry-run=server", "--kubeconfig", c.LocalKube, "-n", crNS, "--create-namespace")
 	noCNINothingWritten(t, c, before)
 

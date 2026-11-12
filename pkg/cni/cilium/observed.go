@@ -118,7 +118,7 @@ func overlayObserved(vals map[string]any, cm *corev1.ConfigMap, ds *appsv1.Daemo
 			}
 		}
 
-		// ponytail: assumes a chart that writes the key while the flag is true (1.19 and 1.20 do).
+		// shortcut: assumes a chart that writes the key while the flag is true (1.19 and 1.20 do).
 		if cm.Name != "" {
 			if _, ok := cm.Data[cmReadSecretsOnly]; !ok {
 				values.Set(vals, keyReadSecretsOnly, false)

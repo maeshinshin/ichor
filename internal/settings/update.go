@@ -14,7 +14,7 @@ import (
 	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
-// Changes are the settings to change; nil means unchanged. ponytail: no way to unset a field
+// Changes are the settings to change; nil means unchanged. shortcut: no way to unset a field
 // again (back to the deployment value) yet.
 type Changes struct {
 	TokenTTL        *time.Duration

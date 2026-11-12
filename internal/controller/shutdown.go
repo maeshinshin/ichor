@@ -85,7 +85,7 @@ var shutdownDrainStall = 15 * time.Minute
 var shutdownNow = time.Now
 
 // shutdownUnreachableSince holds, per operation UID and machine, when the machine was first seen
-// unreachable. ponytail: in memory only; a restarted controller starts the window again, which can
+// unreachable. shortcut: in memory only; a restarted controller starts the window again, which can
 // only make a stop count later, never earlier.
 var shutdownUnreachableSince sync.Map
 
@@ -384,7 +384,7 @@ func (r *TalosOperationReconciler) stopped(
 }
 
 // stalledPDBs names the PodDisruptionBudgets that currently allow no disruption, which is what
-// holds a node's drain back. ponytail: cluster-wide, not narrowed to the pods of the waiting nodes.
+// holds a node's drain back. shortcut: cluster-wide, not narrowed to the pods of the waiting nodes.
 func (r *TalosOperationReconciler) stalledPDBs(ctx context.Context) []string {
 	var pdbs []policyv1.PodDisruptionBudget
 

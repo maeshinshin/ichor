@@ -235,7 +235,7 @@ func walkUnknown(user, defaults, schema map[string]any, prefix string, errs *[]e
 // chart, even when the chart ships a non-empty default (Cilium's cni.resources
 // lists only requests, but limits are legal). Labels and annotations need no
 // entry: their defaults are empty, bare objects or label-keyed.
-// ponytail: a name heuristic; a chart-specific exempt list can replace it if it
+// shortcut: a name heuristic; a chart-specific exempt list can replace it if it
 // ever hides a real typo.
 var freeFormNames = map[string]bool{"resources": true}
 

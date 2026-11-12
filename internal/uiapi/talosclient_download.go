@@ -441,7 +441,7 @@ func collectResources(ctx context.Context, st state.State, problems *[]string) (
 }
 
 func mustJSON(v any) []byte {
-	// ponytail: encoding/json of plain structs and maps cannot fail.
+	// shortcut: encoding/json of plain structs and maps cannot fail.
 	raw, _ := json.MarshalIndent(v, "", "  ")
 
 	return raw

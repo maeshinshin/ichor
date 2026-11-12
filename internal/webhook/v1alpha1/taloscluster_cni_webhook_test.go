@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
 var _ = Describe("TalosCluster Webhook: removed CNI presets", func() {
@@ -47,6 +48,16 @@ var _ = Describe("TalosCluster Webhook: removed CNI presets", func() {
 			_, err := v.ValidateCreate(ctx, withPreset(p))
 			Expect(err).NotTo(HaveOccurred())
 		}
+	})
+
+	It("refuses an update that adds a document to a stored custom cluster's spec.cni.custom", func() {
+		old := withPreset("custom")
+		old.Spec.CNI.Custom = &ichorv1alpha1.TalosClusterCNICustom{}
+
+		changed := old.DeepCopy()
+		changed.Spec.CNI.Custom.Documents = []ichorv1alpha1.TalosConfigPatchDocument{{Kind: "Config", Config: &typedconfig.Config{}}}
+		_, err := v.ValidateUpdate(ctx, old, changed)
+		Expect(err).To(MatchError(ContainSubstring("Cilium is the only CNI")))
 	})
 
 	It("refuses a spec change to a stored flannel cluster but not a metadata change", func() {

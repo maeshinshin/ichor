@@ -14,11 +14,11 @@ upgrade kinds (Talos, Kubernetes, Ichor) share:
 > `maxUnavailable` for workers, a per-machine hold annotation, label-based
 > ordering, and a progress view.
 
-This unit builds exactly that list, scaffolded with `kubebuilder create api
+This ADR covers exactly that list, scaffolded with `kubebuilder create api
 --group ichor --version v1alpha1 --kind TalosOperation --resource
 --controller`, and nothing else: no Talos Upgrade API call, no Kubernetes
 upgrade execution, no Ichor self-upgrade, no UI, no `ichor` CLI command.
-Each of those is a separate, later unit.
+Each of those is separate work.
 
 ## Decision: an injected `AdvanceMachineFunc`, not a per-kind branch
 
@@ -26,7 +26,7 @@ Each of those is a separate, later unit.
 branched on. `TalosOperationReconciler.Advance` is a single function field
 -- `func(ctx, cluster, machine, op) (done bool, err error)` -- that performs
 one disruptive step for one machine and reports whether that step finished.
-`nil` (the default, until a later unit wires a real implementation into
+`nil` (the default, until a real implementation is wired into
 `cmd/main.go`) means "pause with `NoExecutor`," not a panic.
 
 Declared in `internal/controller`, the consumer, not in `pkg/upgrade`: ADR
@@ -45,22 +45,20 @@ that exact name (`internal/controller/talosoperation_controller.go`),
 alongside `TalosMachineReconciler`'s own
 (`internal/controller/removal.go`). `TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite`
 matches on the enclosing function's *name*, not its receiver type, so a
-second, independently-named-the-same function satisfies the guard exactly
-the way the first one does -- no change to that test was needed.
+second function of the same name satisfies the guard exactly the way the
+first one does.
 
 It refuses the same way `refuseReboot`'s call does: recompute the live,
-approved control-plane count (now via
+approved control-plane count (via
 `deleteguard.CountApprovedControlPlanes`, read directly rather than through
-the manager's cache -- see the companion fix landed just before this unit,
-ADR 0010's appendix), and refuse with `*transitioningError` if it is even,
+the manager's cache, ADR 0010), and refuse with `*transitioningError` if it is even,
 before ever calling `Acquire`. Unlike `reconcileRemoval`, `TalosOperation`
 has no `completesTransition` exception: there is no scenario where an
 upgrade operation is itself the step that resolves a control-plane
 replacement, so this call always passes `false` (implemented by simply never
 exposing the parameter).
 
-`pkg/clusterlock.Lock.Renew` -- already built, documented, but with no
-caller until removal.go's `renewWhile` gave it one -- gets a second: once
+`pkg/clusterlock.Lock.Renew` -- also called by removal.go's `renewWhile` -- is called here once
 per reconcile batch, after selecting which machine(s) to advance and before
 calling `Advance` on any of them, comfortably inside `DefaultDuration`'s five
 minutes for the handful of calls one reconcile pass makes.
@@ -77,8 +75,7 @@ to special-case it.
 This is what makes resumption automatic rather than a feature to build:
 `Reconcile` always starts by reading `op.status` fresh and recomputing which
 machines are still pending from it, so a killed and restarted controller
-(or a second, independently constructed reconciler, which is what the test
-for this uses to simulate one) picks up exactly where the persisted status
+picks up exactly where the persisted status
 says the operation was, with no separate recovery path -- the same shape
 `removal.go`'s own resumability section already documents for
 `clusterlock.Lock.Acquire`'s self-resumption.
@@ -92,10 +89,9 @@ because nothing ever removes an entry from `machines` or demotes its phase.
 Once `phase == Paused` *and* `failureReason != ""` (distinguishing a failure
 from `spec.paused`), `Reconcile`'s very next check short-circuits before
 calling `Advance` again on anything: a paused-by-failure operation never
-retries automatically. The only way out, in this unit's scope, is whatever
-the operator does next (fix the underlying cause and -- once a later unit
-adds the mechanism -- clear the failure); nothing here guesses at a retry
-policy nobody asked for.
+retries automatically. The only way out is whatever
+the operator does next (fix the underlying cause and clear the failure);
+nothing here defines an automatic retry policy.
 
 `spec.paused` is the separate, operator-driven halt: it sets `phase: Paused`
 with a different reason (`OperatorPaused`) and, critically, *still holds the
@@ -130,20 +126,19 @@ that were actually candidates). The order label sorts within a tier
 sorting last, with the object's own name as the final, deterministic
 tiebreak -- which matters for tests more than production, since
 `GenerateName`-assigned object names are not something a test should ever
-rely on for ordering (a real bug this unit's own tests hit once, fixed by
-setting the label explicitly rather than depending on name order).
+rely on for ordering.
 
-## Decision: no Conditions populated, on purpose, for now
+## Decision: no Conditions populated by the backbone
 
 `TalosOperationStatus.Conditions` exists (the same `[]metav1.Condition`
-shape every other reconciled CRD here carries) but nothing in this unit
-ever calls `apimeta.SetStatusCondition` on it. `phase`, `machines` and
-`failureReason` already say everything this unit needs to say, and nothing
-in the acceptance criteria asks for a condition-shaped signal on top of
-them. The field stays in the schema (removing it would be a disruptive
-schema change for whichever later unit decides it wants one) but is
-inert until something actually needs it -- deletion-by-default, not
-speculative API surface.
+shape every other reconciled CRD here carries) but the backbone never calls
+`apimeta.SetStatusCondition` on it. `phase`, `machines` and `failureReason`
+already say everything it needs to say, and nothing in the acceptance criteria
+asks for a condition-shaped signal on top of them. The field stays in the
+schema (removing it would be a disruptive schema change for whatever later
+wants one) but is inert until something actually needs it -- deletion-by-
+default, not speculative API surface. (A later amendment below adds a `Paused`
+condition.)
 
 ## Decision: not tracked in Git, and why that is this type's own doc comment, not a mechanism
 
@@ -152,15 +147,14 @@ speculative API surface.
 a record of an imperative action in progress, not a declarative desired
 state. `TalosOperation`'s own Go doc comment says so explicitly and points
 at `ichor gitops export` as the thing responsible for excluding it --
-that command, and its own exclusion logic, belong to a different agent's
-work entirely. This type cannot enforce its own absence from a Git
+that command and its exclusion logic are separate. This type cannot enforce its own absence from a Git
 repository; the most it can do is tell the next reader why, which is what
 the doc comment does.
 
 ## Consequences
 
-- `pkg/deleteguard.CountApprovedControlPlanes` (landed just before this
-  unit, fixing a cached-read bug -- see ADR 0010's appendix) is reused
+- `pkg/deleteguard.CountApprovedControlPlanes` (ADR 0010, which reads
+  directly rather than through the cache) is reused
   directly by `TalosOperationReconciler.acquireDisruptiveLock`, via a new
   `APIReader client.Reader` field wired from `mgr.GetAPIReader()` in
   `cmd/main.go` -- the same pattern `TalosMachineReconciler` and the
@@ -170,10 +164,9 @@ the doc comment does.
   `cmd/main.go`, not folded into `TalosClusterReconciler` or
   `TalosMachineReconciler`, for the same work-queue-isolation reason ADR
   0024 gives for `CNIHandoverReconciler`.
-- Not built here, and explicitly out of scope: any call to Talos's Upgrade
-  API, Kubernetes upgrade execution, Ichor's self-upgrade, the UI's progress
-  view, and the `ichor` CLI's own upgrade commands. `AdvanceMachineFunc`'s
-  only implementation in this unit is test fakes.
+- Not part of this decision: any call to Talos's Upgrade API, Kubernetes
+  upgrade execution, Ichor's self-upgrade, the UI's progress view, and the
+  `ichor` CLI's own upgrade commands.
 
 - `IchorInstallation` and the `kind: ichor` executor landed in ADR 0059; the installer Job is a separate process, so the backbone is unchanged (the executor is idempotent per operation).
 
@@ -183,7 +176,7 @@ the doc comment does.
 
 ## Amendment (2026-11-04): each operation takes the cluster lock under its own identity
 
-**What was wrong.** `OperationService` refuses a second operation while one is unfinished (ADR 0068, Decision 2), but the controller did not keep two operations apart. Every `TalosOperation` took the cluster lease as `ichor-controller`, and `clusterlock.Acquire` lets the same identity back in, so two operations created some other way (`kubectl`, GitOps, a script) ran their disruptive steps at the same time, and an operation also ran alongside a machine removal or join, which share that identity. The envtest `two TalosOperations on one cluster` showed it: the second operation called `Advance` while the first was mid-reboot.
+**The problem.** `OperationService` refuses a second operation while one is unfinished (ADR 0068, Decision 2), but the controller did not keep two operations apart. Every `TalosOperation` took the cluster lease as `ichor-controller`, and `clusterlock.Acquire` lets the same identity back in, so two operations created some other way (`kubectl`, GitOps, a script) ran their disruptive steps at the same time, and an operation also ran alongside a machine removal or join, which share that identity.
 
 **Decision.**
 
@@ -195,7 +188,7 @@ the doc comment does.
 
 **The webhook does not reject a second operation.** The service refuses early so a person sees why before the spec is written; the controller serializes. A webhook refusal would break GitOps, where a repository can hold several operations that are meant to run one after another. The cost is a `Paused` operation with a visible reason instead of an error at creation.
 
-**Follow-up (2026-11-04): a control-plane join and a machine removal take the lock under the machine's own identity.** The amendment above left the machine paths on the shared `ichor-controller`, so two control-plane joins, two removals, or a join and a removal on one cluster could hold the lock together (`clusterlock.Acquire` lets the same identity back in), and the later one also released the earlier one's lease when it finished. Etcd membership changes must run one at a time: a join adds a member, a removal removes one. The envtest `two control-plane TalosMachines of one cluster at a step that takes the cluster lock` showed all four pairings getting through.
+**Follow-up (2026-11-04): a control-plane join and a machine removal take the lock under the machine's own identity.** The amendment above left the machine paths on the shared `ichor-controller`, so two control-plane joins, two removals, or a join and a removal on one cluster could hold the lock together (`clusterlock.Acquire` lets the same identity back in), and the later one also released the earlier one's lease when it finished. Etcd membership changes must run one at a time: a join adds a member, a removal removes one.
 
 - A machine acquires, renews and releases the lock as `ichor-controller/machine/<namespace>/<name>` (`machineLockIdentity`, from the name and not the UID, for the reason given above). The same machine re-enters its own lock across reconciles and restarts; any other machine or operation waits. The wait is `ClusterLockHeld` on the Ready condition (join) or the Removal condition (removal), worded `the cluster lock is held by TalosMachine "<namespace>/<name>"; control plane join deferred` (or `removal deferred`). A holder that is an operation reads `TalosOperation "<namespace>/<name>"`, and an operation that waits for a machine reads `... held by TalosMachine "<namespace>/<name>"; this operation starts when it finishes`. Any other holder, such as `ichor-controller/cni-helm`, keeps clusterlock's wording.
 - A holder that will never renew is not waited for, whoever waits (`lockHolderStopped`, one function for operations and machines). A machine holder is stopped when the machine no longer exists, or when it is not being deleted and is done with its locked step. For a join that step is handing the configuration to the node in maintenance mode, which happens inside one reconcile and ends with `status.configStoredAt`, so a machine with `configStoredAt` set, or Ready, holds nothing. For a removal the step is the removal itself, which runs until the finalizer goes, so a machine with a deletion timestamp is not stopped; once the finalizer is gone it no longer exists and its lease is. There is no failed state to add for machines: a refused or failed join or removal releases the lock before it returns (the deferred `Release`), and the next reconcile takes it again. The lease is only ever left behind by a controller that died mid-step, which these rules turn from a five-minute wait into none when the machine is gone or finished.

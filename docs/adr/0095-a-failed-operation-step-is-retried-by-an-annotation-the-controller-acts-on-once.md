@@ -6,7 +6,7 @@ Decided: `ichor operation retry NAME` (and a Retry button and the `OperationServ
 
 ## Context
 
-ADR 0026 pauses an operation when a step fails and never retries it by itself, and `failureReason` is what tells the controller, the CLI and the UI that. `ichor operation resume` writes `spec.paused=false`, which is not what is wrong, so it did nothing and the phase stayed Paused. The only way out was to delete the operation and create it again, and neither the help text nor the UI said so. On hardware this happened after every transient failure (a drain blocked by a bare pod, a refused webhook, a timeout).
+ADR 0026 pauses an operation when a step fails and never retries it by itself, and `failureReason` is what tells the controller, the CLI and the UI that. `ichor operation resume` writes `spec.paused=false`, which is not what is wrong, so it did nothing and the phase stayed Paused. The only way out was to delete the operation and create it again, and neither the help text nor the UI said so. This follows every transient failure (a drain blocked by a bare pod, a refused webhook, a timeout).
 
 ## Decision
 

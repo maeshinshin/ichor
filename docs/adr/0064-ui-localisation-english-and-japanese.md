@@ -13,7 +13,7 @@ libraries (react-i18next, react-intl, LinguiJS's React bindings). The screens ho
 
 **1. No library.** `ui/src/lib/i18n.ts` has `en` (an `as const` object) and `ja`, typed
 `Record<keyof typeof en, string>`. A key missing from `ja`, or only in `ja`, does not compile. `translate(lang,
-key, params)` replaces `{name}` markers. A test also checks at run time that both have the same keys, that no
+key, params)` replaces `{name}` markers. Run-time checks also require that both have the same keys, that no
 entry is empty, and that both fill the same placeholders, because a compiler check does not see a `ja` entry
 that lost a `{n}`. There are no plural forms: the strings are written so a count is only ever a number in
 a label ("Pending approval (3)"), which both languages can say without grammar. If a language with plural
@@ -57,5 +57,5 @@ labels per language would make one number read as two sizes.
   change both objects in one commit, which the key check enforces only for presence, not for meaning.
 - Strings are translated whole, with placeholders, so word order differs by language where it has to.
   The one sentence with a link in it (the effective-config note) is stored in three pieces around the link.
-- The Japanese is a first draft by the implementer and wants a read-through by a native speaker.
-- Page components are still not unit-tested (ADR 0045); the language logic is, as pure functions in `ui/src/lib`.
+- The Japanese wants a read-through by a native speaker.
+- The language logic is pure functions in `ui/src/lib`, as ADR 0045 prescribes.

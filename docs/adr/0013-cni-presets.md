@@ -38,27 +38,24 @@ the same type a cluster-layer `TalosConfigPatch` already carries -- so a
 future caller applies it exactly the way `pkg/render` already applies any
 other patch, instead of inventing a second patch shape.
 
-**Update (ADR 0019's `ichor init` work):** `ArgoCDApplication` originally
-returned `*unstructured.Unstructured`, for the reason above -- pulling in
-`argoproj/argo-cd`'s Go module for one struct's field names is a dependency
-for a few lines, and `unstructured.Unstructured` was already a transitive
-one. That reasoning held right up until a caller needed to *use* the
-result: `ichor init --gitops-dir` writes every Argo CD Application it
+**`ArgoCDApplication` returns `*gitops.Application`** (ADR 0019's `ichor init`
+work), not `*unstructured.Unstructured`. Pulling in `argoproj/argo-cd`'s Go
+module for one struct's field names is a dependency for a few lines, and
+`unstructured.Unstructured` is already a transitive one, but a caller has to
+*use* the result: `ichor init --gitops-dir` writes every Argo CD Application it
 builds through `pkg/gitops.Skeleton`, and `pkg/gitops` is where the actual
 protections against writing a credential into Git live -- the `RepoURL`
 userinfo check (twice: once in `gitops.New`, once again in
 `Skeleton.Write` for an `Application` that reached it some other way) and
 the refusal to write a `*corev1.Secret`. An `*unstructured.Unstructured`
 carries none of that; a caller handed one has to re-derive whatever
-`pkg/gitops` already guarantees, or (worse) skip it. `ArgoCDApplication`
-now returns `*gitops.Application` -- `pkg/cni` depends on `pkg/gitops`,
-which is the right direction: the package that builds an Argo CD
-Application for a specific CNI depends on the package that models what an
-Argo CD Application is, not the other way around. `pkg/gitops` gained one
-field it didn't have yet to carry this (`ApplicationSourceHelm.Values`,
-`spec.source.helm.values` per argo-cd.readthedocs.io's Helm page, retrieved
-2026-10-25) -- Cilium's rendered values document goes there now, exactly
-as it did in the unstructured map before.
+`pkg/gitops` already guarantees, or (worse) skip it. `pkg/cni` therefore
+depends on `pkg/gitops`, which is the right direction: the package that
+builds an Argo CD Application for a specific CNI depends on the package that
+models what an Argo CD Application is, not the other way around.
+`pkg/gitops` carries `ApplicationSourceHelm.Values` (`spec.source.helm.values`
+per argo-cd.readthedocs.io's Helm page) for this: Cilium's rendered values
+document goes there.
 
 `flannel.Preset` is the zero-value proof that "Ichor does nothing" is
 literal: every method either returns `nil, nil` or, where the design implies
@@ -67,18 +64,16 @@ configure, so there is no constructor argument and no state.
 
 `cilium.Preset` renders Helm values, not Helm's expanded chart templates.
 Actually running Helm -- fetching `cilium/cilium` and expanding its
-templates -- needs a network call and is bootstrap wiring for the unit that
-calls this package (`ichor init`, explicitly out of this change's scope).
+templates -- needs a network call and is bootstrap wiring for `ichor init`,
+which calls this package.
 What `BootstrapManifest` and `ArgoCDApplication` both render today is the
 resolved values document the chart would be installed with
 (`pkg/cni/cilium/values.go`), plus the chart's coordinates
 (`helm.cilium.io`, chart `cilium`, version `1.18.0` -- pinned to the version
-the sourced Talos values below were written against). That is honest about
-what this phase delivers and is exactly the "declare values and chart
-coordinates, and be able to render" boundary the unit was scoped to.
+the sourced Talos values below were written against). That is the "declare values and chart coordinates, and be able to render"
+boundary of this phase.
 
-**Sources, not memory**, since both are Ichor dependencies this change
-touches directly:
+**Sources** for the values and names, all of them Ichor dependencies:
 
 - Talos's recommended Cilium values -- `ipam.mode: kubernetes`,
   `kubeProxyReplacement`, `k8sServiceHost: localhost` /
@@ -87,21 +82,17 @@ touches directly:
   `cleanCiliumState`, and `cgroup.autoMount.enabled: false` /
   `cgroup.hostRoot: /sys/fs/cgroup` -- are from
   `docs.siderolabs.com/kubernetes-guides/cni/deploying-cilium`, the Talos
-  v1.14 docs referencing Cilium 1.18.0, retrieved 2026-10-25.
+  v1.14 docs referencing Cilium 1.18.0.
 - `hubble.tls.auto.method: cronJob` (see below) is from
-  `docs.cilium.io/en/stable/helm-reference/`, retrieved 2026-10-25 (current
-  stable reference, ~1.20.4).
+  `docs.cilium.io/en/stable/helm-reference/` (the stable reference, ~1.20.4).
 - `ServerSideApply=true` as the large-CRD-set sync option, and the
   `source`/`destination`/`syncPolicy.syncOptions` Application shape, are
   from `argo-cd.readthedocs.io`'s sync-options and
-  `operator-manual/application.yaml` pages, retrieved 2026-10-25.
+  `operator-manual/application.yaml` pages.
 - The Cilium agent/operator workload names (`cilium` DaemonSet,
   `cilium-operator` Deployment, both in `kube-system`) returned by
-  `HandoverWorkloads` are Cilium's own standard install layout, confirmed
-  against `docs.cilium.io`'s current Helm install docs, retrieved
-  2026-10-25.
-
-No Sidero Omni material was read for any of this.
+  `HandoverWorkloads` are Cilium's own standard install layout, per `docs.cilium.io`'s Helm install
+  docs.
 
 ## Decision: what `custom` makes the user declare
 
@@ -139,29 +130,24 @@ hand-authored; the chart renders its own CronJob once this value is set.
 `+kubebuilder:validation:XValidation:rule="self.preset == oldSelf.preset"`
 rejects the change. This is a CRD-embedded CEL rule, like every other
 invariant already in `api/v1alpha1` (ADR 0003's allow-list check, the
-patch/target discrimination rules) -- not a webhook, both because
-`internal/webhook/` was out of this change's scope and because a rule that
+patch/target discrimination rules) -- not a webhook, because a rule that
 only ever compares two fields on the same object needs nothing a webhook
-would add. It was generated and confirmed against envtest: changing
-`preset` on an existing `TalosCluster` is rejected; every other update
-(including one that changes something else entirely) is accepted.
+would add. Changing `preset` on an existing `TalosCluster` is rejected; every
+other update (including one that changes something else entirely) is accepted.
 
 **Switching `kubeProxy` needs the
 `ichor.maesh.dev/confirm-kube-proxy-switch` annotation.** This one could
 not be a CRD-embedded rule, which the `preset` rule above is. CRD
 `x-kubernetes-validations` only exposes `metadata.name` and
-`metadata.generateName` on `self`/`oldSelf` -- confirmed the hard way: a
-rule written as `self.metadata.annotations` failed CRD creation outright
-with `undefined field 'annotations'` against envtest's real apiserver, not
-a lint warning. There is no CRD-schema-only way to gate on an annotation.
-The remaining options were a controller-runtime webhook
-(`internal/webhook/`, explicitly out of this change's scope -- another unit
-owns it) or a `ValidatingAdmissionPolicy`: a built-in, declarative,
+`metadata.generateName` on `self`/`oldSelf`: a rule written as
+`self.metadata.annotations` fails CRD creation outright with
+`undefined field 'annotations'`. There is no CRD-schema-only way to gate on an
+annotation. The remaining options are a controller-runtime webhook
+(`internal/webhook/`) or a `ValidatingAdmissionPolicy`: a built-in, declarative,
 CEL-evaluated admission rule (stable since Kubernetes v1.30; this project's
 pinned k8s.io/api is v0.36, i.e. envtest 1.36) that evaluates against the
 full admission request -- `object`/`oldObject`, metadata included -- rather
-than the CRD's own schema. It is still CEL, still no Go admission code, and
-it does not touch `internal/webhook/`.
+than the CRD's own schema. It is still CEL, with no Go admission code.
 
 `config/admission/kubeproxy-switch-policy.yaml` carries the
 `ValidatingAdmissionPolicy` and its `ValidatingAdmissionPolicyBinding`,
@@ -180,33 +166,25 @@ configuration: it fails if either the `ValidatingAdmissionPolicy` or its
 `ValidatingAdmissionPolicyBinding` is missing from the rendered chart, and
 fails if the Binding's `spec.policyName` doesn't name the Policy this chart
 ships -- a Policy with no Binding, or a Binding naming the wrong Policy,
-guards nothing. Verified by deliberately breaking each half (removing the
-template; retargeting `policyName` to a name that doesn't exist) and
-confirming `go test ./dist/chart/...` fails with a message naming the exact
-drift, then restoring it and confirming the suite is green again -- the
-same bar `dist/chart/chart_test.go`'s own doc comment sets, and the one the
-CRD-`documents[]` chart-drift incident shows matters: an invariant nobody
-has watched fail is not a tested invariant. `api/v1alpha1/suite_test.go`
-also loads `config/admission/kubeproxy-switch-policy.yaml` directly (not a
-copy) before the CNI specs run, so the kustomize path is tested too.
+guards nothing. `api/v1alpha1/suite_test.go` also loads
+`config/admission/kubeproxy-switch-policy.yaml` directly (not a copy) before
+the CNI specs run, so the kustomize path is covered too.
 
 Because a cluster below Kubernetes 1.30 would otherwise install this chart
 successfully with the guard silently absent, `dist/chart/Chart.yaml` now
 declares `kubeVersion: ">=1.30.0-0"` -- `ValidatingAdmissionPolicy` is
 stable, enabled by default, from exactly that version
-(kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/,
-retrieved 2026-10-25), so an older cluster now fails the install outright
+(kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/),
+so an older cluster fails the install outright
 instead of silently shipping without the guard.
 
 **The annotation unblocks the API-level guard; it does not run the safe
 switch.** `ichor.maesh.dev/confirm-kube-proxy-switch` only lets the
-`kubeProxy` update through admission -- nothing in this change (or
-anywhere else in the codebase yet) brings the new side up on every node,
-verifies it, and then turns the old side off, which is the one safe order
-the design requires once a switch is allowed. Until that exists (the
-reconciler's job, out of this change's scope -- the bar here was "declare
-the hand-over workloads and the consistency check," not "execute the
-switch"), adding the annotation and flipping `kubeProxy` only clears the
+`kubeProxy` update through admission -- nothing in this decision brings the
+new side up on every node, verifies it, and then turns the old side off, which
+is the one safe order the design requires once a switch is allowed. That is
+the reconciler's job: this decision declares the hand-over workloads and the
+consistency check, not the switch. Until that exists, adding the annotation and flipping `kubeProxy` only clears the
 admission guard; actually carrying out the switch safely is a manual,
 unassisted operation. Do not read the annotation's existence as a
 statement that switching is safe to automate yet.

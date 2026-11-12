@@ -122,14 +122,16 @@ func pendingKinds(classes map[string]kindRow, list []shippedKind) []string {
 }
 
 // fieldName is the JSON name of a kind's union field: the kind with its leading capitals lowered, keeping the
-// last of a capital run that is followed by a lowercase letter (BGPInstanceConfig -> bgpInstanceConfig).
+// last of a capital run that is followed by a lowercase letter (BGPInstanceConfig -> bgpInstanceConfig),
+// unless that letter begins a version marker (DHCPv6Config -> dhcpv6Config).
 func fieldName(kind string) string {
 	i := 0
 	for i < len(kind) && kind[i] >= 'A' && kind[i] <= 'Z' {
 		i++
 	}
 
-	if i > 1 && i < len(kind) && kind[i] >= 'a' && kind[i] <= 'z' {
+	// A lowercase letter followed by a digit is a version marker (DHCPv6Config), not the start of a word.
+	if i > 1 && i < len(kind) && kind[i] >= 'a' && kind[i] <= 'z' && (i+1 == len(kind) || kind[i+1] < '0' || kind[i+1] > '9') {
 		i--
 	}
 

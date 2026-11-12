@@ -9,7 +9,7 @@ Decided: built `PatchService` (CRUD for `TalosConfigPatch` plus `PreviewImpact`)
 ADR 0034 found phase 6's "config editing by layer ... impact preview
 before applying ... schema-driven forms" (architecture.md, "CLI and UI")
 blocked on three missing pieces of API surface, and reported concrete
-shapes for each rather than building against nothing. This unit builds
+shapes for each rather than building against nothing. This ADR builds
 exactly those shapes.
 
 ## Decision
@@ -53,7 +53,7 @@ this precedent), so there is nothing to re-word.
 ### `PatchDocument.document` is opaque JSON, not a third catalogue
 
 `patch.proto`'s own comment states the reasoning ADR 0034 flagged as the
-one real risk of building this unit at all: modeling every typed-config
+one real risk of building this service at all: modeling every typed-config
 field a third time (Go mirror type, CRD schema, now protobuf) would be
 exactly the parallel catalogue ADR 0003's generator exists to avoid.
 `PatchDocument{kind, document}` carries `document` as plain JSON, shaped
@@ -64,7 +64,7 @@ string to its JSON field name -- six entries, the same allow-list
 one -- and `documentFromPB`/`documentToPB` wrap/unwrap the raw JSON under
 that key so `encoding/json` fills (or reads) the real typed field itself.
 No field of any of the six kinds is named, checked or round-tripped by
-hand anywhere in this unit.
+hand anywhere in the service.
 
 ### `PreviewImpact`: every path the patch sets, not a diff
 
@@ -74,8 +74,8 @@ shape, or an edit of an existing one), never writes anything, and returns
 `reboot_required bool`, `install_time_only []string`,
 `unsupported []string`. It classifies every field path the patch's own
 documents set, not a diff against whatever is currently applied:
-computing a true path-level diff between an existing patch's documents
-and a proposed edit is real additional work this unit does not attempt,
+a true path-level diff between an existing patch's documents
+and a proposed edit is real additional work not done here,
 and `pkg/fieldmeta`'s own doc comment already states the safe direction
 when exact information isn't available -- showing impact for a field even
 if an edit happens to leave it unchanged over-reports rather than
@@ -83,7 +83,7 @@ under-reports, which is the direction that can't leave a node running a
 configuration it doesn't have.
 
 `install_time_only` and `reboot_required` are two different response
-fields, not two severities of one signal, per the task's own instruction:
+fields, not two severities of one signal:
 a reboot does nothing for a field Talos only reads at install/imaging
 time (`pkg/fieldmeta`'s own doc comment), so a caller presenting them
 identically would let an operator pick "reboot" for a change nothing
@@ -97,7 +97,7 @@ attribution for `GetEffectiveConfig`) and `patchPaths`
 it rather than each re-implementing "what paths does this one document
 set."
 
-### Schema-driven forms: no new RPC, confirmed rather than assumed
+### Schema-driven forms: no new RPC
 
 ADR 0034 proposed this and nothing here contradicts it: `config/crd/
 bases/ichor.maesh.dev_talosconfigpatches.yaml`'s OpenAPI schema is
@@ -105,9 +105,8 @@ already committed and already generated from the exact mirror types
 `documentFieldKey` maps into. A form renderer reads that file as a static
 asset -- no live cluster state in it, so serving it doesn't cross
 "browser talks only to the backend" either way -- and submits whatever
-JSON it produces as `PatchDocument.document`. Still not built in this
-unit (the task's own boundary: "UI 側の画面はこのユニットに含めません"); the
-backend this form would call now exists.
+JSON it produces as `PatchDocument.document`. The form itself is
+not part of this ADR; the backend it would call now exists.
 
 ### Strict field validation and RBAC
 
@@ -115,10 +114,6 @@ backend this form would call now exists.
 (`machine_service.go`'s existing package-level var) to `s.Create`/
 `s.Update` -- the same discipline every other write in this package
 already has, not a new one invented for this service.
-`internal/uiapi/strictvalidation_test.go`'s `recordingUpdateClient`
-gained a `Create` override (it already had `Update`) so a test can assert
-`CreatePatch`'s own write requests it the same way the existing
-`ApproveMachine`/`RejectMachine` tests do for `Update`.
 
 `internal/uiapi/rbac_markers.go`'s `talosconfigpatches` line moved from
 `get;list` (read-only, ADR 0018) to `get;list;create;update;delete` -- the
@@ -134,26 +129,18 @@ at all -- ADR 0003's generator drops the eleven `meta.Unstructured`
 escape-hatch fields and the nine secret-bearing scalars from the mirror
 types entirely, not just from what gets rendered. There is nothing for
 this service to mask, because there is nothing secret-shaped in a
-`TalosConfigPatch` to begin with; the task's "don't build an unmask
-mechanism" instruction has no mechanism to not-build here.
+`TalosConfigPatch` to begin with, and no unmask mechanism is needed.
 
 ## Consequences
 
-- `proto/ichor/v1alpha1/patch.proto` is new; `buf lint` and
-  `buf breaking` both pass clean against it (every addition, no removal
-  or change to an existing file).
+- `proto/ichor/v1alpha1/patch.proto` is new and purely additive: no removal
+  or change to an existing file.
 - `internal/uiapi/patch_service.go` (the five CRUD methods plus
   `PreviewImpact`), `internal/uiapi/convert.go` (the wire/CRD conversions),
   and `internal/uiapi/effectiveconfig.go` (the `documentLeafPaths`
-  extraction) are the implementation; `internal/uiapi/patch_service_test.go`
-  covers CRUD round-tripping, a CRD-rejected write surfacing as
-  `CodeInvalidArgument`, strict field validation on both writes, and
-  `PreviewImpact`'s three outcomes (none, unsupported, install-time-only
-  kept separate from reboot-required).
+  extraction) are the implementation.
 - `cmd/ichor-ui/main.go` registers `PatchServiceHandler` on the same mux
   as the other three services.
-- `ui/` gained only its generated TS client (`ui/src/gen/ichor/v1alpha1/
-  patch_pb.ts`, committed per ADR 0021's existing policy); no screen in
-  this unit, per the task's own boundary.
-- `internal/controller/`, `internal/cli/`, `pkg/` (beyond reading
-  `pkg/fieldmeta`) and `proto/`'s other files are untouched.
+- `ui/` gains only its generated TS client (`ui/src/gen/ichor/v1alpha1/
+  patch_pb.ts`, committed per ADR 0021's existing policy); there is no
+  screen.

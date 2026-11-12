@@ -11,10 +11,9 @@ breath: find the file, edit it preserving formatting, and open a PR whose
 description carries an impact preview. The first two are pure, local,
 host-independent operations with no external dependency once a checked-out
 repository exists; the third needs a GitHub/GitLab/Gitea-Forgejo API call, a
-network connection, and an impact-preview backend another agent is building
-concurrently. Mixing them would drag the exhaustively-testable half
+network connection, and an impact-preview backend (`PreviewImpact`, ADR 0035). Mixing them would drag the exhaustively-testable half
 (formatting preservation under every YAML shape a real manifest uses) into
-the half that cannot be tested without a live host. This unit is only the
+the half that cannot be tested without a live host. `pkg/prmode` is only the
 first two.
 
 ## Decision: `pkg/prmode`, not `internal/cli`
@@ -26,7 +25,7 @@ that the UI backend could not import.
 
 ## Decision: `yaml.Node` round-tripping, not unmarshal-to-struct-then-marshal
 
-The task's own constraint is correct and was verified, not assumed: a plain
+A plain
 unmarshal into a Go struct and marshal back loses comments outright,
 reorders keys to the struct's field order, and normalizes quote style.
 `go.yaml.in/yaml/v4` (already this project's own YAML dependency --
@@ -34,14 +33,13 @@ reorders keys to the struct's field order, and normalizes quote style.
 `gopkg.in/yaml.v3` with the same `yaml.Node` API) decodes a document into a
 node tree whose comments, key order, anchors/aliases, quote style and
 block/flow list style survive a decode-mutate-encode round trip, **provided
-the encoder's indent width is set to match the document's own** -- verified
-empirically before writing any package code: `yaml.NewEncoder(...).SetIndent(n)`
-defaults to a width that does not match every input, and the first version
-tried (no `SetIndent` call) silently widened a 2-space document to the
-library's own default. `detectIndent` (`pkg/prmode/patch.go`) measures the
+the encoder's indent width is set to match the document's own**:
+`yaml.NewEncoder(...)` without `SetIndent(n)`
+uses a default width that does not match every input and silently widens a
+2-space document. `detectIndent` (`pkg/prmode/patch.go`) measures the
 document's own first indented line rather than assuming one width.
 
-One limitation surfaced by the same verification and is not worked around: a
+One limitation is not worked around: a
 blank line with no comment attached to it, between two sibling keys *inside
 the document actually being edited*, is dropped by go-yaml's own Node
 round trip (blank lines are only preserved when attached to a comment).
@@ -108,17 +106,15 @@ filesystem or source-resolution logic of its own.
 ## Consequences
 
 - Not built here: opening a PR against any host (GitHub, GitLab,
-  Gitea/Forgejo) -- a later unit's interface, deliberately not designed
-  yet, per architecture.md's own phase-8 framing and this unit's own
-  instructions. The UI following a PR through merge/sync/apply, the impact
+  Gitea/Forgejo), which is a separate interface (ADR 0038). The UI following a PR through merge/sync/apply, the impact
   preview text in a PR's description, strict mode, and override are
   likewise untouched.
 - `Locate` takes an already-checked-out directory; cloning or fetching a
-  repository from `ApplicationSource.RepoURL`/`TargetRevision` is the
-  host-specific unit's job, not this package's.
+  repository from `ApplicationSource.RepoURL`/`TargetRevision` belongs to
+  the host-specific layer, not this package.
 - `internal/cli/gitops_tracking.go`'s existing `isTracked` (Argo CD via
   `argocd-cm`, Flux via the `flux-client-side-apply` managed-fields
-  signal) is reused as-is for "is this CR tracked" -- this unit adds no
+  signal) is reused as-is for "is this CR tracked"; there is no
   second tracking check. Resolving *which* Application tracks a CR (so its
   `spec.source` can be read) for the Flux case is not built: Flux has no
   single Application-shaped object with a `.spec.source` the way Argo CD
@@ -127,4 +123,4 @@ filesystem or source-resolution logic of its own.
   via the Application's source" wording is Argo CD vocabulary. `ClassifySource`
   takes an Argo CD Application directly; wiring "CR -> owning Application"
   (via the tracking annotation/label's own value) and the Flux equivalent
-  are both left to the caller/a later unit.
+  are both left to the caller.

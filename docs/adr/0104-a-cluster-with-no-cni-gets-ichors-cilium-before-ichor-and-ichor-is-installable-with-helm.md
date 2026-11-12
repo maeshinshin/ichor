@@ -1,6 +1,6 @@
 # 0104. A cluster with no CNI gets Ichor's Cilium before Ichor, and Ichor is installable with Helm
 
-Status: Accepted; built · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Cilium · Builds on: 0098, 0099, 0101, 0103 · Amends: 0103 (the "no CNI" row of 1.1, 1.1a's gate wiring, test D5, open question 3)
+Status: Accepted; built · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Cilium · Builds on: 0098, 0099, 0101, 0103 · Amends: 0103 (the "no CNI" row of 1.1, 1.1a's gate wiring, open question 3)
 
 Decided: `ichor adopt` on a Talos cluster with no CNI installs Ichor's pinned Cilium itself, in the adopt process with the Helm SDK as Ichor's own release record in `ichor-system`, before Ichor's own pods are installed, and adopts the cluster as the managed `cilium` preset (so ADR 0103's "no CNI becomes unmanaged `talosCNI: none`" row is replaced, and `--cni-unmanaged` is refused there); a cluster that already has a CNI keeps ADR 0103's rules and its network-policy gate follows live detection; every wait for Ichor in `adopt` and `init` is bounded and names why the pods are Pending; and Ichor can be installed with `helm install` of `dist/chart` (published as an OCI chart), after which `ichor adopt` detects the existing install, skips its own install step and registers the cluster, with a new `ichor cni bootstrap` for the one case Helm cannot cover, a cluster with no pod network.
 

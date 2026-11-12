@@ -64,22 +64,11 @@ signs:
     signature: "${artifact}.sigstore.json"
     args: ["sign-blob", "--yes", "--bundle=${signature}", "${artifact}"]
 
+# The release body is the tag's section of CHANGELOG.md (the release workflow passes it with
+# --release-notes). A generated commit log needs the previous tag to be an ancestor of this one, which
+# the re-cut tags are not, so it fell back to the whole history.
 changelog:
-  sort: asc
-  groups:
-    - title: Features
-      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
-      order: 0
-    - title: Fixes
-      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
-      order: 1
-    - title: Others
-      order: 999
-  filters:
-    exclude:
-      - "^docs:"
-      - "^test:"
-      - "^chore:"
+  disable: true
 
 release:
   # No git remote is configured on purpose (see CLAUDE.md); name the repo

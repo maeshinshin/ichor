@@ -1,5 +1,5 @@
 // Fails the build when a fenced code block under docs/ has no language, so every block is highlighted
-// (docs/contributing-docs.md, "Code"). Runs before `astro build`. Only the docs on main are checked: a
+// (docs/development/contributing-docs.md, "Code"). Runs before `astro build`. Only the docs on main are checked: a
 // release's docs are frozen by its tag and must keep building.
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'

@@ -16,7 +16,7 @@ make docs-site-all # every version, as published, into site/dist-all
 
 This guide's commands are the one place that assumes the dev shell: run them
 inside `nix develop`, or with the tools from
-[The tools](development/build-from-source.md#the-tools) on your `PATH`.
+[The tools](build-from-source.md#the-tools) on your `PATH`.
 When you write commands in a page, write them as if the tools are on `PATH`;
 do not put `nix develop` or `nix develop -c` in a command block. `make docs-site` fails on a broken
 internal link (a missing file, a missing page or a missing `#heading`), so a

@@ -8,21 +8,19 @@ Decided: One `Server` type implements all three handler interfaces over a single
 
 ADR 0016 made `ClusterService`, `MachineService` and `NodeService` exist as
 compiling Go interfaces (`ichorv1alpha1connect.*Handler`) and committed the
-generated code under `gen/go/`. Nothing implemented them. This unit is that
+generated code under `gen/go/`. Nothing implemented them. This ADR is that
 implementation, registered on `cmd/ichor-ui`: nine RPCs across the three
 services, the Talos-reading half of `NodeService`, secret masking for
 `GetEffectiveConfig`, a resumable log stream, graceful termination, and a
 UI-backend-only RBAC `ClusterRole` that stays out of the controller's
 `manager-role`.
 
-Versions consulted: `connectrpc.com/connect` v1.21.0 and
-`github.com/siderolabs/talos/pkg/machinery` v1.14.3, both already pinned in
-`go.mod`. Everything below was checked against the vendored module source
-in the Go module cache (`go.yaml.in/yaml/v4`'s actual decode behavior,
-machinery's `config.Provider.RedactSecrets`, the COSI resource shapes under
-`pkg/machinery/resources/{hardware,block,network,perf}`) rather than taken
-on faith from documentation; no WebFetch against talos.dev was needed since
-the module source answered every question this unit ran into.
+Versions: `connectrpc.com/connect` v1.21.0 and
+`github.com/siderolabs/talos/pkg/machinery` v1.14.3, both pinned in `go.mod`.
+The vendored module source in the Go module cache is the authority for
+`go.yaml.in/yaml/v4`'s decode behavior, machinery's
+`config.Provider.RedactSecrets`, and the COSI resource shapes under
+`pkg/machinery/resources/{hardware,block,network,perf}`.
 
 ## Decision
 
@@ -88,7 +86,8 @@ is the whole fix.
 away" versus "never looked at," so a rejected machine looks identical to a
 freshly discovered one in `ListMachines`/`GetMachine`. Recording that
 durably (an annotation, or a proto field) is a contract decision, left to
-the design per the task's instruction not to add fields speculatively.
+the design rather than added speculatively (the tri-state amendment below
+closes it).
 
 ### Audit (`AuditRecord`)
 
@@ -123,14 +122,14 @@ duplicate machinery's own authority on its config shape and silently fall
 behind every time machinery adds a secret-bearing field; diffing against
 machinery's own redaction cannot fall behind it.
 
-Two things found empirically while building the leak test, both now
-load-bearing comments in the code:
+Two properties of machinery's redaction, both load-bearing comments in the
+code:
 
 - `Provider.RedactSecrets` does not always honor the replacement string it
   is given: the cluster bootstrap token field is hardcoded to `"***"`
-  regardless of the caller's argument (confirmed by reading
-  `v1alpha1_redact_test.go`, which asserts `"***"` for that one field while
-  every other redacted field uses the test's own `"**.***"`). `secretMask`
+  regardless of the caller's argument (machinery's
+  `v1alpha1_redact_test.go` asserts `"***"` for that one field while every
+  other redacted field uses the test's own `"**.***"`). `secretMask`
   is therefore fixed at the literal `"***"` in this package -- changing it
   would make that one field's mask silently diverge from every other
   masked field's.
@@ -140,9 +139,9 @@ load-bearing comments in the code:
   rendering choice for `[]byte` fields, observed rather than documented.
   `GetEffectiveConfig`'s wire value for such a field is therefore base64,
   which is still safe (nothing of the real key survives a correct
-  redaction) but not literally the string `"***"`; the test
-  (`effectiveconfig_test.go`) checks both the raw and base64-encoded forms
-  of the two CA keys for exactly this reason.
+  redaction) but not literally the string `"***"`, so the leak check
+  (`effectiveconfig_test.go`) covers both the raw and base64-encoded forms of
+  the two CA keys.
 
 ### Origin, without a second renderer
 
@@ -151,22 +150,20 @@ applicable `TalosConfigPatch` whose **own** documents -- rendered in
 isolation via `render.DocumentFromPatch` (newly exported for this reason)
 plus `container.New(doc).EncodeBytes(...)`, never diffed against the merged
 tree -- set that exact leaf path. A leaf no patch's own document sets is
-bucketed as `{layer: CONFIG_LAYER_SYSTEM, source: "system"}`. This needed
-no second render pass over the whole config (the earlier draft of this
-design called `render.Render` once per patch-prefix and diffed consecutive
-outputs; dropped once `DocumentFromPatch` made rendering each patch's own,
-isolated contribution directly possible) -- `patchOrigins` runs once over
-the already-known list of applicable patches.
+bucketed as `{layer: CONFIG_LAYER_SYSTEM, source: "system"}`. This needs
+no second render pass over the whole config: rendering once per patch-prefix
+and diffing consecutive outputs was rejected because `DocumentFromPatch` makes
+each patch's own, isolated contribution directly renderable --
+`patchOrigins` runs once over the already-known list of applicable patches.
 
-Simplification recorded here rather than tested further: everything not
+Simplification: everything not
 claimed by a patch is bucketed as `CONFIG_LAYER_SYSTEM`/`"system"`, with no
 split between "Ichor's own system-layer generation" (the control-plane
 taint) and "whatever machinery's `generate.NewInput().Config()` fills by
 default" (cluster name, default install image, the discovery identity
 document). The design's own `ConfigOrigin.source` comment allows both
 `"system"` and `"cluster"` as non-patch sources without defining the line
-between them; splitting it further wasn't something this unit had a
-concrete screen requirement to resolve against.
+between them; no screen requires splitting it further.
 
 ### `pkg/render` changes: `BuildConfig` and `DocumentFromPatch` exported
 
@@ -175,22 +172,16 @@ already existed, not new rendering logic:
 
 - `BuildConfig` is `Render`'s existing body, stopping before
   `EncodeBytes`/hashing and returning the `coreconfig.Provider` itself.
-  `Render` now calls `BuildConfig` then encodes -- identical behavior,
-  confirmed by `pkg/render`'s existing test suite passing unchanged.
+  `Render` calls `BuildConfig` then encodes -- identical behavior.
 - `DocumentFromPatch` (was `documentFromPatch`) is the same per-document
   kind switch, now exported so `patchOrigins` can convert one patch's
   documents without reimplementing the kind dispatch.
 
-This package is one `pkg/render` other agents are also working in: the
-task flagged that a fix rejecting an empty `TalosMachineSpec.spec.role`
-(machinery's `machine.ParseType("")` otherwise resolves to a worker
-silently) might already be landing elsewhere. It is not present in this
-worktree's `pkg/render/render.go` as of this change, and this unit's own
-refactor does not touch `machine.ParseType` or add any such check inside
-`pkg/render` itself -- `ApproveMachine` and `GetEffectiveConfig` each guard
-against an empty/unspecified role on their own side instead (see above and
-`node_service.go`), independent of whatever lands in `pkg/render` later, so
-neither relies on a check that might not be there yet.
+`ApproveMachine` and `GetEffectiveConfig` each guard against an
+empty/unspecified role on their own side (machinery's `machine.ParseType("")`
+otherwise resolves to a worker silently; see above and `node_service.go`),
+independent of `pkg/render`'s own explicit empty-role check (ADR 0011), so
+neither relies on a check downstream.
 
 ### Resume tokens (`resumetoken.go`)
 
@@ -237,7 +228,7 @@ client certificate from the bundle otherwise ("readers who can access
 read-only APIs that do not expose secrets," `pkg/machinery/role`'s own doc
 comment), matching "Trust": the UI backend never holds an admin identity.
 
-Per field, mapped from COSI resources confirmed in the vendored module
+Per field, mapped from COSI resources in the vendored module
 (`hardware.SystemInformation/Processor/MemoryModule`, `block.Disk`,
 `network.LinkStatus/AddressStatus`, `perf.CPU/Memory`):
 
@@ -249,13 +240,12 @@ Per field, mapped from COSI resources confirmed in the vendored module
   already noted for `ApproveMachineRequest`), so there is no source of
   truth to fill them from. Both will populate automatically once that CRD
   work lands, with no change needed here.
-- **Unverified shortcut**: `ResourceUsage.cpu_cores_used` is derived from
+- **Shortcut**: `ResourceUsage.cpu_cores_used` is derived from
   `perf.CPU.CPUTotal.Idle` as `(100-idle)/100 * cores`, assuming
   `CPUTotal`'s fields are already a percentage for the latest sample
   window. The vendored module ships only the resource's shape, not the
-  controller that populates it, so this was never checked against a real
-  Talos node's live values. Upgrade by sampling `perf.CPU` twice and
-  computing a rate once this is checked against a live cluster.
+  controller that populates it, so the formula is an assumption about the
+  sample window. Upgrade by sampling `perf.CPU` twice and computing a rate.
 
 This file (like `internal/controller`'s own `*_machinery.go` files) has no
 direct unit test: it is a thin adapter over a real gRPC client, and no
@@ -277,11 +267,9 @@ under its own `roleName=ichor-ui-role`.
 
 This was chosen over narrowing `manifests`'s own `paths="./..."` argument
 (which would also have worked, since `./cmd/ichor-ui` and `./cmd` can be
-told apart by whether the glob is recursive) because other agents are
-concurrently editing this Makefile and were told not to expect its existing
-targets rewritten; the build-tag approach needed zero changes to any
-existing line, confirmed by running `make manifests` before and after and
-diffing `config/`: empty.
+told apart by whether the glob is recursive) because the build-tag approach
+needs no change to any existing Makefile target, and `make manifests` output
+for everything else is unchanged.
 
 The resulting `ClusterRole` (`get`/`list` on `talosclusters` and
 `talosconfigpatches`, `get`/`list`/`update` -- never `create`, `patch` or
@@ -301,8 +289,8 @@ unilaterally.
 `role_binding.yaml`, `kustomization.yaml`) is a standalone kustomize base,
 deliberately **not** added as a resource of `config/rbac/kustomization.yaml`
 or `config/default/kustomization.yaml`: `ichor-ui` has no Deployment or
-Service manifest yet anywhere in `config/` (that is a later work unit, per
-ADR 0017's own scope boundary), so wiring RBAC into the controller's install
+Service manifest yet anywhere in `config/` (shipping it is a separate, later
+decision; see ADR 0017), so wiring RBAC into the controller's install
 path would deploy permissions for a workload that doesn't exist there yet.
 
 ### `cmd/ichor-ui/main.go`: wiring and graceful termination
@@ -326,10 +314,8 @@ rather than making that stream wait out the whole shutdown window.
 
 ## Consequences
 
-- Nine RPCs across three services are implemented and tested against
-  envtest (`internal/uiapi/*_test.go`, 20 Ginkgo specs plus plain-Go tests
-  for `strongIdentity` and the resume token). `make build test lint` passes
-  unchanged for the rest of the repository.
+- Nine RPCs across three services are implemented over a single uncached
+  client.
 - The masking guarantee rests on `config.Provider.RedactSecrets`, not on
   this package's own judgment of which fields are secret. If machinery ever
   stops redacting a field it used to, this package's output changes with
@@ -338,34 +324,25 @@ rather than making that stream wait out the whole shutdown window.
   `pkg/machinery` version bump, the same way a version-contract bump
   already gets scrutiny per principle 4.
 - `pkg/render/render.go` now exports `BuildConfig` and `DocumentFromPatch`;
-  both are refactors of existing code, confirmed behavior-identical by the
-  package's own pre-existing test suite passing unchanged.
+  both are refactors of existing code with identical behavior.
 - `config/rbac/ichor-ui/` exists but is not deployed by any kustomization
-  yet; wiring it in is the job of whichever work unit adds `ichor-ui`'s
+  yet; wiring it in belongs with the change that adds `ichor-ui`'s
   Deployment/Service manifests.
 - Gaps reported rather than silently worked around, two of which the
   amendment below closes: no proto-level "rejected" state for a
   `TalosMachine` (closed), and `StreamNodeLogs` having no way to select a
   specific service/container log (closed). Still open: `AuditRecord.actor`
   is a fixed placeholder pending OIDC (roadmap phase 9);
-  `ResourceUsage.cpu_cores_used`'s formula is unverified against a live
-  node.
+  `ResourceUsage.cpu_cores_used`'s formula is an assumption about the sample
+  window.
 
 ## A build-tag file is not type-checked by default, and two gaps that let it drift silently
 
-Found auditing this ADR's own mechanism, not while building it: putting
-`rbac_markers.go`'s content behind `//go:build ichorui_rbac` correctly keeps
+Putting `rbac_markers.go`'s content behind `//go:build ichorui_rbac` correctly keeps
 its markers out of `manager-role` (the stated goal), but it has a side
 effect nobody had named yet -- `go build ./...`, `go test ./...`, `go vet
 ./...` and golangci-lint's default run **never compile that file at all**,
-since none of them ever sets that tag:
-
-```console
-$ go list -f '{{.GoFiles}}' ./internal/uiapi/
-[bundle.go cluster_service.go ... ]      # rbac_markers.go absent
-$ go list -tags ichorui_rbac -f '{{.GoFiles}}' ./internal/uiapi/
-[... rbac_markers.go]                    # present only with the tag
-```
+since none of them ever sets that tag.
 
 A syntax or type error in that file would pass every check in the repo
 silently. `rbac_markers.go` is comment-only today so this never bit, but the
@@ -397,18 +374,14 @@ Two related gaps closed in the same pass, both CI-level rather than
   `.github/workflows/test.yml` run in parallel with `test`: `make manifests
   generate fmt` (`fmt`, not just `generate` -- see its own comment: raw
   `controller-gen`/mirrorgen output isn't always import-sorted the way
-  `go fmt` leaves it, and skipping it produced a false positive against
-  already-correct, already-committed files during this change), then `git
-  diff --exit-code`, failing with a message naming the fix
-  (`make manifests generate fmt`, then commit). Verified by hand: adding an
-  unregenerated field to `TalosClusterSpec` and running the same two
-  commands fails with exactly that diff and message; reverting the field
-  makes it pass again.
+  `go fmt` leaves it, and skipping it produces false positives against
+  already-correct, already-committed files), then `git diff --exit-code`,
+  failing with a message naming the fix (`make manifests generate fmt`, then
+  commit).
 
 ## Amendment (same date): approval tri-state and service-selectable logs
 
-Two gaps this ADR originally reported back were handed back as real work:
-`RejectMachine`'s own design (never deleting the machine) left no way to
+Two reported gaps are closed: `RejectMachine`'s own design (never deleting the machine) left no way to
 record *that* it had been rejected, and `StreamNodeLogs` could only ever
 mean the kernel log. Both proto messages change; both changes are additive
 or a pre-release breaking change the design explicitly authorized (v1alpha1,
@@ -430,21 +403,15 @@ CRD's three states exactly.
 
 This is a real breaking change to both the CRD and the wire type, pre-
 authorized for exactly this reason (pre-release, nothing depends on the old
-shape yet). `make proto-breaking` confirms it as the one and only breaking
-finding (`Previously present field "8" with name "approved" on message
-"Machine" was deleted`) -- the new `approval_state` field and
-`StreamNodeLogsRequest.service` (below) are both pure additions and `buf
-breaking` reports nothing for either, exactly as expected.
+shape yet). `make proto-breaking` reports exactly one breaking finding, the intended one
+(`Previously present field "8" with name "approved" on message "Machine" was
+deleted`); the new `approval_state` field and `StreamNodeLogsRequest.service`
+(below) are pure additions.
 
-Every caller of the old `Spec.Approved`/`Machine.approved` had to move to
-the new shape: `internal/controller` (`talosmachine_controller.go`'s
-approval gate, `discovery_test.go`'s assertion), `internal/webhook/v1alpha1`
-(the quorum-counting delete guard and its fixtures), `internal/cli`
-(`init_run.go`'s first-control-plane approval and its test), and this
-package's own `convert.go`/`machine_service.go`/`node_service.go` and their
-tests. Every one of these is the same one-line mechanical swap
-(`m.Spec.Approved` -> `m.Spec.IsApproved()`, or setting `ApprovalState`
-instead of `Approved`); none changes behavior.
+Every caller of the old `Spec.Approved`/`Machine.approved` moves to the new
+shape with the same mechanical swap (`m.Spec.Approved` ->
+`m.Spec.IsApproved()`, or setting `ApprovalState` instead of `Approved`);
+none changes behavior.
 
 ### Reversibility: rejecting is not permanent
 
@@ -453,8 +420,7 @@ object, for the same reason as before -- deleting it would let discovery
 recreate it as fresh and pending, making the rejection meaningless the
 moment discovery runs again; `internal/uiapi/discovery_integration_test.go`
 drives the real, exported `controller.DiscoveryReconciler.Discover` against
-a rejected fixture to prove this directly rather than trusting the
-reasoning). `ApproveMachine`'s only refusal is an *already-approved*
+a rejected fixture to pin this). `ApproveMachine`'s only refusal is an *already-approved*
 machine; a *rejected* one is not approved, so approving it succeeds and
 moves it straight to `approved` -- this is the entire mechanism by which a
 rejection is undone, and it needed no new RPC or field.
@@ -482,15 +448,15 @@ a Talos service name (`kubelet`, `etcd`, `trustd`, `apid`, `machined`, ...),
 read through Talos's `Logs` API. `NodeTalosClient.StreamLogs` gained the
 same parameter; `talosclient_machinery.go` branches on it, using
 `constants.SystemContainerdNamespace` with `common.ContainerDriver_CONTAINERD`
-for the non-empty case -- confirmed, not guessed, by reading
-`cmd/talosctl/cmd/talos/{logs,root,image}.go` in the vendored
-`github.com/siderolabs/talos` source (not just `pkg/machinery`): that is
-exactly the namespace/driver `talosctl logs <service>` resolves to with no
-flags given, and the RPC's `id` parameter is the service name verbatim.
+for the non-empty case: that is exactly the namespace/driver
+`talosctl logs <service>` resolves to with no flags given
+(`cmd/talosctl/cmd/talos/{logs,root,image}.go` in the vendored
+`github.com/siderolabs/talos` source), and the RPC's `id` parameter is the
+service name verbatim.
 
 **Architecture.md's open question -- "Can `os:reader` read logs, or does
-the UI backend need more?" -- is answered: yes, for both RPCs this unit
-uses.** `internal/app/machined/pkg/system/services/machined.go` in the same
+the UI backend need more?" -- is answered: yes, for both RPCs this
+backend uses.** `internal/app/machined/pkg/system/services/machined.go` in the same
 vendored source carries the authoritative per-method role table (not
 `pkg/machinery`, which ships no server-side policy at all), and both
 entries read:
@@ -510,7 +476,7 @@ reads as a Talos policy change, not a mystery.
 
 ## Amendment (2026-10-26): `loadBundle` was resolving the wrong namespace
 
-Found live, not in review: `internal/uiapi/bundle.go`'s `loadBundle` read
+`internal/uiapi/bundle.go`'s `loadBundle` read
 `cluster.Namespace` to find the secrets bundle Secret, instead of this
 backend's own namespace. ADR 0011 settled this exact question for
 `internal/controller`'s own `loadBundle` -- a `TalosCluster` may live in
@@ -540,19 +506,16 @@ controller) is what `loadBundle` resolves against now, never `cluster.
 Namespace`; an empty `ControllerNamespace` fails loudly
 ("controller namespace is empty (is POD_NAMESPACE set?)") rather than
 risking a broader read than intended, the same discipline `internal/
-controller/bundle.go` already has. `internal/uiapi/bundle_test.go` is new
-and mirrors `internal/controller/bundle_test.go` directly: resolves the
-Secret in the given namespace even when the `TalosCluster`'s differs,
-fails explicitly when the namespace is empty, names the namespace it
-looked in when the Secret is missing. `effectiveconfig_test.go` gained a
-fourth test creating the `TalosCluster` and the Secret in two different,
-real namespaces end to end through `Server.GetEffectiveConfig` itself
-(not just the `loadBundle` unit), to show the whole RPC path, not only
-the helper, resolves correctly now.
+controller/bundle.go` already has. The tests mirror
+`internal/controller/bundle_test.go`: the Secret resolves in the given
+namespace even when the `TalosCluster`'s differs, an empty namespace fails
+explicitly, and a missing Secret names the namespace it looked in; a
+`GetEffectiveConfig` test creates the `TalosCluster` and the Secret in two
+different namespaces end to end.
 
 ## Amendment (2026-10-26): the `ClusterRole` had no `nodes` rule, so every `GetNode` was `Forbidden`
 
-Found by a security review, not in use: `node_service.go`'s
+`node_service.go`'s
 `findKubernetesNode` -- `GetNode`'s lookup of the `corev1.Node` behind a
 `TalosMachine`, by `Get` on `Spec.Hostname` or, failing that, a `List` over
 every `Node` matched against the Talos endpoint address -- was there from
@@ -586,9 +549,9 @@ ADR's "RBAC: kept out of `manager-role`" section above).
 
 `dist/chart/chart_test.go`'s `checkNoClusterWideSecretsRead` guards only
 rules naming `secrets`; it does not, and should not, fire on this `nodes`
-rule, and `go test ./dist/chart/...` confirms it doesn't.
+rule.
 
-**No new mechanism added to catch a missing marker itself.** envtest's own
+**No mechanism catches a missing marker itself at this point.** envtest's own
 non-enforcement of RBAC is a real gap -- a marker can be deleted or never
 written, and every test in this package still passes -- but closing it
 would mean either standing up a real API server with RBAC turned on (a
@@ -597,22 +560,20 @@ affect every other `internal/uiapi` test, not just this file) or hand-
 writing a second list of "every client-go type this package touches" to
 diff against `rbac_markers.go`'s markers, which is exactly the kind of
 parallel bookkeeping that drifts the same way the markers themselves just
-did. Left unfixed and reported here instead.
+did. That is not addressed in this amendment; see "Amendment: an enforcing RBAC test"
+below.
 
 ## Amendment (2026-10-26): the chart's `ClusterRole` had silently fallen behind `config/`, and nothing would have caught it a third time
 
-The previous amendment's own report named this exact risk: "dist/chart's
-templates and config/'s manifests have no automatic drift check tying them
-together... a future hand-edit of either alone would go unnoticed by any
-test." It was not hypothetical. `dist/chart/templates/rbac/ichor-ui-role.yaml`
-had `talosclusters` and `talosconfigpatches` sharing one `apiGroups` entry
-with only `get`/`list`, while `config/rbac/ichor-ui/role.yaml` (regenerated
-from `rbac_markers.go` when `PatchService`, ADR 0035, added
-`create`/`update`/`delete` on `talosconfigpatches`) had moved on. A Helm
-install granted none of the three: every `TalosConfigPatch` create, update
-or delete `PatchService` makes came back `Forbidden`, surfaced to the UI as
-`CodeInternal`. The chart's hand-written copy had not tracked the generated
-one since `PatchService` landed.
+`dist/chart`'s templates and `config/`'s manifests have no automatic drift
+check tying them together, and a hand-edit of either alone goes unnoticed.
+`dist/chart/templates/rbac/ichor-ui-role.yaml` had `talosclusters` and
+`talosconfigpatches` sharing one `apiGroups` entry with only `get`/`list`, while
+`config/rbac/ichor-ui/role.yaml` (regenerated from `rbac_markers.go` when
+`PatchService`, ADR 0035, added `create`/`update`/`delete` on
+`talosconfigpatches`) had moved on. A Helm install granted none of the three:
+every `TalosConfigPatch` create, update or delete `PatchService` makes came
+back `Forbidden`, surfaced to the UI as `CodeInternal`.
 
 Fixed in the chart (`dist/chart/templates/rbac/ichor-ui-role.yaml`): split
 `talosconfigpatches` back into its own `apiGroups` entry carrying
@@ -645,9 +606,8 @@ gives it its own fixed name, `ichor-ui-secrets-role`, for the packaging
 reason that file's own comment already explains; nothing about that name
 difference is itself drift, so the test does not fail on it.
 
-Proven to actually fail, not just reasoned to: removing `update` from the
-chart's `talosconfigpatches` verbs and running `go test ./dist/chart/...
--run TestChartInvariants -count=1` produced
+When the chart drifts, the check's failure message names the exact missing
+grant and which file to fix, for example:
 
 ```text
 chart_test.go:119: helm template ichor .: ClusterRole ichor-ui-role is
@@ -656,18 +616,12 @@ missing ichor.maesh.dev/talosconfigpatches:update (present in
 dist/chart/templates/rbac/ichor-ui-role.yaml
 ```
 
-for both the `ichor` and `something-else` release-name subtests, naming the
-exact missing grant and which file to fix. Restoring the verb made the
-suite pass again. `checkNoClusterWideSecretsRead` and
-`checkUIBackendRBACIsSeparate` both still pass unchanged.
-
 **The same check, extended to the controller's `manager-role`.** The drift
 check had only looked at `ichor-ui-role`, so the same drift in the
 controller's own RBAC went unseen: `config/rbac/role.yaml` (controller-gen
 output) carried `talosoperations`, `talosoperations/status` and the Argo CD
-`applications` rules, and the chart's `manager-role.yaml` had none of them
-(since `a328ca6`, which added `TalosOperation`). A Helm install would have
-been Forbidden on `TalosOperation` (no upgrade could run) and unable to read
+`applications` rules, and the chart's `manager-role.yaml` had none of them. A Helm install would be
+Forbidden on `TalosOperation` (no upgrade could run) and unable to read
 `Application` state (the CNI handover could never finish).
 
 `checkControllerRBACMatchesConfig` reuses `checkRBACRulesMatch` unchanged and
@@ -679,29 +633,24 @@ release-templated, so they are matched by suffix). Not compared, on purpose:
 kubebuilder scaffolds, not generated from markers) and the per-CRD
 admin/editor/viewer roles (end-user roles, not the controller's identity).
 
-The shared triple now also carries `resourceNames`; without it a name-scoped
-grant for one Secret hid a missing one for another. That immediately found a
-fourth gap: `manager-secrets-role` lacked `get/patch/update` on
-`ichor-metrics-server-cert`, which `cmd/main.go`'s cert rotator needs. Fixed
-in the chart with the other three.
+The shared triple also carries `resourceNames`; without it a name-scoped
+grant for one Secret hid a missing one for another (the chart's
+`manager-secrets-role` lacked `get/patch/update` on `ichor-metrics-server-cert`,
+which `cmd/main.go`'s cert rotator needs).
 
-Proven both ways: before the chart fix the check failed naming every missing
-`talosoperations`, `talosoperations/status` and `applications` verb (and the
-three metrics-cert verbs); after it the suite passes, and removing
-`applications:watch` made it fail with `ClusterRole manager-role is missing
-argoproj.io/applications:watch (present in ../../config/rbac/role.yaml); add
-it to dist/chart/templates/rbac/manager-role.yaml`.
+## Amendment: an enforcing RBAC test
 
-## Amendment: RBAC proven by an enforcing test
-
-`GetEffectiveConfig` failed live with `cannot list resource "talosstorages"`: `render.ResolveSystemInputs`
-lists `TalosStorage` as the ServiceAccount (ADR 0050) and `rbac_markers.go` had no rule for it. Added
-`talosstorages` `list` (no `get`, no `watch`: one non-cached List per call). An audit of every `Get`/`List` in
-`internal/uiapi` and the render inputs it calls (`ResolveSystemInputs`, `ResolveRegistryAuth`, `secretsbundle.Load`)
-found no other gap: Secrets are `get` in the controller namespace, `argocd-cm` and Applications are already granted.
-`internal/uiapi/rbac_enforced_test.go` now loads `config/rbac/ichor-ui/role.yaml` into envtest (whose apiserver
-enforces RBAC) and runs `GetEffectiveConfig` as a client impersonating `system:serviceaccount:ichor-system:ichor-ui`,
-so a read the generated role does not grant fails the suite with Forbidden. A new render input needs a marker, and
-a handler added to that spec is covered.
+`GetEffectiveConfig` needs `list` on `talosstorages`: `render.ResolveSystemInputs`
+lists `TalosStorage` as the ServiceAccount (ADR 0050), so `rbac_markers.go`
+grants `talosstorages` `list` (no `get`, no `watch`: one non-cached List per
+call). Every `Get`/`List` in `internal/uiapi` and the render inputs it calls
+(`ResolveSystemInputs`, `ResolveRegistryAuth`, `secretsbundle.Load`) needs a
+grant: Secrets are `get` in the controller namespace, `argocd-cm` and
+Applications are granted.
+`internal/uiapi/rbac_enforced_test.go` loads `config/rbac/ichor-ui/role.yaml`
+into envtest (whose apiserver enforces RBAC) and runs `GetEffectiveConfig` as a
+client impersonating `system:serviceaccount:ichor-system:ichor-ui`, so a read
+the generated role does not grant fails the suite with Forbidden. A new render
+input needs a marker, and a handler added to that spec is covered.
 
 Amendment 2026-11-05 (ADR 0130): no reason is asked for on approve or reject. `reason` on `RejectMachineRequest`, `ApproveMachineRequest` and `AuditRecord`'s typed use is deprecated and never read; a rejection records the actor and the time only, and a rejected machine that is rejected again simply records the newest decision.

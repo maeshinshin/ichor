@@ -1,5 +1,75 @@
 # Changelog
 
+## v0.2.4 (2026-11-13)
+
+Fixes to removing a node and to how Ichor addresses one, and a check on config
+patch documents. The Talos, Kubernetes and Cilium versions a first install gets
+are the same as in v0.2.2, and no CRD field changed.
+
+### Nodes
+
+- Before Ichor wipes a node, makes it leave etcd, applies a configuration to
+  it, upgrades it or runs a node action on it, it reads the node's machine UUID
+  over the same connection and compares it with `spec.identity.uuid` (ADR
+  0153). A UUID that differs, an empty one and an Identity call that fails each
+  refuse, and nothing is sent. An address recorded for one machine can answer
+  as another control plane that trusts the same CA; a removal used to take the
+  Kubernetes Node and etcd member to remove from whoever answered. It now takes
+  the name from `spec.hostname`, then `status.nodeName`, and from the node's own
+  report only once that node has passed the check.
+
+### Removal
+
+- A control plane removal's drain ends after 90 seconds, records `DrainFailed`
+  in the Removal condition and is tried again after 15 seconds. It used to run
+  without a time limit and ask again at once after every refused eviction, so
+  a PodDisruptionBudget that allows no disruption held the single worker and
+  the cluster lock until the pod restarted. A refused eviction is now retried
+  after 5 seconds, in the rollout's drain too, and a drain no longer waits for
+  a pod that has been terminating for a minute.
+- A removal that is waiting for the cluster lock or for a shutdown to finish
+  asks to be tried again after 10 seconds. Nothing woke it when the lock was
+  released, so it stayed deferred.
+- The removal of a dead control plane finishes. The decision to go on below the
+  declared count is recorded in the Removal condition's reason, and the reset
+  step replaces that reason; the next round then counted the control planes
+  again, refused, and left the finalizer on a node that was already wiped. A
+  reset that Talos accepted now skips the count check, and the next attempt
+  after a failed reset still counts as going on for the dead member.
+
+### Typed configuration
+
+- A `TalosConfigPatch` document whose `kind` names a field that is not the one
+  set, or that has a second field set, is refused with an error naming the kind
+  and the field. It used to convert to no document at all and no error, which
+  panicked the first caller to use it. The CRD's own validation already refuses
+  such a document at admission; this covers one that is stored without it or
+  built in process, and the admission webhook's dry render gives the same
+  answer.
+- A `TalosConfigPatch` document's `config` (the `v1alpha1` document) can no
+  longer set `machine.registries.config.<host>.tls.clientIdentity`, a private
+  key, or `cluster.extraManifestHeaders`, which in practice holds an
+  `Authorization` header. A custom resource is stored unencrypted in etcd and
+  readable by anyone who can read it; credentials belong in the secrets bundle.
+  A create or update that sets or changes either is refused, naming the field.
+  A patch that already has them keeps them, can still be edited for something
+  else, and can have them removed. The fields stay in the CRD.
+
+## v0.2.3 (2026-11-13)
+
+Licence notices. The Talos, Kubernetes and Cilium versions a first install gets
+are the same as in v0.2.2, and no CRD field changed.
+
+### Licensing
+
+- `NOTICE` says where the source of the MPL-2.0 covered files is obtained, at
+  the Git tag that matches the version of the artifact, and names the files
+  that hold schema derived from Talos and cannot carry a header: the two CRD
+  manifests, their copies in the Helm chart and their reference pages.
+- The deep copy methods of `TalosConfigPatchDocument` are written next to the
+  type, so `zz_generated.deepcopy.go`, which carries the Apache-2.0 header,
+  names no Talos type.
+
 ## v0.2.2 (2026-11-12)
 
 Fixes for `ichor-ui`'s log stream and for `ichor init`. The Talos, Kubernetes

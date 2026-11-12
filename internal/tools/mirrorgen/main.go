@@ -52,14 +52,8 @@ const (
 	pkgKubeletV1 = "k8s.io/kubelet/config/v1"
 )
 
-// rootKind is one allow-listed machinery document kind to mirror. Adding a
-// kind here is the only way to grow the generated API surface (rule 0: no
-// CLI flags, no config file). This is also the allow-list half of the pair
-// "P2-2" calls for: api/v1alpha1.TalosConfigPatchDocument's "kind"
-// enum is the other half. They can't be the same Go value -- the enum is a
-// +kubebuilder:validation:Enum marker, plain text controller-gen reads from
-// a source comment -- so main_test.go checks the two agree against the
-// generated CRD instead.
+// rootKind is one shipped machinery document kind to mirror, derived from Talos's registry by
+// deriveRoots; shipped.go lists which kinds are shipped.
 type rootKind struct {
 	pkgPath  string
 	typeName string
@@ -68,28 +62,21 @@ type rootKind struct {
 	// v1alpha1.Config document which carries none, the name it is
 	// referred to by.
 	kind string
-	// kindConst/apiVersion set the embedded meta.Meta on render, if the root
-	// type embeds one. Config does not, so both are empty for it.
-	kindConst  string
-	apiVersion string
+	// constPkg/constName name the kind constant and apiVersion sets the embedded meta.Meta on render, if the
+	// root type embeds one. Config does not, so both are empty for it.
+	constPkg, constName string
+	apiVersion          string
+	// what completes "<field> is a Talos ...; populated when kind is <kind>" in the union field's doc.
+	what string
 }
 
-// apiVersionV1Alpha1 is every allow-listed kind's document API version today;
-// Config has none (see rootKind.apiVersion's doc).
-const apiVersionV1Alpha1 = "v1alpha1"
+// kindConst is the Go expression of the kind constant in generated code, empty when the root has none.
+func (r rootKind) kindConst() string {
+	if r.constName == "" {
+		return ""
+	}
 
-var roots = []rootKind{
-	{pkgRuntime, "SysctlConfigV1Alpha1", "SysctlConfig", "mruntime.SysctlConfigKind", apiVersionV1Alpha1},
-	{pkgRuntime, "KernelModuleConfigV1Alpha1", "KernelModuleConfig", "mruntime.KernelModuleConfigKind", apiVersionV1Alpha1},
-	{pkgV1Alpha1, "Config", "Config", "", ""},
-	// Phase 3 (disk roles): placing EPHEMERAL or STATE on their own disk, a
-	// user volume, and a raw volume handed to a CSI provisioner are each a
-	// separate modern document kind, not a v1alpha1.Config field.
-	{pkgBlock, "VolumeConfigV1Alpha1", "VolumeConfig", "mblock.VolumeConfigKind", apiVersionV1Alpha1},
-	{pkgBlock, "UserVolumeConfigV1Alpha1", "UserVolumeConfig", "mblock.UserVolumeConfigKind", apiVersionV1Alpha1},
-	{pkgBlock, "RawVolumeConfigV1Alpha1", "RawVolumeConfig", "mblock.RawVolumeConfigKind", apiVersionV1Alpha1},
-	// Network documents. ResolverConfig carries only nameservers and search domains: no secret material.
-	{pkgNetwork, "ResolverConfigV1Alpha1", "ResolverConfig", "mnetwork.ResolverKind", apiVersionV1Alpha1},
+	return machImportAlias(r.constPkg) + "." + r.constName
 }
 
 // substKind says how a substituted-by-type field converts to and from its
@@ -325,7 +312,7 @@ func fatalf(format string, args ...any) {
 	os.Exit(1)
 }
 
-// generate walks every allow-listed root and returns the populated
+// generate walks every shipped root and returns the populated
 // generator -- everything main does except reporting and writing files,
 // factored out so tests can inspect what the walk actually dropped
 // (g.droppedSecret, in particular) against the real machinery source,
@@ -334,10 +321,10 @@ func fatalf(format string, args ...any) {
 func generate() *generator {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesInfo |
-			packages.NeedDeps | packages.NeedImports,
+			packages.NeedSyntax | packages.NeedDeps | packages.NeedImports,
 	}
 
-	pkgs, err := packages.Load(cfg, pkgRuntime, pkgV1Alpha1, pkgBlock, pkgNetwork, pkgCoreV1, pkgSpecs, pkgAuditV1, pkgAPIServerV1, pkgKubeletV1)
+	pkgs, err := packages.Load(cfg, pkgTypesTree, pkgCoreV1, pkgSpecs, pkgAuditV1, pkgAPIServerV1, pkgKubeletV1)
 	if err != nil {
 		fatalf("loading packages: %v", err)
 	}
@@ -348,7 +335,18 @@ func generate() *generator {
 		}
 	}
 
+	reg, err := scanRegistry(pkgs)
+	if err != nil {
+		fatalf("%v", err)
+	}
+
+	roots, notes, err := deriveRoots(reg, kindClasses, shipped)
+	if err != nil {
+		fatalf("%v", err)
+	}
+
 	g := newGenerator(pkgs)
+	g.roots, g.notes, g.pending = roots, notes, pendingKinds(kindClasses, shipped)
 
 	for _, r := range roots {
 		named := g.lookupType(r.pkgPath, r.typeName)
@@ -375,4 +373,5 @@ func main() {
 	g.report()
 	g.writeMirror("zz_generated.mirror.go")
 	g.writeConversion("zz_generated.conversion.go")
+	mustWriteFile("../../api/v1alpha1/zz_generated.talosconfigpatchdocument.go", unionSource(g.roots))
 }

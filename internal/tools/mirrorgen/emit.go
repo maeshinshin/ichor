@@ -481,8 +481,8 @@ func writeStructConversion(b *strings.Builder, def *structDef) {
 	b.WriteString("\tif m == nil {\n\t\treturn nil, nil\n\t}\n")
 	fmt.Fprintf(b, "\tout := &%s{}\n", mach)
 
-	if def.isRoot && def.rootKind.kindConst != "" {
-		fmt.Fprintf(b, "\tout.Meta = mmeta.Meta{MetaKind: %s, MetaAPIVersion: %q}\n", def.rootKind.kindConst, def.rootKind.apiVersion)
+	if def.isRoot && def.rootKind.kindConst() != "" {
+		fmt.Fprintf(b, "\tout.Meta = mmeta.Meta{MetaKind: %s, MetaAPIVersion: %q}\n", def.rootKind.kindConst(), def.rootKind.apiVersion)
 	}
 
 	for i, f := range def.fields {
@@ -511,7 +511,12 @@ func mustWriteFile(name, content string) {
 }
 
 func (g *generator) report() {
-	fmt.Println("mirrorgen: generated", len(g.order), "mirror types")
+	fmt.Println("mirrorgen: generated", len(g.order), "mirror types for", len(g.roots), "shipped kinds;",
+		len(g.pending), "accept kinds are not shipped yet")
+
+	for _, n := range g.notes {
+		fmt.Println("mirrorgen: note:", n)
+	}
 
 	if len(g.subst) > 0 {
 		names := make([]string, 0, len(g.subst))
@@ -564,4 +569,116 @@ func (g *generator) report() {
 			fmt.Println("  -", s)
 		}
 	}
+}
+
+const unionHeader = header + `
+package v1alpha1
+
+import "github.com/maeshinshin/ichor/pkg/typedconfig"
+`
+
+// unionSource returns the Go source of api/v1alpha1's TalosConfigPatchDocument for the given roots: the kind
+// enum, one field per root, and the two CEL rules that tie the fields to kind. controller-gen builds the CRD
+// from it as from any other API type.
+func unionSource(roots []rootKind) string {
+	var b strings.Builder
+
+	b.WriteString(unionHeader)
+	b.WriteString(`
+// TalosConfigPatchDocument carries exactly one Talos config document, restricted to Ichor's
+// allow-list of kinds. kind is a discriminator: it says which of the fields below is
+// populated, the same way a Talos config document's own "kind" field says what the rest of the
+// document is. mirrorgen's roots (internal/tools/mirrorgen/main.go) names the same kinds this
+// enum does; TestAllowListMatchesCRDEnum there checks the two agree, since a kubebuilder marker
+// is plain text and can't reference that Go value directly.
+`)
+
+	celCount, celKind, celList := unionRules(roots)
+
+	fmt.Fprintf(&b, "// +kubebuilder:validation:XValidation:rule=%q,message=%q\n", celCount, "exactly one of "+celList+" must be set")
+	fmt.Fprintf(&b, "// +kubebuilder:validation:XValidation:rule=%q,message=\"kind must match the populated field\"\n", celKind)
+	b.WriteString("// +kubebuilder:object:generate=false\n")
+	b.WriteString("type TalosConfigPatchDocument struct {\n")
+	b.WriteString("\t// kind selects which of the fields below is populated.\n")
+
+	kinds := make([]string, len(roots))
+	for i, r := range roots {
+		kinds[i] = r.kind
+	}
+
+	fmt.Fprintf(&b, "\t// +kubebuilder:validation:Enum=%s\n", strings.Join(kinds, ";"))
+	b.WriteString("\t// +unionDiscriminator\n\t// +required\n\tKind string `json:\"kind\"`\n")
+
+	for _, r := range roots {
+		what := strings.ReplaceAll(r.what, "\n", "\n\t// ")
+
+		fmt.Fprintf(&b, "\n\t// %s is a Talos %s; populated when kind is %q.\n", fieldName(r.kind), what, r.kind)
+		fmt.Fprintf(&b, "\t// +optional\n\t%s *typedconfig.%s `json:\"%s,omitempty\"`\n", r.kind, r.typeName, fieldName(r.kind))
+	}
+
+	b.WriteString("}\n")
+	b.WriteString(unionDeepCopy(roots))
+
+	return b.String()
+}
+
+// unionDeepCopy returns the DeepCopyInto and DeepCopy methods of TalosConfigPatchDocument. They are written here and
+// not by controller-gen so that the Talos type and field names they hold stay in this MPL-2.0 file: controller-gen
+// gives every file of a package one header, and api/v1alpha1/zz_generated.deepcopy.go is Apache-2.0.
+func unionDeepCopy(roots []rootKind) string {
+	var b strings.Builder
+
+	b.WriteString(`
+// DeepCopyInto copies the receiver into out. in must be non-nil.
+func (in *TalosConfigPatchDocument) DeepCopyInto(out *TalosConfigPatchDocument) {
+	*out = *in
+`)
+
+	for _, r := range roots {
+		fmt.Fprintf(&b, "\tif in.%[1]s != nil {\n\t\tin, out := &in.%[1]s, &out.%[1]s\n\t\t*out = new(typedconfig.%[2]s)\n\t\t(*in).DeepCopyInto(*out)\n\t}\n", r.kind, r.typeName)
+	}
+
+	b.WriteString(`}
+
+// DeepCopy returns a copy of the receiver.
+func (in *TalosConfigPatchDocument) DeepCopy() *TalosConfigPatchDocument {
+	if in == nil {
+		return nil
+	}
+
+	out := new(TalosConfigPatchDocument)
+	in.DeepCopyInto(out)
+
+	return out
+}
+`)
+
+	return b.String()
+}
+
+
+// unionRules returns the CEL rule that exactly one field is set, the rule that kind names the set field, and
+// the human list of fields ("a, b or c") the first rule's message uses. Both rules grow with the number of
+// roots, and the API server evaluates them once per documents[] element.
+func unionRules(roots []rootKind) (count, kindRule, list string) {
+	terms := make([]string, len(roots))
+	names := make([]string, len(roots))
+
+	for i, r := range roots {
+		terms[i] = fmt.Sprintf("(has(self.%s) ? 1 : 0)", fieldName(r.kind))
+		names[i] = fieldName(r.kind)
+	}
+
+	count = strings.Join(terms, " + ") + " == 1"
+
+	// The last kind needs no test of its own: the enum rules out any other value.
+	for _, r := range roots[:len(roots)-1] {
+		kindRule += fmt.Sprintf("self.kind == '%s' ? has(self.%s) : ", r.kind, fieldName(r.kind))
+	}
+
+	kindRule += fmt.Sprintf("has(self.%s)", fieldName(roots[len(roots)-1].kind))
+
+	list = strings.Join(names[:len(names)-1], ", ") + " or " + names[len(names)-1]
+
+	return count, kindRule, list
 }

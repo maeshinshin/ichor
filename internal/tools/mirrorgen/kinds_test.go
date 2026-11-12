@@ -17,77 +17,49 @@ limitations under the License.
 package main
 
 import (
-	"go/ast"
-	"go/constant"
-	"go/types"
+	"maps"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"golang.org/x/tools/go/packages"
 )
 
-const (
-	pkgTypesTree   = "github.com/siderolabs/talos/pkg/machinery/config/types/..."
-	pkgTalosRegist = "github.com/siderolabs/talos/pkg/machinery/config/internal/registry"
-)
+var loadRegistry = sync.OnceValues(func() (map[string]registered, error) {
+	pkgs, err := packages.Load(&packages.Config{
+		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesInfo |
+			packages.NeedSyntax | packages.NeedDeps | packages.NeedImports,
+	}, pkgTypesTree)
+	if err != nil {
+		return nil, err
+	}
 
-// registeredKinds returns the sorted kind of every registry.Register call in
-// Talos's config/types tree. The registry package is internal to machinery, so
-// its Kinds() cannot be imported; the init() calls that fill it are read
-// instead, with the kind constant resolved by the type checker.
+	for _, p := range pkgs {
+		if len(p.Errors) > 0 {
+			return nil, p.Errors[0]
+		}
+	}
+
+	return scanRegistry(pkgs)
+})
+
+// talosRegistry is every registry.Register call in Talos's config/types tree, keyed by kind.
+func talosRegistry(t *testing.T) map[string]registered {
+	t.Helper()
+
+	reg, err := loadRegistry()
+	if err != nil {
+		t.Fatalf("reading Talos's kind registry: %v", err)
+	}
+
+	return reg
+}
+
 func registeredKinds(t *testing.T) []string {
 	t.Helper()
 
-	cfg := &packages.Config{
-		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesInfo |
-			packages.NeedSyntax | packages.NeedDeps | packages.NeedImports,
-	}
-
-	pkgs, err := packages.Load(cfg, pkgTypesTree)
-	if err != nil {
-		t.Fatalf("loading %s: %v", pkgTypesTree, err)
-	}
-
-	var kinds []string
-
-	for _, p := range pkgs {
-		for _, e := range p.Errors {
-			t.Fatalf("%s: %v", p.PkgPath, e)
-		}
-
-		for _, f := range p.Syntax {
-			ast.Inspect(f, func(n ast.Node) bool {
-				call, ok := n.(*ast.CallExpr)
-				if !ok || len(call.Args) == 0 {
-					return true
-				}
-
-				sel, ok := call.Fun.(*ast.SelectorExpr)
-				if !ok {
-					return true
-				}
-
-				fn, ok := p.TypesInfo.Uses[sel.Sel].(*types.Func)
-				if !ok || fn.Name() != "Register" || fn.Pkg() == nil || fn.Pkg().Path() != pkgTalosRegist {
-					return true
-				}
-
-				v := p.TypesInfo.Types[call.Args[0]].Value
-				if v == nil || v.Kind() != constant.String {
-					t.Fatalf("%s: registry.Register with a kind that is not a constant string", p.Fset.Position(call.Pos()))
-				}
-
-				kinds = append(kinds, constant.StringVal(v))
-
-				return true
-			})
-		}
-	}
-
-	slices.Sort(kinds)
-
-	return slices.Compact(kinds)
+	return slices.Sorted(maps.Keys(talosRegistry(t)))
 }
 
 // TestEveryRegisteredKindIsClassified fails when Talos registers a document
@@ -126,8 +98,8 @@ func TestEveryRegisteredKindIsClassified(t *testing.T) {
 		t.Errorf("Talos registers document kind(s) that internal/tools/mirrorgen/kinds.go has no row for: %s\n"+
 			"Add one row per kind to kindClasses: accept, secret (carries credentials), ichor-owned (Ichor renders it "+
 			"from a spec field) or unstructured (raw YAML), with a reason; docs/adr/0149-* defines the classes. "+
-			"An accept kind also needs a root in main.go and an entry in the kind enum of "+
-			"api/v1alpha1/talosconfigpatch_types.go.", strings.Join(unclassified, ", "))
+			"An accept kind goes live when "+
+			"it is appended to shipped in shipped.go.", strings.Join(unclassified, ", "))
 	}
 
 	if len(stale) > 0 {

@@ -12,6 +12,7 @@ Files covered by MPL-2.0:
 pkg/typedconfig/zz_generated.conversion.go
 pkg/typedconfig/zz_generated.deepcopy.go
 pkg/typedconfig/zz_generated.mirror.go
+api/v1alpha1/zz_generated.talosconfigpatchdocument.go
 
 The following hold the schema generated from those types (the Talos type and
 field names and the documentation text derived from them), and are covered by

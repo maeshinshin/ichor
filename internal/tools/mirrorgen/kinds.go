@@ -31,13 +31,15 @@ const (
 	unstructured kindClass = "unstructured"
 )
 
+type kindRow struct {
+	class kindClass
+	why   string
+}
+
 // kindClasses holds one row for every document kind Talos registers, keyed by
 // the string it registers (see registeredKinds in kinds_test.go). A kind
 // Talos adds with no row here fails TestEveryRegisteredKindIsClassified.
-var kindClasses = map[string]struct {
-	class kindClass
-	why   string
-}{
+var kindClasses = map[string]kindRow{
 	"BGPInstanceConfig":            {accept, "BGP instance settings; no credentials"},
 	"BlackholeRouteConfig":         {accept, "a blackhole route; no credentials"},
 	"BondConfig":                   {accept, "a bond link; no credentials"},

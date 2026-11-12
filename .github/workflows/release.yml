@@ -356,7 +356,7 @@ jobs:
       - name: Clone the code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          fetch-depth: 0 # goreleaser's changelog reads the history
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Install Nix
@@ -370,8 +370,13 @@ jobs:
           name: release-image-digests
           path: bin
 
+      - name: Take the release notes from CHANGELOG.md
+        run: |
+          awk -v h="## ${GITHUB_REF_NAME} " 'index($0, "## ") == 1 { p = index($0, h) == 1; next } p' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          test -s "$RUNNER_TEMP/release-notes.md" || { echo "CHANGELOG.md has no section for ${GITHUB_REF_NAME}" >&2; exit 1; }
+
       - name: Build, sign the checksums and publish the CLI
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ICHOR_IMAGE_DIGESTS: bin/digests.txt
-        run: nix develop --command goreleaser release --clean
+        run: nix develop --command goreleaser release --clean --release-notes "$RUNNER_TEMP/release-notes.md"

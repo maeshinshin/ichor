@@ -2805,6 +2805,10 @@ spec:
                       - VethConfig
                       - WatchdogTimerConfig
                       - ZswapConfig
+                      - KubeAuditPolicyConfig
+                      - KubeAuthorizerConfig
+                      - KubeCredentialProviderConfig
+                      - KubeExternalManifestConfig
                       type: string
                     kmsgLogConfig:
                       description: kmsgLogConfig is a Talos KmsgLogConfig document;
@@ -2868,6 +2872,331 @@ spec:
                           type: boolean
                       required:
                       - image
+                      type: object
+                    kubeAuditPolicyConfig:
+                      description: kubeAuditPolicyConfig is a Talos KubeAuditPolicyConfig
+                        document; populated when kind is "KubeAuditPolicyConfig".
+                      properties:
+                        configuration:
+                          description: |-
+                            Policy defines the configuration of audit logging, and the rules for how different request
+                            categories are logged.
+                          properties:
+                            apiVersion:
+                              description: |-
+                                APIVersion defines the versioned schema of this representation of an object.
+                                Servers should convert recognized schemas to the latest internal value, and
+                                may reject unrecognized values.
+                                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+                              type: string
+                            kind:
+                              description: |-
+                                Kind is a string value representing the REST resource this object represents.
+                                Servers may infer this from the endpoint the client submits requests to.
+                                Cannot be updated.
+                                In CamelCase.
+                                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                              type: string
+                            metadata:
+                              description: ObjectMeta is included for interoperability
+                                with API infrastructure.
+                              type: object
+                            omitManagedFields:
+                              description: |-
+                                OmitManagedFields indicates whether to omit the managed fields of the request
+                                and response bodies from being written to the API audit log.
+                                This is used as a global default - a value of 'true' will omit the managed fileds,
+                                otherwise the managed fields will be included in the API audit log.
+                                Note that this can also be specified per rule in which case the value specified
+                                in a rule will override the global default.
+                              type: boolean
+                            omitStages:
+                              description: |-
+                                OmitStages is a list of stages for which no events are created. Note that this can also
+                                be specified per rule in which case the union of both are omitted.
+                              items:
+                                description: Stage defines the stages in request handling
+                                  that audit events may be generated.
+                                type: string
+                              type: array
+                              x-kubernetes-list-type: atomic
+                            rules:
+                              description: |-
+                                Rules specify the audit Level a request should be recorded at.
+                                A request may match multiple rules, in which case the FIRST matching rule is used.
+                                The default audit level is None, but can be overridden by a catch-all rule at the end of the list.
+                                PolicyRules are strictly ordered.
+                              items:
+                                description: |-
+                                  PolicyRule maps requests based off metadata to an audit Level.
+                                  Requests must match the rules of every field (an intersection of rules).
+                                properties:
+                                  level:
+                                    description: The Level that requests matching
+                                      this rule are recorded at.
+                                    type: string
+                                  namespaces:
+                                    description: |-
+                                      Namespaces that this rule matches.
+                                      The empty string "" matches non-namespaced resources.
+                                      An empty list implies every namespace.
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                  nonResourceURLs:
+                                    description: |-
+                                      NonResourceURLs is a set of URL paths that should be audited.
+                                      `*`s are allowed, but only as the full, final step in the path.
+                                      Examples:
+                                      - `/metrics` - Log requests for apiserver metrics
+                                      - `/healthz*` - Log all health checks
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                  omitManagedFields:
+                                    description: |-
+                                      OmitManagedFields indicates whether to omit the managed fields of the request
+                                      and response bodies from being written to the API audit log.
+                                      - a value of 'true' will drop the managed fields from the API audit log
+                                      - a value of 'false' indicates that the managed fileds should be included
+                                        in the API audit log
+                                      Note that the value, if specified, in this rule will override the global default
+                                      If a value is not specified then the global default specified in
+                                      Policy.OmitManagedFields will stand.
+                                    type: boolean
+                                  omitStages:
+                                    description: |-
+                                      OmitStages is a list of stages for which no events are created. Note that this can also
+                                      be specified policy wide in which case the union of both are omitted.
+                                      An empty list means no restrictions will apply.
+                                    items:
+                                      description: Stage defines the stages in request
+                                        handling that audit events may be generated.
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                  resources:
+                                    description: Resources that this rule matches.
+                                      An empty list implies all kinds in all API groups.
+                                    items:
+                                      description: GroupResources represents resource
+                                        kinds in an API group.
+                                      properties:
+                                        group:
+                                          description: |-
+                                            Group is the name of the API group that contains the resources.
+                                            The empty string represents the core API group.
+                                            `*` matches all groups
+                                          type: string
+                                        resourceNames:
+                                          description: |-
+                                            ResourceNames is a list of resource instance names that the policy matches.
+                                            Using this field requires Resources to be specified.
+                                            An empty list implies that every instance of the resource is matched.
+                                          items:
+                                            type: string
+                                          type: array
+                                          x-kubernetes-list-type: atomic
+                                        resources:
+                                          description: |-
+                                            Resources is a list of resources this rule applies to.
+
+                                            For example:
+                                            - `pods` matches pods.
+                                            - `pods/log` matches the log subresource of pods.
+                                            - `*` matches all resources and their subresources.
+                                            - `pods/*` matches all subresources of pods.
+                                            - `*/scale` matches all scale subresources.
+
+                                            If wildcard is present, the validation rule will ensure resources do not
+                                            overlap with each other.
+
+                                            An empty list implies all resources and subresources in this API groups apply.
+                                          items:
+                                            type: string
+                                          type: array
+                                          x-kubernetes-list-type: atomic
+                                      type: object
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                  userGroups:
+                                    description: |-
+                                      The user groups this rule applies to. A user is considered matching
+                                      if it is a member of any of the UserGroups.
+                                      An empty list implies every user group.
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                  users:
+                                    description: |-
+                                      The users (by authenticated user name) this rule applies to.
+                                      An empty list implies every user.
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                  verbs:
+                                    description: |-
+                                      The verbs that match this rule.
+                                      An empty list implies every verb.
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                required:
+                                - level
+                                type: object
+                              type: array
+                              x-kubernetes-list-type: atomic
+                          required:
+                          - rules
+                          type: object
+                      required:
+                      - configuration
+                      type: object
+                    kubeAuthorizerConfig:
+                      description: kubeAuthorizerConfig is a Talos KubeAuthorizerConfig
+                        document; populated when kind is "KubeAuthorizerConfig".
+                      properties:
+                        name:
+                          type: string
+                        type:
+                          type: string
+                        webhook:
+                          properties:
+                            authorizedTTL:
+                              description: |-
+                                The duration to cache 'authorized' responses from the webhook
+                                authorizer.
+                                Same as setting `--authorization-webhook-cache-authorized-ttl` flag
+                                Default: 5m0s
+                              type: string
+                            cacheAuthorizedRequests:
+                              description: |-
+                                CacheAuthorizedRequests specifies whether authorized requests should be cached.
+                                If set to true, the TTL for cached decisions can be configured via the
+                                AuthorizedTTL field.
+                                Default: true
+                              type: boolean
+                            cacheUnauthorizedRequests:
+                              description: |-
+                                CacheUnauthorizedRequests specifies whether unauthorized requests should be cached.
+                                If set to true, the TTL for cached decisions can be configured via the
+                                UnauthorizedTTL field.
+                                Default: true
+                              type: boolean
+                            connectionInfo:
+                              description: ConnectionInfo defines how we talk to the
+                                webhook
+                              properties:
+                                kubeConfigFile:
+                                  description: |-
+                                    Path to KubeConfigFile for connection info
+                                    Required, if connectionInfo.Type is KubeConfig
+                                  type: string
+                                type:
+                                  description: |-
+                                    Controls how the webhook should communicate with the server.
+                                    Valid values:
+                                    - KubeConfigFile: use the file specified in kubeConfigFile to locate the
+                                      server.
+                                    - InClusterConfig: use the in-cluster configuration to call the
+                                      SubjectAccessReview API hosted by kube-apiserver. This mode is not
+                                      allowed for kube-apiserver.
+                                  type: string
+                              required:
+                              - kubeConfigFile
+                              - type
+                              type: object
+                            failurePolicy:
+                              description: |-
+                                Controls the authorization decision when a webhook request fails to
+                                complete or returns a malformed response or errors evaluating
+                                matchConditions.
+                                Valid values:
+                                  - NoOpinion: continue to subsequent authorizers to see if one of
+                                    them allows the request
+                                  - Deny: reject the request without consulting subsequent authorizers
+                                Required, with no default.
+                              type: string
+                            matchConditionSubjectAccessReviewVersion:
+                              description: |-
+                                MatchConditionSubjectAccessReviewVersion specifies the SubjectAccessReview
+                                version the CEL expressions are evaluated against
+                                Valid values: v1
+                                Required, no default value
+                              type: string
+                            matchConditions:
+                              description: |-
+                                matchConditions is a list of conditions that must be met for a request to be sent to this
+                                webhook. An empty list of matchConditions matches all requests.
+                                There are a maximum of 64 match conditions allowed.
+
+                                The exact matching logic is (in order):
+                                  1. If at least one matchCondition evaluates to FALSE, then the webhook is skipped.
+                                  2. If ALL matchConditions evaluate to TRUE, then the webhook is called.
+                                  3. If at least one matchCondition evaluates to an error (but none are FALSE):
+                                     - If failurePolicy=Deny, then the webhook rejects the request
+                                     - If failurePolicy=NoOpinion, then the error is ignored and the webhook is skipped
+                              items:
+                                properties:
+                                  expression:
+                                    description: |-
+                                      expression represents the expression which will be evaluated by CEL. Must evaluate to bool.
+                                      CEL expressions have access to the contents of the SubjectAccessReview in v1 version.
+                                      If version specified by subjectAccessReviewVersion in the request variable is v1beta1,
+                                      the contents would be converted to the v1 version before evaluating the CEL expression.
+
+                                      - 'resourceAttributes' describes information for a resource access request and is unset for non-resource requests. e.g. has(request.resourceAttributes) && request.resourceAttributes.namespace == 'default'
+                                      - 'nonResourceAttributes' describes information for a non-resource access request and is unset for resource requests. e.g. has(request.nonResourceAttributes) && request.nonResourceAttributes.path == '/healthz'.
+                                      - 'user' is the user to test for. e.g. request.user == 'alice'
+                                      - 'groups' is the groups to test for. e.g. ('group1' in request.groups)
+                                      - 'extra' corresponds to the user.Info.GetExtra() method from the authenticator.
+                                      - 'uid' is the information about the requesting user. e.g. request.uid == '1'
+
+                                      Documentation on CEL: https://kubernetes.io/docs/reference/using-api/cel/
+                                    type: string
+                                required:
+                                - expression
+                                type: object
+                              type: array
+                            subjectAccessReviewVersion:
+                              description: |-
+                                The API version of the authorization.k8s.io SubjectAccessReview to
+                                send to and expect from the webhook.
+                                Same as setting `--authorization-webhook-version` flag
+                                Valid values: v1beta1, v1
+                                Required, no default value
+                              type: string
+                            timeout:
+                              description: |-
+                                Timeout for the webhook request
+                                Maximum allowed value is 30s.
+                                Required, no default value.
+                              type: string
+                            unauthorizedTTL:
+                              description: |-
+                                The duration to cache 'unauthorized' responses from the webhook
+                                authorizer.
+                                Same as setting `--authorization-webhook-cache-unauthorized-ttl` flag
+                                Default: 30s
+                              type: string
+                          required:
+                          - authorizedTTL
+                          - connectionInfo
+                          - failurePolicy
+                          - matchConditionSubjectAccessReviewVersion
+                          - matchConditions
+                          - subjectAccessReviewVersion
+                          - timeout
+                          - unauthorizedTTL
+                          type: object
+                      required:
+                      - name
+                      - type
                       type: object
                     kubeClusterConfig:
                       description: kubeClusterConfig is a Talos KubeClusterConfig
@@ -2934,6 +3263,220 @@ spec:
                           type: boolean
                         image:
                           type: string
+                      type: object
+                    kubeCredentialProviderConfig:
+                      description: kubeCredentialProviderConfig is a Talos KubeCredentialProviderConfig
+                        document; populated when kind is "KubeCredentialProviderConfig".
+                      properties:
+                        configuration:
+                          description: |-
+                            CredentialProviderConfig is the configuration containing information about
+                            each exec credential provider. Kubelet reads this configuration from disk and enables
+                            each provider as specified by the CredentialProvider type.
+                          properties:
+                            apiVersion:
+                              description: |-
+                                APIVersion defines the versioned schema of this representation of an object.
+                                Servers should convert recognized schemas to the latest internal value, and
+                                may reject unrecognized values.
+                                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+                              type: string
+                            kind:
+                              description: |-
+                                Kind is a string value representing the REST resource this object represents.
+                                Servers may infer this from the endpoint the client submits requests to.
+                                Cannot be updated.
+                                In CamelCase.
+                                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                              type: string
+                            providers:
+                              description: |-
+                                providers is a list of credential provider plugins that will be enabled by the kubelet.
+                                Multiple providers may match against a single image, in which case credentials
+                                from all providers will be returned to the kubelet. If multiple providers are called
+                                for a single image, the results are combined. If providers return overlapping
+                                auth keys, the value from the provider earlier in this list is attempted first.
+                              items:
+                                description: |-
+                                  CredentialProvider represents an exec plugin to be invoked by the kubelet. The plugin is only
+                                  invoked when an image being pulled matches the images handled by the plugin (see matchImages).
+                                properties:
+                                  apiVersion:
+                                    description: |-
+                                      Required input version of the exec CredentialProviderRequest. The returned CredentialProviderResponse
+                                      MUST use the same encoding version as the input. Current supported values are:
+                                      - credentialprovider.kubelet.k8s.io/v1
+                                    type: string
+                                  args:
+                                    description: Arguments to pass to the command
+                                      when executing it.
+                                    items:
+                                      type: string
+                                    type: array
+                                  defaultCacheDuration:
+                                    description: |-
+                                      defaultCacheDuration is the default duration the plugin will cache credentials in-memory
+                                      if a cache duration is not provided in the plugin response. This field is required.
+                                    type: string
+                                  env:
+                                    description: |-
+                                      Env defines additional environment variables to expose to the process. These
+                                      are unioned with the host's environment, as well as variables client-go uses
+                                      to pass argument to the plugin.
+                                    items:
+                                      description: |-
+                                        ExecEnvVar is used for setting environment variables when executing an exec-based
+                                        credential plugin.
+                                      properties:
+                                        name:
+                                          type: string
+                                        value:
+                                          type: string
+                                      required:
+                                      - name
+                                      - value
+                                      type: object
+                                    type: array
+                                  matchImages:
+                                    description: |-
+                                      matchImages is a required list of strings used to match against images in order to
+                                      determine if this provider should be invoked. If one of the strings matches the
+                                      requested image from the kubelet, the plugin will be invoked and given a chance
+                                      to provide credentials. Images are expected to contain the registry domain
+                                      and URL path.
+
+                                      Each entry in matchImages is a pattern which can optionally contain a port and a path.
+                                      Globs can be used in the domain, but not in the port or the path. Globs are supported
+                                      as subdomains like '*.k8s.io' or 'k8s.*.io', and top-level-domains such as 'k8s.*'.
+                                      Matching partial subdomains like 'app*.k8s.io' is also supported. Each glob can only match
+                                      a single subdomain segment, so *.io does not match *.k8s.io.
+
+                                      A match exists between an image and a matchImage when all of the below are true:
+                                      - Both contain the same number of domain parts and each part matches.
+                                      - The URL path of an imageMatch must be a prefix of the target image URL path.
+                                      - If the imageMatch contains a port, then the port must match in the image as well.
+
+                                      Example values of matchImages:
+                                        - 123456789.dkr.ecr.us-east-1.amazonaws.com
+                                        - *.azurecr.io
+                                        - gcr.io
+                                        - *.*.registry.io
+                                        - registry.io:8080/path
+                                    items:
+                                      type: string
+                                    type: array
+                                  name:
+                                    description: |-
+                                      name is the required name of the credential provider. It must match the name of the
+                                      provider executable as seen by the kubelet. The executable must be in the kubelet's
+                                      bin directory (set by the --image-credential-provider-bin-dir flag).
+                                      Required to be unique across all providers.
+                                    type: string
+                                  tokenAttributes:
+                                    description: |-
+                                      tokenAttributes is the configuration for the service account token that will be passed to the plugin.
+                                      The credential provider opts in to using service account tokens for image pull by setting this field.
+                                      When this field is set, kubelet will generate a service account token bound to the pod for which the
+                                      image is being pulled and pass to the plugin as part of CredentialProviderRequest along with other
+                                      attributes required by the plugin.
+
+                                      The service account metadata and token attributes will be used as a dimension to cache
+                                      the credentials in kubelet. The cache key is generated by combining the service account metadata
+                                      (namespace, name, UID, and annotations key+value for the keys defined in
+                                      serviceAccountTokenAttribute.requiredServiceAccountAnnotationKeys and serviceAccountTokenAttribute.optionalServiceAccountAnnotationKeys).
+                                      The pod metadata (namespace, name, UID) that are in the service account token are not used as a dimension
+                                      to cache the credentials in kubelet. This means workloads that are using the same service account
+                                      could end up using the same credentials for image pull. For plugins that don't want this behavior, or
+                                      plugins that operate in pass-through mode; i.e., they return the service account token as-is, they
+                                      can set the credentialProviderResponse.cacheDuration to 0. This will disable the caching of
+                                      credentials in kubelet and the plugin will be invoked for every image pull. This does result in
+                                      token generation overhead for every image pull, but it is the only way to ensure that the
+                                      credentials are not shared across pods (even if they are using the same service account).
+                                    properties:
+                                      cacheType:
+                                        description: |-
+                                          cacheType indicates the type of cache key use for caching the credentials returned by the plugin
+                                          when the service account token is used.
+                                          The most conservative option is to set this to "Token", which means the kubelet will cache returned credentials
+                                          on a per-token basis. This should be set if the returned credential's lifetime is limited to the service account
+                                          token's lifetime.
+                                          If the plugin's credential retrieval logic depends only on the service account and not on pod-specific claims,
+                                          then the plugin can set this to "ServiceAccount". In this case, the kubelet will cache returned credentials
+                                          on a per-serviceaccount basis. Use this when the returned credential is valid for all pods using the same service account.
+                                        type: string
+                                      optionalServiceAccountAnnotationKeys:
+                                        description: |-
+                                          optionalServiceAccountAnnotationKeys is the list of annotation keys that the plugin is interested in
+                                          and that are optional to be present in the service account.
+                                          The keys defined in this list will be extracted from the corresponding service account and passed
+                                          to the plugin as part of the CredentialProviderRequest. The plugin is responsible for validating
+                                          the existence of annotations and their values.
+                                          This field is optional and may be empty. Plugins may use this field to extract
+                                          additional information required to fetch credentials.
+                                          Keys in this list must be unique.
+                                        items:
+                                          type: string
+                                        type: array
+                                        x-kubernetes-list-type: set
+                                      requireServiceAccount:
+                                        description: |-
+                                          requireServiceAccount indicates whether the plugin requires the pod to have a service account.
+                                          If set to true, kubelet will only invoke the plugin if the pod has a service account.
+                                          If set to false, kubelet will invoke the plugin even if the pod does not have a service account
+                                          and will not include a token in the CredentialProviderRequest in that scenario. This is useful for plugins that
+                                          are used to pull images for pods without service accounts (e.g., static pods).
+                                        type: boolean
+                                      requiredServiceAccountAnnotationKeys:
+                                        description: |-
+                                          requiredServiceAccountAnnotationKeys is the list of annotation keys that the plugin is interested in
+                                          and that are required to be present in the service account.
+                                          The keys defined in this list will be extracted from the corresponding service account and passed
+                                          to the plugin as part of the CredentialProviderRequest. If any of the keys defined in this list
+                                          are not present in the service account, kubelet will not invoke the plugin and will return an error.
+                                          This field is optional and may be empty. Plugins may use this field to extract
+                                          additional information required to fetch credentials or allow workloads to opt in to
+                                          using service account tokens for image pull.
+                                          If non-empty, requireServiceAccount must be set to true.
+                                          Keys in this list must be unique.
+                                          This list needs to be mutually exclusive with optionalServiceAccountAnnotationKeys.
+                                        items:
+                                          type: string
+                                        type: array
+                                        x-kubernetes-list-type: set
+                                      serviceAccountTokenAudience:
+                                        description: serviceAccountTokenAudience is
+                                          the intended audience for the projected
+                                          service account token.
+                                        type: string
+                                    required:
+                                    - cacheType
+                                    - requireServiceAccount
+                                    - serviceAccountTokenAudience
+                                    type: object
+                                required:
+                                - apiVersion
+                                - defaultCacheDuration
+                                - matchImages
+                                - name
+                                type: object
+                              type: array
+                          required:
+                          - providers
+                          type: object
+                      required:
+                      - configuration
+                      type: object
+                    kubeExternalManifestConfig:
+                      description: kubeExternalManifestConfig is a Talos KubeExternalManifestConfig
+                        document; populated when kind is "KubeExternalManifestConfig".
+                      properties:
+                        name:
+                          type: string
+                        url:
+                          type: string
+                      required:
+                      - name
+                      - url
                       type: object
                     kubeInlineManifestConfig:
                       description: kubeInlineManifestConfig is a Talos KubeInlineManifestConfig

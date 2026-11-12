@@ -80,7 +80,7 @@ var kindClasses = map[string]kindRow{
 	"KubeCoreDNSConfig":            {accept, "CoreDNS deployment settings; no credentials"},
 	"KubeCredentialProviderConfig": {accept, "kubelet image credential provider wiring; no credentials in the document"},
 	"KubeEtcdEncryptionConfig":     {secret, "carries the secretbox key that encrypts Secrets at rest; implements SecretDocument"},
-	"KubeExternalManifestConfig":   {accept, "a manifest fetched from a URL; its headers map may hold a bearer token, so phase C decides whether to drop it"},
+	"KubeExternalManifestConfig":   {accept, "a manifest fetched from a URL; its headers map is dropped like the v1alpha1 document's extraManifestHeaders (ADR 0152), so only an unauthenticated URL works"},
 	"KubeFlannelCNIConfig":         {ichorOwned, "Cilium is Ichor's only CNI; a Flannel document would install a second one"},
 	"KubeInlineManifestConfig":     {accept, "an inline manifest; the author's own content"},
 	"KubeNetworkConfig":            {accept, "pod and service subnets and DNS domain; no credentials"},

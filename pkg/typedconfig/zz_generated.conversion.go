@@ -4002,6 +4002,76 @@ func KubeAPIServerConfigV1Alpha1FromMachinery(src *mk8s.KubeAPIServerConfigV1Alp
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mk8s.KubeAuditPolicyConfigV1Alpha1 type.
+func (m *KubeAuditPolicyConfigV1Alpha1) ToMachinery() (*mk8s.KubeAuditPolicyConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.KubeAuditPolicyConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mk8s.KubeAuditPolicyConfig, MetaAPIVersion: "v1alpha1"}
+	if m.AuditConfig != nil {
+		v1, err := mirrorToMachineryUnstructured(*m.AuditConfig)
+		if err != nil {
+			return nil, fmt.Errorf("KubeAuditPolicyConfigV1Alpha1.configuration"+": %w", err)
+		}
+		out.AuditConfig = v1
+	}
+	return out, nil
+}
+
+// KubeAuditPolicyConfigV1Alpha1FromMachinery converts a machinery mk8s.KubeAuditPolicyConfigV1Alpha1 document to the mirror type.
+func KubeAuditPolicyConfigV1Alpha1FromMachinery(src *mk8s.KubeAuditPolicyConfigV1Alpha1) (*KubeAuditPolicyConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeAuditPolicyConfigV1Alpha1{}
+	if len(src.AuditConfig.Object) > 0 {
+		v1, err := machineryToMirrorUnstructured[auditv1.Policy](src.AuditConfig)
+		if err != nil {
+			return nil, fmt.Errorf("KubeAuditPolicyConfigV1Alpha1.configuration"+": %w", err)
+		}
+		out.AuditConfig = &v1
+	}
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mk8s.KubeAuthorizerConfigV1Alpha1 type.
+func (m *KubeAuthorizerConfigV1Alpha1) ToMachinery() (*mk8s.KubeAuthorizerConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.KubeAuthorizerConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mk8s.KubeAuthorizerConfig, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	out.AuthorizerType = m.AuthorizerType
+	if m.AuthorizerWebhook != nil {
+		v3, err := mirrorToMachineryUnstructured(*m.AuthorizerWebhook)
+		if err != nil {
+			return nil, fmt.Errorf("KubeAuthorizerConfigV1Alpha1.webhook"+": %w", err)
+		}
+		out.AuthorizerWebhook = v3
+	}
+	return out, nil
+}
+
+// KubeAuthorizerConfigV1Alpha1FromMachinery converts a machinery mk8s.KubeAuthorizerConfigV1Alpha1 document to the mirror type.
+func KubeAuthorizerConfigV1Alpha1FromMachinery(src *mk8s.KubeAuthorizerConfigV1Alpha1) (*KubeAuthorizerConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeAuthorizerConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	out.AuthorizerType = src.AuthorizerType
+	if len(src.AuthorizerWebhook.Object) > 0 {
+		v3, err := machineryToMirrorUnstructured[apiserverv1.WebhookConfiguration](src.AuthorizerWebhook)
+		if err != nil {
+			return nil, fmt.Errorf("KubeAuthorizerConfigV1Alpha1.webhook"+": %w", err)
+		}
+		out.AuthorizerWebhook = &v3
+	}
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mk8s.KubeClusterConfigV1Alpha1 type.
 func (m *KubeClusterConfigV1Alpha1) ToMachinery() (*mk8s.KubeClusterConfigV1Alpha1, error) {
 	if m == nil {
@@ -4112,6 +4182,70 @@ func KubeCoreDNSConfigV1Alpha1FromMachinery(src *mk8s.KubeCoreDNSConfigV1Alpha1)
 	out := &KubeCoreDNSConfigV1Alpha1{}
 	out.PodEnabled = src.PodEnabled
 	out.PodImage = src.PodImage
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mk8s.KubeCredentialProviderConfigV1Alpha1 type.
+func (m *KubeCredentialProviderConfigV1Alpha1) ToMachinery() (*mk8s.KubeCredentialProviderConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.KubeCredentialProviderConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mk8s.KubeCredentialProviderConfig, MetaAPIVersion: "v1alpha1"}
+	if m.CredentialProviderConfig != nil {
+		v1, err := mirrorToMachineryUnstructured(*m.CredentialProviderConfig)
+		if err != nil {
+			return nil, fmt.Errorf("KubeCredentialProviderConfigV1Alpha1.configuration"+": %w", err)
+		}
+		out.CredentialProviderConfig = v1
+	}
+	return out, nil
+}
+
+// KubeCredentialProviderConfigV1Alpha1FromMachinery converts a machinery mk8s.KubeCredentialProviderConfigV1Alpha1 document to the mirror type.
+func KubeCredentialProviderConfigV1Alpha1FromMachinery(src *mk8s.KubeCredentialProviderConfigV1Alpha1) (*KubeCredentialProviderConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeCredentialProviderConfigV1Alpha1{}
+	if len(src.CredentialProviderConfig.Object) > 0 {
+		v1, err := machineryToMirrorUnstructured[kubeletv1.CredentialProviderConfig](src.CredentialProviderConfig)
+		if err != nil {
+			return nil, fmt.Errorf("KubeCredentialProviderConfigV1Alpha1.configuration"+": %w", err)
+		}
+		out.CredentialProviderConfig = &v1
+	}
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mk8s.KubeExternalManifestConfigV1Alpha1 type.
+func (m *KubeExternalManifestConfigV1Alpha1) ToMachinery() (*mk8s.KubeExternalManifestConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.KubeExternalManifestConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mk8s.KubeExternalManifestConfig, MetaAPIVersion: "v1alpha1"}
+	out.MetaName = m.MetaName
+	v2, err := mirrorToMachineryScalar[mmeta.URL](m.URLSpec)
+	if err != nil {
+		return nil, fmt.Errorf("KubeExternalManifestConfigV1Alpha1.url"+": %w", err)
+	}
+	out.URLSpec = v2
+	return out, nil
+}
+
+// KubeExternalManifestConfigV1Alpha1FromMachinery converts a machinery mk8s.KubeExternalManifestConfigV1Alpha1 document to the mirror type.
+func KubeExternalManifestConfigV1Alpha1FromMachinery(src *mk8s.KubeExternalManifestConfigV1Alpha1) (*KubeExternalManifestConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeExternalManifestConfigV1Alpha1{}
+	out.MetaName = src.MetaName
+	v2, err := machineryToMirrorScalar(src.URLSpec)
+	if err != nil {
+		return nil, fmt.Errorf("KubeExternalManifestConfigV1Alpha1.url"+": %w", err)
+	}
+	out.URLSpec = v2
 	return out, nil
 }
 

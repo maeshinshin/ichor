@@ -45,8 +45,9 @@ import (
 // layout of the YAML, which is what flattening an inline embedded struct has to keep: a patch author writes
 // the document the way Talos documents it.
 //
-// A field the mirror deliberately does not carry (meta.Unstructured, the secret table) is left empty, and so is
-// a field mirrored as an upstream type: the legacy Config document's own test builds those by hand.
+// A field the mirror deliberately does not carry (meta.Unstructured with no mirror, the secret table) is left
+// empty. A meta.Unstructured field the mirror carries as an upstream type is filled through that type's own
+// JSON form, in every kind but the v1alpha1 Config document, whose own test builds those by hand.
 func TestShippedKindsRoundTrip(t *testing.T) {
 	doc := reflect.TypeFor[ichorv1alpha1.TalosConfigPatchDocument]()
 
@@ -80,7 +81,7 @@ func roundTripKind(t *testing.T, kind string, mirror reflect.Type) {
 		t.Fatalf("building the empty %s document: %v", kind, err)
 	}
 
-	f := &filler{t: t}
+	f := &filler{t: t, upstream: kind != "Config"}
 	f.fill(reflect.ValueOf(base).Elem(), mirror, 0)
 
 	written, err := yaml.Marshal(base)
@@ -217,6 +218,8 @@ func layout(v any) string {
 type filler struct {
 	t *testing.T
 	n int
+	// upstream: fill a meta.Unstructured field the mirror carries as an upstream type.
+	upstream bool
 }
 
 // mirrorPkg is the package whose struct types are mirrors; a field whose mirror is any other struct is mirrored
@@ -249,11 +252,19 @@ func peel(t reflect.Type) reflect.Type {
 func (f *filler) fill(v reflect.Value, r reflect.Type, depth int) {
 	f.t.Helper()
 
-	if depth > 12 || v.Type() == unstructuredType {
+	if depth > 12 {
 		return
 	}
 
 	r = peel(r)
+
+	if v.Type() == unstructuredType {
+		if f.upstream && r != nil && r.PkgPath() != mirrorPkg && (r.Kind() == reflect.Struct || r.Kind() == reflect.Map) {
+			f.fillUnstructured(v, r)
+		}
+
+		return
+	}
 
 	switch v.Kind() {
 	case reflect.Pointer:
@@ -305,6 +316,104 @@ func (f *filler) fill(v reflect.Value, r reflect.Type, depth int) {
 
 	default:
 		f.leaf(v)
+	}
+}
+
+// fillUnstructured sets v, a meta.Unstructured, to a value of r, the upstream type its mirror carries, with every
+// field of r filled, as the JSON object that value encodes to.
+func (f *filler) fillUnstructured(v reflect.Value, r reflect.Type) {
+	f.t.Helper()
+
+	x := reflect.New(r).Elem()
+	f.fillJSON(x, 0)
+
+	data, err := json.Marshal(x.Interface())
+	if err != nil {
+		f.t.Fatalf("encoding the filled %s: %v", r, err)
+	}
+
+	var obj map[string]any
+	if err := json.Unmarshal(data, &obj); err != nil {
+		f.t.Fatalf("reading the filled %s back as an object: %v", r, err)
+	}
+
+	v.Set(reflect.ValueOf(mmeta.Unstructured{Object: obj}))
+}
+
+// jsonSamples are JSON values tried, in order, for a type that decodes itself (a duration, a time, a quantity,
+// raw JSON); the first it accepts and encodes back to something other than null is used.
+var jsonSamples = []string{`"1h30m0s"`, `"2000-01-02T03:04:05Z"`, `"10Gi"`, `"s"`, `{"a":"b"}`, `1`}
+
+// fillJSON gives every field of v, a Go value that is only ever seen through its JSON form, a distinct non-zero
+// value.
+func (f *filler) fillJSON(v reflect.Value, depth int) {
+	f.t.Helper()
+
+	if depth > 12 {
+		return
+	}
+
+	f.n++
+
+	if v.Kind() != reflect.Pointer && v.CanAddr() && (hasMethod(v.Addr().Type(), "UnmarshalJSON") || v.Addr().Type().Implements(textUnmarshaler)) {
+		for _, s := range jsonSamples {
+			x := reflect.New(v.Type())
+			if json.Unmarshal([]byte(s), x.Interface()) != nil || x.Elem().IsZero() {
+				continue
+			}
+
+			if out, err := json.Marshal(x.Interface()); err == nil && string(out) != "null" {
+				v.Set(x.Elem())
+
+				return
+			}
+		}
+
+		f.t.Fatalf("no JSON sample for %s: teach jsonSamples about it", v.Type())
+	}
+
+	switch v.Kind() {
+	case reflect.Pointer:
+		v.Set(reflect.New(v.Type().Elem()))
+		f.fillJSON(v.Elem(), depth+1)
+	case reflect.Struct:
+		for i := range v.NumField() {
+			if sf := v.Type().Field(i); sf.IsExported() && sf.Tag.Get("json") != "-" {
+				f.fillJSON(v.Field(i), depth+1)
+			}
+		}
+	case reflect.Slice:
+		if v.Type().Elem().Kind() == reflect.Uint8 {
+			v.SetBytes([]byte{1, 2, 3})
+
+			return
+		}
+
+		v.Set(reflect.MakeSlice(v.Type(), 2, 2))
+
+		for i := range 2 {
+			f.fillJSON(v.Index(i), depth+1)
+		}
+	case reflect.Map:
+		v.Set(reflect.MakeMap(v.Type()))
+
+		for range 2 {
+			f.n++
+
+			val := reflect.New(v.Type().Elem()).Elem()
+			f.fillJSON(val, depth+1)
+			v.SetMapIndex(reflect.ValueOf(fmt.Sprintf("k%d", f.n)).Convert(v.Type().Key()), val)
+		}
+	case reflect.Bool:
+		v.SetBool(true)
+	case reflect.String:
+		v.SetString(fmt.Sprintf("s%d", f.n))
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		v.SetInt(int64(f.n))
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		v.SetUint(uint64(f.n))
+	default:
+		f.t.Fatalf("no sample for %s: teach fillJSON about it", v.Type())
 	}
 }
 

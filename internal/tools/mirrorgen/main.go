@@ -187,6 +187,11 @@ var fieldOverrides = map[string]fieldOverride{
 	// but (unlike them) needs a new direct dependency, k8s.io/kubelet --
 	// that was the only thing holding it back, not the generator.
 	"KubeletConfig.KubeletCredentialProviderConfig": {pkgPath: pkgKubeletV1, typeName: "CredentialProviderConfig"},
+	// The same three upstream types as the v1alpha1 document's rows above, reached through the document kinds
+	// whose only payload they are.
+	"KubeAuditPolicyConfigV1Alpha1.AuditConfig":                     {pkgPath: pkgAuditV1, typeName: "Policy"},
+	"KubeAuthorizerConfigV1Alpha1.AuthorizerWebhook":                {pkgPath: pkgAPIServerV1, typeName: "WebhookConfiguration"},
+	"KubeCredentialProviderConfigV1Alpha1.CredentialProviderConfig": {pkgPath: pkgKubeletV1, typeName: "CredentialProviderConfig"},
 }
 
 // sparseFields are machinery fields without `omitempty` that the mirror still emits as optional.
@@ -270,6 +275,9 @@ var secretFields = map[string]string{ // "Struct.Field" -> what it carries
 	// an Authorization or token header for a private source, so the map is a
 	// credential container as a whole and its values cannot be told apart.
 	"ClusterConfig.ExtraManifestHeaders": "HTTP headers for extraManifests fetches, usually Authorization (user credential, not a bundle value)",
+	// The same map on the document kind (KubeExternalManifestConfig): dropped for the same reason, so the kind
+	// fetches only from an unauthenticated URL.
+	"KubeExternalManifestConfigV1Alpha1.HeadersSpec": "HTTP headers for a manifest fetch, usually Authorization (user credential, not a bundle value)",
 	// Cloud provider API tokens and a WireGuard private key: also user
 	// credentials under principle 2, but for features outside every
 	// current phase, so unlike the registry ones above these need no

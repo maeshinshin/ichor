@@ -38,7 +38,7 @@ import (
 // +kubebuilder:object:generate=false
 type TalosConfigPatchDocument struct {
 	// kind selects which of the fields below is populated.
-	// +kubebuilder:validation:Enum=SysctlConfig;KernelModuleConfig;Config;VolumeConfig;UserVolumeConfig;RawVolumeConfig;ResolverConfig;BGPInstanceConfig;BlackholeRouteConfig;BondConfig;BridgeConfig;ContainerConfig;DHCPv6Config;DummyLinkConfig;EnvironmentConfig;EtcFileConfig;EthernetConfig;EventSinkConfig;ExistingVolumeConfig;ExtensionServiceConfig;ExternalVolumeConfig;FilesystemScrubConfig;FilesystemTrimConfig;HTTPProbeConfig;ImageCacheConfig;ImageVerificationConfig;KmsgLogConfig;KubeAPIServerConfig;KubeClusterConfig;KubeControllerManagerConfig;KubeCoreDNSConfig;KubeInlineManifestConfig;KubeNetworkConfig;KubeNodeConfig;KubePrismConfig;KubeSpanConfig;KubeSpanEndpointsConfig;KubeTalosAPIAccessConfig;LVMLogicalVolumeConfig;LVMVolumeGroupConfig;Layer2VIPConfig;OOMConfig;PCIDriverRebindConfig;RAIDArrayConfig;RegistryMirrorConfig;RoutingRuleConfig;StaticHostConfig;SwapVolumeConfig;SysfsConfig;TCPProbeConfig;TimeSyncConfig;TrustedRootsConfig;UdevRulesConfig;VRFConfig;VethConfig;WatchdogTimerConfig;ZswapConfig
+	// +kubebuilder:validation:Enum=SysctlConfig;KernelModuleConfig;Config;VolumeConfig;UserVolumeConfig;RawVolumeConfig;ResolverConfig;BGPInstanceConfig;BlackholeRouteConfig;BondConfig;BridgeConfig;ContainerConfig;DHCPv6Config;DummyLinkConfig;EnvironmentConfig;EtcFileConfig;EthernetConfig;EventSinkConfig;ExistingVolumeConfig;ExtensionServiceConfig;ExternalVolumeConfig;FilesystemScrubConfig;FilesystemTrimConfig;HTTPProbeConfig;ImageCacheConfig;ImageVerificationConfig;KmsgLogConfig;KubeAPIServerConfig;KubeClusterConfig;KubeControllerManagerConfig;KubeCoreDNSConfig;KubeInlineManifestConfig;KubeNetworkConfig;KubeNodeConfig;KubePrismConfig;KubeSpanConfig;KubeSpanEndpointsConfig;KubeTalosAPIAccessConfig;LVMLogicalVolumeConfig;LVMVolumeGroupConfig;Layer2VIPConfig;OOMConfig;PCIDriverRebindConfig;RAIDArrayConfig;RegistryMirrorConfig;RoutingRuleConfig;StaticHostConfig;SwapVolumeConfig;SysfsConfig;TCPProbeConfig;TimeSyncConfig;TrustedRootsConfig;UdevRulesConfig;VRFConfig;VethConfig;WatchdogTimerConfig;ZswapConfig;KubeAuditPolicyConfig;KubeAuthorizerConfig;KubeCredentialProviderConfig;KubeExternalManifestConfig
 	// +unionDiscriminator
 	// +required
 	Kind string `json:"kind"`
@@ -272,6 +272,22 @@ type TalosConfigPatchDocument struct {
 	// zswapConfig is a Talos ZswapConfig document; populated when kind is "ZswapConfig".
 	// +optional
 	ZswapConfig *typedconfig.ZswapConfigV1Alpha1 `json:"zswapConfig,omitempty"`
+
+	// kubeAuditPolicyConfig is a Talos KubeAuditPolicyConfig document; populated when kind is "KubeAuditPolicyConfig".
+	// +optional
+	KubeAuditPolicyConfig *typedconfig.KubeAuditPolicyConfigV1Alpha1 `json:"kubeAuditPolicyConfig,omitempty"`
+
+	// kubeAuthorizerConfig is a Talos KubeAuthorizerConfig document; populated when kind is "KubeAuthorizerConfig".
+	// +optional
+	KubeAuthorizerConfig *typedconfig.KubeAuthorizerConfigV1Alpha1 `json:"kubeAuthorizerConfig,omitempty"`
+
+	// kubeCredentialProviderConfig is a Talos KubeCredentialProviderConfig document; populated when kind is "KubeCredentialProviderConfig".
+	// +optional
+	KubeCredentialProviderConfig *typedconfig.KubeCredentialProviderConfigV1Alpha1 `json:"kubeCredentialProviderConfig,omitempty"`
+
+	// kubeExternalManifestConfig is a Talos KubeExternalManifestConfig document; populated when kind is "KubeExternalManifestConfig".
+	// +optional
+	KubeExternalManifestConfig *typedconfig.KubeExternalManifestConfigV1Alpha1 `json:"kubeExternalManifestConfig,omitempty"`
 }
 
 // DeepCopyInto copies the receiver into out. in must be non-nil.
@@ -694,6 +710,14 @@ func TalosConfigPatchDocumentFieldKey(kind string) (string, bool) {
 		return "watchdogTimerConfig", true
 	case "ZswapConfig":
 		return "zswapConfig", true
+	case "KubeAuditPolicyConfig":
+		return "kubeAuditPolicyConfig", true
+	case "KubeAuthorizerConfig":
+		return "kubeAuthorizerConfig", true
+	case "KubeCredentialProviderConfig":
+		return "kubeCredentialProviderConfig", true
+	case "KubeExternalManifestConfig":
+		return "kubeExternalManifestConfig", true
 	default:
 		return "", false
 	}
@@ -937,6 +961,22 @@ func (d *TalosConfigPatchDocument) Validate() error {
 
 	if d.ZswapConfig != nil {
 		set = append(set, "zswapConfig")
+	}
+
+	if d.KubeAuditPolicyConfig != nil {
+		set = append(set, "kubeAuditPolicyConfig")
+	}
+
+	if d.KubeAuthorizerConfig != nil {
+		set = append(set, "kubeAuthorizerConfig")
+	}
+
+	if d.KubeCredentialProviderConfig != nil {
+		set = append(set, "kubeCredentialProviderConfig")
+	}
+
+	if d.KubeExternalManifestConfig != nil {
+		set = append(set, "kubeExternalManifestConfig")
 	}
 
 	if len(set) == 1 && set[0] == want {
@@ -1357,6 +1397,34 @@ func (d *TalosConfigPatchDocument) Document() (config.Document, error) {
 		}
 
 		return doc, nil
+	case "KubeAuditPolicyConfig":
+		doc, err := d.KubeAuditPolicyConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubeAuditPolicyConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KubeAuthorizerConfig":
+		doc, err := d.KubeAuthorizerConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubeAuthorizerConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KubeCredentialProviderConfig":
+		doc, err := d.KubeCredentialProviderConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubeCredentialProviderConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KubeExternalManifestConfig":
+		doc, err := d.KubeExternalManifestConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubeExternalManifestConfig: %w", err)
+		}
+
+		return doc, nil
 	default:
 		return nil, fmt.Errorf("unknown document kind %q", d.Kind)
 	}
@@ -1765,6 +1833,34 @@ func TalosConfigPatchDocumentFromMachinery(doc config.Document) (TalosConfigPatc
 		}
 
 		return TalosConfigPatchDocument{Kind: "ZswapConfig", ZswapConfig: m}, nil
+	case *mk8s.KubeAuditPolicyConfigV1Alpha1:
+		m, err := typedconfig.KubeAuditPolicyConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubeAuditPolicyConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubeAuditPolicyConfig", KubeAuditPolicyConfig: m}, nil
+	case *mk8s.KubeAuthorizerConfigV1Alpha1:
+		m, err := typedconfig.KubeAuthorizerConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubeAuthorizerConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubeAuthorizerConfig", KubeAuthorizerConfig: m}, nil
+	case *mk8s.KubeCredentialProviderConfigV1Alpha1:
+		m, err := typedconfig.KubeCredentialProviderConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubeCredentialProviderConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubeCredentialProviderConfig", KubeCredentialProviderConfig: m}, nil
+	case *mk8s.KubeExternalManifestConfigV1Alpha1:
+		m, err := typedconfig.KubeExternalManifestConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubeExternalManifestConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubeExternalManifestConfig", KubeExternalManifestConfig: m}, nil
 	default:
 		return TalosConfigPatchDocument{}, fmt.Errorf("no document kind for %T", doc)
 	}

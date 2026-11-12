@@ -1155,6 +1155,22 @@ type KubeAPIServerConfigV1Alpha1 struct {
 	PodStartupProbes *bool `json:"startupProbes,omitempty"`
 }
 
+// Talos: KubeAuditPolicyConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/k8s/kubeauditpolicyconfig
+type KubeAuditPolicyConfigV1Alpha1 struct {
+	// +required
+	AuditConfig *auditv1.Policy `json:"configuration"`
+}
+
+// Talos: KubeAuthorizerConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/k8s/kubeauthorizerconfig
+type KubeAuthorizerConfigV1Alpha1 struct {
+	// +required
+	MetaName string `json:"name"`
+	// +required
+	AuthorizerType string `json:"type"`
+	// +optional
+	AuthorizerWebhook *apiserverv1.WebhookConfiguration `json:"webhook,omitempty"`
+}
+
 // Talos: KubeClusterConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/k8s/kubeclusterconfig
 type KubeClusterConfigV1Alpha1 struct {
 	// +required
@@ -1183,6 +1199,20 @@ type KubeCoreDNSConfigV1Alpha1 struct {
 	PodEnabled *bool `json:"enabled,omitempty"`
 	// +optional
 	PodImage string `json:"image,omitempty"`
+}
+
+// Talos: KubeCredentialProviderConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/k8s/kubecredentialproviderconfig
+type KubeCredentialProviderConfigV1Alpha1 struct {
+	// +required
+	CredentialProviderConfig *kubeletv1.CredentialProviderConfig `json:"configuration"`
+}
+
+// Talos: KubeExternalManifestConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/k8s/kubeexternalmanifestconfig
+type KubeExternalManifestConfigV1Alpha1 struct {
+	// +required
+	MetaName string `json:"name"`
+	// +required
+	URLSpec string `json:"url"`
 }
 
 // Talos: KubeInlineManifestConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/k8s/kubeinlinemanifestconfig

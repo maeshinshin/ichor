@@ -36,7 +36,7 @@ controls in the backend: names get a configurable prefix (default `oidc:`) so an
 and a name that still starts with `system:` is refused. The ServiceAccount token remains the thing to protect;
 this grant is the reason it matters more once OIDC is on.
 
-**3. Token verification.** `github.com/coreos/go-oidc/v3` v3.21.0 is added. `go mod graph` showed only
+**3. Token verification.** `github.com/coreos/go-oidc/v3` v3.21.0 is added. The module graph holds only
 `coreos/go-oidc v2.5.0+incompatible` (an old indirect dep of `k8s.io/apiserver`, unusable for a v3 import path)
 and no JWKS-verifying code we could reuse without pulling in the apiserver authenticator machinery. It brings
 `go-jose/v4`, already in the module graph. The verifier does discovery, JWKS rotation, and checks signature,
@@ -54,12 +54,9 @@ needs a token when OIDC is on.
 sending a kubeconfig token to a server that then acts with it is a credential-forwarding path we do not want, it
 would need `tokenreviews` to verify, and a client-certificate kubeconfig has no token to send. With OIDC on the
 CLI therefore uses its in-process fallback (the same `uiapi.Server` on the user's own RBAC; actor stays
-`ichor-cli` for now). Known consequence, not done in this change: the CLI does not yet detect an OIDC-enabled
-backend, so its calls through the port-forward get `Unauthenticated` instead of falling back; `ichor ... --local`
-works, and commands that need the backend (`node`) will need an ID token flag later. A follow-up should make the
-CLI read `/auth/config`, fall back automatically, and take its actor name from a `SelfSubjectReview`.
+`ichor-cli` for now). Detection of an OIDC-enabled backend and the actor name are point 5a.
 
-**5a. Amendment: the CLI detects OIDC (point 5's follow-up, done).** Right after the port-forward is up and
+**5a. Amendment: the CLI detects OIDC.** Right after the port-forward is up and
 the probe answers, the CLI reads `GET /auth/config`. `enabled:true` makes it drop the tunnel and use the
 in-process `uiapi.Server` on the user's own kubeconfig and RBAC, printing one line to stderr saying so. Any other
 answer (non-200, unparseable body, an older backend) counts as not enabled, so the call goes to the backend, which
@@ -82,7 +79,7 @@ backend-held session was rejected as more code (cookie signing, CSRF, secret han
 Kubernetes' audit log; `prmode.SubmitPRRequest.Requester` receives the same value for `Requested by:`.
 
 **8. Secrets.** The ID token and (nonexistent) client secret are never logged, put in errors or written to
-audit; tests assert the verifier's errors do not echo the token. Nothing logs a request header.
+audit. Nothing logs a request header.
 
 ## Amendment: what an impersonated user needs for the effective config
 

@@ -55,6 +55,9 @@ jobs:
       - name: Set up Nix
         uses: ./.github/actions/nix
 
+      - name: Cache npm downloads
+        uses: ./.github/actions/npm-cache
+
       # For next and each release tag: npm ci, astro build, the internal link check and the Pagefind
       # index; then versions.json (from the v* tags, newest first by semver) and the redirects, into site/dist-all.
       - name: Build

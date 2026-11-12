@@ -586,3 +586,89 @@ func TestCNIHandoverDropsInlineManifest(t *testing.T) {
 		}
 	})
 }
+
+// TestDocumentFromPatchRefusesAMismatchedDocument checks that a document whose populated field is
+// not the one its kind names, or that has a second field populated, is an error naming the kind and
+// the field -- never a typed nil with no error, which the caller would call Kind() on -- and that a
+// valid document of each kind is not refused.
+func TestDocumentFromPatchRefusesAMismatchedDocument(t *testing.T) {
+	// One setter per kind, in the order of the kinds; each populates that kind's own field.
+	kinds := []struct {
+		kind, field string
+		set         func(*ichorv1alpha1.TalosConfigPatchDocument)
+	}{
+		{"SysctlConfig", "sysctlConfig", func(d *ichorv1alpha1.TalosConfigPatchDocument) {
+			d.SysctlConfig = &typedconfig.SysctlConfigV1Alpha1{}
+		}},
+		{"KernelModuleConfig", "kernelModuleConfig", func(d *ichorv1alpha1.TalosConfigPatchDocument) {
+			d.KernelModuleConfig = &typedconfig.KernelModuleConfigV1Alpha1{MetaName: "br_netfilter"}
+		}},
+		{kindConfig, "config", func(d *ichorv1alpha1.TalosConfigPatchDocument) {
+			d.Config = &typedconfig.Config{ConfigVersion: configVersionV1Alpha1}
+		}},
+		{"VolumeConfig", "volumeConfig", func(d *ichorv1alpha1.TalosConfigPatchDocument) {
+			d.VolumeConfig = &typedconfig.VolumeConfigV1Alpha1{MetaName: "EPHEMERAL"}
+		}},
+		{"UserVolumeConfig", "userVolumeConfig", func(d *ichorv1alpha1.TalosConfigPatchDocument) {
+			d.UserVolumeConfig = &typedconfig.UserVolumeConfigV1Alpha1{MetaName: "data"}
+		}},
+		{"RawVolumeConfig", "rawVolumeConfig", func(d *ichorv1alpha1.TalosConfigPatchDocument) {
+			d.RawVolumeConfig = &typedconfig.RawVolumeConfigV1Alpha1{MetaName: "raw"}
+		}},
+	}
+
+	// refused calls DocumentFromPatch and wants an error that names the kind and the field, and no
+	// document; a panic would be a failure too, but the guard returns before any Kind() call.
+	refused := func(t *testing.T, d ichorv1alpha1.TalosConfigPatchDocument, kind, field string) {
+		t.Helper()
+
+		doc, err := DocumentFromPatch(d)
+		if err == nil {
+			t.Fatalf("DocumentFromPatch returned (%v, nil), want an error", doc)
+		}
+
+		if !strings.Contains(err.Error(), kind) || !strings.Contains(err.Error(), field) {
+			t.Errorf("error %q does not name the kind %q and the field %q", err, kind, field)
+		}
+
+		if doc != nil {
+			t.Errorf("document = %v alongside the error, want nil", doc)
+		}
+	}
+
+	for i, k := range kinds {
+		// The next kind's field is set, this kind's own is not: the typed-nil case.
+		other := kinds[(i+1)%len(kinds)]
+
+		t.Run(k.kind+" with only "+other.field, func(t *testing.T) {
+			d := ichorv1alpha1.TalosConfigPatchDocument{Kind: k.kind}
+			other.set(&d)
+			refused(t, d, k.kind, k.field)
+		})
+
+		t.Run(k.kind+" with no field", func(t *testing.T) {
+			refused(t, ichorv1alpha1.TalosConfigPatchDocument{Kind: k.kind}, k.kind, k.field)
+		})
+
+		t.Run(k.kind+" with a second field", func(t *testing.T) {
+			d := ichorv1alpha1.TalosConfigPatchDocument{Kind: k.kind}
+			k.set(&d)
+			other.set(&d)
+			refused(t, d, k.kind, other.field)
+		})
+
+		t.Run(k.kind+" valid", func(t *testing.T) {
+			d := ichorv1alpha1.TalosConfigPatchDocument{Kind: k.kind}
+			k.set(&d)
+
+			doc, err := DocumentFromPatch(d)
+			if err != nil {
+				t.Fatalf("DocumentFromPatch refused a valid %s document: %v", k.kind, err)
+			}
+
+			if doc == nil {
+				t.Fatalf("DocumentFromPatch returned a nil %s document and no error", k.kind)
+			}
+		})
+	}
+}

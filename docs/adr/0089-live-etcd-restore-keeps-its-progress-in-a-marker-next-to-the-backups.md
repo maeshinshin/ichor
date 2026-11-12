@@ -23,14 +23,13 @@ Three things make this different from every other operation (ADR 0026, 0068, 008
    in `main`, the process; the Pod would restart into a manager that cannot start without an API. If the wipe is
    done and the recovery is not, nothing is left to do the recovery.
 
-## Talos procedure (checked in Talos v1.14.3)
+## Talos procedure (Talos v1.14.3)
 
-Source read: `internal/integration/api/etcd-recover.go` (`EtcdRecoverSuite.TestSnapshotRecover`),
+Sources: `internal/integration/api/etcd-recover.go` (`EtcdRecoverSuite.TestSnapshotRecover`),
 `internal/app/machined/internal/server/v1alpha1/v1alpha1_server.go` (`Reset`, `Bootstrap`, `EtcdRecover`),
 `internal/app/machined/pkg/system/services/etcd.go` (`argsForControlPlane`, `recoverFromSnapshot`,
-`buildInitialCluster`), `pkg/machinery/config/config/volume.go` (`PromotableSystemVolumeNames`). The website
-documentation itself is not in the module cache; the integration test is the executable form of the documented
-procedure.
+`buildInitialCluster`), `pkg/machinery/config/config/volume.go` (`PromotableSystemVolumeNames`). The
+procedure follows the integration test, which is the executable form of the documented procedure.
 
 - The test takes a snapshot, then wipes every control plane with `Reset{Reboot: true, Graceful: false,
   SystemPartitionsToWipe: EPHEMERAL + every promotable system volume (ETCD, CRI, KUBELET, LOG) that is a dedicated
@@ -157,32 +156,29 @@ cluster name; `--yes` skips the y/N question but not the name, and without `--ov
 review step that shows the plan, the typed cluster name and the reason; the operation page shows the step,
 the snapshot and its time.
 
-## Changes after the first run on hardware (3 control planes, 1 worker, Talos v1.14.3)
+## Resume, stale network state and failure reporting
 
-Three things went wrong; each is now handled and tested.
-
-1. **The operation was never recreated after a restart.** `ResumeEtcdRestores` ran once, as soon as the manager
-   started, and creating the `TalosOperation` goes through the fail-closed override webhook
-   (`voverrideop-v1alpha1.kb.io`), which this same process serves and which is not behind the Service until the
-   Pod is Ready: `connect: connection refused`, one log line, marker left, nothing ever retried (seen twice). The
-   controller's own identity is exempt in that webhook (`DefaultExemptUsers`, from `POD_NAMESPACE` and
-   `POD_SERVICE_ACCOUNT`, set in `config/manager` and the chart; tested by "admits Ichor's own controller, which
-   recreates the operation"), but an exempt user is still sent to the webhook: exemption is decided inside it. So
-   the call cannot avoid the webhook, and the fix is to wait for it. The manager now runs
-   `ResumeEtcdRestoresUntilDone` as a runnable that needs leader election, so it starts after the webhook server
-   and the caches; one pass (`ResumeEtcdRestores`) now returns the errors it met, and the runner repeats it with a
+1. **The operation is recreated once the webhook is up.** Creating the `TalosOperation` after a restart goes through
+   the fail-closed override webhook (`voverrideop-v1alpha1.kb.io`), which this same process serves and which is not
+   behind the Service until the Pod is Ready, so a single attempt at start-up fails with `connect: connection
+   refused` and leaves the marker with nothing to retry it. The controller's own identity is exempt in that webhook
+   (`DefaultExemptUsers`, from `POD_NAMESPACE` and `POD_SERVICE_ACCOUNT`, set in `config/manager` and the chart), but
+   an exempt user is still sent to the webhook: exemption is decided inside it. So the call cannot avoid the webhook,
+   and the resume waits for it. The manager runs `ResumeEtcdRestoresUntilDone` as a runnable that needs leader
+   election, so it starts after the webhook server and the caches; one pass (`ResumeEtcdRestores`) returns the errors
+   it met, and the runner repeats it with a
    pause from 1s doubling to 30s until a pass has nothing left to do (no marker, or the operation is back) or the
    manager stops (a backup whose storage settings cannot be loaded is logged and skipped, since a retry would not
    change that). Creating the operation and writing its status is also repeatable: if the status write failed
    after the create, the next pass finds the operation without `status.etcdRestore` and writes it.
-2. **A node that was not wiped kept stale kube-proxy state.** After the rewind, on the worker the Service IP
-   refused connections although the apiservers and Endpoints were healthy; deleting the worker's kube-proxy pod
-   fixed it, and the controller (running there) had been crash-looping on it. When the `Rejoining` step asks the
-   machines to reconcile, it now also deletes the kube-proxy pods of every node that is not a control plane
+2. **A node that was not wiped keeps stale kube-proxy state.** After the rewind, on such a node the Service IP
+   refuses connections although the apiservers and Endpoints are healthy; deleting the node's kube-proxy pod
+   fixes it. When the `Rejoining` step asks the
+   machines to reconcile, it also deletes the kube-proxy pods of every node that is not a control plane
    (control planes are wiped and reboot, so their pods start fresh): found through the `kube-proxy` DaemonSet's own
    selector, in `kube-system` only, and deleted one by one by name. Best effort and logged. A cluster without
-   the DaemonSet (kube-proxy replaced by the CNI) is left alone. Amended: the CNI's pods (the `cilium` or
-   `kube-flannel` DaemonSet, found by name as the kube-proxy switch finds Cilium) are now replaced the same way. Ichor
+   the DaemonSet (kube-proxy replaced by the CNI) is left alone. The CNI's pods (the `cilium` or
+   `kube-flannel` DaemonSet, found by name as the kube-proxy switch finds Cilium) are replaced the same way. Ichor
    still does not install or operate the CNI; a one-time pod restart after a restore, so that its agent drops state
    cached from the old cluster, is in scope, at the cost of a brief datapath reset on those nodes. The wipe rate limit
    (above) is also kept in the operation's status (a `StaleWipeSent-<machine>` condition), so a restarted controller
@@ -192,50 +188,48 @@ Three things went wrong; each is now handled and tested.
    cache outlives the rewind in the designed path. A manager that somehow stays up across the rewind relies on
    client-go's reflectors relisting on "resource version too large"; that is not relied on here, and
    the simplest safe answer, a restart, is what happens.
-3. **The job must not die silently.** The marker (the only thing that survives) now records `lastNote`, the job's
+3. **The job must not die silently.** The marker (the only thing that survives) records `lastNote`, the job's
    last transient problem, whenever it changes, and `failure` for a final error. A panic in the job is turned into
    a final error instead of a crash. A kill or an out-of-memory death cannot write anything, but the last note
    is already there for the next start; the reconcile shows `lastNote` as the status message while the job runs,
    and a failure becomes the operation's `failureReason` (`ichor operation get`). Every failure after the marker
-   was written now ends with the way out: `ichor restore --recover-cluster`, which needs only the secrets bundle
-   and the bucket (the plan already says the same for a controller on a single control plane). The memory use of the
-   snapshot handling itself is `internal/etcdbackup`'s concern and is fixed separately.
+   was written ends with the way out: `ichor restore --recover-cluster`, which needs only the secrets bundle
+   and the bucket (the plan says the same for a controller on a single control plane). The memory use of the
+   snapshot handling itself is `internal/etcdbackup`'s concern.
 
-### Changes after the second run on hardware
+### The controller's node, the kubelet restart and `--follow`
 
-The second run (3 control planes, 1 worker) found three more faults. (1) The controller's own node was not recognised:
-the first control plane that `ichor init` creates has an empty `spec.hostname`, so matching `NODE_NAME` against it failed
-and all three were wiped at once. Every "is this the controller's node" question (the restore plan, the shutdown order,
-the config rollout's own-node-last) now resolves each machine's node name like the rest of the controller does
+(1) The controller's own node is recognised by resolving each machine's node name: the first control plane that
+`ichor init` creates has an empty `spec.hostname`, so matching `NODE_NAME` against it would fail and all three would be
+wiped at once. Every "is this the controller's node" question (the restore plan, the shutdown order,
+the config rollout's own-node-last) resolves each machine's node name like the rest of the controller does
 (`resolveNodeName`: `spec.hostname`, else what Talos reports, else the Node by address), and the restore reads it before
 anything destructive and keeps it in the marker (`nodes`, `own`), so the plan survives the wipe; the plan text names the
-controller's node and says it is wiped last. (2) Deleting the kube-proxy pod of a worker that was not wiped did nothing:
-its kubelet is as stale against the rewound API as the pod, and the pod stayed Terminating. The controller now restarts
+controller's node and says it is wiped last. (2) Deleting the kube-proxy pod of a worker that was not wiped does nothing:
+its kubelet is as stale against the rewound API as the pod, and the pod stays Terminating. The controller therefore restarts
 that kubelet through Talos first (`ServiceRestart kubelet`, recorded in the marker as `agentsSince` so it happens once),
 waits until the node is Ready with a heartbeat from after the restart, deletes the kube-proxy pod that predates it, and
 waits for the replacement to be Ready; only then does the restore move on. If that has not converged after ten
 minutes it moves on anyway and states what did not converge (marker `agentWarning`, shown in the status and in the
-completion message) instead of claiming success. (3) `ichor restore --live --follow` ended with `not_found` in the window
-after the API returned and before the operation was recreated; the follow now treats NotFound of the restore operation
+completion message) instead of claiming success. (3) `ichor restore --live --follow` would end with `not_found` in the window
+after the API returned and before the operation is recreated; the follow therefore treats NotFound of the restore operation
 as expected for up to 15 minutes and prints "waiting for the restore to resume".
 
-### Changes after the third run
+### The controller's own node and `--follow` failover
 
-The third run (3 control planes, 1 worker) recovered etcd and rejoined the two other control planes within six minutes, then
-stuck at `Rejoining` for 17 minutes. The controller ran on its own, not yet wiped, control plane: that node's etcd held
-the pre-rewind data and was not a member of the recovered cluster, and its kube-proxy was stale, so from there the Service IP
-was unreachable. The pod crash-looped on "Failed to start manager ... connection refused", and only the controller could wipe
-its own node: a deadlock, broken by deleting that node's kube-proxy pod through another control plane. Separately,
-`ichor restore --live --follow` retried the kubeconfig's one server, the controller's own control plane, for ten minutes and
-exited.
+When the controller runs on a control plane that is not yet wiped, that node's etcd holds the pre-rewind data and is
+not a member of the recovered cluster, and its kube-proxy is stale, so from there the Service IP is unreachable. The
+pod crash-loops on "Failed to start manager ... connection refused", and only the controller could wipe its own node:
+a deadlock. Separately, `ichor restore --live --follow` would retry only the kubeconfig's one server, the controller's
+own control plane. Decisions:
 
 1. **The controller's own node is wiped by the restore job, not by the reconcile.** The job (Talos only, outliving the
-   manager) no longer ends at `Rejoining` when the marker names an `own` node. It goes on: (a) wait until the target's etcd
+   manager) does not end at `Rejoining` when the marker names an `own` node. It goes on: (a) wait until the target's etcd
    member list, read through the Talos API, names every other control plane (their node names are in the marker); (b) if
    the own node is already a member, or has no etcd data, set `ownDone` in the marker and stop; (c) otherwise write
    `ownWipeAt` to the marker, **then** send the reset (non-graceful, EPHEMERAL, as for the others). The controller dies with
    that node's reboot, is rescheduled or restarts on the node once it is back, with fresh networking, and the resume path
-   (`ResumeEtcdRestores`) recreates the operation from the marker and goes on at `Reconciling`. The reconcile no longer wipes
+   (`ResumeEtcdRestores`) recreates the operation from the marker and goes on at `Reconciling`. The reconcile does not wipe
    the own node (`waitForMembers` skips `marker.own`), so there is one actor and no Kubernetes API call on that path.
    Idempotence: the intent is stored before the reset, so a process that died in between finds `ownWipeAt` and a node that
    still has data, trusts the request for ten minutes (the node may be going down), then asks again; an unreachable own node
@@ -252,11 +246,9 @@ exited.
    certificate's SANs, which Talos does by default for its nodes. It applies to the in-process clients (`--override`
    implies them, and a live restore requires it); the ichor-ui tunnel keeps its own reconnect. The hook is a field of the
    shared clients and `retryTransient` uses it when set, so other follows could opt in; none does.
-3. **The plan names the node.** The wipe step now reads "Wipe etcd data on cp-a, cp-c, then cp-b (where this controller
+3. **The plan names the node.** The wipe step reads "Wipe etcd data on cp-a, cp-c, then cp-b (where this controller
    runs) once the others have rejoined", found by matching the controller pod's node to the control planes' Nodes (best
    effort: without a match the plan names nobody).
-
-Not observed on hardware: the own-node wipe by the job, and the failover against a real apiserver.
 
 ## Not decided here
 
@@ -279,14 +271,11 @@ Not observed on hardware: the own-node wipe by the job, and the failover against
   operation that cannot keep a status.
 - The marker and the pinned copy are written next to the snapshots with the backup's own credentials. Neither
   holds a secret in the clear: the marker has names, times and the reason; the copy is the encrypted snapshot.
-- Not verified on hardware: nothing here has run against a real Talos cluster. The Talos side is the vendored client
-  and the procedure above, read from source; the fakes in the tests stand in for the nodes. Specifically not
-  observed: the reset of a node that hosts the running controller, the time the nodes take to reboot against
-  `EtcdJoinTimeout`, a rejoin of a node whose old member the recovered etcd no longer lists, the kubelet keeping the
-  process alive through the probe server, the informers' behaviour when the API returns with older objects, and
-  an e2e round trip (the design's regular proof of restore).
+- The design rests on assumptions it does not control: the time the nodes take to reboot against `EtcdJoinTimeout`,
+  the kubelet keeping the process alive through the probe server, and the informers' behaviour when the API returns
+  with older objects (a restart is what happens, not a relist).
 
 - Amendment 2026-10-27: the Recovering step verifies and then re-reads the pinned snapshot, i.e. two decrypts; with the old 270 MiB scrypt cost each that OOM-killed the controller within a second (see 0047), and with the 1 MiB work factor both stay streamed and under 64 MiB.
-- Amendment 2026-10-27 (fourth hardware run, plan text and failover): the controller pod and the control plane's Node are now also found when the machine's `spec.endpoint` is stale (the observed Talos address is tried first, and the machine list shows it), and the pod is looked up in the Ichor namespace, then the cluster's, then (in-process server only) everywhere, since a CLI has no POD_NAMESPACE. `--follow` says which API servers it will fail over to, or why it has none, instead of staying silent. The cause of the missing plan line and failover lines on the run could not be shown from code or tests, which pass with matching endpoints; a stale `spec.endpoint` is the likely one.
+- Amendment 2026-10-27 (plan text and failover): the controller pod and the control plane's Node are now also found when the machine's `spec.endpoint` is stale (the observed Talos address is tried first, and the machine list shows it), and the pod is looked up in the Ichor namespace, then the cluster's, then (in-process server only) everywhere, since a CLI has no POD_NAMESPACE. `--follow` says which API servers it will fail over to, or why it has none, instead of staying silent.
 
 Amendment 2026-11-05 (ADR 0130): `spec.etcdRestore.reason` is no longer required (the CEL `reason is not empty` and `MinLength=1` are gone; the field is optional, deprecated and unused), `CreateOperation` needs the cluster name typed and the override but no reason, the audit record and the Warning Event say who requested the restore with no reason, and the restore marker no longer holds a reason (an older marker's `reason` is ignored). `ichor restore --live` has no `--override-reason`, and the restore dialog has no reason box.

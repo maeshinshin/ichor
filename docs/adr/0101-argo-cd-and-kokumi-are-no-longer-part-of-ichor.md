@@ -6,7 +6,7 @@ Decided: Argo CD and Kokumi are not requirements and Ichor no longer installs, p
 
 ## Context
 
-ADR 0099 made Argo CD and Kokumi the standard stack: `ichor init` always installed them, the controller published their bundles into Kokumi's in-cluster registry, and Argo CD synced from there. The user has decided that neither is a requirement. Storage, monitoring and any GitOps tool are the operator's to install, as the design said before ADR 0099. ADR 0099 also made Cilium the only CNI and Ichor's own Helm release; that part is wanted and untouched.
+ADR 0099 made Argo CD and Kokumi the standard stack: `ichor init` always installed them, the controller published their bundles into Kokumi's in-cluster registry, and Argo CD synced from there. Neither is a requirement. Storage, monitoring and any GitOps tool are the operator's to install, as the design said before ADR 0099. ADR 0099 also made Cilium the only CNI and Ichor's own Helm release; that part is wanted and untouched.
 
 ## Decision
 
@@ -15,7 +15,7 @@ Removed:
 - The stack reconciler in the `IchorInstallation` controller (`internal/controller/stack.go`, `stack_job.go`) and its wiring: `StackEnabled`, `RegistryHost`, the `status.stack` writes and the requeue they drove.
 - `internal/stackapply` and the hidden command `ichor stack apply`; the `ichor-stack` Jobs.
 - `pkg/stack`: the embedded Argo CD chart and Kokumi manifest, the bundle builder, the OCI push, and the bundle policies. The Makefile targets `argocd-chart` and `kokumi-install`. The dependencies that became unused (`go mod tidy`).
-- The `ichor-stack` ServiceAccount and ClusterRole (`config/rbac/ichor-stack`, the chart's `rbac/ichor-stack.yaml`), the controller's rights on Kokumi `orders` and Argo CD `applications`, the `stack` CiliumNetworkPolicy, and the controller's egress to Kokumi's registry. `TestStackRBAC` became `TestControllerRBACHoldsNoEscalation`: the controller's ClusterRole still holds no escalation, CRD or workload-create rights.
+- The `ichor-stack` ServiceAccount and ClusterRole (`config/rbac/ichor-stack`, the chart's `rbac/ichor-stack.yaml`), the controller's rights on Kokumi `orders` and Argo CD `applications`, the `stack` CiliumNetworkPolicy, and the controller's egress to Kokumi's registry. The controller's ClusterRole still holds no escalation, CRD or workload-create rights.
 - In `ichor init`: the wait for `StackReady`, the Kokumi admin password print, and `spec.stack` on the `IchorInstallation` it creates. The wait for `CNIHandover` stays (`internal/cli/init_handover.go`), as does the `IchorInstallation`.
 - The Argo CD and Kokumi sections of `README.md`, `docs/design/architecture.md` and the ui-demo README.
 
@@ -33,7 +33,7 @@ ADR 0099 is superseded in part. These decisions stand: Cilium is the only CNI; i
 
 - Existing clusters that already run the stack keep their Argo CD and Kokumi; Ichor just stops managing them. Removing them is the operator's job.
 - A new `ichor init` finishes after the Cilium hand-over and installs nothing else.
-- The additive-CRD rule holds: no field was removed from any CRD.
+- The CRD fields the stack left unused are removed through the installer's retired-field list (see "Retired CRD fields").
 
 ## GitOps
 
@@ -49,7 +49,7 @@ Removed:
 - RBAC: `argocd-cm` get, Flux `kustomizations` list and `applications` get for `ichor-ui`; `argocd-cm` get and Flux `kustomizations` list for the manager.
 - The `IchorInstallation` `ExternalSuggested` condition and the controller's read of its own Deployment.
 
-Retired CRD fields (a deliberate exception to the append-only rule, decided by the user: these fields are gone for good):
+Retired CRD fields (a deliberate exception to the append-only rule: these fields are gone for good):
 
 - `TalosCluster.spec.gitops` (`mode`, `repository` and everything under it) and its Go types and CEL rules.
 - `TalosCluster.spec.cni.handover` and its enum (ADR 0099 had already made it unused: the hand-over is always to Ichor).
@@ -60,7 +60,7 @@ Kept and not retired: `TalosCluster.spec.cni.custom` and the `flannel` and `cust
 
 The retired-field mechanism: `internal/installer/crdcheck.go` refuses an install whose target CRD would drop a property the installed CRD has (a downgrade). It now carries `retiredFields`, an explicit list of `{crd, path}` entries (the CRD name and the dotted property path from the object root, such as `spec.gitops`, each with a comment citing the ADR). The check lets exactly those paths disappear, on exactly that CRD, and keeps refusing every other removal. The rule: a field is retired only by naming it in that list, one ADR per removal; there is no wildcard and no per-version or prefix match. Enum value changes are not checked by the installer, so dropping an enum alongside its field needs no entry.
 
-Stored objects: once the field is out of the schema the API server prunes it on the next write, and no validation or webhook rejects an object that still carries it (envtest `TestStoredTalosClusterWithRetiredFieldsSurvivesTheCRDUpgrade` and `TestStoredIchorInstallationWithRetiredFieldsSurvivesTheCRDUpgrade` create objects under the pre-removal CRDs, install the new ones and update the objects). The proto fields stay, deprecated, for wire compatibility.
+Stored objects: once the field is out of the schema the API server prunes it on the next write, and no validation or webhook rejects an object that still carries it. The proto fields stay, deprecated, for wire compatibility.
 
 Flux CD is permanently out of scope, like every GitOps tool. Ichor holds no Flux code, RBAC rule or wording.
 

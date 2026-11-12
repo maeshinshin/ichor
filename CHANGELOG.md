@@ -1,5 +1,59 @@
 # Changelog
 
+## v0.2.1 (2026-11-12)
+
+Fixes for `ichor adopt` on a real cluster, clearer command output, and
+documentation. The Talos, Kubernetes and Cilium versions a first install gets
+are the same as in v0.2.0, and no CRD field changed.
+
+### Adopt
+
+- `spec.certSANs` holds only the SANs that every node has, both in its
+  `machine.certSANs` and in its kube-apiserver SANs. Before, adopt could put a
+  SAN there that every node then had to carry, and a cluster whose nodes
+  differed in their SANs stayed blocked. What a node has beyond the shared list
+  goes into that node's own patch, so no certificate changes.
+- When the captured configuration still cannot reproduce a node, the plan names
+  the paths that differ, not everything it captured.
+- When adopt finishes it says what the machines are now (managed by Ichor, so
+  change their configuration through Ichor and not on the node) and what to run
+  next: `ichor cluster status`, `ichor machine list`, `ichor ui`.
+- A run that stops part-way says so and that the same `ichor adopt` can be run
+  again; it continues where it stopped, and machines that are still held have
+  had nothing applied.
+- A machine that needs a reboot to apply a pending change is reported at once,
+  with the `ichor config apply` command to run, and adopt goes on with the other
+  machines. Before, it waited out the 10-minute timeout and stopped there.
+
+### CLI
+
+- Notices wrap to the width of the terminal. A word longer than the line, such
+  as a path or a field name, is not cut.
+- A warning is separated from a following note by a blank line.
+- The short machine name that `ichor machine list` shows (the first eight
+  characters of the UUID) works in the commands that take a machine name. A
+  short name that fits more than one machine is refused, and the candidates are
+  listed.
+
+### Helm chart
+
+- The packaged chart no longer carries the chart's own Go tests and their
+  fixtures.
+
+### Docs
+
+- Getting started: unpack the whole release archive into a directory of its own,
+  explain the sign-in warning and how to log in to ichor-ui, caution that the
+  pod and service subnets must not overlap the nodes' network and cannot change
+  later, say that `machine list` shows short names and that they work in
+  commands, and fix the cosign link.
+- Users and login links the design decisions it builds on.
+- The contributing guide moved into the development section.
+
+### CI
+
+- The GitHub release body is the release's section of this file.
+
 ## v0.2.0 (2026-11-11)
 
 `ichor adopt` now works on an ordinary existing Talos cluster. Before this

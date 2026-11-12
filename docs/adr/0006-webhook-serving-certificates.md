@@ -13,7 +13,7 @@ and nothing in the chart may produce a diff on every Argo CD sync. kubebuilder
 4.15.0 scaffolds a `config/certmanager/` Issuer and assumes cert-manager at
 runtime; it offers no alternative.
 
-What the investigation established:
+Constraints from the dependencies:
 
 - controller-runtime v0.24.1 only *reloads* certificates. `certwatcher` watches
   files and `webhook.Server` points at `CertDir`; nothing in it generates a CA
@@ -34,7 +34,7 @@ What the investigation established:
 - Gatekeeper's chart — cert-controller's own reference consumer — ships the
   webhook configuration with no `caBundle` key, and `caBundle` is written at
   runtime. It does, however, ship the certificate **Secret**, as metadata with
-  no `data`, and that turns out to be load-bearing: cert-controller v0.16.0
+  no `data`, and that is load-bearing: cert-controller v0.16.0
   contains no `Create` call anywhere. `refreshCertIfNeeded` does
   `reader.Get` on the Secret and returns a wrapped error if that fails, so on
   a cluster where the Secret does not exist the rotator errors out, the manager
@@ -129,14 +129,13 @@ CD that the in-process rotator does not need.
 
 ## Amendment: cold-start ordering, no crash restarts
 
-Found on hardware: a fresh install never converged. The rotator is leader-only
-(see the earlier amendment), but controller-runtime's webhook server started at
-once, read `tls.crt`, found nothing and stopped the manager 15 ms after the lease
-was acquired, before the rotator wrote anything. With the 120 s lease and no
-release on cancel (ADR 0063, ADR 0089), every dead holder then blocked the next
-container for up to 120 s and the pod backoff grew to 5 min. The "one or two
-expected restarts" of ADR 0031 won by luck while the lease was short; it lost every
-time afterwards.
+A fresh install must converge on its own. The rotator is leader-only (see
+Decision), but controller-runtime's webhook server starts at once, reads
+`tls.crt`, finds nothing and stops the manager as soon as the lease is acquired,
+before the rotator has written anything. With the 120 s lease and no release on
+cancel (ADR 0063, ADR 0089), every dead holder then blocks the next container
+for up to 120 s and the pod backoff grows to 5 min. The "one or two expected
+restarts" of ADR 0031 holds only while the lease is short.
 
 Decision: the webhook server does not start until its certificate exists.
 
@@ -154,16 +153,17 @@ Decision: the webhook server does not start until its certificate exists.
 - Only the leader writes the certificate, so a single writer is kept and the
   cold-start CA race stays closed.
 - The metrics server, when `--metrics-cert-path` is set, has the same problem and
-  cannot be delayed (it is built into the manager). It now takes its certificate
+  cannot be delayed (it is built into the manager). It takes its certificate
   from a `GetCertificate` that reads the files per handshake, so it starts first and
   follows rotation; scrapes fail until the files exist.
 - Whether a start-up failure before leading should hold the lease is moot: with no
   failure before the certificate exists, nothing exits holding it. A later failure
   still holds it for up to the lease duration, which is the accepted ADR 0063
   trade-off.
-- `logCertStatusBeforeStart` now says the server waits, not that restarts are
+- `logCertStatusBeforeStart` says the server waits, not that restarts are
   expected. ADR 0031's "one or two restarts" no longer holds.
 
-`ichor init` waits for the webhooks for 30 min by default (`WebhookWait`, was the
-15 min node wait), and reports the last real server answer when that wait ends
-rather than the client's own "rate limiter ... deadline exceeded".
+`ichor init` waits for the webhooks for 30 min by default (`WebhookWait`,
+separate from the 15 min node wait), and reports the last real server answer
+when that wait ends rather than the client's own "rate limiter ... deadline
+exceeded".

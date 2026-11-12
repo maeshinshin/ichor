@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.2.3 (2026-11-13)
+
+Licence notices. The Talos, Kubernetes and Cilium versions a first install gets
+are the same as in v0.2.2, and no CRD field changed.
+
+### Licensing
+
+- `NOTICE` says where the source of the MPL-2.0 covered files is obtained, at
+  the Git tag that matches the version of the artifact, and names the files
+  that hold schema derived from Talos and cannot carry a header: the two CRD
+  manifests, their copies in the Helm chart and their reference pages.
+- The deep copy methods of `TalosConfigPatchDocument` are written next to the
+  type, so `zz_generated.deepcopy.go`, which carries the Apache-2.0 header,
+  names no Talos type.
+
 ## v0.2.2 (2026-11-12)
 
 Fixes for `ichor-ui`'s log stream and for `ichor init`. The Talos, Kubernetes

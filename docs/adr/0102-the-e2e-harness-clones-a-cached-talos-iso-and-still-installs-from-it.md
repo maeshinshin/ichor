@@ -11,7 +11,7 @@ Importing the ISO again for every node dominates the time to bring a cluster up.
 ## Decision
 
 - Only the ISO is cached. A cached `metal-amd64.raw.zst` disk would boot straight to a running, already-installed node: no install, no reboot, and no maintenance mode, which `ichor init`'s insecure apply and the approve flow both need. That would skip the step the product must exercise, so it is out.
-- The cache is created by the first run (`kubectl apply`, idempotent) and the harness waits for `Succeeded`. nodes clone it at the cache PVC's capacity. Clones need the same StorageClass as the cache.
+- The cache is created by the first run (`kubectl apply`, idempotent) and the harness waits for `Succeeded`. Nodes clone it at the cache PVC's capacity. Clones need the same StorageClass as the cache.
 - The nodes of a run are created together before any is waited on (the worker is not started after the control plane).
 
 ## Consequences

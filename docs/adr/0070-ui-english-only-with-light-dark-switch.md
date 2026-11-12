@@ -6,7 +6,7 @@ Supersedes: 0064
 
 ## Context
 
-ADR 0064 localised the UI in English and Japanese and picked the language from `navigator.languages`. The user asked for an English-only UI; a Japanese browser should not produce a Japanese page. The user also asked for a dark/light switch; `index.css` already had the `dark` custom variant and token block.
+ADR 0064 localised the UI in English and Japanese and picked the language from `navigator.languages`. The UI is English only: a Japanese browser should not produce a Japanese page. A dark/light switch is also wanted; `index.css` already has the `dark` custom variant and token block.
 
 ## Decision
 

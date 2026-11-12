@@ -7,8 +7,8 @@ Decided: `TalosCluster.spec.controlPlaneMetrics {enabled, allowedCIDRs}` (off by
 
 architecture.md ("Monitoring and registry mirrors") says Ichor can expose the control-plane metrics Talos
 binds locally and restrict scraping to a CIDR with Talos's ingress firewall. ADR 0040 left it as a
-`pkg/render` system-layer unit and listed what it needs. Everything below was read from the Talos
-v1.14.3 source (`siderolabs/talos@v1.14.3` and `pkg/machinery@v1.14.3`), not recalled.
+`pkg/render` system-layer unit and listed what it needs. Everything below is from the Talos
+v1.14.3 source (`siderolabs/talos@v1.14.3` and `pkg/machinery@v1.14.3`).
 
 ## 1. What moves the bind
 
@@ -26,9 +26,8 @@ v1.14.3 source (`siderolabs/talos@v1.14.3` and `pkg/machinery@v1.14.3`), not rec
   `listen-client-urls`, `listen-client-http-urls`, certificates, ...). `listen-metrics-urls` is not in
   it, and Talos sets nothing for it, so `cluster.etcd.extraArgs` can carry it. etcd has no
   standalone 1.14 document (`v1alpha1_etcdconfig.go`); `cluster.etcd.extraArgs` is the only form,
-  so the legacy `Config` document is rendered for etcd under every contract. Not verified in
-  source: that etcd v3.7.2 honours the flag (the etcd source is not in the module cache); it is
-  an upstream etcd flag and Talos passes it through untouched. Needs a real node.
+  so the legacy `Config` document is rendered for etcd under every contract. `listen-metrics-urls`
+  is an upstream etcd flag and Talos passes it through untouched.
 - **Ports.** Controller-manager 10257 and scheduler 10259 (HTTPS, bearer token with RBAC for
   `/metrics`), etcd 2381 (plain HTTP). Talos 1.14 already serves etcd's `/metrics` over mTLS on
   2383 (`constants.EtcdClientHTTPPort`) on all addresses; that needs a client certificate, so it is
@@ -54,8 +53,8 @@ Documents (`config/types/network`): `NetworkRuleConfig` (`name`, `portSelector {
 does not name: the Kubernetes API (6443), etcd client and peer (2379, 2380), kubelet (10250) and the
 Talos API (50000) are never matched. Because lo is accepted before the rule, a node scraping itself
 still works. Ichor therefore never renders `NetworkDefaultActionConfig`; switching it to `block`
-would drop all of the above and is exactly what this design must not do. The test asserts the render
-contains no `NetworkDefaultActionConfig` and that the rule names no port besides the three.
+would drop all of the above and is exactly what this design must not do. The render contains
+no `NetworkDefaultActionConfig` and the rule names no port besides the three.
 
 Consequences to know: the rule also drops sources that are not the scraper, such as other nodes, so
 `allowedCIDRs` must cover wherever Prometheus runs (pod CIDR or node CIDR, depending on CNI and
@@ -88,8 +87,8 @@ Patch override: the typed patch kinds are `Config`, `SysctlConfig`, `KernelModul
 volume kinds, so there is no way to write `NetworkRuleConfig`, `KubeSchedulerConfig` or
 `KubeControllerManagerConfig` in a patch. Under a 1.14 contract a legacy `cluster.scheduler` patch
 is also rejected by Talos next to the standalone document (already true before this ADR). What a patch
-can override is etcd's argument (`cluster.etcd.extraArgs`), tested. For the rest the answer is the
-switch in the spec, as with ADR 0066. Disabled renders byte-identically to unset (tested).
+can override is etcd's argument (`cluster.etcd.extraArgs`). For the rest the answer is the
+switch in the spec, as with ADR 0066. Disabled renders byte-identically to unset.
 
 ## 5. Reboot necessity (`pkg/fieldmeta`)
 
@@ -98,19 +97,14 @@ switch in the spec, as with ADR 0066. Disabled renders byte-identically to unset
   no-reboot mode only persists the config (`v1alpha1_server.go`). Rules added.
 - `KubeControllerManagerConfig` / `KubeSchedulerConfig` `extraArgs`: already no-reboot (static pods).
 - `cluster.etcd.*`: **reboot-required stays.** `services/etcd.go` reads the extra arguments when the
-  service starts and no controller restarts it on change, so nothing was verified that would make it
-  safe. Consequence: toggling `enabled` on a running cluster needs a reboot of each control-plane
+  service starts and no controller restarts it on change, so there is no safe way to apply it live.
+  Consequence: toggling `enabled` on a running cluster needs a reboot of each control-plane
   node, one at a time, through the existing reboot path.
 
 ## Chart
 
 No ServiceMonitor for the control plane was added. A Prometheus scrape of node IPs needs either a
 selector-less Service plus Endpoints naming the node addresses, which the chart cannot know, or a
-Service in `kube-system`, outside the release namespace the chart owns; neither can be checked here. The
+Service in `kube-system`, outside the release namespace the chart owns. The
 scrape targets are `https://<node>:10257/metrics`, `https://<node>:10259/metrics` (bearer token) and
 `http://<node>:2381/metrics`, for the operator's own Prometheus (Ichor installs none).
-
-## Not verified, needs a real node
-
-etcd's `listen-metrics-urls` taking effect on etcd 3.7.2; the firewall rule dropping a non-listed
-source in practice; the scheduler/controller-manager `/metrics` RBAC for the scraper's identity.

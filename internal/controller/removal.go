@@ -75,6 +75,9 @@ const removalRenewInterval = time.Minute
 // one Node read, one pod list and one cordon, cheap enough to repeat for hours.
 const drainRetryInterval = 15 * time.Second
 
+// removalSkipWaitSeconds is how long a pod may already be terminating before a removal's drain stops waiting for it.
+const removalSkipWaitSeconds = 60
+
 // drainBlockedError is reconcileRemoval's verdict when a pod holds the drain back. It is not a
 // failure to report to the error backoff: Reconcile turns it into a requeue after drainRetryInterval.
 type drainBlockedError struct {
@@ -825,8 +828,14 @@ func (r *TalosMachineReconciler) drainNode(ctx context.Context, hostname string)
 		}
 	}
 
-	// Unbounded, as before: removal is one blocking call under its own lock renewal (renewWhile).
-	return cordonAndDrain(newDrainHelper(ctx, r.KubeClient, 0), &node)
+	// Bounded like a rollout's drain: an unbounded one holds the single worker and the cluster lock for as
+	// long as a PodDisruptionBudget refuses an eviction. Past the bound the caller records DrainFailed and
+	// retries after drainRetryInterval. A pod already terminating for a minute (its kubelet is gone) is not
+	// waited for.
+	h := newDrainHelper(ctx, r.KubeClient, drainStepTimeout)
+	h.SkipWaitForDeleteTimeoutSeconds = removalSkipWaitSeconds
+
+	return cordonAndDrain(h, &node)
 }
 
 // renewWhile calls lock.Renew every interval until stop is called. A failed renew is logged, not escalated:

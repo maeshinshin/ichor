@@ -438,36 +438,61 @@ func writeMirrorStruct(b *strings.Builder, def *structDef) {
 	b.WriteString("}\n")
 }
 
+// isStd reports whether an import path is in the standard library (no dot in its first element).
+func isStd(p string) bool { return !strings.Contains(strings.SplitN(p, "/", 2)[0], ".") }
+
+// importSortKey orders the standard library before everything else.
+func importSortKey(p string) string {
+	if isStd(p) {
+		return "0" + p
+	}
+
+	return "1" + p
+}
+
 func (g *generator) writeConversion(filename string) {
+	var body strings.Builder
+
+	for _, def := range g.sortedOrder() {
+		writeStructConversion(&body, def)
+	}
+
 	var b strings.Builder
 
 	b.WriteString(header)
-	b.WriteString(`
-package typedconfig
+	b.WriteString("\npackage typedconfig\n\nimport (\n")
 
-import (
-	"fmt"
+	// gofmt's order: the standard library first, then the rest, each sorted by import path.
+	type spec struct{ alias, path string }
 
-	mx509 "github.com/siderolabs/crypto/x509"
-	mcel "github.com/siderolabs/talos/pkg/machinery/cel"
-	mblock "github.com/siderolabs/talos/pkg/machinery/config/types/block"
-	mnetwork "github.com/siderolabs/talos/pkg/machinery/config/types/network"
-	mmeta "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
-	mruntime "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
-	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
-	mnethelpers "github.com/siderolabs/talos/pkg/machinery/nethelpers"
-	rblock "github.com/siderolabs/talos/pkg/machinery/resources/block"
-	corev1 "k8s.io/api/core/v1"
-	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
-	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
-	kubeletv1 "k8s.io/kubelet/config/v1"
-	"time"
-)
-`)
+	imports := []spec{{"", "fmt"}, {"", "time"}}
 
-	for _, def := range g.sortedOrder() {
-		writeStructConversion(&b, def)
+	for alias, p := range importsUsed {
+		if path.Base(p) == alias {
+			alias = ""
+		}
+
+		imports = append(imports, spec{alias, p})
 	}
+
+	slices.SortFunc(imports, func(a, b spec) int {
+		return strings.Compare(importSortKey(a.path), importSortKey(b.path))
+	})
+
+	for i, im := range imports {
+		if i > 0 && isStd(imports[i-1].path) && !isStd(im.path) {
+			b.WriteString("\n")
+		}
+
+		if im.alias != "" {
+			fmt.Fprintf(&b, "\t%s %q\n", im.alias, im.path)
+		} else {
+			fmt.Fprintf(&b, "\t%q\n", im.path)
+		}
+	}
+
+	b.WriteString(")\n")
+	b.WriteString(body.String())
 
 	mustWriteFile(filename, b.String())
 }

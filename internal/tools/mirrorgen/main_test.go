@@ -19,10 +19,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"go/types"
 	"os"
 	"slices"
 	"testing"
 
+	"golang.org/x/tools/go/packages"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"sigs.k8s.io/yaml"
 )
@@ -159,5 +161,38 @@ func schemaProperties(schema *apiextensionsv1.JSONSchemaProps, visit func(name s
 
 	if schema.AdditionalProperties != nil {
 		schemaProperties(schema.AdditionalProperties.Schema, visit)
+	}
+}
+
+// TestEmbeddedStructsAreFlattened: a struct embedded with the yaml inline option has its fields written at the
+// top level of the embedding document, so the mirror carries them there, in the order the document has them,
+// and looks each one up in secretFields under the struct that declares it.
+func TestEmbeddedStructsAreFlattened(t *testing.T) {
+	const pkg = "github.com/maeshinshin/ichor/internal/tools/mirrorgen/testdata/embedded"
+
+	pkgs, err := packages.Load(&packages.Config{
+		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedSyntax | packages.NeedDeps | packages.NeedImports,
+	}, pkg)
+	if err != nil || len(pkgs[0].Errors) > 0 {
+		t.Fatalf("loading %s: %v %v", pkg, err, pkgs[0].Errors)
+	}
+
+	secretFields["Common.MTU"] = "test"
+
+	defer delete(secretFields, "Common.MTU")
+
+	g := newGenerator(pkgs)
+	named := g.lookupType(pkg, "Outer")
+	g.structMapping(named, named.Underlying().(*types.Struct))
+
+	var got []string
+
+	for _, f := range g.structs[named].fields {
+		got = append(got, f.name+" "+f.jsonName)
+	}
+
+	want := []string{"Name name", "Up up", "Extra extra"} // MTU is dropped by its declaring struct's secretFields row
+	if !slices.Equal(got, want) {
+		t.Errorf("fields of Outer: got %q, want %q", got, want)
 	}
 }

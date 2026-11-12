@@ -9,9 +9,7 @@ Decided: built the `PatchService` CRUD screens (list, create, edit, delete) and 
 ADR 0034 found three of phase 6's four pieces blocked on missing API
 surface and reported the shapes needed; ADR 0035 built exactly those
 shapes (`PatchService`'s five CRUD methods plus `PreviewImpact`). This
-unit is the screens on top of that backend -- the last piece of phase 6,
-and the one the task that produced this ADR asked to be answered as
-design questions before writing any code.
+ADR is the screens on top of that backend -- the last piece of phase 6.
 
 ## Decision
 
@@ -52,7 +50,7 @@ one-line-of-reasoning match for an opaque string field, so
 `PatchTarget.labelSelector` is not opaque on the wire -- `LabelSelector` is
 a structured message (`matchLabels` map, `matchExpressions` list) -- but
 building a dedicated add/remove-row editor for it would be the one bespoke
-structured-editing UI in this unit, for the target type used least often
+structured-editing UI in these screens, for the target type used least often
 (role and a single machine reference both need only a `Select`/`Input`).
 It is edited the same way as a document: one JSON blob in a `Textarea`,
 parsed client-side (`ui/src/lib/patchTarget.ts`'s `parseLabelSelector`)
@@ -62,8 +60,7 @@ shape check), never a rule the CRD already states. A malformed selector
 therefore fails before any request is sent, with its own "must be valid
 JSON" message, distinct from a server-side rejection.
 
-No editor library was added for either case, per the task's own
-constraint; `Textarea` (already in `components/ui/`) is enough for both.
+No editor library is added for either case; `Textarea` (already in `components/ui/`) is enough for both.
 
 ### Question 3: impact preview is an explicit action, not live
 
@@ -121,43 +118,35 @@ transport)`), the same one-line addition as the three existing clients --
 no new transport, no new pattern.
 
 `ui/src/pages/NodeDetail.tsx`'s effective-config section (ADR 0034) is
-unchanged in its grouping logic -- per the task's own instruction, that
-computation was not redone -- only its one-line caveat was updated from
+unchanged in its grouping logic; only its one-line caveat was updated from
 "editing isn't available from this screen yet" to a link to `/patches`,
 since that is no longer true.
 
-### Testing
+### Pure logic lives in `ui/src/lib`
 
-Followed ADR 0021's own precedent exactly: no component-rendering
-library exists in this project (`ui/package.json`'s `test` script is
-`node --test "src/**/*.test.ts"`, chosen specifically to add none), so
-pages themselves are not unit-tested -- only pure logic is, the same as
-`resumableStream.ts`/`.test.ts`. The one piece of new logic worth
-extracting that way is `ui/src/lib/patchTarget.ts` (`targetKindOf`,
-`stringifyLabelSelector`, `parseLabelSelector`), covered by
-`patchTarget.test.ts`: round-tripping a selector through the textarea
-representation, and rejecting invalid JSON or a non-object JSON value
-with its own message rather than guessing. That file deliberately imports
-nothing from `ui/src/gen` or `@bufbuild/protobuf`: the generated client's
-own files use plain, extensionless relative imports among themselves,
-which only a bundler's resolution (Vite, `tsc`'s `moduleResolution:
-bundler`) follows -- Node's own ESM resolver, which `node --test` uses
-directly with no bundler in front of it, cannot. `patchTarget.ts`'s
-exported functions instead take structurally-compatible `*Like`
-interfaces, confirmed against the generated types at every call site in
-`PatchList.tsx`/`PatchDetail.tsx` by `tsc -b --noEmit` passing clean.
+No component-rendering library exists in this project (`ui/package.json`'s
+`test` script is `node --test "src/**/*.test.ts"`, chosen to add none), so
+pages carry no logic of their own worth unit-testing; pure logic lives in
+`ui/src/lib`, as ADR 0021 set out. Here that is `ui/src/lib/patchTarget.ts`
+(`targetKindOf`, `stringifyLabelSelector`, `parseLabelSelector`): it
+round-trips a selector through the textarea representation and rejects
+invalid JSON or a non-object JSON value with its own message rather than
+guessing.
 
-Pages that do construct generated-message-shaped request objects
+That file imports nothing from `ui/src/gen` or `@bufbuild/protobuf`: the
+generated client's files use plain, extensionless relative imports among
+themselves, which only a bundler's resolution (Vite, `tsc`'s
+`moduleResolution: bundler`) follows, and Node's own ESM resolver, which
+`node --test` uses directly, cannot. `patchTarget.ts`'s exported functions
+instead take structurally-compatible `*Like` interfaces.
+
+Pages that construct generated-message-shaped request objects
 (`PatchDetail.tsx`) use `MessageInitShape<typeof PatchSchema>` (from
-`@bufbuild/protobuf`), not the generated `Patch` message type itself:
-confirmed by first getting this wrong -- a `Patch`-typed local variable
-built from a plain object literal failed `tsc` with "Property
-'$typeName' is missing," because `createClient`'s own call signatures
-(`@connectrpc/connect`'s `promise-client.d.ts`) accept `MessageInitShape<I>`
-specifically so a caller never has to carry that brand on code it writes
-from scratch -- the same shape every other page in this project already
-passes without a cast, confirmed by not needing one anywhere in
-`ClusterList.tsx`/`MachineList.tsx`/`NodeDetail.tsx`.
+`@bufbuild/protobuf`), not the generated `Patch` message type: `createClient`'s
+call signatures (`@connectrpc/connect`'s `promise-client.d.ts`) accept
+`MessageInitShape<I>` so a caller building a message from scratch never has
+to carry the generated type's `$typeName` brand. This is the shape every other
+page in the project already passes without a cast.
 
 ## Consequences
 
@@ -168,14 +157,10 @@ passes without a cast, confirmed by not needing one anywhere in
   a link, grouping logic untouched).
 - No new preactcn component was installed -- `Textarea`, `Select`,
   `Dialog`, `Input`, `Label`, `Badge`, `Button`, `Card`, `Table` (all
-  already present, ADR 0021) cover every field this unit needed.
-- No proto change; `ui/src/gen/` was not touched (it already carries
-  `patch_pb.ts` from ADR 0035).
-- `make build test lint` (Go) and `make ui-ci`/`make ui-test` (UI) all
-  pass; `rm -rf cmd/ichor-ui/dist` then `git status` confirmed no
-  generated-artifact drift from this unit.
-- Not built, per the task's own boundary and because none of it needs
-  to exist: `matchExpressions`-only convenience fields on the label
+  already present, ADR 0021) cover every field the screens need.
+- No proto change; `ui/src/gen/` already carries `patch_pb.ts` from
+  ADR 0035.
+- Not built: `matchExpressions`-only convenience fields on the label
   selector form (folded into the one JSON `Textarea` instead, see Question
   2); a live/typing-triggered impact preview (Question 3); any schema
   introspection of the CRD's OpenAPI document in the browser (Question 1).
@@ -189,7 +174,7 @@ doesn't cross "browser talks only to the backend"). Not built: viable to
 *serve* is not the same question as worth *building a renderer for* --
 the renderer itself would be the parallel-validation problem, not the
 asset fetch. Revisit only if the opaque-JSON `Textarea` proves too rough
-for a real operator, which this unit has no evidence of yet.
+for a real operator, which nothing yet suggests.
 
 **A dedicated row-based editor for `LabelSelector.matchExpressions`.**
 Considered and dropped in favor of the single JSON `Textarea` covering

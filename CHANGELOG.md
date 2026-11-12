@@ -37,7 +37,7 @@ are the same as in v0.2.2, and no CRD field changed.
   reset that Talos accepted now skips the count check, and the next attempt
   after a failed reset still counts as going on for the dead member.
 
-### Config patches
+### Typed configuration
 
 - A `TalosConfigPatch` document whose `kind` names a field that is not the one
   set, or that has a second field set, is refused with an error naming the kind
@@ -46,6 +46,14 @@ are the same as in v0.2.2, and no CRD field changed.
   such a document at admission; this covers one that is stored without it or
   built in process, and the admission webhook's dry render gives the same
   answer.
+- A `TalosConfigPatch` document's `config` (the `v1alpha1` document) can no
+  longer set `machine.registries.config.<host>.tls.clientIdentity`, a private
+  key, or `cluster.extraManifestHeaders`, which in practice holds an
+  `Authorization` header. A custom resource is stored unencrypted in etcd and
+  readable by anyone who can read it; credentials belong in the secrets bundle.
+  A create or update that sets or changes either is refused, naming the field.
+  A patch that already has them keeps them, can still be edited for something
+  else, and can have them removed. The fields stay in the CRD.
 
 ## v0.2.3 (2026-11-13)
 

@@ -6,6 +6,9 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
+
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
@@ -97,5 +100,70 @@ var _ = Describe("removing a dead control plane below the declared count", func(
 
 		cond := expectRemoval(fetchMachine(f.cp1), reasonRemovalRefused)
 		Expect(cond.Message).To(ContainSubstring("quorum"))
+	})
+
+	// resetDead starts the removal of a dead control plane that asks for a reset and runs it until it is
+	// past the etcd step: the Node of the machine stays Ready, so the removal waits on it.
+	resetDead := func(f *fixture, host string, self *fakeTalosClient) {
+		newTestNode(host, true)
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, &corev1.Node{Name: host}) })
+
+		f.departing[f.cp1.Name] = self
+
+		got := fetchMachine(f.cp1)
+		got.Annotations = map[string]string{resetOnDeleteAnnotation: resetOnDeleteValue}
+		Expect(k8sClient.Update(ctx, got)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, got)).To(Succeed())
+
+		reconcileOK(f.r, f.cp1)
+		Expect(machineGone(f.cp1)).To(BeFalse())
+	}
+
+	// etcdForgets is the survivor's view once the dead member has been removed from etcd.
+	etcdForgets := func(f *fixture) { f.survivor.etcdMembers = nil }
+
+	It("carries on to the end after the reset was accepted, though the member is gone from etcd and the count is below the declared one", func() {
+		f := setup("d6")
+		self := &fakeTalosClient{etcdStatusErr: errors.New("connection refused")}
+		resetDead(f, "node-d61", self)
+		expectRemoval(fetchMachine(f.cp1), reasonResetRequested)
+
+		etcdForgets(f)
+
+		var n corev1.Node
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "node-d61"}, &n)).To(Succeed())
+		n.Status.Conditions = []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse}}
+		Expect(k8sClient.Status().Update(ctx, &n)).To(Succeed())
+
+		reconcileOK(f.r, f.cp1)
+
+		Expect(self.resetCalls).To(Equal(1), "the wipe is not requested again")
+		Expect(machineGone(f.cp1)).To(BeTrue(), "the finalizer must not outlive the wiped node")
+	})
+
+	It("tries the reset again after it failed, though the member is gone from etcd and the count is below the declared one", func() {
+		f := setup("d7")
+		self := &fakeTalosClient{etcdStatusErr: errors.New("connection refused"), resetErr: errors.New("reset refused")}
+		resetDead(f, "node-d71", self)
+		expectRemoval(fetchMachine(f.cp1), reasonResetFailed)
+
+		etcdForgets(f)
+
+		self.resetErr = nil
+		reconcileOK(f.r, f.cp1)
+
+		Expect(self.resetCalls).To(Equal(2))
+		expectRemoval(fetchMachine(f.cp1), reasonResetRequested)
+	})
+
+	It("still refuses a member that is gone from etcd when no round of this removal ever went on for it", func() {
+		f := setup("d8")
+		etcdForgets(f)
+
+		Expect(k8sClient.Delete(ctx, f.cp1)).To(Succeed())
+		reconcileOK(f.r, f.cp1)
+
+		expectRemoval(fetchMachine(f.cp1), reasonRemovalRefused)
+		Expect(machineGone(f.cp1)).To(BeFalse())
 	})
 })

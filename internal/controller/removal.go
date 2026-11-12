@@ -319,12 +319,10 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	lock, err := r.acquireDisruptiveLock(ctx, &cluster, m, machineLockIdentity(m), true)
 	if err != nil {
 		if shuttingDown, ok := errors.AsType[*shuttingDownError](err); ok {
-			return r.removalCondition(ctx, m, metav1.ConditionFalse, shuttingDown.reason(),
-				shuttingDown.Error()+"; removal deferred")
+			return r.removalDeferred(ctx, m, shuttingDown.reason(), shuttingDown.Error()+"; removal deferred")
 		}
 		if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {
-			return r.removalCondition(ctx, m, metav1.ConditionFalse, reasonClusterLockHeld,
-				lockHeldBy(held)+"; removal deferred")
+			return r.removalDeferred(ctx, m, reasonClusterLockHeld, lockHeldBy(held)+"; removal deferred")
 		}
 		return err
 	}
@@ -341,6 +339,11 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	isControlPlane := m.Spec.Role == roleControlPlane
 	deadMember := false
 
+	// A removal whose Reset Talos already accepted has passed the count check and the etcd step, and the
+	// member is gone from etcd now: counting again would read that as a removal below the declared count and
+	// refuse it, leaving the finalizer on a node that is already wiped.
+	resumed := resetRequested(m) && resetAccepted(m)
+
 	if isControlPlane {
 		siblings, err := r.countApprovedControlPlanes(ctx, m)
 		if err != nil {
@@ -351,11 +354,13 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 			return err
 		}
 
-		var stop bool
+		if !resumed {
+			var stop bool
 
-		deadMember, stop, err = r.checkRemovalCounts(ctx, &cluster, m, siblings)
-		if stop || err != nil {
-			return err
+			deadMember, stop, err = r.checkRemovalCounts(ctx, &cluster, m, siblings)
+			if stop || err != nil {
+				return err
+			}
 		}
 	}
 
@@ -374,9 +379,9 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 		return errors.New(msg) // an error, so Reconcile requeues: the node may only be rebooting
 	}
 
-	// A removal whose Reset Talos already accepted only waits for its Node: the drain and the etcd step
-	// are done, and a node that is wiping cannot be drained.
-	if resetRequested(m) && resetAccepted(m) {
+	// Such a removal only waits for its Node: the drain and the etcd step are done, and a node that is
+	// wiping cannot be drained.
+	if resumed {
 		return r.finishReset(ctx, m, nodeName, nodeStep{})
 	}
 
@@ -434,6 +439,17 @@ func (r *TalosMachineReconciler) reconcileRemoval(ctx context.Context, m *ichorv
 	}
 
 	return r.resetAndFinish(ctx, &cluster, m, nodeName)
+}
+
+// removalDeferred records why the removal cannot go on yet and asks to be tried again after nodeWaitInterval.
+// Nothing else wakes the machine when the operation it waits for ends: no watch covers the lock's Lease, and
+// the resync is hours away.
+func (r *TalosMachineReconciler) removalDeferred(ctx context.Context, m *ichorv1alpha1.TalosMachine, reason, msg string) error {
+	if err := r.removalCondition(ctx, m, metav1.ConditionFalse, reason, msg); err != nil {
+		return err
+	}
+
+	return &removalWaitError{msg: msg}
 }
 
 // resetAndFinish is the end of a removal: without the reset annotation the finalizer just goes; with it

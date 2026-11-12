@@ -282,7 +282,9 @@ var _ = Describe("TalosMachineReconciler removal", func() {
 		Expect(lock.Acquire(ctx, "someone-else")).To(Succeed())
 
 		Expect(k8sClient.Delete(ctx, cp)).To(Succeed())
-		reconcileOK(r, cp)
+		res, err := reconcileMachine(r, cp)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(nodeWaitInterval), "nothing else wakes a removal when the lock frees")
 
 		got := fetchMachine(cp)
 		expectRemoval(got, reasonClusterLockHeld)

@@ -46,17 +46,15 @@ them into their own `argocd-cm` (kustomize patch, Helm values of the Argo CD
 chart, or `kubectl get -o jsonpath`). Same opt-in shape as `metricsCert.enabled`:
 default false, renders nothing.
 
-## Verification
+## Lua dialect
 
-`dist/chart/argocd_health_test.go` loads each `.lua` with `lua` (5.1, added to
-`flake.nix` as `lua5_1`; Argo CD embeds gopher-lua, a 5.1 dialect) against a
-table of status samples and expected verdicts, and checks the option renders
-nothing when off and the two keys, byte-identical to the files, when on.
-The scripts use only the base language (no standard libraries beyond what Argo
-CD enables by default).
+Argo CD embeds gopher-lua, a 5.1 dialect that is close to but not identical
+with PUC Lua 5.1. The scripts use only the base language: tables, `ipairs` and
+string concatenation, with no standard libraries beyond what Argo CD enables
+by default. The option renders nothing when off, and when on its two keys are
+byte-identical to the `.lua` files.
 
 ## Consequences
 
-- The test needs `lua` on PATH (provided by `nix develop`).
-- gopher-lua is close to but not identical with PUC Lua 5.1; the scripts stay
-  to tables, `ipairs` and string concatenation to avoid the differences.
+- The scripts are exercised under `lua` 5.1 (`lua5_1` in `flake.nix`), so
+  `lua` must be on PATH.

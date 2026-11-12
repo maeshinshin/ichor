@@ -7,9 +7,9 @@ Decided: `TalosEtcdBackup` snapshots one healthy non-leader control plane over T
 ## Context
 
 Goal 4 of the design is "restore from the secrets bundle and a snapshot alone".
-Nothing existed: no type, no controller, no storage format. This unit builds the
-backup half. Restore (live and `--recover-cluster`) is the next unit, so the
-stored format below is written for it and lives in `internal/etcdbackup`, which
+No type, controller or storage format existed. This ADR covers the backup half.
+Restore (live and `--recover-cluster`) is separate, so the stored format below
+is written for it and lives in `internal/etcdbackup`, which
 both sides import so they cannot drift.
 
 ## Decisions
@@ -32,8 +32,8 @@ both sides import so they cannot drift.
    never uploaded: the encrypted stream is staged to a spool file (an `emptyDir`;
    the root filesystem is read-only), uploaded only after verification, and the next
    control plane is tried.
-3. **S3 client: `minio-go/v7`.** `go.mod` had no S3-capable dependency (no aws
-   SDK, no minio, no gocloud, checked with `go mod graph`), so any choice adds one.
+3. **S3 client: `minio-go/v7`.** `go.mod` has no S3-capable dependency (no aws
+   SDK, no minio, no gocloud), so any choice adds one.
    `aws-sdk-go-v2` pulls in dozens of modules; minio-go adds nine small ones,
    speaks SigV4 against AWS, MinIO, Ceph and others, and supports a custom CA.
 4. **Encryption: age with a scrypt recipient, passphrase derived from the bundle.**
@@ -52,8 +52,7 @@ both sides import so they cannot drift.
 5. **Credentials.** `spec.destination.s3.credentialsSecretRef` names a Secret with
    `accessKeyID`, `secretAccessKey`, optional `sessionToken` and `ca.crt`. It is read
    from the **controller's own namespace** (`POD_NAMESPACE`), never the backup's
-   (ADR 0011), the same rule as `loadBundle` and `render.ResolveRegistryAuth`; a test
-   puts the backup elsewhere with a decoy Secret to prove it. Errors name the Secret
+   (ADR 0011), the same rule as `loadBundle` and `render.ResolveRegistryAuth`. Errors name the Secret
    and key, not values. Every error string is passed through a scrubber holding the
    credentials, the derived passphrase and the bundle's secret scalars before it
    reaches status or a log, because S3 and Talos error text is not ours.
@@ -61,12 +60,11 @@ both sides import so they cannot drift.
    lists `TalosEtcdBackup` as Git-tracked. Status holds object key, time, size and
    machine name only. **Follow-up:** ADR 0028's `ichor gitops export` allow-list
    (`internal/cli`) does not include this kind, so an exported repository misses
-   it; adding it was out of this unit's scope.
+   it; adding it is not part of this ADR.
 7. **No cluster lock.** A snapshot is a read of one member; it does not stop, drain
    or restart anything. The lock exists for disruptive operations
-   (`acquireDisruptiveLock` is the only `Acquire` caller and the guard test keeps
-   it so). A node mid-upgrade fails its snapshot and the next is tried. The restore
-   unit, which does stop etcd, must take the lock.
+   (`acquireDisruptiveLock` is the only `Acquire` caller). A node mid-upgrade fails its snapshot and the next is tried. Restore,
+   which does stop etcd, must take the lock.
 
 ## Stored format (what restore reads)
 
@@ -96,14 +94,13 @@ them belong with the chart's monitoring option.
 
 ## Deferred
 
-- `shortcut:` only S3; no GCS/Azure/local. Path-style vs virtual-host is minio-go's
+- Only S3; no GCS/Azure/local. Path-style vs virtual-host is minio-go's
   auto-detection; no override field.
-- `shortcut:` no deep verification (opening the bbolt file); a periodic restore test in
+- No deep verification (opening the bbolt file); a periodic restore test in
   e2e is the real proof, per the design.
 - Snapshots are staged on local disk (one snapshot of space in the `emptyDir`); a
   streaming multipart upload would avoid that but cannot un-upload a bad snapshot.
-- The chart's `manager-role` carries these rules; it already lacked `talosoperations`
-  rules before this change (not touched here).
+- The chart's `manager-role` carries these rules.
 
-- Amendment 2026-10-27: snapshots are sealed with scrypt work factor 2^10 (1 MiB) instead of age's default 2^18 (~270 MiB of heap per derivation, which OOM-killed the controller on real hardware); the key is a 256-bit HKDF output so the cost bought nothing. Decrypt caps at the same 2^10. There is no compatibility with pre-release backups: none sealed with 2^18 exist (the only ones were in torn-down test buckets), so the legacy decrypt path is dropped. The manager memory limit is 256Mi (request 128Mi): normal use is tens of MiB plus ~100 MiB of caches, and no legacy derivation needs covering. For the S3 test harness, `docker.io/bitnamilegacy/minio:2025.7.23-debian-12-r3` was pullable on 2026-10-27; `quay.io/minio/minio` and `docker.io/minio/minio` return 401 anonymously.
+- Amendment 2026-10-27: snapshots are sealed with scrypt work factor 2^10 (1 MiB) instead of age's default 2^18 (~270 MiB of heap per derivation, which OOM-killed the controller); the key is a 256-bit HKDF output so the cost bought nothing. Decrypt caps at the same 2^10. There is no compatibility with pre-release backups sealed with 2^18, so the legacy decrypt path is dropped. The manager memory limit is 256Mi (request 128Mi): normal use is tens of MiB plus ~100 MiB of caches, and no legacy derivation needs covering.
 - Amendment 2026-10-28: a backup can be taken on demand. `ichor etcd backup now NAME`, the Backups page's "Back up now" button and the `OperationService.RequestEtcdBackup` RPC set the annotation `ichor.maesh.dev/backup-now=<RFC 3339 time>` on the `TalosEtcdBackup` as the caller (same RBAC as the other operation writes: `update` on `talosetcdbackups`), so neither UI nor CLI touches Talos. The controller, when that time is newer than the new `status.lastManualBackup`, records it there and takes one snapshot in the same reconcile, outside the schedule, through the same path as a scheduled one (same key format, verification, encryption, pruning); the schedule then counts from that snapshot. A request is acted on once, whether the snapshot succeeded or not: a failure shows in `Ready` and is retried on the 5-minute failure interval like any failed attempt. A missing, unparsable or not-newer annotation is ignored, and a suspended backup ignores it. The pattern is ADR 0095's retry annotation. The RPC returns `FailedPrecondition` for a suspended backup and for a request still waiting, and writes a time never earlier than `lastManualBackup` plus one second. `EtcdBackup` in the API now also carries the destination (endpoint, region, bucket, prefix; never the credentials Secret), `keepLast`, the last success time, the last error (the Ready condition's message while it is Failed), `suspended`, `lastManualBackup` and whether a request is pending, and the Backups page shows them. The controller now also reconciles on annotation changes, not only on spec generation changes.

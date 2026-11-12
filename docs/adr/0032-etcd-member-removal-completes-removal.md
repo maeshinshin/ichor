@@ -12,25 +12,25 @@ step they gate — "remove the etcd member if it's a control plane" — was
 never implemented: the package comment on `internal/controller/removal.go`
 said plainly that etcd member removal and the Talos reset itself were
 "deliberately not implemented here," and a removal that passed every check
-and finished draining still held its finalizer forever. Confirmed for real
-against a live 3-node cluster (docs/adr/0007's appendix): a `TalosMachine`
+and finished draining still held its finalizer forever. A `TalosMachine`
 whose deletion is admission-allowed and controller-approved never actually
 disappears, and `deleteguard.CountApprovedControlPlanes`'s List therefore
 never stops counting it either, since nothing ever clears its finalizer.
 That is not a "mostly working" removal path — it is a machine that drains
-and then gets permanently stuck, which counts as a real problem (no half-working thing
-is left behind), not a phase boundary to leave
-alone.
+and then gets permanently stuck.
 
 Finishing it needs a real Talos API call. `TalosClient`'s doc comment calls
 itself "the one interface rule 0 allows," so the fix widens that one
 interface rather than adding a second — a second Talos-facing interface
-would double unit rule 2's fake-test-double burden for no reason the design
+would double the number of test doubles for no reason the design
 asks for.
 
 ## Decision
 
-### `TalosClient` grows three methods, verified against machinery v1.14.3's own client.go and api/machine/machine.pb.go
+### `TalosClient` grows three methods, adapting machinery v1.14.3's `client.Client`
+
+Machinery v1.14.3's `client.go` and `api/machine/machine.pb.go` define the
+calls these adapt:
 
 - `EtcdMemberList(ctx) ([]EtcdMember, error)` — adapts `*client.Client.EtcdMemberList`
   (`QueryLocal: true`), flattening `EtcdMemberListResponse.Messages[].Members[]`
@@ -96,11 +96,39 @@ a crash correct in both directions:
   that is not there, and never trusts any local memory of "did I already
   do this" the way a status flag written *before* the call would have to.
 
+A control plane that has just left etcd can stop answering on its own Talos
+API (Talos no longer runs the control-plane stack on a node that is not an
+etcd member). So a reconcile resumed after a successful leave may find the
+departing machine unreachable; it then takes the survivor path, finds the
+hostname already absent from the survivor's member list, and goes straight to
+`completeRemoval` without calling `EtcdLeaveCluster` or
+`EtcdRemoveMemberByID` again.
+
 This is also why `EtcdLeaveCluster`/`EtcdRemoveMemberByID` need no
 fire-and-forget "record intent before acting" status write the way Reset
 does (next section): both return their result synchronously in the RPC,
 so there is nothing in flight to lose track of across a crash that the
 live member list wouldn't already answer on the next read.
+
+### Every Talos call in the removal is bounded
+
+`removeEtcdMember` and `removeEtcdMemberFromSurvivor` run each attempt (the
+self-leave in `trySelfLeave` and the survivor fallback) under a context
+timeout, `etcdDialTimeout` (15s). Without one, dialling a control plane that
+has just left etcd and gone silent hangs with no deadline and wedges the
+controller's one `talosmachine` worker, and with it every other
+`TalosMachine` queued behind.
+
+### The decoded secrets bundle gets a clock
+
+`secrets.Bundle.Clock` carries `yaml:"-"`, so it is excluded from the
+serialization the bundle Secret decoder reads back, and only `populate()`
+(run when building a brand-new bundle) refills it. Generating a Talos API
+client certificate from a decoded bundle would therefore call a nil
+`Clock.Now()`. `internal/secretsbundle.Load` fills `Clock` with
+`secrets.NewClock()` when it is nil after decoding, the same fallback
+`populate()` uses; because the decode is centralized there (ADR 0033),
+`internal/uiapi`'s read-only Talos client gets it too.
 
 ### Reset stays out of this interface entirely, and the roadmap still says so
 
@@ -153,19 +181,13 @@ cluster" — deliberately not naming a specific target number, since the enum
 only allows 1, 3 or 5 and the arithmetically "obvious" next value
 (`current - 1`) is frequently not one of them.
 
-### The four failure modes, re-checked now that two of them are no longer hypothetical
+### The four failure modes
 
 Architecture.md's "Nodes" section names four ways to get this fatally
 wrong. Two are Reset's alone (partition naming; fire-and-forget double-reset)
 and still cannot be stepped into, because no code in this package calls
-Reset at all — `TestTalosClientHasNoResetMethod` is the guard that stays
-true. The other two are what this ADR's own tests exercise directly:
-Ichor's refusals happening before any Talos call (`removal_test.go`'s "the
-four failure modes" `Describe` block — unchanged in spirit, updated in
-wording now that a passing removal really does call Talos), and the
-not-found-counts-as-success idempotency (`etcd_removal_test.go`'s four
-`removeEtcdMember` specs: self-leave success, survivor fallback, already-
-absent on both paths, and held-finalizer-on-total-failure).
+Reset at all. The other two are exercised directly: Ichor's refusals happen
+before any Talos call, and not-found counts as success for idempotency.
 
 ## Consequences
 
@@ -185,106 +207,7 @@ absent on both paths, and held-finalizer-on-total-failure).
   reset. Reset itself remains unbuilt; this ADR only makes the gap visible
   instead of silent.
 
-## Real-hardware verification
-
-**Two real, previously-latent bugs found and fixed, neither anticipated
-going in:**
-
-1. `secrets.Bundle.Clock` carries `yaml:"-"` -- deliberately excluded from
-   the exact serialization the bundle Secret decoder reads back. Nothing
-   refills it on decode except `populate()`, which only runs while
-   building a brand-new bundle. The first ever call from real production
-   code to `GenerateTalosAPIClientCertificate` on a bundle loaded this way
-   panicked on a nil-interface `Clock.Now()` -- `NewMachineryTalosClient`
-   dialing with the fixture's real bundle, recovered by controller-runtime
-   but looping forever on retry. No test anywhere had exercised this
-   combination before: unit tests fake `TalosClient` entirely, and every
-   previous real-hardware pass either had no bundle at all or never got a
-   working one. Fixed in `internal/secretsbundle.Load` (ADR 0033 had
-   already centralized the decode this ADR's own fix first landed in):
-   fill `Clock` with `secrets.NewClock()` if nil after decode, the same
-   fallback `populate()` itself uses. Centralizing it there means
-   `internal/uiapi`'s own read-only Talos client gets the same fix for
-   free, not just this package's.
-2. No context timeout anywhere in `removeEtcdMember`/
-   `removeEtcdMemberFromSurvivor`. Confirmed for real: the control plane
-   that had just left etcd (`ichor-e2e-ha-0`) went unreachable on its own
-   Talos API moments later -- its local kube-apiserver stopped answering
-   too, consistent with Talos no longer running the control-plane stack on
-   a node that is not an etcd member -- and the next reconcile's self-dial
-   attempt hung with no deadline, wedging this controller's one
-   `talosmachine` worker on every other `TalosMachine` behind it for as
-   long as the process stayed up. Fixed with `etcdDialTimeout` (15s),
-   wrapping both the self-attempt (`trySelfLeave`) and the
-   survivor-fallback attempt.
-
-**The removal itself, with etcd's own before/after member list:**
-
-```text
-# before, queried from ichor-e2e-ha-0 itself (10.244.1.40):
-NODE          ID                 HOSTNAME         ...
-10.244.1.40   221caadec20f5672   ichor-e2e-ha-2
-10.244.1.40   5085f640db370298   ichor-e2e-ha-1
-10.244.1.40   74b4db31286a41e2   ichor-e2e-ha-0
-```
-Lowered `TalosCluster.spec.controlPlane.count` from 3 to 1 (the operator
-action `CheckControlPlaneCount`'s own refusal message now names), annotated
-`ichor-e2e-ha-0`'s `TalosMachine` with `allow-delete=true` and deleted it.
-```text
-# after, queried from a survivor (10.244.1.208, since ha-0's own endpoint
-# was no longer answering by this point -- see bug 2 above):
-NODE           ID                 HOSTNAME
-10.244.1.208   221caadec20f5672   ichor-e2e-ha-2
-10.244.1.208   5085f640db370298   ichor-e2e-ha-1
-```
-Two members, both voters, `ichor-e2e-ha-0` gone -- a real graceful
-`EtcdLeaveCluster`, not the quorum math being taken on faith.
-
-**Idempotency, both sides of the one real crash:**
-
-- *Killed before the Talos call lands*: annotated and deleted
-  `ichor-e2e-ha-0`'s `TalosMachine`, then `kill -9`'d the manager process
-  immediately after the delete request returned. Confirmed before
-  restarting: finalizer still present, no `Removal` condition written at
-  all, etcd still the same 3 members as the "before" snapshot above. On
-  restart, the manager re-acquired its cluster lock under its own stable
-  identity (no `HeldError`) and retried from scratch.
-- *Interrupted after the etcd call succeeds, before the finalizer clears*:
-  this is bug 2 above, and it is also the "after" case -- `ichor-e2e-ha-0`
-  left etcd for real, then went unreachable before `completeRemoval`'s
-  status write could land (its own apiserver had just stopped answering).
-  Once the controller's own client was pointed at a surviving node instead
-  and restarted, the resumed reconcile's self-dial to `ichor-e2e-ha-0`
-  timed out (bug 2's fix), fell back to the survivor path, found the
-  hostname already absent from that survivor's own member list, and went
-  straight to `completeRemoval` -- confirmed by the `NodeStillHasClusterCredentials`
-  `Warning` Event firing and the `TalosMachine` object actually
-  disappearing, with **no second `EtcdLeaveCluster` or `EtcdRemoveMemberByID`
-  call attempted** (nothing to call it on: the member was already gone).
-  This is the scenario this ADR calls "the most fragile point," found not
-  by engineering a precise kill-timing race but by the environment
-  providing the exact same window on its own -- which is arguably stronger
-  evidence than a deliberately timed kill would have been, since nothing
-  about it was staged.
-
-**Deleting an unreachable node: attempted, not cleanly completed, and the
-reason is itself informative.** The delete request itself never reached the inner
-apiserver: with only one of two etcd members still reachable, etcd on the
-inner cluster lost its leader entirely (`etcdserver: no leader`, confirmed
-directly) -- exactly what architecture.md's "Topology" section already
-says about two-member clusters ("with two members etcd needs both to be
-up, so it is strictly less available than one") and exactly why
-`controlPlane.count`'s enum rejects 2, now observed rather than taken on
-faith. `removeEtcdMemberFromSurvivor`'s `EtcdRemoveMemberByID` path (as
-opposed to the `EtcdMemberList` calls already exercised repeatedly above)
-was consequently never exercised against a real, still-a-member,
-unreachable node this pass -- reaching that scenario cleanly needs a
-fourth real control plane (so removing one unreachable member still has a
-reachable quorum left to ask), which this pass's two remaining real nodes
-could not provide without engineering a second full HA boot. Left for a
-future pass; the machinery-client call itself is the same verified
-`client.Client` wrapper `EtcdLeaveCluster` already proved out, and
-`etcd_removal_test.go`'s fake-backed test already covers the control flow.
+## Later changes
 
 Update: removal now evacuates storage before the drain (shared with the Talos
 upgrade, see ADR 0043), so the order is evacuation, drain, etcd member, reset.

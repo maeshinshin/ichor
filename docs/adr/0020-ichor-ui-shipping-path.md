@@ -10,15 +10,14 @@ ADR 0017 (the UI skeleton) and ADR 0018 (the backend's RPCs) both named the
 same gap: nothing shipped `ichor-ui` anywhere. `.goreleaser.yaml` built only
 `./cmd/ichor`; the chart had no `ichor-ui` `Deployment`/`Service`; and
 `config/rbac/ichor-ui/` (ADR 0018) was a standalone kustomize base, wired
-into nothing. Two agents reported this independently as a hole. This ADR
-closes it: a container image build path, the chart's `Deployment`/`Service`/
+into nothing. This ADR closes that gap: a container image build path, the chart's `Deployment`/`Service`/
 `ServiceAccount`, `config/rbac/ichor-ui/` wired into `config/default`, a
 kustomize-side `Deployment`/`Service` to match, and a decision on
 `.goreleaser.yaml`.
 
-Deploying to a real cluster and verifying it there is explicitly out of
-scope: the controller's own image has no path into the inner e2e cluster
-yet either, and that needs its own design pass.
+Deploying to a real cluster is out of this decision's scope: the controller's
+own image has no path into the inner e2e cluster either, and that needs its own
+design pass.
 
 ## Decision: the container image
 
@@ -41,8 +40,7 @@ reached the build context at all.
 
 `make docker-build-ichor-ui` mirrors `docker-build` exactly (`$(CONTAINER_TOOL)
 build -f Dockerfile.ichor-ui -t ${IMG_UI} .`), with a new `IMG_UI ?=
-ichor-ui:latest` beside the existing `IMG`. No push/buildx variants: nobody
-asked for them, and they are a three-line addition each if that changes.
+ichor-ui:latest` beside the existing `IMG`. No push/buildx variants: nothing needs them, and they are a three-line addition each if that changes.
 
 ## Decision: the chart's Deployment/Service/ServiceAccount
 
@@ -68,8 +66,7 @@ Fixed names (`ichor-ui` for the `Deployment`/`ServiceAccount`,
 `ichor-webhook-service`'s own precedent (one installation per cluster,
 design 4.1) and `config/rbac/ichor-ui/`'s existing fixed names (ADR 0018), so
 the two sides agree without either needing to know the other's Helm release
-name. `ichor ui`'s future port-forward (out of scope here, another agent's
-`internal/cli` work) needs exactly this: a name it can find without asking
+name. `ichor ui`'s port-forward needs exactly this: a name it can find without asking
 Helm what the release was called.
 
 No ClusterIP override: architecture.md "Trust" puts the UI behind `ichor ui`
@@ -79,9 +76,7 @@ default (`ClusterIP`) is correct as-is and needed no decision.
 ## Decision: `config/rbac/ichor-ui/` wired into `config/default`, and a matching kustomize Deployment/Service
 
 `config/default/kustomization.yaml` gained `../rbac/ichor-ui` as its own
-resource entry, a sibling to `../rbac`, not folded into it — the task's own
-constraint ("must not mix with the controller's Role") matches
-architecture.md "Trust" directly: the two identities must never share a
+resource entry, a sibling to `../rbac`, not folded into it — architecture.md "Trust" requires it: the two identities must never share a
 kustomization any more than they share a `ServiceAccount`.
 
 Wiring RBAC in without a workload for it to apply to was exactly what ADR
@@ -91,7 +86,7 @@ a sibling to `config/manager/` — and, matching `config/manager/`'s own
 simplicity, **not** the chart's richer treatment: plain `replicas: 1`, no
 `PodDisruptionBudget`, no `topologySpreadConstraints`. The 2-replica/PDB/
 anti-affinity shape is a Helm-chart-only enrichment for the controller
-today (confirmed: nothing under `config/` has a `PodDisruptionBudget` or
+today (nothing under `config/` has a `PodDisruptionBudget` or
 `topologySpreadConstraints` anywhere), so giving `ichor-ui`'s kustomize base
 that treatment while the controller's own kustomize base doesn't have it
 would be a new, one-off inconsistency, not reuse.
@@ -100,63 +95,44 @@ would be a new, one-off inconsistency, not reuse.
 && kustomize edit set image ichor-ui=${IMG_UI}`, mirroring the existing
 `controller=${IMG}` line exactly.
 
-**Found and fixed in the same pass**: `config/default`'s two JSON6902
-patches (`manager_metrics_patch.yaml`, `manager_webhook_patch.yaml`) target
-`kind: Deployment` with no `name`, which silently relied on there being
-exactly one `Deployment` in the whole kustomization. Adding `ichor-ui`'s
-broke that assumption immediately — `kustomize build config/default` failed
-outright (`add operation does not apply: ... missing value`), trying to
-patch `ichor-ui`'s `volumeMounts`/`args`, which it doesn't have. Both
-patches' `target` now also carries `name: controller-manager`. Verified:
-`kustomize build config/default` succeeds, the controller's `Deployment`
-still carries its webhook volume/mount/port and metrics arg, and `ichor-ui`'s
-is untouched by either patch.
+**`config/default`'s two JSON6902 patches name their target.**
+`manager_metrics_patch.yaml` and `manager_webhook_patch.yaml` target
+`kind: Deployment` with no `name`, which relies on there being exactly one
+`Deployment` in the whole kustomization. With `ichor-ui`'s added,
+`kustomize build config/default` fails outright (`add operation does not apply:
+... missing value`), trying to patch `ichor-ui`'s `volumeMounts`/`args`, which it
+doesn't have. Both patches' `target` therefore also carries
+`name: controller-manager`: the controller's `Deployment` carries its webhook
+volume/mount/port and metrics arg, and `ichor-ui`'s is untouched by either patch.
 
-## Resolved gap: the chart's ichor-ui secrets Role no longer diverges from `config/rbac/ichor-ui/role.yaml`
+## The ichor-ui secrets rule is namespace-scoped in both install paths
 
-`internal/uiapi/rbac_markers.go`'s secrets marker originally carried no
-`namespace=` qualifier (`+kubebuilder:rbac:groups="",resources=secrets,
-verbs=get`), unlike the controller's three equivalent markers
-(`cmd/main.go:66-67`, `internal/controller/talosmachine_controller.go:158`,
-all `namespace=ichor-system`). Controller-gen folded that rule into
-`ichor-ui-role`'s cluster-scoped `ClusterRole`, where the controller's
-equivalent rule is split into a separate namespaced `Role`
-(`manager-secrets-role.yaml`) specifically so it isn't cluster-wide.
-`dist/chart/chart_test.go`'s `checkNoClusterWideSecretsRead` — written
-earlier to guard a real regression in the controller's own role, and
-generic over every `ClusterRole` the chart renders, not controller-specific
-— correctly flagged this as the same pattern: an unrestricted `secrets: get`
-with no `resourceNames`, readable as literally any Secret in the cluster if
-its name is known.
+`internal/uiapi/rbac_markers.go`'s secrets marker carries `namespace=ichor-system`
+(`+kubebuilder:rbac:groups="",resources=secrets,namespace=ichor-system,verbs=get`),
+like the controller's three equivalent markers (`cmd/main.go:66-67`,
+`internal/controller/talosmachine_controller.go:158`). Without the qualifier,
+controller-gen folds the rule into `ichor-ui-role`'s cluster-scoped
+`ClusterRole`: an unrestricted `secrets: get` with no `resourceNames`, readable
+as literally any Secret in the cluster if its name is known, which
+`dist/chart/chart_test.go`'s `checkNoClusterWideSecretsRead` (generic over every
+`ClusterRole` the chart renders, not controller-specific) rejects as the same
+pattern it guards in the controller's own role.
 
-At the time this ADR was first written, fixing the marker was out of that
-change's permitted paths, so the chart's RBAC was made to intentionally
-diverge from `config/rbac/ichor-ui/role.yaml`: `templates/rbac/
-ichor-ui-role.yaml`'s `ClusterRole` dropped the secrets rule, and `templates/
-rbac/ichor-ui-secrets-{role,rolebinding}.yaml` carried it as a namespace-
-scoped `Role`, mirroring `manager-secrets-role.yaml`/
-`manager-secrets-rolebinding.yaml` exactly. That was narrower than what
-`config/rbac/ichor-ui/` shipped via kustomize at the time, never wider, so
-the divergence was safe in the direction it went.
-
-**The marker has since gained `namespace=ichor-system`** on that one line.
-`make manifests-ichor-ui` now generates `config/rbac/ichor-ui/role.yaml` as
-the same two-object shape `config/rbac/role.yaml` already has for the
-controller: a cluster-scoped `ClusterRole` (`talosclusters`,
-`talosconfigpatches`, `talosmachines` — no secrets) and a namespaced `Role`
-named `ichor-ui-role` in `ichor-system` (`secrets: get`, nothing else). A
-new `config/rbac/ichor-ui/secrets_role_binding.yaml` binds that `Role` to
-the `ichor-ui` `ServiceAccount` (`config/rbac/ichor-ui/kustomization.yaml`
-now lists it), the same way `config/rbac/manager_secrets_role_binding.yaml`
-already does for the controller. The chart's own `ichor-ui-secrets-
-{role,rolebinding}.yaml` templates are **not deleted or folded into
-`ichor-ui-role.yaml`**: they already matched the controller's own chart
-pattern (`manager-role.yaml` and `manager-secrets-role.yaml` are separate
-files too, not one multi-document file), so there was nothing left to
-converge once the generated kustomize output reached the same shape. The
-two deployment paths (chart, kustomize) now agree structurally: a
-`ClusterRole` without secrets, plus a namespace-scoped `Role`/`RoleBinding`
-pair that grants only `get` on `secrets` in `ichor-system`, in both.
+With the qualifier, `make manifests-ichor-ui` generates
+`config/rbac/ichor-ui/role.yaml` as the same two-object shape
+`config/rbac/role.yaml` has for the controller: a cluster-scoped `ClusterRole`
+(`talosclusters`, `talosconfigpatches`, `talosmachines` — no secrets) and a
+namespaced `Role` named `ichor-ui-role` in `ichor-system` (`secrets: get`,
+nothing else). `config/rbac/ichor-ui/secrets_role_binding.yaml` binds that `Role`
+to the `ichor-ui` `ServiceAccount` (listed in
+`config/rbac/ichor-ui/kustomization.yaml`), the same way
+`config/rbac/manager_secrets_role_binding.yaml` does for the controller. The
+chart's own `templates/rbac/ichor-ui-secrets-{role,rolebinding}.yaml` follow the
+controller's chart pattern (`manager-role.yaml` and `manager-secrets-role.yaml`
+are separate files too, not one multi-document file). The two install paths
+(chart, kustomize) agree structurally: a `ClusterRole` without secrets, plus a
+namespace-scoped `Role`/`RoleBinding` pair that grants only `get` on `secrets` in
+`ichor-system`, in both.
 
 ## Decision: `.goreleaser.yaml` stays as-is
 
@@ -182,17 +158,11 @@ target this ADR already built would be a second way to do the same thing.
   architecture.md "Trust" the same way `checkNoClusterWideSecretsRead`
   guards ADR 0011: the UI's `Deployment` must run as its own
   `ServiceAccount`, bound only to its own `ClusterRole`, with at least one
-  other binding (the controller's) naming neither. Verified by deliberately
-  breaking each half (pointing the `Deployment` at the controller's
-  `ServiceAccount`; pointing the `ClusterRoleBinding` at a different
-  `ClusterRole` name) and confirming the test fails with a message naming
-  the mismatch, then reverting.
+  other binding (the controller's) naming neither. It fails with a message
+  naming the mismatch if the `Deployment` points at the controller's
+  `ServiceAccount` or the `ClusterRoleBinding` at a different `ClusterRole`.
 - Real-cluster deployment and verification remain open, same as the
   controller's own image today — not a new gap this ADR introduces.
-- The secrets-rule divergence above is resolved: `rbac_markers.go`'s one-
-  line fix (`namespace=ichor-system`) landed, `config/rbac/ichor-ui/` and
-  the chart now grant the identical, namespace-scoped `secrets: get`, and
-  `checkNoClusterWideSecretsRead` passes for `ichor-ui-role` the same way
-  it already did for `manager-role` — confirmed by deliberately
-  reintroducing an unrestricted `secrets: get` into `ichor-ui-role.yaml`'s
-  `ClusterRole` and watching the test fail naming it, then reverting.
+- `config/rbac/ichor-ui/` and the chart grant the identical, namespace-scoped
+  `secrets: get`, and `checkNoClusterWideSecretsRead` holds for `ichor-ui-role`
+  the same way it does for `manager-role`.

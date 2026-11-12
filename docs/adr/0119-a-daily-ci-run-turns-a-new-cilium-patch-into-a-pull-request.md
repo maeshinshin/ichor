@@ -21,7 +21,3 @@ On 2026-11-04 the user decided that a cluster's Cilium only moves to the chart e
 - Merging the bump automatically. A patch changes a CNI that runs on every node; a person reads the release notes and merges.
 - Following a new minor. A minor changes values and removes options (ADR 0113's review of the 1.19 and 1.20 removals), and Cilium upgrades one minor at a time.
 - Verifying only the agent image. Ichor runs and verifies three images, so the script verifies those three.
-
-## Test
-
-`hack/bump-cilium-patch.sh` run on the current tree reports "no newer patch". Run on a copy whose pins were lowered to 1.20.3 it verified the three signatures, moved every pin to 1.20.4, fetched the chart with its digest checked, and left a tree byte-identical to the tree that ADR 0113's manual bump produced.

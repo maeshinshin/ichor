@@ -2,7 +2,7 @@
 
 Status: Accepted · Date: 2026-11-04 · Design section: Bootstrap · Touches: 0019, 0094, 0113
 
-Decided: `ichor init -f init.yaml` reads the init settings from an `InitConfig` file (`apiVersion: ichor.maesh.dev/v1alpha1`) instead of a long flag line. The file is decoded strictly into one typed Go struct (unknown, duplicate and mistyped keys, and a wrong `apiVersion` or `kind`, are errors that name the file and the key) and every value is then set through the init flag it stands for, so the file adds no second code path: parsing, defaults and validation are the flags' own, and a file and the equivalent flags behave the same. A flag given on the command line overrides the file. The required flags (`--cluster`, `--endpoint-address`, `--node-endpoint`, `--install-disk`) are required unless the file gives them; the error names the flag and the file key. Relative paths in the file (`ui.tls.certFile`, `ui.tls.keyFile`) resolve against the file's directory. The file holds paths, never key material. `--print-config-template` prints the commented example, which a test parses.
+Decided: `ichor init -f init.yaml` reads the init settings from an `InitConfig` file (`apiVersion: ichor.maesh.dev/v1alpha1`) instead of a long flag line. The file is decoded strictly into one typed Go struct (unknown, duplicate and mistyped keys, and a wrong `apiVersion` or `kind`, are errors that name the file and the key) and every value is then set through the init flag it stands for, so the file adds no second code path: parsing, defaults and validation are the flags' own, and a file and the equivalent flags behave the same. A flag given on the command line overrides the file. The required flags (`--cluster`, `--endpoint-address`, `--node-endpoint`, `--install-disk`) are required unless the file gives them; the error names the flag and the file key. Relative paths in the file (`ui.tls.certFile`, `ui.tls.keyFile`) resolve against the file's directory. The file holds paths, never key material. `--print-config-template` prints the commented example.
 
 ## Context
 
@@ -76,7 +76,7 @@ A relative `certFile` or `keyFile` resolves against the directory of the file, n
 
 ### 5. Template
 
-`ichor init --print-config-template` prints the example above with comments. The text lives in one constant, `initConfigTemplate`, and a test parses it strictly, so it cannot drift from the struct.
+`ichor init --print-config-template` prints the example above with comments. The text lives in one constant, `initConfigTemplate`.
 
 ## Rejected
 
@@ -84,7 +84,3 @@ A relative `certFile` or `keyFile` resolves against the directory of the file, n
 - A raw-YAML escape hatch for machine configuration: the file sets the init flags only; machine configuration stays typed (`TalosConfigPatch`).
 - Key material in the file: a file that gets committed or pasted must not be a secret.
 - Version fields in the file: ADR 0113 and 0115 keep the release set out of the install's inputs.
-
-## Test
-
-Table test: the full example gives the same `initOptions` as the equivalent flag line. A flag overrides the file. An unknown key, a duplicate key, a wrong type, `apiVersion` or `kind` fails naming the key and the file. A relative `certFile` resolves against the file's directory. A missing required setting names the flag and the key. An omitted `ui` block turns no users on. `secretName` with `certFile` fails the existing validation. The template parses and has no inline lists.

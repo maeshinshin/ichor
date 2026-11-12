@@ -141,6 +141,14 @@ func (r *TalosOperationReconciler) advanceNode(
 	}
 	defer closeTalosClient(n.talos)
 
+	if err := confirmMachine(dialCtx, n.talos, m); err != nil {
+		if waiting {
+			return n.wait(ctx, err.Error())
+		}
+
+		return r.nodeFailed(ctx, op, err)
+	}
+
 	step := n.begin
 	if waiting {
 		step = n.await

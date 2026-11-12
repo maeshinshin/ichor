@@ -158,6 +158,10 @@ func (a *configRolloutAdvancer) Advance(
 	}
 	defer closeTalosClient(talos)
 
+	if err := confirmMachine(dialCtx, talos, m); err != nil {
+		return a.unreachable(ctx, cluster, m, rebooting, restarting, err)
+	}
+
 	current, err := talos.CurrentConfig(dialCtx)
 	if err != nil {
 		return a.unreachable(ctx, cluster, m, rebooting, restarting, fmt.Errorf("reading %q's configuration: %w", m.Name, err))

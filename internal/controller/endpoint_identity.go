@@ -58,3 +58,30 @@ func (r *TalosMachineReconciler) checkEndpointIdentity(
 
 	return res, true, err
 }
+
+// confirmMachine proves that the node talos is connected to is the machine m is named for, before a
+// call that wipes it, changes its etcd membership, upgrades it or applies configuration to it. An
+// address recorded for one machine can answer as another that trusts the same CA (a DHCP lease that
+// changed hands), and every credential Ichor holds opens both. Unlike checkEndpointIdentity, which
+// only reads and so lets an unreadable UUID pass, this refuses unless the node reports exactly the
+// UUID in m's spec: an Identity call that fails or a node that reports none cannot show it is the
+// right one, and none of the callers is hurt by refusing and being retried.
+func confirmMachine(ctx context.Context, talos TalosClient, m *ichorv1alpha1.TalosMachine) error {
+	idCtx, cancel := context.WithTimeout(ctx, talosCallTimeout)
+	defer cancel()
+
+	want := m.Spec.Identity.UUID
+
+	hw, err := talos.Identity(idCtx)
+	if err != nil {
+		return fmt.Errorf("cannot tell that %s is %q (UUID %s), so nothing was sent to it: reading its identity failed: %w",
+			m.DialEndpoint(), m.Name, want, err)
+	}
+
+	if hw.UUID == "" || !strings.EqualFold(hw.UUID, want) {
+		return fmt.Errorf("the node at %s reports machine UUID %q, but %q is %s, so nothing was sent to it; "+
+			"the address may be held by another node", m.DialEndpoint(), hw.UUID, m.Name, want)
+	}
+
+	return nil
+}

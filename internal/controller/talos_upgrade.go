@@ -138,6 +138,10 @@ func (a *talosUpgradeAdvancer) Advance(
 	}
 	defer closeTalosClient(talos)
 
+	if err := confirmMachine(dialCtx, talos, m); err != nil {
+		return false, settling(err)
+	}
+
 	currentVersion, err := talos.Version(dialCtx)
 	if err != nil {
 		return false, settling(fmt.Errorf("reading %q's Talos version: %w", m.Name, err))

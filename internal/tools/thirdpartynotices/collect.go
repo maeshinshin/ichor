@@ -33,6 +33,7 @@ const (
 	kindCSS
 	kindUpstream
 	kindChart
+	kindData
 )
 
 // A component is something an artifact carries that has its own licence.
@@ -373,4 +374,11 @@ func chartComponent() (component, error) {
 				Note: "pkg/cni/cilium/" + string(m[1]), Files: []file{{Path: "cilium/LICENSE", Text: string(b)}}}, err
 		}
 	}
+}
+
+// trustedRoot is the Sigstore public-good trusted root internal/imagesig embeds. Its licence is the
+// Apache-2.0 of the sigstore/root-signing repository, which carries no copyright line.
+func trustedRoot() component {
+	return component{Kind: kindData, Name: "Sigstore public-good trusted root", URL: "https://github.com/sigstore/root-signing",
+		Note: "internal/imagesig/trusted_root.json", RefLabel: "Apache-2.0"}
 }

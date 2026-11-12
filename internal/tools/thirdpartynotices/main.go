@@ -37,7 +37,7 @@ func run(out string) error {
 	if err != nil {
 		return err
 	}
-	comps = append(comps, std, chart)
+	comps = append(comps, std, chart, trustedRoot())
 	comps = append(comps, npm...)
 	comps = append(comps, upstreamComponents()...)
 	text, err := render(comps)

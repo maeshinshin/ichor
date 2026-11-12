@@ -1160,6 +1160,7 @@ Components:
 - class-variance-authority@0.7.1
     Copyright 2022 Joe Bell
 - Cilium Helm chart 1.20.4
+- Sigstore public-good trusted root
 
 --------------------------------------------------------------------------------
 Apache-2.0 (variant 2 of 4)
@@ -3657,11 +3658,17 @@ Upstream projects:
 
 
 ================================================================================
-6. Cilium Helm chart
+6. Embedded chart and data
 ================================================================================
 
 Embedded chart:
 
 - Cilium Helm chart 1.20.4 (https://github.com/cilium/cilium)
     pkg/cni/cilium/chart/cilium-1.20.4.tgz
+    Licence: Apache-2.0 (variant 1 of 4) (text in section 3)
+
+Embedded data:
+
+- Sigstore public-good trusted root (https://github.com/sigstore/root-signing)
+    internal/imagesig/trusted_root.json
     Licence: Apache-2.0 (variant 1 of 4) (text in section 3)

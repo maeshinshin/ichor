@@ -83,6 +83,13 @@ jobs:
         with:
           name: goreleaser
 
+      - name: Keep the changelog block out of the goreleaser config
+        run: |
+          if grep -qE '^changelog:' .goreleaser.yaml; then
+            echo "::error file=.goreleaser.yaml::A top-level changelog block is back. Disabling the changelog makes goreleaser skip the pipe that reads --release-notes, which the release workflow passes, so the GitHub release body comes out empty or wrong. Remove the block; the comment above the release section says why." >&2
+            exit 1
+          fi
+
       - name: Check goreleaser configuration
         run: nix develop --command bash -c "goreleaser check"
       - name: Build a goreleaser snapshot

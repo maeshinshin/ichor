@@ -101,6 +101,13 @@ Before pushing a release tag `vX.Y.Z`, write its `## vX.Y.Z (date)` section in
 `make release-prep VERSION=vX.Y.Z`: it sets the release number in `README.md` and
 stops if the changelog section is missing. Commit the result, then tag.
 
+A tag cut from a `release-X.Y` branch leaves that work on the branch. Once the release has
+published, the Release workflow opens a pull request against `main` that adds the tag's
+changelog section and sets the README's version (the newest release only); merge it. A tag
+cut from `main` needs nothing. The pull request is opened with the `RELEASE_SYNC_PR_TOKEN`
+secret when it is set; without it the default token is used, which needs "Allow GitHub
+Actions to create and approve pull requests" on and starts no checks on the pull request.
+
 To build the release artifacts for a tag instead, run
 `make release VERSION=vX.Y.Z`. It writes `bin/release/ichor` (the CLI with its
 install manifest embedded), `bin/release/install.yaml`,

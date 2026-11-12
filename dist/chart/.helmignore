@@ -23,3 +23,7 @@
 
 # Helm chart artifacts
 dist/chart/*.tgz
+
+# The chart's own Go tests and their fixtures
+*_test.go
+testdata/

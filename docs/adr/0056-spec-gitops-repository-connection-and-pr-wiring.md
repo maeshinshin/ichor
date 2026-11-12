@@ -83,7 +83,7 @@ with the first on merge.
 - *A branch left behind* (the earlier PR was closed or merged and the branch kept) has no open PR, so the push
   that follows replaces it with `--force`. The `ichor/` branches are Ichor's own; a person's work does not
   belong on one.
-- *Host calls* (verified against the docs 2026-10-26). GitHub: `GET /repos/{owner}/{repo}/pulls?state=open&head={owner}:{branch}&base={base}`
+- *Host calls* (per each host's docs). GitHub: `GET /repos/{owner}/{repo}/pulls?state=open&head={owner}:{branch}&base={base}`
   (docs.github.com/en/rest/pulls/pulls). GitLab: `GET /api/v4/projects/:id/merge_requests?state=opened&source_branch=&target_branch=`
   (docs.gitlab.com/api/merge_requests). Gitea/Forgejo: the list endpoint has no head filter, so `GET
   /api/v1/repos/{owner}/{repo}/pulls/{base}/{head}` ("get a pull request by base and head", 404 when none;
@@ -99,9 +99,7 @@ with the first on merge.
 
 The token goes to git only through `GIT_CONFIG_*` `http.extraHeader` in the environment (`prmode.gitAuthEnv`) and
 to the host as a request header. Errors from `SubmitPR` are scrubbed of the token and its base64 Basic form
-before they are returned; the Secret read errors name the Secret, never its data. Tests drive a host that echoes
-the `Authorization` header on failure, a failing clone, and the success path, and look for the token in the
-error, the PR body, the response and the pushed file.
+before they are returned; the Secret read errors name the Secret, never its data.
 
 ## Consequences
 
@@ -112,7 +110,7 @@ error, the PR body, the response and the pushed file.
   different namespaces no longer share one; a name with characters outside `[a-z0-9-]` or over 100 bytes gets an
   8-hex hash of the full name appended, which keeps it a valid, bounded ref. PRs opened under the old name are not found.
 - `machinesPath` is one directory for every cluster's machines in that connection; a layout that needs more is
-  later work.
+  not built.
 - The new-file manifest carries no labels or annotations from the live `TalosMachine`.
 - A merged strict PR relies on Argo CD applying over the existing pending `TalosMachine`; if the Application
   prunes or uses `Replace`, that is the Application's setting, not Ichor's.

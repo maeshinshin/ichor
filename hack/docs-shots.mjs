@@ -232,7 +232,7 @@ try {
       check(await ev(`document.querySelector('article [role=alert]')?.textContent.includes('Unreleased (main)')`), `${tag}: next shows the "Unreleased (main)" banner`)
       await mouse(switcher)
       check(await until(`!!${inMenu('v')}`, 'the version menu', 3000), `${tag}: the version switcher opens`)
-      check(await ev(`!!${inMenu('next (main)')} && !!${inMenu(`${latest.name} (${latest.patch}) (latest)`)}`), `${tag}: the switcher lists next (main) and ${latest.name} (${latest.patch}) (latest)`)
+      check(await ev(`!!${inMenu('next (main)')} && !!${inMenu(`${latest.name} (latest)`)}`), `${tag}: the switcher lists next (main) and ${latest.name} (latest)`)
       await shot(`${tag}-version-switcher`)
       await mouse(inMenu(latest.name))
       await until(`location.pathname === '${root}${latest.path}guides/getting-started/'`, 'the same page in the release', 5000)

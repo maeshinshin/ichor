@@ -283,7 +283,7 @@ try {
         await until(`document.querySelector('[data-slot=sidebar]')?.dataset.state === 'expanded'`, 'Ctrl-B', 3000)
         check(await ev(`document.querySelector('[data-slot=sidebar]')?.dataset.state === 'expanded'`), `${tag}: Ctrl-B shows the sidebar again`)
         // Code blocks get a copy button and GitHub alerts render as the preactcn Alert.
-        await open('contributing-docs/')
+        await open('development/contributing-docs/')
         await until(`!!document.querySelector('article pre + div [aria-label="Copy code"]')`, 'the copy button', 3000)
         check(await ev(`!!document.querySelector('article pre + div [aria-label="Copy code"]')`), `${tag}: code blocks have a copy button`)
         check(await ev(`!!document.querySelector('article [data-slot=alert]')`), `${tag}: a GitHub alert renders as an Alert`)

@@ -31,6 +31,7 @@ import (
 	machineapi "github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"golang.org/x/net/bpf"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/semaphore"
 	authv1 "k8s.io/api/authorization/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -64,6 +65,10 @@ const (
 	maxBPFInstructions     = 4096
 	downloadChunkSize      = 64 << 10
 	maxConcurrentDownloads = 2
+	// Log streams are counted per machine, since each is a goroutine, a Talos dial and a read of
+	// the log. One request names at most maxLogMachines: the CLI takes any list, the UI sends one.
+	maxLogMachines          = 32
+	maxConcurrentLogStreams = 64
 
 	pcapContentType = "application/vnd.tcpdump.pcap"
 )
@@ -82,11 +87,33 @@ type DownloadTalosClientFactory func(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, id *TalosIdentity, scope DownloadScope,
 ) (DownloadTalosClient, error)
 
-// diagnostics is the Server's state for the downloads: a counting semaphore.
-type diagnostics struct{ slots chan struct{} }
+// diagnostics is the Server's state for the downloads and log streams: counting semaphores.
+type diagnostics struct {
+	slots    chan struct{}
+	logSlots *semaphore.Weighted
+}
+
+func (s *Server) initDiag() {
+	s.diagOnce.Do(func() {
+		s.diag.slots = make(chan struct{}, maxConcurrentDownloads)
+		s.diag.logSlots = semaphore.NewWeighted(maxConcurrentLogStreams)
+	})
+}
+
+// acquireLogSlots takes n machine-stream slots, or fails at once when they are not free.
+func (s *Server) acquireLogSlots(n int) (func(), error) {
+	s.initDiag()
+
+	if !s.diag.logSlots.TryAcquire(int64(n)) {
+		return nil, connect.NewError(connect.CodeResourceExhausted,
+			fmt.Errorf("%d log streams are already running; wait for one to finish", maxConcurrentLogStreams))
+	}
+
+	return func() { s.diag.logSlots.Release(int64(n)) }, nil
+}
 
 func (s *Server) acquireDownloadSlot() (func(), error) {
-	s.diagOnce.Do(func() { s.diag.slots = make(chan struct{}, maxConcurrentDownloads) })
+	s.initDiag()
 
 	select {
 	case s.diag.slots <- struct{}{}:

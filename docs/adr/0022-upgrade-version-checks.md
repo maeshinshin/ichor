@@ -14,9 +14,9 @@ evaluate."
 
 This ADR covers only the calculable half of that: given version strings, is a transition
 supported. It does not cover the state machine, `TalosOperation`, or anything that drives an
-actual upgrade against a running cluster — that is separate work, already underway elsewhere.
+actual upgrade against a running cluster — that is separate work.
 Two pre-checks genuinely need a running cluster (etcd health, node readiness); this package
-declares them as interfaces and implements neither, on purpose.
+neither implements nor declares them, on purpose (see Decision).
 
 ## Evaluating `upgrade-k8s` reuse
 
@@ -40,7 +40,6 @@ depend on it, and the answer is no, for two independent reasons:
   module that needs bumping just to recognize a Kubernetes release it doesn't enumerate yet,
   for a rule with no actual per-version content to reuse.
 
-Confirmed by reading `path.go` directly (quoted above), not inferred from the package's existence.
 `KubernetesSkew` (`kubernetes_skew.go`) reimplements the identical rule generically instead,
 using `golang.org/x/mod/semver` (already an indirect dependency, now direct) rather than
 `github.com/blang/semver/v4` (what `go-kubernetes` and `pkg/machinery/compatibility` both use) —
@@ -55,7 +54,7 @@ release, maintained by Talos itself:
 
 - `TalosVersion.UpgradeableFrom(host *TalosVersion) error` — the actual rule, which is a minimum
   host version, a maximum host version for downgrades, and an explicit deny-list, **not** a
-  generic "one minor at a time" rule. Confirmed by reading it: Talos 1.14's own compatibility
+  generic "one minor at a time" rule. Talos 1.14's own compatibility
   data (`compatibility/talos114/talos114.go`) sets `MinimumHostUpgradeVersion = 1.12.0`, meaning
   `1.12 -> 1.14` is a supported upgrade that skips `1.13` entirely. `pkg/upgrade.TalosPath` is a
   thin wrapper: parse both versions with `compatibility.ParseTalosVersion`, call
@@ -69,15 +68,13 @@ release, maintained by Talos itself:
 same major version, minor moves by at most one step, never backwards. Sourced from
 [kubernetes.io's version skew policy](https://kubernetes.io/releases/version-skew-policy/)
 ("the relative version skew between control plane components ... must differ by no more than one
-minor version") and independently confirmed by `go-kubernetes`'s own hardcoded table (every pair
-in it is exactly this rule, as established above) — two independent sources agreeing, not one
-read taken on faith.
+minor version") and consistent with `go-kubernetes`'s own hardcoded table (every pair in it is exactly
+this rule, as established above).
 
 **The two cluster-dependent pre-checks (etcd health, node readiness) are not declared here at
-all — not as an implementation, and not as an interface either.** An earlier draft of this ADR
-declared `EtcdHealthChecker`/`NodeReadinessChecker` interface types with no implementation and no
-caller, reasoning that the package should at least name the shape. That was wrong, caught in
-review, and removed (the deleted `checks.go` is this paragraph's reason for existing). Go's own
+all — not as an implementation, and not as an interface either.** Declaring
+`EtcdHealthChecker`/`NodeReadinessChecker` interface types with no implementation and no caller,
+just to name the shape, was rejected. Go's own
 convention is that interfaces are declared by the consumer, at the point of consumption ("accept
 interfaces, return structs") — the consumer here is the upgrade state machine, which does not
 exist yet. Declaring the interface anyway means guessing both its method set and where it
@@ -101,7 +98,6 @@ just be a tuple of three independent answers wearing a struct.
   changes a supported path, a Kubernetes pairing, or (per Kubernetes' own policy, essentially
   never) the skew rule shows up the moment machinery is bumped, for the first two, with zero
   code change here.
-- `golang.org/x/mod` moved from an indirect to a direct dependency (`go mod tidy`); no new module
-  was added.
-- Callers (the upgrade state machine, out of this change's scope) get three independent pure
-  functions plus two interfaces, and decide for themselves how to sequence and aggregate them.
+- `golang.org/x/mod` is a direct dependency; no new module is added.
+- Callers (the upgrade state machine) get three independent pure functions, and decide for
+  themselves how to sequence and aggregate them.

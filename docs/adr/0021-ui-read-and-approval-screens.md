@@ -9,7 +9,7 @@ Decided: Built the four read/approval UI screens on a committed, generated TS cl
 ADR 0017 built the UI skeleton (routing, build, preactcn wiring) with one
 placeholder page. ADR 0016 defined the Connect API and committed its Go
 client; ADR 0018 implemented the server. Nothing yet in `ui/` called it, and
-no screen existed. This unit is "Read-only UI, approval UI" from roadmap
+no screen existed. This ADR covers "Read-only UI, approval UI" from roadmap
 item 5, scoped to exactly four screens the design names in "CLI and UI":
 cluster list and detail (status, rollout progress, hand-over state), the
 machine list with pending approvals and the approve/reject actions, and a
@@ -18,18 +18,15 @@ state, effective config annotated by origin with secrets masked, logs).
 Config editing, the GitOps page, a merged multi-node log viewer and deep
 links into other tools are explicitly later phases and out of scope here.
 
-Versions consulted (docs read, not recalled from memory):
+Versions:
 - `buf` 1.73.0, `protoc-gen-go` v1.36.12, `protoc-gen-connect-go` v1.21.0 -
   unchanged from ADR 0016, still pinned in `flake.nix`.
 - `@bufbuild/protoc-gen-es` and `@bufbuild/protobuf` 2.16.0,
-  `@connectrpc/connect` and `@connectrpc/connect-web` 2.2.0 - current
-  published versions at the time of this work (`npm view <pkg> version`),
-  installed into `ui/`'s own `package.json`, not nix (`ui/` already has its
+  `@connectrpc/connect` and `@connectrpc/connect-web` 2.2.0, installed into `ui/`'s own `package.json`, not nix (`ui/` already has its
   own npm world per ADR 0017; these packages are tied to `ui/`'s own
   `@bufbuild/protobuf` runtime version, which nixpkgs has no reason to track).
-  connectrpc.com's "Getting started" and "Generating code" pages (current,
-  no version selector) confirmed the `createClient(Service, transport)` and
-  `buf.gen.yaml` shapes below.
+  The `createClient(Service, transport)` and `buf.gen.yaml` shapes below follow
+  connectrpc.com's "Getting started" and "Generating code" pages.
 - `shadcn` CLI 4.22.1 - same version ADR 0017 already used.
 
 ## Decision
@@ -51,9 +48,8 @@ v1 did: `protoc-gen-es` v2 itself generates both the message types and a
 `GenService` const (e.g. `export const ClusterService = ...`) that
 `createClient(ClusterService, transport)` consumes directly. Adding
 `@connectrpc/protoc-gen-connect-es` (still published, at v1.7.0, for the
-older style) would have been a second plugin generating code nothing here
-calls - rejected on the same "does this need to exist" ground as any other
-dependency.
+older style) would be a second plugin generating code nothing here
+calls, so it is not used.
 
 `erasable_syntax=true` is not cosmetic: `ui/tsconfig.app.json` already sets
 `erasableSyntaxOnly` (ADR 0017's scaffold), which rejects a real TypeScript
@@ -61,8 +57,7 @@ dependency.
 Protobuf-ES's default enum output is exactly that real `enum`; without this
 option, `tsc -b` fails on every generated enum (`RolloutKind`,
 `HandoverPhase`, `MachineRole`, `DiskRole`, `ConfigLayer`) with
-`TS1294: This syntax is not allowed when 'erasableSyntaxOnly' is enabled`,
-confirmed by generating once without the option first. With it, enums
+`TS1294: This syntax is not allowed when 'erasableSyntaxOnly' is enabled`. With it, enums
 generate as `as const` objects instead, and `ui/src/lib/enum.ts`'s
 `enumLabel()` does the reverse (value -> name) lookup for display that a
 real TS enum would otherwise have given for free.
@@ -85,10 +80,10 @@ only its template grew a new plugin) now fails for anyone who hasn't run
 disk. This is the same category of pre-requisite `proto-generate` already
 had (`nix develop`, for the Go plugins), not a new kind of trap, but it is
 a new instance of it for whoever next edits `proto/` without having ever
-touched `ui/`. `make ui-proto-generate` (new, `ui-install` as a
+touched `ui/`. `make ui-proto-generate` (with `ui-install` as a
 prerequisite) is the one-command fix; documented here rather than solved
-by making `ui/node_modules` a dependency of the untouched `proto-generate`
-target, which this phase's own instructions say not to rewrite.
+by making `ui/node_modules` a dependency of the unchanged `proto-generate`
+target.
 
 `ui/eslint.config.js`'s existing radix-only exemption
 (`@typescript-eslint/no-explicit-any` off for `src/lib/radix/**`, ADR 0017)
@@ -154,22 +149,22 @@ ends cleanly. `NodeDetail`'s log tail is its only caller in this phase - one
 `AbortController` per mount, passed as the call's `signal`, torn down on
 unmount or on a `namespace`/`name` change.
 
-This is tested without a server, as the task requires: `ui/src/lib/
+The resume logic is tested without a server: `ui/src/lib/
 resumableStream.test.ts` passes a fake call (a hand-written async
 generator/iterable, not a mock library) that yields two lines, throws
 `CodeUnavailable`, and on the fake's own second invocation asserts it
 received the *second* line's token, not the first's or an empty one - the
-exact behavior a backend drain needs. A second test confirms a
+exact behavior a backend drain needs. A second test checks that a
 non-`Unavailable` error propagates instead of looping forever; a third
-confirms a clean stream end doesn't reconnect. Run with `node --test
-"src/**/*.test.ts"` (Node 24.21.0's native TypeScript support, confirmed by
-running it - `ui/tsconfig.app.json`'s `erasableSyntaxOnly` already commits
-this project to code Node can strip and run directly) - no test framework
-dependency added. `ui/package.json` gained one script, `"test"`; `Makefile`
-gained `ui-test` (new, appended, `ui-install` as its prerequisite).
-`ui/tsconfig.app.json`'s `types` array gained `"node"` (alongside
-`"vite/client"`) so `node:test`/`node:assert` type-check too - `@types/node`
-was already a dependency, just not wired to the app project.
+that a clean stream end doesn't reconnect. They run with `node --test
+"src/**/*.test.ts"` (Node 24's native TypeScript support -
+`ui/tsconfig.app.json`'s `erasableSyntaxOnly` already commits this project
+to code Node can strip and run directly), so no test framework dependency
+is needed. `ui/package.json` has one script, `"test"`; the `Makefile` has
+`ui-test` (with `ui-install` as its prerequisite). `ui/tsconfig.app.json`'s
+`types` array includes `"node"` (alongside `"vite/client"`) so
+`node:test`/`node:assert` type-check too - `@types/node` was already a
+dependency, just not wired to the app project.
 
 ### The approval screen
 
@@ -203,8 +198,8 @@ whatever reaches the server anyway.
 
 Reject's dialog states, before the button exists to click, what rejecting
 does and does not do: it is recorded as an `AuditRecord` only; the
-`TalosMachine` is neither deleted nor mutated. Checked directly against
-`machine.proto`'s `Machine` message before writing this copy: the only
+`TalosMachine` is neither deleted nor mutated. In
+`machine.proto`'s `Machine` message at this point the only
 status field is `approved bool` - there is no separate "rejected" value -
 so the dialog says plainly that a rejected machine can reappear in the
 pending list indistinguishable from one that was never looked at, if its
@@ -218,36 +213,25 @@ than leaving it as something only the ADR says.
   list row (`ClusterDetail`, `NodeDetail`), all reading through the
   generated TS client; approve/reject both work end to end against the
   generated request/response shapes.
-- `make build test lint` passes with no UI build present (verified: `rm -rf
-  cmd/ichor-ui/dist && make build test lint`, unchanged from before this
-  unit). `make ui-ci` (`ui-typecheck ui-typecheck ui-lint ui-build`, ADR
-  0017's existing target, unmodified) and the new `make ui-test` both pass.
-  `ui/node_modules` and `cmd/ichor-ui/dist` remain untracked (`ui/
-  .gitignore`/root `.gitignore`, both from ADR 0017, needed no changes).
-- `react` and `preact/compat` do not appear anywhere in `ui/package-lock.
-  json` (`grep -i 'react\|compat' ui/package-lock.json` after every
-  `npm install`/`npx shadcn add` in this unit - empty every time, including
-  after installing `@floating-ui/dom` and `lucide-preact`, which `shadcn
-  add` pulled in on its own for the select/dialog positioning and icons
-  the new components need).
-- `buf lint` passes unchanged; `proto/` was not touched. Nothing was
-  missing from the proto for these four screens - every field the design
-  describes for them (status, rollout, hand-over, identity, endpoint,
-  role, hardware, disks, network, resource usage, Kubernetes status,
+- `make build test lint` needs no UI build (`cmd/ichor-ui` embeds a placeholder
+  by default, ADR 0017); `make ui-ci` (ADR 0017's existing target) and
+  `make ui-test` cover the UI. `ui/node_modules` and `cmd/ichor-ui/dist` remain
+  untracked (`ui/.gitignore`/root `.gitignore`, both from ADR 0017).
+- `react` and `preact/compat` must not appear anywhere in
+  `ui/package-lock.json`, including via `@floating-ui/dom` and `lucide-preact`,
+  which `shadcn add` pulls in on its own for the select/dialog positioning and
+  icons the new components need.
+- The four screens need nothing beyond the wire types ADR 0016 defined: every
+  field the design describes for them (status, rollout, hand-over, identity,
+  endpoint, role, hardware, disks, network, resource usage, Kubernetes status,
   effective config with origin and masking, log lines with a resume token)
-  already exists on the wire types ADR 0016 defined.
-- No live end-to-end run against `cmd/ichor-ui`/`internal/uiapi` was done:
-  both are explicitly read-only for this unit, and a verification harness
-  for either would have meant adding files under `cmd/` or `internal/`,
-  which this unit was told not to touch. Confidence that the wire format
-  matches rests on both sides generating from the same `.proto` files
-  (confirmed field-by-field against the generated `.ts`/comparable `.go`
-  during this work) and on `internal/uiapi`'s own 18 Ginkgo specs (ADR
-  0018) already exercising the server side of every RPC these screens
-  call. The first real integration check is left to whoever next runs the
-  UI against a live backend.
-- `ResourceUsage.cpuCoresUsed`'s server-side formula is unverified against
-  a live node (ADR 0018's own caveat); `NodeDetail` displays whatever it
+  already exists, so `proto/` is unchanged.
+- No end-to-end run of the UI against a live `cmd/ichor-ui`/`internal/uiapi` is
+  part of this decision: the wire format rests on both sides generating from the
+  same `.proto` files, and `internal/uiapi`'s specs (ADR 0018) cover the server
+  side of every RPC these screens call.
+- `ResourceUsage.cpuCoresUsed`'s server-side formula is an assumption about the
+  sample window (ADR 0018's own caveat); `NodeDetail` displays whatever it
   receives without re-deriving or second-guessing it.
 
 ## Alternatives considered
@@ -255,34 +239,30 @@ than leaving it as something only the ADR says.
 **A separate `buf.gen.ts.yaml` template, invoked by its own Makefile
 target, instead of adding a plugin entry to the existing `buf.gen.yaml`.**
 Would have kept `make proto-generate` working without `ui/node_modules`
-present. Not taken: the task's own instruction was to add the TS plugin to
-`buf.gen.yaml` specifically, and one generate command producing both
-outputs from one source of truth is simpler to reason about than two
-templates that could drift out of sync with each other's plugin options.
+present. Not taken: one generate command producing both outputs from one source of
+truth is simpler to reason about than two templates that could drift out of
+sync with each other's plugin options.
 The cost (documented above) is paid once per `ui/` checkout, not per
 screen.
 
 **`@connectrpc/protoc-gen-connect-es` (the v1-style connect plugin)
 alongside `protoc-gen-es`.** Still published (v1.7.0) for projects on the
 older code-generation style; unnecessary here since `protoc-gen-es` v2
-already generates the `GenService` `createClient` needs - confirmed by
-reading the generated output, not assumed from a version number.
+already generates the `GenService` `createClient` needs.
 
 **A data-fetching library (e.g. a small SWR-style hook) instead of
 `useEffect`/`useState` per page.** Four pages, each with at most two
 independent fetches and no shared cache requirement across them (a cluster
 list and a node detail page never need to agree on the same cached
-`Cluster` object) - whether it needs to exist is answered no,
-matching ADR 0017's own precedent of preferring zero dependencies over a
-reach for one.
+`Cluster` object), so none is needed, matching ADR 0017's own precedent of
+preferring zero dependencies over a reach for one.
 
 **A `Tabs` component for `NodeDetail`.** See "Screens" above - stacked
 `Card`s instead.
 
 ## Amendment (same date): approval tri-state and service-selectable logs
 
-ADR 0018's own amendment (same date) landed on `main` while this unit was
-in flight, changing the two proto messages this unit's screens read:
+ADR 0018's amendment changes the two proto messages these screens read:
 `Machine.approved` (bool) became `Machine.approval_state`
 (`MachineApprovalState`: pending/approved/rejected), and
 `StreamNodeLogsRequest` gained `service` (empty selects the kernel log,
@@ -311,14 +291,9 @@ log view. Switching it resets the resume token and restarts
 source is a different stream, not a resumable continuation of the old
 one. `"kernel"` is this component's own sentinel for the wire value `""`:
 `@preactcn/select`'s own convention reserves an empty string for "nothing
-selected" (confirmed earlier in this unit, debugging the role picker in
-the approve dialog - see the git history for that fix), so a legitimate
+selected", so a legitimate
 empty-string wire value needs a non-empty UI-side stand-in, mapped back to
 `""` only when building the request.
-
-No further proto gaps were found while making this change: both new fields
-were exactly what the two screens needed, with nothing extra to add and
-nothing missing to report.
 
 ## Second amendment (same date): the decision record lives on the CR, not only in the RPC response
 
@@ -356,11 +331,7 @@ symmetric action could explain itself, which this had no good answer for.
 read straight from `Machine.approval_decision`. The approve dialog gained
 its own optional, non-blocking `Reason` textarea for the same symmetry.
 
-`proto/`, `api/v1alpha1/talosmachine_types.go` and `internal/uiapi/` were
-all in scope for this amendment specifically (widened from this unit's
-original boundary, which had treated them as read-only) - `internal/
-controller/` was not touched, and `IsApproved()`'s meaning did not
-change, both confirmed by `internal/controller`'s own test suite passing
-unchanged.
+`IsApproved()`'s meaning does not change, and `internal/controller` is
+untouched.
 
 Amendment 2026-11-05 (ADR 0130): the "symmetric reason" is gone. `ApproveMachineRequest.reason`, `RejectMachineRequest.reason` and `MachineApprovalDecision.reason` are deprecated and unused, `TalosMachine.spec.approvalDecision.reason` is kept in the schema but no longer written or shown, the Approve and Reject dialogs have no reason box, and the Rejected list has no Reason column. `ichor machine approve|reject` lost `--reason`. The decision still records the actor and the time.

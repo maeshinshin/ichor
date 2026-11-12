@@ -19,8 +19,8 @@ backend that reads as the signed-in user when OIDC is on (ADR 0058).
   names with `get`. It never lists Applications, so ADR 0056's `get` rule is enough and no RBAC is added. One
   Application is read once per call however many CRs it tracks. Flux-tracked and untracked CRs are listed with
   who manages them and no state.
-- *Whose permission reads the Application.* The caller's (strict, decided 2026-10-26: "permissions are managed
-  strictly"; see Amendment below). The first draft read it with the ServiceAccount; that showed a user the sync and
+- *Whose permission reads the Application.* The caller's (strict: permissions are managed
+  strictly; see Amendment below). Reading it with the ServiceAccount would show a user the sync and
   health of an Application they may not read.
 - *Open pull requests.* Not on page load. Every open pull request lookup is a call to an external host
   (rate-limited, token-bearing), and a page open would make two per machine or patch. The row's "Check" button
@@ -42,7 +42,7 @@ GitOps-managed chart already carries them. A `TalosCluster.spec` field would be 
 per installation, would put a UI preference in the API, and would touch the API types. Unset means no link, so the
 default install shows none.
 
-**Link shapes (verified against each tool's documentation, 2026-10-26).**
+**Link shapes (per each tool's documentation).**
 
 - *Argo CD*: the Argo CD docs show `<base>/applications/<name>` and say an Application in Argo CD's own namespace
   may omit the namespace, and that elsewhere applications are named `<namespace>/<name>`. The page writes the
@@ -51,8 +51,7 @@ default install shows none.
 - *Grafana*: `<base>/d/<uid>` (Grafana serves the dashboard by uid; the slug is optional). The bundled dashboard's
   uid is `ichor-overview` (ADR 0040). It has no cluster or node variable (its series are the controller's and the
   backend's own), so there is nothing to pass; `var-<name>=` would only matter if a variable existed.
-- *Hubble* and *Longhorn*: the front page only. Neither project's documentation gives a deep-link form we could
-  verify, so none is invented.
+- *Hubble* and *Longhorn*: the front page only. Neither project's documentation gives a deep-link form, so none is invented.
 
 **Safety.** A registered URL is shown to every browser, so `GetLinks` drops anything that is not an absolute
 http(s) URL with a host and no `user:pass@`, and the UI applies `pullRequestHref` (the pull request notice's

@@ -1,6 +1,6 @@
 # 0126. FQDN rules for ichor-ui's external endpoint and no metrics scraping unless a namespace is named
 
-Status: Accepted; built; hardware verification pending (FQDN rules and metrics policy) · Date: 2026-11-04 · Design section: Upgrades (Ichor), Security · Touches: 0100, 0105, 0108, 0114
+Status: Accepted; built · Date: 2026-11-04 · Design section: Upgrades (Ichor), Security · Touches: 0100, 0105, 0108, 0114
 
 Decided: the last `world` egress rule of Ichor's own policies, ichor-ui to its external OIDC issuer on 443, is replaced by an FQDN rule that the controller derives from the issuer the live ichor-ui Deployment is configured with (`--oidc-issuer` or `ICHOR_OIDC_ISSUER`) and writes as the CiliumNetworkPolicy `ichor-ui-oidc-egress`; the static install copy (`config/cilium-network-policy`, used by `ichor init` and the installer Job) therefore carries no `world` egress rule, and the chart renders one only as a fallback (`networkPolicy.cilium.dynamicTalosEgress=false` or `externalCIDRs`) and only while `ichorUI.oidc.enabled`; the controller's `/metrics` port is no longer open to the whole `cluster` entity: neither the static copy nor the chart opens it unless the chart's `networkPolicy.cilium.metricsNamespaces` names a namespace (optionally narrowed by pod labels, `metricsPodLabels`), and an installer or `ichor init` install allows a scraper with a policy of the operator's own, which the guide gives.
 
@@ -18,7 +18,7 @@ The controller reaches no registry, IdP or other external host in process apart 
 
 ## What the docs confirm about toFQDNs
 
-Cilium, Layer 3 policy "DNS based" and Layer 7 "DNS Proxy" (`Documentation/security/policy/layer3.rst` and `layer7.rst`; the repository pins Cilium 1.20, `pkg/release/compat.go`, whose pages were read at 1.19, and the pages are the same):
+Cilium, Layer 3 policy "DNS based" and Layer 7 "DNS Proxy" (Cilium documentation, `Documentation/security/policy/layer3.rst` and `layer7.rst`; the repository pins Cilium 1.20, `pkg/release/compat.go`):
 
 - A `toFQDNs` rule works only with `--enable-l7-proxy=true` (Helm `l7Proxy`, default true; Ichor's own rendered Cilium config has `enable-l7-proxy: "true"`, `pkg/cni/cilium/testdata/bootstrap-*.golden.yaml`) and a rule that sends the endpoint's DNS through the proxy: an egress `toEndpoints` rule to `kube-system` `k8s-app=kube-dns` on port 53 with `rules.dns`. Without that rule the names never resolve to allowed addresses and every dial fails. Ichor's static and chart policies carry the rule (`matchPattern: "*"`) since ADR 0100's amendment.
 - `toFQDNs` cannot share a rule with another L3 selector (`toEndpoints`, `toCIDR`); each kind is its own rule, as `buildEgress` already writes them. It may carry `toPorts`.
@@ -53,21 +53,9 @@ On a cluster Ichor adopts without managing Cilium (`cni.preset: unmanaged`, or a
 - Nothing in `ichor-system` can scrape the controller until the operator names a source. A Prometheus that worked before an upgrade stops until the namespace is named (the chart NOTES and the guide say so); the controller's own ServiceMonitor is unchanged.
 - The static policies have no `world` egress rule left: every egress allow is the Kubernetes API, this cluster's nodes, DNS, or a name or address that an Ichor object or the Deployment names.
 
-## Not verified (hardware, after integration)
-
-On a Talos cluster with Cilium (the outer cluster, `ichor-e2e` only), `hubble observe --verdict DROPPED -n ichor-e2e-ichor` or `cilium-dbg monitor --type drop` on the node of the pod:
-
-1. Set an external issuer on the ichor-ui Deployment (env `ICHOR_OIDC_ISSUER=https://<a host with a name>`): within about a minute `kubectl get ciliumnetworkpolicy ichor-ui-oidc-egress` exists with one `toFQDNs` rule on 443; ichor-ui logs the provider as reachable; `curl` from the ichor-ui pod's network namespace (a debug pod with the ichor-ui labels in the same namespace) to that host succeeds and to another host (`https://example.com`) is dropped.
-2. Remove the issuer: the policy is deleted and the issuer host is dropped.
-3. `cilium-dbg fqdn cache list` on the pod's node shows the issuer name with its addresses; `cilium-dbg policy get` shows no `world` egress rule for the ichor-ui endpoint.
-4. An in-cluster issuer (`http://dex.dex.svc:5556`) is allowed through `toServices`.
-5. Metrics: from a pod in another namespace, `curl -k https://<controller pod>:8443/metrics` times out with the static copy; with a user-written policy naming that namespace it answers 401 without a token and 200 with a token that may `get` `/metrics`; from a third namespace it still times out. With the chart: the same with `metricsNamespaces={monitoring}` and `metricsPodLabels={app.kubernetes.io/name: prometheus}`, a pod of the namespace without the label timing out.
-6. The earlier rules still work: the S3 backup, the release check, discovery, the UI behind its LoadBalancer or NodePort, the webhook across nodes.
-7. With `enable-l7-proxy` turned off in a test cluster's `cilium-config` and the agents restarted, the issuer is unreachable (the documented limit), and `dynamicTalosEgress=false` restores it.
-
 ## As built
 
-- Controller: `internal/controller/ui_egress.go` (`UIEgress`, a leader-only runnable added in `cmd/main.go`, 30 seconds), `talos_egress.go` (`urlTarget.rule()` is the shared per-target rule, `parseURLTarget` replaces `parseS3Endpoint`). Tests: `ui_egress_test.go` (issuer parsing, the spec, and an envtest spec for gating, writing, no rewrite when unchanged, removal with the issuer, disabled).
-- Static copy and chart: `config/cilium-network-policy/policies.yaml`, `dist/chart/templates/network-policy/cilium.yaml`, `values.yaml` (`metricsPodLabels`, new comments), `NOTES.txt`. Tests: `dist/chart/netpol_test.go` and `netpol_egress_test.go` (chart equals the static copy; no `world` egress for ichor-ui; the external rule only as a fallback and only with OIDC on; the metrics port closed by default; namespaces and pod labels).
+- Controller: `internal/controller/ui_egress.go` (`UIEgress`, a leader-only runnable added in `cmd/main.go`, 30 seconds), `talos_egress.go` (`urlTarget.rule()` is the shared per-target rule, `parseURLTarget` replaces `parseS3Endpoint`).
+- Static copy and chart: `config/cilium-network-policy/policies.yaml`, `dist/chart/templates/network-policy/cilium.yaml`, `values.yaml` (`metricsPodLabels`, new comments), `NOTES.txt`.
 - Docs: `docs/guides/install-with-helm.md` "Network policies", `docs/design/architecture.md`.
 - No CRD, RBAC, proto, UI or CLI change: the Role already grants `get;list` on Deployments in the namespace.

@@ -249,13 +249,13 @@ func (t *machineryDownloadClient) dmesg(ctx context.Context) ([]byte, error) {
 }
 
 // redactKernelLog masks credential-shaped arguments on the kernel's
-// "Command line:" lines (talos.config=<url with a token>), the same rule
+// "Command line:" and "Unknown kernel command line parameters" lines (talos.config=<url with a token>), the same rule
 // GetNodeTalosDetails applies to the arguments it shows.
 func redactKernelLog(raw []byte) []byte {
 	lines := strings.Split(string(raw), "\n")
 
 	for i, l := range lines {
-		if strings.Contains(strings.ToLower(l), "command line:") {
+		if strings.Contains(strings.ToLower(l), "command line") {
 			lines[i] = strings.Join(redactKernelArgs(strings.Fields(l)), " ")
 		}
 	}

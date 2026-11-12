@@ -221,3 +221,51 @@ func TestTalosConfigPatchResolverConfig(t *testing.T) {
 		}
 	})
 }
+
+// The CRD only bounds a document to kind plus one field; the webhook refuses the one whose field is not the
+// field kind names, naming the kind, the field it needs and the field it has.
+func TestTalosConfigPatchDocumentKindNamesItsField(t *testing.T) {
+	ctx := context.Background()
+	v := dryRenderValidator(t)
+
+	ok := ichorv1alpha1.TalosConfigPatchDocument{
+		Kind: "SysctlConfig", SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.ipv4.ip_forward": "1"}},
+	}
+
+	for name, tc := range map[string]struct {
+		doc  ichorv1alpha1.TalosConfigPatchDocument
+		want string
+	}{
+		"another field is set": {
+			ichorv1alpha1.TalosConfigPatchDocument{Kind: "SysctlConfig", KernelModuleConfig: &typedconfig.KernelModuleConfigV1Alpha1{MetaName: "btrfs"}},
+			`spec.documents[1]: kind "SysctlConfig" needs the field sysctlConfig alone, but the document sets kernelModuleConfig`,
+		},
+		"no field is set": {
+			ichorv1alpha1.TalosConfigPatchDocument{Kind: "KernelModuleConfig"},
+			`spec.documents[1]: kind "KernelModuleConfig" needs the field kernelModuleConfig, but the document sets no field`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p := configPatch("p", nil)
+			p.Spec.Documents = []ichorv1alpha1.TalosConfigPatchDocument{ok, tc.doc}
+
+			if _, err := v.ValidateCreate(ctx, p); err == nil || err.Error() != tc.want {
+				t.Errorf("create: want %q, got %v", tc.want, err)
+			}
+
+			good := configPatch("p", nil)
+			good.Spec.Documents = []ichorv1alpha1.TalosConfigPatchDocument{ok, ok}
+
+			if _, err := v.ValidateUpdate(ctx, good, p); err == nil || err.Error() != tc.want {
+				t.Errorf("update: want %q, got %v", tc.want, err)
+			}
+		})
+	}
+
+	p := configPatch("p", nil)
+	p.Spec.Documents = []ichorv1alpha1.TalosConfigPatchDocument{ok}
+
+	if _, err := v.ValidateCreate(ctx, p); err != nil {
+		t.Errorf("a document whose kind names its field was refused: %v", err)
+	}
+}

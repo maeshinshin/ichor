@@ -586,3 +586,19 @@ func TestCNIHandoverDropsInlineManifest(t *testing.T) {
 		}
 	})
 }
+
+// TestRenderRefusesADocumentWhoseKindNamesAnUnsetField: the CRD only bounds a document to kind plus one
+// field, so the renderer must not convert one whose kind names a field that is not set.
+func TestRenderRefusesADocumentWhoseKindNamesAnUnsetField(t *testing.T) {
+	p := configPatch("p", &typedconfig.Config{ConfigVersion: configVersionV1Alpha1})
+	p.Spec.Documents[0].Kind = "SysctlConfig"
+
+	m := testMachine("node-a", roleWorker, nil)
+
+	_, _, err := Render(testCluster("true"), m, testBundle(t), []ichorv1alpha1.TalosConfigPatch{p}, nil)
+
+	const want = `kind "SysctlConfig" needs the field sysctlConfig alone, but the document sets config`
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("want the kind/field mismatch, got %v", err)
+	}
+}

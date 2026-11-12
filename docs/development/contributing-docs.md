@@ -36,7 +36,8 @@ newest line. The version menu in the header lists the lines and, under the minor
 A page that tells the reader which release to install writes it as `{{version}}`
 (no leading `v`), which the build replaces with the patch release that copy
 documents (for `/next/`, the newest tag). Do not write a release number in prose.
-`README.md` is not built, so it has literals; `make test` fails if they are older than the newest tag.
+`README.md` is not built, so it has literals; `make release-prep VERSION=vX.Y.Z` sets them
+before the release tag is pushed.
 
 ## Adding a page
 

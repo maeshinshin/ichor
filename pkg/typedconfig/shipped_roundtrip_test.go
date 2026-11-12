@@ -195,7 +195,8 @@ func layout(v any) string {
 		for _, k := range keys {
 			// An empty object is not told from an absent key: Talos leaves out a struct that holds
 			// nothing the mirror carries (a ResourcesConfig of two free-form fields), the mirror writes {}.
-			if l := layout(x[k]); l != "{}" {
+			// The same goes for an empty string, which Talos writes for a required field the mirror leaves out.
+			if l := layout(x[k]); l != "{}" && x[k] != "" {
 				parts = append(parts, k+":"+l)
 			}
 		}
@@ -259,7 +260,9 @@ func (f *filler) fill(v reflect.Value, r reflect.Type, depth int) {
 	r = peel(r)
 
 	if v.Type() == unstructuredType {
-		if f.upstream && r != nil && r.PkgPath() != mirrorPkg && (r.Kind() == reflect.Struct || r.Kind() == reflect.Map) {
+		// A mirror of the upstream type is the type itself or, in this package, a local subset of it.
+		upstream := r != nil && (r.PkgPath() != mirrorPkg || strings.HasSuffix(r.Name(), "Subset"))
+		if f.upstream && upstream && (r.Kind() == reflect.Struct || r.Kind() == reflect.Map) {
 			f.fillUnstructured(v, r)
 		}
 

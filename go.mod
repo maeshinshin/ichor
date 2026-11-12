@@ -46,6 +46,9 @@ require (
 	k8s.io/apimachinery v0.36.6
 	k8s.io/apiserver v0.36.6
 	k8s.io/client-go v0.36.6
+	k8s.io/component-base v0.36.6
+	k8s.io/kube-proxy v0.36.6
+	k8s.io/kube-scheduler v0.36.6
 	k8s.io/kubectl v0.36.6
 	k8s.io/kubelet v0.36.6
 	k8s.io/utils v0.0.0-20261023123148-ca04ba58ecab
@@ -260,7 +263,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
 	k8s.io/cli-runtime v0.36.6 // indirect
-	k8s.io/component-base v0.36.6 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a // indirect
 	k8s.io/streaming v0.36.6 // indirect

@@ -17,8 +17,10 @@ limitations under the License.
 package typedconfig
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
 
 	mmeta "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
 	yaml "go.yaml.in/yaml/v4"
@@ -103,6 +105,35 @@ func mirrorToMachineryUnstructured[T any](v T) (mmeta.Unstructured, error) {
 // machineryToMirrorUnstructured is mirrorToMachineryUnstructured's inverse.
 func machineryToMirrorUnstructured[T any](u mmeta.Unstructured) (T, error) {
 	return jsonConvert[T](u.Object)
+}
+
+// machineryToMirrorSubset reads u into T, a local subset of an upstream type (the mirror structs ending in
+// Subset), and refuses a field T does not carry: a subset leaves fields out on purpose, and a document that
+// sets one must be told so rather than have it dropped.
+func machineryToMirrorSubset[T any](u mmeta.Unstructured) (out T, err error) {
+	data, err := json.Marshal(u.Object)
+	if err != nil {
+		return out, fmt.Errorf("encoding %T: %w", u.Object, err)
+	}
+
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+
+	if err := dec.Decode(&out); err != nil {
+		return out, fmt.Errorf("the document sets a field Ichor does not carry: %w", err)
+	}
+
+	return out, nil
+}
+
+// refuseSet is the error for a document that sets field, a typed field the mirror does not carry because Ichor
+// owns what it sets; why says what owns it. An unset value is no error.
+func refuseSet(field string, v any, why string) error {
+	if reflect.ValueOf(v).IsZero() {
+		return nil
+	}
+
+	return fmt.Errorf("%s is set, and Ichor does not carry it: %s", field, why)
 }
 
 // jsonConvert re-reads in as Out through its JSON form.

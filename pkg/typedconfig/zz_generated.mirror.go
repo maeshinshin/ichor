@@ -10,9 +10,14 @@ package typedconfig
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
 	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
+	tracingv1 "k8s.io/component-base/tracing/api/v1"
+	kubeproxyv1alpha1 "k8s.io/kube-proxy/config/v1alpha1"
+	kubeschedulerv1 "k8s.io/kube-scheduler/config/v1"
 	kubeletv1 "k8s.io/kubelet/config/v1"
+	kubeletv1beta1 "k8s.io/kubelet/config/v1beta1"
 )
 
 // Talos: APIServerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
@@ -1269,12 +1274,36 @@ type KubePrismConfigV1Alpha1 struct {
 	TLSServerNameConfig string `json:"tlsServerName,omitempty"`
 }
 
+// Talos: KubeProxyConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/k8s/kubeproxyconfig
+type KubeProxyConfigV1Alpha1 struct {
+	// +optional
+	ProxyMode string `json:"mode,omitempty"`
+	// +required
+	ProxyConfig *KubeProxyConfigurationSubset `json:"config"`
+	// +optional
+	ProxyExtraArgs map[string][]string `json:"extraArgs,omitempty"`
+	// +optional
+	ProxyResources *KubeResourcesConfig `json:"resources,omitempty"`
+}
+
 // Talos: ResourcesConfig
 type KubeResourcesConfig struct {
 	// +optional
 	Requests corev1.ResourceList `json:"requests,omitempty"`
 	// +optional
 	Limits corev1.ResourceList `json:"limits,omitempty"`
+}
+
+// Talos: KubeSchedulerConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/k8s/kubeschedulerconfig
+type KubeSchedulerConfigV1Alpha1 struct {
+	// +required
+	PodConfig *KubeSchedulerConfigurationSubset `json:"config"`
+	// +optional
+	PodArgs map[string][]string `json:"extraArgs,omitempty"`
+	// +optional
+	PodEnv map[string]string `json:"env,omitempty"`
+	// +optional
+	PodResources *KubeResourcesConfig `json:"resources,omitempty"`
 }
 
 // Talos: KubeSpanConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/kubespanconfig
@@ -1339,6 +1368,18 @@ type KubeletConfig struct {
 	KubeletSkipNodeRegistration *bool `json:"skipNodeRegistration,omitempty"`
 	// +optional
 	KubeletDisableManifestsDirectory *bool `json:"disableManifestsDirectory,omitempty"`
+}
+
+// Talos: KubeletConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/k8s/kubeletconfig
+type KubeletConfigV1Alpha1 struct {
+	// +required
+	KubeletConfig *KubeletConfigurationSubset `json:"config"`
+	// +optional
+	KubeletArgs map[string][]string `json:"extraArgs,omitempty"`
+	// +optional
+	KubeletClusterDNS []string `json:"clusterDNS,omitempty"`
+	// +optional
+	KubeletDefaultRuntimeSeccompProfileEnabled *bool `json:"defaultRuntimeSeccompProfileEnabled,omitempty"`
 }
 
 // Talos: KubeletNodeIPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
@@ -2253,4 +2294,136 @@ type ZswapConfigV1Alpha1 struct {
 	MaxPoolPercentConfig *int `json:"maxPoolPercent,omitempty"`
 	// +optional
 	ShrinkerEnabledConfig *bool `json:"shrinkerEnabled,omitempty"`
+}
+
+// KubeProxyConfigurationSubset mirrors k8s.io/kube-proxy/config/v1alpha1.KubeProxyConfiguration. Ichor does not carry bindAddress, clientConnection, configSyncPeriod, enableProfiling, healthzBindAddress, hostnameOverride, logging, mode, portRange, showHiddenMetricsForVersion, windowsRunAsService, winkernel.
+type KubeProxyConfigurationSubset struct {
+	// +optional
+	FeatureGates map[string]bool `json:"featureGates,omitempty"`
+	// +optional
+	MetricsBindAddress string `json:"metricsBindAddress,omitempty"`
+	// +optional
+	BindAddressHardFail bool `json:"bindAddressHardFail,omitempty"`
+	// +optional
+	IPTables *kubeproxyv1alpha1.KubeProxyIPTablesConfiguration `json:"iptables,omitempty"`
+	// +optional
+	IPVS *kubeproxyv1alpha1.KubeProxyIPVSConfiguration `json:"ipvs,omitempty"`
+	// +optional
+	NFTables *kubeproxyv1alpha1.KubeProxyNFTablesConfiguration `json:"nftables,omitempty"`
+	// +optional
+	DetectLocalMode kubeproxyv1alpha1.LocalMode `json:"detectLocalMode,omitempty"`
+	// +optional
+	DetectLocal *kubeproxyv1alpha1.DetectLocalConfiguration `json:"detectLocal,omitempty"`
+	// +optional
+	ClusterCIDR string `json:"clusterCIDR,omitempty"`
+	// +optional
+	NodePortAddresses []string `json:"nodePortAddresses,omitempty"`
+	// +optional
+	OOMScoreAdj *int32 `json:"oomScoreAdj,omitempty"`
+	// +optional
+	Conntrack *kubeproxyv1alpha1.KubeProxyConntrackConfiguration `json:"conntrack,omitempty"`
+}
+
+// KubeSchedulerConfigurationSubset mirrors k8s.io/kube-scheduler/config/v1.KubeSchedulerConfiguration. Ichor does not carry DebuggingConfiguration, clientConnection, delayCacheUntilActive, extenders, leaderElection, parallelism, podInitialBackoffSeconds, podMaxBackoffSeconds.
+type KubeSchedulerConfigurationSubset struct {
+	// +optional
+	PercentageOfNodesToScore *int32 `json:"percentageOfNodesToScore,omitempty"`
+	// +optional
+	Profiles []KubeSchedulerProfileSubset `json:"profiles,omitempty"`
+}
+
+// KubeSchedulerProfileSubset mirrors k8s.io/kube-scheduler/config/v1.KubeSchedulerProfile. Ichor does not carry pluginConfig.
+type KubeSchedulerProfileSubset struct {
+	// +optional
+	SchedulerName *string `json:"schedulerName,omitempty"`
+	// +optional
+	PercentageOfNodesToScore *int32 `json:"percentageOfNodesToScore,omitempty"`
+	// +optional
+	Plugins *kubeschedulerv1.Plugins `json:"plugins,omitempty"`
+}
+
+// KubeletConfigurationSubset mirrors k8s.io/kubelet/config/v1beta1.KubeletConfiguration. Ichor does not carry address, authentication, authorization, cgroupDriver, cgroupRoot, cgroupsPerQOS, clusterDNS, configMapAndSecretChangeDetectionStrategy, containerRuntimeEndpoint, contentType, cpuCFSQuota, cpuCFSQuotaPeriod, crashLoopBackOff, enableContentionProfiling, enableControllerAttachDetach, enableDebugFlagsHandler, enableDebuggingHandlers, enableProfilingHandler, enableServer, enableSystemLogHandler, enableSystemLogQuery, enforceNodeAllocatable, eventBurst, eventRecordQPS, failCgroupV1, fileCheckFrequency, hairpinMode, healthzBindAddress, healthzPort, httpCheckFrequency, imagePullCredentialsVerificationPolicy, imageServiceEndpoint, iptablesDropBit, iptablesMasqueradeBit, kernelMemcgNotification, kubeAPIBurst, kubeAPIQPS, kubeReservedCgroup, kubeletCgroups, localStorageCapacityIsolation, logging, makeIPTablesUtilChains, maxOpenFiles, memoryReservationPolicy, memoryThrottlingFactor, nodeLeaseDurationSeconds, nodeStatusMaxImages, nodeStatusReportFrequency, nodeStatusUpdateFrequency, oomScoreAdj, podCIDR, podLogsDir, podsPerCore, port, preloadedImagesVerificationAllowlist, protectKernelDefaults, providerID, qosReserved, readOnlyPort, registerNode, registryBurst, registryPullQPS, reservedSystemCPUs, resolvConf, rotateCertificates, runOnce, runtimeRequestTimeout, seccompDefault, showHiddenMetricsForVersion, singleProcessOOMKill, staticPodPath, staticPodURL, staticPodURLHeader, streamingConnectionIdleTimeout, syncFrequency, systemCgroups, systemReservedCgroup, tlsCertFile, tlsCipherSuites, tlsCurvePreferences, tlsMinVersion, tlsPrivateKeyFile, volumePluginDir, volumeStatsAggPeriod.
+type KubeletConfigurationSubset struct {
+	// +optional
+	ServerTLSBootstrap bool `json:"serverTLSBootstrap,omitempty"`
+	// +optional
+	ClusterDomain string `json:"clusterDomain,omitempty"`
+	// +optional
+	ImageMinimumGCAge *metav1.Duration `json:"imageMinimumGCAge,omitempty"`
+	// +optional
+	ImageMaximumGCAge *metav1.Duration `json:"imageMaximumGCAge,omitempty"`
+	// +optional
+	ImageGCHighThresholdPercent *int32 `json:"imageGCHighThresholdPercent,omitempty"`
+	// +optional
+	ImageGCLowThresholdPercent *int32 `json:"imageGCLowThresholdPercent,omitempty"`
+	// +optional
+	CPUManagerPolicy string `json:"cpuManagerPolicy,omitempty"`
+	// +optional
+	CPUManagerPolicyOptions map[string]string `json:"cpuManagerPolicyOptions,omitempty"`
+	// +optional
+	CPUManagerReconcilePeriod *metav1.Duration `json:"cpuManagerReconcilePeriod,omitempty"`
+	// +optional
+	MemoryManagerPolicy string `json:"memoryManagerPolicy,omitempty"`
+	// +optional
+	TopologyManagerPolicy string `json:"topologyManagerPolicy,omitempty"`
+	// +optional
+	TopologyManagerScope string `json:"topologyManagerScope,omitempty"`
+	// +optional
+	TopologyManagerPolicyOptions map[string]string `json:"topologyManagerPolicyOptions,omitempty"`
+	// +optional
+	MaxPods int32 `json:"maxPods,omitempty"`
+	// +optional
+	PodPidsLimit *int64 `json:"podPidsLimit,omitempty"`
+	// +optional
+	SerializeImagePulls *bool `json:"serializeImagePulls,omitempty"`
+	// +optional
+	MaxParallelImagePulls *int32 `json:"maxParallelImagePulls,omitempty"`
+	// +optional
+	EvictionHard map[string]string `json:"evictionHard,omitempty"`
+	// +optional
+	EvictionSoft map[string]string `json:"evictionSoft,omitempty"`
+	// +optional
+	EvictionSoftGracePeriod map[string]string `json:"evictionSoftGracePeriod,omitempty"`
+	// +optional
+	EvictionPressureTransitionPeriod *metav1.Duration `json:"evictionPressureTransitionPeriod,omitempty"`
+	// +optional
+	EvictionMaxPodGracePeriod int32 `json:"evictionMaxPodGracePeriod,omitempty"`
+	// +optional
+	EvictionMinimumReclaim map[string]string `json:"evictionMinimumReclaim,omitempty"`
+	// +optional
+	MergeDefaultEvictionSettings *bool `json:"mergeDefaultEvictionSettings,omitempty"`
+	// +optional
+	FeatureGates map[string]bool `json:"featureGates,omitempty"`
+	// +optional
+	FailSwapOn *bool `json:"failSwapOn,omitempty"`
+	// +optional
+	MemorySwap *kubeletv1beta1.MemorySwapConfiguration `json:"memorySwap,omitempty"`
+	// +optional
+	ContainerLogMaxSize string `json:"containerLogMaxSize,omitempty"`
+	// +optional
+	ContainerLogMaxFiles *int32 `json:"containerLogMaxFiles,omitempty"`
+	// +optional
+	ContainerLogMaxWorkers *int32 `json:"containerLogMaxWorkers,omitempty"`
+	// +optional
+	ContainerLogMonitorInterval *metav1.Duration `json:"containerLogMonitorInterval,omitempty"`
+	// +optional
+	SystemReserved map[string]string `json:"systemReserved,omitempty"`
+	// +optional
+	KubeReserved map[string]string `json:"kubeReserved,omitempty"`
+	// +optional
+	AllowedUnsafeSysctls []string `json:"allowedUnsafeSysctls,omitempty"`
+	// +optional
+	ShutdownGracePeriod *metav1.Duration `json:"shutdownGracePeriod,omitempty"`
+	// +optional
+	ShutdownGracePeriodCriticalPods *metav1.Duration `json:"shutdownGracePeriodCriticalPods,omitempty"`
+	// +optional
+	ShutdownGracePeriodByPodPriority []kubeletv1beta1.ShutdownGracePeriodByPodPriority `json:"shutdownGracePeriodByPodPriority,omitempty"`
+	// +optional
+	ReservedMemory []kubeletv1beta1.MemoryReservation `json:"reservedMemory,omitempty"`
+	// +optional
+	RegisterWithTaints []corev1.Taint `json:"registerWithTaints,omitempty"`
+	// +optional
+	Tracing *tracingv1.TracingConfiguration `json:"tracing,omitempty"`
+	// +optional
+	UserNamespaces *kubeletv1beta1.UserNamespaces `json:"userNamespaces,omitempty"`
 }

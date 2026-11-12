@@ -19,7 +19,10 @@ limitations under the License.
 // common fields.
 package embedded
 
-import mmeta "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
+import (
+	mmeta "github.com/siderolabs/talos/pkg/machinery/config/types/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
 
 // Common is embedded in Outer.
 type Common struct {
@@ -44,4 +47,20 @@ type WithPayload struct {
 type OnlyPayload struct {
 	mmeta.Meta `yaml:",inline"`
 	Raw        mmeta.Unstructured `yaml:"raw"`
+}
+
+// Inner is nested in Upstream and carries a field of its own to omit.
+type Inner struct {
+	A string `json:"a,omitempty"`
+	B string `json:"b,omitempty"`
+}
+
+// Upstream stands for a Kubernetes configuration type that a subset override mirrors in part. Its embedded
+// metav1.TypeMeta is not a field of the subset.
+type Upstream struct {
+	metav1.TypeMeta `json:",inline"`
+	Keep            string      `json:"keep,omitempty"`
+	Drop            string      `json:"drop,omitempty"`
+	Nested          *Inner      `json:"nested,omitempty"`
+	When            metav1.Time `json:"when,omitempty"`
 }

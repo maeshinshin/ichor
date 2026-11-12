@@ -28,9 +28,12 @@ import (
 const testReason = "recorded for this test"
 
 // TestShippedKindsKeepTheirPayload fails, naming the kind and the field, for a shipped kind whose mirror has no
-// fields or that drops a meta.Unstructured field nobody decided to drop (see droppedPayloads).
+// fields, that drops a meta.Unstructured field nobody decided to drop (see droppedPayloads), or whose subset
+// override or refused field has a row that matches nothing (see omissionProblems).
 func TestShippedKindsKeepTheirPayload(t *testing.T) {
-	if problems := generate().payloadProblems(droppedPayloads); len(problems) > 0 {
+	g := generate()
+
+	if problems := append(g.payloadProblems(droppedPayloads), g.omissionProblems(fieldOverrides, refusedFields)...); len(problems) > 0 {
 		t.Errorf("a shipped kind would be accepted with its content discarded:\n  %s", strings.Join(problems, "\n  "))
 	}
 }
@@ -73,5 +76,45 @@ func TestPayloadGateRefusesWhatItShould(t *testing.T) {
 	got = strings.Join(g.payloadProblems(rows), "\n")
 	if strings.Contains(got, "meta.Unstructured field") || !strings.Contains(got, `"Gone.Raw" matches no dropped field`) {
 		t.Errorf("with the decisions recorded the gate should refuse only the empty mirror and the stale row, got:\n%s", got)
+	}
+}
+
+// TestSubsetOverrideKeepsWhatIsNotOmitted builds a subset of a small upstream struct and checks that every field
+// is either kept or named in the omits table, that a nested struct with a row of its own becomes a local struct,
+// and that a row naming no field, and a refused row matching nothing, are reported.
+func TestSubsetOverrideKeepsWhatIsNotOmitted(t *testing.T) {
+	const pkg = "github.com/maeshinshin/ichor/internal/tools/mirrorgen/testdata/embedded"
+
+	pkgs, err := packages.Load(&packages.Config{
+		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedSyntax | packages.NeedDeps | packages.NeedImports,
+	}, pkg)
+	if err != nil || len(pkgs[0].Errors) > 0 {
+		t.Fatalf("loading %s: %v %v", pkg, err, pkgs[0].Errors)
+	}
+
+	g := newGenerator(pkgs)
+	omits := map[string]string{
+		"Upstream.drop": testReason, "Inner.b": testReason, "Upstream.gone": testReason,
+	}
+	s := g.subsetFor(g.lookupType(pkg, "Upstream"), omits)
+
+	kept := make([]string, 0, len(s.fields))
+	for _, f := range s.fields {
+		kept = append(kept, f.jsonName+" "+f.typeExpr)
+	}
+
+	if got, want := strings.Join(kept, ","), "keep string,nested *InnerSubset,when *metav1.Time"; got != want {
+		t.Errorf("kept fields %q, want %q", got, want)
+	}
+
+	if got, want := strings.Join(s.omitted, ","), "drop"; got != want {
+		t.Errorf("omitted fields %q, want %q", got, want)
+	}
+
+	got := strings.Join(g.omissionProblems(map[string]fieldOverride{"x": {omits: omits}}, map[string]string{"Nothing.Here": testReason}), "\n")
+	for _, want := range []string{`omits row "Upstream.gone" names no field`, `refusedFields row "Nothing.Here" matches no field`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the gate did not report %q; it reported:\n%s", want, got)
+		}
 	}
 }

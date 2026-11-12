@@ -2812,6 +2812,9 @@ spec:
                       - KubeAuthorizerConfig
                       - KubeCredentialProviderConfig
                       - KubeExternalManifestConfig
+                      - KubeletConfig
+                      - KubeProxyConfig
+                      - KubeSchedulerConfig
                       type: string
                     kmsgLogConfig:
                       description: kmsgLogConfig is a Talos KmsgLogConfig document;
@@ -3558,6 +3561,1270 @@ spec:
                       required:
                       - port
                       type: object
+                    kubeProxyConfig:
+                      description: kubeProxyConfig is a Talos KubeProxyConfig document;
+                        populated when kind is "KubeProxyConfig".
+                      properties:
+                        config:
+                          description: KubeProxyConfigurationSubset mirrors k8s.io/kube-proxy/config/v1alpha1.KubeProxyConfiguration.
+                            Ichor does not carry bindAddress, clientConnection, configSyncPeriod,
+                            enableProfiling, healthzBindAddress, hostnameOverride,
+                            logging, mode, portRange, showHiddenMetricsForVersion,
+                            windowsRunAsService, winkernel.
+                          properties:
+                            bindAddressHardFail:
+                              type: boolean
+                            clusterCIDR:
+                              type: string
+                            conntrack:
+                              description: |-
+                                KubeProxyConntrackConfiguration contains conntrack settings for
+                                the Kubernetes proxy server.
+                              properties:
+                                maxPerCore:
+                                  description: |-
+                                    maxPerCore is the maximum number of NAT connections to track
+                                    per CPU core (0 to leave the limit as-is and ignore min).
+                                  format: int32
+                                  type: integer
+                                min:
+                                  description: |-
+                                    min is the minimum value of connect-tracking records to allocate,
+                                    regardless of maxPerCore (set maxPerCore=0 to leave the limit as-is).
+                                  format: int32
+                                  type: integer
+                                tcpBeLiberal:
+                                  description: |-
+                                    tcpBeLiberal, if true, kube-proxy will configure conntrack
+                                    to run in liberal mode for TCP connections and packets with
+                                    out-of-window sequence numbers won't be marked INVALID.
+                                  type: boolean
+                                tcpCloseWaitTimeout:
+                                  description: |-
+                                    tcpCloseWaitTimeout is how long an idle conntrack entry
+                                    in CLOSE_WAIT state will remain in the conntrack
+                                    table. (e.g. '60s'). Must be greater than 0 to set.
+                                  type: string
+                                tcpEstablishedTimeout:
+                                  description: |-
+                                    tcpEstablishedTimeout is how long an idle TCP connection will be kept open
+                                    (e.g. '2s').  Must be greater than 0 to set.
+                                  type: string
+                                udpStreamTimeout:
+                                  description: |-
+                                    udpStreamTimeout is how long an idle UDP conntrack entry in
+                                    ASSURED state will remain in the conntrack table
+                                    (e.g. '300s'). Must be greater than 0 to set.
+                                  type: string
+                                udpTimeout:
+                                  description: |-
+                                    udpTimeout is how long an idle UDP conntrack entry in
+                                    UNREPLIED state will remain in the conntrack table
+                                    (e.g. '30s'). Must be greater than 0 to set.
+                                  type: string
+                              required:
+                              - maxPerCore
+                              - min
+                              - tcpBeLiberal
+                              - tcpCloseWaitTimeout
+                              - tcpEstablishedTimeout
+                              - udpStreamTimeout
+                              - udpTimeout
+                              type: object
+                            detectLocal:
+                              description: DetectLocalConfiguration contains optional
+                                settings related to DetectLocalMode option
+                              properties:
+                                bridgeInterface:
+                                  description: |-
+                                    bridgeInterface is a bridge interface name. When DetectLocalMode is set to
+                                    LocalModeBridgeInterface, kube-proxy will consider traffic to be local if
+                                    it originates from this bridge.
+                                  type: string
+                                interfaceNamePrefix:
+                                  description: |-
+                                    interfaceNamePrefix is an interface name prefix. When DetectLocalMode is set to
+                                    LocalModeInterfaceNamePrefix, kube-proxy will consider traffic to be local if
+                                    it originates from any interface whose name begins with this prefix.
+                                  type: string
+                              required:
+                              - bridgeInterface
+                              - interfaceNamePrefix
+                              type: object
+                            detectLocalMode:
+                              description: LocalMode represents modes to detect local
+                                traffic from the node
+                              type: string
+                            featureGates:
+                              additionalProperties:
+                                type: boolean
+                              type: object
+                            iptables:
+                              description: |-
+                                KubeProxyIPTablesConfiguration contains iptables-related configuration
+                                details for the Kubernetes proxy server.
+                              properties:
+                                localhostNodePorts:
+                                  description: |-
+                                    localhostNodePorts, if false, tells kube-proxy to disable the legacy behavior
+                                    of allowing NodePort services to be accessed via localhost. (Applies only to
+                                    iptables mode and IPv4; localhost NodePorts are never allowed with other proxy
+                                    modes or with IPv6.)
+                                  type: boolean
+                                masqueradeAll:
+                                  description: |-
+                                    masqueradeAll tells kube-proxy to SNAT all traffic sent to Service cluster IPs,
+                                    when using the iptables or ipvs proxy mode. This may be required with some CNI
+                                    plugins.
+                                  type: boolean
+                                masqueradeBit:
+                                  description: |-
+                                    masqueradeBit is the bit of the iptables fwmark space to use for SNAT if using
+                                    the iptables or ipvs proxy mode. Values must be within the range [0, 31].
+                                  format: int32
+                                  type: integer
+                                minSyncPeriod:
+                                  description: |-
+                                    minSyncPeriod is the minimum period between iptables rule resyncs (e.g. '5s',
+                                    '1m', '2h22m'). A value of 0 means every Service or EndpointSlice change will
+                                    result in an immediate iptables resync.
+                                  type: string
+                                syncPeriod:
+                                  description: |-
+                                    syncPeriod is an interval (e.g. '5s', '1m', '2h22m') indicating how frequently
+                                    various re-synchronizing and cleanup operations are performed. Must be greater
+                                    than 0.
+                                  type: string
+                              required:
+                              - localhostNodePorts
+                              - masqueradeAll
+                              - masqueradeBit
+                              - minSyncPeriod
+                              - syncPeriod
+                              type: object
+                            ipvs:
+                              description: |-
+                                KubeProxyIPVSConfiguration contains ipvs-related configuration
+                                details for the Kubernetes proxy server.
+                              properties:
+                                excludeCIDRs:
+                                  description: |-
+                                    excludeCIDRs is a list of CIDRs which the ipvs proxier should not touch
+                                    when cleaning up ipvs services.
+                                  items:
+                                    type: string
+                                  type: array
+                                minSyncPeriod:
+                                  description: |-
+                                    minSyncPeriod is the minimum period between IPVS rule resyncs (e.g. '5s', '1m',
+                                    '2h22m'). A value of 0 means every Service or EndpointSlice change will result
+                                    in an immediate IPVS resync.
+                                  type: string
+                                scheduler:
+                                  description: scheduler is the IPVS scheduler to
+                                    use
+                                  type: string
+                                strictARP:
+                                  description: |-
+                                    strictARP configures arp_ignore and arp_announce to avoid answering ARP queries
+                                    from kube-ipvs0 interface
+                                  type: boolean
+                                syncPeriod:
+                                  description: |-
+                                    syncPeriod is an interval (e.g. '5s', '1m', '2h22m') indicating how frequently
+                                    various re-synchronizing and cleanup operations are performed. Must be greater
+                                    than 0.
+                                  type: string
+                                tcpFinTimeout:
+                                  description: |-
+                                    tcpFinTimeout is the timeout value used for IPVS TCP sessions after receiving a FIN.
+                                    The default value is 0, which preserves the current timeout value on the system.
+                                  type: string
+                                tcpTimeout:
+                                  description: |-
+                                    tcpTimeout is the timeout value used for idle IPVS TCP sessions.
+                                    The default value is 0, which preserves the current timeout value on the system.
+                                  type: string
+                                udpTimeout:
+                                  description: |-
+                                    udpTimeout is the timeout value used for IPVS UDP packets.
+                                    The default value is 0, which preserves the current timeout value on the system.
+                                  type: string
+                              required:
+                              - excludeCIDRs
+                              - minSyncPeriod
+                              - scheduler
+                              - strictARP
+                              - syncPeriod
+                              - tcpFinTimeout
+                              - tcpTimeout
+                              - udpTimeout
+                              type: object
+                            metricsBindAddress:
+                              type: string
+                            nftables:
+                              description: |-
+                                KubeProxyNFTablesConfiguration contains nftables-related configuration
+                                details for the Kubernetes proxy server.
+                              properties:
+                                masqueradeAll:
+                                  description: |-
+                                    masqueradeAll tells kube-proxy to SNAT all traffic sent to Service cluster IPs,
+                                    when using the nftables mode. This may be required with some CNI plugins.
+                                  type: boolean
+                                masqueradeBit:
+                                  description: |-
+                                    masqueradeBit is the bit of the iptables fwmark space to use for SNAT if using
+                                    the nftables proxy mode. Values must be within the range [0, 31].
+                                  format: int32
+                                  type: integer
+                                minSyncPeriod:
+                                  description: |-
+                                    minSyncPeriod is the minimum period between iptables rule resyncs (e.g. '5s',
+                                    '1m', '2h22m'). A value of 0 means every Service or EndpointSlice change will
+                                    result in an immediate iptables resync.
+                                  type: string
+                                syncPeriod:
+                                  description: |-
+                                    syncPeriod is an interval (e.g. '5s', '1m', '2h22m') indicating how frequently
+                                    various re-synchronizing and cleanup operations are performed. Must be greater
+                                    than 0.
+                                  type: string
+                              required:
+                              - masqueradeAll
+                              - masqueradeBit
+                              - minSyncPeriod
+                              - syncPeriod
+                              type: object
+                            nodePortAddresses:
+                              items:
+                                type: string
+                              type: array
+                            oomScoreAdj:
+                              format: int32
+                              type: integer
+                          type: object
+                        extraArgs:
+                          additionalProperties:
+                            items:
+                              type: string
+                            type: array
+                          type: object
+                        mode:
+                          type: string
+                        resources:
+                          description: 'Talos: ResourcesConfig'
+                          properties:
+                            limits:
+                              additionalProperties:
+                                anyOf:
+                                - type: integer
+                                - type: string
+                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                x-kubernetes-int-or-string: true
+                              description: ResourceList is a set of (resource name,
+                                quantity) pairs.
+                              type: object
+                            requests:
+                              additionalProperties:
+                                anyOf:
+                                - type: integer
+                                - type: string
+                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                x-kubernetes-int-or-string: true
+                              description: ResourceList is a set of (resource name,
+                                quantity) pairs.
+                              type: object
+                          type: object
+                      required:
+                      - config
+                      type: object
+                    kubeSchedulerConfig:
+                      description: kubeSchedulerConfig is a Talos KubeSchedulerConfig
+                        document; populated when kind is "KubeSchedulerConfig".
+                      properties:
+                        config:
+                          description: KubeSchedulerConfigurationSubset mirrors k8s.io/kube-scheduler/config/v1.KubeSchedulerConfiguration.
+                            Ichor does not carry DebuggingConfiguration, clientConnection,
+                            delayCacheUntilActive, extenders, leaderElection, parallelism,
+                            podInitialBackoffSeconds, podMaxBackoffSeconds.
+                          properties:
+                            percentageOfNodesToScore:
+                              format: int32
+                              type: integer
+                            profiles:
+                              items:
+                                description: KubeSchedulerProfileSubset mirrors k8s.io/kube-scheduler/config/v1.KubeSchedulerProfile.
+                                  Ichor does not carry pluginConfig.
+                                properties:
+                                  percentageOfNodesToScore:
+                                    format: int32
+                                    type: integer
+                                  plugins:
+                                    description: |-
+                                      Plugins include multiple extension points. When specified, the list of plugins for
+                                      a particular extension point are the only ones enabled. If an extension point is
+                                      omitted from the config, then the default set of plugins is used for that extension point.
+                                      Enabled plugins are called in the order specified here, after default plugins. If they need to
+                                      be invoked before default plugins, default plugins must be disabled and re-enabled here in desired order.
+                                    properties:
+                                      bind:
+                                        description: |-
+                                          Bind is a list of plugins that should be invoked at "Bind" extension point of the scheduling framework.
+                                          The scheduler call these plugins in order. Scheduler skips the rest of these plugins as soon as one returns success.
+                                        properties:
+                                          disabled:
+                                            description: |-
+                                              Disabled specifies default plugins that should be disabled.
+                                              When all default plugins need to be disabled, an array containing only one "*" should be provided.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                            - name
+                                            x-kubernetes-list-type: map
+                                          enabled:
+                                            description: |-
+                                              Enabled specifies plugins that should be enabled in addition to default plugins.
+                                              If the default plugin is also configured in the scheduler config file, the weight of plugin will
+                                              be overridden accordingly.
+                                              These are called after default plugins and in the same order specified here.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        type: object
+                                      filter:
+                                        description: Filter is a list of plugins that
+                                          should be invoked when filtering out nodes
+                                          that cannot run the Pod.
+                                        properties:
+                                          disabled:
+                                            description: |-
+                                              Disabled specifies default plugins that should be disabled.
+                                              When all default plugins need to be disabled, an array containing only one "*" should be provided.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                            - name
+                                            x-kubernetes-list-type: map
+                                          enabled:
+                                            description: |-
+                                              Enabled specifies plugins that should be enabled in addition to default plugins.
+                                              If the default plugin is also configured in the scheduler config file, the weight of plugin will
+                                              be overridden accordingly.
+                                              These are called after default plugins and in the same order specified here.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        type: object
+                                      multiPoint:
+                                        description: |-
+                                          MultiPoint is a simplified config section to enable plugins for all valid extension points.
+                                          Plugins enabled through MultiPoint will automatically register for every individual extension
+                                          point the plugin has implemented. Disabling a plugin through MultiPoint disables that behavior.
+                                          The same is true for disabling "*" through MultiPoint (no default plugins will be automatically registered).
+                                          Plugins can still be disabled through their individual extension points.
+
+                                          In terms of precedence, plugin config follows this basic hierarchy
+                                            1. Specific extension points
+                                            2. Explicitly configured MultiPoint plugins
+                                            3. The set of default plugins, as MultiPoint plugins
+                                          This implies that a higher precedence plugin will run first and overwrite any settings within MultiPoint.
+                                          Explicitly user-configured plugins also take a higher precedence over default plugins.
+                                          Within this hierarchy, an Enabled setting takes precedence over Disabled. For example, if a plugin is
+                                          set in both `multiPoint.Enabled` and `multiPoint.Disabled`, the plugin will be enabled. Similarly,
+                                          including `multiPoint.Disabled = '*'` and `multiPoint.Enabled = pluginA` will still register that specific
+                                          plugin through MultiPoint. This follows the same behavior as all other extension point configurations.
+                                        properties:
+                                          disabled:
+                                            description: |-
+                                              Disabled specifies default plugins that should be disabled.
+                                              When all default plugins need to be disabled, an array containing only one "*" should be provided.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                            - name
+                                            x-kubernetes-list-type: map
+                                          enabled:
+                                            description: |-
+                                              Enabled specifies plugins that should be enabled in addition to default plugins.
+                                              If the default plugin is also configured in the scheduler config file, the weight of plugin will
+                                              be overridden accordingly.
+                                              These are called after default plugins and in the same order specified here.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        type: object
+                                      permit:
+                                        description: Permit is a list of plugins that
+                                          control binding of a Pod. These plugins
+                                          can prevent or delay binding of a Pod.
+                                        properties:
+                                          disabled:
+                                            description: |-
+                                              Disabled specifies default plugins that should be disabled.
+                                              When all default plugins need to be disabled, an array containing only one "*" should be provided.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                            - name
+                                            x-kubernetes-list-type: map
+                                          enabled:
+                                            description: |-
+                                              Enabled specifies plugins that should be enabled in addition to default plugins.
+                                              If the default plugin is also configured in the scheduler config file, the weight of plugin will
+                                              be overridden accordingly.
+                                              These are called after default plugins and in the same order specified here.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        type: object
+                                      placementGenerate:
+                                        description: PlacementGenerate is a list of
+                                          plugins that should be invoked during pod
+                                          group scheduling cycle when determining
+                                          placements for a pod group.
+                                        properties:
+                                          disabled:
+                                            description: |-
+                                              Disabled specifies default plugins that should be disabled.
+                                              When all default plugins need to be disabled, an array containing only one "*" should be provided.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                            - name
+                                            x-kubernetes-list-type: map
+                                          enabled:
+                                            description: |-
+                                              Enabled specifies plugins that should be enabled in addition to default plugins.
+                                              If the default plugin is also configured in the scheduler config file, the weight of plugin will
+                                              be overridden accordingly.
+                                              These are called after default plugins and in the same order specified here.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        type: object
+                                      placementScore:
+                                        description: PlacementScore is a list of plugins
+                                          that should be invoked during workload scheduling
+                                          cycle when ranking pod group assignments.
+                                        properties:
+                                          disabled:
+                                            description: |-
+                                              Disabled specifies default plugins that should be disabled.
+                                              When all default plugins need to be disabled, an array containing only one "*" should be provided.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                            - name
+                                            x-kubernetes-list-type: map
+                                          enabled:
+                                            description: |-
+                                              Enabled specifies plugins that should be enabled in addition to default plugins.
+                                              If the default plugin is also configured in the scheduler config file, the weight of plugin will
+                                              be overridden accordingly.
+                                              These are called after default plugins and in the same order specified here.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        type: object
+                                      postBind:
+                                        description: PostBind is a list of plugins
+                                          that should be invoked after a pod is successfully
+                                          bound.
+                                        properties:
+                                          disabled:
+                                            description: |-
+                                              Disabled specifies default plugins that should be disabled.
+                                              When all default plugins need to be disabled, an array containing only one "*" should be provided.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                            - name
+                                            x-kubernetes-list-type: map
+                                          enabled:
+                                            description: |-
+                                              Enabled specifies plugins that should be enabled in addition to default plugins.
+                                              If the default plugin is also configured in the scheduler config file, the weight of plugin will
+                                              be overridden accordingly.
+                                              These are called after default plugins and in the same order specified here.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        type: object
+                                      postFilter:
+                                        description: PostFilter is a list of plugins
+                                          that are invoked after filtering phase,
+                                          but only when no feasible nodes were found
+                                          for the pod.
+                                        properties:
+                                          disabled:
+                                            description: |-
+                                              Disabled specifies default plugins that should be disabled.
+                                              When all default plugins need to be disabled, an array containing only one "*" should be provided.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                            - name
+                                            x-kubernetes-list-type: map
+                                          enabled:
+                                            description: |-
+                                              Enabled specifies plugins that should be enabled in addition to default plugins.
+                                              If the default plugin is also configured in the scheduler config file, the weight of plugin will
+                                              be overridden accordingly.
+                                              These are called after default plugins and in the same order specified here.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        type: object
+                                      preBind:
+                                        description: PreBind is a list of plugins
+                                          that should be invoked before a pod is bound.
+                                        properties:
+                                          disabled:
+                                            description: |-
+                                              Disabled specifies default plugins that should be disabled.
+                                              When all default plugins need to be disabled, an array containing only one "*" should be provided.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                            - name
+                                            x-kubernetes-list-type: map
+                                          enabled:
+                                            description: |-
+                                              Enabled specifies plugins that should be enabled in addition to default plugins.
+                                              If the default plugin is also configured in the scheduler config file, the weight of plugin will
+                                              be overridden accordingly.
+                                              These are called after default plugins and in the same order specified here.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        type: object
+                                      preEnqueue:
+                                        description: PreEnqueue is a list of plugins
+                                          that should be invoked before adding pods
+                                          to the scheduling queue.
+                                        properties:
+                                          disabled:
+                                            description: |-
+                                              Disabled specifies default plugins that should be disabled.
+                                              When all default plugins need to be disabled, an array containing only one "*" should be provided.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                            - name
+                                            x-kubernetes-list-type: map
+                                          enabled:
+                                            description: |-
+                                              Enabled specifies plugins that should be enabled in addition to default plugins.
+                                              If the default plugin is also configured in the scheduler config file, the weight of plugin will
+                                              be overridden accordingly.
+                                              These are called after default plugins and in the same order specified here.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        type: object
+                                      preFilter:
+                                        description: PreFilter is a list of plugins
+                                          that should be invoked at "PreFilter" extension
+                                          point of the scheduling framework.
+                                        properties:
+                                          disabled:
+                                            description: |-
+                                              Disabled specifies default plugins that should be disabled.
+                                              When all default plugins need to be disabled, an array containing only one "*" should be provided.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                            - name
+                                            x-kubernetes-list-type: map
+                                          enabled:
+                                            description: |-
+                                              Enabled specifies plugins that should be enabled in addition to default plugins.
+                                              If the default plugin is also configured in the scheduler config file, the weight of plugin will
+                                              be overridden accordingly.
+                                              These are called after default plugins and in the same order specified here.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        type: object
+                                      preScore:
+                                        description: PreScore is a list of plugins
+                                          that are invoked before scoring.
+                                        properties:
+                                          disabled:
+                                            description: |-
+                                              Disabled specifies default plugins that should be disabled.
+                                              When all default plugins need to be disabled, an array containing only one "*" should be provided.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                            - name
+                                            x-kubernetes-list-type: map
+                                          enabled:
+                                            description: |-
+                                              Enabled specifies plugins that should be enabled in addition to default plugins.
+                                              If the default plugin is also configured in the scheduler config file, the weight of plugin will
+                                              be overridden accordingly.
+                                              These are called after default plugins and in the same order specified here.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        type: object
+                                      queueSort:
+                                        description: QueueSort is a list of plugins
+                                          that should be invoked when sorting pods
+                                          in the scheduling queue.
+                                        properties:
+                                          disabled:
+                                            description: |-
+                                              Disabled specifies default plugins that should be disabled.
+                                              When all default plugins need to be disabled, an array containing only one "*" should be provided.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                            - name
+                                            x-kubernetes-list-type: map
+                                          enabled:
+                                            description: |-
+                                              Enabled specifies plugins that should be enabled in addition to default plugins.
+                                              If the default plugin is also configured in the scheduler config file, the weight of plugin will
+                                              be overridden accordingly.
+                                              These are called after default plugins and in the same order specified here.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        type: object
+                                      reserve:
+                                        description: |-
+                                          Reserve is a list of plugins invoked when reserving/unreserving resources
+                                          after a node is assigned to run the pod.
+                                        properties:
+                                          disabled:
+                                            description: |-
+                                              Disabled specifies default plugins that should be disabled.
+                                              When all default plugins need to be disabled, an array containing only one "*" should be provided.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                            - name
+                                            x-kubernetes-list-type: map
+                                          enabled:
+                                            description: |-
+                                              Enabled specifies plugins that should be enabled in addition to default plugins.
+                                              If the default plugin is also configured in the scheduler config file, the weight of plugin will
+                                              be overridden accordingly.
+                                              These are called after default plugins and in the same order specified here.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        type: object
+                                      score:
+                                        description: Score is a list of plugins that
+                                          should be invoked when ranking nodes that
+                                          have passed the filtering phase.
+                                        properties:
+                                          disabled:
+                                            description: |-
+                                              Disabled specifies default plugins that should be disabled.
+                                              When all default plugins need to be disabled, an array containing only one "*" should be provided.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-map-keys:
+                                            - name
+                                            x-kubernetes-list-type: map
+                                          enabled:
+                                            description: |-
+                                              Enabled specifies plugins that should be enabled in addition to default plugins.
+                                              If the default plugin is also configured in the scheduler config file, the weight of plugin will
+                                              be overridden accordingly.
+                                              These are called after default plugins and in the same order specified here.
+                                            items:
+                                              description: Plugin specifies a plugin
+                                                name and its weight when applicable.
+                                                Weight is used only for Score and
+                                                PlacementScore plugins.
+                                              properties:
+                                                name:
+                                                  description: Name defines the name
+                                                    of plugin
+                                                  type: string
+                                                weight:
+                                                  description: Weight defines the
+                                                    weight of plugin, only used for
+                                                    Score and PlacementScore plugins.
+                                                  format: int32
+                                                  type: integer
+                                              required:
+                                              - name
+                                              type: object
+                                            type: array
+                                            x-kubernetes-list-type: atomic
+                                        type: object
+                                    type: object
+                                  schedulerName:
+                                    type: string
+                                type: object
+                              type: array
+                          type: object
+                        env:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        extraArgs:
+                          additionalProperties:
+                            items:
+                              type: string
+                            type: array
+                          type: object
+                        resources:
+                          description: 'Talos: ResourcesConfig'
+                          properties:
+                            limits:
+                              additionalProperties:
+                                anyOf:
+                                - type: integer
+                                - type: string
+                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                x-kubernetes-int-or-string: true
+                              description: ResourceList is a set of (resource name,
+                                quantity) pairs.
+                              type: object
+                            requests:
+                              additionalProperties:
+                                anyOf:
+                                - type: integer
+                                - type: string
+                                pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                x-kubernetes-int-or-string: true
+                              description: ResourceList is a set of (resource name,
+                                quantity) pairs.
+                              type: object
+                          type: object
+                      required:
+                      - config
+                      type: object
                     kubeSpanConfig:
                       description: kubeSpanConfig is a Talos KubeSpanConfig document;
                         populated when kind is "KubeSpanConfig".
@@ -3609,6 +4876,268 @@ spec:
                           items:
                             type: string
                           type: array
+                      type: object
+                    kubeletConfig:
+                      description: kubeletConfig is a Talos KubeletConfig document;
+                        populated when kind is "KubeletConfig".
+                      properties:
+                        clusterDNS:
+                          items:
+                            type: string
+                          type: array
+                        config:
+                          description: KubeletConfigurationSubset mirrors k8s.io/kubelet/config/v1beta1.KubeletConfiguration.
+                            Ichor does not carry address, authentication, authorization,
+                            cgroupDriver, cgroupRoot, cgroupsPerQOS, clusterDNS, configMapAndSecretChangeDetectionStrategy,
+                            containerRuntimeEndpoint, contentType, cpuCFSQuota, cpuCFSQuotaPeriod,
+                            crashLoopBackOff, enableContentionProfiling, enableControllerAttachDetach,
+                            enableDebugFlagsHandler, enableDebuggingHandlers, enableProfilingHandler,
+                            enableServer, enableSystemLogHandler, enableSystemLogQuery,
+                            enforceNodeAllocatable, eventBurst, eventRecordQPS, failCgroupV1,
+                            fileCheckFrequency, hairpinMode, healthzBindAddress, healthzPort,
+                            httpCheckFrequency, imagePullCredentialsVerificationPolicy,
+                            imageServiceEndpoint, iptablesDropBit, iptablesMasqueradeBit,
+                            kernelMemcgNotification, kubeAPIBurst, kubeAPIQPS, kubeReservedCgroup,
+                            kubeletCgroups, localStorageCapacityIsolation, logging,
+                            makeIPTablesUtilChains, maxOpenFiles, memoryReservationPolicy,
+                            memoryThrottlingFactor, nodeLeaseDurationSeconds, nodeStatusMaxImages,
+                            nodeStatusReportFrequency, nodeStatusUpdateFrequency,
+                            oomScoreAdj, podCIDR, podLogsDir, podsPerCore, port, preloadedImagesVerificationAllowlist,
+                            protectKernelDefaults, providerID, qosReserved, readOnlyPort,
+                            registerNode, registryBurst, registryPullQPS, reservedSystemCPUs,
+                            resolvConf, rotateCertificates, runOnce, runtimeRequestTimeout,
+                            seccompDefault, showHiddenMetricsForVersion, singleProcessOOMKill,
+                            staticPodPath, staticPodURL, staticPodURLHeader, streamingConnectionIdleTimeout,
+                            syncFrequency, systemCgroups, systemReservedCgroup, tlsCertFile,
+                            tlsCipherSuites, tlsCurvePreferences, tlsMinVersion, tlsPrivateKeyFile,
+                            volumePluginDir, volumeStatsAggPeriod.
+                          properties:
+                            allowedUnsafeSysctls:
+                              items:
+                                type: string
+                              type: array
+                            clusterDomain:
+                              type: string
+                            containerLogMaxFiles:
+                              format: int32
+                              type: integer
+                            containerLogMaxSize:
+                              type: string
+                            containerLogMaxWorkers:
+                              format: int32
+                              type: integer
+                            containerLogMonitorInterval:
+                              type: string
+                            cpuManagerPolicy:
+                              type: string
+                            cpuManagerPolicyOptions:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            cpuManagerReconcilePeriod:
+                              type: string
+                            evictionHard:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            evictionMaxPodGracePeriod:
+                              format: int32
+                              type: integer
+                            evictionMinimumReclaim:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            evictionPressureTransitionPeriod:
+                              type: string
+                            evictionSoft:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            evictionSoftGracePeriod:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            failSwapOn:
+                              type: boolean
+                            featureGates:
+                              additionalProperties:
+                                type: boolean
+                              type: object
+                            imageGCHighThresholdPercent:
+                              format: int32
+                              type: integer
+                            imageGCLowThresholdPercent:
+                              format: int32
+                              type: integer
+                            imageMaximumGCAge:
+                              type: string
+                            imageMinimumGCAge:
+                              type: string
+                            kubeReserved:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            maxParallelImagePulls:
+                              format: int32
+                              type: integer
+                            maxPods:
+                              format: int32
+                              type: integer
+                            memoryManagerPolicy:
+                              type: string
+                            memorySwap:
+                              properties:
+                                swapBehavior:
+                                  description: |-
+                                    swapBehavior configures swap memory available to container workloads. May be one of
+                                    "", "NoSwap": workloads can not use swap, default option.
+                                    "LimitedSwap": workload swap usage is limited. The swap limit is proportionate to the container's memory request.
+                                  type: string
+                              type: object
+                            mergeDefaultEvictionSettings:
+                              type: boolean
+                            podPidsLimit:
+                              format: int64
+                              type: integer
+                            registerWithTaints:
+                              items:
+                                description: |-
+                                  The node this Taint is attached to has the "effect" on
+                                  any pod that does not tolerate the Taint.
+                                properties:
+                                  effect:
+                                    description: |-
+                                      Required. The effect of the taint on pods
+                                      that do not tolerate the taint.
+                                      Valid effects are NoSchedule, PreferNoSchedule and NoExecute.
+                                    type: string
+                                  key:
+                                    description: Required. The taint key to be applied
+                                      to a node.
+                                    type: string
+                                  timeAdded:
+                                    description: TimeAdded represents the time at
+                                      which the taint was added.
+                                    format: date-time
+                                    type: string
+                                  value:
+                                    description: The taint value corresponding to
+                                      the taint key.
+                                    type: string
+                                required:
+                                - effect
+                                - key
+                                type: object
+                              type: array
+                            reservedMemory:
+                              items:
+                                description: MemoryReservation specifies the memory
+                                  reservation of different types for each NUMA node
+                                properties:
+                                  limits:
+                                    additionalProperties:
+                                      anyOf:
+                                      - type: integer
+                                      - type: string
+                                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                      x-kubernetes-int-or-string: true
+                                    description: ResourceList is a set of (resource
+                                      name, quantity) pairs.
+                                    type: object
+                                  numaNode:
+                                    format: int32
+                                    type: integer
+                                required:
+                                - limits
+                                - numaNode
+                                type: object
+                              type: array
+                            serializeImagePulls:
+                              type: boolean
+                            serverTLSBootstrap:
+                              type: boolean
+                            shutdownGracePeriod:
+                              type: string
+                            shutdownGracePeriodByPodPriority:
+                              items:
+                                description: ShutdownGracePeriodByPodPriority specifies
+                                  the shutdown grace period for Pods based on their
+                                  associated priority class value
+                                properties:
+                                  priority:
+                                    description: priority is the priority value associated
+                                      with the shutdown grace period
+                                    format: int32
+                                    type: integer
+                                  shutdownGracePeriodSeconds:
+                                    description: shutdownGracePeriodSeconds is the
+                                      shutdown grace period in seconds
+                                    format: int64
+                                    type: integer
+                                required:
+                                - priority
+                                - shutdownGracePeriodSeconds
+                                type: object
+                              type: array
+                            shutdownGracePeriodCriticalPods:
+                              type: string
+                            systemReserved:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            topologyManagerPolicy:
+                              type: string
+                            topologyManagerPolicyOptions:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            topologyManagerScope:
+                              type: string
+                            tracing:
+                              description: TracingConfiguration provides versioned
+                                configuration for OpenTelemetry tracing clients.
+                              properties:
+                                endpoint:
+                                  description: |-
+                                    Endpoint of the collector this component will report traces to.
+                                    The connection is insecure, and does not currently support TLS.
+                                    Recommended is unset, and endpoint is the otlp grpc default, localhost:4317.
+                                  type: string
+                                samplingRatePerMillion:
+                                  description: |-
+                                    SamplingRatePerMillion is the number of samples to collect per million spans.
+                                    Recommended is unset. If unset, sampler respects its parent span's sampling
+                                    rate, but otherwise never samples.
+                                  format: int32
+                                  type: integer
+                              type: object
+                            userNamespaces:
+                              description: UserNamespaces contains User Namespace
+                                configurations.
+                              properties:
+                                idsPerPod:
+                                  description: |-
+                                    IDsPerPod is the mapping length of UIDs and GIDs.
+                                    The length must be a multiple of 65536, and must be less than 1<<32.
+                                    On non-linux such as windows, only null / absent is allowed.
+
+                                    Changing the value may require recreating all containers on the node.
+
+                                    Default: 65536
+                                  format: int64
+                                  type: integer
+                              type: object
+                          type: object
+                        defaultRuntimeSeccompProfileEnabled:
+                          type: boolean
+                        extraArgs:
+                          additionalProperties:
+                            items:
+                              type: string
+                            type: array
+                          type: object
+                      required:
+                      - config
                       type: object
                     layer2VIPConfig:
                       description: layer2VIPConfig is a Talos Layer2VIPConfig document;

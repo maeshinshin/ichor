@@ -53,6 +53,10 @@ const (
 	// override"): k8s.io/kubelet wasn't pulled in transitively by anything
 	// already in go.mod.
 	pkgKubeletV1 = "k8s.io/kubelet/config/v1"
+	// The three upstream configuration types a subset override mirrors (see fieldOverride.omits).
+	pkgKubeletV1Beta1    = "k8s.io/kubelet/config/v1beta1"
+	pkgKubeProxyV1Alpha1 = "k8s.io/kube-proxy/config/v1alpha1"
+	pkgKubeSchedulerV1   = "k8s.io/kube-scheduler/config/v1"
 )
 
 // rootKind is one shipped machinery document kind to mirror, derived from Talos's registry by
@@ -165,6 +169,14 @@ type fieldOverride struct {
 	// and appears only as a plain pointer field. See
 	// pkg/typedconfig/seccomp.go.
 	localWrapper string
+
+	// omits, if set, makes the mirror a local copy of the upstream struct without the fields it names, keyed
+	// "UpstreamStruct.jsonName" with the reason, instead of the whole upstream type (see subset.go). Use it
+	// where the whole type is too large for the CRD or cannot be expressed in a schema. A document that sets
+	// an omitted field is refused when it is read, with the field named. A row is also what makes a field
+	// inexpressible in Ichor, so it needs a reason a maintainer can read: the generator fails on a row that
+	// names no field, and every field not named here is kept.
+	omits map[string]string
 }
 
 // fieldOverrides is the field-level table's follow-up calls for.
@@ -192,6 +204,22 @@ var fieldOverrides = map[string]fieldOverride{
 	"KubeAuditPolicyConfigV1Alpha1.AuditConfig":                     {pkgPath: pkgAuditV1, typeName: "Policy"},
 	"KubeAuthorizerConfigV1Alpha1.AuthorizerWebhook":                {pkgPath: pkgAPIServerV1, typeName: "WebhookConfiguration"},
 	"KubeCredentialProviderConfigV1Alpha1.CredentialProviderConfig": {pkgPath: pkgKubeletV1, typeName: "CredentialProviderConfig"},
+	// The three configuration documents whose upstream type cannot be used whole (too large, or with a field a
+	// CRD schema cannot express): a local subset, see omits.
+	"KubeletConfigV1Alpha1.KubeletConfig":   {pkgPath: pkgKubeletV1Beta1, typeName: "KubeletConfiguration", omits: kubeletOmits},
+	"KubeProxyConfigV1Alpha1.ProxyConfig":   {pkgPath: pkgKubeProxyV1Alpha1, typeName: "KubeProxyConfiguration", omits: kubeProxyOmits},
+	"KubeSchedulerConfigV1Alpha1.PodConfig": {pkgPath: pkgKubeSchedulerV1, typeName: "KubeSchedulerConfiguration", omits: kubeSchedulerOmits},
+}
+
+// refusedFields are typed fields of a shipped document that the mirror does not carry because Ichor owns what
+// they set, keyed "StructName.FieldName" like secretFields. Unlike a secret field, a document that sets one is
+// refused when it is read, naming the field, and the reason is part of the message.
+var refusedFields = map[string]string{
+	"KubeletConfigV1Alpha1.KubeletImage":     "the kubelet image follows spec.kubernetesVersion and is set by the Kubernetes upgrade",
+	"KubeProxyConfigV1Alpha1.ProxyImage":     "the kube-proxy image follows spec.kubernetesVersion and is set by the Kubernetes upgrade",
+	"KubeProxyConfigV1Alpha1.ProxyEnabled":   "whether kube-proxy runs is decided by spec.cni.kubeProxy",
+	"KubeSchedulerConfigV1Alpha1.PodImage":   "the kube-scheduler image follows spec.kubernetesVersion and is set by the Kubernetes upgrade",
+	"KubeSchedulerConfigV1Alpha1.PodEnabled": "whether kube-scheduler runs is not carried",
 }
 
 // sparseFields are machinery fields without `omitempty` that the mirror still emits as optional.
@@ -351,7 +379,8 @@ func generate() *generator {
 			packages.NeedSyntax | packages.NeedDeps | packages.NeedImports,
 	}
 
-	pkgs, err := packages.Load(cfg, pkgTypesTree, pkgCoreV1, pkgSpecs, pkgAuditV1, pkgAPIServerV1, pkgKubeletV1)
+	pkgs, err := packages.Load(cfg, pkgTypesTree, pkgCoreV1, pkgSpecs, pkgAuditV1, pkgAPIServerV1, pkgKubeletV1,
+		pkgKubeletV1Beta1, pkgKubeProxyV1Alpha1, pkgKubeSchedulerV1)
 	if err != nil {
 		fatalf("loading packages: %v", err)
 	}
@@ -397,7 +426,7 @@ func generate() *generator {
 func main() {
 	g := generate()
 
-	if problems := g.payloadProblems(droppedPayloads); len(problems) > 0 {
+	if problems := append(g.payloadProblems(droppedPayloads), g.omissionProblems(fieldOverrides, refusedFields)...); len(problems) > 0 {
 		fatalf("a shipped kind would be accepted with its content discarded:\n  %s", strings.Join(problems, "\n  "))
 	}
 

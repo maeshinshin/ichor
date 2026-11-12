@@ -4427,6 +4427,81 @@ func KubePrismConfigV1Alpha1FromMachinery(src *mk8s.KubePrismConfigV1Alpha1) (*K
 	return out, nil
 }
 
+// ToMachinery converts m to the machinery mk8s.KubeProxyConfigV1Alpha1 type.
+func (m *KubeProxyConfigV1Alpha1) ToMachinery() (*mk8s.KubeProxyConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.KubeProxyConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mk8s.KubeProxyConfig, MetaAPIVersion: "v1alpha1"}
+	out.ProxyMode = m.ProxyMode
+	if m.ProxyConfig != nil {
+		v2, err := mirrorToMachineryUnstructured(*m.ProxyConfig)
+		if err != nil {
+			return nil, fmt.Errorf("KubeProxyConfigV1Alpha1.config"+": %w", err)
+		}
+		out.ProxyConfig = v2
+	}
+	if m.ProxyExtraArgs != nil {
+		c3 := make(map[string]mmeta.ArgValue, len(m.ProxyExtraArgs))
+		for k3, e3 := range m.ProxyExtraArgs {
+			v4, err := argValueToMachinery(e3)
+			if err != nil {
+				return nil, fmt.Errorf("KubeProxyConfigV1Alpha1.extraArgs"+": %w", err)
+			}
+			c3[k3] = v4
+		}
+		out.ProxyExtraArgs = mmeta.Args(c3)
+	}
+	t4, err := (m.ProxyResources).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("KubeProxyConfigV1Alpha1.resources"+": %w", err)
+	}
+	if t4 != nil {
+		out.ProxyResources = *t4
+	}
+	return out, nil
+}
+
+// KubeProxyConfigV1Alpha1FromMachinery converts a machinery mk8s.KubeProxyConfigV1Alpha1 document to the mirror type.
+func KubeProxyConfigV1Alpha1FromMachinery(src *mk8s.KubeProxyConfigV1Alpha1) (*KubeProxyConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeProxyConfigV1Alpha1{}
+	if err := refuseSet("KubeProxyConfigV1Alpha1.enabled", src.ProxyEnabled, "whether kube-proxy runs is decided by spec.cni.kubeProxy"); err != nil {
+		return nil, err
+	}
+	if err := refuseSet("KubeProxyConfigV1Alpha1.image", src.ProxyImage, "the kube-proxy image follows spec.kubernetesVersion and is set by the Kubernetes upgrade"); err != nil {
+		return nil, err
+	}
+	out.ProxyMode = src.ProxyMode
+	if len(src.ProxyConfig.Object) > 0 {
+		v2, err := machineryToMirrorSubset[KubeProxyConfigurationSubset](src.ProxyConfig)
+		if err != nil {
+			return nil, fmt.Errorf("KubeProxyConfigV1Alpha1.config"+": %w", err)
+		}
+		out.ProxyConfig = &v2
+	}
+	if src.ProxyExtraArgs != nil {
+		c3 := make(map[string][]string, len(src.ProxyExtraArgs))
+		for k3, e3 := range src.ProxyExtraArgs {
+			v4, err := argValueFromMachinery(e3)
+			if err != nil {
+				return nil, fmt.Errorf("KubeProxyConfigV1Alpha1.extraArgs"+": %w", err)
+			}
+			c3[k3] = v4
+		}
+		out.ProxyExtraArgs = c3
+	}
+	t4, err := KubeResourcesConfigFromMachinery(&(src.ProxyResources))
+	if err != nil {
+		return nil, fmt.Errorf("KubeProxyConfigV1Alpha1.resources"+": %w", err)
+	}
+	out.ProxyResources = t4
+	return out, nil
+}
+
 // ToMachinery converts m to the machinery mk8s.ResourcesConfig type.
 func (m *KubeResourcesConfig) ToMachinery() (*mk8s.ResourcesConfig, error) {
 	if m == nil {
@@ -4462,6 +4537,81 @@ func KubeResourcesConfigFromMachinery(src *mk8s.ResourcesConfig) (*KubeResources
 		return nil, fmt.Errorf("KubeResourcesConfig.limits"+": %w", err)
 	}
 	out.Limits = v2
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mk8s.KubeSchedulerConfigV1Alpha1 type.
+func (m *KubeSchedulerConfigV1Alpha1) ToMachinery() (*mk8s.KubeSchedulerConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.KubeSchedulerConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mk8s.KubeSchedulerConfig, MetaAPIVersion: "v1alpha1"}
+	if m.PodConfig != nil {
+		v1, err := mirrorToMachineryUnstructured(*m.PodConfig)
+		if err != nil {
+			return nil, fmt.Errorf("KubeSchedulerConfigV1Alpha1.config"+": %w", err)
+		}
+		out.PodConfig = v1
+	}
+	if m.PodArgs != nil {
+		c2 := make(map[string]mmeta.ArgValue, len(m.PodArgs))
+		for k2, e2 := range m.PodArgs {
+			v3, err := argValueToMachinery(e2)
+			if err != nil {
+				return nil, fmt.Errorf("KubeSchedulerConfigV1Alpha1.extraArgs"+": %w", err)
+			}
+			c2[k2] = v3
+		}
+		out.PodArgs = mmeta.Args(c2)
+	}
+	out.PodEnv = m.PodEnv
+	t4, err := (m.PodResources).ToMachinery()
+	if err != nil {
+		return nil, fmt.Errorf("KubeSchedulerConfigV1Alpha1.resources"+": %w", err)
+	}
+	if t4 != nil {
+		out.PodResources = *t4
+	}
+	return out, nil
+}
+
+// KubeSchedulerConfigV1Alpha1FromMachinery converts a machinery mk8s.KubeSchedulerConfigV1Alpha1 document to the mirror type.
+func KubeSchedulerConfigV1Alpha1FromMachinery(src *mk8s.KubeSchedulerConfigV1Alpha1) (*KubeSchedulerConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeSchedulerConfigV1Alpha1{}
+	if err := refuseSet("KubeSchedulerConfigV1Alpha1.enabled", src.PodEnabled, "whether kube-scheduler runs is not carried"); err != nil {
+		return nil, err
+	}
+	if err := refuseSet("KubeSchedulerConfigV1Alpha1.image", src.PodImage, "the kube-scheduler image follows spec.kubernetesVersion and is set by the Kubernetes upgrade"); err != nil {
+		return nil, err
+	}
+	if len(src.PodConfig.Object) > 0 {
+		v1, err := machineryToMirrorSubset[KubeSchedulerConfigurationSubset](src.PodConfig)
+		if err != nil {
+			return nil, fmt.Errorf("KubeSchedulerConfigV1Alpha1.config"+": %w", err)
+		}
+		out.PodConfig = &v1
+	}
+	if src.PodArgs != nil {
+		c2 := make(map[string][]string, len(src.PodArgs))
+		for k2, e2 := range src.PodArgs {
+			v3, err := argValueFromMachinery(e2)
+			if err != nil {
+				return nil, fmt.Errorf("KubeSchedulerConfigV1Alpha1.extraArgs"+": %w", err)
+			}
+			c2[k2] = v3
+		}
+		out.PodArgs = c2
+	}
+	out.PodEnv = src.PodEnv
+	t4, err := KubeResourcesConfigFromMachinery(&(src.PodResources))
+	if err != nil {
+		return nil, fmt.Errorf("KubeSchedulerConfigV1Alpha1.resources"+": %w", err)
+	}
+	out.PodResources = t4
 	return out, nil
 }
 
@@ -4688,6 +4838,68 @@ func KubeletConfigFromMachinery(src *mv1alpha1.KubeletConfig) (*KubeletConfig, e
 	out.KubeletNodeIP = t8
 	out.KubeletSkipNodeRegistration = src.KubeletSkipNodeRegistration
 	out.KubeletDisableManifestsDirectory = src.KubeletDisableManifestsDirectory
+	return out, nil
+}
+
+// ToMachinery converts m to the machinery mk8s.KubeletConfigV1Alpha1 type.
+func (m *KubeletConfigV1Alpha1) ToMachinery() (*mk8s.KubeletConfigV1Alpha1, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := &mk8s.KubeletConfigV1Alpha1{}
+	out.Meta = mmeta.Meta{MetaKind: mk8s.KubeletConfig, MetaAPIVersion: "v1alpha1"}
+	if m.KubeletConfig != nil {
+		v1, err := mirrorToMachineryUnstructured(*m.KubeletConfig)
+		if err != nil {
+			return nil, fmt.Errorf("KubeletConfigV1Alpha1.config"+": %w", err)
+		}
+		out.KubeletConfig = v1
+	}
+	if m.KubeletArgs != nil {
+		c2 := make(map[string]mmeta.ArgValue, len(m.KubeletArgs))
+		for k2, e2 := range m.KubeletArgs {
+			v3, err := argValueToMachinery(e2)
+			if err != nil {
+				return nil, fmt.Errorf("KubeletConfigV1Alpha1.extraArgs"+": %w", err)
+			}
+			c2[k2] = v3
+		}
+		out.KubeletArgs = mmeta.Args(c2)
+	}
+	out.KubeletClusterDNS = m.KubeletClusterDNS
+	out.KubeletDefaultRuntimeSeccompProfileEnabled = m.KubeletDefaultRuntimeSeccompProfileEnabled
+	return out, nil
+}
+
+// KubeletConfigV1Alpha1FromMachinery converts a machinery mk8s.KubeletConfigV1Alpha1 document to the mirror type.
+func KubeletConfigV1Alpha1FromMachinery(src *mk8s.KubeletConfigV1Alpha1) (*KubeletConfigV1Alpha1, error) {
+	if src == nil {
+		return nil, nil
+	}
+	out := &KubeletConfigV1Alpha1{}
+	if err := refuseSet("KubeletConfigV1Alpha1.image", src.KubeletImage, "the kubelet image follows spec.kubernetesVersion and is set by the Kubernetes upgrade"); err != nil {
+		return nil, err
+	}
+	if len(src.KubeletConfig.Object) > 0 {
+		v1, err := machineryToMirrorSubset[KubeletConfigurationSubset](src.KubeletConfig)
+		if err != nil {
+			return nil, fmt.Errorf("KubeletConfigV1Alpha1.config"+": %w", err)
+		}
+		out.KubeletConfig = &v1
+	}
+	if src.KubeletArgs != nil {
+		c2 := make(map[string][]string, len(src.KubeletArgs))
+		for k2, e2 := range src.KubeletArgs {
+			v3, err := argValueFromMachinery(e2)
+			if err != nil {
+				return nil, fmt.Errorf("KubeletConfigV1Alpha1.extraArgs"+": %w", err)
+			}
+			c2[k2] = v3
+		}
+		out.KubeletArgs = c2
+	}
+	out.KubeletClusterDNS = src.KubeletClusterDNS
+	out.KubeletDefaultRuntimeSeccompProfileEnabled = src.KubeletDefaultRuntimeSeccompProfileEnabled
 	return out, nil
 }
 

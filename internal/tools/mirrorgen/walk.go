@@ -51,6 +51,10 @@ type typeMapping struct {
 	// meta.Unstructured{Object: nil} and omitempty on its own.
 	overridePtr bool
 
+	// strictDecode is set for kOverride entries that mirror a local subset struct: reading a machinery
+	// document refuses a field the subset does not carry, instead of dropping it.
+	strictDecode bool
+
 	elem      *typeMapping // for kPointer, kSlice, kMap
 	structDef *structDef   // for kStruct
 }
@@ -68,7 +72,9 @@ type structDef struct {
 	pkgPath  string // machinery package path this struct comes from
 	fields   []*fieldDef
 	// dropped is the meta.Unstructured fields this struct lost, declared on it or on a struct embedded in it.
-	dropped  []droppedField
+	dropped []droppedField
+	// refused is the fields of refusedFields this struct lost: a document that sets one is refused.
+	refused  []refusedField
 	isRoot   bool
 	rootKind rootKind
 	// pages holds the reference page of every root this struct is reachable from.
@@ -80,6 +86,11 @@ type fieldDef struct {
 	jsonName string
 	optional bool
 	mapping  *typeMapping
+}
+
+type refusedField struct {
+	// Key is "machinery struct.Go field"; Path is "mirror struct.yaml name" for the error message.
+	Key, Field, Path, Why string
 }
 
 type droppedField struct {
@@ -115,6 +126,7 @@ type generator struct {
 	roots         []rootKind      // the shipped kinds, in union field order
 	notes         []string        // shipped kinds no longer classed accept, for the report
 	pending       []string        // accept kinds not shipped yet, for the report
+	subset        *subsetState    // local structs of subset overrides, see subset.go
 }
 
 func newGenerator(pkgs []*packages.Package) *generator {
@@ -200,6 +212,9 @@ func machImportAlias(pkgPath string) string {
 	return alias
 }
 
+// aliasCoreV1 is the import alias of k8s.io/api/core/v1 in generated code.
+const aliasCoreV1 = "corev1"
+
 // importAlias is the alias for a package path, without recording any use of it.
 func importAlias(pkgPath string) string {
 	alias := ""
@@ -218,7 +233,7 @@ func importAlias(pkgPath string) string {
 	case "net/netip":
 		alias = "netip"
 	case pkgCoreV1:
-		alias = "corev1"
+		alias = aliasCoreV1
 	case pkgSpecs:
 		alias = "specs"
 	case pkgAuditV1:
@@ -408,16 +423,26 @@ func (g *generator) overrideMapping(fieldKey string, ov fieldOverride) *typeMapp
 
 	_, isMap := named.Underlying().(*types.Map)
 
-	mirrorExpr := ov.localWrapper
-	if mirrorExpr == "" {
+	var (
+		mirrorExpr string
+		strict     bool
+	)
+
+	switch {
+	case len(ov.omits) > 0:
+		mirrorExpr, strict = g.subsetFor(named, ov.omits).name, true
+	case ov.localWrapper != "":
+		mirrorExpr = ov.localWrapper
+	default:
 		mirrorExpr = g.qualify(named)
 	}
 
 	return &typeMapping{
-		kind:        kOverride,
-		mirrorExpr:  mirrorExpr,
-		machExpr:    machImportAlias(pkgMeta) + ".Unstructured",
-		overridePtr: !isMap,
+		kind:         kOverride,
+		mirrorExpr:   mirrorExpr,
+		machExpr:     machImportAlias(pkgMeta) + ".Unstructured",
+		overridePtr:  !isMap,
+		strictDecode: strict,
 	}
 }
 
@@ -511,6 +536,13 @@ func (g *generator) addFields(def *structDef, named *types.Named, st *types.Stru
 				Struct: def.name, Field: fld.Name(), YAML: yamlName, Why: why,
 				Scalar: isScalarType(fld.Type()),
 			})
+
+			continue
+		}
+
+		if why, ok := refusedFields[fieldKey]; ok {
+			g.subsetState().refused[fieldKey] = true
+			def.refused = append(def.refused, refusedField{Key: fieldKey, Field: fld.Name(), Path: def.name + "." + yamlName, Why: why})
 
 			continue
 		}

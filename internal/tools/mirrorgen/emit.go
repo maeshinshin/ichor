@@ -212,6 +212,16 @@ func emitTryAssign(b *strings.Builder, call string, depth int, dst, fieldPath st
 	fmt.Fprintf(b, "\t%s = %s\n", dst, v)
 }
 
+// fromUnstructuredFunc is the helper that reads a meta.Unstructured into the override's mirror type: the strict
+// one refuses a field a subset does not carry.
+func (m *typeMapping) fromUnstructuredFunc() string {
+	if m.strictDecode {
+		return "machineryToMirrorSubset"
+	}
+
+	return "machineryToMirrorUnstructured"
+}
+
 // emitOverrideConvert handles a fieldOverrides entry: mirror is an upstream
 // type, machinery is always a plain meta.Unstructured value (never a
 // pointer, whatever m.overridePtr says about the mirror side -- see its
@@ -225,7 +235,7 @@ func emitOverrideConvert(b *strings.Builder, m *typeMapping, src, dst string, to
 	v := fmt.Sprintf("v%d", depth)
 
 	if !m.overridePtr {
-		call := fmt.Sprintf("machineryToMirrorUnstructured[%s](%s)", m.mirrorExpr, src)
+		call := fmt.Sprintf("%s[%s](%s)", m.fromUnstructuredFunc(), m.mirrorExpr, src)
 		if toMachinery {
 			call = "mirrorToMachineryUnstructured(" + src + ")"
 		}
@@ -246,7 +256,7 @@ func emitOverrideConvert(b *strings.Builder, m *typeMapping, src, dst string, to
 	}
 
 	fmt.Fprintf(b, "\tif len(%s.Object) > 0 {\n", src)
-	fmt.Fprintf(b, "\t\t%s, err := machineryToMirrorUnstructured[%s](%s)\n", v, m.mirrorExpr, src)
+	fmt.Fprintf(b, "\t\t%s, err := %s[%s](%s)\n", v, m.fromUnstructuredFunc(), m.mirrorExpr, src)
 	emitErrCheck(b, "\t\t", fieldPath)
 	fmt.Fprintf(b, "\t\t%s = &%s\n", dst, v)
 	fmt.Fprintf(b, "\t}\n")
@@ -394,20 +404,15 @@ func (g *generator) writeMirror(filename string) {
 	var b strings.Builder
 
 	b.WriteString(header)
-	b.WriteString(`
-package typedconfig
-
-import (
-	corev1 "k8s.io/api/core/v1"
-	apiserverv1 "k8s.io/apiserver/pkg/apis/apiserver/v1"
-	auditv1 "k8s.io/apiserver/pkg/apis/audit/v1"
-	kubeletv1 "k8s.io/kubelet/config/v1"
-)
-`)
+	b.WriteString("\npackage typedconfig\n\nimport (\n")
+	b.WriteString(g.mirrorImports())
+	b.WriteString(")\n")
 
 	for _, def := range g.sortedOrder() {
 		writeMirrorStruct(&b, def)
 	}
+
+	g.writeSubsets(&b)
 
 	mustWriteFile(filename, b.String())
 }
@@ -522,6 +527,10 @@ func writeStructConversion(b *strings.Builder, def *structDef) {
 	fmt.Fprintf(b, "func %sFromMachinery(src *%s) (*%s, error) {\n", def.name, mach, def.name)
 	b.WriteString("\tif src == nil {\n\t\treturn nil, nil\n\t}\n")
 	fmt.Fprintf(b, "\tout := &%s{}\n", def.name)
+
+	for _, r := range def.refused {
+		fmt.Fprintf(b, "\tif err := refuseSet(%q, src.%s, %q); err != nil {\n\t\treturn nil, err\n\t}\n", r.Path, r.Field, r.Why)
+	}
 
 	for i, f := range def.fields {
 		emitConvert(b, f.mapping, "src."+f.name, "out."+f.name, false, i+1, def.name+"."+f.jsonName)

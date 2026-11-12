@@ -38,7 +38,7 @@ import (
 // +kubebuilder:object:generate=false
 type TalosConfigPatchDocument struct {
 	// kind selects which of the fields below is populated.
-	// +kubebuilder:validation:Enum=SysctlConfig;KernelModuleConfig;Config;VolumeConfig;UserVolumeConfig;RawVolumeConfig;ResolverConfig;BGPInstanceConfig;BlackholeRouteConfig;BondConfig;BridgeConfig;ContainerConfig;DHCPv6Config;DummyLinkConfig;EnvironmentConfig;EtcFileConfig;EthernetConfig;EventSinkConfig;ExistingVolumeConfig;ExtensionServiceConfig;ExternalVolumeConfig;FilesystemScrubConfig;FilesystemTrimConfig;HTTPProbeConfig;ImageCacheConfig;ImageVerificationConfig;KmsgLogConfig;KubeAPIServerConfig;KubeClusterConfig;KubeControllerManagerConfig;KubeCoreDNSConfig;KubeInlineManifestConfig;KubeNetworkConfig;KubeNodeConfig;KubePrismConfig;KubeSpanConfig;KubeSpanEndpointsConfig;KubeTalosAPIAccessConfig;LVMLogicalVolumeConfig;LVMVolumeGroupConfig;Layer2VIPConfig;OOMConfig;PCIDriverRebindConfig;RAIDArrayConfig;RegistryMirrorConfig;RoutingRuleConfig;StaticHostConfig;SwapVolumeConfig;SysfsConfig;TCPProbeConfig;TimeSyncConfig;TrustedRootsConfig;UdevRulesConfig;VRFConfig;VethConfig;WatchdogTimerConfig;ZswapConfig;KubeAuditPolicyConfig;KubeAuthorizerConfig;KubeCredentialProviderConfig;KubeExternalManifestConfig
+	// +kubebuilder:validation:Enum=SysctlConfig;KernelModuleConfig;Config;VolumeConfig;UserVolumeConfig;RawVolumeConfig;ResolverConfig;BGPInstanceConfig;BlackholeRouteConfig;BondConfig;BridgeConfig;ContainerConfig;DHCPv6Config;DummyLinkConfig;EnvironmentConfig;EtcFileConfig;EthernetConfig;EventSinkConfig;ExistingVolumeConfig;ExtensionServiceConfig;ExternalVolumeConfig;FilesystemScrubConfig;FilesystemTrimConfig;HTTPProbeConfig;ImageCacheConfig;ImageVerificationConfig;KmsgLogConfig;KubeAPIServerConfig;KubeClusterConfig;KubeControllerManagerConfig;KubeCoreDNSConfig;KubeInlineManifestConfig;KubeNetworkConfig;KubeNodeConfig;KubePrismConfig;KubeSpanConfig;KubeSpanEndpointsConfig;KubeTalosAPIAccessConfig;LVMLogicalVolumeConfig;LVMVolumeGroupConfig;Layer2VIPConfig;OOMConfig;PCIDriverRebindConfig;RAIDArrayConfig;RegistryMirrorConfig;RoutingRuleConfig;StaticHostConfig;SwapVolumeConfig;SysfsConfig;TCPProbeConfig;TimeSyncConfig;TrustedRootsConfig;UdevRulesConfig;VRFConfig;VethConfig;WatchdogTimerConfig;ZswapConfig;KubeAuditPolicyConfig;KubeAuthorizerConfig;KubeCredentialProviderConfig;KubeExternalManifestConfig;KubeletConfig;KubeProxyConfig;KubeSchedulerConfig
 	// +unionDiscriminator
 	// +required
 	Kind string `json:"kind"`
@@ -288,6 +288,18 @@ type TalosConfigPatchDocument struct {
 	// kubeExternalManifestConfig is a Talos KubeExternalManifestConfig document; populated when kind is "KubeExternalManifestConfig".
 	// +optional
 	KubeExternalManifestConfig *typedconfig.KubeExternalManifestConfigV1Alpha1 `json:"kubeExternalManifestConfig,omitempty"`
+
+	// kubeletConfig is a Talos KubeletConfig document; populated when kind is "KubeletConfig".
+	// +optional
+	KubeletConfig *typedconfig.KubeletConfigV1Alpha1 `json:"kubeletConfig,omitempty"`
+
+	// kubeProxyConfig is a Talos KubeProxyConfig document; populated when kind is "KubeProxyConfig".
+	// +optional
+	KubeProxyConfig *typedconfig.KubeProxyConfigV1Alpha1 `json:"kubeProxyConfig,omitempty"`
+
+	// kubeSchedulerConfig is a Talos KubeSchedulerConfig document; populated when kind is "KubeSchedulerConfig".
+	// +optional
+	KubeSchedulerConfig *typedconfig.KubeSchedulerConfigV1Alpha1 `json:"kubeSchedulerConfig,omitempty"`
 }
 
 // DeepCopyInto copies the receiver into out. in must be non-nil.
@@ -718,6 +730,12 @@ func TalosConfigPatchDocumentFieldKey(kind string) (string, bool) {
 		return "kubeCredentialProviderConfig", true
 	case "KubeExternalManifestConfig":
 		return "kubeExternalManifestConfig", true
+	case "KubeletConfig":
+		return "kubeletConfig", true
+	case "KubeProxyConfig":
+		return "kubeProxyConfig", true
+	case "KubeSchedulerConfig":
+		return "kubeSchedulerConfig", true
 	default:
 		return "", false
 	}
@@ -977,6 +995,18 @@ func (d *TalosConfigPatchDocument) Validate() error {
 
 	if d.KubeExternalManifestConfig != nil {
 		set = append(set, "kubeExternalManifestConfig")
+	}
+
+	if d.KubeletConfig != nil {
+		set = append(set, "kubeletConfig")
+	}
+
+	if d.KubeProxyConfig != nil {
+		set = append(set, "kubeProxyConfig")
+	}
+
+	if d.KubeSchedulerConfig != nil {
+		set = append(set, "kubeSchedulerConfig")
 	}
 
 	if len(set) == 1 && set[0] == want {
@@ -1425,6 +1455,27 @@ func (d *TalosConfigPatchDocument) Document() (config.Document, error) {
 		}
 
 		return doc, nil
+	case "KubeletConfig":
+		doc, err := d.KubeletConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubeletConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KubeProxyConfig":
+		doc, err := d.KubeProxyConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubeProxyConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KubeSchedulerConfig":
+		doc, err := d.KubeSchedulerConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kubeSchedulerConfig: %w", err)
+		}
+
+		return doc, nil
 	default:
 		return nil, fmt.Errorf("unknown document kind %q", d.Kind)
 	}
@@ -1861,6 +1912,27 @@ func TalosConfigPatchDocumentFromMachinery(doc config.Document) (TalosConfigPatc
 		}
 
 		return TalosConfigPatchDocument{Kind: "KubeExternalManifestConfig", KubeExternalManifestConfig: m}, nil
+	case *mk8s.KubeletConfigV1Alpha1:
+		m, err := typedconfig.KubeletConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubeletConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubeletConfig", KubeletConfig: m}, nil
+	case *mk8s.KubeProxyConfigV1Alpha1:
+		m, err := typedconfig.KubeProxyConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubeProxyConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubeProxyConfig", KubeProxyConfig: m}, nil
+	case *mk8s.KubeSchedulerConfigV1Alpha1:
+		m, err := typedconfig.KubeSchedulerConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kubeSchedulerConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KubeSchedulerConfig", KubeSchedulerConfig: m}, nil
 	default:
 		return TalosConfigPatchDocument{}, fmt.Errorf("no document kind for %T", doc)
 	}

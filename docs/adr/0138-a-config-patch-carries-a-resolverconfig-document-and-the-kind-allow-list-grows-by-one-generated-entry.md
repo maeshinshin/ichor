@@ -6,7 +6,7 @@ Decided: `TalosConfigPatch.spec.documents[]` accepts `kind: ResolverConfig` (fie
 
 ## Context
 
-A real Talos v1.13.1 cluster could not be adopted: `ichor adopt --plan` blocked every machine on `ResolverConfig.apiVersion`, `.kind` and `.nameservers`. The allow-list had no way to state them, and the legacy `machine.network.nameservers` is no substitute: machinery's `ResolverConfigV1Alpha1.V1Alpha1ConflictValidate` refuses a config holding both, and dropping the document leaves the adopt diff non-empty. About 45 more document kinds are in the same position.
+A Talos v1.13.1 cluster could not be adopted: `ichor adopt --plan` blocked every machine on `ResolverConfig.apiVersion`, `.kind` and `.nameservers`. The allow-list had no way to state them, and the legacy `machine.network.nameservers` is no substitute: machinery's `ResolverConfigV1Alpha1.V1Alpha1ConflictValidate` refuses a config holding both, and dropping the document leaves the adopt diff non-empty. About 45 more document kinds are in the same position.
 
 ## Decisions
 

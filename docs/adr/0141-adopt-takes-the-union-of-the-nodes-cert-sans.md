@@ -6,7 +6,7 @@ Decided: `ichor adopt` sets a new cluster's `spec.certSANs` to the union of ever
 
 ## Context
 
-On a real three-control-plane Talos v1.13 cluster each node lists its own name and address next to the shared SANs, so `agreedCertSANs` returned nothing and `machine.certSANs` and `cluster.apiServer.certSANs` blocked every machine.
+On a three-control-plane Talos v1.13 cluster each node lists its own name and address next to the shared SANs, so `agreedCertSANs` returned nothing and `machine.certSANs` and `cluster.apiServer.certSANs` blocked every machine.
 
 ## Decisions
 

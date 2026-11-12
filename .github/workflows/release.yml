@@ -10,7 +10,9 @@ name: Release
 #                 controller's own verifier, attaches an SBOM and a provenance attestation;
 #                 runs in the protected "release" environment, as publish-core does (a required reviewer approves both)
 #   cli           goreleaser builds the ichor CLI archives with the install manifest that pins those digests, signs the
-#                 checksums (cosign keyless) and attaches both to the GitHub release; the only job that writes contents
+#                 checksums (cosign keyless) and attaches both to the GitHub release; the only job that writes the release
+#   sync-main     after a tag cut from a release-X.Y branch, opens a pull request that brings the tag's CHANGELOG.md
+#                 section and the README's version literals to main; its failure does not fail the release
 on:
   push:
     tags: ["v*"]
@@ -398,3 +400,72 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ICHOR_IMAGE_DIGESTS: bin/digests.txt
         run: nix develop --command goreleaser release --clean --release-notes "$RUNNER_TEMP/release-notes.md"
+
+  # main is the next minor and a patch is cut from a release-X.Y branch, so its notes and README bump live only
+  # there. A tag that is already in main's history (cut from main) needs nothing.
+  # The pull request is the only write to main, and a person merges it. continue-on-error keeps a failure here from
+  # marking a release that published correctly as failed; the job still shows red.
+  # A pull request opened with the default GITHUB_TOKEN does not start other workflows, and only opens at all while
+  # "Allow GitHub Actions to create and approve pull requests" is on. Set the RELEASE_SYNC_PR_TOKEN secret (a
+  # fine-grained token with contents and pull requests write) to have Tests, Lint and PR Title run on it as on any
+  # other pull request.
+  sync-main:
+    name: Bring the release notes and README version to main
+    needs: cli
+    permissions:
+      contents: write # push the branch of the pull request
+      pull-requests: write # open it
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Clone main with its tags
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check that the tag was not cut from main
+        id: gate
+        run: |
+          if ! [[ "$GITHUB_REF_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "${GITHUB_REF_NAME} is not a final release tag; nothing to bring to main"
+          elif git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "${GITHUB_REF_NAME} is in main's history; nothing to bring to main"
+          else
+            echo "sync=true" >> "$GITHUB_OUTPUT"
+            # The README names the newest release, so an older patch line must not move it back.
+            [ "$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)" = "$GITHUB_REF_NAME" ] && echo "readme=true" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
+      - name: Add the changelog section
+        if: steps.gate.outputs.sync == 'true'
+        run: |
+          git show "refs/tags/${GITHUB_REF_NAME}:CHANGELOG.md" > "$RUNNER_TEMP/tag-changelog.md"
+          hack/add-release-section.sh "$GITHUB_REF_NAME" "$RUNNER_TEMP/tag-changelog.md"
+
+      - name: Set the README's version
+        if: steps.gate.outputs.readme == 'true'
+        run: make release-prep VERSION="$GITHUB_REF_NAME"
+
+      # The branch is rebuilt from main on every run, so a rerun for the same tag updates the open pull request.
+      - name: Open the pull request
+        if: steps.gate.outputs.sync == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ secrets.RELEASE_SYNC_PR_TOKEN || secrets.GITHUB_TOKEN }}
+          branch: chore/sync-release-${{ github.ref_name }}
+          base: main
+          sign-commits: true
+          add-paths: |
+            CHANGELOG.md
+            README.md
+          commit-message: "docs: bring the ${{ github.ref_name }} release notes and README version to main"
+          title: "docs: bring the ${{ github.ref_name }} release notes and README version to main"
+          body: |
+            ${{ github.ref_name }} was cut from a release branch, so its changelog section and the version in the README exist only there. This copies the section to `CHANGELOG.md` (newest first) and sets the README's version literals (`make release-prep`), unless a newer release exists.
+
+            Opened by the Release workflow; the branch is rebuilt on every run of it for this tag.
+          delete-branch: true

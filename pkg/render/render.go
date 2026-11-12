@@ -647,16 +647,21 @@ func mergeDocument(cfg coreconfig.Provider, what string, docs ...config.Document
 
 // DocumentFromPatch converts one TalosConfigPatchDocument to the machinery
 // document its kind selects, through the typedconfig mirror type's own
-// ToMachinery conversion. The CRD's discriminator validation
-// guarantees exactly one of the fields below is populated and that it
-// matches Kind; the default case only guards against a value that bypassed
-// that validation (e.g. in a unit test).
+// ToMachinery conversion. The CRD's two CEL rules guarantee exactly one of
+// the fields below is populated and that it matches Kind; Validate repeats
+// that check first, for a value that bypassed admission (an object stored
+// before the rules, a CRD without them, an in-process caller, a unit test),
+// which would otherwise convert to a nil document with no error.
 //
 // Exported so the UI backend's effective-config view can encode
 // one patch's own documents in isolation -- to learn which field paths that
 // patch contributes, for the view's per-value origin -- without
 // re-implementing this kind switch.
 func DocumentFromPatch(d ichorv1alpha1.TalosConfigPatchDocument) (config.Document, error) {
+	if err := d.Validate(); err != nil {
+		return nil, err
+	}
+
 	switch d.Kind {
 	case "SysctlConfig":
 		return wrapDocument("sysctlConfig")(d.SysctlConfig.ToMachinery())

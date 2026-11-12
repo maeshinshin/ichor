@@ -156,6 +156,8 @@ through a containerd mirror for `ghcr.io`, the controller does not. So the upgra
 Gotchas: the endpoint is the VM's pod IP and changes if the VM restarts (re-run init);
 `ichor init` cannot be re-run against a node that already took its config, so after a failed
 init delete and recreate the VMs (`down-demo`, `up-demo`).
+`ichor init` also refuses to overwrite a secrets bundle an earlier run left under
+`/tmp/home/.ichor/clusters/$P/`: when no node holds that bundle any more (the VMs are gone, or the node never took the configuration), remove that directory first.
 
 ## Teardown
 

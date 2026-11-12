@@ -64,9 +64,13 @@ try {
   await new Promise((r) => (ws.onopen = r))
   let id = 0
   const pending = new Map()
+  // A navigation replaces the document, so an evaluate it interrupts fails with "navigated or closed". Counting the
+  // loads lets a wait for "the next load" see one that finished before the wait began.
+  let loads = 0
   ws.onmessage = (m) => {
     const d = JSON.parse(m.data)
     if (d.id && pending.has(d.id)) pending.get(d.id)(d)
+    if (d.method === 'Page.loadEventFired') loads++
   }
   const send = (method, params = {}, sessionId) =>
     new Promise((resolve, reject) => {
@@ -80,7 +84,21 @@ try {
   await s('Page.enable')
   await send('Browser.grantPermissions', { origin, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] })
 
-  const ev = async (expression) => (await s('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result?.value
+  const loadedSince = async (since) => {
+    for (const end = Date.now() + 10000; loads === since; await sleep(20)) if (Date.now() > end) throw new Error('the page did not finish loading within 10 s')
+  }
+  // An evaluate that a navigation interrupts is sent again once the page that replaces it has loaded.
+  const ev = async (expression) => {
+    for (;;) {
+      const since = loads
+      try {
+        return (await s('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true })).result?.value
+      } catch (e) {
+        if (!/navigated or closed/.test(e.message)) throw e
+        await loadedSince(since)
+      }
+    }
+  }
   const until = async (expression, what, ms = 10000) => {
     for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) if (await ev(expression)) return true
     check(false, `timed out waiting for ${what}`)
@@ -95,9 +113,15 @@ try {
     writeFileSync(file, Buffer.from(data, 'base64'))
     console.log(`shot ${file}`)
   }
+  // Page.navigate returns before the new page exists: wait for its load before anything reads the page.
+  const go = async (url) => {
+    const since = loads
+    const { errorText } = await s('Page.navigate', { url })
+    if (errorText) throw new Error(`navigating to ${url}: ${errorText}`)
+    await loadedSince(since)
+  }
   const open = async (path) => {
-    await s('Page.navigate', { url: origin + base + path })
-    await sleep(300)
+    await go(origin + base + path)
     await ready()
   }
   const click = (selector) => ev(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (e) e.click(); return !!e })()`)
@@ -119,8 +143,7 @@ try {
       const tag = `${size}-${theme}`
       await s('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile })
       await s('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: theme }] })
-      await s('Page.navigate', { url: origin + base })
-      await sleep(300)
+      await go(origin + base)
       await ev('localStorage.clear()')
 
       await open('guides/rotate-keys/')
@@ -256,8 +279,7 @@ try {
       check((await ev(`location.pathname`)).startsWith(`${root}${latest.path}`), `${tag}: search in ${latest.name} stays in that version`)
       await ready()
       fakeNewer.on = true // a release newer than this build exists: the old-version banner
-      await s('Page.navigate', { url: `${origin}${root}${latest.path}guides/getting-started/` })
-      await sleep(300)
+      await go(`${origin}${root}${latest.path}guides/getting-started/`)
       await ready()
       await until(`!!document.querySelector('article [role=alert]')`, 'the old-version banner', 3000)
       const banner = await ev(`document.querySelector('article [role=alert]')?.textContent`)

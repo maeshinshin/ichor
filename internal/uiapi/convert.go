@@ -262,29 +262,12 @@ func targetToPB(t *ichorv1alpha1.TalosConfigPatchTarget) *pb.PatchTarget {
 	return out
 }
 
-// documentFieldKey maps a PatchDocument's kind to the JSON field name
-// TalosConfigPatchDocument's own json tags use for it -- the
-// same allow-list render.DocumentFromPatch's own switch enumerates, kept
-// here once rather than duplicated a third time: a kind string builds the
-// right JSON object key, and json.Marshal/Unmarshal fill the matching
-// typed field themselves, instead of this package re-modeling every Talos
-// field patch.proto's own doc comment says it deliberately does not.
-var documentFieldKey = map[string]string{
-	"SysctlConfig":       "sysctlConfig",
-	"KernelModuleConfig": "kernelModuleConfig",
-	"Config":             "config",
-	"VolumeConfig":       "volumeConfig",
-	"UserVolumeConfig":   "userVolumeConfig",
-	"RawVolumeConfig":    "rawVolumeConfig",
-	"ResolverConfig":     "resolverConfig",
-}
-
 // documentFromPB decodes a wire PatchDocument's opaque JSON into the typed
 // TalosConfigPatchDocument the CRD actually stores, by wrapping it under
 // its own kind's JSON key and letting encoding/json -- not a hand-written
 // field table -- fill the matching struct field.
 func documentFromPB(d *pb.PatchDocument) (ichorv1alpha1.TalosConfigPatchDocument, error) {
-	key, ok := documentFieldKey[d.GetKind()]
+	key, ok := ichorv1alpha1.TalosConfigPatchDocumentFieldKey(d.GetKind())
 	if !ok {
 		return ichorv1alpha1.TalosConfigPatchDocument{}, fmt.Errorf("unknown document kind %q", d.GetKind())
 	}
@@ -313,7 +296,7 @@ func documentFromPB(d *pb.PatchDocument) (ichorv1alpha1.TalosConfigPatchDocument
 // envelope (the other five fields, always nil here, would otherwise
 // round-trip as explicit nulls).
 func documentToPB(d ichorv1alpha1.TalosConfigPatchDocument) (*pb.PatchDocument, error) {
-	key, ok := documentFieldKey[d.Kind]
+	key, ok := ichorv1alpha1.TalosConfigPatchDocumentFieldKey(d.Kind)
 	if !ok {
 		return nil, fmt.Errorf("unknown document kind %q", d.Kind)
 	}

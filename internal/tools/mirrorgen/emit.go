@@ -598,13 +598,6 @@ func (g *generator) report() {
 
 const unionHeader = header + `
 package v1alpha1
-
-import (
-	"fmt"
-	"strings"
-
-	"github.com/maeshinshin/ichor/pkg/typedconfig"
-)
 `
 
 // unionSource returns the Go source of api/v1alpha1's TalosConfigPatchDocument for the given roots: the kind
@@ -614,6 +607,7 @@ func unionSource(roots []rootKind) string {
 	var b strings.Builder
 
 	b.WriteString(unionHeader)
+	b.WriteString(unionImports(roots))
 	b.WriteString(`
 // TalosConfigPatchDocument carries exactly one Talos config document, restricted to Ichor's
 // allow-list of kinds. kind is a discriminator: it says which of the fields below is
@@ -647,6 +641,7 @@ func unionSource(roots []rootKind) string {
 	b.WriteString("}\n")
 	b.WriteString(unionDeepCopy(roots))
 	b.WriteString(unionValidate(roots))
+	b.WriteString(unionConvert(roots))
 
 	return b.String()
 }
@@ -686,27 +681,119 @@ func (in *TalosConfigPatchDocument) DeepCopy() *TalosConfigPatchDocument {
 }
 
 
+// unionImports returns the import block of the union file: the packages of the shipped document types (for
+// the type switch of TalosConfigPatchDocumentFromMachinery) and the ones the fixed code uses.
+func unionImports(roots []rootKind) string {
+	paths := map[string]bool{}
+	for _, r := range roots {
+		paths[r.pkgPath] = true
+	}
+
+	imports := []string{
+		"\"fmt\"", "\"strings\"", "\"github.com/maeshinshin/ichor/pkg/typedconfig\"",
+		"\"github.com/siderolabs/talos/pkg/machinery/config/config\"",
+	}
+
+	for p := range paths {
+		imports = append(imports, importAlias(p)+" \""+p+"\"")
+	}
+
+	// gofmt's order within a block: by import path, the standard library in its own group first.
+	path := func(spec string) string { return spec[strings.Index(spec, "\"")+1 : len(spec)-1] }
+
+	slices.SortFunc(imports, func(a, b string) int { return strings.Compare(importSortKey(path(a)), importSortKey(path(b))) })
+
+	var b strings.Builder
+
+	b.WriteString("\nimport (\n")
+
+	for i, spec := range imports {
+		if i > 0 && isStd(path(imports[i-1])) && !isStd(path(spec)) {
+			b.WriteString("\n")
+		}
+
+		b.WriteString("\t" + spec + "\n")
+	}
+
+	b.WriteString(")\n")
+
+	return b.String()
+}
+
+// unionConvert returns Document, the union's conversion to a machinery document, and its inverse. Both are
+// one case per shipped kind, so adding a kind to shipped is the whole change for the renderer too.
+func unionConvert(roots []rootKind) string {
+	var b strings.Builder
+
+	b.WriteString(`
+// Document converts the populated field to the Talos machinery document its kind selects, through the
+// mirror type's own ToMachinery. It refuses a document Validate refuses, so it never returns a typed nil.
+func (d *TalosConfigPatchDocument) Document() (config.Document, error) {
+	if err := d.Validate(); err != nil {
+		return nil, err
+	}
+
+	switch d.Kind {
+`)
+
+	for _, r := range roots {
+		fmt.Fprintf(&b, "\tcase %q:\n\t\tdoc, err := d.%s.ToMachinery()\n\t\tif err != nil {\n\t\t\treturn nil, fmt.Errorf(\"%s: %%w\", err)\n\t\t}\n\n\t\treturn doc, nil\n",
+			r.kind, r.kind, fieldName(r.kind))
+	}
+
+	b.WriteString(`	default:
+		return nil, fmt.Errorf("unknown document kind %q", d.Kind)
+	}
+}
+
+// TalosConfigPatchDocumentFromMachinery is Document's inverse: it converts a Talos machinery document of a
+// shipped kind to the typed document that carries it.
+func TalosConfigPatchDocumentFromMachinery(doc config.Document) (TalosConfigPatchDocument, error) {
+	switch v := doc.(type) {
+`)
+
+	for _, r := range roots {
+		fmt.Fprintf(&b, "\tcase *%s.%s:\n\t\tm, err := typedconfig.%sFromMachinery(v)\n\t\tif err != nil {\n\t\t\treturn TalosConfigPatchDocument{}, fmt.Errorf(\"%s: %%w\", err)\n\t\t}\n\n\t\treturn TalosConfigPatchDocument{Kind: %q, %s: m}, nil\n",
+			importAlias(r.pkgPath), r.typeName, r.typeName, fieldName(r.kind), r.kind, r.kind)
+	}
+
+	b.WriteString(`	default:
+		return TalosConfigPatchDocument{}, fmt.Errorf("no document kind for %T", doc)
+	}
+}
+`)
+
+	return b.String()
+}
+
 // unionValidate returns the Validate method of TalosConfigPatchDocument: it lists the fields that are set
 // and wants exactly the one kind names.
 func unionValidate(roots []rootKind) string {
 	var b strings.Builder
 
 	b.WriteString(`
+// TalosConfigPatchDocumentFieldKey returns the JSON name of the field a kind selects, and false for a kind
+// that has none.
+func TalosConfigPatchDocumentFieldKey(kind string) (string, bool) {
+	switch kind {
+`)
+
+	for _, r := range roots {
+		fmt.Fprintf(&b, "\tcase %q:\n\t\treturn %q, true\n", r.kind, fieldName(r.kind))
+	}
+
+	b.WriteString(`	default:
+		return "", false
+	}
+}
+
 // Validate returns an error unless exactly the field that kind names is populated, naming the kind and the
 // fields that disagree. The CRD only bounds a document to kind plus one field (minProperties and
 // maxProperties 2, which cost no CEL budget however many kinds ship); that the field is the one kind names
 // is checked here, by the webhook at admission and by the renderer before it converts a document.
 func (d *TalosConfigPatchDocument) Validate() error {
-	var want string
-
-	switch d.Kind {
-`)
-
-	for _, r := range roots {
-		fmt.Fprintf(&b, "\tcase %q:\n\t\twant = %q\n", r.kind, fieldName(r.kind))
-	}
-
-	b.WriteString(`	default:
+	want, ok := TalosConfigPatchDocumentFieldKey(d.Kind)
+	if !ok {
 		return fmt.Errorf("unknown document kind %q", d.Kind)
 	}
 

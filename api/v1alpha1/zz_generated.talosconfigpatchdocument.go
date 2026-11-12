@@ -13,6 +13,11 @@ import (
 	"strings"
 
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
+	"github.com/siderolabs/talos/pkg/machinery/config/config"
+	mblock "github.com/siderolabs/talos/pkg/machinery/config/types/block"
+	mnetwork "github.com/siderolabs/talos/pkg/machinery/config/types/network"
+	mruntime "github.com/siderolabs/talos/pkg/machinery/config/types/runtime"
+	mv1alpha1 "github.com/siderolabs/talos/pkg/machinery/config/types/v1alpha1"
 )
 
 // TalosConfigPatchDocument carries exactly one Talos config document, restricted to Ichor's
@@ -114,29 +119,36 @@ func (in *TalosConfigPatchDocument) DeepCopy() *TalosConfigPatchDocument {
 	return out
 }
 
+// TalosConfigPatchDocumentFieldKey returns the JSON name of the field a kind selects, and false for a kind
+// that has none.
+func TalosConfigPatchDocumentFieldKey(kind string) (string, bool) {
+	switch kind {
+	case "SysctlConfig":
+		return "sysctlConfig", true
+	case "KernelModuleConfig":
+		return "kernelModuleConfig", true
+	case "Config":
+		return "config", true
+	case "VolumeConfig":
+		return "volumeConfig", true
+	case "UserVolumeConfig":
+		return "userVolumeConfig", true
+	case "RawVolumeConfig":
+		return "rawVolumeConfig", true
+	case "ResolverConfig":
+		return "resolverConfig", true
+	default:
+		return "", false
+	}
+}
+
 // Validate returns an error unless exactly the field that kind names is populated, naming the kind and the
 // fields that disagree. The CRD only bounds a document to kind plus one field (minProperties and
 // maxProperties 2, which cost no CEL budget however many kinds ship); that the field is the one kind names
 // is checked here, by the webhook at admission and by the renderer before it converts a document.
 func (d *TalosConfigPatchDocument) Validate() error {
-	var want string
-
-	switch d.Kind {
-	case "SysctlConfig":
-		want = "sysctlConfig"
-	case "KernelModuleConfig":
-		want = "kernelModuleConfig"
-	case "Config":
-		want = "config"
-	case "VolumeConfig":
-		want = "volumeConfig"
-	case "UserVolumeConfig":
-		want = "userVolumeConfig"
-	case "RawVolumeConfig":
-		want = "rawVolumeConfig"
-	case "ResolverConfig":
-		want = "resolverConfig"
-	default:
+	want, ok := TalosConfigPatchDocumentFieldKey(d.Kind)
+	if !ok {
 		return fmt.Errorf("unknown document kind %q", d.Kind)
 	}
 
@@ -179,4 +191,124 @@ func (d *TalosConfigPatchDocument) Validate() error {
 	}
 
 	return fmt.Errorf("kind %q needs the field %s alone, but the document sets %s", d.Kind, want, strings.Join(set, ", "))
+}
+
+// Document converts the populated field to the Talos machinery document its kind selects, through the
+// mirror type's own ToMachinery. It refuses a document Validate refuses, so it never returns a typed nil.
+func (d *TalosConfigPatchDocument) Document() (config.Document, error) {
+	if err := d.Validate(); err != nil {
+		return nil, err
+	}
+
+	switch d.Kind {
+	case "SysctlConfig":
+		doc, err := d.SysctlConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("sysctlConfig: %w", err)
+		}
+
+		return doc, nil
+	case "KernelModuleConfig":
+		doc, err := d.KernelModuleConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("kernelModuleConfig: %w", err)
+		}
+
+		return doc, nil
+	case "Config":
+		doc, err := d.Config.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("config: %w", err)
+		}
+
+		return doc, nil
+	case "VolumeConfig":
+		doc, err := d.VolumeConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("volumeConfig: %w", err)
+		}
+
+		return doc, nil
+	case "UserVolumeConfig":
+		doc, err := d.UserVolumeConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("userVolumeConfig: %w", err)
+		}
+
+		return doc, nil
+	case "RawVolumeConfig":
+		doc, err := d.RawVolumeConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("rawVolumeConfig: %w", err)
+		}
+
+		return doc, nil
+	case "ResolverConfig":
+		doc, err := d.ResolverConfig.ToMachinery()
+		if err != nil {
+			return nil, fmt.Errorf("resolverConfig: %w", err)
+		}
+
+		return doc, nil
+	default:
+		return nil, fmt.Errorf("unknown document kind %q", d.Kind)
+	}
+}
+
+// TalosConfigPatchDocumentFromMachinery is Document's inverse: it converts a Talos machinery document of a
+// shipped kind to the typed document that carries it.
+func TalosConfigPatchDocumentFromMachinery(doc config.Document) (TalosConfigPatchDocument, error) {
+	switch v := doc.(type) {
+	case *mruntime.SysctlConfigV1Alpha1:
+		m, err := typedconfig.SysctlConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("sysctlConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "SysctlConfig", SysctlConfig: m}, nil
+	case *mruntime.KernelModuleConfigV1Alpha1:
+		m, err := typedconfig.KernelModuleConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("kernelModuleConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "KernelModuleConfig", KernelModuleConfig: m}, nil
+	case *mv1alpha1.Config:
+		m, err := typedconfig.ConfigFromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("config: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "Config", Config: m}, nil
+	case *mblock.VolumeConfigV1Alpha1:
+		m, err := typedconfig.VolumeConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("volumeConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "VolumeConfig", VolumeConfig: m}, nil
+	case *mblock.UserVolumeConfigV1Alpha1:
+		m, err := typedconfig.UserVolumeConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("userVolumeConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "UserVolumeConfig", UserVolumeConfig: m}, nil
+	case *mblock.RawVolumeConfigV1Alpha1:
+		m, err := typedconfig.RawVolumeConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("rawVolumeConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "RawVolumeConfig", RawVolumeConfig: m}, nil
+	case *mnetwork.ResolverConfigV1Alpha1:
+		m, err := typedconfig.ResolverConfigV1Alpha1FromMachinery(v)
+		if err != nil {
+			return TalosConfigPatchDocument{}, fmt.Errorf("resolverConfig: %w", err)
+		}
+
+		return TalosConfigPatchDocument{Kind: "ResolverConfig", ResolverConfig: m}, nil
+	default:
+		return TalosConfigPatchDocument{}, fmt.Errorf("no document kind for %T", doc)
+	}
 }

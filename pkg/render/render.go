@@ -654,43 +654,9 @@ func mergeDocument(cfg coreconfig.Provider, what string, docs ...config.Document
 //
 // Exported so the UI backend's effective-config view can encode
 // one patch's own documents in isolation -- to learn which field paths that
-// patch contributes, for the view's per-value origin -- without
-// re-implementing this kind switch.
+// patch contributes, for the view's per-value origin.
 func DocumentFromPatch(d ichorv1alpha1.TalosConfigPatchDocument) (config.Document, error) {
-	if err := d.Validate(); err != nil {
-		return nil, err
-	}
-
-	switch d.Kind {
-	case "SysctlConfig":
-		return wrapDocument("sysctlConfig")(d.SysctlConfig.ToMachinery())
-	case "KernelModuleConfig":
-		return wrapDocument("kernelModuleConfig")(d.KernelModuleConfig.ToMachinery())
-	case "Config":
-		return wrapDocument("config")(d.Config.ToMachinery())
-	case "VolumeConfig":
-		return wrapDocument("volumeConfig")(d.VolumeConfig.ToMachinery())
-	case "UserVolumeConfig":
-		return wrapDocument("userVolumeConfig")(d.UserVolumeConfig.ToMachinery())
-	case "RawVolumeConfig":
-		return wrapDocument("rawVolumeConfig")(d.RawVolumeConfig.ToMachinery())
-	case kindResolverConfig:
-		return wrapDocument("resolverConfig")(d.ResolverConfig.ToMachinery())
-	default:
-		return nil, fmt.Errorf("unknown document kind %q", d.Kind)
-	}
-}
-
-// wrapDocument returns a function that turns a ToMachinery result into DocumentFromPatch's
-// return, naming the kind in an error and never returning a typed nil.
-func wrapDocument(kind string) func(config.Document, error) (config.Document, error) {
-	return func(doc config.Document, err error) (config.Document, error) {
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", kind, err)
-		}
-
-		return doc, nil
-	}
+	return d.Document()
 }
 
 // clientRuntimeMode validates the rendered config the way a client outside

@@ -177,8 +177,25 @@ func qualifiedName(n *types.Named) string {
 var importsUsed = map[string]string{}
 
 // machImportAlias returns the import alias this generator uses for a
-// machinery package path, for qualifying generated type expressions.
+// machinery package path, for qualifying generated type expressions, and records that the conversion
+// file imports it.
 func machImportAlias(pkgPath string) string {
+	alias := importAlias(pkgPath)
+	if alias == "time" {
+		return alias
+	}
+
+	if other, ok := importsUsed[alias]; ok && other != pkgPath {
+		fatalf("import alias %s is taken by %s and wanted by %s; add a case for one of them in walk.go", alias, other, pkgPath)
+	}
+
+	importsUsed[alias] = pkgPath
+
+	return alias
+}
+
+// importAlias is the alias for a package path, without recording any use of it.
+func importAlias(pkgPath string) string {
 	alias := ""
 
 	switch pkgPath {
@@ -222,12 +239,6 @@ func machImportAlias(pkgPath string) string {
 			alias = "r" + path.Base(pkgPath)
 		}
 	}
-
-	if other, ok := importsUsed[alias]; ok && other != pkgPath {
-		fatalf("import alias %s is taken by %s and wanted by %s; add a case for one of them in walk.go", alias, other, pkgPath)
-	}
-
-	importsUsed[alias] = pkgPath
 
 	return alias
 }

@@ -14,12 +14,12 @@ revisits machines whose last reconcile failed, and a converged machine returns a
 
 - One mapping, `machinesOfCluster`, serves all three watches: a `TalosCluster` maps by its own name, a
   `TalosConfigPatch` and a `TalosStorage` by `spec.clusterRef`. It replaces `machinesForStorage`; there is one
-  function declaring a `TalosMachineList` for this, in the same `countplanes_guard_test.go` allow-list slot.
+  function declaring a `TalosMachineList` for this.
 - Each watch uses `predicate.GenerationChangedPredicate`. It filters update events only, so create and delete still
   enqueue, and a status write (a `TalosCluster` going `Transitioning`, a `TalosStorage` condition) does not wake every
   machine of the cluster. These are CRDs with a status subresource, so `generation` moves exactly on spec writes.
-- `envtest` runs the real manager and checks that a patch created, or a registry mirror added, after the machine
-  converged is applied within 15s, under the 30s requeue of ADR 0060, so the watch is what delivers it.
+- A patch created, or a registry mirror added, after the machine converged is applied promptly, well under the 30s
+  requeue of ADR 0060: the watch, not the requeue, delivers it.
 
 ## Secrets are not watched (superseded: they are now)
 

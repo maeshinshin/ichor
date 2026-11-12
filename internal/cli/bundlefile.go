@@ -102,6 +102,17 @@ func refuseExistingBundle(cluster string) error {
 	return nil
 }
 
+// discardBundleFile removes the bundle file init wrote in this run, and its directory if that leaves it
+// empty. Best effort: a file that is left behind is only a refusal on the next run.
+func discardBundleFile(path string) {
+	if path == "" {
+		return
+	}
+
+	_ = os.Remove(path)
+	_ = os.Remove(filepath.Dir(path)) // fails, harmlessly, when anything else is in it
+}
+
 // saveBundleFile writes bundle to ~/.ichor/clusters/<cluster>/secrets.yaml
 // with the permissions the Trust section requires, creating the directory
 // if necessary. A non-empty pass seals it as an age file; ""

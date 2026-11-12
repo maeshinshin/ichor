@@ -35,13 +35,31 @@ jobs:
         with:
           cache: 'false'
 
+      # Restore-only on a tag: this job reads what main saved and writes nothing back. Only verify does; the jobs
+      # that build what is published start from empty Go caches, as they do from an empty Nix cache.
+      - name: Restore the Go caches of the tests
+        uses: ./.github/actions/go-cache
+        with:
+          name: test
+
+      - name: Restore the Go caches of the linter
+        uses: ./.github/actions/go-cache
+        with:
+          name: lint
+
+      - name: Cache npm downloads
+        uses: ./.github/actions/npm-cache
+
       - name: Verify go.mod, go.sum and the module cache
         run: nix develop --command bash -c "go mod tidy -diff && go mod verify"
 
       - name: Lint
         run: nix develop --command make lint-config lint
 
+      # -count=1: a release reruns every test instead of replaying a result cached on main.
       - name: Test
+        env:
+          GOFLAGS: -count=1
         run: nix develop --command make test
 
       - name: UI CI (type-check, lint, unit tests, build)

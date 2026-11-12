@@ -35,6 +35,14 @@ jobs:
             bin/k8s
           key: bin-${{ runner.os }}-${{ github.job }}-${{ hashFiles('Makefile', '.custom-gcl.yml') }}
 
+      - name: Cache Go modules and builds
+        uses: ./.github/actions/go-cache
+        with:
+          name: test
+
+      - name: Cache npm downloads
+        uses: ./.github/actions/npm-cache
+
       - name: Verify the devShell Go floor
         run: |
           # shellcheck disable=SC2016 # the single-quoted script is meant for the inner bash -c, not this shell
@@ -101,6 +109,11 @@ jobs:
             bin/golangci-lint*
             bin/k8s
           key: bin-${{ runner.os }}-${{ github.job }}-${{ hashFiles('Makefile', '.custom-gcl.yml') }}
+
+      - name: Cache Go modules and builds
+        uses: ./.github/actions/go-cache
+        with:
+          name: drift
 
       # "fmt" is part of this, not an extra step: controller-gen/mirrorgen's raw output
       # isn't always import-sorted the way gofmt leaves it (observed for real -- a bare

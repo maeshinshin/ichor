@@ -1,0 +1,23 @@
+name: npm cache
+description: Restore and save npm's download cache (~/.npm) for ui/ and site/ with the GitHub Actions cache.
+
+# Saved on branches and pull requests, restore-only on tags, as in the go-cache action. npm ci checks every
+# cached tarball against the integrity hash in package-lock.json, so a cache entry cannot change what gets installed.
+runs:
+  using: composite
+  steps:
+    - name: Cache the npm downloads
+      if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.npm
+        key: npm-${{ runner.os }}-${{ hashFiles('ui/package-lock.json', 'site/package-lock.json') }}
+        restore-keys: npm-${{ runner.os }}-
+
+    - name: Restore the npm downloads
+      if: ${{ startsWith(github.ref, 'refs/tags/') }}
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.npm
+        key: npm-${{ runner.os }}-${{ hashFiles('ui/package-lock.json', 'site/package-lock.json') }}
+        restore-keys: npm-${{ runner.os }}-

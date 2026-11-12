@@ -168,7 +168,7 @@ func TestUnionHasNoCELAndChecksEveryKind(t *testing.T) {
 	}
 
 	for _, r := range roots {
-		for _, want := range []string{"case \"" + r.kind + "\":\n\t\twant = \"" + fieldName(r.kind) + "\"", "if d." + r.kind + " != nil {"} {
+		for _, want := range []string{"case \"" + r.kind + "\":\n\t\treturn \"" + fieldName(r.kind) + "\", true", "case \"" + r.kind + "\":\n\t\tdoc, err := d." + r.kind + ".ToMachinery()", "if d." + r.kind + " != nil {"} {
 			if !strings.Contains(src, want) {
 				t.Errorf("Validate does not check %s: missing %q", r.kind, want)
 			}

@@ -16,9 +16,9 @@ directly". Phase 10 (air gap) needs exactly this: "registry mirrors pushed to ev
 the system layer" (architecture.md, "Monitoring and registry mirrors") only works end to end for a private
 registry if its pull credentials can reach a node at all, and today they can't -- there is no
 field anywhere in the API that can carry them without reintroducing the Git-embedding problem
-ADR 0003 just closed.
+ADR 0003 closes.
 
-Two things had to be settled: where the declaration lives, and what shape the reference takes.
+Two things are settled here: where the declaration lives, and what shape the reference takes.
 
 **Where it lives.** The design's own CRD table defines `TalosCluster` as "Cluster-wide settings",
 and a registry mirror is exactly that -- it applies to every node, not one machine or one subset
@@ -32,8 +32,7 @@ but "### Monitoring and registry mirrors" is explicit that they are "pushed to e
 system layer". The two sections describe the same stack from different angles (one lists what's
 already built, the other names a not-yet-built feature by its layer), not two different answers;
 rendering registries as the system layer, below every `TalosConfigPatch` layer, is consistent
-with both and was the one thing this change had to re-check before proceeding, per the task that
-produced this ADR. It did not surface a contradiction, so the work went ahead.
+with both.
 
 ## Decision
 
@@ -64,33 +63,18 @@ inject, and their leak tests) is one package's responsibility. `pkg/render`'s ow
 already claimed "touches no cluster"; that claim now has one named exception, documented at the
 top of the package, the same way the rest of the package's guarantees are documented.
 
-**Injection is additive, not a breaking signature change.** `render.Render` and
-`render.BuildConfig` are called from `internal/controller`, `internal/cli` and `internal/uiapi`
--- none of which this unit of work may touch (a different agent owns `internal/controller` for
-`TalosOperation` concurrently; `internal/cli` and `internal/uiapi` are out of scope entirely).
-Changing either function's signature would break all three without a way to fix them here. The
-fix: `BuildConfig`/`Render` are now one-line wrappers around a private `buildConfig` that takes
-an extra `map[string]RegistryAuth` parameter (`nil` from the existing wrappers, so their
-behavior and output are byte-for-byte unchanged -- `TestRenderWithRegistryAuthNoRegistries`
-checks this directly); `BuildConfigWithRegistryAuth`/`RenderWithRegistryAuth` are the new, fully
-additive entry points that pass a real map through. Wiring either of
-`ResolveRegistryAuth`/`RenderWithRegistryAuth` into `TalosMachineReconciler`'s actual reconcile
-loop is `internal/controller`'s call to make and is left for whoever next touches that package;
-this ADR's scope is the capability, built and tested against its public API, not the call site.
-
-**Two entry points for one render, closed with a refusal rather than left as a silent trap.**
-Keeping `Render`/`BuildConfig` working unchanged means there are now two ways to render a
-machine's config, and nothing stopped a caller with `cluster.Spec.Registries` set from calling
-the one that never resolves or injects auth: the render would still succeed, the config would
-still apply, and the resulting cluster simply could not pull from its private registry -- no
-error, no log, the worst kind of failure to track down because nothing says it happened. Caught
-in review and closed the same day: `BuildConfig` (and so `Render`, which calls it) now refuses
-outright when `cluster.Spec.Registries` is non-empty, naming both
-`BuildConfigWithRegistryAuth` and `RenderWithRegistryAuth` in the error so the caller is told
-which one to use instead of just that it chose wrong. `TestRenderRefusesRegistriesWithoutAuthPath`
-covers both `BuildConfig` and `Render`. This turns "silently wrong" into "loudly wrong," which is
-the entire point -- it does not turn "two entry points" into "one"; see Consequences below for
-why that reduction is `internal/controller`'s to make, not this ADR's.
+**Injection is a required argument of `Render`/`BuildConfig`.** They take
+`auth map[string]RegistryAuth` as their last argument (`ResolveRegistryAuth`
+returns nil when the cluster declares no registries). Keeping the auth-less
+`Render`/`BuildConfig` and adding `*WithRegistryAuth` variants beside them, so
+callers' signatures stay unchanged, was rejected: it leaves two ways to render
+a machine's config, and a caller with `cluster.Spec.Registries` set that used
+the plain one would produce a config that applies but cannot pull from the
+private registry, with no error and no log. Guarding that with a refusal turns
+"silently wrong" into "loudly wrong" but leaves every `TalosCluster` with
+`spec.registries` (even an anonymous mirror) unreconcilable until every caller
+moves. Two entry points were the cause, so there is one; a caller that forgets
+to resolve auth is a compile error (see the amendment below).
 
 **The injected document is built directly from machinery's types, not through a
 `TalosConfigPatch`.** The password-shaped fields have no mirror-type representation at all --
@@ -110,14 +94,14 @@ for the secrets bundle.
 ## Consequences
 
 - `TalosCluster.spec.registries[]` uses `+listType=map` / `+listMapKey=host` for host uniqueness,
-  not a CEL `x-kubernetes-validations` rule. A `self.exists_one` uniqueness rule was tried first
-  and rejected by envtest's real apiserver: with `MaxItems=32` its estimated cost exceeded the
-  per-field budget by 32x (the `exists_one` macro is quadratic in list length) and still
-  contributed enough to blow the whole-schema budget (this CRD already carries CEL rules
-  elsewhere) by 3.3x. The native `listType: map` structural-schema mechanism -- the same one
+  not a CEL `x-kubernetes-validations` rule. A `self.exists_one` uniqueness rule cannot express this
+  within the apiserver's CEL cost budget: with `MaxItems=32` its estimated cost exceeds the
+  per-field budget by 32x (the `exists_one` macro is quadratic in list length) and contributes
+  enough to exceed the whole-schema budget (this CRD already carries CEL rules elsewhere) by
+  3.3x. The native `listType: map` structural-schema mechanism -- the same one
   `status.conditions` already uses on `metav1.Condition`'s `type` key -- enforces the same
-  uniqueness at zero estimated CEL cost, confirmed by the same envtest apiserver accepting the
-  CRD and rejecting a duplicate-host `Create` in `api/v1alpha1/validation_test.go`.
+  uniqueness at zero estimated CEL cost, and a duplicate-host `Create` is rejected
+  (`api/v1alpha1/validation_test.go`).
 - Resolved credentials are held only in a short-lived `map[string]RegistryAuth` in memory,
   handed from `ResolveRegistryAuth` to `Render`/`BuildConfig` and
   never written anywhere else -- not a CR's spec or status, not a log line, not an error string,
@@ -127,25 +111,21 @@ for the secrets bundle.
   discipline for the secrets bundle.
 - The rendered config's hash changes when a resolved credential changes, same as any other
   input -- correct, since the node needs the new config re-applied. The hash cannot be reversed
-  to recover the credential (`pkg/render`'s `Hash` is a one-way `sha256`); this was flagged as not
-  needing a test, since it follows from using a cryptographic hash and not from anything this
-  change wrote.
+  to recover the credential (`pkg/render`'s `Hash` is a one-way `sha256`).
 - `internal/controller/diff.go`'s `ChangedPaths` reports only field-path strings (it walks a
-  decoded YAML tree and appends the `prefix` on a mismatch, never the leaf values themselves),
-  read but not modified for this change. `TestRegistryAuthDriftPathsNeverLeakValue`
-  (`pkg/render/registry_drift_test.go`, an external `render_test` package so it can import
-  `internal/controller` without an import cycle through `pkg/render`) renders the same machine
-  twice with two different resolved passwords and confirms `ChangedPaths` reports a path naming
-  `machine.registries.config.<host>.auth.password` and never either password's value --
-  confirming `TalosMachine.status` (which only ever carries `ChangedPaths`'s output, never the
-  rendered config) cannot carry a registry credential either.
-- **Debt (closed, see the amendment below):** `BuildConfig`/`Render` and the `*WithRegistryAuth` pair were two entry points.
+  decoded YAML tree and appends the `prefix` on a mismatch, never the leaf values themselves), so
+  `TalosMachine.status` (which only ever carries `ChangedPaths`'s output, never the rendered
+  config) cannot carry a registry credential either: a change of a resolved password reports a
+  path naming `machine.registries.config.<host>.auth.password` and never either password's value
+  (`TestRegistryAuthDriftPathsNeverLeakValue`, `pkg/render/registry_drift_test.go`, an external
+  `render_test` package so it can import `internal/controller` without an import cycle through
+  `pkg/render`).
 - **Debt: this feature is built on a field machinery itself marks deprecated.**
   `injectRegistries` nests its output under the legacy
   `v1alpha1.Config.MachineConfig.MachineRegistries` (`//nolint:staticcheck` suppresses the
   `SA1019` warning at the call site), not under the modern standalone `RegistryMirrorConfig`/
   `RegistryAuthConfig` documents (package `config/types/cri`) machinery's own doc comment points
-  to instead. That was the right call for this change -- the modern documents are not in Ichor's
+  to instead. That is the right call -- the modern documents are not in Ichor's
   mirror-type allow-list, and adding them is a mirrorgen-root-sized change (ADR 0012's shape),
   not a render-time-injection-sized one -- but it means this feature depends on a deprecated
   field today, not merely declines to use a nicer one. Migrating `injectRegistries` (and, if the
@@ -153,7 +133,7 @@ for the secrets bundle.
   documents is follow-up work this ADR creates, not a closed question; until it happens, a
   future machinery release that actually removes the deprecated field breaks this feature, not
   just produces a louder lint warning.
-- Out of scope, same as the removal that produced this follow-up: `VIPEquinixMetalConfig.apiToken`,
+- Out of scope: `VIPEquinixMetalConfig.apiToken`,
   `VIPHCloudConfig.apiToken`, `WireguardDevice.privateKey` stay dropped with no replacement --
   nothing in any current phase uses them. `ichor images list` and mirror-reachability checks
   (also air-gap, but not this ADR's slice of it) are untouched.
@@ -171,25 +151,18 @@ different Secret -- but no real use case needs that, it triples the CRD surface 
 struct, and it breaks the parallel with `secretsRef`'s existing one-reference-fixed-keys shape
 for no benefit this phase needs.
 
-**A CEL rule for `registries[].host` uniqueness.** Tried, measured, rejected -- see
+**A CEL rule for `registries[].host` uniqueness.** Rejected -- see
 Consequences above.
 
-## Amendment (2026-10-26): one entry point; every production caller was still on the refusing one
+## Amendment (2026-10-26): one entry point
 
-The Consequences bullet above tracked the `Render`/`*WithRegistryAuth` split as debt to be paid
-"once `TalosMachineReconciler` is wired". It never was: all five production call sites
-(`TalosMachineReconciler.Reconcile`, `internal/uiapi`'s effective-config view, `ichor init`, and
-`ichor adopt`'s two renders) still called the plain pair, and the refusal guard added so a
-forgotten call would be loud meant that **any `TalosCluster` with `spec.registries` set, even an
-anonymous mirror, could not be reconciled at all.** `ResolveRegistryAuth` and the `*WithRegistryAuth`
-functions had no non-test caller. A new envtest spec ("reconciles a TalosCluster that declares
-registries...") failed first with `RenderFailed` / `cluster.Spec.Registries is set; BuildConfig never
-resolves or injects registry auth`, then passed after the fix.
-
-The cause was having two entry points, so the fix removes one. `Render` and `BuildConfig` now take
-`auth map[string]RegistryAuth` as a required last argument; `RenderWithRegistryAuth`,
-`BuildConfigWithRegistryAuth` and the refusal guard are deleted. A caller that forgets to resolve
-auth is now a compile error rather than a runtime refusal. `ResolveRegistryAuth` returns a nil map
+`Render` and `BuildConfig` take `auth map[string]RegistryAuth` as a required last argument;
+`RenderWithRegistryAuth`, `BuildConfigWithRegistryAuth` and the refusal guard no longer exist. A
+caller that forgets to resolve auth is a compile error rather than a runtime refusal. Having two
+entry points was the cause of the problem: with the plain pair still behind the refusal guard,
+any `TalosCluster` with `spec.registries` set, even an anonymous mirror, could not be reconciled
+at all (`TalosMachineReconciler.Reconcile`, `internal/uiapi`'s effective-config view, `ichor
+init`, and `ichor adopt`'s two renders all render). `ResolveRegistryAuth` returns a nil map
 without reading anything (and without requiring a namespace) when the cluster declares no
 registries, so the common path costs nothing and needs no extra RBAC.
 

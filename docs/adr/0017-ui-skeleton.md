@@ -20,7 +20,7 @@ components to install for a skeleton, and — the one with teeth — how to keep
 `go build ./...`/`go vet ./...`/golangci-lint working for anyone who never
 touches the UI, given the Go side embeds its output.
 
-Constraints already fixed by `CLAUDE.md`: preactcn only, no React, no
+Constraints already fixed by the project's conventions: preactcn only, no React, no
 `preact/compat`; components come from the shadcn CLI against the `@preactcn`
 registry, never hand-written; the browser talks only to the backend, never to
 a third-party host directly.
@@ -50,19 +50,17 @@ matching "deliverables don't import each other."
   from preactcn's own documented recipe doesn't violate "scaffold with the
   tools, never by hand" — there is no tool for it.
 - Components: `npx shadcn@latest add @preactcn/button @preactcn/card
-  @preactcn/separator` (shadcn CLI 4.22.1). Three, matching "レイアウトやボタン"
-  in the task: `Button` and `Separator` build the nav shell, `Card` is the
+  @preactcn/separator` (shadcn CLI 4.22.1). Three are enough for a skeleton: `Button` and `Separator` build the nav shell, `Card` is the
   page container every placeholder screen uses. The CLI wrote
   `src/components/ui/{button,card,separator}.tsx` plus the Radix-for-Preact
   interop it depends on under `src/lib/radix/` and `src/lib/utils.ts` — all
-  generated, all Preact, no `react` or `react-dom` anywhere (verified against
-  `package-lock.json`).
+  generated, all Preact, no `react` or `react-dom` anywhere in the dependency tree.
 - The shadcn `add` step does not also write Tailwind's `:root`/`.dark`
   variable block (there is no Preact `init` to do it, and `add` only touches
   component files) — without it, the components' `bg-primary`/`border-border`
   etc. classes exist in markup but resolve to nothing. The `shadcn` npm
   package exports its shared utility layer as `shadcn/tailwind.css`
-  (confirmed in `node_modules/shadcn/package.json`'s `exports` map), and
+  (per the package's `exports` map), and
   ui.shadcn.com/docs/theming publishes the standard oklch `:root`/`.dark`
   variable block for Tailwind v4. `src/index.css` imports the former and
   defines the latter; both are checked in since generating them isn't a
@@ -84,16 +82,13 @@ separate fixes:
 - Separately: `go build ./...`, `go vet ./...` and `go test ./...` walk the
   whole module by directory, and npm dependencies are not obliged to contain
   only JavaScript — `ui/node_modules/flatted` vendors a Go port of itself,
-  and it showed up in `go test ./...` output and in a first, broken
-  `golangci-lint run` (`forbid-sort-pkg` tripped inside it). `ui/go.mod`
-  gives `ui/` its own module boundary, which is enough for `./...` from the
-  repo root to skip it entirely — confirmed by `go list ./...` and
-  `golangci-lint run` before and after, with no further `.golangci.yml`
-  change needed: golangci-lint resolves packages the same way `go list`
-  does, so the module boundary alone was sufficient. An explicit `^ui/`
-  path exclusion in `.golangci.yml` was tried first and found to add
-  nothing once the module boundary was in place, so it was dropped —
-  `.golangci.yml` ships from this phase unchanged.
+  which `go test ./...` and `golangci-lint run` would otherwise walk into
+  (`forbid-sort-pkg` trips inside it). `ui/go.mod` gives `ui/` its own module
+  boundary, which is enough for `./...` from the repo root to skip it
+  entirely, with no `.golangci.yml` change: golangci-lint resolves packages
+  the same way `go list` does. An explicit `^ui/` path exclusion in
+  `.golangci.yml` adds nothing once the module boundary is in place, so there
+  is none.
 
 **Serving.** `cmd/ichor-ui/main.go` is deliberately small: one
 `http.FileServerFS` over whichever `fs.FS` the build tag selected, wrapped so
@@ -105,7 +100,7 @@ health endpoint, no metrics, no streaming: none of that exists to serve yet.
 **App shell.** `src/router.tsx` is a ~30-line History-API router (`usePath`,
 `navigate`, `Link`) rather than a dependency — `preact-router` or similar
 would be the obvious reach, but a route table with one page component
-doesn't need one, and whether it needs to exist is answered no.
+doesn't need one.
 `src/pages/Placeholder.tsx` is the one page component every route renders
 ("Coming soon" in a `Card`); `src/app.tsx` wires two routes (`/`, `/gitops`)
 through it with `Button`/`Separator` for the nav, standing in for the real
@@ -122,11 +117,9 @@ nav this skeleton doesn't build.
   for being well-documented and exactly reproducible, not reviewed for
   Ichor's actual visual identity. Expected to be revisited once there's a
   real screen to look at.
-- `spaHandler`'s fallback branch is covered by a table test
-  (`cmd/ichor-ui/main_test.go`, `TestSpaHandler`) against a synthetic
-  `testing/fstest.MapFS` — an existing path is served as-is, an unknown path
-  falls back to `index.html` with `200`. It doesn't depend on either
-  `embed.FS` variant, so it runs the same under the default build and
+- `spaHandler` takes an `fs.FS` and does not depend on either `embed.FS`
+  variant: an existing path is served as-is, an unknown path falls back to
+  `index.html` with `200`, the same under the default build and
   `-tags uiembed`.
 - There is currently no path that ships `ichor-ui` anywhere. `-tags uiembed`
   is wired into exactly one place, `make build-ichor-ui`; `.goreleaser.yaml`
@@ -145,8 +138,8 @@ nav this skeleton doesn't build.
 
 **Running `npx shadcn@latest init -t vite`.** Targets React's Vite template;
 it would scaffold React-flavored files and fight preactcn's own documented
-manual setup rather than complementing it. Not attempted beyond confirming
-via its `--help` that `-t`/`-b` offer no Preact option.
+manual setup rather than complementing it. Its `-t`/`-b` options offer no
+Preact choice.
 
 **Copying `ui/dist` into `cmd/ichor-ui/dist` as a build step.** Works, but is
 one more moving part than pointing Vite's `outDir` at the destination
@@ -158,7 +151,7 @@ also wrong on trust grounds — "only the controller holds an
 `os:admin`-equivalent Talos identity; the UI backend holds a read-only one."
 
 **A `.golangci.yml` path exclusion instead of (or alongside) `ui/go.mod`.**
-Tried first; redundant once the module boundary was added, since
-golangci-lint's package discovery follows the same module rules `go list`
-does. Dropped in favor of touching one file (`ui/go.mod`, new) instead of
-two (`ui/go.mod` plus a shared config file other agents are also editing).
+Redundant once the module boundary exists, since golangci-lint's package
+discovery follows the same module rules `go list` does. The module boundary is
+one new file (`ui/go.mod`); the exclusion would be a second entry in a shared
+config file that does nothing.

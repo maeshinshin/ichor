@@ -141,8 +141,8 @@ passes (one apply per machine per stage), where `talosctl rotate-ca` runs the Ta
    `ApplyNoReboot`, control planes first), and in a later reconcile verifies before the stage advances: Ichor can dial every
    machine with the stage's credentials (`Version`), and every Kubernetes Node is Ready (read through the admin kubeconfig a Talos
    node issues, `NodesReady`). The verification is a separate reconcile from the applying one, so the kubelet restart a CA change
-   causes has begun before readiness is read (deferred: that does not observe the restart itself, as `talosctl`'s helper does
-   through the kubelet service resource).
+   causes has begun before readiness is read (`shortcut:` this does not observe the restart itself, as `talosctl`'s helper does
+   through the kubelet service resource; add that if a restart is ever missed).
 4. *Finalizing.* One Secret update puts the new CAs into `secrets.yaml` and removes `rotation.yaml`, and fails if the Secret changed in
    between. Then `BundleBackupStale` is raised, and every machine is checked against the replaced bundle: Ichor dials it with the
    plain bundle (as every other controller will) and its configuration equals what the replaced bundle renders. Only then `Done`,

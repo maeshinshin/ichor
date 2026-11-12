@@ -44,7 +44,7 @@ Connect API (ADR 0049); it is one of the CLI operations that predate the cluster
    confirmation names the snapshot actually chosen and its time. `--snapshot <name>` is exclusive: broken means
    an error, never a substitute. A bundle that is not the cluster's fails age's authentication on every object,
    and the final error says nothing was sent. The plaintext is kept in memory, not on disk (it holds every
-   Secret); a multi-GB etcd would need a protected spool file instead (deferred).
+   Secret); `shortcut:` the snapshot stays in memory, which a multi-GB etcd outgrows; switch to a protected spool file then.
 5. **Confirmation.** The shared `confirm` and the global `--yes`; the prompt states the node, the snapshot and its
    time, that state reverts, and that it cannot be undone. Declining contacts nothing.
 

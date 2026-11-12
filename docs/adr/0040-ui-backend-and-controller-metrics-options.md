@@ -12,9 +12,8 @@ and Grafana dashboards ship with the chart as an option." It also requires
 Ichor to "expose the control-plane metrics that Talos binds locally by
 default (controller-manager, scheduler, etcd) and restrict scraping to a
 CIDR with Talos's ingress firewall" -- that second sentence is Talos machine
-config, owned by a different unit working in `pkg/render`'s system layer,
-and is out of scope here; see "Left to another unit" below for what it
-still needs.
+config, which belongs in `pkg/render`'s system layer, and is out of scope
+here; see "Not covered here" below.
 
 ADR 0031 already settled the controller's metrics *endpoint* and its
 optional certificate (`metricsCert.enabled`). What was still open: which
@@ -25,17 +24,16 @@ all, and how many dashboards/alerts are enough.
 
 `controller-runtime` v0.24.1 registers eight metrics unconditionally, with
 no code required on Ichor's part (`sigs.k8s.io/controller-runtime/pkg/
-internal/controller/metrics`, confirmed by reading the vendored source, not
-assumed): `controller_runtime_reconcile_total` (by `controller`, `result`),
+internal/controller/metrics`): `controller_runtime_reconcile_total` (by `controller`, `result`),
 `controller_runtime_reconcile_errors_total`, `controller_runtime_terminal_
 reconcile_errors_total`, `controller_runtime_reconcile_panics_total`,
 `controller_runtime_reconcile_time_seconds`, `controller_runtime_max_
 concurrent_reconciles`, `controller_runtime_active_workers`, and
 `controller_runtime_reconcile_timeouts_total`. "The controller exports
-Prometheus metrics" is true before this unit writes a single line.
+Prometheus metrics" is true before Ichor writes a single line.
 
 The real question was which *domain-specific* facts those don't cover.
-Four candidates were weighed, and all four turned out to already be
+Five candidates were weighed, and all five turned out to already be
 answerable without adding anything to the controller:
 
 - **Reconcile count/latency/error rate per controller.** Exactly
@@ -77,33 +75,30 @@ installs. A `kube-state-metrics` CRS snippet covering `approvalState` and
 `TalosOperation.status` is worth documenting for an operator who already
 runs `kube-state-metrics`, but writing and shipping that config is exactly
 the kind of optional-component choice architecture.md reserves for the
-user, not this unit. It is not written here, to avoid the same silent-
+user, not Ichor. It is not written here, to avoid the same silent-
 failure shape ADR 0031 rejected for its bootstrap certificate: a config
 file committed into this repo, decoupled from whatever CRS version and
 schema the user's actual `kube-state-metrics` deployment runs, would look
 authoritative while quietly drifting out of sync with nothing to catch it.
 
-This also settles why no "build info" gauge (version/commit labels, a
-common pattern elsewhere) was added: nothing in this unit's scope
-(`cmd/`, `dist/chart/`, `config/`, `internal/uiapi/`) currently threads a
-version string through `ldflags`, and wiring that up is a build-tooling
-change with its own blast radius, not a one-line consequence of a
-monitoring-options unit.
+No "build info" gauge (version/commit labels, a common pattern elsewhere)
+is added either: it would need a version string threaded through
+`ldflags`, a build-tooling change with its own blast radius that the
+monitoring options do not take on.
 
 ## Decided: one metric for the UI backend, via one interceptor
 
-Unlike the controller, ichor-ui (`cmd/ichor-ui/main.go`) had *no* metrics
-endpoint before this unit -- it is a plain `net/http` server with no
+Unlike the controller, ichor-ui (`cmd/ichor-ui/main.go`) has *no* metrics
+endpoint of its own -- it is a plain `net/http` server with no
 `controller-runtime` manager underneath it, so there was nothing free here.
 architecture.md requires it to export something, and the one domain fact
 worth having is Connect RPC latency and outcome, per procedure: is
 `ApproveMachine` slow, is `StreamNodeLogs` erroring.
 
-Checked before writing any per-handler instrumentation: `connectrpc.com/
-connect` v1.21.0 ships `connect.Interceptor` (`WrapUnary`,
-`WrapStreamingClient`, `WrapStreamingHandler`), read directly from the
-vendored source (`connectrpc.com/connect@v1.21.0/interceptor.go`) rather
-than from memory. That is the mechanism to use instead of timing code
+`connectrpc.com/connect` v1.21.0 ships `connect.Interceptor` (`WrapUnary`,
+`WrapStreamingClient`, `WrapStreamingHandler`;
+`connectrpc.com/connect@v1.21.0/interceptor.go`). That is the mechanism to
+use instead of timing code
 scattered across `ClusterService`/`MachineService`/`NodeService`/
 `PatchService`'s handlers. `internal/uiapi/metrics.go` adds one
 `connect.Interceptor` (`MetricsInterceptor`) observing one histogram,
@@ -122,7 +117,7 @@ Connect API itself already sits behind, so a second port with its own
 TLS/auth story would protect nothing a scrape of the first port doesn't
 already cross. `github.com/prometheus/client_golang` was already an
 indirect dependency (pulled in by `controller-runtime`); using it directly
-for `promhttp.Handler()` and `promauto` added zero new dependencies
+for `promhttp.Handler()` and `promauto` adds no new dependency
 (`go.mod`'s diff is a one-line promotion from indirect to direct).
 
 ## Decided: one Grafana dashboard, two alerts
@@ -130,8 +125,8 @@ for `promhttp.Handler()` and `promauto` added zero new dependencies
 **Dashboard: one, not several.** "Ichor overview" (`dist/chart/templates/
 grafana/dashboard-configmap.yaml`) carries five panels: reconcile rate and
 error rate by controller, reconcile duration p99, and ichor-ui's RPC
-latency p99 and error rate by procedure -- everything this unit's own
-metrics cover, on one screen. A dashboard is a JSON blob that rots the
+latency p99 and error rate by procedure -- everything the metrics above
+cover, on one screen. A dashboard is a JSON blob that rots the
 moment a panel's metric name or label changes and nothing re-checks it;
 splitting one screen's worth of panels into multiple dashboards would only
 multiply that liability for no reader benefit. Shipped as a ConfigMap
@@ -140,8 +135,7 @@ labeled `grafana_dashboard: "1"`, the sidecar-discovery convention both
 unless the cluster's own Grafana runs that sidecar, consistent with Ichor
 installing no Grafana itself.
 
-**Alerts: two.** Both pass the "would this wake someone up" bar the task
-set, and nothing else proposed did:
+**Alerts: two.** The bar is "would this wake someone up", and only these two pass:
 
 - `IchorControllerDown` (`up{service="ichor-controller-manager-metrics-
   service"} == 0` for 5m, `severity: critical`): the controller is the only
@@ -180,15 +174,10 @@ and is actually silent absence.
 
 All three default `false`, the same shape `metricsCert.enabled` already
 uses (ADR 0031): rendering nothing is the default, each flag renders
-exactly its own resource, verified by `helm template` both ways
-(`dist/chart/chart_test.go`'s `checkMonitoringOptionsOffByDefault`, run as
-part of `TestChartInvariants`'s existing default-values render, and the
-new `TestMonitoringOptionsEnabled`, which turns all three on and checks the
-UI `ServiceMonitor` exists, both named alerts are present in the rendered
-`PrometheusRule`, and the dashboard ConfigMap's `ichor-overview.json` value
-is valid JSON with at least one panel -- not just that a `ConfigMap`
-exists, the same "actually render it, don't just read the template"
-standard ADR 0031's own `TestMetricsCertEnabled` sets).
+exactly its own resource. With all three on, the UI `ServiceMonitor` exists,
+both named alerts are in the rendered `PrometheusRule`, and the dashboard
+ConfigMap's `ichor-overview.json` value is valid JSON with at least one panel;
+`dist/chart/chart_test.go` pins this down.
 
 `config/prometheus/` (the kustomize mirror, CONTRIBUTING.md's "mirroring
 the matching `config/` base when one exists") gained `ui-monitor.yaml` and
@@ -196,29 +185,24 @@ the matching `config/` base when one exists") gained `ui-monitor.yaml` and
 toggle in `config/default/kustomization.yaml` -- kustomize's coarser
 one-switch convention doesn't need the chart's finer
 `prometheus.enabled`/`prometheus.rules.enabled` split to stay useful for
-local dev. The Grafana dashboard has no `config/` mirror: no `config/
-grafana/` directory existed before this unit, nothing else in `config/`
+local dev. The Grafana dashboard has no `config/` mirror: there is no `config/
+grafana/` directory, nothing else in `config/`
 wires up Grafana's sidecar-discovery convention, and kustomize's audience
 (contributors rendering `config/default` for local iteration) has no
-Grafana to discover it. Verified empirically, not just by reading the
-templates: temporarily uncommented `../prometheus` in `config/default/
-kustomization.yaml`, ran `make build-installer`, confirmed
-`ichor-alert-rules` and `ichor-ichor-ui-metrics-monitor` both render with
-the names this ADR states (the double `ichor-ichor-` prefix on the UI one
-matches the pre-existing convention every other `config/manager-ui`
-resource already has, not a new defect), then reverted.
+Grafana to discover it. The kustomize resources render as `ichor-alert-rules`
+and `ichor-ichor-ui-metrics-monitor`; the double `ichor-ichor-` prefix on the
+UI one is the existing kustomize naming convention every other
+`config/manager-ui` resource already has, not a defect.
 
-## Left to another unit: Talos control-plane metrics
+## Not covered here: Talos control-plane metrics
 
 architecture.md's "expose the control-plane metrics that Talos binds
 locally by default (controller-manager, scheduler, etcd) and restrict
 scraping to a CIDR with Talos's ingress firewall" is Talos machine
 configuration -- a `machine.controlPlane`-level binding (or equivalent) plus
 `machine.network.kubespan`/ingress-firewall-style CIDR rules -- that belongs
-in `pkg/render`'s system layer, not in the chart or `internal/uiapi`. This
-unit's own scope (`dist/chart/`, `config/`, `internal/uiapi/`, `cmd/`,
-`docs/`) does not include `pkg/render`, and another agent is actively
-working there, so nothing was implemented. What that unit still needs to
+in `pkg/render`'s system layer, not in the chart or `internal/uiapi`, so
+this ADR does not implement it (ADR 0069 does). What that work has to
 decide and build:
 
 - Which of `controller-manager`/`scheduler`/`etcd`'s locally-bound metrics
@@ -228,8 +212,7 @@ decide and build:
 - The ingress-firewall CIDR restriction that scopes who can reach those
   ports once exposed -- without it, "expose the metrics" and "open the
   control plane to the whole pod network" are the same change.
-- Whether exposing these needs its own chart/config option (this unit's
-  `prometheus.enabled` only covers the controller and ichor-ui's own
+- Whether exposing these needs its own chart/config option (`prometheus.enabled` only covers the controller and ichor-ui's own
   `/metrics`, served from this Kubernetes cluster, not a Talos node's).
 
 ## Consequences
@@ -257,11 +240,6 @@ decide and build:
 - `config/prometheus/` gained `ui-monitor.yaml` and `alert-rules.yaml`,
   wired into the existing `[PROMETHEUS]` toggle; no `config/grafana/`
   directory was created (reasoning above).
-- `dist/chart/chart_test.go` gained `checkMonitoringOptionsOffByDefault`
-  (wired into `TestChartInvariants`) and `TestMonitoringOptionsEnabled`.
 - `go.mod`: `github.com/prometheus/client_golang` moved from an indirect to
   a direct dependency; no new dependency was added.
-- Talos control-plane metrics binding and ingress-firewall CIDR scoping
-  remain unimplemented, left to the unit already working in `pkg/render`'s
-  system layer (see above).
 - Update: the Talos control-plane metrics binding and the ingress-firewall CIDR restriction were built in ADR 0069 (`spec.controlPlaneMetrics`).

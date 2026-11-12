@@ -681,7 +681,6 @@ func (in *TalosConfigPatchDocument) DeepCopy() *TalosConfigPatchDocument {
 	return b.String()
 }
 
-
 // unionImports returns the import block of the union file: the packages of the shipped document types (for
 // the type switch of TalosConfigPatchDocumentFromMachinery) and the ones the fixed code uses.
 func unionImports(roots []rootKind) string {

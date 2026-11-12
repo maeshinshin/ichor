@@ -32,19 +32,29 @@ type retiredField struct {
 	path string // dotted property path from the object root, e.g. "spec.gitops"
 }
 
-const ichorInstallationsCRD = "ichorinstallations.ichor.maesh.dev"
+const (
+	ichorInstallationsCRD = "ichorinstallations.ichor.maesh.dev"
+	talosClustersCRD      = "talosclusters.ichor.maesh.dev"
+	talosConfigPatchesCRD = "talosconfigpatches.ichor.maesh.dev"
+)
 
 // retiredFields is the whole list.
 var retiredFields = []retiredField{
 	// GitOps is permanently out of scope; spec.gitops (and everything under it) is gone.
-	{crd: "talosclusters.ichor.maesh.dev", path: "spec.gitops"},
+	{crd: talosClustersCRD, path: "spec.gitops"},
 	// (hand-over is always to Ichor), retired.
-	{crd: "talosclusters.ichor.maesh.dev", path: "spec.cni.handover"},
+	{crd: talosClustersCRD, path: "spec.cni.handover"},
 	// (the stack is gone), retired.
 	{crd: ichorInstallationsCRD, path: "spec.stack"},
 	{crd: ichorInstallationsCRD, path: "status.stack"},
 	// The only management mode is ichor, so the field is gone.
 	{crd: ichorInstallationsCRD, path: "spec.managementMode"},
+	// ADR 0152: credential-bearing fields of the mirrored legacy v1alpha1 document, retired.
+	// The mirror is embedded in both CRDs (TalosClusters through the deprecated spec.cni.custom).
+	{crd: talosConfigPatchesCRD, path: "spec.documents[].config.cluster.extraManifestHeaders"},
+	{crd: talosConfigPatchesCRD, path: "spec.documents[].config.machine.registries.config{}.tls.clientIdentity"},
+	{crd: talosClustersCRD, path: "spec.cni.custom.documents[].config.cluster.extraManifestHeaders"},
+	{crd: talosClustersCRD, path: "spec.cni.custom.documents[].config.machine.registries.config{}.tls.clientIdentity"},
 }
 
 // checkAdditive refuses a target CRD that would take something away from the live one: a

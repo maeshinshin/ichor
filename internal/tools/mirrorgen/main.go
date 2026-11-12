@@ -226,12 +226,11 @@ var sparseFields = map[string]bool{
 // of the CRD schema entirely means the API server rejects it structurally
 // -- there is no path to forget.
 //
-// suspiciousFields (suspicious.go) is this table's safety net: it reports,
-// rather than drops, every surviving field whose name suggests a secret
-// and isn't listed here, so a sibling field this table missed (it has
-// happened) or a new credential-shaped field a future machinery bump adds
-// shows up in `go generate`'s output for a human to triage, instead of
-// shipping silently.
+// suspicious.go is this table's safety net: every surviving field whose name
+// suggests a secret must be either in this table or in reviewedSurvivors
+// with a reason, and TestSuspiciousSurvivorsAreReviewed fails otherwise, so
+// a sibling field this table missed (it has happened) or a new
+// credential-shaped field a future machinery bump adds cannot ship silently.
 var secretFields = map[string]string{ // "Struct.Field" -> what it carries
 	"ClusterConfig.ClusterSecret":                 "cluster discovery secret",
 	"ClusterConfig.BootstrapToken":                "etcd cluster bootstrap token",
@@ -254,6 +253,16 @@ var secretFields = map[string]string{ // "Struct.Field" -> what it carries
 	"RegistryAuthConfig.RegistryPassword":      "registry password (user credential, not a bundle value)",
 	"RegistryAuthConfig.RegistryAuth":          "registry auth string (user credential, not a bundle value)",
 	"RegistryAuthConfig.RegistryIdentityToken": "registry identity token (user credential, not a bundle value)",
+	// The private half of a registry mTLS client identity. The legacy
+	// document reached it through machine.registries.config.<host>.tls, the
+	// same key the RegistryTLSConfig document kind already refuses (kindClasses
+	// marks it secret). The whole identity goes, not only the key: a
+	// "clientIdentity" with a certificate and no key cannot be used.
+	"RegistryTLSConfig.TLSClientIdentity": "registry mTLS client certificate and private key (user credential, not a bundle value)",
+	// HTTP headers sent when fetching extraManifests URLs. Their usual job is
+	// an Authorization or token header for a private source, so the map is a
+	// credential container as a whole and its values cannot be told apart.
+	"ClusterConfig.ExtraManifestHeaders": "HTTP headers for extraManifests fetches, usually Authorization (user credential, not a bundle value)",
 	// Cloud provider API tokens and a WireGuard private key: also user
 	// credentials under principle 2, but for features outside every
 	// current phase, so unlike the registry ones above these need no

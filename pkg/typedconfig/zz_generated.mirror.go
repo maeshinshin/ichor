@@ -184,8 +184,6 @@ type ClusterConfig struct {
 	// +optional
 	ExtraManifests []string `json:"extraManifests,omitempty"`
 	// +optional
-	ExtraManifestHeaders map[string]string `json:"extraManifestHeaders,omitempty"`
-	// +optional
 	ClusterInlineManifests []*ClusterInlineManifest `json:"inlineManifests,omitempty"`
 	// +optional
 	AdminKubeconfigConfig *AdminKubeconfigConfig `json:"adminKubeconfig,omitempty"`
@@ -865,14 +863,6 @@ type PEMEncodedCertificate struct {
 	Crt []byte `json:"crt"`
 }
 
-// github.com/siderolabs/crypto/x509: PEMEncodedCertificateAndKey
-type PEMEncodedCertificateAndKey struct {
-	// +required
-	Crt []byte `json:"crt"`
-	// +required
-	Key []byte `json:"key"`
-}
-
 // Talos: ProvisioningSpec
 type ProvisioningSpec struct {
 	// +optional
@@ -955,8 +945,6 @@ type RegistryServiceConfig struct {
 
 // Talos: RegistryTLSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config
 type RegistryTLSConfig struct {
-	// +optional
-	TLSClientIdentity *PEMEncodedCertificateAndKey `json:"clientIdentity,omitempty"`
 	// +optional
 	TLSCA []byte `json:"ca,omitempty"`
 	// +optional

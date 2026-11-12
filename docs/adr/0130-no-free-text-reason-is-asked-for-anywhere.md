@@ -41,7 +41,7 @@ Machine-generated text is not touched: condition `reason` (`status.conditions[].
 ## Alternatives considered
 
 - **Keep the reason optional and only drop the requirements.** Rejected: the user asked for the inputs to go, and an optional box still invites a typed placeholder.
-- **Remove the fields from the CRDs and the proto.** Rejected: CRD fields are append-only (installed builds, including the demo, have them), and a removed proto field number could be reused by mistake.
+- **Remove the fields from the CRDs and the proto.** Rejected: CRD fields are append-only (installed builds have them), and a removed proto field number could be reused by mistake.
 - **Keep the reason in the audit trail for the dangerous operations only (reset, restore, skip).** Rejected: it is the same free text; the verb and the Event already record who and when.
 
 ## Compatibility

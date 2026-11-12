@@ -31,7 +31,7 @@ The user decided this ships in v0.1.0.
 - **OS keyring (Secret Service, Keychain, Credential Manager) as the key store.** No keyring on a headless Linux jump host or in CI, which is where `init` often runs; and the key would live on the machine that wrote the file, while the file's job is to be restorable on a different machine after a full loss (ADR 0053).
 - **A machine-bound key** (derived from the host or kept in `~/.ichor`). Same recovery problem, and a key beside the file protects nothing.
 - **An age X25519 identity file or an SSH key as the only mechanism.** The identity file is another secret needing the same protection as the one it replaces; an SSH key needs an agent or its own passphrase and may be absent on the recovery machine. Both remain possible later as extra recipients in the same file format.
-- **Hardware keys (`age-plugin-yubikey`, TPM).** The plugin is an external binary that the Go library runs by name, which the "no tool installed any other way" rule and a static CLI rule out for the default path. Possible later as a recipient.
+- **Hardware keys (`age-plugin-yubikey`, TPM).** The plugin is an external binary that the Go library runs by name, which a static CLI rules out for the default path. Possible later as a recipient.
 - **A `decrypt` command.** `age -d` already does it, and a command that writes the bundle in plaintext to stdout or a file is a leak surface Ichor does not need.
 
 ## Risks

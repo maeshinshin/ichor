@@ -497,14 +497,21 @@ func (r *TalosMachineReconciler) checkRemovalCounts(
 	return true, false, r.removalCondition(ctx, m, metav1.ConditionFalse, reasonDeadMemberRemoval, msg)
 }
 
-// removalNodeName is resolveNodeName for the departing machine: spec.hostname when set,
-// otherwise its own report (dialed here, bounded by etcdDialTimeout) or the Kubernetes Node at
-// its endpoint. The error is only fatal for a control plane (the caller decides).
+// removalNodeName is resolveNodeName for the departing machine: spec.hostname when set, then the
+// name recorded in status, otherwise its own report (dialed here, bounded by etcdDialTimeout, and
+// only once the node there has shown it is this machine) or the Kubernetes Node at its endpoint
+// when it cannot be dialed. The error is only fatal for a control plane (the caller decides).
 func (r *TalosMachineReconciler) removalNodeName(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) (string, error) {
 	if m.Spec.Hostname != "" {
 		return m.Spec.Hostname, nil
+	}
+
+	// The name the machine itself reported when it was last read as this machine: unlike an answer from its
+	// address now, it cannot be another node's.
+	if m.Status.NodeName != "" {
+		return m.Status.NodeName, nil
 	}
 
 	var talos TalosClient
@@ -516,6 +523,12 @@ func (r *TalosMachineReconciler) removalNodeName(
 		if bundle, err := loadBundle(ctx, r.Client, r.ControllerNamespace, cluster); err == nil {
 			if c, err := r.TalosClient(ctx, cluster, m, bundle); err == nil {
 				defer closeTalosClient(c)
+
+				// A node that cannot show it is this machine must not name the Node and etcd member to remove,
+				// and its address is no better a way to find them.
+				if err := confirmMachine(ctx, c, m); err != nil {
+					return "", err
+				}
 
 				talos = c
 			}
@@ -631,6 +644,10 @@ func (r *TalosMachineReconciler) resetNode(
 	}
 	defer closeTalosClient(talos)
 
+	if err := confirmMachine(resetCtx, talos, m); err != nil {
+		return err
+	}
+
 	if err := talos.Reset(resetCtx, m.Annotations[resetWipeModeAnnotation], powerOffRequested(m)); err != nil {
 		return fmt.Errorf("reset request to %q failed: %w", m.Name, err)
 	}
@@ -679,6 +696,13 @@ func (r *TalosMachineReconciler) trySelfLeave(
 		return false
 	}
 	defer closeTalosClient(self)
+
+	// Another node answering at m's address would list its own member and be told to leave etcd.
+	if err := confirmMachine(selfCtx, self, m); err != nil {
+		logf.FromContext(ctx).Info("not asking the node at the machine's address to leave etcd", "reason", err.Error())
+
+		return false
+	}
 
 	members, err := self.EtcdMemberList(selfCtx)
 	if err != nil {

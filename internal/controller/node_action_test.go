@@ -85,7 +85,7 @@ func (f *nodeFixture) reconciler() *TalosOperationReconciler {
 	return &TalosOperationReconciler{
 		Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace, KubeClient: f.kube,
 		TalosClient: func(_ context.Context, _ *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, _ *secrets.Bundle) (TalosClient, error) {
-			return f.fakes[m.Name], nil
+			return f.fakes[m.Name].dialedAs(m), nil
 		},
 	}
 }

@@ -19,6 +19,7 @@ package cli
 import (
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -85,7 +86,8 @@ func (o initOptions) installerPin() installerPin {
 // small interfaces/funcs, mirroring adoptDeps, so runInit is driven by a
 // test with no real node, cluster or network on either end.
 type initDeps struct {
-	Identity        func(ctx context.Context, endpoint string) (controller.HardwareIdentity, error)
+	// ReadNode reads the first node's identity and, when wantDisks, its disks, over one connection.
+	ReadNode        func(ctx context.Context, endpoint string, wantDisks bool) (nodeReading, error)
 	DialMaintenance func(ctx context.Context, endpoint string) (maintenanceApplier, error)
 	DialAdmin       func(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, endpoint string, bundle *secrets.Bundle) (bootstrapClient, error)
 	NewK8sClient    func(kubeconfig []byte) (client.Client, error)
@@ -182,6 +184,12 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
+	// --install-disk unset on a terminal is asked for below, once the node can list its disks.
+	pickDisk := opts.InstallDisk == "" && bundleTerminal()
+	if opts.InstallDisk == "" && !pickDisk {
+		return errors.New("init: --install-disk is required")
+	}
+
 	preset, err := cilium.New().WithTunnel(opts.CNITunnel)
 	if err != nil {
 		return fmt.Errorf("init: %w", err)
@@ -194,20 +202,9 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
-	identity, err := deps.Identity(ctx, opts.NodeEndpoint)
+	identity, installDisk, err := readFirstNode(ctx, opts, deps, pickDisk)
 	if err != nil {
-		return fmt.Errorf("init: reading the first node's hardware identity: %w", err)
-	}
-
-	if identity.UUID == "" {
-		return fmt.Errorf(
-			"init: the node at %q reported no SMBIOS UUID; init needs a strong hardware identity for the first control plane",
-			opts.NodeEndpoint)
-	}
-
-	installDisk, err := parseDiskSelector("--install-disk", opts.InstallDisk)
-	if err != nil {
-		return fmt.Errorf("init: %w", err)
+		return err
 	}
 
 	machine := &ichorv1alpha1.TalosMachine{
@@ -557,6 +554,35 @@ func waitForCiliumHandover(
 	s.Done("Helm release owned by Ichor")
 
 	return nil
+}
+
+// readFirstNode reads the first node's identity and settles its install disk: the --install-disk
+// value, or, when pickDisk, one chosen from the node's own disk list on the same connection. It runs
+// before the first write; the apply to the node is initBootstrapAccess's, steps later.
+func readFirstNode(ctx context.Context, opts initOptions, deps initDeps, pickDisk bool) (controller.HardwareIdentity, *ichorv1alpha1.TalosMachineDisk, error) {
+	node, err := deps.ReadNode(ctx, opts.NodeEndpoint, pickDisk)
+	if err != nil {
+		return node.Identity, nil, fmt.Errorf("init: reading the first node's hardware identity: %w", err)
+	}
+
+	if node.Identity.UUID == "" {
+		return node.Identity, nil, fmt.Errorf(
+			"init: the node at %q reported no SMBIOS UUID; init needs a strong hardware identity for the first control plane",
+			opts.NodeEndpoint)
+	}
+
+	if pickDisk {
+		if opts.InstallDisk, err = chooseInstallDisk(deps.Stdin, deps.Stderr, node.Disks, node.DisksErr); err != nil {
+			return node.Identity, nil, fmt.Errorf("init: %w", err)
+		}
+	}
+
+	installDisk, err := parseDiskSelector("--install-disk", opts.InstallDisk)
+	if err != nil {
+		return node.Identity, nil, fmt.Errorf("init: %w", err)
+	}
+
+	return node.Identity, installDisk, nil
 }
 
 // initBootstrapAccess is step 4: apply the rendered configuration to the node and wait for it to

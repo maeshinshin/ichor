@@ -319,8 +319,8 @@ func newFakeInitDeps(t *testing.T, k8sClient client.Client) (
 	boot := &fakeBootstrapClient{kubeconfig: []byte("apiVersion: v1\nkind: Config\n")}
 
 	deps := initDeps{
-		Identity: func(context.Context, string) (controller.HardwareIdentity, error) {
-			return controller.HardwareIdentity{UUID: testInitMachineUUID, Serial: "serial-1"}, nil
+		ReadNode: func(context.Context, string, bool) (nodeReading, error) {
+			return nodeReading{Identity: controller.HardwareIdentity{UUID: testInitMachineUUID, Serial: "serial-1"}}, nil
 		},
 		DialMaintenance: func(context.Context, string) (maintenanceApplier, error) { return maint, nil },
 		DialAdmin: func(context.Context, *ichorv1alpha1.TalosCluster, string, *secrets.Bundle) (bootstrapClient, error) {

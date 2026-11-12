@@ -34,6 +34,7 @@ import (
 // command line wins over the file.
 
 const (
+	flagEndpointType    = "endpoint-type"
 	flagEndpointAddress = "endpoint-address"
 	flagNodeEndpoint    = "node-endpoint"
 	flagInstallDisk     = "install-disk"
@@ -44,14 +45,14 @@ const (
 
 // initConfigTemplate is what `ichor init --print-config-template` prints. It is a valid InitConfig
 // as it stands; the test parses it strictly. Lists are in block style.
-const initConfigTemplate = `apiVersion: ichor.maesh.dev/v1alpha1
+var initConfigTemplate = `apiVersion: ichor.maesh.dev/v1alpha1
 kind: InitConfig
 cluster:
   name: demo                       # --cluster (required)
   namespace: ichor-system          # -n/--namespace
   preset: single                   # --preset: single, compact-ha, standard or large
   endpoint:
-    type: node                     # --endpoint-type: vip, loadBalancer, dns or node
+    type: node                     # --endpoint-type: ` + endpointTypeNames(", ", " or ") + `
     address: 192.168.1.50          # --endpoint-address (required)
   network:
     podSubnets:                    # --pod-subnets
@@ -284,11 +285,17 @@ func applyInitFile(flags *pflag.FlagSet, path string) error {
 }
 
 // checkInitRequired refuses a run in which a required setting is given neither by flag nor by the
-// file.
+// file. On a terminal --install-disk is not required here: init asks for it once the node can list
+// its disks (chooseInstallDisk). A given --install-disk is checked now, not after the node is dialed.
 func checkInitRequired(flags *pflag.FlagSet) error {
 	var missing []string
 
-	for _, name := range []string{flagCluster, flagEndpointAddress, flagNodeEndpoint, flagInstallDisk} {
+	names := []string{flagCluster, flagEndpointAddress, flagNodeEndpoint}
+	if !bundleTerminal() {
+		names = append(names, flagInstallDisk)
+	}
+
+	for _, name := range names {
 		if !flags.Changed(name) {
 			missing = append(missing, fmt.Sprintf("%q (file key %s)", name, initFileKeys[name]))
 		}
@@ -296,6 +303,13 @@ func checkInitRequired(flags *pflag.FlagSet) error {
 
 	if len(missing) > 0 {
 		return errors.New("required flag(s) " + strings.Join(missing, ", ") + " not set")
+	}
+
+	// An empty value is left to the later check, whose message it keeps.
+	if v, _ := flags.GetString(flagInstallDisk); v != "" {
+		if _, err := parseDiskSelector("--install-disk", v); err != nil {
+			return fmt.Errorf("init: %w", err)
+		}
 	}
 
 	return nil

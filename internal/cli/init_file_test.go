@@ -95,6 +95,7 @@ firstNode:
 // check and returns what runInit would be given.
 func parsedInit(t *testing.T, file string, args ...string) (initOptions, time.Duration, error) {
 	t.Helper()
+	setTerminal(t, false)
 
 	var (
 		o    initOptions

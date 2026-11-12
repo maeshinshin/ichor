@@ -29,7 +29,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
@@ -284,8 +283,8 @@ func TestRunInit_WeakIdentityRejected(t *testing.T) {
 
 	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
 	deps, maint, _ := newFakeInitDeps(t, k8sClient)
-	deps.Identity = func(context.Context, string) (controller.HardwareIdentity, error) {
-		return controller.HardwareIdentity{}, nil
+	deps.ReadNode = func(context.Context, string, bool) (nodeReading, error) {
+		return nodeReading{}, nil
 	}
 
 	opts := validInitOptions()

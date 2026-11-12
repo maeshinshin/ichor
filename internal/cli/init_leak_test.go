@@ -28,7 +28,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
@@ -121,8 +120,8 @@ func TestInitNeverLeaksSecrets(t *testing.T) {
 
 	t.Run("identity read failed (before bundle exists)", func(t *testing.T) {
 		stdout, stderr, err := run(t, nil, func(d *initDeps) {
-			d.Identity = func(context.Context, string) (controller.HardwareIdentity, error) {
-				return controller.HardwareIdentity{}, errors.New("dial failed")
+			d.ReadNode = func(context.Context, string, bool) (nodeReading, error) {
+				return nodeReading{}, errors.New("dial failed")
 			}
 		})
 

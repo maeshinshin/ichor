@@ -25,6 +25,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/installmanifest"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
@@ -110,7 +111,11 @@ change to this cluster goes through the controller, by writing CRs.
 
 The settings can come from a file instead of flags: -f init.yaml (an
 InitConfig; --print-config-template prints an example). A flag on the command
-line overrides the file; relative paths in the file are relative to it.`,
+line overrides the file; relative paths in the file are relative to it.
+
+On a terminal, init asks for the required settings that neither flags nor the
+file give (--install-disk is offered from the disks the node reports). Without
+a terminal it fails naming the missing flags.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		if initPrintTemplate {
 			_, err := fmt.Fprint(cmd.OutOrStdout(), initConfigTemplate)
@@ -121,6 +126,12 @@ line overrides the file; relative paths in the file are relative to it.`,
 		if initFile != "" {
 			if err := applyInitFile(cmd.Flags(), initFile); err != nil {
 				return err
+			}
+		}
+
+		if bundleTerminal() {
+			if err := promptInitMissing(cmd.Flags(), cmd.InOrStdin(), cmd.ErrOrStderr()); err != nil {
+				return fmt.Errorf("init: %w", err)
 			}
 		}
 
@@ -150,7 +161,7 @@ line overrides the file; relative paths in the file are relative to it.`,
 		}
 
 		deps := initDeps{
-			Identity:        identityOverMaintenance,
+			ReadNode:        readNodeOverMaintenance,
 			DialMaintenance: dialMaintenance,
 			DialAdmin:       dialAdmin,
 			NewK8sClient:    newKubeClientFromBytes,
@@ -218,25 +229,48 @@ func initOutput(cmd *cobra.Command) string {
 	return ""
 }
 
-// identityOverMaintenance reads a node's hardware identity the same way
+// nodeReading is what init reads from the first node over one maintenance connection.
+type nodeReading struct {
+	Identity controller.HardwareIdentity
+	// Disks and DisksErr are the node's installable disks, read only when asked for; a failed read is
+	// reported in DisksErr and does not fail the call.
+	Disks    []ichorv1alpha1.TalosMachineDiscoveredDisk
+	DisksErr error
+}
+
+// readNodeOverMaintenance reads a node's hardware identity the same way
 // discovery does (internal/controller.NewMachineryMaintenanceClient,
-// dialed in maintenance mode), closing the connection afterward: init
-// only ever needs one identity read per run, not a held connection.
-func identityOverMaintenance(ctx context.Context, endpoint string) (controller.HardwareIdentity, error) {
+// dialed in maintenance mode), and its disks too when wantDisks, on the same client; it closes the
+// connection afterward: init only ever needs one read per run, not a held connection.
+func readNodeOverMaintenance(ctx context.Context, endpoint string, wantDisks bool) (nodeReading, error) {
 	c, err := controller.NewMachineryMaintenanceClient(ctx, endpoint)
 	if err != nil {
-		return controller.HardwareIdentity{}, fmt.Errorf("dialing maintenance Talos API at %q: %w", endpoint, err)
+		return nodeReading{}, fmt.Errorf("dialing maintenance Talos API at %q: %w", endpoint, err)
 	}
 
 	if closer, ok := c.(interface{ Close() error }); ok {
 		defer func() { _ = closer.Close() }()
 	}
 
-	return c.Identity(ctx)
+	var r nodeReading
+
+	if r.Identity, err = c.Identity(ctx); err != nil {
+		return r, err
+	}
+
+	if wantDisks {
+		var inv controller.Inventory
+
+		inv, r.DisksErr = c.Inventory(ctx)
+		r.Disks = inv.Disks
+	}
+
+	return r, nil
 }
 
 // bindInitFlags registers every setting flag of `ichor init` on flags, bound to o and wait. The
-// required ones are checked by checkInitRequired, since -f/--file can stand in for them.
+// required ones are checked by checkInitRequired, since -f/--file can stand in for them, and asked for
+// by promptInitMissing on a terminal.
 func bindInitFlags(flags *pflag.FlagSet, o *initOptions, wait *time.Duration) {
 	flags.DurationVar(wait, "wait-timeout", defaultWebhookWait,
 		"how long to wait for Ichor's controller to serve its admission webhooks before writing the first resources")
@@ -253,7 +287,7 @@ func bindInitFlags(flags *pflag.FlagSet, o *initOptions, wait *time.Duration) {
 	flags.StringVar(&o.CNITunnel, "cni-tunnel", "",
 		"Cilium's tunnel protocol, vxlan or geneve (default: Cilium's vxlan); "+
 			"geneve for virtualised networks that pass geneve but not vxlan")
-	flags.StringVar(&o.EndpointType, "endpoint-type", "vip", "cluster endpoint type: vip, loadBalancer, dns or node")
+	flags.StringVar(&o.EndpointType, flagEndpointType, endpointTypes[0].Name, "cluster endpoint type: "+endpointTypeNames(", ", " or "))
 	flags.StringVar(&o.EndpointAddress, "endpoint-address", "", "cluster endpoint address (required)")
 	flags.StringVar(&o.NodeEndpoint, "node-endpoint", "",
 		"Talos API address (host:port) of the first node, currently in maintenance mode (required)")

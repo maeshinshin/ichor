@@ -269,10 +269,8 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 		return nil, fmt.Errorf("init: --cni-tunnel %q is invalid: must be %q or %q", in.CNITunnel, ciliumTunnelVxlan, ciliumTunnelGeneve)
 	}
 
-	switch in.EndpointType {
-	case "vip", "loadBalancer", "dns", "node":
-	default:
-		return nil, fmt.Errorf("init: --endpoint-type %q is invalid: must be one of vip, loadBalancer, dns, node", in.EndpointType)
+	if !validEndpointType(in.EndpointType) {
+		return nil, fmt.Errorf("init: --endpoint-type %q is invalid: must be one of %s", in.EndpointType, endpointTypeNames(", ", ", "))
 	}
 
 	if in.EndpointType != "vip" {
@@ -290,10 +288,6 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 			"warning: --namespace %q is not %q: Ichor's controller always runs in %q, "+
 				"so a Secret or CR created elsewhere is not visible to it\n",
 			in.Namespace, ichorControllerNamespace, ichorControllerNamespace)
-	}
-
-	if in.InstallDisk == "" {
-		return nil, fmt.Errorf("init: --install-disk is required")
 	}
 
 	if err := validateCIDRs("--pod-subnets", in.PodSubnets); err != nil {

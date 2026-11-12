@@ -154,7 +154,6 @@ func TestBuildInitPlan_Errors(t *testing.T) {
 		{"invalid cni tunnel", func(in *initPlanInput) { in.CNITunnel = "gre" }},
 		{"invalid endpoint type", func(in *initPlanInput) { in.EndpointType = "carrier-pigeon" }},
 		{"empty endpoint address", func(in *initPlanInput) { in.EndpointAddress = "" }},
-		{"empty install disk", func(in *initPlanInput) { in.InstallDisk = "" }},
 		{"pod subnet is not a CIDR", func(in *initPlanInput) { in.PodSubnets = []string{"10.248.0.0"} }},
 		{"too many service subnets", func(in *initPlanInput) {
 			in.ServiceSubnets = []string{"10.1.0.0/16", "fd00::/64", "10.2.0.0/16"}

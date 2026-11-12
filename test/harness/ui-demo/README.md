@@ -24,7 +24,7 @@ and prints its generated password once (must change on first login). It needs an
 
 ## Steps
 
-`P=ichor-ui-demo3`, `C=admin@talos-cluster01`; run inside `nix develop`. Replace `__PREFIX__` with `$P`.
+`P=ichor-ui-demo3`, `C=OUTER_CONTEXT` (your outer cluster's kube context); run inside `nix develop`. Replace `__PREFIX__` with `$P`.
 
 VM memory defaults to 2560Mi for both VMs. Override per role before `up-demo` with
 `ICHOR_UI_DEMO_CP_MEMORY` and `ICHOR_UI_DEMO_WORKER_MEMORY` (a plain `Mi`/`Gi` quantity, e.g.
@@ -164,7 +164,7 @@ init delete and recreate the VMs (`down-demo`, `up-demo`).
 Every command names its target; nothing uses `-l` or `--all`.
 
 ```sh
-C=admin@talos-cluster01; P=ichor-ui-demo3
+C=OUTER_CONTEXT; P=ichor-ui-demo3
 kubectl --context $C -n ichor-e2e delete pod $P-tools
 kubectl --context $C -n ichor-e2e delete deployment $P-registry
 kubectl --context $C -n ichor-e2e delete service $P-registry

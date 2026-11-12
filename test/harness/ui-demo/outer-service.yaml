@@ -1,4 +1,4 @@
-# Applied to the OUTER cluster (talos-cluster01), namespace ichor-e2e only. Cilium's
+# Applied to the OUTER cluster, namespace ichor-e2e only. Cilium's
 # existing ip-pool hands this Service an address from 192.168.0.64/26 and l2-policy
 # announces it. With the bridge binding the virt-launcher pod's IP is the guest's IP, so
 # the Service reaches the Talos VM directly: port 443 -> the inner NodePort 30080

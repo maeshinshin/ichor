@@ -31,7 +31,7 @@ The order is Talos, Cilium, Kubernetes, one component per decision. Kubernetes c
 
 ### 3. When
 
-Every guard is a field of the pure function `autopatch.Decide`, with a table test each:
+Every guard is a field of the pure function `autopatch.Decide`:
 
 1. the setting is on, and not halted;
 2. no Ichor upgrade is in progress (`status.installedVersion` is `spec.version`);
@@ -63,8 +63,8 @@ An acknowledged halt does not unblock a cluster: a paused operation still holds 
 
 The target of a Talos or Kubernetes upgrade is `TalosCluster.spec.talosVersion` / `kubernetesVersion`, which the executors (`talos_upgrade.go`, `kubernetes_upgrade.go`) read and the renderer (`render.go`) uses for every node's machine configuration. An operation that carried its own version would leave the spec behind the nodes, and the next reconcile would render the old version back. So the spec has to change, and the architecture says the controller never writes `spec` (principle 5). The rule is kept whole: the write is made by another identity acting for the user who turned the setting on.
 
-- **`ichor-auto-patch`** is a ServiceAccount in the controller's namespace with a ClusterRole `ichor-auto-patch-role` of three rules: `get` and `update` on `talosclusters`, `create` on `talosoperations`. Nothing else, and nobody else is bound to it. It writes the version and creates the operation, so both are attributed to it. Config (`config/rbac/ichor-auto-patch/`) and chart (`templates/rbac/ichor-auto-patch.yaml`) are identical and a chart test compares them. Its objects carry the installer's label like every other installed object, so the prune of ADR 0111 treats them as any other; the installer's `bind`/`escalate` lists name the ClusterRole and the Role.
-- **The controller impersonates it.** `AutoPatcher.Actor` is a client built with `Impersonate: system:serviceaccount:<ns>:ichor-auto-patch`. The controller's right is `impersonate` on `serviceaccounts` with `resourceNames: [ichor-auto-patch]` in a namespaced Role, so it can act as that one account in its own namespace and no other. Its own ClusterRole holds no `update` or `patch` on `talosclusters` (a chart test asserts it). Cilium takes the same path for uniformity, though its operation carries the target itself.
+- **`ichor-auto-patch`** is a ServiceAccount in the controller's namespace with a ClusterRole `ichor-auto-patch-role` of three rules: `get` and `update` on `talosclusters`, `create` on `talosoperations`. Nothing else, and nobody else is bound to it. It writes the version and creates the operation, so both are attributed to it. Config (`config/rbac/ichor-auto-patch/`) and chart (`templates/rbac/ichor-auto-patch.yaml`) are identical. Its objects carry the installer's label like every other installed object, so the prune of ADR 0111 treats them as any other; the installer's `bind`/`escalate` lists name the ClusterRole and the Role.
+- **The controller impersonates it.** `AutoPatcher.Actor` is a client built with `Impersonate: system:serviceaccount:<ns>:ichor-auto-patch`. The controller's right is `impersonate` on `serviceaccounts` with `resourceNames: [ichor-auto-patch]` in a namespaced Role, so it can act as that one account in its own namespace and no other. Its own ClusterRole holds no `update` or `patch` on `talosclusters`. Cilium takes the same path for uniformity, though its operation carries the target itself.
 - **The webhook limits both.** `TalosClusterCustomValidator` refuses any update of a `TalosCluster` spec by the controller's own username, and limits the `ichor-auto-patch` username to one change: `spec.talosVersion` or `spec.kubernetesVersion` to a newer patch of the same minor, with labels, annotations, finalizers and every other spec field unchanged. The compatibility webhook and both executors check the step again. A bug in the patcher therefore cannot edit a cluster's configuration.
 - **A GitOps tool that owns the TalosCluster** will see the version drift and revert it, so a deployment that keeps clusters in Git should leave auto-patch off (the default).
 
@@ -80,7 +80,6 @@ The target of a Talos or Kubernetes upgrade is `TalosCluster.spec.talosVersion` 
 - A new ServiceAccount, ClusterRole and binding `ichor-auto-patch`, and a namespaced Role that lets the controller impersonate that account only; the controller's own ClusterRole is unchanged (`manager-role` equals `config/rbac/role.yaml` as before). The installer's escalation lists name the new Role and ClusterRole.
 - The release check must be on for there to be anything to apply; with it off `status.upgradeTargets` is cleared and the patcher starts nothing.
 - `ichor settings get` and the Settings page show the effective switch, components and window, and the halted operation.
-- Tests: table tests of `autopatch.Decide` for every guard and of `autopatch.Resume`; an envtest of `AutoPatcher` for start (annotations, spec bump, no second start), the guards that need a cluster, halt on a paused operation, resume by acknowledgement and by a later manual operation; the webhook tests of the automatic patcher's limited write and of the controller's refused one, the chart test of the identity and of the settings gate (including read-only and the acknowledgement); the uiapi tests of the new fields; the UI's pure tests of the form.
 
 ## Amendment 2026-11-04: Cilium has no automatic patch
 

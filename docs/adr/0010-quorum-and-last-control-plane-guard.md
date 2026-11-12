@@ -106,14 +106,10 @@ plane is deleting the `TalosCluster`, which answers a different question
 
 ## Consequences
 
-- `pkg/deleteguard` stays at 100% test coverage; `CheckControlPlaneQuorum` is
-  tested at every boundary `n` in {1, 2, 3, 4, 5}, and a dedicated test
-  (`TestAllowDeleteDoesNotOverrideQuorum`) shows the annotation does not
-  change its answer, which is the roadmap's named acceptance condition.
-  `internal/webhook/v1alpha1`'s envtest suite adds the same cases end to end,
-  including the sequential case the task called out by name: three approved
-  control planes, delete one (3 -> 2, allowed), then delete another
-  (2 -> 1, refused for quorum).
+- The annotation does not change `CheckControlPlaneQuorum`'s answer, which is
+  the roadmap's named acceptance condition. At admission the sequential case
+  behaves as follows: with three approved control planes, deleting one
+  (3 -> 2) is allowed, and deleting another (2 -> 1) is refused for quorum.
 - `TalosMachineCustomValidator` now needs a `client.Client` to list siblings;
   `SetupTalosMachineWebhookWithManager` supplies `mgr.GetClient()`. No RBAC
   change was needed -- the manager's role already has `list`/`watch` on
@@ -123,9 +119,9 @@ plane is deleting the `TalosCluster`, which answers a different question
   never etcd members, so nothing protects them. This is also why a lone
   unapproved control plane does not hit the "last one" refusal.
 - The third removal-sequence refusal -- dropping below
-  `spec.controlPlane.count` -- is not implemented. It's a topology/replace
+  `spec.controlPlane.count` -- is not a webhook check. It's a topology/replace
   concern (phase 3's "replace add-then-remove" flow), not a bare quorum or
-  last-member check, and doesn't exist to retrofit onto yet.
+  last-member check; the removal operation below enforces it.
 - Real etcd member health is still never queried; this guard is optimistic
   about every counted `TalosMachine` actually being a healthy voter. If that
   turns out to be wrong in practice (a control plane counted as live but
@@ -145,9 +141,10 @@ plane is deleting the `TalosCluster`, which answers a different question
   control-plane removal only happens as a step inside that serialized,
   ordered sequence, the webhook's job changes from "count and decide" to
   "refuse a delete that isn't part of the operation," and the operation
-  itself -- which *is* serialized -- does the counting. That's phase 3's
-  removal work, not yet built. Acceptable for now because today's deletions
-  are an operator acting one at a time, not several removals fired at once.
+  itself -- which *is* serialized -- does the counting. That is the
+  removal operation described below. Until a removal goes through it, this is
+  acceptable because deletions are an operator acting one at a time, not
+  several removals fired at once.
 
 ### What this guard protects, and what it doesn't
 
@@ -156,8 +153,8 @@ quorum or taking the last control plane -- the case the roadmap's
 acceptance test asks for, and the only case a webhook that only sees one
 request at a time can actually decide. It does not protect against several
 such deletes landing concurrently and jointly breaking quorum, each one
-individually legal by this check's own math; closing that gap needs the
-ordered removal operation above, and stays open until that lands.
+individually legal by this check's own math; the ordered removal operation
+below closes that gap.
 
 ## The ordered removal operation closes the gap above
 
@@ -208,7 +205,7 @@ immediately: `TalosMachineReconciler.Reconcile` sees the
    (`k8s.io/kubectl`'s own helper, cordon then evict -- architecture.md:
    "Draining uses `k8s.io/kubectl`'s own drain helper rather than a
    hand-written eviction loop"), renewing the lock every minute while that
-   runs (see "Renew gets its first caller" below).
+   runs (see "The drain renews the lock" below).
 
 ### The webhook's check is kept, not replaced
 
@@ -239,8 +236,7 @@ ADR's "no way to override [the quorum guard] through the webhook" changes
 Removing the etcd member and running the Talos `Reset` that returns a node
 to maintenance mode both need `TalosClient` widened past the three methods
 its own doc comment calls "the one interface rule 0 allows" -- a design
-decision, referred back rather than made here (per the task that asked for
-this: widening `TalosClient` is explicitly a refer-to-main trigger).
+decision this slice does not make.
 Without the reset, letting the `TalosMachine` disappear would be a lie:
 the physical node would still be configured and still an etcd member.
 So `reconcileRemoval` never clears the finalizer on the safe path either
@@ -269,13 +265,11 @@ here is irreversible yet.
 ### What the four failure modes mean for this slice
 
 Architecture.md's "Nodes" names four things about the removal sequence
-that are "easy to get fatally wrong," verified against Talos 1.14.3's
-source. Two are about the `Reset` call specifically -- naming the
+that are "easy to get fatally wrong" (per Talos 1.14.3's source). Two are about the `Reset` call specifically -- naming the
 partitions to wipe, and the fire-and-forget double-reset hazard -- and do
 not apply to this slice at all, because there is no `Reset` call in it;
-that is the direct consequence of referring `TalosClient`'s widening back
-rather than building it now. The other two are exactly what this slice
-delivers and tests:
+that is the direct consequence of not widening `TalosClient` in this slice. The other two are exactly what this slice
+delivers:
 
 - "Ichor's refusals are Ichor's alone." `reconcileRemoval` never asks
   Talos anything -- there is no Talos API call anywhere in it. Every
@@ -313,25 +307,16 @@ resumable on its own:
   satisfying architecture.md's chaos-case requirement that progress
   resume from status, without needing a dedicated phase field to do it.
 
-Tested directly: acquiring the same cluster's lock as a second,
-independently-constructed `TalosMachineReconciler` (simulating a fresh
-process with no memory of the first) succeeds rather than erroring, and
-the removal verdict it reaches afterward is correct.
+### The drain renews the lock
 
-### Renew gets its first caller
+`pkg/clusterlock.Lock.Renew` is documented ("the reconciler is expected to call
+Renew well inside this window on every step"). The removal operation's
+`renewWhile` renews every minute (`removalRenewInterval`, comfortably inside
+`DefaultDuration`'s five) for as long as the drain step is running, stopping
+the moment it returns, so the lock survives a drain longer than its duration
+and expires normally once the drain stops.
 
-`pkg/clusterlock.Lock.Renew` existed since the lock package was written,
-documented ("the reconciler is expected to call Renew well inside this
-window on every step") but never called from production code until this
-file's `renewWhile`, which renews every minute (`removalRenewInterval`,
-comfortably inside `DefaultDuration`'s five) for as long as the drain step
-is running, stopping the moment it returns. Tested by giving a `Lock` a
-deliberately short duration, running `renewWhile` against it, and showing
-the lock survives several multiples of that duration -- which only holds
-if `Renew` is really being called repeatedly, not just once at the start --
-and that it expires normally once `renewWhile` is stopped.
-
-### RBAC this added
+### RBAC for draining
 
 Draining needs a `kubernetes.Interface` Clientset (`k8s.io/kubectl`'s drain
 helper takes one, not controller-runtime's cached `client.Client`), wired
@@ -340,10 +325,9 @@ in `cmd/main.go` from the manager's own config. The new RBAC it needs --
 `create` on `pods/eviction`, `get`/`list` on `poddisruptionbudgets` -- is
 additive only; nothing already granted was widened or removed.
 `k8s.io/kubectl` is pinned to the same `v0.36.0` line as the rest of this
-module's `k8s.io/*` dependencies (`go get k8s.io/kubectl/pkg/drain@v0.36.0`
-specifically, not a bare `go get`, which resolves to kubectl's latest and
-drags every `k8s.io/*` dependency in this module up with it -- caught
-before it reached `go.sum`, not after).
+module's `k8s.io/*` dependencies (a bare `go get` of
+`k8s.io/kubectl` resolves to its latest and drags every `k8s.io/*` dependency
+in this module up with it).
 
 ## `Transitioning`: the live control-plane count, not the declared one
 
@@ -397,25 +381,22 @@ count is even. (This was later centralized into `acquireDisruptiveLock` --
 see "The gate moved to where the lock is acquired" below -- rather than
 left as a check each disruptive-operation call site repeats for itself.)
 
-### Tests
+### Condition reasons
 
-`internal/controller/removal_test.go`'s "TalosCluster transitioning
-status" group covers: a stable (odd) count reports `Transitioning: False`
-(`StableControlPlaneCount`); approving a fourth control plane flips it to
-`True` (`EvenControlPlaneCount`); and a reboot-requiring change on *any*
-machine (not just a control plane) in a transitioning cluster is refused
-with `ClusterTransitioning`, before the cluster lock is ever taken.
+`Transitioning` is `False` with reason `StableControlPlaneCount` for an odd
+count and `True` with reason `EvenControlPlaneCount` for an even one (approving
+a fourth control plane flips it). A reboot-requiring change on *any* machine
+(not just a control plane) in a transitioning cluster is refused with
+`ClusterTransitioning`, before the cluster lock is ever taken.
 
 ## The gate moved to where the lock is acquired
 
-The first version of the transitioning check lived inside `refuseReboot`
-itself: recompute the live count, refuse if even, otherwise take the
-lock. That is exactly the shape of safety net this project has already
-watched rot once -- ADR 0011 records a secrets RBAC marker regressing
-from namespace-scoped back to cluster-wide because the fix lived at one
-call site and a later change added another one without knowing the rule
-existed. A check a future call site has to remember to repeat is a check
-that will eventually not get repeated.
+A transitioning check inside `refuseReboot` itself (recompute the live count,
+refuse if even, otherwise take the lock) is the shape of safety net that rots:
+ADR 0011 records a secrets RBAC marker regressing from namespace-scoped back to
+cluster-wide because the fix lived at one call site and a later change added
+another one without knowing the rule existed. A check a future call site has to
+remember to repeat is a check that will eventually not get repeated.
 
 ### Decision
 
@@ -466,18 +447,8 @@ one this section opens with, unless something checks it mechanically.
 `*.go` file in the package with `go/parser` -- the same technique
 `TestFixtureUUIDsAreUnique` already uses for the UUID-collision guard --
 and fails if any call to a method named `Acquire` appears outside
-`acquireDisruptiveLock`'s own body. Verified by deliberately adding a
-second call site (a throwaway function calling `clusterlock.New(...).
-Acquire(...)` directly) and confirming the failure:
-
-```text
-taloscluster_controller.go:37: calls Acquire directly from scratchAcquireForGuardTest; disruptive
-operations must go through acquireDisruptiveLock -- the even-control-plane-count refusal lives there
-```
-
--- a message that says what rule was broken and which function to call
-instead, not just that something failed. The scratch call site was
-removed immediately after; the guard is what stays.
+`acquireDisruptiveLock`'s own body. Its message says what rule was broken and
+which function to call instead, not just that something failed.
 
 This is also why `pkg/clusterlock` was left alone rather than touched to
 "help" enforce this: the guard's whole premise is that this package has
@@ -492,39 +463,29 @@ is about *when* two requests are counted relative to each other. A second,
 independent mechanism can drift the count the same dangerous way even for
 a single request: *what* the count is read through.
 
-### What was found, and how
-
-A `TalosMachine` Webhook control-plane-quorum spec started failing
-intermittently -- always passing alone, failing only as part of the full
-suite. The easy, wrong conclusion is "flaky test, environment noise."
-Looking at *which direction* it failed ruled that out: every failure was
-`Expected an error to have occurred. Got: <nil>` -- a deletion that should
-have been refused was allowed. That is only possible if the quorum count
-came out too *high* (an already-gone control plane still counted), never
-too low (which would only ever over-refuse, the safe side).
+### Why the cache is the wrong read path
 
 Both counters -- `TalosMachineCustomValidator.ValidateDelete` (the webhook)
 and `TalosMachineReconciler.countApprovedControlPlanes` (`removal.go`,
 the authoritative recount under the cluster lock this ADR's "ordered
-removal operation" section describes) -- listed through
-`mgr.GetClient()`, controller-runtime's cache-backed client, in both the
-real manager and the envtest-backed suites. A watch-based cache can still
-report an object for a short window after its delete has actually
-committed to etcd; the gap is normally small enough not to matter, but it
-widens under load (the exact condition "passes alone, fails in the full
-suite" describes) and skews in exactly one direction: toward *more*
+removal operation" section describes) -- list through
+`mgr.GetClient()`, controller-runtime's cache-backed client. A watch-based
+cache can still report an object for a short window after its delete has
+actually committed to etcd; the gap is normally small enough not to matter,
+but it widens under load and skews in exactly one direction: toward *more*
 objects, never fewer. For a quorum count, more is unconditionally the
 dangerous direction -- it is what lets a second, concurrent (or merely
 closely-timed) deletion look safe when the first one already brought the
-cluster to the edge.
+cluster to the edge -- while a count that is too low only ever over-refuses,
+the safe side. The symptom is a deletion that should have been refused being
+allowed (`Expected an error to have occurred. Got: <nil>`), which is why a
+quorum-related failure of that shape points at the count's read path (cached
+vs. direct) before the environment.
 
 This is a different mechanism from the admission/commit race the earlier
 section documents (that one is about ordering between two requests; this
 one is about staleness within reading for one request), but it opens the
-same shape of hole, in the same direction, against the same check. If a
-future quorum- or removal-related test flakes, suspect the count's read
-path -- cached vs. direct -- before the environment. That is exactly how
-this one was found.
+same shape of hole, in the same direction, against the same check.
 
 ### Decision
 
@@ -552,32 +513,19 @@ this one function.
 ### Enforcing that nothing bypasses it
 
 The same mechanical technique as `TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite`
-applies again, but it took two attempts to land somewhere that actually
-checks anything.
-
-The first version, `TestCountApprovedControlPlanesIsTheOnlyListSite`, lived
-in `pkg/deleteguard` and globbed only that package's own `*.go` files,
-matching any call to a method named `List` outside
-`CountApprovedControlPlanes`'s own body. That is the wrong place: the
-original bug was two *other* packages (`internal/webhook/v1alpha1` and
-`internal/controller/removal.go`) each independently re-listing
-`TalosMachineList` to count; `pkg/deleteguard` structurally has exactly one
-`List` call site after the fix, so a guard that only looks there can never
-observe a second one reappearing -- it passes, permanently, having checked
-nothing a regression could ever trip.
-
-The replacement, `TestTalosMachineListCountingStaysCentralized`
-(`internal/controller/countplanes_guard_test.go`), scans the two packages
-the bug actually lived in: `internal/controller` itself, plus
-`internal/webhook/v1alpha1` via a relative path
-(`../webhook/v1alpha1/*.go`) -- the same cross-directory technique
-`dist/chart/chart_test.go` already uses for `../../config/crd/bases`.
-`deleteguard.CountApprovedControlPlanes` lives in a third package outside
-both scanned directories, so the guard needs no self-exemption the way
+applies again. `TestTalosMachineListCountingStaysCentralized`
+(`internal/controller/countplanes_guard_test.go`) scans the two packages
+where a duplicate count could appear: `internal/controller` itself, plus
+`internal/webhook/v1alpha1` via a relative path (`../webhook/v1alpha1/*.go`) --
+the same cross-directory technique `dist/chart/chart_test.go` already uses for
+`../../config/crd/bases`. A guard scoped to `pkg/deleteguard` alone would check
+nothing a regression could trip, since that package structurally has exactly
+one `List` call site; the duplicates would reappear in the other two packages.
+`deleteguard.CountApprovedControlPlanes` lives in a third package outside both
+scanned directories, so the guard needs no self-exemption the way
 `acquireDisruptiveLock`'s guard exempts its own body.
 
-It also matches more precisely than the first version did: on the
-declared *type* of a listed variable (`ichorv1alpha1.TalosMachineList`),
+It matches on the declared *type* of a listed variable (`ichorv1alpha1.TalosMachineList`),
 not on a call to a method named `List`. Both scanned packages legitimately
 call `List` for plenty of other object kinds (listing `TalosCluster`s,
 other webhooks' own lookups, and -- as of this same change --
@@ -587,22 +535,13 @@ method name would have forced every one of those into a growing
 exception list, and a future violation hidden behind some other call
 shape would slip through a method-name match that a type-shape match
 still catches. `countplanesAllowedFuncs` is the explicit, reviewable
-exception list this version actually needs -- today, just
+exception list the guard needs -- today, just
 `candidateMachines`.
 
-Verified the same way the `Acquire` guard was: a throwaway second counting
-function was added to `internal/controller` (and, separately, to
-`internal/webhook/v1alpha1`, to confirm the cross-directory glob really
-reaches it) and confirmed to fail --
-
-```text
-countplanes_guard_test.go:114: talosoperation_controller.go:404: scratchSecondCountForGuardTest declares a
-TalosMachineList to count or select machines by hand; a control-plane count must go through
-deleteguard.CountApprovedControlPlanes -- if this is a different, legitimate purpose, add
-"scratchSecondCountForGuardTest" to countplanesAllowedFuncs with why, in that function's own doc comment
-```
-
--- then removed immediately after.
+Its failure message says what is wrong and what to do: a control-plane count
+must go through `deleteguard.CountApprovedControlPlanes`, and a different,
+legitimate purpose belongs in `countplanesAllowedFuncs` with a reason in that
+function's own doc comment.
 
 Like the `Acquire` guard, this one does not and structurally cannot verify
 that the `client.Reader` value passed in at a given call site is actually
@@ -649,34 +588,20 @@ and a violation sitting in the same file.
   gains a second field, `APIReader client.Reader`, alongside its existing
   `Client`, since that reconciler's `Client` is still legitimately
   cache-backed for everything else it does.
-- Every test construction of `TalosMachineReconciler` in
-  `internal/controller` now sets `APIReader` to the same `client.New(cfg,
-  ...)` value the suite already used for `Client` -- that constructor
-  builds a direct, uncached client (no informer, no watch), so these
-  were never actually exposed to this bug; only the *production* manager's
-  `mgr.GetClient()` is cache-backed. This is also why the webhook suite's
-  envtest failure was reproducible at all: its validator is wired through
-  a real `ctrl.Manager` (`SetupTalosMachineWebhookWithManager`), which
-  defaults to the same cached client production uses, independently of
-  whatever direct client a test's own assertions happen to use.
 - No RBAC change: `mgr.GetAPIReader()` reads the same resources through
   the same permissions already granted for `list`/`watch` on
   `talosmachines`; it is a different code path to the same API server,
   not a different credential.
-- Three go/parser guards existed across this codebase at this point
-  (`TestFixtureUUIDsAreUnique`, `TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite`,
-  `TestTalosMachineListCountingStaysCentralized`), with near-identical
-  glob/parse/walk scaffolding and, for the latter two, the same "method
-  or type allowed from exactly one place" rule. Not shared into a common
-  helper at the time: doing so needed a fourth, test-only package for
-  three ~100-line files to import, which cost more than the scaffolding
-  duplication it would remove. Flagged to revisit if a fourth guard
-  showed up -- see the section below for what happened when one did.
+- Four go/parser guards exist (`TestFixtureUUIDsAreUnique`,
+  `TestAcquireDisruptiveLockIsTheOnlyAcquireCallSite`,
+  `TestTalosMachineListCountingStaysCentralized`, and the fourth below), with
+  near-identical glob/parse/walk scaffolding. Four callers do not justify a
+  shared test helper, so each guard stays self-contained.
 
-### A fourth guard, and why consolidating it did not pay for itself
+### A fourth guard, and why the guards share no scaffolding
 
-A fourth go/parser guard, `TestAPIReaderIsAlwaysTheDirectReader`, was
-added right after this one: both `client.Client` (cached) and
+A fourth go/parser guard, `TestAPIReaderIsAlwaysTheDirectReader`, covers the
+wiring: both `client.Client` (cached) and
 `client.Reader`'s direct implementation satisfy the same `client.Reader`
 interface every `APIReader` field is typed as, so `APIReader:
 mgr.GetClient()` compiles and runs, silently reopening every hole this
@@ -684,60 +609,17 @@ ADR's appendix closes, with no signal from the type system at all. It
 scans `cmd/main.go` and `internal/webhook/v1alpha1` (the only two places
 an `APIReader` field is ever wired) for any value assigned to a field or
 key named `APIReader` that is not exactly a call to `GetAPIReader`.
-Verified the same way as the others: `APIReader: mgr.GetAPIReader()` was
-deliberately changed to `APIReader: mgr.GetClient()` in both `cmd/main.go`
-and the webhook's `SetupTalosMachineWebhookWithManager`, confirmed to
-fail in each case, then reverted.
-
-With a fourth guard landed, the reason consolidation had been deferred --
-"needs a fourth, test-only package" -- no longer held: all four guards
-now live in the same package (`internal/controller`), so a shared helper
-needs nothing more than an ordinary file in that same package, no new
-package at all. That changed condition was reason enough to actually try
-it, not just note it again.
-
-The attempt: a `forEachParsedFile(t, fset, dirs, pattern, skip, visit)`
-helper, in its own file, doing the glob-and-parse loop every guard
-repeated, with `isTestFile` moved alongside it; each of the four guards
-rewritten to supply only its own rule as `visit`. All four were
-re-verified exactly as before -- each deliberately broken again, in the
-already-refactored form, and confirmed to still fail with the same
-message, before being reverted back to passing.
-
-The result did not pay for itself. Measured in lines:
-
-| | before | after |
-|---|---|---|
-| `acquire_guard_test.go` | 103 | 85 |
-| `countplanes_guard_test.go` | 131 | 114 |
-| `uuid_guard_test.go` | 118 | 109 |
-| `apireader_guard_test.go` | 129 | 112 |
-| `guard_scaffold_test.go` (new) | -- | 73 |
-| **total** | **481** | **493** |
-
-Each guard did shrink -- the shared loop is real, and saves something
-every time -- but the four savings together (18 + 17 + 9 + 17 = 61 lines)
-were smaller than the new helper file's own cost (73 lines: a license
-header, the doc comment explaining why it exists and which four tests
-use it, and the function itself). Four callers were not enough for this
-particular helper to earn its own file. The consolidation was reverted;
-all four guards stayed self-contained, as they were before this section,
-and were re-verified once more (deliberately broken, confirmed failing,
-reverted) in that same self-contained form to confirm the revert itself
-introduced no regression.
-
-This is the opposite conclusion from `acquireDisruptiveLock`'s own
-centralization earlier in this ADR, and deliberately so: that
-consolidation wasn't justified by a line count at all, but by a safety
-property no amount of line-counting captures -- one function is either
-reviewed or it isn't, where two independently-written copies can each
-look reviewed and still disagree. Test *scaffolding* has no equivalent
-property to protect; it is not itself a safety rule, so it is fair to
-judge purely on whether it makes the code smaller, and here it did not.
+Test scaffolding is deliberately not centralized, unlike `acquireDisruptiveLock`.
+That centralization is justified by a safety property no line count captures --
+one function is either reviewed or it isn't, where two independently-written
+copies can each look reviewed and still disagree. Test *scaffolding* has no
+equivalent property to protect; it is not itself a safety rule, so it is judged
+purely on whether it makes the code smaller, and a shared helper for four
+guards does not.
 
 ## Amendment: a blocked drain is a wait, retried every 15 seconds
 
-Decided (2026-11-03, found on hardware in ADR 0108's friction item (b)): a
+Decided (2026-11-03; see ADR 0108's friction item (b)): a
 removal whose drain fails returns a `drainBlockedError`, and `Reconcile`
 requeues the machine after `drainRetryInterval` (15s), with the `Removal`
 condition (`DrainFailed`, naming the blocking pod) and one Warning Event when

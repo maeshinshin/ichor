@@ -115,7 +115,7 @@ test: manifests generate fmt vet setup-envtest build-installer ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 .PHONY: remote-gate
-remote-gate: ## Run the full gate (go test, lint, ui-ci) for HEAD as parallel Jobs in the homelab's ichor-e2e namespace; logs in remote-gate-out/.
+remote-gate: ## Run the full gate (go test, lint, ui-ci) for HEAD as parallel Jobs in the cluster set in hack/remote-gate.sh; logs in remote-gate-out/.
 	hack/remote-gate.sh
 
 .PHONY: test-e2e
@@ -301,7 +301,7 @@ $(LOCALBIN):
 KUBECTL ?= kubectl
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 # controller-gen (unlike `go list ./...`) descends into dot directories, so "./..." would walk
-# .claude/worktrees/*, whose nested go.mod files may be broken (missing go.sum) and fail
+# a git worktree kept in a dot directory of the repository, whose nested go.mod files may be broken (missing go.sum) and fail
 # the whole run. List the real code roots instead; "{a,b}" is its multi-path syntax.
 CONTROLLER_GEN_PATHS ?= {./api/...,./cmd/...,./internal/...,./pkg/...}
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen

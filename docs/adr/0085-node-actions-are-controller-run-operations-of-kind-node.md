@@ -28,7 +28,7 @@ ADR 0082 listed what the Talos client enables and ranked it, and implemented non
 
 ## Not decided here
 
-Support bundle, etcd snapshot and packet capture (ADR 0082 items 3, 5, 9) are not implemented. Override for the last-worker refusal: a node operation carries no override field and the webhook checks it for `reset` only, so the refusal has no override yet.
+Support bundle, etcd snapshot and packet capture (ADR 0082 items 3, 5, 9) only read from a node and are decided in ADR 0084. Override for the last-worker refusal: a node operation carries no override field and the webhook checks it for `reset` only, so the refusal has no override yet.
 
 Amended: a `reboot` or `shutdown` of a worker is refused (the operation pauses with the reason) when no other schedulable, Ready, non-control-plane Node exists. `restart-service` also requires the Talos service to report `Running` (and healthy, when it has a health check) through the Talos ServiceList API, in addition to the Node being Ready; a client that cannot read service state gets the Node check alone.
 
@@ -36,7 +36,6 @@ Amended: a `reboot` or `shutdown` of a worker is refused (the operation pauses w
 
 - One more operation kind; `TalosOperation` gains `spec.node` and `status.node`; `TalosClient` gains `ServiceRestart`, `EtcdStatus`, `EtcdAlarms`, `EtcdDefragment`, `EtcdForfeitLeadership` (all plain calls from `machinery` v1.14.3).
 - The operation reconciler gets `KubeClient` and `Evacuator` (the same as the config rollout).
-- Not verified on hardware: any of the actions against a real Talos node or cluster (the drain eviction of the controller's own pod, Talos's drain on `Shutdown(force=false)`, `EtcdDefragment` and `EtcdForfeitLeadership` responses, the removal flow of a worker with a reset). Tests use a fake Talos client and a fake clientset.
 - A node `reset` is also guarded server-side: the override webhook (ADR 0065) now covers CREATE of `talosoperations` and requires the `override` verb on the target `talosmachines` for `action: reset`, so a hand-written TalosOperation cannot skip the CLI/UI check; the typed-name confirm was already a CRD rule.
 
 ## Amendment: the Kubernetes Node stays after a remove

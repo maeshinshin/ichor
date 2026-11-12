@@ -590,6 +590,41 @@ func (in *TalosConfigPatchDocument) DeepCopyInto(out *TalosConfigPatchDocument) 
 		*out = new(typedconfig.ZswapConfigV1Alpha1)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.KubeAuditPolicyConfig != nil {
+		in, out := &in.KubeAuditPolicyConfig, &out.KubeAuditPolicyConfig
+		*out = new(typedconfig.KubeAuditPolicyConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KubeAuthorizerConfig != nil {
+		in, out := &in.KubeAuthorizerConfig, &out.KubeAuthorizerConfig
+		*out = new(typedconfig.KubeAuthorizerConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KubeCredentialProviderConfig != nil {
+		in, out := &in.KubeCredentialProviderConfig, &out.KubeCredentialProviderConfig
+		*out = new(typedconfig.KubeCredentialProviderConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KubeExternalManifestConfig != nil {
+		in, out := &in.KubeExternalManifestConfig, &out.KubeExternalManifestConfig
+		*out = new(typedconfig.KubeExternalManifestConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KubeletConfig != nil {
+		in, out := &in.KubeletConfig, &out.KubeletConfig
+		*out = new(typedconfig.KubeletConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KubeProxyConfig != nil {
+		in, out := &in.KubeProxyConfig, &out.KubeProxyConfig
+		*out = new(typedconfig.KubeProxyConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.KubeSchedulerConfig != nil {
+		in, out := &in.KubeSchedulerConfig, &out.KubeSchedulerConfig
+		*out = new(typedconfig.KubeSchedulerConfigV1Alpha1)
+		(*in).DeepCopyInto(*out)
+	}
 }
 
 // DeepCopy returns a copy of the receiver.

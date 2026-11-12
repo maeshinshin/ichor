@@ -39,9 +39,9 @@ end-to-end test is the right tool and a separate decision.
 
 ## Consequences
 
-- `describeError` used `ConnectError.message`, which carries a
-  `[code]` prefix, so the apiserver text was never shown verbatim. It
-  now uses `rawMessage`. A test pins this.
+- `describeError` uses `ConnectError.rawMessage`, not `.message`, which
+  carries a `[code]` prefix and would keep the apiserver text from being
+  shown verbatim.
 - Wiring mistakes inside a page (a gate not called, wrong prop) are not
   caught. Only the rule itself is.
 - New dangerous UI decisions are extracted into `lib/` first.

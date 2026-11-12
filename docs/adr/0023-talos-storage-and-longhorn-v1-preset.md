@@ -13,27 +13,25 @@ system and operating its volumes/replicas/settings — belong to Argo CD and the
 own controller, never Ichor. This ADR covers only layer 1: a `TalosStorage` CRD and a
 `longhorn-v1` preset producing the Talos-side config a node needs before Longhorn can use one of
 its disks. Layer 4 (the node-operation hook: mark unschedulable, request evacuation, wait, drain)
-is a separate work unit and is not built here — `TalosStorage.spec.evacuationTimeout` exists so
-that hook has somewhere to read its timeout from, but nothing in this change calls it.
+is separate (ADR 0025) and not part of this decision — `TalosStorage.spec.evacuationTimeout` exists so
+that hook has somewhere to read its timeout from, but nothing here calls it.
 
 The design leaves one thing unresolved going in: the exact Longhorn node label/annotation and
-evacuation field names per version, listed as an open question. Resolving it (with citations, not
-assumption) was this task's other half.
+evacuation field names per version, listed as an open question. This ADR resolves it, with citations.
 
-## What was verified, and against what
+## What Longhorn's docs and source say
 
-Checked against Longhorn's official docs (`longhorn.io/docs/1.12.1` and `1.13.0`, the latter
-current stable at the time of writing) and `longhorn-manager`'s own source
-(`github.com/longhorn/longhorn-manager`, tag `v1.12.1`, `k8s/pkg/apis/longhorn/v1beta2/node.go`) —
-not recalled from memory, not guessed:
+Per Longhorn's official docs (`longhorn.io/docs/1.12.1` and `1.13.0`) and
+`longhorn-manager`'s own source (`github.com/longhorn/longhorn-manager`, tag `v1.12.1`,
+`k8s/pkg/apis/longhorn/v1beta2/node.go`):
 
 - **Node registration is two plain Kubernetes Node fields, not a Longhorn CR.** The label
   `node.longhorn.io/create-default-disk` set to `"config"` tells Longhorn's node controller to
   read the disk list from the annotation `node.longhorn.io/default-disks-config` (a JSON array of
   `{path, allowScheduling, [tags]}`) instead of auto-creating a default disk from Longhorn's own
   `default-data-path` setting. This matches the design's "registered ... through its own node
-  label and annotation mechanism, not by writing its CRs" directly, and has been stable across
-  the two doc versions checked.
+  label and annotation mechanism, not by writing its CRs" directly, and is the same in
+  both doc versions.
 - **The matching "is this actually honoured" setting is Longhorn's own `create-default-disk-
   labeled-nodes` setting.** If it is off, Longhorn ignores the label/annotation pair entirely and
   auto-creates (or doesn't) by its own default-path logic — this is the live/consistency check the
@@ -48,17 +46,16 @@ not recalled from memory, not guessed:
 - **The required system extensions are `siderolabs/iscsi-tools` and `siderolabs/util-linux-tools`**,
   per the same support doc. These are Image Factory schematic/installer-image concerns, not a
   `TalosConfigPatch` document (`machine.install.extensions` lists already-baked extension image
-  refs — a different mechanism, verified during the v1alpha1.Config walk in ADR 0003 — it does not
+  refs — a different mechanism, per ADR 0003's walk of v1alpha1.Config — it does not
   make an extension appear in an image that was not built with it). `longhornV1.CheckExtensions`
   therefore verifies and blocks with a clear error; it does not and cannot generate the extension
   into existence.
 
-**Not resolved, left to a later look if it matters:** the exact `nodes.longhorn.io` CRD field
-names for eviction (`NodeSpec.AllowScheduling`/`EvictionRequested`,
-`DiskSpec.AllowScheduling`/`EvictionRequested`, per the same source read) are layer 4's concern,
-not layer 1's — recorded here since they were read during the same research pass, not because
-this change uses them. The open question in `docs/design/architecture.md` is removed because
-layer 1's half of it (registration) is now resolved and cited; layer 4's half (eviction) is this
+**Eviction field names are layer 4's concern, not layer 1's.** The exact `nodes.longhorn.io` CRD
+field names for eviction (`NodeSpec.AllowScheduling`/`EvictionRequested`,
+`DiskSpec.AllowScheduling`/`EvictionRequested`, per the same source) are not used by this ADR; ADR
+0025 covers them. The design's open question in `docs/design/architecture.md` is removed because
+layer 1's half of it (registration) is resolved and cited here; layer 4's half (eviction) is this
 ADR's explicit non-scope, not a remaining unknown to track under the same bullet.
 
 ## Decision
@@ -80,29 +77,26 @@ ADR's explicit non-scope, not a remaining unknown to track under the same bullet
   `UserVolumeConfig` document (named `longhorn`, matching Longhorn's own example) plus the `Config`
   document adding the kubelet bind mount at `longhornMountPath` the support doc's example shows
   alongside it — without the mount, the volume is invisible to the kubelet and so to Longhorn;
-  `NodeLabels`/`NodeAnnotations` return the two Longhorn fields verified above; `CheckConsistency`
+  `NodeLabels`/`NodeAnnotations` return the two Longhorn fields described above; `CheckConsistency`
   implements the live-settings check. `NewPreset` is the only switch on `diskPreset`'s string
   value, so a second preset (`longhorn-v2`, `raw`, `filesystem`, all named in the design's roadmap)
   is a new `Preset` implementation and one new `case`, nothing else.
-- **Scaffolded, not hand-written.** `kubebuilder create api --group ichor --version v1alpha1
-  --kind TalosStorage --resource --controller=false` generated `talosstorage_types.go`'s skeleton,
-  `PROJECT`, and the three `kustomization.yaml` entries; `--controller=false` because layer 1's
-  reconciler is not part of this change (there is nothing yet for one to do: `Preset` is a library,
-  not wired to a controller). `make manifests` generated the CRD, RBAC roles and deepcopy; `dist/
-  chart`'s CRD and RBAC templates were synced by hand (the header-reconstruction technique already
-  established for `TalosConfigPatch`/`TalosCluster`), never via `kubebuilder edit
-  --plugins=helm/v2-alpha`, which would revert unrelated hand-edits already in the chart.
+- **Scaffolded with `kubebuilder create api --group ichor --version v1alpha1 --kind TalosStorage
+  --resource --controller=false`**, because layer 1's reconciler is not part of this decision
+  (`Preset` is a library, not wired to a controller). `make manifests` generates the CRD, RBAC
+  roles and deepcopy; `dist/chart`'s CRD and RBAC templates are synced by hand (the
+  header-reconstruction technique already established for `TalosConfigPatch`/`TalosCluster`),
+  never via `kubebuilder edit --plugins=helm/v2-alpha`, which would revert unrelated hand-edits
+  already in the chart.
 
 ## Consequences
 
-- Layer 1 is complete and tested (`pkg/storage`, 95%+ coverage): given a disk preset name and a
-  disk selector, Ichor can produce the exact `TalosConfigPatch` documents and node labels/
+- Layer 1 is complete: given a disk preset name and a disk selector, Ichor can produce the exact `TalosConfigPatch` documents and node labels/
   annotations Longhorn needs, and can tell the caller before anything is applied whether the
   node's installer image is missing a required extension.
-- Nothing in this change installs, configures, or talks to Longhorn, writes a `nodes.longhorn.io`
+- Nothing in this decision installs, configures, or talks to Longhorn, writes a `nodes.longhorn.io`
   resource, or reconciles `TalosStorage`. Those are, respectively, Argo CD's job, out of scope by
-  design, layer 4 (a separate work unit), and controller work for a later change once there is a
-  reconciler to write.
+  design, layer 4 (ADR 0025), and controller work once there is a reconciler to write.
 - A second preset is additive: implement `Preset`, add a `case` to `NewPreset`, extend the CRD
   enum. Nothing about `TalosStorageSpec` assumes Longhorn specifically.
 
@@ -129,9 +123,9 @@ Layer 1 is now rendered into node configs as the system layer and `TalosStorage`
 ## Amendment (2026-10-27): a schematic-only change is a Talos upgrade
 
 Adding an extension (iscsi-tools, util-linux-tools) means a new schematic, and "this is a Talos
-upgrade to a new schematic" has to be true when `spec.talosVersion` does not move. On hardware it
-was not: `talos_upgrade.go` compared only the running version with the target, so changing only
-`TalosCluster.spec.schematic.id` completed the TalosOperation in seconds with no reboot.
+upgrade to a new schematic" has to be true when `spec.talosVersion` does not move. A comparison of
+only the running version with the target (as `talos_upgrade.go` once made) would complete the
+TalosOperation in seconds with no reboot when only `TalosCluster.spec.schematic.id` changes.
 
 A machine now needs the upgrade when its running version **or** its running schematic differs from
 the target; the same version and schematic is still a no-op. The Upgrade call and the post-reboot

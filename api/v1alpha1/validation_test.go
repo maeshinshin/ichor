@@ -166,18 +166,6 @@ var _ = Describe("TalosConfigPatchDocument", func() {
 		func(doc TalosConfigPatchDocument) {
 			Expect(k8sClient.Create(context.Background(), newConfigPatchWithDocument(doc))).NotTo(Succeed())
 		},
-		Entry("kind SysctlConfig with config populated instead", TalosConfigPatchDocument{
-			Kind:   kindSysctlConfig,
-			Config: minimalConfig(),
-		}),
-		Entry("kind KernelModuleConfig with sysctlConfig populated instead", TalosConfigPatchDocument{
-			Kind:         kindKernelModuleConfig,
-			SysctlConfig: minimalSysctlConfig(),
-		}),
-		Entry("kind Config with kernelModuleConfig populated instead", TalosConfigPatchDocument{
-			Kind:               kindConfig,
-			KernelModuleConfig: minimalKernelModuleConfig(),
-		}),
 		Entry("two fields populated", TalosConfigPatchDocument{
 			Kind:               kindSysctlConfig,
 			SysctlConfig:       minimalSysctlConfig(),
@@ -190,6 +178,27 @@ var _ = Describe("TalosConfigPatchDocument", func() {
 			Kind:         "NetworkRuleConfig",
 			SysctlConfig: minimalSysctlConfig(),
 		}),
+	)
+
+	// The schema bounds a document to kind plus one field (minProperties and maxProperties 2); that the
+	// field is the one kind names is Validate's, which the webhook and the renderer call.
+	DescribeTable("a document the schema admits but Validate refuses, naming the kind and the fields",
+		func(doc TalosConfigPatchDocument, kind, populated string) {
+			Expect(k8sClient.Create(context.Background(), newConfigPatchWithDocument(doc))).To(Succeed())
+			Expect(doc.Validate()).To(MatchError(And(ContainSubstring(kind), ContainSubstring(populated))))
+		},
+		Entry("kind SysctlConfig with config populated instead", TalosConfigPatchDocument{
+			Kind:   kindSysctlConfig,
+			Config: minimalConfig(),
+		}, kindSysctlConfig, "config"),
+		Entry("kind KernelModuleConfig with sysctlConfig populated instead", TalosConfigPatchDocument{
+			Kind:         kindKernelModuleConfig,
+			SysctlConfig: minimalSysctlConfig(),
+		}, kindKernelModuleConfig, "sysctlConfig"),
+		Entry("kind Config with kernelModuleConfig populated instead", TalosConfigPatchDocument{
+			Kind:               kindConfig,
+			KernelModuleConfig: minimalKernelModuleConfig(),
+		}, kindConfig, "kernelModuleConfig"),
 	)
 
 	It("round-trips a non-trivial Config document through the API server", func() {

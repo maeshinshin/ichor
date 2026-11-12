@@ -22,9 +22,7 @@ in the Go module cache (`go.yaml.in/yaml/v4`'s actual decode behavior,
 machinery's `config.Provider.RedactSecrets`, the COSI resource shapes under
 `pkg/machinery/resources/{hardware,block,network,perf}`) rather than taken
 on faith from documentation; no WebFetch against talos.dev was needed since
-the module source answered every question this unit ran into. Context7 and
-Serena were unavailable for this session, as noted by the task; `rg` and
-direct reads of the module cache stood in for both.
+the module source answered every question this unit ran into.
 
 ## Decision
 
@@ -101,7 +99,7 @@ fabricated. `AuditRecord` is returned to the caller and nothing more --
 not also written as a Kubernetes `Event` or any other durable log. Adding
 an `EventRecorder` would mean wiring a `client-go` broadcaster this backend
 has no other use for, purely to duplicate what the response already states;
-skipped under ponytail's "does this need to exist."
+skipped because it does not need to exist.
 
 ### Secrets masking is machinery's job, not a path denylist
 

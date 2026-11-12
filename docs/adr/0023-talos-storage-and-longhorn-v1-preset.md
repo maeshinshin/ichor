@@ -115,7 +115,7 @@ reconciling that CRD from the label/annotation pair — writing it directly woul
 controller meant to own it.
 
 Giving `TalosStorage` a `--controller=true` scaffold now, even with an empty `Reconcile`. Rejected
-as the kind of placeholder ponytail mode rules out: an empty reconciler is not load-bearing, adds
+as the kind of placeholder with no need shown: an empty reconciler is not load-bearing, adds
 a watch and an RBAC surface for nothing, and the next change that actually needs one can scaffold
 it then.
 

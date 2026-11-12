@@ -52,7 +52,7 @@ this screen yet, rather than leaving a reader to wonder why there's no
 edit button.
 
 **Not built, and not stubbed**: a patch-editing form, an impact-preview
-panel, or a schema-driven field list. Ponytail's first question —
+panel, or a schema-driven field list. The first question —
 does this need to exist — has a clear answer here: a form with no RPC to
 submit to is not a smaller version of the feature, it is a non-functional
 one that looks finished. Building it would also have meant exactly the

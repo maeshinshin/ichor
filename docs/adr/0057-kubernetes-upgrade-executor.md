@@ -93,7 +93,7 @@ Talos API. The controller's own ServiceAccount therefore gets no write access to
 CRDs; it gains `get` on DaemonSets, and `get;list` on Pods and Nodes it already had. When `spec.cni.kubeProxy` is
 `replaced` nothing about kube-proxy is checked (no DaemonSet is shipped); otherwise the step waits for the
 `kube-proxy` DaemonSet to carry the target and finish rolling out. This is before the workers, not after the
-kubelets as in `upgrade-k8s`; kube-proxy may be newer than a kubelet but not than the API server. `ponytail:`
+kubelets as in `upgrade-k8s`; kube-proxy may be newer than a kubelet but not than the API server. `shortcut:`
 no pruning and no inventory, unlike `ssa.Manager`; an object a later Talos stops shipping stays until removed.
 
 **A rendering bug found on the way** (fixed in `pkg/render`): `spec.kubernetesVersion` is `vX.Y.Z` (the CRD

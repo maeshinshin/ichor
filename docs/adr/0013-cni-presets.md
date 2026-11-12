@@ -116,8 +116,8 @@ design's interface is for CNIs Ichor knows how to render something for.
 declared patches pass straight through to the reconciler and the Argo CD
 Application it builds, with nothing for a `Preset` to compute. Building a
 no-op `custom.Preset` that exists only to satisfy an interface no caller
-needs yet would be the exact kind of extension point ponytail's ladder says
-not to add.
+needs yet would be the exact kind of extension point that is not worth adding
+before a caller needs it.
 
 ## Decision: Hubble's certificates
 

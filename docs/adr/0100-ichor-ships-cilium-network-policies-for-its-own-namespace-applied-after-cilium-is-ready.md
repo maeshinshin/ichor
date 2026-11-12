@@ -116,7 +116,7 @@ Amendment 2026-10-29 (ADR 0105): the ichor-ui ingress rule moves from 8080 to 84
 
 The user asked for Ichor's own security to be raised with CiliumNetworkPolicies (ADR 0108). Scope is `ichor-system` and its Jobs only; the managed clusters' policies stay opt-in. The default deny in both directions and the per-flow allows already existed; this amendment removes the `world` rules that no longer need to be wide, makes the chart on by default, and lets the controller write the one policy whose content depends on user objects.
 
-### Cilium semantics relied on (Cilium 1.18 docs via Context7 `/cilium/cilium/v1_18_2`, `Documentation/security/policy/language.rst`)
+### Cilium semantics relied on (Cilium 1.18 docs, `Documentation/security/policy/language.rst`)
 
 - A rule that selects an endpoint and has an `egress` (or `ingress`) section puts that direction in deny mode; `egress: [{}]` allows nothing. Policies are additive, so one wide `world` rule in a static policy would cancel any narrowing done elsewhere. That is why the static controller rules lose `world` instead of the dynamic policy merely adding to it.
 - `toFQDNs` only works if the endpoint's DNS lookups go through Cilium's DNS proxy: the documented form is a `toEndpoints` rule to `kube-system` `k8s-app=kube-dns` on port 53 with `rules.dns` (`matchPattern: "*"` allows every query), next to the `toFQDNs` rule. The static DNS rules now carry that L7 rule; before they were port-level only.

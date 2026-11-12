@@ -68,7 +68,7 @@ UI, per the design's own standard for the write side):
   `nodes.longhorn.io` with whatever client it already has (dynamic or typed) — adding
   `longhorn-manager`'s own API types as a dependency here, just to name two bool fields this ADR
   already names in prose, was considered and rejected as exactly the dependency-for-a-few-lines
-  ponytail mode rules out.
+  that is not worth adding.
 
 ## Consequences
 

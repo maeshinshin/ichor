@@ -18,8 +18,8 @@ whose deletion is admission-allowed and controller-approved never actually
 disappears, and `deleteguard.CountApprovedControlPlanes`'s List therefore
 never stops counting it either, since nothing ever clears its finalizer.
 That is not a "mostly working" removal path — it is a machine that drains
-and then gets permanently stuck, which Ponytail's "no half-working thing
-left behind" rule treats as a real problem, not a phase boundary to leave
+and then gets permanently stuck, which counts as a real problem (no half-working thing
+is left behind), not a phase boundary to leave
 alone.
 
 Finishing it needs a real Talos API call. `TalosClient`'s doc comment calls

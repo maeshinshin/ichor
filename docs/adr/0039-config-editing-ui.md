@@ -174,8 +174,8 @@ passes without a cast, confirmed by not needing one anywhere in
 - `make build test lint` (Go) and `make ui-ci`/`make ui-test` (UI) all
   pass; `rm -rf cmd/ichor-ui/dist` then `git status` confirmed no
   generated-artifact drift from this unit.
-- Not built, per the task's own boundary and ponytail's "does this need
-  to exist": `matchExpressions`-only convenience fields on the label
+- Not built, per the task's own boundary and because none of it needs
+  to exist: `matchExpressions`-only convenience fields on the label
   selector form (folded into the one JSON `Textarea` instead, see Question
   2); a live/typing-triggered impact preview (Question 3); any schema
   introspection of the CRD's OpenAPI document in the browser (Question 1).

@@ -272,7 +272,7 @@ reading the generated output, not assumed from a version number.
 `useEffect`/`useState` per page.** Four pages, each with at most two
 independent fetches and no shared cache requirement across them (a cluster
 list and a node detail page never need to agree on the same cached
-`Cluster` object) - ponytail's "does this need to exist" answer was no,
+`Cluster` object) - whether it needs to exist is answered no,
 matching ADR 0017's own precedent of preferring zero dependencies over a
 reach for one.
 

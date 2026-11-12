@@ -28,7 +28,7 @@ So the registry would have exactly one member.
 
 ## Decision: no registry
 
-Ponytail's own rule applies directly here: don't build an abstraction over a
+The rule applies directly here: don't build an abstraction over a
 single implementation. `pkg/cni.Preset` already declares everything a CNI
 hand-over needs (`BootstrapManifest`, `ArgoCDApplication`,
 `HandoverWorkloads`) as part of the one interface every CNI implements. A

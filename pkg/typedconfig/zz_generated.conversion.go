@@ -529,25 +529,24 @@ func (m *ClusterConfig) ToMachinery() (*mv1alpha1.ClusterConfig, error) {
 	}
 	out.ExternalCloudProviderConfig = t13
 	out.ExtraManifests = m.ExtraManifests
-	out.ExtraManifestHeaders = m.ExtraManifestHeaders
 	if m.ClusterInlineManifests != nil {
-		c16 := make([]mv1alpha1.ClusterInlineManifest, len(m.ClusterInlineManifests))
-		for k16, e16 := range m.ClusterInlineManifests {
-			t17, err := (e16).ToMachinery()
+		c15 := make([]mv1alpha1.ClusterInlineManifest, len(m.ClusterInlineManifests))
+		for k15, e15 := range m.ClusterInlineManifests {
+			t16, err := (e15).ToMachinery()
 			if err != nil {
 				return nil, fmt.Errorf("ClusterConfig.inlineManifests"+": %w", err)
 			}
-			if t17 != nil {
-				c16[k16] = *t17
+			if t16 != nil {
+				c15[k15] = *t16
 			}
 		}
-		out.ClusterInlineManifests = mv1alpha1.ClusterInlineManifests(c16)
+		out.ClusterInlineManifests = mv1alpha1.ClusterInlineManifests(c15)
 	}
-	t17, err := (m.AdminKubeconfigConfig).ToMachinery()
+	t16, err := (m.AdminKubeconfigConfig).ToMachinery()
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.adminKubeconfig"+": %w", err)
 	}
-	out.AdminKubeconfigConfig = t17
+	out.AdminKubeconfigConfig = t16
 	out.AllowSchedulingOnMasters = m.AllowSchedulingOnMasters
 	out.AllowSchedulingOnControlPlanes = m.AllowSchedulingOnControlPlanes
 	return out, nil
@@ -623,23 +622,22 @@ func ClusterConfigFromMachinery(src *mv1alpha1.ClusterConfig) (*ClusterConfig, e
 	}
 	out.ExternalCloudProviderConfig = t13
 	out.ExtraManifests = src.ExtraManifests
-	out.ExtraManifestHeaders = src.ExtraManifestHeaders
 	if src.ClusterInlineManifests != nil {
-		c16 := make([]*ClusterInlineManifest, len(src.ClusterInlineManifests))
-		for k16, e16 := range src.ClusterInlineManifests {
-			t17, err := ClusterInlineManifestFromMachinery(&(e16))
+		c15 := make([]*ClusterInlineManifest, len(src.ClusterInlineManifests))
+		for k15, e15 := range src.ClusterInlineManifests {
+			t16, err := ClusterInlineManifestFromMachinery(&(e15))
 			if err != nil {
 				return nil, fmt.Errorf("ClusterConfig.inlineManifests"+": %w", err)
 			}
-			c16[k16] = t17
+			c15[k15] = t16
 		}
-		out.ClusterInlineManifests = c16
+		out.ClusterInlineManifests = c15
 	}
-	t17, err := AdminKubeconfigConfigFromMachinery(src.AdminKubeconfigConfig)
+	t16, err := AdminKubeconfigConfigFromMachinery(src.AdminKubeconfigConfig)
 	if err != nil {
 		return nil, fmt.Errorf("ClusterConfig.adminKubeconfig"+": %w", err)
 	}
-	out.AdminKubeconfigConfig = t17
+	out.AdminKubeconfigConfig = t16
 	out.AllowSchedulingOnMasters = src.AllowSchedulingOnMasters
 	out.AllowSchedulingOnControlPlanes = src.AllowSchedulingOnControlPlanes
 	return out, nil
@@ -3054,28 +3052,6 @@ func PEMEncodedCertificateFromMachinery(src *mx509.PEMEncodedCertificate) (*PEME
 	return out, nil
 }
 
-// ToMachinery converts m to the machinery mx509.PEMEncodedCertificateAndKey type.
-func (m *PEMEncodedCertificateAndKey) ToMachinery() (*mx509.PEMEncodedCertificateAndKey, error) {
-	if m == nil {
-		return nil, nil
-	}
-	out := &mx509.PEMEncodedCertificateAndKey{}
-	out.Crt = m.Crt
-	out.Key = m.Key
-	return out, nil
-}
-
-// PEMEncodedCertificateAndKeyFromMachinery converts a machinery mx509.PEMEncodedCertificateAndKey document to the mirror type.
-func PEMEncodedCertificateAndKeyFromMachinery(src *mx509.PEMEncodedCertificateAndKey) (*PEMEncodedCertificateAndKey, error) {
-	if src == nil {
-		return nil, nil
-	}
-	out := &PEMEncodedCertificateAndKey{}
-	out.Crt = src.Crt
-	out.Key = src.Key
-	return out, nil
-}
-
 // ToMachinery converts m to the machinery mblock.ProvisioningSpec type.
 func (m *ProvisioningSpec) ToMachinery() (*mblock.ProvisioningSpec, error) {
 	if m == nil {
@@ -3411,11 +3387,6 @@ func (m *RegistryTLSConfig) ToMachinery() (*mv1alpha1.RegistryTLSConfig, error) 
 		return nil, nil
 	}
 	out := &mv1alpha1.RegistryTLSConfig{}
-	t1, err := (m.TLSClientIdentity).ToMachinery()
-	if err != nil {
-		return nil, fmt.Errorf("RegistryTLSConfig.clientIdentity"+": %w", err)
-	}
-	out.TLSClientIdentity = t1
 	out.TLSCA = mv1alpha1.Base64Bytes(m.TLSCA)
 	out.TLSInsecureSkipVerify = m.TLSInsecureSkipVerify
 	return out, nil
@@ -3427,11 +3398,6 @@ func RegistryTLSConfigFromMachinery(src *mv1alpha1.RegistryTLSConfig) (*Registry
 		return nil, nil
 	}
 	out := &RegistryTLSConfig{}
-	t1, err := PEMEncodedCertificateAndKeyFromMachinery(src.TLSClientIdentity)
-	if err != nil {
-		return nil, fmt.Errorf("RegistryTLSConfig.clientIdentity"+": %w", err)
-	}
-	out.TLSClientIdentity = t1
 	out.TLSCA = []byte(src.TLSCA)
 	out.TLSInsecureSkipVerify = src.TLSInsecureSkipVerify
 	return out, nil

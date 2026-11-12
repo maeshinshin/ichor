@@ -138,7 +138,6 @@ Version v1alpha1: has a `status` subresource.
 | `spec.cni.custom.documents[].config.cluster.externalCloudProvider` **(deprecated)** | `object` | no | Talos: ExternalCloudProviderConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
 | `spec.cni.custom.documents[].config.cluster.externalCloudProvider.enabled` **(deprecated)** | `boolean` | no |  |
 | `spec.cni.custom.documents[].config.cluster.externalCloudProvider.manifests` **(deprecated)** | `[]string` | no |  |
-| `spec.cni.custom.documents[].config.cluster.extraManifestHeaders` **(deprecated)** | `map[string]string` | no |  |
 | `spec.cni.custom.documents[].config.cluster.extraManifests` **(deprecated)** | `[]string` | no |  |
 | `spec.cni.custom.documents[].config.cluster.id` **(deprecated)** | `string` | no |  |
 | `spec.cni.custom.documents[].config.cluster.inlineManifests` **(deprecated)** | `[]object` | no |  |
@@ -408,9 +407,6 @@ Version v1alpha1: has a `status` subresource.
 | `spec.cni.custom.documents[].config.machine.registries.config.<key>.auth.username` **(deprecated)** | `string` | no |  |
 | `spec.cni.custom.documents[].config.machine.registries.config.<key>.tls` **(deprecated)** | `object` | no | Talos: RegistryTLSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
 | `spec.cni.custom.documents[].config.machine.registries.config.<key>.tls.ca` **(deprecated)** | `string (byte)` | no |  |
-| `spec.cni.custom.documents[].config.machine.registries.config.<key>.tls.clientIdentity` **(deprecated)** | `object` | no | github.com/siderolabs/crypto/x509: PEMEncodedCertificateAndKey |
-| `spec.cni.custom.documents[].config.machine.registries.config.<key>.tls.clientIdentity.crt` **(deprecated)** | `string (byte)` | yes |  |
-| `spec.cni.custom.documents[].config.machine.registries.config.<key>.tls.clientIdentity.key` **(deprecated)** | `string (byte)` | yes |  |
 | `spec.cni.custom.documents[].config.machine.registries.config.<key>.tls.insecureSkipVerify` **(deprecated)** | `boolean` | no |  |
 | `spec.cni.custom.documents[].config.machine.registries.mirrors` **(deprecated)** | `map[string]object` | no |  |
 | `spec.cni.custom.documents[].config.machine.registries.mirrors.<key>.endpoints` **(deprecated)** | `[]string` | yes |  |

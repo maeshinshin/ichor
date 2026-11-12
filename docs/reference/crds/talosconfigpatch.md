@@ -123,7 +123,6 @@ Version v1alpha1: has a `status` subresource.
 | `spec.documents[].config.cluster.externalCloudProvider` | `object` | no | Talos: ExternalCloudProviderConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
 | `spec.documents[].config.cluster.externalCloudProvider.enabled` | `boolean` | no |  |
 | `spec.documents[].config.cluster.externalCloudProvider.manifests` | `[]string` | no |  |
-| `spec.documents[].config.cluster.extraManifestHeaders` | `map[string]string` | no |  |
 | `spec.documents[].config.cluster.extraManifests` | `[]string` | no |  |
 | `spec.documents[].config.cluster.id` | `string` | no |  |
 | `spec.documents[].config.cluster.inlineManifests` | `[]object` | no |  |
@@ -393,9 +392,6 @@ Version v1alpha1: has a `status` subresource.
 | `spec.documents[].config.machine.registries.config.<key>.auth.username` | `string` | no |  |
 | `spec.documents[].config.machine.registries.config.<key>.tls` | `object` | no | Talos: RegistryTLSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
 | `spec.documents[].config.machine.registries.config.<key>.tls.ca` | `string (byte)` | no |  |
-| `spec.documents[].config.machine.registries.config.<key>.tls.clientIdentity` | `object` | no | github.com/siderolabs/crypto/x509: PEMEncodedCertificateAndKey |
-| `spec.documents[].config.machine.registries.config.<key>.tls.clientIdentity.crt` | `string (byte)` | yes |  |
-| `spec.documents[].config.machine.registries.config.<key>.tls.clientIdentity.key` | `string (byte)` | yes |  |
 | `spec.documents[].config.machine.registries.config.<key>.tls.insecureSkipVerify` | `boolean` | no |  |
 | `spec.documents[].config.machine.registries.mirrors` | `map[string]object` | no |  |
 | `spec.documents[].config.machine.registries.mirrors.<key>.endpoints` | `[]string` | yes |  |

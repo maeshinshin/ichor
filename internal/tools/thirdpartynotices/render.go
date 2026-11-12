@@ -88,6 +88,29 @@ func label(body string) string {
 
 const mplLabel = "MPL-2.0"
 
+// copyleft names the licences Ichor does not ship: its own licence is Apache-2.0, and only file-level
+// MPL-2.0 is accepted. The MPL text itself names the GPL family as Secondary Licenses, so it is exempt.
+var copyleft = []struct{ name, phrase string }{
+	{"GPL", "gnu general public license"},
+	{"LGPL", "gnu lesser general public license"},
+	{"LGPL", "gnu library general public license"},
+	{"AGPL", "gnu affero general public license"},
+	{"SSPL", "server side public license"},
+	{"BUSL", "business source license"},
+}
+
+// denied returns the copyleft licences a normalised body holds, or nil.
+func denied(body string) []string {
+	b := strings.ToLower(strings.Join(strings.Fields(body), " "))
+	var l []string
+	for _, c := range copyleft {
+		if strings.Contains(b, c.phrase) && !slices.Contains(l, c.name) {
+			l = append(l, c.name)
+		}
+	}
+	return l
+}
+
 // A use is one component's claim on a variant.
 type use struct {
 	c      *component
@@ -128,6 +151,9 @@ func buildPool(comps []component) (*pool, error) {
 	add := func(c *component, f file) error {
 		flat, text, cp := split(f.Text)
 		body, lb := canon(flat), label(flat)
+		if d := denied(flat); len(d) > 0 && !strings.Contains(lb, mplLabel) {
+			return fmt.Errorf("%s %s: licence text matches %s, which Ichor does not ship; remove the dependency or decide in an ADR", c.id(), f.Path, strings.Join(d, " + "))
+		}
 		if lb == "" {
 			return fmt.Errorf("%s %s: licence text of no known kind; teach label() about it", c.id(), f.Path)
 		}

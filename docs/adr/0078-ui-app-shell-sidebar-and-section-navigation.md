@@ -6,7 +6,7 @@ Supersedes: 0074 (the header and nav-row part only; the scrollbar-gutter and scr
 
 ## Context
 
-The top header with five nav buttons worked on a phone only because the nav row scrolled sideways (ADR 0074), and detail pages were a vertical stack of identically styled cards with no overview. The user asked for something closer to Argo CD, the AWS console or Rancher: persistent navigation, a breadcrumb, readable summaries, and a way around the long machine page.
+The top header with five nav buttons worked on a phone only because the nav row scrolled sideways (ADR 0074), and detail pages were a vertical stack of identically styled cards with no overview. A console-style UI needs persistent navigation, a breadcrumb, readable summaries, and a way around the long machine page.
 
 ## Decision
 
@@ -20,21 +20,19 @@ The top header with five nav buttons worked on a phone only because the nav row 
 
 ## Consequences
 
-- preactcn components added: `sidebar`, `sheet`, `tooltip`, `breadcrumb`, `skeleton`, `empty` (and their radix ports `tooltip`; `tabs`, `scroll-area` and `collapsible` were installed, found unused and removed). The installer was told not to overwrite existing shared files, so the ADR 0074 `modal-layer.ts` is kept.
+- preactcn components added: `sidebar`, `sheet`, `tooltip`, `breadcrumb`, `skeleton`, `empty` (and their radix port `tooltip`). The ADR 0074 `modal-layer.ts` is kept.
 - The sidebar keeps its open/closed state in a cookie, as the component does; the `Ctrl/Cmd+B` shortcut comes with it.
-- Not verified in a real browser (none in `nix develop`); checked by building and reading the markup and classes.
 
-## Amendment: first look in a browser (2026-10-26)
+## Amendment: landing page, list pages, status and detail pages (2026-10-26)
 
-The shell was first viewed in headless Chromium (`make ui-shots`, `hack/ui-shots.mjs`; Chromium is in `flake.nix`) against the demo. Measured against Argo CD and the cloud consoles, it was a stack of cards with grey pills for status and no landing page. Changes:
+The first shell was a stack of cards with grey pills for status and no landing page. Changes:
 
 1. **Overview is the landing page** (`/`, `pages/Overview.tsx`): a strip of four linked count tiles (clusters, machines, operations, patches) with health lines, a "Needs attention" table (pending approvals, not-ready machines, running/paused/failed operations, rollouts) and the latest operations. The cluster list moved to `/clusters`; breadcrumbs and the sidebar follow. Each list is read separately, so a list the user may not read shows "not available" instead of failing the page. Counting is in `lib/overview.ts`.
 2. **List pages** share `ListToolbar` (preactcn `input-group` search, count, refresh, the page's primary action), `DataTable` (one bordered table, no card around it) and `LinkRow` (the whole row opens the detail page; links and buttons in it keep their own action). Search is `lib/filter.ts`. Empty "pending" and "rejected" machine sections are hidden rather than shown as empty cards.
 3. **Status is a coloured icon plus the word** (`components/Status.tsx`, tone from `lib/status.ts`), not a pill; colour is never the only cue. Machine readiness shows the condition's reason (Converged) when there is one.
 4. **Detail pages**: `PageHeader` takes a `meta` list of compact label/value pairs under the title, so the key facts show without scrolling; the "Overview" sections of the cluster and machine pages are gone (their fields moved there). `Section` is a heading with a rule, not a card; tables inside a section get the same bordered frame. Conditions are a table.
-5. The theme switch was compared with the preactcn site's `ThemeToggle.tsx`: same markup (ghost icon `Button`, `Sun hidden dark:block`, `Moon dark:hidden`); only the storage key differs (`ichor-ui-theme`, ADR 0070).
-6. `ICHOR_API=http://host npx vite` (and `vite preview`) proxy the Connect services and `/auth/config` to a running backend for screenshots.
-7. **The UI says "Node", not "Machine"**: the sidebar entry, page titles, breadcrumbs, Overview tile and table headers, dialogs and kind labels read "Node" (`lib/i18n.ts`). The `/machines` route, the i18n key names, the protos and the `TalosMachine` CRD keep their names.
+5. The theme switch uses the same markup as the preactcn site's `ThemeToggle.tsx` (ghost icon `Button`, `Sun hidden dark:block`, `Moon dark:hidden`); only the storage key differs (`ichor-ui-theme`, ADR 0070).
+6. **The UI says "Node", not "Machine"**: the sidebar entry, page titles, breadcrumbs, Overview tile and table headers, dialogs and kind labels read "Node" (`lib/i18n.ts`). The `/machines` route, the i18n key names, the protos and the `TalosMachine` CRD keep their names.
 
 ## Amendment: the cluster page's Operations section shows context (2026-10-27)
 

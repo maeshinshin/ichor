@@ -18,5 +18,5 @@ The page from ADR 0039 was correct but bare: four fields, a JSON box per documen
 
 ## Consequences
 
-- New: `ui/src/components/PatchDocumentCard.tsx`, `ui/src/lib/patchDocs.ts` and its test. No preactcn component was added.
+- New: `ui/src/components/PatchDocumentCard.tsx`, `ui/src/lib/patchDocs.ts`. No preactcn component was added.
 - No API or proto change.

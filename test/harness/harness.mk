@@ -37,7 +37,7 @@ test-e2e-prereqs: ## Verify KUBECONFIG and ICHOR_E2E_KUBE_CONTEXT point at a clu
 # runs against whatever KUBECONFIG, ICHOR_E2E_TALOS_NODES, ICHOR_E2E_INNER_KUBECONFIG and
 # ICHOR_E2E_TALOSCONFIG already point at.
 
-# --- KubeVirt harness (talos-cluster01, by hand or in CI against that cluster) ---
+# --- KubeVirt harness (by hand or in CI against a host cluster) ---
 
 .PHONY: kubevirt-harness
 kubevirt-harness: ## Build the KubeVirt e2e harness binary

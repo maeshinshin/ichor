@@ -34,8 +34,8 @@ import (
 
 // podSubnet and serviceSubnet are the inner cluster's Kubernetes networks. They must not
 // overlap the host cluster's own pod network, which is where the VM's address comes from:
-// talos-cluster01 uses 10.244.0.0/16 (confirmed via `kubectl get nodes -o
-// jsonpath={.spec.podCIDR}`), so these are pinned elsewhere.
+// the host cluster it runs against uses 10.244.0.0/16 (confirmed via
+// `kubectl get nodes -o jsonpath={.spec.podCIDR}`), so these are pinned elsewhere.
 const (
 	podSubnet     = "10.248.0.0/16"
 	serviceSubnet = "10.249.0.0/16"

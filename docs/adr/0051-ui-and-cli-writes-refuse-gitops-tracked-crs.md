@@ -8,7 +8,7 @@ Decided: Every write to an existing CR in `internal/uiapi` (so the UI and the CL
 `pkg/gitopstracking` and `pkg/prmode` (ADR 0037, 0038, 0044) were complete but nothing imported them, so the
 backend wrote CRs that Argo CD or Flux owns. Architecture: a tracked CR without a repository connection is
 read-only with an export button. No repository connection exists in the CRDs yet, so for now every tracked CR is
-read-only; opening the PR for `ModeOpenPR` is a later unit.
+read-only; opening the PR for `ModeOpenPR` is not built.
 
 ## Decisions
 
@@ -26,7 +26,7 @@ is never "may write" (ADR 0044).
 
 **4. `Create` is not gated.** A CR that does not exist has no Argo CD annotation or label, no Flux field
 manager and no inventory entry, so `IsTracked` can only answer "not tracked". Whether the new CR lands in a path
-or namespace a tool will later own is not knowable from the cluster; that belongs to the PR-mode unit, which
+or namespace a tool will later own is not knowable from the cluster; that belongs to PR mode, which
 decides where a new file goes. Creating the CR directly is the same as `kubectl apply` today.
 
 **5. RBAC.** Two rules added to the UI ClusterRole (`rbac_markers.go`, `config/rbac/ichor-ui/`, the chart):

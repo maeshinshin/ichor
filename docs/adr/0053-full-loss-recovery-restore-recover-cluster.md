@@ -7,7 +7,7 @@ Decided: `ichor restore --recover-cluster` runs standalone (no Kubernetes, no Ic
 ## Context
 
 Goal 4: restore from the secrets bundle and a snapshot alone. ADR 0047 fixed the stored format and left restore to
-this unit. After a total loss the controller is gone too, so the command cannot lean on any CR, Secret or the
+this ADR. After a total loss the controller is gone too, so the command cannot lean on any CR, Secret or the
 Connect API (ADR 0049); it is one of the CLI operations that predate the cluster, like `init` and `adopt`.
 
 ## Decisions
@@ -30,7 +30,7 @@ Connect API (ADR 0049); it is one of the CLI operations that predate the cluster
 2. **Bundle.** Same file `ichor init` writes (`internal/cli/bundlefile.go`): `~/.ichor/clusters/<cluster>/secrets.yaml`,
    or `--secrets-bundle` for a copy kept elsewhere (the machine doing the recovery is often not the one that ran
    `init`). Decoding errors carry the path only, never content. The derived passphrase and the bundle are never
-   printed; `restore_test.go` asserts none of the bundle's scalars, the passphrase or the S3 keys appear in
+   printed: none of the bundle's scalars, the passphrase or the S3 keys appear in
    stdout, stderr or any error, including when an S3 or Talos error string contains the credentials (every such error
    passes through a scrubber holding them).
 3. **S3 credentials.** Non-secret addressing is flags (`--s3-endpoint`, `--s3-bucket`, `--s3-region`,
@@ -44,7 +44,7 @@ Connect API (ADR 0049); it is one of the CLI operations that predate the cluster
    confirmation names the snapshot actually chosen and its time. `--snapshot <name>` is exclusive: broken means
    an error, never a substitute. A bundle that is not the cluster's fails age's authentication on every object,
    and the final error says nothing was sent. The plaintext is kept in memory, not on disk (it holds every
-   Secret); `shortcut:` a multi-GB etcd would need a protected spool file instead.
+   Secret); a multi-GB etcd would need a protected spool file instead (deferred).
 5. **Confirmation.** The shared `confirm` and the global `--yes`; the prompt states the node, the snapshot and its
    time, that state reverts, and that it cannot be undone. Declining contacts nothing.
 
@@ -52,7 +52,7 @@ Connect API (ADR 0049); it is one of the CLI operations that predate the cluster
 
 The cluster lock (`acquireDisruptiveLock`, `clusterlock.Acquire`) is a Kubernetes object, and in full loss there
 is no Kubernetes. The command is the only actor by construction, and it is refused by Talos unless etcd data is
-empty. `acquire_guard_test.go` is unaffected: this code never calls `Acquire`. The live-cluster restore, which
+empty. This code never calls `Acquire`. The live-cluster restore, which
 does have a cluster, must take the lock.
 
 ## Not done
@@ -62,8 +62,6 @@ does have a cluster, must take the lock.
   on one with the calls above, lets the others rejoin and reconciles every machine again; it reuses `fetchVerified`
   (now `etcdbackup.FetchVerified`). `--recover-cluster` is still the way back when that operation cannot finish,
   for example when the controller ran on the only control plane that was wiped.
-- A restore round trip against a real Talos (e2e) is the design's regular proof and is not part of this unit.
-- Tests use an in-memory `etcdbackup.Store` plus a fake Talos client; the real S3 client is covered by
-  `internal/etcdbackup`'s TLS fake S3, which lives in a `_test.go` file and is not importable.
+- A restore round trip against a real Talos (e2e) is the design's regular proof and is not covered here.
 
 - Amendment 2026-10-27: `loadBundleFile` now decodes through `secretsbundle.Decode`, which fills `Bundle.Clock`; before, `--recover-cluster` panicked in `dialRecover` on a nil Clock.

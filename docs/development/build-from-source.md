@@ -96,6 +96,11 @@ from `IMG` and `IMG_UI`, which default to `controller:latest` and
 `ichor-ui:latest`; pass them as in the `demo-images-build` recipe if you use it.
 `make help` lists the other targets.
 
+Before pushing a release tag `vX.Y.Z`, write its `## vX.Y.Z (date)` section in
+`CHANGELOG.md` (the release workflow takes the release notes from it) and run
+`make release-prep VERSION=vX.Y.Z`: it sets the release number in `README.md` and
+stops if the changelog section is missing. Commit the result, then tag.
+
 To build the release artifacts for a tag instead, run
 `make release VERSION=vX.Y.Z`. It writes `bin/release/ichor` (the CLI with its
 install manifest embedded), `bin/release/install.yaml`,

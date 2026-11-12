@@ -18,6 +18,7 @@ package uiapi
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"time"
@@ -271,6 +272,60 @@ var _ = Describe("NodeService", func() {
 		}
 		Expect(resumed.Err()).NotTo(HaveOccurred())
 		Expect(replayed).To(BeEmpty(), "resuming from the latest token must not replay already-seen lines")
+	})
+
+	It("streams a machine named twice once, rejects a long machine list, and masks the boot command line", func() {
+		cluster := newTestClusterWithBundle()
+		m := newTestMachine(cluster.Name, strongTestIdentity("uuid-logdup"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
+
+		fake := &fakeNodeTalosClient{lines: []LogLine{
+			{Time: time.Now().Add(-time.Minute), Message: "[0.0] Command line: talos.platform=metal talos.config=https://x?token=hunter2"},
+			{Time: time.Now().Add(-time.Second), Message: `[0.1] Unknown kernel command line parameters "talos.config=https://x?token=hunter2"`},
+		}}
+		client, closeFn := newTestNodeServer(fake, nil)
+		defer closeFn()
+
+		ref := objectRef(m.Namespace, m.Name)
+
+		stream, err := client.StreamNodeLogs(ctx, connect.NewRequest(&pb.StreamNodeLogsRequest{Machines: []*pb.ObjectRef{ref, ref}}))
+		Expect(err).NotTo(HaveOccurred())
+
+		var messages []string
+		for stream.Receive() {
+			messages = append(messages, stream.Msg().GetMessage())
+		}
+		Expect(stream.Err()).NotTo(HaveOccurred())
+		Expect(messages).To(HaveLen(2), "one stream, not two")
+
+		for _, msg := range messages {
+			Expect(msg).NotTo(ContainSubstring("hunter2"))
+			Expect(msg).To(ContainSubstring("talos.config="))
+		}
+
+		many := make([]*pb.ObjectRef, maxLogMachines+1)
+		for i := range many {
+			many[i] = objectRef(m.Namespace, fmt.Sprintf("m%d", i))
+		}
+
+		stream, err = client.StreamNodeLogs(ctx, connect.NewRequest(&pb.StreamNodeLogsRequest{Machines: many}))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(stream.Receive()).To(BeFalse())
+		Expect(connect.CodeOf(stream.Err())).To(Equal(connect.CodeInvalidArgument))
+	})
+
+	It("refuses log streams past the concurrency limit and frees the slots on release", func() {
+		s := &Server{}
+
+		release, err := s.acquireLogSlots(maxConcurrentLogStreams)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = s.acquireLogSlots(1)
+		Expect(connect.CodeOf(err)).To(Equal(connect.CodeResourceExhausted))
+
+		release()
+
+		_, err = s.acquireLogSlots(1)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	It("starts from the tail and follows by default, and honours tail_lines and follow=false", func() {

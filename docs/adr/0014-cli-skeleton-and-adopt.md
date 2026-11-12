@@ -10,15 +10,14 @@ Phase 4 is the CLI. `docs/design/architecture.md`'s "CLI and UI" section sets
 the rule — parity: the CLI and the UI share the same Go packages for
 rendering, diffing and planning, and both write CRs rather than mutating a
 Talos node directly. It names three exceptions that predate the cluster:
-`init`, `adopt` and full-loss recovery. This unit scaffolds `cmd/ichor` with
-cobra and implements the first of those exceptions, `ichor adopt`:
+`init`, `adopt` and full-loss recovery. This ADR covers the `cmd/ichor` cobra
+scaffold and the first of those exceptions, `ichor adopt`:
 
 > `ichor adopt` brings an existing cluster under management by diffing each
 > node's current config against a fresh render and storing the difference as
 > initial patches, so ownership transfers with zero drift.
 
-Two problems surfaced while building this that are worth recording so the
-next person touching the CLI doesn't rediscover them the hard way.
+Two tooling collisions shape the layout.
 
 ### cobra-cli's default layout collides with kubebuilder's
 
@@ -28,8 +27,8 @@ next person touching the CLI doesn't rediscover them the hard way.
 rather than against the path given to `init`. In this repo that `cmd`
 package is already taken: `cmd/main.go` is the controller manager's own
 `package main`, from `kubebuilder init`. Importing a `main` package is a
-compile error ("is a program, not an importable package"), and it broke
-`make manifests` repo-wide the moment it landed, because `controller-gen`'s
+compile error ("is a program, not an importable package"), and it breaks
+`make manifests` repo-wide, because `controller-gen`'s
 `paths="./..."` walks into `cmd/ichor` too.
 
 cobra-cli isn't wrong to assume this; kubebuilder's and cobra-cli's
@@ -56,8 +55,8 @@ there and moved into `internal/cli` by hand, same as `adopt.go` was.
 `dist/chart` is a committed Helm chart (ADR tooling elsewhere generates it
 from `dist/install.yaml`); goreleaser also defaults to writing its own build
 output to `dist/`. `goreleaser build --clean` deletes whatever `dist:` points
-at before writing to it — discovered by running it and watching `git status`
-show the entire chart staged for deletion. `.goreleaser.yaml` now sets
+at before writing to it, which would delete the entire chart.
+`.goreleaser.yaml` sets
 `dist: .goreleaser-dist` (ignored in `.gitignore`) so a release build can
 never touch the chart.
 
@@ -134,9 +133,9 @@ For each `TalosMachine` already recorded for `--cluster`:
 2. Render a baseline from the `TalosCluster`/`TalosMachine`/existing
    `TalosConfigPatch` objects already in the Kubernetes API
    (`pkg/render.Render` — not re-implemented).
-3. Diff live vs. baseline with `internal/controller.ChangedPaths` (exported
-   from this unit's previously-unexported `changedPaths`, logic unchanged) —
-   not re-implemented either.
+3. Diff live vs. baseline with `internal/controller.ChangedPaths` (the
+   exported form of `changedPaths`, logic unchanged) — not re-implemented
+   either.
 4. If nothing changed, there is nothing to adopt for this machine.
 5. Otherwise, build a candidate `TalosConfigPatch` and **verify it before
    ever proposing it**: render baseline+candidate and require the result to
@@ -144,50 +143,28 @@ For each `TalosMachine` already recorded for `--cluster`:
    candidate is ever returned from `buildAdoptPlan`; only a `buildAdoptPlan`
    result with a patch is ever shown to the operator or created.
 
-Step 5's self-check, not the diff in step 3, is what the "zero drift"
-acceptance test actually exercises: it is exactly the comparison the test
-performs independently (render the created patch again, compare to the
-current-config fixture).
+Step 5's self-check, not the diff in step 3, is what establishes "zero drift":
+rendering the created patch again and comparing it to the node's current
+configuration is exactly the acceptance comparison.
 
 Step 5 also has to not leak secrets, which drove the scope decision in
 `adopt_plan.go`: **only `SysctlConfig` and `KernelModuleConfig` documents are
 ever captured automatically.** The legacy v1alpha1 `Config` document is
 deliberately never captured.
 
-**Update, same day:** the reason this ADR originally gave no longer holds,
-and is recorded here rather than silently deleted so the history is
-honest. The original reason was schema-specific: `TalosConfigPatchDocument`'s
-`config.machine` object required `type`, `token` and `certSANs` on *any*
-Config document, sparse or not, and `token` mirrored the secrets bundle —
-there was no way to patch e.g. `cluster.network.cni.name` without also
-restating it. A same-day mirrorgen change (see ADR 0003's update) dropped
-`machine.token`, `machine.ca`, `cluster.ca` and six other secret-bearing
-fields from the mirror type and the CRD schema entirely, closing a real
-hole (`configpatcher.Apply`'s strategic merge meant a `Config` document
-could already overwrite a cluster's CA through a `TalosConfigPatch`). The
-two fields `config.machine` still requires — `type` and `certSANs` — are
-not secrets: `type` is the role already on `TalosMachine.Spec.Role`,
-`certSANs` the machine's own address. A sparse Config document is now
-representable without touching anything sensitive.
+**Why the legacy `Config` document is never captured.** A sparse `Config`
+document is representable without touching anything sensitive: the secret-bearing
+fields that mirror `secrets.Bundle` (the CAs, the join/bootstrap tokens, the etcd
+encryption key, the service-account signing key, which are Ichor's own root of
+trust) are dropped from the mirror type and the CRD schema (ADR 0003), and the two
+fields `config.machine` still requires, `type` and `certSANs`, are not secrets
+(`type` is the role already on `TalosMachine.Spec.Role`, `certSANs` the machine's
+own address). Capturing it is refused anyway, for a reason about the `Config`
+document's own schema rather than a missing piece of code.
 
-**Second update, same day, this one final: it still does not capture it,
-and now for a design reason rather than a missing-code one.** The question
-was asked directly: now that a sparse `Config` document is representable
-without the schema forcing a secret into it, should adopt actually build
-the sparse-reconstruction path? The answer is no, and the reason is a
-specific, checked fact about the `Config` document's own schema, not
-"nobody got to it yet."
-
-**The nine fields the same-day mirrorgen change dropped are not the only
-secret-shaped fields the `Config` document can carry.** That cleanup
-removed exactly the fields that mirror `secrets.Bundle` — the CAs, the
-join/bootstrap tokens, the etcd encryption key, the service-account
-signing key — because those are Ichor's own root of trust. It was never
-meant to, and did not, sweep the rest of Talos's own config surface for
-every other field that happens to be a credential. Reading the generated
-mirror type for exactly this (not assumed) turns up several, live in the
-schema today, that have nothing to do with Ichor's bundle and so were
-never in scope for that pass:
+**The fields that mirror `secrets.Bundle` are not the only secret-shaped fields
+the `Config` document can carry.** Talos's own config surface has other
+credential fields that have nothing to do with Ichor's bundle:
 
 - `RegistryAuthConfig.{password,auth,identityToken}` — private
   registry pull credentials, reachable from `machine.registries.*` and
@@ -196,18 +173,14 @@ never in scope for that pass:
   provider API tokens, under `machine.network`'s VIP config.
 - `WireguardDevice.privateKey` (`machine.network`'s WireGuard device
   config) — a WireGuard private key.
-- `ClusterConfig.secretboxEncryptionSecret` — apparently missed by the
-  same-day cleanup entirely: it is the secretbox sibling of
-  `aescbcEncryptionSecret`, which *was* dropped, and is exactly the same
-  kind of etcd encryption secret the other one is. Flagged back to
-  whoever owns that cleanup; not something this unit can fix, since
-  `pkg/typedconfig` is out of scope here.
+- `ClusterConfig.secretboxEncryptionSecret` — the secretbox sibling of
+  `aescbcEncryptionSecret`, an etcd encryption secret.
 
-None of these come from `secrets.Bundle`, so no amount of extending that
-one cleanup closes them — they are a different, open-ended category:
-whatever credential-shaped field Talos's own schema happens to carry
-*this version*, for a use case (private registries, cloud VIPs, WireGuard
-KubeSpan) an adopted cluster may well have configured. A sparse-diff
+ADR 0003 drops the ones it has found, but none of these come from
+`secrets.Bundle`, so no extension of that one list closes the category: it is
+open-ended, whatever credential-shaped field Talos's own schema happens to
+carry *in this version*, for a use case (private registries, cloud VIPs,
+WireGuard KubeSpan) an adopted cluster may well have configured. A sparse-diff
 mechanism that captures "whatever changed" has no way to tell "a harmless
 field changed" from "someone's registry password changed" without a
 field-by-field allow/deny list over the entire `Config` document — and
@@ -218,16 +191,15 @@ just to widen what `adopt` can automate. `SysctlConfig` and
 surface is kernel parameters and module names — there is no credential
 shape anywhere in either one to worry about missing.
 
-The consequence is unchanged in practice, now for the reason that will
-actually last: a difference confined to the legacy Config document comes
+The consequence: a difference confined to the legacy Config document comes
 back from `buildAdoptPlan` as `UnrepresentablePaths` — field *names*
 only, safe to print — with no patch. `runAdopt` reports these and leaves
 that machine's drift for the operator to patch by hand, through a
 `TalosConfigPatch` they write themselves and can see the contents of
-before it goes anywhere. This is covered by
-`TestBuildAdoptPlan_LegacyDiffIsNeverAutoPatched` and is the one
-`TestAdoptNeverLeaksSecrets` subtest ("legacy diff reported, not patched")
-that proves the refusal itself never leaks either.
+before it goes anywhere. This is pinned by
+`TestBuildAdoptPlan_LegacyDiffIsNeverAutoPatched`, and
+`TestAdoptNeverLeaksSecrets` includes the case ("legacy diff reported, not
+patched") that the report itself never leaks either.
 
 ### Confirmation and output
 
@@ -253,14 +225,9 @@ full rendered machine configuration.
   deliberate refusal, because the Config document's field surface has no
   stable boundary between "safe to auto-capture" and "a credential" --
   registry passwords, cloud API tokens and a WireGuard private key are
-  live examples found by reading the schema, not hypothetical. `ichor
+  examples that exist in the schema today, not hypothetical. `ichor
   adopt` is complete for sysctl/kernel-module drift (no such fields exist
   there) and honest about everything else.
-- A second, unrelated finding from the same reading: `ClusterConfig`'s
-  `secretboxEncryptionSecret` looks like it was missed by the same-day
-  cleanup that dropped its sibling `aescbcEncryptionSecret` -- both are
-  etcd encryption secrets, only one was removed. Flagged for whoever owns
-  `pkg/typedconfig`; out of this unit's scope to fix directly.
 - `.goreleaser.yaml`'s `dist:` override means any future tooling that reads
   goreleaser's own output has to know to look in `.goreleaser-dist`, not
   `dist/`.

@@ -67,6 +67,8 @@ type structDef struct {
 	machName string
 	pkgPath  string // machinery package path this struct comes from
 	fields   []*fieldDef
+	// dropped is the meta.Unstructured fields this struct lost, declared on it or on a struct embedded in it.
+	dropped  []droppedField
 	isRoot   bool
 	rootKind rootKind
 	// pages holds the reference page of every root this struct is reachable from.
@@ -81,7 +83,8 @@ type fieldDef struct {
 }
 
 type droppedField struct {
-	Struct, Field, YAML string
+	// Key is "machinery struct.Go field" like secretFields' keys; Struct is the mirror struct's name.
+	Key, Struct, Field, YAML string
 }
 
 // droppedSecretField is a secretFields entry actually hit while walking, for
@@ -517,7 +520,9 @@ func (g *generator) addFields(def *structDef, named *types.Named, st *types.Stru
 		}
 
 		if mapping.kind == kDropped {
-			g.dropped = append(g.dropped, droppedField{Struct: def.name, Field: fld.Name(), YAML: yamlName})
+			d := droppedField{Key: fieldKey, Struct: def.name, Field: fld.Name(), YAML: yamlName}
+			g.dropped = append(g.dropped, d)
+			def.dropped = append(def.dropped, d)
 
 			continue
 		}

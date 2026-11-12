@@ -24,6 +24,9 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
+// testReason is the reason column of the rows the tests invent.
+const testReason = "recorded for this test"
+
 // TestShippedKindsKeepTheirPayload fails, naming the kind and the field, for a shipped kind whose mirror has no
 // fields or that drops a meta.Unstructured field nobody decided to drop (see droppedPayloads).
 func TestShippedKindsKeepTheirPayload(t *testing.T) {
@@ -65,7 +68,7 @@ func TestPayloadGateRefusesWhatItShould(t *testing.T) {
 		}
 	}
 
-	rows := map[string]string{"WithPayload.Raw": "test", "OnlyPayload.Raw": "test", "Gone.Raw": "test"}
+	rows := map[string]string{"WithPayload.Raw": testReason, "OnlyPayload.Raw": testReason, "Gone.Raw": testReason}
 
 	got = strings.Join(g.payloadProblems(rows), "\n")
 	if strings.Contains(got, "meta.Unstructured field") || !strings.Contains(got, `"Gone.Raw" matches no dropped field`) {

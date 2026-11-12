@@ -52,8 +52,7 @@ func TestShippedKindsRoundTrip(t *testing.T) {
 
 	kinds := 0
 
-	for i := range doc.NumField() {
-		f := doc.Field(i)
+	for f := range doc.Fields() {
 		if f.Name == "Kind" {
 			continue
 		}
@@ -174,7 +173,8 @@ func checkKeyLayout(t *testing.T, kind string, talosYAML, stored []byte) {
 	key, _ := ichorv1alpha1.TalosConfigPatchDocumentFieldKey(kind)
 
 	if a, b := layout(fromYAML), layout(envelope[key]); a != b {
-		t.Errorf("%s: the mirror's JSON has a different key layout from Talos's YAML.\n--- YAML ---\n%s\n--- JSON ---\n%s", kind, a, b)
+		t.Errorf("%s: the mirror's JSON has a different key layout from Talos's YAML.\n--- YAML ---\n%s\n--- JSON ---\n%s",
+			kind, a, b)
 	}
 }
 
@@ -364,7 +364,8 @@ func hasMethod(t reflect.Type, name string) bool {
 	return ok
 }
 
-// parsed sets v to the first of scalarSamples (or, for an enum of integers, the first nonzero number, else 0) it accepts.
+// parsed sets v to the first of scalarSamples it accepts or, for an enum of integers, the first nonzero number
+// it names (else 0).
 func (f *filler) parsed(v reflect.Value) {
 	f.t.Helper()
 
@@ -397,7 +398,8 @@ func (f *filler) parsed(v reflect.Value) {
 			}
 
 			// An enum names only some of its numbers: keep the first whose name it reads back.
-			if x := reflect.New(v.Type()); x.Interface().(encoding.TextUnmarshaler).UnmarshalText(text) == nil && x.Elem().Equal(v) {
+			x := reflect.New(v.Type())
+			if x.Interface().(encoding.TextUnmarshaler).UnmarshalText(text) == nil && x.Elem().Equal(v) {
 				return
 			}
 		}

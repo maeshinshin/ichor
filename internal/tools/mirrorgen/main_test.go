@@ -177,7 +177,7 @@ func TestEmbeddedStructsAreFlattened(t *testing.T) {
 		t.Fatalf("loading %s: %v %v", pkg, err, pkgs[0].Errors)
 	}
 
-	secretFields["Common.MTU"] = "test"
+	secretFields["Common.MTU"] = testReason
 
 	defer delete(secretFields, "Common.MTU")
 
@@ -185,7 +185,7 @@ func TestEmbeddedStructsAreFlattened(t *testing.T) {
 	named := g.lookupType(pkg, "Outer")
 	g.structMapping(named, named.Underlying().(*types.Struct))
 
-	var got []string
+	got := make([]string, 0, 4)
 
 	for _, f := range g.structs[named].fields {
 		got = append(got, f.name+" "+f.jsonName)

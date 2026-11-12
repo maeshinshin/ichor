@@ -465,7 +465,8 @@ func (g *generator) writeConversion(filename string) {
 	// gofmt's order: the standard library first, then the rest, each sorted by import path.
 	type spec struct{ alias, path string }
 
-	imports := []spec{{"", "fmt"}, {"", "time"}}
+	imports := make([]spec, 0, 2+len(importsUsed))
+	imports = append(imports, spec{"", "fmt"}, spec{"", pkgTime})
 
 	for alias, p := range importsUsed {
 		if path.Base(p) == alias {
@@ -689,10 +690,11 @@ func unionImports(roots []rootKind) string {
 		paths[r.pkgPath] = true
 	}
 
-	imports := []string{
+	imports := make([]string, 0, 4+len(paths))
+	imports = append(imports,
 		"\"fmt\"", "\"strings\"", "\"github.com/maeshinshin/ichor/pkg/typedconfig\"",
 		"\"github.com/siderolabs/talos/pkg/machinery/config/config\"",
-	}
+	)
 
 	for p := range paths {
 		imports = append(imports, importAlias(p)+" \""+p+"\"")

@@ -174,6 +174,9 @@ func qualifiedName(n *types.Named) string {
 	return pkg.Path() + "." + n.Obj().Name()
 }
 
+// pkgTime is the one standard library package whose types the walk meets and that needs no import alias.
+const pkgTime = "time"
+
 // importsUsed is every machinery package machImportAlias handed out an alias for, alias to path: the import
 // block of zz_generated.conversion.go. An alias is either the one written in the switch (a name that other
 // code and the hand-written helpers already use) or "m" ("r" under resources/) plus the package's last path element.
@@ -184,7 +187,7 @@ var importsUsed = map[string]string{}
 // file imports it.
 func machImportAlias(pkgPath string) string {
 	alias := importAlias(pkgPath)
-	if alias == "time" {
+	if alias == pkgTime {
 		return alias
 	}
 
@@ -210,8 +213,8 @@ func importAlias(pkgPath string) string {
 		alias = "mmeta"
 	case "github.com/siderolabs/crypto/x509":
 		alias = "mx509"
-	case "time":
-		return "time"
+	case pkgTime:
+		return pkgTime
 	case "net/netip":
 		alias = "netip"
 	case pkgCoreV1:

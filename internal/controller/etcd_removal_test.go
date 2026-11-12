@@ -53,7 +53,7 @@ func perMachineClientFactory(byName map[string]*fakeTalosClient) func(
 			return nil, fmt.Errorf("fake dial refused for %q", m.Name)
 		}
 
-		return fake, nil
+		return fake.dialedAs(m), nil
 	}
 }
 

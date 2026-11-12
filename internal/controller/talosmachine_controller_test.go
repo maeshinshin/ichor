@@ -144,6 +144,7 @@ type fakeTalosClient struct {
 	stageErr error
 	// schematic is the Image Factory schematic the fake node reports ("" = not an Image Factory asset).
 	identity     HardwareIdentity
+	dialedUUID   string
 	identityErr  error
 	schematic    string
 	schematicErr error
@@ -289,8 +290,21 @@ func (f *fakeTalosClient) APIServerReady(context.Context) error {
 	return f.apiReadyErr
 }
 
+// Identity answers with f.identity and f.identityErr when either is set, and otherwise as the machine the
+// last dial was for, so a fake behind a factory stands for that machine without each spec saying so.
 func (f *fakeTalosClient) Identity(context.Context) (HardwareIdentity, error) {
+	if f.identityErr == nil && reflect.DeepEqual(f.identity, HardwareIdentity{}) {
+		return HardwareIdentity{UUID: f.dialedUUID}, nil
+	}
+
 	return f.identity, f.identityErr
+}
+
+// dialedAs records which machine f was just dialed for and returns f.
+func (f *fakeTalosClient) dialedAs(m *ichorv1alpha1.TalosMachine) *fakeTalosClient {
+	f.dialedUUID = m.Spec.Identity.UUID
+
+	return f
 }
 
 func (f *fakeTalosClient) Schematic(context.Context) (string, error) {
@@ -337,8 +351,8 @@ func (f *fakeTalosClient) BootstrapManifests(context.Context) ([]map[string]any,
 func clientFactory(fake *fakeTalosClient) func(
 	context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle,
 ) (TalosClient, error) {
-	return func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle) (TalosClient, error) {
-		return fake, nil
+	return func(_ context.Context, _ *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine, _ *secrets.Bundle) (TalosClient, error) {
+		return fake.dialedAs(m), nil
 	}
 }
 

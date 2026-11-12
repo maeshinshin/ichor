@@ -140,6 +140,11 @@ line overrides the file; relative paths in the file are relative to it.`,
 			return err
 		}
 
+		// Before the passphrase is generated and shown for a file init would not write.
+		if err := refuseExistingBundle(initOpts.Cluster); err != nil {
+			return err
+		}
+
 		if err := chooseInitBundleProtection(cmd, &initOpts); err != nil {
 			return err
 		}

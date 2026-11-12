@@ -60,7 +60,8 @@ func decodeResumeToken(s string) resumeToken {
 	}
 
 	var tok resumeToken
-	if err := json.Unmarshal(raw, &tok); err != nil {
+	// JSON null decodes to a nil map without an error, and advance writes to it.
+	if err := json.Unmarshal(raw, &tok); err != nil || tok == nil {
 		return resumeToken{}
 	}
 

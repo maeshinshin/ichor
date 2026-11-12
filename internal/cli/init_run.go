@@ -141,6 +141,10 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return errNoSealPassphrase
 	}
 
+	if err := refuseExistingBundle(opts.Cluster); err != nil {
+		return err
+	}
+
 	// One maintenance pin for the whole run: the node that answered the identity read is the node
 	// that receives the configuration.
 	ctx = controller.WithMaintenancePin(ctx, &controller.MaintenancePin{})

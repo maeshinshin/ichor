@@ -31,7 +31,7 @@ The metric deliberately departs from ADR 0040's "zero controller metrics": that 
 facts already in a CR, and ADR 0047 had already added backup metrics; a timestamp gauge keeps the alert independent of
 anyone's kube-state-metrics custom-resource configuration.
 
-**Later, on purpose.** The UI (the proto needs a field; a different unit owns it), a ready-made `PrometheusRule` in
+**Later, on purpose.** The UI (the proto needs a field), a ready-made `PrometheusRule` in
 the chart, and per-node leaf certificates. If those are wanted, the source is the node's COSI `secrets.API` resource
 (`resources/secrets/api.go`, `APICertsSpec.Server`), read with the same admin dial.
 
@@ -72,8 +72,8 @@ stated rather than papered over.
 **The etcd backup key does not change.** `etcdbackup.Passphrase` (`internal/etcdbackup/crypto.go`) derives it with HKDF from
 `bundle.Cluster.Secret` (key) and `bundle.Cluster.ID` (salt) only, and a CA rotation does not touch either:
 `rotate-ca.go` takes only `newBundle.Certs.OS` and `newBundle.Certs.K8s` from its fresh bundle, and the patches change
-`machine.ca`, `machine.acceptedCAs`, `cluster.ca` and `cluster.acceptedCAs`. `TestPassphraseSurvivesCARotation` pins this
-(same cluster, replaced `Certs`, same passphrase), so snapshots taken before a rotation still decrypt after it.
+`machine.ca`, `machine.acceptedCAs`, `cluster.ca` and `cluster.acceptedCAs`. Snapshots taken before a rotation
+therefore still decrypt after it.
 
 **Who updates the bundle Secret (when `CARotation` is built).** The executor, in the controller, as the last step of
 the operation and never earlier; a Secret is not `spec`, so the "never mutates spec" rule holds. Order matters because
@@ -96,9 +96,8 @@ It would be the third phased executor and it changes the one thing every other c
 properly needs, at least: a render input for accepted CAs (`pkg/render` has none, and a machine in phase 2 has a
 different rendered config from one in phase 1, so the machine controller's drift check must not fight the operation), the
 Secret write and RBAC above, a verified Ichor dial through each phase (the admin client certificate must come from the new
-CA after phase 2), the `BundleBackupStale` flow in the CLI, and the three tests named in the brief (leak test with the
-scrubber, bundle/backup consistency, crash-resume per phase). Half of that is worse than none: a partial executor
-that stops between phases leaves a cluster in a state only the full executor can finish. Next unit: add
+CA after phase 2), the `BundleBackupStale` flow in the CLI, and three tests: a leak test with the scrubber, bundle/backup consistency, and crash-resume per phase. Half of that is worse than none: a partial executor
+that stops between phases leaves a cluster in a state only the full executor can finish. Next: add
 `kind: CARotation` to `TalosOperation`, `pkg/render` accepted-CA inputs, then the executor on the ADR 0026 backbone,
 holding the lock through `acquireDisruptiveLock`.
 
@@ -107,8 +106,7 @@ holding the lock through `acquireDisruptiveLock`.
 - `TalosCluster.status.certificates` is a new list; the CRD, chart copy and deepcopy are regenerated.
 - A new controller, `certexpiry`, reuses the existing RBAC (`talosclusters` get/list/watch, `talosclusters/status` patch,
   `secrets` get/list/watch in the controller namespace); no new permission.
-- `go.mod` gained `github.com/kylelemons/godebug` as an indirect dependency, which the Prometheus `testutil` package the
-  tests use needs.
+
 - Until `CARotation` exists, rotation is `talosctl rotate-ca` by hand, after which the Secret must be replaced by the user
   or the controller can no longer authenticate.
 
@@ -138,19 +136,18 @@ passes (one apply per machine per stage), where `talosctl rotate-ca` runs the Ta
    reached again, which is why the check is at the start and again at every stage.
 2. *Save the new CAs.* `rotation.yaml` (certificate and key for both) is written into the bundle Secret with an `Update` that
    fails if it already exists, and only then is `stage: Accepting` written. A start that died between the two is resumed by
-   adopting that `rotation.yaml`; no node has been told anything at that point. A test asserts that the Secret holds
-   `rotation.yaml` when the first node is told anything, which is the failure this ADR names as the worst one.
+   adopting that `rotation.yaml`; no node has been told anything at that point.
 3. *Accepting, Issuing, Dropping.* Each stage renders the machines (below), applies to each that differs (dry run, then
    `ApplyNoReboot`, control planes first), and in a later reconcile verifies before the stage advances: Ichor can dial every
    machine with the stage's credentials (`Version`), and every Kubernetes Node is Ready (read through the admin kubeconfig a Talos
    node issues, `NodesReady`). The verification is a separate reconcile from the applying one, so the kubelet restart a CA change
-   causes has begun before readiness is read (`shortcut:` that does not observe the restart itself, as `talosctl`'s helper does
+   causes has begun before readiness is read (deferred: that does not observe the restart itself, as `talosctl`'s helper does
    through the kubelet service resource).
 4. *Finalizing.* One Secret update puts the new CAs into `secrets.yaml` and removes `rotation.yaml`, and fails if the Secret changed in
    between. Then `BundleBackupStale` is raised, and every machine is checked against the replaced bundle: Ichor dials it with the
    plain bundle (as every other controller will) and its configuration equals what the replaced bundle renders. Only then `Done`,
    the lock is released and the phase is `Completed`. A restart after the Secret was replaced but before status learned of it
-   recognises the new CAs by fingerprint and carries on (tested).
+   recognises the new CAs by fingerprint and carries on.
 
 **A step that cannot be verified never advances.** Ichor not reaching a machine, a Node not Ready, a refused dry run or apply, a
 render failure: the operation is `Paused` with a `CARotation` condition (`False`, reason `Blocked`, a message naming the cause) and is
@@ -162,15 +159,13 @@ and a retry is always safe because each step is idempotent.
 uses a derived bundle: the signing CA and key are the one the stage's nodes accept, and the trusted server CA list holds both CAs
 (`dialBundle`; `GenerateTalosAPIClientCertificate` signs with the first certificate and key, and the trust list is a PEM bundle).
 Accepting is applied with the old client certificate, which every node still accepts; every later stage with the new one, which the
-Accepting verification proved the nodes accept. The tests' fake node serves a certificate from the CA in its applied configuration
-and accepts a client only if its certificate chains to one of that configuration's accepted CAs, so a wrong signer or a missing
-trust fails exactly as it would on a node.
+Accepting verification proved the nodes accept.
 
 **Render input (`pkg/render/carotation.go`).** `SystemInputs.CARotation{Stage, New}`, set by the executor only (never by
 `ResolveSystemInputs`). The bundle passed to `Render` stays the old one. Accepting renders from it and adds the new CAs to
 `machine.acceptedCAs` and the Kubernetes accepted list; Issuing renders from a copy of the bundle with the new CAs and adds the old
 ones as accepted; Dropping and Finalizing render from that copy with nothing extra. The Kubernetes accepted list is written through
-machinery's own `rotatepatcher`, so the single- or multi-document form follows the version contract. A test pins that the Dropping
+machinery's own `rotatepatcher`, so the single- or multi-document form follows the version contract. The Dropping
 configuration is byte for byte what a bundle already holding the new CAs renders, for both roles, which is what leaves the machine
 controller no drift when the rotation ends.
 
@@ -186,7 +181,7 @@ finalizer knowing that the nodes are then in the stage status last showed and `r
 **Secret write and RBAC.** `update` on Secrets in the controller namespace was added to the manager's namespaced Role (config and
 chart). It is broader than Decision 4 intended: `resourceNames` cannot name the bundle Secret, whose name is `spec.secretsRef.name`,
 chosen by the user. Reads of the bundle, `rotation.yaml` and the machine gate go through the API reader. `talosoperations/finalizers`
-was added too. Amendment (write scope): the broad `update` is kept. A required label (`ichor.maesh.dev/secrets-bundle=true`) was rejected: RBAC cannot filter by label, so it adds no API-side protection, and it would break every existing bundle. Since ADR 0096 only `talosclusters/secret-references` holders can change `secretsRef`, and the executor enforces in code (`caRun.updateBundle`, tested) that it writes only the Secret `secretsRef` names in the controller namespace.
+was added too. Amendment (write scope): the broad `update` is kept. A required label (`ichor.maesh.dev/secrets-bundle=true`) was rejected: RBAC cannot filter by label, so it adds no API-side protection, and it would break every existing bundle. Since ADR 0096 only `talosclusters/secret-references` holders can change `secretsRef`,  and the executor enforces in code (`caRun.updateBundle`) that it writes only the Secret `secretsRef` names in the controller namespace.
 
 **`BundleBackupStale`.** Raised on the `TalosCluster` (condition, `reason: CARotated`) and as a Warning Event by the executor at
 Finalizing. The message names the command and carries no secret. `ichor cluster bundle-export NAME` reads the live bundle from the
@@ -196,18 +191,10 @@ the two CA fingerprints). `CertExpiryReconciler` lowers the condition when the a
 export of the pre-rotation bundle does not. The CLI writes metadata, not `spec`, and the controller still owns every status.
 
 **Backups.** Not touched: `etcdbackup.Passphrase` derives from `Cluster.Secret` and `Cluster.ID`, which `Rotation.Apply` leaves as they
-are; `TestPassphraseSurvivesCARotation` still passes, and the controller test asserts both fields and the etcd CA are unchanged in the
-replaced bundle.
+are, as it does the etcd CA.
 
-**Tests.** envtest with a fake node per machine (above), and a new reconciler for every step, so nothing can live in memory: the
-stage sequence and the issuing and accepted fingerprints at each stage; nodes' CAs after each stage; each of Accepting, Issuing and
-Dropping killed after two applies and resumed with no apply repeated; the Secret replaced but status not told; an adopted
-`rotation.yaml`; a machine that stops answering Ichor, and a Node not Ready, hold the stage and resume by themselves; a machine down
-or not converged blocks the start and writes nothing; the machine controller and another operation stand aside; deletion held by
-the finalizer; `BundleBackupStale` kept by a stale export and cleared by the live one; and a leak test in the style of
-`leak_test.go` that makes dial errors echo the new CA key and the old CA key and checks every status snapshot, Event, cluster object
-and returned error for any bundle or CA material (and that the redaction happened). The scrubber is applied to every message
-`caRun.status` writes; removing it makes that test fail.
+**Scrubbing.** The scrubber is applied to every message `caRun.status` writes, so dial errors that echo a CA key never reach a status
+snapshot, Event, cluster object or returned error.
 
 **Not built, and the limits.**
 
@@ -217,12 +204,10 @@ and returned error for any bundle or CA material (and that the redaction happene
 - `status.certificates` follows the replaced bundle at the next hourly read of the cert-expiry reconciler, not at once.
 - Held machines (`upgrade-hold`) are not skipped: a machine left out would be locked out when the old CA is dropped.
 - The etcd and aggregator CAs and the service-account key are not rotated (Decision 3).
-- Nothing here was run against real machines or a real kubelet restart; the sequence follows `talosctl rotate-ca`'s as read from
-  Talos v1.14.3 (`pkg/rotate/pki`), and the first real run should be on a disposable cluster.
 
 ## Amendment: in-cluster clients and the serving-CA switch
 
-Observed on real hardware (Talos 1.14.3, Kubernetes 1.37.1): right after a rotation reached Done, the Ichor controller pod crash-looped twice with `x509: certificate signed by unknown authority` against the in-cluster API and recovered about 50 s later. Every in-cluster client has the same exposure.
+Right after a rotation reaches Done, the Ichor controller pod can crash-loop with `x509: certificate signed by unknown authority` against the in-cluster API until its CA file refreshes (about a minute). Every in-cluster client has the same exposure.
 
 - Talos renders kube-controller-manager with `--root-ca-file` pointing at a file that holds the **issuing** Kubernetes CA alone (`render_secrets_static_pod.go`, `IssuingCA`; the flag is merge-denied in `control_plane_final.go`). `kube-root-ca.crt`, from which every pod's projected `ca.crt` is made, therefore holds the old CA through Accepting and only the new one from Issuing on. It never holds both, and Ichor cannot make it (no typed field reaches that flag). The kube-apiserver serving certificate is signed by the issuing CA too, so it switches in the same pass.
 - A pod's file follows only after controller-manager restarts and republishes the ConfigMaps and the kubelet refreshes the projected volume (about a minute). client-go v0.36 re-reads `ca.crt` (`ClientsAllowCARotation`, beta, on by default) but at most once per 5 minutes and only on a request (`transport/ca_rotation.go`); clients on older libraries, or that read the file once, never do. A process that exits in the window (for Ichor, probably leader election lost because renewals fail the TLS check) restarts onto the not yet refreshed file and fails at start until the kubelet catches up.
@@ -235,19 +220,19 @@ Observed on real hardware (Talos 1.14.3, Kubernetes 1.37.1): right after a rotat
 
 ## Amendment: Ichor restarts the clients that keep the old CA
 
-Observed on real hardware (Talos 1.14.3, Kubernetes 1.37.1, five rotations): the `kube-root-ca.crt` wait and the settle delay work, but after Done flannel (`flannel:0.28.9`) and CoreDNS (`coredns:v1.14.7`) kept logging `x509: certificate signed by unknown authority` for 46 minutes and never recovered (new Services did not resolve). kube-proxy recovered after about 5 minutes. ichor-ui could not reach the API for about 5 minutes after Issuing (client-go re-reads the CA at most every 5 minutes), which also blocks a following `rotate-ca`.
+The `kube-root-ca.crt` wait and the settle delay are not enough: after Done the CNI and CoreDNS can keep logging `x509: certificate signed by unknown authority` indefinitely (new Services do not resolve), kube-proxy recovers after about 5 minutes, and ichor-ui cannot reach the API for about 5 minutes after Issuing (client-go re-reads the CA at most every 5 minutes), which also blocks a following `rotate-ca`.
 
 - Decision: in Finalizing, after the old CAs are dropped and the replaced bundle is verified, and before Done, the controller restarts once the clients known to keep the old CA: the `coredns` Deployment and the `kube-proxy`, `cilium` and `kube-flannel` DaemonSets in kube-system (the same names the restore's agent check uses; one that does not exist is skipped), and the `ichor-ui` Deployment in the controller's namespace. The restart is a rollout restart: a merge patch of the pod template's `kubectl.kubernetes.io/restartedAt` annotation, plus `ichor.maesh.dev/ca-rotation` set to the operation's UID.
 - This is a write to those workloads and is in scope in the same way as the restore's one-time pod restart: Ichor bootstraps the CNI but does not operate it, and this is recovery from Ichor's own action, done once. It never mutates `spec` of any Ichor resource.
 - Idempotent across controller restarts without a status field: a workload whose pod template already carries this operation's UID is not patched again. The wait is bounded by `caClientRestartTimeout` (5 minutes, timed from the `RestartingClients` condition's transition time, so it also survives a restart). Workloads not available by then do not hold the rotation: it completes and the `CARotation` condition's message names what is not back.
 - RBAC: `get;patch` on the three DaemonSets and on `coredns`, by `resourceNames`, in the manager ClusterRole (a ClusterRole rule cannot be limited to kube-system, so the same names in another namespace are also patchable); `patch` on `ichor-ui` in a Role in the controller's namespace.
 - Limitation, stated in the plan text: other in-cluster clients that load the CA once may still need a restart.
-- Ordering (second hardware rotation): restarting all four at once while the API server restarted broke Services and DNS for about 55 s. The restarts are issued only after the Finalizing verification passes (replaced bundle accepted, every Node Ready) and one at a time, each after the previous is available again: CoreDNS, kube-proxy, the CNI, ichor-ui. The 5-minute bound covers the whole sequence; workloads not yet restarted at the timeout are named as not back.
-- Stale Ready (third hardware rotation): the Nodes still read Ready right after Dropping, then the kubelets restarted and CoreDNS lost its replicas. Before the first restart the controller reads the Nodes live (a fresh admin kubeconfig, never a cache) and requires them Ready continuously for `caKubeletSettleDelay` (90 s, longer than the 40 s node-monitor grace plus a kubelet restart); a NotReady read resets the clock. It waits (`AwaitingNodes`, `SettlingNodes`), it does not Pause. Node `lastTransitionTime` is not used: a kubelet that restarts inside the grace period never changes it.
+- Ordering: restarting all four at once while the API server restarts breaks Services and DNS for about a minute. The restarts are issued only after the Finalizing verification passes (replaced bundle accepted, every Node Ready) and one at a time, each after the previous is available again: CoreDNS, kube-proxy, the CNI, ichor-ui. The 5-minute bound covers the whole sequence; workloads not yet restarted at the timeout are named as not back.
+- Stale Ready: the Nodes still read Ready right after Dropping, then the kubelets restarted and CoreDNS lost its replicas. Before the first restart the controller reads the Nodes live (a fresh admin kubeconfig, never a cache) and requires them Ready continuously for `caKubeletSettleDelay` (90 s, longer than the 40 s node-monitor grace plus a kubelet restart); a NotReady read resets the clock. It waits (`AwaitingNodes`, `SettlingNodes`), it does not Pause. Node `lastTransitionTime` is not used: a kubelet that restarts inside the grace period never changes it.
 
 ## Amendment: the controller trusts the new Kubernetes CA ahead of the switch
 
-Observed on real hardware (three rotations): the controller still restarted once or twice per rotation. At Issuing the API server serves a certificate from the new Kubernetes CA, the running controller's lease renewal fails `x509`, leader election is lost and the process exits; the restarted container (same pod) mounts the old projected `ca.crt`, which the kubelet cannot refresh while the API server restarts, so the 5-minute start-up wait times out and it exits again.
+Without further measures the controller restarts once or twice per rotation. At Issuing the API server serves a certificate from the new Kubernetes CA, the running controller's lease renewal fails `x509`, leader election is lost and the process exits; the restarted container (same pod) mounts the old projected `ca.crt`, which the kubelet cannot refresh while the API server restarts, so the 5-minute start-up wait times out and it exits again.
 
 - Decision: the controller already generates the new Kubernetes CA before Accepting, so its own client trusts it in advance. `internal/kubetrust` keeps a process-wide pool, the in-cluster `ca.crt` (re-read on every handshake) plus extra CA certificates added at runtime. `rest.Config.Transport` is replaced by a transport whose TLS config verifies in `VerifyConnection` (the stock check is switched off only so this one can run): it checks the chain against the pool and the API host name, taken from the config, not from the connection, because the connection's server name is empty for an IP host. Verification is never skipped. Configs with client certificates, exec/auth providers, `insecure` or their own transport are left alone.
 - Every pass of a CA rotation that can read `rotation.yaml` adds the new Kubernetes CA's certificate (public part only; the key never leaves the Secret) to the pool and writes the pool's certificates to `/var/run/ichor/trust/kubernetes-ca.crt`, an `emptyDir` mounted into the manager container. Start-up loads that file before the API-server wait, so a restarted container trusts the new CA at once. Publishing failing is logged and does not stop the rotation.
@@ -256,9 +241,9 @@ Observed on real hardware (three rotations): the controller still restarted once
 
 ## Amendment: leader election outlives an API server restart
 
-Observed on a single-control-plane cluster: after the trust amendment the first rotation still restarted the controller. At Dropping the API server is down for the whole static-pod restart, longer than controller-runtime's default RenewDeadline (10 s); the lease renew got `connection refused`, then `context deadline exceeded`, and the manager exited with `leader election lost`.
+On a single-control-plane cluster the controller still restarts after the trust amendment. At Dropping the API server is down for the whole static-pod restart, longer than controller-runtime's default RenewDeadline (10 s); the lease renew got `connection refused`, then `context deadline exceeded`, and the manager exited with `leader election lost`.
 
-- Decision: `LeaseDuration` 120 s, `RenewDeadline` 90 s, `RetryPeriod` 10 s (`cmd/leaderelection.go`). A 60-90 s outage no longer loses the lease. client-go requires LeaseDuration > RenewDeadline > RetryPeriod x 1.2; a unit test builds the elector with these values.
+- Decision: `LeaseDuration` 120 s, `RenewDeadline` 90 s, `RetryPeriod` 10 s (`cmd/leaderelection.go`).  A 60-90 s outage no longer loses the lease. client-go requires LeaseDuration > RenewDeadline > RetryPeriod x 1.2.
 - Cost: after a crash (not a voluntary stop) a second replica waits up to `LeaseDuration` (120 s) before taking over, where the default took 15 s.
 - `LeaderElectionReleaseOnCancel` stays off: the process outlives the manager in `WaitForRestoreTails` (ADR 0089, up to 70 minutes), and releasing the lease there would let a second replica act mid-restore. Voluntary hand-offs therefore also wait out the lease.
 - Readiness now includes the webhook server (`StartedChecker`), because a replaced pod was 1/1 Ready while admission calls to it still failed.
@@ -266,7 +251,7 @@ Observed on a single-control-plane cluster: after the trust amendment the first 
 
 ## Amendment: the trust pool is pruned, and every replica keeps its own
 
-Review findings on the trust amendment above: the pool only grew, so after a second rotation the first rotation's CA (possibly exposed, which is why people rotate) stayed trusted until the pod was recreated; and the follower replica never ran the rotation, so it never published and its webhooks and informers failed x509 until its projected `ca.crt` refreshed.
+Two gaps in the trust amendment above: the pool only grew, so after a second rotation the first rotation's CA (possibly exposed, which is why people rotate) stayed trusted until the pod was recreated; and the follower replica never ran the rotation, so it never published and its webhooks and informers failed x509 until its projected `ca.crt` refreshed.
 
 - Supersedes "The file is not pruned after Done". `Pool.Clear(path)` drops every extra and removes the trust file (idempotent). `Pool.ClearOnceBaseTrusts(path)` calls it only when the base `ca.crt`, re-read from disk, contains the newest extra (the latest rotation's new CA, by certificate equality). The projected file can lag the API server by about a minute or more, so clearing earlier would lock the client out; until the base carries the new CA the extras stay and the next pass tries again. The base then alone trusts the API server.
 - Where it runs: `caRun.complete` (the terminal step, after the client restarts and the settle delay) tries once, so the common case is cleared at once. Because a Completed operation is never reconciled again, a lagging `ca.crt`, a crash between Done and the clear, or a restarted container whose emptyDir still holds the file are handled by `controller.CATrustSync`, a runnable with `NeedLeaderElection() == false` on every replica. Every 10 s it lists CA-rotation operations (uncached): while one is under way it publishes that cluster's `rotation.yaml` Kubernetes CA certificate (certificate only, never the key); with none under way it calls `ClearOnceBaseTrusts`. Not clearing while a rotation is under way, plus the base check, make clearing safe: a pending rotation's CA is never in the base yet, and a rotation that starts again is republished by the leader on its next pass, long before Issuing.
@@ -276,15 +261,15 @@ Review findings on the trust amendment above: the pool only grew, so after a sec
 
 ## Amendment: the follower publishes on an event, not on a tick
 
-Observed on hardware with two controller replicas: at each CA switch the follower still got `x509: unknown authority` for about 80 s, until its projected `ca.crt` refreshed. The previous amendment's claim that a 10 s poll publishes "long before Issuing" was wrong: Accepting to Issuing took 6-8 s, and the rotation was created about 0.2 s after a follower tick, so Issuing came before the next one. Once the API server serves the new CA the follower cannot list operations to publish it.
+With two controller replicas, at each CA switch the follower still gets `x509: unknown authority` for about 80 s, until its projected `ca.crt` refreshes. A 10 s poll does not publish "long before Issuing": Accepting to Issuing takes only 6-8 s, so Issuing can come before the next tick. Once the API server serves the new CA the follower cannot list operations to publish it.
 
 - Decision: `CATrustSync` registers an event handler on the manager's TalosOperation informer (`mgr.GetCache().GetInformer`; informers run on every replica regardless of leader election) and requests a pass on every add or update of a CA rotation that is under way (`caRotationUnderway`). Passes run only in the runnable's own loop, which selects on the tick and a one-slot trigger channel (a non-blocking send), so the handler and the tick never run a pass concurrently. The 10 s tick stays as the fallback and does the clearing. If the informer cannot be obtained it logs and relies on the tick.
 - `rotation.yaml` needs no extra trigger. `caRun.preflight` writes it to the bundle Secret before it sets the status to Accepting, and "under way" requires a non-empty stage, so the first event a follower acts on is that status update, after the Secret holds the keys. The pass reads the Secret uncached (`GetAPIReader`), so no Secret watch or cache is needed. The creation event itself (no status yet) is ignored.
-- No fixed hold in Accepting was added. The publish now happens within milliseconds of the Accepting status, and the rotation then still applies Accepting to every machine and verifies it (the measured 6-8 s; AwaitingCredentials, ADR 0091, adds time when the operator is slow), so the race is against event latency, not against a tick. A fixed delay would only be a guess; a per-replica acknowledgement (a Lease per pod) would make it certain and is left for when hardware shows the event is still too late.
+- No fixed hold in Accepting was added. The publish now happens within milliseconds of the Accepting status, and the rotation then still applies Accepting to every machine and verifies it (the 6-8 s; AwaitingCredentials, ADR 0091, adds time when the operator is slow), so the race is against event latency, not against a tick. A fixed delay would only be a guess; a per-replica acknowledgement (a Lease per pod) would make it certain and is left for when hardware shows the event is still too late.
 
 ## Amendment (2026-10-29): the CNI is restarted first
 
-Observed on hardware (Cilium geneve, 1 control plane and 1 worker, two controller replicas), on two consecutive rotations: after the Kubernetes CA rotation the cilium agents and cilium-operator still held the old CA (`x509: certificate signed by unknown authority` against the API Service), went 0/1 Ready, and Cilium tainted both Nodes `node.cilium.io/agent-not-ready:NoSchedule`. The restarted CoreDNS pods stayed Pending on that taint, so the sequence (written for flannel, CoreDNS first) never reached the cilium restart. After the 5-minute bound the operation completed with DNS and the CNI broken. `kubectl -n kube-system rollout restart ds/cilium deploy/cilium-operator` fixed it in 12-16 s.
+With Cilium as the CNI, after the Kubernetes CA rotation the cilium agents and cilium-operator still held the old CA (`x509: certificate signed by unknown authority` against the API Service), went 0/1 Ready, and Cilium tainted both Nodes `node.cilium.io/agent-not-ready:NoSchedule`. The restarted CoreDNS pods stayed Pending on that taint, so the sequence (written for flannel, CoreDNS first) never reached the cilium restart. After the 5-minute bound the operation completed with DNS and the CNI broken. `kubectl -n kube-system rollout restart ds/cilium deploy/cilium-operator` fixed it in 12-16 s.
 
 - Decision: the order is now the CNI first (the `cilium` DaemonSet, then the `cilium-operator` Deployment), then `kube-proxy`, `coredns`, `ichor-ui`; each waits for the one before to be available (supersedes the order in the "Ordering" bullet above; the flannel preset no longer exists, ADR 0099). RBAC: `cilium-operator` is added to the `get;patch` Deployment names in kube-system.
 - Unmanaged CNI (`spec.cni.preset: unmanaged`, ADR 0103): Ichor does not know or touch the CNI, so no CNI workload is restarted (`kube-proxy`, `coredns` and `ichor-ui` still are). The completion message says the CNI was not restarted and that the operator should restart its pods if they report x509 errors.
@@ -292,4 +277,4 @@ Observed on hardware (Cilium geneve, 1 control plane and 1 worker, two controlle
 
 ## Amendment (2026-10-30): the lease is handed over on a voluntary stop
 
-`LeaderElectionReleaseOnCancel` stays off for the reason above: the API server may well be up while the process sits in `WaitForRestoreTails`, so a release there could let a second replica act mid-restore. But keeping the lease on every stop made each upgrade wait out the 120 s lease before the new controller issued ichor-ui's certificates (ADR 0105). The process now builds its own Lease lock (`cmd/leaderelection.go`, so it knows its identity) and, after `mgr.Start` returns, calls `releaseLeaseUnlessRestoring`: unless an etcd restore job is running (`controller.RestoreTailsRunning`) and only while the Lease's holder is still this process, it clears the holder with an update that fails if the Lease changed since it was read. A crash, a lost lease, or a stop that goes into the restore tail keeps the old behaviour (the lease runs out). Covered by unit tests on a fake clientset (released on the voluntary path; kept in the restore tail and when another holder has it); the optimistic-concurrency failure is client-go's resourceVersion check, which the fake does not enforce.
+`LeaderElectionReleaseOnCancel` stays off for the reason above: the API server may well be up while the process sits in `WaitForRestoreTails`, so a release there could let a second replica act mid-restore. But keeping the lease on every stop made each upgrade wait out the 120 s lease before the new controller issued ichor-ui's certificates (ADR 0105). The process now builds its own Lease lock (`cmd/leaderelection.go`, so it knows its identity) and, after `mgr.Start` returns, calls `releaseLeaseUnlessRestoring`: unless an etcd restore job is running (`controller.RestoreTailsRunning`) and only while the Lease's holder is still this process, it clears the holder with an update that fails if the Lease changed since it was read. A crash, a lost lease, or a stop that goes into the restore tail keeps the old behaviour (the lease runs out).

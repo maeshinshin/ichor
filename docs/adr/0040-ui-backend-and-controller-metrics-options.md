@@ -207,8 +207,7 @@ decide and build:
 
 - Which of `controller-manager`/`scheduler`/`etcd`'s locally-bound metrics
   ports get exposed, and on which typed `TalosConfigPatch` field(s)
-  (ADR 0003's typed-mirror types, not raw YAML -- CLAUDE.md's "Machine
-  config is typed only").
+  (ADR 0003's typed-mirror types, not raw YAML: machine config is typed only).
 - The ingress-firewall CIDR restriction that scopes who can reach those
   ports once exposed -- without it, "expose the metrics" and "open the
   control plane to the whole pod network" are the same change.

@@ -40,7 +40,7 @@ Argo CD"):
 - (Partly answered, ADR 0055: in Kokumi's source at commit 4126144 the
   Application is hard-coded with prune, selfHeal and `ServerSideApply=true`,
   has no `ignoreDifferences`, and edits to it are reverted. No sync-wave or
-  other options are passed. Still to confirm on a test cluster.)
+  other options are passed. Still to confirm.)
 - Whether Kokumi's Application can be given a `ref`/path or only a bare
   artifact, and whether its Applications can carry Ichor's sync-wave and
   sync options. Check: Kokumi's Serving CRD reference and a generated
@@ -52,8 +52,8 @@ Argo CD"):
 - Air gap: the images Kokumi itself and its scanner need, and how to mirror
   its artifacts. Check: Kokumi's Container Images (operator guide) and
   Registries guides; the pages read only listed these topics.
-- The Argo CD version range: Kokumi says >= 3.3; ADR 0019 verified shapes
-  against v3.5.x. Likely compatible, not tested.
+- The Argo CD version range: Kokumi says >= 3.3; ADR 0019 targets v3.5.x
+  shapes. Likely compatible.
 - Kokumi's project status is "experimental"; its API is `v1alpha1`.
 
 ## Consequences

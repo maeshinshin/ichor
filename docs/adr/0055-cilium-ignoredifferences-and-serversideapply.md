@@ -29,8 +29,8 @@ byte equal.
 documentation (argo-cd.readthedocs.io, stable; the page names no version) says `ignoreDifferences` is by default used only to compute sync
 status, and that the option makes a sync pre-patch the *desired* state so
 ignored fields are not applied over live ones; it is only effective when the
-resource already exists. `CiliumIdentity` objects are created by the Cilium
-operator and appear nowhere in the chart (no template under
+resource already exists. `CiliumIdentity` objects are created at runtime by Cilium
+(the agent, by default) and appear nowhere in the chart (no template under
 `install/kubernetes/cilium/templates` at tag v1.20.0 mentions the kind), so
 there is no desired manifest to pre-patch. `gitops.New` therefore adds the option only when an
 entry names fields (`jsonPointers`, `jqPathExpressions` or
@@ -61,14 +61,26 @@ cluster rather than of the install Ichor owns.
 facts above were read at v1.20.0. The pin is not bumped here: ADR 0013 ties a
 bump to a review of the values against the new chart.
 
-**Caveat.** The Argo CD docs for `ignoreDifferences` (diffing guide) do not
-explain mechanically how a group/kind-only entry affects the result; every
-documented example names a field, and the page does not say what a kind-only
-entry does. `CiliumIdentity` objects are created by the operator, are
-cluster-scoped and appear nowhere in the chart, so Argo CD is expected to stay
-Synced with or without the entry. It is kept as a harmless precaution against
-operator-owned objects entering the diff, not because a derived mechanism
-requires it.
+**Why `CiliumIdentity`.** A `CiliumIdentity` is runtime state, not declared
+state. Cilium represents each security identity as a `CiliumIdentity` object
+(the default CRD identity allocation); it is created while Cilium runs
+(`identityManagementMode` defaults to `agent`, so the agent creates them) as
+workload labels change, and the operator's garbage collection deletes the ones
+whose heartbeat lapsed (Cilium 1.18 docs, `Documentation/internals/cilium_operator.rst`
+and the chart README's `identityAllocationMode`/`identityManagementMode`). They
+appear nowhere in the chart. Cilium's own Argo CD guide
+(`Documentation/configuration/argocd-issues.rst`, 1.18) lists the resulting
+failures (`ciliumid not found`, OutOfSync) and recommends excluding the kind
+through `resource.exclusions` in `argocd-cm`. Ichor does not write `argocd-cm`
+(ADR 0046), so the Application carries the kind-only `ignoreDifferences` entry
+as its own counterpart: Argo CD must not treat runtime-managed identities as
+drift.
+
+**Caveat.** Cilium's guide recommends the `argocd-cm` exclusion, not
+`ignoreDifferences`, and the Argo CD docs for `ignoreDifferences` (diffing
+guide) do not say what a group/kind-only entry does: every documented example
+names a field. The entry states the intent; whether Argo CD stays Synced
+without it is not established here.
 
 **Project.** The Application names the `default` AppProject. Argo CD's
 `core-install.yaml` does not create one, and the Application reports

@@ -71,8 +71,8 @@ changelog:
   disable: true
 
 release:
-  # No git remote is configured on purpose (see CLAUDE.md); name the repo
-  # explicitly so goreleaser doesn't need to read it from `git remote`.
+  # Name the repo explicitly so goreleaser doesn't need to read it from
+  # `git remote`.
   github:
     owner: maeshinshin
     name: ichor

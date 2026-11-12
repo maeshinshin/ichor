@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run the full gate (go test, lint, ui-ci) for the current HEAD as parallel Jobs
-# in the homelab cluster's ichor-e2e namespace; see CONTRIBUTING.md.
+# in the cluster and namespace set in k() below; see CONTRIBUTING.md.
 #   make remote-gate        (GATE_SHARDS="ctl:10 cli:4 uiapi:2 rest:3" to resize;
 #                            GATE_ONLY="cli0 uiapi1" to re-run just those shards)
 # The same file runs inside each pod as `remote-gate.sh pod <group> <k> <n>`.

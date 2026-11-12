@@ -117,8 +117,8 @@ lint failures are not yours.
   against it.
 - Read `docs/design/architecture.md` before changing behaviour.
 - Never pass `paths="./..."` to controller-gen: unlike `go list ./...` it descends into
-  dot directories such as `.claude/worktrees/`, and a broken nested `go.mod` there fails
-  `make manifests`. Use `CONTROLLER_GEN_PATHS` in the Makefile (new top-level code roots go there).
+  dot directories such as a git worktree kept in `.worktrees/`, and a broken nested `go.mod` there
+  fails `make manifests`. Use `CONTROLLER_GEN_PATHS` in the Makefile (new top-level code roots go there).
 
 ## Commits and pull requests
 
@@ -138,9 +138,10 @@ lint failures are not yours.
 - `make test` runs unit tests and envtest; `make ui-ci` runs the UI's typecheck,
   lint, node tests and build.
 - `make remote-gate` runs the whole gate (sharded `go test`, `make lint`, `make
-  ui-ci`) for the committed `HEAD` as parallel Jobs named `ichor-gate-*` in the
-  homelab cluster's `ichor-e2e` namespace (context `admin@talos-cluster01`), so a
-  small workstation is not the bottleneck. Uncommitted changes are not tested. Logs
+  ui-ci`) for the committed `HEAD` as parallel Jobs named `ichor-gate-*` in a
+  Kubernetes cluster, so a small workstation is not the bottleneck. The cluster
+  and namespace are set in `hack/remote-gate.sh` (the `k` function); point them
+  at a cluster you can run Jobs in. Uncommitted changes are not tested. Logs
   land in `remote-gate-out/<shard>.log`; the summary lists PASS/FAIL per shard and
   the failing tests, and the Jobs are deleted by name at the end. It needs
   `bin/k8s/1.36.2-linux-amd64` (`make setup-envtest`; `ENVTEST_SRC` points at another

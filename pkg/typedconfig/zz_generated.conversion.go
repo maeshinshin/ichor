@@ -4582,7 +4582,7 @@ func KubeSchedulerConfigV1Alpha1FromMachinery(src *mk8s.KubeSchedulerConfigV1Alp
 		return nil, nil
 	}
 	out := &KubeSchedulerConfigV1Alpha1{}
-	if err := refuseSet("KubeSchedulerConfigV1Alpha1.enabled", src.PodEnabled, "whether kube-scheduler runs is not carried"); err != nil {
+	if err := refuseSet("KubeSchedulerConfigV1Alpha1.enabled", src.PodEnabled, "whether kube-scheduler runs at all is part of the control plane's shape, which Ichor owns, and not something a config patch may switch off"); err != nil {
 		return nil, err
 	}
 	if err := refuseSet("KubeSchedulerConfigV1Alpha1.image", src.PodImage, "the kube-scheduler image follows spec.kubernetesVersion and is set by the Kubernetes upgrade"); err != nil {

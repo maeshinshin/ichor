@@ -219,7 +219,7 @@ var refusedFields = map[string]string{
 	"KubeProxyConfigV1Alpha1.ProxyImage":     "the kube-proxy image follows spec.kubernetesVersion and is set by the Kubernetes upgrade",
 	"KubeProxyConfigV1Alpha1.ProxyEnabled":   "whether kube-proxy runs is decided by spec.cni.kubeProxy",
 	"KubeSchedulerConfigV1Alpha1.PodImage":   "the kube-scheduler image follows spec.kubernetesVersion and is set by the Kubernetes upgrade",
-	"KubeSchedulerConfigV1Alpha1.PodEnabled": "whether kube-scheduler runs is not carried",
+	"KubeSchedulerConfigV1Alpha1.PodEnabled": "whether kube-scheduler runs at all is part of the control plane's shape, which Ichor owns, and not something a config patch may switch off",
 }
 
 // sparseFields are machinery fields without `omitempty` that the mirror still emits as optional.

@@ -113,8 +113,10 @@ ichor init \
   It is repeatable and not needed here.
 - On virtual networks that pass geneve but not vxlan, add
   `--cni-tunnel geneve` for Cilium.
-- `ichor init --help` lists the rest (pod and service subnets, disk selectors,
-  discovery addresses).
+- The pod and service subnets (`--pod-subnets` and `--service-subnets`, by
+  default `10.244.0.0/16` and `10.96.0.0/12`) must not overlap the network the
+  nodes sit on, and they cannot change once the cluster exists.
+  `ichor init --help` lists the rest (disk selectors, discovery addresses).
 
 The same settings can come from a file instead of flags. `ichor init -f
 init.yaml` reads an `InitConfig`; `ichor init --print-config-template`

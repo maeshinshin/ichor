@@ -200,6 +200,37 @@ func TestRunInit_ConfirmationDeclined(t *testing.T) {
 	}
 }
 
+// TestRunInit_KeepsAnExistingBundle proves init leaves a secrets bundle already stored for the cluster
+// untouched and stops before it contacts the node.
+func TestRunInit_KeepsAnExistingBundle(t *testing.T) {
+	home := withTempHome(t)
+
+	dir := home + "/.ichor/clusters/" + testInitClusterName
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	path := dir + "/secrets.yaml"
+	if err := os.WriteFile(path, []byte("earlier bundle"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	deps, maint, _ := newFakeInitDeps(t, fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build())
+
+	err := runInit(context.Background(), validInitOptions(), deps)
+	if err == nil || !strings.Contains(err.Error(), "~/.ichor/clusters/"+testInitClusterName+"/secrets.yaml") {
+		t.Fatalf("runInit err = %v, want a refusal naming the existing bundle", err)
+	}
+
+	if got, _ := os.ReadFile(path); string(got) != "earlier bundle" {
+		t.Fatalf("the existing bundle was replaced: %q", got)
+	}
+
+	if maint.callCount != 0 {
+		t.Fatalf("expected the node to be left alone, got callCount=%d", maint.callCount)
+	}
+}
+
 // TestRunInit_WeakIdentityRejected proves init refuses to bootstrap a
 // node whose hardware identity is weak (no SMBIOS UUID), the same rule
 // Applies to discovery.

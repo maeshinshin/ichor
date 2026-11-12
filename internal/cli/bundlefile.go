@@ -17,8 +17,10 @@ limitations under the License.
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -74,6 +76,30 @@ func ensureBundleDir(cluster string) (string, error) {
 	}
 
 	return dir, nil
+}
+
+// refuseExistingBundle is init's guard before it generates a bundle: a file already at
+// ~/.ichor/clusters/<cluster>/secrets.yaml may be the only way left to authenticate to a node that was
+// configured with it (a first init that failed after the apply, or another cluster of the same name), and
+// saveBundleFile replaces it. A path that cannot be examined is refused too.
+func refuseExistingBundle(cluster string) error {
+	dir, err := bundleDir(cluster)
+	if err != nil {
+		return err
+	}
+
+	path := filepath.Join(dir, secretsbundle.SecretKey)
+
+	switch _, err := os.Lstat(path); {
+	case err == nil:
+		return fmt.Errorf("init: a secrets bundle already exists at %s; it may be the only way to reach a node "+
+			"configured with it, so init will not overwrite it: move it aside, or choose another --%s",
+			tildePath(path), flagCluster)
+	case !errors.Is(err, fs.ErrNotExist):
+		return fmt.Errorf("init: checking for an existing secrets bundle at %s: %w", tildePath(path), err)
+	}
+
+	return nil
 }
 
 // saveBundleFile writes bundle to ~/.ichor/clusters/<cluster>/secrets.yaml

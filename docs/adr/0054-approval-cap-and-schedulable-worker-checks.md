@@ -40,8 +40,7 @@ one shared `countApproved`), read through `mgr.GetAPIReader()`. No new `TalosMac
 package. The pure rules are `CheckControlPlaneApproval` and `CheckLastWorker`.
 
 **Webhook scope.** The markers now say `create;update;delete` for TalosMachine and `update;delete` for
-TalosCluster, and `config/webhook/manifests.yaml`, the chart template and the e2e harness follow. The chart
-test asserts these exact operation lists instead of "DELETE only". This widens the fail-closed blast radius of
+TalosCluster, and `config/webhook/manifests.yaml`, the chart template and the e2e harness follow. This widens the fail-closed blast radius of
 ADR 0006: with the webhook down, spec and metadata writes to those CRs are refused, not only deletes. Status
 writes use the `/status` subresource and do not match. That is the same direction of failure ADR 0006 chose.
 
@@ -110,8 +109,7 @@ The control-plane count, the approval cap and several controllers each narrowed 
 `findEtcdSurvivor` skipped it. This is a policy matter, not an etcd one: members leave etcd one at a time, so a
 removal in progress cannot break quorum. What it broke was the declared count. With 4 control planes of which one
 is stuck mid-removal (finalizer still held), counting it let a second removal pass `4 -> 3` although only 3 were
-staying, so the effective count fell to 2 (test: "does not count another control plane that is already being
-deleted toward the declared count").
+staying, so the effective count fell to 2.
 
 `deleteguard.ApprovedMachines(ctx, reader, ns, cluster, MachineFilter{Role, IncludeDeleting, KeepDeleting})` is now
 the only function that lists TalosMachines and narrows them to approved ones of a cluster. By default a machine

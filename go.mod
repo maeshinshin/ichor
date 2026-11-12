@@ -255,3 +255,11 @@ require (
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.3 // indirect
 )
+
+retract (
+	v0.2.2
+	v0.2.1
+	v0.2.0
+	v0.1.1
+	v0.1.0
+)

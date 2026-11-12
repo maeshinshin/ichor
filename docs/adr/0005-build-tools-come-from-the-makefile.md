@@ -10,7 +10,7 @@ ADR 0002 put all four of kubebuilder's build tools in the devShell and
 overrode `CONTROLLER_GEN`, `KUSTOMIZE`, `ENVTEST` and `GOLANGCI_LINT` with Nix
 store paths, so that the generated Makefile would use the flake's binaries and
 still not need editing. The reasoning was sound and the mechanism (`?=`) is
-real, but running it showed the approach cannot work:
+real, but the approach cannot work:
 
 - The rule is `$(CONTROLLER_GEN): $(LOCALBIN)`, with `bin/` as a prerequisite.
   `bin/` is newer than any store path, so Make always runs the recipe.
@@ -28,7 +28,7 @@ real, but running it showed the approach cannot work:
   $(LOCALBIN)` to *build* a plugin-carrying binary and then `mv`s it over the
   tool path. A read-only store binary can never serve that purpose.
 
-Meanwhile `CLAUDE.md` says to never call controller-gen, kustomize or envtest
+Meanwhile `CONTRIBUTING.md` says to never call controller-gen, kustomize or envtest
 directly, and to build and generate through the Makefile targets. Tools nobody
 is allowed to invoke directly don't need to be on `PATH`; putting them there
 mostly creates the temptation the rule forbids.
@@ -43,7 +43,7 @@ devShell: drop `kubernetes-controller-tools`, `kustomize`, `setup-envtest` and
 `ENVTEST_VERSION` derived from `go.mod`), which is how kubebuilder intends its
 Makefile to work.
 
-The devShell keeps what a person or an agent actually types: Go, kubebuilder,
+The devShell keeps what contributors actually type: Go, kubebuilder,
 cobra-cli, talosctl, kubectl, helm, buf and the protoc plugins, goreleaser,
 govulncheck, QEMU, cni-plugins, Node, make, git.
 
@@ -58,7 +58,7 @@ govulncheck, QEMU, cni-plugins, Node, make, git.
   side to be on.
 - This weakens the letter of the rule that every tool comes from `flake.nix`:
   these four come from the Go module proxy instead. It keeps the rule's intent
-  — one toolchain for people, agents and CI, pinned, with no ad-hoc or global
+  — one toolchain for contributors and CI, pinned, with no ad-hoc or global
   installs — because the versions are pinned in the Makefile and resolved the
   same way everywhere. The rule still holds for everything else.
 - `make` needs the module proxy the first time it runs in a fresh checkout, on

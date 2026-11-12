@@ -11,7 +11,7 @@ The design gives `TalosCluster.spec.controlPlane.schedulable` three values —
 there are no workers, tainted otherwise, and then stays fixed", so that adding
 workers later does not silently move a user's pods.
 
-Building the renderer showed that `auto` cannot be resolved:
+`auto` cannot be resolved:
 
 - **At creation there are never any workers.** `TalosCluster` is created before
   any `TalosMachine`, so a defaulting webhook counting workers would always see
@@ -24,10 +24,10 @@ Building the renderer showed that `auto` cannot be resolved:
 - **Resolving it later is explicitly ruled out** by the same design paragraph:
   the whole point of fixing it at creation is that approving a worker must not
   retaint the control planes underneath running pods.
-- Leaving it unresolved and picking a safe side breaks the other way. The
-  renderer's first cut treated anything other than `true` as tainted, which
-  taints the only node of a single-node cluster and leaves nothing schedulable
-  — and single-node is a supported configuration, not a corner case.
+- Leaving it unresolved and picking a safe side breaks the other way. Treating
+  anything other than `true` as tainted taints the only node of a
+  single-node cluster and leaves nothing schedulable, and single-node is a
+  supported configuration, not a corner case.
 
 ## Decision
 

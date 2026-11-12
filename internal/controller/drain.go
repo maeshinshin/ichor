@@ -57,15 +57,21 @@ const (
 // test can shorten it.
 var drainStepTimeout = 90 * time.Second
 
+// drainEvictRetryDelay is how long the helper waits after a refused eviction (429, a
+// PodDisruptionBudget) before asking again; left at 0 it asks in a tight loop for the whole step.
+// A variable only so a test can shorten it.
+var drainEvictRetryDelay = 5 * time.Second
+
 // newDrainHelper is the one place the drain policy lives: evictions through the Eviction API (so
 // PodDisruptionBudgets are respected and a blocked eviction is retried until timeout), DaemonSet
 // pods ignored, mirror pods skipped by the helper's own filters, emptyDir data deleted with its
-// pod, and pods that no controller owns refused rather than lost. timeout 0 means unbounded.
+// pod, and pods that no controller owns refused rather than lost. timeout 0 means unbounded,
+// so every drain inside a reconcile passes drainStepTimeout.
 func newDrainHelper(ctx context.Context, kube kubernetes.Interface, timeout time.Duration) *drain.Helper {
 	return &drain.Helper{
 		Ctx: ctx, Client: kube, Timeout: timeout,
 		GracePeriodSeconds: -1, IgnoreAllDaemonSets: true, DeleteEmptyDirData: true,
-		Out: io.Discard, ErrOut: io.Discard,
+		Out: io.Discard, ErrOut: io.Discard, EvictErrorRetryDelay: drainEvictRetryDelay,
 	}
 }
 

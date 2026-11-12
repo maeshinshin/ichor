@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -86,6 +88,61 @@ var _ = Describe("a removal whose drain is blocked", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(res.RequeueAfter).To(BeZero())
 
+		Expect(machineGone(cp1)).To(BeTrue())
+	})
+})
+
+var _ = Describe("a removal whose pod a PodDisruptionBudget will not let go", func() {
+	It("gives up the step, releases the cluster lock and retries, instead of holding the worker", func() {
+		shortenDrain(300 * time.Millisecond)
+
+		bundle := newTestBundle("v1.14")
+		secret := newTestSecret(bundle)
+		cluster := newTestClusterWithCount(1, secret.Name)
+		cp1 := newTestControlPlane(cluster.Name, "pdb1")
+		cp2 := newTestControlPlane(cluster.Name, "pdb2")
+		cp3 := newTestControlPlane(cluster.Name, "pdb3")
+
+		const nodeName = "drain-pdb-node"
+
+		node := &corev1.Node{Name: nodeName}
+		Expect(k8sClient.Create(ctx, node)).To(Succeed())
+		DeferCleanup(func() { _ = k8sClient.Delete(ctx, node) })
+
+		kube := newDrainFake(func() int { return 0 }, node.DeepCopy(), drainTestPod("db", nodeName, "StatefulSet", false))
+		kube.blocked["db"] = true
+
+		r := &TalosMachineReconciler{
+			Client: k8sClient, APIReader: k8sClient, ControllerNamespace: tmNamespace,
+			TalosClient: clientFactory(&fakeTalosClient{nodeName: nodeName}), Recorder: record.NewFakeRecorder(10), KubeClient: kube,
+		}
+
+		reconcileOK(r, cp1, cp2, cp3)
+
+		var live ichorv1alpha1.TalosMachine
+		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(cp1), &live)).To(Succeed())
+		live.Status.NodeName = nodeName
+		Expect(k8sClient.Status().Update(ctx, &live)).To(Succeed())
+
+		Expect(k8sClient.Delete(ctx, cp1)).To(Succeed())
+
+		started := time.Now()
+		res, err := reconcileMachine(r, cp1)
+
+		Expect(time.Since(started)).To(BeNumerically("<", 10*time.Second), "the drain step is bounded")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(drainRetryInterval))
+
+		cond := expectRemoval(fetchMachine(cp1), reasonDrainFailed)
+		Expect(cond.Message).To(And(ContainSubstring("db"), ContainSubstring("global timeout")))
+		Expect(controllerutil.ContainsFinalizer(fetchMachine(cp1), machineRemovalFinalizer)).To(BeTrue())
+		expectLockFree(cluster, "a blocked drain must not keep the cluster lock between retries")
+
+		delete(kube.blocked, "db")
+
+		res, err = reconcileMachine(r, cp1)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(BeZero())
 		Expect(machineGone(cp1)).To(BeTrue())
 	})
 })

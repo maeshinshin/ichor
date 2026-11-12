@@ -119,6 +119,13 @@ func (f *drainFake) hasPod(name string) bool {
 	return err == nil
 }
 
+// shortenDrain bounds one drain step by step and retries a refused eviction every 50ms, for the rest of the spec.
+func shortenDrain(step time.Duration) {
+	DeferCleanup(func(s, d time.Duration) { drainStepTimeout, drainEvictRetryDelay = s, d }, drainStepTimeout, drainEvictRetryDelay)
+
+	drainStepTimeout, drainEvictRetryDelay = step, 50*time.Millisecond
+}
+
 func drainRolloutAdvancer(fake *fakeTalosClient, kube *drainFake) *configRolloutAdvancer {
 	a := newRolloutAdvancer(fake)
 	a.Kube = kube
@@ -165,9 +172,7 @@ var _ = Describe("configRolloutAdvancer drain", func() {
 	})
 
 	It("keeps draining while a PodDisruptionBudget refuses an eviction and reboots only when it lets go", func() {
-		DeferCleanup(func(old time.Duration) { drainStepTimeout = old }, drainStepTimeout)
-
-		drainStepTimeout = 2 * time.Second
+		shortenDrain(2 * time.Second)
 
 		f := newRolloutFixture()
 		m := newTestMachine(f.cluster.Name, true)

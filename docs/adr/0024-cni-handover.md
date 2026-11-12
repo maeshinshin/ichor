@@ -8,14 +8,13 @@ Decided: No CNI hand-over registry (one real member); removal happens at render 
 
 ADR 0019 built `ichor init` through step 5 and deliberately excluded step 6
 (hand-over): "it is a continuous reconciliation loop against Argo CD's own
-status (watch, poll, retry) ... It belongs to the controller, as a later
-unit's work." This is that unit.
+status (watch, poll, retry) ... It belongs to the controller." This ADR is that controller's design.
 
 The design document's "GitOps and Argo CD" section originally described
 hand-over as "one mechanism with a component registry, not three special
 cases," implying three components (CNI, Ichor, Argo CD) each go through
-inject-into-`cluster.inlineManifests` → adopted by Argo CD → removed. Building
-`ichor init` (ADR 0019) showed that isn't what actually happens:
+inject-into-`cluster.inlineManifests` → adopted by Argo CD → removed. That is not
+what `ichor init` (ADR 0019) does:
 
 - **Ichor** is applied directly through the API server (`applyIchorManifest`),
   never inlined. It never needs hand-over.
@@ -40,7 +39,7 @@ register.
 ## Decision: removal happens at render time, not by rewriting a `TalosConfigPatch`
 
 Why removal has to actually happen, not just "Argo CD adopting it": Talos's
-`ManifestApplyController` (checked against Talos v1.14.3's source) only ever
+`ManifestApplyController` (per Talos v1.14.3's source) only ever
 server-side-applies `cluster.inlineManifests` and re-applies them on every
 Kubernetes upgrade -- it has no delete path. If the CNI's inlined entry were
 left in place, an upgrade would silently roll the CNI back to whatever Ichor
@@ -48,7 +47,7 @@ originally inlined, overwriting anything Argo CD has since changed. The same
 controller refuses to apply over an object carrying another controller's
 inventory annotation, which sounds like protection -- but Argo CD's own
 tracking marker (configured by `argocd-cm`'s `application.resourceTrackingMethod`,
-read rather than assumed, per the design doc) is not that annotation, so
+per the design doc) is not that annotation, so
 adoption alone does not stop the re-apply.
 
 Given that, removing the entry has to be a real, visible state change, not an
@@ -64,19 +63,17 @@ patch) and principle 5 (the controller renders from ingredients; it does not
 rewrite them): no `TalosConfigPatch` object is ever mutated -- a patch
 carrying the entry is deep-copied only for the filtered copy that gets
 merged, and every other patch passes through as the original pointer
-(verified in `pkg/render/render_test.go`'s
-`TestCNIHandoverDropsInlineManifest`, including a pointer-identity check).
+(`pkg/render/render_test.go`'s `TestCNIHandoverDropsInlineManifest` pins
+this, including pointer identity).
 
 ## Decision: automatic / manual / disabled, as a CR field only
 
 `TalosClusterCNI.Handover` (`api/v1alpha1/taloscluster_types.go`) is one of
 `automatic` (default), `manual`, or `disabled`, matching the design's "Hand-over
 can be automatic, manual (`ichor gitops handoff cni`), or disabled when Argo CD
-isn't used." This unit only builds the field and the reconciler's branching on
-it: `disabled` and `manual` both set the `CNIHandover` condition `False` (with
+isn't used." The reconciler branches on the field: `disabled` and `manual` both set the `CNIHandover` condition `False` (with
 a reason naming which) and never requeue. The `ichor gitops handoff cni` CLI
-command that would flip a manual cluster to adopted is explicitly another
-agent's work and is not built here.
+command that would flip a manual cluster to adopted is separate work.
 
 ## Decision: a separate controller, not a bump to `TalosClusterReconciler`
 
@@ -101,10 +98,7 @@ foreign CRD this project neither owns nor vendors Go types for) at the exact
 Name/Namespace `preset.ArgoCDApplication` itself returns -- which is also how
 "adoption produces no diff" is satisfied: the same template that was injected
 is the only thing ever looked up, so there's no second, independently-guessed
-shape to drift from (`pkg/cni/cilium`'s `TestArgoCDApplication` already
-covers the template's own content; this reconciler's test
-(`internal/controller/cnihandover_controller_test.go`) covers that the lookup
-uses that template's Name/Namespace).
+shape to drift from.
 
 Both `apierrors.IsNotFound` (Argo CD exists but hasn't adopted the Application
 yet) and `apimeta.IsNoMatchError` (Argo CD's CRDs aren't installed at all --
@@ -121,30 +115,28 @@ in a tight loop) without guessing that the operator meant `disabled`.
 
 ## Consequences
 
-- `pkg/cni.InlineManifestName` is a new exported constant duplicating
+- `pkg/cni.InlineManifestName` is an exported constant duplicating
   `internal/cli`'s own unexported `cniKey`: both `pkg/render` and
   `internal/controller` need the exact string Ichor inlined the manifest
-  under, and `internal/cli` is off-limits to this unit, so there is no
-  shared home below it. `pkg/cni` is safe for both to import (its own
+  under, and neither can import the CLI package. `pkg/cni` is safe for both to import (its own
   subpackages `cilium`/`flannel` import it, not the reverse).
 - `CNIHandoverReconciler.cniPresetFor` duplicates `internal/cli`'s own preset
   switch (`"cilium"`/`"flannel"`, `"custom"` deliberately absent, same as ADR
   0013) for the same reason: a controller cannot import the CLI package.
-- Not built here: the `ichor gitops handoff cni` CLI command; any change to
-  `internal/cli`, `internal/uiapi`, `pkg/upgrade`, or the e2e suite.
+- Not part of this decision: the `ichor gitops handoff cni` CLI command.
 
-> Update (ADR 0055 addendum, 2026-10-26): the generated Cilium Application now carries `syncPolicy.automated {prune: true, selfHeal: true}` and `PruneLast=true`. Without it Argo CD never synced the Application, so it never became Synced + Healthy and the hand-over never completed (found on real hardware). Ichor still never changes the sync policy of an existing Application; it only chooses one when it creates its own.
+> Update (ADR 0055 addendum, 2026-10-26): the generated Cilium Application now carries `syncPolicy.automated {prune: true, selfHeal: true}` and `PruneLast=true`. Without it Argo CD never synced the Application, so it never became Synced + Healthy and the hand-over never completed. Ichor still never changes the sync policy of an existing Application; it only chooses one when it creates its own.
 
-> Update (2026-10-28): `cluster.inlineManifests`, `cluster.extraManifests` and `cluster.extraManifestHeaders` are `safe` in `pkg/fieldmeta`. Found on real hardware: after the hand-over Ichor stops rendering the CNI entry, and with the default (reboot-required) class the single control plane sat `Ready=False/RebootRequired` for that pending removal (the machine controller never reboots), a later CNI operation paused on "unrelated pending configuration change at cluster.inlineManifests", and only `ichor config apply` cleared it, by rebooting the node (~3 min API outage). Talos v1.14.3 needs no reboot: `controllers/k8s/control_plane.go:510-552` rebuilds `ExtraManifestsConfig` live from the active MachineConfig on control planes only (`controlplaneMapFunc`, `:44-66`); `extra_manifest.go:131-141` destroys the no-longer-listed `k8s.Manifest` resource; `manifest_apply.go:230-393` only server-side-applies (skips inventoried objects, `:335-338`) and has no delete path, so removing an entry deletes nothing in the cluster. The machine controller therefore applies the removal live right after the hand-over and nothing reboot-required is left behind.
+> Update (2026-10-28): `cluster.inlineManifests`, `cluster.extraManifests` and `cluster.extraManifestHeaders` are `safe` in `pkg/fieldmeta`. After the hand-over Ichor stops rendering the CNI entry. With the default (reboot-required) class the single control plane would sit `Ready=False/RebootRequired` for that pending removal (the machine controller never reboots), a later CNI operation would pause on "unrelated pending configuration change at cluster.inlineManifests", and only `ichor config apply` would clear it, by rebooting the node (~3 min API outage). Talos v1.14.3 needs no reboot: `controllers/k8s/control_plane.go:510-552` rebuilds `ExtraManifestsConfig` live from the active MachineConfig on control planes only (`controlplaneMapFunc`, `:44-66`); `extra_manifest.go:131-141` destroys the no-longer-listed `k8s.Manifest` resource; `manifest_apply.go:230-393` only server-side-applies (skips inventoried objects, `:335-338`) and has no delete path, so removing an entry deletes nothing in the cluster. The machine controller therefore applies the removal live right after the hand-over and nothing reboot-required is left behind.
 
 ## Amendment (2026-10-28): the hand-over status is a render input, so its removal is a change, not drift
 
 The machine controller classes a node/render mismatch as drift when `desiredInputsHash` (the
 generations of the cluster, machine, patches, storage, plus the registry credentials) equals the
 hash recorded at the last convergence. The hand-over writes `status.conditions[CNIHandover]`, which
-moves no generation, so the hash stayed put while the render dropped the CNI's
-`cluster.inlineManifests` entry. The removal read as drift and, under the default `warnOnly`, was
-never applied (`NodeDrifted`). `desiredInputsHash` now also folds in whether `CNIHandover` is True
+moves no generation, so the hash stays put while the render drops the CNI's
+`cluster.inlineManifests` entry. The removal would read as drift and, under the default `warnOnly`, never be
+applied (`NodeDrifted`). `desiredInputsHash` now also folds in whether `CNIHandover` is True
 and `status.cni.kubeProxy` (ADR 0066), the two status values the render reads. The removal is then
 an intended change and is applied live under any `driftPolicy`, since `cluster.inlineManifests` is
 safe and needs no reboot. Hashes of clusters that have neither are unchanged.

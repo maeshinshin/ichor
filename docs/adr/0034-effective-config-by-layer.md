@@ -9,10 +9,9 @@ Decided: built the one piece of phase 6's "config editing by layer ... effective
 Roadmap phase 6 is "config editing UI." Architecture.md's `## CLI and UI`
 section names four things: "config editing by layer," "an effective-config
 view annotated by origin and secrets masked," "impact preview before
-applying," and "schema-driven forms." Before building any of it, checked
-what `proto/ichor/v1alpha1/` actually exposes today — unchanged since ADR
-0016, still only `ClusterService`, `MachineService` and `NodeService`,
-none of them with a write method for `TalosConfigPatch`:
+applying," and "schema-driven forms." What `proto/ichor/v1alpha1/` exposes decides how much of it can be built:
+since ADR 0016 it has only `ClusterService`, `MachineService` and
+`NodeService`, none of them with a write method for `TalosConfigPatch`:
 
 - `NodeService.GetEffectiveConfig` is read-only and already returns
   exactly `EffectiveConfigValue{path, value, secret, origin{layer,
@@ -38,8 +37,7 @@ none of them with a write method for `TalosConfigPatch`:
 ## Decision: build the effective-config view's layer grouping, nothing that needs a write path
 
 `ui/src/pages/NodeDetail.tsx`'s `EffectiveConfigSection` already called
-`GetEffectiveConfig` and rendered one flat table (built in the phase 5
-unit, before this one). It did not satisfy "the effective-config view in
+`GetEffectiveConfig` and rendered one flat table (built with the phase 5 UI). It did not satisfy "the effective-config view in
 the UI shows which layer each value came from" (architecture.md, "Patch
 layers" — the one concrete UI requirement that section states): origin
 was a text column to read per row, not a grouping. `groupByLayer` buckets
@@ -52,11 +50,10 @@ this screen yet, rather than leaving a reader to wonder why there's no
 edit button.
 
 **Not built, and not stubbed**: a patch-editing form, an impact-preview
-panel, or a schema-driven field list. The first question —
-does this need to exist — has a clear answer here: a form with no RPC to
+panel, or a schema-driven field list. A form with no RPC to
 submit to is not a smaller version of the feature, it is a non-functional
-one that looks finished. Building it would also have meant exactly the
-mistake the task warned against twice over: hand-listing `TalosConfigPatch`'s
+one that looks finished. Building it would also have meant two mistakes:
+hand-listing `TalosConfigPatch`'s
 fields (when mirrorgen exists specifically so no parallel catalogue of
 Talos's field names has to exist, ADR 0003) and hand-porting
 `pkg/fieldmeta`'s reboot/install-time verdicts into JS (a second, harder
@@ -66,8 +63,8 @@ than being guessed).
 
 ## Gap report: what proto needs for the rest of phase 6
 
-Not added, per the task's own instruction — reported with enough shape
-that implementing them is mechanical, not another research pass:
+Not added to proto here. Each gap is recorded with enough shape
+that implementing it is mechanical:
 
 1. **A write path for `TalosConfigPatch`.** Smallest useful shape: a
    `PatchService` with `ListPatches(cluster ObjectRef) → []Patch`,
@@ -85,8 +82,7 @@ that implementing them is mechanical, not another research pass:
    {rebootRequired bool, installTimeOnly []string, unsupported []string}`
    — `fieldmeta.Impact`'s three fields, unchanged. Either way, the UI
    needs to show `installTimeOnly` and `rebootRequired` as genuinely
-   different outcomes, not two severities of the same warning: the design
-   task that produced this ADR was explicit that a reboot does nothing
+   different outcomes, not two severities of the same warning: a reboot does nothing
    for an install-time-only field, so presenting them identically would
    invite an operator to reboot for no reason.
 3. **Schema-driven forms do not need a new RPC** — `config/crd/bases/
@@ -103,16 +99,13 @@ that implementing them is mechanical, not another research pass:
 ## Consequences
 
 - `ui/src/pages/NodeDetail.tsx`'s effective-config view groups by layer;
-  `ui/src/lib/`, `proto/`, `internal/uiapi/` are otherwise untouched by
-  this unit.
-- No proto change. `buf lint`/`buf breaking` were not run against a diff
-  because there is no proto diff.
+  nothing else changes in `ui/src/lib/`, `proto/` or `internal/uiapi/`.
+- No proto change.
 - The three gaps above are not new discoveries — ADR 0016 and ADR 0018
   already named "config editing, a different, later unit" and "disk
   roles and network link configuration join this request message,
   additively, once they land on the CRD" as deferred. This ADR is the
-  first unit that actually needed them and found no workaround, so it
-  records the concrete shapes rather than leaving the gap as a one-line
-  mention.
+  first to need them and find no workaround, so it records the concrete
+  shapes rather than leaving the gap as a one-line mention.
 - `TalosOperation`'s progress view, the GitOps page, PR mode and OIDC
-  remain out of this unit's scope, per the task's own boundary.
+  are separate decisions, not covered here.

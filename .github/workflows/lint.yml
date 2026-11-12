@@ -37,14 +37,9 @@ jobs:
           key: bin-${{ runner.os }}-${{ github.job }}-${{ hashFiles('Makefile', '.custom-gcl.yml') }}
 
       - name: Cache Go modules and builds
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/go-cache
         with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-            ~/.cache/golangci-lint
-          key: lint-go-v2-${{ hashFiles('go.sum') }}
-          restore-keys: lint-go-v2-
+          name: lint
 
       - name: Check linter configuration
         run: nix develop --command make lint-config
@@ -84,13 +79,9 @@ jobs:
           key: bin-${{ runner.os }}-${{ github.job }}-${{ hashFiles('Makefile', '.custom-gcl.yml') }}
 
       - name: Cache Go modules and builds
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: ./.github/actions/go-cache
         with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: goreleaser-go-${{ hashFiles('go.sum') }}
-          restore-keys: goreleaser-go-
+          name: goreleaser
 
       - name: Check goreleaser configuration
         run: nix develop --command bash -c "goreleaser check"

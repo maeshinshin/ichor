@@ -1,0 +1,53 @@
+name: Go module and build caches
+description: Restore and save GOMODCACHE and GOCACHE (the build cache, which also holds go test results and the golangci-lint cache) with the GitHub Actions cache.
+
+inputs:
+  name:
+    description: Which build cache to use. One per kind of work (test, lint, goreleaser), because each fills it with different objects.
+    required: true
+
+# Saved on branches and pull requests, restore-only on tags: a tag run (a release) reads what main saved and writes nothing back.
+# GitHub scopes a cache to the ref that saved it. A pull request reads its own and its base branch's; a tag reads only its
+# own and the default branch's. So a pull request can never change what main or a release restores.
+runs:
+  using: composite
+  steps:
+    # Keyed by go.sum alone, with no restore-keys: a changed go.sum starts from an empty module cache rather than
+    # carrying every module of every earlier go.sum forward.
+    - name: Cache the Go modules
+      if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/go/pkg/mod
+        key: gomod-${{ runner.os }}-${{ hashFiles('go.sum') }}
+
+    - name: Restore the Go modules
+      if: ${{ startsWith(github.ref, 'refs/tags/') }}
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/go/pkg/mod
+        key: gomod-${{ runner.os }}-${{ hashFiles('go.sum') }}
+
+    # The key ends in the commit, so every run that finishes saves a fresh entry (an exact hit is never saved
+    # again) and starts from the newest earlier one. Go drops build-cache entries unused for five days, which
+    # bounds what each save carries. A cache entry is keyed by the content of its inputs, so a source change
+    # reuses everything it did not touch.
+    - name: Cache the Go build cache
+      if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/.cache/golangci-lint
+        key: gobuild-${{ runner.os }}-${{ inputs.name }}-${{ github.sha }}
+        restore-keys: gobuild-${{ runner.os }}-${{ inputs.name }}-
+
+    - name: Restore the Go build cache
+      if: ${{ startsWith(github.ref, 'refs/tags/') }}
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/.cache/golangci-lint
+        key: gobuild-${{ runner.os }}-${{ inputs.name }}-${{ github.sha }}
+        restore-keys: gobuild-${{ runner.os }}-${{ inputs.name }}-

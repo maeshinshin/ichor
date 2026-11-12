@@ -877,3 +877,31 @@ func TestMachineActionsAcceptAHostnameAndRefuseAnAmbiguousOne(t *testing.T) {
 		t.Fatalf("unknown: %v", err)
 	}
 }
+
+func TestMachineActionsAcceptAUniqueNamePrefixAndRefuseAnAmbiguousOne(t *testing.T) {
+	srv, _ := opServer(t, append(opObjects(),
+		opMachine("79dca8b8-7a59-452d-af10-f76150a0100d", "worker", nil, nil),
+		opMachine("79dca8b8-7a59-452d-af10-f76150a0100e", "worker", nil, nil),
+		opMachine("aabbccdd-0000-0000-0000-000000000001", "worker", nil, nil),
+		opMachine("aabb", "worker", nil, nil))...)
+	ctx := context.Background()
+
+	for _, get := range []func(context.Context, *pb.ObjectRef) (*ichorv1alpha1.TalosMachine, error){srv.getMachine, srv.resolveMachine} {
+		if m, err := get(ctx, objectRef(opNS, "aabbccdd")); err != nil || m.Name != "aabbccdd-0000-0000-0000-000000000001" {
+			t.Fatalf("unique prefix: %v, %v", m, err)
+		}
+
+		if m, err := get(ctx, objectRef(opNS, "aabb")); err != nil || m.Name != "aabb" {
+			t.Fatalf("an exact name wins over longer names it prefixes: %v, %v", m, err)
+		}
+
+		if _, err := get(ctx, objectRef(opNS, "79dca8b8")); connect.CodeOf(err) != connect.CodeInvalidArgument ||
+			!strings.Contains(err.Error(), "0100d") || !strings.Contains(err.Error(), "0100e") {
+			t.Fatalf("ambiguous prefix: %v", err)
+		}
+
+		if _, err := get(ctx, objectRef(opNS, "nobody")); connect.CodeOf(err) != connect.CodeNotFound {
+			t.Fatalf("no match: %v", err)
+		}
+	}
+}

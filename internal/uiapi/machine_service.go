@@ -86,7 +86,19 @@ func (s *Server) GetMachine(
 	return connect.NewResponse(&pb.GetMachineResponse{Machine: machineToPB(m)}), nil
 }
 
+// getMachine reads ref's TalosMachine by its exact name, or, when no machine has that name, by a
+// name prefix that only one machine has: `machine list` shows a UUID name shortened to eight
+// characters, and that short form has to name the machine back.
 func (s *Server) getMachine(ctx context.Context, ref *pb.ObjectRef) (*ichorv1alpha1.TalosMachine, error) {
+	m, err := s.getMachineExact(ctx, ref)
+	if connect.CodeOf(err) != connect.CodeNotFound {
+		return m, err
+	}
+
+	return s.machineByPrefix(ctx, ref, err)
+}
+
+func (s *Server) getMachineExact(ctx context.Context, ref *pb.ObjectRef) (*ichorv1alpha1.TalosMachine, error) {
 	var m ichorv1alpha1.TalosMachine
 
 	key := namespacedName(ref)
@@ -99,10 +111,10 @@ func (s *Server) getMachine(ctx context.Context, ref *pb.ObjectRef) (*ichorv1alp
 
 // resolveMachine is getMachine that also takes the machine's hostname or its Kubernetes Node name,
 // for a caller who knows the node by that name and not by the TalosMachine's UUID. The exact name
-// wins; only a name no machine has is looked up as a hostname or Node name, and more than one match
-// is an error rather than a guess.
+// wins; only a name no machine has is looked up as a hostname or Node name, then as a name prefix,
+// and more than one match is an error rather than a guess.
 func (s *Server) resolveMachine(ctx context.Context, ref *pb.ObjectRef) (*ichorv1alpha1.TalosMachine, error) {
-	m, err := s.getMachine(ctx, ref)
+	m, err := s.getMachineExact(ctx, ref)
 	if connect.CodeOf(err) != connect.CodeNotFound {
 		return m, err
 	}
@@ -128,10 +140,43 @@ func (s *Server) resolveMachine(ctx context.Context, ref *pb.ObjectRef) (*ichorv
 		}
 	}
 
-	switch len(found) {
-	case 0:
-		return nil, err
-	case 1:
+	if len(found) == 0 {
+		return s.machineByPrefix(ctx, ref, err)
+	}
+
+	return oneMachine(ref.GetName(), found)
+}
+
+// machineByPrefix is the TalosMachine in ref's namespace whose name starts with ref's name; notFound
+// is the answer when there is none.
+func (s *Server) machineByPrefix(ctx context.Context, ref *pb.ObjectRef, notFound error) (*ichorv1alpha1.TalosMachine, error) {
+	if ref.GetName() == "" {
+		return nil, notFound
+	}
+
+	var list ichorv1alpha1.TalosMachineList
+	if err := s.List(ctx, &list, client.InNamespace(ref.GetNamespace())); err != nil {
+		return nil, notFound // the not found is the better answer
+	}
+
+	var found []*ichorv1alpha1.TalosMachine
+
+	for i := range list.Items {
+		if strings.HasPrefix(list.Items[i].Name, ref.GetName()) {
+			found = append(found, &list.Items[i])
+		}
+	}
+
+	if len(found) == 0 {
+		return nil, notFound
+	}
+
+	return oneMachine(ref.GetName(), found)
+}
+
+// oneMachine is the only machine in found, or an error naming them all.
+func oneMachine(name string, found []*ichorv1alpha1.TalosMachine) (*ichorv1alpha1.TalosMachine, error) {
+	if len(found) == 1 {
 		return found[0], nil
 	}
 
@@ -140,7 +185,7 @@ func (s *Server) resolveMachine(ctx context.Context, ref *pb.ObjectRef) (*ichorv
 		names[i] = f.Name
 	}
 
-	return nil, invalid("%q matches more than one machine (%s): use the machine's own name", ref.GetName(), strings.Join(names, ", "))
+	return nil, invalid("%q matches more than one machine (%s): use the machine's own name", name, strings.Join(names, ", "))
 }
 
 // ApproveMachine is how a person decides a discovered machine joins the

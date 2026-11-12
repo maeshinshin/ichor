@@ -28,7 +28,6 @@ ADR 0085 had two ways out: `reset` (wipe, reboot into maintenance, Node kept and
 
 ## Risks
 
-- Not verified on hardware: `Reset` with `reboot=false` powering a the outer cluster node off, the time the Node takes to go NotReady, and the removal of a dead control plane through this path.
 - `delete` on every Node is a broader RBAC verb than the controller had.
 - Machines removed before this change were not wiped; the adopt guide says how to add them again (`ichor adopt --add-machine`).
 

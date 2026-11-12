@@ -57,8 +57,7 @@ cluster.
 architecture.md fixes only `ichor machine approve`. The rest follows it:
 `ichor machine list|get|approve|reject`, `cluster list|get`,
 `patch list|get|create|update|delete|preview`, `node get|logs`,
-`config effective`. Scaffolded with `cobra-cli add` (in a scratch module, then
-moved, as in ADR 0014). Output is the wire message as `-o yaml|json`. `approve`,
+`config effective`. Output is the wire message as `-o yaml|json`. `approve`,
 `reject` and `patch delete` confirm unless `--yes`. `patch create|update`
 preview first and confirm only when the patch needs a reboot, touches an
 install-time-only field or one too new for the cluster's Talos. Patches are
@@ -72,9 +71,9 @@ with unknown fields rejected; `uiapi.PatchToWire` is the one conversion.
 the latest token, the Go twin of `ui/src/lib/resumableStream.ts`; the same
 caveat about a few repeated or missed lines applies (ADR 0018). The API has
 no "snapshot" mode, so without `--follow` the command stops after
-`--idle-timeout` (3s) without a new line. shortcut: a `follow` field on
+`--idle-timeout` (3s) without a new line. A `follow` field on
 `StreamNodeLogsRequest` would replace the idle timer; it needs a `proto/`
-change and is left for whoever owns it.
+change and is not part of this ADR.
 
 ## Not done
 

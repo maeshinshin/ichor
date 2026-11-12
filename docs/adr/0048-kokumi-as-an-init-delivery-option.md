@@ -6,12 +6,11 @@ Decided: `ichor init --argocd --kokumi` prepares the OCI repo-creds Secret, inst
 
 ## Context
 
-A user asked for Kokumi to be usable with Ichor, specifically "as an option
-when installing Argo CD", not as an `ichor gitops export` target, a PR-mode
-destination or a third kind of tracking detection.
+Kokumi is offered as an option when installing Argo CD, not as an
+`ichor gitops export` target, a PR-mode destination or a third kind of
+tracking detection.
 
-Verified from Kokumi's own docs (kokumi.dev, github.com/kokumi-dev/kokumi,
-read 2026-10-26): an OCI-first delivery operator, Apache-2.0, "currently
+Kokumi's own docs (kokumi.dev, github.com/kokumi-dev/kokumi) describe an OCI-first delivery operator, Apache-2.0, "currently
 experimental". Renders become immutable content-addressed OCI artifacts
 (Preparations); a Serving creates or updates an Argo CD `Application` in the
 `argocd` namespace with `spec.source.repoURL` set to the Preparation's OCI
@@ -36,14 +35,7 @@ Argo CD"):
   unchanged.
 - Flag name (`--delivery kokumi` is a placeholder) is left to implementation.
 
-## Why the first cut left implementation out
-
-Reconciling the design against the code turned up gaps that matter more than
-a new option, and they should be filled first so Kokumi is not built on top
-of them. Adding a delivery layer before those are closed would widen the
-surface that has to be re-verified.
-
-## Unknowns (what to check before building)
+## Open questions at design time
 
 - (Partly answered, ADR 0055: in Kokumi's source at commit 4126144 the
   Application is hard-coded with prune, selfHeal and `ServerSideApply=true`,
@@ -87,11 +79,10 @@ Accepted and built, in the narrow form the Decision above describes.
 - What it does: creates the Secret `kokumi-registry-repo-creds` in
   `--argocd-namespace` (`argocd.argoproj.io/secret-type: repo-creds`, `type:
   oci`, `url: oci://kokumi-registry.kokumi.svc.cluster.local:5000`,
-  `insecureOCIForceHttp: "true"`; the service name and port 5000 were checked
-  in 0.17.0's install.yaml). Soft-fail like the repository Secret. It prints
+  `insecureOCIForceHttp: "true"`). Soft-fail like the repository Secret. It prints
   that Kokumi was not installed.
 - What it does not do: the repository skeleton is byte-identical with and
-  without `--kokumi` (tested). Ichor writes no Kokumi CRs (Kitchen, Menu, Order,
+  without `--kokumi`. Ichor writes no Kokumi CRs (Kitchen, Menu, Order,
   Serving...) and moves none of its own CRs behind Kokumi. This is the
   conservative answer to the root-Application coexistence unknown: the root
   Application keeps delivering everything Ichor generates.
@@ -111,7 +102,6 @@ Accepted and built, in the narrow form the Decision above describes.
   untouched.
 
 Deferred: delivering any Ichor CR through Kokumi; the Argo CD >= 3.3 check and
-Kubernetes >= 1.26 check; testing against a real cluster (not done, no cluster
-was touched); a TLS or authenticated Kokumi registry (the Secret assumes the
+Kubernetes >= 1.26 check; a TLS or authenticated Kokumi registry (the Secret assumes the
 bundled plain-HTTP one); tracking Kokumi upgrades past 0.17.0 (v1alpha1,
 experimental).

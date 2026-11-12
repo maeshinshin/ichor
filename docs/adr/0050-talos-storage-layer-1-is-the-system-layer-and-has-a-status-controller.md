@@ -16,7 +16,7 @@ showed that the preset ADR 0023 shipped could not have worked (below).
 (ADR 0027) and before every `TalosConfigPatch`. It is Ichor-generated and not patch-shaped; a
 user who needs a different mount option or disk size overrides it with a patch, and one
 who wants no preparation removes the `TalosStorage` (a patch cannot delete the volume).
-Verified: a machine-layer `UserVolumeConfig` named `longhorn` wins over it. A patch replacing
+A machine-layer `UserVolumeConfig` named `longhorn` wins over it. A patch replacing
 that document must be complete (Talos then validates it alone: a diskSelector is required).
 
 **2. Which nodes.** `storage.Select(cluster, storages, nodeLabels)` is the only implementation
@@ -45,7 +45,7 @@ to the one it would compute now (a machine that converged before the `TalosStora
 does not count). False reasons: `NoNodesSelected`, `NodesNotConverged` (lists the
 machines), `ClusterNotFound`. `StorageSystemConsistent` is informational and never gates `Ready`:
 it reads Longhorn's `settings.longhorn.io` object `create-default-disk-labeled-nodes` (top-level
-`value`, longhorn-manager v1.9.1 `setting.go` / `types/setting.go`, name verified there) through
+`value`, longhorn-manager v1.9.1 `setting.go` / `types/setting.go`) through
 the preset's `CheckConsistency`. Longhorn or its CRD absent is `Unknown/NotInstalled`, not an error.
 It must not gate `Ready`: the setting lives in the storage Application's values, which the held
 wave delivers. The read goes through `mgr.GetAPIReader()` (no informer on a possibly absent
@@ -65,12 +65,11 @@ as ADR 0025 already decided.
   documents, and Talos rejects the legacy `machine.kubelet` / `machine.nodeLabels` next to them.
   The preset no longer returns the legacy `Config` document: `TalosPatches` is the volume only,
   `KubeletMounts()` is separate data. Render puts the Node label/annotation into a `KubeNodeConfig`
-  document under 1.14+ and into `machine.nodeLabels`, `nodeAnnotations` and `kubelet.extraMounts` below it
-  (tested with `v1.12`).
+  document under 1.14+ and into `machine.nodeLabels`, `nodeAnnotations` and `kubelet.extraMounts` below it.
 - The standalone `KubeletConfig` has no extra-mount field, so under 1.14+ **the kubelet bind mount
   from Longhorn's Talos doc is not rendered**. Talos itself bind-mounts `/var/mnt` into the kubelet
   (`rslave`, read-only); whether Longhorn works on that without the `rshared` read-write mount is
-  not verified here and needs a real node.
+  not known.
 
 ## Also fixed
 
@@ -82,18 +81,18 @@ setting name.
 
 ## Consequences
 
-- Kernel modules and sysctls: `longhorn-v1` emits none today (ADR 0023 verified none); a preset that
+- Kernel modules and sysctls: `longhorn-v1` emits none today (ADR 0023); a preset that
   needs them returns them from `TalosPatches` and they arrive the same way.
 - Patches do not trigger machine reconciles (only `TalosStorage` does); unchanged here.
 
 ## Amendment: the UI backend reads TalosStorage
 
 The UI's effective-config view renders layer 1, so the `ichor-ui` ClusterRole needs `list` on `talosstorages`
-(missed at first, found live; see the amendment in ADR 0018, which also adds the test that enforces it).
+(see the amendment in ADR 0018).
 
 ## Amendment: the extension check is wired (ExtensionsPresent)
 
-Found on real hardware: a `longhorn-v1` TalosStorage was Ready on nodes whose schematic lacked
+A `longhorn-v1` TalosStorage was Ready on nodes whose schematic lacked
 `iscsi-tools` and `util-linux-tools`, and longhorn-manager crash-looped. The "Not done" note above is
 superseded. `TalosStorageReconciler` now sets `ExtensionsPresent` (informational, never gates
 `Ready`, never blocks the rest of the reconcile): for each governed machine it finds the Kubernetes

@@ -6,7 +6,7 @@ Decided: Pinned `nixpkgs` to `nixpkgs-unstable` and committed `flake.lock` for a
 
 ## Context
 
-Every later task needs to run inside a reproducible shell with the whole
+Every contributor and CI job needs to run inside a reproducible shell with the whole
 project toolchain (Go, kubebuilder, controller-gen, kustomize, setup-envtest,
 cobra-cli, talosctl, kubectl, helm, buf/protoc-gen-go/protoc-gen-connect-go,
 goreleaser, golangci-lint, govulncheck, QEMU + cni-plugins, Node, make). The
@@ -15,8 +15,8 @@ newer.
 
 On `nixpkgs-unstable` the default `go` attribute is 1.26.9; Go 1.27.3 is
 reachable only through the `go_1_27` attribute. Since 1.27 is the current Go
-release series, no stable NixOS release channel carries it yet (checked:
-`nixpkgs-unstable` at the pinned revision).
+release series, no stable NixOS release channel carries it yet; only
+`nixpkgs-unstable` does.
 
 ## Decision
 
@@ -30,9 +30,8 @@ release series, no stable NixOS release channel carries it yet (checked:
   etc.) from the devShell. Kubebuilder's generated Makefile declares these
   variables with `?=` and otherwise `go install`s its own copies into
   `./bin`; setting them as shell env vars lets the Makefile stay unedited
-  while the binaries still come from the flake, per `CONTRIBUTING.md` and
-  `CLAUDE.md`'s rule against calling controller-gen/kustomize/envtest by
-  hand.
+  while the binaries still come from the flake, per `CONTRIBUTING.md`'s rule
+  against calling controller-gen/kustomize/envtest by hand.
 - Define `devShells.<system>.default` for `x86_64-linux` and `aarch64-linux`
   via `nixpkgs.lib.genAttrs`, with `nixpkgs` as the only flake input.
 

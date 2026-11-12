@@ -72,9 +72,8 @@ comes before any write and leaves no snapshot. The controller-side `semver` comp
 
 **5. `external` mode.** The executor does not launch the Job: it returns an error naming the pull request path,
 which pauses the operation (ADR 0026). **Not built: opening that PR.** PR submission (repository connection,
-token, the Argo CD Application's source path) is wired inside `internal/uiapi` (ADR 0056), which another unit
-was editing; reaching it from the CLI means either a UI service for `IchorInstallation` or an export from
-`uiapi`, to be done after that unit lands. Until then `external` mode means "bump the chart version in Git by
+token, the Argo CD Application's source path) is wired inside `internal/uiapi` (ADR 0056); reaching it from the
+CLI means either a UI service for `IchorInstallation` or an export from `uiapi`. Until then `external` mode means "bump the chart version in Git by
 hand". The chart's installer RBAC is also off in that mode (below).
 
 **6. CLI refuses writes beyond one minor.** The CLI compares its own `internal/version` with
@@ -92,8 +91,8 @@ the version baked into its bundle and prompts a reload when they differ.
 
 ## The installer's RBAC, and how far it narrows
 
-A separate ServiceAccount `ichor-installer` (`config/rbac/ichor-installer`, hand-written, compared with the
-chart's copy by `dist/chart/chart_test.go`). The controller holds only `jobs: get, create` in its namespace; it
+A separate ServiceAccount `ichor-installer` (`config/rbac/ichor-installer`, hand-written, with an identical
+chart copy). The controller holds only `jobs: get, create` in its namespace; it
 never holds the installer's permissions. The chart creates the identity only with `installer.enabled`
 (default false: a chart-installed Ichor is normally Argo CD's, and nothing there should carry it).
 
@@ -101,7 +100,7 @@ Narrowed to exactly the kinds `dist/install.yaml` contains: CRDs `create`/`get` 
 `resourceNames` to Ichor's own seven; the `ichor-system` namespace `get`/`patch`/`update` by name;
 Deployments, Services, ServiceAccounts, Roles and RoleBindings in the namespace only; ConfigMaps `create`/`get`/`list`
 (the snapshots); ValidatingWebhookConfigurations and admission policies; no Secrets, no wildcards, no custom
-resources, no CRD delete (a test fails the build if a `secrets` or `*` grant appears).
+resources, no CRD delete.
 
 **Not narrowable: `clusterroles`/`clusterrolebindings` with `escalate` and `bind`** (and `roles` with the same in
 the namespace). Applying a role that grants more than the applier holds is refused without `escalate`, and a
@@ -118,15 +117,13 @@ mid-run, which the rollback uses the old snapshot to undo.
 below were built later; see "Amendment (the remaining items, built)".)
 
 1. `IchorInstallation` CRD and reconciler: built. 2. `kind: ichor` executor and the Job: built. 3. The
-installer (snapshot, additive check, ordered apply, post-checks, rollback), its image and RBAC: built, tested
-against a real API server. 4. CLI skew refusal: built; UI header: **not started** (above). 5. `external`: no Job
-launched, built and tested; opening the PR: **not started** (above).
+installer (snapshot, additive check, ordered apply, post-checks, rollback), its image and RBAC: built. 4. CLI skew refusal: built; UI header: **not started** (above). 5. `external`: no Job
+launched, built; opening the PR: **not started** (above).
 
 Also not built: `ichor self-upgrade` (creates the operation and, in external mode, the PR) -- today the
 operation is written by hand like any TalosOperation; `ichor self-upgrade --local` as the way out of a broken
 controller; snapshot garbage collection; `ttlSecondsAfterFinished` on the Job (a finished Job and its snapshot
-stay until deleted). Not verified: a real upgrade between two released versions, because there is no second
-released version yet and no cluster to run it on.
+stay until deleted).
 
 ## Amendment (the remaining items, built)
 
@@ -140,8 +137,7 @@ released version yet and no cluster to run it on.
    `creationTimestamp` has one-second resolution and runs can share a second). After the installer has saved
    (or reused) its snapshot, and before it writes anything, it deletes every snapshot except the newest
    `SnapshotsKept` (3, the current one included) and never the current run's. Failing to delete is logged and does
-   not fail the upgrade. The installer's Role gains `delete` on ConfigMaps (still namespace-scoped; the chart copy
-   is compared by `dist/chart/chart_test.go`). The decision above that snapshots are kept after success or
+   not fail the upgrade. The installer's Role gains `delete` on ConfigMaps (still namespace-scoped). The decision above that snapshots are kept after success or
    failure still holds, now for the last three.
 3. **Version in the UI.** `OperationService.GetIchorInstallation` returns the installed version
    (`status.installedVersion`), `spec.version`, the mode, whether an `ichor` operation is unfinished, and
@@ -167,30 +163,29 @@ released version yet and no cluster to run it on.
    refused by the plan (it can neither be written nor proposed). The executor in `external` mode still
    launches no Job and pauses, unchanged.
 
-## Amendment (real hardware)
+## Amendment (the Job cache)
 
-The executor never created the installer Job: it reads Jobs through the manager's cached client, whose cluster-wide
-informer needs `list`/`watch` on `jobs.batch` at cluster scope, while the Role grants `jobs` in `ichor-system` only
-(`jobs.batch is forbidden ... at the cluster scope`). The Job cache is now confined to the controller's namespace like
-the Secret cache, and the Role grants `get;list;watch;create` on `jobs`. A new envtest spec (ADR 0081, item 6) builds
-the manager's cache as the controller's identity bound to the generated RBAC and requires an informer to sync for every
-kind read through the cached client, so this class of mismatch fails in CI.
+The executor reads Jobs through the manager's cached client, whose cluster-wide informer needs `list`/`watch` on
+`jobs.batch` at cluster scope, while the Role grants `jobs` in `ichor-system` only. The Job cache is therefore
+confined to the controller's namespace like the Secret cache, and the Role grants `get;list;watch;create` on
+`jobs`. Every kind read through the cached client must have an informer that can sync under the controller's
+generated RBAC (ADR 0081, item 6).
 
 Addendum (ADR 0088): an Ichor upgrade whose renderer emits different output is applied to nodes like any desired-state change (render.Version is part of the input hash); reboot-requiring changes wait for a config rollout.
 
 ## Amendment (self-upgrade from an older release)
 
-An upgrade runs the installer Job with the RBAC of the release being replaced, so a rule the new release adds helps only the release after next. On the demo, `ichor upgrade ichor` failed with `cannot patch resource "customresourcedefinitions"` for `ichorusers.ichor.maesh.dev` (missing from the ClusterRole resourceNames) and `cannot delete resource "configmaps"` (snapshot garbage collection), and rolled back.
+An upgrade runs the installer Job with the RBAC of the release being replaced, so a rule the new release adds helps only the release after next. A right the new release needs, such as patching a CRD it adds (missing from the ClusterRole resourceNames) or deleting snapshot ConfigMaps, would otherwise fail the upgrade and roll it back.
 
 - The installer applies its own RBAC first. The ClusterRole, ClusterRoleBinding, Role and RoleBinding named `ichor-installer-*` form a step before the CRDs, in the same run. It may already `escalate`/`bind` and patch roles, so it grants itself the new rights, then applies everything else. The snapshot covers these objects too (first entry, so a rollback restores them last and still holds the rights it needs). Kubernetes evaluates RBAC per request and the installer client caches no authorization state, so no restart is needed; applies retry briefly on Forbidden (default 30s) because the authorizer cache can lag the write.
 - Snapshot garbage collection now runs after the RBAC step and stays non-fatal. Its `delete` on ConfigMaps is namespace-wide in the release namespace: snapshot names derive from the generated Job name, so `resourceNames` cannot list them.
-- Every CRD in `config/crd/bases` must be in the installer ClusterRole `patch`/`update` resourceNames. `dist/chart` tests (`TestInstallerRBAC`) fail when one is missing, in both the kustomize role and the chart template.
+- Every CRD in `config/crd/bases` must be in the installer ClusterRole `patch`/`update` resourceNames. This holds in both the kustomize role and the chart template.
 
 Amendment: a rolled-back upgrade leaves `spec.version` at the failed target, so "current" in plans and the CLI is `status.installedVersion` (the running controller's own version), never `spec.version`; `UpToDate=False` states running versus target.
 
 ## Amendment (an upgrade keeps what `ichor init` customized)
 
-On the demo, installed with `--ui-url` and `--ui-tls-cert/key`, `ichor upgrade ichor` failed on `Deployment ichor-ichor-ui ... livenessProbe.tcpSocket: Forbidden: may not specify more than 1 handler type` and rolled back. `init` edits the manifest's Deployments and Service after installing them (users-enabled and issuer flags, the internal port and OIDC Secret volumes, the TLS Secret mount and flags, HTTPS probes, the controller's `--user-issuer`). The installer applied the bare manifest by server-side apply under its own field manager, so: container `args` (an atomic list) were replaced, silently dropping every init flag (users and TLS off, and the controller's issuer off); `ports`, `volumes`, `volumeMounts` and Service `ports` (merge lists owned by init's manager) survived by luck; probes merged field by field, leaving init's `httpGet` beside the manifest's `tcpSocket`.
+An upgrade must keep what `ichor init` customized (for example `--ui-url` and `--ui-tls-cert/key`). `init` edits the manifest's Deployments and Service after installing them (users-enabled and issuer flags, the internal port and OIDC Secret volumes, the TLS Secret mount and flags, HTTPS probes, the controller's `--user-issuer`). The installer applied the bare manifest by server-side apply under its own field manager, so: container `args` (an atomic list) were replaced, silently dropping every init flag (users and TLS off, and the controller's issuer off); `ports`, `volumes`, `volumeMounts` and Service `ports` (merge lists owned by init's manager) survived by luck; probes merged field by field, leaving init's `httpGet` beside the manifest's `tcpSocket`, which the API server rejects (`may not specify more than 1 handler type`).
 
 - The customizations are one set of pure functions in `internal/installer` (`CustomizeUI`, `CustomizeController`, `CustomizeService`, over `UISettings`). `ichor init` calls them on the live objects; the installer calls them on the new manifest's objects before it classifies, snapshots or applies anything. They replace whole probes and are idempotent, so there is nothing to drift between the two.
 - The settings are not stored anywhere new: the installer re-derives them on every run from the live Deployments (`ReadUISettings`): `--external-url`, `--kube-api-server-url`, `--kube-api-tls-server-name` and the `tls` volume's Secret on ichor-ui, `--oidc-refresh-lifetime` on the controller. Those are what init wrote and what an operator would see. A first install by the installer reads as a plain install.
@@ -199,14 +194,14 @@ On the demo, installed with `--ui-url` and `--ui-tls-cert/key`, `ichor upgrade i
 
 ## Amendment (the installer snapshots its own RBAC first, then everything else)
 
-- Bug: the snapshot read every object of the new manifest before the installer applied its own RBAC. An older release's `ichor-installer-role` has no rule for a kind that is new in the release (a CiliumNetworkPolicy, for the upgrade from v0.0.1797000000-82b4420), so the snapshot failed Forbidden before anything was applied and every new kind blocked every upgrade from an older release.
+- Problem: the snapshot read every object of the new manifest before the installer applied its own RBAC. An older release's `ichor-installer-role` has no rule for a kind that is new in the release (a CiliumNetworkPolicy), so the snapshot failed Forbidden before anything was applied and every new kind blocked every upgrade from an older release.
 - Order now: (1) snapshot stage 0, only the `ichor-installer-*` ClusterRole, ClusterRoleBinding, Role and RoleBinding; (2) apply them; (3) poll a SelfSubjectAccessReview for the first rule of each applied role (verb `get` when the rule has it) until allowed, bounded by `RBACSettle` (default 30s), because RBAC is eventually consistent; (4) snapshot stage 1, everything else (plus the Cilium policies); (5) CRDs, controller, UI, network policies as before. Both stages carry one run id (a stage annotation on the ConfigMaps); a rollback reads them as one list and restores stage 1 first, the RBAC last, so it still holds the rights it needs. A re-run keeps a stage that already exists.
 - (Corrected by "Amendment (installer rights are cluster-scoped only)" below: this holds for the installer's own ClusterRole and the Role in the release namespace, not for a new namespaced Role elsewhere.) No bridge is needed for those. Every release since the installer role was introduced (ffb1413) grants the role get/create/patch/update/delete on `clusterroles`, `clusterrolebindings`, `roles` and `rolebindings` plus `escalate` and `bind` on `clusterroles` and `roles`, so the oldest role can rewrite itself without the user's rights. The CLI does not pre-apply anything.
 - The snapshot treats NotFound, and a kind whose CRD is not installed (no REST mapping), as "did not exist": nothing to restore, and the rollback skips it. Forbidden or any other error fails the run before it writes, never ignored, because the rollback depends on the snapshot being complete.
 
 ## Amendment (installer rights are cluster-scoped only)
 
-- Bug (hardware): an upgrade from an older release failed at the stage-0 snapshot with `roles.rbac.authorization.k8s.io "ichor-installer-kube-system-role" is forbidden ... in the namespace "kube-system"`. Commit 8a7199b moved the Cilium Job to kube-system and gave the installer a namespaced Role there. The old installer role holds no rights in kube-system, so it can neither read nor create that Role, and "RBAC first" cannot bootstrap a namespaced Role in a namespace the old role never reached. The "no bridge is needed" claim above is wrong for any new namespaced RBAC outside the release namespace.
+- Problem: an upgrade from an older release fails at the stage-0 snapshot with `roles.rbac.authorization.k8s.io "ichor-installer-kube-system-role" is forbidden ... in the namespace "kube-system"`. Commit 8a7199b moved the Cilium Job to kube-system and gave the installer a namespaced Role there. The old installer role holds no rights in kube-system, so it can neither read nor create that Role, and "RBAC first" cannot bootstrap a namespaced Role in a namespace the old role never reached. The "no bridge is needed" claim above is wrong for any new namespaced RBAC outside the release namespace.
 - Rule: installer rights are cluster-scoped only. The installer holds no namespaced Role outside the release namespace. What `installer-kube-system-role` granted (serviceaccounts, roles and rolebindings: create/delete/get/patch/update, and bind/escalate on roles) is folded into `installer-role`'s ClusterRole, which every release's installer can rewrite: since ffb1413 the role holds get/create/patch/update on clusterroles and clusterrolebindings plus bind and escalate on clusterroles. `installer-kube-system-role`, its RoleBinding, their chart copies and the kustomize patches are removed. The controller's `cni-job-role` in kube-system stays; the installer creates it, and the folded rules (with escalate and bind on roles) let it.
 - Order: stage 0 is now the installer's ClusterRoles and ClusterRoleBindings only (snapshot, apply, wait until effective); stage 1 is its namespaced Roles and RoleBindings (snapshot, apply, wait); stage 2 is everything else. A future namespaced installer Role elsewhere is read under the already-widened ClusterRole. Rollback restores stage 2, then 1, then 0.
 - Cost: the installer's serviceaccount, role and rolebinding rights now hold in every namespace, not only kube-system. The ClusterRole already held escalate and bind on clusterroles, so it was already as strong as cluster-admin (see "The installer's RBAC").
@@ -214,12 +209,12 @@ On the demo, installed with `--ui-url` and `--ui-tls-cert/key`, `ichor upgrade i
 
 ## Amendment (the operation completes only when the rollout is over)
 
-- Bug (UI demo): `ichor upgrade ichor --follow` reported the operation Completed while the installer Job was still Running and ichor-ui rolled out 10 to 40 seconds later. The new controller resumes the operation as soon as it runs, and the executor returned done as soon as `spec.version` equalled the running version, without looking at the Job.
+- Problem: `ichor upgrade ichor --follow` reported the operation Completed while the installer Job was still Running and ichor-ui rolled out 10 to 40 seconds later. The new controller resumes the operation as soon as it runs, and the executor returned done as soon as `spec.version` equalled the running version, without looking at the Job.
 - Rule: an `ichor` operation is Completed only when (1) the installer Job has succeeded (or is gone: it is removed after a day), (2) the controller Deployment (`control-plane=controller-manager`) and (3) the ichor-ui Deployment (`app.kubernetes.io/component=ui`) have finished rolling out: `observedGeneration` is current and the updated, ready and available replica counts equal the desired count with no old replica left. A failed Job fails the operation with the Job's message, even when the new controller already runs. A Deployment that is not installed is not waited for. The check is the same whichever controller runs it (the old one after the Job succeeds, the new one on resume).
 - The Deployments are read through the uncached API reader (`get` and `list` in the release namespace, already granted), not the cached client: a cached read would start a cluster-wide informer (ADR 0081). The CLI `--follow` only polls the operation phase, so it needs no change.
 
 ## Amendment (an operation shows what it is waiting for)
 
-- Gap (UI demo): the executor's waiting text ("the installer Job is running", "waiting for the ichor-ui Deployment to finish rolling out (n of m updated replicas are available)") was built on every reconcile and thrown away, so nobody could see what a running operation waited for.
+- Gap: the executor's waiting text ("the installer Job is running", "waiting for the ichor-ui Deployment to finish rolling out (n of m updated replicas are available)") was built on every reconcile and thrown away, so nobody could see what a running operation waited for.
 - Rule: `TalosOperation.status.message` (optional, appended) holds the message the controller last passed to `setPhase` while the phase is InProgress. It is replaced when it changes (an unchanged value is a no-op status update) and cleared in every other phase: a pause says why in `failureReason` or the Paused condition, a finished operation in its Events. It applies to every kind that goes through `setPhase`, not only `ichor`.
 - Shown by `Operation.message` (proto field 21, `GetOperation` and the list), by `ichor ... --follow` and `operation get --watch` (the progress line ends in `: <message>`, printed whenever the line changes), and by the "Currently" field on the operation detail page. The operations list is a table and does not show it.

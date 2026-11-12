@@ -6,7 +6,7 @@ Decided: `BootstrapManifest` for the Cilium preset returns the pinned Cilium cha
 
 ## Context
 
-ADR 0013 left chart expansion "to a later unit", so `BootstrapManifest` returned only the Helm values. `ichor init --cni cilium` put that values file in `cluster.inlineManifests`, which Talos cannot apply, so no CNI was installed and the first node stayed NotReady. On some virtualised networks Cilium's default VXLAN tunnel also passes no traffic between nodes, while geneve works.
+ADR 0013 left chart expansion "to a later unit", so `BootstrapManifest` returned only the Helm values. `ichor init --cni cilium` put that values file in `cluster.inlineManifests`, which Talos cannot apply, so no CNI was installed and the first node stayed NotReady. Some networks drop VXLAN (UDP 8472) between nodes, so the tunnel protocol is selectable and geneve is available.
 
 ## Decision
 

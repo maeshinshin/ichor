@@ -18,7 +18,7 @@ The controller reaches no registry, IdP or other external host in process apart 
 
 ## What the docs confirm about toFQDNs
 
-Cilium, Layer 3 policy "DNS based" and Layer 7 "DNS Proxy" (Context7 `/cilium/cilium`, `Documentation/security/policy/layer3.rst` and `layer7.rst`; the repository pins Cilium 1.20, `pkg/release/compat.go`, whose page set Context7 lists only up to 1.19, and the pages are the same):
+Cilium, Layer 3 policy "DNS based" and Layer 7 "DNS Proxy" (`Documentation/security/policy/layer3.rst` and `layer7.rst`; the repository pins Cilium 1.20, `pkg/release/compat.go`, whose pages were read at 1.19, and the pages are the same):
 
 - A `toFQDNs` rule works only with `--enable-l7-proxy=true` (Helm `l7Proxy`, default true; Ichor's own rendered Cilium config has `enable-l7-proxy: "true"`, `pkg/cni/cilium/testdata/bootstrap-*.golden.yaml`) and a rule that sends the endpoint's DNS through the proxy: an egress `toEndpoints` rule to `kube-system` `k8s-app=kube-dns` on port 53 with `rules.dns`. Without that rule the names never resolve to allowed addresses and every dial fails. Ichor's static and chart policies carry the rule (`matchPattern: "*"`) since ADR 0100's amendment.
 - `toFQDNs` cannot share a rule with another L3 selector (`toEndpoints`, `toCIDR`); each kind is its own rule, as `buildEgress` already writes them. It may carry `toPorts`.

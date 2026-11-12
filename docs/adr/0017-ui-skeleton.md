@@ -105,7 +105,7 @@ health endpoint, no metrics, no streaming: none of that exists to serve yet.
 **App shell.** `src/router.tsx` is a ~30-line History-API router (`usePath`,
 `navigate`, `Link`) rather than a dependency — `preact-router` or similar
 would be the obvious reach, but a route table with one page component
-doesn't need one, and ponytail's "does this need to exist" answer here is no.
+doesn't need one, and whether it needs to exist is answered no.
 `src/pages/Placeholder.tsx` is the one page component every route renders
 ("Coming soon" in a `Card`); `src/app.tsx` wires two routes (`/`, `/gitops`)
 through it with `Button`/`Separator` for the nav, standing in for the real

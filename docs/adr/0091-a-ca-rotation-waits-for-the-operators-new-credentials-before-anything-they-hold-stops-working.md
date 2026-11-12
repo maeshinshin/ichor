@@ -62,7 +62,7 @@ acknowledging, the CLI asks the API server who the new kubeconfig is (a `SelfSub
 annotation if that fails, so a Talos build where an accepted CA does not authenticate clients leaves the rotation waiting, with the
 old credentials intact, rather than stranding the operator. The same check against a node's Talos API with the new talosconfig is
 made too, but only warns when it fails: the operator's machine often cannot reach the nodes except through the Kubernetes API, and
-the Kubernetes check is the one that guards the file the rotation cannot continue without. (`ponytail:` neither has run against
+the Kubernetes check is the one that guards the file the rotation cannot continue without. (`shortcut:` neither has run against
 real hardware yet; the first run on a disposable cluster should read the check's result.)
 
 ## Decision 3: what sets the acknowledgement, and where the CLI reads the CAs

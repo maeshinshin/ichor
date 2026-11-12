@@ -72,7 +72,7 @@ with unknown fields rejected; `uiapi.PatchToWire` is the one conversion.
 the latest token, the Go twin of `ui/src/lib/resumableStream.ts`; the same
 caveat about a few repeated or missed lines applies (ADR 0018). The API has
 no "snapshot" mode, so without `--follow` the command stops after
-`--idle-timeout` (3s) without a new line. ponytail: a `follow` field on
+`--idle-timeout` (3s) without a new line. shortcut: a `follow` field on
 `StreamNodeLogsRequest` would replace the idle timer; it needs a `proto/`
 change and is left for whoever owns it.
 

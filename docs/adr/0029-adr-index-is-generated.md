@@ -43,7 +43,7 @@ possible by construction, and `internal/tools/adrindex`'s own
 already is the CI check that regenerating changes nothing -- the same
 drift-detection shape `dist/chart`'s CRD sync already uses. A test that
 can no longer fail for the reason it was written is deleted, not kept as
-a second implementation of the same check (ponytail: deletion beats
+a second implementation of the same check (deletion beats
 addition).
 
 Three ADRs (0002, 0018, 0020, 0021) had a `Status:` header that did not

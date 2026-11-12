@@ -76,7 +76,7 @@ exists with every pod updated and ready. Each wait is `VerifyingNewSide` (30 min
 fails and the operation pauses (ADR 0026), never retried automatically. A preset whose live state Ichor cannot
 read (`custom`) is refused before anything changes.
 
-ponytail: no probe of an actual Service connection from a pod, and no per-agent `cilium status`; the agents
+shortcut: no probe of an actual Service connection from a pod, and no per-agent `cilium status`; the agents
 rolling out on the changed ConfigMap is the proxy for it. A synthetic probe needs a workload Ichor does not run.
 
 ## Decision 6: node rules
@@ -84,7 +84,7 @@ rolling out on the changed ConfigMap is the proxy for it. A synthetic probe need
 Left alone. kube-proxy's rules (nftables by default) remain until the node reboots, which clears them on Talos
 (ephemeral); Cilium's documented manual cleanup is `iptables-save | grep -v KUBE | iptables-restore` on each node,
 which Talos has no shell for. `kube-proxy --cleanup` would need a privileged per-node Job. Deferred
-(`ponytail:` in `RemoveKubeProxy`): the stale rules are bypassed by Cilium's socket load balancing.
+(`shortcut:` in `RemoveKubeProxy`): the stale rules are bypassed by Cilium's socket load balancing.
 Amended: after the removal the executor connects to the `kubernetes` Service's cluster IP from the controller
 (`KUBERNETES_SERVICE_HOST`) and reports done only once that answers; until then it waits under the verification clock
 (`VerifyingNewSide`, 30 minutes) with a message that says the old rules stay on each node until it reboots.

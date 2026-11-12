@@ -16,8 +16,7 @@ yet; this package only needs to give them something to call.
 
 ### Should Argo CD's own Go types be a dependency?
 
-Ponytail's ladder says: before writing a struct, check whether a dependency
-already provides it. Argo CD publishes its `Application` CRD type at
+Before writing a struct, check whether a dependency already provides it. Argo CD publishes its `Application` CRD type at
 `github.com/argoproj/argo-cd/v3/pkg/apis/application/v1alpha1`. It was tried
 directly, not assumed:
 

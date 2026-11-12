@@ -43,7 +43,7 @@ Constraints from the repo: Cilium is the only CNI and Ichor's own Helm release (
 - `Upgrade` also has `TakeOwnership` (`upgrade.go:121,347`), but Ichor's `Apply` only runs it after an Ichor-side record exists.
 - Chart `crds/` handling (`installCRDs`) runs on Install; the pinned Cilium 1.18 chart is checked for a `crds/` directory in unit 5.
 
-### Talos v1.14 (docs.siderolabs.com via Context7, and ADR 0099's earlier reading)
+### Talos v1.14 (docs.siderolabs.com, and ADR 0099's earlier reading)
 
 - Inline manifests are created and never updated or deleted by Talos; a values change needs `upgrade-k8s`. Therefore an inline-manifest Cilium cannot be left in the machine config once Ichor owns the release (ADR 0099, decision 2): the entry has to go, or a Kubernetes upgrade can re-apply it over the Helm release.
 - `talosctl reset` accepts `--system-labels-to-wipe`, `--graceful` (cordon, drain, leave etcd; default true) and `--reboot`; ADR 0042 already fixed the request Ichor sends.

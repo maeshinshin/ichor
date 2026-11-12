@@ -56,7 +56,7 @@ tell whether `ichor ui` is still working or has found a problem.
 real cluster: `transport/spdy.RoundTripperFor` plus
 `tools/portforward.NewOnAddresses`, the same two client-go packages
 `kubectl port-forward` itself is built on (not reimplemented --
-ponytail's "already a dependency, use it" rung). `uiDeps.Forward` is the
+an already-present dependency is used rather than rewritten). `uiDeps.Forward` is the
 seam: `runUI`'s own tests (`internal/cli/ui_run_test.go`) pass a fake that
 never opens a socket, only drives the ready/error/context-done paths
 `selectPod`'s decision depends on -- proving the reforward behavior and

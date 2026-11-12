@@ -19,6 +19,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -228,6 +229,50 @@ func TestRunInit_KeepsAnExistingBundle(t *testing.T) {
 
 	if maint.callCount != 0 {
 		t.Fatalf("expected the node to be left alone, got callCount=%d", maint.callCount)
+	}
+}
+
+// TestRunInit_BundleFileFollowsTheApply proves a failed run leaves no secrets bundle behind as long as
+// the node was never sent the configuration, and keeps it once ApplyInsecure has been called, whatever
+// that call returned.
+func TestRunInit_BundleFileFollowsTheApply(t *testing.T) {
+	for name, tc := range map[string]struct {
+		setup    func(*initDeps, *fakeMaintenanceApplier)
+		wantFile bool
+	}{
+		"prompt declined": {
+			setup: func(d *initDeps, _ *fakeMaintenanceApplier) {
+				d.AssumeYes = false
+				d.Stdin = strings.NewReader("n\n")
+			},
+		},
+		"node not reachable": {
+			setup: func(d *initDeps, _ *fakeMaintenanceApplier) {
+				d.DialMaintenance = func(context.Context, string) (maintenanceApplier, error) {
+					return nil, errors.New("connection refused")
+				}
+			},
+		},
+		"apply failed": {
+			setup:    func(_ *initDeps, m *fakeMaintenanceApplier) { m.applyErr = errors.New("apply failed") },
+			wantFile: true,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			home := withTempHome(t)
+
+			deps, maint, _ := newFakeInitDeps(t, fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build())
+			tc.setup(&deps, maint)
+
+			if err := runInit(context.Background(), validInitOptions(), deps); err == nil {
+				t.Fatal("expected init to fail")
+			}
+
+			_, err := os.Stat(home + "/.ichor/clusters/" + testInitClusterName + "/secrets.yaml")
+			if got := err == nil; got != tc.wantFile {
+				t.Fatalf("bundle file present = %v (stat err %v), want %v", got, err, tc.wantFile)
+			}
+		})
 	}
 }
 

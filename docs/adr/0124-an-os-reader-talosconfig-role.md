@@ -1,6 +1,6 @@
 # 0124. An os:reader talosconfig role
 
-Status: Accepted; built; hardware verification pending · Date: 2026-11-04 · Design section: Credentials, Security · Touches: 0058, 0084, 0093, 0094, 0108
+Status: Accepted; built · Date: 2026-11-04 · Design section: Credentials, Security · Touches: 0058, 0084, 0093, 0094, 0108
 
 Decided: a person with the Kubernetes RBAC verb `download` on `talosclusters/talosconfig-reader` gets a short-lived talosconfig whose client certificate carries the Talos role `os:reader`, for `talosctl`. It is a new `TalosCredentialRequest` purpose, `talosconfig-reader` (default lifetime 1 hour, cap 12 hours, longer is refused at admission and again by the controller), signed by the controller for a key the requester keeps. Every issuance is recorded as an Event on the TalosCluster that names the requesting user, written by the admission webhook before the request is admitted (a request whose Event cannot be written is refused). `ichor cluster talosconfig NAME` and the UI (the cluster page's "..." menu, a download) are the two ways to ask. The shipped roles `ichor-operator` and `ichor-admin` carry the verb; `ichor-viewer` does not. Ichor offers no `os:operator` talosconfig.
 
@@ -13,7 +13,7 @@ ADR 0108 left "an `os:reader` talosconfig role" in its list of options that are 
 
 So a person who only needs to look at a node with `talosctl` (`get members`, `logs`, `dmesg`, `processes`, `get` of non-secret resources) has to be given either the secrets bundle or the cluster-admin download. Neither is a good grant for read access.
 
-Talos role facts, from the Talos v1.14 RBAC page (https://docs.siderolabs.com/talos/v1.14/security/rbac): the roles are `os:admin` (every API method), `os:operator` (everything the reader may do plus operational methods such as reboot, shutdown and etcd backup), `os:reader` ("safe" methods: it can list files but not read their contents), `os:etcd:backup` (only `EtcdSnapshot`). "The certificate subject's organization field is used to encode user roles": the role is the `O=` of the client certificate, which is what `credentials.IssueTalos` writes from `role.Set` and what the test below reads back. RBAC is on by default for clusters created with `talosctl` since v0.11 and in Ichor's rendered machine config; `talosctl config info` shows the roles of a talosconfig. The hardware run of ADR 0108 showed that an `os:reader` talosconfig answers `talosctl version` and is refused (`PermissionDenied`) for `get machineconfig`.
+Talos role facts, from the Talos v1.14 RBAC page (https://docs.siderolabs.com/talos/v1.14/security/rbac): the roles are `os:admin` (every API method), `os:operator` (everything the reader may do plus operational methods such as reboot, shutdown and etcd backup), `os:reader` ("safe" methods: it can list files but not read their contents), `os:etcd:backup` (only `EtcdSnapshot`). "The certificate subject's organization field is used to encode user roles": the role is the `O=` of the client certificate, which is what `credentials.IssueTalos` writes from `role.Set`. RBAC is on by default for clusters created with `talosctl` since v0.11 and in Ichor's rendered machine config; `talosctl config info` shows the roles of a talosconfig. An `os:reader` talosconfig answers `talosctl version` and is refused (`PermissionDenied`) for `get machineconfig`.
 
 ## Decision
 
@@ -41,23 +41,3 @@ Talos role facts, from the Talos v1.14 RBAC page (https://docs.siderolabs.com/ta
 - The talosconfig is a bearer credential until it expires; revocation is not possible (Talos has no CRL), so the cap is the control. A cluster whose CA rotates keeps the file valid until expiry only if it trusts the old CA, which the dropped-CA stage ends.
 - The Event is written at admission, not after the controller signed: a request the controller then fails (cluster missing, bundle unreadable) still has its Event. That is conservative for an audit.
 - `os:reader` is a statement about Talos' API surface, not about secrets: it can read kernel logs and service logs, which may contain sensitive text. That is why the default role set leaves viewers out.
-
-## Test
-
-- `internal/credentials`: `TestPurposeLifetime` covers the new purpose (1 h default, 12 h cap, 12 h + 1 s refused); `TalosRoles` maps it to `os:reader` only.
-- `internal/controller` (envtest): the issued certificate's subject `O=` is exactly `os:reader`; it verifies against `status.trust`; `NotAfter` is about one hour; 13 hours fails with no certificate.
-- `internal/webhook/v1alpha1`: a holder of `download talosclusters/talosconfig-reader` is admitted and an Event naming the user exists; a user without it, a user with only `talosclusters/credentials`, and the backend's ServiceAccount are refused with no Event; 13 hours is refused; a dry-run writes no Event; an Event that cannot be written refuses the request.
-- `internal/cli`: `ichor cluster talosconfig` writes a mode-0600 talosconfig with the controller's certificate and the key made locally, refuses to overwrite the current talosconfig and a `--ttl` above 12 h.
-- `internal/uiapi`: the stream carries a parseable talosconfig whose certificate is `os:reader`; a caller without the verb gets `PermissionDenied`; `GetMyPermissions` answers the flag.
-- `ui`: the menu item shows only with the flag.
-- RBAC: `TestBuiltinRolesRunTheDocumentedFlows` lists the two flows (CLI and UI); operator and admin run them, viewer does not.
-
-## Hardware verification (later)
-
-1. As an Ichor operator (`ichor auth login`), `ichor cluster talosconfig <cluster> --ttl 1h --out /tmp/reader.yaml`; `talosctl --talosconfig /tmp/reader.yaml config info` shows `Roles: os:reader` and an expiry of about 1 hour.
-2. `talosctl --talosconfig /tmp/reader.yaml get members` and `talosctl ... dmesg | head`, `talosctl ... logs kubelet` work.
-3. `talosctl --talosconfig /tmp/reader.yaml reboot` (and `get machineconfig`) answer `PermissionDenied ... not authorized`; nothing reboots.
-4. `kubectl -n ichor-system get events --field-selector reason=TalosconfigReader` shows the user's name for each of the above.
-5. As a viewer, the same command is refused by the webhook naming the verb; `--ttl 13h` is refused for everyone.
-6. In the UI as an operator, Overview, "...", Download read-only talosconfig; the file works as in 2 and 3. A viewer does not see the item.
-7. During a CA rotation (AwaitingCredentials), a new reader talosconfig works as in 2.

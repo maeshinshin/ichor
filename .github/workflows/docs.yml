@@ -4,7 +4,7 @@ name: Docs
 # publishes it to GitHub Pages at https://ichor.maesh.dev/.
 # One run builds every version: main as /next/ and each minor line vX.Y as /vX.Y/
 # (docs/ of the branch release-X.Y, else of the newest tag vX.Y.*, built with main's site/),
-# plus versions.json, the /latest/ redirects and a redirect from each old /vX.Y.Z/ path
+# and each tag as a frozen /vX.Y.Z/, plus versions.json and the /latest/ redirects
 # (make docs-site-all), and the Helm repository at /charts/
 # (each release's signed chart, pulled from ghcr). A new tag publishes after its
 # Release run succeeds, so the chart exists, and adds itself to the version switcher

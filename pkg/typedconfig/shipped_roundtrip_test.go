@@ -189,9 +189,14 @@ func layout(v any) string {
 
 		slices.Sort(keys)
 
-		parts := make([]string, len(keys))
-		for i, k := range keys {
-			parts[i] = k + ":" + layout(x[k])
+		parts := make([]string, 0, len(keys))
+
+		for _, k := range keys {
+			// An empty object is not told from an absent key: Talos leaves out a struct that holds
+			// nothing the mirror carries (a ResourcesConfig of two free-form fields), the mirror writes {}.
+			if l := layout(x[k]); l != "{}" {
+				parts = append(parts, k+":"+l)
+			}
 		}
 
 		return "{" + strings.Join(parts, ",") + "}"
@@ -359,7 +364,7 @@ func hasMethod(t reflect.Type, name string) bool {
 	return ok
 }
 
-// parsed sets v to the first of scalarSamples (or, for an enum of integers, the first number) it accepts.
+// parsed sets v to the first of scalarSamples (or, for an enum of integers, the first nonzero number, else 0) it accepts.
 func (f *filler) parsed(v reflect.Value) {
 	f.t.Helper()
 
@@ -379,14 +384,20 @@ func (f *filler) parsed(v reflect.Value) {
 	}
 
 	if (v.CanInt() || v.CanUint()) && v.Type().Implements(textMarshaler) {
-		for i := int64(1); i < 16; i++ {
+		for _, i := range []int64{1, 2, 3, 4, 5, 6, 7, 8, 0} { // 0 last: omitempty hides it
 			if v.CanInt() {
 				v.SetInt(i)
 			} else {
 				v.SetUint(uint64(i))
 			}
 
-			if text, err := v.Interface().(encoding.TextMarshaler).MarshalText(); err == nil && len(text) > 0 && !strings.Contains(string(text), "unknown") {
+			text, err := v.Interface().(encoding.TextMarshaler).MarshalText()
+			if err != nil || len(text) == 0 {
+				continue
+			}
+
+			// An enum names only some of its numbers: keep the first whose name it reads back.
+			if x := reflect.New(v.Type()); x.Interface().(encoding.TextUnmarshaler).UnmarshalText(text) == nil && x.Elem().Equal(v) {
 				return
 			}
 		}

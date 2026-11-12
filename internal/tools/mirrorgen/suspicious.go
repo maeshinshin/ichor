@@ -63,6 +63,7 @@ var reviewedSurvivors = map[string]string{
 	"AuthorizationConfigAuthorizerConfig.AuthorizerType":    "authorizer type, an enum",
 	"AuthorizationConfigAuthorizerConfig.AuthorizerWebhook": "webhook authorizer settings; the kubeconfig is a file path on the node, not its contents",
 	"Bond.BondADUserPortKey":                                "LACP aggregator port key, a number",
+	"BondConfigV1Alpha1.BondADUserPortKey":                  "LACP aggregator port key, a number",
 	"DeviceWireguardPeer.WireguardPublicKey":                "WireGuard public key, not secret",
 	"EncryptionConfig.EncryptionKeySize":                    "cipher key size in bits, a number",
 	"EncryptionConfig.EncryptionKeys":                       "list of key sources; the static passphrase source is dropped (EncryptionKey.KeyStatic), the rest carry no secret",
@@ -75,6 +76,11 @@ var reviewedSurvivors = map[string]string{
 	"EncryptionKey.KeyTPM":                                  "TPM-sealed key source; options only, the key stays in the TPM",
 	"FeaturesConfig.ApidCheckExtKeyUsage":                   "boolean about certificate extended key usage",
 	"KubeletConfig.KubeletCredentialProviderConfig":         "lists credential provider plugins (name, image matches, command, args, env); the plugin fetches the credentials at pull time",
+	"ImageKeylessVerifierV1Alpha1.KeylessIssuer":            "OIDC issuer URL an image signature must name; a public matcher",
+	"ImageKeylessVerifierV1Alpha1.KeylessSubject":           "signer identity (email or URI) an image signature must name; a public matcher",
+	"ImageKeylessVerifierV1Alpha1.KeylessSubjectRegex":      "pattern for the signer identity; a public matcher",
+	"ImageVerificationRuleV1Alpha1.RuleKeylessVerifier":     "keyless verifier settings (issuer and subject matchers); no secret",
+	"ImageVerificationRuleV1Alpha1.RulePublicKeyVerifier":   "verifier holding a public key; the private half is the signer's and never in a config",
 	"RegistryConfig.RegistryAuth":                           "holds only the username once the password, auth and identityToken members are dropped",
 }
 

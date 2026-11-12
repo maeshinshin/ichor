@@ -29,6 +29,98 @@ Version v1alpha1: has a `status` subresource.
 | `spec.clusterRef` | `object` | yes | clusterRef names the TalosCluster this patch applies to. |
 | `spec.clusterRef.name` | `string` | no | Name of the referent. This field is effectively required, but due to backwards compatibility is allowed to be empty. Instances of this type with an empty value here are almost certainly wrong. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names Default: `""`. |
 | `spec.documents` | `[]object` | no | documents holds the Talos config documents this patch applies, restricted to an allow-list of kinds. |
+| `spec.documents[].bgpInstanceConfig` | `object` | no | bgpInstanceConfig is a Talos BGPInstanceConfig document; populated when kind is "BGPInstanceConfig". |
+| `spec.documents[].bgpInstanceConfig.advertise` | `[]string` | no |  |
+| `spec.documents[].bgpInstanceConfig.importRoutes` | `[]object` | no |  |
+| `spec.documents[].bgpInstanceConfig.importRoutes[].bgpInstance` | `string` | yes |  |
+| `spec.documents[].bgpInstanceConfig.importRoutes[].prefixes` | `[]string` | yes |  |
+| `spec.documents[].bgpInstanceConfig.installRoutes` | `boolean` | no |  |
+| `spec.documents[].bgpInstanceConfig.localASN` | `integer` | yes |  |
+| `spec.documents[].bgpInstanceConfig.maxPaths` | `integer` | no |  |
+| `spec.documents[].bgpInstanceConfig.multipath` | `boolean` | no |  |
+| `spec.documents[].bgpInstanceConfig.name` | `string` | yes |  |
+| `spec.documents[].bgpInstanceConfig.neighbors` | `[]object` | no |  |
+| `spec.documents[].bgpInstanceConfig.neighbors[].address` | `string` | no |  |
+| `spec.documents[].bgpInstanceConfig.neighbors[].bfd` | `object` | no | Talos: BGPBFDConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/bgpinstanceconfig |
+| `spec.documents[].bgpInstanceConfig.neighbors[].bfd.detectMultiplier` | `integer` | no |  |
+| `spec.documents[].bgpInstanceConfig.neighbors[].bfd.receiveInterval` | `string` | no |  |
+| `spec.documents[].bgpInstanceConfig.neighbors[].bfd.transmitInterval` | `string` | no |  |
+| `spec.documents[].bgpInstanceConfig.neighbors[].holdTime` | `string` | no |  |
+| `spec.documents[].bgpInstanceConfig.neighbors[].link` | `string` | no |  |
+| `spec.documents[].bgpInstanceConfig.neighbors[].localASN` | `integer` | no |  |
+| `spec.documents[].bgpInstanceConfig.neighbors[].passive` | `boolean` | no |  |
+| `spec.documents[].bgpInstanceConfig.neighbors[].peerASN` | `integer` | no |  |
+| `spec.documents[].bgpInstanceConfig.routeSource` | `string` | no |  |
+| `spec.documents[].bgpInstanceConfig.routerID` | `string` | no |  |
+| `spec.documents[].bgpInstanceConfig.vrf` | `string` | no |  |
+| `spec.documents[].blackholeRouteConfig` | `object` | no | blackholeRouteConfig is a Talos BlackholeRouteConfig document; populated when kind is "BlackholeRouteConfig". |
+| `spec.documents[].blackholeRouteConfig.metric` | `integer` | no |  |
+| `spec.documents[].blackholeRouteConfig.name` | `string` | yes |  |
+| `spec.documents[].bondConfig` | `object` | no | bondConfig is a Talos BondConfig document; populated when kind is "BondConfig". |
+| `spec.documents[].bondConfig.adActorSysPrio` | `integer` | no |  |
+| `spec.documents[].bondConfig.adLACPActive` | `integer` | no |  |
+| `spec.documents[].bondConfig.adSelect` | `integer` | no |  |
+| `spec.documents[].bondConfig.adUserPortKey` | `integer` | no |  |
+| `spec.documents[].bondConfig.addresses` | `[]object` | no |  |
+| `spec.documents[].bondConfig.addresses[].address` | `string` | yes |  |
+| `spec.documents[].bondConfig.addresses[].routePriority` | `integer` | no |  |
+| `spec.documents[].bondConfig.allSlavesActive` | `integer` | no |  |
+| `spec.documents[].bondConfig.arpAllTargets` | `integer` | no |  |
+| `spec.documents[].bondConfig.arpInterval` | `integer` | no |  |
+| `spec.documents[].bondConfig.arpIpTargets` | `[]string` | no |  |
+| `spec.documents[].bondConfig.arpValidate` | `integer` | no |  |
+| `spec.documents[].bondConfig.bondMode` | `integer` | no |  |
+| `spec.documents[].bondConfig.downdelay` | `integer` | no |  |
+| `spec.documents[].bondConfig.failOverMac` | `integer` | no |  |
+| `spec.documents[].bondConfig.hardwareAddr` | `string (byte)` | no |  |
+| `spec.documents[].bondConfig.lacpRate` | `integer` | no |  |
+| `spec.documents[].bondConfig.links` | `[]string` | no |  |
+| `spec.documents[].bondConfig.lpInterval` | `integer` | no |  |
+| `spec.documents[].bondConfig.miimon` | `integer` | no |  |
+| `spec.documents[].bondConfig.minLinks` | `integer` | no |  |
+| `spec.documents[].bondConfig.missedMax` | `integer` | no |  |
+| `spec.documents[].bondConfig.mtu` | `integer` | no |  |
+| `spec.documents[].bondConfig.multicast` | `boolean` | no |  |
+| `spec.documents[].bondConfig.name` | `string` | yes |  |
+| `spec.documents[].bondConfig.nsIp6Targets` | `[]string` | no |  |
+| `spec.documents[].bondConfig.numPeerNotif` | `integer` | no |  |
+| `spec.documents[].bondConfig.packetsPerSlave` | `integer` | no |  |
+| `spec.documents[].bondConfig.peerNotifDelay` | `integer` | no |  |
+| `spec.documents[].bondConfig.primaryReselect` | `integer` | no |  |
+| `spec.documents[].bondConfig.resendIGMP` | `integer` | no |  |
+| `spec.documents[].bondConfig.routes` | `[]object` | no |  |
+| `spec.documents[].bondConfig.routes[].destination` | `string` | no |  |
+| `spec.documents[].bondConfig.routes[].gateway` | `string` | no |  |
+| `spec.documents[].bondConfig.routes[].metric` | `integer` | no |  |
+| `spec.documents[].bondConfig.routes[].mtu` | `integer` | no |  |
+| `spec.documents[].bondConfig.routes[].source` | `string` | no |  |
+| `spec.documents[].bondConfig.routes[].table` | `integer` | no |  |
+| `spec.documents[].bondConfig.tlbLogicalLb` | `integer` | no |  |
+| `spec.documents[].bondConfig.up` | `boolean` | no |  |
+| `spec.documents[].bondConfig.updelay` | `integer` | no |  |
+| `spec.documents[].bondConfig.useCarrier` | `boolean` | no |  |
+| `spec.documents[].bondConfig.xmitHashPolicy` | `integer` | no |  |
+| `spec.documents[].bridgeConfig` | `object` | no | bridgeConfig is a Talos BridgeConfig document; populated when kind is "BridgeConfig". |
+| `spec.documents[].bridgeConfig.addresses` | `[]object` | no |  |
+| `spec.documents[].bridgeConfig.addresses[].address` | `string` | yes |  |
+| `spec.documents[].bridgeConfig.addresses[].routePriority` | `integer` | no |  |
+| `spec.documents[].bridgeConfig.hardwareAddr` | `string (byte)` | no |  |
+| `spec.documents[].bridgeConfig.links` | `[]string` | no |  |
+| `spec.documents[].bridgeConfig.mtu` | `integer` | no |  |
+| `spec.documents[].bridgeConfig.multicast` | `boolean` | no |  |
+| `spec.documents[].bridgeConfig.name` | `string` | yes |  |
+| `spec.documents[].bridgeConfig.routes` | `[]object` | no |  |
+| `spec.documents[].bridgeConfig.routes[].destination` | `string` | no |  |
+| `spec.documents[].bridgeConfig.routes[].gateway` | `string` | no |  |
+| `spec.documents[].bridgeConfig.routes[].metric` | `integer` | no |  |
+| `spec.documents[].bridgeConfig.routes[].mtu` | `integer` | no |  |
+| `spec.documents[].bridgeConfig.routes[].source` | `string` | no |  |
+| `spec.documents[].bridgeConfig.routes[].table` | `integer` | no |  |
+| `spec.documents[].bridgeConfig.stp` | `object` | no | Talos: BridgeSTPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/bridgeconfig |
+| `spec.documents[].bridgeConfig.stp.enabled` | `boolean` | no |  |
+| `spec.documents[].bridgeConfig.up` | `boolean` | no |  |
+| `spec.documents[].bridgeConfig.vlan` | `object` | no | Talos: BridgeVLANConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/bridgeconfig |
+| `spec.documents[].bridgeConfig.vlan.filtering` | `boolean` | no |  |
 | `spec.documents[].config` | `object` | no | config is a Talos v1alpha1 Config document; populated when kind is "Config". |
 | `spec.documents[].config.cluster` | `object` | no | Talos: ClusterConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/v1alpha1/config |
 | `spec.documents[].config.cluster.acceptedCAs` | `[]object` | no |  |
@@ -453,10 +545,247 @@ Version v1alpha1: has a `status` subresource.
 | `spec.documents[].config.machine.udev.rules` | `[]string` | no |  |
 | `spec.documents[].config.persist` | `boolean` | no |  |
 | `spec.documents[].config.version` | `string` | yes |  |
+| `spec.documents[].containerConfig` | `object` | no | containerConfig is a Talos ContainerConfig document; populated when kind is "ContainerConfig". |
+| `spec.documents[].containerConfig.args` | `[]string` | no |  |
+| `spec.documents[].containerConfig.dependsOn` | `object` | no | Talos: ContainerDependsOn — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.documents[].containerConfig.dependsOn.containers` | `[]string` | no |  |
+| `spec.documents[].containerConfig.dependsOn.networks` | `[]string` | no |  |
+| `spec.documents[].containerConfig.dependsOn.paths` | `[]string` | no |  |
+| `spec.documents[].containerConfig.dependsOn.time` | `boolean` | no |  |
+| `spec.documents[].containerConfig.entrypoint` | `[]string` | no |  |
+| `spec.documents[].containerConfig.environment` | `[]string` | no |  |
+| `spec.documents[].containerConfig.image` | `string` | yes |  |
+| `spec.documents[].containerConfig.mounts` | `[]object` | no |  |
+| `spec.documents[].containerConfig.mounts[].hostPath` | `object` | no | Talos: HostPathMount — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.documents[].containerConfig.mounts[].hostPath.destination` | `string` | yes |  |
+| `spec.documents[].containerConfig.mounts[].hostPath.options` | `[]string` | no |  |
+| `spec.documents[].containerConfig.mounts[].hostPath.source` | `string` | yes |  |
+| `spec.documents[].containerConfig.mounts[].tmpfs` | `object` | no | Talos: TmpfsMount — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.documents[].containerConfig.mounts[].tmpfs.destination` | `string` | yes |  |
+| `spec.documents[].containerConfig.mounts[].tmpfs.options` | `[]string` | no |  |
+| `spec.documents[].containerConfig.mounts[].tmpfs.size` | `string` | no |  |
+| `spec.documents[].containerConfig.mounts[].userVolume` | `object` | no | Talos: UserVolumeMount — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.documents[].containerConfig.mounts[].userVolume.destination` | `string` | yes |  |
+| `spec.documents[].containerConfig.mounts[].userVolume.name` | `string` | yes |  |
+| `spec.documents[].containerConfig.mounts[].userVolume.options` | `[]string` | no |  |
+| `spec.documents[].containerConfig.name` | `string` | yes |  |
+| `spec.documents[].containerConfig.network` | `object` | no | Talos: ContainerNetwork — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.documents[].containerConfig.network.mode` | `string` | no |  |
+| `spec.documents[].containerConfig.resources` | `object` | no | Talos: ContainerResources — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.documents[].containerConfig.resources.limits` | `object` | no | Talos: ContainerResourceLimits — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.documents[].containerConfig.resources.limits.cpu` | `string` | no |  |
+| `spec.documents[].containerConfig.resources.limits.memory` | `string` | no |  |
+| `spec.documents[].containerConfig.runAs` | `object` | no | Talos: ContainerRunAs — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.documents[].containerConfig.runAs.gid` | `integer` | no |  |
+| `spec.documents[].containerConfig.runAs.uid` | `integer` | no |  |
+| `spec.documents[].containerConfig.security` | `object` | no | Talos: ContainerSecurity — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.documents[].containerConfig.security.capabilities` | `object` | no | Talos: ContainerCapabilities — https://docs.siderolabs.com/talos/v1.14/reference/configuration/container/containerconfig |
+| `spec.documents[].containerConfig.security.capabilities.add` | `[]string` | no |  |
+| `spec.documents[].containerConfig.security.capabilities.drop` | `[]string` | no |  |
+| `spec.documents[].containerConfig.security.machinedAccess` | `boolean` | no |  |
+| `spec.documents[].containerConfig.security.profile` | `string` | no |  |
+| `spec.documents[].containerConfig.workingDir` | `string` | no |  |
+| `spec.documents[].dhcpv6Config` | `object` | no | dhcpv6Config is a Talos DHCPv6Config document; populated when kind is "DHCPv6Config". |
+| `spec.documents[].dhcpv6Config.clientIdentifier` | `integer` | no |  |
+| `spec.documents[].dhcpv6Config.duidRaw` | `string (byte)` | no |  |
+| `spec.documents[].dhcpv6Config.ignoreHostname` | `boolean` | no |  |
+| `spec.documents[].dhcpv6Config.name` | `string` | yes |  |
+| `spec.documents[].dhcpv6Config.routeMetric` | `integer` | no |  |
+| `spec.documents[].dummyLinkConfig` | `object` | no | dummyLinkConfig is a Talos DummyLinkConfig document; populated when kind is "DummyLinkConfig". |
+| `spec.documents[].dummyLinkConfig.addresses` | `[]object` | no |  |
+| `spec.documents[].dummyLinkConfig.addresses[].address` | `string` | yes |  |
+| `spec.documents[].dummyLinkConfig.addresses[].routePriority` | `integer` | no |  |
+| `spec.documents[].dummyLinkConfig.hardwareAddr` | `string (byte)` | no |  |
+| `spec.documents[].dummyLinkConfig.mtu` | `integer` | no |  |
+| `spec.documents[].dummyLinkConfig.multicast` | `boolean` | no |  |
+| `spec.documents[].dummyLinkConfig.name` | `string` | yes |  |
+| `spec.documents[].dummyLinkConfig.routes` | `[]object` | no |  |
+| `spec.documents[].dummyLinkConfig.routes[].destination` | `string` | no |  |
+| `spec.documents[].dummyLinkConfig.routes[].gateway` | `string` | no |  |
+| `spec.documents[].dummyLinkConfig.routes[].metric` | `integer` | no |  |
+| `spec.documents[].dummyLinkConfig.routes[].mtu` | `integer` | no |  |
+| `spec.documents[].dummyLinkConfig.routes[].source` | `string` | no |  |
+| `spec.documents[].dummyLinkConfig.routes[].table` | `integer` | no |  |
+| `spec.documents[].dummyLinkConfig.up` | `boolean` | no |  |
+| `spec.documents[].environmentConfig` | `object` | no | environmentConfig is a Talos EnvironmentConfig document; populated when kind is "EnvironmentConfig". |
+| `spec.documents[].environmentConfig.variables` | `map[string]string` | yes |  |
+| `spec.documents[].etcFileConfig` | `object` | no | etcFileConfig is a Talos EtcFileConfig document; populated when kind is "EtcFileConfig". |
+| `spec.documents[].etcFileConfig.contents` | `string` | yes |  |
+| `spec.documents[].etcFileConfig.mode` | `integer` | yes |  |
+| `spec.documents[].etcFileConfig.name` | `string` | yes |  |
+| `spec.documents[].ethernetConfig` | `object` | no | ethernetConfig is a Talos EthernetConfig document; populated when kind is "EthernetConfig". |
+| `spec.documents[].ethernetConfig.channels` | `object` | no | Talos: EthernetChannelsConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/ethernetconfig |
+| `spec.documents[].ethernetConfig.channels.combined` | `integer` | no |  |
+| `spec.documents[].ethernetConfig.channels.other` | `integer` | no |  |
+| `spec.documents[].ethernetConfig.channels.rx` | `integer` | no |  |
+| `spec.documents[].ethernetConfig.channels.tx` | `integer` | no |  |
+| `spec.documents[].ethernetConfig.features` | `map[string]boolean` | no |  |
+| `spec.documents[].ethernetConfig.name` | `string` | yes |  |
+| `spec.documents[].ethernetConfig.rings` | `object` | no | Talos: EthernetRingsConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/ethernetconfig |
+| `spec.documents[].ethernetConfig.rings.cqe-size` | `integer` | no |  |
+| `spec.documents[].ethernetConfig.rings.rx` | `integer` | no |  |
+| `spec.documents[].ethernetConfig.rings.rx-buf-len` | `integer` | no |  |
+| `spec.documents[].ethernetConfig.rings.rx-jumbo` | `integer` | no |  |
+| `spec.documents[].ethernetConfig.rings.rx-mini` | `integer` | no |  |
+| `spec.documents[].ethernetConfig.rings.rx-push` | `boolean` | no |  |
+| `spec.documents[].ethernetConfig.rings.tcp-data-split` | `boolean` | no |  |
+| `spec.documents[].ethernetConfig.rings.tx` | `integer` | no |  |
+| `spec.documents[].ethernetConfig.rings.tx-push` | `boolean` | no |  |
+| `spec.documents[].ethernetConfig.rings.tx-push-buf-len` | `integer` | no |  |
+| `spec.documents[].ethernetConfig.wakeOnLan` | `[]integer` | no |  |
+| `spec.documents[].eventSinkConfig` | `object` | no | eventSinkConfig is a Talos EventSinkConfig document; populated when kind is "EventSinkConfig". |
+| `spec.documents[].eventSinkConfig.endpoint` | `string` | yes |  |
+| `spec.documents[].existingVolumeConfig` | `object` | no | existingVolumeConfig is a Talos ExistingVolumeConfig document; populated when kind is "ExistingVolumeConfig". |
+| `spec.documents[].existingVolumeConfig.discovery` | `object` | no | Talos: VolumeDiscoverySpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/existingvolumeconfig |
+| `spec.documents[].existingVolumeConfig.discovery.volumeSelector` | `object` | no | Talos: VolumeSelector — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/existingvolumeconfig |
+| `spec.documents[].existingVolumeConfig.discovery.volumeSelector.match` | `string` | no |  |
+| `spec.documents[].existingVolumeConfig.mount` | `object` | no | Talos: ExistingMountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/existingvolumeconfig |
+| `spec.documents[].existingVolumeConfig.mount.disableAccessTime` | `boolean` | no |  |
+| `spec.documents[].existingVolumeConfig.mount.readOnly` | `boolean` | no |  |
+| `spec.documents[].existingVolumeConfig.mount.secure` | `boolean` | no |  |
+| `spec.documents[].existingVolumeConfig.name` | `string` | yes |  |
+| `spec.documents[].existingVolumeConfig.scrub` | `object` | no | Talos: ScrubConfig |
+| `spec.documents[].existingVolumeConfig.scrub.enabled` | `boolean` | no |  |
+| `spec.documents[].existingVolumeConfig.scrub.interval` | `string` | no |  |
+| `spec.documents[].existingVolumeConfig.trim` | `object` | no | Talos: TrimConfig |
+| `spec.documents[].existingVolumeConfig.trim.enabled` | `boolean` | no |  |
+| `spec.documents[].existingVolumeConfig.trim.interval` | `string` | no |  |
+| `spec.documents[].extensionServiceConfig` | `object` | no | extensionServiceConfig is a Talos ExtensionServiceConfig document; populated when kind is "ExtensionServiceConfig". |
+| `spec.documents[].extensionServiceConfig.configFiles` | `[]object` | no |  |
+| `spec.documents[].extensionServiceConfig.configFiles[].content` | `string` | yes |  |
+| `spec.documents[].extensionServiceConfig.configFiles[].mountPath` | `string` | yes |  |
+| `spec.documents[].extensionServiceConfig.environment` | `[]string` | no |  |
+| `spec.documents[].extensionServiceConfig.name` | `string` | yes |  |
+| `spec.documents[].externalVolumeConfig` | `object` | no | externalVolumeConfig is a Talos ExternalVolumeConfig document; populated when kind is "ExternalVolumeConfig". |
+| `spec.documents[].externalVolumeConfig.filesystemType` | `string` | yes |  |
+| `spec.documents[].externalVolumeConfig.mount` | `object` | no | Talos: ExternalMountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/externalvolumeconfig |
+| `spec.documents[].externalVolumeConfig.mount.disableAccessTime` | `boolean` | no |  |
+| `spec.documents[].externalVolumeConfig.mount.readOnly` | `boolean` | no |  |
+| `spec.documents[].externalVolumeConfig.mount.secure` | `boolean` | no |  |
+| `spec.documents[].externalVolumeConfig.mount.virtiofs` | `object` | no | Talos: VirtiofsMountSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/block/externalvolumeconfig |
+| `spec.documents[].externalVolumeConfig.mount.virtiofs.tag` | `string` | yes |  |
+| `spec.documents[].externalVolumeConfig.name` | `string` | yes |  |
+| `spec.documents[].filesystemScrubConfig` | `object` | no | filesystemScrubConfig is a Talos FilesystemScrubConfig document; populated when kind is "FilesystemScrubConfig". |
+| `spec.documents[].filesystemScrubConfig.interval` | `string` | no |  |
+| `spec.documents[].filesystemTrimConfig` | `object` | no | filesystemTrimConfig is a Talos FilesystemTrimConfig document; populated when kind is "FilesystemTrimConfig". |
+| `spec.documents[].filesystemTrimConfig.interval` | `string` | no |  |
+| `spec.documents[].httpProbeConfig` | `object` | no | httpProbeConfig is a Talos HTTPProbeConfig document; populated when kind is "HTTPProbeConfig". |
+| `spec.documents[].httpProbeConfig.failureThreshold` | `integer` | no |  |
+| `spec.documents[].httpProbeConfig.interval` | `string` | no |  |
+| `spec.documents[].httpProbeConfig.name` | `string` | yes |  |
+| `spec.documents[].httpProbeConfig.timeout` | `string` | no |  |
+| `spec.documents[].httpProbeConfig.url` | `string` | yes |  |
+| `spec.documents[].imageCacheConfig` | `object` | no | imageCacheConfig is a Talos ImageCacheConfig document; populated when kind is "ImageCacheConfig". |
+| `spec.documents[].imageCacheConfig.local` | `object` | yes | Talos: LocalImageCacheConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/cri/imagecacheconfig |
+| `spec.documents[].imageCacheConfig.local.enabled` | `boolean` | no |  |
+| `spec.documents[].imageVerificationConfig` | `object` | no | imageVerificationConfig is a Talos ImageVerificationConfig document; populated when kind is "ImageVerificationConfig". |
+| `spec.documents[].imageVerificationConfig.rules` | `[]object` | no |  |
+| `spec.documents[].imageVerificationConfig.rules[].deny` | `boolean` | no |  |
+| `spec.documents[].imageVerificationConfig.rules[].image` | `string` | no |  |
+| `spec.documents[].imageVerificationConfig.rules[].keyless` | `object` | no | Talos: ImageKeylessVerifierV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/security/imageverificationconfig |
+| `spec.documents[].imageVerificationConfig.rules[].keyless.issuer` | `string` | no |  |
+| `spec.documents[].imageVerificationConfig.rules[].keyless.subject` | `string` | no |  |
+| `spec.documents[].imageVerificationConfig.rules[].keyless.subjectRegex` | `string` | no |  |
+| `spec.documents[].imageVerificationConfig.rules[].publicKey` | `object` | no | Talos: ImagePublicKeyVerifierV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/security/imageverificationconfig |
+| `spec.documents[].imageVerificationConfig.rules[].publicKey.certificate` | `string` | no |  |
+| `spec.documents[].imageVerificationConfig.rules[].skip` | `boolean` | no |  |
 | `spec.documents[].kernelModuleConfig` | `object` | no | kernelModuleConfig is a Talos KernelModuleConfig document; populated when kind is "KernelModuleConfig". |
 | `spec.documents[].kernelModuleConfig.name` | `string` | yes |  |
 | `spec.documents[].kernelModuleConfig.parameters` | `[]string` | no |  |
-| `spec.documents[].kind` | `string` | yes | kind selects which of the fields below is populated. Allowed values: `SysctlConfig`, `KernelModuleConfig`, `Config`, `VolumeConfig`, `UserVolumeConfig`, `RawVolumeConfig`, `ResolverConfig`. |
+| `spec.documents[].kind` | `string` | yes | kind selects which of the fields below is populated. Allowed values: `SysctlConfig`, `KernelModuleConfig`, `Config`, `VolumeConfig`, `UserVolumeConfig`, `RawVolumeConfig`, `ResolverConfig`, `BGPInstanceConfig`, `BlackholeRouteConfig`, `BondConfig`, `BridgeConfig`, `ContainerConfig`, `DHCPv6Config`, `DummyLinkConfig`, `EnvironmentConfig`, `EtcFileConfig`, `EthernetConfig`, `EventSinkConfig`, `ExistingVolumeConfig`, `ExtensionServiceConfig`, `ExternalVolumeConfig`, `FilesystemScrubConfig`, `FilesystemTrimConfig`, `HTTPProbeConfig`, `ImageCacheConfig`, `ImageVerificationConfig`, `KmsgLogConfig`, `KubeAPIServerConfig`, `KubeClusterConfig`, `KubeControllerManagerConfig`, `KubeCoreDNSConfig`, `KubeInlineManifestConfig`, `KubeNetworkConfig`, `KubeNodeConfig`, `KubePrismConfig`, `KubeSpanConfig`, `KubeSpanEndpointsConfig`, `KubeTalosAPIAccessConfig`, `LVMLogicalVolumeConfig`, `LVMVolumeGroupConfig`, `Layer2VIPConfig`, `OOMConfig`, `PCIDriverRebindConfig`, `RAIDArrayConfig`, `RegistryMirrorConfig`, `RoutingRuleConfig`, `StaticHostConfig`, `SwapVolumeConfig`, `SysfsConfig`, `TCPProbeConfig`, `TimeSyncConfig`, `TrustedRootsConfig`, `UdevRulesConfig`, `VRFConfig`, `VethConfig`, `WatchdogTimerConfig`, `ZswapConfig`. |
+| `spec.documents[].kmsgLogConfig` | `object` | no | kmsgLogConfig is a Talos KmsgLogConfig document; populated when kind is "KmsgLogConfig". |
+| `spec.documents[].kmsgLogConfig.name` | `string` | yes |  |
+| `spec.documents[].kmsgLogConfig.url` | `string` | yes |  |
+| `spec.documents[].kubeAPIServerConfig` | `object` | no | kubeAPIServerConfig is a Talos KubeAPIServerConfig document; populated when kind is "KubeAPIServerConfig". |
+| `spec.documents[].kubeAPIServerConfig.apiPort` | `integer` | no |  |
+| `spec.documents[].kubeAPIServerConfig.certExtraSANs` | `[]string` | no |  |
+| `spec.documents[].kubeAPIServerConfig.env` | `map[string]string` | no |  |
+| `spec.documents[].kubeAPIServerConfig.extraArgs` | `map[string][]string` | no |  |
+| `spec.documents[].kubeAPIServerConfig.image` | `string` | yes |  |
+| `spec.documents[].kubeAPIServerConfig.resources` | `object` | no | Talos: ResourcesConfig |
+| `spec.documents[].kubeAPIServerConfig.resources.limits` | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
+| `spec.documents[].kubeAPIServerConfig.resources.requests` | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
+| `spec.documents[].kubeAPIServerConfig.startupProbes` | `boolean` | no |  |
+| `spec.documents[].kubeClusterConfig` | `object` | no | kubeClusterConfig is a Talos KubeClusterConfig document; populated when kind is "KubeClusterConfig". |
+| `spec.documents[].kubeClusterConfig.clusterName` | `string` | yes |  |
+| `spec.documents[].kubeClusterConfig.endpoint` | `string` | yes |  |
+| `spec.documents[].kubeControllerManagerConfig` | `object` | no | kubeControllerManagerConfig is a Talos KubeControllerManagerConfig document; populated when kind is "KubeControllerManagerConfig". |
+| `spec.documents[].kubeControllerManagerConfig.enabled` | `boolean` | no |  |
+| `spec.documents[].kubeControllerManagerConfig.env` | `map[string]string` | no |  |
+| `spec.documents[].kubeControllerManagerConfig.extraArgs` | `map[string][]string` | no |  |
+| `spec.documents[].kubeControllerManagerConfig.image` | `string` | yes |  |
+| `spec.documents[].kubeControllerManagerConfig.resources` | `object` | no | Talos: ResourcesConfig |
+| `spec.documents[].kubeControllerManagerConfig.resources.limits` | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
+| `spec.documents[].kubeControllerManagerConfig.resources.requests` | `map[string]integer or string` | no | ResourceList is a set of (resource name, quantity) pairs. |
+| `spec.documents[].kubeCoreDNSConfig` | `object` | no | kubeCoreDNSConfig is a Talos KubeCoreDNSConfig document; populated when kind is "KubeCoreDNSConfig". |
+| `spec.documents[].kubeCoreDNSConfig.enabled` | `boolean` | no |  |
+| `spec.documents[].kubeCoreDNSConfig.image` | `string` | no |  |
+| `spec.documents[].kubeInlineManifestConfig` | `object` | no | kubeInlineManifestConfig is a Talos KubeInlineManifestConfig document; populated when kind is "KubeInlineManifestConfig". |
+| `spec.documents[].kubeInlineManifestConfig.manifest` | `string` | yes |  |
+| `spec.documents[].kubeInlineManifestConfig.name` | `string` | yes |  |
+| `spec.documents[].kubeNetworkConfig` | `object` | no | kubeNetworkConfig is a Talos KubeNetworkConfig document; populated when kind is "KubeNetworkConfig". |
+| `spec.documents[].kubeNetworkConfig.dnsDomain` | `string` | yes |  |
+| `spec.documents[].kubeNetworkConfig.nodeCIDRMaskSizeIPv4` | `integer` | no |  |
+| `spec.documents[].kubeNetworkConfig.nodeCIDRMaskSizeIPv6` | `integer` | no |  |
+| `spec.documents[].kubeNetworkConfig.podSubnets` | `[]string` | yes |  |
+| `spec.documents[].kubeNetworkConfig.serviceSubnets` | `[]string` | yes |  |
+| `spec.documents[].kubeNodeConfig` | `object` | no | kubeNodeConfig is a Talos KubeNodeConfig document; populated when kind is "KubeNodeConfig". |
+| `spec.documents[].kubeNodeConfig.annotations` | `map[string]string` | no |  |
+| `spec.documents[].kubeNodeConfig.labels` | `map[string]string` | no |  |
+| `spec.documents[].kubeNodeConfig.nodeIP` | `object` | yes | Talos: NodeIPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/k8s/kubenodeconfig |
+| `spec.documents[].kubeNodeConfig.nodeIP.validSubnets` | `[]string` | no |  |
+| `spec.documents[].kubeNodeConfig.registerWithFQDN` | `boolean` | no |  |
+| `spec.documents[].kubeNodeConfig.skipNodeRegistration` | `boolean` | no |  |
+| `spec.documents[].kubeNodeConfig.taints` | `map[string]string` | no |  |
+| `spec.documents[].kubePrismConfig` | `object` | no | kubePrismConfig is a Talos KubePrismConfig document; populated when kind is "KubePrismConfig". |
+| `spec.documents[].kubePrismConfig.port` | `integer` | yes |  |
+| `spec.documents[].kubePrismConfig.tlsServerName` | `string` | no |  |
+| `spec.documents[].kubeSpanConfig` | `object` | no | kubeSpanConfig is a Talos KubeSpanConfig document; populated when kind is "KubeSpanConfig". |
+| `spec.documents[].kubeSpanConfig.advertiseKubernetesNetworks` | `boolean` | no |  |
+| `spec.documents[].kubeSpanConfig.allowDownPeerBypass` | `boolean` | no |  |
+| `spec.documents[].kubeSpanConfig.enabled` | `boolean` | no |  |
+| `spec.documents[].kubeSpanConfig.filters` | `object` | no | Talos: KubeSpanFiltersConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/kubespanconfig |
+| `spec.documents[].kubeSpanConfig.filters.endpoints` | `[]string` | no |  |
+| `spec.documents[].kubeSpanConfig.filters.excludeAdvertisedNetworks` | `[]string` | no |  |
+| `spec.documents[].kubeSpanConfig.harvestExtraEndpoints` | `boolean` | no |  |
+| `spec.documents[].kubeSpanConfig.mtu` | `integer` | no |  |
+| `spec.documents[].kubeSpanEndpointsConfig` | `object` | no | kubeSpanEndpointsConfig is a Talos KubeSpanEndpointsConfig document; populated when kind is "KubeSpanEndpointsConfig". |
+| `spec.documents[].kubeSpanEndpointsConfig.extraAnnouncedEndpoints` | `[]string` | yes |  |
+| `spec.documents[].kubeTalosAPIAccessConfig` | `object` | no | kubeTalosAPIAccessConfig is a Talos KubeTalosAPIAccessConfig document; populated when kind is "KubeTalosAPIAccessConfig". |
+| `spec.documents[].kubeTalosAPIAccessConfig.allowedKubernetesNamespaces` | `[]string` | no |  |
+| `spec.documents[].kubeTalosAPIAccessConfig.allowedRoles` | `[]string` | no |  |
+| `spec.documents[].layer2VIPConfig` | `object` | no | layer2VIPConfig is a Talos Layer2VIPConfig document; populated when kind is "Layer2VIPConfig". |
+| `spec.documents[].layer2VIPConfig.link` | `string` | yes |  |
+| `spec.documents[].layer2VIPConfig.name` | `string` | yes |  |
+| `spec.documents[].lvmLogicalVolumeConfig` | `object` | no | lvmLogicalVolumeConfig is a Talos LVMLogicalVolumeConfig document; populated when kind is "LVMLogicalVolumeConfig". |
+| `spec.documents[].lvmLogicalVolumeConfig.mirrors` | `integer` | no |  |
+| `spec.documents[].lvmLogicalVolumeConfig.name` | `string` | yes |  |
+| `spec.documents[].lvmLogicalVolumeConfig.provisioning` | `object` | yes | Talos: LVMLogicalVolumeProvisioningSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/storage/lvmlogicalvolumeconfig |
+| `spec.documents[].lvmLogicalVolumeConfig.provisioning.maxSize` | `string` | no |  |
+| `spec.documents[].lvmLogicalVolumeConfig.provisioning.minSize` | `string` | no |  |
+| `spec.documents[].lvmLogicalVolumeConfig.provisioning.volumeGroup` | `string` | yes |  |
+| `spec.documents[].lvmLogicalVolumeConfig.stripes` | `integer` | no |  |
+| `spec.documents[].lvmLogicalVolumeConfig.type` | `integer` | yes |  |
+| `spec.documents[].lvmVolumeGroupConfig` | `object` | no | lvmVolumeGroupConfig is a Talos LVMVolumeGroupConfig document; populated when kind is "LVMVolumeGroupConfig". |
+| `spec.documents[].lvmVolumeGroupConfig.name` | `string` | yes |  |
+| `spec.documents[].lvmVolumeGroupConfig.provisioning` | `object` | yes | Talos: ProvisioningSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/storage/lvmvolumegroupconfig |
+| `spec.documents[].lvmVolumeGroupConfig.provisioning.volumeSelector` | `object` | no | Talos: LVMVolumeSelectorSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/storage/lvmvolumegroupconfig |
+| `spec.documents[].lvmVolumeGroupConfig.provisioning.volumeSelector.match` | `string` | no |  |
+| `spec.documents[].oomConfig` | `object` | no | oomConfig is a Talos OOMConfig document; populated when kind is "OOMConfig". |
+| `spec.documents[].oomConfig.cgroupRankingExpression` | `string` | no |  |
+| `spec.documents[].oomConfig.sampleInterval` | `string` | no |  |
+| `spec.documents[].oomConfig.strictCgroupClassOrdering` | `boolean` | no |  |
+| `spec.documents[].oomConfig.triggerExpression` | `string` | no |  |
+| `spec.documents[].pciDriverRebindConfig` | `object` | no | pciDriverRebindConfig is a Talos PCIDriverRebindConfig document; populated when kind is "PCIDriverRebindConfig". |
+| `spec.documents[].pciDriverRebindConfig.name` | `string` | yes |  |
+| `spec.documents[].pciDriverRebindConfig.targetDriver` | `string` | yes |  |
+| `spec.documents[].raidArrayConfig` | `object` | no | raidArrayConfig is a Talos RAIDArrayConfig document; populated when kind is "RAIDArrayConfig". |
+| `spec.documents[].raidArrayConfig.level` | `integer` | yes |  |
+| `spec.documents[].raidArrayConfig.metadata` | `integer` | no |  |
+| `spec.documents[].raidArrayConfig.name` | `string` | yes |  |
+| `spec.documents[].raidArrayConfig.provisioning` | `object` | yes | Talos: RAIDProvisioningSpec — https://docs.siderolabs.com/talos/v1.14/reference/configuration/storage/raidarrayconfig |
+| `spec.documents[].raidArrayConfig.provisioning.volumeSelector` | `object` | yes | Talos: RAIDVolumeSelector — https://docs.siderolabs.com/talos/v1.14/reference/configuration/storage/raidarrayconfig |
+| `spec.documents[].raidArrayConfig.provisioning.volumeSelector.match` | `string` | no |  |
 | `spec.documents[].rawVolumeConfig` | `object` | no | rawVolumeConfig is a Talos RawVolumeConfig document (an unformatted partition for a CSI provisioner); populated when kind is "RawVolumeConfig". |
 | `spec.documents[].rawVolumeConfig.encryption` | `object` | no | Talos: EncryptionSpec |
 | `spec.documents[].rawVolumeConfig.encryption.allowDiscards` | `boolean` | no |  |
@@ -482,6 +811,12 @@ Version v1alpha1: has a `status` subresource.
 | `spec.documents[].rawVolumeConfig.provisioning.grow` | `boolean` | no |  |
 | `spec.documents[].rawVolumeConfig.provisioning.maxSize` | `string` | no |  |
 | `spec.documents[].rawVolumeConfig.provisioning.minSize` | `string` | no |  |
+| `spec.documents[].registryMirrorConfig` | `object` | no | registryMirrorConfig is a Talos RegistryMirrorConfig document; populated when kind is "RegistryMirrorConfig". |
+| `spec.documents[].registryMirrorConfig.endpoints` | `[]object` | no |  |
+| `spec.documents[].registryMirrorConfig.endpoints[].overridePath` | `boolean` | no |  |
+| `spec.documents[].registryMirrorConfig.endpoints[].url` | `string` | yes |  |
+| `spec.documents[].registryMirrorConfig.name` | `string` | yes |  |
+| `spec.documents[].registryMirrorConfig.skipFallback` | `boolean` | no |  |
 | `spec.documents[].resolverConfig` | `object` | no | resolverConfig is a Talos ResolverConfig document (DNS nameservers and search domains); populated when kind is "ResolverConfig". |
 | `spec.documents[].resolverConfig.hostDNS` | `object` | no | Talos: HostDNSConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig |
 | `spec.documents[].resolverConfig.hostDNS.enabled` | `boolean` | no |  |
@@ -494,8 +829,67 @@ Version v1alpha1: has a `status` subresource.
 | `spec.documents[].resolverConfig.searchDomains` | `object` | no | Talos: SearchDomainsConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/resolverconfig |
 | `spec.documents[].resolverConfig.searchDomains.disableDefault` | `boolean` | no |  |
 | `spec.documents[].resolverConfig.searchDomains.domains` | `[]string` | no |  |
+| `spec.documents[].routingRuleConfig` | `object` | no | routingRuleConfig is a Talos RoutingRuleConfig document; populated when kind is "RoutingRuleConfig". |
+| `spec.documents[].routingRuleConfig.action` | `integer` | no |  |
+| `spec.documents[].routingRuleConfig.dst` | `string` | no |  |
+| `spec.documents[].routingRuleConfig.fwMark` | `integer` | no |  |
+| `spec.documents[].routingRuleConfig.fwMask` | `integer` | no |  |
+| `spec.documents[].routingRuleConfig.iifName` | `string` | no |  |
+| `spec.documents[].routingRuleConfig.name` | `string` | yes |  |
+| `spec.documents[].routingRuleConfig.oifName` | `string` | no |  |
+| `spec.documents[].routingRuleConfig.src` | `string` | no |  |
+| `spec.documents[].routingRuleConfig.table` | `integer` | yes |  |
+| `spec.documents[].staticHostConfig` | `object` | no | staticHostConfig is a Talos StaticHostConfig document; populated when kind is "StaticHostConfig". |
+| `spec.documents[].staticHostConfig.hostnames` | `[]string` | yes |  |
+| `spec.documents[].staticHostConfig.name` | `string` | yes |  |
+| `spec.documents[].swapVolumeConfig` | `object` | no | swapVolumeConfig is a Talos SwapVolumeConfig document; populated when kind is "SwapVolumeConfig". |
+| `spec.documents[].swapVolumeConfig.encryption` | `object` | no | Talos: EncryptionSpec |
+| `spec.documents[].swapVolumeConfig.encryption.allowDiscards` | `boolean` | no |  |
+| `spec.documents[].swapVolumeConfig.encryption.blockSize` | `integer` | no |  |
+| `spec.documents[].swapVolumeConfig.encryption.cipher` | `string` | no |  |
+| `spec.documents[].swapVolumeConfig.encryption.keySize` | `integer` | no |  |
+| `spec.documents[].swapVolumeConfig.encryption.keys` | `[]object` | yes |  |
+| `spec.documents[].swapVolumeConfig.encryption.keys[].kms` | `object` | no | Talos: EncryptionKeyKMS |
+| `spec.documents[].swapVolumeConfig.encryption.keys[].kms.endpoint` | `string` | yes |  |
+| `spec.documents[].swapVolumeConfig.encryption.keys[].lockToState` | `boolean` | no |  |
+| `spec.documents[].swapVolumeConfig.encryption.keys[].nodeID` | `object` | no | Talos: EncryptionKeyNodeID |
+| `spec.documents[].swapVolumeConfig.encryption.keys[].slot` | `integer` | yes |  |
+| `spec.documents[].swapVolumeConfig.encryption.keys[].tpm` | `object` | no | Talos: EncryptionKeyTPM |
+| `spec.documents[].swapVolumeConfig.encryption.keys[].tpm.checkSecurebootStatusOnEnroll` | `boolean` | no |  |
+| `spec.documents[].swapVolumeConfig.encryption.keys[].tpm.options` | `object` | no | Talos: EncryptionKeyTPMOptions |
+| `spec.documents[].swapVolumeConfig.encryption.keys[].tpm.options.pcrs` | `[]integer` | no |  |
+| `spec.documents[].swapVolumeConfig.encryption.options` | `[]string` | no |  |
+| `spec.documents[].swapVolumeConfig.encryption.provider` | `string` | yes |  |
+| `spec.documents[].swapVolumeConfig.name` | `string` | yes |  |
+| `spec.documents[].swapVolumeConfig.provisioning` | `object` | no | Talos: ProvisioningSpec |
+| `spec.documents[].swapVolumeConfig.provisioning.diskSelector` | `object` | no | Talos: DiskSelector |
+| `spec.documents[].swapVolumeConfig.provisioning.diskSelector.match` | `string` | no |  |
+| `spec.documents[].swapVolumeConfig.provisioning.grow` | `boolean` | no |  |
+| `spec.documents[].swapVolumeConfig.provisioning.maxSize` | `string` | no |  |
+| `spec.documents[].swapVolumeConfig.provisioning.minSize` | `string` | no |  |
 | `spec.documents[].sysctlConfig` | `object` | no | sysctlConfig is a Talos SysctlConfig document; populated when kind is "SysctlConfig". |
 | `spec.documents[].sysctlConfig.params` | `map[string]string` | yes |  |
+| `spec.documents[].sysfsConfig` | `object` | no | sysfsConfig is a Talos SysfsConfig document; populated when kind is "SysfsConfig". |
+| `spec.documents[].sysfsConfig.params` | `map[string]string` | yes |  |
+| `spec.documents[].tcpProbeConfig` | `object` | no | tcpProbeConfig is a Talos TCPProbeConfig document; populated when kind is "TCPProbeConfig". |
+| `spec.documents[].tcpProbeConfig.endpoint` | `string` | yes |  |
+| `spec.documents[].tcpProbeConfig.failureThreshold` | `integer` | no |  |
+| `spec.documents[].tcpProbeConfig.interval` | `string` | no |  |
+| `spec.documents[].tcpProbeConfig.name` | `string` | yes |  |
+| `spec.documents[].tcpProbeConfig.timeout` | `string` | no |  |
+| `spec.documents[].timeSyncConfig` | `object` | no | timeSyncConfig is a Talos TimeSyncConfig document; populated when kind is "TimeSyncConfig". |
+| `spec.documents[].timeSyncConfig.bootTimeout` | `string` | no |  |
+| `spec.documents[].timeSyncConfig.enabled` | `boolean` | no |  |
+| `spec.documents[].timeSyncConfig.ntp` | `object` | no | Talos: NTPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/timesyncconfig |
+| `spec.documents[].timeSyncConfig.ntp.servers` | `[]string` | no |  |
+| `spec.documents[].timeSyncConfig.ntp.useNTS` | `boolean` | no |  |
+| `spec.documents[].timeSyncConfig.ptp` | `object` | no | Talos: PTPConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/timesyncconfig |
+| `spec.documents[].timeSyncConfig.ptp.devices` | `[]string` | no |  |
+| `spec.documents[].trustedRootsConfig` | `object` | no | trustedRootsConfig is a Talos TrustedRootsConfig document; populated when kind is "TrustedRootsConfig". |
+| `spec.documents[].trustedRootsConfig.certificates` | `string` | yes |  |
+| `spec.documents[].trustedRootsConfig.name` | `string` | yes |  |
+| `spec.documents[].udevRulesConfig` | `object` | no | udevRulesConfig is a Talos UdevRulesConfig document; populated when kind is "UdevRulesConfig". |
+| `spec.documents[].udevRulesConfig.rules` | `[]string` | no |  |
 | `spec.documents[].userVolumeConfig` | `object` | no | userVolumeConfig is a Talos UserVolumeConfig document; populated when kind is "UserVolumeConfig". |
 | `spec.documents[].userVolumeConfig.encryption` | `object` | no | Talos: EncryptionSpec |
 | `spec.documents[].userVolumeConfig.encryption.allowDiscards` | `boolean` | no |  |
@@ -536,6 +930,36 @@ Version v1alpha1: has a `status` subresource.
 | `spec.documents[].userVolumeConfig.trim.enabled` | `boolean` | no |  |
 | `spec.documents[].userVolumeConfig.trim.interval` | `string` | no |  |
 | `spec.documents[].userVolumeConfig.volumeType` | `string` | no |  |
+| `spec.documents[].vethConfig` | `object` | no | vethConfig is a Talos VethConfig document; populated when kind is "VethConfig". |
+| `spec.documents[].vethConfig.addresses` | `[]object` | no |  |
+| `spec.documents[].vethConfig.addresses[].address` | `string` | yes |  |
+| `spec.documents[].vethConfig.addresses[].routePriority` | `integer` | no |  |
+| `spec.documents[].vethConfig.mtu` | `integer` | no |  |
+| `spec.documents[].vethConfig.multicast` | `boolean` | no |  |
+| `spec.documents[].vethConfig.name` | `string` | yes |  |
+| `spec.documents[].vethConfig.peer` | `object` | yes | Talos: VethPeerConfig — https://docs.siderolabs.com/talos/v1.14/reference/configuration/network/vethconfig |
+| `spec.documents[].vethConfig.peer.addresses` | `[]object` | no |  |
+| `spec.documents[].vethConfig.peer.addresses[].address` | `string` | yes |  |
+| `spec.documents[].vethConfig.peer.addresses[].routePriority` | `integer` | no |  |
+| `spec.documents[].vethConfig.peer.mtu` | `integer` | no |  |
+| `spec.documents[].vethConfig.peer.multicast` | `boolean` | no |  |
+| `spec.documents[].vethConfig.peer.name` | `string` | yes |  |
+| `spec.documents[].vethConfig.peer.routes` | `[]object` | no |  |
+| `spec.documents[].vethConfig.peer.routes[].destination` | `string` | no |  |
+| `spec.documents[].vethConfig.peer.routes[].gateway` | `string` | no |  |
+| `spec.documents[].vethConfig.peer.routes[].metric` | `integer` | no |  |
+| `spec.documents[].vethConfig.peer.routes[].mtu` | `integer` | no |  |
+| `spec.documents[].vethConfig.peer.routes[].source` | `string` | no |  |
+| `spec.documents[].vethConfig.peer.routes[].table` | `integer` | no |  |
+| `spec.documents[].vethConfig.peer.up` | `boolean` | no |  |
+| `spec.documents[].vethConfig.routes` | `[]object` | no |  |
+| `spec.documents[].vethConfig.routes[].destination` | `string` | no |  |
+| `spec.documents[].vethConfig.routes[].gateway` | `string` | no |  |
+| `spec.documents[].vethConfig.routes[].metric` | `integer` | no |  |
+| `spec.documents[].vethConfig.routes[].mtu` | `integer` | no |  |
+| `spec.documents[].vethConfig.routes[].source` | `string` | no |  |
+| `spec.documents[].vethConfig.routes[].table` | `integer` | no |  |
+| `spec.documents[].vethConfig.up` | `boolean` | no |  |
 | `spec.documents[].volumeConfig` | `object` | no | volumeConfig is a Talos VolumeConfig document (a system volume, e.g. STATE or EPHEMERAL, placed on its own disk); populated when kind is "VolumeConfig". |
 | `spec.documents[].volumeConfig.encryption` | `object` | no | Talos: EncryptionSpec |
 | `spec.documents[].volumeConfig.encryption.allowDiscards` | `boolean` | no |  |
@@ -573,6 +997,30 @@ Version v1alpha1: has a `status` subresource.
 | `spec.documents[].volumeConfig.trim` | `object` | no | Talos: TrimConfig |
 | `spec.documents[].volumeConfig.trim.enabled` | `boolean` | no |  |
 | `spec.documents[].volumeConfig.trim.interval` | `string` | no |  |
+| `spec.documents[].vrfConfig` | `object` | no | vrfConfig is a Talos VRFConfig document; populated when kind is "VRFConfig". |
+| `spec.documents[].vrfConfig.addresses` | `[]object` | no |  |
+| `spec.documents[].vrfConfig.addresses[].address` | `string` | yes |  |
+| `spec.documents[].vrfConfig.addresses[].routePriority` | `integer` | no |  |
+| `spec.documents[].vrfConfig.hardwareAddr` | `string (byte)` | no |  |
+| `spec.documents[].vrfConfig.links` | `[]string` | no |  |
+| `spec.documents[].vrfConfig.mtu` | `integer` | no |  |
+| `spec.documents[].vrfConfig.multicast` | `boolean` | no |  |
+| `spec.documents[].vrfConfig.name` | `string` | yes |  |
+| `spec.documents[].vrfConfig.routes` | `[]object` | no |  |
+| `spec.documents[].vrfConfig.routes[].destination` | `string` | no |  |
+| `spec.documents[].vrfConfig.routes[].gateway` | `string` | no |  |
+| `spec.documents[].vrfConfig.routes[].metric` | `integer` | no |  |
+| `spec.documents[].vrfConfig.routes[].mtu` | `integer` | no |  |
+| `spec.documents[].vrfConfig.routes[].source` | `string` | no |  |
+| `spec.documents[].vrfConfig.routes[].table` | `integer` | no |  |
+| `spec.documents[].vrfConfig.table` | `integer` | yes |  |
+| `spec.documents[].vrfConfig.up` | `boolean` | no |  |
+| `spec.documents[].watchdogTimerConfig` | `object` | no | watchdogTimerConfig is a Talos WatchdogTimerConfig document; populated when kind is "WatchdogTimerConfig". |
+| `spec.documents[].watchdogTimerConfig.device` | `string` | yes |  |
+| `spec.documents[].watchdogTimerConfig.timeout` | `string` | no |  |
+| `spec.documents[].zswapConfig` | `object` | no | zswapConfig is a Talos ZswapConfig document; populated when kind is "ZswapConfig". |
+| `spec.documents[].zswapConfig.maxPoolPercent` | `integer` | no |  |
+| `spec.documents[].zswapConfig.shrinkerEnabled` | `boolean` | no |  |
 | `spec.layer` | `string` | yes | layer is where this patch applies in the bottom-up stack; "system" is absent because Ichor generates that layer itself. Allowed values: `cluster`, `role`, `selector`, `machine`. |
 | `spec.priority` | `integer` | no | priority orders patches within the same layer. Default: `0`. |
 | `spec.target` | `object` | no | target narrows which machines this patch applies to; required for every layer but "cluster", and its kind follows the layer: role -> role, selector -> labelSelector, machine -> machineRef. |

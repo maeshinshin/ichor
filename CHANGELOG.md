@@ -1,5 +1,32 @@
 # Changelog
 
+## v0.2.2 (2026-11-12)
+
+Fixes for `ichor-ui`'s log stream and for `ichor init`. The Talos, Kubernetes
+and Cilium versions a first install gets are the same as in v0.2.1, and no CRD
+field changed.
+
+### ichor-ui
+
+- A `resume_token` that decodes to nothing no longer ends the process. The
+  token is client-supplied, and a request carrying one could stop every
+  `ichor-ui` replica, so anyone running an earlier release should move to this
+  one.
+- A request for node logs is limited to 32 machines and its list is
+  de-duplicated, and the number of log streams the backend serves at once is
+  bounded, the way downloads already were.
+- The kernel log is masked before it is streamed, so a `talos.config` URL in
+  the kernel command line does not reach a reader. The support bundle masks the
+  same line when the kernel writes it without a colon.
+
+### ichor init
+
+- `init` refuses to replace a secrets bundle that already exists for the
+  cluster. The bundle may be the only way to reach a node configured with it,
+  and a rerun used to overwrite it before asking anything.
+- A run that fails before the node is sent anything removes the bundle it just
+  wrote, so the usual first-run failures can simply be run again.
+
 ## v0.2.1 (2026-11-12)
 
 Fixes for `ichor adopt` on a real cluster, clearer command output, and

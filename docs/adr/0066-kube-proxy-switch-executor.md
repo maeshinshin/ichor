@@ -20,12 +20,12 @@ Kubernetes executor, ADR 0024 the hand-over.
   ClusterRoleBinding, all named `kube-proxy` (`k8stemplates/kube-proxy.go`). It is the same manifest path the
   Kubernetes upgrade syncs (ADR 0057).
 - `manifest_apply.go` has no delete (or prune) call at all. Enabling therefore creates the DaemonSet; disabling
-  only stops Talos managing it. Confirmed: the design text and `grep` for Delete/Destroy/Prune in that file.
+  only stops Talos managing it. 
 - At the `v1.14` contract the setting is the `KubeProxyConfig` document's `enabled` field (default mode
   `nftables`), and the legacy `cluster.proxy` block cannot coexist with that document (validation error
   "can't be used with KubeProxyConfig document"). `pkg/typedconfig` has no `KubeProxyConfig` kind, and the Cilium
-  preset's `TalosPatches` emits the legacy block, so a replaced cluster at the v1.14 contract failed to render
-  (reproduced in `pkg/render/kubeproxy_test.go`). Nothing in Talos clears the rules kube-proxy programmed.
+  preset's `TalosPatches` emits the legacy block, so a replaced cluster at the v1.14 contract failed to render.
+  Nothing in Talos clears the rules kube-proxy programmed.
 
 ## Decision 2: what represents the switch
 
@@ -50,7 +50,10 @@ Replacing (`enabled` to `replaced`):
    touched and no status changes.
 2. `status.cni.kubeProxy` is set to replaced; each machine is switched (`enabled: false`), control planes first.
 3. After every machine of the operation is done: delete the DaemonSet, ServiceAccount, ClusterRoleBinding and
-   the `kube-proxy`-named ConfigMaps (through the admin kubeconfig, like ADR 0057), then confirm the DaemonSet is gone.
+      every `kube-proxy` or `kube-proxy-<checksum>` ConfigMap, by name (through the admin kubeconfig, like ADR 0057),
+   then confirm the DaemonSet is gone. This cleanup always runs through a control plane's Talos client, because an
+   admin kubeconfig is only available on control planes and the last machine to finish in a cluster with workers is
+   a worker.
    A control plane excluded by the hold annotation fails the step instead (it would re-apply what is deleted).
 
 Enabling (`replaced` to `enabled`):
@@ -76,7 +79,7 @@ exists with every pod updated and ready. Each wait is `VerifyingNewSide` (30 min
 fails and the operation pauses (ADR 0026), never retried automatically. A preset whose live state Ichor cannot
 read (`custom`) is refused before anything changes.
 
-shortcut: no probe of an actual Service connection from a pod, and no per-agent `cilium status`; the agents
+Deferred: no probe of an actual Service connection from a pod, and no per-agent `cilium status`; the agents
 rolling out on the changed ConfigMap is the proxy for it. A synthetic probe needs a workload Ichor does not run.
 
 ## Decision 6: node rules
@@ -84,7 +87,7 @@ rolling out on the changed ConfigMap is the proxy for it. A synthetic probe need
 Left alone. kube-proxy's rules (nftables by default) remain until the node reboots, which clears them on Talos
 (ephemeral); Cilium's documented manual cleanup is `iptables-save | grep -v KUBE | iptables-restore` on each node,
 which Talos has no shell for. `kube-proxy --cleanup` would need a privileged per-node Job. Deferred
-(`shortcut:` in `RemoveKubeProxy`): the stale rules are bypassed by Cilium's socket load balancing.
+(noted in `RemoveKubeProxy`): the stale rules are bypassed by Cilium's socket load balancing.
 Amended: after the removal the executor connects to the `kubernetes` Service's cluster IP from the controller
 (`KUBERNETES_SERVICE_HOST`) and reports done only once that answers; until then it waits under the verification clock
 (`VerifyingNewSide`, 30 minutes) with a message that says the old rules stay on each node until it reboots.
@@ -92,48 +95,23 @@ Amended: after the removal the executor connects to the `kubernetes` Service's c
 ## Consequences
 
 - Existing replaced clusters at the v1.14 contract render again; the legacy block in their patches is ignored.
-- Applying `KubeProxyConfig.enabled` without a reboot is assumed from the controller reading the config live
-  (as ADR 0057 does for images). Confirmed on hardware for the config apply (no reboot), but not for the
-  DaemonSet appearing: see the amendment at the end.
+- Applying `KubeProxyConfig.enabled` takes effect without a reboot, because the controller reads the config live
+  (as ADR 0057 does for images). The DaemonSet does not reappear by itself when enabling: see the 2026-10-28
+  amendment.
 - The operation is created by hand (or by the UI/CLI); the admission guard (ADR 0013) still needs the
-  annotation on the spec change.
-
-## E2E observation (2026-10-26, through `ichor cni kube-proxy replaced`)
-
-Same cluster as ADR 0057's observation (Cilium 1.18.0 with kube-proxy, `handover: disabled`, legacy
-`cluster.proxy` form because the contract was v1.13, so the v1.14 `KubeProxyConfig` document path was not run).
-
-- Confirmation text: "Switch kube-proxy on cluster ... from enabled to replaced. Configuration is applied without a
-  reboot; the kubelet and control plane components restart on each machine. 4 machine(s) ...". The annotation was
-  not left on the TalosCluster afterwards.
-- The operation sat in `AwaitingCNIChange` ("live kube-proxy-replacement is false ... set kubeProxyReplacement: true,
-  with k8sServiceHost: localhost and the KubePrism port ...") and touched no node until Cilium was changed. I applied
-  the chart's `kubeProxyReplacement: true` values by server-side apply (the stand-in for editing the inline entry,
-  as there was none here). Within about 15 s the operation reported "the Cilium agents are rolling out" and then
-  started on the first control plane.
-- A cluster with a control plane still on the old Kubernetes version failed the step with "unrelated pending
-  configuration change at cluster.apiServer.image ... converge it first", as designed (my cluster was half
-  upgraded; see ADR 0057).
-- After converging: all four machines switched (Talos `cluster.proxy.disabled: true` on every node, 4 s for the
-  three control planes already applied), `cilium-config` `kube-proxy-replacement: true`.
-- **Bug: the operation ends `Paused` on the worker**, the last machine, with `removing kube-proxy: fetching an admin
-  kubeconfig from the Talos API: rpc error: code = Unimplemented desc = kubeconfig is only available on control
-  plane nodes`. The post-switch deletion of the DaemonSet and its objects is run through whichever machine finishes
-  last; a cluster with workers always ends on a worker. It needs to use a control plane for the admin kubeconfig.
-  I removed the DaemonSet and ServiceAccount by hand and then checked: from a pod, the cluster DNS ClusterIP
-  (`10.249.0.10`) answered and a TCP/TLS connection to the `kubernetes` Service ClusterIP was established.
-- Not observed: `replaced` to `enabled`; the "values in Git" wait after a hand-over.
-- Fixed: the removal goes through a control plane's Talos client when the last machine is a worker, and deletes the DaemonSet, ServiceAccount, ClusterRoleBinding and every `kube-proxy` or `kube-proxy-<checksum>` ConfigMap by name.
+  annotation on the spec change. `ichor cni kube-proxy <mode>` confirms before starting: it states that the
+  configuration is applied without a reboot while the kubelet and control plane components restart on each machine,
+  and the number of machines.
 
 ## Amendment: one-shot, Git-friendly confirmation
 
-On an Argo CD-tracked cluster the Git change that switches `spec.cni.kubeProxy` was rejected by the admission policy (ADR 0013) because the confirmation annotation was missing, so the tester committed the annotation into Git where it stayed as a standing consent. The annotation value now names the target mode (`replaced` or `enabled`) and the policy admits a switch only when the value equals the new `spec.cni.kubeProxy`. A leftover annotation therefore cannot admit a different later switch, and it is safe to commit for the one switch. The server sets it to the target for the one write it makes and removes it again (it used to write an actor name). For a tracked cluster `ichor cni kube-proxy <mode>` prints the exact YAML to commit (spec field plus annotation) and says to run the same command again, which finds the spec already changed and starts the operation; the old text said "start the operation without a target", which was wrong.
+On an Argo CD-tracked cluster the Git change that switches `spec.cni.kubeProxy` was rejected by the admission policy (ADR 0013) because the confirmation annotation was missing, so the annotation had to be committed into Git, where it stayed as a standing consent. The annotation value now names the target mode (`replaced` or `enabled`) and the policy admits a switch only when the value equals the new `spec.cni.kubeProxy`. A leftover annotation therefore cannot admit a different later switch, and it is safe to commit for the one switch. The server sets it to the target for the one write it makes and removes it again (it used to write an actor name). For a tracked cluster `ichor cni kube-proxy <mode>` prints the exact YAML to commit (spec field plus annotation) and says to run the same command again, which finds the spec already changed and starts the operation; the old text said "start the operation without a target", which was wrong.
 
 ## Amendment (2026-10-28): Talos never recreates kube-proxy after Ichor removed it; Ichor restores it when enabling
 
-Observed on hardware, `replaced` to `enabled`: the configuration applied without a reboot
-(`cluster.proxy.disabled: false`), but the kube-proxy DaemonSet was never created and the operation sat in
-`VerifyingNewSide` ("the kube-proxy DaemonSet has not been created yet") for over 19 minutes. The
+When enabling (`replaced` to `enabled`), the configuration applies without a reboot
+(`cluster.proxy.disabled: false`), but the kube-proxy DaemonSet is never created and the operation sits in
+`VerifyingNewSide` ("the kube-proxy DaemonSet has not been created yet"). The
 `talos-bootstrap-manifests-inventory` ConfigMap in kube-system still listed the old kube-proxy objects.
 
 Cause, in Talos v1.14.3 `internal/app/machined/pkg/controllers/k8s/manifest_apply.go`
@@ -183,9 +161,8 @@ Guessing from the machine's applied hash would make the render depend on node hi
 
 - The signal that a switch is pending, in either direction, is the consent annotation
   (`ichor.maesh.dev/confirm-kube-proxy-switch`) naming the spec's mode while `status.cni.kubeProxy` is unset or
-  differs. Spec alone cannot tell a switch from a patch-made `cluster.proxy.disabled` change, and a first version that
-  keyed on "spec says replaced, no status" missed the reverse (a cluster created `replaced`, edited spec-first to
-  `enabled`). The admission rule already requires the annotation for any switch, so Git-first commits carry it.
+  differs. Spec alone cannot tell a switch from a patch-made `cluster.proxy.disabled` change, and keying on "spec says
+  replaced, no status" would miss the reverse (a cluster created `replaced`, edited spec-first to `enabled`). The admission rule already requires the annotation for any switch, so Git-first commits carry it.
 - While that holds, a TalosMachine whose only reboot-class paths are
   `KubeProxyConfig*` / `cluster.proxy*` (and no API server restart on a control plane) reports
   `Ready=False/KubeProxySwitchPending`: "run `ichor cni kube-proxy replaced` (or the UI's kube-proxy switch) to apply
@@ -200,9 +177,9 @@ Guessing from the machine's applied hash would make the render depend on node hi
 
 ## Amendment (2026-10-29): only the operation changes Cilium's kube-proxy mode; the consent annotation is removed after the operation exists
 
-Observed on hardware (replaced, through the Cilium Helm Job): writing `spec.cni.kubeProxy=replaced` alone made
+Writing `spec.cni.kubeProxy=replaced` alone made
 Cilium run `kube-proxy-replacement: true` while kube-proxy still ran, with no operation and no guard. Cause: the
-hand-over reconciler (ADR 0099 unit 8) hashed the effective values with `spec.cni.kubeProxy`, which derive
+hand-over reconciler (ADR 0099) hashed the effective values with `spec.cni.kubeProxy`, which derive
 `kubeProxyReplacement` and `k8sService*`, saw a new hash and ran the `ichor-cni` Job at once. The operation then
 found nothing to wait for and completed in about a second.
 

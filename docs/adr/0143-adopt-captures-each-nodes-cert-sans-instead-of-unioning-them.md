@@ -6,9 +6,9 @@ Decided: `ichor adopt` no longer takes the union of the nodes' certSANs. `spec.c
 
 ## Context
 
-A real VM run of ADR 0141 showed its cost: `machine.certSANs` is reboot-required, so every control plane went Ready=False with `RebootRequired`, adopt's release step timed out after 10 minutes ("did not become Ready within 10m0s after its hold was released; the machines after it stay held"), and the operator had to run `ichor config apply` once per machine and adopt again. Adopting a three-control-plane cluster must not reboot it.
+ADR 0141's union makes every node's `machine.certSANs` differ from what the node actually has, and `machine.certSANs` is reboot-required. Adopt would therefore leave every control plane `RebootRequired` (Ready=False) and its release step would wait on nodes that only a reboot, applied machine by machine, can make Ready. Adopting a three-control-plane cluster must not reboot it.
 
-The first version took the control planes' shared kube-apiserver list, else the shared `machine.certSANs`. On a real cluster that set `localhost` in `spec.certSANs`, which the render then added to `cluster.apiServer.certSANs` where the node had none, and the zero-drift check then reported the interfaces captured in the same document as unrepresentable too.
+Taking the control planes' shared kube-apiserver list, else the shared `machine.certSANs`, as `spec.certSANs` fails the other way: the render feeds `spec.certSANs` into every node's `machine.certSANs` and kube-apiserver SANs, so a node whose generated config has `machine.certSANs: [localhost]` and no `cluster.apiServer.certSANs` would pull `localhost` into `spec.certSANs`. The render would then add it to `cluster.apiServer.certSANs` where the node has none, a difference no patch can remove.
 
 ## Decisions
 

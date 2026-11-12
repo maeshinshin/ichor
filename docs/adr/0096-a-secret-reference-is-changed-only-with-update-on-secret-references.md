@@ -8,9 +8,9 @@ Decided: any create or update that sets or changes a field naming a Secret needs
 
 ADR 0094 gives `ichor-operator` `update` and `patch` on `talosclusters` and `talosmachines` and gates `spec.authentication` alone. But several spec fields name a Secret that the controller (or the UI backend) then reads with its own, broader privileges, in its own namespace. An operator who may edit a cluster could repoint such a field at any Secret in that namespace and make Ichor use it: for a registry's `authSecretRef` the controller copies the Secret's password-shaped keys into the node's machine config, which the operator can then read back. Editing the object was meant to be the operator's right; choosing which Secret Ichor reads was not.
 
-## The audit
+## The fields
 
-`rg -n "SecretRef|secretRef|SecretKeyRef" api/` finds four fields. Nothing on `TalosMachine`, `TalosConfigPatch`, `TalosStorage`, `TalosOperation`, `IchorUser` or `IchorInstallation` names a Secret.
+Four fields name a Secret. Nothing on `TalosMachine`, `TalosConfigPatch`, `TalosStorage`, `TalosOperation`, `IchorUser` or `IchorInstallation` names a Secret.
 
 | Field | Read by | Why it is sensitive |
 | --- | --- | --- |
@@ -27,7 +27,7 @@ ADR 0094 gives `ichor-operator` `update` and `patch` on `talosclusters` and `tal
 
 **Who is exempt.** The controller's identity and the GitOps engines (`ExemptUsers`), exactly as for the authentication gate: the engines apply what a person reviewed in Git, and the controller never changes `spec`.
 
-**Roles.** `ichor-admin` gets `update` on `talosclusters/secret-references` and `talosetcdbackups/secret-references` (kustomize role and chart template, kept equal by the role test). `ichor-operator` does not. The ichor-ui ServiceAccount does not: with OIDC on the backend writes as the user; with it off the backend's writes (upgrades, machine approval, patches) leave the references as they were, and the webhook does not ask for an unchanged value. A cluster created by `ichor init` sets `secretsRef`, so it needs an administrator, as creating the bundle's Secret already does.
+**Roles.** `ichor-admin` gets `update` on `talosclusters/secret-references` and `talosetcdbackups/secret-references` (kustomize role and chart template). `ichor-operator` does not. The ichor-ui ServiceAccount does not: with OIDC on the backend writes as the user; with it off the backend's writes (upgrades, machine approval, patches) leave the references as they were, and the webhook does not ask for an unchanged value. A cluster created by `ichor init` sets `secretsRef`, so it needs an administrator, as creating the bundle's Secret already does.
 
 ## Consequences
 

@@ -6,7 +6,7 @@ Decided: `ichor` prints for a person unless `-o yaml` or `-o json` is given: a t
 
 ## Context
 
-Every command dumped YAML by default, including the protobuf enum names (`MACHINE_APPROVAL_STATE_APPROVED`). `ichor init` already shows its steps as a short list with glyphs and a spinner (progress.go); the rest of the CLI should read the same way. Other agents convert the remaining commands, so the foundation has to be easy to reuse.
+Every command dumped YAML by default, including the protobuf enum names (`MACHINE_APPROVAL_STATE_APPROVED`). `ichor init` already shows its steps as a short list with glyphs and a spinner (progress.go); the rest of the CLI should read the same way. The shared helpers have to be easy to reuse for every command.
 
 ## Decision
 

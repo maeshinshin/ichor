@@ -19,7 +19,7 @@ opens a PR, with nothing upstream deciding that it should.
 This is the same shape of problem ADR 0033 solved for `strongIdentity` and
 `loadBundle`: a rule two packages need was a copy away from drifting, except
 here there was no second copy yet -- the second caller didn't exist. The
-job was to make the rule reachable before a second copy could appear, not
+aim is to make the rule reachable before a second copy can appear, not
 to un-drift two already-diverging ones.
 
 ## Question 1: is a field-manager lookup enough for Flux when it gates a write?
@@ -27,9 +27,9 @@ to un-drift two already-diverging ones.
 `isTracked`'s old doc comment justified checking one field manager name,
 `flux-client-side-apply`, over listing Kustomizations, because the function
 only fed a warning. Used as a write gate, a miss means Ichor writes directly
-to a CR Flux owns, the fight PR mode exists to prevent. Two things were
-checked against primary sources (fluxcd.io docs and kustomize-controller
-source, 2026-10-26).
+to a CR Flux owns, the fight PR mode exists to prevent. Two facts
+from primary sources (fluxcd.io docs and kustomize-controller source) bear
+on that.
 
 **`flux-client-side-apply` is not a Flux signal.** fluxcd.io's FAQ and
 Kustomization page document it as the field manager name a *user* must give
@@ -42,8 +42,7 @@ controller name is configurable, so `kustomize-controller` is only the
 default. A deployment that changes `--field-manager` never shows that name,
 and Ichor would write directly to Flux-managed CRs. That is the reason
 architecture.md has Ichor read `argocd-cm` instead of guessing an Argo CD
-marker, and it applies equally here. (An earlier draft of this ADR concluded
-the lookup was enough because the name is fixed; that was wrong.)
+marker, and it applies equally here.
 
 Flux also puts no label or annotation on what it applies; ownership is the
 Kustomization's `.status.inventory`. So the authoritative check is the scan.
@@ -72,8 +71,7 @@ forbidden) is returned as an error: for a gate, "cannot tell" must not become
 when nothing cheaper matched. `gitops export` already turns an `IsTracked`
 error into a printed warning and continues, so a failed scan degrades it
 gracefully, and a second, weaker function would be a second rule that can
-drift (the problem ADR 0033 fixed). `internal/cli`'s existing tests are
-unchanged in behavior.
+drift (the problem ADR 0033 fixed).
 
 Not covered: `HelmRelease` ownership. Only the first-signal manager name sees
 it; whether a HelmRelease exposes an inventory to scan was not verified.
@@ -98,7 +96,7 @@ scope true.
 
 architecture.md already answers this -- "Without a repository connection
 the CR is read-only with an export button" -- so this is not a new design
-decision, only this unit's confirmation that `Decide` implements that
+decision: `Decide` implements that
 sentence exactly rather than guessing at a nearby behavior (warn-but-write,
 or refuse with an error): `ModeReadOnly`, the same outcome `Decide` also
 returns for a Flux-tracked CR (see below), carries no write and no PR.
@@ -110,10 +108,8 @@ returns for a Flux-tracked CR (see below), carries no write and no PR.
 `internal/cli/gitops_tracking.go` keeps `isTracked` and its six
 package-local constants as one-line aliases/delegation to the new
 package -- exactly ADR 0033's `bundleSecretKey` pattern -- so
-`gitops_tracking_test.go` and `gitops_export_test.go` needed no edits at
-all: both reference the lowercase symbols by name, not by literal value,
-so they are unaffected (`TestIsTracked_FluxManagedFieldsEntry` sets
-`Manager: fluxFieldManager`, which aliases `kustomize-controller`).
+code and tests that reference the lowercase symbols by name are
+unaffected (`fluxFieldManager` aliases `kustomize-controller`).
 
 `pkg/prmode.Decide` (`decide.go`) is new:
 
@@ -139,7 +135,7 @@ architecture.md's sentence literally; every other case -- not tracked is
 the one exception, mapped to `ModeDirectWrite` -- is `ModeReadOnly`,
 including `"Flux"` regardless of connection state: ADR 0037 already scoped
 PR mode to Argo CD (`ClassifySource` takes an Argo CD Application directly;
-"wiring ... the Flux equivalent are both left to the caller/a later unit"),
+"wiring ... the Flux equivalent are both left to the caller"),
 so a Flux-tracked CR has no `SubmitPR` path to route to yet, and
 `ModeReadOnly` is what is left once `ModeDirectWrite` and `ModeOpenPR` are
 ruled out -- not a new special case, the fallthrough of the two the design
@@ -147,19 +143,13 @@ already named.
 
 ## Consequences
 
-- `internal/cli`'s behavior and tests are unchanged byte-for-byte in
-  `gitops_tracking_test.go`/`gitops_export_test.go`; `goconst`'s
-  package-scoped counting meant two new string literals
-  (`"kustomize-controller"`, `"FieldsV1"`) needed pulling into named
-  constants inside `pkg/gitopstracking` itself once its own test file
-  repeated them three times -- a `pkg/gitopstracking`-local concern, not a
-  cross-package one.
+- `internal/cli`'s behavior is unchanged.
 - Not built here, same as ADR 0038/0037 left them: strict mode, override,
   the UI GitOps page, computing an impact preview, and wiring "CR → owning
   Application" for the Flux case. `pkg/prmode.Decide` and
   `pkg/gitopstracking.IsTracked` are both now importable from
   `internal/uiapi`, but nothing in `internal/uiapi` calls either yet --
-  that caller is a later unit's job.
+  that caller is added separately (ADR 0051).
 - `pkg/gitopstracking` has no Argo CD or Flux Go module dependency: the Flux
   inventory scan uses `unstructured`, the Argo CD branch a `corev1.ConfigMap`
   read.

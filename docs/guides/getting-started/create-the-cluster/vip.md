@@ -26,10 +26,6 @@ the kubeconfig use. Do not use the VIP as a Talos API endpoint: `talosctl` and
 [Talos production notes](https://docs.siderolabs.com/talos/v1.14/getting-started/prodnotes)
 describe the requirements for the cluster endpoint.
 
-![One address moves between three control planes. Control plane 1 holds the VIP and answers for it; when it is gone, control plane 2 takes the address over, and the clients still use the same address.](../../../images/create-the-cluster-vip.light.drawio.svg)
-
-*The VIP is one address. The control plane that holds it answers for it, and when that control plane is gone another one takes it over.*
-
 ## Interactive
 
 Run `ichor init` with the settings you know. On a terminal, init asks for each

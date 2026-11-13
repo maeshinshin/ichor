@@ -238,7 +238,10 @@ func clusterFromNodes(name, namespace, talosVersion string, nodes []*adoptNode) 
 	endpointType := "dns"
 
 	if addr, err := netip.ParseAddr(f.EndpointHost); err == nil {
-		endpointType = endpointVIP
+		// An address that is no node's own is something in front of the nodes, a hardware load balancer
+		// or a VIP the cluster runs itself. It is not called a vip: that type means Ichor puts the address on
+		// the control planes (pkg/render), and adopt must never claim an address it did not configure.
+		endpointType = endpointLoadBalancer
 
 		if slices.ContainsFunc(nodes, func(n *adoptNode) bool { return n.M.Spec.Endpoint == addr.String() }) {
 			endpointType = endpointNode
@@ -360,8 +363,9 @@ func readNodes(nodes []*adoptNode) []*adoptNode {
 }
 
 const (
-	endpointVIP  = "vip"
-	endpointNode = "node"
+	endpointVIP          = "vip"
+	endpointLoadBalancer = "loadBalancer"
+	endpointNode         = "node"
 )
 
 func kubernetesVersionOr(v string) string {

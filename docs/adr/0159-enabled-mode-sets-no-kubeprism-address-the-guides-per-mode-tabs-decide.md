@@ -25,4 +25,4 @@ The two reference pages that described KubePrism as used in every mode now descr
 
 - With kube-proxy enabled, Cilium's API address is the chart's default, as the guide leaves it. Setting these keys in `spec.cni.cilium.values` is refused in both modes, so a change here needs the guide to change first.
 - If the Talos guide later adds KubePrism to its kube-proxy-enabled tabs, or the KubePrism page's general sentence is qualified otherwise, this record is revisited and the code follows the guide.
-- The values diagram in `docs/images/cni-values.light.drawio.svg` still labels the KubePrism address as applied to every owned key. It is not yet corrected.
+- The values diagram in `docs/images/cni-values.light.drawio.svg` labels the KubePrism address as set only when kube-proxy is replaced, as this record decides.

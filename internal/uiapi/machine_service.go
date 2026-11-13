@@ -267,6 +267,10 @@ func (s *Server) ApproveMachine(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
+	if err := s.requireVIPLink(ctx, m, role, network); err != nil {
+		return nil, err
+	}
+
 	// A rejected machine can be approved: this is how a rejection is undone. The only state ApproveMachine refuses to
 	// touch is
 	// already-approved, checked above.
@@ -300,6 +304,65 @@ func (s *Server) ApproveMachine(
 	return connect.NewResponse(&pb.ApproveMachineResponse{
 		Machine: machineToPB(m), Audit: audit, Warnings: m.DiscoveryWarnings(),
 	}), nil
+}
+
+// requireVIPLink refuses to approve a control plane without a primary link into a cluster whose VIP Ichor
+// holds. The VIP is announced on the link spec.network gives a machine (pkg/render), so a control plane
+// without one never joins the election and the first node keeps the address for good: a VIP that cannot fail
+// over, which looks like high availability and is not. The VIP counts as Ichor's when the endpoint type is vip
+// and another control plane already has a spec.network; a vip adopted from a hardware load balancer, or one the
+// cluster runs itself, has none, so approving into it is left alone.
+func (s *Server) requireVIPLink(
+	ctx context.Context, m *ichorv1alpha1.TalosMachine, role pb.MachineRole, network *ichorv1alpha1.TalosMachineNetwork,
+) error {
+	if role != pb.MachineRole_MACHINE_ROLE_CONTROL_PLANE || network != nil {
+		return nil
+	}
+
+	var cluster ichorv1alpha1.TalosCluster
+	if err := s.Get(ctx, types.NamespacedName{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name}, &cluster); err != nil ||
+		cluster.Spec.Endpoint.Type != "vip" {
+		return nil
+	}
+
+	var machines ichorv1alpha1.TalosMachineList
+	if err := s.List(ctx, &machines, client.InNamespace(m.Namespace)); err != nil {
+		return connect.NewError(connect.CodeInternal, err)
+	}
+
+	holds := false
+
+	for i := range machines.Items {
+		o := &machines.Items[i]
+		holds = holds || (o.Name != m.Name && o.Spec.ClusterRef.Name == cluster.Name &&
+			o.Spec.Role == opRoleControlPlane && o.Spec.IsApproved() && o.Spec.Network != nil)
+	}
+
+	if !holds {
+		return nil
+	}
+
+	msg := fmt.Sprintf("node %q is a control plane of cluster %q, whose endpoint %s is a VIP Ichor holds on each control plane's "+
+		"primary link; without one this node never joins the VIP and the first node keeps it for good. Give its primary link's "+
+		"permanent MAC (`ichor approve node --nic MAC`, the network of the approval form)",
+		m.Name, cluster.Name, cluster.Spec.Endpoint.Address)
+
+	if len(m.Status.DiscoveredLinks) == 0 {
+		return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("%s", msg))
+	}
+
+	var links []string
+
+	for _, l := range m.Status.DiscoveredLinks {
+		state := "down"
+		if l.LinkUp {
+			state = "up"
+		}
+
+		links = append(links, fmt.Sprintf("%s (%s, %s)", l.PermanentMAC, l.Name, state))
+	}
+
+	return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("%s; its links: %s", msg, strings.Join(links, ", ")))
 }
 
 // approveRightHint says what to do when the TalosMachine webhook refused an approval for want of the

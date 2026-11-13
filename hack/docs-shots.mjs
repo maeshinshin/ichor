@@ -159,9 +159,34 @@ try {
   }
   const click = (selector) => ev(`(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (e) e.click(); return !!e })()`)
   // A real mouse click (or just a move) at the middle of the element `expr` evaluates to; Radix menus open on pointerdown.
+  // The point is taken only once the element has stood still for 10 frames and is what the browser hit-tests at that point:
+  // a banner that grows after load, or a menu that is still opening or closing, moves things, and a click at the old
+  // position then lands on another element (the previous menu item, or nothing). An element that never settles or stays
+  // covered is reported, with what covers it, and not clicked.
   const mouse = async (expr, type = 'click') => {
-    const p = await ev(`(() => { const e = ${expr}; if (!e) return null; e.scrollIntoView({ block: 'center' }); const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 } })()`)
+    const p = await ev(`new Promise((resolve) => {
+      const e = ${expr}
+      if (!e) return resolve(null)
+      e.scrollIntoView({ block: 'center' })
+      const at = () => { const r = e.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2, w: r.width, h: r.height } }
+      let last = at(), still = 0, frames = 0
+      const tick = () => {
+        const now = at()
+        still = now.x === last.x && now.y === last.y && now.w === last.w && now.h === last.h ? still + 1 : 0
+        last = now
+        const top = document.elementFromPoint(now.x, now.y)
+        const hit = !!top && e.isConnected && (e === top || e.contains(top))
+        if (still >= 10 && hit) return resolve({ x: now.x, y: now.y })
+        if (++frames > 180) return resolve({ covered: top ? top.tagName + (top.getAttribute('aria-label') ? '[' + top.getAttribute('aria-label') + ']' : '') : 'nothing' })
+        requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    })`)
     if (!p) return false
+    if (p.covered) {
+      console.log(`docs-shots: not clicking ${expr.slice(0, 80)}: it never stood still and uncovered, the point is on ${p.covered}`)
+      return false
+    }
     await s('Input.dispatchMouseEvent', { type: 'mouseMoved', ...p })
     if (type === 'click') for (const t of ['mousePressed', 'mouseReleased']) await s('Input.dispatchMouseEvent', { type: t, ...p, button: 'left', buttons: t === 'mousePressed' ? 1 : 0, clickCount: 1 })
     return true
@@ -209,7 +234,10 @@ try {
       check((await (await fetch(origin + base + 'llms.txt')).text()).includes('/' + mdOf(at.rotateKeys) + ')'), `${tag}: llms.txt links the page's .md`)
       const item = (text) => `[...document.querySelectorAll('[data-slot=dropdown-menu-item]')].find((e) => e.textContent.includes(${JSON.stringify(text)}))`
       const more = `document.querySelector('button[aria-label="More page actions"]')`
-      const menuOpen = () => until(`document.querySelectorAll('[data-slot=dropdown-menu-item]').length >= 3`, 'the Copy page menu', 3000)
+      // Open means the Radix content is in its open state: a menu that is closing still has its items in the page.
+      const menuContent = `document.querySelector('[data-slot=dropdown-menu-content]')`
+      const menuOpen = () => until(`${menuContent}?.dataset.state === 'open' && document.querySelectorAll('[data-slot=dropdown-menu-item]').length >= 3`, 'the Copy page menu', 3000)
+      const menuClosed = () => until(`!${menuContent}`, 'the Copy page menu to close', 3000)
       check(await ev(`!![...document.querySelectorAll('article button')].find((b) => b.textContent.trim() === 'Copy page')`), `${tag}: the Copy page button exists`)
       await mouse(more)
       check(await menuOpen(), `${tag}: the Copy page menu opens`)
@@ -220,16 +248,19 @@ try {
       check(await ev(`!!document.querySelector('[data-sonner-toast]')`), `${tag}: a toast confirms the copy`)
       const copied = await clipboard()
       check(copied.startsWith(`# ${title}`) && copied === mdText, `${tag}: Copy as Markdown puts the page's Markdown (starting "# ${title}") on the clipboard`)
+      await menuClosed()
       await mouse(more)
-      await menuOpen()
+      check(await menuOpen(), `${tag}: the Copy page menu opens again`)
       check(await ev(`${item('View as Markdown')}?.getAttribute('href') === '${base}${mdOf(at.rotateKeys)}'`), `${tag}: View as Markdown links to the .md`)
       check(!(await ev(`!!${item('Share')}`)), `${tag}: no Share item without the Web Share API`)
       const canonical = (process.env.DOCS_SITE ?? 'https://ichor.maesh.dev') + base + at.rotateKeys
+      // Record what the click lands on, so a failure says whether it hit another item, nothing, or the right item and no copy followed.
+      await ev(`window.__clicks = []; document.addEventListener('click', (e) => window.__clicks.push((e.target.closest('[data-slot=dropdown-menu-item]') ?? e.target).textContent.trim().slice(0, 30) || e.target.tagName), { capture: true })`)
       const clicked = await mouse(item('Copy link'))
       const linked = await clipboardBecomes(canonical)
-      check(linked === canonical, `${tag}: Copy link copies the canonical URL (item clicked: ${clicked}, clipboard: ${JSON.stringify(linked.slice(0, 80))})`)
+      check(linked === canonical, `${tag}: Copy link copies the canonical URL (sent: ${clicked}, click landed on: ${await ev(`JSON.stringify(window.__clicks)`)}, clipboard: ${JSON.stringify(linked.slice(0, 80))})`)
       // Closing the menu gives the focus back to its trigger; let that finish before the heading link below takes the focus.
-      await until(`document.querySelectorAll('[data-slot=dropdown-menu-item]').length === 0`, 'the Copy page menu to close', 3000)
+      await menuClosed()
 
       // Heading links: hidden until hover or focus, copy the URL with the anchor and move the address bar.
       const anchor = `document.querySelector('article h2 a[data-heading-link]')`

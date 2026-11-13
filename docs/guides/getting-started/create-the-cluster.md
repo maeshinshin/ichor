@@ -12,12 +12,12 @@ is hard to change later. Each pattern below is one endpoint type.
 
 | Pattern | Endpoint type | Use it when |
 | --- | --- | --- |
-| [Virtual IP](create-the-cluster/vip.md) | `vip` | the default. You have a free address on the nodes' network, and the control planes share it. |
-| [Load balancer](create-the-cluster/load-balancer.md) | `loadBalancer` | a load balancer you run already sits in front of the control planes. |
-| [DNS name](create-the-cluster/dns.md) | `dns` | a name you control already points at the control planes. |
-| [Node address](create-the-cluster/node.md) | `node` | the cluster is one node, and that node's own address is the endpoint. |
+| [Virtual IP](create-the-cluster/vip.md) | `vip` | the default. The control planes share one layer-2 segment with no router between them. |
+| [Load balancer](create-the-cluster/load-balancer.md) | `loadBalancer` | there is no shared layer-2 segment, or you are in a cloud. You run a TCP load balancer in front of the control planes. |
+| [DNS name](create-the-cluster/dns.md) | `dns` | you can create DNS records for the control planes, for example on a home network with a local DNS server. |
+| [Node address](create-the-cluster/node.md) | `node` | a lab or a single control plane. The node's own address is the endpoint. |
 
-Use the virtual IP unless one of the other rows fits your network better. Each
+Use the virtual IP unless your network rules it out. Ichor treats the three address-based types the same way and creates nothing behind them: with a load balancer or a DNS name, running what answers on that name is yours. Each
 pattern page shows the same three ways to create the cluster: at a prompt, from
 an `init.yaml` file, and with flags. The settings that every pattern shares
 (the topology preset, the subnets, the secrets bundle's passphrase, the

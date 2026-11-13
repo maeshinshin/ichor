@@ -9,6 +9,10 @@ each of them. The pattern page gives the endpoint and the first node's settings.
 
 ## The shape of the cluster
 
+A fresh install runs Talos v1.14.5 with Kubernetes v1.36.6, under
+Talos config contract `v1.14`. `ichor init` refuses other versions on a fresh
+install.
+
 `--preset` is `standard` by default: three control planes, with workers added
 later and tainted. `single` is one schedulable node, `compact-ha` is three
 schedulable control planes, and `large` is five control planes with workers

@@ -8,10 +8,11 @@ The endpoint is the first node's own address. Use this pattern for a cluster of
 one node, such as a lab or a single machine. It is the simplest pattern and
 needs no second address on the network.
 
-A node endpoint is one control plane's API server. With several control planes
-behind it, the upgrade checks warn that the endpoint is a single API server, so
-prefer the [Virtual IP](vip.md) pattern for a cluster that has more than one
-control plane.
+Nothing has to be run for this pattern, but one control plane's API server
+serves every client. During an upgrade that replaces that node's API server, the
+Kubernetes API is unreachable for everyone, and the upgrade warns about it. For
+a cluster with more than one control plane, prefer the [Virtual IP](vip.md)
+pattern.
 
 ## Interactive
 

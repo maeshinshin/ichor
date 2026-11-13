@@ -4,9 +4,20 @@ sidebar_order: 3
 
 # DNS name
 
-Use this pattern when a name you control already points at the control planes.
-The endpoint is that hostname. Ichor does not create or manage the DNS record;
-the name is yours to keep pointing at the control planes.
+Use this pattern when a name you control can point at the control planes, and
+you can create records for it. A home network with a local DNS server is the
+usual case. The endpoint is the name, and it must be a name, not an IP address.
+
+Ichor treats this type the same as a VIP or a load balancer: it renders the API
+address as `https://NAME:6443`, and nothing more. It does not create the DNS
+records, and DNS does no health checking, so a record that points at a dead
+control plane stays in place until you change it.
+
+You create the records. The usual setup is one `A` (or `AAAA`) record per control
+plane, all with the same name, so clients spread across the control planes. A
+record can also point at a VIP or a load balancer instead. The
+[Talos production notes](https://docs.siderolabs.com/talos/v1.14/getting-started/prodnotes)
+describe the setup.
 
 Init prints a warning for this type that a VIP is recommended. The reason is on
 the [Virtual IP](vip.md) page: changing the endpoint later re-issues every
@@ -50,7 +61,8 @@ ichor init --cluster demo \
 
 - `--cluster`, `--node-endpoint`, `--endpoint-address` and `--install-disk` are
   required.
-- `--endpoint-address` is a hostname for this type, not an IP address.
+- `--endpoint-address` is the name, and the records for it must exist before
+  the cluster is reached through it.
 - `--node-endpoint` is still the first node's own Talos API (`host:port`).
 - If the first node needs a static address or a named link, the network flags
   (`--nic`, `--address`, `--gateway`, `--dns`, `--vlan`) are the same as on the

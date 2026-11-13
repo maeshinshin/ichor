@@ -4,10 +4,28 @@ sidebar_order: 2
 
 # Load balancer
 
-Use this pattern when a load balancer you already run sits in front of the
-control planes and gives the cluster its address. The endpoint is that load
-balancer's hostname. Ichor does not set up the load balancer or run it; that
-part is yours.
+Use this pattern when the control planes have no shared layer-2 segment, for
+example in a cloud or across routers, and you run a TCP load balancer in front of
+them. The endpoint is the load balancer's name or address.
+
+Ichor treats this type the same as a VIP or a DNS name: it renders the API
+address as `https://ADDRESS:6443`, and nothing more. It does not create
+a load balancer, add a health check to one, or tell you when it is down. Those
+parts are yours to run.
+
+The load balancer is a TCP forwarder on port 6443. It needs a frontend listening
+on TCP 6443 and forwarding to the address of every control plane. A forwarder
+on a router, a small machine running HAProxy, or a cloud load balancer all do the
+job; the [Talos production notes](https://docs.siderolabs.com/talos/v1.14/getting-started/prodnotes)
+describe the setup.
+
+Two things follow from that, and both are easy to miss:
+
+- If the forwarder dies, `kubectl` and the kubeconfig Ichor hands out lose the
+  Kubernetes API, even when every control plane is healthy. Watch the forwarder
+  as you would any other single point of failure.
+- Ichor's controller dials each machine's own address, so the Talos API traffic
+  does not pass through the load balancer.
 
 Init prints a warning for this type that a VIP is recommended. The reason is on
 the [Virtual IP](vip.md) page: changing the endpoint later re-issues every
@@ -16,9 +34,9 @@ certificate in the cluster.
 ## Interactive
 
 Run `ichor init` and pick `loadBalancer` from the endpoint type list. The
-endpoint address prompt says `a hostname is expected here`; type the load
-balancer's name. The node address and the install disk are asked as described
-on the [Virtual IP](vip.md#interactive) page.
+endpoint address prompt says `a hostname is expected here`; type the name the
+load balancer answers on. The node address and the install disk are asked as
+described on the [Virtual IP](vip.md#interactive) page.
 
 ## `init.yaml`
 
@@ -51,10 +69,9 @@ ichor init --cluster demo \
 
 - `--cluster`, `--node-endpoint`, `--endpoint-address` and `--install-disk` are
   required.
-- `--endpoint-address` is a hostname for this type, not an IP address.
-- `--node-endpoint` is still the first node's own Talos API (`host:port`); the
-  load balancer is the endpoint the cluster is reached through, not the way init
-  reaches the node.
+- `--endpoint-address` is the load balancer's name for this type. Use the name
+  the forwarder answers on, not a machine's address.
+- `--node-endpoint` is still the first node's own Talos API (`host:port`).
 - If the first node needs a static address or a named link, the network flags
   (`--nic`, `--address`, `--gateway`, `--dns`, `--vlan`) are the same as on the
   [Virtual IP](vip.md#flags) page.

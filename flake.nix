@@ -30,11 +30,21 @@
             dontFixup = true;
             installPhase = "cp -r . $out";
           };
+          # Podman is host-installed, and its containers.conf has no policy setting. Accept-all is a deliberate dev-shell choice: no signature check, unsigned images included (the ko base image is pinned by digest in .ko.yaml).
+          containersPolicy = pkgs.writeTextDir "containers/policy.json" ''{"default":[{"type":"insecureAcceptAnything"}]}'';
+          # shortcut: hands the policy to pull, push, run, create and build per call (podman 5.8.9 takes a hidden flag there); drop when podman reads a policy path from its config.
+          podmanShim = pkgs.writeShellScriptBin "podman" ''
+            real=$(type -ap podman | grep -vxF "$0" | head -n1)
+            [ -n "$real" ] || { echo "podman: no host podman on PATH" >&2; exit 127; }
+            case "$1" in pull|push|run|create|build) set -- "$1" --signature-policy ${containersPolicy}/containers/policy.json "''${@:2}" ;; esac
+            exec "$real" "$@"
+          '';
         in
         {
           default = pkgs.mkShell {
             packages = with pkgs; [
               go
+              podmanShim # runs the host podman with the dev shell's signature policy (see containersPolicy)
               kubebuilder
               cobra-cli
               talosctl

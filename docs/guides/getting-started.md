@@ -118,6 +118,32 @@ ichor init \
   nodes sit on, and they cannot change once the cluster exists.
   `ichor init --help` lists the rest (disk selectors, discovery addresses).
 
+### Answering at a prompt
+
+On a terminal, the required settings can be left out and `ichor init` asks for
+each one that was not given: the cluster name, the endpoint type, the
+endpoint address and the node address. Settings given as flags are not asked
+for again.
+
+```console
+$ ichor init --preset single
+  Cluster name       demo
+  Endpoint type      node (an IP address)
+› Endpoint address   192.168.1.50▏
+  an IP address is expected here
+
+  enter confirm · esc cancel
+```
+
+The endpoint type is a list: typing narrows it, the arrow keys move, Enter
+selects. Text fields check the answer as you type and say what is wrong. The
+install disk is asked last, from the disks the node reports; a node with one
+disk has it chosen and named. Esc or Ctrl-C cancels and nothing is written.
+
+With no terminal (in CI, or from a pod) there is no prompt: a missing setting
+fails with the same "required flag" error as always, so scripts are
+unaffected. Use the flags there.
+
 The same settings can come from a file instead of flags. `ichor init -f
 init.yaml` reads an `InitConfig`; `ichor init --print-config-template`
 prints a commented example. The command above is this file:

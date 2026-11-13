@@ -38,6 +38,9 @@ The settings can come from a file instead of flags: -f init.yaml (an
 InitConfig; --print-config-template prints an example). A flag on the command
 line overrides the file; relative paths in the file are relative to it.
 
+On a terminal, a required setting given by neither is asked for; with no
+terminal init fails as before, naming the missing flag.
+
 ```sh
 ichor init [flags]
 ```

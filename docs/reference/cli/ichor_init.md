@@ -39,8 +39,9 @@ InitConfig; --print-config-template prints an example). A flag on the command
 line overrides the file; relative paths in the file are relative to it.
 
 On a terminal, init asks for the required settings that neither flags nor the
-file give (--install-disk is offered from the disks the node reports). Without
-a terminal it fails naming the missing flags.
+file give (--install-disk is offered from the disks the node reports). Typing
+narrows a list; Esc or Ctrl-C cancels with nothing written. The prompts are
+drawn on standard error. Without a terminal it fails naming the missing flags.
 
 ```sh
 ichor init [flags]

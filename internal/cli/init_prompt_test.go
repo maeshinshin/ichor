@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,6 +40,20 @@ func setTerminal(t *testing.T, on bool) {
 	bundleTerminal = func() bool { return on }
 
 	t.Cleanup(func() { bundleTerminal = old })
+}
+
+// typed is a terminal that has had keys typed on it and stays open, as a real one does: its reader
+// gives the keys, then waits.
+func typed(t *testing.T, keys string) io.Reader {
+	t.Helper()
+
+	r, w := io.Pipe()
+
+	go func() { _, _ = w.Write([]byte(keys)) }()
+
+	t.Cleanup(func() { _ = r.Close() })
+
+	return r
 }
 
 var allButTheDisk = []string{"--cluster", "c", "--endpoint-address", "a", "--node-endpoint", "n:1"}
@@ -115,31 +130,27 @@ func TestInitRequired_TerminalDoesNotRequireTheDisk(t *testing.T) {
 }
 
 func TestPromptInitMissing_AsksForEverythingAndSetsTheFlags(t *testing.T) {
+	setTerminal(t, true)
+
 	flags := newInitFlags(t)
 
 	var out bytes.Buffer
 
-	// An invalid cluster name is asked again; a bare Enter takes the default type.
-	in := strings.NewReader("Not_Valid\ndemo\n\n192.168.1.9\n192.168.1.50:50000\n")
+	// An invalid cluster name is kept for editing (Ctrl-U clears it); a bare Enter takes the default type.
+	in := typed(t, "Not_Valid\r\x15demo\r\r192.168.1.9\r192.168.1.50:50000\r")
 	if err := promptInitMissing(flags, in, &out); err != nil {
 		t.Fatal(err)
 	}
 
 	for name, want := range map[string]string{
-		flagCluster: "demo", flagEndpointType: "vip", flagEndpointAddress: "192.168.1.9", flagNodeEndpoint: "192.168.1.50:50000",
+		flagCluster: tuiCluster, flagEndpointType: endpointVIP, flagEndpointAddress: "192.168.1.9", flagNodeEndpoint: "192.168.1.50:50000",
 	} {
 		if got, _ := flags.GetString(name); got != want {
 			t.Errorf("--%s = %q, want %q", name, got, want)
 		}
 	}
 
-	if !strings.Contains(out.String(), `"Not_Valid" is not a valid name`) {
-		t.Errorf("the invalid name was not explained:\n%s", out.String())
-	}
-
-	if !strings.Contains(out.String(), "(an IP address)") {
-		t.Errorf("a vip address is an IP:\n%s", out.String())
-	}
+	setTerminal(t, false)
 
 	if err := checkInitRequired(flags); err == nil || strings.Contains(err.Error(), `"cluster"`) {
 		t.Errorf("only the disk should be missing without a terminal: %v", err)
@@ -147,25 +158,27 @@ func TestPromptInitMissing_AsksForEverythingAndSetsTheFlags(t *testing.T) {
 }
 
 func TestPromptInitMissing_HostnameTypeAsksForAHostname(t *testing.T) {
+	setTerminal(t, true)
+
 	flags := newInitFlags(t)
 
 	var out bytes.Buffer
 
-	// 2 is loadBalancer; the cluster and node endpoint are given.
+	// One row down from vip is loadBalancer; the cluster and node endpoint are given.
 	if err := flags.Parse([]string{"--cluster", "c", "--node-endpoint", "n:1"}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := promptInitMissing(flags, strings.NewReader("2\nlb.example.com\n"), &out); err != nil {
+	if err := promptInitMissing(flags, typed(t, "\x1b[B\rlb.example.com\r"), &out); err != nil {
 		t.Fatal(err)
 	}
 
-	if got, _ := flags.GetString(flagEndpointType); got != "loadBalancer" {
+	if got, _ := flags.GetString(flagEndpointType); got != tuiLB {
 		t.Errorf("type = %q", got)
 	}
 
-	if !strings.Contains(out.String(), "(a hostname)") {
-		t.Errorf("a loadBalancer address is a hostname:\n%s", out.String())
+	if got, _ := flags.GetString(flagEndpointAddress); got != "lb.example.com" {
+		t.Errorf("address = %q", got)
 	}
 }
 
@@ -178,32 +191,6 @@ func TestPromptInitMissing_AsksOnlyForWhatIsMissing(t *testing.T) {
 	var out bytes.Buffer
 	if err := promptInitMissing(flags, strings.NewReader(""), &out); err != nil || out.Len() != 0 {
 		t.Errorf("err = %v, output %q", err, out.String())
-	}
-}
-
-func TestReadChoice(t *testing.T) {
-	opts := []string{"a", "b", "c"}
-
-	for _, tc := range []struct {
-		name, in string
-		def      int
-		want     int
-		wantErr  bool
-	}{
-		{"number", "2\n", 0, 1, false},
-		{"bare Enter takes the default", "\n", 0, 0, false},
-		{"invalid then valid", "9\nx\n3\n", 0, 2, false},
-		{"no default re-asks on Enter", "\n1\n", -1, 0, false},
-		{"closed input ends the loop", "", -1, 0, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			var out bytes.Buffer
-
-			got, err := readChoice(strings.NewReader(tc.in), &out, "Pick", opts, tc.def)
-			if (err != nil) != tc.wantErr || (!tc.wantErr && got != tc.want) {
-				t.Errorf("got %d, %v; output:\n%s", got, err, out.String())
-			}
-		})
 	}
 }
 
@@ -238,8 +225,8 @@ func TestDiskFlagValue(t *testing.T) {
 }
 
 func TestChooseInstallDisk(t *testing.T) {
-	a := ichorv1alpha1.TalosMachineDiscoveredDisk{WWID: "w-a", DevPath: testInstallDisk, Model: "M", SizeBytes: 1 << 30, Transport: "sata"}
-	b := ichorv1alpha1.TalosMachineDiscoveredDisk{DevPath: "/dev/sdb", Serial: "S-b"}
+	a := ichorv1alpha1.TalosMachineDiscoveredDisk{WWID: "w-a", DevPath: testInstallDisk, Model: "M", SizeBytes: 1 << 30, Transport: tuiSata}
+	b := ichorv1alpha1.TalosMachineDiscoveredDisk{DevPath: tuiSdb, Serial: "S-b"}
 
 	t.Run("a sole disk is taken and named", func(t *testing.T) {
 		var out bytes.Buffer
@@ -261,28 +248,27 @@ func TestChooseInstallDisk(t *testing.T) {
 		}
 	})
 
-	t.Run("several disks are a menu", func(t *testing.T) {
-		var out bytes.Buffer
+	t.Run("several disks are a list, with nothing selected to begin with", func(t *testing.T) {
+		setTerminal(t, true)
 
-		got, err := chooseInstallDisk(strings.NewReader("2\n"), &out, []ichorv1alpha1.TalosMachineDiscoveredDisk{a, b}, nil)
-		if err != nil || got != "serial:S-b" {
+		// Two rows down from the empty first row is the second disk.
+		got, err := chooseInstallDisk(typed(t, "\x1b[B\x1b[B\r"), &bytes.Buffer{}, []ichorv1alpha1.TalosMachineDiscoveredDisk{a, b}, nil)
+		if err != nil || got != tuiSerialSel {
 			t.Fatalf("got %q, %v", got, err)
-		}
-
-		if !strings.Contains(out.String(), "/dev/sda  M  ") {
-			t.Errorf("the menu lacks the disk's details:\n%s", out.String())
 		}
 	})
 
-	t.Run("a failed inventory falls back to text, re-asking an invalid value", func(t *testing.T) {
+	t.Run("a failed inventory falls back to text, keeping an invalid value for editing", func(t *testing.T) {
+		setTerminal(t, true)
+
 		var out bytes.Buffer
 
-		got, err := chooseInstallDisk(strings.NewReader("sda\n/dev/sda\n"), &out, nil, errors.New("rejected"))
-		if err != nil || got != "/dev/sda" {
+		got, err := chooseInstallDisk(typed(t, "sda\r\x15/dev/sda\r"), &out, nil, errors.New("rejected"))
+		if err != nil || got != testInstallDisk {
 			t.Fatalf("got %q, %v", got, err)
 		}
 
-		if !strings.Contains(out.String(), "Could not list the node's disks: rejected") || !strings.Contains(out.String(), `--install-disk "sda": want`) {
+		if !strings.Contains(out.String(), "Could not list the node's disks: rejected") {
 			t.Errorf("output:\n%s", out.String())
 		}
 	})
@@ -301,7 +287,7 @@ func TestRunInit_CancelAtTheDiskPromptLeavesNothing(t *testing.T) {
 	deps.ReadNode = func(ctx context.Context, e string, want bool) (nodeReading, error) {
 		asked = want
 		r, err := inner(ctx, e, want)
-		r.Disks = []ichorv1alpha1.TalosMachineDiscoveredDisk{{DevPath: "/dev/sda"}, {DevPath: "/dev/sdb"}}
+		r.Disks = []ichorv1alpha1.TalosMachineDiscoveredDisk{{DevPath: testInstallDisk}, {DevPath: tuiSdb}}
 
 		return r, err
 	}

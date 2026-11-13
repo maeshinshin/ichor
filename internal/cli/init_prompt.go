@@ -17,12 +17,10 @@ limitations under the License.
 package cli
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -55,127 +53,89 @@ func validEndpointType(name string) bool {
 	return slices.ContainsFunc(endpointTypes, func(t struct{ Name, Address string }) bool { return t.Name == name })
 }
 
-// ask prompts until check accepts the answer, printing check's error between tries, and returns what
-// check returned. End of input with nothing typed is an error, so a closed stdin cannot loop.
-func ask(r io.Reader, w io.Writer, prompt string, check func(answer string) error) (string, error) {
-	br := bufio.NewReader(r)
-
-	for {
-		_, _ = fmt.Fprint(w, prompt)
-
-		line, err := br.ReadString('\n')
-		if err != nil && (!errors.Is(err, io.EOF) || line == "") {
-			return "", fmt.Errorf("reading the answer: %w", err)
+// endpointAddressKind says what --endpoint-address holds for an endpoint type.
+func endpointAddressKind(typ string) string {
+	for _, t := range endpointTypes {
+		if t.Name == typ {
+			return t.Address
 		}
-
-		answer := strings.TrimSpace(line)
-
-		if cerr := check(answer); cerr != nil {
-			_, _ = fmt.Fprintln(w, cerr)
-
-			continue
-		}
-
-		return answer, nil
 	}
+
+	return "an address" // a type from -f or --endpoint-type that the plan check will refuse
 }
 
-// readChoice lists options numbered from 1 and returns the index of the one chosen; def is the index
-// an empty answer takes, or -1 for no default.
-func readChoice(r io.Reader, w io.Writer, label string, options []string, def int) (int, error) {
-	for i, o := range options {
-		_, _ = fmt.Fprintf(w, "  %d) %s\n", i+1, o)
-	}
-
-	prompt := label + ": "
-	if def >= 0 {
-		prompt = fmt.Sprintf("%s [%d]: ", label, def+1)
-	}
-
-	chosen := -1
-
-	_, err := ask(r, w, prompt, func(a string) error {
-		if a == "" && def >= 0 {
-			chosen = def
-
-			return nil
-		}
-
-		n, err := strconv.Atoi(a)
-		if err != nil || n < 1 || n > len(options) {
-			return fmt.Errorf("enter a number from 1 to %d", len(options))
-		}
-
-		chosen = n - 1
-
-		return nil
-	})
-
-	return chosen, err
-}
-
-// promptInitMissing asks for the settings init needs that neither a flag nor the file gave, and sets
-// them on flags as if they had been typed there. --install-disk is not asked here: only the node can
-// list its disks (see chooseInstallDisk).
-func promptInitMissing(flags *pflag.FlagSet, r io.Reader, w io.Writer) error {
-	r = bufio.NewReader(r) // one reader for every question, so a buffered line is not lost between them
-
-	set := func(name, prompt string, check func(string) error) error {
-		v, err := ask(r, w, prompt, check)
-		if err != nil {
-			return err
-		}
-
-		return flags.Set(name, v)
-	}
+// initQuestions lists what init must ask for: the settings that neither a flag nor the file gave.
+// --install-disk is not among them: only the node can list its disks (see chooseInstallDisk).
+func initQuestions(flags *pflag.FlagSet) []promptQuestion {
+	var qs []promptQuestion
 
 	if !flags.Changed(flagCluster) {
-		err := set(flagCluster, "Cluster name: ", func(a string) error {
-			if errs := validation.IsDNS1123Subdomain(a); len(errs) > 0 {
-				return fmt.Errorf("%q is not a valid name: %s", a, strings.Join(errs, "; "))
-			}
+		qs = append(qs, promptQuestion{
+			flag:  flagCluster,
+			title: func(map[string]string) string { return "Cluster name" },
+			check: func(a string) error {
+				if errs := validation.IsDNS1123Subdomain(a); len(errs) > 0 {
+					return fmt.Errorf("%q is not a valid name: %s", a, strings.Join(errs, "; "))
+				}
 
-			return nil
+				return nil
+			},
 		})
-		if err != nil {
-			return err
-		}
 	}
 
 	if !flags.Changed(flagEndpointAddress) {
 		// The type decides what the address is, so it is asked first, but only here: left unasked it is the default.
 		if !flags.Changed(flagEndpointType) {
-			options := make([]string, len(endpointTypes))
+			choices := make([]promptChoice, len(endpointTypes))
 			for i, t := range endpointTypes {
-				options[i] = t.Name + " (" + t.Address + ")"
+				choices[i] = promptChoice{label: t.Name + " (" + t.Address + ")", value: t.Name}
 			}
 
-			i, err := readChoice(r, w, "Cluster endpoint type", options, 0)
-			if err != nil {
-				return err
-			}
-
-			if err := flags.Set(flagEndpointType, endpointTypes[i].Name); err != nil {
-				return err
-			}
+			qs = append(qs, promptQuestion{
+				flag:    flagEndpointType,
+				title:   func(map[string]string) string { return "Cluster endpoint type" },
+				choices: choices,
+			})
 		}
 
-		kind := "an address" // a type from -f or --endpoint-type that the plan check will refuse
-		typ, _ := flags.GetString(flagEndpointType)
-
-		for _, t := range endpointTypes {
-			if t.Name == typ {
-				kind = t.Address
-			}
-		}
-
-		if err := set(flagEndpointAddress, "Cluster endpoint address ("+kind+"): ", answerRequired); err != nil {
-			return err
-		}
+		qs = append(qs, promptQuestion{
+			flag: flagEndpointAddress,
+			title: func(got map[string]string) string {
+				return "Cluster endpoint address (" + endpointAddressKind(got[flagEndpointType]) + ")"
+			},
+			check: answerRequired,
+		})
 	}
 
 	if !flags.Changed(flagNodeEndpoint) {
-		return set(flagNodeEndpoint, "First node's Talos API address (host:port): ", answerRequired)
+		qs = append(qs, promptQuestion{
+			flag:  flagNodeEndpoint,
+			title: func(map[string]string) string { return "First node's Talos API address (host:port)" },
+			check: answerRequired,
+		})
+	}
+
+	return qs
+}
+
+// promptInitMissing asks the initQuestions and sets the answers on flags as if they had been typed there.
+func promptInitMissing(flags *pflag.FlagSet, r io.Reader, w io.Writer) error {
+	qs := initQuestions(flags)
+	if len(qs) == 0 {
+		return nil
+	}
+
+	typ, _ := flags.GetString(flagEndpointType)
+
+	got, err := askPrompts(qs, map[string]string{flagEndpointType: typ}, r, w)
+	if err != nil {
+		return err
+	}
+
+	for _, q := range qs {
+		if err := flags.Set(q.flag, got[q.flag]); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -190,40 +150,47 @@ func answerRequired(a string) error {
 }
 
 // chooseInstallDisk returns the --install-disk value for the disk init installs Talos on. One disk is
-// taken and named, none is an error, and several are a menu. When the node's disks could not be
-// read, it asks for the value as text.
+// taken and named, none is an error, and several are a list to pick from, with nothing selected to
+// begin with. When the node's disks could not be read, it asks for the value as text.
 func chooseInstallDisk(r io.Reader, w io.Writer, disks []ichorv1alpha1.TalosMachineDiscoveredDisk, readErr error) (string, error) {
+	const flag = flagInstallDisk
+
 	if readErr != nil {
 		_, _ = fmt.Fprintf(w, "Could not list the node's disks: %v\n", readErr)
 
-		return ask(r, w, "Install disk ("+installDiskUsage+"): ", func(a string) error {
-			_, err := parseDiskSelector("--install-disk", a)
+		got, err := askPrompts([]promptQuestion{{
+			flag:  flag,
+			title: func(map[string]string) string { return "Install disk (" + installDiskUsage + ")" },
+			check: func(a string) error {
+				_, err := parseDiskSelector("--install-disk", a)
 
-			return err
-		})
+				return err
+			},
+		}}, nil, r, w)
+
+		return got[flag], err
 	}
 
 	if len(disks) == 0 {
 		return "", errors.New("no installable disk was found on the node; name one with --install-disk")
 	}
 
-	pick := 0
+	v := diskFlagValue(disks[0])
 
 	if len(disks) > 1 {
-		options := make([]string, len(disks))
-		for i, d := range disks {
-			options[i] = fmt.Sprintf("%s  %s  %s  %s", d.DevPath, d.Model, humanBytes(d.SizeBytes), d.Transport)
-		}
-
-		var err error
-
-		pick, err = readChoice(r, w, "Install disk (Talos is installed here and the disk is wiped)", options, -1)
+		got, err := askPrompts([]promptQuestion{{
+			flag:      flag,
+			title:     func(map[string]string) string { return "Install disk (Talos is installed here and the disk is wiped)" },
+			choices:   diskChoices(disks),
+			noDefault: true,
+		}}, nil, r, w)
 		if err != nil {
 			return "", err
 		}
+
+		v = got[flag]
 	}
 
-	v := diskFlagValue(disks[pick])
 	if _, err := parseDiskSelector("--install-disk", v); err != nil {
 		return "", err
 	}
@@ -233,6 +200,20 @@ func chooseInstallDisk(r io.Reader, w io.Writer, disks []ichorv1alpha1.TalosMach
 	}
 
 	return v, nil
+}
+
+// diskChoices lists disks as rows of device path, model, size and transport, each choosing its
+// --install-disk value.
+func diskChoices(disks []ichorv1alpha1.TalosMachineDiscoveredDisk) []promptChoice {
+	choices := make([]promptChoice, len(disks))
+	for i, d := range disks {
+		choices[i] = promptChoice{
+			label: fmt.Sprintf("%s  %s  %s  %s", d.DevPath, d.Model, humanBytes(d.SizeBytes), d.Transport),
+			value: diskFlagValue(d),
+		}
+	}
+
+	return choices
 }
 
 // diskFlagValue is the --install-disk value naming d by the most stable identifier it reports.

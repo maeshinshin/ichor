@@ -36,7 +36,7 @@ var discoveryCmd = &cobra.Command{
 	Use:         "discovery",
 	GroupID:     groupChange,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "List, add or remove the addresses and ranges Ichor scans for new nodes",
 	Example: `  ichor discovery list
   ichor discovery add 192.168.10.0/24`,

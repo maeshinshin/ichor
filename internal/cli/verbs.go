@@ -57,8 +57,13 @@ var helpGroups = []*cobra.Group{
 // template reads (see groupingUsageTemplate), and the reference generator reads it for the synopsis.
 const groupingKey = "ichor.maesh.dev/grouping"
 
+// groupingAnnotations is the Annotations of a grouping command.
+func groupingAnnotations() map[string]string { return map[string]string{groupingKey: groupingValue} }
+
+const groupingValue = "true"
+
 // IsGroupingCommand is true for a command that only groups others.
-func IsGroupingCommand(c *cobra.Command) bool { return c.Annotations[groupingKey] == "true" }
+func IsGroupingCommand(c *cobra.Command) bool { return c.Annotations[groupingKey] == groupingValue }
 
 // HelpGroups are the groups of the root command's help, in the order --help lists them.
 func HelpGroups() []*cobra.Group { return helpGroups }
@@ -92,7 +97,7 @@ var getCmd = &cobra.Command{
 	Use:         "get",
 	GroupID:     groupInspect,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "List objects, or show a cluster in a few lines",
 	Long: `get lists clusters, nodes, TalosConfigPatches, operations, users, Ichor's settings and
 Cilium's Helm values. Add -o yaml or -o json for scripts. Use describe to see one object in full.`,
@@ -105,7 +110,7 @@ var describeCmd = &cobra.Command{
 	Use:         "describe",
 	GroupID:     groupInspect,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Show one object in full",
 	Long: `describe shows one cluster, node, patch, operation, user or node configuration in full.
 It reads the same resources the UI shows.`,
@@ -117,7 +122,7 @@ var diffCmd = &cobra.Command{
 	Use:         "diff",
 	GroupID:     groupInspect,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Show how a change would alter what is in force",
 	Long:        `diff shows how the effective Cilium values would change if a file became your layer, without writing anything.`,
 	Example:     `  ichor diff cni-values -f cilium-values.yaml`,
@@ -127,7 +132,7 @@ var editCmd = &cobra.Command{
 	Use:         "edit",
 	GroupID:     groupChange,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Edit an object in $EDITOR, or change a user's fields",
 	Example: `  ichor edit cni-values
   ichor edit user alice --role admin`,
@@ -137,7 +142,7 @@ var setCmd = &cobra.Command{
 	Use:         "set",
 	GroupID:     groupChange,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Change one setting: kube-proxy mode or Ichor's runtime settings",
 	Example: `  ichor set kube-proxy replaced --cluster prod
   ichor set settings updateCheck.enabled=false`,
@@ -147,7 +152,7 @@ var createCmd = &cobra.Command{
 	Use:         "create",
 	GroupID:     groupChange,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Create a user, or write credentials for talosctl and kubectl",
 	Long: `create makes an Ichor user, or writes the files a person needs to reach a cluster: the admin
 credentials (a kubeconfig and a talosconfig), a short-lived read-only talosconfig, or your own kubeconfig.`,
@@ -159,7 +164,7 @@ var deleteCmd = &cobra.Command{
 	Use:         "delete",
 	GroupID:     groupChange,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Delete a node, patch, operation or user",
 	Example: `  ichor delete patch ingress-sysctls
   ichor delete node worker-3 --confirm worker-3`,
@@ -169,7 +174,7 @@ var rolloutCmd = &cobra.Command{
 	Use:         "rollout",
 	GroupID:     groupChange,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Roll out pending changes that need a reboot or an API server restart",
 	Example:     `  ichor rollout config --cluster prod`,
 }
@@ -178,7 +183,7 @@ var approveCmd = &cobra.Command{
 	Use:         "approve",
 	GroupID:     groupLifecycle,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Approve a pending node so the controller starts configuring it",
 	Example:     `  ichor approve node 3f1c2a --role worker`,
 }
@@ -187,7 +192,7 @@ var rejectCmd = &cobra.Command{
 	Use:         "reject",
 	GroupID:     groupLifecycle,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Reject a pending node",
 	Example:     `  ichor reject node 3f1c2a`,
 }
@@ -196,7 +201,7 @@ var reclaimCmd = &cobra.Command{
 	Use:         "reclaim",
 	GroupID:     groupLifecycle,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Reset a configured Talos node of another cluster back to maintenance mode",
 	Example:     `  ichor reclaim node 192.168.10.21 --talosconfig old-cluster/talosconfig --cluster prod`,
 }
@@ -205,7 +210,7 @@ var rebootCmd = &cobra.Command{
 	Use:         "reboot",
 	GroupID:     groupLifecycle,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Reboot a node gracefully",
 	Example:     `  ichor reboot node worker-3`,
 }
@@ -214,7 +219,7 @@ var shutdownCmd = &cobra.Command{
 	Use:         "shutdown",
 	GroupID:     groupLifecycle,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Shut a node down, or every node of a cluster",
 	Example: `  ichor shutdown node worker-3
   ichor shutdown cluster lab --follow`,
@@ -224,7 +229,7 @@ var restartCmd = &cobra.Command{
 	Use:         "restart",
 	GroupID:     groupLifecycle,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Restart a Talos service on a node",
 	Example:     `  ichor restart service worker-3 kubelet`,
 }
@@ -233,7 +238,7 @@ var bootstrapCmd = &cobra.Command{
 	Use:         "bootstrap",
 	GroupID:     groupMaintain,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Install Ichor's Cilium on a cluster with no CNI, before helm install ichor",
 	Example:     `  ichor bootstrap cni --kube-proxy replaced`,
 }
@@ -242,7 +247,7 @@ var rotateCmd = &cobra.Command{
 	Use:         "rotate",
 	GroupID:     groupMaintain,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Rotate a cluster's certificate authorities or its signing and encryption keys",
 	Example: `  ichor rotate ca prod
   ichor rotate keys prod`,
@@ -252,7 +257,7 @@ var backupCmd = &cobra.Command{
 	Use:         "backup",
 	GroupID:     groupMaintain,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Take a backup now, outside the schedule",
 	Example:     `  ichor backup etcd nightly`,
 }
@@ -261,7 +266,7 @@ var snapshotCmd = &cobra.Command{
 	Use:         "snapshot",
 	GroupID:     groupMaintain,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Download a snapshot from a node",
 	Example:     `  ichor snapshot etcd --node cp-1 --out etcd.snapshot`,
 }
@@ -270,7 +275,7 @@ var defragCmd = &cobra.Command{
 	Use:         "defrag",
 	GroupID:     groupMaintain,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Defragment etcd on a control plane node",
 	Example:     `  ichor defrag etcd --node cp-2`,
 }
@@ -279,7 +284,7 @@ var forfeitLeadershipCmd = &cobra.Command{
 	Use:         "forfeit-leadership",
 	GroupID:     groupMaintain,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Hand etcd leadership over from a control plane node that leads",
 	Example:     `  ichor forfeit-leadership etcd --node cp-1`,
 }
@@ -288,7 +293,7 @@ var pauseCmd = &cobra.Command{
 	Use:         "pause",
 	GroupID:     groupMaintain,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Pause a running operation",
 	Example:     `  ichor pause operation upgrade-talos-x7k2p`,
 }
@@ -297,7 +302,7 @@ var resumeCmd = &cobra.Command{
 	Use:         "resume",
 	GroupID:     groupMaintain,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Resume a paused operation",
 	Example:     `  ichor resume operation upgrade-talos-x7k2p`,
 }
@@ -306,7 +311,7 @@ var exportCmd = &cobra.Command{
 	Use:         "export",
 	GroupID:     groupMaintain,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Save a cluster's secrets bundle locally",
 	Example:     `  ichor export bundle prod`,
 }
@@ -315,7 +320,7 @@ var logsCmd = &cobra.Command{
 	Use:         "logs",
 	GroupID:     groupTroubleshoot,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Print a node's kernel or service log",
 	Example:     `  ichor logs node worker-3 --service kubelet --follow`,
 }

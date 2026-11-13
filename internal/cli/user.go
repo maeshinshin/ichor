@@ -46,7 +46,7 @@ var userCmd = &cobra.Command{
 	Use:         "user",
 	GroupID:     groupAccess,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Set a user's password or sign a user out everywhere",
 	Long: `Manage the users of Ichor's own login. These commands talk to
 ichor-ui at --issuer over HTTPS with your login (run ` + "`ichor auth login --issuer URL --audience ichor-ui`" + `

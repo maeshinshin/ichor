@@ -54,7 +54,7 @@ var authCmd = &cobra.Command{
 	Use:         "auth",
 	GroupID:     groupAccess,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Log in to Ichor's OIDC issuer and act as a kubectl credential plugin",
 	Example: `  ichor auth login --issuer https://ichor.example.com
   ichor auth whoami --issuer https://ichor.example.com`,

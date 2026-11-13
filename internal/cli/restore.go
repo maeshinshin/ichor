@@ -38,7 +38,7 @@ var restoreCmd = &cobra.Command{
 	Use:         "restore",
 	GroupID:     groupMaintain,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Restore etcd from a backup: into the running cluster (restore etcd) or after losing it (restore cluster)",
 	Example: `  ichor restore etcd --cluster prod --follow
   ichor restore cluster --cluster prod --node-endpoint 192.168.10.11:50000 --s3-endpoint https://s3.example.com --s3-bucket ichor-backups --s3-prefix prod`,

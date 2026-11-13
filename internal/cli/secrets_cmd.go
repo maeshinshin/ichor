@@ -34,7 +34,7 @@ var secretsCmd = &cobra.Command{
 	Use:         "secrets",
 	GroupID:     groupAccess,
 	RunE:        groupRunE,
-	Annotations: map[string]string{groupingKey: "true"},
+	Annotations: groupingAnnotations(),
 	Short:       "Manage the local secrets bundle file",
 	Example:     `  ichor secrets encrypt prod`,
 }

@@ -581,3 +581,43 @@ func TestOverrideIsABareFlagWithNoReason(t *testing.T) {
 
 	walk(rootCmd)
 }
+
+// ichor apply -f creates a patch that is not there and replaces the spec of one that is.
+func TestPatchApplyCreatesThenUpdates(t *testing.T) {
+	setHumanTestFlags(t, outputHuman)
+
+	cluster := newTestCluster()
+	c, k8s := freshClients(t, []client.Object{cluster})
+
+	p := sysctlPatch(cluster.Name, map[string]string{testSysctlKey: "1"})
+	p.Name = testPatchName
+	p.Spec.Layer = cniPatchLayer
+
+	apply := func() string {
+		t.Helper()
+
+		var out bytes.Buffer
+		if err := runPatchApply(context.Background(), c, strings.NewReader(""), &out, &bytes.Buffer{}, &p); err != nil {
+			t.Fatal(err)
+		}
+
+		return out.String()
+	}
+
+	key := types.NamespacedName{Namespace: testNamespace, Name: testPatchName}
+
+	if out := apply(); !strings.Contains(out, "created patch") {
+		t.Errorf("a new patch is created: %q", out)
+	}
+
+	p.Spec.Priority = 7
+
+	if out := apply(); !strings.Contains(out, "updated patch") {
+		t.Errorf("an existing patch is updated: %q", out)
+	}
+
+	var stored ichorv1alpha1.TalosConfigPatch
+	if err := k8s.Get(context.Background(), key, &stored); err != nil || stored.Spec.Priority != 7 {
+		t.Fatalf("stored = %+v, %v", stored.Spec, err)
+	}
+}

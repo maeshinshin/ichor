@@ -355,7 +355,7 @@ func TestDescribeNodeFailsForAMissingNode(t *testing.T) {
 }
 
 // run executes the root command with args and returns the error and what it wrote.
-func run(t *testing.T, args ...string) (error, string) {
+func run(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 
 	var out, errw bytes.Buffer
@@ -368,7 +368,7 @@ func run(t *testing.T, args ...string) (error, string) {
 
 	_, err := rootCmd.ExecuteC()
 
-	return err, out.String() + errw.String()
+	return out.String() + errw.String(), err
 }
 
 // A word that names no command under a verb or a noun is an error with a non-zero exit, not a help page.
@@ -388,20 +388,20 @@ func TestAnUnknownWordUnderAVerbIsAnError(t *testing.T) {
 	for _, p := range parents {
 		args := append(strings.Fields(strings.TrimPrefix(p.CommandPath(), "ichor ")), "no-such-thing")
 
-		if err, _ := run(t, args...); err == nil || !strings.Contains(err.Error(), "no-such-thing") {
+		if _, err := run(t, args...); err == nil || !strings.Contains(err.Error(), "no-such-thing") {
 			t.Errorf("ichor %s: err = %v", strings.Join(args, " "), err)
 		}
 	}
 }
 
 func TestAnUnknownWordSuggestsTheClosestCommand(t *testing.T) {
-	err, _ := run(t, "get", "nodse")
+	_, err := run(t, "get", "nodse")
 	if err == nil || !strings.Contains(err.Error(), "Did you mean this?\n\tnodes") {
 		t.Fatalf("err = %v", err)
 	}
 
 	// With no word, a verb prints its help and succeeds.
-	if err, out := run(t, "get"); err != nil || !strings.Contains(out, "Available Commands:") {
+	if out, err := run(t, "get"); err != nil || !strings.Contains(out, "Available Commands:") {
 		t.Fatalf("ichor get: %v\n%s", err, out)
 	}
 }

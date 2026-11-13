@@ -5,8 +5,9 @@
 The command line is verb first, which breaks every script that calls it, and a
 `TalosConfigPatch` can carry 64 of the 65 Talos document kinds Ichor accepts,
 up from 7. The Talos, Kubernetes and Cilium versions a first install gets are
-the same as in v0.2.4. The CRDs gain fields, and two credential fields leave
-them (see Typed configuration).
+the same as in v0.2.4. The CRDs gain fields, one endpoint type leaves the
+`TalosCluster` enum, and two credential fields leave them (see Cluster and
+Typed configuration).
 
 ### CLI
 
@@ -85,6 +86,23 @@ them (see Typed configuration).
   command has an example. The reference pages list the commands in the same
   groups, and a group's usage line reads `ichor get [command]`, since the group
   does nothing without one.
+
+### Cluster
+
+- **Breaking: `dns` is no longer an endpoint type.** `spec.endpoint.type`
+  takes `vip`, `loadBalancer` or `node`. A hostname in front of the control
+  planes is a `loadBalancer` endpoint, which takes an IP address or a hostname.
+  A `TalosCluster` that still says `dns` fails validation the next time anything
+  updates it, so move it first. The address stays as it is:
+
+  ```
+  kubectl -n NAMESPACE patch talosclusters.ichor.maesh.dev NAME --type=merge -p '{"spec":{"endpoint":{"type":"loadBalancer"}}}'
+  ```
+
+  Ichor renders the same for `dns` and `loadBalancer`, since only `vip` changes
+  the configuration. `ichor adopt` types a name, or an address that no node
+  has, as `loadBalancer`, and the endpoint prompt of `ichor init` offers no
+  `dns`.
 
 ### Nodes
 

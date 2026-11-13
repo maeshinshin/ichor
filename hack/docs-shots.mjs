@@ -327,6 +327,24 @@ try {
       check((await (await fetch(origin + root)).text()).includes(`url=${root}${latest.path}`), `${tag}: the site root redirects to ${latest.name}`)
       check((await fetch(origin + root + 'latest/' + at.gettingStarted)).status === 200, `${tag}: latest/ has a redirect for each page`)
       check((await fetch(origin + root + latest.path + 'pagefind/pagefind.js')).status === 200, `${tag}: ${latest.name} has its own search index`)
+
+      // A page must not move once it has loaded. A banner, or any component, that fills in after a fetch pushes everything
+      // below it away, and a reader who taps as the page settles hits the wrong thing. The page as the server sent it (no
+      // script runs) and the page once it is hydrated and versions.json is in must put the heading in the same place.
+      const older = vs.find((v) => !v.isLatest && !v.isNext)
+      const headingY = () => ev(`document.querySelector('article h1').getBoundingClientRect().y`)
+      for (const path of [base + at.rotateKeys, root + latest.path + at.rotateKeys, older && root + older.path + at.rotateKeys].filter(Boolean)) {
+        await s('Emulation.setScriptExecutionDisabled', { value: true })
+        await go(origin + path)
+        const served = await headingY()
+        await s('Emulation.setScriptExecutionDisabled', { value: false })
+        await go(origin + path)
+        await ready()
+        await until(`performance.getEntriesByType('resource').some((r) => r.name.endsWith('versions.json'))`, 'versions.json', 5000)
+        await sleep(300)
+        const settled = await headingY()
+        check(Math.abs(served - settled) < 1, `${tag}: ${path} does not move after it loads (heading at ${served} as served, ${settled} once loaded)`)
+      }
       const inMenu = (text) => `[...document.querySelectorAll('[data-slot=dropdown-menu-radio-item]')].find((e) => e.textContent.includes(${JSON.stringify(text)}))`
       const switcher = `[...document.querySelectorAll('button[aria-label="Documentation version"]')].find((b) => b.getClientRects().length)`
       await open(at.gettingStarted)

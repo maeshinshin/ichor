@@ -16,6 +16,19 @@ The state machine lives in `status` (`phase`, and a per-machine list), never in
 the controller's memory, so a restarted controller or a new leader picks the
 operation up where it was.
 
+## Phases
+
+`status.phase` is one of five values. An operation waits as `Pending` until it
+holds the cluster lock, advances machines as `InProgress`, and ends as
+`Completed`. `Paused` is where it stops for a reason the figure lists, and
+`ShutDown` is the resting phase of a `shutdown` operation: every machine has been
+asked to stop, and the operation waits for you to power them back on. It
+becomes `Completed` once every machine answers on a new boot.
+
+![The phases of a TalosOperation. Pending becomes InProgress when the operation takes the cluster lock, or Paused while another operation holds it. InProgress ends as Completed when all machines are done, or as ShutDown for a shutdown operation, which becomes Completed once every machine answers again. Paused has three causes: waiting for the cluster lock, which lifts by itself; a person pausing it, which keeps the lock and ends with ichor resume; and a failed step, which is never retried by itself and runs again on ichor resume, through the retry annotation.](../images/operation-phases.light.drawio.svg)
+
+*The phases of a TalosOperation, and the three causes of Paused.*
+
 ## Kinds
 
 `spec.kind` names the action. Each kind has its own executor; they share the

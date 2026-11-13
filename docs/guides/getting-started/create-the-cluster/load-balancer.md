@@ -5,27 +5,37 @@ sidebar_order: 2
 # Load balancer
 
 Use this pattern when the control planes have no shared layer-2 segment, for
-example in a cloud or across routers, and you run a TCP load balancer in front of
-them. The endpoint is the load balancer's name or address.
+example in a cloud or across routers, or when you have a DNS name and no load
+balancer. The endpoint is an IP address or a hostname. A hostname is a valid
+endpoint here: if a name you control is the only thing in front of the control
+planes, this is your page.
 
-Ichor treats this type the same as a VIP or a DNS name: it renders the API
-address as `https://ADDRESS:6443`, and nothing more. It does not create
-a load balancer, add a health check to one, or tell you when it is down. Those
-parts are yours to run.
+Ichor records the address you give it and renders the API address as
+`https://ADDRESS:6443`, and nothing more. It creates no load balancer, no DNS
+record and no health check, and it does not tell you when what is in front of
+the control planes is down. Those parts are yours to run.
 
-The load balancer is a TCP forwarder on port 6443. It needs a frontend listening
-on TCP 6443 and forwarding to the address of every control plane. A forwarder
-on a router, a small machine running HAProxy, or a cloud load balancer all do the
-job; the [Talos production notes](https://docs.siderolabs.com/talos/v1.14/getting-started/prodnotes)
-describe the setup.
+## What sits in front
 
-Two things follow from that, and both are easy to miss:
+There are two common choices. Both are yours to run.
 
-- If the forwarder dies, `kubectl` and the kubeconfig Ichor hands out lose the
-  Kubernetes API, even when every control plane is healthy. Watch the forwarder
-  as you would any other single point of failure.
-- Ichor's controller dials each machine's own address, so the Talos API traffic
-  does not pass through the load balancer.
+- **A TCP load balancer.** A forwarder on port 6443 sends traffic to every control
+  plane. It must forward TCP and must not terminate TLS: the Kubernetes API server
+  handles TLS and mutual TLS itself, so an HTTP load balancer will not work. The
+  [Talos production notes](https://docs.siderolabs.com/talos/v1.14/getting-started/prodnotes)
+  describe the setup. A forwarder on a router, a small machine running HAProxy, or
+  a cloud load balancer all do the job.
+- **One DNS record per control plane.** Create an `A` (or `AAAA`) record for each
+  control plane, all with the same name, and use that name as the endpoint. It
+  costs nothing to run, but DNS does no health checking: a control plane that is
+  down keeps being handed out until you change its record.
+
+Either way, if the thing in front fails, `kubectl` and the kubeconfig Ichor hands
+out lose the Kubernetes API, even when every control plane is healthy. The
+components on each node keep working: Talos's local load balancer, KubePrism,
+serves them, and the [KubePrism reference](https://docs.siderolabs.com/talos/v1.14/reference/configuration/kubernetes/kubeprismconfig)
+describes it. Ichor's controller dials each machine's own address, so Talos API
+traffic does not pass through the endpoint.
 
 Init prints a warning for this type that a VIP is recommended. The reason is on
 the [Virtual IP](vip.md) page: changing the endpoint later re-issues every
@@ -34,9 +44,9 @@ certificate in the cluster.
 ## Interactive
 
 Run `ichor init` and pick `loadBalancer` from the endpoint type list. At the
-endpoint address prompt, type the IP address or the hostname the load balancer
-answers on. The node address and the install disk are asked as
-described on the [Virtual IP](vip.md#interactive) page.
+endpoint address prompt, type the IP address or the hostname that answers on
+port 6443. The node address and the install disk are asked as described on the
+[Virtual IP](vip.md#interactive) page.
 
 ## `init.yaml`
 
@@ -69,8 +79,8 @@ ichor init --cluster demo \
 
 - `--cluster`, `--node-endpoint`, `--endpoint-address` and `--install-disk` are
   required.
-- `--endpoint-address` is the IP address or hostname the load balancer answers
-  on. Use the forwarder's address, not a machine's address.
+- `--endpoint-address` is the IP address or hostname that answers on port 6443.
+  Use the forwarder's or the record's name, not a machine's address.
 - `--node-endpoint` is still the first node's own Talos API (`host:port`).
 - If the first node needs a static address or a named link, the network flags
   (`--nic`, `--address`, `--gateway`, `--dns`, `--vlan`) are the same as on the

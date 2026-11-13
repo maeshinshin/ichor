@@ -40,15 +40,15 @@ settings or when the deployment manages them (below).
 ## With the CLI
 
 ```sh
-ichor settings get
-ichor settings set users.tokenTTL=15m defaults.driftPolicy=autoCorrect
+ichor get settings
+ichor set settings users.tokenTTL=15m defaults.driftPolicy=autoCorrect
 ```
 
-`ichor settings get` shows each setting, the value in force and its source
+`ichor get settings` shows each setting, the value in force and its source
 (`spec` or `deployment`); `-o yaml` or `-o json` print the full response.
 
 ```console
-$ ichor settings get
+$ ichor get settings
 SETTING                VALUE        SOURCE
 version                v0.4.0       spec
 installedVersion       v0.4.0       status
@@ -62,7 +62,7 @@ autoPatch.components   -            -
 autoPatch.window       -            -
 ```
 
-`ichor settings set` writes only the keys you name, and prints the table again
+`ichor set settings` writes only the keys you name, and prints the table again
 with the new values:
 
 ```text
@@ -77,7 +77,7 @@ with the new values:
 ```
 
 There is no switch for "Reset and add" (MachineReclaim) any more: `reclaim.enabled`
-and `spec.reclaim` are deprecated and ignored, `ichor settings set
+and `spec.reclaim` are deprecated and ignored, `ichor set settings
 reclaim.enabled=...` is refused, and the webhook warns when `spec.reclaim` is
 set. Who may reset and add a machine is decided by RBAC alone; see
 [Adopt and reclaim](adopt-and-reclaim.md). Each accepted change leaves an Event on the
@@ -114,8 +114,8 @@ are not semver are ignored. The dashboard then shows "v<X> available" next to Up
 attention list names it. Nothing is installed by the check: Upgrade is still how Ichor moves, and a Helm install is
 upgraded with `helm upgrade`. A dev build is never told about a release.
 
-The request is one anonymous tag listing; it carries nothing about the cluster. Turning the check off (`ichor settings
-set updateCheck.enabled=false`, or the chart's `updateCheck.enabled: false`, which passes the flag) stops the requests and
+The request is one anonymous tag listing; it carries nothing about the cluster. Turning the check off (`ichor set
+settings updateCheck.enabled=false`, or the chart's `updateCheck.enabled: false`, which passes the flag) stops the requests and
 removes the controller's egress rule for them (`ichor-controller-release-check`). `status.latestRelease` keeps the
 last result and its error: a failed check shows nothing on the dashboard, and Settings says why.
 
@@ -126,7 +126,7 @@ request of its own: the line comes from the `IchorInstallation` the command alre
 
 ## Automatic patching
 
-Off by default. When you turn it on (the Settings page's "Automatic patching" card, `ichor settings set
+Off by default. When you turn it on (the Settings page's "Automatic patching" card, `ichor set settings
 autoPatch.enabled=true`, or the chart's `autoPatch.enabled`), the controller starts upgrades to **patch releases of
 the running minor** by itself: Talos, then Cilium, then Kubernetes, one component at a time and at most one
 operation per cluster. It never moves to a new minor and never starts anything that would need `--override`.
@@ -146,8 +146,8 @@ kept in Git by a tool that reverts edits, leave automatic patching off.
 
 If an automatic operation fails or pauses, automatic patching stops everywhere (condition `AutoPatchHalted`, a
 warning Event, an item in the Overview's attention list) and never retries. Look at the operation, resume it with
-`ichor operation resume` or delete it, then clear the halt: the Settings page's "Clear the halt" button, or `ichor
-settings set autoPatch.acknowledgeHalt=NAMESPACE/NAME`. It also ends by itself when the operation completes or is
+`ichor resume operation` or delete it, then clear the halt: the Settings page's "Clear the halt" button, or `ichor
+set settings autoPatch.acknowledgeHalt=NAMESPACE/NAME`. It also ends by itself when the operation completes or is
 deleted, or when a later manual upgrade of that cluster completes. Clearing the halt is allowed under read-only mode.
 
 ## A Helm install

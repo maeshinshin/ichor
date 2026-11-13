@@ -1,8 +1,8 @@
 # Rotating the service-account and secretbox keys
 
-`ichor cluster rotate-ca` replaces the Talos API and Kubernetes API certificate
+`ichor rotate ca` replaces the Talos API and Kubernetes API certificate
 authorities. Two more secrets are worth replacing after a compromise or on a
-schedule, and `ichor cluster rotate-keys` does that:
+schedule, and `ichor rotate keys` does that:
 
 - the **service-account signing key**: the key that signs the tokens of every
   ServiceAccount, including the ones pods mount, and that kube-controller-manager
@@ -37,7 +37,7 @@ reboots, and your kubeconfig and talosconfig keep working: no CA changes.
 ## Running it
 
 ```sh
-ichor cluster rotate-keys NAME
+ichor rotate keys NAME
 ```
 
 shows the plan and asks for confirmation (`--yes` skips it). The UI has the same
@@ -84,13 +84,13 @@ other disruptive operations are refused. The new keys are kept in the bundle Sec
 
 ## Afterwards
 
-1. `ichor cluster bundle-export NAME`. The bundle in the cluster is replaced and it
+1. `ichor export bundle NAME`. The bundle in the cluster is replaced and it
    now also holds the **retired keys** (`retired-keys.yaml`): the old secretbox
    secret, from which the key of backups sealed before the rotation derives, and the
    fingerprint of the old service-account key. The export writes the bundle and
    `retired-keys.yaml` next to it; keep both. Without the second file a backup sealed
    before the rotation cannot be opened from the bundle and the snapshot alone.
-2. Defragment etcd on each control plane (`ichor node` action `etcd-defrag`): older
+2. Defragment etcd on each control plane (`ichor defrag etcd`): older
    etcd revisions, and the snapshots and backups taken before, are still encrypted
    under the old key until compaction and defragmentation drop them or you delete
    them.
@@ -98,7 +98,7 @@ other disruptive operations are refused. The new keys are kept in the bundle Sec
 New backups are sealed with the new key. A **snapshot taken before the rotation
 finished cannot be restored** into the running cluster: its Secrets, the bundle
 among them, are under keys the control planes no longer use. Ichor refuses it and
-names the operation. Total-loss recovery (`ichor restore --recover-cluster`) with
+names the operation. Total-loss recovery (`ichor restore cluster`) with
 the exported bundle and `retired-keys.yaml` can open an older snapshot, but the Secrets in
 it are under the retired secretbox key, which the new bundle's configuration no longer
 carries: to run a cluster from such a snapshot use the bundle that matches it.

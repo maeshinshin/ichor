@@ -65,12 +65,12 @@ operation that an operator paused keeps its lock.
 There are two reasons an operation is `Paused`, and they are told apart by
 `status.failureReason`.
 
-- **You paused it.** `ichor operation pause NAME` sets `spec.paused`. The
+- **You paused it.** `ichor pause operation NAME` sets `spec.paused`. The
   operation stops advancing but keeps the cluster lock, so nothing else
-  disruptive starts in the middle of it. `ichor operation resume NAME` lifts it.
+  disruptive starts in the middle of it. `ichor resume operation NAME` lifts it.
 - **A step failed.** The operation pauses with a `failureReason` and is never
   retried by itself, and nothing is rolled back across the cluster. Fix the
-  cause, then run `ichor operation resume NAME` (or press Resume in the UI): on
+  cause, then run `ichor resume operation NAME` (or press Resume in the UI): on
   an operation paused by a failure it asks the controller to run the failed
   step again.
 
@@ -92,6 +92,6 @@ Starting a kind that can take a cluster down needs a verb of its own, `start`
 on a subresource such as `talosoperations/ca-rotation`, and only `ichor-admin`
 holds those. See [Security model](security.md).
 
-Related: [`ichor operation`](../reference/cli/ichor_operation.md),
+Related: [`ichor get operations`](../reference/cli/ichor_get_operations.md),
 [`ichor upgrade`](../reference/cli/ichor_upgrade.md),
-[`ichor node`](../reference/cli/ichor_node.md).
+[`ichor reboot node`](../reference/cli/ichor_reboot_node.md).

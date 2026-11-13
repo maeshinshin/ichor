@@ -37,7 +37,11 @@ lint failures are not yours.
   Add APIs and webhooks with `kubebuilder create api` / `create webhook`, and
   build with the Makefile targets (`make manifests generate test build`).
   Don't call controller-gen, kustomize or envtest by hand.
-- The CLI uses cobra; add commands with `cobra-cli add`.
+- The CLI uses cobra; add commands with `cobra-cli add`. The command surface is verb first
+  (`ichor get nodes`, `ichor reboot node NAME`, never `ichor node reboot`) and the noun is `node`
+  for a TalosMachine. Hang a new command on its verb in `internal/cli/verbs.go`, give it an `Example:`, and put a new
+  verb in one of the help groups there; a test fails when a command lacks either. `auth token`,
+  `installer run` and `cni helm apply` keep their names: kubeconfigs and the Jobs the controller starts name them.
 - **Do not run `kubebuilder edit --plugins=helm/v2-alpha`.** It regenerates
   every file under `dist/chart/templates/` from `config/`, and `dist/chart/`
   carries hand-edits the plugin knows nothing about — the webhook's fixed

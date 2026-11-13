@@ -198,7 +198,7 @@ settings, apply them:
 
 ```sh
 export KUBECONFIG=~/.ichor/clusters/demo/kubeconfig
-ichor config apply --cluster demo --follow
+ichor rollout config --cluster demo --follow
 ```
 
 With one control plane the Kubernetes API is down for about a minute while it
@@ -212,9 +212,9 @@ until you approve them. Point the scan at them (`init` takes
 `--discover-address` and `--discover-cidr` too):
 
 ```sh
-ichor cluster discovery add 192.168.1.51 --cluster demo
-ichor machine list --cluster demo
-ichor machine approve NAME --role worker --install-disk /dev/sda
+ichor discovery add 192.168.1.51 --cluster demo
+ichor get nodes --cluster demo
+ichor approve node NAME --role worker --install-disk /dev/sda
 ```
 
 `NAME` is the pending machine from the list. A machine is named after its
@@ -232,7 +232,7 @@ machine as before):
 If the install disk, a disk role or the NIC you named was not among those
 discovery recorded on the node, a `!` line follows: advice, not a refusal.
 `approve` also takes a hostname, labels, a static
-address and extra disk roles; see `ichor machine approve --help`. A machine
+address and extra disk roles; see `ichor approve node --help`. A machine
 with a weak identity (no UUID, serial or permanent MAC) is refused. After
 approval the controller renders and applies the configuration; the node
 installs Talos, reboots and joins. With the `single` preset there is nothing
@@ -266,7 +266,7 @@ ichor auth login --issuer https://192.168.1.60 --audience ichor-ui --ca-file ich
 ```
 
 The warning stops once the login is cached. [Users and login](users-and-login.md)
-explains the CA and `--ca-file`, which the other `ichor auth` and `ichor user`
+explains the CA and `--ca-file`, which the other `ichor auth` commands and the user
 commands take too.
 
 ## 4. Check the cluster
@@ -276,15 +276,15 @@ to list the nodes.
 
 ```sh
 export KUBECONFIG=~/.ichor/clusters/demo/kubeconfig
-ichor cluster status demo
-ichor cluster get demo
-ichor machine list --cluster demo
+ichor get cluster demo
+ichor describe cluster demo
+ichor get nodes --cluster demo
 ichor version
 kubectl get nodes
 ```
 
 ```console
-$ ichor cluster status demo
+$ ichor get cluster demo
 demo · ichor-system
   Talos        v1.14.5
   Kubernetes   v1.36.6
@@ -292,7 +292,7 @@ demo · ichor-system
   Endpoint     192.168.1.50 (node)
   Health       ✓ ready
 
-$ ichor machine list --cluster demo
+$ ichor get nodes --cluster demo
 NAME      ROLE           APPROVAL  READY  ENDPOINT            NODE     AGE
 fa70962a  control-plane  approved  ✓      192.168.1.50:50000  demo-cp  5m
 
@@ -302,8 +302,8 @@ installed    v{{version}}
 new installs Talos v1.14.5 · Kubernetes v1.36.6 · Cilium 1.20.4 (contract v1.14)
 ```
 
-`cluster status` prints versions, endpoint and health in a few lines;
-`cluster get` adds the network, CNI, control plane, certificate expiry and
+`ichor get cluster NAME` prints versions, endpoint and health in a few lines;
+`ichor describe cluster NAME` adds the network, CNI, control plane, certificate expiry and
 every condition (with ✓, `!`, ✗ or … in front). Every machine should be Ready
 (✓). `ichor version` shows the CLI and the installed Ichor version; they should
 both say the release you installed.
@@ -315,15 +315,15 @@ command for the full response. A table cell is never cut off, but a long
 machine name is shown in short form (see step 3); `-o yaml` prints it whole.
 Colour appears only on a terminal (set `NO_COLOR` to turn it off).
 
-The same goes for the operations. `ichor operation list` shows each one with a
-glyph for its phase and what it is doing; `ichor operation get NAME` adds the
-state of every machine. `--follow` (on `upgrade`, `config apply` and the node
-actions) and `operation get NAME --watch` keep one live line with the phase and
+The same goes for the operations. `ichor get operations` shows each one with a
+glyph for its phase and what it is doing; `ichor describe operation NAME` adds the
+state of every machine. `--follow` (on `upgrade`, `rollout config` and the node
+actions) and `ichor describe operation NAME --watch` keep one live line with the phase and
 message, and end it with the time the operation took. In a pipe or CI log they
 print a line per change instead:
 
 ```console
-$ ichor operation list
+$ ichor get operations
 NAME                 KIND    PHASE         TARGET  MESSAGE                       AGE
 upgrade-talos-x7k2p  talos   … InProgress  demo    upgrading talos-cp2 (2 of 3)  12m
 config-r2d9m         config  ✓ Completed   demo    -                             3d
@@ -336,8 +336,8 @@ operation upgrade-talos-x7k2p · cluster demo
 ```
 
 A failed step ends the line with ✗ Failed, prints the reason and exits with an
-error that names `ichor operation resume NAME`. `ichor upgrade talos --list`
-(and `kubernetes`, `cni upgrade`) prints the versions on offer as a table; `-o yaml`
+error that names `ichor resume operation NAME`. `ichor upgrade talos --list`
+(and `kubernetes`) prints the versions on offer as a table; `-o yaml`
 and `-o json` of these commands print what they always printed.
 
 ## 5. Open the UI and sign in

@@ -33,7 +33,7 @@ section "Nodes".
 Ichor does not boot machines. You bring a machine to Talos maintenance mode
 (from an ISO, over PXE, however you like) and Ichor finds it. Discovery is
 either a node you register by address, or a subnet scan for the Talos API port
-(`ichor cluster discovery add`, or the Add node page in the UI). Talos offers
+(`ichor discovery add`, or the Add node page in the UI). Talos offers
 nothing a controller could listen for, so scanning is the only way.
 
 For each node found, the controller reads its hardware over the
@@ -54,7 +54,7 @@ because its API wants a client certificate. Discovery reports it as
 ## Approval
 
 A pending machine does nothing until someone approves it, in the UI or with
-`ichor machine approve`. Approval is where you decide:
+`ichor approve node`. Approval is where you decide:
 
 - the role, `controlplane` or `worker`, and labels;
 - the install disk and the roles of the other disks (`system`, `ephemeral`,
@@ -104,4 +104,4 @@ provisioned again by the controller, with a Warning Event. The annotation
   In the cluster it is a [`MachineReclaim`](../reference/crds/machinereclaim.md).
 
 Next: [Operations](operations.md) for upgrades and node actions, and
-[`ichor machine`](../reference/cli/ichor_machine.md) for the commands.
+[`ichor get nodes`](../reference/cli/ichor_get_nodes.md) and the commands it links to.

@@ -16,9 +16,9 @@ for little.
 | Condition | What happens |
 |---|---|
 | Kubernetes 1.30 or later, Helm 3 | The chart declares `kubeVersion >=1.30.0-0`; Helm refuses an older cluster. |
-| A working pod network | The chart's pods need one. If every node is NotReady with "cni plugin not initialized", the chart refuses to install and tells you to run `ichor cni bootstrap` first (see [A cluster with no CNI](#a-cluster-with-no-cni)). A cluster with at least one Ready node passes. |
+| A working pod network | The chart's pods need one. If every node is NotReady with "cni plugin not initialized", the chart refuses to install and tells you to run `ichor bootstrap cni` first (see [A cluster with no CNI](#a-cluster-with-no-cni)). A cluster with at least one Ready node passes. |
 | Cilium as the CNI | Not needed to install. With Cilium, the chart also renders Ichor's network policies (see [Network policies](#network-policies)). |
-| Another CNI (flannel, Calico, ...) | The chart installs and runs; it does not touch your CNI and renders no network policies, so `ichor-system` is not isolated by Ichor. `ichor adopt` later refuses such a cluster unless you pass `--cni-unmanaged`, which leaves the CNI exactly as it is and refuses `ichor cni` commands for the cluster. Ichor does not migrate a CNI. |
+| Another CNI (flannel, Calico, ...) | The chart installs and runs; it does not touch your CNI and renders no network policies, so `ichor-system` is not isolated by Ichor. `ichor adopt` later refuses such a cluster unless you pass `--cni-unmanaged`, which leaves the CNI exactly as it is and refuses the Cilium commands (`ichor get cni-values`, `ichor edit cni-values`, `ichor apply cni-values`, `ichor diff cni-values`, `ichor upgrade cni`, `ichor set kube-proxy`) for the cluster. Ichor does not migrate a CNI. |
 | A talosconfig, a secrets bundle, a kubeconfig | Not needed to install. The chart never takes them; they go to `ichor adopt`, which needs Talos v1.12 or later on every node (see [Adopt a running cluster](adopt-and-reclaim.md#what-you-need)). |
 | OIDC or Ichor users | Not needed to install. With neither, ichor-ui has no sign-in and serves read-only calls only (see [Users and login](users-and-login.md)). |
 
@@ -201,8 +201,8 @@ checked first. Before it creates the Job the controller:
 
 If the tag does not resolve or the signature does not verify, the operation is
 paused with the reason `InstallerImageUnresolved` or `InstallerImageUnverified`,
-no Job is created and nothing is applied. `ichor operation get` shows why.
-After you fix the registry or the mirror, `ichor operation resume NAME` runs the check
+no Job is created and nothing is applied. `ichor describe operation` shows why.
+After you fix the registry or the mirror, `ichor resume operation NAME` runs the check
 again. The digest and the result are in `ichor version` and in
 `IchorInstallation` `status.installerImage`.
 
@@ -295,13 +295,13 @@ Its nodes are NotReady, so the chart's pods could not start and `helm install
 sequence is:
 
 ```sh
-ichor cni bootstrap --kubeconfig FILE --kube-proxy enabled|replaced [--tunnel vxlan|geneve] [--cilium-values FILE]
+ichor bootstrap cni --kubeconfig FILE --kube-proxy enabled|replaced [--tunnel vxlan|geneve] [--cilium-values FILE]
 helm install ichor ichor/ichor --version X.Y.Z \
   --namespace ichor-system --create-namespace
 ichor adopt --cluster NAME --node ADDR --recover-secrets --recover-from ADDR
 ```
 
-- `ichor cni bootstrap` creates `ichor-system` if needed, installs the pinned
+- `ichor bootstrap cni` creates `ichor-system` if needed, installs the pinned
   Cilium as Ichor's own Helm release (release `cilium`, records in
   `ichor-system`), and waits for the nodes to be Ready. It asks for
   confirmation unless `--yes`. Running it again is safe.

@@ -592,7 +592,7 @@ func TestNodeActionHumanOutput(t *testing.T) {
 
 	wantText(t, out.String(), "✓ removing node "+testMachineName+": the controller drains it, removes its etcd member (control plane), wipes it and deletes its Kubernetes Node\n")
 
-	for _, want := range []string{"Next\n", "new pending machine", "powers it off"} {
+	for _, want := range []string{"Next\n", "new pending node", "powers it off"} {
 		if !strings.Contains(errw.String(), want) {
 			t.Errorf("remove stderr lacks %q:\n%s", want, errw.String())
 		}

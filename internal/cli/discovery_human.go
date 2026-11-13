@@ -85,7 +85,7 @@ func renderDiscoveryList(h *human, cl *pb.Cluster, machines []*pb.Machine) error
 
 		cell := strings.Join(found, ", ")
 		if len(found) > 3 {
-			cell = fmt.Sprintf("%d machines", len(found))
+			cell = fmt.Sprintf("%d nodes", len(found))
 		}
 
 		rows = append(rows, []string{r, discoveryKindRange, cell})

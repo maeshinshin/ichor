@@ -133,7 +133,7 @@ verify ichor-ui by that name (2026-11-03).
 Ichor's runtime settings (the sign-in lifetimes, the default
 drift policy) are optional fields of the `IchorInstallation` singleton, read live
 by the controller, the webhooks and ichor-ui, and written by the UI Settings page
-or `ichor settings` as the signed-in user. The webhook splits write rights over
+or `ichor set settings` as the signed-in user. The webhook splits write rights over
 the subresources `ichorinstallations/version` and `/settings`, and
 requires a confirmation annotation to enable reclaim. A deployment can make them
 read-only with `--settings-read-only`.
@@ -172,7 +172,7 @@ logout`, revokes it at the issuer's RFC 7009 endpoint `/oidc/revoke`.
 Users never get an admin talosconfig, because no per-user Talos identity exists. Two
 paths can hand Talos admin credentials to a person, and both stay admin-only: the
 CLI hand-off and the UI download. A third hands out much
-less: `ichor cluster talosconfig` and a UI download give an operator or admin an
+less: `ichor create talosconfig` and a UI download give an operator or admin an
 `os:reader` talosconfig valid for one hour (twelve at most), signed through a
 `TalosCredentialRequest` like the backend's own reads; it needs the verb
 `download` on `talosclusters/talosconfig-reader`, and each request is an Event
@@ -224,7 +224,7 @@ Ichor's own users and login are off by default. Turning them on
 needs three things a default install lacks: an https URL that browsers and the
 CLI can reach (`ichorUI.users.externalURL`, set by `ichor init --ui-url`), a
 Talos v1.14 contract or later (earlier contracts can carry only one issuer),
-and an `ichor config apply` rollout of the control planes. ichor-ui is the
+and an `ichor rollout config` rollout of the control planes. ichor-ui is the
 issuer. The kube-apiserver reads discovery and keys from a ClusterIP listener
 on port 8444, signed by an Ichor-made CA, so the external URL does not have to
 be reachable from the control planes. Ichor installs no ingress. Expose
@@ -498,7 +498,7 @@ cannot get through, because it shows up as secret-field drift and no patch is
 produced. After adoption the controller uses a certificate minted from the
 bundle. The previous administrators' client certificates stay valid, so adopt
 prints, and the UI shows as a dismissible notice (condition
-`CARotationAdvised`), the advice to run `ichor cluster rotate-ca`. Nothing
+`CARotationAdvised`), the advice to run `ichor rotate ca`. Nothing
 starts a rotation.
 
 Ichor can also be installed with Helm: `helm install` of the chart
@@ -508,7 +508,7 @@ detects the Helm release, skips its own install step, never creates an
 `IchorInstallation`, requires Ichor's version to equal the CLI's, and registers
 the cluster. A Helm-installed Ichor is upgraded with `helm upgrade`. The chart
 refuses to install on a cluster with no pod network (`preflight.cni`); that one
-case is covered by `ichor cni bootstrap`, which runs the same Cilium step as
+case is covered by `ichor bootstrap cni`, which runs the same Cilium step as
 adopt. The chart never ships Cilium. See `docs/guides/install-with-helm.md`.
 
 ### Cilium
@@ -525,7 +525,7 @@ cluster-admin-equivalent rights, so the controller does not run Helm itself.
 Values. Cilium's live values are Ichor defaults, then the user's layer in
 `spec.cni.cilium.values`, then Ichor-owned keys (the Talos-required ones, the
 KubePrism address, `kubeProxyReplacement`, `tunnelProtocol`). They are edited
-in the UI (Cilium page) or with `ichor cni values get|set|edit|diff`, validated
+in the UI (Cilium page) or with `ichor get cni-values|set|edit|diff`, validated
 by one function in the webhook, the backend and the controller, and applied by
 the Job. Changing the layer needs `update` on `talosclusters/cilium-values`, held
 by `ichor-admin` only (the chart can run privileged pods on every node), and the
@@ -535,7 +535,7 @@ from then on, counted from the Nodes that exist, and a Helm Job that keeps faili
 with the same values is retried with a growing backoff.
 
 Upgrades. A new Ichor release carries new pinned charts. Cilium is upgraded
-only when the user starts a `cni` operation (`ichor cni upgrade`, or the UI),
+only when the user starts a `cni` operation (`ichor upgrade cni`, or the UI),
 at most one minor at a time, rolled back by Helm on failure. The cluster rollout runs that operation last, as its Cilium step.
 
 Takeover. `ichor adopt` can make a Cilium that someone else
@@ -576,7 +576,7 @@ Upgrades always run through the installer Job. Its CRD check lets only the
 retired fields disappear and refuses every other removed field.
 
 The CLI keeps a way out of the corners: `ichor upgrade ichor VERSION --local`
-(no ichor-ui) and `ichor restore --recover-cluster`.
+(no ichor-ui) and `ichor restore cluster`.
 
 ### Nodes
 
@@ -630,7 +630,7 @@ held `TalosMachine` and zero-drift release, for the listed addresses only, with
 a check that the machine's own configuration names this cluster's ID and Talos
 API CA. The UI has no button for it yet.
 
-- CLI: `ichor machine reclaim ADDRESS --talosconfig FILE`. The CLI writes to
+- CLI: `ichor reclaim node ADDRESS --talosconfig FILE`. The CLI writes to
   the node itself, with the operator's own credential, which never leaves the
   operator's machine; like `init` and `adopt` it acts on a node that belongs
   to no Ichor cluster.
@@ -640,7 +640,7 @@ API CA. The UI has no button for it yet.
   stops at `AwaitingConfirmation`, and resets only after the user has typed
   the UUID. See "Trust" for the credential.
 
-Approval, in the UI or `ichor machine approve`, sets the role, labels, disk
+Approval, in the UI or `ichor approve node`, sets the role, labels, disk
 roles and basic networking (which NIC, DHCP or static, VLAN or bond if
 needed) through typed forms; no YAML required. "Which NIC" is expressed as a
 `LinkAliasConfig` whose CEL selector matches the permanent MAC discovered
@@ -664,7 +664,7 @@ message saying it re-installed the node. The identity checks, the SecureBoot
 requirement, the install disk and the control plane's cluster lock are the
 first provisioning's; a control plane's stale etcd member is removed through a
 surviving control plane first, and with no surviving control plane nothing is
-sent and the message points to `ichor restore --recover-cluster`.
+sent and the message points to `ichor restore cluster`.
 
 Disks are identified by WWID, serial or by-id path, not `/dev/sdX` — but all
 three can be absent. Talos fills WWID and serial from sysfs, with a udev
@@ -729,7 +729,7 @@ a control plane (refused if quorum would break, if the count would drop below
 `spec.controlPlane.count`, or if it's the last one) → graceful Talos reset →
 delete the Node, in that order. The machine reappears as pending and can be
 reused, or, if it was removed with "power off", comes back when you power it on. Remove and
-reset are one action: `node remove` always wipes STATE and EPHEMERAL, and `node remove --reboot`
+reset are one action: `delete node` always wipes STATE and EPHEMERAL, and `delete node --reboot`
 reboots the node afterwards; the `ichor node reset` command was removed on 2026-11-07. A node that does not answer is removed
 without the wipe, its Node is deleted, and the Event says it was not wiped. `forceRemove` skips drain and reset for dead hardware. Control planes
 are replaced add-then-remove, never the other way round — a 3-node cluster
@@ -821,7 +821,7 @@ two CNIs even then. In this mode:
   is `default` (render says nothing about the CNI) or `none` (render keeps
   `cluster.network.cni.name: none`). `spec.cni.kubeProxy` only records what
   the node has.
-- The hand-over, the `ichor-cni` Job, `ichor cni` commands, `cni` operations
+- The hand-over, the `ichor-cni` Job, the Cilium commands (`ichor get cni-values`, `ichor upgrade cni` and the rest), `cni` operations
   and the kube-proxy switch are refused or skipped. A Kubernetes upgrade is
   never blocked on a hand-over. A CA rotation restarts no CNI workload.
 - The preset is immutable. Moving between managed and unmanaged means a new
@@ -841,7 +841,7 @@ come from a CronJob, not Helm, so a re-render does not change them.
 the setting across two owners, Talos (`KubeProxyConfig`, Ichor) and Cilium's
 `kubeProxyReplacement` (the Helm release, also Ichor), so the consistency check
 reads Cilium's live config and reports mismatches as health failures.
-Switching modes (`ichor cni kube-proxy`) is refused unless annotated (the
+Switching modes (`ichor set kube-proxy`) is refused unless annotated (the
 server sets the annotation for that one write), and then runs in the only safe
 order: upgrade the Cilium release through the `ichor-cni` Job, verify on all
 nodes, then turn the Talos side off.
@@ -932,7 +932,7 @@ until the Talos side is ready.
    node at a time through the operation hook and drain, control planes with
    etcd checks in between. They never start by themselves: the machine reports
    `RebootRequired` with the fields, and a `config` operation, started from
-   `ichor config apply` or Apply in the Overview page's attention list after a plan, rolls them out.
+   `ichor rollout config` or Apply in the Overview page's attention list after a plan, rolls them out.
    A third class, `APIServerRestart` (for example `spec.authentication`), needs
    no reboot but restarts the kube-apiserver; the machine controller never
    applies it to a control plane, and the same `config` operation does, one
@@ -976,7 +976,7 @@ way. `ichor upgrade talos|kubernetes --list` prints the same groups as a table (
 cluster; each component is upgraded by its own operation.
 
 A step that fails pauses its operation with a `failureReason` and is never
-retried by itself; `ichor operation resume` (or Resume in the UI) on such an
+retried by itself; `ichor resume operation` (or Resume in the UI) on such an
 operation re-runs the failed step through an annotation, not through `spec`.
 
 Every operation takes the cluster lock under its own identity
@@ -1062,7 +1062,7 @@ itself once every machine answers on a new boot, which lifts the refusal.
 `TalosEtcdBackup` takes snapshots on a schedule from a healthy non-leader
 control plane, verifies them, encrypts them (snapshots contain Secrets) and
 stores them in S3-compatible storage with retention. A snapshot can also be
-taken outside the schedule (`ichor etcd backup now`, Back up now on the Backups
+taken outside the schedule (`ichor backup etcd`, Back up now on the Backups
 page), which sets an annotation the controller acts on. Failures and staleness
 surface as metrics and alerts.
 
@@ -1078,7 +1078,7 @@ range): the marker is written to the store after the API is down, so a store
 inside the cluster deadlocks the restore. The plan refuses it, override does
 not override that, and the `TalosEtcdBackup` carries a `StoreInCluster`
 warning condition meanwhile. Full-loss
-recovery is CLI-only: `ichor restore --recover-cluster` rebuilds control
+recovery is CLI-only: `ichor restore cluster` rebuilds control
 planes from the local bundle and the snapshot, after which the controller
 re-reconciles every node the way `adopt` does and waits for confirmation
 before applying anything, since the restored CRs may not match the hardware.
@@ -1145,7 +1145,7 @@ bar shows the cluster's name, its Talos, Kubernetes and Ichor versions and a
 health badge. Screens: an Overview, built from stock preactcn components, with
 tiles for nodes (and the nodes waiting for approval), the running operation,
 backups and versions, a needs-attention list, recent operations, and a
-collapsible cluster details section (a config apply waiting for a reboot shows in the
+collapsible cluster details section (a config rollout waiting for a reboot shows in the
 needs-attention list with its own Apply action), with Add node and cluster
 actions (rotating the CAs, shutting down) in the header; a Nodes list and an add-node
 (approval) page; a node page with tabs for Summary, Storage & network, Talos,

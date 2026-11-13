@@ -123,10 +123,10 @@ func nodeRemoveNext(errw io.Writer, reboot bool, wipeMode string) {
 	}
 
 	did := "The controller drains the node, removes its etcd member (control plane), wipes " + wiped + ", powers it off and deletes its Kubernetes Node."
-	back := "to add it again: power it on; it boots into maintenance mode and shows up as a new pending machine, which you can approve"
+	back := "to add it again: power it on; it boots into maintenance mode and shows up as a new pending node, which you can approve"
 
 	if wipeMode != "" {
-		back = "to add it again: power it on; it starts from its boot image and shows up as a new pending machine, which you can approve"
+		back = "to add it again: power it on; it starts from its boot image and shows up as a new pending node, which you can approve"
 	}
 
 	if reboot {
@@ -136,7 +136,7 @@ func nodeRemoveNext(errw io.Writer, reboot bool, wipeMode string) {
 		}
 
 		did = "The controller drains the node, removes its etcd member (control plane), wipes " + wiped + ", reboots it" + rebootInto + " and deletes its Kubernetes Node."
-		back = "to add it again: it shows up as a new pending machine, which you can approve"
+		back = "to add it again: it shows up as a new pending node, which you can approve"
 	}
 
 	if outputFormat != outputHuman {

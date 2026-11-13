@@ -11,12 +11,12 @@ Ichor rotates two kinds of cluster secrets, each as a
 follows the rules of [Operations](operations.md): one cluster lock, pause on a
 failed step, `resume` to run the step again. Starting either needs a verb that
 only `ichor-admin` holds ([Security model](security.md)). Take an etcd snapshot
-first (`ichor etcd backup now NAME`).
+first (`ichor backup etcd NAME`).
 
 | | CA rotation | Key rotation |
 |---|---|---|
 | Kind | `ca-rotation` | `key-rotation` |
-| Command | `ichor cluster rotate-ca NAME` | `ichor cluster rotate-keys NAME` |
+| Command | `ichor rotate ca NAME` | `ichor rotate keys NAME` |
 | Verb | `start` on `talosoperations/ca-rotation` | `start` on `talosoperations/key-rotation` |
 | Replaces | Talos API CA and Kubernetes API CA; with `--ca` or `--all` also the etcd CA and the aggregator CA | Service-account signing key and the secretbox (encryption at rest) key |
 | Changes your credentials | Yes | No |
@@ -44,10 +44,10 @@ avoids locking you out by stopping, after every node accepts the new CAs, in the
 stage `AwaitingCredentials`, where it changes nothing until you hold
 credentials that work with both CAs.
 
-- With the CLI, `ichor cluster rotate-ca` waits for that point, writes a
+- With the CLI, `ichor rotate ca` waits for that point, writes a
   kubeconfig and talosconfig next to yours with the suffix `.ichor-new` (yours
   are not touched), checks that the new kubeconfig authenticates, and only then
-  lets the operation go on. `ichor cluster credentials NAME --acknowledge` does
+  lets the operation go on. `ichor create credentials NAME --acknowledge` does
   the same for a rotation already waiting.
 - In the UI, an administrator who holds `download` on `talosclusters/credentials`
   downloads the credentials and presses continue.
@@ -74,7 +74,7 @@ in the UI and in metrics.
 
 ## Key rotation
 
-`ichor cluster rotate-keys` replaces the service-account signing key and the
+`ichor rotate keys` replaces the service-account signing key and the
 secretbox key. Both need a dual-key period, in which the old key keeps
 verifying or decrypting until nothing depends on it. The stages are
 `Accepting`, `Issuing`, `Reencrypting`, `SettlingTokens`, `Dropping` and
@@ -94,6 +94,6 @@ Two things to know:
 
 The step-by-step guide is [Rotating the service-account and secretbox
 keys](../guides/rotate-keys.md). Commands:
-[`ichor cluster rotate-ca`](../reference/cli/ichor_cluster_rotate-ca.md),
-[`ichor cluster rotate-keys`](../reference/cli/ichor_cluster_rotate-keys.md),
-[`ichor cluster credentials`](../reference/cli/ichor_cluster_credentials.md).
+[`ichor rotate ca`](../reference/cli/ichor_rotate_ca.md),
+[`ichor rotate keys`](../reference/cli/ichor_rotate_keys.md),
+[`ichor create credentials`](../reference/cli/ichor_create_credentials.md).

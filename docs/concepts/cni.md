@@ -43,7 +43,7 @@ The values that Cilium runs with are built in three layers:
    `*.secretsNamespace.name` keys.
 
 You edit your layer on the Cilium page of the UI or with
-`ichor cni values get|set|edit|diff`. One function validates it, and it runs in
+`ichor get cni-values|set|edit|diff`. One function validates it, and it runs in
 the TalosCluster webhook, the UI backend, the CLI and the controller (before
 every Cilium Job). A refusal starts no Job and shows as
 `CNIValuesApplied=False`. It checks the chart's schema, unknown keys, Ichor-owned
@@ -71,17 +71,18 @@ a Role that lets Cilium's service accounts read Ichor's Secrets.
 ## Upgrades and kube-proxy
 
 Cilium moves only to the chart embedded in the running Ichor, and only when
-you start a `cni` [operation](operations.md) (`ichor cni upgrade`, or the UI).
+you start a `cni` [operation](operations.md) (`ichor upgrade cni`, or the UI).
 There is one tested combination per release, and a recorded patch newer than the
 embedded chart is never stepped back. A
 daily CI run opens a pull request when Cilium publishes a new patch of the
 pinned minor.
 Helm rolls the release back if the upgrade fails.
 
-`ichor cni kube-proxy` switches between Talos's kube-proxy and Cilium's
+`ichor set kube-proxy` switches between Talos's kube-proxy and Cilium's
 replacement as an operation.
 
 Ichor's own namespace is locked down with CiliumNetworkPolicies once Cilium is
 ready.
 
-Related: [`ichor cni`](../reference/cli/ichor_cni.md).
+Related: [`ichor upgrade cni`](../reference/cli/ichor_upgrade_cni.md),
+[`ichor get cni-values`](../reference/cli/ichor_get_cni-values.md).

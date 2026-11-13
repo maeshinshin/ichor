@@ -147,7 +147,7 @@ Ichor refuses the option instead of raising the contract. Both restart the
 kube-apiserver on each control plane; nodes do not reboot. The restart is not
 applied on its own: the control plane shows
 `Ready=False APIServerRestartRequired` until you run
-`ichor config apply --cluster NAME --follow` (or start the rollout on the
+`ichor rollout config --cluster NAME --follow` (or start the rollout on the
 cluster page), which goes one control plane at a time. The condition message
 names that command. With one control plane the API is down for about a
 minute (measured: 109 to 171 seconds for the whole operation).
@@ -206,7 +206,7 @@ for this. The path, one node at a time: set the option and the annotation, then
 remove a worker, wait for it to rejoin and come up encrypted, then do each
 control plane in turn, leaving etcd quorum intact. Back up etcd first. "Reset
 and add" is for machines of another cluster and refuses one already
-in Ichor; for your own node use `ichor node remove NODE --reboot --override --confirm MACHINE`
+in Ichor; for your own node use `ichor delete node NODE --reboot --override --confirm MACHINE`
 (NODE is the machine's name or its hostname; `--confirm` is always the machine name, the
 TalosMachine's UUID that the prompt and the UI dialog show),
 and approve the pending machine again once it is rediscovered. Pods that no
@@ -280,7 +280,7 @@ node, for three reasons Talos gives: a GRUB install cannot become UKI, key
 enrolment happens in the firmware, and a TPM disk key is bound to the SecureBoot
 state (PCR 7). The path, one node at a time, as for disk encryption: set the
 mode (and the confirm annotation for `Required`); take an etcd backup; remove the
-node with a full system-disk wipe, `ichor node remove NODE --wipe-mode system-disk --reboot`
+node with a full system-disk wipe, `ichor delete node NODE --wipe-mode system-disk --reboot`
 (or choose "The whole system disk" under "What to wipe" in the UI's Remove node
 dialog); boot the machine
 from the SecureBoot ISO of this cluster's schematic and Talos version
@@ -391,7 +391,7 @@ touch the documents is not re-checked, so a patch stored earlier stays editable.
 that applies them can create privileged, host-network pods with host paths on
 every node (the chart takes `extraContainers`, `extraHostPathMounts`, image
 overrides and the like). A user who could write the values could therefore become
-root on the nodes. So changing them, from the UI, `ichor cni values set|edit`,
+root on the nodes. So changing them, from the UI, `ichor apply cni-values|edit`,
 `ichor adopt --cilium-values` or `kubectl`, needs the verb `update` on
 `talosclusters/cilium-values`. Only the built-in `ichor-admin` role
 holds it; `ichor-operator` can still edit everything else on the cluster and start a
@@ -410,7 +410,7 @@ The namespace of the Roles that let Cilium read Secrets is pinned as well: the f
 `~/.ichor/clusters/<name>/secrets.yaml` holds every CA key of the cluster. It is an age file
 sealed with a passphrase, so a copy of it on a laptop backup or a cloud drive is
 not a copy of the cluster's keys. `ichor init`, `ichor adopt --recover-secrets`
-and `ichor cluster bundle-export` write it that way by default.
+and `ichor export bundle` write it that way by default.
 
 The passphrase comes from, in order:
 
@@ -424,8 +424,8 @@ The passphrase comes from, in order:
 
 Never a flag value (it would be in `ps` and your shell history). A passphrase you
 choose must be at least 12 characters. Every command that reads the bundle
-(`restore --recover-cluster`, `adopt --secrets-bundle`, `cluster credentials
---bundle`, `cluster bundle-export`) takes it the same way. A wrong passphrase and
+(`restore cluster`, `adopt --secrets-bundle`, `create credentials
+--bundle`, `export bundle`) takes it the same way. A wrong passphrase and
 a damaged file give the same error, which names neither.
 
 A bundle file you made before this change still works, with a warning on every
@@ -439,7 +439,7 @@ ichor secrets encrypt --file ./secrets.yaml
 The command seals the file, opens the sealed copy again, compares it with the
 original, and only then replaces the file. If the plaintext file was ever copied
 or exposed, encrypting it does not undo that: rotate the CAs
-(`ichor cluster rotate-ca`). The `age` tool opens the file without Ichor:
+(`ichor rotate ca`). The `age` tool opens the file without Ichor:
 `age -d secrets.yaml`.
 
 The kubeconfig next to it stays plaintext, because `kubectl` reads it. It holds
@@ -450,7 +450,7 @@ that holds the bundle for the controller is not affected.
 
 ## Rotating the CAs
 
-`ichor cluster rotate-ca NAME` replaces the Talos API and Kubernetes API CAs by
+`ichor rotate ca NAME` replaces the Talos API and Kubernetes API CAs by
 default. `--ca etcd` and `--ca kubernetes-aggregator` (or `--all`) add the other
 two. The service-account signing key and the secretbox key are not
 rotated, so rotating after a compromise is complete only for the CAs
@@ -464,7 +464,7 @@ you list.
   CA): three reboots of every control plane, each preceded by cordon and drain.
   A cluster with one control plane has no Kubernetes API while its only member
   reboots. Take a snapshot first
-  (`ichor etcd backup now NAME`). Snapshots stay readable: the backup key does
+  (`ichor backup etcd NAME`). Snapshots stay readable: the backup key does
   not depend on the CAs.
 - **aggregator.** kube-apiserver publishes the CAs it accepts for extension API
   servers (for example metrics-server) in `extension-apiserver-authentication`.
@@ -477,22 +477,22 @@ you list.
   The aggregator CA needs `versionContract` v1.14 or later.
 - **No hand-off.** A rotation of etcd and the aggregator CA alone changes nothing
   your kubeconfig or talosconfig depends on, so it does not wait for new
-  credentials. After any rotation run `ichor cluster bundle-export NAME`.
+  credentials. After any rotation run `ichor export bundle NAME`.
 - **The hand-off annotation is an attestation.** A rotation of the Talos or Kubernetes
   CA stops in `AwaitingCredentials` until the operation carries the annotation
-  `ichor.maesh.dev/credentials-handoff`. `ichor cluster credentials --acknowledge`
+  `ichor.maesh.dev/credentials-handoff`. `ichor create credentials --acknowledge`
   and the UI check that the new kubeconfig works against the cluster, and only
   then set it. The controller checks only that the annotation names this
   rotation's new CAs, so setting it by hand with `kubectl annotate` says "I hold a
   working kubeconfig and talosconfig for the new CAs" and nothing verifies it: if
   you do not, the old ones stop working when the old CAs drop.
-- **Abandoning.** `ichor operation delete NAME` on a rotation that has not yet
+- **Abandoning.** `ichor delete operation NAME` on a rotation that has not yet
   made the new CA issue (Accepting and AwaitingCredentials; Issuing too when
   neither the Kubernetes nor the etcd CA is rotated) takes it back: the new CAs
   leave the bundle, the cluster lock is released and the machines are rendered
   from the old CAs again. The nodes then report a pending change (the extra
   accepted CAs, and for etcd the CA field, are still loaded); run
-  `ichor config apply` to drop them, which reboots the nodes it has to. Later in
+  `ichor rollout config` to drop them, which reboots the nodes it has to. Later in
   the rotation the delete is refused, because the nodes would be left between
   two CAs: let it finish.
 

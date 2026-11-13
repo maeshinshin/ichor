@@ -4,7 +4,7 @@ This guide covers three things Ichor does with Talos machines it did not set up:
 bringing a whole running cluster under management (`ichor adopt`), adding one
 machine that already carries the cluster's own certificates to a cluster Ichor
 manages (`ichor adopt --add-machine`), and resetting one machine that another
-cluster configured so it can join an Ichor cluster (`ichor machine reclaim`, or
+cluster configured so it can join an Ichor cluster (`ichor reclaim node`, or
 the UI).
 
 ## What you have in front of you
@@ -13,18 +13,18 @@ the UI).
 |---|---|---|
 | A running cluster Ichor has never seen | `ichor adopt` (below) | No |
 | One more machine that already runs a configuration signed by a cluster Ichor manages (it joined with your own `talosctl apply-config`) and that you want to keep as it is | `ichor adopt --cluster NAME --add-machine ADDRESS` | No |
-| A machine removed from a cluster Ichor manages (its `TalosMachine` was deleted, the node was not wiped, and it still carries the cluster's configuration) | `ichor machine reclaim ADDRESS --cluster NAME` (no talosconfig) or the UI "Reset and add" with "It was removed from this cluster" | Yes: `STATE` and `EPHEMERAL` |
-| A machine another Talos cluster (or a config of its own) configured, and you hold its talosconfig | `ichor machine reclaim` or the UI "Reset and add" | Yes: `STATE` and `EPHEMERAL` |
-| A machine that was never configured, or whose `STATE` was wiped (booted from the ISO, in maintenance mode), including one removed with `ichor node remove` (it is wiped; power it on if it was powered off) | The normal Add node flow | No |
+| A machine removed from a cluster Ichor manages (its `TalosMachine` was deleted, the node was not wiped, and it still carries the cluster's configuration) | `ichor reclaim node ADDRESS --cluster NAME` (no talosconfig) or the UI "Reset and add" with "It was removed from this cluster" | Yes: `STATE` and `EPHEMERAL` |
+| A machine another Talos cluster (or a config of its own) configured, and you hold its talosconfig | `ichor reclaim node` or the UI "Reset and add" | Yes: `STATE` and `EPHEMERAL` |
+| A machine that was never configured, or whose `STATE` was wiped (booted from the ISO, in maintenance mode), including one removed with `ichor delete node` (it is wiped; power it on if it was powered off) | The normal Add node flow | No |
 | A configured machine and no credential for it | None through the API: reinstall from the ISO, or wipe it with a kernel argument | Yes |
 
 How to tell them apart: `ichor adopt --add-machine` reads the machine's own configuration and
 refuses one that does not name this cluster's ID and Talos API CA, and says to use
-`ichor machine reclaim` instead. For a machine that does carry this cluster's CAs it keeps the
+`ichor reclaim node` instead. For a machine that does carry this cluster's CAs it keeps the
 configuration; if that configuration cannot be represented (typically a machine removed without a wipe, whose hostname and network link Ichor rendered from its deleted `TalosMachine`), it
-blocks the machine and offers the wipe: `ichor machine reclaim ADDRESS --cluster NAME`.
-`ichor machine reclaim` refuses a machine that is still an approved Ichor machine (use
-`ichor node remove`), and accepts one of a managed cluster that has no approved `TalosMachine`
+blocks the machine and offers the wipe: `ichor reclaim node ADDRESS --cluster NAME`.
+`ichor reclaim node` refuses a machine that is still an approved Ichor machine (use
+`ichor delete node`), and accepts one of a managed cluster that has no approved `TalosMachine`
 (an orphan). So the two commands never send you back and forth.
 
 ## Adopt a running cluster
@@ -120,7 +120,7 @@ the CNI it found, tells you to run again with `--cni-unmanaged`, and says that I
 does not migrate a CNI (see "Moving from flannel" below).
 
 With `--cni-unmanaged` the cluster keeps its CNI exactly as it is. Ichor does
-not install, upgrade or configure it, and `ichor cni ...` commands and `cni`
+not install, upgrade or configure it, and the Cilium commands (`get`, `edit`, `apply` and `diff cni-values`, `upgrade cni`, `set kube-proxy`) and `cni`
 operations are refused for it. Everything else still works: Talos and
 Kubernetes upgrades, CA rotation, config rollout, etcd backup, node add and
 remove. This cannot be changed later (`spec.cni.preset` is immutable); going
@@ -209,11 +209,11 @@ namespace ichor-system · discovering from 10.0.0.11
 ✓ Cilium hand-over — Helm release owned by Ichor
 ✓ Release holds — 2 released
 Done in 4m12s
-! the Talos and Kubernetes client certificates of the previous administrators, and the CA keys held by whoever created this cluster, remain valid; consider `ichor cluster rotate-ca`
+! the Talos and Kubernetes client certificates of the previous administrators, and the CA keys held by whoever created this cluster, remain valid; consider `ichor rotate ca`
 
 Next
-  ichor cluster status prod -n default
-  ichor machine list -n default
+  ichor get cluster prod -n default
+  ichor get nodes -n default
 ```
 
 The consent prompt and the reminder to back up a recovered secrets bundle stay
@@ -258,7 +258,7 @@ See [Install Ichor with Helm](install-with-helm.md).
 Adopt prints advice, and the UI shows it on the cluster page until you dismiss
 it: the Talos and Kubernetes client certificates of the previous
 administrators, and the CA keys held by whoever created the cluster, remain
-valid. Consider `ichor cluster rotate-ca`. Nothing starts a rotation for you.
+valid. Consider `ichor rotate ca`. Nothing starts a rotation for you.
 
 ### What adopt does to your running workloads
 
@@ -307,11 +307,11 @@ A machine that already runs a configuration signed by your cluster's own certifi
 authorities, but that Ichor has no `TalosMachine` for, cannot be found by discovery (it
 is not in maintenance mode) and must not be reset (a reset would wipe an etcd member or a
 joined kubelet for no reason). This is the usual state of a node you added with your own
-`talosctl apply-config` after the adoption, or of one whose `TalosMachine` you deleted by hand or removed without a wipe. A machine removed with `ichor node remove` (or the UI "Remove node") is wiped and shows up as a new pending machine instead.
+`talosctl apply-config` after the adoption, or of one whose `TalosMachine` you deleted by hand or removed without a wipe. A machine removed with `ichor delete node` (or the UI "Remove node") is wiped and shows up as a new pending machine instead.
 `ichor adopt --add-machine` registers it with the same safety as an adoption.
 
 ```sh
-ichor cluster credentials prod                      # a talosconfig for the cluster, if you have none
+ichor create credentials prod                      # a talosconfig for the cluster, if you have none
 ichor adopt --cluster prod --add-machine 10.0.0.21 --talosconfig ./talosconfig.ichor --plan
 ichor adopt --cluster prod --add-machine 10.0.0.21 --talosconfig ./talosconfig.ichor
 ```
@@ -324,7 +324,7 @@ refuses. What it does, in order:
 
 1. Reads each machine's identity and configuration with your talosconfig and checks that
    the configuration names this cluster's ID and Talos API CA. A machine that does not is
-   refused with nothing written, and the message names `ichor machine reclaim`.
+   refused with nothing written, and the message names `ichor reclaim node`.
 2. Skips a machine whose UUID is already a `TalosMachine`, and refuses a control plane
    that would exceed `spec.controlPlane.count` (raise the count first: 1, 3 or 5).
 3. Plans it like an adoption: what the typed documents can hold (sysctl, kernel modules,
@@ -340,7 +340,7 @@ refuses. What it does, in order:
 `--version-contract`) are refused.
 
 Not covered: the UI has no button for this yet; discovery still reports such an address as
-"already configured" (and the `!` line of `ichor cluster discovery add` now names both
+"already configured" (and the `!` line of `ichor discovery add` now names both
 commands).
 
 ## Let Ichor find new machines: one address or a whole range
@@ -352,18 +352,18 @@ that contains it, is listed in the cluster's `spec.discovery`.
 - UI: on the cluster's "Add node" page type `192.168.0.50` or
   `192.168.0.0/24` into the one input and press Add. Each listed address and
   range has a remove button; removing a range asks first.
-- CLI: `ichor cluster discovery add 192.168.0.0/24` (or an address),
-  `ichor cluster discovery list` and `ichor cluster discovery remove ADDRESS|CIDR`.
+- CLI: `ichor discovery add 192.168.0.0/24` (or an address),
+  `ichor discovery list` and `ichor discovery remove ADDRESS|CIDR`.
   Name the cluster with `--cluster` unless the namespace has only one.
 
 `add` and `remove` print one line, `list` a table of what is scanned and what
 each address or range has found so far (the API keeps no time of the last probe):
 
 ```console
-$ ichor cluster discovery add 192.168.1.51 --cluster demo
+$ ichor discovery add 192.168.1.51 --cluster demo
 ✓ added 192.168.1.51 to the discovery of demo
 
-$ ichor cluster discovery list --cluster demo
+$ ichor discovery list --cluster demo
 ADDRESS/CIDR      KIND     FOUND
 192.168.1.51      address  fa70962a
 192.168.1.0/24    range    fa70962a, 3c1d0e44
@@ -372,7 +372,7 @@ ADDRESS/CIDR      KIND     FOUND
 An address that already runs a Talos configuration is not added as a machine;
 `add` then ends with a `!` line that says so and names the two commands that apply:
 `ichor adopt --cluster NAME --add-machine ADDRESS` if it carries this cluster's certificates,
-`ichor machine reclaim` if another cluster configured it.
+`ichor reclaim node` if another cluster configured it.
 
 A range must be IPv4 and `/24` or smaller (at most 256 addresses), and a cluster
 holds at most 4 ranges. It is scanned address by address on the Talos
@@ -382,7 +382,7 @@ network rule for the new address is still being installed), the controller
 probes it again every 15 seconds for the first 3 minutes, so a machine that
 comes up within that time is found within about 15 to 30 seconds of answering;
 after that the normal 5 minute pass applies. Machines found appear as pending on the Add node page (and in
-`ichor machine list`) and wait for approval. Removing an address or range stops
+`ichor get nodes`) and wait for approval. Removing an address or range stops
 the scanning only; machines already found stay.
 
 ## Reclaim a machine that another cluster configured ("Reset and add", MachineReclaim)
@@ -398,7 +398,7 @@ the same UUID and registers as a pending machine, which you approve as usual.
 Both paths refuse:
 
 - a machine that is already an approved Ichor machine (take it out with
-  `ichor node remove`, which wipes it). A machine that belongs to a cluster Ichor manages but
+  `ichor delete node`, which wipes it). A machine that belongs to a cluster Ichor manages but
   has no approved `TalosMachine` is an orphan and is accepted, with a warning that
   `ichor adopt --add-machine` would keep its configuration instead. A stale pending `TalosMachine` for the same UUID, left
   by an earlier reclaim, does not count (it pinned the old maintenance certificate; the
@@ -422,7 +422,7 @@ usually have no talosconfig for it. Wipe it with the credentials Ichor already h
 that cluster:
 
 ```sh
-ichor machine reclaim 10.0.0.21 --cluster prod
+ichor reclaim node 10.0.0.21 --cluster prod
 ```
 
 The controller inspects the machine, the CLI shows the same report, you type the UUID, and the
@@ -437,7 +437,7 @@ Discovery finds such a machine for you when its address is in the cluster's `spe
 that runs a Talos configuration at the address of a Kubernetes Node that no `TalosMachine` of the
 namespace accounts for (matched by the Node's system UUID) is reported as `Orphan`, not
 `AlreadyConfigured`. The Add node page lists it with Reset and add already set to the cluster's own
-credentials, and `ichor cluster get` shows it under "Possible orphans". Discovery cannot prove the
+credentials, and `ichor describe cluster` shows it under "Possible orphans". Discovery cannot prove the
 machine is this cluster's (the probe is unauthenticated); the wipe can, because only this cluster's
 certificate authority can dial it. Nothing is wiped by the report, and a machine reported as
 `AlreadyConfigured` (a foreign device) is only reset by the pasted-talosconfig flow with its typed UUID. The
@@ -453,7 +453,7 @@ This uses your own talosconfig for the machine. It is used for this command
 only, never stored or printed.
 
 ```sh
-ichor machine reclaim 10.0.0.21 --talosconfig ./foreign-talosconfig --cluster prod
+ichor reclaim node 10.0.0.21 --talosconfig ./foreign-talosconfig --cluster prod
 ```
 
 It prints the machine's UUID, hostname, role, the cluster that will lose it,
@@ -476,7 +476,7 @@ Type the machine's UUID to continue: 5b2c0d1e-7f44-4c35-9a0e-2f6f1c4b8e11
 Done in 2m41s
 
 Next
-  ichor machine list -n default
+  ichor get nodes -n default
 ```
 
 A refusal (the machine is already an Ichor machine, or a control plane whose

@@ -127,7 +127,7 @@ func TestVerbFirstCommandPathsResolve(t *testing.T) {
 func TestTheNounFirstGroupsAreGone(t *testing.T) {
 	for _, path := range []string{
 		"cluster", "machine", "node", "patch", "config", "operation", "op", "settings", "etcd",
-		"get clusters", "machine list", "delete node", "patch create", "rollout config", "upgrade cni", "cni values",
+		"cluster list", "machine list", "node remove", "patch create", "config apply", "cni upgrade", "cni values",
 		"etcd snapshot", "auth status", "auth kubeconfig", "cluster discovery", "user list", "user create",
 	} {
 		words := strings.Fields(path)

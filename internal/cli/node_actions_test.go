@@ -156,7 +156,7 @@ func TestNodeRemoveNeedsTheTypedName(t *testing.T) {
 		t.Fatalf("typed name: %v", err)
 	}
 
-	if !strings.Contains(done.String(), "deletes its Kubernetes Node") || !strings.Contains(done.String(), "new pending machine") {
+	if !strings.Contains(done.String(), "deletes its Kubernetes Node") || !strings.Contains(done.String(), "new pending node") {
 		t.Fatalf("remove must say how to add the machine again:\n%s", done.String())
 	}
 

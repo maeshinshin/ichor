@@ -32,7 +32,7 @@ func machineNode(m *pb.Machine) string { return cmp.Or(m.GetNodeName(), m.GetHos
 func renderMachineList(h *human, resp *pb.ListMachinesResponse) error {
 	ms := resp.GetMachines()
 	if len(ms) == 0 {
-		h.Note("no machines")
+		h.Note("no nodes")
 
 		return h.Err()
 	}

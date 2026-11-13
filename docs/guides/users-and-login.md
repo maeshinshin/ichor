@@ -42,7 +42,7 @@ Turning users on needs three things:
   provide one.
 - A Talos v1.14 contract or later. Older contracts cannot carry the issuer
   configuration.
-- A rollout of the control planes with `ichor config apply`. The kube-apiserver
+- A rollout of the control planes with `ichor rollout config`. The kube-apiserver
   reads its login settings from the machine config.
 
 ## Turn users on
@@ -66,7 +66,7 @@ stderr, the Helm values that match and the generated
 password of the admin. The password is printed once, also when a later step
 failed, and is stored nowhere; the first login forces a change. Save it when it
 is printed. The kube-apiserver login settings reach the control planes with
-`ichor config apply`, which restarts the kube-apiserver on each control plane
+`ichor rollout config`, which restarts the kube-apiserver on each control plane
 in turn (see the end of this guide). Init retries transient API errors (such as
 an etcd timeout right after the API server comes up) for a few minutes before
 it gives up.
@@ -100,7 +100,7 @@ On an existing install, set `ichorUI.users.enabled` to `true` and
 the first admin before every request starts to need a login:
 
 ```sh
-ichor user create admin --role admin --generate --bootstrap
+ichor create user admin --role admin --generate --bootstrap
 ```
 
 `--bootstrap` needs no login, because nobody can log in yet. It uses your own
@@ -114,7 +114,7 @@ users are not turned on yet (the chart creates it with
 must be changed at the first login. Instead of `--generate` you can type the
 password at a prompt with no echo, or pipe it with `--password-stdin`. Then set
 `spec.authentication.ichor` (`enabled: true`, `url`) on the TalosCluster, which
-needs `update` on `talosclusters/authentication`, and run `ichor config apply`
+needs `update` on `talosclusters/authentication`, and run `ichor rollout config`
 if a change waits for a reboot. Once users are on, every request to ichor-ui
 needs a login.
 
@@ -304,7 +304,7 @@ A role is a group in Kubernetes. A custom permission is a ClusterRole bound to
 the group `ichor:<name>` of the user. No built-in role can read secrets.
 
 Changing the Cilium Helm values (`spec.cni.cilium.values`: the Cilium page, `ichor
-cni values set|edit`, `ichor adopt --cilium-values`, `kubectl`) needs the verb
+apply cni-values` or `ichor edit cni-values`, `ichor adopt --cilium-values`, `kubectl`) needs the verb
 `update` on `talosclusters/cilium-values`, which only `admin` holds:
 the chart can run privileged pods on every node. An `operator` sees the values
 read-only, and a write of theirs that changes the values is refused; an edit of the
@@ -327,29 +327,29 @@ Give the URL with `--issuer` or `ICHOR_ISSUER`, and `--ca-file` (or
 print for people; `-o yaml` or `-o json` print the full response for scripts.
 
 ```sh
-ichor user list
-ichor user get alice
-ichor user create alice --display-name "Alice" --role viewer --generate
-ichor user update alice --role operator        # only the flags you pass change
-ichor user update alice --disabled=true
+ichor get users
+ichor describe user alice
+ichor create user alice --display-name "Alice" --role viewer --generate
+ichor edit user alice --role operator        # only the flags you pass change
+ichor edit user alice --disabled=true
 ichor user set-password alice --password-stdin
 ichor user revoke-sessions alice
-ichor user delete alice                        # asks; --yes skips
+ichor delete user alice                        # asks; --yes skips
 ```
 
 `list` is a table, and a write prints one line naming what it did:
 
 ```console
-$ ichor user list
+$ ichor get users
 NAME   DISPLAY NAME  EMAIL  ROLES   STATE        AGE
 admin  -             -      admin   active       2d
 alice  Alice         -      viewer  no password  4s
 
-$ ichor user create bob --role viewer --generate
+$ ichor create user bob --role viewer --generate
 ✓ created user bob (viewer)
 ! Password for bob (shown once, stored nowhere; they must change it at the first sign-in): Zq3x...
 
-$ ichor user update bob --role operator
+$ ichor edit user bob --role operator
 ✓ updated user bob
 ```
 
@@ -374,7 +374,7 @@ ichor auth login --issuer https://ichor.example.com --audience ichor-ui
 This opens a browser for the login page. The password is typed only into that
 page; the CLI never sees it. The default audience is `ichor-kube`, the login
 `kubectl` needs; `--audience ichor-ui` is the one the `ichor user` commands use.
-`ichor auth status` shows who you are and when the
+`ichor auth whoami` shows who you are and when the
 cached tokens expire; it prints no token. `ichor auth logout` revokes the
 refresh token of each cached login at the issuer, then removes the local login
 cache; if the issuer cannot be reached it warns, and still removes the cache. If the certificate of ichor-ui comes from a private CA, add
@@ -384,7 +384,7 @@ and `ichor user` command.
 To get a kubeconfig:
 
 ```sh
-ichor auth kubeconfig --issuer https://ichor.example.com --out ~/.kube/ichor.yaml
+ichor create kubeconfig --issuer https://ichor.example.com --out ~/.kube/ichor.yaml
 ```
 
 `--out -` prints it to stdout; without `--out` the file is named as ichor-ui
@@ -413,7 +413,7 @@ Talos role `os:reader`: `talosctl` can read a node (`get members`, `logs`,
 (`reboot`, `upgrade`, `reset`). It needs no access to the secrets bundle.
 
 ```sh
-ichor cluster talosconfig my-cluster --ttl 4h
+ichor create talosconfig my-cluster --ttl 4h
 TALOSCONFIG=~/.talos/config.ichor-reader talosctl get members
 ```
 
@@ -429,7 +429,7 @@ talosconfig is the node's own API, without the filtering and masking of the UI.
 To give it to a group, bind a ClusterRole with that rule to it. Ichor offers no
 `os:operator` talosconfig: it could reboot and upgrade nodes outside the
 operations Ichor plans and records. For admin access to the node API use
-`ichor cluster credentials`.
+`ichor create credentials`.
 
 ## What a sign-in is, and what ends it
 
@@ -561,7 +561,7 @@ Once users are on, keep this folder offline and use it only in an incident.
 The bundle in that folder (`secrets.yaml`) is encrypted with a passphrase
 (see [Getting started](getting-started.md)); the kubeconfig is not, because
 `kubectl` reads it directly. The bundle is what matters: with it
-`ichor cluster credentials --bundle` makes a new kubeconfig and talosconfig at
+`ichor create credentials --bundle` makes a new kubeconfig and talosconfig at
 any time. So you can move or delete the kubeconfig once login works, and keep
 only the encrypted bundle and its passphrase.
 Do not confuse it with the override write, which is an RBAC verb that guards destructive operations.
@@ -571,6 +571,6 @@ Do not confuse it with the override write, which is an RBAC verb that guards des
 Talos applies the login settings without a reboot, but restarts the
 kube-apiserver on each change (15 to 45 seconds of `/readyz` down per control
 plane). The machine controller does not apply the change by itself: the
-machines report `APIServerRestartRequired`, and `ichor config apply` (or Apply in the attention list of the UI's Overview) rolls it out one control plane at a time with
+machines report `APIServerRestartRequired`, and `ichor rollout config` (or Apply in the attention list of the UI's Overview) rolls it out one control plane at a time with
 no drain, waiting for that node's `/readyz` before the next. On a cluster with
 one control plane the API is unavailable while it restarts.

@@ -31,10 +31,13 @@ There are two common choices. Both are yours to run.
   down keeps being handed out until you change its record.
 
 Either way, if the thing in front fails, `kubectl` and the kubeconfig Ichor hands
-out lose the Kubernetes API, even when every control plane is healthy. The
-components on each node keep working: Talos's local load balancer, KubePrism,
-serves them, and the [KubePrism reference](https://docs.siderolabs.com/talos/v1.14/reference/configuration/kubernetes/kubeprismconfig)
-describes it. Ichor's controller dials each machine's own address, so Talos API
+out lose the Kubernetes API. The components Talos points at KubePrism, the local
+endpoint it enables by default on each node (the kubelet, the scheduler, the
+controller manager and kube-proxy), do not depend on that endpoint, so a dead
+endpoint does not take them down with it. What stops is access from outside the
+cluster, meaning `kubectl` and the kubeconfig Ichor hands out, and anything joining
+through the endpoint. Nothing here says anything about workloads.
+Ichor's controller dials each machine's own address, so Talos API
 traffic does not pass through the endpoint.
 
 Init prints a warning for this type that a VIP is recommended. The reason is on

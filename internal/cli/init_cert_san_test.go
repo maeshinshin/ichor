@@ -15,6 +15,9 @@ import (
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 )
 
+// testCertSAN is the extra name the cert-SAN tests pass with --cert-san.
+const testCertSAN = "ichor.lan"
+
 // renderFirstControlPlane renders the first control plane that init builds from in, the way
 // runInit does: candidatePatches (the bootstrap patch included), then render.Render.
 func renderFirstControlPlane(t *testing.T, in initPlanInput, nodeAddress string) coreconfig.Provider {
@@ -67,14 +70,14 @@ func renderFirstControlPlane(t *testing.T, in initPlanInput, nodeAddress string)
 
 func TestCertSAN_ReachesTheClusterSpec(t *testing.T) {
 	in := validInitPlanInput()
-	in.CertSANs = []string{"ichor.lan"}
+	in.CertSANs = []string{testCertSAN}
 
 	cluster, err := buildInitPlan(in, io.Discard)
 	if err != nil {
 		t.Fatalf("buildInitPlan: %v", err)
 	}
 
-	if !slices.Equal(cluster.Spec.CertSANs, []string{"ichor.lan"}) {
+	if !slices.Equal(cluster.Spec.CertSANs, []string{testCertSAN}) {
 		t.Errorf("spec.certSANs = %v, want the flag's value", cluster.Spec.CertSANs)
 	}
 }
@@ -84,12 +87,12 @@ func TestCertSAN_ReachesTheClusterSpec(t *testing.T) {
 // certExtraSANs), and the address the bootstrap patch sets stays in machine.certSANs beside it.
 func TestCertSAN_RendersIntoBothCertificates(t *testing.T) {
 	in := validInitPlanInput()
-	in.CertSANs = []string{"ichor.lan"}
+	in.CertSANs = []string{testCertSAN}
 
 	cfg := renderFirstControlPlane(t, in, "192.168.0.201")
 
 	machineSANs := cfg.Machine().Security().CertSANs()
-	if !slices.Contains(machineSANs, "ichor.lan") {
+	if !slices.Contains(machineSANs, testCertSAN) {
 		t.Errorf("machine.certSANs = %v, want ichor.lan from --cert-san", machineSANs)
 	}
 
@@ -97,7 +100,7 @@ func TestCertSAN_RendersIntoBothCertificates(t *testing.T) {
 		t.Errorf("machine.certSANs = %v, lost the bootstrap patch's node address", machineSANs)
 	}
 
-	if apiSANs := cfg.K8sAPIServerConfig().CertSANs(); !slices.Contains(apiSANs, "ichor.lan") {
+	if apiSANs := cfg.K8sAPIServerConfig().CertSANs(); !slices.Contains(apiSANs, testCertSAN) {
 		t.Errorf("kube-apiserver certExtraSANs = %v, want ichor.lan from --cert-san", apiSANs)
 	}
 }

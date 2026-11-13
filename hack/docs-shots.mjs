@@ -166,6 +166,15 @@ try {
     return true
   }
   const clipboard = () => ev(`navigator.clipboard.readText()`)
+  // The clipboard is written, and a CSS transition ends, some time after the click or focus that causes it, so a fixed
+  // sleep races them on a slow runner. Read until the value is `want` or 5 s pass, and return the last value read:
+  // the check still compares it with `want`, so a value that never arrives fails and says what was there instead.
+  const eventually = async (read, want) => {
+    let got = await read()
+    for (const end = Date.now() + 5000; got !== want && Date.now() < end; got = await read()) await sleep(100)
+    return got
+  }
+  const clipboardBecomes = (want) => eventually(clipboard, want)
   const key = async (k, modifiers = 0) => {
     for (const type of ['keyDown', 'keyUp']) await s('Input.dispatchKeyEvent', { type, key: k, code: `Key${k.toUpperCase()}`, modifiers })
   }
@@ -214,9 +223,12 @@ try {
       await menuOpen()
       check(await ev(`${item('View as Markdown')}?.getAttribute('href') === '${base}${mdOf(at.rotateKeys)}'`), `${tag}: View as Markdown links to the .md`)
       check(!(await ev(`!!${item('Share')}`)), `${tag}: no Share item without the Web Share API`)
-      await mouse(item('Copy link'))
-      await sleep(300)
-      check((await clipboard()) === (process.env.DOCS_SITE ?? 'https://ichor.maesh.dev') + base + at.rotateKeys, `${tag}: Copy link copies the canonical URL`)
+      const canonical = (process.env.DOCS_SITE ?? 'https://ichor.maesh.dev') + base + at.rotateKeys
+      const clicked = await mouse(item('Copy link'))
+      const linked = await clipboardBecomes(canonical)
+      check(linked === canonical, `${tag}: Copy link copies the canonical URL (item clicked: ${clicked}, clipboard: ${JSON.stringify(linked.slice(0, 80))})`)
+      // Closing the menu gives the focus back to its trigger; let that finish before the heading link below takes the focus.
+      await until(`document.querySelectorAll('[data-slot=dropdown-menu-item]').length === 0`, 'the Copy page menu to close', 3000)
 
       // Heading links: hidden until hover or focus, copy the URL with the anchor and move the address bar.
       const anchor = `document.querySelector('article h2 a[data-heading-link]')`
@@ -228,17 +240,18 @@ try {
         check(idle === '0', `${tag}: heading links are hidden until hover (opacity ${idle})`)
         await mouse(`${anchor}.parentElement`, 'move')
         await sleep(300)
-        check((await opacity()) === '1', `${tag}: a heading link shows on hover`)
+        check((await eventually(opacity, '1')) === '1', `${tag}: a heading link shows on hover`)
         await shot(`${tag}-heading-hover`)
       }
       await ev(`${anchor}.focus()`)
       await sleep(300)
-      check((await opacity()) === '1', `${tag}: a heading link shows on keyboard focus`)
+      const focused = await eventually(opacity, '1')
+      check(focused === '1', `${tag}: a heading link shows on keyboard focus (opacity ${focused})`)
       const hash = await ev(`${anchor}.getAttribute('href')`)
       await mouse(anchor)
       await sleep(400)
       check((await ev(`location.hash`)) === hash, `${tag}: clicking a heading link updates the address bar (${hash})`)
-      check((await clipboard()) === `${origin}${base}${at.rotateKeys}${hash}`, `${tag}: clicking a heading link copies the URL with ${hash}`)
+      check((await clipboardBecomes(`${origin}${base}${at.rotateKeys}${hash}`)) === `${origin}${base}${at.rotateKeys}${hash}`, `${tag}: clicking a heading link copies the URL with ${hash}`)
       await shot(`${tag}-heading-link`)
 
       // Search: the Pagefind index answers "rotate" with the key-rotation guide.
@@ -264,8 +277,8 @@ try {
       await sleep(300)
       await shot(`${tag}-codeblock`)
       await mouse(`document.querySelector('article pre + div button')`)
-      await sleep(300)
-      check((await clipboard()) === (await ev(`document.querySelector('article pre code').textContent`)), `${tag}: the code copy button copies the code`)
+      const code = await ev(`document.querySelector('article pre code').textContent`)
+      check((await clipboardBecomes(code)) === code, `${tag}: the code copy button copies the code`)
 
       // Syntax highlighting: a YAML block has several token colours, taken from the theme that is on.
       await ev(`(() => { const p = [...document.querySelectorAll('article pre')].find((p) => p.textContent.includes('kind: InitConfig')); p.scrollIntoView({ block: 'center' }) })()`)

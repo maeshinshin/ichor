@@ -8,7 +8,7 @@ description: "Reset a configured Talos node of another cluster back to maintenan
 Reset a configured Talos node of another cluster back to maintenance mode
 
 ```sh
-ichor reclaim [flags]
+ichor reclaim [command]
 ```
 
 ### Examples

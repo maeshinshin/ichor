@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/maeshinshin/ichor/internal/cli"
 )
 
 // repoRoot is the repository root, relative to this package.
@@ -88,4 +90,51 @@ func readTree(t *testing.T, dir string) map[string][]byte {
 	}
 
 	return files
+}
+
+// The root page lists every available top-level command once, under its help group, in the group order of
+// `ichor --help`, and the groups come from the CLI's own definition.
+func TestRootPageIsGroupedLikeTheHelp(t *testing.T) {
+	dir := t.TempDir()
+	if err := generateCLI(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	b, err := os.ReadFile(filepath.Join(dir, "ichor.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	page := string(b)
+	last := strings.Index(page, "### SEE ALSO")
+
+	for _, g := range cli.HelpGroups() {
+		heading := "#### " + strings.TrimSuffix(g.Title, ":") + "\n"
+
+		at := strings.Index(page, heading)
+		if at < 0 {
+			continue // a group that holds only cobra's own help and completion has no page entries
+		}
+
+		if at < last {
+			t.Errorf("group %q is out of order", g.Title)
+		}
+
+		last = at
+	}
+
+	for _, c := range cli.RootCommand().Commands() {
+		if !c.IsAvailableCommand() {
+			continue
+		}
+
+		link := "(" + strings.ReplaceAll(c.CommandPath(), " ", "_") + ".md)"
+		if strings.Count(page, link) != 1 {
+			t.Errorf("%s is listed %d times on the root page", c.CommandPath(), strings.Count(page, link))
+		}
+	}
+
+	if !strings.Contains(page, "#### Get Started Commands\n") || strings.Contains(page, "ichor.md)") {
+		t.Errorf("root page:\n%s", page)
+	}
 }

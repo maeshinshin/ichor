@@ -15,7 +15,7 @@ short-lived ID tokens for kubectl. The login cache lives in ~/.ichor/auth
 holds no secret.
 
 ```sh
-ichor auth [flags]
+ichor auth [command]
 ```
 
 ### Examples

@@ -405,3 +405,27 @@ func TestAnUnknownWordSuggestsTheClosestCommand(t *testing.T) {
 		t.Fatalf("ichor get: %v\n%s", err, out)
 	}
 }
+
+// A command that only groups others offers `[command]`, not `[flags]`: `ichor get -o json` returns nothing.
+func TestAGroupingCommandsUsageOffersOnlyCommand(t *testing.T) {
+	usage := func(c *cobra.Command) string { return c.UsageString() }
+
+	if u := usage(getCmd); !strings.Contains(u, "ichor get [command]") || strings.Contains(u, "[flags]") {
+		t.Errorf("ichor get usage:\n%s", u)
+	}
+
+	// apply is a command and a group at once: both lines.
+	if u := usage(applyCmd); !strings.Contains(u, "ichor apply -f FILE [flags]") || !strings.Contains(u, "ichor apply [command]") {
+		t.Errorf("ichor apply usage:\n%s", u)
+	}
+
+	walk(rootCmd, func(c *cobra.Command) {
+		if c == rootCmd || !ownCommand(c) || !c.IsAvailableCommand() || !c.HasAvailableSubCommands() || c == applyCmd {
+			return
+		}
+
+		if !IsGroupingCommand(c) {
+			t.Errorf("ichor %s only groups others but is not marked as grouping", c.CommandPath())
+		}
+	})
+}

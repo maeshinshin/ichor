@@ -8,7 +8,7 @@ description: "Install Ichor's Cilium on a cluster with no CNI, before helm insta
 Install Ichor's Cilium on a cluster with no CNI, before helm install ichor
 
 ```sh
-ichor bootstrap [flags]
+ichor bootstrap [command]
 ```
 
 ### Examples

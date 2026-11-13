@@ -8,7 +8,7 @@ description: "Defragment etcd on a control plane node"
 Defragment etcd on a control plane node
 
 ```sh
-ichor defrag [flags]
+ichor defrag [command]
 ```
 
 ### Examples

@@ -13,7 +13,7 @@ get lists clusters, nodes, TalosConfigPatches, operations, users, Ichor's settin
 Cilium's Helm values. Add -o yaml or -o json for scripts. Use describe to see one object in full.
 
 ```sh
-ichor get [flags]
+ichor get [command]
 ```
 
 ### Examples

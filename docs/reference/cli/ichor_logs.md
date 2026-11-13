@@ -8,7 +8,7 @@ description: "Print a node's kernel or service log"
 Print a node's kernel or service log
 
 ```sh
-ichor logs [flags]
+ichor logs [command]
 ```
 
 ### Examples

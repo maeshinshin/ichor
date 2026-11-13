@@ -8,7 +8,7 @@ description: "Restore etcd from a backup: into the running cluster (restore etcd
 Restore etcd from a backup: into the running cluster (restore etcd) or after losing it (restore cluster)
 
 ```sh
-ichor restore [flags]
+ichor restore [command]
 ```
 
 ### Examples

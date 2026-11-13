@@ -8,7 +8,7 @@ description: "Change one setting: kube-proxy mode or Ichor's runtime settings"
 Change one setting: kube-proxy mode or Ichor's runtime settings
 
 ```sh
-ichor set [flags]
+ichor set [command]
 ```
 
 ### Examples

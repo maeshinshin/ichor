@@ -8,7 +8,7 @@ description: "Resume a paused operation"
 Resume a paused operation
 
 ```sh
-ichor resume [flags]
+ichor resume [command]
 ```
 
 ### Examples

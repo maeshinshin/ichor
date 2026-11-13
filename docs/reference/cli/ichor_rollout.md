@@ -8,7 +8,7 @@ description: "Roll out pending changes that need a reboot or an API server resta
 Roll out pending changes that need a reboot or an API server restart
 
 ```sh
-ichor rollout [flags]
+ichor rollout [command]
 ```
 
 ### Examples

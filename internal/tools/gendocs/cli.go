@@ -48,7 +48,75 @@ func generateCLI(dir string) error {
 		return err
 	}
 
+	if err := groupingPages(dir, byFile); err != nil {
+		return err
+	}
+
+	if err := groupRootPage(dir, root); err != nil {
+		return err
+	}
+
 	return labelFences(dir)
+}
+
+// groupingPages gives a command that only groups others the synopsis `ichor get [command]`, as its --help has,
+// instead of cobra's `ichor get [flags]`.
+func groupingPages(dir string, byFile map[string]*cobra.Command) error {
+	for file, cmd := range byFile {
+		if !cli.IsGroupingCommand(cmd) {
+			continue
+		}
+
+		path := filepath.Join(dir, file)
+
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+
+		out := strings.Replace(string(b), "\n"+cmd.UseLine()+"\n", "\n"+cmd.CommandPath()+" [command]\n", 1)
+		if err := os.WriteFile(path, []byte(out), 0o644); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// groupRootPage replaces the flat, alphabetical SEE ALSO list of the root page, which cobra's generator writes
+// without regard to the groups of `ichor --help`, with one list per group, in the CLI's own group order.
+func groupRootPage(dir string, root *cobra.Command) error {
+	path := filepath.Join(dir, "ichor.md")
+
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	head, _, ok := strings.Cut(string(b), "### SEE ALSO\n")
+	if !ok {
+		return fmt.Errorf("%s has no SEE ALSO section", path)
+	}
+
+	var out strings.Builder
+
+	out.WriteString(head + "### SEE ALSO\n")
+
+	for _, g := range cli.HelpGroups() {
+		var rows []string
+
+		for _, c := range root.Commands() {
+			if c.GroupID == g.ID && c.IsAvailableCommand() && !c.IsAdditionalHelpTopicCommand() {
+				rows = append(rows, fmt.Sprintf("* [%s](%s.md)\t - %s\n", c.CommandPath(), strings.ReplaceAll(c.CommandPath(), " ", "_"), c.Short))
+			}
+		}
+
+		if len(rows) > 0 {
+			out.WriteString("\n#### " + strings.TrimSuffix(g.Title, ":") + "\n\n" + strings.Join(rows, ""))
+		}
+	}
+
+	return os.WriteFile(path, []byte(out.String()), 0o644)
 }
 
 // disableAutoGenTag drops cobra's "Auto generated on <date>" footer, which would change every run.

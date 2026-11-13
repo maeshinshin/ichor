@@ -28,7 +28,7 @@ running) nothing was changed. Run the command again to retry: a spec that
 already names the version is not written twice.
 
 ```sh
-ichor upgrade [flags]
+ichor upgrade [command]
 ```
 
 ### Examples

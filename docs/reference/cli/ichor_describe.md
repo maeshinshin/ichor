@@ -13,7 +13,7 @@ describe shows one cluster, node, patch, operation, user or node configuration i
 It reads the same resources the UI shows.
 
 ```sh
-ichor describe [flags]
+ichor describe [command]
 ```
 
 ### Examples

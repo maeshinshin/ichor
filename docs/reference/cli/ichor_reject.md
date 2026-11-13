@@ -8,7 +8,7 @@ description: "Reject a pending node"
 Reject a pending node
 
 ```sh
-ichor reject [flags]
+ichor reject [command]
 ```
 
 ### Examples

@@ -43,10 +43,11 @@ import (
 // The commands that list, show, create, change and delete users sit under the verbs (get users, describe user,
 // create user, edit user, delete user) and carry the same --issuer and --ca-file; the two below stay here.
 var userCmd = &cobra.Command{
-	Use:     "user",
-	GroupID: groupAccess,
-	RunE:    groupRunE,
-	Short:   "Set a user's password or sign a user out everywhere",
+	Use:         "user",
+	GroupID:     groupAccess,
+	RunE:        groupRunE,
+	Annotations: map[string]string{groupingKey: "true"},
+	Short:       "Set a user's password or sign a user out everywhere",
 	Long: `Manage the users of Ichor's own login. These commands talk to
 ichor-ui at --issuer over HTTPS with your login (run ` + "`ichor auth login --issuer URL --audience ichor-ui`" + `
 or let the first command open the browser). Use --ca-file for a private CA.

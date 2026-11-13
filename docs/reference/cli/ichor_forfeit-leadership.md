@@ -8,7 +8,7 @@ description: "Hand etcd leadership over from a control plane node that leads"
 Hand etcd leadership over from a control plane node that leads
 
 ```sh
-ichor forfeit-leadership [flags]
+ichor forfeit-leadership [command]
 ```
 
 ### Examples

@@ -8,7 +8,7 @@ description: "Reboot a node gracefully"
 Reboot a node gracefully
 
 ```sh
-ichor reboot [flags]
+ichor reboot [command]
 ```
 
 ### Examples

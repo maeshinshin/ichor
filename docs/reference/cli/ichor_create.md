@@ -13,7 +13,7 @@ create makes an Ichor user, or writes the files a person needs to reach a cluste
 credentials (a kubeconfig and a talosconfig), a short-lived read-only talosconfig, or your own kubeconfig.
 
 ```sh
-ichor create [flags]
+ichor create [command]
 ```
 
 ### Examples

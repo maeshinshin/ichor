@@ -8,7 +8,7 @@ description: "Save a cluster's secrets bundle locally"
 Save a cluster's secrets bundle locally
 
 ```sh
-ichor export [flags]
+ichor export [command]
 ```
 
 ### Examples

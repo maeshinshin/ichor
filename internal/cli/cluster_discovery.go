@@ -33,10 +33,11 @@ var clusterDiscoveryCluster string
 // discoveryCmd groups the commands that edit what discovery scans: single
 // addresses and IPv4 ranges. They write spec.discovery as the caller.
 var discoveryCmd = &cobra.Command{
-	Use:     "discovery",
-	GroupID: groupChange,
-	RunE:    groupRunE,
-	Short:   "List, add or remove the addresses and ranges Ichor scans for new nodes",
+	Use:         "discovery",
+	GroupID:     groupChange,
+	RunE:        groupRunE,
+	Annotations: map[string]string{groupingKey: "true"},
+	Short:       "List, add or remove the addresses and ranges Ichor scans for new nodes",
 	Example: `  ichor discovery list
   ichor discovery add 192.168.10.0/24`,
 }

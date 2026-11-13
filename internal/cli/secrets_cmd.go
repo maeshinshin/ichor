@@ -31,11 +31,12 @@ import (
 
 // secretsCmd groups the commands on the local secrets bundle file. They touch no cluster.
 var secretsCmd = &cobra.Command{
-	Use:     "secrets",
-	GroupID: groupAccess,
-	RunE:    groupRunE,
-	Short:   "Manage the local secrets bundle file",
-	Example: `  ichor secrets encrypt prod`,
+	Use:         "secrets",
+	GroupID:     groupAccess,
+	RunE:        groupRunE,
+	Annotations: map[string]string{groupingKey: "true"},
+	Short:       "Manage the local secrets bundle file",
+	Example:     `  ichor secrets encrypt prod`,
 }
 
 var secretsEncryptFile string

@@ -20,7 +20,7 @@ To create the very first admin on an existing install, use
 which needs no login: it writes the user with your kubeconfig's own rights.
 
 ```sh
-ichor user [flags]
+ichor user [command]
 ```
 
 ### Examples

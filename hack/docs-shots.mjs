@@ -16,7 +16,7 @@ if (!outDir) {
   console.error('usage: node hack/docs-shots.mjs <outDir> [distDir]')
   process.exit(2)
 }
-const root = (process.env.DOCS_BASE ?? '/ichor').replace(/\/*$/, '/')
+const root = (process.env.DOCS_BASE ?? '/').replace(/\/*$/, '/')
 const base = root + 'next/' // the pages under test; dist is the merged tree of all versions (make docs-site-all)
 const fakeNewer = { on: false } // serve a versions.json that lists a newer release, to see the old-version banner
 mkdirSync(outDir, { recursive: true })
@@ -360,16 +360,16 @@ try {
       }
 
       // Diagrams (docs/images/*.drawio.svg): the page names the light image, the site adds the dark one and shows the
-      // one for the theme. Both must load, only one may be visible, and the page must not scroll sideways.
+      // one for the theme. Both must load, only one of each pair may be visible, and the page must not scroll sideways.
       for (const route of diagrams) {
         const name = route.replace(/\/$/, '').replaceAll('/', '-') || 'home'
         await open(route)
         const imgs = `[...document.querySelectorAll('article img[src*=".drawio.svg"]')]`
         const shown = `${imgs}.filter((i) => i.getClientRects().length)`
-        await until(`${imgs}.length === 2 && ${imgs}.every((i) => i.complete)`, `the ${name} images`, 5000)
-        check(await ev(`${imgs}.length === 2 && ${shown}.length === 1`), `${tag}: ${name} has a light and a dark image, one visible`)
-        check(await ev(`${shown}[0]?.src.endsWith('.${theme}.drawio.svg') && ${shown}[0].naturalWidth > 0`), `${tag}: ${name} shows its ${theme} image, loaded`)
-        check(await ev(`(${shown}[0]?.alt ?? '').length > 40 && !!${shown}[0].closest('p')?.nextElementSibling?.textContent.trim()`), `${tag}: ${name} has alt text and a caption`)
+        await until(`${imgs}.length >= 2 && ${imgs}.length % 2 === 0 && ${imgs}.every((i) => i.complete)`, `the ${name} images`, 5000)
+        check(await ev(`${imgs}.length >= 2 && ${imgs}.length % 2 === 0 && ${shown}.length === ${imgs}.length / 2`), `${tag}: ${name} has a light and a dark image of each diagram, one visible`)
+        check(await ev(`${shown}.every((i) => i.src.endsWith('.${theme}.drawio.svg') && i.naturalWidth > 0)`), `${tag}: ${name} shows its ${theme} images, loaded`)
+        check(await ev(`${shown}.every((i) => i.alt.length > 40 && !!i.closest('p')?.nextElementSibling?.textContent.trim())`), `${tag}: ${name} has alt text and a caption for each diagram`)
         check(await ev(`document.documentElement.scrollWidth <= window.innerWidth`), `${tag}: ${name} page has no sideways scroll`)
         await ev(`${shown}[0].scrollIntoView({ block: 'center' })`)
         await shot(`${tag}-diagram-${name}`)

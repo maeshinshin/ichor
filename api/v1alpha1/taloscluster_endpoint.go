@@ -25,24 +25,18 @@ import (
 const (
 	EndpointTypeVIP          = "vip"
 	EndpointTypeLoadBalancer = "loadBalancer"
-	EndpointTypeDNS          = "dns"
 	EndpointTypeNode         = "node"
 )
 
 // CheckAddress reports whether the endpoint's address has the shape its type needs: vip and node take an IP address
-// (a VIP is also written into a Layer2VIPConfig, which only takes one), dns takes a name, and loadBalancer takes
-// either. The error says what was given, what the type needs, and which types would have accepted it.
+// (a VIP is also written into a Layer2VIPConfig, which only takes one), and loadBalancer takes either. The error says
+// what was given, what the type needs, and which type would have accepted it.
 func (e TalosClusterEndpoint) CheckAddress() error {
 	_, err := netip.ParseAddr(e.Address)
-	isIP := err == nil
 
-	switch {
-	case (e.Type == EndpointTypeVIP || e.Type == EndpointTypeNode) && !isIP:
+	if (e.Type == EndpointTypeVIP || e.Type == EndpointTypeNode) && err != nil {
 		return fmt.Errorf("endpoint address %q is a hostname, but endpoint type %s needs an IP address; "+
-			"type %s or %s would take a hostname", e.Address, e.Type, EndpointTypeLoadBalancer, EndpointTypeDNS)
-	case e.Type == EndpointTypeDNS && isIP:
-		return fmt.Errorf("endpoint address %q is an IP address, but endpoint type %s needs a hostname; "+
-			"type %s, %s or %s would take an IP address", e.Address, e.Type, EndpointTypeVIP, EndpointTypeNode, EndpointTypeLoadBalancer)
+			"type %s would take a hostname", e.Address, e.Type, EndpointTypeLoadBalancer)
 	}
 
 	return nil

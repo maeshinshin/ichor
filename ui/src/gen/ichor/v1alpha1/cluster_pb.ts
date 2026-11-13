@@ -567,7 +567,7 @@ export type Cluster = Message<"ichor.v1alpha1.Cluster"> & {
   createdAt?: Timestamp | undefined;
 
   /**
-   * endpoint_type is spec.endpoint.type: vip, loadBalancer, dns or node.
+   * endpoint_type is spec.endpoint.type: vip, loadBalancer or node.
    *
    * @generated from field: string endpoint_type = 21;
    */

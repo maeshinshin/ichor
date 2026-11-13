@@ -1087,7 +1087,7 @@ type Cluster struct {
 	ReleaseSet *ReleaseSet `protobuf:"bytes,19,opt,name=release_set,json=releaseSet,proto3" json:"release_set,omitempty"`
 	// created_at is the object's creation time; unset when talking to an older backend.
 	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,20,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	// endpoint_type is spec.endpoint.type: vip, loadBalancer, dns or node.
+	// endpoint_type is spec.endpoint.type: vip, loadBalancer or node.
 	EndpointType string `protobuf:"bytes,21,opt,name=endpoint_type,json=endpointType,proto3" json:"endpoint_type,omitempty"`
 	// pod_subnets and service_subnets are spec.network; empty keeps Talos's defaults.
 	PodSubnets     []string `protobuf:"bytes,22,rep,name=pod_subnets,json=podSubnets,proto3" json:"pod_subnets,omitempty"`

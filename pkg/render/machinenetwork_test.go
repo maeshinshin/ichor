@@ -222,7 +222,7 @@ func TestRenderVIP(t *testing.T) {
 			"Layer2VIPConfig", "net0")
 	})
 
-	for _, typ := range []string{"node", "loadBalancer", "dns"} {
+	for _, typ := range []string{"node", "loadBalancer"} {
 		t.Run("endpoint type "+typ+": none", func(t *testing.T) {
 			requireNone(t, render(t, "", typ, dhcp), "Layer2VIPConfig", "vip:")
 		})

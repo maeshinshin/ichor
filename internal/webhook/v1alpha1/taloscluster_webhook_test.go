@@ -77,7 +77,7 @@ var _ = Describe("TalosCluster Webhook", func() {
 		bad.Spec.Endpoint.Address = "cluster.example.com"
 		err := k8sClient.Create(ctx, bad)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("loadBalancer or dns would take a hostname"))
+		Expect(err.Error()).To(ContainSubstring("type loadBalancer would take a hostname"))
 	})
 
 	It("admits update", func() {

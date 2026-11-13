@@ -121,6 +121,13 @@ func typeQuestion(t *testing.T) promptModel {
 	return promptModel{}
 }
 
+// The prompt offers the types the CRD takes: a hostname is loadBalancer, so there is no dns.
+func TestPromptModel_OffersNoDNSEndpointType(t *testing.T) {
+	if v := shown(typeQuestion(t)); strings.Contains(v, "dns") {
+		t.Fatalf("the endpoint type prompt offers dns:\n%s", v)
+	}
+}
+
 func TestPromptModel_TypingNarrowsTheEndpointTypes(t *testing.T) {
 	m := typeQuestion(t)
 
@@ -306,7 +313,7 @@ func TestPromptModel_EnterTakesTheOnlyRemainingCandidate(t *testing.T) {
 }
 
 func TestPromptModel_EnterNeedsTwoPressesWhileSeveralRemain(t *testing.T) {
-	m, _ := send(t, typeQuestion(t), typedKeys("d")) // loadBalancer, dns and node have a d
+	m, _ := send(t, typeQuestion(t), typedKeys("d")) // loadBalancer and node have a d
 
 	if n := len(m.pick.VisibleItems()); n < 2 {
 		t.Fatalf("%d candidates match", n)

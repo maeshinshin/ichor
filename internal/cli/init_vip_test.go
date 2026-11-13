@@ -125,13 +125,10 @@ func TestRunInit_VIPFirstNodeGetsTheVIPAndItsLink(t *testing.T) {
 
 // Any other endpoint type leaves the node as it was: no spec.network, no VIP, and the links are not asked for.
 func TestRunInit_OtherEndpointTypesGetNoVIP(t *testing.T) {
-	for _, typ := range []string{endpointNode, endpointLoadBalancer, endpointDNS} {
+	for _, typ := range []string{endpointNode, endpointLoadBalancer} {
 		t.Run(typ, func(t *testing.T) {
 			applied, machine, _, _, err := initWithLinks(t, func(o *initOptions) {
 				o.EndpointType = typ
-				if typ == endpointDNS {
-					o.EndpointAddress = "cluster.example.com"
-				}
 			}, nil, errors.New("not read"))
 			if err != nil {
 				t.Fatalf("runInit: %v", err)
@@ -237,9 +234,7 @@ func TestBuildInitPlan_VIPInput(t *testing.T) {
 		want   string
 	}{
 		"a vip must be an IP address": {func(in *initPlanInput) { in.EndpointAddress = "vip.example.com" },
-			`"vip.example.com" is a hostname, but endpoint type vip needs an IP address; type loadBalancer or dns would take a hostname`},
-		"dns must be a name": {func(in *initPlanInput) { in.EndpointType, in.EndpointAddress = endpointDNS, testEndpointAddr },
-			"needs a hostname; type vip, node or loadBalancer would take an IP address"},
+			`"vip.example.com" is a hostname, but endpoint type vip needs an IP address; type loadBalancer would take a hostname`},
 		"loadBalancer takes a hostname":       {func(in *initPlanInput) { in.EndpointType, in.EndpointAddress = endpointLoadBalancer, "lb.example.com" }, ""},
 		"loadBalancer takes an IP":            {func(in *initPlanInput) { in.EndpointType = endpointLoadBalancer }, ""},
 		"--nic needs a vip":                   {func(in *initPlanInput) { in.EndpointType, in.NIC = endpointNode, testSecondMAC }, testVIPOnly},
@@ -309,7 +304,7 @@ func TestAdoptCallsAnUnmatchedEndpointALoadBalancer(t *testing.T) {
 	for name, tc := range map[string]struct{ endpoint, host, want string }{
 		"an address in front of the nodes": {testAdoptAddr, testEndpointAddr, "loadBalancer"},
 		"a node's own address":             {testAdoptAddr, testAdoptAddr, endpointNode},
-		"a name":                           {testAdoptAddr, "k8s.example.com", endpointDNS},
+		"a name":                           {testAdoptAddr, "k8s.example.com", endpointLoadBalancer},
 	} {
 		t.Run(name, func(t *testing.T) {
 			c, err := clusterFromNodes("c", "ns", "v1.14.3", []*adoptNode{node(tc.endpoint, tc.host)})
@@ -554,7 +549,7 @@ func TestRunInit_EndpointAddressAgainstTypeIsRefusedBeforeAnythingIsCreated(t *t
 	opts.EndpointAddress = "cluster.example.com"
 
 	err := runInit(context.Background(), opts, deps)
-	if err == nil || !strings.Contains(err.Error(), "needs an IP address") || !strings.Contains(err.Error(), "loadBalancer or dns") {
+	if err == nil || !strings.Contains(err.Error(), "needs an IP address") || !strings.Contains(err.Error(), "type loadBalancer would take a hostname") {
 		t.Fatalf("err = %v", err)
 	}
 

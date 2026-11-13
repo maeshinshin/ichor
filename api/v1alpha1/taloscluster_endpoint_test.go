@@ -32,11 +32,9 @@ func TestEndpointCheckAddress(t *testing.T) {
 	}{
 		{EndpointTypeVIP, "192.168.0.210", ""},
 		{EndpointTypeVIP, "fd00::210", ""},
-		{EndpointTypeVIP, epHost, "needs an IP address; type loadBalancer or dns would take a hostname"},
+		{EndpointTypeVIP, epHost, "needs an IP address; type loadBalancer would take a hostname"},
 		{EndpointTypeNode, epIP, ""},
 		{EndpointTypeNode, "node1.example.com", "endpoint type node needs an IP address"},
-		{EndpointTypeDNS, epHost, ""},
-		{EndpointTypeDNS, epIP, "needs a hostname; type vip, node or loadBalancer would take an IP address"},
 		{EndpointTypeLoadBalancer, epHost, ""},
 		{EndpointTypeLoadBalancer, epIP, ""},
 	} {

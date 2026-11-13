@@ -28,11 +28,11 @@ type TalosClusterEndpoint struct {
 	// type is the kind of address the endpoint resolves through. vip is an address Ichor itself puts on every
 	// control plane that has a spec.network, as a shared IP on its primary link; an address something else holds,
 	// such as a hardware load balancer or a VIP the cluster already runs, is loadBalancer.
-	// +kubebuilder:validation:Enum=vip;loadBalancer;dns;node
+	// +kubebuilder:validation:Enum=vip;loadBalancer;node
 	// +required
 	Type string `json:"type"`
 
-	// address is the endpoint's address: an IP for vip/node, a hostname or an IP for loadBalancer, or a hostname for dns.
+	// address is the endpoint's address: an IP for vip/node, or an IP or a hostname for loadBalancer.
 	// +kubebuilder:validation:MinLength=1
 	// +required
 	Address string `json:"address"`

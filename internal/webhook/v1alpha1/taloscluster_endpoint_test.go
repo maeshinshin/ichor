@@ -41,13 +41,12 @@ func TestValidateEndpoint(t *testing.T) {
 		want     string
 	}{
 		"create: a hostname with vip is refused":       {nil, endpointCluster("vip", host), wantNeedsIP},
-		"create: an IP with dns is refused":            {nil, endpointCluster("dns", ip), "needs a hostname"},
 		"create: loadBalancer takes a hostname":        {nil, endpointCluster("loadBalancer", host), ""},
 		"create: loadBalancer takes an IP":             {nil, endpointCluster("loadBalancer", ip), ""},
 		"create: a vip with an IP":                     {nil, endpointCluster("vip", ip), ""},
 		"update: another field of a mismatched pair":   {endpointCluster("vip", host), endpointCluster("vip", host), ""},
 		"update: the address changes to a mismatch":    {endpointCluster("vip", ip), endpointCluster("vip", host), wantNeedsIP},
-		"update: the type changes to a mismatch":       {endpointCluster("loadBalancer", ip), endpointCluster("dns", ip), "needs a hostname"},
+		"update: the type changes to a mismatch":       {endpointCluster("loadBalancer", ip), endpointCluster("vip", host), wantNeedsIP},
 		"update: a mismatched pair changes to a fit":   {endpointCluster("vip", host), endpointCluster("loadBalancer", host), ""},
 		"update: a mismatched pair changes to another": {endpointCluster("vip", host), endpointCluster("vip", "other.example.com"), wantNeedsIP},
 	} {

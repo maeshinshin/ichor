@@ -78,7 +78,7 @@ func TestTalosEndpointsNeverFallBackToTheClusterEndpoint(t *testing.T) {
 		},
 		"no machine at all is refused": {nil, nil},
 	} {
-		for _, typ := range []string{ichorv1alpha1.EndpointTypeVIP, ichorv1alpha1.EndpointTypeLoadBalancer, ichorv1alpha1.EndpointTypeDNS, ichorv1alpha1.EndpointTypeNode} {
+		for _, typ := range []string{ichorv1alpha1.EndpointTypeVIP, ichorv1alpha1.EndpointTypeLoadBalancer, ichorv1alpha1.EndpointTypeNode} {
 			t.Run(name+"/"+typ, func(t *testing.T) {
 				c := cluster.DeepCopy()
 				c.Spec.Endpoint.Type = typ

@@ -188,7 +188,7 @@ message Cluster {
   ReleaseSet release_set = 19;
   // created_at is the object's creation time; unset when talking to an older backend.
   google.protobuf.Timestamp created_at = 20;
-  // endpoint_type is spec.endpoint.type: vip, loadBalancer, dns or node.
+  // endpoint_type is spec.endpoint.type: vip, loadBalancer or node.
   string endpoint_type = 21;
   // pod_subnets and service_subnets are spec.network; empty keeps Talos's defaults.
   repeated string pod_subnets = 22;

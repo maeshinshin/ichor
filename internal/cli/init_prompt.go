@@ -38,7 +38,6 @@ import (
 var endpointTypes = []struct{ Name, Address string }{
 	{"vip", "an IP address"},
 	{"loadBalancer", "a hostname"},
-	{endpointDNS, "a hostname"},
 	{"node", "an IP address"},
 }
 

@@ -375,6 +375,19 @@ var _ = Describe("TalosCluster", func() {
 		Entry("4 is rejected", int32(4), false),
 	)
 
+	// The endpoint type has no dns: a hostname is a loadBalancer address, so the enum is the three values.
+	DescribeTable("endpoint.type",
+		func(typ string, accepted bool) {
+			c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
+			c.Spec.Endpoint.Type = typ
+			expectAdmitted(k8sClient.Create(context.Background(), c), accepted)
+		},
+		Entry("vip is accepted", "vip", true),
+		Entry("loadBalancer is accepted", "loadBalancer", true),
+		Entry("node is accepted", "node", true),
+		Entry("dns is refused", "dns", false),
+	)
+
 	// Schedulable has no "auto" -- nothing on the object can resolve
 	// it before any machine exists, so the field is required and limited to
 	// true/false, and any other value (including empty) is refused.

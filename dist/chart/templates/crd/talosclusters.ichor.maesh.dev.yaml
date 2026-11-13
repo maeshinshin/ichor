@@ -6535,7 +6535,7 @@ spec:
                 properties:
                   address:
                     description: 'address is the endpoint''s address: an IP for vip/node,
-                      a hostname or an IP for loadBalancer, or a hostname for dns.'
+                      or an IP or a hostname for loadBalancer.'
                     minLength: 1
                     type: string
                   type:
@@ -6546,7 +6546,6 @@ spec:
                     enum:
                     - vip
                     - loadBalancer
-                    - dns
                     - node
                     type: string
                 required:

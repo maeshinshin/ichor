@@ -72,7 +72,7 @@ ichor init [flags]
       --discover-cidr stringArray          IPv4 CIDR (/24 or smaller) of maintenance-mode nodes for the controller to probe (spec.discovery.cidrs); repeatable
       --dns strings                        with --endpoint-type vip: DNS server address (repeatable)
       --endpoint-address string            cluster endpoint address (required): an IP address that no node has yet for vip, which Ichor puts on the control planes
-      --endpoint-type string               cluster endpoint type: vip, loadBalancer, dns or node (default "vip")
+      --endpoint-type string               cluster endpoint type: vip, loadBalancer or node (default "vip")
       --ephemeral-disk-selector string     CEL disk selector (e.g. disk.wwid == "...") for a dedicated EPHEMERAL disk, separate from --install-disk
   -f, --file string                        read the init settings from this InitConfig file (see --print-config-template); a flag given on the command line overrides the file
       --gateway string                     with --address: default gateway. Left out, the configuration adds no default route; a route the node already has from its platform configuration (Talos merges the layers) is kept

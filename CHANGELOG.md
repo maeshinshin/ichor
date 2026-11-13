@@ -88,6 +88,12 @@ node's network for it.
   command has an example. The reference pages list the commands in the same
   groups, and a group's usage line reads `ichor get [command]`, since the group
   does nothing without one.
+- With a terminal on standard input, `ichor init` asks for what is missing: the
+  cluster name, the endpoint type and address, the first node's address, and the
+  install disk, picked from the disks the node reports, before anything is
+  written. Without a terminal the flags are required, as before. Esc or Ctrl-C
+  cancels with nothing written. Enter alone does not pick the disk, which is
+  wiped.
 - `ichor init` takes the first node's network: `--nic`, `--address`, `--gateway`,
   `--dns` and `--vlan`, with the matching keys `firstNode.nic`,
   `firstNode.addresses`, `firstNode.gateway`, `firstNode.dns` and
@@ -150,6 +156,16 @@ node's network for it.
   matches on a `type` or a `reason` keeps working. Something that matches on
   the text of a message, a condition's `message` or the words of a denial, does
   not.
+- A node is changed only once it answers as the machine it is named for, by
+  its machine UUID. A reset, an etcd departure, a configuration rollout, a
+  Talos upgrade or another node action is refused when it does not, rather than
+  sent to whichever machine answered.
+- A removal deferred by a held cluster lock or a shutdown retries by itself when
+  the lock frees. A dead control plane's removal is no longer refused after its
+  node has been reset, which kept the finalizer in place.
+- A control plane's drain during removal ends after the rollout's step timeout
+  and is retried later, so a PodDisruptionBudget that allows no disruption no
+  longer holds the cluster lock until the pod restarts.
 
 ### Typed configuration
 

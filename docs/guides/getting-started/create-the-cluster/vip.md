@@ -29,6 +29,10 @@ the kubeconfig use. Do not use the VIP as a Talos API endpoint: `talosctl` and
 API server being healthy, so when either is down the VIP cannot be reached, and
 the Talos API is then the way to recover, which needs the machine's own address.
 
+![Three control planes, each with its own address. The virtual IP 192.168.1.40 is on one of them at a time, on that machine's link enp1s0: on control plane 1 while it is up, and on control plane 2 once control plane 1 is gone. kubectl and the kubeconfig use the VIP; talosctl uses each machine's own address.](../../../images/create-the-cluster-vip.light.drawio.svg)
+
+*One address, held by one control plane at a time. When that one is gone, another takes it over.*
+
 ## Interactive
 
 Run `ichor init` with the settings you know. On a terminal, init asks for each

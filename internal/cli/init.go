@@ -317,7 +317,15 @@ func bindInitFlags(flags *pflag.FlagSet, o *initOptions, wait *time.Duration) {
 		"run the installer image WITHOUT checking its signature (for builds nobody signs: development and demo images)")
 	flags.StringVar(&o.NIC, flagNIC, "",
 		"with --endpoint-type vip: the first node's primary network link, by its permanent MAC (aa:bb:cc:dd:ee:ff), "+
-			"the link the VIP is announced on; like `approve node --nic`. Needed only when the node has more than one physical link")
+			"the link the VIP is announced on; like approve node --nic. Needed only when the node has more than one physical link")
+	flags.StringSliceVar(&o.Addresses, "address", nil,
+		"with --endpoint-type vip: static address of the first node's primary link with prefix length, 192.168.1.10/24 (repeatable); "+
+			"without it the node uses DHCP on that link. Same as approve node --address")
+	flags.StringVar(&o.Gateway, "gateway", "",
+		"with --address: default gateway. Left out, the configuration adds no default route; a route the node already has from its "+
+			"platform configuration (Talos merges the layers) is kept")
+	flags.StringSliceVar(&o.DNS, flagDNS, nil, "with --endpoint-type vip: DNS server address (repeatable)")
+	flags.Int32Var(&o.VLAN, "vlan", 0, "with --endpoint-type vip: VLAN ID (1-4094) to put the addressing on")
 	flags.StringVar(&o.InstallDisk, "install-disk", "", "the first node's install disk: "+installDiskUsage+" (required)")
 	flags.StringSliceVar(&o.PodSubnets, "pod-subnets", nil,
 		"pod CIDRs (spec.network.podSubnets; at most one per IP family); unset keeps Talos's default 10.244.0.0/16. Fixed once the cluster exists")

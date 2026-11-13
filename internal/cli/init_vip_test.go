@@ -38,6 +38,10 @@ const (
 	testSecondMAC  = "52:54:00:dd:ee:ff"
 	testAdoptAddr  = "10.0.0.11"
 	testNodeAddr   = "10.0.0.10"
+	testStaticCIDR = "192.168.0.201/16"
+	testNotIP      = "not an IP address"
+	testVIPOnly    = "only used with --endpoint-type vip"
+	testHWGateway  = "192.168.0.254"
 )
 
 // initWithLinks runs init for a first node that reports links (and a read error) and returns what init applied
@@ -118,7 +122,7 @@ func TestRunInit_VIPFirstNodeGetsTheVIPAndItsLink(t *testing.T) {
 
 // Any other endpoint type leaves the node as it was: no spec.network, no VIP, and the links are not asked for.
 func TestRunInit_OtherEndpointTypesGetNoVIP(t *testing.T) {
-	for _, typ := range []string{endpointNode, "loadBalancer", "dns"} {
+	for _, typ := range []string{endpointNode, "loadBalancer", endpointDNS} {
 		t.Run(typ, func(t *testing.T) {
 			applied, machine, _, _, err := initWithLinks(t, func(o *initOptions) { o.EndpointType = typ }, nil, errors.New("not read"))
 			if err != nil {
@@ -217,9 +221,15 @@ func TestBuildInitPlan_VIPInput(t *testing.T) {
 		mutate func(*initPlanInput)
 		want   string
 	}{
-		"a vip must be an IP address":       {func(in *initPlanInput) { in.EndpointAddress = "vip.example.com" }, "not an IP address"},
-		"--nic needs a vip":                 {func(in *initPlanInput) { in.EndpointType, in.NIC = endpointNode, testSecondMAC }, "only used with --endpoint-type vip"},
-		"--nic must be a MAC":               {func(in *initPlanInput) { in.NIC = "eno1" }, "not a MAC address"},
+		"a vip must be an IP address": {func(in *initPlanInput) { in.EndpointAddress = "vip.example.com" }, testNotIP},
+		"--nic needs a vip":           {func(in *initPlanInput) { in.EndpointType, in.NIC = endpointNode, testSecondMAC }, testVIPOnly},
+		"--nic must be a MAC":         {func(in *initPlanInput) { in.NIC = "eno1" }, "not a MAC address"},
+		"--address needs a vip": {func(in *initPlanInput) {
+			in.EndpointType, in.Addresses = endpointNode, []string{testStaticCIDR}
+		}, testVIPOnly},
+		"--gateway needs a vip": {func(in *initPlanInput) {
+			in.EndpointType, in.Gateway = endpointNode, testHWGateway
+		}, testVIPOnly},
 		"a valid vip and --nic are allowed": {func(in *initPlanInput) { in.NIC = testSecondMAC }, ""},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -278,7 +288,7 @@ func TestAdoptCallsAnUnmatchedEndpointALoadBalancer(t *testing.T) {
 	for name, tc := range map[string]struct{ endpoint, host, want string }{
 		"an address in front of the nodes": {testAdoptAddr, testEndpointAddr, "loadBalancer"},
 		"a node's own address":             {testAdoptAddr, testAdoptAddr, endpointNode},
-		"a name":                           {testAdoptAddr, "k8s.example.com", "dns"},
+		"a name":                           {testAdoptAddr, "k8s.example.com", endpointDNS},
 	} {
 		t.Run(name, func(t *testing.T) {
 			c, err := clusterFromNodes("c", "ns", "v1.14.3", []*adoptNode{node(tc.endpoint, tc.host)})
@@ -321,4 +331,101 @@ func TestChooseNIC_ListOnATerminal(t *testing.T) {
 			t.Fatalf("got %q, %v, want a refusal", got, err)
 		}
 	})
+}
+
+// --address puts the first node's static address on its primary link, as `approve node --address` does: a
+// LinkConfig with the address (a /16 as given) and the route, no DHCPv4Config, and the VIP and alias as before.
+func TestRunInit_VIPStaticAddress(t *testing.T) {
+	one := []ichorv1alpha1.TalosMachineDiscoveredLink{testInitLink}
+
+	applied, machine, _, _, err := initWithLinks(t, func(o *initOptions) {
+		o.Addresses, o.Gateway, o.DNS = []string{testStaticCIDR}, testHWGateway, []string{"1.1.1.1"}
+	}, one, nil)
+	if err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	for _, want := range []string{
+		"kind: LinkConfig", "address: " + testStaticCIDR, "gateway: " + testHWGateway, "address: 1.1.1.1",
+		"kind: Layer2VIPConfig", "link: net0", "kind: LinkAliasConfig",
+	} {
+		if !strings.Contains(applied, want) {
+			t.Errorf("%q missing from the applied configuration", want)
+		}
+	}
+
+	if strings.Contains(applied, "kind: DHCPv4Config") {
+		t.Error("a static node also got a DHCPv4Config")
+	}
+
+	if n := machine.Spec.Network; n == nil || n.Addressing != ichorv1alpha1.MachineAddressingStatic || n.Gateway != testHWGateway || n.Addresses[0] != testStaticCIDR {
+		t.Errorf("machine spec.network = %+v", n)
+	}
+
+	// With no --address the node is still DHCP, as before.
+	if applied, _, _, _, err = initWithLinks(t, nil, one, nil); err != nil || !strings.Contains(applied, "kind: DHCPv4Config") {
+		t.Fatalf("no --address: err %v, DHCPv4Config present = %v", err, strings.Contains(applied, "kind: DHCPv4Config"))
+	}
+}
+
+// What `approve node` refuses, init refuses too, before anything is applied to the node.
+func TestRunInit_VIPStaticAddressRefusals(t *testing.T) {
+	one := []ichorv1alpha1.TalosMachineDiscoveredLink{testInitLink}
+
+	for name, tc := range map[string]struct {
+		mutate func(*initOptions)
+		want   string
+	}{
+		"--gateway without --address":       {func(o *initOptions) { o.Gateway = testHWGateway }, "--gateway needs a static --address"},
+		"--address without a prefix length": {func(o *initOptions) { o.Addresses = []string{"192.168.0.201"} }, "needs a prefix length"},
+		"--gateway that is no IP":           {func(o *initOptions) { o.Addresses, o.Gateway = []string{testStaticCIDR}, "gw" }, testNotIP},
+		"--dns that is no IP":               {func(o *initOptions) { o.Addresses, o.DNS = []string{testStaticCIDR}, []string{"dns-name"} }, testNotIP},
+	} {
+		t.Run(name, func(t *testing.T) {
+			applied, _, _, _, err := initWithLinks(t, tc.mutate, one, nil)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err = %v, want one containing %q", err, tc.want)
+			}
+
+			if applied != "" {
+				t.Error("the node was configured despite the refusal")
+			}
+		})
+	}
+}
+
+// -f carries the static settings under firstNode, the same values as the flags.
+func TestInitFile_StaticKeys(t *testing.T) {
+	c, err := parseInitConfig([]byte("apiVersion: ichor.maesh.dev/v1alpha1\nkind: InitConfig\nfirstNode:\n  addresses: [" + testStaticCIDR +
+		"]\n  gateway: " + testHWGateway + "\n  dns: [1.1.1.1]\n  vlan: 7\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := map[string]string{}
+	for _, v := range c.values("") {
+		got[v.flag] = strings.Join(v.values, ",")
+	}
+
+	for flag, want := range map[string]string{"address": testStaticCIDR, "gateway": testHWGateway, flagDNS: "1.1.1.1", "vlan": "7"} {
+		if got[flag] != want {
+			t.Errorf("--%s from the file = %q, want %q", flag, got[flag], want)
+		}
+	}
+}
+
+// A static address needs a link to go on: with several links and no --nic init refuses and lists them, before
+// anything is applied, exactly as it does for DHCP; with a sole link that link is the one the address goes on.
+func TestRunInit_VIPStaticAddressNeedsAnUnambiguousLink(t *testing.T) {
+	two := []ichorv1alpha1.TalosMachineDiscoveredLink{testInitLink, {Name: testSecondLink, PermanentMAC: testSecondMAC}}
+	static := func(o *initOptions) { o.Addresses = []string{testStaticCIDR} }
+
+	applied, _, _, _, err := initWithLinks(t, static, two, nil)
+	if err == nil || !strings.Contains(err.Error(), "--nic") || applied != "" {
+		t.Fatalf("err = %v, applied = %q, want a refusal naming --nic and nothing applied", err, applied)
+	}
+
+	if _, machine, _, _, err := initWithLinks(t, static, two[:1], nil); err != nil || machine.Spec.Network.MAC != testLinkMAC {
+		t.Fatalf("sole link: err = %v", err)
+	}
 }

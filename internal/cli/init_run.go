@@ -36,6 +36,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
+	"github.com/maeshinshin/ichor/internal/uiapi"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/release"
 	"github.com/maeshinshin/ichor/pkg/render"
@@ -202,7 +203,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
-	identity, installDisk, nic, err := readFirstNode(ctx, opts, deps, pickDisk)
+	identity, installDisk, network, err := readFirstNode(ctx, opts, deps, pickDisk)
 	if err != nil {
 		return err
 	}
@@ -217,7 +218,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 			Endpoint: opts.NodeEndpoint,
 			Role:     roleControlPlane,
 			Install:  &ichorv1alpha1.TalosMachineInstall{Disk: *installDisk},
-			Network:  vipNetwork(cluster, nic),
+			Network:  network,
 			// init is the special case of approving the first control
 			// plane (architecture.md's "Bootstrap": "Adding later nodes
 			// goes through the normal approval flow").
@@ -559,55 +560,66 @@ func waitForCiliumHandover(
 
 // readFirstNode reads the first node's identity and settles its install disk: the --install-disk
 // value, or, when pickDisk, one chosen from the node's own disk list on the same connection. For a vip
-// endpoint it also settles the primary link's MAC (see chooseNIC); it is empty for any other type. It runs
+// endpoint it also settles the primary link and its addressing (see chooseNIC and vipNetwork) as the machine's
+// spec.network; it is nil for any other type, where the node keeps Talos's default of DHCP on every physical link. It runs
 // before the first write; the apply to the node is initBootstrapAccess's, steps later.
 func readFirstNode(
 	ctx context.Context, opts initOptions, deps initDeps, pickDisk bool,
-) (controller.HardwareIdentity, *ichorv1alpha1.TalosMachineDisk, string, error) {
+) (controller.HardwareIdentity, *ichorv1alpha1.TalosMachineDisk, *ichorv1alpha1.TalosMachineNetwork, error) {
 	vip := opts.EndpointType == endpointVIP
 
 	node, err := deps.ReadNode(ctx, opts.NodeEndpoint, pickDisk || vip)
 	if err != nil {
-		return node.Identity, nil, "", fmt.Errorf("init: reading the first node's hardware identity: %w", err)
+		return node.Identity, nil, nil, fmt.Errorf("init: reading the first node's hardware identity: %w", err)
 	}
 
 	if node.Identity.UUID == "" {
-		return node.Identity, nil, "", fmt.Errorf(
+		return node.Identity, nil, nil, fmt.Errorf(
 			"init: the node at %q reported no SMBIOS UUID; init needs a strong hardware identity for the first control plane",
 			opts.NodeEndpoint)
 	}
 
 	if pickDisk {
 		if opts.InstallDisk, err = chooseInstallDisk(deps.Stdin, deps.Stderr, node.Disks, node.InventoryErr); err != nil {
-			return node.Identity, nil, "", fmt.Errorf("init: %w", err)
+			return node.Identity, nil, nil, fmt.Errorf("init: %w", err)
 		}
 	}
 
 	installDisk, err := parseDiskSelector("--install-disk", opts.InstallDisk)
 	if err != nil {
-		return node.Identity, nil, "", fmt.Errorf("init: %w", err)
+		return node.Identity, nil, nil, fmt.Errorf("init: %w", err)
 	}
 
-	var nic string
-
-	if vip {
-		if nic, err = chooseNIC(deps.Stdin, deps.Stderr, opts.NIC, node.Links, node.InventoryErr); err != nil {
-			return node.Identity, nil, "", fmt.Errorf("init: %w", err)
-		}
+	if !vip {
+		return node.Identity, installDisk, nil, nil
 	}
 
-	return node.Identity, installDisk, nic, nil
+	nic, err := chooseNIC(deps.Stdin, deps.Stderr, opts.NIC, node.Links, node.InventoryErr)
+	if err != nil {
+		return node.Identity, nil, nil, fmt.Errorf("init: %w", err)
+	}
+
+	network, err := vipNetwork(opts, nic, node.Identity)
+	if err != nil {
+		return node.Identity, nil, nil, fmt.Errorf("init: %w", err)
+	}
+
+	return node.Identity, installDisk, network, nil
 }
 
-// vipNetwork is the first node's spec.network for a vip cluster: DHCP on the primary link. pkg/render then emits
-// the net0 alias and, on a control plane, the VIP on it. It is nil for any other endpoint type, where the node
-// keeps Talos's default of DHCP on every physical link.
-func vipNetwork(cluster *ichorv1alpha1.TalosCluster, nic string) *ichorv1alpha1.TalosMachineNetwork {
-	if cluster.Spec.Endpoint.Type != endpointVIP {
-		return nil
+// vipNetwork is the first node's spec.network for a vip cluster, from the primary link and --address, --gateway,
+// --dns and --vlan, checked as `approve node` checks them (networkFromFlags, then the API's own NetworkFromPB):
+// DHCP on the link with none of them, static with --address. pkg/render then emits the net0 alias and, on a
+// control plane, the VIP on it.
+func vipNetwork(opts initOptions, nic string, id controller.HardwareIdentity) (*ichorv1alpha1.TalosMachineNetwork, error) {
+	n, err := networkFromFlags(machineApproveOptions{
+		NIC: nic, Addresses: opts.Addresses, Gateway: opts.Gateway, DNS: opts.DNS, VLAN: opts.VLAN,
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	return &ichorv1alpha1.TalosMachineNetwork{MAC: nic, Addressing: ichorv1alpha1.MachineAddressingDHCP}
+	return uiapi.NetworkFromPB(n, ichorv1alpha1.TalosMachineIdentity{MACAddresses: id.MACAddresses})
 }
 
 // initBootstrapAccess is step 4: apply the rendered configuration to the node and wait for it to

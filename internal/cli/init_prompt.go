@@ -37,7 +37,7 @@ import (
 var endpointTypes = []struct{ Name, Address string }{
 	{"vip", "an IP address"},
 	{"loadBalancer", "a hostname"},
-	{"dns", "a hostname"},
+	{endpointDNS, "a hostname"},
 	{"node", "an IP address"},
 }
 
@@ -307,7 +307,7 @@ func chooseNIC(r io.Reader, w io.Writer, given string, links []ichorv1alpha1.Tal
 		flag:  flagNIC,
 		label: "Primary link",
 		help: func(map[string]string) string {
-			return "the VIP is announced on this link and the node gets its address by DHCP on it"
+			return "the VIP is announced on this link, and the node is addressed on it (DHCP unless --address is given)"
 		},
 		choices:   nicChoices(links),
 		noDefault: true,

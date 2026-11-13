@@ -33,11 +33,11 @@ var (
 	maxSizeRe    = regexp.MustCompile(`^[1-9][0-9]*(MiB|GiB|TiB)$`)
 )
 
-// networkFromPB converts the wire network settings to spec.network and checks them
+// NetworkFromPB converts the wire network settings to spec.network and checks them
 // the way the CRD does, so the caller learns the reason instead of an admission error. The MAC
 // must be one the machine was discovered with: that is what "permanent MAC discovered earlier"
 // means, and it stops a typo from selecting a link that does not exist. nil means "none".
-func networkFromPB(in *pb.MachineNetwork, identity ichorv1alpha1.TalosMachineIdentity) (*ichorv1alpha1.TalosMachineNetwork, error) {
+func NetworkFromPB(in *pb.MachineNetwork, identity ichorv1alpha1.TalosMachineIdentity) (*ichorv1alpha1.TalosMachineNetwork, error) {
 	if in == nil {
 		return nil, nil
 	}

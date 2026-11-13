@@ -119,6 +119,13 @@ type initPlanInput struct {
 	// whose Layer2VIPConfig is announced on that link.
 	NIC string
 
+	// Addresses, Gateway, DNS and VLAN address that link (--address, --gateway, --dns, --vlan), as on
+	// `approve node`; with none of them the node uses DHCP on it.
+	Addresses []string
+	Gateway   string
+	DNS       []string
+	VLAN      int32
+
 	TalosVersion      string
 	KubernetesVersion string
 	VersionContract   string
@@ -356,12 +363,18 @@ func checkVIPInput(in initPlanInput) error {
 		}
 	}
 
-	if in.NIC == "" {
-		return nil
+	if in.EndpointType != endpointVIP {
+		if in.NIC != "" {
+			return fmt.Errorf("init: --nic is only used with --endpoint-type vip, not %q", in.EndpointType)
+		}
+
+		if len(in.Addresses) > 0 || in.Gateway != "" || len(in.DNS) > 0 || in.VLAN != 0 {
+			return fmt.Errorf("init: --address, --gateway, --dns and --vlan are only used with --endpoint-type vip, not %q", in.EndpointType)
+		}
 	}
 
-	if in.EndpointType != endpointVIP {
-		return fmt.Errorf("init: --nic is only used with --endpoint-type vip, not %q", in.EndpointType)
+	if in.NIC == "" {
+		return nil
 	}
 
 	if !macPattern.MatchString(in.NIC) {

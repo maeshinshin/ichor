@@ -38,6 +38,7 @@ const (
 	flagEndpointAddress = "endpoint-address"
 	flagNodeEndpoint    = "node-endpoint"
 	flagInstallDisk     = "install-disk"
+	flagDNS             = "dns"
 
 	initConfigAPIVersion = "ichor.maesh.dev/v1alpha1"
 	initConfigKind       = "InitConfig"
@@ -67,6 +68,12 @@ firstNode:
   endpoint: 192.168.1.50:50000     # --node-endpoint (required)
   installDisk: /dev/sda            # --install-disk (required)
   # nic: 52:54:00:12:34:56         # --nic: with a vip endpoint, the primary link's permanent MAC (asked for when the node has several)
+  # addresses:                     # --address: with a vip endpoint, a static address with prefix length instead of DHCP
+  #   - 192.168.1.50/24
+  # gateway: 192.168.1.1           # --gateway
+  # dns:                           # --dns
+  #   - 1.1.1.1
+  # vlan: 100                      # --vlan
   disks:
     ephemeralSelector: 'disk.wwid == "naa.0000"'   # --ephemeral-disk-selector
     storage:
@@ -127,9 +134,13 @@ type initConfigVolume struct {
 }
 
 type initConfigNode struct {
-	Endpoint    string `json:"endpoint"`
-	InstallDisk string `json:"installDisk"`
-	NIC         string `json:"nic"`
+	Endpoint    string   `json:"endpoint"`
+	InstallDisk string   `json:"installDisk"`
+	NIC         string   `json:"nic"`
+	Addresses   []string `json:"addresses"`
+	Gateway     string   `json:"gateway"`
+	DNS         []string `json:"dns"`
+	VLAN        int32    `json:"vlan"`
 	Disks       struct {
 		EphemeralSelector string           `json:"ephemeralSelector"`
 		Storage           initConfigVolume `json:"storage"`
@@ -206,6 +217,11 @@ func (c initConfigFile) values(dir string) []initFileValue {
 		return []string{s}
 	}
 
+	var vlan []string
+	if c.FirstNode.VLAN != 0 {
+		vlan = []string{fmt.Sprint(c.FirstNode.VLAN)}
+	}
+
 	mirrors := make([]string, 0, len(c.Cluster.RegistryMirrors))
 	for host, u := range c.Cluster.RegistryMirrors {
 		mirrors = append(mirrors, host+"="+u)
@@ -226,6 +242,10 @@ func (c initConfigFile) values(dir string) []initFileValue {
 		{flagNodeEndpoint, "firstNode.endpoint", one(c.FirstNode.Endpoint)},
 		{flagInstallDisk, "firstNode.installDisk", one(c.FirstNode.InstallDisk)},
 		{flagNIC, "firstNode.nic", one(c.FirstNode.NIC)},
+		{"address", "firstNode.addresses", c.FirstNode.Addresses},
+		{"gateway", "firstNode.gateway", one(c.FirstNode.Gateway)},
+		{flagDNS, "firstNode.dns", c.FirstNode.DNS},
+		{"vlan", "firstNode.vlan", vlan},
 		{"ephemeral-disk-selector", "firstNode.disks.ephemeralSelector", one(c.FirstNode.Disks.EphemeralSelector)},
 		{"storage-disk-selector", "firstNode.disks.storage.selector", one(c.FirstNode.Disks.Storage.Selector)},
 		{"storage-volume-name", "firstNode.disks.storage.volumeName", one(c.FirstNode.Disks.Storage.VolumeName)},

@@ -235,7 +235,7 @@ func clusterFromNodes(name, namespace, talosVersion string, nodes []*adoptNode) 
 
 	f := cp.Facts
 
-	endpointType := "dns"
+	endpointType := endpointDNS
 
 	if addr, err := netip.ParseAddr(f.EndpointHost); err == nil {
 		// An address that is no node's own is something in front of the nodes, a hardware load balancer
@@ -366,6 +366,7 @@ const (
 	endpointVIP          = "vip"
 	endpointLoadBalancer = "loadBalancer"
 	endpointNode         = "node"
+	endpointDNS          = "dns"
 )
 
 func kubernetesVersionOr(v string) string {

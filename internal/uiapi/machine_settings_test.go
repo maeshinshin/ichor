@@ -61,7 +61,7 @@ func TestNetworkFromPB(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := networkFromPB(tc.in, id)
+			got, err := NetworkFromPB(tc.in, id)
 
 			switch {
 			case tc.wantErr == "" && err != nil:
@@ -81,7 +81,7 @@ func TestNetworkRoundTrip(t *testing.T) {
 		DnsServers: []string{"9.9.9.9"}, VlanId: 5,
 	}
 
-	spec, err := networkFromPB(in, ichorv1alpha1.TalosMachineIdentity{})
+	spec, err := NetworkFromPB(in, ichorv1alpha1.TalosMachineIdentity{})
 	if err != nil {
 		t.Fatal(err)
 	}

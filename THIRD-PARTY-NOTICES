@@ -2479,7 +2479,7 @@ Components:
     Copyright (c) 2013 The Gorilla WebSocket Authors. All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 1 of 11)
+BSD-3-Clause (variant 1 of 12)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2541,7 +2541,7 @@ Components:
     Copyright (c) 2018 The Go Authors. All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 2 of 11)
+BSD-3-Clause (variant 2 of 12)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2597,7 +2597,7 @@ Components:
     Copyright 2009 The Go Authors.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 3 of 11)
+BSD-3-Clause (variant 3 of 12)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2632,7 +2632,7 @@ Components:
     Copyright (c) 2014, Evan Phoenix All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 4 of 11)
+BSD-3-Clause (variant 4 of 12)
 --------------------------------------------------------------------------------
 
 Authors. All rights reserved.
@@ -2668,7 +2668,41 @@ Components:
     Copyright (c) 2012 Péter Surányi. Portions Copyright (c) 2009 The Go
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 5 of 11)
+BSD-3-Clause (variant 5 of 12)
+--------------------------------------------------------------------------------
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+   * Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+   * Redistributions in binary form must reproduce the above
+copyright notice, this list of conditions and the following disclaimer
+in the documentation and/or other materials provided with the
+distribution.
+   * Neither the name of @atotto. nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Components:
+- github.com/atotto/clipboard@v0.1.4
+    Copyright (c) 2013 Ato Araki. All rights reserved.
+
+--------------------------------------------------------------------------------
+BSD-3-Clause (variant 6 of 12)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2731,7 +2765,7 @@ Components:
     Copyright (c) 2009 The Go Authors. All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 6 of 11)
+BSD-3-Clause (variant 7 of 12)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without modification,
@@ -2764,7 +2798,7 @@ Components:
     Copyright (c) 2015, Gengo, Inc. All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 7 of 11)
+BSD-3-Clause (variant 8 of 12)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2803,7 +2837,7 @@ Components:
     Copyright 2008 Google Inc.  All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 8 of 11)
+BSD-3-Clause (variant 9 of 12)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2839,7 +2873,7 @@ Components:
     Copyright 2022 Filippo Valsorda
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 9 of 11)
+BSD-3-Clause (variant 10 of 12)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2874,7 +2908,7 @@ Components:
     Copyright (c) 2012-2023 The ANTLR Project. All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 10 of 11)
+BSD-3-Clause (variant 11 of 12)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -2911,7 +2945,7 @@ Components:
     Copyright (c) 2011, Open Knowledge Foundation Ltd. All rights reserved.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 11 of 11)
+BSD-3-Clause (variant 12 of 12)
 --------------------------------------------------------------------------------
 
 Redistribution and use in source and binary forms, with or without
@@ -3010,7 +3044,7 @@ Components:
 MIT (variant 1 of 8)
 --------------------------------------------------------------------------------
 
-The MIT License (MIT)
+MIT License
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -3019,18 +3053,24 @@ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
 furnished to do so, subject to the following conditions:
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 
 Components:
+- charm.land/bubbles/v2@v2.2.1
+    Copyright (c) 2020-2026 Charmbracelet, Inc.
+- charm.land/bubbletea/v2@v2.1.1
+    Copyright (c) 2020-2026 Charmbracelet, Inc.
+- charm.land/lipgloss/v2@v2.0.6
+    Copyright (c) 2021-2026 Charmbracelet, Inc.
 - github.com/BurntSushi/toml@v1.6.0
     Copyright (c) 2013 TOML authors
 - github.com/MakeNowJust/heredoc@v1.0.0
@@ -3053,6 +3093,20 @@ Components:
     Copyright (c) 2014 Cenk Altı
 - github.com/cespare/xxhash/v2@v2.3.0
     Copyright (c) 2016 Caleb Spare
+- github.com/charmbracelet/colorprofile@v0.4.3
+    Copyright (c) 2020-2024 Charmbracelet, Inc
+- github.com/charmbracelet/ultraviolet@v0.0.0-20261008173134-6b8d4baf91b4
+    Copyright (c) 2025 Charmbracelet, Inc
+- github.com/charmbracelet/x/ansi@v0.11.9
+    Copyright (c) 2023 Charmbracelet, Inc.
+- github.com/charmbracelet/x/term@v0.2.2
+    Copyright (c) 2023 Charmbracelet, Inc.
+- github.com/charmbracelet/x/termios@v0.1.1
+    Copyright (c) 2023 Charmbracelet, Inc.
+- github.com/charmbracelet/x/windows@v0.2.2
+    Copyright (c) 2023 Charmbracelet, Inc.
+- github.com/clipperhouse/displaywidth@v0.11.0
+    Copyright (c) 2025 Matt Sherman
 - github.com/clipperhouse/uax29/v2@v2.7.0
     Copyright (c) 2020 Matt Sherman
 - github.com/digitorus/pkcs7@v0.0.0-20261104125046-a476de3098e4
@@ -3092,6 +3146,8 @@ Components:
     Copyright (c) 2013 Michael Hendricks
 - github.com/lib/pq@v1.12.3
     Copyright (c) 2011-2013, 'pq' Contributors. Portions Copyright (c) 2011 Blake Mizerany
+- github.com/lucasb-eyer/go-colorful@v1.4.1
+    Copyright (c) 2013 Lucas Beyer
 - github.com/mattn/go-colorable@v0.1.16
     Copyright (c) 2016 Yasuhiro Matsumoto
 - github.com/mattn/go-isatty@v0.0.24
@@ -3106,10 +3162,14 @@ Components:
     Copyright (c) 2013 Mitchell Hashimoto
 - github.com/monochromegane/go-gitignore@v0.0.0-20200626010858-205db1a8cc00
     Copyright (c) [2015] [go-gitignore]
+- github.com/muesli/cancelreader@v0.2.2
+    Copyright (c) 2022 Erik Geiser and Christian Muehlhaeuser
 - github.com/peterbourgon/diskv@v2.0.1+incompatible
     Copyright (c) 2011-2012 Peter Bourgon
 - github.com/philhofer/fwd@v1.2.1
     Copyright (c) 2014-2015, Philip Hofer
+- github.com/rivo/uniseg@v0.4.7
+    Copyright (c) 2019 Oliver Kuederle
 - github.com/robfig/cron/v3@v3.0.1
     Copyright (C) 2012 Rob Figueiredo All Rights Reserved.
 - github.com/rs/xid@v1.6.0
@@ -3118,6 +3178,8 @@ Components:
     Copyright (C) 2014-2021 by Ruben Vermeersch <ruben@rocketeer.be>
 - github.com/ryanuber/go-glob@v1.0.0
     Copyright (c) 2014 Ryan Uber
+- github.com/sahilm/fuzzy@v0.1.3
+    Copyright (c) 2017 Sahil Muthoo
 - github.com/secure-systems-lab/go-securesystemslib@v0.11.1
     Copyright (c) 2021 NYU Secure Systems Lab
 - github.com/sirupsen/logrus@v1.10.2
@@ -3131,6 +3193,8 @@ Components:
     Copyright (c) 2019 Montgomery Edwards⁴⁴⁸ and Faye Amacker
 - github.com/xlab/treeprint@v1.2.0
     Copyright © 2016 Maxim Kupriianov <max@kc.vc>
+- github.com/xo/terminfo@v1.0.0
+    Copyright (c) 2016 Anmol Sethi
 - github.com/youmark/pkcs8@v0.0.0-20240726163527-a2c0da244d78
     Copyright (c) 2014 youmark
 - go.uber.org/atomic@v1.11.0
@@ -3512,7 +3576,7 @@ MPL-2.0: see section 1.
 Licence files in directories of packages that are linked, whose text differs from the module's own.
 
 --------------------------------------------------------------------------------
-BSD-3-Clause (variant 1 of 11)
+BSD-3-Clause (variant 1 of 12)
 --------------------------------------------------------------------------------
 
 Text: see above.
@@ -3579,7 +3643,7 @@ Packages bundled into the UI:
 
 - @bufbuild/protobuf@2.16.0 (https://github.com/bufbuild/protobuf-es)
     declared as (Apache-2.0 AND BSD-3-Clause) in its package.json; the package ships no licence file
-    Licence: BSD-3-Clause (variant 7 of 11) (text in section 3)
+    Licence: BSD-3-Clause (variant 8 of 12) (text in section 3)
     Copyright 2008 Google Inc.  All rights reserved.
     Licence: Apache-2.0 (variant 1 of 4) (text in section 3)
     Copyright 2021-2026 Buf Technologies, Inc.

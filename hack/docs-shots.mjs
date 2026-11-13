@@ -28,6 +28,7 @@ const at = {
   home: '',
   rotateKeys: 'guides/rotate-keys/',
   gettingStarted: 'guides/getting-started/',
+  createCluster: 'guides/getting-started/create-the-cluster/', // has the YAML blocks the code checks use
   architecture: 'design/architecture/',
   contributing: 'development/contributing-docs/',
   concept: 'concepts/cni/',
@@ -273,6 +274,7 @@ try {
       check(links.length > 0 && !bad.length, `${tag}: ${links.length} internal links in getting-started, ${bad.length} broken ${bad.join(' ')}`)
 
       // A code block's copy button (hovered), and what it copies.
+      await open(at.createCluster)
       await mouse(`document.querySelector('article pre + div button')`, 'move')
       await sleep(300)
       await shot(`${tag}-codeblock`)

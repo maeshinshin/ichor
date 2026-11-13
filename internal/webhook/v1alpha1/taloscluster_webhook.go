@@ -163,6 +163,10 @@ func (v *TalosClusterCustomValidator) ValidateCreate(ctx context.Context, obj *i
 		return nil, err
 	}
 
+	if err := validateEndpoint(nil, obj); err != nil {
+		return nil, err
+	}
+
 	if err := validateCiliumValues(nil, obj); err != nil {
 		return nil, err
 	}
@@ -274,6 +278,21 @@ func validateCNICreate(c *ichorv1alpha1.TalosCluster) error {
 	return nil
 }
 
+// validateEndpoint checks that the endpoint's address has the shape its type needs. A new cluster is always checked;
+// an update only when it changes the type or the address, so a stored object with a pair that predates the check
+// (a load balancer an earlier adopt called a vip) stays editable in every other respect.
+func validateEndpoint(oldObj, newObj *ichorv1alpha1.TalosCluster) error {
+	if oldObj != nil && oldObj.Spec.Endpoint == newObj.Spec.Endpoint {
+		return nil
+	}
+
+	if err := newObj.Spec.Endpoint.CheckAddress(); err != nil {
+		return fmt.Errorf("spec.endpoint: %w", err)
+	}
+
+	return nil
+}
+
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type TalosCluster.
 func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
 	talosclusterlog.Info("Validation for TalosCluster upon update", "name", newObj.GetName())
@@ -286,6 +305,10 @@ func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj
 	// controllers refuse to render it, so a spec edit could never take effect.
 	if (removedPreset(oldObj) || removedPreset(newObj)) && !apiequality.Semantic.DeepEqual(oldObj.Spec, newObj.Spec) {
 		return nil, fmt.Errorf(presetRemovedMessage, cmp.Or(newObj.Spec.CNI.Preset, oldObj.Spec.CNI.Preset))
+	}
+
+	if err := validateEndpoint(oldObj, newObj); err != nil {
+		return nil, err
 	}
 
 	// The Cilium values are checked as the UI checks them, when this update changes what that check reads.

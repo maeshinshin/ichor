@@ -299,6 +299,11 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 		return nil, fmt.Errorf("init: --endpoint-address is required")
 	}
 
+	// The webhook refuses the same pair; here it is refused before anything is created.
+	if err := (ichorv1alpha1.TalosClusterEndpoint{Type: in.EndpointType, Address: in.EndpointAddress}).CheckAddress(); err != nil {
+		return nil, fmt.Errorf("init: %w", err)
+	}
+
 	if err := checkVIPInput(in); err != nil {
 		return nil, err
 	}
@@ -354,15 +359,9 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 	}, nil
 }
 
-// checkVIPInput refuses what Talos would refuse after the irreversible apply: a VIP that is not an IP address,
-// and a --nic that is not a MAC or that no VIP would use.
+// checkVIPInput refuses a --nic or static-address flag that no VIP would use, and a --nic that is neither a link name
+// nor a MAC written with colons.
 func checkVIPInput(in initPlanInput) error {
-	if in.EndpointType == endpointVIP {
-		if _, err := netip.ParseAddr(in.EndpointAddress); err != nil {
-			return fmt.Errorf("init: --endpoint-address %q is not an IP address, which a vip endpoint must be", in.EndpointAddress)
-		}
-	}
-
 	if in.EndpointType != endpointVIP {
 		if in.NIC != "" {
 			return fmt.Errorf("init: --nic is only used with --endpoint-type vip, not %q", in.EndpointType)

@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -124,9 +125,14 @@ func TestRunInit_VIPFirstNodeGetsTheVIPAndItsLink(t *testing.T) {
 
 // Any other endpoint type leaves the node as it was: no spec.network, no VIP, and the links are not asked for.
 func TestRunInit_OtherEndpointTypesGetNoVIP(t *testing.T) {
-	for _, typ := range []string{endpointNode, "loadBalancer", endpointDNS} {
+	for _, typ := range []string{endpointNode, endpointLoadBalancer, endpointDNS} {
 		t.Run(typ, func(t *testing.T) {
-			applied, machine, _, _, err := initWithLinks(t, func(o *initOptions) { o.EndpointType = typ }, nil, errors.New("not read"))
+			applied, machine, _, _, err := initWithLinks(t, func(o *initOptions) {
+				o.EndpointType = typ
+				if typ == endpointDNS {
+					o.EndpointAddress = "cluster.example.com"
+				}
+			}, nil, errors.New("not read"))
 			if err != nil {
 				t.Fatalf("runInit: %v", err)
 			}
@@ -230,7 +236,12 @@ func TestBuildInitPlan_VIPInput(t *testing.T) {
 		mutate func(*initPlanInput)
 		want   string
 	}{
-		"a vip must be an IP address":         {func(in *initPlanInput) { in.EndpointAddress = "vip.example.com" }, testNotIP},
+		"a vip must be an IP address": {func(in *initPlanInput) { in.EndpointAddress = "vip.example.com" },
+			`"vip.example.com" is a hostname, but endpoint type vip needs an IP address; type loadBalancer or dns would take a hostname`},
+		"dns must be a name": {func(in *initPlanInput) { in.EndpointType, in.EndpointAddress = endpointDNS, testEndpointAddr },
+			"needs a hostname; type vip, node or loadBalancer would take an IP address"},
+		"loadBalancer takes a hostname":       {func(in *initPlanInput) { in.EndpointType, in.EndpointAddress = endpointLoadBalancer, "lb.example.com" }, ""},
+		"loadBalancer takes an IP":            {func(in *initPlanInput) { in.EndpointType = endpointLoadBalancer }, ""},
 		"--nic needs a vip":                   {func(in *initPlanInput) { in.EndpointType, in.NIC = endpointNode, testSecondMAC }, testVIPOnly},
 		"--nic written as a MAC needs colons": {func(in *initPlanInput) { in.NIC = "52-54-00-dd-ee-ff" }, "not a MAC address"},
 		"--nic may be a link name":            {func(in *initPlanInput) { in.NIC = testHWLink }, ""},
@@ -531,4 +542,27 @@ func TestInitFile_NICByName(t *testing.T) {
 	}
 
 	t.Fatal("firstNode.nic: enp1s0 does not set --nic")
+}
+
+// A hostname with --endpoint-type vip is refused before anything is created: no bundle is written, nothing is
+// applied to the node.
+func TestRunInit_EndpointAddressAgainstTypeIsRefusedBeforeAnythingIsCreated(t *testing.T) {
+	home := withTempHome(t)
+	deps, maint, _ := newFakeInitDeps(t, fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build())
+
+	opts := validInitOptions()
+	opts.EndpointAddress = "cluster.example.com"
+
+	err := runInit(context.Background(), opts, deps)
+	if err == nil || !strings.Contains(err.Error(), "needs an IP address") || !strings.Contains(err.Error(), "loadBalancer or dns") {
+		t.Fatalf("err = %v", err)
+	}
+
+	if _, statErr := os.Stat(home + "/.ichor/clusters/" + testInitClusterName + "/secrets.yaml"); statErr == nil {
+		t.Error("a secrets bundle was written before the refusal")
+	}
+
+	if maint.callCount != 0 {
+		t.Errorf("the node was sent a configuration: %d calls", maint.callCount)
+	}
 }

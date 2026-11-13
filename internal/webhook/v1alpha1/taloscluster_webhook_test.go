@@ -65,6 +65,21 @@ var _ = Describe("TalosCluster Webhook", func() {
 		Expect(obj.Spec.DriftPolicy).To(Equal("warnOnly"))
 	})
 
+	It("refuses an update that makes a vip endpoint a hostname", func() {
+		obj.Spec.Endpoint.Address = "cluster.example.com"
+		err := k8sClient.Update(ctx, obj)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("needs an IP address"))
+	})
+
+	It("refuses to create a vip cluster whose endpoint is a hostname", func() {
+		bad := newTestCluster()
+		bad.Spec.Endpoint.Address = "cluster.example.com"
+		err := k8sClient.Create(ctx, bad)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("loadBalancer or dns would take a hostname"))
+	})
+
 	It("admits update", func() {
 		obj.Spec.KubernetesVersion = "v1.36.1"
 		Expect(k8sClient.Update(ctx, obj)).To(Succeed())

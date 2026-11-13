@@ -29,6 +29,9 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
+// paths splits a list with one command path per line.
+func paths(lines string) []string { return strings.Split(strings.TrimSpace(lines), "\n") }
+
 // walk calls fn for every command of the tree, the root first.
 func walk(c *cobra.Command, fn func(*cobra.Command)) {
 	fn(c)
@@ -42,7 +45,7 @@ func walk(c *cobra.Command, fn func(*cobra.Command)) {
 // neither is anything under a hidden command (what the installer and Cilium Jobs run).
 func ownCommand(c *cobra.Command) bool {
 	for p := c; p != nil; p = p.Parent() {
-		if p.Name() == "help" || p.Name() == "completion" || p.Hidden {
+		if p.Name() == "help" || strings.HasPrefix(p.CommandPath(), "ichor completion") || p.Hidden {
 			return false
 		}
 	}
@@ -101,19 +104,79 @@ func TestEveryHelpGroupHoldsACommand(t *testing.T) {
 
 // The command surface is verb first. Each row is a path that must resolve to a command named by its last word.
 func TestVerbFirstCommandPathsResolve(t *testing.T) {
-	for _, path := range []string{
-		"get clusters", "get cluster", "get nodes", "get patches", "get operations", "get users", "get settings", "get cni-values",
-		"describe cluster", "describe node", "describe patch", "describe operation", "describe user", "describe config",
-		"approve node", "reject node", "reclaim node", "delete node", "delete patch", "delete operation", "delete user",
-		"logs node", "reboot node", "shutdown node", "shutdown cluster", "restart service", "pcap", "support-bundle",
-		"apply", "apply cni-values", "preview", "diff cni-values", "edit cni-values", "edit user", "create user",
-		"rollout config", "upgrade talos", "upgrade kubernetes", "upgrade ichor", "upgrade cni", "bootstrap cni", "set kube-proxy", "set settings",
-		"snapshot etcd", "backup etcd", "defrag etcd", "forfeit-leadership etcd", "restore etcd", "restore cluster",
-		"rotate ca", "rotate keys", "create credentials", "create talosconfig", "create kubeconfig", "export bundle",
-		"pause operation", "resume operation", "discovery add", "discovery list", "discovery remove",
-		"auth login", "auth logout", "auth whoami", "auth token", "user set-password", "user revoke-sessions",
-		"secrets encrypt", "adopt", "init", "version", "ui",
-	} {
+	for _, path := range paths(`
+get clusters
+get cluster
+get nodes
+get patches
+get operations
+get users
+get settings
+get cni-values
+describe cluster
+describe node
+describe patch
+describe operation
+describe user
+describe config
+approve node
+reject node
+reclaim node
+delete node
+delete patch
+delete operation
+delete user
+logs node
+reboot node
+shutdown node
+shutdown cluster
+restart service
+pcap
+support-bundle
+apply
+apply cni-values
+preview
+diff cni-values
+edit cni-values
+edit user
+create user
+rollout config
+upgrade talos
+upgrade kubernetes
+upgrade ichor
+upgrade cni
+bootstrap cni
+set kube-proxy
+set settings
+snapshot etcd
+backup etcd
+defrag etcd
+forfeit-leadership etcd
+restore etcd
+restore cluster
+rotate ca
+rotate keys
+create credentials
+create talosconfig
+create kubeconfig
+export bundle
+pause operation
+resume operation
+discovery add
+discovery list
+discovery remove
+auth login
+auth logout
+auth whoami
+auth token
+user set-password
+user revoke-sessions
+secrets encrypt
+adopt
+init
+version
+ui
+`) {
 		words := strings.Fields(path)
 
 		c, rest, err := rootCmd.Find(words)
@@ -125,11 +188,30 @@ func TestVerbFirstCommandPathsResolve(t *testing.T) {
 
 // The noun-first groups of the earlier surface are gone, with no alias left behind.
 func TestTheNounFirstGroupsAreGone(t *testing.T) {
-	for _, path := range []string{
-		"cluster", "machine", "node", "patch", "config", "operation", "op", "settings", "etcd",
-		"cluster list", "machine list", "node remove", "patch create", "config apply", "cni upgrade", "cni values",
-		"etcd snapshot", "auth status", "auth kubeconfig", "cluster discovery", "user list", "user create",
-	} {
+	for _, path := range paths(`
+cluster
+machine
+node
+patch
+config
+operation
+op
+settings
+etcd
+cluster list
+machine list
+node remove
+patch create
+config apply
+cni upgrade
+cni values
+etcd snapshot
+auth status
+auth kubeconfig
+cluster discovery
+user list
+user create
+`) {
 		words := strings.Fields(path)
 
 		c, rest, err := rootCmd.Find(words)
@@ -208,13 +290,13 @@ func TestDescribeNodeShowsTheRecordAndTheLiveDetailWhenIchorUIIsReachable(t *tes
 	c, _ := nodeActionClients(t, true)
 	c.Local = false
 	c.Node = liveNode{localNode: localNode{}, detail: &pb.NodeDetail{
-		Machine: objectRef(testNamespace, testMachineName), Hardware: &pb.Hardware{Manufacturer: "QEMU", Model: "Standard PC", CpuCores: 4},
-		Kubernetes: &pb.KubernetesNodeStatus{NodeName: "n1", Ready: true, KubeletVersion: "v1.36.6"},
+		Machine: objectRef(testNamespace, testMachineName), Hardware: &pb.Hardware{Manufacturer: "Dell", Model: "Standard PC", CpuCores: 4},
+		Kubernetes: &pb.KubernetesNodeStatus{NodeName: "n1", Ready: true, KubeletVersion: humanK8s},
 	}}
 
 	out, errw := describeNodeOutput(t, c, outputHuman)
 
-	for _, want := range []string{"Identity\n", "Hardware\n  Manufacturer QEMU", "Kubernetes\n  Node         n1"} {
+	for _, want := range []string{"Identity\n", "Hardware\n  Manufacturer Dell", "Kubernetes\n  Node         n1"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
@@ -225,7 +307,7 @@ func TestDescribeNodeShowsTheRecordAndTheLiveDetailWhenIchorUIIsReachable(t *tes
 	}
 
 	out, _ = describeNodeOutput(t, c, outputJSON)
-	if !strings.Contains(out, `"machine"`) || !strings.Contains(out, `"node"`) || !strings.Contains(out, `"manufacturer": "QEMU"`) {
+	if !strings.Contains(out, `"machine"`) || !strings.Contains(out, `"node"`) || !strings.Contains(out, `"manufacturer": "Dell"`) {
 		t.Errorf("-o json holds the record under machine and the live part under node:\n%s", out)
 	}
 }

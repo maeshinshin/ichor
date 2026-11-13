@@ -65,7 +65,7 @@ var getOperationsCmd = &cobra.Command{
 var operationClusterFlag string
 
 var describeOperationCmd = &cobra.Command{
-	Use:   "operation NAME",
+	Use:   useOperationName,
 	Short: "Show one operation: phase, failure reason and the state of each node",
 	Long: `describe operation prints the operation's status as the controller wrote it. With --watch it
 keeps polling, prints a progress line to stderr whenever the status changes, and
@@ -95,7 +95,7 @@ which is an error exit).
 
 func newPauseCmd(short, example string, paused bool) *cobra.Command {
 	return &cobra.Command{
-		Use:     "operation NAME",
+		Use:     useOperationName,
 		Short:   short,
 		Example: example,
 		Args:    cobra.ExactArgs(1),
@@ -129,7 +129,7 @@ var resumeOperationCmd = newPauseCmd("Let a paused operation continue; one pause
 	"  ichor resume operation upgrade-talos-x7k2p", false)
 
 var deleteOperationCmd = &cobra.Command{
-	Use:   "operation NAME",
+	Use:   useOperationName,
 	Short: "Delete an operation record",
 	Long: `delete operation removes the record and, when it has not finished, lets the controller release
 the cluster lock. It does not stop a step already sent to a machine and it does not

@@ -37,8 +37,11 @@ var cniFlags startFlags
 
 // cniCmd only holds the hidden `helm` group the Cilium Job runs; the commands a person runs are verb first
 // (get/edit/apply/diff cni-values, upgrade cni, set kube-proxy, bootstrap cni).
+// cniName is the hidden group the Cilium Job runs; the Job names it in its arguments, so it must not change.
+const cniName = "cni"
+
 var cniCmd = &cobra.Command{
-	Use:    "cni",
+	Use:    cniName,
 	Short:  "Commands the Cilium Job runs",
 	Hidden: true,
 

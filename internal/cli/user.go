@@ -154,7 +154,7 @@ var getUsersCmd = &cobra.Command{
 }
 
 var describeUserCmd = &cobra.Command{
-	Use:     "user NAME",
+	Use:     useUserName,
 	Short:   "Show one user",
 	Example: `  ichor describe user alice --issuer https://ichor.example.com`,
 	Args:    cobra.ExactArgs(1),
@@ -171,7 +171,7 @@ var describeUserCmd = &cobra.Command{
 }
 
 var createUserCmd = &cobra.Command{
-	Use:   "user NAME",
+	Use:   useUserName,
 	Short: "Create a user and set its first password (it must be changed at the first sign-in)",
 	Example: `  ichor create user alice --role operator --generate
   ichor create user alice --role admin --generate --bootstrap`,
@@ -213,7 +213,7 @@ func runUserCreate(ctx context.Context, u ichorv1alpha1connect.UserServiceClient
 }
 
 var editUserCmd = &cobra.Command{
-	Use:   "user NAME",
+	Use:   useUserName,
 	Short: "Change a user's display name, e-mail, roles or disabled flag (only the flags you pass)",
 	Example: `  ichor edit user alice --role admin
   ichor edit user alice --disabled=true`,
@@ -266,7 +266,7 @@ func runUserUpdate(ctx context.Context, u ichorv1alpha1connect.UserServiceClient
 }
 
 var deleteUserCmd = &cobra.Command{
-	Use:     "user NAME",
+	Use:     useUserName,
 	Short:   "Delete a user (the last enabled admin cannot be deleted)",
 	Example: `  ichor delete user alice`,
 	Args:    cobra.ExactArgs(1),

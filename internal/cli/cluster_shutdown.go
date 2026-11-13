@@ -27,7 +27,7 @@ import (
 var clusterShutdownFollow bool
 
 var shutdownClusterCmd = &cobra.Command{
-	Use:   "cluster NAME",
+	Use:   useClusterName,
 	Short: "Stop every node of a cluster in the order that keeps the API up longest",
 	Long: `shutdown cluster starts a shutdown operation: workers are drained and stopped first, then
 every control plane. Nodes stay off until you power them on; the operation

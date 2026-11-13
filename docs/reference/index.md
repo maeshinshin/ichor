@@ -12,23 +12,20 @@ fails when the committed pages are stale.
 
 ## CLI
 
-The `ichor` command and its subcommands, with every flag. Start at
-[ichor](cli/ichor.md). The top-level groups:
+The `ichor` command and its subcommands, with every flag. Commands are verb first
+(`ichor get nodes`, `ichor reboot node NAME`); `ichor --help` groups them the same way as this table.
+Start at [ichor](cli/ichor.md).
 
-| Command | For |
+| Group | Commands |
 |---|---|
-| [`ichor init`](cli/ichor_init.md) | Create the first control plane and install Ichor |
-| [`ichor adopt`](cli/ichor_adopt.md) | Bring an existing Talos cluster, or one more machine of it, under Ichor |
-| [`ichor cluster`](cli/ichor_cluster.md) | Inspect clusters, discovery, CA and key rotation, credentials |
-| [`ichor machine`](cli/ichor_machine.md) | List, approve, reject and reclaim machines |
-| [`ichor node`](cli/ichor_node.md) | Node actions: reboot, shutdown, reset, remove, logs, support bundle |
-| [`ichor operation`](cli/ichor_operation.md) | List, follow, pause, resume and delete operations |
-| [`ichor upgrade`](cli/ichor_upgrade.md) | Upgrade Talos, Kubernetes or Ichor |
-| [`ichor config`](cli/ichor_config.md) and [`ichor patch`](cli/ichor_patch.md) | Effective configuration and configuration patches |
-| [`ichor cni`](cli/ichor_cni.md) | Cilium values, upgrades and the kube-proxy mode |
-| [`ichor etcd`](cli/ichor_etcd.md) and [`ichor restore`](cli/ichor_restore.md) | Backups, snapshots and recovery |
-| [`ichor user`](cli/ichor_user.md), [`ichor auth`](cli/ichor_auth.md) and [`ichor settings`](cli/ichor_settings.md) | Users, sign-in and Ichor's runtime settings |
-| [`ichor ui`](cli/ichor_ui.md), [`ichor version`](cli/ichor_version.md), [`ichor secrets`](cli/ichor_secrets.md) | Open the UI, show versions, encrypt the local bundle |
+| Get started | [`init`](cli/ichor_init.md), [`adopt`](cli/ichor_adopt.md), [`ui`](cli/ichor_ui.md) |
+| Inspect | [`get`](cli/ichor_get.md), [`describe`](cli/ichor_describe.md), [`diff`](cli/ichor_diff.md), [`preview`](cli/ichor_preview.md) |
+| Change | [`apply`](cli/ichor_apply.md), [`create`](cli/ichor_create.md), [`delete`](cli/ichor_delete.md), [`edit`](cli/ichor_edit.md), [`set`](cli/ichor_set.md), [`rollout`](cli/ichor_rollout.md), [`discovery`](cli/ichor_discovery.md) |
+| Node and cluster lifecycle | [`approve`](cli/ichor_approve.md), [`reject`](cli/ichor_reject.md), [`reclaim`](cli/ichor_reclaim.md), [`reboot`](cli/ichor_reboot.md), [`shutdown`](cli/ichor_shutdown.md), [`restart`](cli/ichor_restart.md) |
+| Maintenance | [`upgrade`](cli/ichor_upgrade.md), [`bootstrap`](cli/ichor_bootstrap.md), [`rotate`](cli/ichor_rotate.md), [`backup`](cli/ichor_backup.md), [`snapshot`](cli/ichor_snapshot.md), [`defrag`](cli/ichor_defrag.md), [`forfeit-leadership`](cli/ichor_forfeit-leadership.md), [`restore`](cli/ichor_restore.md), [`pause`](cli/ichor_pause.md), [`resume`](cli/ichor_resume.md), [`export`](cli/ichor_export.md) |
+| Troubleshooting | [`logs`](cli/ichor_logs.md), [`pcap`](cli/ichor_pcap.md), [`support-bundle`](cli/ichor_support-bundle.md) |
+| Access | [`auth`](cli/ichor_auth.md), [`user`](cli/ichor_user.md), [`secrets`](cli/ichor_secrets.md) |
+| Other | [`version`](cli/ichor_version.md) |
 
 ## Custom resources
 

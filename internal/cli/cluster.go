@@ -42,7 +42,7 @@ var getClustersCmd = &cobra.Command{
 }
 
 var describeClusterCmd = &cobra.Command{
-	Use:   "cluster NAME",
+	Use:   useClusterName,
 	Short: "Show one cluster: versions, conditions, rollout and hand-over state",
 	Example: `  ichor describe cluster prod
   ichor describe cluster prod -o json`,
@@ -55,7 +55,7 @@ var describeClusterCmd = &cobra.Command{
 }
 
 var getClusterCmd = &cobra.Command{
-	Use:     "cluster NAME",
+	Use:     useClusterName,
 	Short:   "Show a cluster's versions, endpoint and CNI in a few lines",
 	Example: `  ichor get cluster prod`,
 	Args:    cobra.ExactArgs(1),

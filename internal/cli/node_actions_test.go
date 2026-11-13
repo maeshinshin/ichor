@@ -48,17 +48,6 @@ func present(k8s client.Client, name string) bool {
 	return k8s.Get(context.Background(), types.NamespacedName{Namespace: testNamespace, Name: name}, &m) == nil
 }
 
-func TestNodeCommandsAreRegistered(t *testing.T) {
-	for _, path := range [][]string{
-		{"reboot", "node"}, {"shutdown", "node"}, {"delete", "node"}, {"restart", "service"},
-		{"defrag", "etcd"}, {"forfeit-leadership", "etcd"},
-	} {
-		if c, _, err := rootCmd.Find(path); err != nil || c == nil || c.Name() != path[1] {
-			t.Errorf("ichor %s is not registered: %v", strings.Join(path, " "), err)
-		}
-	}
-}
-
 func TestNodeRebootShowsThePlanAndDeclineWritesNothing(t *testing.T) {
 	c, k8s := nodeActionClients(t, false)
 

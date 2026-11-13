@@ -51,7 +51,12 @@ import (
 )
 
 // Command Use string several commands share.
-const useList = "list"
+const (
+	useList          = "list"
+	useClusterName   = "cluster NAME"
+	useOperationName = "operation NAME"
+	useUserName      = "user NAME"
+)
 
 // actorCLI is the audit actor the in-process fallback records, so an
 // AuditRecord says which path wrote the CR.

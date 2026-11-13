@@ -245,7 +245,9 @@ func TestSupportBundleRequestNeedsExactlyOneTarget(t *testing.T) {
 func TestDownloadCommandsTakeTheirFileAsOut(t *testing.T) {
 	t.Parallel()
 
-	for _, path := range [][]string{{"support-bundle"}, {"pcap"}, {"snapshot", "etcd"}} {
+	for _, line := range paths("support-bundle\npcap\nsnapshot etcd") {
+		path := strings.Fields(line)
+
 		c, _, err := rootCmd.Find(path)
 		if err != nil || c == rootCmd {
 			t.Fatalf("ichor %v is missing: %v", path, err)

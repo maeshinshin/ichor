@@ -295,7 +295,7 @@ func initEpilogue(p *progress, opts initOptions, password string, ok bool) {
 			"the ichor-ui Service (label %s=%s), or ichorUI.tls.secretName); Ichor installs none", opts.UIURL, uiComponentLabel, uiComponentValue))
 		p.Warn("spec.authentication.ichor is set; the controller renders the kube-apiserver authentication " +
 			"config next. Applying it restarts kube-apiserver on each control plane, so machines report APIServerRestartRequired " +
-			"until you run `ichor config apply` (or Apply in the Overview page's attention list), which rolls one control plane at a time")
+			"until you run `ichor rollout config` (or Apply in the Overview page's attention list), which rolls one control plane at a time")
 
 		if password != "" {
 			printGeneratedPassword(p, opts.AdminUser, password)
@@ -303,7 +303,7 @@ func initEpilogue(p *progress, opts initOptions, password string, ok bool) {
 	}
 
 	if ok {
-		cmds := []string{"ichor cluster status " + opts.Cluster, "ichor machine list", "ichor ui"}
+		cmds := []string{"ichor get cluster " + opts.Cluster, "ichor get nodes", "ichor ui"}
 
 		if opts.mergedContext != "" {
 			p.Info(fmt.Sprintf("kubectl and ichor now use context %s", opts.mergedContext))

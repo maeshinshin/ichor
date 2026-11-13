@@ -36,7 +36,7 @@ import (
 // This file writes an IchorUser and its password hash straight through the
 // Kubernetes API with the caller's own rights ("First admin"):
 // `ichor init --admin-user` uses it on a cluster that has no login yet, and
-// `ichor user create --bootstrap` uses it to make the first admin of an
+// `ichor create user --bootstrap` uses it to make the first admin of an
 // existing install. It hashes locally with pkg/ichorauth, the package ichor-ui
 // uses, so the entry is the one ichor-ui reads. The password never reaches a
 // log, a file or an error message.

@@ -306,7 +306,7 @@ var _ = Describe("TalosMachineReconciler re-provisioning a node that fell back t
 			got := reconcileOnce()
 			Expect(maint.applyCalls).To(BeEmpty())
 			Expect(readyCondition(got).Reason).To(Equal(reasonStaleEtcdMember))
-			Expect(readyCondition(got).Message).To(ContainSubstring("ichor node remove"))
+			Expect(readyCondition(got).Message).To(ContainSubstring("ichor delete node"))
 			Expect(got.Status.AppliedConfigHash).To(Equal("applied-long-ago"))
 		})
 
@@ -328,7 +328,7 @@ var _ = Describe("TalosMachineReconciler re-provisioning a node that fell back t
 			got := reconcileOnce()
 			Expect(maint.applyCalls).To(BeEmpty())
 			Expect(readyCondition(got).Reason).To(Equal(reasonReprovisionBlocked))
-			Expect(readyCondition(got).Message).To(ContainSubstring("ichor restore --recover-cluster"))
+			Expect(readyCondition(got).Message).To(ContainSubstring("ichor restore cluster"))
 		})
 
 		It("sends the configuration when etcd no longer lists the member, under the cluster lock", func() {

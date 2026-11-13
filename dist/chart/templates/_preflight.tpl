@@ -27,7 +27,7 @@ ichor.preflight fails the install on a cluster with no pod network. lookup retur
 {{- if .Values.preflight.cni -}}
 {{- $nodes := lookup "v1" "Node" "" "" -}}
 {{- if and $nodes $nodes.items (eq (include "ichor.preflight.noCNI" $nodes.items) "true") -}}
-{{- fail "this cluster has no CNI, so no pod can start, including Ichor's. Run `ichor cni bootstrap` first (it installs Ichor's Cilium), then run helm install again; see docs/guides/adopt-and-reclaim.md. Set preflight.cni=false to skip this check." -}}
+{{- fail "this cluster has no CNI, so no pod can start, including Ichor's. Run `ichor bootstrap cni` first (it installs Ichor's Cilium), then run helm install again; see docs/guides/adopt-and-reclaim.md. Set preflight.cni=false to skip this check." -}}
 {{- end -}}
 {{- end -}}
 {{- end }}

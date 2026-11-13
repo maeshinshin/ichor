@@ -17,7 +17,7 @@ limitations under the License.
 // Package reclaim returns a machine that already runs a configured Talos to
 // maintenance mode so that Ichor can join it.
 //
-// It is shared by the CLI (`ichor machine reclaim`) and, later, the
+// It is shared by the CLI (`ichor reclaim node`) and, later, the
 // controller's MachineReclaim path. Both inspect the node the same way, apply
 // the same refusals, require the same typed UUID and send the same reset
 // request (ResetRequest).

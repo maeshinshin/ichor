@@ -82,7 +82,7 @@ func skewPreRun(cmd *cobra.Command, _ []string) error {
 }
 
 func init() {
-	markWrites(machineApproveCmd, machineRejectCmd, patchCreateCmd, patchUpdateCmd, patchDeleteCmd)
+	markWrites(approveNodeCmd, rejectNodeCmd, applyCmd, deletePatchCmd)
 
 	rootCmd.PersistentPreRunE = skewPreRun
 	rootCmd.Version = clientVersion()

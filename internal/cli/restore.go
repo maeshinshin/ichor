@@ -18,7 +18,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -31,23 +30,49 @@ var restoreOpts restoreOptions
 // flagSnapshot names the flag that picks the snapshot, for both restore modes.
 const flagSnapshot = "snapshot"
 
-// restoreCmd implements `ichor restore`: --recover-cluster (full-loss
-// recovery), one of the CLI operations that predate the cluster and
-// so never go through the Connect API, and --live, which asks the
-// controller of a running cluster to put a stored snapshot back.
+// restoreCmd is the parent of the two ways to restore etcd: `restore etcd` asks the controller of a
+// running cluster to put a stored snapshot back, and `restore cluster` recovers a cluster whose control
+// planes are gone. The latter is one of the CLI operations that predate the cluster and so never go through
+// the Connect API.
 var restoreCmd = &cobra.Command{
-	Use:   "restore (--live | --recover-cluster)",
-	Short: "Restore etcd from a backup snapshot: into the running cluster (--live) or after losing it (--recover-cluster)",
-	Long: `restore --live rewinds a RUNNING cluster to a stored snapshot (disaster recovery after
+	Use:     "restore",
+	GroupID: groupMaintain,
+	Short:   "Restore etcd from a backup snapshot: into the running cluster (restore etcd) or after losing it (restore cluster)",
+	Example: `  ichor restore etcd --cluster prod --follow
+  ichor restore cluster --cluster prod --node-endpoint 192.168.10.11:50000 --s3-endpoint https://s3.example.com --s3-bucket ichor-backups --s3-prefix prod`,
+}
+
+var restoreEtcdCmd = &cobra.Command{
+	Use:   "etcd",
+	Short: "Rewind a running cluster to a stored etcd snapshot",
+	Long: `restore etcd rewinds a RUNNING cluster to a stored snapshot (disaster recovery after
 data corruption or a bad change). It creates an etcd-restore operation; the controller wipes
 etcd on every control plane, recovers the snapshot on one, lets the others rejoin and reconciles
-every machine again. The Kubernetes API is unavailable meanwhile and EVERYTHING WRITTEN SINCE THE
+every node again. The Kubernetes API is unavailable meanwhile and EVERYTHING WRITTEN SINCE THE
 SNAPSHOT IS LOST. It needs --override (and the override verb on the TalosCluster) and the
 cluster's name typed (or --confirm NAME); --yes does not replace the name. Without --snapshot
 the newest snapshot of the cluster's backup is used; --backup picks the backup when there are
 several. Follow it with --follow.
 
-restore --recover-cluster recovers a cluster whose control planes and
+The snapshot is read and decrypted by the controller; no secrets bundle or S3 credentials are
+needed here.`,
+	Example: `  ichor restore etcd --cluster prod --override
+  ichor restore etcd --cluster prod --backup nightly --snapshot etcd-20261112T020000Z.snapshot.age --override --follow`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
+			return runLiveRestore(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), liveRestoreSpec{
+				Cluster: restoreOpts.Cluster, Backup: restoreLiveOpts.Backup, Snapshot: restoreOpts.Snapshot,
+				Confirm: restoreLiveOpts.Confirm, Follow: restoreLiveOpts.Follow,
+			})
+		})
+	},
+}
+
+var restoreClusterCmd = &cobra.Command{
+	Use:   "cluster",
+	Short: "Recover a cluster whose control planes and etcd data are gone, from a backup in S3",
+	Long: `restore cluster recovers a cluster whose control planes and
 etcd data are gone, using only what survives outside it: the secrets bundle
 (~/.ichor/clusters/<cluster>/secrets.yaml, or --secrets-bundle) and the S3
 bucket the TalosEtcdBackup wrote to. It does not need Ichor, Kubernetes or
@@ -67,36 +92,11 @@ They are never accepted as flags, so they do not show in 'ps'.
 
 Without --snapshot the newest usable snapshot is used; one that fails to
 decrypt or whose checksum does not match is skipped and reported. With
---snapshot, that snapshot or nothing.
-
-With --live the snapshot is read and decrypted by the controller; no secrets bundle or S3
-credentials are needed here.`,
+--snapshot, that snapshot or nothing.`,
+	Example: `  ichor restore cluster --cluster prod --node-endpoint 192.168.10.11:50000 \
+    --s3-endpoint https://s3.example.com --s3-bucket ichor-backups --s3-prefix prod`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		if restoreLiveOpts.Live {
-			if restoreOpts.RecoverCluster {
-				return errors.New("restore: choose --live or --recover-cluster, not both")
-			}
-
-			// Only --live changes a cluster through Ichor, so only it is refused across a version skew;
-			// --recover-cluster must not wait on a cluster that is gone.
-			markWrites(cmd)
-
-			if err := skewPreRun(cmd, nil); err != nil {
-				return err
-			}
-
-			return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
-				return runLiveRestore(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), liveRestoreSpec{
-					Cluster: restoreOpts.Cluster, Backup: restoreLiveOpts.Backup, Snapshot: restoreOpts.Snapshot,
-					Confirm: restoreLiveOpts.Confirm, Follow: restoreLiveOpts.Follow,
-				})
-			})
-		}
-
-		if !restoreOpts.RecoverCluster {
-			return errors.New("restore: choose --live (into the running cluster) or --recover-cluster (after losing it)")
-		}
-
 		deps := restoreDeps{
 			NewStore:  etcdbackup.NewS3Store,
 			Dial:      dialRecover,
@@ -114,16 +114,23 @@ credentials are needed here.`,
 
 func init() {
 	rootCmd.AddCommand(restoreCmd)
+	restoreCmd.AddCommand(restoreEtcdCmd, restoreClusterCmd)
 
 	addAPIFlags(restoreCmd)
 
-	f := restoreCmd.Flags()
-	f.BoolVar(&restoreLiveOpts.Live, "live", false, "restore into the running cluster: the controller wipes etcd on every control plane and recovers a stored snapshot")
-	f.StringVar(&restoreLiveOpts.Backup, "backup", "", "with --live: the TalosEtcdBackup to restore from (default the cluster's only one)")
-	f.StringVar(&restoreLiveOpts.Confirm, "confirm", "", "with --live: the cluster's name, to go on without being asked to type it")
-	f.BoolVar(&restoreLiveOpts.Follow, "follow", false, "with --live: follow the operation until it finishes")
-	f.BoolVar(&restoreOpts.RecoverCluster, "recover-cluster", false, "full-loss recovery: bootstrap one new control plane from a snapshot")
-	f.StringVar(&restoreOpts.Cluster, flagCluster, "", "name of the cluster (--recover-cluster: locates ~/.ichor/clusters/<name>/secrets.yaml, required; --live: default the only one)")
+	// Only restore etcd changes a cluster through Ichor, so only it is refused across a version skew;
+	// restore cluster must not wait on a cluster that is gone.
+	markWrites(restoreEtcdCmd)
+
+	f := restoreEtcdCmd.Flags()
+	f.StringVar(&restoreLiveOpts.Backup, "backup", "", "the TalosEtcdBackup to restore from (default the cluster's only one)")
+	f.StringVar(&restoreLiveOpts.Confirm, "confirm", "", "the cluster's name, to go on without being asked to type it")
+	f.BoolVar(&restoreLiveOpts.Follow, "follow", false, "follow the operation until it finishes")
+	f.StringVar(&restoreOpts.Cluster, flagCluster, "", "name of the cluster (default the only one)")
+	f.StringVar(&restoreOpts.Snapshot, flagSnapshot, "", "object name to restore (etcd-<time>.snapshot.age); default the newest one")
+
+	f = restoreClusterCmd.Flags()
+	f.StringVar(&restoreOpts.Cluster, flagCluster, "", "name of the cluster (locates ~/.ichor/clusters/<name>/secrets.yaml, required)")
 	f.StringVar(&restoreOpts.SecretsBundle, "secrets-bundle", "", "path to the secrets bundle; default ~/.ichor/clusters/<cluster>/secrets.yaml")
 	f.StringVar(&restoreOpts.NodeEndpoint, "node-endpoint", "", "Talos API address (host:port) of the new control plane to recover onto (required)")
 	f.StringVar(&restoreOpts.Snapshot, flagSnapshot, "", "object name to restore (etcd-<time>.snapshot.age); default the newest one")

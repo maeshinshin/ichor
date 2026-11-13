@@ -64,12 +64,12 @@ func helmInstall(t *testing.T, c *foreign.Cluster, wait bool) (string, error) {
 }
 
 // TestF3NoCNIHelmPath: on a no-CNI cluster helm install is refused by the preflight;
-// `ichor cni bootstrap`, helm install, then adopt recognises Ichor (Helm) and Ichor's Cilium.
+// `ichor bootstrap cni`, helm install, then adopt recognises Ichor (Helm) and Ichor's Cilium.
 func TestF3NoCNIHelmPath(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1, CNI: foreign.CNINone})
 	before := cniPaths(t, c)
 	out, err := helmInstall(t, c, false)
-	if err == nil || !strings.Contains(out, "this cluster has no CNI") || !strings.Contains(out, "ichor cni bootstrap") {
+	if err == nil || !strings.Contains(out, "this cluster has no CNI") || !strings.Contains(out, "ichor bootstrap cni") {
 		t.Errorf("helm install was not refused by the preflight (err=%v)", err)
 	}
 	if got, err := inner(c, "get", "crd", "--no-headers"); err == nil && strings.Contains(got, "ichor.maesh.dev") {

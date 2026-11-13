@@ -655,7 +655,7 @@ networkPolicy:
 ##
 preflight:
   ## Refuse to install on a cluster with no CNI (every node NotReady with the network-plugin
-  ## message), where Ichor pods could not start. Run `ichor cni bootstrap` first.
+  ## message), where Ichor pods could not start. Run `ichor bootstrap cni` first.
   ## Needs a live cluster: `helm template` and --dry-run skip it.
   ##
   cni: true

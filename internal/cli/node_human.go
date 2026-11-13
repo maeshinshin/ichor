@@ -56,8 +56,8 @@ func usage(used, total int64) string {
 	return gibPrecise(used) + " / " + gibPrecise(total)
 }
 
-func renderNodeGet(h *human, resp *pb.GetNodeResponse) error {
-	n := resp.GetNode()
+// renderNodeLive prints what a live read of the node adds to its record; describe node prints it after the record.
+func renderNodeLive(h *human, n *pb.NodeDetail) error {
 	hw := n.GetHardware()
 	ru := n.GetResourceUsage()
 
@@ -69,7 +69,7 @@ func renderNodeGet(h *human, resp *pb.GetNodeResponse) error {
 		}
 	}
 
-	h.Block(nsName(n.GetMachine()), kv{"Manufacturer", hw.GetManufacturer()}, kv{"Model", hw.GetModel()},
+	h.Block("Hardware", kv{"Manufacturer", hw.GetManufacturer()}, kv{"Model", hw.GetModel()},
 		kv{"Serial", hw.GetSerialNumber()}, kv{"CPU", cpu},
 		kv{"Memory", usage(ru.GetMemoryUsedBytes(), cmp.Or(ru.GetMemoryTotalBytes(), hw.GetMemoryTotalBytes()))},
 		kv{"Filesystem", usage(ru.GetFilesystemUsedBytes(), ru.GetFilesystemTotalBytes())})
@@ -95,7 +95,7 @@ func renderNodeGet(h *human, resp *pb.GetNodeResponse) error {
 				humanEnum(d.GetRole().String()), gibPrecise(d.GetSizeBytes()), cmp.Or(d.GetWwid(), d.GetSerial())}
 		}
 
-		h.Title("Disks")
+		h.Title("Live disks")
 		h.Table([]string{"disk", colRole, "size", "id"}, rows)
 	}
 

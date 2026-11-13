@@ -49,7 +49,7 @@ const (
 // caRotationAdvice is the recommendation, word for word. Advice only: nothing here
 // starts a rotation.
 const caRotationAdvice = "the Talos and Kubernetes client certificates of the previous administrators, and the CA keys held by " +
-	"whoever created this cluster, remain valid; consider `ichor cluster rotate-ca`"
+	"whoever created this cluster, remain valid; consider `ichor rotate ca`"
 
 // releaseOrder puts control planes first, one machine after the other, then workers; each group by
 // name so a rerun releases in the same order.
@@ -149,7 +149,7 @@ func releaseHold(
 		// The hold is already off and nothing reboots a node on its own, so go on to the next
 		// machine; a rerun of adopt skips the machines whose hold is gone.
 		if reboot {
-			_, _ = fmt.Fprintf(deps.Stderr, "adopt: machine %q needs a reboot to apply a pending change; run `ichor config apply --cluster %s`; adopt goes on with the other machines\n",
+			_, _ = fmt.Fprintf(deps.Stderr, "adopt: machine %q needs a reboot to apply a pending change; run `ichor rollout config --cluster %s`; adopt goes on with the other machines\n",
 				m.Name, clusterName)
 		}
 	}
@@ -208,7 +208,7 @@ func waitMachineReleased(ctx context.Context, deps adoptDeps, key types.Namespac
 
 		if sleepCtx(ctx, interval) != nil {
 			return false, fmt.Errorf("adopt: machine %q did not become Ready within %s after its hold was released; "+
-				"the machines after it stay held; if it reports a pending change, run `ichor config apply`; "+
+				"the machines after it stay held; if it reports a pending change, run `ichor rollout config`; "+
 				"adopt can be run again, it skips the machines already released", key.Name, wait)
 		}
 	}

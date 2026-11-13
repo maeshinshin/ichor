@@ -32,7 +32,7 @@ import (
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 )
 
-// `ichor cni bootstrap`: the Helm path's step before helm install ichor.
+// `ichor bootstrap cni`: the Helm path's step before helm install ichor.
 
 const errNotNoCNI = "not a cluster with no CNI"
 

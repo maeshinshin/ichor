@@ -47,7 +47,7 @@ const (
 // bundleDir returns ~/.ichor/clusters/<cluster>/, the fixed location
 // architecture.md's "Trust" section names for the local secrets bundle
 // backup. There is no override flag: the path is part of the recovery
-// contract ("ichor restore --recover-cluster rebuilds control planes from
+// contract ("ichor restore cluster rebuilds control planes from
 // the local bundle"), and a moving target would undermine that.
 func bundleDir(cluster string) (string, error) {
 	home, err := os.UserHomeDir()

@@ -115,7 +115,7 @@ func TestOperationParkedForTheEvenCountTellsItResumesByItself(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(got, "resumes by itself") || strings.Contains(got, "ichor operation resume") {
+	if !strings.Contains(got, "resumes by itself") || strings.Contains(got, "ichor resume operation") {
 		t.Errorf("message = %q", got)
 	}
 }

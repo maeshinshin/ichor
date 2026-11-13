@@ -228,7 +228,7 @@ func TestFsyncDir_ErrorsOnMissingDir(t *testing.T) {
 }
 
 // TestLoadBundleFileFillsClock: a bundle read from a file must be able to mint a client certificate, which
-// `ichor restore --recover-cluster` does to dial the node. Without a Clock it panicked in dialRecover.
+// `ichor restore cluster` does to dial the node. Without a Clock it panicked in dialRecover.
 func TestLoadBundleFileFillsClock(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 

@@ -172,7 +172,7 @@ func TestOperationCreatedPausedAndDeletedHumanOutput(t *testing.T) {
   Cluster      initshow
   Phase        … Pending
   Spec         changed to the target first
-  Follow       ichor operation get upgrade-talos-x7k2p --watch
+  Follow       ichor describe operation upgrade-talos-x7k2p --watch
 `
 	wantText(t, out.String(), want)
 
@@ -343,7 +343,7 @@ func TestWatchHumanEndsFailedAndPausedByTheOperator(t *testing.T) {
 
 	want := "Upgrade Talos v1.14.3 → v1.14.5\n" +
 		"operation upgrade-talos-x7k2p · cluster initshow\n" +
-		"… talos — Paused · resume with `ichor operation resume upgrade-talos-x7k2p`\n" +
+		"… talos — Paused · resume with `ichor resume operation upgrade-talos-x7k2p`\n" +
 		"✗ talos — Failed\n"
 	wantText(t, errw.String(), want)
 }
@@ -447,7 +447,7 @@ func TestWatchHumanFailedOperationReturnsTheResumeHintAndPrintsTheBlock(t *testi
 	var out, errw bytes.Buffer
 
 	err := watchOperation(context.Background(), c, objectRef(testNamespace, "x"), &out, &errw)
-	if err == nil || !strings.Contains(err.Error(), "operation x paused after a failure: boom (fix the cause, then `ichor operation resume x`)") {
+	if err == nil || !strings.Contains(err.Error(), "operation x paused after a failure: boom (fix the cause, then `ichor resume operation x`)") {
 		t.Fatalf("want the failure with the resume hint, got %v", err)
 	}
 
@@ -573,7 +573,7 @@ func TestNodeActionHumanOutput(t *testing.T) {
 		t.Fatalf("operations = %+v", ops)
 	}
 
-	for _, want := range []string{"Started " + ops[0].Name + " · default\n", "  Kind         node\n", "  Follow       ichor operation get " + ops[0].Name + " --watch\n"} {
+	for _, want := range []string{"Started " + ops[0].Name + " · default\n", "  Kind         node\n", "  Follow       ichor describe operation " + ops[0].Name + " --watch\n"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("stdout lacks %q:\n%s", want, out.String())
 		}

@@ -31,8 +31,10 @@ import (
 
 // secretsCmd groups the commands on the local secrets bundle file. They touch no cluster.
 var secretsCmd = &cobra.Command{
-	Use:   "secrets",
-	Short: "Manage the local secrets bundle file",
+	Use:     "secrets",
+	GroupID: groupAccess,
+	Short:   "Manage the local secrets bundle file",
+	Example: `  ichor secrets encrypt prod`,
 }
 
 var secretsEncryptFile string
@@ -50,6 +52,8 @@ one is generated and printed once. The bundle is never printed. The old plaintex
 its blocks are overwritten; if the file was ever exposed, rotate the CAs.
 
 An encrypted file is a standard age file: 'age -d secrets.yaml' opens it.`,
+	Example: `  ichor secrets encrypt prod
+  ichor secrets encrypt --file ./secrets.yaml`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path := secretsEncryptFile

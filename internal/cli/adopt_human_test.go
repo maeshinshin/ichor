@@ -83,8 +83,8 @@ func TestRunAdopt_StepsOnAPlainWriter(t *testing.T) {
 		"! " + caRotationAdvice,
 		"the machines are now managed by Ichor",
 		"Next",
-		"ichor cluster status " + f.env.cluster.Name + " -n " + testNamespace,
-		"ichor machine list -n " + testNamespace,
+		"ichor get cluster " + f.env.cluster.Name + " -n " + testNamespace,
+		"ichor get nodes -n " + testNamespace,
 		"ichor ui",
 	}
 

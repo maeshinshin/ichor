@@ -38,7 +38,7 @@ import (
 	"github.com/maeshinshin/ichor/pkg/reclaim"
 )
 
-// reclaimFlags are `ichor machine reclaim`'s own flags. --talosconfig and --yes
+// reclaimFlags are `ichor reclaim node`'s own flags. --talosconfig and --yes
 // are root flags; --yes is deliberately not consulted here.
 type reclaimFlags struct {
 	Context         string
@@ -52,13 +52,13 @@ type reclaimFlags struct {
 
 var machineReclaimFlags reclaimFlags
 
-var machineReclaimCmd = &cobra.Command{
-	Use:   "reclaim ADDRESS (--talosconfig FILE | --cluster NAME)",
-	Short: "Reset a configured Talos machine of another cluster back to maintenance mode",
-	Long: `Reclaim a machine that already runs a configured Talos, so that Ichor can join it.
+var reclaimNodeCmd = &cobra.Command{
+	Use:   "node ADDRESS (--talosconfig FILE | --cluster NAME)",
+	Short: "Reset a configured Talos node of another cluster back to maintenance mode",
+	Long: `Reclaim a node that already runs a configured Talos, so that Ichor can join it.
 
-The machine is inspected with YOUR talosconfig (read from --talosconfig, used
-only for this command, never stored and never printed). Ichor refuses a machine
+The node is inspected with YOUR talosconfig (read from --talosconfig, used
+only for this command, never stored and never printed). Ichor refuses a node
 that is already in an Ichor cluster, and a control plane whose removal would
 break its cluster's etcd quorum (override: --force plus the cluster name typed
 a second time). The reset is graceful (cordon, drain, leave etcd) when the
@@ -68,22 +68,24 @@ The reset wipes only the STATE and EPHEMERAL partitions and reboots.
 User disks are not touched; they are listed, and encrypted ones are called out
 because their keys may be gone.
 
-Without --talosconfig, give --cluster NAME: the machine is then an orphan of that Ichor
+Without --talosconfig, give --cluster NAME: the node is then an orphan of that Ichor
 cluster (its TalosMachine was deleted, which wipes on remove, so it still
 carries the cluster's configuration) and the controller wipes it with the credentials Ichor
 already holds for that cluster, deletes its Kubernetes Node and, afterwards, this command
-registers it as a pending machine. A machine that still has an approved TalosMachine is
-refused: use "ichor node remove". Needs the "reclaim" verb on machinereclaims.
+registers it as a pending node. A node that still has an approved TalosMachine is
+refused: use "ichor delete node". Needs the "reclaim" verb on machinereclaims.
 
-Consent is the machine's UUID, typed at the prompt or given as --confirm. --yes
+Consent is the node's UUID, typed at the prompt or given as --confirm. --yes
 does not satisfy it.
 
-Afterwards the machine comes back in maintenance mode with the same UUID. With
+Afterwards the node comes back in maintenance mode with the same UUID. With
 --cluster NAME its address is added to that cluster's spec.discovery.addresses
-so that Ichor registers it as a pending machine. A pending TalosMachine of the same
+so that Ichor registers it as a pending node. A pending TalosMachine of the same
 UUID that an earlier reclaim left is kept: on its next pass (within about five
 minutes) discovery re-probes the node and records the new maintenance certificate
-and disks on that same machine (Event MaintenanceIdentityRefreshed); approve it after that.`,
+and disks on that same node (Event MaintenanceIdentityRefreshed); approve it after that.`,
+	Example: `  ichor reclaim node 192.168.10.21 --talosconfig old-cluster/talosconfig
+  ichor reclaim node 192.168.10.21 --cluster prod`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if talosconfigPath == "" {
@@ -288,7 +290,7 @@ func finishReclaim(ctx context.Context, d reclaimDeps, steps *progress, address,
 	}
 
 	steps.Done()
-	steps.Next("ichor machine list" + nsFlag(apiOpts.Namespace))
+	steps.Next("ichor get nodes" + nsFlag(apiOpts.Namespace))
 
 	return nil
 }
@@ -336,9 +338,10 @@ func registerDiscoveryAddress(ctx context.Context, c client.Client, namespace, n
 }
 
 func init() {
-	machineCmd.AddCommand(machineReclaimCmd)
+	addAPIFlags(reclaimNodeCmd)
+	reclaimCmd.AddCommand(reclaimNodeCmd)
 
-	fl := machineReclaimCmd.Flags()
+	fl := reclaimNodeCmd.Flags()
 	fl.StringVar(&machineReclaimFlags.Context, "context", "", "talosconfig context to use (default: the file's own)")
 	fl.StringVar(&machineReclaimFlags.Confirm, "confirm", "", "the machine's UUID, for non-interactive use (--yes does not replace it)")
 	fl.StringVar(&machineReclaimFlags.ConfirmCluster, "confirm-cluster", "", "the foreign cluster's name, the second confirmation --force needs")

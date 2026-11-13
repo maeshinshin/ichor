@@ -17,7 +17,7 @@ limitations under the License.
 // "up-demo"/"down-demo" create the two VMs of a cluster for looking at ichor-ui by hand
 // and leave BOTH in Talos maintenance mode: the harness installs nothing. The cluster
 // itself is built by `ichor init` against <prefix>-cp and the worker is approved with
-// `ichor machine approve --install-disk`, so every node's configuration is rendered by
+// `ichor approve node --install-disk`, so every node's configuration is rendered by
 // Ichor (test/harness/ui-demo/README.md). Objects are named with a prefix (env
 // ICHOR_UI_DEMO_PREFIX, default "ichor-ui-demo"), never the e2e prefixes, because other
 // runs share the ichor-e2e namespace. Nothing here is torn down on its own: the cluster

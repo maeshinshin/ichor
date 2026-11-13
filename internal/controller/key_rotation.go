@@ -1048,7 +1048,7 @@ func (c *keyRun) replaceBundle(ctx context.Context) (*secrets.Bundle, error) {
 func (c *keyRun) markBundleBackupStale(ctx context.Context) error {
 	return c.r.raiseBundleBackupStale(ctx, c.cluster, bundleStaleReasonKeys, fmt.Sprintf(
 		"A key rotation replaced the secrets bundle. The copy saved on your machine no longer matches the "+
-			"cluster, and recovering from a total loss needs the new one together with the retired keys. Run `ichor cluster bundle-export %s` "+
+			"cluster, and recovering from a total loss needs the new one together with the retired keys. Run `ichor export bundle %s` "+
 			"and keep both files safe.", c.cluster.Name))
 }
 

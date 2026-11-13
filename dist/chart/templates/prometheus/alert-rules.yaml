@@ -46,5 +46,5 @@ spec:
         severity: warning
       annotations:
         summary: "The {{`{{ $labels.certificate }}`}} CA of cluster {{`{{ $labels.namespace }}/{{ $labels.name }}`}} expires soon."
-        description: "Rotate the cluster's CAs (ichor cluster rotate-ca) before they expire. A negative remainder means the CA has already expired."
+        description: "Rotate the cluster's CAs (ichor rotate ca) before they expire. A negative remainder means the CA has already expired."
 {{- end }}

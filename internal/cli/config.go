@@ -26,19 +26,15 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// configCmd groups the machine-configuration read subcommands.
-var configCmd = &cobra.Command{
-	Use:   "config",
-	Short: "Inspect machine configuration",
-}
-
-var configEffectiveCmd = &cobra.Command{
-	Use:   "effective MACHINE",
-	Short: "Show a machine's rendered configuration, each value tagged with the layer that set it",
-	Long: `effective renders the machine's complete configuration the way the
+var describeConfigCmd = &cobra.Command{
+	Use:   "config NODE",
+	Short: "Show a node's rendered configuration, each value tagged with the layer that set it",
+	Long: `describe config renders the node's complete configuration the way the
 controller does and prints every value with its origin layer. Secrets are
 masked ("***") by the same code ichor-ui uses -- this works without ichor-ui,
 reading the CRs and the secrets bundle with your own Kubernetes access.`,
+	Example: `  ichor describe config cp-1
+  ichor describe config worker-3 -o yaml`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
@@ -60,15 +56,15 @@ func runConfigEffective(ctx context.Context, c *apiClients, out io.Writer, machi
 
 var configApplyFlags startFlags
 
-var configApplyCmd = &cobra.Command{
-	Use:   "apply",
-	Short: "Apply the pending configuration changes that need a reboot or an API server restart",
-	Long: `Ichor never reboots a node for a configuration change on its own: a machine whose
-rendered configuration differs from the node's in a way that needs a reboot waits with
-Ready=False, reason RebootRequired, and the message names the fields. apply starts the
-config operation that rolls those changes out, one machine at a time: control planes
+var rolloutConfigCmd = &cobra.Command{
+	Use:   "config",
+	Short: "Roll out the pending configuration changes that need a reboot or an API server restart",
+	Long: `Ichor never reboots a node for a configuration change on its own: a node whose
+rendered configuration differs from what it runs in a way that needs a reboot waits with
+Ready=False, reason RebootRequired, and the message names the fields. rollout config starts the
+config operation that rolls those changes out, one node at a time: control planes
 first, one at a time with an etcd membership check before each, then workers (at most
---max-unavailable at once), and the machine this controller runs on last. Per machine:
+--max-unavailable at once), and the node this controller runs on last. Per node:
 storage evacuation hook, the node is cordoned and drained (evictions respect
 PodDisruptionBudgets; DaemonSet and mirror pods stay), the configuration is staged, the node
 reboots, and the step finishes when the node runs the configuration, is Ready, is
@@ -76,11 +72,13 @@ uncordoned and (control planes) is back in etcd. On a cluster with one control p
 Kubernetes API is unavailable while it reboots. A change that needs no reboot but restarts the
 Kubernetes API server (authentication, API server arguments, admission, audit, authorizers: Ready=False,
 reason APIServerRestartRequired) is applied the same way, one control plane at a time with no drain
-and no reboot, waiting for that node's API server to answer /readyz before the next. A machine that fails pauses the operation; nothing is
-rolled back. Machines held with upgrade-hold are skipped.
+and no reboot, waiting for that node's API server to answer /readyz before the next. A node that fails pauses the operation; nothing is
+rolled back. Nodes held with upgrade-hold are skipped.
 
-It shows which machines reboot, which fields need it and in which order, and asks for
+It shows which nodes reboot, which fields need it and in which order, and asks for
 confirmation unless --yes.`,
+	Example: `  ichor rollout config --cluster prod
+  ichor rollout config --cluster prod --max-unavailable 2 --follow`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
@@ -93,9 +91,10 @@ confirmation unless --yes.`,
 }
 
 func init() {
-	rootCmd.AddCommand(configCmd)
-	addAPIFlags(configCmd)
-	configCmd.AddCommand(configEffectiveCmd, configApplyCmd)
-	addStartFlags(configApplyCmd, &configApplyFlags)
-	markWrites(configApplyCmd)
+	addAPIFlags(describeConfigCmd)
+	addAPIFlags(rolloutConfigCmd)
+	describeCmd.AddCommand(describeConfigCmd)
+	rolloutCmd.AddCommand(rolloutConfigCmd)
+	addStartFlags(rolloutConfigCmd, &configApplyFlags)
+	markWrites(rolloutConfigCmd)
 }

@@ -829,7 +829,7 @@ func (st *adoptState) settleCiliumValues(deps adoptDeps) error {
 }
 
 // setCiliumUserValues validates --cilium-values for a Cilium in kube-proxy mode kubeProxy with
-// tunnel and stores them as spec.cni.cilium.values: shared by adopt and `ichor cni bootstrap`, so
+// tunnel and stores them as spec.cni.cilium.values: shared by adopt and `ichor bootstrap cni`, so
 // both build the TalosCluster whose effective values the release is installed from.
 func setCiliumUserValues(c *ichorv1alpha1.TalosCluster, user map[string]any, kubeProxy, tunnel string) error {
 	if err := cilium.ValidateValues(user, cilium.ValidationContext{KubeProxy: cni.KubeProxyMode(kubeProxy), Tunnel: tunnel}); err != nil {
@@ -1391,7 +1391,7 @@ func (st *adoptState) hintStartOver(say adoptSay, plans []*adoptPlan) {
 				"deleted TalosMachine had. "
 		}
 
-		say(adoptWarn, "machine %q: %sTo start over instead, wipe it with `ichor machine reclaim %s --cluster %s` (or the UI Reset and add); "+
+		say(adoptWarn, "machine %q: %sTo start over instead, wipe it with `ichor reclaim node %s --cluster %s` (or the UI Reset and add); "+
 			"this wipes STATE and EPHEMERAL, deletes its Kubernetes Node, and the machine comes back as a pending machine to approve",
 			n.M.Name, why, reclaim.HostOnly(n.M.Spec.Endpoint), st.cluster.Name)
 	}

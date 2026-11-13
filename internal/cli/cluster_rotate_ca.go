@@ -73,17 +73,17 @@ func needsCredentialHandoff(targets []string) bool {
 		slices.Contains(targets, ichorv1alpha1.CARotationTargetKubernetes)
 }
 
-// clusterRotateCACmd implements `ichor cluster rotate-ca`: it starts a ca-rotation TalosOperation through
+// rotateCACmd implements `ichor rotate ca`: it starts a ca-rotation TalosOperation through
 // OperationService like every other start, so the plan, the
 // refusals and the permission check are the ones the UI has. The controller runs the rotation.
 //
 // Unlike the other kinds the command does not return when the operation exists: the rotation waits,
 // after the nodes accept the new CAs, for the operator's credentials, and this command
 // writes them while the old ones still work and tells the controller to go on.
-var clusterRotateCACmd = &cobra.Command{
-	Use:   "rotate-ca NAME",
+var rotateCACmd = &cobra.Command{
+	Use:   "ca NAME",
 	Short: "Replace the cluster's certificate authorities (Talos API, Kubernetes API, and optionally etcd and aggregator)",
-	Long: `rotate-ca starts a CA rotation operation: the Talos API CA and the Kubernetes API CA are
+	Long: `rotate ca starts a CA rotation operation: the Talos API CA and the Kubernetes API CA are
 replaced in passes over every machine (accept the new CA, make it the issuer, drop the old one),
 each verified before the next. The kubelet restarts on each machine in the passes that change the
 Kubernetes CA.
@@ -94,9 +94,9 @@ replaced. The etcd CA is replaced by rebooting every control plane, one at a tim
 three passes (Talos neither restarts etcd on a configuration change nor lets an API call do it): each
 node is cordoned and drained, hands etcd leadership over, reboots, and the next one waits until it is
 back, Ready and etcd is healthy; with one control plane the Kubernetes API is unavailable during each
-reboot. That is three reboots of every control plane. Take an etcd snapshot first ('ichor etcd backup
-now NAME'). Deleting the operation before the new CA issues abandons the rotation (the old
-configuration is rendered again); 'ichor config apply' then drops what the nodes still accept. The
+reboot. That is three reboots of every control plane. Take an etcd snapshot first ('ichor backup
+etcd NAME'). Deleting the operation before the new CA issues abandons the rotation (the old
+configuration is rendered again); 'ichor rollout config' then drops what the nodes still accept. The
 aggregator CA needs the extension API servers (metrics-server, for one) to load the new CA: Ichor
 waits for kube-apiserver to publish it and restarts none of them. A rotation of etcd and the
 aggregator CA alone changes nothing your kubeconfig or talosconfig depends on, so it has no
@@ -114,8 +114,8 @@ checks that the new kubeconfig authenticates, and only then lets the operation g
 needs your own kubeconfig, so this command does it with or without --follow: it stays until the
 operation has gone on (a few seconds to a few minutes), then returns, and the rest of the rotation
 runs in the controller. The files' contents are never printed. If this command is interrupted while the operation waits, run
-'ichor cluster credentials NAME --acknowledge' with your current kubeconfig. If you lost both,
-'ichor cluster credentials NAME --bundle FILE' makes credentials from a current bundle file.
+'ichor create credentials NAME --acknowledge' with your current kubeconfig. If you lost both,
+'ichor create credentials NAME --bundle FILE' makes credentials from a current bundle file.
 
 Before it starts, every machine must answer, run the configuration Ichor renders for it, and every
 Kubernetes Node must be Ready; otherwise the operation pauses without changing anything. While it
@@ -124,11 +124,13 @@ operations are refused. It resumes by itself after the controller restarts, and 
 a step it could not verify. Machines held with upgrade-hold are not skipped.
 
 When it completes, the secrets bundle in the cluster has been replaced, and the copy saved on your
-machine is stale: run 'ichor cluster bundle-export NAME' and keep the file safe.
+machine is stale: run 'ichor export bundle NAME' and keep the file safe.
 
 It shows which machines are reconfigured and in which order, and asks for confirmation unless --yes.
 --follow keeps reporting progress until the rotation completes, through the Kubernetes API with the
 new kubeconfig (the ichor-ui tunnel does not survive the rotation).`,
+	Example: `  ichor rotate ca prod
+  ichor rotate ca prod --all --follow`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		targets, err := rotateCATargets(clusterRotateCATargets, clusterRotateCAAll)
@@ -170,14 +172,14 @@ func afterRotateCAWithoutHandoff(ctx context.Context, cmd *cobra.Command, cluste
 			return err
 		}
 
-		_, _ = fmt.Fprintf(errw, "Follow it with: ichor operation get %s --watch\nWhen it completes: ichor cluster bundle-export %s\n", ref.GetName(), cluster)
+		_, _ = fmt.Fprintf(errw, "Follow it with: ichor describe operation %s --watch\nWhen it completes: ichor export bundle %s\n", ref.GetName(), cluster)
 
 		return nil
 	}
 
 	k8s, err := newKubeClient(kubeconfigPath)
 	if err != nil {
-		return fmt.Errorf("operation %s was created, but following it needs your kubeconfig: %w; follow it with 'ichor operation get %s --watch'",
+		return fmt.Errorf("operation %s was created, but following it needs your kubeconfig: %w; follow it with 'ichor describe operation %s --watch'",
 			ref.GetName(), err, ref.GetName())
 	}
 
@@ -189,7 +191,7 @@ func afterRotateCAWithoutHandoff(ctx context.Context, cmd *cobra.Command, cluste
 		return printRotateCADone(out, ref.GetName(), cluster, "")
 	}
 
-	_, _ = fmt.Fprintf(errw, "When it completes: ichor cluster bundle-export %s\n", cluster)
+	_, _ = fmt.Fprintf(errw, "When it completes: ichor export bundle %s\n", cluster)
 
 	return nil
 }
@@ -200,7 +202,7 @@ func afterRotateCACreate(ctx context.Context, cmd *cobra.Command, cluster string
 	k8s, err := newKubeClient(kubeconfigPath)
 	if err != nil {
 		return fmt.Errorf("operation %s was created, but the credential hand-off needs your kubeconfig: %w; run "+
-			"'ichor cluster credentials %s --acknowledge' to continue it", ref.GetName(), err, cluster)
+			"'ichor create credentials %s --acknowledge' to continue it", ref.GetName(), err, cluster)
 	}
 
 	req := credentialRequest{
@@ -215,7 +217,7 @@ func afterRotateCACreate(ctx context.Context, cmd *cobra.Command, cluster string
 	files, err := runRotateCAHandoff(ctx, handoffDeps{K8s: k8s, Checks: defaultHandoffChecks(), Poll: opWatchInterval, Progress: progress}, req, ref.GetName(), errw)
 	if err != nil {
 		return fmt.Errorf("%w\nThe operation %s keeps waiting; nothing was changed on your credentials. Rerun the hand-off with "+
-			"'ichor cluster credentials %s --acknowledge'", err, ref.GetName(), cluster)
+			"'ichor create credentials %s --acknowledge'", err, ref.GetName(), cluster)
 	}
 
 	if !clusterRotateCAFollow {
@@ -227,7 +229,7 @@ func afterRotateCACreate(ctx context.Context, cmd *cobra.Command, cluster string
 			return err
 		}
 
-		_, _ = fmt.Fprintf(errw, "Follow it with: ichor operation get %s --watch --kubeconfig %s\n", ref.GetName(), files.Kubeconfig)
+		_, _ = fmt.Fprintf(errw, "Follow it with: ichor describe operation %s --watch --kubeconfig %s\n", ref.GetName(), files.Kubeconfig)
 		rotateCAAfterwards(errw, cluster, files.Kubeconfig)
 
 		return nil
@@ -255,10 +257,10 @@ func afterRotateCACreate(ctx context.Context, cmd *cobra.Command, cluster string
 }
 
 // rotateCAAfterwards is what to do once the rotation is over. The old kubeconfig trusts only the old
-// CA, so the credentials command must be pointed at the new kubeconfig that rotate-ca wrote.
+// CA, so the credentials command must be pointed at the new kubeconfig that rotate ca wrote.
 func rotateCAAfterwards(errw io.Writer, cluster, newKubeconfig string) {
-	_, _ = fmt.Fprintf(errw, "When it completes: run 'ichor cluster credentials %s --kubeconfig %s' for files that trust the new CA only, and "+
-		"'ichor cluster bundle-export %s' to save the new secrets bundle.\n", cluster, newKubeconfig, cluster)
+	_, _ = fmt.Fprintf(errw, "When it completes: run 'ichor create credentials %s --kubeconfig %s' for files that trust the new CA only, and "+
+		"'ichor export bundle %s' to save the new secrets bundle.\n", cluster, newKubeconfig, cluster)
 }
 
 // runRotateCAHandoff waits, through the Kubernetes API, until the operation waits for credentials,
@@ -383,11 +385,12 @@ func watchCARotation(ctx context.Context, k8s ctrlclient.Client, namespace, name
 }
 
 func init() {
-	clusterCmd.AddCommand(clusterRotateCACmd)
-	clusterRotateCACmd.Flags().BoolVar(&clusterRotateCAFollow, "follow", false,
+	addAPIFlags(rotateCACmd)
+	rotateCmd.AddCommand(rotateCACmd)
+	rotateCACmd.Flags().BoolVar(&clusterRotateCAFollow, "follow", false,
 		"after the credential hand-off, follow the rotation until it completes or fails (without it the command still does the hand-off, then returns)")
-	clusterRotateCACmd.Flags().StringSliceVar(&clusterRotateCATargets, "ca", nil,
+	rotateCACmd.Flags().StringSliceVar(&clusterRotateCATargets, "ca", nil,
 		"the CAs to replace: talos, kubernetes, etcd, kubernetes-aggregator (default: talos and kubernetes)")
-	clusterRotateCACmd.Flags().BoolVar(&clusterRotateCAAll, "all", false, "replace all four CAs")
-	markWrites(clusterRotateCACmd)
+	rotateCACmd.Flags().BoolVar(&clusterRotateCAAll, "all", false, "replace all four CAs")
+	markWrites(rotateCACmd)
 }

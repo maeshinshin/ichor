@@ -175,7 +175,7 @@ func TestMachineReclaimHumanOutputOnAPlainWriter(t *testing.T) {
 		"✓ Maintenance mode — 10.0.0.5 answers with UUID AAAA-1\n",
 		"✓ Register — added to cluster new's discovery addresses; it will appear as a pending machine\n",
 		doneInPrefix,
-		"Next\n  ichor machine list",
+		"Next\n  ichor get nodes",
 	}
 
 	assertInOrder(t, out, want)
@@ -282,7 +282,7 @@ func TestClusterDiscoveryAddWarnsAboutAnAlreadyConfiguredAddress(t *testing.T) {
 	want := "✓ added 10.0.0.5 to the discovery of initshow\n" +
 		"! 10.0.0.5 already runs a Talos configuration, so discovery does not add it as a machine; " +
 		"if it is a member of this cluster's Talos cluster run `ichor adopt --cluster initshow --add-machine 10.0.0.5`, " +
-		"if another cluster configured it run `ichor machine reclaim 10.0.0.5 --talosconfig FILE --cluster initshow`\n"
+		"if another cluster configured it run `ichor reclaim node 10.0.0.5 --talosconfig FILE --cluster initshow`\n"
 	wantText(t, out.String(), want)
 }
 
@@ -329,10 +329,10 @@ func TestRotateCAHumanOutput(t *testing.T) {
 	}
 
 	want := "✓ started ca-rotation operation ca-rotation-x7k2p\n" +
-		"  follow with: ichor operation get ca-rotation-x7k2p --watch --kubeconfig " + newKubeconfig + "\n\n" +
+		"  follow with: ichor describe operation ca-rotation-x7k2p --watch --kubeconfig " + newKubeconfig + "\n\n" +
 		"When it completes\n" +
-		"  ichor cluster credentials " + opTestCluster + " --kubeconfig " + newKubeconfig + "   files that trust the new CA only\n" +
-		"  ichor cluster bundle-export " + opTestCluster + "   save the new secrets bundle\n"
+		"  ichor create credentials " + opTestCluster + " --kubeconfig " + newKubeconfig + "   files that trust the new CA only\n" +
+		"  ichor export bundle " + opTestCluster + "   save the new secrets bundle\n"
 	wantText(t, out.String(), want)
 
 	out.Reset()

@@ -769,7 +769,7 @@ func TestAPausedOperationBlocksAndNamesBothWaysOut(t *testing.T) {
 	}
 
 	want := `operation "upgrade-x" (talos) on this cluster is not finished (phase Paused); ` +
-		`resume it with 'ichor operation resume upgrade-x', or delete it with 'ichor operation delete upgrade-x'`
+		`resume it with 'ichor resume operation upgrade-x', or delete it with 'ichor delete operation upgrade-x'`
 	if got != want {
 		t.Errorf("unfinishedOperation =\n%q\nwant\n%q", got, want)
 	}
@@ -794,7 +794,7 @@ func TestUnfinishedOperationTellsAFailedIchorUpgradeToBeDeleted(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, want := range []string{"rolled back", "ichor operation delete upgrade-ichor-x", "ichor upgrade ichor <version>"} {
+	for _, want := range []string{"rolled back", "ichor delete operation upgrade-ichor-x", "ichor upgrade ichor <version>"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("message %q lacks %q", got, want)
 		}

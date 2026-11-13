@@ -99,8 +99,11 @@ var uiOpts uiOptions
 // mutates anything in the cluster; it only reads the ichor-ui Service and
 // Pods to find something to forward to.
 var uiCmd = &cobra.Command{
-	Use:   "ui",
-	Short: "Open the Ichor UI through a port-forward to ichor-ui",
+	Use:     "ui",
+	GroupID: groupStart,
+	Short:   "Open the Ichor UI through a port-forward to ichor-ui",
+	Example: `  ichor ui
+  ichor ui --local-port 8080 --open-browser=false`,
 	Long: `ui opens a port-forward to one of the ichor-ui Deployment's pods (found
 through the ichor-ui Service (found by its component label), never a hardcoded pod name) and opens
 it in your default browser.

@@ -176,7 +176,7 @@ release.
 3. Read the release notes and merge. This moves no cluster.
 4. Cut a patch release of Ichor (push a `v*` tag, which runs the release
    workflow; `make release VERSION=vX.Y.Z` builds the same artifacts locally); users get the new chart when they upgrade Ichor and run
-   `ichor cni upgrade`.
+   `ichor upgrade cni`.
 
 A new Cilium minor is never bumped by the script: change the pin and the values
 by hand.

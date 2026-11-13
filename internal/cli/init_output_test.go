@@ -124,7 +124,7 @@ func TestRunInit_StepsOnAPlainWriter(t *testing.T) {
 		"✓ ichor-ui — ready",
 		"Done in ",
 		"! ichor-ui has no sign-in (--allow-unauthenticated)",
-		"ichor cluster status " + testInitClusterName,
+		"ichor get cluster " + testInitClusterName,
 	}
 
 	assertInOrder(t, progress, want)

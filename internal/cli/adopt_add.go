@@ -181,7 +181,7 @@ func (st *adoptState) loadAdded(
 }
 
 // otherClusterRefusal is the refusal for a machine that does not carry the cluster's CAs: it
-// cannot join without a reset, and the reset is `ichor machine reclaim`. id is the machine's cluster
+// cannot join without a reset, and the reset is `ichor reclaim node`. id is the machine's cluster
 // ID when its configuration could be read, "" when the dial itself failed.
 func otherClusterRefusal(addr, id, cluster string) error {
 	what := "belongs to a different Talos cluster"
@@ -192,7 +192,7 @@ func otherClusterRefusal(addr, id, cluster string) error {
 	}
 
 	return fmt.Errorf("adopt: the machine at %[1]q %[2]s than %[3]q: it does not carry this cluster's CAs, "+
-		"so it cannot join without a reset. To reset it and add it, run `ichor machine reclaim %[1]s --talosconfig FILE --cluster %[3]s` "+
+		"so it cannot join without a reset. To reset it and add it, run `ichor reclaim node %[1]s --talosconfig FILE --cluster %[3]s` "+
 		"(this wipes its STATE and EPHEMERAL partitions)", addr, what, cluster)
 }
 

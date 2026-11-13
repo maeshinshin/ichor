@@ -35,15 +35,18 @@ import (
 
 var cniFlags startFlags
 
+// cniCmd only holds the hidden `helm` group the Cilium Job runs; the commands a person runs are verb first
+// (get/edit/apply/diff cni-values, upgrade cni, set kube-proxy, bootstrap cni).
 var cniCmd = &cobra.Command{
-	Use:   "cni",
-	Short: "Operate on the cluster's CNI settings Ichor owns",
+	Use:    "cni",
+	Short:  "Commands the Cilium Job runs",
+	Hidden: true,
 
 	PersistentPreRunE: cniPreRun,
 }
 
-// refuseUnmanagedCNI fails when the cluster's CNI is not managed by Ichor. It is the one check every `ichor cni ...`
-// subcommand shares, run before the subcommand.
+// refuseUnmanagedCNI fails when the cluster's CNI is not managed by Ichor. It is the one check every command that
+// changes or reads the CNI settings shares (cniPreRun), run before the command.
 func refuseUnmanagedCNI(ctx context.Context, c *apiClients, cluster string) error {
 	ref, err := resolveCluster(ctx, c, cluster)
 	if err != nil {
@@ -62,16 +65,17 @@ func refuseUnmanagedCNI(ctx context.Context, c *apiClients, cluster string) erro
 	return nil
 }
 
-// cniPreRun is cniCmd's PersistentPreRunE. cobra runs only the nearest hook, so it calls the
+// cniPreRun is the PersistentPreRunE of every command that reads or changes the cluster's CNI settings (set on
+// each command, since they sit under different verbs). cobra runs only the nearest hook, so it calls the
 // root's skew check itself. The hidden `helm` group is what the Cilium Job runs and never
-// reaches an unmanaged cluster. `bootstrap` runs before Ichor exists, so it has no cluster to ask.
+// reaches an unmanaged cluster.
 func cniPreRun(cmd *cobra.Command, args []string) error {
 	if err := skewPreRun(cmd, args); err != nil {
 		return err
 	}
 
 	for p := cmd; p != nil; p = p.Parent() {
-		if p == cniHelmCmd || p == cniBootstrapCmd {
+		if p == cniHelmCmd {
 			return nil
 		}
 	}
@@ -86,10 +90,10 @@ func cniPreRun(cmd *cobra.Command, args []string) error {
 	})
 }
 
-var cniKubeProxyCmd = &cobra.Command{
+var setKubeProxyCmd = &cobra.Command{
 	Use:   "kube-proxy replaced|enabled",
 	Short: "Switch kube-proxy between enabled and replaced by the CNI",
-	Long: `kube-proxy sets spec.cni.kubeProxy and starts the operation that carries the switch out
+	Long: `set kube-proxy sets spec.cni.kubeProxy and starts the operation that carries the switch out
 node by node: the new side comes up and is verified before the old side is turned off.
 The admission policy that guards this field wants a confirmation annotation; the
 server sets it (to the new mode) for this one write and removes it again, so it never stays behind as
@@ -99,7 +103,9 @@ first and verifies it on every node before kube-proxy is turned off; enabling re
 kube-proxy first and then switches Cilium's replacement off. Writing spec.cni.kubeProxy alone
 changes nothing in Cilium; only this operation does.
 
-It shows which machines are touched and in which order, and asks for confirmation unless --yes.`,
+It shows which nodes are touched and in which order, and asks for confirmation unless --yes.`,
+	Example: `  ichor set kube-proxy replaced --cluster prod
+  ichor set kube-proxy enabled --follow`,
 	Args:      cobra.ExactArgs(1),
 	ValidArgs: []string{"replaced", "enabled"},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -121,7 +127,7 @@ var (
 	cniLayer string
 )
 
-// Layers of `ichor cni values get --layer`.
+// Layers of `ichor get cni-values --layer`.
 const (
 	cniLayerUser      = "user"
 	cniLayerDefaults  = "defaults"
@@ -129,20 +135,20 @@ const (
 	cniLayerOwned     = "owned"
 )
 
-var cniValuesCmd = &cobra.Command{
-	Use:   "values",
-	Short: "Show, edit and diff Cilium's Helm values (the user layer on the TalosCluster)",
-	Long: `Cilium's Helm values are Ichor's defaults, then your layer (spec.cni.cilium.values)
+// cniValuesNote is the part of the help of every cni-values command that says what the layers are.
+const cniValuesNote = `Cilium's Helm values are Ichor's defaults, then your layer (spec.cni.cilium.values)
 merged on top, then the keys Ichor owns. Only your layer is written; the controller applies it.
 
-Changing your layer (set, edit) needs the verb "update" on talosclusters/cilium-values, which only the
-ichor-admin role holds: the chart can run privileged pods on every node. Reading and diffing need none.`,
-}
+Changing your layer (apply, edit) needs the verb "update" on talosclusters/cilium-values, which only the
+ichor-admin role holds: the chart can run privileged pods on every node. Reading and diffing need none.`
 
-var cniValuesGetCmd = &cobra.Command{
-	Use:   "get",
+var getCniValuesCmd = &cobra.Command{
+	Use:   "cni-values",
 	Short: "Print your layer of Cilium's values (--layer shows the others)",
-	Args:  cobra.NoArgs,
+	Long:  cniValuesNote,
+	Example: `  ichor get cni-values
+  ichor get cni-values --layer effective`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 			return runCniValuesGet(ctx, c, cmd.OutOrStdout(), cniCluster, cniLayer)
@@ -150,10 +156,13 @@ var cniValuesGetCmd = &cobra.Command{
 	},
 }
 
-var cniValuesSetCmd = &cobra.Command{
-	Use:   "set -f FILE",
+var applyCniValuesCmd = &cobra.Command{
+	Use:   "cni-values -f FILE",
 	Short: "Replace your layer of Cilium's values with a YAML file (- is stdin; an empty file clears it)",
-	Args:  cobra.NoArgs,
+	Long:  cniValuesNote,
+	Example: `  ichor apply cni-values -f cilium-values.yaml
+  ichor apply cni-values -f cilium-values.yaml --cluster prod`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		text, err := readValuesFile(cmd.InOrStdin(), cniValuesFile)
 		if err != nil {
@@ -166,10 +175,12 @@ var cniValuesSetCmd = &cobra.Command{
 	},
 }
 
-var cniValuesDiffCmd = &cobra.Command{
-	Use:   "diff -f FILE",
-	Short: "Show how the effective values would change if FILE became your layer",
-	Args:  cobra.NoArgs,
+var diffCniValuesCmd = &cobra.Command{
+	Use:     "cni-values -f FILE",
+	Short:   "Show how the effective values would change if FILE became your layer",
+	Long:    cniValuesNote,
+	Example: `  ichor diff cni-values -f cilium-values.yaml`,
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		text, err := readValuesFile(cmd.InOrStdin(), cniValuesFile)
 		if err != nil {
@@ -182,10 +193,13 @@ var cniValuesDiffCmd = &cobra.Command{
 	},
 }
 
-var cniValuesEditCmd = &cobra.Command{
-	Use:   "edit",
+var editCniValuesCmd = &cobra.Command{
+	Use:   "cni-values",
 	Short: "Edit your layer of Cilium's values in $EDITOR, validate it, show the diff and save",
-	Args:  cobra.NoArgs,
+	Long:  cniValuesNote,
+	Example: `  ichor edit cni-values
+  EDITOR=vim ichor edit cni-values --cluster prod`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 			return runCniValuesEdit(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), cniCluster, runEditor)
@@ -193,14 +207,16 @@ var cniValuesEditCmd = &cobra.Command{
 	},
 }
 
-var cniUpgradeCmd = &cobra.Command{
-	Use:   "upgrade",
+var upgradeCniCmd = &cobra.Command{
+	Use:   "cni",
 	Short: "Upgrade Cilium to the chart this Ichor ships",
-	Long: `upgrade checks that a newer Cilium chart is available and that your values still
+	Long: `upgrade cni checks that a newer Cilium chart is available and that your values still
 validate against it, then starts the cni upgrade operation.
 
 Cilium moves only to the chart the running Ichor embeds, with the images that chart pins: a newer
 Cilium patch arrives with a newer Ichor release (upgrade Ichor first, then run this).`,
+	Example: `  ichor upgrade cni
+  ichor upgrade cni --cluster prod`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
@@ -402,7 +418,7 @@ func runCniValuesEdit(
 	defer func() { _ = os.Remove(f.Name()) }()
 
 	header := "# Your layer of Cilium's Helm values (spec.cni.cilium.values). Ichor-owned keys cannot be set;\n" +
-		"# `ichor cni values get --layer owned` lists them. An empty file clears your layer.\n"
+		"# `ichor get cni-values --layer owned` lists them. An empty file clears your layer.\n"
 
 	if _, err := f.WriteString(header + cur.Msg.GetUserYaml()); err != nil {
 		_ = f.Close()
@@ -451,22 +467,36 @@ func runCniUpgrade(ctx context.Context, c *apiClients, out io.Writer, cluster st
 func init() {
 	rootCmd.AddCommand(cniCmd)
 	addAPIFlags(cniCmd)
-	cniCmd.AddCommand(cniKubeProxyCmd, cniValuesCmd, cniUpgradeCmd)
-	addStartFlags(cniKubeProxyCmd, &cniFlags)
-	markWrites(cniKubeProxyCmd)
 
-	cniValuesCmd.AddCommand(cniValuesGetCmd, cniValuesSetCmd, cniValuesDiffCmd, cniValuesEditCmd)
+	// Each command carries the CNI pre-run itself: they sit under different verbs, so no one parent holds it.
+	for _, c := range []*cobra.Command{setKubeProxyCmd, getCniValuesCmd, applyCniValuesCmd, diffCniValuesCmd, editCniValuesCmd, upgradeCniCmd} {
+		c.PersistentPreRunE = cniPreRun
 
-	for _, c := range []*cobra.Command{cniValuesGetCmd, cniValuesSetCmd, cniValuesDiffCmd, cniValuesEditCmd, cniUpgradeCmd} {
+		if c != upgradeCniCmd { // upgrade cni inherits them from upgrade
+			addAPIFlags(c)
+		}
+	}
+
+	setCmd.AddCommand(setKubeProxyCmd)
+	getCmd.AddCommand(getCniValuesCmd)
+	applyCmd.AddCommand(applyCniValuesCmd)
+	diffCmd.AddCommand(diffCniValuesCmd)
+	editCmd.AddCommand(editCniValuesCmd)
+	upgradeCmd.AddCommand(upgradeCniCmd)
+
+	addStartFlags(setKubeProxyCmd, &cniFlags)
+	markWrites(setKubeProxyCmd)
+
+	for _, c := range []*cobra.Command{getCniValuesCmd, applyCniValuesCmd, diffCniValuesCmd, editCniValuesCmd, upgradeCniCmd} {
 		c.Flags().StringVar(&cniCluster, "cluster", "", "the cluster (default: the only one in the namespace)")
 	}
 
-	cniValuesGetCmd.Flags().StringVar(&cniLayer, "layer", cniLayerUser, "which layer to print: user, defaults, effective or owned")
+	getCniValuesCmd.Flags().StringVar(&cniLayer, "layer", cniLayerUser, "which layer to print: user, defaults, effective or owned")
 
-	for _, c := range []*cobra.Command{cniValuesSetCmd, cniValuesDiffCmd} {
+	for _, c := range []*cobra.Command{applyCniValuesCmd, diffCniValuesCmd} {
 		c.Flags().StringVarP(&cniValuesFile, "filename", "f", "", "YAML file holding your layer of the values; - reads stdin (required)")
 		_ = c.MarkFlagRequired("filename")
 	}
 
-	markWrites(cniValuesSetCmd, cniValuesEditCmd, cniUpgradeCmd)
+	markWrites(applyCniValuesCmd, editCniValuesCmd, upgradeCniCmd)
 }

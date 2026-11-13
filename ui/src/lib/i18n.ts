@@ -101,7 +101,7 @@ export const en = {
   'addNode.removing': 'Removing…',
   'addNode.duplicate': 'This address is already listed.',
   'addNode.cidrHint': 'A range is scanned address by address (at most 256 per range). Machines found there appear below as waiting for approval; the first scan starts right after you add it.',
-  'addNode.alreadyConfigured': '{address} already runs a Talos configuration, so Ichor did not add it. To reuse the machine, reset it first: ichor machine reclaim {address} --talosconfig FILE',
+  'addNode.alreadyConfigured': '{address} already runs a Talos configuration, so Ichor did not add it. To reuse the machine, reset it first: ichor reclaim node {address} --talosconfig FILE',
   'addNode.alreadyConfiguredCan': '{address} already runs a Talos configuration, so Ichor did not add it. Reset and add wipes it and adds it to this cluster.',
   'addNode.orphan': '{address} runs a Talos configuration and has a Kubernetes Node, but no machine of this cluster accounts for it. It may have been removed from this cluster without a wipe. Ichor did not touch it.',
   'addNode.orphanCan': '{address} runs a Talos configuration and has a Kubernetes Node, but no machine of this cluster accounts for it. It may have been removed from this cluster without a wipe. Ichor did not touch it; Reset and add wipes it with this cluster\'s own credentials after you type its UUID.',
@@ -712,7 +712,7 @@ export const en = {
   'ops.plan.stages': 'Passes over every node, each verified before the next: {stages}.',
   'ops.plan.keyStages': 'Stages, each verified before the next: {stages}.',
   'ops.plan.effectKeyRotation':
-    'Every control plane is reconfigured once per applying stage, one at a time, without a reboot; its Kubernetes API server restarts each time and is waited for. New keys are first accepted everywhere, then made primary; every Secret is rewritten under the new key; the old signing key is kept for 90 minutes by default while tokens are re-issued. Workers are not touched. Both keys are rotated here; the CLI (ichor cluster rotate-keys) can rotate one, change the wait, or skip the check for legacy token Secrets.',
+    'Every control plane is reconfigured once per applying stage, one at a time, without a reboot; its Kubernetes API server restarts each time and is waited for. New keys are first accepted everywhere, then made primary; every Secret is rewritten under the new key; the old signing key is kept for 90 minutes by default while tokens are re-issued. Workers are not touched. Both keys are rotated here; the CLI (ichor rotate keys) can rotate one, change the wait, or skip the check for legacy token Secrets.',
   'ops.plan.kubeStages': 'The upgrade runs in {n} stages, each verified before the next:',
   'ops.plan.kubeStageHint.APIServers': 'The API server moves to the new version on every control plane, one at a time.',
   'ops.plan.kubeStageHint.ControlPlaneComponents': 'Controller-manager and scheduler move to the new version, one control plane at a time, once every API server has.',
@@ -723,13 +723,13 @@ export const en = {
   'ops.plan.orderKeyRotation': 'One control plane at a time; every one is visited in each applying stage:',
   'ops.plan.bundleStaleTitle': 'Your secrets bundle becomes stale',
   'ops.plan.bundleStale':
-    'When the rotation completes, the secrets bundle in the cluster is replaced and the copy on your machine is out of date. Run "ichor cluster bundle-export {name}" and keep the file safe. Nodes held with upgrade-hold are not skipped.',
+    'When the rotation completes, the secrets bundle in the cluster is replaced and the copy on your machine is out of date. Run "ichor export bundle {name}" and keep the file safe. Nodes held with upgrade-hold are not skipped.',
   'ops.plan.credentialsTitle': 'Your credentials stop working during the rotation',
   'ops.plan.credentials':
-    'Your kubeconfig and talosconfig stop working from the second pass (Issuing) on: the nodes start serving certificates from the new CA, and a file that trusts only the old CA can no longer verify them. After every node accepts the new CAs, the operation waits, changing nothing, until you have new credentials. There are two ways to get them. In this page, an administrator who is allowed to ("download" on talosclusters/credentials) downloads a zip with a new kubeconfig and talosconfig that work with both CAs, saves it, and then chooses "Continue rotation" after the page has checked that the new kubeconfig works. Or in a terminal, with your current kubeconfig: "ichor cluster credentials {name} --acknowledge" writes the same two files, checks them, and lets the operation go on; "ichor cluster rotate-ca {name}" does all of this itself when you start the rotation from the terminal. Pods get the new CA from the kubelet within about a minute after Issuing, so in-cluster clients cannot verify the API server for that time; Ichor waits until every namespace has the new CA before it drops the old ones. CoreDNS, kube-proxy, the CNI and ichor-ui are restarted once after the old CAs are dropped; other in-cluster clients that load the CA once may need a restart.',
+    'Your kubeconfig and talosconfig stop working from the second pass (Issuing) on: the nodes start serving certificates from the new CA, and a file that trusts only the old CA can no longer verify them. After every node accepts the new CAs, the operation waits, changing nothing, until you have new credentials. There are two ways to get them. In this page, an administrator who is allowed to ("download" on talosclusters/credentials) downloads a zip with a new kubeconfig and talosconfig that work with both CAs, saves it, and then chooses "Continue rotation" after the page has checked that the new kubeconfig works. Or in a terminal, with your current kubeconfig: "ichor create credentials {name} --acknowledge" writes the same two files, checks them, and lets the operation go on; "ichor rotate ca {name}" does all of this itself when you start the rotation from the terminal. Pods get the new CA from the kubelet within about a minute after Issuing, so in-cluster clients cannot verify the API server for that time; Ichor waits until every namespace has the new CA before it drops the old ones. CoreDNS, kube-proxy, the CNI and ichor-ui are restarted once after the old CAs are dropped; other in-cluster clients that load the CA once may need a restart.',
   'ops.awaitingCredentialsTitle': 'Waiting for your credentials',
   'ops.awaitingCredentials':
-    'Every node accepts the new CAs and the old ones still work. Nothing else happens until you continue. Download the new credentials here (if you are allowed to) and save them, then choose "Continue rotation"; or run "ichor cluster credentials {name} --acknowledge" with your current kubeconfig. The downloaded files work with both CAs. Your current kubeconfig and talosconfig stop working once the rotation continues.',
+    'Every node accepts the new CAs and the old ones still work. Nothing else happens until you continue. Download the new credentials here (if you are allowed to) and save them, then choose "Continue rotation"; or run "ichor create credentials {name} --acknowledge" with your current kubeconfig. The downloaded files work with both CAs. Your current kubeconfig and talosconfig stop working once the rotation continues.',
   'creds.download': 'Download new credentials',
   'creds.downloadTitle': 'Download the new credentials?',
   'creds.downloadDescription':
@@ -760,7 +760,7 @@ export const en = {
   'creds.continueDescription':
     'Ichor checks that a new kubeconfig authenticates to the cluster, then lets the rotation go on. From the next pass (Issuing) your current kubeconfig and talosconfig stop working. The downloaded files work with both CAs and keep working after the old CA is dropped.',
   'creds.continueNoDownload':
-    'If you have not downloaded the new credentials, you can still download them while the rotation runs, but only if you are allowed to. Otherwise run "ichor cluster credentials" with a kubeconfig that still works.',
+    'If you have not downloaded the new credentials, you can still download them while the rotation runs, but only if you are allowed to. Otherwise run "ichor create credentials" with a kubeconfig that still works.',
   'creds.continueConfirm': 'Continue rotation',
   'creds.continuing': 'Checking and continuing…',
   'creds.continued': 'The rotation is going on',
@@ -1106,7 +1106,7 @@ export const en = {
   'cni.unmanagedNote': 'Ichor does not install, upgrade or configure this CNI',
   'caAdvice.title': 'Consider rotating the cluster CAs',
   'caAdvice.text':
-    'The Talos and Kubernetes client certificates of the previous administrators, and the CA keys held by whoever created this cluster, remain valid. Consider rotating the CAs (Rotate CAs, or ichor cluster rotate-ca).',
+    'The Talos and Kubernetes client certificates of the previous administrators, and the CA keys held by whoever created this cluster, remain valid. Consider rotating the CAs (Rotate CAs, or ichor rotate ca).',
   'caAdvice.dismiss': 'Dismiss',
   'cilium.title': 'Cilium settings',
   'cilium.loading': 'Loading Cilium values…',

@@ -94,7 +94,7 @@ var _ = Describe("a kube-proxy mode committed to spec ahead of the switch", func
 				cond := readyCondition(got)
 				Expect(cond).NotTo(BeNil())
 				Expect(cond.Reason).To(Equal(reasonKubeProxySwitchPending))
-				Expect(cond.Message).To(ContainSubstring("ichor cni kube-proxy " + d.to))
+				Expect(cond.Message).To(ContainSubstring("ichor set kube-proxy " + d.to))
 				Expect(cond.Message).NotTo(ContainSubstring("config apply"))
 				Expect(got.Status.RebootPaths).To(BeEmpty(), "a config rollout must not pick the machine up")
 				Expect(f.fake.applyCalls).To(BeEmpty())
@@ -106,7 +106,7 @@ var _ = Describe("a kube-proxy mode committed to spec ahead of the switch", func
 				Expect(k8sClient.Update(ctx, f.cluster)).To(Succeed())
 
 				_, err := newRolloutAdvancer(f.fake).Advance(ctx, f.cluster, fetchMachine(f.m), nil)
-				Expect(err).To(MatchError(ContainSubstring("ichor cni kube-proxy " + d.to)))
+				Expect(err).To(MatchError(ContainSubstring("ichor set kube-proxy " + d.to)))
 				Expect(f.fake.stagedCalls).To(BeEmpty())
 				Expect(f.fake.applyCalls).To(BeEmpty())
 				Expect(f.fake.rebootCalls).To(BeZero())

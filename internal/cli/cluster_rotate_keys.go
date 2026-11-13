@@ -36,14 +36,14 @@ var (
 	clusterRotateKeysFollow             bool
 )
 
-// clusterRotateKeysCmd implements `ichor cluster rotate-keys`: it starts a key-rotation
+// rotateKeysCmd implements `ichor rotate keys`: it starts a key-rotation
 // TalosOperation through OperationService like every other start, so the plan, the refusals and
-// the permission check are the ones the UI has. Unlike rotate-ca it hands the operator nothing: the Talos API
+// the permission check are the ones the UI has. Unlike rotate ca it hands the operator nothing: the Talos API
 // and the Kubernetes API CAs are not touched, so every kubeconfig and talosconfig keeps working.
-var clusterRotateKeysCmd = &cobra.Command{
-	Use:   "rotate-keys NAME",
+var rotateKeysCmd = &cobra.Command{
+	Use:   "keys NAME",
 	Short: "Replace the cluster's service-account signing key and secretbox (encryption at rest) key",
-	Long: `rotate-keys starts a key rotation operation: the Kubernetes service-account signing key and the
+	Long: `rotate keys starts a key rotation operation: the Kubernetes service-account signing key and the
 kube-apiserver secretbox key that Secrets are encrypted with in etcd are replaced in a dual-key period.
 The new keys are first only accepted by every control plane (the old ones still sign and encrypt), then
 made primary; every Secret in the cluster is rewritten under the new secretbox key; the old service-account
@@ -66,12 +66,14 @@ past a step it could not verify.
 
 When it completes, the secrets bundle in the cluster has been replaced and it now also keeps the retired
 keys (backups sealed before the rotation stay readable with them), so the copy saved on your machine is
-stale: run 'ichor cluster bundle-export NAME' and keep both files safe. Defragment etcd on each control
-plane afterwards ('ichor node ...' etcd-defrag): old revisions encrypted with the old key stay until then.
+stale: run 'ichor export bundle NAME' and keep both files safe. Defragment etcd on each control
+plane afterwards ('ichor defrag etcd'): old revisions encrypted with the old key stay until then.
 A snapshot taken before the rotation finished cannot be restored.
 
 It shows which control planes are reconfigured and in which order, and asks for confirmation unless --yes.
 --follow keeps reporting progress until the rotation completes.`,
+	Example: `  ichor rotate keys prod
+  ichor rotate keys prod --only secretbox --follow`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		targets, err := keyRotationTargets(clusterRotateKeysOnly)
@@ -141,12 +143,13 @@ func keyRotationStart(cluster string, targets []string, tokenSettle string, igno
 }
 
 func init() {
-	clusterCmd.AddCommand(clusterRotateKeysCmd)
-	clusterRotateKeysCmd.Flags().StringVar(&clusterRotateKeysOnly, "only", "", "rotate only this key: service-account or secretbox (default: both)")
-	clusterRotateKeysCmd.Flags().StringVar(&clusterRotateKeysTokenSettle, "token-settle", "",
+	addAPIFlags(rotateKeysCmd)
+	rotateCmd.AddCommand(rotateKeysCmd)
+	rotateKeysCmd.Flags().StringVar(&clusterRotateKeysOnly, "only", "", "rotate only this key: service-account or secretbox (default: both)")
+	rotateKeysCmd.Flags().StringVar(&clusterRotateKeysTokenSettle, "token-settle", "",
 		"how long the old service-account key is kept after the new one signs (default 90m, at least 75m: pods refresh their tokens after 48m)")
-	clusterRotateKeysCmd.Flags().BoolVar(&clusterRotateKeysIgnoreLegacyTokens, "ignore-legacy-tokens", false,
+	rotateKeysCmd.Flags().BoolVar(&clusterRotateKeysIgnoreLegacyTokens, "ignore-legacy-tokens", false,
 		"drop the old service-account key although token Secrets it signed still exist")
-	clusterRotateKeysCmd.Flags().BoolVar(&clusterRotateKeysFollow, "follow", false, "keep reporting progress until the rotation completes or fails")
-	markWrites(clusterRotateKeysCmd)
+	rotateKeysCmd.Flags().BoolVar(&clusterRotateKeysFollow, "follow", false, "keep reporting progress until the rotation completes or fails")
+	markWrites(rotateKeysCmd)
 }

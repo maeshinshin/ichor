@@ -292,7 +292,7 @@ var _ = Describe("TalosOperation etcd-restore failures", func() {
 		Expect(got.Status.EtcdRestore.Message).To(ContainSubstring("not ready for recovery"))
 	})
 
-	It("tells the operator about ichor restore --recover-cluster when the restore fails", func() {
+	It("tells the operator about ichor restore cluster when the restore fails", func() {
 		f := newRestoreFixture("")
 		f.wipeHooks()
 		op := f.newOp(nil)
@@ -305,6 +305,6 @@ var _ = Describe("TalosOperation etcd-restore failures", func() {
 		got := f.reconcile(op)
 		Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		Expect(got.Status.FailureReason).To(ContainSubstring("refused"))
-		Expect(got.Status.FailureReason).To(ContainSubstring("ichor restore --recover-cluster"))
+		Expect(got.Status.FailureReason).To(ContainSubstring("ichor restore cluster"))
 	})
 })

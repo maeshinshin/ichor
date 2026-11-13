@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 // OperationService backs the operations screens and the `ichor upgrade`,
-// `ichor cluster shutdown`, `ichor cni` and `ichor operation` commands:
+// `ichor shutdown cluster`, `ichor cni` and `ichor operation` commands:
 // every disruptive, machine-by-machine action Ichor performs is a
 // TalosOperation CR, and this service is how the UI and CLI list,
 // plan, start, pause and delete one. Reads and writes are made
@@ -444,7 +444,7 @@ message PlanOperationResponse {
   repeated string stages = 9;
   // replaces_secrets_bundle is true when the operation ends by replacing the
   // cluster's secrets bundle, so the copy on the user's machine is stale and
-  // `ichor cluster bundle-export` is needed.
+  // `ichor export bundle` is needed.
   bool replaces_secrets_bundle = 10;
   // kubernetes_api_unavailable is true when a machine reboots while it is the
   // cluster's only approved control plane, so the Kubernetes API is down for

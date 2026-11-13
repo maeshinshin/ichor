@@ -26,6 +26,7 @@ import (
 
 	"github.com/pkg/browser"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	clientauthv1 "k8s.io/client-go/pkg/apis/clientauthentication/v1"
 )
@@ -50,8 +51,11 @@ var authOpts struct {
 }
 
 var authCmd = &cobra.Command{
-	Use:   "auth",
-	Short: "Log in to Ichor's OIDC issuer and act as a kubectl credential plugin",
+	Use:     "auth",
+	GroupID: groupAccess,
+	Short:   "Log in to Ichor's OIDC issuer and act as a kubectl credential plugin",
+	Example: `  ichor auth login --issuer https://ichor.example.com
+  ichor auth whoami --issuer https://ichor.example.com`,
 	Long: `Log in to Ichor's own OIDC issuer with the browser, and print
 short-lived ID tokens for kubectl. The login cache lives in ~/.ichor/auth
 (directory 0700, files 0600) and holds a refresh token; the kubeconfig itself
@@ -61,7 +65,9 @@ holds no secret.`,
 var authLoginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "Log in through the browser (authorization code + PKCE, loopback redirect); the default audience ichor-kube is the login kubectl needs when it has no terminal",
-	Args:  cobra.NoArgs,
+	Example: `  ichor auth login --issuer https://ichor.example.com
+  ichor auth login --issuer https://ichor.example.com --no-browser`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		f, err := newAuthFlow(cmd, !authOpts.noBrowser)
 		if err != nil {
@@ -85,7 +91,8 @@ var authTokenCmd = &cobra.Command{
 that. It uses the cached ID token while it has 30 seconds left, then the cached
 refresh token, and starts a browser login only when kubectl says the session is
 interactive (KUBERNETES_EXEC_INFO).`,
-	Args: cobra.NoArgs,
+	Example: `  ichor auth token --issuer https://ichor.example.com`,
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		f, err := newAuthFlow(cmd, true)
 		if err != nil {
@@ -99,7 +106,9 @@ interactive (KUBERNETES_EXEC_INFO).`,
 var authLogoutCmd = &cobra.Command{
 	Use:   "logout",
 	Short: "Revoke and delete every cached login for the issuer (all audiences), or only --audience's",
-	Args:  cobra.NoArgs,
+	Example: `  ichor auth logout --issuer https://ichor.example.com
+  ichor auth logout --issuer https://ichor.example.com --audience ichor-ui`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		f, err := newAuthFlow(cmd, false)
 		if err != nil {
@@ -121,15 +130,19 @@ var authLogoutCmd = &cobra.Command{
 	},
 }
 
+// addAuthFlags registers the issuer flags of `ichor auth` (and of `ichor create kubeconfig`, which signs in the same way).
+func addAuthFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&authOpts.issuer, "issuer", os.Getenv("ICHOR_ISSUER"), "Ichor OIDC issuer URL, the external https URL of ichor-ui (required; env ICHOR_ISSUER)")
+	fs.StringVar(&authOpts.clientID, "client-id", defaultAuthClient, "OIDC client id")
+	fs.StringVar(&authOpts.audience, "audience", defaultAuthAudience, "token audience: ichor-kube (the kube-apiserver, default; `ichor auth login` once lets kubectl run without a terminal) or ichor-ui (ichor-ui itself)")
+	addCAFileFlag(fs)
+}
+
 func init() {
-	pf := authCmd.PersistentFlags()
-	pf.StringVar(&authOpts.issuer, "issuer", os.Getenv("ICHOR_ISSUER"), "Ichor OIDC issuer URL, the external https URL of ichor-ui (required; env ICHOR_ISSUER)")
-	pf.StringVar(&authOpts.clientID, "client-id", defaultAuthClient, "OIDC client id")
-	pf.StringVar(&authOpts.audience, "audience", defaultAuthAudience, "token audience: ichor-kube (the kube-apiserver, default; `ichor auth login` once lets kubectl run without a terminal) or ichor-ui (ichor-ui itself)")
-	addCAFileFlag(pf)
+	addAuthFlags(authCmd.PersistentFlags())
 	authLoginCmd.Flags().BoolVar(&authOpts.noBrowser, "no-browser", false, "print the login URL instead of opening a browser")
 
-	authCmd.AddCommand(authLoginCmd, authTokenCmd, authLogoutCmd, authStatusCmd, authKubeconfigCmd)
+	authCmd.AddCommand(authLoginCmd, authTokenCmd, authLogoutCmd, authWhoamiCmd)
 	rootCmd.AddCommand(authCmd)
 }
 

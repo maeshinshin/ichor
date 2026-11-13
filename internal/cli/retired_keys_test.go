@@ -267,7 +267,7 @@ func TestRestoreOpensASnapshotSealedBeforeAKeyRotation(t *testing.T) {
 			snapshot := goodSnapshot(t)
 			putSnapshot(t, h.store, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), snapshot, h.bundle)
 
-			// What `ichor cluster bundle-export` leaves after the rotation.
+			// What `ichor export bundle` leaves after the rotation.
 			path := saveTestBundle(t, "lost", rotated, pass)
 
 			if pass != "" {

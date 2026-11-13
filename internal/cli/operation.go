@@ -41,19 +41,18 @@ var operationOpts struct {
 	Watch bool
 }
 
-var operationCmd = &cobra.Command{
-	Use:     "operation",
-	Aliases: []string{"op"},
-	Short:   "List, follow, pause, resume or delete the operations (upgrades, shutdowns) of a cluster",
-	Long: `An operation is the record of one machine-by-machine action: a Talos,
-Kubernetes or Ichor upgrade, a kube-proxy switch, or a cluster shutdown. These
-commands read and change the records; ` + "`ichor upgrade`, `ichor cni` and `ichor cluster shutdown`" + ` start them.`,
-}
+// operationNote is the part of the help of every operation command that says what an operation is.
+const operationNote = `An operation is the record of one node-by-node action: a Talos, Kubernetes, Ichor or Cilium
+upgrade, a kube-proxy switch, a configuration rollout, a rotation or a cluster shutdown. The operation commands
+read and change the records; the commands that do the action (` + "`ichor upgrade`, `ichor set kube-proxy`, `ichor shutdown cluster`" + `) start them.`
 
-var operationListCmd = &cobra.Command{
-	Use:   useList,
+var getOperationsCmd = &cobra.Command{
+	Use:   "operations",
 	Short: "List operations",
-	Args:  cobra.NoArgs,
+	Long:  operationNote,
+	Example: `  ichor get operations
+  ichor get operations --cluster prod`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return showAPIHuman(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.ListOperationsResponse], error) {
 			return c.Operation.ListOperations(ctx, connect.NewRequest(&pb.ListOperationsRequest{
@@ -65,13 +64,17 @@ var operationListCmd = &cobra.Command{
 
 var operationClusterFlag string
 
-var operationGetCmd = &cobra.Command{
-	Use:   useGetName,
-	Short: "Show one operation: phase, failure reason and the state of each machine",
-	Long: `get prints the operation's status as the controller wrote it. With --watch it
+var describeOperationCmd = &cobra.Command{
+	Use:   "operation NAME",
+	Short: "Show one operation: phase, failure reason and the state of each node",
+	Long: `describe operation prints the operation's status as the controller wrote it. With --watch it
 keeps polling, prints a progress line to stderr whenever the status changes, and
-exits when the operation completes (or pauses itself because a machine failed,
-which is an error exit).`,
+exits when the operation completes (or pauses itself because a node failed,
+which is an error exit).
+
+` + operationNote,
+	Example: `  ichor describe operation upgrade-talos-x7k2p
+  ichor describe operation upgrade-talos-x7k2p --watch`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
@@ -90,11 +93,12 @@ which is an error exit).`,
 	},
 }
 
-func newPauseCmd(use, short string, paused bool) *cobra.Command {
+func newPauseCmd(short, example string, paused bool) *cobra.Command {
 	return &cobra.Command{
-		Use:   use + " NAME",
-		Short: short,
-		Args:  cobra.ExactArgs(1),
+		Use:     "operation NAME",
+		Short:   short,
+		Example: example,
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 				return runSetPaused(ctx, c, cmd.OutOrStdout(), cmd.ErrOrStderr(), args[0], paused)
@@ -119,20 +123,24 @@ func runSetPaused(ctx context.Context, c *apiClients, out, errw io.Writer, name 
 	return printAPI(out, resp.Msg, renderOperationPaused)
 }
 
-var operationPauseCmd = newPauseCmd("pause", "Stop the operation from advancing any further machine (the cluster lock stays held, nothing is undone)", true)
-var operationResumeCmd = newPauseCmd("resume", "Let a paused operation continue; one paused by a failed step runs that step again, so fix the cause first", false)
+var pauseOperationCmd = newPauseCmd("Stop the operation from advancing any further node (the cluster lock stays held, nothing is undone)",
+	"  ichor pause operation upgrade-talos-x7k2p", true)
+var resumeOperationCmd = newPauseCmd("Let a paused operation continue; one paused by a failed step runs that step again, so fix the cause first",
+	"  ichor resume operation upgrade-talos-x7k2p", false)
 
-var operationDeleteCmd = &cobra.Command{
-	Use:   "delete NAME",
+var deleteOperationCmd = &cobra.Command{
+	Use:   "operation NAME",
 	Short: "Delete an operation record",
-	Long: `delete removes the record and, when it has not finished, lets the controller release
+	Long: `delete operation removes the record and, when it has not finished, lets the controller release
 the cluster lock. It does not stop a step already sent to a machine and it does not
 roll anything back. It asks for confirmation unless --yes.
 
 A ca-rotation or key-rotation deleted before it made the new CA or key issue is abandoned: the
 new material leaves the bundle, the lock is released and the machines are rendered from the old
-material again (the nodes then report a pending change; 'ichor config apply' drops what they
+material again (the nodes then report a pending change; 'ichor rollout config' drops what they
 still accept). Later in the rotation the delete is refused: let it finish.`,
+	Example: `  ichor delete operation upgrade-talos-x7k2p
+  ichor delete operation upgrade-talos-x7k2p --yes`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
@@ -346,7 +354,7 @@ func watchOperationKind(ctx context.Context, c *apiClients, ref *pb.ObjectRef, o
 				}
 
 				if failed {
-					return fmt.Errorf("operation %s paused after a failure: %s (fix the cause, then `ichor operation resume %[1]s`)", ref.GetName(), op.GetFailureReason())
+					return fmt.Errorf("operation %s paused after a failure: %s (fix the cause, then `ichor resume operation %[1]s`)", ref.GetName(), op.GetFailureReason())
 				}
 
 				return nil
@@ -483,10 +491,16 @@ func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, er
 }
 
 func init() {
-	rootCmd.AddCommand(operationCmd)
-	addAPIFlags(operationCmd)
-	operationCmd.AddCommand(operationListCmd, operationGetCmd, operationPauseCmd, operationResumeCmd, operationDeleteCmd)
-	operationListCmd.Flags().StringVar(&operationClusterFlag, "cluster", "", "only the operations of this cluster")
-	operationGetCmd.Flags().BoolVarP(&operationOpts.Watch, "watch", "w", false, "keep polling and print progress until the operation finishes")
-	markWrites(operationPauseCmd, operationResumeCmd, operationDeleteCmd)
+	for _, c := range []*cobra.Command{getOperationsCmd, describeOperationCmd, pauseOperationCmd, resumeOperationCmd, deleteOperationCmd} {
+		addAPIFlags(c)
+	}
+
+	getCmd.AddCommand(getOperationsCmd)
+	describeCmd.AddCommand(describeOperationCmd)
+	pauseCmd.AddCommand(pauseOperationCmd)
+	resumeCmd.AddCommand(resumeOperationCmd)
+	deleteCmd.AddCommand(deleteOperationCmd)
+	getOperationsCmd.Flags().StringVar(&operationClusterFlag, "cluster", "", "only the operations of this cluster")
+	describeOperationCmd.Flags().BoolVarP(&operationOpts.Watch, "watch", "w", false, "keep polling and print progress until the operation finishes")
+	markWrites(pauseOperationCmd, resumeOperationCmd, deleteOperationCmd)
 }

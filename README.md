@@ -51,7 +51,7 @@ You need one machine booted from a Talos ISO into maintenance mode.
 6. Check it:
 
    ```sh
-   ichor cluster get demo
+   ichor describe cluster demo
    ```
 
 ### Already have a Talos cluster?

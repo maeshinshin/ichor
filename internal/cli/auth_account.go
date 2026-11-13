@@ -35,10 +35,11 @@ import (
 
 var authKubeconfigOut string
 
-var authStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Show who you are signed in as and when the cached tokens expire (prints no token)",
-	Args:  cobra.NoArgs,
+var authWhoamiCmd = &cobra.Command{
+	Use:     "whoami",
+	Short:   "Show who you are signed in as and when the cached tokens expire (prints no token)",
+	Example: `  ichor auth whoami --issuer https://ichor.example.com`,
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		sess, err := dialUI(cmd, false)
 		if err != nil {
@@ -50,13 +51,15 @@ var authStatusCmd = &cobra.Command{
 	},
 }
 
-var authKubeconfigCmd = &cobra.Command{
+var createKubeconfigCmd = &cobra.Command{
 	Use:   "kubeconfig",
 	Short: "Download your own kubeconfig (it holds no secret: it runs `ichor auth token`)",
 	Long: `Asks ichor-ui for a kubeconfig for the signed-in user and writes it (mode 0600).
 The file has the API server address, the cluster CA certificate and an exec
 block that runs ` + "`ichor auth token`" + `; there is nothing secret in it. With --ca-file the
 exec block carries the same --ca-file so kubectl trusts the issuer's private CA.`,
+	Example: `  ichor create kubeconfig --issuer https://ichor.example.com
+  ichor create kubeconfig --issuer https://ichor.example.com --out - | kubectl --kubeconfig /dev/stdin get nodes`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		sess, err := dialUI(cmd, true)
@@ -69,7 +72,9 @@ exec block carries the same --ca-file so kubectl trusts the issuer's private CA.
 }
 
 func init() {
-	authKubeconfigCmd.Flags().StringVar(&authKubeconfigOut, "out", "", `file to write ("-" for stdout); default: the file name ichor-ui suggests, in the current directory`)
+	addAuthFlags(createKubeconfigCmd.Flags())
+	createCmd.AddCommand(createKubeconfigCmd)
+	createKubeconfigCmd.Flags().StringVar(&authKubeconfigOut, "out", "", `file to write ("-" for stdout); default: the file name ichor-ui suggests, in the current directory`)
 }
 
 func runAuthStatus(ctx context.Context, sess *uiSession, out io.Writer) error {

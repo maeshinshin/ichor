@@ -125,7 +125,7 @@ func TestOwnReclaimNeedsTheCluster(t *testing.T) {
 // The two refusals of an orphan never send the user round in a circle: a machine that is still approved is
 // pointed at Remove node here, and adopt's own refusal says to wipe with reclaim (see TestAdoptRefusalOffersTheWipe).
 func TestOwnReclaimRefusalPointsToRemoveNode(t *testing.T) {
-	c, last := reclaimControllerStub(t, []string{"node AAAA-1 is already an Ichor machine (approved); to wipe it, use Remove node (`ichor node remove`), which wipes it"})
+	c, last := reclaimControllerStub(t, []string{"node AAAA-1 is already an Ichor machine (approved); to wipe it, use Remove node (`ichor delete node`), which wipes it"})
 
 	var (
 		out        bytes.Buffer

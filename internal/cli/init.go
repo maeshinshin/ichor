@@ -82,8 +82,11 @@ var initWaitTimeout = defaultWebhookWait
 // the design document says predate the cluster and so never go through
 // the Connect API.
 var initCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Bootstrap a brand-new Talos cluster's first control plane",
+	Use:     "init",
+	GroupID: groupStart,
+	Short:   "Bootstrap a brand-new Talos cluster's first control plane",
+	Example: `  ichor init --print-config-template > init.yaml
+  ichor init -f init.yaml`,
 	Long: `init brings a single, freshly-booted Talos node (in maintenance mode, not
 yet configured) under Ichor's management as the first control plane of a
 new cluster:

@@ -256,7 +256,7 @@ func TestDownloadCommandsKeepTheirOwnOutputFlag(t *testing.T) {
 
 	c, _, err := rootCmd.Find([]string{"etcd", "snapshot"})
 	if err != nil || c.Name() != "snapshot" {
-		t.Fatalf("ichor etcd snapshot is missing: %v", err)
+		t.Fatalf("ichor snapshot etcd is missing: %v", err)
 	}
 
 	if f := c.Flags().Lookup("output"); f == nil || f.DefValue != "" {

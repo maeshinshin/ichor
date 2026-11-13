@@ -200,8 +200,8 @@ func TestNodeRemoveWithConfirmDoNotAskAgain(t *testing.T) {
 
 // ichor node reset is gone: node remove --reboot replaces it.
 func TestNodeResetIsRemoved(t *testing.T) {
-	if nodeRemoveCmd.Flags().Lookup("reboot") == nil {
-		t.Error("ichor node remove has no --reboot")
+	if deleteNodeCmd.Flags().Lookup("reboot") == nil {
+		t.Error("ichor delete node has no --reboot")
 	}
 
 	for _, c := range nodeCmd.Commands() {

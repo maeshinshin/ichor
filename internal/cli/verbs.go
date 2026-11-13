@@ -1,0 +1,241 @@
+/*
+Copyright 2026 maeshinshin.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package cli
+
+import "github.com/spf13/cobra"
+
+// The command surface is verb first: `ichor get nodes`, `ichor reboot node NAME`. The verbs below
+// are the parents; every command file adds its own object (nodes, cluster, patch, ...) to the verb it
+// belongs to. auth, user, discovery and secrets have no natural verb and stay nouns, the way kubectl
+// keeps auth, config and rollout.
+
+// Help groups of the root command, in the order `ichor --help` lists them.
+const (
+	groupStart        = "start"
+	groupInspect      = "inspect"
+	groupChange       = "change"
+	groupLifecycle    = "lifecycle"
+	groupMaintain     = "maintain"
+	groupTroubleshoot = "troubleshoot"
+	groupAccess       = "access"
+	groupOther        = "other"
+)
+
+var helpGroups = []*cobra.Group{
+	{ID: groupStart, Title: "Get Started Commands:"},
+	{ID: groupInspect, Title: "Inspect Commands:"},
+	{ID: groupChange, Title: "Change Commands:"},
+	{ID: groupLifecycle, Title: "Node and Cluster Lifecycle Commands:"},
+	{ID: groupMaintain, Title: "Maintenance Commands:"},
+	{ID: groupTroubleshoot, Title: "Troubleshooting Commands:"},
+	{ID: groupAccess, Title: "Access Commands:"},
+	{ID: groupOther, Title: "Other Commands:"},
+}
+
+var getCmd = &cobra.Command{
+	Use:     "get",
+	GroupID: groupInspect,
+	Short:   "List objects, or show a cluster in a few lines",
+	Long: `get lists clusters, nodes, TalosConfigPatches, operations, users, Ichor's settings and
+Cilium's Helm values. Add -o yaml or -o json for scripts. Use describe to see one object in full.`,
+	Example: `  ichor get clusters
+  ichor get nodes --cluster prod
+  ichor get operations -o json`,
+}
+
+var describeCmd = &cobra.Command{
+	Use:     "describe",
+	GroupID: groupInspect,
+	Short:   "Show one object in full",
+	Long: `describe shows one cluster, node, patch, operation, user or node configuration in full.
+It reads the same resources the UI shows.`,
+	Example: `  ichor describe cluster prod
+  ichor describe node cp-1`,
+}
+
+var diffCmd = &cobra.Command{
+	Use:     "diff",
+	GroupID: groupInspect,
+	Short:   "Show how a change would alter what is in force",
+	Long:    `diff shows how the effective Cilium values would change if a file became your layer, without writing anything.`,
+	Example: `  ichor diff cni-values -f cilium-values.yaml`,
+}
+
+var editCmd = &cobra.Command{
+	Use:     "edit",
+	GroupID: groupChange,
+	Short:   "Edit an object in $EDITOR, or change a user's fields",
+	Example: `  ichor edit cni-values
+  ichor edit user alice --role admin`,
+}
+
+var setCmd = &cobra.Command{
+	Use:     "set",
+	GroupID: groupChange,
+	Short:   "Change one setting: kube-proxy mode or Ichor's runtime settings",
+	Example: `  ichor set kube-proxy replaced --cluster prod
+  ichor set settings updateCheck.enabled=false`,
+}
+
+var createCmd = &cobra.Command{
+	Use:     "create",
+	GroupID: groupChange,
+	Short:   "Create a user, or write credentials for talosctl and kubectl",
+	Long: `create makes an Ichor user, or writes the files a person needs to reach a cluster: the admin
+credentials (a kubeconfig and a talosconfig), a short-lived read-only talosconfig, or your own kubeconfig.`,
+	Example: `  ichor create user alice --role operator --generate
+  ichor create talosconfig prod`,
+}
+
+var deleteCmd = &cobra.Command{
+	Use:     "delete",
+	GroupID: groupChange,
+	Short:   "Delete a node, patch, operation or user",
+	Example: `  ichor delete patch ingress-sysctls
+  ichor delete node worker-3 --confirm worker-3`,
+}
+
+var rolloutCmd = &cobra.Command{
+	Use:     "rollout",
+	GroupID: groupChange,
+	Short:   "Roll out pending changes that need a reboot or an API server restart",
+	Example: `  ichor rollout config --cluster prod`,
+}
+
+var approveCmd = &cobra.Command{
+	Use:     "approve",
+	GroupID: groupLifecycle,
+	Short:   "Approve a pending node so the controller starts configuring it",
+	Example: `  ichor approve node 3f1c2a --role worker`,
+}
+
+var rejectCmd = &cobra.Command{
+	Use:     "reject",
+	GroupID: groupLifecycle,
+	Short:   "Reject a pending node",
+	Example: `  ichor reject node 3f1c2a`,
+}
+
+var reclaimCmd = &cobra.Command{
+	Use:     "reclaim",
+	GroupID: groupLifecycle,
+	Short:   "Reset a configured Talos node of another cluster back to maintenance mode",
+	Example: `  ichor reclaim node 192.168.10.21 --talosconfig old-cluster/talosconfig --cluster prod`,
+}
+
+var rebootCmd = &cobra.Command{
+	Use:     "reboot",
+	GroupID: groupLifecycle,
+	Short:   "Reboot a node gracefully",
+	Example: `  ichor reboot node worker-3`,
+}
+
+var shutdownCmd = &cobra.Command{
+	Use:     "shutdown",
+	GroupID: groupLifecycle,
+	Short:   "Shut a node down, or every node of a cluster",
+	Example: `  ichor shutdown node worker-3
+  ichor shutdown cluster lab --follow`,
+}
+
+var restartCmd = &cobra.Command{
+	Use:     "restart",
+	GroupID: groupLifecycle,
+	Short:   "Restart a Talos service on a node",
+	Example: `  ichor restart service worker-3 kubelet`,
+}
+
+var bootstrapCmd = &cobra.Command{
+	Use:     "bootstrap",
+	GroupID: groupMaintain,
+	Short:   "Install Ichor's Cilium on a cluster with no CNI, before helm install ichor",
+	Example: `  ichor bootstrap cni --kube-proxy replaced`,
+}
+
+var rotateCmd = &cobra.Command{
+	Use:     "rotate",
+	GroupID: groupMaintain,
+	Short:   "Rotate a cluster's certificate authorities or its signing and encryption keys",
+	Example: `  ichor rotate ca prod
+  ichor rotate keys prod`,
+}
+
+var backupCmd = &cobra.Command{
+	Use:     "backup",
+	GroupID: groupMaintain,
+	Short:   "Take a backup now, outside the schedule",
+	Example: `  ichor backup etcd nightly`,
+}
+
+var snapshotCmd = &cobra.Command{
+	Use:     "snapshot",
+	GroupID: groupMaintain,
+	Short:   "Download a snapshot from a node",
+	Example: `  ichor snapshot etcd --node cp-1 --out etcd.snapshot`,
+}
+
+var defragCmd = &cobra.Command{
+	Use:     "defrag",
+	GroupID: groupMaintain,
+	Short:   "Defragment etcd on a control plane node",
+	Example: `  ichor defrag etcd --node cp-2`,
+}
+
+var forfeitLeadershipCmd = &cobra.Command{
+	Use:     "forfeit-leadership",
+	GroupID: groupMaintain,
+	Short:   "Hand etcd leadership over from a control plane node that leads",
+	Example: `  ichor forfeit-leadership etcd --node cp-1`,
+}
+
+var pauseCmd = &cobra.Command{
+	Use:     "pause",
+	GroupID: groupMaintain,
+	Short:   "Pause a running operation",
+	Example: `  ichor pause operation upgrade-talos-x7k2p`,
+}
+
+var resumeCmd = &cobra.Command{
+	Use:     "resume",
+	GroupID: groupMaintain,
+	Short:   "Resume a paused operation",
+	Example: `  ichor resume operation upgrade-talos-x7k2p`,
+}
+
+var exportCmd = &cobra.Command{
+	Use:     "export",
+	GroupID: groupMaintain,
+	Short:   "Save a cluster's secrets bundle locally",
+	Example: `  ichor export bundle prod`,
+}
+
+var logsCmd = &cobra.Command{
+	Use:     "logs",
+	GroupID: groupTroubleshoot,
+	Short:   "Print a node's kernel or service log",
+	Example: `  ichor logs node worker-3 --service kubelet --follow`,
+}
+
+func init() {
+	rootCmd.AddGroup(helpGroups...)
+	rootCmd.SetHelpCommandGroupID(groupOther)
+	rootCmd.SetCompletionCommandGroupID(groupOther)
+
+	rootCmd.AddCommand(getCmd, describeCmd, previewCmd, diffCmd, applyCmd, editCmd, setCmd, createCmd, deleteCmd, rolloutCmd,
+		approveCmd, rejectCmd, reclaimCmd, rebootCmd, shutdownCmd, restartCmd,
+		bootstrapCmd, rotateCmd, backupCmd, snapshotCmd, defragCmd, forfeitLeadershipCmd, pauseCmd, resumeCmd, exportCmd, logsCmd)
+}

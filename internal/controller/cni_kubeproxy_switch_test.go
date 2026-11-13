@@ -383,7 +383,7 @@ var _ = Describe("cniKubeProxyAdvancer", func() {
 		Expect(before).NotTo(BeEmpty())
 		Expect(cniJobCount(cluster)).To(Equal(1))
 
-		// The spec is written, as `ichor cni kube-proxy replaced` does before it creates the operation.
+		// The spec is written, as `ichor set kube-proxy replaced` does before it creates the operation.
 		edited := fetchCluster(cluster)
 		edited.Spec.CNI.KubeProxy = modeReplaced
 		edited.Annotations = map[string]string{ichorv1alpha1.TalosClusterConfirmKubeProxySwitchAnnotation: modeReplaced}

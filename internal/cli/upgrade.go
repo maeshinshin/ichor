@@ -45,8 +45,11 @@ var upgradeFlags startFlags
 var upgradeList bool
 
 var upgradeCmd = &cobra.Command{
-	Use:   "upgrade",
-	Short: "Upgrade the cluster's Talos or Kubernetes, or Ichor itself",
+	Use:     "upgrade",
+	GroupID: groupMaintain,
+	Short:   "Upgrade the cluster's Talos, Kubernetes or Cilium, or Ichor itself",
+	Example: `  ichor upgrade talos --list
+  ichor upgrade kubernetes v1.36.3 --cluster prod --follow`,
 	Long: `Upgrade one component of the cluster, or Ichor itself. Talos, Kubernetes and Cilium move
 independently: the release set of the Ichor that runs the cluster is the version of a
 first install, and any valid target is allowed after that.
@@ -54,12 +57,12 @@ first install, and any valid target is allowed after that.
 ` + "`ichor upgrade talos`" + ` and ` + "`ichor upgrade kubernetes`" + ` offer the versions the cluster can
 move to (` + "`--list`" + `). Without a VERSION they use the recommended one, the release set's version
 when it is a valid upgrade, else the newest patch of the running minor. With a VERSION they move to it.
-` + "`ichor upgrade ichor`" + ` moves Ichor itself. Before the installer Job runs, the controller pins the
+` + "`ichor upgrade ichor`" + ` moves Ichor itself and ` + "`ichor upgrade cni`" + ` moves Cilium to the chart this Ichor ships. Before the installer Job runs, the controller pins the
 installer image to a digest and checks its signature; --skip-signature-check is the opt-out for
 images nobody signs.
 
 Each upgrade changes the version in the spec that names it and then starts the
-operation that rolls it out machine by machine: control planes one at a time,
+operation that rolls it out node by node: control planes one at a time,
 then workers. The spec is changed first, because the operation reads its target
 from it; if the operation cannot be created (no permission, another operation
 running) nothing was changed. Run the command again to retry: a spec that
@@ -81,7 +84,7 @@ func newUpgradeCmd(use, short string, kind pb.OperationKind) *cobra.Command {
 		Short: short,
 		Long: short + `.
 
-Without VERSION it uses the recommended version (see ` + "`--list`" + `). It shows which machines restart
+Without VERSION it uses the recommended version (see ` + "`--list`" + `). It shows which nodes restart
 and in which order, and asks for confirmation unless --yes.`,
 		Args: args,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -258,6 +261,12 @@ func init() {
 		"run the installer image WITHOUT checking its signature (for builds nobody signs: development and demo images)")
 
 	markWrites(upgradeTalosCmd, upgradeKubernetesCmd, upgradeIchorCmd)
+
+	upgradeTalosCmd.Example = `  ichor upgrade talos --list
+  ichor upgrade talos v1.14.1 --cluster prod --follow`
+	upgradeKubernetesCmd.Example = `  ichor upgrade kubernetes --list
+  ichor upgrade kubernetes v1.36.3 --cluster prod --follow`
+	upgradeIchorCmd.Example = `  ichor upgrade ichor v0.3.1 --follow`
 }
 
 // refuseHelmManagedInstall stops a command that would run the installer Job when Helm owns the

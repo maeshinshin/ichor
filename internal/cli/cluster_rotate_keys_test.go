@@ -60,7 +60,7 @@ func TestRotateKeysPromptSaysWhatHappensToTheKeysAndDeclineWritesNothing(t *test
 
 	for _, want := range []string{
 		onlyServiceAccount, ichorv1alpha1.KeyRotationTargetSecretbox, "Accepting, Issuing, Reencrypting, SettlingTokens, Dropping",
-		"kube-apiserver", "one at a time", "1. " + opCP + " (controlplane)", "ichor cluster bundle-export " + opTestCluster,
+		"kube-apiserver", "one at a time", "1. " + opCP + " (controlplane)", "ichor export bundle " + opTestCluster,
 		"every Secret", "legacy", "90 minutes",
 	} {
 		if !strings.Contains(prompt.String(), want) {
@@ -155,7 +155,7 @@ func TestRotateKeysOnlyAcceptsTheKeysItKnows(t *testing.T) {
 }
 
 func TestRotateKeysIsOneCommandThroughTheEntryPoint(t *testing.T) {
-	if _, ok := clusterRotateKeysCmd.Annotations[writesAnnotation]; !ok {
+	if _, ok := rotateKeysCmd.Annotations[writesAnnotation]; !ok {
 		t.Error("rotate-keys is not marked as a write")
 	}
 

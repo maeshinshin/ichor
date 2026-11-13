@@ -27,10 +27,12 @@ import (
 
 var machineListCluster string
 
-var machineListCmd = &cobra.Command{
-	Use:   useList,
-	Short: "List machines, pending ones included",
-	Args:  cobra.NoArgs,
+var getNodesCmd = &cobra.Command{
+	Use:   "nodes",
+	Short: "List nodes, pending ones included",
+	Example: `  ichor get nodes
+  ichor get nodes --cluster prod -o yaml`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return showAPIHuman(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.ListMachinesResponse], error) {
 			return c.Machine.ListMachines(ctx, connect.NewRequest(&pb.ListMachinesRequest{
@@ -41,6 +43,7 @@ var machineListCmd = &cobra.Command{
 }
 
 func init() {
-	machineCmd.AddCommand(machineListCmd)
-	machineListCmd.Flags().StringVar(&machineListCluster, flagCluster, "", "only machines of this TalosCluster")
+	addAPIFlags(getNodesCmd)
+	getCmd.AddCommand(getNodesCmd)
+	getNodesCmd.Flags().StringVar(&machineListCluster, flagCluster, "", "only nodes of this TalosCluster")
 }

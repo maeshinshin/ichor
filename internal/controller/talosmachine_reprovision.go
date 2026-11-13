@@ -89,7 +89,7 @@ func (r *TalosMachineReconciler) removeStaleEtcdMember(
 	survivor, err := r.findEtcdSurvivor(ctx, m)
 	if err != nil {
 		return blocked(fmt.Sprintf("%v. If this was the cluster's only control plane its etcd data is gone: recover the cluster "+
-			"from a backup with `ichor restore --recover-cluster`", err))
+			"from a backup with `ichor restore cluster`", err))
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, etcdDialTimeout)
@@ -113,7 +113,7 @@ func (r *TalosMachineReconciler) removeStaleEtcdMember(
 
 	if err := sc.EtcdRemoveMemberByID(ctx, id); err != nil {
 		return reasonStaleEtcdMember, fmt.Sprintf("etcd still lists a member named %q for this control plane and removing it "+
-			"through %q failed (%s), so nothing was sent; remove the machine with `ichor node remove %s`, which removes its etcd "+
+			"through %q failed (%s), so nothing was sent; remove the machine with `ichor delete node %s`, which removes its etcd "+
 			"member too, and approve it again", name, survivor.Name, shortError(err), m.Name)
 	}
 

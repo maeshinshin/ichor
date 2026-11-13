@@ -183,7 +183,7 @@ func TestAdoptAddMachineRefusesAMachineOfAnotherCluster(t *testing.T) {
 		t.Fatal("runAdopt succeeded for a machine of another Talos cluster")
 	}
 
-	for _, want := range []string{addAddr, "different Talos cluster", "ichor machine reclaim " + addAddr} {
+	for _, want := range []string{addAddr, "different Talos cluster", "ichor reclaim node " + addAddr} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not contain %q", err, want)
 		}
@@ -211,7 +211,7 @@ func TestAdoptAddMachineUnknownAuthorityNamesReclaim(t *testing.T) {
 		t.Fatal("runAdopt succeeded for a machine whose certificate is not trusted")
 	}
 
-	for _, want := range []string{addAddr, "different Talos cluster", "ichor machine reclaim " + addAddr, "--cluster " + env.cluster.Name} {
+	for _, want := range []string{addAddr, "different Talos cluster", "ichor reclaim node " + addAddr, "--cluster " + env.cluster.Name} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("error %q does not contain %q", err, want)
 		}

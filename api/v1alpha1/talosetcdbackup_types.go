@@ -41,7 +41,7 @@ const (
 	TalosEtcdBackupReasonSuspended = "Suspended"
 )
 
-// BackupNowAnnotation, set by `ichor etcd backup now` (or the UI) to an RFC 3339 time, asks the
+// BackupNowAnnotation, set by `ichor backup etcd` (or the UI) to an RFC 3339 time, asks the
 // controller for one snapshot outside the schedule. The controller never changes spec, so the request
 // is an annotation; it acts once the time is newer than status.lastManualBackup.
 const BackupNowAnnotation = "ichor.maesh.dev/backup-now"

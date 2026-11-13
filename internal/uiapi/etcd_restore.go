@@ -122,7 +122,7 @@ func (s *Server) planEtcdRestore(ctx context.Context, clusterRef *pb.ObjectRef, 
 		"The Kubernetes API is unavailable from the first wipe until etcd is back, which takes several minutes; "+
 		"running pods keep running but nothing can be changed. Afterwards every machine reconciles against the restored "+
 		"state, which may differ from what the nodes run, so check each machine. If Ichor's controller runs on the only "+
-		"control plane it stops with it and `ichor restore --recover-cluster` finishes the restore. That command is also the way out "+
+		"control plane it stops with it and `ichor restore cluster` finishes the restore. That command is also the way out "+
 		"if the restore stops with an error.", whenText(taken))
 
 	p.resp.Blocked, _ = s.etcdRestoreBlocked(ctx, p, cluster, &bk, taken, len(cps))

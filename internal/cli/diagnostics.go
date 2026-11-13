@@ -239,7 +239,7 @@ func saveDownload[M chunk](stream chunkStream[M], output string, stdout io.Write
 func targetPath(output, suggested string) (string, error) {
 	name := filepath.Base(suggested)
 	if name == "." || name == string(filepath.Separator) || name == "" {
-		return "", errors.New("the server suggested no file name; pass -o FILE")
+		return "", errors.New("the server suggested no file name; pass --out FILE")
 	}
 
 	if output == "" {
@@ -380,9 +380,10 @@ func explainDownloadError(err error, local bool) error {
 	return err
 }
 
-var nodeSupportBundleCmd = &cobra.Command{
-	Use:   "support-bundle [NODE]",
-	Short: "Download a zip of a node's (or every node of a cluster's) logs, processes, mounts and Talos resources",
+var supportBundleCmd = &cobra.Command{
+	Use:     "support-bundle [NODE]",
+	GroupID: groupTroubleshoot,
+	Short:   "Download a zip of a node's (or every node of a cluster's) logs, processes, mounts and Talos resources",
 	Long: `support-bundle downloads a zip with, per node: the kernel log, the log of each Talos
 service, the service list, process names (no command lines), mounts, memory, containers and every
 Talos resource that Talos does not mark sensitive. It leaves out the machine configuration,
@@ -390,7 +391,9 @@ certificates and keys. Logs are free text and can still contain a credential a p
 so treat the file as confidential.
 
 Name one NODE, or --cluster for every approved node of a cluster. Needs the "download" verb on
-talosmachines/support-bundle. The file is written with mode 0600; -o - writes to standard output.`,
+talosmachines/support-bundle. The file is written with mode 0600; --out - writes to standard output.`,
+	Example: `  ichor support-bundle worker-3
+  ichor support-bundle --cluster prod --out prod-support.zip`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		req, err := supportBundleRequest(apiOpts.Namespace, args, downloadOpts.Cluster)
@@ -404,18 +407,21 @@ talosmachines/support-bundle. The file is written with mode 0600; -o - writes to
 	},
 }
 
-var nodePcapCmd = &cobra.Command{
-	Use:   "pcap NODE",
-	Short: "Capture packets on a node's interface into a pcap file, for a bounded time and size",
+var pcapCmd = &cobra.Command{
+	Use:     "pcap NODE",
+	GroupID: groupTroubleshoot,
+	Short:   "Capture packets on a node's interface into a pcap file, for a bounded time and size",
 	Long: `pcap captures packets on one interface of a node and downloads them as a pcap file. The
 capture ends after --duration (default 30s, at most 5m) or --max-size (at most 100 MiB), whichever
 comes first, and the file is complete either way. Packets on the wire can contain secrets.
 
 --filter takes a classic BPF program in "tcpdump -dd" format (the form Talos takes), or @FILE to
 read it from a file, for example:
-  ichor node pcap worker-1 --interface eth0 --filter "$(tcpdump -dd -y EN10MB 'tcp port 80')" -o web.pcap
+  ichor pcap worker-1 --interface eth0 --filter "$(tcpdump -dd -y EN10MB 'tcp port 80')" --out web.pcap
 
 Needs the "download" verb on talosmachines/packet-capture. The file is written with mode 0600.`,
+	Example: `  ichor pcap worker-3 --duration 10s
+  ichor pcap worker-3 --interface eth0 --out web.pcap`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		req, err := pcapRequest(apiOpts.Namespace, args[0], downloadOpts.Interface, downloadOpts.Filter, downloadOpts.Duration, downloadOpts.MaxSize)
@@ -429,19 +435,15 @@ Needs the "download" verb on talosmachines/packet-capture. The file is written w
 	},
 }
 
-// etcdCmd groups the etcd commands: reading a snapshot (here) and the maintenance actions (node_actions.go).
-var etcdCmd = &cobra.Command{
-	Use:   "etcd",
-	Short: "Download an etcd snapshot from, or run an etcd maintenance action on, a control plane node",
-}
-
-var etcdSnapshotCmd = &cobra.Command{
-	Use:   "snapshot --node CONTROL_PLANE",
+var snapshotEtcdCmd = &cobra.Command{
+	Use:   "etcd --node CONTROL_PLANE",
 	Short: "Download an etcd snapshot from a control plane node",
-	Long: `snapshot downloads an etcd snapshot taken from one control plane node. THE SNAPSHOT CONTAINS
+	Long: `snapshot etcd downloads an etcd snapshot taken from one control plane node. THE SNAPSHOT CONTAINS
 EVERY KUBERNETES SECRET in the cluster; keep it as you would the secrets themselves. For scheduled,
 encrypted backups use a TalosEtcdBackup instead. The file is plaintext (not encrypted). Needs the "download" verb on
-talosmachines/etcd-snapshot. The file is written with mode 0600; -o - writes to standard output.`,
+talosmachines/etcd-snapshot. The file is written with mode 0600; --out - writes to standard output.`,
+	Example: `  ichor snapshot etcd --node cp-1
+  ichor snapshot etcd --node cp-1 --out etcd.snapshot`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		if downloadOpts.Node == "" {
@@ -457,27 +459,25 @@ talosmachines/etcd-snapshot. The file is written with mode 0600; -o - writes to 
 }
 
 func init() {
-	nodeCmd.AddCommand(nodeSupportBundleCmd, nodePcapCmd)
+	rootCmd.AddCommand(supportBundleCmd, pcapCmd)
+	snapshotCmd.AddCommand(snapshotEtcdCmd)
 
-	// -o means the output file for these commands, not the yaml/json format of the
-	// others: a local flag of the same name replaces the inherited one.
-	const outputHelp = "file to write (mode 0600); default the name the server suggests; - for standard output"
+	// --out is the file; -o stays the global yaml/json format, which a download has no use for (runAPI refuses a file name there).
+	const outHelp = "file to write (mode 0600); default the name the server suggests; - for standard output"
 
-	for _, c := range []*cobra.Command{nodeSupportBundleCmd, nodePcapCmd, etcdSnapshotCmd} {
-		c.Flags().StringVarP(&downloadOpts.Output, "output", "o", "", outputHelp)
+	for _, c := range []*cobra.Command{supportBundleCmd, pcapCmd, snapshotEtcdCmd} {
+		addAPIFlags(c)
+		c.Flags().StringVar(&downloadOpts.Output, "out", "", outHelp)
 	}
 
-	nodeSupportBundleCmd.Flags().StringVar(&downloadOpts.Cluster, "cluster", "", "download for every approved node of this cluster instead of one NODE")
+	supportBundleCmd.Flags().StringVar(&downloadOpts.Cluster, "cluster", "", "download for every approved node of this cluster instead of one NODE")
 
-	f := nodePcapCmd.Flags()
+	f := pcapCmd.Flags()
 	f.StringVar(&downloadOpts.Interface, "interface", "eth0", "interface to capture on")
 	f.DurationVar(&downloadOpts.Duration, "duration", uiapi.DefaultCaptureDuration, "capture time (at most 5m)")
 	f.StringVar(&downloadOpts.Filter, "filter", "", `BPF filter in "tcpdump -dd" format, or @FILE`)
 	f.Int64Var(&downloadOpts.MaxSize, "max-size", 0, "stop after this many bytes (default and maximum 100 MiB)")
 
-	etcdSnapshotCmd.Flags().StringVar(&downloadOpts.Node, "node", "", "control plane TalosMachine to take the snapshot from")
+	snapshotEtcdCmd.Flags().StringVar(&downloadOpts.Node, "node", "", "control plane TalosMachine to take the snapshot from")
 
-	rootCmd.AddCommand(etcdCmd)
-	addAPIFlags(etcdCmd)
-	etcdCmd.AddCommand(etcdSnapshotCmd)
 }

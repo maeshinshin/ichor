@@ -28,16 +28,12 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// clusterCmd groups the read-only TalosCluster subcommands.
-var clusterCmd = &cobra.Command{
-	Use:   "cluster",
-	Short: "List or inspect clusters",
-}
-
-var clusterListCmd = &cobra.Command{
-	Use:   useList,
+var getClustersCmd = &cobra.Command{
+	Use:   "clusters",
 	Short: "List clusters",
-	Args:  cobra.NoArgs,
+	Example: `  ichor get clusters
+  ichor get clusters -o yaml`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return showAPIHuman(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.ListClustersResponse], error) {
 			return c.Cluster.ListClusters(ctx, connect.NewRequest(&pb.ListClustersRequest{}))
@@ -45,10 +41,12 @@ var clusterListCmd = &cobra.Command{
 	},
 }
 
-var clusterGetCmd = &cobra.Command{
-	Use:   useGetName,
+var describeClusterCmd = &cobra.Command{
+	Use:   "cluster NAME",
 	Short: "Show one cluster: versions, conditions, rollout and hand-over state",
-	Args:  cobra.ExactArgs(1),
+	Example: `  ichor describe cluster prod
+  ichor describe cluster prod -o json`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return showAPIHuman(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.GetClusterResponse], error) {
 			return c.Cluster.GetCluster(ctx, connect.NewRequest(&pb.GetClusterRequest{Cluster: objectRef(apiOpts.Namespace, args[0])}))
@@ -56,10 +54,11 @@ var clusterGetCmd = &cobra.Command{
 	},
 }
 
-var clusterStatusCmd = &cobra.Command{
-	Use:   "status NAME",
-	Short: "Show a cluster's versions, endpoint and CNI in a few lines",
-	Args:  cobra.ExactArgs(1),
+var getClusterCmd = &cobra.Command{
+	Use:     "cluster NAME",
+	Short:   "Show a cluster's versions, endpoint and CNI in a few lines",
+	Example: `  ichor get cluster prod`,
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 			return runClusterStatus(ctx, c, cmd.OutOrStdout(), args[0])
@@ -86,7 +85,7 @@ func runClusterStatus(ctx context.Context, c *apiClients, out io.Writer, name st
 	return err
 }
 
-// cniStatusLine is the cni line of `ichor cluster status -o yaml`.
+// cniStatusLine is the cni line of `ichor get cluster -o yaml`.
 func cniStatusLine(cl *pb.Cluster) string {
 	if cl.GetCniPreset() != ichorv1alpha1.TalosClusterCNIPresetUnmanaged {
 		return string(detectedCilium)
@@ -101,7 +100,10 @@ func cniStatusLine(cl *pb.Cluster) string {
 }
 
 func init() {
-	rootCmd.AddCommand(clusterCmd)
-	addAPIFlags(clusterCmd)
-	clusterCmd.AddCommand(clusterListCmd, clusterGetCmd, clusterStatusCmd)
+	for _, c := range []*cobra.Command{getClustersCmd, getClusterCmd, describeClusterCmd} {
+		addAPIFlags(c)
+	}
+
+	getCmd.AddCommand(getClustersCmd, getClusterCmd)
+	describeCmd.AddCommand(describeClusterCmd)
 }

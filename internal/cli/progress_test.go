@@ -435,7 +435,7 @@ func TestProgress_PlainSampleOfAWholeRun(t *testing.T) {
 	step("Kubernetes API", 20, "reachable")
 	step("Install Ichor", 36, "104 objects")
 	p.Done()
-	p.Next("ichor cluster status initshow")
+	p.Next("ichor get cluster initshow")
 
 	t.Logf("\n%s", buf.String())
 }

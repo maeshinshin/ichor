@@ -26,7 +26,7 @@ import (
 // kindUser is the word of the user result lines.
 const kindUser = "user"
 
-// The state column of `ichor user list`.
+// The state column of `ichor get users`.
 const (
 	userActive     = "active"
 	userDisabled   = "disabled"

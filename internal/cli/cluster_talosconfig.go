@@ -37,7 +37,7 @@ import (
 	"github.com/maeshinshin/ichor/internal/credentials"
 )
 
-// readerSuffix is appended to the current talosconfig's path to name the file `ichor cluster talosconfig`
+// readerSuffix is appended to the current talosconfig's path to name the file `ichor create talosconfig`
 // writes by default; the current talosconfig is never overwritten.
 const readerSuffix = ".ichor-reader"
 
@@ -65,11 +65,11 @@ type readerTalosconfigRequest struct {
 	Wait, Poll time.Duration
 }
 
-// clusterTalosconfigCmd implements `ichor cluster talosconfig`.
-var clusterTalosconfigCmd = &cobra.Command{
+// createTalosconfigCmd implements `ichor create talosconfig`.
+var createTalosconfigCmd = &cobra.Command{
 	Use:   "talosconfig NAME",
 	Short: "Write a short-lived os:reader talosconfig for talosctl",
-	Long: `talosconfig writes a talosconfig (mode 0600, content never printed) whose client certificate carries
+	Long: `create talosconfig writes a talosconfig (mode 0600, content never printed) whose client certificate carries
 the Talos role os:reader: talosctl can read a node (get members, logs, dmesg, processes) and cannot change
 it (reboot, upgrade and reset are refused by the node).
 
@@ -82,6 +82,8 @@ names you.
 The Talos endpoints are the cluster's control-plane machines (or --talos-endpoints, or your current
 talosconfig's). The file is written next to your current talosconfig with the suffix ` + readerSuffix + ` (never over
 it), unless --out says otherwise. Use it with: TALOSCONFIG=<file> talosctl get members`,
+	Example: `  ichor create talosconfig prod
+  ichor create talosconfig prod --ttl 15m --out reader.talosconfig`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		o := clusterTalosconfigOpts
@@ -227,9 +229,10 @@ func requestTalosconfigReader(ctx context.Context, k8s client.Client, cluster *i
 }
 
 func init() {
-	clusterCmd.AddCommand(clusterTalosconfigCmd)
+	addAPIFlags(createTalosconfigCmd)
+	createCmd.AddCommand(createTalosconfigCmd)
 
-	f := clusterTalosconfigCmd.Flags()
+	f := createTalosconfigCmd.Flags()
 	f.StringVar(&clusterTalosconfigOpts.Out, "out", "",
 		"where to write the talosconfig (default: your current talosconfig's path plus "+readerSuffix+")")
 	f.StringSliceVar(&clusterTalosconfigOpts.Endpoints, "talos-endpoints", nil,

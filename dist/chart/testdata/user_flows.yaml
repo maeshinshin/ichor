@@ -5,11 +5,11 @@
 # for a short-lived certificate with a TalosCredentialRequest: the webhook checks the download
 # verb, RBAC checks the create.
 flows:
-- name: list and read every Ichor resource (ichor machine list, cluster pages)
+- name: list and read every Ichor resource (ichor get nodes, cluster pages)
   role: viewer
   needs: [talosclusters get, talosclusters list, talosmachines watch, talosoperations list, talosetcdbackups list,
     talosstorages list, ichorinstallations get, talosconfigpatches list]
-- name: start an operation (ichor config apply, upgrade, reboot)
+- name: start an operation (ichor rollout config, upgrade, reboot)
   role: operator
   needs: [talosoperations create, talosoperations update]
 - name: pause, resume and delete an operation
@@ -18,16 +18,16 @@ flows:
 - name: create, edit and delete a config patch (ichor patch)
   role: operator
   needs: [talosconfigpatches create, talosconfigpatches update, talosconfigpatches delete]
-- name: approve a machine (ichor machine approve)
+- name: approve a machine (ichor approve node)
   role: operator
   needs: [talosmachines/approval approve, talosmachines update]
 - name: reject a machine and change its settings
   role: operator
   needs: [talosmachines patch]
-- name: add and remove discovery ranges (ichor cluster discovery)
+- name: add and remove discovery ranges (ichor discovery)
   role: operator
   needs: [talosclusters update]
-- name: back up etcd now (ichor etcd backup now sets an annotation)
+- name: back up etcd now (ichor backup etcd sets an annotation)
   role: operator
   needs: [talosetcdbackups patch, talosetcdbackups update]
 - name: define and delete a TalosEtcdBackup
@@ -42,7 +42,7 @@ flows:
 - name: set a machine's endpoint outside discovery
   role: admin
   needs: [talosmachines/endpoint update]
-- name: change ichor settings (ichor settings set)
+- name: change ichor settings (ichor set settings)
   role: admin
   needs: [ichorinstallations/settings update]
 - name: upgrade ichor (ichor upgrade ichor)
@@ -54,10 +54,10 @@ flows:
 - name: change the authentication configuration
   role: admin
   needs: [talosclusters/authentication update, talosclusters/secret-references update]
-- name: change the Cilium Helm values (ichor cni values set, the Cilium page)
+- name: change the Cilium Helm values (ichor apply cni-values, the Cilium page)
   role: admin
   needs: [talosclusters update, talosclusters/cilium-values update]
-- name: rotate the CA (ichor cluster rotate-ca)
+- name: rotate the CA (ichor rotate ca)
   role: admin
   needs: [talosoperations create, talosoperations/ca-rotation start]
 - name: restore etcd (ichor restore)
@@ -66,10 +66,10 @@ flows:
 - name: shut a cluster down
   role: admin
   needs: [talosoperations create, talosoperations/shutdown start]
-- name: reset or shut down a node (the UI Reset, ichor node shutdown)
+- name: reset or shut down a node (the UI Reset, ichor shutdown node)
   role: admin
   needs: [talosoperations/node-reset start, talosoperations/node-shutdown start, talosmachines override]
-- name: reclaim a machine (ichor machine reclaim)
+- name: reclaim a machine (ichor reclaim node)
   role: admin
   needs: [machinereclaims create, machinereclaims reclaim, machinereclaims get, machinereclaims update]
 - name: download a support bundle
@@ -84,6 +84,6 @@ flows:
 - name: download the credentials after a CA rotation
   role: admin
   needs: [talosclusters/credentials download, taloscredentialrequests create]
-- name: take an os:reader talosconfig (ichor cluster talosconfig; the UI download needs the first two)
+- name: take an os:reader talosconfig (ichor create talosconfig; the UI download needs the first two)
   role: operator
   needs: [talosclusters/talosconfig-reader download, taloscredentialrequests create, taloscredentialrequests get]

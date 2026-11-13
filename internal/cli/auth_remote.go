@@ -119,7 +119,7 @@ var dialUI = dialUIOverIssuer
 // external URL is both), and the call carries an ID token for audience
 // ichor-ui from the login cache, logging in through the browser when there
 // is none. It does not go through a port-forward: the backend would refuse
-// an unauthenticated tunnel once users are on, and `ichor auth kubeconfig`
+// an unauthenticated tunnel once users are on, and `ichor create kubeconfig`
 // must work for someone who has no cluster access yet.
 func dialUIOverIssuer(cmd *cobra.Command, interactive bool) (*uiSession, error) {
 	ctx := cmd.Context()

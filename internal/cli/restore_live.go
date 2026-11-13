@@ -30,18 +30,17 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// Restore into a live cluster: `ichor restore --live` writes one TalosOperation of kind
+// Restore into a live cluster: `ichor restore etcd` writes one TalosOperation of kind
 // etcd-restore; the controller wipes etcd on every control plane and recovers the snapshot. Unlike
 // --recover-cluster it needs the cluster, ichor-ui or the kubeconfig, and the controller.
 
 var restoreLiveOpts struct {
-	Live    bool
 	Backup  string
 	Confirm string
 	Follow  bool
 }
 
-// liveRestoreSpec is what `ichor restore --live` was asked for.
+// liveRestoreSpec is what `ichor restore etcd` was asked for.
 type liveRestoreSpec struct {
 	Cluster string
 	// Backup and Snapshot may be empty: the cluster's only backup, and its newest snapshot.

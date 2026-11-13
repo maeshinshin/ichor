@@ -24,7 +24,7 @@ import (
 	"github.com/maeshinshin/ichor/internal/etcdbackup"
 )
 
-// The human output of `ichor restore --recover-cluster`, on a pipe: progress steps on
+// The human output of `ichor restore cluster`, on a pipe: progress steps on
 // stderr, the result on stdout, no colour codes.
 
 func TestRestoreRecoverClusterHumanOutput(t *testing.T) {

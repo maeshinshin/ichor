@@ -192,7 +192,7 @@ func setCertificatesExpiring(
 			cond.Reason = "Expired"
 		}
 
-		cond.Message = strings.Join(soon, "; ") + ". Rotate the CAs (ichor cluster rotate-ca; add --ca etcd or " +
+		cond.Message = strings.Join(soon, "; ") + ". Rotate the CAs (ichor rotate ca; add --ca etcd or " +
 			"--ca kubernetes-aggregator for those) before they expire."
 	}
 

@@ -85,7 +85,7 @@ func startedBlock(t *testing.T, out string, ops []ichorv1alpha1.TalosOperation, 
 
 	name := ops[0].Name
 	if !strings.HasPrefix(out, "Started "+name+" · default\n") || !strings.Contains(out, "  Kind         "+kind+"\n") ||
-		!strings.Contains(out, "  Follow       ichor operation get "+name+" --watch\n") || strings.Contains(out, "operation:") {
+		!strings.Contains(out, "  Follow       ichor describe operation "+name+" --watch\n") || strings.Contains(out, "operation:") {
 		t.Errorf("human stdout:\n%s", out)
 	}
 }

@@ -49,15 +49,17 @@ type machineApproveOptions struct {
 	UserVolumes   []string
 }
 
-var machineApproveCmd = &cobra.Command{
-	Use:   "approve NAME --role controlplane|worker",
-	Short: "Approve a pending machine so the controller starts configuring it",
-	Long: `approve sets the role (and optionally node labels, a hostname and the
-install disk, network link and disk roles) of a discovered machine and marks it approved; the controller then renders and
-applies its configuration. It is refused for a machine whose identity is
+var approveNodeCmd = &cobra.Command{
+	Use:   "node NAME --role controlplane|worker",
+	Short: "Approve a pending node so the controller starts configuring it",
+	Long: `approve node sets the role (and optionally node labels, a hostname and the
+install disk, network link and disk roles) of a discovered node and marks it approved; the controller then renders and
+applies its configuration. It is refused for a node whose identity is
 weak (missing UUID, serial number or permanent MAC) and for one already
 approved -- by ichor-ui, or, when ichor-ui is unreachable, by the same
 checks running in this process. It asks for confirmation unless --yes.`,
+	Example: `  ichor approve node 3f1c2a --role worker
+  ichor approve node 9b04de --role controlplane --hostname cp-1 --install-disk /dev/nvme0n1`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
@@ -138,9 +140,10 @@ func runMachineApprove(
 }
 
 func init() {
-	machineCmd.AddCommand(machineApproveCmd)
+	addAPIFlags(approveNodeCmd)
+	approveCmd.AddCommand(approveNodeCmd)
 
-	f := machineApproveCmd.Flags()
+	f := approveNodeCmd.Flags()
 	f.StringVar(&machineApproveOpts.Role, "role", "", "controlplane or worker (required)")
 	f.StringToStringVar(&machineApproveOpts.Labels, "label", nil, "node label KEY=VALUE (repeatable)")
 	f.StringVar(&machineApproveOpts.Hostname, "hostname", "", "hostname to set")
@@ -153,5 +156,5 @@ func init() {
 	f.Int32Var(&machineApproveOpts.VLAN, "vlan", 0, "VLAN ID (1-4094) to put the addressing on (needs --nic)")
 	f.StringVar(&machineApproveOpts.EphemeralDisk, "ephemeral-disk", "", "put EPHEMERAL on its own disk: "+installDiskUsage)
 	f.StringArrayVar(&machineApproveOpts.UserVolumes, "user-volume", nil, "NAME=DISK[,size=200GiB] user volume on a disk (repeatable)")
-	_ = machineApproveCmd.MarkFlagRequired("role")
+	_ = approveNodeCmd.MarkFlagRequired("role")
 }

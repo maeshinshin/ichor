@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"os"
@@ -49,11 +50,8 @@ import (
 	"github.com/maeshinshin/ichor/internal/uiapi"
 )
 
-// Command Use strings several subcommand groups share.
-const (
-	useList    = "list"
-	useGetName = "get NAME"
-)
+// Command Use string several commands share.
+const useList = "list"
 
 // actorCLI is the audit actor the in-process fallback records, so an
 // AuditRecord says which path wrote the CR.
@@ -279,14 +277,14 @@ func localClients(opts apiOptions, deps apiDeps) *apiClients {
 }
 
 // localOperation is the in-process OperationService. The credentials download streams, which the
-// in-process server cannot hand a client; the CLI writes the files itself (`ichor cluster credentials`), so it does
+// in-process server cannot hand a client; the CLI writes the files itself (`ichor create credentials`), so it does
 // not use the stream.
 type localOperation struct{ *uiapi.Server }
 
 func (localOperation) DownloadCARotationCredentials(
 	context.Context, *connect.Request[pb.DownloadCARotationCredentialsRequest],
 ) (*connect.ServerStreamForClient[pb.DownloadCARotationCredentialsResponse], error) {
-	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("use 'ichor cluster credentials NAME' to write the credentials"))
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("use 'ichor create credentials NAME' to write the credentials"))
 }
 
 // localNode serves only GetEffectiveConfig, which needs no Talos call.
@@ -610,6 +608,40 @@ func writeMessage(w io.Writer, format string, msg proto.Message) error {
 	if err != nil {
 		return err
 	}
+
+	return writeJSON(w, format, raw)
+}
+
+// writeMessages prints several wire messages as one object holding each one's fields side by side:
+// the top-level keys of the messages are joined, so each keeps the shape it has on its own.
+func writeMessages(w io.Writer, format string, msgs ...proto.Message) error {
+	joined := map[string]json.RawMessage{}
+
+	for _, m := range msgs {
+		raw, err := protojson.Marshal(m)
+		if err != nil {
+			return err
+		}
+
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			return err
+		}
+
+		maps.Copy(joined, fields)
+	}
+
+	raw, err := json.Marshal(joined)
+	if err != nil {
+		return err
+	}
+
+	return writeJSON(w, format, raw)
+}
+
+// writeJSON prints raw JSON as indented JSON or as YAML.
+func writeJSON(w io.Writer, format string, raw []byte) error {
+	var err error
 
 	switch machineFormat(format) {
 	case outputJSON:

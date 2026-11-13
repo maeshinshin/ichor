@@ -127,7 +127,7 @@ func (c Changes) Apply(inst *ichorv1alpha1.IchorInstallation) {
 	}
 }
 
-// Keys of ParseAssignments, as `ichor settings set` spells them.
+// Keys of ParseAssignments, as `ichor set settings` spells them.
 const (
 	// KeyReclaim is the removed switch: ParseAssignments refuses it.
 	KeyReclaim         = "reclaim.enabled"

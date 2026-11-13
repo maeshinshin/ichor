@@ -90,7 +90,7 @@ const (
 const EtcdRestoreReconcileAnnotation = "ichor.maesh.dev/reconcile-requested"
 
 // OperationRetryAnnotation, set to OperationRetryRequested (`kubectl annotate talosoperation NAME
-// ichor.maesh.dev/retry=true`, or `ichor operation resume`, or the UI) on an operation paused by a failed
+// ichor.maesh.dev/retry=true`, or `ichor resume operation`, or the UI) on an operation paused by a failed
 // step, asks the controller to run the failed step again. The controller never changes spec, so the
 // request is an annotation; it acts once and removes it, so the next "true" is a new request.
 // Any other value is ignored.
@@ -192,12 +192,12 @@ const ConditionCAClientsNotRestarted = "CAClientsNotRestarted"
 // rotation until the user has exported the new secrets bundle.
 const ConditionBundleBackupStale = "BundleBackupStale"
 
-// CredentialsHandoffAnnotation, set on a ca-rotation TalosOperation by `ichor cluster rotate-ca` (or
-// `ichor cluster credentials --acknowledge`) after it has written the operator a kubeconfig and a
+// CredentialsHandoffAnnotation, set on a ca-rotation TalosOperation by `ichor rotate ca` (or
+// `ichor create credentials --acknowledge`) after it has written the operator a kubeconfig and a
 // talosconfig that work with both the old and the new CAs, holds CARotationHandoffToken of the
 // operation's status. The controller leaves the AwaitingCredentials stage only when it matches.
 // It checks nothing else: setting the annotation by hand is an attestation that you hold a working
-// kubeconfig and talosconfig for the new CAs. `ichor cluster credentials --acknowledge` and the
+// kubeconfig and talosconfig for the new CAs. `ichor create credentials --acknowledge` and the
 // UI verify the new kubeconfig against the cluster before they set it.
 const CredentialsHandoffAnnotation = "ichor.maesh.dev/credentials-handoff"
 
@@ -217,7 +217,7 @@ func CARotationHandoffToken(rs *TalosOperationCARotationStatus) string {
 	return strings.Join(parts, ",")
 }
 
-// BundleExportedAnnotation, set on a TalosCluster by `ichor cluster bundle-export` after it has saved
+// BundleExportedAnnotation, set on a TalosCluster by `ichor export bundle` after it has saved
 // the bundle, holds the fingerprint (secretsbundle.Fingerprint) of the bundle it saved. When it
 // equals the live bundle's fingerprint the controller clears BundleBackupStale.
 const BundleExportedAnnotation = "ichor.maesh.dev/bundle-exported"
@@ -483,7 +483,7 @@ type TalosOperationNodeSpec struct {
 
 	// powerOff makes the node power off after the reset wipes it instead of rebooting into maintenance
 	// mode. Only with the reset action; unset keeps the reboot, which is what a reset did before
-	// the field existed. The UI and `ichor node remove` set it unless asked to reboot.
+	// the field existed. The UI and `ichor delete node` set it unless asked to reboot.
 	// +optional
 	PowerOff bool `json:"powerOff,omitempty"`
 

@@ -250,8 +250,8 @@ func readLine(r io.Reader, w io.Writer, prompt string) (string, error) {
 	return strings.TrimSpace(line), nil
 }
 
-// nodeRemoveLong is the part of remove's help that the other node actions do not share.
-const nodeRemoveLong = `remove --wipe-mode chooses what the wipe erases: system-partitions (the default) wipes the STATE and
+// nodeRemoveLong is the part of delete node's help that the other node actions do not share.
+const nodeRemoveLong = `delete node --wipe-mode chooses what the wipe erases: system-partitions (the default) wipes the STATE and
 EPHEMERAL partitions, so the node boots its installed system again from a fresh state; system-disk
 wipes the whole system disk, boot and EFI included, so the node starts from its boot image (ISO or PXE)
 and installs afresh, which is how a node is moved onto SecureBoot images (docs/guides/hardening.md);
@@ -263,7 +263,7 @@ func newNodeActionCmd(use, short string, action pb.NodeAction, args cobra.Positi
 		Short: short,
 		Long: short + `.
 
-It shows the plan and asks for confirmation unless --yes. For remove the typed machine name
+It shows the plan and asks for confirmation unless --yes. For delete node the typed node name
 (the TalosMachine name, or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
 (or deletes the machine); the controller does the work. Follow it with --follow.`,
 		Args: args,
@@ -285,44 +285,62 @@ It shows the plan and asks for confirmation unless --yes. For remove the typed m
 func machineArg(a []string) nodeActionSpec { return nodeActionSpec{Machine: a[0]} }
 
 var (
-	nodeRebootCmd = newNodeActionCmd("reboot NODE", "Reboot a node gracefully: cordon, drain, reboot, wait until it is Ready again",
+	rebootNodeCmd = newNodeActionCmd("node NAME", "Reboot a node gracefully: cordon, drain, reboot, wait until it is Ready again",
 		pb.NodeAction_NODE_ACTION_REBOOT, cobra.ExactArgs(1), machineArg)
-	nodeShutdownCmd = newNodeActionCmd("shutdown NODE", "Shut a node down; it stays off until you power it on",
+	shutdownNodeCmd = newNodeActionCmd("node NAME", "Shut a node down; it stays off until you power it on",
 		pb.NodeAction_NODE_ACTION_SHUTDOWN, cobra.ExactArgs(1), machineArg)
-	nodeRemoveCmd = newNodeActionCmd("remove NODE", "Remove a node from the cluster: drain it, wipe it (STATE and EPHEMERAL, or more with --wipe-mode), power it off (or reboot it with --reboot) and delete its Kubernetes Node; needs the override permission",
+	deleteNodeCmd = newNodeActionCmd("node NAME", "Delete a node from the cluster: drain it, wipe it (STATE and EPHEMERAL, or more with --wipe-mode), power it off (or reboot it with --reboot) and delete its Kubernetes Node; needs the override permission",
 		pb.NodeAction_NODE_ACTION_REMOVE, cobra.ExactArgs(1), machineArg)
-	nodeRestartServiceCmd = newNodeActionCmd("restart-service NODE SERVICE",
+	restartServiceCmd = newNodeActionCmd("service NODE SERVICE",
 		"Restart a Talos service on a node (kubelet, containerd or cri)",
 		pb.NodeAction_NODE_ACTION_RESTART_SERVICE, cobra.ExactArgs(2), func(a []string) nodeActionSpec {
 			return nodeActionSpec{Machine: a[0], Service: a[1]}
 		})
 
-	etcdDefragCmd = newNodeActionCmd("defrag", "Defragment the etcd member of a control plane node",
+	defragEtcdCmd = newNodeActionCmd("etcd --node CONTROL_PLANE", "Defragment the etcd member of a control plane node",
 		pb.NodeAction_NODE_ACTION_ETCD_DEFRAG, cobra.NoArgs, func([]string) nodeActionSpec {
 			return nodeActionSpec{Machine: nodeActionOpts.Node, AllowLeader: nodeActionOpts.AllowLeader}
 		})
-	etcdForfeitCmd = newNodeActionCmd("forfeit-leadership", "Hand etcd leadership over from a control plane node that leads",
+	forfeitLeadershipEtcdCmd = newNodeActionCmd("etcd --node CONTROL_PLANE", "Hand etcd leadership over from a control plane node that leads",
 		pb.NodeAction_NODE_ACTION_ETCD_FORFEIT_LEADERSHIP, cobra.NoArgs, func([]string) nodeActionSpec {
 			return nodeActionSpec{Machine: nodeActionOpts.Node}
 		})
 )
 
 func init() {
-	nodeCmd.AddCommand(nodeRebootCmd, nodeShutdownCmd, nodeRemoveCmd, nodeRestartServiceCmd)
-	etcdCmd.AddCommand(etcdDefragCmd, etcdForfeitCmd)
+	rebootCmd.AddCommand(rebootNodeCmd)
+	shutdownCmd.AddCommand(shutdownNodeCmd)
+	deleteCmd.AddCommand(deleteNodeCmd)
+	restartCmd.AddCommand(restartServiceCmd)
+	defragCmd.AddCommand(defragEtcdCmd)
+	forfeitLeadershipCmd.AddCommand(forfeitLeadershipEtcdCmd)
 
-	for _, c := range []*cobra.Command{etcdDefragCmd, etcdForfeitCmd} {
+	rebootNodeCmd.Example = `  ichor reboot node worker-3
+  ichor reboot node worker-3 --follow`
+	shutdownNodeCmd.Example = `  ichor shutdown node worker-3`
+	deleteNodeCmd.Example = `  ichor delete node worker-3
+  ichor delete node worker-3 --confirm worker-3 --wipe-mode system-disk --override`
+	restartServiceCmd.Example = `  ichor restart service worker-3 kubelet`
+	defragEtcdCmd.Example = `  ichor defrag etcd --node cp-2
+  ichor defrag etcd --node cp-1 --allow-leader`
+	forfeitLeadershipEtcdCmd.Example = `  ichor forfeit-leadership etcd --node cp-1`
+
+	for _, c := range []*cobra.Command{rebootNodeCmd, shutdownNodeCmd, deleteNodeCmd, restartServiceCmd, defragEtcdCmd, forfeitLeadershipEtcdCmd} {
+		addAPIFlags(c)
+	}
+
+	for _, c := range []*cobra.Command{defragEtcdCmd, forfeitLeadershipEtcdCmd} {
 		c.Flags().StringVar(&nodeActionOpts.Node, "node", "", "the control plane node (required)")
 		_ = c.MarkFlagRequired("node")
 	}
 
-	etcdDefragCmd.Flags().BoolVar(&nodeActionOpts.AllowLeader, "allow-leader", false,
+	defragEtcdCmd.Flags().BoolVar(&nodeActionOpts.AllowLeader, "allow-leader", false,
 		"allow defragmenting the etcd leader (writes pause for the whole cluster meanwhile)")
 
-	nodeRemoveCmd.Flags().BoolVar(&nodeActionOpts.Reboot, "reboot", false,
+	deleteNodeCmd.Flags().BoolVar(&nodeActionOpts.Reboot, "reboot", false,
 		"after the wipe reboot the node into maintenance mode, so it can be added again, instead of powering it off")
-	nodeRemoveCmd.Long += "\n\n" + nodeRemoveLong
-	nodeRemoveCmd.Flags().StringVar(&nodeActionOpts.WipeMode, "wipe-mode", wipeModeSystemPartitions,
+	deleteNodeCmd.Long += "\n\n" + nodeRemoveLong
+	deleteNodeCmd.Flags().StringVar(&nodeActionOpts.WipeMode, "wipe-mode", wipeModeSystemPartitions,
 		"what to wipe: system-partitions (STATE and EPHEMERAL), system-disk (the whole system disk) or all (system disk and every user disk)")
-	nodeRemoveCmd.Flags().StringVar(&nodeActionOpts.Confirm, "confirm", "", "the machine name (the TalosMachine name, not the hostname), to go on without being asked to type it")
+	deleteNodeCmd.Flags().StringVar(&nodeActionOpts.Confirm, "confirm", "", "the machine name (the TalosMachine name, not the hostname), to go on without being asked to type it")
 }

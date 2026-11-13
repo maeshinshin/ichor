@@ -33,16 +33,8 @@ import (
 	"github.com/maeshinshin/ichor/internal/uiapi"
 )
 
-// patchFile is --filename on create, update and preview.
+// patchFile is --filename on apply and preview.
 var patchFile, patchListCluster string
-
-// patchCmd groups the TalosConfigPatch subcommands. Patches are typed
-// TalosConfigPatch manifests (spec.documents[] with the Talos machinery
-// types); there is no raw-YAML path (CLAUDE.md).
-var patchCmd = &cobra.Command{
-	Use:   "patch",
-	Short: "List, inspect, create, update, delete or preview TalosConfigPatches",
-}
 
 func patchFileCmd(use, short string, run func(ctx context.Context, c *apiClients, cmd *cobra.Command, p *ichorv1alpha1.TalosConfigPatch) error) *cobra.Command {
 	cmd := &cobra.Command{
@@ -62,8 +54,10 @@ func patchFileCmd(use, short string, run func(ctx context.Context, c *apiClients
 	return cmd
 }
 
-var patchListCmd = &cobra.Command{
-	Use: useList, Short: "List patches", Args: cobra.NoArgs,
+var getPatchesCmd = &cobra.Command{
+	Use: "patches", Short: "List patches", Args: cobra.NoArgs,
+	Example: `  ichor get patches
+  ichor get patches --cluster prod`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 			return runPatchList(ctx, c, cmd.OutOrStdout(), patchListCluster)
@@ -71,8 +65,9 @@ var patchListCmd = &cobra.Command{
 	},
 }
 
-var patchGetCmd = &cobra.Command{
-	Use: useGetName, Short: "Show one patch", Args: cobra.ExactArgs(1),
+var describePatchCmd = &cobra.Command{
+	Use: "patch NAME", Short: "Show one patch", Args: cobra.ExactArgs(1),
+	Example: `  ichor describe patch ingress-sysctls`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return showAPIHuman(cmd, false, func(ctx context.Context, c *apiClients) (*connect.Response[pb.GetPatchResponse], error) {
 			return c.Patch.GetPatch(ctx, connect.NewRequest(&pb.GetPatchRequest{Patch: objectRef(apiOpts.Namespace, args[0])}))
@@ -80,8 +75,9 @@ var patchGetCmd = &cobra.Command{
 	},
 }
 
-var patchDeleteCmd = &cobra.Command{
-	Use: "delete NAME", Short: "Delete a patch", Args: cobra.ExactArgs(1),
+var deletePatchCmd = &cobra.Command{
+	Use: "patch NAME", Short: "Delete a patch", Args: cobra.ExactArgs(1),
+	Example: `  ichor delete patch ingress-sysctls`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 			return runPatchDelete(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), args[0])
@@ -89,20 +85,26 @@ var patchDeleteCmd = &cobra.Command{
 	},
 }
 
-var patchPreviewCmd = patchFileCmd("preview -f FILE", "Show a patch's impact (reboot, install-time-only fields) without writing it",
+var previewCmd = patchFileCmd("preview -f FILE", "Show a patch's impact (reboot, install-time-only fields) without writing it",
 	func(ctx context.Context, c *apiClients, cmd *cobra.Command, p *ichorv1alpha1.TalosConfigPatch) error {
 		return runPatchPreview(ctx, c, cmd.OutOrStdout(), p)
 	})
 
-var patchCreateCmd = patchFileCmd("create -f FILE", "Create a patch (shows its impact first; confirms if it needs a reboot or reinstall)",
+// applyCmd is both `ichor apply -f FILE` (a TalosConfigPatch) and the parent of `ichor apply cni-values`.
+var applyCmd = patchFileCmd("apply -f FILE", "Create or update a TalosConfigPatch from a file (shows its impact first; confirms if it needs a reboot or reinstall)",
 	func(ctx context.Context, c *apiClients, cmd *cobra.Command, p *ichorv1alpha1.TalosConfigPatch) error {
-		return runPatchWrite(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), p, false)
+		return runPatchApply(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), p)
 	})
 
-var patchUpdateCmd = patchFileCmd("update -f FILE", "Replace an existing patch's spec (shows its impact first; confirms if it needs a reboot or reinstall)",
-	func(ctx context.Context, c *apiClients, cmd *cobra.Command, p *ichorv1alpha1.TalosConfigPatch) error {
-		return runPatchWrite(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), p, true)
-	})
+// runPatchApply updates the patch when one of that name exists and creates it when none does, the way kubectl apply does.
+func runPatchApply(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, p *ichorv1alpha1.TalosConfigPatch) error {
+	_, err := c.Patch.GetPatch(ctx, connect.NewRequest(&pb.GetPatchRequest{Patch: objectRef(p.Namespace, p.Name)}))
+	if err != nil && connect.CodeOf(err) != connect.CodeNotFound {
+		return err
+	}
+
+	return runPatchWrite(ctx, c, in, out, errw, p, err == nil)
+}
 
 // readPatchFile decodes path ("-" is stdin) into a TalosConfigPatch with
 // unknown fields rejected, the same strictness the API server applies on
@@ -252,8 +254,29 @@ func impactWarning(r *pb.PreviewImpactResponse) string {
 }
 
 func init() {
-	rootCmd.AddCommand(patchCmd)
-	addAPIFlags(patchCmd)
-	patchListCmd.Flags().StringVar(&patchListCluster, flagCluster, "", "only patches of this TalosCluster")
-	patchCmd.AddCommand(patchListCmd, patchGetCmd, patchCreateCmd, patchUpdateCmd, patchDeleteCmd, patchPreviewCmd)
+	getPatchesCmd.Flags().StringVar(&patchListCluster, flagCluster, "", "only patches of this TalosCluster")
+
+	for _, c := range []*cobra.Command{getPatchesCmd, describePatchCmd, deletePatchCmd, previewCmd, applyCmd} {
+		addAPIFlags(c)
+	}
+
+	previewCmd.GroupID = groupInspect
+	previewCmd.Example = `  ichor preview -f ingress-sysctls.yaml
+  cat ingress-sysctls.yaml | ichor preview -f -`
+
+	applyCmd.GroupID = groupChange
+	applyCmd.Long = `apply writes the TalosConfigPatch in FILE: it creates the patch when none of that name exists in the
+namespace and replaces its spec when one does. It shows the impact first (a reboot, a reset and
+reinstall for install-time-only fields, fields too new for the cluster's Talos) and asks for confirmation
+when there is any, unless --yes. - reads the manifest from stdin.
+
+The manifest is a typed TalosConfigPatch: spec.documents[] holds Talos machine configuration documents.
+
+apply cni-values writes your layer of Cilium's Helm values instead.`
+	applyCmd.Example = `  ichor apply -f ingress-sysctls.yaml
+  ichor apply -f ingress-sysctls.yaml --yes`
+
+	getCmd.AddCommand(getPatchesCmd)
+	describeCmd.AddCommand(describePatchCmd)
+	deleteCmd.AddCommand(deletePatchCmd)
 }

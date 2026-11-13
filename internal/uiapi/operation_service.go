@@ -366,7 +366,7 @@ func caRotationWarning(targets []string) string {
 	if slices.Contains(targets, ichorv1alpha1.CARotationTargetEtcd) {
 		parts = append(parts, "Every control plane is rebooted once in each of the three stages (three reboots each), one at a time and only "+
 			"while etcd is healthy, because Talos does not restart etcd on a configuration change; with one control plane the Kubernetes "+
-			"API is unavailable during each reboot. Take an etcd snapshot first (ichor etcd backup now).")
+			"API is unavailable during each reboot. Take an etcd snapshot first (ichor backup etcd).")
 	}
 
 	if slices.Contains(targets, ichorv1alpha1.CARotationTargetAggregator) {
@@ -901,8 +901,8 @@ func (s *Server) unfinishedOperationFor(ctx context.Context, cluster *ichorv1alp
 			// The installer Job failed and rolled back; a resume would only meet the same failed Job
 			// (it is kept for a day), and spec.version still names the failed target.
 			return fmt.Sprintf("the Ichor upgrade %q failed: the installer image was refused before it ran, or the installer rolled back "+
-				"(see 'ichor operation get %s' and the installer Job's log); "+
-				"delete it with 'ichor operation delete %s', then run 'ichor upgrade ichor <version>' again",
+				"(see 'ichor describe operation %s' and the installer Job's log); "+
+				"delete it with 'ichor delete operation %s', then run 'ichor upgrade ichor <version>' again",
 				o.Name, o.Name, o.Name), nil
 		}
 
@@ -918,7 +918,7 @@ func (s *Server) unfinishedOperationFor(ctx context.Context, cluster *ichorv1alp
 
 		if o.Status.Phase == ichorv1alpha1.TalosOperationPhasePaused {
 			return fmt.Sprintf("operation %q (%s) on this cluster is not finished (phase Paused); "+
-				"resume it with 'ichor operation resume %s', or delete it with 'ichor operation delete %s'",
+				"resume it with 'ichor resume operation %s', or delete it with 'ichor delete operation %s'",
 				o.Name, o.Spec.Kind, o.Name, o.Name), nil
 		}
 

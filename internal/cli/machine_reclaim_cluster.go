@@ -33,7 +33,7 @@ import (
 	"github.com/maeshinshin/ichor/pkg/reclaim"
 )
 
-// ownReclaimDeps are the effects of `ichor machine reclaim ADDRESS --cluster NAME` without --talosconfig; tests
+// ownReclaimDeps are the effects of `ichor reclaim node ADDRESS --cluster NAME` without --talosconfig; tests
 // replace them.
 type ownReclaimDeps struct {
 	K8s client.Client
@@ -168,7 +168,7 @@ func runMachineReclaimOwn(ctx context.Context, d ownReclaimDeps, address string,
 	}
 
 	steps.Done()
-	steps.Next("ichor machine list" + nsFlag(apiOpts.Namespace))
+	steps.Next("ichor get nodes" + nsFlag(apiOpts.Namespace))
 
 	return nil
 }

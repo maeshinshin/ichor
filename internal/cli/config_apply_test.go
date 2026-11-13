@@ -28,7 +28,7 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// `ichor config apply` starts a config operation through OperationService like every other start: the plan names the
+// `ichor rollout config` starts a config operation through OperationService like every other start: the plan names the
 // machines and the fields that need the reboot, and
 // nothing reboots without the operation.
 
@@ -97,7 +97,7 @@ func TestConfigApplyRefusesWhenNothingNeedsAReboot(t *testing.T) {
 }
 
 func TestConfigApplyIsAWriteAndNamedConfig(t *testing.T) {
-	if _, ok := configApplyCmd.Annotations[writesAnnotation]; !ok {
+	if _, ok := rolloutConfigCmd.Annotations[writesAnnotation]; !ok {
 		t.Error("config apply is not marked as a write")
 	}
 

@@ -20,23 +20,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/spf13/cobra"
-
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
-
-// machineCmd groups the TalosMachine subcommands. They go through the same
-// Connect API as the UI, so approving here runs the very
-// checks approving in the UI does.
-var machineCmd = &cobra.Command{
-	Use:   "machine",
-	Short: "List, inspect, approve or reject machines",
-}
-
-func init() {
-	rootCmd.AddCommand(machineCmd)
-	addAPIFlags(machineCmd)
-}
 
 // roleControlPlane is the TalosMachine spec's spelling of the control plane role.
 const roleControlPlane = "controlplane"

@@ -2,7 +2,7 @@
 
 A long-lived throwaway Talos cluster for looking at ichor-ui in a browser, built by the
 product's own bootstrap: `ichor init` creates the control plane, a second VM is approved
-with `ichor machine approve --install-disk`. Everything lives in the outer `ichor-e2e`
+with `ichor approve node --install-disk`. Everything lives in the outer `ichor-e2e`
 namespace and is named `<prefix>-*` (prefix `ichor-ui-demo`; the current build is
 `ichor-ui-demo3`).
 
@@ -106,11 +106,11 @@ kubectl --context $C -n ichor-e2e exec $P-tools -- env HOME=/tmp/home /tmp/ichor
 # 6. apply the config. init leaves the control plane at APIServerRestartRequired until this runs.
 #    With a single control plane the API server is down for about a minute.
 #    Run inside the tools pod (see the --local note below).
-ichor config apply --cluster $P -n ichor-system --yes --follow --local
+ichor rollout config --cluster $P -n ichor-system --yes --follow --local
 
 # 7. the worker: init's --discover-address set spec.discovery, so wait for the pending TalosMachine, approve it.
 #    (inside the pod, KUBECONFIG=/tmp/kc, with a static kubectl copied in)
-KUBECONFIG=/tmp/kc ichor machine approve <pending machine name> --role worker --install-disk /dev/vda --hostname $P-w --yes --local
+KUBECONFIG=/tmp/kc ichor approve node <pending machine name> --role worker --install-disk /dev/vda --hostname $P-w --yes --local
 # both TalosMachines go Ready=True and `get nodes` shows two Ready nodes after a few minutes
 
 # 8. expose it: the inner NodePort for ichor-ui (outer Service was applied in step 3)
@@ -180,7 +180,7 @@ Deleting the VMs removes the inner cluster and everything in it.
 - The demo VMs use the KubeVirt pod network. Stopping or restarting a VM gives it a new IP.
   The Talos cluster (etcd, endpoints) cannot come back after that. Rebuild the demo with the
   teardown and up steps above instead.
-- `ichor node remove` leaves the Kubernetes Node in place until the VM is deleted. Then run
+- `ichor delete node` leaves the Kubernetes Node in place until the VM is deleted. Then run
   `kubectl delete node <name>`.
 - VM sizing: the harness gives both VMs 2560Mi by default. For the control plane that is enough;
   measured use is about 1.6Gi with ichor and ichor-ui. A memory-bound host can shrink the worker

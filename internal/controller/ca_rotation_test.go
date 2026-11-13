@@ -602,7 +602,7 @@ var _ = Describe("TalosOperation ca-rotation", func() {
 		cond := apimeta.FindStatusCondition(op.Status.Conditions, conditionCARotation)
 		Expect(cond).NotTo(BeNil())
 		Expect(cond.Reason).To(Equal(reasonCARotationAwaitingCredentials))
-		Expect(cond.Message).To(ContainSubstring("ichor cluster credentials"))
+		Expect(cond.Message).To(ContainSubstring("ichor create credentials"))
 
 		// An acknowledgement for some other rotation does not release this one.
 		base := op.DeepCopy()

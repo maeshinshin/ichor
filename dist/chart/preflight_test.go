@@ -76,7 +76,7 @@ func TestPreflightMessageNamesTheCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, want := range []string{"ichor cni bootstrap", "preflight.cni=false"} {
+	for _, want := range []string{"ichor bootstrap cni", "preflight.cni=false"} {
 		if !strings.Contains(string(src), want) {
 			t.Errorf("_preflight.tpl: the failure message must mention %q", want)
 		}

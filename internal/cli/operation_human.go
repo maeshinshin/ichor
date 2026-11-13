@@ -205,7 +205,7 @@ func renderOperationCreated(h *human, resp *pb.CreateOperationResponse) error {
 
 	rows := opHead(h, op)
 	rows = append(rows, kv{"Spec", changedNote(resp.GetSpecChanged())},
-		kv{"Follow", "ichor operation get " + op.GetRef().GetName() + " --watch"})
+		kv{"Follow", "ichor describe operation " + op.GetRef().GetName() + " --watch"})
 	h.Block("Started "+nsName(op.GetRef()), rows...)
 
 	return h.Err()
@@ -279,7 +279,7 @@ func (w *opWatch) detailIn(op *pb.Operation, stage, phase string) string {
 
 	switch {
 	case op.GetPhase() == condPaused && !opFailed(op):
-		parts = append(parts, "resume with `ichor operation resume "+op.GetRef().GetName()+"`")
+		parts = append(parts, "resume with `ichor resume operation "+op.GetRef().GetName()+"`")
 	case opFailed(op):
 		parts = append(parts, op.GetFailureReason())
 	default:

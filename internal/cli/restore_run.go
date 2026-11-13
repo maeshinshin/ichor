@@ -37,14 +37,13 @@ import (
 )
 
 type restoreOptions struct {
-	RecoverCluster bool
-	Cluster        string
-	SecretsBundle  string
-	NodeEndpoint   string
-	Snapshot       string
-	S3             etcdbackup.S3Config // Endpoint, Bucket, Region only; credentials come from the environment
-	S3Prefix       string
-	S3CAFile       string
+	Cluster       string
+	SecretsBundle string
+	NodeEndpoint  string
+	Snapshot      string
+	S3            etcdbackup.S3Config // Endpoint, Bucket, Region only; credentials come from the environment
+	S3Prefix      string
+	S3CAFile      string
 }
 
 // recoverClient is the two Talos calls full-loss recovery makes, in this
@@ -67,7 +66,7 @@ type restoreDeps struct {
 	AssumeYes bool
 }
 
-// runRecoverCluster is `ichor restore --recover-cluster`. Every
+// runRecoverCluster is `ichor restore cluster`. Every
 // step that can fail without touching the node (bundle, listing, download,
 // decrypt, integrity check) runs before the confirmation, so the operator
 // confirms a snapshot already known good, and nothing is sent otherwise.

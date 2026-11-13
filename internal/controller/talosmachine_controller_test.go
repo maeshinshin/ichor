@@ -798,7 +798,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 
 			cond := expectReady(got, metav1.ConditionFalse, reasonRebootRequired)
 			Expect(cond.Message).To(ContainSubstring("cluster.proxy.disabled"), "the message names the field that needs the reboot")
-			Expect(cond.Message).To(ContainSubstring("ichor config apply"), "and says how to apply it")
+			Expect(cond.Message).To(ContainSubstring("ichor rollout config"), "and says how to apply it")
 			Expect(got.Status.RebootPaths).To(ContainElement("cluster.proxy.disabled"))
 
 			holderNow, held, err := lock.Holder(ctx)

@@ -227,8 +227,11 @@ func writeVersion(w io.Writer, format string, info versionInfo) error {
 }
 
 var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Print the CLI version and the installed Ichor version",
+	Use:     "version",
+	GroupID: groupOther,
+	Short:   "Print the CLI version and the installed Ichor version",
+	Example: `  ichor version
+  ichor version --client`,
 	Long: `Print this CLI's version and, when the cluster is reachable, the version of Ichor
 installed there (IchorInstallation status.installedVersion, plus spec.version when
 it differs, which means an upgrade is pending). When the cluster cannot be

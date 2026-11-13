@@ -75,7 +75,7 @@ func validateCiliumValues(oldObj, newObj *ichorv1alpha1.TalosCluster) error {
 	}
 
 	if err := cilium.ValidateValues(user, cilium.ValidationContext{KubeProxy: kubeProxy, Tunnel: newObj.Spec.CNI.Tunnel}); err != nil {
-		return fmt.Errorf("spec.cni.cilium.values is not valid (the same check as the UI and `ichor cni values set`):\n%w", err)
+		return fmt.Errorf("spec.cni.cilium.values is not valid (the same check as the UI and `ichor apply cni-values`):\n%w", err)
 	}
 
 	return nil

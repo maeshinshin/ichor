@@ -28,7 +28,7 @@ import (
 )
 
 // Golden tests of the human output of `ichor cni`, `ichor config`, `ichor etcd backup` and
-// `ichor restore --live`, on a pipe: no colour codes.
+// `ichor restore etcd`, on a pipe: no colour codes.
 
 const valuesDiffText = "  debug:\n+  enabled: true\n-  old: 1\n"
 
@@ -189,7 +189,7 @@ func TestRestoreLiveStartedHumanOutput(t *testing.T) {
 	}
 
 	want := "✓ started etcd restore operation etcd-restore-x · ichor-system\n" +
-		"  follow it with: ichor operation get etcd-restore-x --watch\n"
+		"  follow it with: ichor describe operation etcd-restore-x --watch\n"
 	if out.String() != want {
 		t.Errorf("got %q, want %q", out.String(), want)
 	}

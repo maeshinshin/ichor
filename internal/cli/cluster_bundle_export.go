@@ -32,23 +32,25 @@ import (
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 )
 
-// clusterBundleExportCmd implements `ichor cluster bundle-export`: it saves the cluster's current
+// exportBundleCmd implements `ichor export bundle`: it saves the cluster's current
 // secrets bundle to ~/.ichor/clusters/<name>/secrets.yaml, and only after reading the saved file
 // back and finding it is the live bundle does it tell the controller so, which lowers the
 // BundleBackupStale condition a CA rotation raised.
-var clusterBundleExportCmd = &cobra.Command{
-	Use:   "bundle-export NAME",
+var exportBundleCmd = &cobra.Command{
+	Use:   "bundle NAME",
 	Short: "Save the cluster's current secrets bundle locally and acknowledge it after a CA rotation",
-	Long: `bundle-export reads the secrets bundle the cluster is running with from its Secret and
+	Long: `export bundle reads the secrets bundle the cluster is running with from its Secret and
 writes it to ~/.ichor/clusters/<name>/secrets.yaml (mode 0600, encrypted with the passphrase of the file it
 replaces, or a new one: --bundle-passphrase-file, $ICHOR_BUNDLE_PASSPHRASE, or generated on a terminal and shown
 once). A CA rotation replaces the bundle, and a
 copy saved before it no longer matches any node, so recovering a lost cluster (ichor restore
---recover-cluster) needs this one.
+cluster) needs this one.
 
 After the file is written it is read back; only if it holds the live bundle does the command mark the
 TalosCluster as exported, which clears its BundleBackupStale condition. The bundle is never printed.
 It refuses while a CA rotation is still under way, because the bundle is about to change.`,
+	Example: `  ichor export bundle prod
+  ichor export bundle prod --bundle-passphrase-file /run/secrets/bundle-pass`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		k8s, err := newKubeClient(kubeconfigPath)
@@ -176,8 +178,9 @@ func runBundleExport(ctx context.Context, d bundleExportDeps, namespace, ichorNa
 var bundleExportPlaintext bool
 
 func init() {
-	clusterCmd.AddCommand(clusterBundleExportCmd)
-	clusterBundleExportCmd.Flags().BoolVar(&bundleExportPlaintext, bundlePlaintextFlag, false,
+	addAPIFlags(exportBundleCmd)
+	exportCmd.AddCommand(exportBundleCmd)
+	exportBundleCmd.Flags().BoolVar(&bundleExportPlaintext, bundlePlaintextFlag, false,
 		"store the bundle unencrypted (default: encrypted; an existing encrypted file keeps its passphrase)")
-	markWrites(clusterBundleExportCmd)
+	markWrites(exportBundleCmd)
 }

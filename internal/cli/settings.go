@@ -28,19 +28,16 @@ import (
 	"github.com/maeshinshin/ichor/internal/settings"
 )
 
-// settingsCmd groups `ichor settings`: the runtime settings in the IchorInstallation, the same
+// `ichor get settings` and `ichor set settings` read and change the runtime settings in the IchorInstallation, the same
 // ones the UI's Settings page edits. Both go through SettingsService, so RBAC and the bounds are judged in one place.
-var settingsCmd = &cobra.Command{
+var getSettingsCmd = &cobra.Command{
 	Use:   "settings",
-	Short: "Show and change Ichor's runtime settings (sign-in lifetimes, default drift policy, update check, automatic patching)",
-}
-
-var settingsGetCmd = &cobra.Command{
-	Use:   "get",
 	Short: "Show each setting, its value in force and where the value comes from (spec or deployment)",
-	Long: `Show each setting with the value in force and its source: "spec" when the IchorInstallation
+	Long: `Show Ichor's runtime settings (sign-in lifetimes, default drift policy, update check, automatic patching): each setting with the value in force and its source: "spec" when the IchorInstallation
 sets it, "deployment" when the flag or chart value applies. The default is a table;
 -o yaml or -o json print the full response.`,
+	Example: `  ichor get settings
+  ichor get settings -o yaml`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
@@ -54,8 +51,8 @@ sets it, "deployment" when the flag or chart value applies. The default is a tab
 	},
 }
 
-var settingsSetCmd = &cobra.Command{
-	Use:   "set KEY=VALUE...",
+var setSettingsCmd = &cobra.Command{
+	Use:   "settings KEY=VALUE...",
 	Short: "Change settings (see --help for the keys)",
 	Long: `Change one or more settings; only the keys you name are written.
 
@@ -68,7 +65,9 @@ var settingsSetCmd = &cobra.Command{
   ` + settings.KeyAutoPatchWindow + `=02:00-05:00   daily UTC window an automatic upgrade may start in (empty: any time)
   ` + settings.KeyAutoPatchAckHalt + `=NAMESPACE/NAME   resume after an automatic operation halted auto-patching
 
-reclaim.enabled is removed: who may reset and add a machine is decided by RBAC alone.`,
+reclaim.enabled is removed: who may reset and add a node is decided by RBAC alone.`,
+	Example: `  ichor set settings updateCheck.enabled=false
+  ichor set settings autoPatch.enabled=true autoPatch.window=02:00-05:00`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		req, err := settingsUpdateRequest(args)
@@ -88,8 +87,8 @@ reclaim.enabled is removed: who may reset and add a machine is decided by RBAC a
 }
 
 func init() {
-	settingsCmd.AddCommand(settingsGetCmd, settingsSetCmd)
-	rootCmd.AddCommand(settingsCmd)
+	getCmd.AddCommand(getSettingsCmd)
+	setCmd.AddCommand(setSettingsCmd)
 }
 
 // settingsUpdateRequest validates KEY=VALUE arguments the way the server will, so a typo fails before any

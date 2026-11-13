@@ -20,23 +20,23 @@ import (
 	"io"
 )
 
-// Human output of rotate-ca: the credential hand-off reports on stderr as it goes;
+// Human output of rotate ca: the credential hand-off reports on stderr as it goes;
 // what is printed here is the end of the command. An empty kubeconfig means no credential hand-off
 // (the etcd or aggregator CA alone): your kubeconfig still works, so nothing points at a new one.
 
-// printRotateCAStarted ends a rotate-ca without --follow: the operation runs on, the new
+// printRotateCAStarted ends a rotate ca without --follow: the operation runs on, the new
 // kubeconfig is the one that reaches the cluster.
 func printRotateCAStarted(out io.Writer, opName, cluster, kubeconfig string) error {
 	h := newHuman(out)
 
 	h.done("started ca-rotation operation %s", opName)
-	h.Line("follow with: ichor operation get " + opName + " --watch" + kubeconfigFlag(kubeconfig))
+	h.Line("follow with: ichor describe operation " + opName + " --watch" + kubeconfigFlag(kubeconfig))
 	rotateCAAfterwardsHuman(h, "When it completes", cluster, kubeconfig)
 
 	return h.Err()
 }
 
-// printRotateCADone ends a rotate-ca --follow once the operation completed.
+// printRotateCADone ends a rotate ca --follow once the operation completed.
 func printRotateCADone(out io.Writer, opName, cluster, kubeconfig string) error {
 	h := newHuman(out)
 
@@ -61,8 +61,8 @@ func rotateCAAfterwardsHuman(h *human, title, cluster, kubeconfig string) {
 	h.Title(title)
 
 	if kubeconfig != "" {
-		h.Line("ichor cluster credentials " + cluster + kubeconfigFlag(kubeconfig) + h.Paint(sgrDim, "   files that trust the new CA only"))
+		h.Line("ichor create credentials " + cluster + kubeconfigFlag(kubeconfig) + h.Paint(sgrDim, "   files that trust the new CA only"))
 	}
 
-	h.Line("ichor cluster bundle-export " + cluster + h.Paint(sgrDim, "   save the new secrets bundle"))
+	h.Line("ichor export bundle " + cluster + h.Paint(sgrDim, "   save the new secrets bundle"))
 }

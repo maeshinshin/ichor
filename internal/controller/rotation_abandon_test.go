@@ -108,7 +108,7 @@ var _ = Describe("Deleting a rotation operation", func() {
 			ready := readyCondition(fetchMachine(f.machines[0]))
 			Expect(ready.Reason).To(Equal(reasonRebootRequired))
 			Expect(ready.Message).To(ContainSubstring("acceptedCAs"))
-			Expect(ready.Message).To(ContainSubstring("ichor config apply"))
+			Expect(ready.Message).To(ContainSubstring("ichor rollout config"))
 		})
 
 		It("abandons a rotation of CAs that survive the Issuing stage", func() {

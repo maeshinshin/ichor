@@ -32,7 +32,7 @@ limitations under the License.
 //	            CAs to rotation.yaml, then -> Accepting
 //	Accepting . new CA added to every machine's accepted CAs (old issues)      -> AwaitingCredentials
 //	AwaitingCredentials  nothing changes until the operator has credentials that work with both CAs:
-//	            `ichor cluster credentials` writes them and sets the hand-off annotation   -> Issuing
+//	            `ichor create credentials` writes them and sets the hand-off annotation   -> Issuing
 //	Issuing ... new CA issues, old is accepted                                 -> Dropping
 //	Dropping .. old CA removed from the accepted CAs                           -> Finalizing
 //	Finalizing  Secret replaced, BundleBackupStale raised, Ichor's dial and the machines'
@@ -814,7 +814,7 @@ func (c *caRun) awaitCredentials(ctx context.Context) (ctrl.Result, error) {
 	return ctrl.Result{RequeueAfter: operationRequeueInterval}, c.status(ctx, ichorv1alpha1.TalosOperationPhasePaused,
 		metav1.ConditionFalse, reasonCARotationAwaitingCredentials, fmt.Sprintf(
 			"every machine accepts the new CAs and the old ones still work. Nothing else happens until you have credentials that "+
-				"work after the next stage: run `ichor cluster credentials %s --acknowledge` "+
+				"work after the next stage: run `ichor create credentials %s --acknowledge` "+
 				"with your current kubeconfig, or download them and continue on the operation page of the UI", c.cluster.Name))
 }
 
@@ -991,7 +991,7 @@ func (c *caRun) replaceBundle(ctx context.Context) (*secrets.Bundle, error) {
 func (c *caRun) markBundleBackupStale(ctx context.Context) error {
 	return c.r.raiseBundleBackupStale(ctx, c.cluster, bundleStaleReason, fmt.Sprintf(
 		"A CA rotation replaced the secrets bundle. The copy saved on your machine no longer matches the "+
-			"cluster, and recovering from a total loss needs the new one. Run `ichor cluster bundle-export %s` and keep the file safe.",
+			"cluster, and recovering from a total loss needs the new one. Run `ichor export bundle %s` and keep the file safe.",
 		c.cluster.Name))
 }
 

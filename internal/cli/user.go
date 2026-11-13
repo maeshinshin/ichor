@@ -27,6 +27,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"golang.org/x/term"
 
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
@@ -38,19 +39,25 @@ import (
 // ID token for audience ichor-ui, so the caller's Kubernetes RBAC decides
 // what they may do. A password is never a flag: it comes from a prompt with
 // no echo, from stdin (--password-stdin), or is generated.
+//
+// The commands that list, show, create, change and delete users sit under the verbs (get users, describe user,
+// create user, edit user, delete user) and carry the same --issuer and --ca-file; the two below stay here.
 var userCmd = &cobra.Command{
-	Use:   "user",
-	Short: "Manage Ichor's own users (list, create, update, delete, set-password, revoke-sessions)",
+	Use:     "user",
+	GroupID: groupAccess,
+	Short:   "Set a user's password or sign a user out everywhere",
 	Long: `Manage the users of Ichor's own login. These commands talk to
 ichor-ui at --issuer over HTTPS with your login (run ` + "`ichor auth login --issuer URL --audience ichor-ui`" + `
 or let the first command open the browser). Use --ca-file for a private CA.
 
-To create the very first admin on an existing install, use
-  ichor user create NAME --role admin --generate --bootstrap
-which needs no login: it writes the user with your kubeconfig's own rights.`,
-}
+See also: ichor get users, ichor describe user, ichor create user, ichor edit user, ichor delete user.
 
-const useUserDelete = "delete NAME"
+To create the very first admin on an existing install, use
+  ichor create user NAME --role admin --generate --bootstrap
+which needs no login: it writes the user with your kubeconfig's own rights.`,
+	Example: `  ichor user set-password alice --generate
+  ichor user revoke-sessions alice`,
+}
 
 type userFlags struct {
 	displayName   string
@@ -64,26 +71,40 @@ type userFlags struct {
 
 var userOpts userFlags
 
+// addUserFlags registers the flags every command that calls UserService on ichor-ui shares.
+func addUserFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&authOpts.issuer, "issuer", os.Getenv("ICHOR_ISSUER"), "external https URL of ichor-ui, which is Ichor's OIDC issuer (env ICHOR_ISSUER)")
+	addCAFileFlag(fs)
+}
+
 func init() {
-	pf := userCmd.PersistentFlags()
-	pf.StringVar(&authOpts.issuer, "issuer", os.Getenv("ICHOR_ISSUER"), "external https URL of ichor-ui, which is Ichor's OIDC issuer (env ICHOR_ISSUER)")
-	addCAFileFlag(pf)
+	addUserFlags(userCmd.PersistentFlags())
 
-	userCreateCmd.Flags().StringVar(&userOpts.displayName, "display-name", "", "display name")
-	userCreateCmd.Flags().StringVar(&userOpts.email, "email", "", "e-mail address (informational)")
-	userCreateCmd.Flags().StringSliceVar(&userOpts.roles, "role", nil, "role (viewer, operator, admin or your own); repeatable")
-	userCreateCmd.Flags().BoolVar(&userOpts.bootstrap, "bootstrap", false,
+	for _, c := range []*cobra.Command{getUsersCmd, describeUserCmd, createUserCmd, editUserCmd, deleteUserCmd} {
+		addUserFlags(c.Flags())
+	}
+
+	getCmd.AddCommand(getUsersCmd)
+	describeCmd.AddCommand(describeUserCmd)
+	createCmd.AddCommand(createUserCmd)
+	editCmd.AddCommand(editUserCmd)
+	deleteCmd.AddCommand(deleteUserCmd)
+
+	createUserCmd.Flags().StringVar(&userOpts.displayName, "display-name", "", "display name")
+	createUserCmd.Flags().StringVar(&userOpts.email, "email", "", "e-mail address (informational)")
+	createUserCmd.Flags().StringSliceVar(&userOpts.roles, "role", nil, "role (viewer, operator, admin or your own); repeatable")
+	createUserCmd.Flags().BoolVar(&userOpts.bootstrap, "bootstrap", false,
 		"write the user and its password hash with your kubeconfig's own rights instead of through ichor-ui (for the first admin of an existing install)")
-	addPasswordFlags(userCreateCmd)
+	addPasswordFlags(createUserCmd)
 
-	userUpdateCmd.Flags().StringVar(&userOpts.displayName, "display-name", "", "new display name")
-	userUpdateCmd.Flags().StringVar(&userOpts.email, "email", "", "new e-mail address")
-	userUpdateCmd.Flags().StringSliceVar(&userOpts.roles, "role", nil, "replace the roles with these; repeatable")
-	userUpdateCmd.Flags().BoolVar(&userOpts.disabled, "disabled", false, "disable (true) or enable (false) the user")
+	editUserCmd.Flags().StringVar(&userOpts.displayName, "display-name", "", "new display name")
+	editUserCmd.Flags().StringVar(&userOpts.email, "email", "", "new e-mail address")
+	editUserCmd.Flags().StringSliceVar(&userOpts.roles, "role", nil, "replace the roles with these; repeatable")
+	editUserCmd.Flags().BoolVar(&userOpts.disabled, "disabled", false, "disable (true) or enable (false) the user")
 
 	addPasswordFlags(userSetPasswordCmd)
 
-	userCmd.AddCommand(userListCmd, userGetCmd, userCreateCmd, userUpdateCmd, userDeleteCmd, userSetPasswordCmd, userRevokeCmd)
+	userCmd.AddCommand(userSetPasswordCmd, userRevokeCmd)
 	rootCmd.AddCommand(userCmd)
 }
 
@@ -115,10 +136,11 @@ func withUsers(cmd *cobra.Command, fn func(ctx context.Context, u ichorv1alpha1c
 	return fn(cmd.Context(), sess.Users)
 }
 
-var userListCmd = &cobra.Command{
-	Use:   useList,
-	Short: "List users",
-	Args:  cobra.NoArgs,
+var getUsersCmd = &cobra.Command{
+	Use:     "users",
+	Short:   "List users",
+	Example: `  ichor get users --issuer https://ichor.example.com`,
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return withUsers(cmd, func(ctx context.Context, u ichorv1alpha1connect.UserServiceClient) error {
 			resp, err := u.ListUsers(ctx, connect.NewRequest(&pb.ListUsersRequest{}))
@@ -131,10 +153,11 @@ var userListCmd = &cobra.Command{
 	},
 }
 
-var userGetCmd = &cobra.Command{
-	Use:   useGetName,
-	Short: "Show one user",
-	Args:  cobra.ExactArgs(1),
+var describeUserCmd = &cobra.Command{
+	Use:     "user NAME",
+	Short:   "Show one user",
+	Example: `  ichor describe user alice --issuer https://ichor.example.com`,
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return withUsers(cmd, func(ctx context.Context, u ichorv1alpha1connect.UserServiceClient) error {
 			resp, err := u.GetUser(ctx, connect.NewRequest(&pb.GetUserRequest{Name: args[0]}))
@@ -147,10 +170,12 @@ var userGetCmd = &cobra.Command{
 	},
 }
 
-var userCreateCmd = &cobra.Command{
-	Use:   "create NAME",
+var createUserCmd = &cobra.Command{
+	Use:   "user NAME",
 	Short: "Create a user and set its first password (it must be changed at the first sign-in)",
-	Args:  cobra.ExactArgs(1),
+	Example: `  ichor create user alice --role operator --generate
+  ichor create user alice --role admin --generate --bootstrap`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if userOpts.bootstrap {
 			return runUserBootstrap(cmd, args[0])
@@ -187,11 +212,13 @@ func runUserCreate(ctx context.Context, u ichorv1alpha1connect.UserServiceClient
 	return err
 }
 
-var userUpdateCmd = &cobra.Command{
-	Use:   "update NAME",
+var editUserCmd = &cobra.Command{
+	Use:   "user NAME",
 	Short: "Change a user's display name, e-mail, roles or disabled flag (only the flags you pass)",
-	Args:  cobra.ExactArgs(1),
-	RunE:  userRunE(runUserUpdate),
+	Example: `  ichor edit user alice --role admin
+  ichor edit user alice --disabled=true`,
+	Args: cobra.ExactArgs(1),
+	RunE: userRunE(runUserUpdate),
 }
 
 func runUserUpdate(ctx context.Context, u ichorv1alpha1connect.UserServiceClient, cmd *cobra.Command, name string) error {
@@ -238,11 +265,12 @@ func runUserUpdate(ctx context.Context, u ichorv1alpha1connect.UserServiceClient
 	})
 }
 
-var userDeleteCmd = &cobra.Command{
-	Use:   useUserDelete,
-	Short: "Delete a user (the last enabled admin cannot be deleted)",
-	Args:  cobra.ExactArgs(1),
-	RunE:  userRunE(runUserDelete),
+var deleteUserCmd = &cobra.Command{
+	Use:     "user NAME",
+	Short:   "Delete a user (the last enabled admin cannot be deleted)",
+	Example: `  ichor delete user alice`,
+	Args:    cobra.ExactArgs(1),
+	RunE:    userRunE(runUserDelete),
 }
 
 func runUserDelete(ctx context.Context, u ichorv1alpha1connect.UserServiceClient, cmd *cobra.Command, name string) error {
@@ -265,8 +293,10 @@ func runUserDelete(ctx context.Context, u ichorv1alpha1connect.UserServiceClient
 var userSetPasswordCmd = &cobra.Command{
 	Use:   "set-password NAME",
 	Short: "Set a user's password as an administrator (the user must change it at the next sign-in)",
-	Args:  cobra.ExactArgs(1),
-	RunE:  userRunE(runUserSetPassword),
+	Example: `  ichor user set-password alice --generate
+  echo 'correct horse' | ichor user set-password alice --password-stdin`,
+	Args: cobra.ExactArgs(1),
+	RunE: userRunE(runUserSetPassword),
 }
 
 func runUserSetPassword(ctx context.Context, u ichorv1alpha1connect.UserServiceClient, cmd *cobra.Command, name string) error {
@@ -291,10 +321,11 @@ func runUserSetPassword(ctx context.Context, u ichorv1alpha1connect.UserServiceC
 }
 
 var userRevokeCmd = &cobra.Command{
-	Use:   "revoke-sessions NAME",
-	Short: "Sign a user out everywhere (kubectl tokens last at most the token lifetime)",
-	Args:  cobra.ExactArgs(1),
-	RunE:  userRunE(runUserRevoke),
+	Use:     "revoke-sessions NAME",
+	Short:   "Sign a user out everywhere (kubectl tokens last at most the token lifetime)",
+	Example: `  ichor user revoke-sessions alice`,
+	Args:    cobra.ExactArgs(1),
+	RunE:    userRunE(runUserRevoke),
 }
 
 func runUserRevoke(ctx context.Context, u ichorv1alpha1connect.UserServiceClient, cmd *cobra.Command, name string) error {

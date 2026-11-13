@@ -30,17 +30,21 @@ import (
 
 var clusterDiscoveryCluster string
 
-// clusterDiscoveryCmd groups the commands that edit what discovery scans: single
+// discoveryCmd groups the commands that edit what discovery scans: single
 // addresses and IPv4 ranges. They write spec.discovery as the caller.
-var clusterDiscoveryCmd = &cobra.Command{
-	Use:   "discovery",
-	Short: "List, add or remove the addresses and ranges Ichor scans for new machines",
+var discoveryCmd = &cobra.Command{
+	Use:     "discovery",
+	GroupID: groupChange,
+	Short:   "List, add or remove the addresses and ranges Ichor scans for new nodes",
+	Example: `  ichor discovery list
+  ichor discovery add 192.168.10.0/24`,
 }
 
-var clusterDiscoveryListCmd = &cobra.Command{
-	Use:   useList,
-	Short: "List the addresses and ranges the cluster scans",
-	Args:  cobra.NoArgs,
+var discoveryListCmd = &cobra.Command{
+	Use:     useList,
+	Short:   "List the addresses and ranges the cluster scans",
+	Example: `  ichor discovery list --cluster prod`,
+	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 			return runDiscoveryList(ctx, c, cmd.OutOrStdout())
@@ -48,13 +52,15 @@ var clusterDiscoveryListCmd = &cobra.Command{
 	},
 }
 
-var clusterDiscoveryAddCmd = &cobra.Command{
+var discoveryAddCmd = &cobra.Command{
 	Use:   "add ADDRESS|CIDR",
-	Short: "Scan one more IPv4 address or range (/24 or smaller) for machines in maintenance mode",
+	Short: "Scan one more IPv4 address or range (/24 or smaller) for nodes in maintenance mode",
 	Long: `Add an IPv4 address (192.168.0.50) or a range (192.168.0.0/24) to the cluster's
 spec.discovery. A range is scanned address by address (at most 256 per range, at most
 4 ranges). The scan starts right away; machines found appear as pending (see
-"ichor machine list") and wait for approval.`,
+"ichor get nodes") and wait for approval.`,
+	Example: `  ichor discovery add 192.168.10.50
+  ichor discovery add 192.168.10.0/24 --cluster prod`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
@@ -63,10 +69,11 @@ spec.discovery. A range is scanned address by address (at most 256 per range, at
 	},
 }
 
-var clusterDiscoveryRemoveCmd = &cobra.Command{
-	Use:   "remove ADDRESS|CIDR",
-	Short: "Stop scanning an address or range (machines already found stay)",
-	Args:  cobra.ExactArgs(1),
+var discoveryRemoveCmd = &cobra.Command{
+	Use:     "remove ADDRESS|CIDR",
+	Short:   "Stop scanning an address or range (nodes already found stay)",
+	Example: `  ichor discovery remove 192.168.10.0/24`,
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 			return runDiscoveryEdit(ctx, c, cmd, args[0], true)
@@ -169,9 +176,10 @@ func runDiscoveryList(ctx context.Context, c *apiClients, out io.Writer) error {
 }
 
 func init() {
-	clusterCmd.AddCommand(clusterDiscoveryCmd)
-	clusterDiscoveryCmd.AddCommand(clusterDiscoveryListCmd, clusterDiscoveryAddCmd, clusterDiscoveryRemoveCmd)
-	clusterDiscoveryCmd.PersistentFlags().StringVar(&clusterDiscoveryCluster, "cluster", "",
+	rootCmd.AddCommand(discoveryCmd)
+	addAPIFlags(discoveryCmd)
+	discoveryCmd.AddCommand(discoveryListCmd, discoveryAddCmd, discoveryRemoveCmd)
+	discoveryCmd.PersistentFlags().StringVar(&clusterDiscoveryCluster, "cluster", "",
 		"TalosCluster (in --namespace) to edit; optional when the namespace has exactly one")
-	markWrites(clusterDiscoveryAddCmd, clusterDiscoveryRemoveCmd)
+	markWrites(discoveryAddCmd, discoveryRemoveCmd)
 }

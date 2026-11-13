@@ -36,10 +36,10 @@ var cniBootstrapOpts struct {
 	CiliumValues string
 }
 
-var cniBootstrapCmd = &cobra.Command{
-	Use:   "bootstrap --kube-proxy enabled|replaced",
+var bootstrapCniCmd = &cobra.Command{
+	Use:   "cni --kube-proxy enabled|replaced",
 	Short: "Install Ichor's Cilium on a cluster with no CNI, before helm install ichor",
-	Long: `bootstrap is the first step of the Helm path on a cluster with no CNI: such a
+	Long: `bootstrap cni is the first step of the Helm path on a cluster with no CNI: such a
 cluster cannot run any pod, so Ichor's chart cannot start. bootstrap installs Ichor's pinned Cilium
 as Ichor's own Helm release (release cilium in kube-system, its record in ichor-system) with the
 operator's kubeconfig, and waits for every node to be Ready. Then run helm install ichor, then
@@ -55,6 +55,8 @@ immutable afterwards. --cilium-values is a YAML file of Cilium Helm values merge
 spec.cni.cilium.values; Ichor-owned keys are refused.
 
 It shows what it will do and asks for confirmation unless --yes. Running it again is safe.`,
+	Example: `  ichor bootstrap cni --kube-proxy replaced
+  ichor bootstrap cni --kube-proxy enabled --tunnel vxlan --yes`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		o := cniBootstrapOpts
@@ -172,11 +174,12 @@ func runCNIBootstrap(ctx context.Context, d cniBootstrapDeps) error {
 }
 
 func init() {
-	cniCmd.AddCommand(cniBootstrapCmd)
+	addAPIFlags(bootstrapCniCmd)
+	bootstrapCmd.AddCommand(bootstrapCniCmd)
 
-	f := cniBootstrapCmd.Flags()
+	f := bootstrapCniCmd.Flags()
 	f.StringVar(&cniBootstrapOpts.KubeProxy, "kube-proxy", "", "enabled (Talos runs kube-proxy) or replaced (Cilium replaces it) (required)")
 	f.StringVar(&cniBootstrapOpts.Tunnel, "tunnel", "", "tunnel protocol, vxlan or geneve; immutable afterwards")
 	f.StringVar(&cniBootstrapOpts.CiliumValues, "cilium-values", "", "YAML file of Cilium Helm values (Ichor-owned keys are refused)")
-	_ = cniBootstrapCmd.MarkFlagRequired("kube-proxy")
+	_ = bootstrapCniCmd.MarkFlagRequired("kube-proxy")
 }

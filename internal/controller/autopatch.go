@@ -226,7 +226,7 @@ func (p *AutoPatcher) keepHalt(
 		}
 
 		p.Recorder.Eventf(inst, corev1.EventTypeWarning, "AutoPatchHalted",
-			"Automatic patching stopped: operation %s (%s) is paused: %s. Resume or delete it, or acknowledge it with 'ichor settings set %s=%s'",
+			"Automatic patching stopped: operation %s (%s) is paused: %s. Resume or delete it, or acknowledge it with 'ichor set settings %s=%s'",
 			opRef(o), o.Spec.Kind, reason, settings.KeyAutoPatchAckHalt, opRef(o))
 
 		return opRef(o), nil

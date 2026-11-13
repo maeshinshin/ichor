@@ -426,7 +426,7 @@ func (r *TalosMachineReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	case kubeProxySwitchOnly(&cluster, &m, impact):
 		return ctrl.Result{}, r.ready(ctx, &m, metav1.ConditionFalse, reasonKubeProxySwitchPending,
-			driftNote+"spec.cni.kubeProxy changed to "+cluster.Spec.CNI.KubeProxy+"; run `ichor cni kube-proxy "+
+			driftNote+"spec.cni.kubeProxy changed to "+cluster.Spec.CNI.KubeProxy+"; run `ichor set kube-proxy "+
 				cluster.Spec.CNI.KubeProxy+"` (or the UI's kube-proxy switch) to apply it without a reboot")
 
 	case needsOperation(&m, impact):
@@ -729,7 +729,7 @@ func (r *TalosMachineReconciler) refuseForOperation(
 
 		return ctrl.Result{}, r.ready(ctx, m, metav1.ConditionFalse, reasonRebootRequired,
 			driftNote+"configuration change needs a reboot (fields: "+summarizePaths(m.Status.RebootPaths, rebootPathsInMessage)+
-				")"+renameNote(m.Status.RebootPaths)+"; nothing reboots a node on its own -- run `ichor config apply --cluster "+m.Spec.ClusterRef.Name+"` (or start a config rollout on the cluster page) to apply it")
+				")"+renameNote(m.Status.RebootPaths)+"; nothing reboots a node on its own -- run `ichor rollout config --cluster "+m.Spec.ClusterRef.Name+"` (or start a config rollout on the cluster page) to apply it")
 	}
 
 	m.Status.APIServerRestartPaths = paths
@@ -737,7 +737,7 @@ func (r *TalosMachineReconciler) refuseForOperation(
 	return ctrl.Result{}, r.ready(ctx, m, metav1.ConditionFalse, reasonAPIServerRestartRequired,
 		driftNote+"configuration change restarts the Kubernetes API server (fields: "+summarizePaths(paths, rebootPathsInMessage)+
 			"); no reboot, but it is not applied on its own, so every control plane does not lose its API server at once -- "+
-			"run `ichor config apply --cluster "+m.Spec.ClusterRef.Name+" --follow` (or start a config rollout on the cluster page) to apply it one control plane at a time")
+			"run `ichor rollout config --cluster "+m.Spec.ClusterRef.Name+" --follow` (or start a config rollout on the cluster page) to apply it one control plane at a time")
 }
 
 // rebootPathsInMessage caps how many field paths a Ready message lists; status.rebootPaths has all.

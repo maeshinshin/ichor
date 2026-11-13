@@ -44,5 +44,5 @@ ichorUI.allowUnauthenticated=true restores open writes.
 {{- end }}
 
 On a cluster with no CNI the chart refuses to install (preflight.cni): run
-`ichor cni bootstrap` first, which installs Ichor Cilium, then install again.
+`ichor bootstrap cni` first, which installs Ichor Cilium, then install again.
 After the install, register the cluster with `ichor adopt`.

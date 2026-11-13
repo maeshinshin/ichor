@@ -342,7 +342,7 @@ func (r *DiscoveryReconciler) reportAlreadyConfigured(cluster *ichorv1alpha1.Tal
 			corev1.EventTypeWarning, ReasonOrphan,
 			"%s runs a Talos configuration and has a Kubernetes Node, but no TalosMachine accounts for it: it may be "+
 				"a node of this cluster that was removed without a wipe; Ichor did not touch it. To start over, "+
-				"wipe it with the cluster's own credentials (ichor machine reclaim ADDRESS --cluster NAME, or Reset and add)",
+				"wipe it with the cluster's own credentials (ichor reclaim node ADDRESS --cluster NAME, or Reset and add)",
 			endpoint)
 
 		return
@@ -350,7 +350,7 @@ func (r *DiscoveryReconciler) reportAlreadyConfigured(cluster *ichorv1alpha1.Tal
 
 	r.Recorder.AnnotatedEventf(cluster, map[string]string{AnnotationAlreadyConfiguredEndpoint: endpoint},
 		corev1.EventTypeWarning, ReasonAlreadyConfigured,
-		"%s already runs a Talos configuration, so Ichor did not add it; reclaim it first (ichor machine reclaim)",
+		"%s already runs a Talos configuration, so Ichor did not add it; reclaim it first (ichor reclaim node)",
 		endpoint)
 }
 

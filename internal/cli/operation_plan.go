@@ -147,9 +147,9 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 		if credentials {
 			b.WriteString("YOUR " + credentialsStopWorking + "\n" +
 				"So after every machine accepts the new CAs the operation WAITS, changing nothing, until you have new credentials. " +
-				"'ichor cluster rotate-ca' writes them (a kubeconfig and a talosconfig trusting the old and the new CAs, next to your current ones, " +
+				"'ichor rotate ca' writes them (a kubeconfig and a talosconfig trusting the old and the new CAs, next to your current ones, " +
 				"mode 0600, never printed) while your current ones still work, checks them, and only then lets the operation go on. " +
-				"To continue, run 'ichor cluster credentials NAME --acknowledge' with your current kubeconfig, or, if you may " +
+				"To continue, run 'ichor create credentials NAME --acknowledge' with your current kubeconfig, or, if you may " +
 				"(the 'download' verb on talosclusters/credentials), use the operation page of the UI: it downloads the same files and continues the rotation.\n")
 		} else {
 			b.WriteString("Nothing your kubeconfig or talosconfig depends on changes, so there is no credential hand-off.\n")
@@ -186,7 +186,7 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 
 	if p.GetReplacesSecretsBundle() {
 		fmt.Fprintf(&b, "When it completes, the secrets bundle in the cluster is replaced and the copy on your machine is stale: "+
-			"run 'ichor cluster bundle-export %s' and keep the file safe.\n", cluster)
+			"run 'ichor export bundle %s' and keep the file safe.\n", cluster)
 	}
 
 	if kind != pb.OperationKind_OPERATION_KIND_SHUTDOWN && p.GetEffect() != pb.OperationEffect_OPERATION_EFFECT_NONE {

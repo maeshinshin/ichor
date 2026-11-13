@@ -886,7 +886,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			f.r = f.reconciler(restoreHostA)
 
 			got := f.reconcile(f.newOp(nil))
-			Expect(got.Status.EtcdRestore.Message).To(ContainSubstring("ichor restore --recover-cluster"))
+			Expect(got.Status.EtcdRestore.Message).To(ContainSubstring("ichor restore cluster"))
 			Expect(got.Status.EtcdRestore.Target).To(Equal(m.Name))
 		})
 	})

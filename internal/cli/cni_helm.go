@@ -36,7 +36,7 @@ import (
 )
 
 // cniHelmCmd groups what only the Cilium Helm Job runs. Hidden: a person changes
-// Cilium by writing spec.cni.cilium.values (or `ichor cni values`), never by running this.
+// Cilium by writing spec.cni.cilium.values (or `ichor apply cni-values`), never by running this.
 var cniHelmCmd = &cobra.Command{
 	Use:    "helm",
 	Short:  "Commands the Cilium Helm Job runs",

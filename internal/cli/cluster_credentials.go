@@ -52,9 +52,9 @@ var clusterCredentialsOpts struct {
 const staleBundleWarning = "the bundle's CAs differ from the secrets bundle Ichor stores for this cluster; " +
 	"the files will not work unless that stored bundle is the out-of-date one"
 
-// clusterCredentialsCmd implements `ichor cluster credentials`: write a kubeconfig and a
+// createCredentialsCmd implements `ichor create credentials`: write a kubeconfig and a
 // talosconfig for the operator, from the cluster's secrets bundle or, offline, from a bundle file.
-var clusterCredentialsCmd = &cobra.Command{
+var createCredentialsCmd = &cobra.Command{
 	Use:   "credentials NAME",
 	Short: "Write a kubeconfig and a talosconfig for the cluster's admin, from its secrets bundle",
 	Long: `credentials writes two files and never prints their contents (mode 0600):
@@ -77,13 +77,16 @@ By default the CAs are read from the cluster's secrets bundle Secret. While a CA
 the files trust the old and the new CAs and are signed by the new one, which every node accepts from
 the moment the rotation waits for credentials: they keep working after the old CA is dropped.
 
-With --bundle FILE (the output of 'ichor cluster bundle-export') nothing is read from the cluster, so
+With --bundle FILE (the output of 'ichor export bundle') nothing is read from the cluster, so
 an operator with a current bundle can always get back in. A bundle saved before a rotation names CAs
 that no node accepts any more.
 
 With --acknowledge the command also tells a waiting CA rotation that you have the credentials, after
 checking that the new kubeconfig authenticates to the cluster: the rotation does not continue without
-it. 'ichor cluster rotate-ca' does all of this itself.`,
+it. 'ichor rotate ca' does all of this itself.`,
+	Example: `  ichor create credentials prod
+  ichor create credentials prod --read-only --ttl 8h
+  ichor create credentials prod --bundle ~/.ichor/clusters/prod/secrets.yaml`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		o := clusterCredentialsOpts
@@ -336,9 +339,10 @@ type handoffDeps struct {
 }
 
 func init() {
-	clusterCmd.AddCommand(clusterCredentialsCmd)
+	addAPIFlags(createCredentialsCmd)
+	createCmd.AddCommand(createCredentialsCmd)
 
-	f := clusterCredentialsCmd.Flags()
+	f := createCredentialsCmd.Flags()
 	f.StringVar(&clusterCredentialsOpts.Bundle, "bundle", "",
 		"read the CAs from this secrets bundle file (bundle-export's output) instead of the cluster; works offline")
 	f.StringVar(&clusterCredentialsOpts.KubeconfigOut, "kubeconfig-out", "",

@@ -234,10 +234,10 @@ func TestWatchEndsWithAnErrorWhenAMachineFailedAndPrintsProgress(t *testing.T) {
 func TestStartCommandsAreMarkedAsWrites(t *testing.T) {
 	for name, ann := range map[string]string{
 		"talos": upgradeTalosCmd.Annotations[writesAnnotation], "kubernetes": upgradeKubernetesCmd.Annotations[writesAnnotation],
-		"ichor": upgradeIchorCmd.Annotations[writesAnnotation], "kube-proxy": cniKubeProxyCmd.Annotations[writesAnnotation],
-		"shutdown": clusterShutdownCmd.Annotations[writesAnnotation], "pause": operationPauseCmd.Annotations[writesAnnotation],
-		"resume": operationResumeCmd.Annotations[writesAnnotation],
-		"delete": operationDeleteCmd.Annotations[writesAnnotation],
+		"ichor": upgradeIchorCmd.Annotations[writesAnnotation], "kube-proxy": setKubeProxyCmd.Annotations[writesAnnotation],
+		"shutdown": shutdownClusterCmd.Annotations[writesAnnotation], "pause": pauseOperationCmd.Annotations[writesAnnotation],
+		"resume": resumeOperationCmd.Annotations[writesAnnotation],
+		"delete": deleteOperationCmd.Annotations[writesAnnotation],
 	} {
 		if ann != "true" {
 			t.Errorf("%s is not marked as a write", name)
@@ -286,7 +286,7 @@ func TestPlanTextForAConfigRestartSaysNoReboot(t *testing.T) {
 }
 
 func TestHeadlineForAKubeProxySwitchSaysItStartsWhenTheSpecAlreadySaysTheTarget(t *testing.T) {
-	// The second run of `ichor cni kube-proxy replaced --yes`: the spec already says replaced.
+	// The second run of `ichor set kube-proxy replaced --yes`: the spec already says replaced.
 	mode := string(cni.KubeProxyReplaced)
 	same := &pb.PlanOperationResponse{Current: mode, Target: mode}
 

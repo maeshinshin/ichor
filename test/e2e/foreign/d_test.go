@@ -139,7 +139,7 @@ func TestD4K8s(t *testing.T) {
 	flannelRunning(t, c, c.LocalKube)
 }
 
-// TestD4RotateCA: `ichor cluster rotate-ca` (without --follow: the call returns after the credential hand-off).
+// TestD4RotateCA: `ichor rotate ca` (without --follow: the call returns after the credential hand-off).
 func TestD4RotateCA(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1})
 	start := time.Now()

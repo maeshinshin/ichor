@@ -124,7 +124,7 @@ func TestRotateCAPlanOfEtcdAloneHasNoHandoffAndWarnsAboutRestartsAndTheSnapshot(
 
 	for _, want := range []string{
 		"Rotate the etcd certificate authorities", "no credential hand-off", "rebooted once in each of the three stages",
-		"the control planes REBOOT in each pass", "ichor etcd backup now", "ichor cluster bundle-export " + opTestCluster,
+		"the control planes REBOOT in each pass", "ichor backup etcd", "ichor export bundle " + opTestCluster,
 	} {
 		if !strings.Contains(prompt.String(), want) {
 			t.Errorf("prompt lacks %q:\n%s", want, prompt.String())
@@ -206,7 +206,7 @@ func TestRotateCAOfEtcdAloneWritesTheTargetsAndFollowsNothingItDoesNotNeed(t *te
 		t.Fatalf("ops = %+v", ops)
 	}
 
-	for _, want := range []string{"started ca-rotation operation", "ichor operation get", "ichor cluster bundle-export " + opTestCluster} {
+	for _, want := range []string{"started ca-rotation operation", "ichor describe operation", "ichor export bundle " + opTestCluster} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("output lacks %q:\n%s", want, out.String())
 		}

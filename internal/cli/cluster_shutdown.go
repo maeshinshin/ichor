@@ -26,15 +26,17 @@ import (
 
 var clusterShutdownFollow bool
 
-var clusterShutdownCmd = &cobra.Command{
-	Use:   "shutdown NAME",
-	Short: "Stop every machine of a cluster in the order that keeps the API up longest",
-	Long: `shutdown starts a shutdown operation: workers are drained and stopped first, then
-every control plane. Machines stay off until you power them on; the operation
+var shutdownClusterCmd = &cobra.Command{
+	Use:   "cluster NAME",
+	Short: "Stop every node of a cluster in the order that keeps the API up longest",
+	Long: `shutdown cluster starts a shutdown operation: workers are drained and stopped first, then
+every control plane. Nodes stay off until you power them on; the operation
 completes once they answer again. While it has not completed, every other
 disruptive operation on the cluster is refused.
 
-It shows which machines stop and in which order, and asks for confirmation unless --yes.`,
+It shows which nodes stop and in which order, and asks for confirmation unless --yes.`,
+	Example: `  ichor shutdown cluster lab
+  ichor shutdown cluster lab --follow --yes`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
@@ -45,8 +47,9 @@ It shows which machines stop and in which order, and asks for confirmation unles
 }
 
 func init() {
-	clusterCmd.AddCommand(clusterShutdownCmd)
-	clusterShutdownCmd.Flags().BoolVar(&clusterShutdownFollow, "follow", false,
-		"after creating the operation, follow its progress (it ends at ShutDown, when every machine is down)")
-	markWrites(clusterShutdownCmd)
+	addAPIFlags(shutdownClusterCmd)
+	shutdownCmd.AddCommand(shutdownClusterCmd)
+	shutdownClusterCmd.Flags().BoolVar(&clusterShutdownFollow, "follow", false,
+		"after creating the operation, follow its progress (it ends at ShutDown, when every node is down)")
+	markWrites(shutdownClusterCmd)
 }

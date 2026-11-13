@@ -400,7 +400,7 @@ func wipingMessage(n restoreNodes) string {
 	case n.own != nil:
 		msg += fmt.Sprintf(" %s (node %s), where this controller runs, is wiped last, when etcd is back.", n.own.Name, nodeNameFor(n.names, n.own))
 	case n.controllerOnTarget:
-		msg += " This controller runs on the only control plane and stops when it is wiped: finish with `ichor restore --recover-cluster`."
+		msg += " This controller runs on the only control plane and stops when it is wiped: finish with `ichor restore cluster`."
 	}
 
 	return msg
@@ -645,7 +645,7 @@ func (run *restoreRun) mirror(ctx context.Context, m *etcdbackup.RestoreMarker, 
 
 // etcdRestoreFallback is what the operator is told when the restore stops: the offline recovery needs
 // only the secrets bundle and the bucket, no Kubernetes and no controller.
-const etcdRestoreFallback = "To finish by hand, without Kubernetes or this controller: `ichor restore --recover-cluster` " +
+const etcdRestoreFallback = "To finish by hand, without Kubernetes or this controller: `ichor restore cluster` " +
 	"(it needs the cluster's secrets bundle and the backup bucket)."
 
 // failed pauses the operation with the reason, in the status and (when there is a marker) in the marker

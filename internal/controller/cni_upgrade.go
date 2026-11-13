@@ -108,7 +108,7 @@ func (r *CNIHandoverReconciler) syncUpgradeAvailable(ctx context.Context, cluste
 	if rel.ChartVersion != cilium.ChartVersion {
 		available = cilium.ChartVersion
 		cond.Status, cond.Reason = metav1.ConditionTrue, reasonCiliumUpgradeAvailable
-		cond.Message = fmt.Sprintf("Cilium chart %s is available (installed %s): run `ichor cni upgrade`", available, rel.ChartVersion)
+		cond.Message = fmt.Sprintf("Cilium chart %s is available (installed %s): run `ichor upgrade cni`", available, rel.ChartVersion)
 
 		if err := checkChartStep(rel.ChartVersion, available); err != nil {
 			cond.Message = fmt.Sprintf("Cilium chart %s is embedded (installed %s), but it cannot be applied in one step: %v",
@@ -168,13 +168,13 @@ func (a *cniKubeProxyAdvancer) upgradeChart(
 	// operation is refused rather than run as the chart.
 	if op.Spec.CNI.ImageVersion != "" {
 		return false, fmt.Errorf("the operation names the Cilium patch %s, which Ichor no longer runs: Cilium moves only to the chart "+
-			"this Ichor embeds (%s); delete the operation and run `ichor cni upgrade` again", op.Spec.CNI.ImageVersion, cilium.ChartVersion)
+			"this Ichor embeds (%s); delete the operation and run `ichor upgrade cni` again", op.Spec.CNI.ImageVersion, cilium.ChartVersion)
 	}
 
 	target := op.Spec.CNI.ChartVersion
 	if target != cilium.ChartVersion {
 		return false, fmt.Errorf("the operation upgrades to Cilium chart %s but this controller embeds %s (Ichor was changed "+
-			"after the operation was created); delete the operation and run `ichor cni upgrade` again", target, cilium.ChartVersion)
+			"after the operation was created); delete the operation and run `ichor upgrade cni` again", target, cilium.ChartVersion)
 	}
 
 	rel, err := readCiliumRelease(ctx, a.Reader, a.ControllerNamespace)

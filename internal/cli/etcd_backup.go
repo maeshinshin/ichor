@@ -27,20 +27,16 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-var etcdBackupCmd = &cobra.Command{
-	Use:   "backup",
-	Short: "Work with the etcd backups (TalosEtcdBackup)",
-}
-
-var etcdBackupNowCmd = &cobra.Command{
-	Use:   "now NAME",
+var backupEtcdCmd = &cobra.Command{
+	Use:   "etcd NAME",
 	Short: "Take an etcd snapshot now, outside the schedule",
-	Long: `now asks the controller of the TalosEtcdBackup NAME for one snapshot outside its schedule. It only sets an annotation on the TalosEtcdBackup; the controller takes, verifies,
+	Long: `backup etcd asks the controller of the TalosEtcdBackup NAME for one snapshot outside its schedule. It only sets an annotation on the TalosEtcdBackup; the controller takes, verifies,
 encrypts and stores the snapshot, prunes to the retention, and records the request in
 status.lastManualBackup. A suspended backup, or one with a request the controller has not started
-yet, is refused. Check the result with 'ichor restore --live' (it lists the snapshots) or the
+yet, is refused. Check the result with 'ichor restore etcd' (it lists the snapshots) or the
 Backups page.`,
-	Args: cobra.ExactArgs(1),
+	Example: `  ichor backup etcd nightly`,
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 			return runEtcdBackupNow(ctx, c, cmd.OutOrStdout(), cmd.ErrOrStderr(), args[0])
@@ -66,7 +62,7 @@ func runEtcdBackupNow(ctx context.Context, c *apiClients, out, errw io.Writer, n
 }
 
 func init() {
-	etcdCmd.AddCommand(etcdBackupCmd)
-	etcdBackupCmd.AddCommand(etcdBackupNowCmd)
-	markWrites(etcdBackupNowCmd)
+	addAPIFlags(backupEtcdCmd)
+	backupCmd.AddCommand(backupEtcdCmd)
+	markWrites(backupEtcdCmd)
 }

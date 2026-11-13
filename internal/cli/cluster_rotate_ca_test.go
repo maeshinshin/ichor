@@ -44,8 +44,8 @@ func TestRotateCAPromptSaysKubeletRestartsAndTheBundleGoesStaleAndDeclineWritesN
 
 	for _, want := range []string{
 		"ca-rotation", "2 machine(s)", "1. " + opCP + " (controlplane)", "2. " + testMachineName + " (worker)",
-		"Accepting, Issuing, Dropping", "kubelet", "ichor cluster bundle-export " + opTestCluster,
-		"STOP WORKING from the second pass (Issuing)", "WAITS", "ichor cluster credentials NAME --acknowledge",
+		"Accepting, Issuing, Dropping", "kubelet", "ichor export bundle " + opTestCluster,
+		"STOP WORKING from the second pass (Issuing)", "WAITS", "ichor create credentials NAME --acknowledge",
 	} {
 		if !strings.Contains(prompt.String(), want) && !strings.Contains(strings.ToLower(prompt.String()), strings.ToLower(want)) {
 			t.Errorf("prompt lacks %q:\n%s", want, prompt.String())
@@ -86,7 +86,7 @@ func TestRotateCAWithYesCreatesOneOperationAndRefusesASecondWhileItRuns(t *testi
 }
 
 func TestRotateCAIsOneCommandThroughTheEntryPoint(t *testing.T) {
-	if _, ok := clusterRotateCACmd.Annotations[writesAnnotation]; !ok {
+	if _, ok := rotateCACmd.Annotations[writesAnnotation]; !ok {
 		t.Error("rotate-ca is not marked as a write")
 	}
 
@@ -108,7 +108,7 @@ func TestRotateCADoneHintNamesTheNewKubeconfig(t *testing.T) {
 	var errw bytes.Buffer
 	rotateCAAfterwards(&errw, opTestCluster, newKubeconfig)
 
-	want := "ichor cluster credentials " + opTestCluster + " --kubeconfig " + newKubeconfig + "' for files"
+	want := "ichor create credentials " + opTestCluster + " --kubeconfig " + newKubeconfig + "' for files"
 	if !strings.Contains(errw.String(), want) {
 		t.Errorf("done hint lacks %q:\n%s", want, errw.String())
 	}
@@ -117,11 +117,11 @@ func TestRotateCADoneHintNamesTheNewKubeconfig(t *testing.T) {
 // The hand-off needs the operator's own kubeconfig, so rotate-ca does it with or without --follow
 // (a rotation left at AwaitingCredentials waits for it); the help says so instead of surprising anyone.
 func TestRotateCAHelpSaysTheHandoffHappensWithoutFollow(t *testing.T) {
-	if !strings.Contains(clusterRotateCACmd.Long, "with or without --follow") {
-		t.Errorf("the help does not say the hand-off is done with or without --follow:\n%s", clusterRotateCACmd.Long)
+	if !strings.Contains(rotateCACmd.Long, "with or without --follow") {
+		t.Errorf("the help does not say the hand-off is done with or without --follow:\n%s", rotateCACmd.Long)
 	}
 
-	if u := clusterRotateCACmd.Flags().Lookup("follow").Usage; !strings.Contains(u, "without it") {
+	if u := rotateCACmd.Flags().Lookup("follow").Usage; !strings.Contains(u, "without it") {
 		t.Errorf("--follow usage = %q", u)
 	}
 }

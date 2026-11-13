@@ -75,7 +75,7 @@ func TestT7HelmManager(t *testing.T) {
 	}
 
 	if out, err := ichorInPod(t, c, "settings", "set", "users.tokenTTL=10m"); err != nil {
-		t.Fatalf("ichor settings set failed: %v\n%s", err, out)
+		t.Fatalf("ichor set settings failed: %v\n%s", err, out)
 	}
 	if got := installationField(c, "{.spec.users.tokenTTL}"); got != "10m0s" {
 		t.Fatalf("spec.users.tokenTTL = %q, want 10m0s", got)

@@ -64,7 +64,7 @@ func adviseCARotation(ctx context.Context, c client.Client, cluster *ichorv1alph
 		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{
 			Type: ichorv1alpha1.ConditionCARotationAdvised, Status: metav1.ConditionTrue, Reason: reasonAdopted,
 			Message: "this cluster was adopted: previous administrators' client certificates and the CA keys held by its creator " +
-				"remain valid; consider `ichor cluster rotate-ca`",
+				"remain valid; consider `ichor rotate ca`",
 		})
 	default:
 		apimeta.SetStatusCondition(&cluster.Status.Conditions, metav1.Condition{

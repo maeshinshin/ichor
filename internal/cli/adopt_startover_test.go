@@ -52,7 +52,7 @@ func TestAdoptRefusalOffersTheWipe(t *testing.T) {
 		}, []*adoptPlan{{Machine: "w1", UnrepresentablePaths: paths}})
 
 		got := strings.Join(lines, "\n")
-		if !strings.Contains(got, "ichor machine reclaim 10.0.0.21 --cluster "+ownClusterName) || !strings.Contains(got, "UI Reset and add") {
+		if !strings.Contains(got, "ichor reclaim node 10.0.0.21 --cluster "+ownClusterName) || !strings.Contains(got, "UI Reset and add") {
 			t.Errorf("%s: the refusal does not offer the wipe:\n%s", name, got)
 		}
 

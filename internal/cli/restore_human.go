@@ -20,7 +20,7 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// renderRestoreStarted is the result of `ichor restore --live` without --follow: the operation that
+// renderRestoreStarted is the result of `ichor restore etcd` without --follow: the operation that
 // carries the restore out, and how to watch it.
 func renderRestoreStarted(h *human, resp *pb.CreateOperationResponse) error {
 	ref := resp.GetOperation().GetRef()
@@ -28,7 +28,7 @@ func renderRestoreStarted(h *human, resp *pb.CreateOperationResponse) error {
 		return err
 	}
 
-	h.Line("follow it with: ichor operation get " + ref.GetName() + " --watch")
+	h.Line("follow it with: ichor describe operation " + ref.GetName() + " --watch")
 
 	return h.Err()
 }

@@ -27,10 +27,11 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-var machineRejectCmd = &cobra.Command{
-	Use:   "reject NAME",
-	Short: "Reject a pending machine (recorded, never deleted)",
-	Args:  cobra.ExactArgs(1),
+var rejectNodeCmd = &cobra.Command{
+	Use:     "node NAME",
+	Short:   "Reject a pending node (recorded, never deleted)",
+	Example: `  ichor reject node 3f1c2a`,
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAPI(cmd, false, func(ctx context.Context, c *apiClients) error {
 			return runMachineReject(ctx, c, cmd.InOrStdin(), cmd.OutOrStdout(), cmd.ErrOrStderr(), args[0])
@@ -60,5 +61,6 @@ func runMachineReject(ctx context.Context, c *apiClients, in io.Reader, out, err
 }
 
 func init() {
-	machineCmd.AddCommand(machineRejectCmd)
+	addAPIFlags(rejectNodeCmd)
+	rejectCmd.AddCommand(rejectNodeCmd)
 }

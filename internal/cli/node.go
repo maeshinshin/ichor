@@ -46,29 +46,12 @@ type nodeLogsOptions struct {
 	Idle        time.Duration
 }
 
-// nodeCmd groups the subcommands that read a live node. They need
-// ichor-ui: the read-only Talos identity lives there and the CLI never
-// talks to a node itself, so there is no local fallback.
-var nodeCmd = &cobra.Command{
-	Use:   "node",
-	Short: "Show a node, tail its logs (needs ichor-ui), or reboot, shut down or remove it",
-}
-
-var nodeGetCmd = &cobra.Command{
-	Use:   useGetName,
-	Short: "Show a node's hardware, disks, network interfaces, usage and Kubernetes status",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return showAPIHuman(cmd, true, func(ctx context.Context, c *apiClients) (*connect.Response[pb.GetNodeResponse], error) {
-			return c.Node.GetNode(ctx, connect.NewRequest(&pb.GetNodeRequest{Machine: objectRef(apiOpts.Namespace, args[0])}))
-		}, renderNodeGet)
-	},
-}
-
-var nodeLogsCmd = &cobra.Command{
-	Use:   "logs NAME...",
-	Short: "Print a node's kernel or service log; --follow keeps streaming",
-	Long: `logs prints the kernel log (or, with --service, a Talos service's log) of one
+// logsNodeCmd reads a live node, so it needs ichor-ui: the read-only Talos identity lives there and the CLI
+// never talks to a node itself, so there is no local fallback.
+var logsNodeCmd = &cobra.Command{
+	Use:   "node NAME...",
+	Short: "Print a node's kernel or service log (needs ichor-ui); --follow keeps streaming",
+	Long: `logs node prints the kernel log (or, with --service, a Talos service's log) of one
 or more nodes, merged onto one stream. Without --follow it prints what the node
 has and exits once nothing new arrives for --idle-timeout. With --follow it keeps
 streaming until Ctrl-C and, if the connection drops or ichor-ui drains, reconnects
@@ -76,6 +59,9 @@ and resumes from the last resume token (a few lines around the cut may repeat or
 be missed: Talos offers no per-line identity). Output is plain
 text (prefixed with the node name when several are given); -o json prints one
 JSON object per line instead.`,
+	Example: `  ichor logs node worker-3
+  ichor logs node worker-3 --service kubelet --follow
+  ichor logs node cp-1 cp-2 cp-3 --service etcd`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := validateOutputFormat(outputFormat); err != nil {
@@ -213,11 +199,10 @@ func streamLogsOnce(
 }
 
 func init() {
-	rootCmd.AddCommand(nodeCmd)
-	addAPIFlags(nodeCmd)
-	nodeCmd.AddCommand(nodeGetCmd, nodeLogsCmd)
+	addAPIFlags(logsNodeCmd)
+	logsCmd.AddCommand(logsNodeCmd)
 
-	f := nodeLogsCmd.Flags()
+	f := logsNodeCmd.Flags()
 	f.StringVar(&nodeLogsOpts.Service, "service", "", "Talos service whose log to read (kubelet, etcd, ...); empty means the kernel log")
 	f.BoolVarP(&nodeLogsOpts.Follow, "follow", "f", false, "keep streaming, reconnecting with the resume token if the connection drops")
 	f.StringVar(&nodeLogsOpts.ResumeToken, "resume-token", "", "resume token from an earlier run (opaque)")

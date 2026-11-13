@@ -1,5 +1,205 @@
 # Changelog
 
+## v0.3.0 (2026-11-13)
+
+The command line is verb first, which breaks every script that calls it, and a
+`TalosConfigPatch` can carry 64 of the 65 Talos document kinds Ichor accepts,
+up from 7. The Talos, Kubernetes and Cilium versions a first install gets are
+the same as in v0.2.4. The CRDs gain fields, and two credential fields leave
+them (see Typed configuration).
+
+### CLI
+
+- **Breaking: the command surface is verb first.** `ichor machine list` is now
+  `ichor get nodes`, and `ichor machine approve NAME` is
+  `ichor approve node NAME`. The noun-first groups `cluster`, `machine`,
+  `node`, `patch`, `operation`, `config`, `etcd`, `cni` and `settings` are
+  gone, and no alias keeps the old names: a script that calls one fails with
+  `unknown command`. `auth`, `user` and `secrets` stay as groups, and
+  `discovery` becomes one of its own; `user set-password`,
+  `user revoke-sessions`, `auth login`, `auth logout`, `auth token` and
+  `secrets encrypt` are unchanged, and the other commands under them are
+  listed here. `adopt`, `init`, `ui`, `upgrade talos`, `upgrade kubernetes`,
+  `upgrade ichor` and `version` keep their names. `docs/reference/cli/` has the
+  whole surface.
+
+  | Before | Now |
+  |---|---|
+  | `cluster list` | `get clusters` |
+  | `cluster status NAME` | `get cluster NAME` |
+  | `cluster get NAME` | `describe cluster NAME` |
+  | `machine list` | `get nodes` |
+  | `machine get NAME`, `node get NAME` | `describe node NAME` |
+  | `machine approve`, `machine reject`, `machine reclaim` | `approve node`, `reject node`, `reclaim node` |
+  | `node reboot`, `node shutdown`, `node remove` | `reboot node`, `shutdown node`, `delete node` |
+  | `node restart-service NODE SERVICE` | `restart service NODE SERVICE` |
+  | `node logs`, `node pcap`, `node support-bundle` | `logs node`, `pcap`, `support-bundle` |
+  | `cluster shutdown` | `shutdown cluster` |
+  | `patch list`, `patch get NAME` | `get patches`, `describe patch NAME` |
+  | `patch create -f FILE`, `patch update -f FILE` | `apply -f FILE` |
+  | `patch preview`, `patch delete` | `preview`, `delete patch` |
+  | `operation list`, `operation get` | `get operations`, `describe operation` |
+  | `operation pause`, `operation resume`, `operation delete` | `pause operation`, `resume operation`, `delete operation` |
+  | `config apply` | `rollout config` |
+  | `config effective` | `describe config` |
+  | `etcd backup now` | `backup etcd` |
+  | `etcd snapshot`, `etcd defrag`, `etcd forfeit-leadership` | `snapshot etcd`, `defrag etcd`, `forfeit-leadership etcd` |
+  | `restore --live`, `restore --recover-cluster` | `restore etcd`, `restore cluster` |
+  | `cni bootstrap`, `cni upgrade`, `cni kube-proxy` | `bootstrap cni`, `upgrade cni`, `set kube-proxy` |
+  | `cni values get`, `set`, `edit`, `diff` | `get cni-values`, `apply cni-values -f FILE`, `edit cni-values`, `diff cni-values -f FILE` |
+  | `settings get`, `settings set` | `get settings`, `set settings` |
+  | `user list`, `get`, `create`, `update`, `delete` | `get users`, `describe user`, `create user`, `edit user`, `delete user` |
+  | `cluster rotate-ca`, `cluster rotate-keys` | `rotate ca`, `rotate keys` |
+  | `cluster bundle-export` | `export bundle` |
+  | `cluster credentials`, `cluster talosconfig`, `auth kubeconfig` | `create credentials`, `create talosconfig`, `create kubeconfig` |
+  | `auth status` | `auth whoami` |
+  | `cluster discovery add`, `list`, `remove` | `discovery add`, `discovery list`, `discovery remove` |
+
+- **Breaking: `restore` has two subcommands and no mode flags.** `restore
+  etcd` rewinds the running cluster to a snapshot, as `--live` did, and
+  `restore cluster` recovers a cluster whose control planes and etcd data are
+  gone, as `--recover-cluster` did. The flags `--live` and `--recover-cluster`
+  no longer exist, and `ichor restore` alone prints help. Each subcommand
+  takes only the flags that apply to it.
+- **Breaking: `-o FILE` is now `--out FILE`** on `snapshot etcd` (before:
+  `etcd snapshot`), `pcap` and `support-bundle`. `-o` is the global output
+  format (`yaml` or `json`), and these three used it for a file name, so the
+  same letter meant two things. A script that still passes `-o FILE` to one of
+  them fails with `invalid --output`.
+- **Breaking: an unknown word under a verb or a group is an error.**
+  `ichor get noedes` prints `unknown command "noedes" for "ichor get"` with the
+  nearest names and exits non-zero. It used to print the help page and exit
+  0, so a mistyped command in a script looked as if it had worked.
+- `apply -f FILE` is one command for what `patch create` and `patch update`
+  did. It creates the patch when none of that name exists in the namespace and
+  replaces its spec when one does, shows the impact first and asks for
+  confirmation as before. A caller who may create patches but not read them
+  gets the create; if the patch exists, the create is refused as already
+  existing.
+- `describe node` shows the node's record and, below it, its hardware, usage
+  and Kubernetes node when ichor-ui is reachable. It replaces `machine get`
+  and `node get`; without ichor-ui it shows the record and says why the rest
+  is missing.
+- `ichor --help` groups the commands (Get Started, Inspect, Change, Node and
+  Cluster Lifecycle, Maintenance, Troubleshooting, Access, Other), and every
+  command has an example. The reference pages list the commands in the same
+  groups, and a group's usage line reads `ichor get [command]`, since the group
+  does nothing without one.
+
+### Nodes
+
+- The CLI, the controller, the admission webhooks and ichor-ui say node where
+  they said machine: confirmations, plans, errors, command hints, Kubernetes
+  event and condition messages, admission denials and the screens of the UI. The
+  `TalosMachine` kind, its fields and the names of the CRDs are unchanged.
+  Condition types and event reasons are unchanged too, so something that
+  matches on a `type` or a `reason` keeps working. Something that matches on
+  the text of a message, a condition's `message` or the words of a denial, does
+  not.
+
+### Typed configuration
+
+- A `TalosConfigPatch` document can now be 64 of the 65 Talos document kinds
+  Ichor accepts, up from 7 (`SysctlConfig`, `KernelModuleConfig`, the
+  `v1alpha1` document, `VolumeConfig`, `UserVolumeConfig`, `RawVolumeConfig`
+  and `ResolverConfig`). The 57 added cover network links and routing (bond,
+  bridge, VRF, veth, dummy, Ethernet, BGP, blackhole routes, routing rules,
+  Layer 2 VIP, DHCPv6, static hosts, KubeSpan, probes, time sync), storage
+  (existing, external and swap volumes, LVM, RAID, filesystem scrub and trim,
+  zswap, the image cache), the node (sysctl, sysfs, udev, environment, etc
+  files, extension services, containers, event sinks, kernel log, OOM,
+  watchdog, PCI driver rebind, trusted roots, registry mirrors, image
+  verification) and Kubernetes (the API server, controller manager, CoreDNS,
+  network, node, KubePrism, Talos API access, inline and external manifests,
+  audit policy, authorizer, credential provider, kubelet, kube-proxy and
+  kube-scheduler). A document is `kind` plus one field named after it
+  (`SysctlConfig` has `sysctlConfig`). `docs/reference/crds/talosconfigpatch.md`
+  lists every kind.
+- The other 25 kinds Talos registers are not available, on purpose. 10 carry a
+  credential (registry authentication and TLS, the CA and signing keys,
+  the encryption key, WireGuard, SideroLink, Hetzner Cloud and the discovery
+  identity), and a custom resource is stored unencrypted in etcd. 12 are
+  rendered by Ichor from its own spec (links, VLANs, DHCPv4, the hostname,
+  the firewall, discovery, the security profile, the install, Flannel (Cilium
+  is the only CNI), and the API server's authentication configuration, whose
+  `configuration` replaces rather than merges, so a patch would drop Ichor's
+  own issuers). 3 have no schema, being free-form text or one configuration
+  per plugin (`CRIBaseRuntimeSpecConfig`, `CRICustomizationConfig` and
+  `KubeAdmissionControlConfig`); Pod Security exemptions and versions go in
+  `spec.security.podSecurity`.
+- `KubeStaticPodConfig` is the one accepted kind that is not in the CRD. The
+  Pod schema is 358,567 bytes of compact JSON in each of the two CRDs that
+  embed the union, against the 262,144 bytes that `kubectl apply` keeps in
+  its last-applied annotation, and a trimmed Pod without a security context,
+  host networking, host paths and capabilities would not do what the kind is
+  for. It stays accepted, and a later change in how the CRDs are installed can
+  ship it.
+- `KubeletConfig`, `KubeProxyConfig` and `KubeSchedulerConfig` carry a subset
+  of the upstream configuration: the fields an operator is documented to set on
+  a Talos node. The upstream types contain floating point numbers, a quantity
+  type and a list with no list type, which a CRD schema cannot express, and
+  the scheduler's is large. A Talos document that sets a field the subset does
+  not carry is refused, at any depth, naming the field, and so is one that
+  sets a field Talos protects in the kubelet (`authentication`,
+  `authorization`, `cgroupRoot`, `port`, `resolvConf`, `staticPodPath` and
+  others) or the `image` and `enabled` fields that Ichor owns (the image
+  follows `spec.kubernetesVersion`, kube-proxy's `enabled` is
+  `spec.cni.kubeProxy`, and a patch cannot switch the kube-scheduler off). The
+  scheduler's plugin arguments (`profiles[].pluginConfig`) cannot be set.
+  `kubectl` refuses a manifest with a field outside a subset, naming its path,
+  because it validates strictly by default; a client that does not ask for
+  strict validation has the field removed by the API server without being
+  told. The tables of omitted fields in `internal/tools/mirrorgen/omits.go`
+  are the list.
+- `KubeAuditPolicyConfig`, `KubeAuthorizerConfig` and
+  `KubeCredentialProviderConfig` carry their payload as the upstream
+  Kubernetes type, so nothing it can express is lost.
+  `KubeExternalManifestConfig` has no `headers` field: it fetches a manifest
+  from a URL that needs no authentication, and a Talos document that carries
+  `headers` loses them when it is converted to the typed form.
+- **Breaking for a patch that uses them:** the `v1alpha1` document no longer
+  has `machine.registries.config.<host>.tls.clientIdentity` or
+  `cluster.extraManifestHeaders`, in the `TalosConfigPatch` and `TalosCluster`
+  CRDs alike. They hold a private key and an `Authorization` header, and v0.2.4
+  only refused a change that set them. A stored patch that has either loses it
+  when the API server prunes it, and a node that relied on it loses the setting
+  at the next apply. `kubectl apply` of a manifest that still sets one is
+  refused. Nothing replaces them yet; set them on the node outside Ichor until
+  a reference to a Secret exists.
+- Admission of a document changed. The CRD now requires `kind` plus one field
+  (at least and at most two properties), and the webhook checks that the field
+  is the one `kind` names; it runs on create and on an update that changes
+  `spec.documents`, and the renderer repeats it. The CEL rules that did this
+  overran the API server's cost limit at 12 kinds. The messages are different:
+  a document with a second field is refused as
+  `Too many: 3: must have at most 2 items`, and one whose field does not match
+  its kind as `spec.documents[1]: kind "SysctlConfig" needs the field
+  sysctlConfig alone, but the document sets kernelModuleConfig`. With
+  `webhook.enabled=false` a mismatched document is stored, and each node it
+  reaches fails to render with the same message.
+
+### Go module
+
+- `go.mod` retracts v0.1.0, v0.1.1, v0.2.0, v0.2.1 and v0.2.2. `go get` and
+  `go mod tidy` do not move a module to one of them, a build that already
+  requires one keeps working, and `go list -m -u` reports the retraction.
+
+### Licensing
+
+- `NOTICE` names `api/v1alpha1/zz_generated.talosconfigpatchdocument.go`,
+  which holds the generated union and carries the MPL-2.0 header, with the
+  other files derived from Talos.
+- Every page of the docs site links the licences in its footer, and the site
+  publishes `NOTICE`, `LICENSE` and `THIRD-PARTY-NOTICES` as text files.
+- `THIRD-PARTY-NOTICES` lists the Sigstore public-good trusted root that the
+  binary embeds, and the build refuses a dependency under the GPL, LGPL, AGPL,
+  SSPL or BUSL.
+
+### Docs
+
+- The guides, concepts, getting started, the design document, the diagrams and
+  the README name the verb-first commands.
+
 ## v0.2.4 (2026-11-13)
 
 Fixes to removing a node and to how Ichor addresses one, and a check on config

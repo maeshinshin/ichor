@@ -35,6 +35,13 @@ The install disk can be given as `wwid:ID`, `serial:SERIAL`, a
 `ichor init --help` lists the rest, including the disk selectors and the
 discovery addresses.
 
+## Certificates for the endpoint
+
+Ichor does not configure this; Talos adds the endpoint to the certificate it
+issues on each control plane. So `kubectl` verifies against the endpoint with
+every pattern, including a name for `dns` and `loadBalancer`, and you do not
+need to add the endpoint to any certificate setting.
+
 ## The init.yaml file
 
 `ichor init -f init.yaml` reads the same settings from a file. `ichor init

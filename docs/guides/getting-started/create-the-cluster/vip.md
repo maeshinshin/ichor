@@ -15,7 +15,9 @@ answering for it.
 > between control planes by gratuitous ARP, and a router between them stops that.
 > On a network where this does not hold, the cluster can come up and look healthy
 > while the VIP does not answer. Pick a flat home or office network, not pod
-> networking or a routed subnet between the control planes.
+> networking or a routed subnet between the control planes. The Talos
+> [virtual IP page](https://docs.siderolabs.com/talos/v1.14/networking/advanced/vip)
+> states the same requirement: the switch, with no router in between.
 
 Pick a free address on that segment for the VIP. The first node keeps its own
 address, which the node endpoint (`--node-endpoint`) uses. With `--preset
@@ -23,7 +25,9 @@ single` a VIP works for one node too, and it is still recommended.
 
 The VIP is the endpoint for the set of control planes, which is what kubectl and
 the kubeconfig use. Do not use the VIP as a Talos API endpoint: `talosctl` and
-`--node-endpoint` name a machine's own address.
+`--node-endpoint` name a machine's own address. The VIP depends on etcd and the
+API server being healthy, so when either is down the VIP cannot be reached, and
+the Talos API is then the way to recover, which needs the machine's own address.
 
 ## Interactive
 

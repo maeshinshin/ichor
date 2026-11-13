@@ -102,7 +102,8 @@ People sign in to ichor-ui through an external OIDC provider (users appear as
 on (users appear as `ichor:<name>`). Both are accepted by the kube-apiserver, so
 RBAC and audit apply per user. A user's kubeconfig holds no secret: it runs
 `ichor auth token` as an exec plugin. See
-[Users and login](../guides/users-and-login.md).
+[Users and login](../guides/users-and-login.md) and
+[Sign-in and sessions](sign-in-and-sessions.md).
 
 Users never receive an admin talosconfig. Two paths hand Talos admin
 credentials to a person, both admin-only: the CA-rotation hand-off.

@@ -317,6 +317,17 @@ at the next login. A password is 12 to 128 bytes long, with no other rules.
 
 Users can change their own password in the account menu.
 
+Two rules keep the roles from being worn away:
+
+- A user may grant only roles they hold (admin: any); Kubernetes RBAC alone
+  used to decide this. A validating webhook on `ichorusers` applies the same rule
+  to a `kubectl` write made as an Ichor user; an external identity
+  stays gated by RBAC alone.
+- The last enabled admin cannot be deleted, disabled or demoted, in the UI, the CLI
+  or with `kubectl`. The `system:masters` override certificate below
+  is exempt, and so are the controller and the Kubernetes namespace deletion, so
+  deleting the `ichor-system` namespace still works.
+
 ### The `ichor user` commands
 
 They talk to ichor-ui directly at the issuer URL over https, with your login (a
@@ -405,6 +416,9 @@ The login cache is a credential on your machine. It is stored in
 After a Kubernetes CA rotation, a kubeconfig downloaded earlier fails TLS. Get
 a new one.
 
+How long a sign-in lasts, and what ends one early, is in
+[Sign-in and sessions](../concepts/sign-in-and-sessions.md).
+
 ### A read-only talosconfig for `talosctl`
 
 `operator` and `admin` can take a talosconfig whose client certificate has the
@@ -431,62 +445,9 @@ To give it to a group, bind a ClusterRole with that rule to it. Ichor offers no
 operations Ichor plans and records. For admin access to the node API use
 `ichor create credentials`.
 
-## What a sign-in is, and what ends it
+## Client addresses behind a load balancer
 
-- An ID token lasts 5 minutes by default (1 minute to 1 hour). ichor-ui checks
-  it against the user's `notBefore` on every request: **revoking sessions or
-  changing the password ends tokens issued before it**, here within 10 seconds
-  per replica (a cache). The kube-apiserver cannot do this check, so a token already given to
-  `kubectl` lives out its 5 minutes there.
-- The browser stays signed in for as long as the CLI would, not for 5 minutes.
-  The sign-in form asks for a refresh token, and the page trades it for a new
-  ID token about a minute before the current one ends (and when you come back to
-  a tab, and when a request is refused), until the **session lifetime**
-  (`ichorUI.users.refreshLifetime`, 12 hours by default, 1 hour to 30 days) since
-  you typed the password. It does not slide: after that you sign in again, even in
-  a tab you are using. Sign out (which revokes the refresh token at the issuer), a revoke-sessions, a password change or a
-  disabled user end it as before (the next refresh is refused and the tab
-  returns to the sign-in card). The refresh token lives in the tab's
-  `sessionStorage` next to the ID token, so closing the tab ends the browser
-  session; each tab has its own sign-in, and a tab duplicated by the browser
-  signs in again instead of sharing the original's session. There is no idle
-  timeout: an open tab on an unattended screen stays signed in until the
-  session lifetime, so lock the screen, or shorten `refreshLifetime`. The
-  sign-in with an external identity provider is unchanged.
-- A refresh token is single-use: every refresh returns a new one
-  and retires the old. Presenting a retired token ends the whole chain, which is
-  what a stolen copy looks like; the owner signs in again. The state is kept
-  in the user's entry of the `ichor-user-credentials` Secret, so all replicas
-  agree, and it never extends the session: the chain dies at the original
-  lifetime. Tokens issued before the upgrade that added this are accepted once
-  and then rotated.
-- Log and download streams end with "your sign-in expired" when the token does.
-- Wrong passwords slow down, they do not lock out. The counter is per
-  (client address, user name), so a stranger cannot lock `admin` out for you.
-  After 5 failures that pair waits 1 s, 2 s, 4 s and so on up to 15 minutes;
-  one address waits too after 30 failures across names (up to 1 minute), and
-  once a user has 30 failures within an hour from any addresses, every
-  sign-in of that user takes 2 s longer (never refused). Counters are kept per
-  replica, so with N replicas the free guesses are N times as many.
-  Behind a proxy or load balancer the client address is the proxy's unless you
-  list it in `ichorUI.users.trustedProxyCIDRs` (`--trusted-proxy-cidrs`), when
-  the rightmost `X-Forwarded-For` address outside the list is used (see
-  "Client addresses behind a load balancer" below). Password
-  hashing for sign-in has its own queue, so a flood of sign-ins gets `503
-  Retry-After` and cannot block a password change.
-- A refresh token does not survive an etcd restore. Its state is in the
-  `ichor-user-credentials` Secret, which `ichor restore` rewinds with the rest
-  of Kubernetes, so a token that was refreshed after the snapshot was taken is
-  a retired one in the restored Secret, and presenting it ends the chain (above).
-  This is expected, not a fault: sign in again (`ichor auth login`, or the
-  browser). Measured: after a live restore the admin's refresh token was
-  refused and a new sign-in worked. Users, passwords and roles are restored to
-  the snapshot's state as well, so a password changed after the snapshot is
-  the old one again.
-
-### Client addresses behind a load balancer
-
-The failed-login counters key on the address ichor-ui sees. If every client
+The failed-login counters (see [Sign-in and sessions](../concepts/sign-in-and-sessions.md#wrong-passwords-slow-down)) key on the address ichor-ui sees. If every client
 arrives with the same address, they share one counter: a stranger's wrong
 passwords for `admin` then slow `admin` down for everyone. This is the case
 whenever something between the client and the pod replaces the source address:
@@ -517,14 +478,6 @@ Pick one of these:
    an administrator can still be reached with `kubectl` and the override
    credential below. Pods inside the cluster have their own addresses and are
    not affected.
-- A user may grant only roles they hold (admin: any); Kubernetes RBAC alone
-  used to decide this. A validating webhook on `ichorusers` applies the same rule
-  to a `kubectl` write made as an Ichor user; an external identity
-  stays gated by RBAC alone.
-- The last enabled admin cannot be deleted, disabled or demoted, in the UI, the CLI
-  or with `kubectl`. The `system:masters` override certificate below
-  is exempt, and so are the controller and the Kubernetes namespace deletion, so
-  deleting the `ichor-system` namespace still works.
 
 ## Disable a user
 
@@ -538,17 +491,9 @@ has two parts:
 Ichor has no way to take back a token that is already issued. The 5 minute
 token lifetime is the limit.
 
-To end every existing session of a user, revoke their sessions. Changing a
-user's password also ends their earlier sessions. A session lasts at most the
-session lifetime (12 hours by default). Signing out in the browser (or
-`ichor auth logout`) revokes that session's refresh token at the issuer (RFC
-7009, `POST /oidc/revoke`) and then discards the tokens, so a copy of the
-refresh token someone took earlier stops working too. The ID token already
-issued is not revocable and ends within its 5 minutes. The revocation is best
-effort: if the issuer cannot be reached when you sign out, the sign-out still
-completes, and the refresh token then lasts to the end of its lifetime unless
-you revoke the user's sessions. A tab signed in before this was added has no
-revocation endpoint stored and only discards its tokens.
+To end every existing session of a user without disabling them, revoke their
+sessions (`ichor user revoke-sessions`). What ends a session, and what it leaves
+running for a few minutes, is in [Sign-in and sessions](../concepts/sign-in-and-sessions.md).
 
 ## Override
 

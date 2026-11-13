@@ -86,7 +86,7 @@ const check = (ok, what) => {
 
 try {
   let version
-  for (let i = 0; i < 100 && !version; i++) {
+  for (let i = 0; i < 300 && !version; i++) { // 30 s: a bound for a loaded machine, not an expected time
     try {
       version = await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()
     } catch {
@@ -118,7 +118,7 @@ try {
   await send('Browser.grantPermissions', { origin, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] })
 
   const loadedSince = async (since) => {
-    for (const end = Date.now() + 10000; loads === since; await sleep(20)) if (Date.now() > end) throw new Error('the page did not finish loading within 10 s')
+    for (const end = Date.now() + 30000; loads === since; await sleep(20)) if (Date.now() > end) throw new Error('the page did not finish loading within 30 s')
   }
   // An evaluate that a navigation interrupts is sent again once the page that replaces it has loaded.
   const ev = async (expression) => {
@@ -132,15 +132,28 @@ try {
       }
     }
   }
-  const until = async (expression, what, ms = 10000) => {
+  // Every wait polls for the state it needs and gives up only after `ms`, which is a bound for a loaded machine and not an
+  // expected time: a wait that succeeds costs what the page takes, so the bound can be generous.
+  const until = async (expression, what, ms = 20000) => {
     for (const end = Date.now() + ms; Date.now() < end; await sleep(100)) if (await ev(expression)) return true
     check(false, `timed out waiting for ${what}`)
     return false
   }
-  // Hydrated: every island has dropped its ssr attribute.
-  const ready = () => until(`document.readyState === 'complete' && !document.querySelector('astro-island[ssr]')`, 'hydration')
+  // Preact runs a component's effects, which is where the keyboard shortcuts are attached and where state read from storage
+  // is applied, after the next frame, not when the island has hydrated or its DOM has changed. A key pressed before that
+  // is lost (no listener yet, or the listener of the render before). A frame and a task after it is when they have run, and
+  // twice because an effect that sets state renders again and queues effects of its own.
+  const idle = async () => {
+    for (let i = 0; i < 2; i++) await ev(`new Promise((r) => requestAnimationFrame(() => setTimeout(r)))`)
+  }
+  // Hydrated: every island has dropped its ssr attribute and its effects have run.
+  const ready = async () => {
+    const ok = await until(`document.readyState === 'complete' && !document.querySelector('astro-island[ssr]')`, 'hydration')
+    await idle()
+    return ok
+  }
   const shot = async (name) => {
-    await sleep(400)
+    await sleep(400) // lets a transition finish for the picture; nothing is checked against it
     const { data } = await s('Page.captureScreenshot', { format: 'png' })
     const file = join(outDir, `${name}.png`)
     writeFileSync(file, Buffer.from(data, 'base64'))
@@ -191,17 +204,29 @@ try {
     if (type === 'click') for (const t of ['mousePressed', 'mouseReleased']) await s('Input.dispatchMouseEvent', { type: t, ...p, button: 'left', buttons: t === 'mousePressed' ? 1 : 0, clickCount: 1 })
     return true
   }
+  // Ctrl-K, the text, and the results with one selected: the dialog opens, the input takes the focus (the text goes to the
+  // focused element, so before that it is lost), the Pagefind index answers, and Enter opens the selected result (before one
+  // is selected it does nothing).
+  const search = async (text) => {
+    await key('k', 2)
+    const opened = await until(`!!document.querySelector('[data-slot=command-input]')`, 'the search dialog')
+    await until(`document.activeElement?.matches('[data-slot=command-input]')`, 'the search input to have the focus')
+    await s('Input.insertText', { text })
+    await until(`!!document.querySelector('[data-slot=command-item][aria-selected=true]')`, 'search results with one selected')
+    return opened
+  }
   const clipboard = () => ev(`navigator.clipboard.readText()`)
   // The clipboard is written, and a CSS transition ends, some time after the click or focus that causes it, so a fixed
   // sleep races them on a slow runner. Read until the value is `want` or 5 s pass, and return the last value read:
   // the check still compares it with `want`, so a value that never arrives fails and says what was there instead.
   const eventually = async (read, want) => {
     let got = await read()
-    for (const end = Date.now() + 5000; got !== want && Date.now() < end; got = await read()) await sleep(100)
+    for (const end = Date.now() + 20000; got !== want && Date.now() < end; got = await read()) await sleep(100)
     return got
   }
   const clipboardBecomes = (want) => eventually(clipboard, want)
   const key = async (k, modifiers = 0) => {
+    await idle()
     for (const type of ['keyDown', 'keyUp']) await s('Input.dispatchKeyEvent', { type, key: k, code: `Key${k.toUpperCase()}`, modifiers })
   }
 
@@ -236,15 +261,15 @@ try {
       const more = `document.querySelector('button[aria-label="More page actions"]')`
       // Open means the Radix content is in its open state: a menu that is closing still has its items in the page.
       const menuContent = `document.querySelector('[data-slot=dropdown-menu-content]')`
-      const menuOpen = () => until(`${menuContent}?.dataset.state === 'open' && document.querySelectorAll('[data-slot=dropdown-menu-item]').length >= 3`, 'the Copy page menu', 3000)
-      const menuClosed = () => until(`!${menuContent}`, 'the Copy page menu to close', 3000)
+      const menuOpen = () => until(`${menuContent}?.dataset.state === 'open' && document.querySelectorAll('[data-slot=dropdown-menu-item]').length >= 3`, 'the Copy page menu')
+      const menuClosed = () => until(`!${menuContent}`, 'the Copy page menu to close')
       check(await ev(`!![...document.querySelectorAll('article button')].find((b) => b.textContent.trim() === 'Copy page')`), `${tag}: the Copy page button exists`)
       await mouse(more)
       check(await menuOpen(), `${tag}: the Copy page menu opens`)
       check(await ev(`['Copy as Markdown', 'View as Markdown', 'Copy link'].every((t) => [...document.querySelectorAll('[data-slot=dropdown-menu-item]')].some((e) => e.textContent.includes(t)))`), `${tag}: the menu lists Copy as Markdown, View as Markdown and Copy link`)
       await shot(`${tag}-page-menu`)
       await mouse(item('Copy as Markdown'))
-      await until(`!!document.querySelector('[data-sonner-toast]')`, 'the toast', 3000)
+      await until(`!!document.querySelector('[data-sonner-toast]')`, 'the toast')
       check(await ev(`!!document.querySelector('[data-sonner-toast]')`), `${tag}: a toast confirms the copy`)
       const copied = await clipboard()
       check(copied.startsWith(`# ${title}`) && copied === mdText, `${tag}: Copy as Markdown puts the page's Markdown (starting "# ${title}") on the clipboard`)
@@ -267,34 +292,28 @@ try {
       const opacity = () => ev(`getComputedStyle(${anchor}).opacity`)
       if (!mobile) {
         await mouse(`document.querySelector('article h1')`, 'move')
-        await sleep(400)
-        const idle = await opacity()
-        check(idle === '0', `${tag}: heading links are hidden until hover (opacity ${idle})`)
+        const hidden = await eventually(opacity, '0') // the fade runs after the pointer has moved
+        check(hidden === '0', `${tag}: heading links are hidden until hover (opacity ${hidden})`)
         await mouse(`${anchor}.parentElement`, 'move')
-        await sleep(300)
         check((await eventually(opacity, '1')) === '1', `${tag}: a heading link shows on hover`)
         await shot(`${tag}-heading-hover`)
       }
       await ev(`${anchor}.focus()`)
-      await sleep(300)
       const focused = await eventually(opacity, '1')
       check(focused === '1', `${tag}: a heading link shows on keyboard focus (opacity ${focused})`)
       const hash = await ev(`${anchor}.getAttribute('href')`)
       await mouse(anchor)
-      await sleep(400)
+      await until(`location.hash === ${JSON.stringify(hash)}`, 'the address bar to take the heading link')
       check((await ev(`location.hash`)) === hash, `${tag}: clicking a heading link updates the address bar (${hash})`)
       check((await clipboardBecomes(`${origin}${base}${at.rotateKeys}${hash}`)) === `${origin}${base}${at.rotateKeys}${hash}`, `${tag}: clicking a heading link copies the URL with ${hash}`)
       await shot(`${tag}-heading-link`)
 
       // Search: the Pagefind index answers "rotate" with the key-rotation guide.
-      await key('k', 2)
-      check(await until(`!!document.querySelector('[data-slot=command-input]')`, 'the search dialog'), `${tag}: Ctrl-K opens search`)
-      await s('Input.insertText', { text: 'rotate' })
-      await until(`document.querySelectorAll('[data-slot=command-item]').length > 0`, 'search results')
+      check(await search('rotate'), `${tag}: Ctrl-K opens search`)
       check((await ev(`document.querySelectorAll('[data-slot=command-item]').length`)) > 0, `${tag}: search for "rotate" has results`)
       await shot(`${tag}-search`)
       await key('Enter')
-      check(await until(`location.pathname.startsWith(${JSON.stringify(base)}) && !location.pathname.endsWith('/${at.rotateKeys}') || location.hash !== ''`, 'navigation from a result', 5000), `${tag}: Enter opens the result`)
+      check(await until(`location.pathname.startsWith(${JSON.stringify(base)}) && !location.pathname.endsWith('/${at.rotateKeys}') || location.hash !== ''`, 'navigation from a result'), `${tag}: Enter opens the result`)
       await ready()
 
       // Relative links between Markdown files became site URLs that resolve.
@@ -307,7 +326,6 @@ try {
       // A code block's copy button (hovered), and what it copies.
       await open(at.createCluster)
       await mouse(`document.querySelector('article pre + div button')`, 'move')
-      await sleep(300)
       await shot(`${tag}-codeblock`)
       await mouse(`document.querySelector('article pre + div button')`)
       const code = await ev(`document.querySelector('article pre code').textContent`)
@@ -315,7 +333,6 @@ try {
 
       // Syntax highlighting: a YAML block has several token colours, taken from the theme that is on.
       await ev(`(() => { const p = [...document.querySelectorAll('article pre')].find((p) => p.textContent.includes('kind: InitConfig')); p.scrollIntoView({ block: 'center' }) })()`)
-      await sleep(300)
       const colours = await ev(`new Set([...[...document.querySelectorAll('article pre.astro-code')].find((p) => p.textContent.includes('kind: InitConfig')).querySelectorAll('span')].map((s) => getComputedStyle(s).color)).size`)
       check(colours > 2, `${tag}: a YAML block is highlighted (${colours} colours)`)
       await shot(`${tag}-highlight`)
@@ -350,39 +367,36 @@ try {
       await open(at.gettingStarted)
       check(await ev(`document.querySelector('article [role=alert]')?.textContent.includes('Unreleased (main)')`), `${tag}: next shows the "Unreleased (main)" banner`)
       await mouse(switcher)
-      check(await until(`!!${inMenu('v')}`, 'the version menu', 3000), `${tag}: the version switcher opens`)
+      check(await until(`!!${inMenu('v')}`, 'the version menu'), `${tag}: the version switcher opens`)
       check(await ev(`!!${inMenu('next (main)')} && !!${inMenu(`${latest.name} (latest)`)}`), `${tag}: the switcher lists next (main) and ${latest.name} (latest)`)
       await shot(`${tag}-version-switcher`)
       await mouse(inMenu(latest.name))
-      await until(`location.pathname === '${root}${latest.path}${at.gettingStarted}'`, 'the same page in the release', 5000)
+      await until(`location.pathname === '${root}${latest.path}${at.gettingStarted}'`, 'the same page in the release')
       check(await ev(`location.pathname`) === `${root}${latest.path}${at.gettingStarted}`, `${tag}: switching keeps the page path when it exists in ${latest.name}`)
       await ready()
       check(!(await ev(`!!document.querySelector('article [role=alert]')`)), `${tag}: the newest release has no banner`)
       await open(at.architecture)
       const there = (await fetch(origin + root + latest.path + at.architecture, { method: 'HEAD' })).ok
       await mouse(switcher)
-      await until(`!!${inMenu('v')}`, 'the version menu', 3000)
+      await until(`!!${inMenu('v')}`, 'the version menu')
       await mouse(inMenu(latest.name))
-      await until(`location.pathname.startsWith('${root}${latest.path}')`, 'the release', 5000)
+      await until(`location.pathname.startsWith('${root}${latest.path}')`, 'the release')
       check(await ev(`location.pathname`) === `${root}${latest.path}${there ? at.architecture : ''}`, `${tag}: switching to a page ${latest.name} lacks goes to its overview (page there: ${there})`)
       await ready()
-      await key('k', 2)
-      await until(`!!document.querySelector('[data-slot=command-input]')`, 'the search dialog', 3000)
-      await s('Input.insertText', { text: 'adopt' })
-      await until(`document.querySelectorAll('[data-slot=command-item]').length > 0`, 'search results')
+      await search('adopt')
       await key('Enter')
-      await until(`!location.pathname.endsWith('${root}${latest.path}')`, 'a search result', 5000)
+      await until(`!location.pathname.endsWith('${root}${latest.path}')`, 'a search result')
       check((await ev(`location.pathname`)).startsWith(`${root}${latest.path}`), `${tag}: search in ${latest.name} stays in that version`)
       await ready()
       fakeNewer.on = true // a release newer than this build exists: the old-version banner
       await go(`${origin}${root}${latest.path}${at.gettingStarted}`)
       await ready()
-      await until(`!!document.querySelector('article [role=alert]')`, 'the old-version banner', 3000)
+      await until(`!!document.querySelector('article [role=alert]')`, 'the old-version banner')
       const banner = await ev(`document.querySelector('article [role=alert]')?.textContent`)
       check(banner?.includes(`You are viewing the docs for ${latest.name}`) && banner.includes('The latest is v9.9.9'), `${tag}: an old version warns "${banner}"`)
       await shot(`${tag}-old-version-banner`)
       await open(at.gettingStarted)
-      await until(`document.querySelector('article [role=alert]')?.textContent.includes('v9.9.9')`, 'the latest release in the next banner', 3000)
+      await until(`document.querySelector('article [role=alert]')?.textContent.includes('v9.9.9')`, 'the latest release in the next banner')
       check(await ev(`document.querySelector('article [role=alert]')?.textContent.includes('The latest release is v9.9.9')`), `${tag}: next's banner names the latest release`)
       fakeNewer.on = false
 
@@ -391,18 +405,18 @@ try {
         const w = () => ev(`document.querySelector('article').getBoundingClientRect().width`)
         const before = await w()
         await click('[data-slot=sidebar-trigger]')
-        await sleep(500)
+        await until(`document.querySelector('article').getBoundingClientRect().width > ${before}`, 'the content to widen') // the sidebar slides out
         check((await w()) > before, `${tag}: content widens when the sidebar is hidden`)
         await shot(`${tag}-sidebar-hidden`)
         await open(at.rotateKeys)
         await until(`document.querySelector('[data-slot=sidebar]')?.dataset.state === 'collapsed'`, 'the remembered sidebar state')
         check(await ev(`document.querySelector('[data-slot=sidebar]')?.dataset.state === 'collapsed'`), `${tag}: hidden sidebar is remembered`)
         await key('b', 2)
-        await until(`document.querySelector('[data-slot=sidebar]')?.dataset.state === 'expanded'`, 'Ctrl-B', 3000)
+        await until(`document.querySelector('[data-slot=sidebar]')?.dataset.state === 'expanded'`, 'Ctrl-B')
         check(await ev(`document.querySelector('[data-slot=sidebar]')?.dataset.state === 'expanded'`), `${tag}: Ctrl-B shows the sidebar again`)
         // Code blocks get a copy button and GitHub alerts render as the preactcn Alert.
         await open(at.contributing)
-        await until(`!!document.querySelector('article pre + div [aria-label="Copy code"]')`, 'the copy button', 3000)
+        await until(`!!document.querySelector('article pre + div [aria-label="Copy code"]')`, 'the copy button')
         check(await ev(`!!document.querySelector('article pre + div [aria-label="Copy code"]')`), `${tag}: code blocks have a copy button`)
         check(await ev(`!!document.querySelector('article [data-slot=alert]')`), `${tag}: a GitHub alert renders as an Alert`)
         await shot(`${tag}-contributing`)
@@ -417,7 +431,7 @@ try {
         check(await until(`!!document.querySelector('[data-mobile=true]')`, 'the drawer'), `${tag}: the menu button opens the drawer`)
         await shot(`${tag}-drawer`)
         await key('Escape')
-        await sleep(400)
+        await until(`!document.querySelector('[data-mobile=true]')`, 'the drawer to close')
         await ev(`[...document.querySelectorAll('button')].find((b) => b.textContent.includes('On this page'))?.click()`)
         await shot(`${tag}-toc`)
         check(await ev(`document.documentElement.scrollWidth <= window.innerWidth`), `${tag}: architecture page has no sideways scroll`)
@@ -430,7 +444,7 @@ try {
         await open(route)
         const imgs = `[...document.querySelectorAll('article img[src*=".drawio.svg"]')]`
         const shown = `${imgs}.filter((i) => i.getClientRects().length)`
-        await until(`${imgs}.length >= 2 && ${imgs}.length % 2 === 0 && ${imgs}.every((i) => i.complete)`, `the ${name} images`, 5000)
+        await until(`${imgs}.length >= 2 && ${imgs}.length % 2 === 0 && ${imgs}.every((i) => i.complete)`, `the ${name} images`)
         check(await ev(`${imgs}.length >= 2 && ${imgs}.length % 2 === 0 && ${shown}.length === ${imgs}.length / 2`), `${tag}: ${name} has a light and a dark image of each diagram, one visible`)
         check(await ev(`${shown}.every((i) => i.src.endsWith('.${theme}.drawio.svg') && i.naturalWidth > 0)`), `${tag}: ${name} shows its ${theme} images, loaded`)
         check(await ev(`${shown}.every((i) => i.alt.length > 40 && !!i.closest('p')?.nextElementSibling?.textContent.trim())`), `${tag}: ${name} has alt text and a caption for each diagram`)

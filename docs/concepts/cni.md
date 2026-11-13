@@ -36,7 +36,7 @@ The values that Cilium runs with are built in three layers, and a later layer
 wins. Your layer is `spec.cni.cilium.values` on the
 [`TalosCluster`](../reference/crds/taloscluster.md).
 
-![The three layers of Cilium values. Ichor's defaults come first. Your layer, spec.cni.cilium.values, which only ichor-admin can write, replaces the defaults. The keys Ichor owns are applied last and always win: the settings Talos requires, the KubePrism address, kubeProxyReplacement, tunnelProtocol and the five secretsNamespace name keys. Setting one of them is refused. The result is the values of the Helm release cilium.](../images/cni-values.light.drawio.svg)
+![The three layers of Cilium values. Ichor's defaults come first. Your layer, spec.cni.cilium.values, which only ichor-admin can write, replaces the defaults. The keys Ichor owns are applied last and always win: the settings Talos requires, the KubePrism address (set only when kube-proxy is replaced), kubeProxyReplacement, tunnelProtocol and the five secretsNamespace name keys. Setting one of them is refused. The result is the values of the Helm release cilium.](../images/cni-values.light.drawio.svg)
 
 *Ichor's defaults, then your layer, then the keys Ichor owns.*
 

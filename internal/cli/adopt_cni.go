@@ -270,8 +270,9 @@ func checkNoCNIPreconditions(r *cniReport, kubePrism map[string]KubePrismFacts, 
 	if len(bad) > 0 {
 		slices.Sort(bad)
 
-		return fmt.Errorf("this cluster has no CNI, so Ichor must install Cilium, and Cilium reaches the API through KubePrism on port 7445, "+
-			"which is not enabled there on %s. Enable KubePrism (%s, port 7445) with your usual tool, then run adopt again",
+		return fmt.Errorf("this cluster has no CNI, so Ichor must install Cilium, which needs KubePrism on port 7445 on every node in both kube-proxy modes "+
+			"(with kube-proxy replaced, Cilium also reaches the API through it), but KubePrism is not enabled there on %s. "+
+			"Enable KubePrism (%s, port 7445) with your usual tool, then run adopt again",
 			strings.Join(bad, ", "), kubePrismSetting(contract))
 	}
 

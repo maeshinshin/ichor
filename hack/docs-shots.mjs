@@ -208,12 +208,28 @@ try {
   // focused element, so before that it is lost), the Pagefind index answers, and Enter opens the selected result (before one
   // is selected it does nothing).
   const search = async (text) => {
-    await key('k', 2)
-    const opened = await until(`!!document.querySelector('[data-slot=command-input]')`, 'the search dialog')
+    const opened = await press('k', 2, `!!document.querySelector('[data-slot=command-input]')`, 'the search dialog')
     await until(`document.activeElement?.matches('[data-slot=command-input]')`, 'the search input to have the focus')
     await s('Input.insertText', { text })
     await until(`!!document.querySelector('[data-slot=command-item][aria-selected=true]')`, 'search results with one selected')
     return opened
+  }
+  // A key that nothing receives changes nothing, so a press whose effect has not shown after 2 s is sent again (twice at most):
+  // there is no state it could undo. Each repeat is reported, so a shortcut that keeps needing one shows in the log. When the
+  // last press still has no effect the check fails and says what had the focus.
+  const press = async (k, modifiers, expression, what) => {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      await key(k, modifiers)
+      for (const end = Date.now() + (attempt < 3 ? 2000 : 20000); Date.now() < end; await sleep(100)) {
+        if (await ev(expression)) {
+          if (attempt > 1) console.log(`note: ${what} needed ${attempt} presses of ${k}`)
+          return true
+        }
+      }
+    }
+    const state = await ev(`JSON.stringify({ hasFocus: document.hasFocus(), visible: document.visibilityState, active: document.activeElement?.tagName, url: location.pathname })`)
+    check(false, `timed out waiting for ${what} after 3 presses of ${k} (${state})`)
+    return false
   }
   const clipboard = () => ev(`navigator.clipboard.readText()`)
   // The clipboard is written, and a CSS transition ends, some time after the click or focus that causes it, so a fixed
@@ -411,8 +427,7 @@ try {
         await open(at.rotateKeys)
         await until(`document.querySelector('[data-slot=sidebar]')?.dataset.state === 'collapsed'`, 'the remembered sidebar state')
         check(await ev(`document.querySelector('[data-slot=sidebar]')?.dataset.state === 'collapsed'`), `${tag}: hidden sidebar is remembered`)
-        await key('b', 2)
-        await until(`document.querySelector('[data-slot=sidebar]')?.dataset.state === 'expanded'`, 'Ctrl-B')
+        await press('b', 2, `document.querySelector('[data-slot=sidebar]')?.dataset.state === 'expanded'`, 'Ctrl-B')
         check(await ev(`document.querySelector('[data-slot=sidebar]')?.dataset.state === 'expanded'`), `${tag}: Ctrl-B shows the sidebar again`)
         // Code blocks get a copy button and GitHub alerts render as the preactcn Alert.
         await open(at.contributing)

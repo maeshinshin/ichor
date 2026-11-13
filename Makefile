@@ -251,6 +251,9 @@ demo-images-build: images-build-core ## Compile the three images into OCI_DIR, t
 .PHONY: demo-images-push
 demo-images-push: images-push-core images-push-installer ## Push the images from demo-images-build (DIGEST_FILE=<path> receives repo@digest lines).
 
+# KO_DOCKER_REPO=kind.local makes ko load each image into this kind cluster itself, and ko reads KIND_CLUSTER_NAME from the environment.
+KIND_CLUSTER_NAME ?= kind
+
 .PHONY: images-kind
 images-kind: ui-build ## Build the controller and ichor-ui for this machine and load them into the kind cluster (KIND_CLUSTER_NAME) as kind.local/<name>:latest.
 	for n in ichor-controller:./cmd ichor-ui:./cmd/ichor-ui; do \

@@ -33,6 +33,7 @@ import (
 var secretsCmd = &cobra.Command{
 	Use:     "secrets",
 	GroupID: groupAccess,
+	RunE:    groupRunE,
 	Short:   "Manage the local secrets bundle file",
 	Example: `  ichor secrets encrypt prod`,
 }

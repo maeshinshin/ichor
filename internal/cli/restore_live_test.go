@@ -91,8 +91,8 @@ func TestRestoreEtcdIsRegisteredBesideRestoreCluster(t *testing.T) {
 		}
 	}
 
-	if restoreCmd.Runnable() {
-		t.Error("ichor restore without etcd or cluster must print help, not pick a mode")
+	if err := restoreCmd.RunE(restoreCmd, []string{"etcd-live"}); err == nil {
+		t.Error("ichor restore without etcd or cluster must not pick a mode")
 	}
 }
 

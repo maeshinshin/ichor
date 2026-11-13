@@ -47,6 +47,7 @@ var upgradeList bool
 var upgradeCmd = &cobra.Command{
 	Use:     "upgrade",
 	GroupID: groupMaintain,
+	RunE:    groupRunE,
 	Short:   "Upgrade the cluster's Talos, Kubernetes or Cilium, or Ichor itself",
 	Example: `  ichor upgrade talos --list
   ichor upgrade kubernetes v1.36.3 --cluster prod --follow`,

@@ -99,12 +99,9 @@ ichor init \
 ```
 
 - `--cluster`, `--node-endpoint`, `--endpoint-address` and `--install-disk`
-  are required. On a terminal, `ichor init` asks for any of them you leave
-  out; the install disk is chosen from the disks the node reports, and typing
-  narrows a list. Esc or Ctrl-C cancels with nothing written. The prompts are
-  drawn on standard error. Without a terminal, a missing one is an error. `--node-endpoint` is the node's Talos
-  API (`host:port`); the install disk can also be `wwid:ID`, `serial:SERIAL`
-  or a `/dev/disk/by-id/` path.
+  are required. `--node-endpoint` is the node's Talos API (`host:port`); the
+  install disk can also be `wwid:ID`, `serial:SERIAL` or a
+  `/dev/disk/by-id/` path.
 - `--endpoint-type` is `vip` by default, which expects a free address on the
   nodes' network as `--endpoint-address`. `node` uses the node's own address,
   which is simplest for one control plane.

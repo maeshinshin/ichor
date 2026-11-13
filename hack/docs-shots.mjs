@@ -209,6 +209,7 @@ try {
   // is selected it does nothing).
   const search = async (text) => {
     const opened = await press('k', 2, `!!document.querySelector('[data-slot=command-input]')`, 'the search dialog')
+    if (!opened) return false
     await until(`document.activeElement?.matches('[data-slot=command-input]')`, 'the search input to have the focus')
     await s('Input.insertText', { text })
     await until(`!!document.querySelector('[data-slot=command-item][aria-selected=true]')`, 'search results with one selected')

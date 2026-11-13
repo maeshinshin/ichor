@@ -33,9 +33,9 @@ certificate in the cluster.
 
 ## Interactive
 
-Run `ichor init` and pick `loadBalancer` from the endpoint type list. The
-endpoint address prompt says `a hostname is expected here`; type the name the
-load balancer answers on. The node address and the install disk are asked as
+Run `ichor init` and pick `loadBalancer` from the endpoint type list. At the
+endpoint address prompt, type the IP address or the hostname the load balancer
+answers on. The node address and the install disk are asked as
 described on the [Virtual IP](vip.md#interactive) page.
 
 ## `init.yaml`
@@ -69,8 +69,8 @@ ichor init --cluster demo \
 
 - `--cluster`, `--node-endpoint`, `--endpoint-address` and `--install-disk` are
   required.
-- `--endpoint-address` is the load balancer's name for this type. Use the name
-  the forwarder answers on, not a machine's address.
+- `--endpoint-address` is the IP address or hostname the load balancer answers
+  on. Use the forwarder's address, not a machine's address.
 - `--node-endpoint` is still the first node's own Talos API (`host:port`).
 - If the first node needs a static address or a named link, the network flags
   (`--nic`, `--address`, `--gateway`, `--dns`, `--vlan`) are the same as on the

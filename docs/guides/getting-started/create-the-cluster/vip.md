@@ -11,10 +11,11 @@ nodes and Ichor's controller keep using one address whichever control plane is
 answering for it.
 
 > [!IMPORTANT]
-> A VIP needs the control planes on one shared layer-2 segment, with no router
-> between them. On a network where this does not hold, the cluster can come up
-> and look healthy while the VIP does not answer. Pick a flat home or office
-> network, not pod networking or a routed subnet between the control planes.
+> A VIP needs the control planes on the same layer-2 segment. The address moves
+> between control planes by gratuitous ARP, and a router between them stops that.
+> On a network where this does not hold, the cluster can come up and look healthy
+> while the VIP does not answer. Pick a flat home or office network, not pod
+> networking or a routed subnet between the control planes.
 
 Pick a free address on that segment for the VIP. The first node keeps its own
 address, which the node endpoint (`--node-endpoint`) uses. With `--preset
@@ -22,9 +23,7 @@ single` a VIP works for one node too, and it is still recommended.
 
 The VIP is the endpoint for the set of control planes, which is what kubectl and
 the kubeconfig use. Do not use the VIP as a Talos API endpoint: `talosctl` and
-`--node-endpoint` name a machine's own address. The
-[Talos production notes](https://docs.siderolabs.com/talos/v1.14/getting-started/prodnotes)
-describe the requirements for the cluster endpoint.
+`--node-endpoint` name a machine's own address.
 
 ## Interactive
 

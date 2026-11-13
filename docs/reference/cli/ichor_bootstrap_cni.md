@@ -18,11 +18,12 @@ ichor adopt, which recognises this Cilium as Ichor's and does not take it over.
 It refuses unless the cluster has no CNI: no CNI workload, no CiliumNode CRD, and every node
 NotReady with the network-plugin message. It has no Talos credential, so it takes Talos's
 cluster.network.cni.name to be none (the only way a cluster ends up like this) and reads nothing
-else from Talos: --kube-proxy says whether Cilium replaces kube-proxy (replaced: kube-proxy is
-disabled in Talos) and, in either mode, Cilium reaches the API through KubePrism on port 7445,
-which must be enabled on every node (adopt checks this again later). --tunnel (vxlan or geneve) is
-immutable afterwards. --cilium-values is a YAML file of Cilium Helm values merged like
-spec.cni.cilium.values; Ichor-owned keys are refused.
+else from Talos: --kube-proxy says whether Cilium replaces kube-proxy. Replaced: kube-proxy is
+disabled in Talos, and Cilium reaches the API through KubePrism on port 7445. Enabled: Cilium's
+API address is the chart's default. In both modes KubePrism must be enabled on port 7445 on every
+node (adopt checks this again later). --tunnel (vxlan or geneve) is immutable afterwards.
+--cilium-values is a YAML file of Cilium Helm values merged like spec.cni.cilium.values;
+Ichor-owned keys are refused.
 
 It shows what it will do and asks for confirmation unless --yes. Running it again is safe.
 

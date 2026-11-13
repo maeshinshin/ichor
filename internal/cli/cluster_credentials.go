@@ -69,7 +69,7 @@ hours and --read-only makes the talosconfig os:reader instead of os:admin, for a
 change a node.
 
 The server and context names are copied from your current kubeconfig, the Talos endpoints from the
-cluster's control-plane machines (or --talos-endpoints, or your current talosconfig). The files are
+cluster's control-plane nodes (or --talos-endpoints, or your current talosconfig). The files are
 written next to your current kubeconfig and talosconfig with the suffix ` + credentialsSuffix + `
 (never over them), unless --kubeconfig-out and --talosconfig-out say otherwise.
 
@@ -350,7 +350,7 @@ func init() {
 	f.StringVar(&clusterCredentialsOpts.TalosconfigOut, "talosconfig-out", "",
 		"where to write the talosconfig (default: your current talosconfig's path plus "+credentialsSuffix+")")
 	f.StringSliceVar(&clusterCredentialsOpts.TalosEndpoints, "talos-endpoints", nil,
-		"the Talos API endpoints for the talosconfig (default: the cluster's control-plane machines, else your current talosconfig's)")
+		"the Talos API endpoints for the talosconfig (default: the cluster's control-plane nodes, else your current talosconfig's)")
 	f.DurationVar(&clusterCredentialsOpts.TTL, "ttl", 0,
 		"how long the client certificates in the files are valid; the default and the maximum is "+credentials.MaxLifetime.String()+
 			" (a rotation hand-off must outlive the rotation)")

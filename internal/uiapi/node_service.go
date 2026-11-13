@@ -107,7 +107,7 @@ func (s *Server) GetEffectiveConfig(
 		// changing), so an unapproved or otherwise role-less machine is
 		// refused before any rendering is attempted, not after.
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("machine %q has no role yet; approve it before requesting its effective configuration", namespacedName(ref)))
+			fmt.Errorf("node %q has no role yet; approve it before requesting its effective configuration", namespacedName(ref)))
 	}
 
 	bundle, err := s.renderBundle(ctx, cluster)
@@ -172,7 +172,7 @@ func (s *Server) StreamNodeLogs(
 	}
 
 	if len(refs) > maxLogMachines {
-		return invalid("at most %d machines per log stream", maxLogMachines)
+		return invalid("at most %d nodes per log stream", maxLogMachines)
 	}
 
 	// The same machine twice would double its lines and its connections.
@@ -345,7 +345,7 @@ func (s *Server) openNodeClient(
 ) (NodeTalosClient, func(), error) {
 	tc, err := s.NodeTalosClient(ctx, cluster, m, id)
 	if err != nil {
-		return nil, nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("connecting to machine's Talos API: %w", err))
+		return nil, nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("connecting to node's Talos API: %w", err))
 	}
 
 	return tc, closeFunc(tc), nil

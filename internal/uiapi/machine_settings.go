@@ -47,7 +47,7 @@ func networkFromPB(in *pb.MachineNetwork, identity ichorv1alpha1.TalosMachineIde
 	}
 
 	if len(identity.MACAddresses) > 0 && !containsMAC(identity.MACAddresses, in.GetMac()) {
-		return nil, fmt.Errorf("network.mac %s is not one of the machine's discovered MAC addresses (%s)",
+		return nil, fmt.Errorf("network.mac %s is not one of the node's discovered MAC addresses (%s)",
 			in.GetMac(), strings.Join(identity.MACAddresses, ", "))
 	}
 

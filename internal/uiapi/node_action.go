@@ -106,7 +106,7 @@ func invalid(format string, args ...any) error {
 //nolint:gocyclo // one switch over the actions, each a few lines
 func (s *Server) planNode(ctx context.Context, req *pb.NodeActionRequest) (*opPlan, error) {
 	if req == nil || req.GetMachine().GetName() == "" {
-		return nil, invalid("a node operation needs the machine")
+		return nil, invalid("a node operation needs the node")
 	}
 
 	action, err := nodeActionToSpec(req.GetAction())
@@ -188,7 +188,7 @@ func (s *Server) planNode(ctx context.Context, req *pb.NodeActionRequest) (*opPl
 func (s *Server) approvedControlPlanes(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine) (int, error) {
 	var list ichorv1alpha1.TalosMachineList
 	if err := s.List(ctx, &list, client.InNamespace(cluster.Namespace)); err != nil {
-		return 0, mapListError("machines", err)
+		return 0, mapListError("nodes", err)
 	}
 
 	n := 0
@@ -311,9 +311,9 @@ func removeWarning(powerOff bool, wipeMode string) string {
 		wiped = "The node's system disk and every user disk are wiped."
 	}
 
-	after := "It reboots into maintenance mode and shows up as a new pending machine, so you can add it again."
+	after := "It reboots into maintenance mode and shows up as a new pending node, so you can add it again."
 	if powerOff {
-		after = "It is powered off. To add it again, power it on: it boots into maintenance mode and shows up as a new pending machine."
+		after = "It is powered off. To add it again, power it on: it boots into maintenance mode and shows up as a new pending node."
 	}
 
 	return "This cannot be undone. The node leaves the cluster, its Kubernetes Node is deleted and Ichor deletes this machine. " + wiped + " " + after
@@ -325,7 +325,7 @@ func removalSteps(isCP bool, wipe string) []string {
 		steps = append(steps, "Remove the node's etcd member.")
 	}
 
-	return append(steps, wipe, "Delete the Kubernetes Node.", "Delete the machine from Ichor.")
+	return append(steps, wipe, "Delete the Kubernetes Node.", "Delete the node from Ichor.")
 }
 
 // nodeBlocked is the first reason the action cannot start now, or "". The checks that need the
@@ -339,9 +339,9 @@ func (s *Server) nodeBlocked(ctx context.Context, np *nodePlan, cluster *ichorv1
 
 	switch {
 	case !m.Spec.IsApproved():
-		return fmt.Sprintf("machine %q is not approved, so it is not a node of the cluster yet", m.Name), nil
+		return fmt.Sprintf("node %q is not approved, so it is not a node of the cluster yet", m.Name), nil
 	case !m.DeletionTimestamp.IsZero():
-		return fmt.Sprintf("machine %q is being removed", m.Name), nil
+		return fmt.Sprintf("node %q is being removed", m.Name), nil
 	case action == ichorv1alpha1.NodeActionRestartService && np.spec.Service == "":
 		return "choose the service to restart: " + strings.Join(nodeServices, ", "), nil
 	case action == ichorv1alpha1.NodeActionRestartService && !slices.Contains(nodeServices, np.spec.Service):
@@ -413,11 +413,11 @@ func (s *Server) createNodeOperation(ctx context.Context, p *opPlan) (*pb.Create
 
 	if np.action == ichorv1alpha1.NodeActionReset {
 		if np.spec.Confirm != np.machine.Name {
-			return nil, invalid("type the machine name %q to confirm the reset", np.machine.Name)
+			return nil, invalid("type the node name %q to confirm the reset", np.machine.Name)
 		}
 
 		if !override {
-			return nil, invalid("a reset needs the override: it is checked against the override permission on the machine")
+			return nil, invalid("a reset needs the override: it is checked against the override permission on the node")
 		}
 	}
 
@@ -472,12 +472,12 @@ func (s *Server) RemoveMachine(
 
 	m := p.node.machine
 	if c := req.Msg.GetConfirm(); c != m.Name {
-		return nil, invalid("type the machine name %q to confirm the removal", m.Name)
+		return nil, invalid("type the node name %q to confirm the removal", m.Name)
 	}
 
 	// The remove wipes the node, so it needs the override like a reset.
 	if req.Msg.GetOverride() == nil {
-		return nil, invalid("a remove wipes the node: it needs the override, checked against the override permission on the machine")
+		return nil, invalid("a remove wipes the node: it needs the override, checked against the override permission on the node")
 	}
 
 	if err := s.authorizeOverride(ctx, m); err != nil {
@@ -504,7 +504,7 @@ func (s *Server) RemoveMachine(
 	}
 
 	if err := s.Delete(ctx, m, client.Preconditions{UID: &m.UID}); err != nil {
-		return nil, mapOperationWriteError("removing machine", namespacedName(ref), err)
+		return nil, mapOperationWriteError("removing node", namespacedName(ref), err)
 	}
 
 	return connect.NewResponse(&pb.RemoveMachineResponse{Audit: s.opAudit(ctx, "remove", objectRef(m.Namespace, m.Name))}), nil

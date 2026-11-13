@@ -112,12 +112,12 @@ func releaseHold(
 
 		talos, err := deps.DialTalos(ctx, m.DialEndpoint())
 		if err != nil {
-			return released, fmt.Errorf("adopt: dialing machine %q at %q: %w", m.Name, m.DialEndpoint(), err)
+			return released, fmt.Errorf("adopt: dialing node %q at %q: %w", m.Name, m.DialEndpoint(), err)
 		}
 
 		live, err := talos.CurrentConfig(ctx)
 		if err != nil {
-			return released, fmt.Errorf("adopt: reading machine %q's live configuration: %w", m.Name, err)
+			return released, fmt.Errorf("adopt: reading node %q's live configuration: %w", m.Name, err)
 		}
 
 		plan, err := buildAdoptPlan(&cluster, &m, bundle, patches, live, sys, own(n))
@@ -126,7 +126,7 @@ func releaseHold(
 		}
 
 		if plan.Patch != nil || len(plan.UnrepresentablePaths) > 0 {
-			return released, fmt.Errorf("adopt: machine %q still drifts outside what Ichor owns (%s); its hold stays, and so does the hold of every machine after it",
+			return released, fmt.Errorf("adopt: node %q still drifts outside what Ichor owns (%s); its hold stays, and so does the hold of every node after it",
 				m.Name, strings.Join(append(append([]string{}, plan.UnrepresentablePaths...), driftKinds(plan)...), ", "))
 		}
 
@@ -134,10 +134,10 @@ func releaseHold(
 		delete(m.Annotations, ichorv1alpha1.TalosMachineHoldApplyAnnotation)
 
 		if err := deps.K8s.Patch(ctx, &m, client.MergeFrom(before)); err != nil {
-			return released, fmt.Errorf("adopt: releasing the hold on machine %q: %w", m.Name, err)
+			return released, fmt.Errorf("adopt: releasing the hold on node %q: %w", m.Name, err)
 		}
 
-		_, _ = fmt.Fprintf(deps.Stderr, "adopt: released the hold on machine %q\n", m.Name)
+		_, _ = fmt.Fprintf(deps.Stderr, "adopt: released the hold on node %q\n", m.Name)
 
 		released++
 
@@ -149,7 +149,7 @@ func releaseHold(
 		// The hold is already off and nothing reboots a node on its own, so go on to the next
 		// machine; a rerun of adopt skips the machines whose hold is gone.
 		if reboot {
-			_, _ = fmt.Fprintf(deps.Stderr, "adopt: machine %q needs a reboot to apply a pending change; run `ichor rollout config --cluster %s`; adopt goes on with the other machines\n",
+			_, _ = fmt.Fprintf(deps.Stderr, "adopt: node %q needs a reboot to apply a pending change; run `ichor rollout config --cluster %s`; adopt goes on with the other nodes\n",
 				m.Name, clusterName)
 		}
 	}
@@ -207,9 +207,9 @@ func waitMachineReleased(ctx context.Context, deps adoptDeps, key types.Namespac
 		}
 
 		if sleepCtx(ctx, interval) != nil {
-			return false, fmt.Errorf("adopt: machine %q did not become Ready within %s after its hold was released; "+
-				"the machines after it stay held; if it reports a pending change, run `ichor rollout config`; "+
-				"adopt can be run again, it skips the machines already released", key.Name, wait)
+			return false, fmt.Errorf("adopt: node %q did not become Ready within %s after its hold was released; "+
+				"the nodes after it stay held; if it reports a pending change, run `ichor rollout config`; "+
+				"adopt can be run again, it skips the nodes already released", key.Name, wait)
 		}
 	}
 }

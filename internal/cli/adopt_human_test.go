@@ -81,7 +81,7 @@ func TestRunAdopt_StepsOnAPlainWriter(t *testing.T) {
 		"✓ Release holds — ",
 		doneInPrefix,
 		"! " + caRotationAdvice,
-		"the machines are now managed by Ichor",
+		"the nodes are now managed by Ichor",
 		"Next",
 		"ichor get cluster " + f.env.cluster.Name + " -n " + testNamespace,
 		"ichor get nodes -n " + testNamespace,
@@ -113,7 +113,7 @@ func TestRunAdopt_PlanOnlyInHumanOutput(t *testing.T) {
 		t.Fatalf("--plan wrote: %v", *env.writes)
 	}
 
-	for _, want := range []string{"plan only, nothing is written", "! machine \"" + flowCP + "\": Ichor-owned settings", "--plan: nothing was written", doneInPrefix} {
+	for _, want := range []string{"plan only, nothing is written", "! node \"" + flowCP + "\": Ichor-owned settings", "--plan: nothing was written", doneInPrefix} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}
@@ -162,7 +162,7 @@ func TestRunAdopt_MachineFormatKeepsTheAdoptLines(t *testing.T) {
 
 	out := env.stderr.String()
 
-	for _, want := range []string{"adopt: machine \"" + flowCP + "\": ", "adopt: --plan: nothing was written\n"} {
+	for _, want := range []string{"adopt: node \"" + flowCP + "\": ", "adopt: --plan: nothing was written\n"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in:\n%s", want, out)
 		}

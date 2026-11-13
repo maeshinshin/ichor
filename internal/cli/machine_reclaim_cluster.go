@@ -52,8 +52,8 @@ type ownReclaimDeps struct {
 // controller does the work; the CLI writes the request, shows the inspection, writes the typed UUID and waits.
 func runMachineReclaimOwn(ctx context.Context, d ownReclaimDeps, address string, f reclaimFlags) error {
 	if f.Cluster == "" {
-		return errors.New("reclaim node: without --talosconfig the machine is wiped with the credentials Ichor holds for its own cluster; " +
-			"name that cluster with --cluster NAME, or pass --talosconfig FILE for a machine of another cluster")
+		return errors.New("reclaim node: without --talosconfig the node is wiped with the credentials Ichor holds for its own cluster; " +
+			"name that cluster with --cluster NAME, or pass --talosconfig FILE for a node of another cluster")
 	}
 
 	user, err := d.Who(ctx)
@@ -105,7 +105,7 @@ func runMachineReclaimOwn(ctx context.Context, d ownReclaimDeps, address string,
 	uuid := f.Confirm
 
 	if uuid == "" {
-		say(d.Out, "\nThis wipes STATE and EPHEMERAL on %s and deletes its Kubernetes Node.\nType the machine's UUID to continue: ", in.Hostname)
+		say(d.Out, "\nThis wipes STATE and EPHEMERAL on %s and deletes its Kubernetes Node.\nType the node's UUID to continue: ", in.Hostname)
 
 		if uuid, err = readTypedLine(r); err != nil {
 			return fmt.Errorf("reclaim node: reading the UUID (pass --confirm UUID when not interactive): %w", err)
@@ -126,7 +126,7 @@ func runMachineReclaimOwn(ctx context.Context, d ownReclaimDeps, address string,
 	metav1.SetMetaDataAnnotation(&mr.ObjectMeta, ichorv1alpha1.ReclaimConfirmedByAnnotation, user)
 
 	if err := d.K8s.Patch(ctx, mr, client.MergeFrom(base)); err != nil {
-		return fmt.Errorf("reclaim node: confirming (the typed UUID must be the machine's): %w", err)
+		return fmt.Errorf("reclaim node: confirming (the typed UUID must be the node's): %w", err)
 	}
 
 	confirmed = true
@@ -160,7 +160,7 @@ func runMachineReclaimOwn(ctx context.Context, d ownReclaimDeps, address string,
 				return "", fmt.Errorf("reclaim node: %w", err)
 			}
 
-			return "added to cluster " + f.Cluster + "'s discovery addresses; it will appear as a pending machine", nil
+			return "added to cluster " + f.Cluster + "'s discovery addresses; it will appear as a pending node", nil
 		})
 		if err != nil {
 			return err

@@ -82,7 +82,7 @@ func (s *Server) planEtcdRestore(ctx context.Context, clusterRef *pb.ObjectRef, 
 
 	var machines ichorv1alpha1.TalosMachineList
 	if err := s.List(ctx, &machines, client.InNamespace(cluster.Namespace)); err != nil {
-		return nil, mapListError("machines", err)
+		return nil, mapListError("nodes", err)
 	}
 
 	for i := range machines.Items {
@@ -115,13 +115,13 @@ func (s *Server) planEtcdRestore(ctx context.Context, clusterRef *pb.ObjectRef, 
 		wipeStep(cps, own),
 		"Upload the snapshot to one control plane and start etcd from it.",
 		"The other control planes rejoin etcd by themselves. Wait until all are members and the Kubernetes API answers.",
-		"Restart kube-proxy on the nodes that were not wiped, ask every machine to reconcile again and wait until each is Ready.",
+		"Restart kube-proxy on the nodes that were not wiped, ask every node to reconcile again and wait until each is Ready.",
 	}
 	p.resp.Warning = fmt.Sprintf("This rewinds the whole cluster to the state of %s. Everything written since is lost: "+
-		"every Kubernetes object, including Ichor's own resources and Secrets, and every change to machines or this cluster. "+
+		"every Kubernetes object, including Ichor's own resources and Secrets, and every change to nodes or this cluster. "+
 		"The Kubernetes API is unavailable from the first wipe until etcd is back, which takes several minutes; "+
-		"running pods keep running but nothing can be changed. Afterwards every machine reconciles against the restored "+
-		"state, which may differ from what the nodes run, so check each machine. If Ichor's controller runs on the only "+
+		"running pods keep running but nothing can be changed. Afterwards every node reconciles against the restored "+
+		"state, which may differ from what the nodes run, so check each node. If Ichor's controller runs on the only "+
 		"control plane it stops with it and `ichor restore cluster` finishes the restore. That command is also the way out "+
 		"if the restore stops with an error.", whenText(taken))
 

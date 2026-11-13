@@ -62,7 +62,7 @@ func (n *adoptNode) controlPlane() bool { return n.M.Spec.Role == roleControlPla
 func discoverMachines(ctx context.Context, deps adoptDeps, clusterName, namespace string) ([]*ichorv1alpha1.TalosMachine, []ClusterMember, error) {
 	if deps.Seed == "" {
 		return nil, nil, fmt.Errorf("adopt: TalosCluster %q does not exist yet; give --node, the address of one control plane, "+
-			"so adopt can discover the cluster's machines", clusterName)
+			"so adopt can discover the cluster's nodes", clusterName)
 	}
 
 	if deps.ReadIdentity == nil {
@@ -185,7 +185,7 @@ func completeNode(n *adoptNode, warn func(format string, args ...any)) error {
 		if hostnameRE.MatchString(h) && len(h) <= 253 {
 			n.M.Spec.Hostname = h
 		} else {
-			warn("machine %q: its hostname %q is not an RFC 1123 name, so it is not taken into spec.hostname and stays as drift", n.M.Name, h)
+			warn("node %q: its hostname %q is not an RFC 1123 name, so it is not taken into spec.hostname and stays as drift", n.M.Name, h)
 		}
 	}
 
@@ -230,7 +230,7 @@ func clusterFromNodes(name, namespace, talosVersion string, nodes []*adoptNode) 
 	}
 
 	if cp == nil {
-		return nil, errors.New("adopt: no control plane among the cluster's machines")
+		return nil, errors.New("adopt: no control plane among the cluster's nodes")
 	}
 
 	f := cp.Facts

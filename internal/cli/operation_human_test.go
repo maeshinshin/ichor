@@ -121,11 +121,11 @@ Details
   Target Talos version v1.14.5
   Max unavailable      1
 
-Machines
-MACHINE  NODE       PHASE         STEP  TIME   MESSAGE
-cp1      -          ✓ Completed   -     3m30s  -
-cp2      talos-cp2  ✗ InProgress  -     7m00s  -
-w1       -          …             -     -      -
+Nodes
+NODE  KUBERNETES NODE  PHASE         STEP  TIME   MESSAGE
+cp1   -                ✓ Completed   -     3m30s  -
+cp2   talos-cp2        ✗ InProgress  -     7m00s  -
+w1    -                …             -     -      -
 
 Conditions
   ! Paused  StepFailed  drain of cp2 timed out: pod etcd-backup cannot be evicted
@@ -144,7 +144,7 @@ func TestOperationGetHumanOutputOfARunningOperation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, want := range []string{"  Phase        … InProgress\n", "  Message      upgrading talos-cp2\n", "cp2      talos-cp2  … InProgress  -     7m00s  -\n"} {
+	for _, want := range []string{"  Phase        … InProgress\n", "  Message      upgrading talos-cp2\n", "cp2   talos-cp2        … InProgress  -     7m00s  -\n"} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("missing %q in:\n%s", want, out.String())
 		}
@@ -319,8 +319,8 @@ func TestWatchHumanShowsOneStepAndEndsItWithTheTime(t *testing.T) {
 
 	want := "Upgrade Talos v1.14.3 → v1.14.5\n" +
 		"operation upgrade-talos-x7k2p · cluster initshow\n" +
-		"… talos — InProgress · 0/1 machines · upgrading cp1\n" +
-		"… talos — InProgress · 1/1 machines · upgrading cp2\n" +
+		"… talos — InProgress · 0/1 nodes · upgrading cp1\n" +
+		"… talos — InProgress · 1/1 nodes · upgrading cp2\n" +
 		"✓ talos — Completed (5m03s)\n"
 	wantText(t, errw.String(), want)
 }
@@ -395,7 +395,7 @@ func TestWatchHumanOnATerminalRedrawsOneLine(t *testing.T) {
 	w.end(op)
 
 	got := buf.String()
-	if !strings.Contains(got, "\r\x1b[2K") || !strings.Contains(got, "InProgress · 1/3 machines") || !strings.Contains(got, "✓ talos") ||
+	if !strings.Contains(got, "\r\x1b[2K") || !strings.Contains(got, "InProgress · 1/3 nodes") || !strings.Contains(got, "✓ talos") ||
 		!strings.Contains(got, "Completed") || !strings.HasSuffix(got, "\n") {
 		t.Errorf("terminal output: %q", got)
 	}
@@ -457,7 +457,7 @@ func TestWatchHumanFailedOperationReturnsTheResumeHintAndPrintsTheBlock(t *testi
 
 	wantText(t, errw.String(), "Upgrade Talos\noperation x · cluster adopt-cluster\n✗ talos — Failed (5m00s)\n")
 
-	for _, want := range []string{"x · default\n", "  Failure      boom\n", "cp1      ", "w        "} {
+	for _, want := range []string{"x · default\n", "  Failure      boom\n", "cp1   ", "w     "} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("stdout lacks %q:\n%s", want, out.String())
 		}

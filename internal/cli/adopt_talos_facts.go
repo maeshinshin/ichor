@@ -415,7 +415,7 @@ func gateTalosVersions(
 	for _, m := range machines {
 		talos, err := dial(ctx, m.DialEndpoint())
 		if err != nil {
-			return fmt.Errorf("adopt: dialing machine %q at %q: %w", m.Name, m.DialEndpoint(), err)
+			return fmt.Errorf("adopt: dialing node %q at %q: %w", m.Name, m.DialEndpoint(), err)
 		}
 
 		vr, ok := talos.(talosVersionReader)
@@ -425,7 +425,7 @@ func gateTalosVersions(
 
 		v, err := vr.TalosVersion(ctx)
 		if err != nil {
-			return fmt.Errorf("adopt: reading machine %q's Talos version: %w", m.Name, err)
+			return fmt.Errorf("adopt: reading node %q's Talos version: %w", m.Name, err)
 		}
 
 		nodes = append(nodes, nodeVersion{Node: m.Name, Version: v})

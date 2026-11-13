@@ -111,7 +111,7 @@ func runMachineApprove(
 		m := got.Msg.GetMachine()
 
 		if err := confirmOrAbort(in, errw, "approve node", fmt.Sprintf(
-			"Approve machine %s/%s (uuid %q, endpoint %s) as %s? The controller will start configuring it. [y/N] ",
+			"Approve node %s/%s (uuid %q, endpoint %s) as %s? The controller will start configuring it. [y/N] ",
 			ref.GetNamespace(), name, m.GetIdentity().GetUuid(), m.GetEndpoint(), opts.Role), "aborted"); err != nil {
 			return err
 		}

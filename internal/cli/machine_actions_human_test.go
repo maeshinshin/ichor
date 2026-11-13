@@ -41,7 +41,7 @@ const (
 	actionsRangeIP      = "10.1.0.0/24"
 	actionsNewAddress   = "10.0.0.7"
 	actionsNewCluster   = "new"
-	// actionsOtherMachine is a second, pending machine.
+	// actionsOtherMachine is a second, pending node.
 	actionsOtherMachine = "other-machine"
 )
 
@@ -170,10 +170,10 @@ func TestMachineReclaimHumanOutputOnAPlainWriter(t *testing.T) {
 		"  Cluster      old (id cid), reachable from the node\n",
 		"  Reset        STATE and EPHEMERAL, then reboot · graceful\n",
 		"/dev/sdb1 (10 bytes), not wiped  ! ENCRYPTED: its key may depend on STATE",
-		"This wipes STATE and EPHEMERAL on w1 and removes it from cluster \"old\".\nType the machine's UUID to continue: ",
+		"This wipes STATE and EPHEMERAL on w1 and removes it from cluster \"old\".\nType the node's UUID to continue: ",
 		"✓ Reset — accepted, graceful\n",
 		"✓ Maintenance mode — 10.0.0.5 answers with UUID AAAA-1\n",
-		"✓ Register — added to cluster new's discovery addresses; it will appear as a pending machine\n",
+		"✓ Register — added to cluster new's discovery addresses; it will appear as a pending node\n",
 		doneInPrefix,
 		"Next\n  ichor get nodes",
 	}
@@ -188,7 +188,7 @@ func TestMachineReclaimARefusalIsAFailedLineAndTheHintStaysVisible(t *testing.T)
 		t.Fatal("want a refusal")
 	}
 
-	if !strings.Contains(h.out.String(), "✗ refused: node AAAA-1 is already an Ichor machine") {
+	if !strings.Contains(h.out.String(), "✗ refused: node AAAA-1 is already an Ichor node") {
 		t.Errorf("the refusal is not shown:\n%s", h.out.String())
 	}
 
@@ -280,7 +280,7 @@ func TestClusterDiscoveryAddWarnsAboutAnAlreadyConfiguredAddress(t *testing.T) {
 	}
 
 	want := "✓ added 10.0.0.5 to the discovery of initshow\n" +
-		"! 10.0.0.5 already runs a Talos configuration, so discovery does not add it as a machine; " +
+		"! 10.0.0.5 already runs a Talos configuration, so discovery does not add it as a node; " +
 		"if it is a member of this cluster's Talos cluster run `ichor adopt --cluster initshow --add-machine 10.0.0.5`, " +
 		"if another cluster configured it run `ichor reclaim node 10.0.0.5 --talosconfig FILE --cluster initshow`\n"
 	wantText(t, out.String(), want)

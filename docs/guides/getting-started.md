@@ -293,8 +293,8 @@ demo · ichor-system
   Health       ✓ ready
 
 $ ichor get nodes --cluster demo
-NAME      ROLE           APPROVAL  READY  ENDPOINT            NODE     AGE
-fa70962a  control-plane  approved  ✓      192.168.1.50:50000  demo-cp  5m
+NAME      ROLE           APPROVAL  READY  ENDPOINT            KUBERNETES NODE  AGE
+fa70962a  control-plane  approved  ✓      192.168.1.50:50000  demo-cp          5m
 
 $ ichor version
 ichor        v{{version}}
@@ -330,8 +330,8 @@ config-r2d9m         config  ✓ Completed   demo    -                          
 $ ichor upgrade talos --follow --yes
 Upgrade Talos v1.14.3 → v1.14.5
 operation upgrade-talos-x7k2p · cluster demo
-… talos — InProgress · 0/3 machines · upgrading talos-cp1
-… talos — InProgress · 1/3 machines · upgrading talos-cp2
+… talos — InProgress · 0/3 nodes · upgrading talos-cp1
+… talos — InProgress · 1/3 nodes · upgrading talos-cp2
 ✓ talos — Completed (11m52s)
 ```
 

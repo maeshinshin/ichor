@@ -122,7 +122,7 @@ func enableFailover(ctx context.Context, c *apiClients, errw io.Writer, cluster 
 
 	resp, err := c.Machine.ListMachines(ctx, connect.NewRequest(&pb.ListMachinesRequest{Cluster: cluster}))
 	if err != nil {
-		_, _ = fmt.Fprintf(errw, "ichor: no failover to other API servers (reading the machines: %v); --follow will retry %s\n", err, c.Server)
+		_, _ = fmt.Fprintf(errw, "ichor: no failover to other API servers (reading the nodes: %v); --follow will retry %s\n", err, c.Server)
 
 		return // best effort: the follow still retries the one server
 	}

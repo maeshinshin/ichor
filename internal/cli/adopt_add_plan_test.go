@@ -94,7 +94,7 @@ func TestAdoptAddMachinePlanPrintsRoleAndInstallDisk(t *testing.T) {
 	}
 
 	out := env.stderr.String()
-	for _, want := range []string{`machine "uuid-` + addAddr + `"`, "role worker", "install disk"} {
+	for _, want := range []string{`node "uuid-` + addAddr + `"`, "role worker", "install disk"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the plan lacks %q:\n%s", want, out)
 		}

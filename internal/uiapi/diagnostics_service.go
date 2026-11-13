@@ -326,7 +326,7 @@ func (s *Server) startDownload(
 
 	if !m.Spec.IsApproved() {
 		return nil, nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("machine %q is not approved, so it has no Talos credentials to download with", m.Name))
+			fmt.Errorf("node %q is not approved, so it has no Talos credentials to download with", m.Name))
 	}
 
 	if err := s.authorizeDownload(ctx, m, scope); err != nil {
@@ -347,7 +347,7 @@ func (s *Server) startDownload(
 
 	tc, err := s.DownloadTalosClient(ctx, cluster, m, id, scope)
 	if err != nil {
-		return nil, nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("connecting to machine's Talos API: %w", err))
+		return nil, nil, connect.NewError(connect.CodeUnavailable, fmt.Errorf("connecting to node's Talos API: %w", err))
 	}
 
 	return tc, closeFunc(tc), nil
@@ -453,7 +453,7 @@ func (s *Server) DownloadEtcdSnapshot(
 	}
 
 	if m.Spec.Role != opRoleControlPlane {
-		return invalid("machine %q is not a control plane node; an etcd snapshot comes from a control plane node", m.Name)
+		return invalid("node %q is not a control plane node; an etcd snapshot comes from a control plane node", m.Name)
 	}
 
 	release, err := s.acquireDownloadSlot()
@@ -625,12 +625,12 @@ func (s *Server) DownloadSupportBundle(
 		}
 
 		if len(machines) == 0 {
-			return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("cluster %q has no approved machines", c.Name))
+			return connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf("cluster %q has no approved nodes", c.Name))
 		}
 
 		cluster, name = c, c.Name
 	default:
-		return invalid("name a machine or a cluster")
+		return invalid("name a node or a cluster")
 	}
 
 	release, err := s.acquireDownloadSlot()
@@ -682,7 +682,7 @@ func (s *Server) DownloadSupportBundle(
 	}
 
 	if len(nodes) == 0 {
-		return connect.NewError(connect.CodeUnavailable, errors.New("no machine could be reached"))
+		return connect.NewError(connect.CodeUnavailable, errors.New("no node could be reached"))
 	}
 
 	w := &chunkWriter{

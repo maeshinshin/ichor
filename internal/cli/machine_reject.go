@@ -41,7 +41,7 @@ var rejectNodeCmd = &cobra.Command{
 
 func runMachineReject(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, name string) error {
 	if !assumeYes {
-		if err := confirmOrAbort(in, errw, "reject node", fmt.Sprintf("Reject machine %s/%s? [y/N] ", apiOpts.Namespace, name), "aborted"); err != nil {
+		if err := confirmOrAbort(in, errw, "reject node", fmt.Sprintf("Reject node %s/%s? [y/N] ", apiOpts.Namespace, name), "aborted"); err != nil {
 			return err
 		}
 	}

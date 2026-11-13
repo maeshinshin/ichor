@@ -472,7 +472,7 @@ This wipes STATE and EPHEMERAL on w1 and removes it from cluster "old".
 Type the machine's UUID to continue: 5b2c0d1e-7f44-4c35-9a0e-2f6f1c4b8e11
 ✓ Reset — accepted, graceful
 ✓ Maintenance mode — 10.0.0.21 answers with UUID 5b2c0d1e-7f44-4c35-9a0e-2f6f1c4b8e11
-✓ Register — added to cluster prod's discovery addresses; it will appear as a pending machine
+✓ Register — added to cluster prod's discovery addresses; it will appear as a pending node
 Done in 2m41s
 
 Next

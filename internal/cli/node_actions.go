@@ -126,6 +126,27 @@ func needsTypedName(a pb.NodeAction) bool {
 	return a == pb.NodeAction_NODE_ACTION_REMOVE
 }
 
+// nodeActionCommand is the command that starts a node action, for the messages that name it.
+func nodeActionCommand(a pb.NodeAction) string {
+	switch a {
+	case pb.NodeAction_NODE_ACTION_REBOOT:
+		return "reboot node"
+	case pb.NodeAction_NODE_ACTION_SHUTDOWN:
+		return "shutdown node"
+	case pb.NodeAction_NODE_ACTION_REMOVE:
+		return "delete node"
+	case pb.NodeAction_NODE_ACTION_RESTART_SERVICE:
+		return "restart service"
+	case pb.NodeAction_NODE_ACTION_ETCD_DEFRAG:
+		return "defrag etcd"
+	case pb.NodeAction_NODE_ACTION_ETCD_FORFEIT_LEADERSHIP:
+		return "forfeit-leadership etcd"
+	case pb.NodeAction_NODE_ACTION_UNSPECIFIED:
+	}
+
+	return "node action"
+}
+
 // runNodeAction plans, confirms and starts one node action. --yes skips the y/N question; remove
 // needs the machine name instead, typed here or given with --confirm, which replaces the question.
 func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, s nodeActionSpec) error {
@@ -145,14 +166,14 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 		return err
 	}
 
-	name := strings.ReplaceAll(strings.ToLower(strings.TrimPrefix(s.Action.String(), "NODE_ACTION_")), "_", "-")
+	name := nodeActionCommand(s.Action)
 
 	if b := plan.Msg.GetBlocked(); b != "" {
-		return fmt.Errorf("node %s: %s", name, b)
+		return fmt.Errorf("%s: %s", name, b)
 	}
 
 	if needsTypedName(s.Action) && bg == nil {
-		return fmt.Errorf("node %s: it wipes the node, so it needs --override (and the override RBAC verb on the machine)", name)
+		return fmt.Errorf("%s: it wipes the node, so it needs --override (and the override RBAC verb on the node)", name)
 	}
 
 	// The typed name is the TalosMachine's name, as the CRD rule and RemoveMachine check it; NODE
@@ -174,22 +195,22 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 
 		typed, err := readLine(in, errw, confirmPrompt(machine, s.Machine))
 		if err != nil {
-			return fmt.Errorf("node %s: reading confirmation: %w", name, err)
+			return fmt.Errorf("%s: reading confirmation: %w", name, err)
 		}
 
 		if typed != machine {
-			return fmt.Errorf("node %s: aborted (the name did not match; type %s)", name, confirmWhat(machine, s.Machine))
+			return fmt.Errorf("%s: aborted (the name did not match; type %s)", name, confirmWhat(machine, s.Machine))
 		}
 
 		s.Confirm = typed
 	default:
-		if err := confirmPlan(in, errw, "node "+name, text); err != nil {
+		if err := confirmPlan(in, errw, name, text); err != nil {
 			return err
 		}
 	}
 
 	if needsTypedName(s.Action) && s.Confirm != machine {
-		return fmt.Errorf("node %s: type %s with --confirm to go on without asking", name, confirmWhat(machine, s.Machine))
+		return fmt.Errorf("%s: type %s with --confirm to go on without asking", name, confirmWhat(machine, s.Machine))
 	}
 
 	if s.Action == pb.NodeAction_NODE_ACTION_REMOVE {
@@ -228,10 +249,10 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 // confirmWhat names what to type: the machine name, and the node as the user gave it when that differs.
 func confirmWhat(machine, asked string) string {
 	if asked == machine {
-		return "the machine name " + machine
+		return "the node name " + machine
 	}
 
-	return fmt.Sprintf("the machine name %s (node %s)", machine, asked)
+	return fmt.Sprintf("the node name %s (node %s)", machine, asked)
 }
 
 func confirmPrompt(machine, asked string) string {
@@ -265,7 +286,7 @@ func newNodeActionCmd(use, short string, action pb.NodeAction, args cobra.Positi
 
 It shows the plan and asks for confirmation unless --yes. For delete node the typed node name
 (the TalosMachine name, or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
-(or deletes the machine); the controller does the work. Follow it with --follow.`,
+(or deletes the node); the controller does the work. Follow it with --follow.`,
 		Args: args,
 		RunE: func(cmd *cobra.Command, a []string) error {
 			s := spec(a)
@@ -342,5 +363,5 @@ func init() {
 	deleteNodeCmd.Long += "\n\n" + nodeRemoveLong
 	deleteNodeCmd.Flags().StringVar(&nodeActionOpts.WipeMode, "wipe-mode", wipeModeSystemPartitions,
 		"what to wipe: system-partitions (STATE and EPHEMERAL), system-disk (the whole system disk) or all (system disk and every user disk)")
-	deleteNodeCmd.Flags().StringVar(&nodeActionOpts.Confirm, "confirm", "", "the machine name (the TalosMachine name, not the hostname), to go on without being asked to type it")
+	deleteNodeCmd.Flags().StringVar(&nodeActionOpts.Confirm, "confirm", "", "the node name (the TalosMachine name, not the hostname), to go on without being asked to type it")
 }

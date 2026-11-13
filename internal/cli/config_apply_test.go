@@ -57,7 +57,7 @@ func TestConfigApplyPromptNamesTheMachineTheFieldAndTheRebootAndDeclineWritesNot
 		t.Fatalf("want aborted, got %v", err)
 	}
 
-	for _, want := range []string{"(config)", "1 machine(s)", "1. " + opCP + " (controlplane)", "cluster.proxy.disabled", "REBOOT"} {
+	for _, want := range []string{"(config)", "1 node(s)", "1. " + opCP + " (controlplane)", "cluster.proxy.disabled", "REBOOT"} {
 		if !strings.Contains(prompt.String(), want) {
 			t.Errorf("prompt lacks %q:\n%s", want, prompt.String())
 		}

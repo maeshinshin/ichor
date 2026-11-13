@@ -62,7 +62,7 @@ func TestRestoreRecoverClusterHumanOutput(t *testing.T) {
 
 	want := "✓ etcd on 10.0.0.9:50000 is recovering from " + name + "\n" +
 		"Next: once the Kubernetes API is back, the restored Ichor controller re-reconciles the cluster; " +
-		"check each machine before approving anything.\n"
+		"check each node before approving anything.\n"
 	if h.stdout.String() != want {
 		t.Errorf("stdout = %q, want %q", h.stdout.String(), want)
 	}

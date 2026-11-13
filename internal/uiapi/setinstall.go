@@ -42,12 +42,12 @@ func (s *Server) SetMachineInstall(
 
 	if !m.Spec.IsApproved() {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("machine %q is not approved; its install disk is chosen when it is approved", namespacedName(ref)))
+			fmt.Errorf("node %q is not approved; its install disk is chosen when it is approved", namespacedName(ref)))
 	}
 
 	if m.Status.AppliedConfigHash != "" {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("machine %q already has a configuration applied; an install disk only applies before the first install", namespacedName(ref)))
+			fmt.Errorf("node %q already has a configuration applied; an install disk only applies before the first install", namespacedName(ref)))
 	}
 
 	install, err := installFromPB(req.Msg.GetInstall())
@@ -62,7 +62,7 @@ func (s *Server) SetMachineInstall(
 	m.Spec.Install = install
 
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("setting install of machine %q: %w", namespacedName(ref), err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("setting install of node %q: %w", namespacedName(ref), err))
 	}
 
 	audit := s.opAudit(ctx, "set-install", objectRef(m.Namespace, m.Name))

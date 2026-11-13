@@ -60,7 +60,7 @@ cluster with more than one control plane. Workers are not touched.
 Your kubeconfig and talosconfig keep working: no CA changes. The cluster must use versionContract
 v1.14 or later. Before it starts, every control plane must answer, run the configuration Ichor
 renders for it, and every Kubernetes Node must be Ready; otherwise the operation pauses without
-changing anything. While it runs, the machine controller does not reconcile the control planes and other
+changing anything. While it runs, the TalosMachine controller does not reconcile the control planes and other
 disruptive operations are refused. It resumes by itself after the controller restarts and does not advance
 past a step it could not verify.
 

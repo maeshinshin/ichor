@@ -140,7 +140,7 @@ func TestMachineReclaimRefusesIchorMachine(t *testing.T) {
 	h := newReclaimHarness("AAAA-1\n", reclaim.Known{MachineUUIDs: []string{strings.ToLower(testUUID)}})
 
 	err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Confirm: testUUID})
-	if err == nil || !strings.Contains(err.Error(), "already an Ichor machine") {
+	if err == nil || !strings.Contains(err.Error(), "already an Ichor node") {
 		t.Fatalf("err = %v", err)
 	}
 

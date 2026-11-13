@@ -122,7 +122,7 @@ func (d adoptDeps) epilogue(cluster, namespace string, e adoptEnd) {
 	}
 
 	if len(e.blocked) > 0 {
-		d.say(adoptWarn, "blocked machines were left out: %s", strings.Join(e.blocked, ", "))
+		d.say(adoptWarn, "blocked nodes were left out: %s", strings.Join(e.blocked, ", "))
 	}
 
 	// A machine added to a cluster Ichor already manages brings no new administrator with it.
@@ -130,7 +130,7 @@ func (d adoptDeps) epilogue(cluster, namespace string, e adoptEnd) {
 		d.say(adoptWarn, "%s", caRotationAdvice)
 	}
 
-	d.say(adoptInfo, "the machines are now managed by Ichor: change their configuration through Ichor (a TalosConfigPatch, or `ichor rollout config`), not on the node")
+	d.say(adoptInfo, "the nodes are now managed by Ichor: change their configuration through Ichor (a TalosConfigPatch, or `ichor rollout config`), not on the node")
 
 	if d.Steps == nil {
 		return

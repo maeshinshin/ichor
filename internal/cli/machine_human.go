@@ -106,7 +106,7 @@ func approvalRow(m *pb.Machine) string {
 
 func renderMachineGet(h *human, m *pb.Machine) error {
 	h.Block(nsName(m.GetRef()), kv{labelCluster, m.GetCluster().GetName()}, kv{"Role", humanEnum(m.GetRole().String())},
-		kv{"Approval", approvalRow(m)}, kv{labelHealth, machineHealth(h, m)}, kv{labelNode, m.GetNodeName()},
+		kv{"Approval", approvalRow(m)}, kv{labelHealth, machineHealth(h, m)}, kv{labelKubeNode, m.GetNodeName()},
 		kv{"Hostname", m.GetHostname()}, kv{"Endpoint", m.GetEndpoint()}, kv{"Stage", m.GetStage()},
 		kv{"Deleting", yesIf(m.GetDeleting())}, kv{labelCreated, agoOrEmpty(m.GetCreatedAt())})
 

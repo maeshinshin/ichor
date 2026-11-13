@@ -105,7 +105,7 @@ func (s *Server) emitCredentialsEvent(ctx context.Context, cluster *ichorv1alpha
 func (s *Server) talosEndpoints(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) ([]string, error) {
 	var machines ichorv1alpha1.TalosMachineList
 	if err := s.Client.List(ctx, &machines, client.InNamespace(cluster.Namespace)); err != nil {
-		return nil, fmt.Errorf("listing the cluster's machines: %w", err)
+		return nil, fmt.Errorf("listing the cluster's nodes: %w", err)
 	}
 
 	if endpoints := credentials.Endpoints(machines.Items, cluster.Name); len(endpoints) > 0 {

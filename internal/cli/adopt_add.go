@@ -62,7 +62,7 @@ func resolveClusterBundle(ctx context.Context, k8s client.Reader, namespace, clu
 	}
 
 	if _, rotating := secret.Data[secretsbundle.RotationKey]; rotating {
-		return nil, errors.New("adopt: a CA rotation is under way, so the nodes do not yet trust only the CAs in the secrets bundle; add the machine after the rotation completes")
+		return nil, errors.New("adopt: a CA rotation is under way, so the nodes do not yet trust only the CAs in the secrets bundle; add the node after the rotation completes")
 	}
 
 	return secretsbundle.Load(ctx, k8s, key.Namespace, key.Name)
@@ -155,7 +155,7 @@ func (st *adoptState) loadAdded(
 
 		trusts, err := nodeTrustsBundle(n.Current, deps.Bundle)
 		if err != nil {
-			return fmt.Errorf("adopt: machine at %q: %w", m.Spec.Endpoint, err)
+			return fmt.Errorf("adopt: node at %q: %w", m.Spec.Endpoint, err)
 		}
 
 		if !trusts {
@@ -188,10 +188,10 @@ func otherClusterRefusal(addr, id, cluster string) error {
 	if id != "" {
 		what += fmt.Sprintf(" (id %q)", id)
 	} else {
-		what += " (its Talos API certificate is not signed by a CA your talosconfig trusts; if the machine should be in this cluster, check --talosconfig)"
+		what += " (its Talos API certificate is not signed by a CA your talosconfig trusts; if the node should be in this cluster, check --talosconfig)"
 	}
 
-	return fmt.Errorf("adopt: the machine at %[1]q %[2]s than %[3]q: it does not carry this cluster's CAs, "+
+	return fmt.Errorf("adopt: the node at %[1]q %[2]s than %[3]q: it does not carry this cluster's CAs, "+
 		"so it cannot join without a reset. To reset it and add it, run `ichor reclaim node %[1]s --talosconfig FILE --cluster %[3]s` "+
 		"(this wipes its STATE and EPHEMERAL partitions)", addr, what, cluster)
 }
@@ -231,7 +231,7 @@ func (st *adoptState) registrations(
 		}
 
 		if prev, dup := seen[id.UUID]; dup {
-			return nil, fmt.Errorf("adopt: %q and %q are the same machine (UUID %s)", prev, addr, id.UUID)
+			return nil, fmt.Errorf("adopt: %q and %q are the same node (UUID %s)", prev, addr, id.UUID)
 		}
 
 		seen[id.UUID] = addr
@@ -239,11 +239,11 @@ func (st *adoptState) registrations(
 		if i := slices.IndexFunc(machines, func(m *ichorv1alpha1.TalosMachine) bool { return m.Spec.Identity.UUID == id.UUID }); i >= 0 {
 			have := machines[i]
 			if !have.Spec.IsApproved() {
-				return nil, fmt.Errorf("adopt: the machine at %q is TalosMachine %q, which is not approved yet (%s); approve it, or delete it and run this again",
+				return nil, fmt.Errorf("adopt: the node at %q is TalosMachine %q, which is not approved yet (%s); approve it, or delete it and run this again",
 					addr, have.Name, have.Spec.ApprovalState)
 			}
 
-			deps.say(adoptInfo, "the machine at %s is already TalosMachine %s of cluster %s; not adding it", addr, have.Name, cluster.Name)
+			deps.say(adoptInfo, "the node at %s is already TalosMachine %s of cluster %s; not adding it", addr, have.Name, cluster.Name)
 
 			continue
 		}

@@ -79,7 +79,7 @@ verb "download" on talosclusters/talosconfig-reader (ichor-operator and ichor-ad
 does not), and no access to the secrets bundle. Each request is recorded as an Event on the cluster that
 names you.
 
-The Talos endpoints are the cluster's control-plane machines (or --talos-endpoints, or your current
+The Talos endpoints are the cluster's control-plane nodes (or --talos-endpoints, or your current
 talosconfig's). The file is written next to your current talosconfig with the suffix ` + readerSuffix + ` (never over
 it), unless --out says otherwise. Use it with: TALOSCONFIG=<file> talosctl get members`,
 	Example: `  ichor create talosconfig prod
@@ -138,7 +138,7 @@ func writeReaderTalosconfig(ctx context.Context, k8s client.Client, req readerTa
 	if len(endpoints) == 0 {
 		var machines ichorv1alpha1.TalosMachineList
 		if err := k8s.List(ctx, &machines, client.InNamespace(req.Namespace)); err != nil {
-			return "", time.Time{}, fmt.Errorf("listing the cluster's machines: %w", err)
+			return "", time.Time{}, fmt.Errorf("listing the cluster's nodes: %w", err)
 		}
 
 		endpoints = credentials.Endpoints(machines.Items, req.Cluster)
@@ -236,7 +236,7 @@ func init() {
 	f.StringVar(&clusterTalosconfigOpts.Out, "out", "",
 		"where to write the talosconfig (default: your current talosconfig's path plus "+readerSuffix+")")
 	f.StringSliceVar(&clusterTalosconfigOpts.Endpoints, "talos-endpoints", nil,
-		"the Talos API endpoints for the talosconfig (default: the cluster's control-plane machines, else your current talosconfig's)")
+		"the Talos API endpoints for the talosconfig (default: the cluster's control-plane nodes, else your current talosconfig's)")
 	f.DurationVar(&clusterTalosconfigOpts.TTL, "ttl", 0,
 		"how long the talosconfig is valid; the default is "+credentials.TalosconfigLifetime.String()+" and the maximum "+credentials.MaxTalosconfigLifetime.String())
 }

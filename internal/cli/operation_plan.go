@@ -101,9 +101,9 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 	switch p.GetEffect() {
 	case pb.OperationEffect_OPERATION_EFFECT_REBOOT:
 		if kind == pb.OperationKind_OPERATION_KIND_CONFIG {
-			b.WriteString("Each machine below gets its rendered configuration staged and REBOOTS (Ichor cordons and drains it first, since Talos does not on a reboot).\n")
+			b.WriteString("Each node below gets its rendered configuration staged and REBOOTS (Ichor cordons and drains it first, since Talos does not on a reboot).\n")
 		} else {
-			b.WriteString("Each machine is upgraded and REBOOTS.\n")
+			b.WriteString("Each node is upgraded and REBOOTS.\n")
 		}
 	case pb.OperationEffect_OPERATION_EFFECT_RESTART_COMPONENTS:
 		if kind == pb.OperationKind_OPERATION_KIND_CONFIG {
@@ -112,9 +112,9 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 			break
 		}
 
-		b.WriteString("Configuration is applied without a reboot; the kubelet and control plane components restart on each machine.\n")
+		b.WriteString("Configuration is applied without a reboot; the kubelet and control plane components restart on each node.\n")
 		if kind == pb.OperationKind_OPERATION_KIND_KUBERNETES && len(p.GetStages()) > 0 {
-			fmt.Fprintf(&b, "It runs in %d stages, each finished on every machine before the next starts, "+
+			fmt.Fprintf(&b, "It runs in %d stages, each finished on every node before the next starts, "+
 				"so nothing is ever newer than an API server:\n", len(p.GetStages()))
 
 			for i, s := range p.GetStages() {
@@ -122,9 +122,9 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 			}
 		}
 	case pb.OperationEffect_OPERATION_EFFECT_STOP:
-		b.WriteString("Every machine is POWERED OFF and stays off until you start it again. The Kubernetes API goes down.\n")
+		b.WriteString("Every node is POWERED OFF and stays off until you start it again. The Kubernetes API goes down.\n")
 	case pb.OperationEffect_OPERATION_EFFECT_NONE:
-		b.WriteString("No machine is touched; a Job applies the new install manifest.\n")
+		b.WriteString("No node is touched; a Job applies the new install manifest.\n")
 	case pb.OperationEffect_OPERATION_EFFECT_CA_ROTATION:
 		targets := p.GetCaTargets()
 		kube := caPlanHas(targets, ichorv1alpha1.CARotationTargetKubernetes)
@@ -132,21 +132,21 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 
 		if caPlanHas(targets, ichorv1alpha1.CARotationTargetEtcd) {
 			// Talos does not restart etcd on a configuration change, so the control planes reboot.
-			fmt.Fprintf(&b, "Every machine is reconfigured once per pass (%s); the control planes REBOOT in each pass (see the warning below), workers do not.",
+			fmt.Fprintf(&b, "Every node is reconfigured once per pass (%s); the control planes REBOOT in each pass (see the warning below), workers do not.",
 				strings.Join(p.GetStages(), ", "))
 		} else {
-			fmt.Fprintf(&b, "Every machine is reconfigured once per pass (%s), without a reboot.", strings.Join(p.GetStages(), ", "))
+			fmt.Fprintf(&b, "Every node is reconfigured once per pass (%s), without a reboot.", strings.Join(p.GetStages(), ", "))
 		}
 
 		if kube {
-			b.WriteString(" The kubelet RESTARTS on each machine in the passes that change the Kubernetes CA.")
+			b.WriteString(" The kubelet RESTARTS on each node in the passes that change the Kubernetes CA.")
 		}
 
 		b.WriteString("\n")
 
 		if credentials {
 			b.WriteString("YOUR " + credentialsStopWorking + "\n" +
-				"So after every machine accepts the new CAs the operation WAITS, changing nothing, until you have new credentials. " +
+				"So after every node accepts the new CAs the operation WAITS, changing nothing, until you have new credentials. " +
 				"'ichor rotate ca' writes them (a kubeconfig and a talosconfig trusting the old and the new CAs, next to your current ones, " +
 				"mode 0600, never printed) while your current ones still work, checks them, and only then lets the operation go on. " +
 				"To continue, run 'ichor create credentials NAME --acknowledge' with your current kubeconfig, or, if you may " +
@@ -169,7 +169,7 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 	if ms := p.GetMachines(); len(ms) > 0 {
 		b.WriteString(orderText(kind, p))
 	} else if p.GetEffect() != pb.OperationEffect_OPERATION_EFFECT_NONE {
-		b.WriteString("No approved machine is selected, so nothing would be changed.\n")
+		b.WriteString("No approved node is selected, so nothing would be changed.\n")
 	}
 
 	if p.GetKubernetesApiUnavailable() {
@@ -190,7 +190,7 @@ func planText(kind pb.OperationKind, cluster string, p *pb.PlanOperationResponse
 	}
 
 	if kind != pb.OperationKind_OPERATION_KIND_SHUTDOWN && p.GetEffect() != pb.OperationEffect_OPERATION_EFFECT_NONE {
-		b.WriteString("A machine that fails pauses the operation; nothing is rolled back.\n")
+		b.WriteString("A node that fails pauses the operation; nothing is rolled back.\n")
 	}
 
 	return b.String()
@@ -276,13 +276,13 @@ func orderText(kind pb.OperationKind, p *pb.PlanOperationResponse) string {
 	}
 
 	total := len(p.GetMachines())
-	fmt.Fprintf(&b, "%d machine(s) (%d control plane, %d worker)", total, cps, total-cps)
+	fmt.Fprintf(&b, "%d node(s) (%d control plane, %d worker)", total, cps, total-cps)
 
 	switch kind {
 	case pb.OperationKind_OPERATION_KIND_SHUTDOWN:
 		b.WriteString(": workers first, drained and stopped together, then the control planes at once:\n")
 	case pb.OperationKind_OPERATION_KIND_CA_ROTATION:
-		b.WriteString(", one at a time, control planes first; every machine is visited in each pass:\n")
+		b.WriteString(", one at a time, control planes first; every node is visited in each pass:\n")
 	case pb.OperationKind_OPERATION_KIND_KEY_ROTATION:
 		b.WriteString(", one at a time, waiting for each kube-apiserver to come back; every one is visited in each applying stage:\n")
 	case pb.OperationKind_OPERATION_KIND_KUBERNETES:
@@ -310,7 +310,7 @@ func orderText(kind pb.OperationKind, p *pb.PlanOperationResponse) string {
 			}
 		}
 
-		b.WriteString("The machine the controller runs on goes last.\n")
+		b.WriteString("The node the controller runs on goes last.\n")
 	}
 
 	return b.String()

@@ -219,7 +219,7 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 	}
 
 	if st.adding && len(st.nodes) == 0 {
-		deps.say(adoptInfo, "nothing to add, every listed machine is already a TalosMachine")
+		deps.say(adoptInfo, "nothing to add, every listed node is already a TalosMachine")
 		deps.epilogue(clusterName, namespace, adoptEnd{})
 
 		return nil
@@ -227,7 +227,7 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 
 	// Phase 1: plan.
 	if st.adding {
-		err = deps.run("Check machines", func(d adoptDeps) (string, error) { return "", st.inspectAdded(d) })
+		err = deps.run("Check nodes", func(d adoptDeps) (string, error) { return "", st.inspectAdded(d) })
 	} else {
 		err = deps.run("Inspect CNI", func(d adoptDeps) (string, error) { return "", st.inspect(ctx, d) })
 	}
@@ -331,7 +331,7 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		// Both phases leave the not yet released machines held, and a rerun picks them up by their
 		// hold annotation (heldNodes, releaseHold skips the released ones).
 		deps.say(adoptWarn, "adoption stopped part-way: run the same `ichor adopt` again to continue where it stopped; "+
-			"nothing was applied to the machines that are still held")
+			"nothing was applied to the nodes that are still held")
 
 		return err
 	}
@@ -377,14 +377,14 @@ func (st *adoptState) planPhase(deps adoptDeps) (*adoptPlanned, error) {
 
 	// Before "nothing to adopt": a machine that is blocked does not match a fresh render.
 	if (st.fresh || st.adding) && len(pl.writable) == 0 {
-		return nil, fmt.Errorf("adopt: every machine is blocked by configuration Ichor cannot represent (%s); nothing was written", strings.Join(pl.blocked, ", "))
+		return nil, fmt.Errorf("adopt: every node is blocked by configuration Ichor cannot represent (%s); nothing was written", strings.Join(pl.blocked, ", "))
 	}
 
 	if !st.fresh && len(toCreate) == 0 && len(pl.held) == 0 {
 		if len(pl.blocked) > 0 {
 			deps.say(adoptWarn, "nothing to adopt: %s blocked by configuration Ichor cannot represent (see above)", strings.Join(pl.blocked, ", "))
 		} else {
-			deps.say(adoptInfo, "nothing to adopt, every machine already matches a fresh render")
+			deps.say(adoptInfo, "nothing to adopt, every node already matches a fresh render")
 		}
 
 		pl.nothing = true
@@ -419,7 +419,7 @@ func (st *adoptState) finishAdopt(ctx context.Context, deps adoptDeps, clusterNa
 	// release at its hash and sets CNIHandover, with no Job.
 	if st.installCilium || st.needsTakeover() {
 		if !st.installCilium && deps.Preflight == nil {
-			deps.say(adoptWarn, "Cilium takeover: pending; the machines stay held, nothing was applied to any node")
+			deps.say(adoptWarn, "Cilium takeover: pending; the nodes stay held, nothing was applied to any node")
 
 			return false, nil
 		}
@@ -555,15 +555,15 @@ func loadAdoption(ctx context.Context, clusterName, namespace string, deps adopt
 func readNode(ctx context.Context, deps adoptDeps, n *adoptNode, fresh bool) error {
 	talos, err := deps.DialTalos(ctx, n.M.DialEndpoint())
 	if err != nil {
-		return fmt.Errorf("adopt: dialing machine %q at %q: %w", n.M.Name, n.M.DialEndpoint(), err)
+		return fmt.Errorf("adopt: dialing node %q at %q: %w", n.M.Name, n.M.DialEndpoint(), err)
 	}
 
 	if n.Current, err = talos.CurrentConfig(ctx); err != nil {
-		return fmt.Errorf("adopt: reading machine %q's current configuration: %w", n.M.Name, err)
+		return fmt.Errorf("adopt: reading node %q's current configuration: %w", n.M.Name, err)
 	}
 
 	if n.Facts, err = ReadTalosFacts(n.Current); err != nil {
-		return fmt.Errorf("adopt: machine %q: %w", n.M.Name, err)
+		return fmt.Errorf("adopt: node %q: %w", n.M.Name, err)
 	}
 
 	if fresh {
@@ -581,7 +581,7 @@ func firstControlPlaneVersion(ctx context.Context, deps adoptDeps, nodes []*adop
 
 		talos, err := deps.DialTalos(ctx, n.M.DialEndpoint())
 		if err != nil {
-			return "", fmt.Errorf("adopt: dialing machine %q: %w", n.M.Name, err)
+			return "", fmt.Errorf("adopt: dialing node %q: %w", n.M.Name, err)
 		}
 
 		vr, ok := talos.(talosVersionReader)
@@ -592,7 +592,7 @@ func firstControlPlaneVersion(ctx context.Context, deps adoptDeps, nodes []*adop
 		return vr.TalosVersion(ctx)
 	}
 
-	return "", errors.New("adopt: no control plane among the cluster's machines")
+	return "", errors.New("adopt: no control plane among the cluster's nodes")
 }
 
 // firstNode returns the first read node, a control plane when there is one.
@@ -621,7 +621,7 @@ func (st *adoptState) firstNode() *adoptNode {
 func (st *adoptState) inspect(ctx context.Context, deps adoptDeps) error {
 	first := st.firstNode()
 	if first == nil {
-		return errors.New("adopt: no approved machine to adopt")
+		return errors.New("adopt: no approved node to adopt")
 	}
 
 	st.unmanaged = deps.CNIUnmanaged || st.cluster.Spec.CNI.Preset == ichorv1alpha1.TalosClusterCNIPresetUnmanaged
@@ -960,7 +960,7 @@ func (st *adoptState) plan(deps adoptDeps) ([]*adoptPlan, error) {
 		}
 
 		if (st.fresh || n.added) && n.M.Spec.Install == nil && n.Facts.Install.DiskSelector != "" {
-			return nil, fmt.Errorf("adopt: machine %q installs to a disk chosen by a selector; Ichor needs a plain device path in "+
+			return nil, fmt.Errorf("adopt: node %q installs to a disk chosen by a selector; Ichor needs a plain device path in "+
 				"machine.install.disk to record spec.install", n.M.Name)
 		}
 
@@ -1016,7 +1016,7 @@ func reportOwned(say adoptSay, plans []*adoptPlan) int {
 
 		total += len(p.Owned)
 
-		say(adoptWarn, "machine %q: Ichor-owned settings its first render will change (need consent): %s",
+		say(adoptWarn, "node %q: Ichor-owned settings its first render will change (need consent): %s",
 			p.Machine, strings.Join(p.Owned, ", "))
 	}
 
@@ -1056,7 +1056,7 @@ func (st *adoptState) takeoverPlan(ctx context.Context, deps adoptDeps) (takeove
 
 		name, err := cilium.FindInlineManifest(inlineEntries(n.Facts))
 		if err != nil {
-			return tp, fmt.Errorf("adopt: machine %q: %w", n.M.Name, err)
+			return tp, fmt.Errorf("adopt: node %q: %w", n.M.Name, err)
 		}
 
 		tp.inline = cmp.Or(tp.inline, name)
@@ -1188,7 +1188,7 @@ func waitHandover(ctx context.Context, deps adoptDeps, key types.NamespacedName)
 			return errPending
 		}, func(err error) bool { return errors.Is(err, errPending) }, what+" did not finish within "+timeout.String())
 	if err != nil {
-		return fmt.Errorf("adopt: %w; the machines stay held", err)
+		return fmt.Errorf("adopt: %w; the nodes stay held", err)
 	}
 
 	return nil
@@ -1203,7 +1203,7 @@ func (st *adoptState) consent(deps adoptDeps, clusterName string, patches, machi
 
 	what := fmt.Sprintf("Create %d TalosConfigPatch object(s) to adopt cluster %q with zero drift", patches, clusterName)
 	if st.adding {
-		what = fmt.Sprintf("Create %d held TalosMachine(s) and %d TalosConfigPatch object(s) to add the machine(s) to cluster %q", machines, patches, clusterName)
+		what = fmt.Sprintf("Create %d held TalosMachine(s) and %d TalosConfigPatch object(s) to add the node(s) to cluster %q", machines, patches, clusterName)
 	}
 
 	if st.fresh {
@@ -1332,7 +1332,7 @@ func reportMachines(say adoptSay, nodes []*adoptNode) {
 			disk = n.InstallDisk
 		}
 
-		say(adoptInfo, "machine %q: role %s, install disk %s", n.M.Name, cmp.Or(n.M.Spec.Role, "unknown"), disk)
+		say(adoptInfo, "node %q: role %s, install disk %s", n.M.Name, cmp.Or(n.M.Spec.Role, "unknown"), disk)
 	}
 }
 
@@ -1344,22 +1344,22 @@ func reportPlans(say adoptSay, plans []*adoptPlan) []*adoptPlan {
 	for _, p := range plans {
 		switch {
 		case p.Skipped != "":
-			say(adoptWarn, "machine %q: skipped, %s (only approved machines are read; approve it and re-run adopt to include it)",
+			say(adoptWarn, "node %q: skipped, %s (only approved nodes are read; approve it and re-run adopt to include it)",
 				p.Machine, p.Skipped)
 		case p.Patch != nil:
-			say(adoptInfo, "machine %q: drift found, patch ready (zero drift verified)", p.Machine)
+			say(adoptInfo, "node %q: drift found, patch ready (zero drift verified)", p.Machine)
 
 			toCreate = append(toCreate, p)
 		case len(p.UnrepresentablePaths) > 0:
-			say(adoptWarn, "machine %q: blocked, it differs from a fresh render in %d field(s) that adopt cannot patch automatically: %s",
+			say(adoptWarn, "node %q: blocked, it differs from a fresh render in %d field(s) that adopt cannot patch automatically: %s",
 				p.Machine, len(p.UnrepresentablePaths), strings.Join(p.UnrepresentablePaths, ", "))
 			for _, line := range explainUnrepresentable(p.UnrepresentablePaths) {
-				say(adoptWarn, "machine %q: %s", p.Machine, line)
+				say(adoptWarn, "node %q: %s", p.Machine, line)
 			}
 		case len(p.Owned) > 0:
-			say(adoptInfo, "machine %q: no drift beyond the Ichor-owned settings listed below", p.Machine)
+			say(adoptInfo, "node %q: no drift beyond the Ichor-owned settings listed below", p.Machine)
 		default:
-			say(adoptInfo, "machine %q: already matches a fresh render, nothing to do", p.Machine)
+			say(adoptInfo, "node %q: already matches a fresh render, nothing to do", p.Machine)
 		}
 	}
 
@@ -1387,12 +1387,12 @@ func (st *adoptState) hintStartOver(say adoptSay, plans []*adoptPlan) {
 
 		why := ""
 		if !slices.ContainsFunc(plans[i].UnrepresentablePaths, func(p string) bool { return !hasPathPrefix(p, renderedFromSpec) }) {
-			why = "those are documents Ichor renders from a machine's TalosMachine spec (hostname, network link), which this machine's " +
+			why = "those are documents Ichor renders from a node's TalosMachine spec (hostname, network link), which this node's " +
 				"deleted TalosMachine had. "
 		}
 
-		say(adoptWarn, "machine %q: %sTo start over instead, wipe it with `ichor reclaim node %s --cluster %s` (or the UI Reset and add); "+
-			"this wipes STATE and EPHEMERAL, deletes its Kubernetes Node, and the machine comes back as a pending machine to approve",
+		say(adoptWarn, "node %q: %sTo start over instead, wipe it with `ichor reclaim node %s --cluster %s` (or the UI Reset and add); "+
+			"this wipes STATE and EPHEMERAL, deletes its Kubernetes Node, and the node comes back as a pending node to approve",
 			n.M.Name, why, reclaim.HostOnly(n.M.Spec.Endpoint), st.cluster.Name)
 	}
 }
@@ -1406,9 +1406,9 @@ type specFieldHint struct{ prefix, hint string }
 const cniHint = "the CNI selection has no spec field; Ichor leaves it as the node has it only on a cluster adopted with --cni-unmanaged"
 
 const (
-	installHint = "set TalosMachine spec.install (disk, image, wipe) for this machine; a disk selector that is not one wwid, serial, " +
+	installHint = "set TalosMachine spec.install (disk, image, wipe) for this node; a disk selector that is not one wwid, serial, " +
 		"by-id, bus-path or device-path match, extra kernel arguments, extensions and the bootloader options have no spec field"
-	mirrorHint = "the node and TalosCluster spec.registries disagree on registry mirrors, and every machine is rendered with the cluster's: " +
+	mirrorHint = "the node and TalosCluster spec.registries disagree on registry mirrors, and every node is rendered with the cluster's: " +
 		"if the node has none or other ones, add the cluster's mirrors to the node's own configuration and run adopt again; if the node's " +
 		"are the ones to keep, set spec.registries (host, endpoints, skipFallback, overridePath) to them. Every node must state the " +
 		"same mirrors, and one overridePath value for all of a host's endpoints"
@@ -1435,7 +1435,7 @@ var specFieldHints = []specFieldHint{
 	{"machine.certSANs", certSANsHint},
 	{"cluster.apiServer.certSANs", certSANsHint},
 	{"KubeAPIServerConfig.certExtraSANs", certSANsHint},
-	{"ResolverConfig", "write the node's nameservers in one place: TalosMachine spec.network.dnsServers, or a TalosConfigPatch with a ResolverConfig document (a machine with both is refused)"},
+	{"ResolverConfig", "write the node's nameservers in one place: TalosMachine spec.network.dnsServers, or a TalosConfigPatch with a ResolverConfig document (a node with both is refused)"},
 	{"KubeFlannelCNIConfig", cniHint},
 	{"cluster.network.cni", cniHint},
 }
@@ -1517,7 +1517,7 @@ func (st *adoptState) checkKubePrism(deps adoptDeps) error {
 		}
 
 		if kp := n.Facts.KubePrism; !kp.Enabled || (kp.Port != 0 && kp.Port != 7445) {
-			return fmt.Errorf("adopt: KubePrism is off on machine %s; Ichor's Cilium needs KubePrism on port 7445 "+
+			return fmt.Errorf("adopt: KubePrism is off on node %s; Ichor's Cilium needs KubePrism on port 7445 "+
 				"(the CNI Job reaches the API through it). Enable KubePrism (%s) with your usual tool, then run adopt again",
 				n.M.Name, kubePrismSetting(contract))
 		}

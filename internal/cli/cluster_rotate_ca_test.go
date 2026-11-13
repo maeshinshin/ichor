@@ -43,7 +43,7 @@ func TestRotateCAPromptSaysKubeletRestartsAndTheBundleGoesStaleAndDeclineWritesN
 	}
 
 	for _, want := range []string{
-		"ca-rotation", "2 machine(s)", "1. " + opCP + " (controlplane)", "2. " + testMachineName + " (worker)",
+		"ca-rotation", "2 node(s)", "1. " + opCP + " (controlplane)", "2. " + testMachineName + " (worker)",
 		"Accepting, Issuing, Dropping", "kubelet", "ichor export bundle " + opTestCluster,
 		"STOP WORKING from the second pass (Issuing)", "WAITS", "ichor create credentials NAME --acknowledge",
 	} {

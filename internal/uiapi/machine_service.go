@@ -103,7 +103,7 @@ func (s *Server) getMachineExact(ctx context.Context, ref *pb.ObjectRef) (*ichor
 
 	key := namespacedName(ref)
 	if err := s.Get(ctx, key, &m); err != nil {
-		return nil, mapGetError(fmt.Sprintf("machine %q", key), err)
+		return nil, mapGetError(fmt.Sprintf("node %q", key), err)
 	}
 
 	return &m, nil
@@ -185,7 +185,7 @@ func oneMachine(name string, found []*ichorv1alpha1.TalosMachine) (*ichorv1alpha
 		names[i] = f.Name
 	}
 
-	return nil, invalid("%q matches more than one machine (%s): use the machine's own name", name, strings.Join(names, ", "))
+	return nil, invalid("%q matches more than one node (%s): use the node's own name", name, strings.Join(names, ", "))
 }
 
 // ApproveMachine is how a person decides a discovered machine joins the
@@ -228,19 +228,19 @@ func (s *Server) ApproveMachine(
 
 	if m.Spec.IsApproved() {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("machine %q is already approved; approving it again would risk an unintended "+
+			fmt.Errorf("node %q is already approved; approving it again would risk an unintended "+
 				"reconfiguration, which this API refuses -- edit its configuration instead", namespacedName(ref)))
 	}
 
 	if !m.Spec.Identity.IsStrongIdentity() {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("machine %q has a weak identity (missing UUID, serial number or permanent MAC "+
+			fmt.Errorf("node %q has a weak identity (missing UUID, serial number or permanent MAC "+
 				"address) and cannot be approved", namespacedName(ref)))
 	}
 
 	role := req.Msg.GetRole()
 	if role == pb.MachineRole_MACHINE_ROLE_UNSPECIFIED {
-		return nil, invalid("role is required to approve a machine")
+		return nil, invalid("role is required to approve a node")
 	}
 
 	// Checked here so the caller gets the reason, not a bare admission error.
@@ -285,10 +285,10 @@ func (s *Server) ApproveMachine(
 
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
 		if hint := approveRightHint(ctx, err); hint != "" {
-			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("approving machine %q: %w; %s", namespacedName(ref), err, hint))
+			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("approving node %q: %w; %s", namespacedName(ref), err, hint))
 		}
 
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("approving machine %q: %w", namespacedName(ref), err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("approving node %q: %w", namespacedName(ref), err))
 	}
 
 	audit := &pb.AuditRecord{
@@ -389,7 +389,7 @@ func (s *Server) RejectMachine(
 
 	if m.Spec.IsApproved() {
 		return nil, connect.NewError(connect.CodeFailedPrecondition,
-			fmt.Errorf("machine %q is already approved; reject only applies to a pending machine", namespacedName(ref)))
+			fmt.Errorf("node %q is already approved; reject only applies to a pending node", namespacedName(ref)))
 	}
 
 	now := s.now()
@@ -400,7 +400,7 @@ func (s *Server) RejectMachine(
 	}
 
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("rejecting machine %q: %w", namespacedName(ref), err))
+		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("rejecting node %q: %w", namespacedName(ref), err))
 	}
 
 	audit := &pb.AuditRecord{

@@ -26,18 +26,19 @@ const (
 	colName    = "name"
 	colRole    = "role"
 	colKind    = "kind"
-	colMachine = "machine"
-	colNode    = "node"
+	colMachine = "node"
+	colNode    = "kubernetes node"
 	colVersion = "version"
 	colAge     = "age"
 	colReady   = "ready"
 
-	labelCluster = "Cluster"
-	labelCreated = "Created"
-	labelHealth  = "Health"
-	labelKind    = "Kind"
-	labelNode    = "Node"
-	labelPhase   = "Phase"
+	labelCluster  = "Cluster"
+	labelCreated  = "Created"
+	labelHealth   = "Health"
+	labelKind     = "Kind"
+	labelNode     = "Node"
+	labelKubeNode = "K8s node"
+	labelPhase    = "Phase"
 )
 
 // doneLine prints the one result line of a command that changed something: "✓ created patch

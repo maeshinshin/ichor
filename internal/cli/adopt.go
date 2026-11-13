@@ -84,8 +84,8 @@ Kubernetes API (using --kubeconfig), and turns the difference into a new
 TalosConfigPatch -- so that applying it on top of that fresh render
 reproduces the node's live configuration byte for byte. adopt verifies this
 itself before ever proposing a patch: if it cannot achieve zero drift for a
-machine automatically, it reports the differing fields and leaves that
-machine untouched rather than writing a patch that would not.
+node automatically, it reports the differing fields and leaves that
+node untouched rather than writing a patch that would not.
 
 adopt runs in four phases, and nothing is applied to a node in any of them:
 
@@ -97,7 +97,7 @@ adopt runs in four phases, and nothing is applied to a node in any of them:
      TalosMachines (annotated as adopted), the initial TalosConfigPatch objects,
      and installs Ichor itself. A Cilium that Ichor does not own yet is then taken
      over as Ichor's Helm release.
-  4. Release: lifts the hold one machine at a time, control planes first, each
+  4. Release: lifts the hold one node at a time, control planes first, each
      waiting for Ready, so the first render is applied with zero drift.
 
 Every node must run Talos v1.12 or later; older ones are refused and nothing is
@@ -112,12 +112,12 @@ data plane (IPAM and the tunnel protocol are never changed). Any other CNI is
 adopted only with --cni-unmanaged, which leaves the CNI exactly as it is: Ichor
 will not install, upgrade or configure it. A cluster with two CNIs is refused.
 
---add-machine ADDRESS (repeatable) does not adopt a cluster: it adds a machine to a
-cluster Ichor already manages. The machine already runs a configuration signed by
+--add-machine ADDRESS (repeatable) does not adopt a cluster: it adds a node to a
+cluster Ichor already manages. The node already runs a configuration signed by
 that cluster's CAs, for example because it joined with your own tooling after the
 adoption or its TalosMachine was deleted. adopt reads it, plans it in the same three
 classes, creates a held TalosMachine and releases the hold after the zero-drift check.
-A machine of another Talos cluster is refused; "ichor reclaim node" resets it. The
+A node of another Talos cluster is refused; "ichor reclaim node" resets it. The
 secrets bundle is read from the cluster's own Secret unless you pass one of the flags
 above, and --talosconfig may come from "ichor create credentials".
 
@@ -274,7 +274,7 @@ func init() {
 		"YAML file of Cilium Helm values for the Cilium adopt installs on a cluster with no CNI, or for a Cilium it takes over that has no Helm release record (Ichor-owned keys are refused)")
 	adoptCmd.Flags().BoolVar(&adoptPlanOnly, "plan", false, "print the plan and write nothing")
 	adoptCmd.Flags().StringVar(&adoptSeed, adoptFlagNode, "",
-		"address of one control plane; adopt discovers the cluster's machines from its membership when the TalosCluster does not exist yet")
+		"address of one control plane; adopt discovers the cluster's nodes from its membership when the TalosCluster does not exist yet")
 	adoptCmd.Flags().StringVar(&adoptContract, adoptFlagVersionContract, "",
 		"use this Talos version contract (v1.12 to the running minor) instead of the probed one")
 
@@ -284,7 +284,7 @@ func init() {
 		"accept the differences between the live Cilium objects and the pinned chart")
 
 	adoptCmd.Flags().StringArrayVar(&adoptAddMachines, "add-machine", nil,
-		"address of a machine that already runs a configuration signed by this cluster's CAs but has no TalosMachine; "+
+		"address of a node that already runs a configuration signed by this cluster's CAs but has no TalosMachine; "+
 			"adds it to the existing cluster instead of adopting the cluster (repeatable)")
 
 	_ = adoptCmd.MarkFlagRequired(flagCluster)
@@ -312,7 +312,7 @@ func checkAddMachineFlags(cmd *cobra.Command, add []string) error {
 
 	for _, name := range addMachineExcluded {
 		if cmd.Flags().Changed(name) {
-			return fmt.Errorf("adopt: --%s does not apply to --add-machine, which adds a machine to a cluster Ichor already manages", name)
+			return fmt.Errorf("adopt: --%s does not apply to --add-machine, which adds a node to a cluster Ichor already manages", name)
 		}
 	}
 

@@ -294,7 +294,7 @@ func initEpilogue(p *progress, opts initOptions, password string, ok bool) {
 		p.Warn(fmt.Sprintf("make ichor-ui reachable at %s over https (an Ingress, Gateway or LoadBalancer in front of "+
 			"the ichor-ui Service (label %s=%s), or ichorUI.tls.secretName); Ichor installs none", opts.UIURL, uiComponentLabel, uiComponentValue))
 		p.Warn("spec.authentication.ichor is set; the controller renders the kube-apiserver authentication " +
-			"config next. Applying it restarts kube-apiserver on each control plane, so machines report APIServerRestartRequired " +
+			"config next. Applying it restarts kube-apiserver on each control plane, so nodes report APIServerRestartRequired " +
 			"until you run `ichor rollout config` (or Apply in the Overview page's attention list), which rolls one control plane at a time")
 
 		if password != "" {

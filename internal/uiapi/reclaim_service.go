@@ -157,7 +157,7 @@ func (s *Server) CreateReclaim(
 
 		if !ok {
 			return nil, connect.NewError(connect.CodePermissionDenied,
-				fmt.Errorf("you may reclaim machines but not add addresses to cluster %s", namespacedName(c)))
+				fmt.Errorf("you may reclaim nodes but not add addresses to cluster %s", namespacedName(c)))
 		}
 	}
 

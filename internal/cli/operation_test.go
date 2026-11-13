@@ -90,7 +90,7 @@ func TestUpgradeTalosAsksWhichMachinesRebootInWhichOrderAndDeclineWritesNothing(
 		t.Fatalf("want aborted, got %v", err)
 	}
 
-	for _, want := range []string{"REBOOTS", "2 machine(s)", "1. " + opCP + " (controlplane)", "2. " + testMachineName + " (worker)", opOldVersion, opNewVersion} {
+	for _, want := range []string{"REBOOTS", "2 node(s)", "1. " + opCP + " (controlplane)", "2. " + testMachineName + " (worker)", opOldVersion, opNewVersion} {
 		if !strings.Contains(prompt.String(), want) {
 			t.Errorf("prompt lacks %q:\n%s", want, prompt.String())
 		}
@@ -349,7 +349,7 @@ func TestPlanTextMentionsHeldMachinesAndTheBlastRadius(t *testing.T) {
 	}
 
 	got := planText(pb.OperationKind_OPERATION_KIND_KUBERNETES, "c", p)
-	for _, want := range []string{"without a reboot", "3 machine(s) (1 control plane, 2 worker)", "at most 2 at once", "2. w1, w2 (worker)", "Held", "w9", "nothing is rolled back"} {
+	for _, want := range []string{"without a reboot", "3 node(s) (1 control plane, 2 worker)", "at most 2 at once", "2. w1, w2 (worker)", "Held", "w9", "nothing is rolled back"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("text lacks %q:\n%s", want, got)
 		}

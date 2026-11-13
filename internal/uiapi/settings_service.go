@@ -174,7 +174,7 @@ func changesOf(f *pb.SettingsFields) (settings.Changes, error) {
 	var c settings.Changes
 
 	if f.ReclaimEnabled != nil {
-		return c, errors.New("reclaim.enabled is removed: RBAC alone decides who may reset and add a machine")
+		return c, errors.New("reclaim.enabled is removed: RBAC alone decides who may reset and add a node")
 	}
 
 	c.DriftPolicy = f.DriftPolicy

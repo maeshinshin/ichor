@@ -268,9 +268,9 @@ func describeOperationNamed(out *pb.Operation, op *ichorv1alpha1.TalosOperation,
 	case ichorv1alpha1.TalosOperationKindKeyRotation:
 		describeKeyRotation(out, op, add)
 	case ichorv1alpha1.TalosOperationKindConfig:
-		out.Summary = "Apply configuration to the machines with pending changes"
+		out.Summary = "Apply configuration to the nodes with pending changes"
 		if machines := len(op.Status.Machines); machines > 0 {
-			out.Summary = fmt.Sprintf("Apply configuration to %d machine%s", machines, plural(machines))
+			out.Summary = fmt.Sprintf("Apply configuration to %d node%s", machines, plural(machines))
 		}
 	case ichorv1alpha1.TalosOperationKindNode:
 		describeNodeOp(out, op, names, add)
@@ -340,7 +340,7 @@ func describeNodeOp(out *pb.Operation, op *ichorv1alpha1.TalosOperation, names m
 	}
 
 	add("Action", n.Action)
-	add("Machine", m)
+	add("Node", m)
 	add("Service", n.Service)
 	add("Wipe mode", n.WipeMode)
 

@@ -359,7 +359,7 @@ func TestAdoptRefusesKubeProxyWithoutKubePrism(t *testing.T) {
 		want    []string
 	}{
 		{kubeProxyReplaced, true, []string{"KubePrism"}},
-		{kubeProxyEnabled, false, []string{"KubePrism is off on machine", "port 7445"}},
+		{kubeProxyEnabled, false, []string{"KubePrism is off on node", "port 7445"}},
 	}
 
 	for _, tc := range tests {
@@ -444,7 +444,7 @@ func TestAdoptHelmCiliumWithoutTakeoverStaysHeld(t *testing.T) {
 
 	out := env.stderr.String()
 
-	for _, want := range []string{"Cilium takeover checks: pending", "machines stay held"} {
+	for _, want := range []string{"Cilium takeover checks: pending", "nodes stay held"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q:\n%s", want, out)
 		}

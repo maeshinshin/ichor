@@ -156,12 +156,12 @@ func buildAdoptPlan(
 
 	baseline, _, err := render.Render(cluster, m, bundle, existing, sys)
 	if err != nil {
-		return nil, fmt.Errorf("adopt: rendering machine %q's baseline: %w", m.Name, err)
+		return nil, fmt.Errorf("adopt: rendering node %q's baseline: %w", m.Name, err)
 	}
 
 	paths, err := controller.ChangedPaths(currentCfg, baseline)
 	if err != nil {
-		return nil, fmt.Errorf("adopt: diffing machine %q's current configuration: %w", m.Name, err)
+		return nil, fmt.Errorf("adopt: diffing node %q's current configuration: %w", m.Name, err)
 	}
 
 	plan := &adoptPlan{Machine: m.Name}
@@ -195,7 +195,7 @@ func buildAdoptPlan(
 
 	docs, err := captureDocuments(currentCfg, wantSysctl, wantKernelModule, captured, wantResolver, cluster.Spec.CertSANs)
 	if err != nil {
-		return nil, fmt.Errorf("adopt: capturing machine %q's current documents: %w", m.Name, err)
+		return nil, fmt.Errorf("adopt: capturing node %q's current documents: %w", m.Name, err)
 	}
 
 	candidate := ichorv1alpha1.TalosConfigPatch{
@@ -213,7 +213,7 @@ func buildAdoptPlan(
 
 	rendered, _, err := render.Render(cluster, m, bundle, withCandidate, sys)
 	if err != nil {
-		return nil, fmt.Errorf("adopt: verifying machine %q's zero-drift patch: %w", m.Name, err)
+		return nil, fmt.Errorf("adopt: verifying node %q's zero-drift patch: %w", m.Name, err)
 	}
 
 	// Zero drift, enforced: this is the only path that returns a Patch, and it never does so
@@ -221,7 +221,7 @@ func buildAdoptPlan(
 	// nothing but class B paths (with none, that is byte-identical).
 	left, err := controller.ChangedPaths(currentCfg, rendered)
 	if err != nil {
-		return nil, fmt.Errorf("adopt: verifying machine %q's zero-drift patch: %w", m.Name, err)
+		return nil, fmt.Errorf("adopt: verifying node %q's zero-drift patch: %w", m.Name, err)
 	}
 
 	if _, notOwned := own.split(left); len(notOwned) == 0 {
@@ -247,7 +247,7 @@ func buildAdoptPlan(
 func refuseJWTAuthenticators(machine string, currentCfg []byte) error {
 	provider, err := configloader.NewFromBytes(currentCfg)
 	if err != nil {
-		return fmt.Errorf("adopt: decoding machine %q's current configuration: %w", machine, err)
+		return fmt.Errorf("adopt: decoding node %q's current configuration: %w", machine, err)
 	}
 
 	auth := provider.K8sAuthenticationConfig()
@@ -256,7 +256,7 @@ func refuseJWTAuthenticators(machine string, currentCfg []byte) error {
 	}
 
 	if jwt, _ := auth.Configuration()["jwt"].([]any); len(jwt) > 0 {
-		return fmt.Errorf("adopt: machine %q has %d jwt authenticator(s) in its KubeAuthenticationConfig, which Ichor would replace "+
+		return fmt.Errorf("adopt: node %q has %d jwt authenticator(s) in its KubeAuthenticationConfig, which Ichor would replace "+
 			"when it renders the node; move the identity provider into spec.authentication.external of the TalosCluster and adopt again",
 			machine, len(jwt))
 	}
@@ -449,7 +449,7 @@ func probeVersionContract(
 	}
 
 	if best < 0 {
-		return "", probes, fmt.Errorf("adopt: machine %q renders at none of the version contracts %s: %w",
+		return "", probes, fmt.Errorf("adopt: node %q renders at none of the version contracts %s: %w",
 			m.Name, strings.Join(candidates, ", "), probes[0].Err)
 	}
 

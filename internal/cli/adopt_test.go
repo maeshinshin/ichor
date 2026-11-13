@@ -371,7 +371,7 @@ func TestRunAdopt_SkipsMachinesThatAreNotApproved(t *testing.T) {
 	}
 
 	for _, name := range []string{"node-pending", "node-rejected"} {
-		if !strings.Contains(stderr.String(), `machine "`+name+`": skipped`) {
+		if !strings.Contains(stderr.String(), `node "`+name+`": skipped`) {
 			t.Fatalf("stderr does not say %s was skipped:\n%s", name, stderr.String())
 		}
 	}

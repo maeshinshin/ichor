@@ -182,7 +182,7 @@ func renderOperationMachines(h *human, op *pb.Operation) {
 		rows[i] = row
 	}
 
-	h.Title("Machines")
+	h.Title("Nodes")
 	h.Table(header, rows)
 }
 
@@ -270,7 +270,7 @@ func (w *opWatch) detailIn(op *pb.Operation, stage, phase string) string {
 			}
 		}
 
-		parts = append(parts, fmt.Sprintf("%d/%d machines", done, n))
+		parts = append(parts, fmt.Sprintf("%d/%d nodes", done, n))
 	}
 
 	if stage = cmp.Or(stage, op.GetKubernetesStage(), op.GetEtcdRestoreStep()); stage != "" {

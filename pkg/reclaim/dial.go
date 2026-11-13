@@ -351,7 +351,7 @@ func tcpReachable(ctx context.Context, hostport string) bool {
 
 // ErrOtherMachine is returned (wrapped) by WaitMaintenance when the address
 // answers in maintenance mode with a different UUID: another machine now has it.
-var ErrOtherMachine = errors.New("another machine now has the address")
+var ErrOtherMachine = errors.New("another node now has the address")
 
 // MaintenanceUUID dials address's Talos API in maintenance mode (no
 // credential: a node with no configuration offers nothing else) and returns

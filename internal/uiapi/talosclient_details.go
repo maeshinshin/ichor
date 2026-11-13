@@ -67,7 +67,7 @@ func (t *machineryNodeTalosClient) TalosSystem(ctx context.Context) (*pb.TalosSy
 
 	ms, err := optional(safe.StateGetByID[*runtime.MachineStatus](ctx, t.c.COSI, runtime.MachineStatusID))
 	if err != nil {
-		return nil, fmt.Errorf("reading machine status: %w", err)
+		return nil, fmt.Errorf("reading node status: %w", err)
 	}
 
 	if ms != nil {

@@ -209,7 +209,7 @@ var (
 )
 
 var (
-	upgradeTalosCmd      = newUpgradeCmd("talos", "Upgrade Talos on every machine of a cluster (each machine reboots)", pb.OperationKind_OPERATION_KIND_TALOS)
+	upgradeTalosCmd      = newUpgradeCmd("talos", "Upgrade Talos on every node of a cluster (each node reboots)", pb.OperationKind_OPERATION_KIND_TALOS)
 	upgradeKubernetesCmd = newUpgradeCmd("kubernetes", "Upgrade Kubernetes on a cluster (no reboot)", pb.OperationKind_OPERATION_KIND_KUBERNETES)
 	upgradeIchorCmd      = newUpgradeCmd("ichor", "Upgrade Ichor itself (IchorInstallation.spec.version)", pb.OperationKind_OPERATION_KIND_ICHOR)
 )

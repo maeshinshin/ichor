@@ -696,7 +696,7 @@ func (s *Server) planMachines(ctx context.Context, p *opPlan, cluster *ichorv1al
 
 	var list ichorv1alpha1.TalosMachineList
 	if err := s.List(ctx, &list, client.InNamespace(cluster.Namespace)); err != nil {
-		return mapListError("machines", err)
+		return mapListError("nodes", err)
 	}
 
 	var cps, workers []*ichorv1alpha1.TalosMachine
@@ -851,7 +851,7 @@ func (s *Server) blockedReason(
 	}
 
 	if p.kind == ichorv1alpha1.TalosOperationKindConfig && len(p.resp.Machines) == 0 {
-		return "no approved machine has a pending configuration change that needs a reboot or an API server restart (nothing is waiting in Ready=RebootRequired or APIServerRestartRequired)", nil
+		return "no approved node has a pending configuration change that needs a reboot or an API server restart (nothing is waiting in Ready=RebootRequired or APIServerRestartRequired)", nil
 	}
 
 	return "", nil

@@ -135,7 +135,7 @@ func TestNodeRemoveNeedsTheTypedName(t *testing.T) {
 		t.Fatalf("wrong name = %v", err)
 	}
 
-	if !strings.Contains(prompt.String(), "Type the machine name") || !present(k8s, testMachineName) {
+	if !strings.Contains(prompt.String(), "Type the node name") || !present(k8s, testMachineName) {
 		t.Fatalf("a wrong name must remove nothing:\n%s", prompt.String())
 	}
 
@@ -220,11 +220,11 @@ func TestNodeRemoveConfirmationIsTheMachineNameNotTheHostname(t *testing.T) {
 	var prompt bytes.Buffer
 
 	err := runNodeAction(ctx, c, strings.NewReader(host+"\n"), &bytes.Buffer{}, &prompt, spec)
-	if err == nil || !strings.Contains(err.Error(), "type the machine name "+testMachineName+" (node "+host+")") {
+	if err == nil || !strings.Contains(err.Error(), "type the node name "+testMachineName+" (node "+host+")") {
 		t.Fatalf("the hostname must not confirm: %v", err)
 	}
 
-	if !strings.Contains(prompt.String(), "Type the machine name "+testMachineName+" (node "+host+") to confirm") || !present(k8s, testMachineName) {
+	if !strings.Contains(prompt.String(), "Type the node name "+testMachineName+" (node "+host+") to confirm") || !present(k8s, testMachineName) {
 		t.Fatalf("the prompt names the machine and the node:\n%s", prompt.String())
 	}
 

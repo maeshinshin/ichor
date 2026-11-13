@@ -132,11 +132,11 @@ var deleteOperationCmd = &cobra.Command{
 	Use:   useOperationName,
 	Short: "Delete an operation record",
 	Long: `delete operation removes the record and, when it has not finished, lets the controller release
-the cluster lock. It does not stop a step already sent to a machine and it does not
+the cluster lock. It does not stop a step already sent to a node and it does not
 roll anything back. It asks for confirmation unless --yes.
 
 A ca-rotation or key-rotation deleted before it made the new CA or key issue is abandoned: the
-new material leaves the bundle, the lock is released and the machines are rendered from the old
+new material leaves the bundle, the lock is released and the nodes are rendered from the old
 material again (the nodes then report a pending change; 'ichor rollout config' drops what they
 still accept). Later in the rotation the delete is refused: let it finish.`,
 	Example: `  ichor delete operation upgrade-talos-x7k2p
@@ -161,7 +161,7 @@ func runOperationDelete(ctx context.Context, c *apiClients, in io.Reader, out, e
 		op := got.Msg.GetOperation()
 
 		if err := confirmOrAbort(in, errw, "delete operation", fmt.Sprintf(
-			"Delete operation %s/%s (%s on cluster %s, phase %q)? Steps already sent to machines are not undone. [y/N] ",
+			"Delete operation %s/%s (%s on cluster %s, phase %q)? Steps already sent to nodes are not undone. [y/N] ",
 			ref.GetNamespace(), name, kindName(op.GetKind()), op.GetCluster().GetName(), op.GetPhase()), "aborted"); err != nil {
 			return err
 		}

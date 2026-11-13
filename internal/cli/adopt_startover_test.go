@@ -56,7 +56,7 @@ func TestAdoptRefusalOffersTheWipe(t *testing.T) {
 			t.Errorf("%s: the refusal does not offer the wipe:\n%s", name, got)
 		}
 
-		if rendered := strings.Contains(got, "renders from a machine's TalosMachine spec"); rendered != (name == "only rendered documents") {
+		if rendered := strings.Contains(got, "renders from a node's TalosMachine spec"); rendered != (name == "only rendered documents") {
 			t.Errorf("%s: explanation of the rendered documents = %v:\n%s", name, rendered, got)
 		}
 	}

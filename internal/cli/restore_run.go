@@ -131,7 +131,7 @@ func runRecoverCluster(ctx context.Context, opts restoreOptions, deps restoreDep
 	h := newHuman(deps.Stdout)
 	h.Note(h.Mark(markOK) + " etcd on " + opts.NodeEndpoint + " is recovering from " + snap.name)
 	h.Note("Next: once the Kubernetes API is back, the restored Ichor controller re-reconciles the cluster; " +
-		"check each machine before approving anything.")
+		"check each node before approving anything.")
 
 	return h.Err()
 }

@@ -169,7 +169,7 @@ type reclaimDeps struct {
 func runMachineReclaim(ctx context.Context, d reclaimDeps, address string, f reclaimFlags) error {
 	known, err := d.Known(ctx)
 	if err != nil {
-		return fmt.Errorf("reclaim node: cannot tell which machines Ichor manages, so cannot rule out reclaiming one: %w", err)
+		return fmt.Errorf("reclaim node: cannot tell which nodes Ichor manages, so cannot rule out reclaiming one: %w", err)
 	}
 
 	node, err := d.Dial(ctx, d.Credential, address, f.Context)
@@ -212,7 +212,7 @@ func runMachineReclaim(ctx context.Context, d reclaimDeps, address string, f rec
 	c := reclaim.Confirmation{UUID: f.Confirm, ClusterName: f.ConfirmCluster}
 
 	if c.UUID == "" {
-		say(d.Out, "\nThis wipes STATE and EPHEMERAL on %s and removes it from cluster %q.\nType the machine's UUID to continue: ", in.Hostname, in.ClusterName)
+		say(d.Out, "\nThis wipes STATE and EPHEMERAL on %s and removes it from cluster %q.\nType the node's UUID to continue: ", in.Hostname, in.ClusterName)
 
 		if c.UUID, err = readTypedLine(r); err != nil {
 			return fmt.Errorf("reclaim node: reading the UUID (pass --confirm UUID when not interactive): %w", err)
@@ -260,8 +260,8 @@ func finishReclaim(ctx context.Context, d reclaimDeps, steps *progress, address,
 		defer cancel()
 
 		if err := reclaim.WaitMaintenance(wctx, host, uuid, d.Poll, d.Probe); err != nil {
-			return "", fmt.Errorf("reclaim node: the reset was sent but the machine did not come back at %s: %w\n"+
-				"The machine may have taken a new address from DHCP after the reboot. "+
+			return "", fmt.Errorf("reclaim node: the reset was sent but the node did not come back at %s: %w\n"+
+				"The node may have taken a new address from DHCP after the reboot. "+
 				"Find it (its UUID is %s) and add it to a cluster's spec.discovery.addresses or cidrs", host, err, uuid)
 		}
 
@@ -283,7 +283,7 @@ func finishReclaim(ctx context.Context, d reclaimDeps, steps *progress, address,
 			return "", fmt.Errorf("reclaim node: %w", err)
 		}
 
-		return "added to cluster " + f.Cluster + "'s discovery addresses; it will appear as a pending machine", nil
+		return "added to cluster " + f.Cluster + "'s discovery addresses; it will appear as a pending node", nil
 	})
 	if err != nil {
 		return err
@@ -343,10 +343,10 @@ func init() {
 
 	fl := reclaimNodeCmd.Flags()
 	fl.StringVar(&machineReclaimFlags.Context, "context", "", "talosconfig context to use (default: the file's own)")
-	fl.StringVar(&machineReclaimFlags.Confirm, "confirm", "", "the machine's UUID, for non-interactive use (--yes does not replace it)")
+	fl.StringVar(&machineReclaimFlags.Confirm, "confirm", "", "the node's UUID, for non-interactive use (--yes does not replace it)")
 	fl.StringVar(&machineReclaimFlags.ConfirmCluster, "confirm-cluster", "", "the foreign cluster's name, the second confirmation --force needs")
 	fl.BoolVar(&machineReclaimFlags.Force, "force", false, "allow a control plane whose removal breaks etcd quorum, or is the last one")
 	fl.BoolVar(&machineReclaimFlags.ForceUngraceful, "force-ungraceful", false, "reset without cordon, drain and etcd leave, for a dead cluster")
-	fl.StringVar(&machineReclaimFlags.Cluster, "cluster", "", "TalosCluster (in --namespace) whose discovery addresses get the machine's address afterwards")
+	fl.StringVar(&machineReclaimFlags.Cluster, "cluster", "", "TalosCluster (in --namespace) whose discovery addresses get the node's address afterwards")
 	fl.DurationVar(&machineReclaimFlags.Wait, "wait", 10*time.Minute, "how long to wait for maintenance mode (0 to not wait)")
 }

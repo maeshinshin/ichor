@@ -222,7 +222,7 @@ func TestMachineListHumanOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := "NAME      ROLE           APPROVAL  READY  ENDPOINT            NODE                   AGE\n" +
+	want := "NAME      ROLE           APPROVAL  READY  ENDPOINT            KUBERNETES NODE        AGE\n" +
 		"fa70962a  control-plane  approved  ✓      10.244.1.136:50000  ichor-e2e-initshow-cp  5m\n" +
 		"0b1c2d3e  -              pending   -      10.244.1.150:50000  -                      30s\n"
 	wantText(t, out.String(), want)
@@ -264,7 +264,7 @@ func TestMachineGetHumanOutput(t *testing.T) {
   Role         control-plane
   Approval     approved by ichor-cli (4m ago)
   Health       ✓ ready
-  Node         ichor-e2e-initshow-cp
+  K8s node     ichor-e2e-initshow-cp
   Endpoint     10.244.1.136:50000
   Created      5m ago
 
@@ -299,7 +299,7 @@ func TestMachineGetHumanOutputForAPendingMachineShowsWhatDiscoveryFound(t *testi
 	}
 
 	if strings.Contains(out.String(), "Health") {
-		t.Errorf("a pending machine has no health yet:\n%s", out.String())
+		t.Errorf("a pending node has no health yet:\n%s", out.String())
 	}
 }
 
@@ -467,8 +467,8 @@ func TestHumanOutputThroughTheInProcessAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := "NAME      ROLE    APPROVAL  READY  ENDPOINT         NODE  AGE\n" +
-		"fa70962a  worker  approved  ✓      10.0.0.10:50000  -     2h\n"
+	want := "NAME      ROLE    APPROVAL  READY  ENDPOINT         KUBERNETES NODE  AGE\n" +
+		"fa70962a  worker  approved  ✓      10.0.0.10:50000  -                2h\n"
 	wantText(t, out.String(), want)
 
 	out.Reset()

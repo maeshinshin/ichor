@@ -70,11 +70,9 @@ type ClusterServiceClient interface {
 	// gate as the other writes, which writes the CR directly.
 	AddDiscoveryAddress(context.Context, *connect.Request[v1alpha1.AddDiscoveryAddressRequest]) (*connect.Response[v1alpha1.AddDiscoveryAddressResponse], error)
 	// DismissCARotationAdvice sets the annotation ichor.maesh.dev/ca-rotation-advice-dismissed on the
-	// TalosCluster, which the controller reads to clear the CARotationAdvised condition. It writes that annotation and
-	// nothing else.
+	// TalosCluster, which the controller reads to clear the CARotationAdvised condition. It writes that annotation and nothing else.
 	DismissCARotationAdvice(context.Context, *connect.Request[v1alpha1.DismissCARotationAdviceRequest]) (*connect.Response[v1alpha1.DismissCARotationAdviceResponse], error)
-	// AddDiscoveryCidr appends one IPv4 range (/24 or smaller) to TalosCluster.spec.discovery.cidrs. The controller
-	// scans it address by address; the write itself wakes the cluster's
+	// AddDiscoveryCidr appends one IPv4 range (/24 or smaller) to TalosCluster.spec.discovery.cidrs. The controller scans it address by address; the write itself wakes the cluster's
 	// reconcile, so the first pass starts now and not at the next 5 minute interval.
 	AddDiscoveryCidr(context.Context, *connect.Request[v1alpha1.AddDiscoveryCidrRequest]) (*connect.Response[v1alpha1.AddDiscoveryCidrResponse], error)
 	// RemoveDiscoveryAddress removes one address from spec.discovery.addresses. Machines already found
@@ -196,11 +194,9 @@ type ClusterServiceHandler interface {
 	// gate as the other writes, which writes the CR directly.
 	AddDiscoveryAddress(context.Context, *connect.Request[v1alpha1.AddDiscoveryAddressRequest]) (*connect.Response[v1alpha1.AddDiscoveryAddressResponse], error)
 	// DismissCARotationAdvice sets the annotation ichor.maesh.dev/ca-rotation-advice-dismissed on the
-	// TalosCluster, which the controller reads to clear the CARotationAdvised condition. It writes that annotation and
-	// nothing else.
+	// TalosCluster, which the controller reads to clear the CARotationAdvised condition. It writes that annotation and nothing else.
 	DismissCARotationAdvice(context.Context, *connect.Request[v1alpha1.DismissCARotationAdviceRequest]) (*connect.Response[v1alpha1.DismissCARotationAdviceResponse], error)
-	// AddDiscoveryCidr appends one IPv4 range (/24 or smaller) to TalosCluster.spec.discovery.cidrs. The controller
-	// scans it address by address; the write itself wakes the cluster's
+	// AddDiscoveryCidr appends one IPv4 range (/24 or smaller) to TalosCluster.spec.discovery.cidrs. The controller scans it address by address; the write itself wakes the cluster's
 	// reconcile, so the first pass starts now and not at the next 5 minute interval.
 	AddDiscoveryCidr(context.Context, *connect.Request[v1alpha1.AddDiscoveryCidrRequest]) (*connect.Response[v1alpha1.AddDiscoveryCidrResponse], error)
 	// RemoveDiscoveryAddress removes one address from spec.discovery.addresses. Machines already found

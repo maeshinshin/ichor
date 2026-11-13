@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -67,15 +68,31 @@ func liveClients(t *testing.T, yes, allowed bool, extra ...client.Object) (*apiC
 
 func liveSpec() liveRestoreSpec { return liveRestoreSpec{Cluster: opTestCluster} }
 
-func TestRestoreLiveIsRegisteredBesideRecoverCluster(t *testing.T) {
-	for _, name := range []string{"live", "backup", "confirm", "follow", flagSnapshot, flagCluster, "recover-cluster"} {
-		if restoreCmd.Flags().Lookup(name) == nil {
-			t.Errorf("ichor restore has no --%s", name)
+func TestRestoreEtcdIsRegisteredBesideRestoreCluster(t *testing.T) {
+	for cmd, flags := range map[*cobra.Command][]string{
+		restoreEtcdCmd:    {"backup", "confirm", "follow", flagSnapshot, flagCluster},
+		restoreClusterCmd: {flagSnapshot, flagCluster, "secrets-bundle", "node-endpoint", "s3-endpoint", "s3-bucket", "s3-prefix"},
+	} {
+		for _, name := range flags {
+			if cmd.Flags().Lookup(name) == nil {
+				t.Errorf("ichor restore %s has no --%s", cmd.Name(), name)
+			}
+		}
+
+		if cmd.InheritedFlags().Lookup("override") == nil {
+			t.Errorf("ichor restore %s has no --override", cmd.Name())
+		}
+
+		// The modes are subcommands now; the flags that picked one are gone.
+		for _, gone := range []string{"live", "recover-cluster"} {
+			if cmd.Flags().Lookup(gone) != nil {
+				t.Errorf("ichor restore %s still has --%s", cmd.Name(), gone)
+			}
 		}
 	}
 
-	if restoreCmd.PersistentFlags().Lookup("override") == nil {
-		t.Error("ichor restore has no --override")
+	if restoreCmd.Runnable() {
+		t.Error("ichor restore without etcd or cluster must print help, not pick a mode")
 	}
 }
 
@@ -269,25 +286,6 @@ func TestRestoreLiveRefusesABackupStoreInsideTheCluster(t *testing.T) {
 		if len(opTestOps(t, k8s)) != 0 {
 			t.Fatalf("%s: a blocked restore writes nothing", endpoint)
 		}
-	}
-}
-
-func TestRestoreRequiresAMode(t *testing.T) {
-	old := restoreLiveOpts
-	t.Cleanup(func() { restoreLiveOpts = old })
-
-	restoreLiveOpts.Live = false
-	restoreOpts.RecoverCluster = false
-
-	if err := restoreCmd.RunE(restoreCmd, nil); err == nil || !strings.Contains(err.Error(), "--live") {
-		t.Fatalf("no mode = %v", err)
-	}
-
-	restoreLiveOpts.Live, restoreOpts.RecoverCluster = true, true
-	t.Cleanup(func() { restoreOpts.RecoverCluster = false })
-
-	if err := restoreCmd.RunE(restoreCmd, nil); err == nil || !strings.Contains(err.Error(), "not both") {
-		t.Fatalf("both modes = %v", err)
 	}
 }
 

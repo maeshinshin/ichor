@@ -32,7 +32,7 @@ import (
 )
 
 // A live restore wipes the control plane the kubeconfig usually points at, and the apiserver there is
-// unreachable for many minutes; the other control planes' apiservers answer. restore --live --follow
+// unreachable for many minutes; the other control planes' apiservers answer. restore etcd --follow
 // therefore learns the control planes' addresses up front and, while the current server is
 // unreachable, tries the others in turn.
 

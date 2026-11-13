@@ -31,7 +31,7 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// Golden tests of the human output of `ichor etcd`, on a pipe: no colour codes.
+// Golden tests of the human output of `ichor snapshot etcd`, on a pipe: no colour codes.
 
 func TestDownloadHumanOutput(t *testing.T) {
 	f := &fakeDiagnostics{chunks: []*pb.DownloadEtcdSnapshotResponse{{Filename: "etcd.snapshot.db", Data: []byte("abc")}, {Data: []byte("def")}}}

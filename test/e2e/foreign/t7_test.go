@@ -74,7 +74,7 @@ func TestT7HelmManager(t *testing.T) {
 		t.Errorf("a TalosOperation exists after the refused upgrade:\n%s", ops)
 	}
 
-	if out, err := ichorInPod(t, c, "settings", "set", "users.tokenTTL=10m"); err != nil {
+	if out, err := ichorInPod(t, c, "set", "settings", "users.tokenTTL=10m"); err != nil {
 		t.Fatalf("ichor set settings failed: %v\n%s", err, out)
 	}
 	if got := installationField(c, "{.spec.users.tokenTTL}"); got != "10m0s" {

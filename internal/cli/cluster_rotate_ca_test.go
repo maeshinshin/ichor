@@ -26,7 +26,7 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// rotate-ca goes through OperationService like every other start: there is
+// rotate ca goes through OperationService like every other start: there is
 // no second path that writes the operation from the kubeconfig.
 
 func TestRotateCAPromptSaysKubeletRestartsAndTheBundleGoesStaleAndDeclineWritesNothing(t *testing.T) {
@@ -87,7 +87,7 @@ func TestRotateCAWithYesCreatesOneOperationAndRefusesASecondWhileItRuns(t *testi
 
 func TestRotateCAIsOneCommandThroughTheEntryPoint(t *testing.T) {
 	if _, ok := rotateCACmd.Annotations[writesAnnotation]; !ok {
-		t.Error("rotate-ca is not marked as a write")
+		t.Error("rotate ca is not marked as a write")
 	}
 
 	if got := kindName(pb.OperationKind_OPERATION_KIND_CA_ROTATION); got != "ca-rotation" {
@@ -100,7 +100,7 @@ func TestRotateCAIsOneCommandThroughTheEntryPoint(t *testing.T) {
 	}
 }
 
-// The done hint names the new kubeconfig rotate-ca wrote: the old one trusts only the old CA and
+// The done hint names the new kubeconfig rotate ca wrote: the old one trusts only the old CA and
 // fails with x509 once the rotation is over.
 func TestRotateCADoneHintNamesTheNewKubeconfig(t *testing.T) {
 	const newKubeconfig = "/home/op/.kube/config.ichor-new"
@@ -114,7 +114,7 @@ func TestRotateCADoneHintNamesTheNewKubeconfig(t *testing.T) {
 	}
 }
 
-// The hand-off needs the operator's own kubeconfig, so rotate-ca does it with or without --follow
+// The hand-off needs the operator's own kubeconfig, so rotate ca does it with or without --follow
 // (a rotation left at AwaitingCredentials waits for it); the help says so instead of surprising anyone.
 func TestRotateCAHelpSaysTheHandoffHappensWithoutFollow(t *testing.T) {
 	if !strings.Contains(rotateCACmd.Long, "with or without --follow") {

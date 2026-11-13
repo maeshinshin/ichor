@@ -64,7 +64,7 @@ func TestConfigApplyPromptNamesTheMachineTheFieldAndTheRebootAndDeclineWritesNot
 	}
 
 	if len(opTestOps(t, k8s)) != 0 {
-		t.Fatal("a declined config apply wrote something")
+		t.Fatal("a declined rollout config wrote something")
 	}
 }
 
@@ -92,13 +92,13 @@ func TestConfigApplyRefusesWhenNothingNeedsAReboot(t *testing.T) {
 	err := runStartOperation(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{},
 		startSpec{Kind: pb.OperationKind_OPERATION_KIND_CONFIG, Cluster: opTestCluster})
 	if err == nil || len(opTestOps(t, k8s)) != 0 {
-		t.Fatalf("an empty config apply must be refused and write nothing: %v", err)
+		t.Fatalf("an empty rollout config must be refused and write nothing: %v", err)
 	}
 }
 
 func TestConfigApplyIsAWriteAndNamedConfig(t *testing.T) {
 	if _, ok := rolloutConfigCmd.Annotations[writesAnnotation]; !ok {
-		t.Error("config apply is not marked as a write")
+		t.Error("rollout config is not marked as a write")
 	}
 
 	if got := kindName(pb.OperationKind_OPERATION_KIND_CONFIG); got != "config" {

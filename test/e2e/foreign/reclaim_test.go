@@ -121,10 +121,10 @@ func (r *rig) pod(t *testing.T, args ...string) (string, error) {
 	return string(out), err
 }
 
-// machine runs `ichor machine <args>` in the Ichor tools pod.
-func (r *rig) machine(t *testing.T, args ...string) (string, error) {
+// machine runs `ichor <verb> node <args>` (reclaim, approve) in the Ichor tools pod.
+func (r *rig) machine(t *testing.T, verb string, args ...string) (string, error) {
 	t.Helper()
-	return r.pod(t, append([]string{"env", "HOME=/tmp/home", "/tmp/ichor", "machine"}, args...)...)
+	return r.pod(t, append([]string{"env", "HOME=/tmp/home", "/tmp/ichor", verb, "node"}, args...)...)
 }
 
 func (r *rig) reclaim(t *testing.T, addr string, extra ...string) (string, error) {

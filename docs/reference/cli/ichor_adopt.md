@@ -51,9 +51,9 @@ cluster Ichor already manages. The machine already runs a configuration signed b
 that cluster's CAs, for example because it joined with your own tooling after the
 adoption or its TalosMachine was deleted. adopt reads it, plans it in the same three
 classes, creates a held TalosMachine and releases the hold after the zero-drift check.
-A machine of another Talos cluster is refused; "ichor machine reclaim" resets it. The
+A machine of another Talos cluster is refused; "ichor reclaim node" resets it. The
 secrets bundle is read from the cluster's own Secret unless you pass one of the flags
-above, and --talosconfig may come from "ichor cluster credentials".
+above, and --talosconfig may come from "ichor create credentials".
 
 adopt only reads the Talos nodes (using --talosconfig); it never applies
 configuration to them. Afterwards it advises a CA rotation, since adopted
@@ -61,6 +61,14 @@ clusters keep the old CAs, but never starts one.
 
 ```sh
 ichor adopt [flags]
+```
+
+### Examples
+
+```sh
+  ichor adopt --cluster prod --secrets-bundle ./secrets.yaml --plan
+  ichor adopt --cluster prod --secrets-bundle ./secrets.yaml
+  ichor adopt --cluster prod --add-machine 192.168.10.24
 ```
 
 ### Options

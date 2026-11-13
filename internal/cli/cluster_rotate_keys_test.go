@@ -30,7 +30,7 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// rotate-keys goes through OperationService like every other start.
+// rotate keys goes through OperationService like every other start.
 
 const (
 	keyTestContract    = "v1.14"
@@ -156,7 +156,7 @@ func TestRotateKeysOnlyAcceptsTheKeysItKnows(t *testing.T) {
 
 func TestRotateKeysIsOneCommandThroughTheEntryPoint(t *testing.T) {
 	if _, ok := rotateKeysCmd.Annotations[writesAnnotation]; !ok {
-		t.Error("rotate-keys is not marked as a write")
+		t.Error("rotate keys is not marked as a write")
 	}
 
 	if got := kindName(pb.OperationKind_OPERATION_KIND_KEY_ROTATION); got != "key-rotation" {

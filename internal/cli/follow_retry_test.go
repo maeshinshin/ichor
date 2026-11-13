@@ -99,7 +99,7 @@ func (s *stagesOps) GetOperation(_ context.Context, req *connect.Request[pb.GetO
 	return connect.NewResponse(&pb.GetOperationResponse{Operation: op}), nil
 }
 
-// TestOperationWatchPrintsTheStagesAPollJumpedOver: operation get --watch prints the stages a poll
+// TestOperationWatchPrintsTheStagesAPollJumpedOver: describe operation --watch prints the stages a poll
 // skipped, between the ones it saw.
 func TestOperationWatchPrintsTheStagesAPollJumpedOver(t *testing.T) {
 	shrinkFollowTimers(t)

@@ -332,8 +332,7 @@ type ApproveMachineRequest struct {
 	// install is the system disk (TalosMachine.spec.install). Unset
 	// approves without an install target.
 	Install *MachineInstall `protobuf:"bytes,7,opt,name=install,proto3" json:"install,omitempty"`
-	// network is the primary link and its addressing (TalosMachine.spec.network). Unset leaves networking to Talos's
-	// default.
+	// network is the primary link and its addressing (TalosMachine.spec.network). Unset leaves networking to Talos's default.
 	Network *MachineNetwork `protobuf:"bytes,8,opt,name=network,proto3" json:"network,omitempty"`
 	// disks are the roles of the non-system disks (TalosMachine.spec.disks).
 	Disks         []*MachineDiskRole `protobuf:"bytes,9,rep,name=disks,proto3" json:"disks,omitempty"`

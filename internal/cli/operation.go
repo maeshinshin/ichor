@@ -43,7 +43,7 @@ var operationOpts struct {
 
 // operationNote is the part of the help of every operation command that says what an operation is.
 const operationNote = `An operation is the record of one node-by-node action: a Talos, Kubernetes, Ichor or Cilium
-upgrade, a kube-proxy switch, a configuration rollout, a rotation or a cluster shutdown. The operation commands
+upgrade, a kube-proxy switch, a configuration rollout, a rotation or a shutdown cluster. The operation commands
 read and change the records; the commands that do the action (` + "`ichor upgrade`, `ichor set kube-proxy`, `ichor shutdown cluster`" + `) start them.`
 
 var getOperationsCmd = &cobra.Command{
@@ -160,7 +160,7 @@ func runOperationDelete(ctx context.Context, c *apiClients, in io.Reader, out, e
 
 		op := got.Msg.GetOperation()
 
-		if err := confirmOrAbort(in, errw, "operation delete", fmt.Sprintf(
+		if err := confirmOrAbort(in, errw, "delete operation", fmt.Sprintf(
 			"Delete operation %s/%s (%s on cluster %s, phase %q)? Steps already sent to machines are not undone. [y/N] ",
 			ref.GetNamespace(), name, kindName(op.GetKind()), op.GetCluster().GetName(), op.GetPhase()), "aborted"); err != nil {
 			return err
@@ -443,8 +443,8 @@ func confirmOrAbort(in io.Reader, errw io.Writer, what, prompt, aborted string) 
 	return nil
 }
 
-// runStartOperation is the shared body of `upgrade`, `cni kube-proxy` and
-// `cluster shutdown`: ask the server for the plan, show it, confirm (unless --yes), create.
+// runStartOperation is the shared body of `upgrade`, `set kube-proxy` and
+// `shutdown cluster`: ask the server for the plan, show it, confirm (unless --yes), create.
 // The server changes the spec first and creates the operation second, and
 // refuses everything it can before the first write.
 func runStartOperation(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, s startSpec) error {

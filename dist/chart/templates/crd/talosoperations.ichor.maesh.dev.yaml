@@ -314,7 +314,7 @@ spec:
                     description: |-
                       powerOff makes the node power off after the reset wipes it instead of rebooting into maintenance
                       mode. Only with the reset action; unset keeps the reboot, which is what a reset did before
-                      the field existed. The UI and `ichor node remove` set it unless asked to reboot.
+                      the field existed. The UI and `ichor delete node` set it unless asked to reboot.
                     type: boolean
                   service:
                     description: |-

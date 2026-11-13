@@ -30,7 +30,7 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// Golden tests of the human output of `ichor patch`, on a pipe: no colour codes.
+// Golden tests of the human output of `ichor get patches` and `ichor apply`, on a pipe: no colour codes.
 
 const (
 	hpSysctlName  = "sysctl-tuning"

@@ -31,8 +31,8 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// The commands that start an operation (etcd defrag and forfeit-leadership, cni kube-proxy, config
-// apply, restore --live) print for a person when -o is unset, with and without --follow, and the
+// The commands that start an operation (defrag etcd and forfeit-leadership, set kube-proxy, config
+// apply, restore etcd) print for a person when -o is unset, with and without --follow, and the
 // wire message on -o yaml. They share runNodeAction, runStartOperation and
 // watchOperation, so these tests pin that each one really goes through them.
 
@@ -151,8 +151,8 @@ func TestCniKubeProxyAndConfigApplyPrintHumanOutputAndTheWireMessageOnYAML(t *te
 		name string
 		spec startSpec
 	}{
-		{"cni kube-proxy", startSpec{Kind: pb.OperationKind_OPERATION_KIND_CNI, Cluster: opTestCluster, Target: kubeProxyReplaced}},
-		{"config apply", startSpec{Kind: pb.OperationKind_OPERATION_KIND_CONFIG, Cluster: opTestCluster}},
+		{"set kube-proxy", startSpec{Kind: pb.OperationKind_OPERATION_KIND_CNI, Cluster: opTestCluster, Target: kubeProxyReplaced}},
+		{"rollout config", startSpec{Kind: pb.OperationKind_OPERATION_KIND_CONFIG, Cluster: opTestCluster}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			setAPITestFlags(t, true)

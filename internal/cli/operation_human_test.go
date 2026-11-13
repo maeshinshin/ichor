@@ -250,7 +250,7 @@ func TestMachineFormatsOfTheOperationCommandsAreUnchanged(t *testing.T) {
 	}
 
 	if want := "operation:\n  phase: Completed\n  ref:\n    name: x\n    namespace: ichor-system\n"; out.String() != want {
-		t.Errorf("operation get -o yaml: %q, want %q", out.String(), want)
+		t.Errorf("describe operation -o yaml: %q, want %q", out.String(), want)
 	}
 
 	outputFormat = outputJSON
@@ -262,7 +262,7 @@ func TestMachineFormatsOfTheOperationCommandsAreUnchanged(t *testing.T) {
 	}
 
 	if want := "{\n  \"operations\": [\n    {\n      \"ref\": {\n        \"namespace\": \"ichor-system\",\n        \"name\": \"x\"\n      },\n      \"phase\": \"Completed\"\n    }\n  ]\n}\n"; out.String() != want {
-		t.Errorf("operation list -o json: %q, want %q", out.String(), want)
+		t.Errorf("get operations -o json: %q, want %q", out.String(), want)
 	}
 
 	out.Reset()
@@ -505,7 +505,7 @@ func TestWatchHumanInterruptedLeavesTheOperationRunning(t *testing.T) {
 	}
 }
 
-func TestNodeGetHumanOutput(t *testing.T) {
+func TestNodeLiveHumanOutput(t *testing.T) {
 	setHumanTestFlags(t, outputHuman)
 
 	n := &pb.NodeDetail{
@@ -523,11 +523,11 @@ func TestNodeGetHumanOutput(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := renderNodeGet(newHuman(&out), &pb.GetNodeResponse{Node: n}); err != nil {
+	if err := renderNodeLive(newHuman(&out), n); err != nil {
 		t.Fatal(err)
 	}
 
-	want := `talos-cp2 · ichor-system
+	want := `Hardware
   Manufacturer QEMU
   Model        Standard PC
   CPU          4 cores (0.25 in use)
@@ -540,7 +540,7 @@ Kubernetes
   Kubelet      v1.36.6
   Schedulable  no
 
-Disks
+Live disks
 DISK      ROLE    SIZE       ID
 /dev/vda  system  40.0 GiB   disk-1
 /dev/vdb  unused  500.0 GiB  -
@@ -550,7 +550,7 @@ DISK      ROLE    SIZE       ID
 	out.Reset()
 
 	n.Kubernetes, n.KubernetesPermissionDenied = nil, true
-	if err := renderNodeGet(newHuman(&out), &pb.GetNodeResponse{Node: n}); err != nil || !strings.Contains(out.String(), "Kubernetes\n  Node         you may not read the Kubernetes Node\n") {
+	if err := renderNodeLive(newHuman(&out), n); err != nil || !strings.Contains(out.String(), "Kubernetes\n  Node         you may not read the Kubernetes Node\n") {
 		t.Errorf("permission denied: %q, %v", out.String(), err)
 	}
 }
@@ -599,7 +599,7 @@ func TestNodeActionHumanOutput(t *testing.T) {
 	}
 }
 
-// -o yaml of the node actions and `operation delete` is the wire message, as before.
+// -o yaml of the node actions and `delete operation` is the wire message, as before.
 func TestNodeActionAndOperationDeleteMachineFormatsAreUnchanged(t *testing.T) {
 	c, _ := nodeActionClients(t, true)
 	outputFormat = outputYAML

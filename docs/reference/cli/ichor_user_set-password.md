@@ -11,6 +11,13 @@ Set a user's password as an administrator (the user must change it at the next s
 ichor user set-password NAME [flags]
 ```
 
+### Examples
+
+```sh
+  ichor user set-password alice --generate
+  echo 'correct horse' | ichor user set-password alice --password-stdin
+```
+
 ### Options
 
 ```text
@@ -33,5 +40,5 @@ ichor user set-password NAME [flags]
 
 ### SEE ALSO
 
-* [ichor user](ichor_user.md)	 - Manage Ichor's own users (list, create, update, delete, set-password, revoke-sessions)
+* [ichor user](ichor_user.md)	 - Set a user's password or sign a user out everywhere
 

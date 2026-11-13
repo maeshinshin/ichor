@@ -49,15 +49,12 @@ func present(k8s client.Client, name string) bool {
 }
 
 func TestNodeCommandsAreRegistered(t *testing.T) {
-	for _, name := range []string{"reboot", "shutdown", "remove", "restart-service"} {
-		if c, _, err := nodeCmd.Find([]string{name}); err != nil || c == nil || c.Name() != name {
-			t.Errorf("ichor node %s is not registered: %v", name, err)
-		}
-	}
-
-	for _, name := range []string{"defrag", "forfeit-leadership"} {
-		if c, _, err := etcdCmd.Find([]string{name}); err != nil || c == nil || c.Name() != name {
-			t.Errorf("ichor etcd %s is not registered: %v", name, err)
+	for _, path := range [][]string{
+		{"reboot", "node"}, {"shutdown", "node"}, {"delete", "node"}, {"restart", "service"},
+		{"defrag", "etcd"}, {"forfeit-leadership", "etcd"},
+	} {
+		if c, _, err := rootCmd.Find(path); err != nil || c == nil || c.Name() != path[1] {
+			t.Errorf("ichor %s is not registered: %v", strings.Join(path, " "), err)
 		}
 	}
 }
@@ -180,7 +177,7 @@ func TestNodeRemoveWithYesStillNeedsConfirm(t *testing.T) {
 }
 
 // --confirm NAME is the typed name given up front: like typing it at the prompt it is the
-// consent, so it does not also ask "Proceed? [y/N]" (restore --live and machine reclaim treat it alike).
+// consent, so it does not also ask "Proceed? [y/N]" (restore etcd and reclaim node treat it alike).
 func TestNodeRemoveWithConfirmDoNotAskAgain(t *testing.T) {
 	c, _ := nodeActionClients(t, false)
 	apiOpts.Override = true
@@ -198,15 +195,15 @@ func TestNodeRemoveWithConfirmDoNotAskAgain(t *testing.T) {
 	}
 }
 
-// ichor node reset is gone: node remove --reboot replaces it.
+// ichor node reset is gone: delete node --reboot replaces it.
 func TestNodeResetIsRemoved(t *testing.T) {
 	if deleteNodeCmd.Flags().Lookup("reboot") == nil {
 		t.Error("ichor delete node has no --reboot")
 	}
 
-	for _, c := range nodeCmd.Commands() {
+	for _, c := range deleteCmd.Commands() {
 		if c.Name() == "reset" {
-			t.Errorf("ichor node reset is still registered: %q", c.Short)
+			t.Errorf("ichor reset is still registered: %q", c.Short)
 		}
 	}
 }

@@ -2,7 +2,7 @@
 //
 // Source: ichor/v1alpha1/cni.proto
 
-// CniService backs the Cilium settings screen and `ichor cni values|upgrade`
+// CniService backs the Cilium settings screen and `ichor get|edit|apply|diff cni-values` and `ichor upgrade cni`
 // (4 and 11). Cilium's Helm values live on the
 // TalosCluster as spec.cni.cilium.values (the user layer). Ichor merges them
 // over its own defaults and applies its own keys last. The only write here is

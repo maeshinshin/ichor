@@ -95,12 +95,12 @@ and disks on that same node (Event MaintenanceIdentityRefreshed); approve it aft
 		raw, err := os.ReadFile(talosconfigPath)
 		if err != nil {
 			// The path, not the content.
-			return fmt.Errorf("machine reclaim: reading --talosconfig: %w", err)
+			return fmt.Errorf("reclaim node: reading --talosconfig: %w", err)
 		}
 
 		k8s, err := newKubeClient(kubeconfigPath)
 		if err != nil {
-			return fmt.Errorf("machine reclaim: building the Kubernetes client: %w", err)
+			return fmt.Errorf("reclaim node: building the Kubernetes client: %w", err)
 		}
 
 		f := machineReclaimFlags
@@ -127,17 +127,17 @@ and disks on that same node (Event MaintenanceIdentityRefreshed); approve it aft
 func runOwnReclaim(cmd *cobra.Command, address string) error {
 	cfg, err := loadKubeconfig(kubeconfigPath)
 	if err != nil {
-		return fmt.Errorf("machine reclaim: %w", err)
+		return fmt.Errorf("reclaim node: %w", err)
 	}
 
 	k8s, err := newKubeClientForConfig(cfg)
 	if err != nil {
-		return fmt.Errorf("machine reclaim: building the Kubernetes client: %w", err)
+		return fmt.Errorf("reclaim node: building the Kubernetes client: %w", err)
 	}
 
 	clientset, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
-		return fmt.Errorf("machine reclaim: %w", err)
+		return fmt.Errorf("reclaim node: %w", err)
 	}
 
 	f := machineReclaimFlags
@@ -169,12 +169,12 @@ type reclaimDeps struct {
 func runMachineReclaim(ctx context.Context, d reclaimDeps, address string, f reclaimFlags) error {
 	known, err := d.Known(ctx)
 	if err != nil {
-		return fmt.Errorf("machine reclaim: cannot tell which machines Ichor manages, so cannot rule out reclaiming one: %w", err)
+		return fmt.Errorf("reclaim node: cannot tell which machines Ichor manages, so cannot rule out reclaiming one: %w", err)
 	}
 
 	node, err := d.Dial(ctx, d.Credential, address, f.Context)
 	if err != nil {
-		return fmt.Errorf("machine reclaim: %w", err)
+		return fmt.Errorf("reclaim node: %w", err)
 	}
 	defer node.Close() //nolint:errcheck
 
@@ -190,7 +190,7 @@ func runMachineReclaim(ctx context.Context, d reclaimDeps, address string, f rec
 		var ierr error
 
 		if in, ierr = node.Inspect(ctx); ierr != nil {
-			return "", fmt.Errorf("machine reclaim: inspecting %s: %w", address, ierr)
+			return "", fmt.Errorf("reclaim node: inspecting %s: %w", address, ierr)
 		}
 
 		return "read " + address, nil
@@ -205,7 +205,7 @@ func runMachineReclaim(ctx context.Context, d reclaimDeps, address string, f rec
 	renderInspection(newHuman(d.Out), in, plan)
 
 	if err := plan.Refused(); err != nil {
-		return fmt.Errorf("machine reclaim: %w", err)
+		return fmt.Errorf("reclaim node: %w", err)
 	}
 
 	r := bufio.NewReader(d.In)
@@ -215,7 +215,7 @@ func runMachineReclaim(ctx context.Context, d reclaimDeps, address string, f rec
 		say(d.Out, "\nThis wipes STATE and EPHEMERAL on %s and removes it from cluster %q.\nType the machine's UUID to continue: ", in.Hostname, in.ClusterName)
 
 		if c.UUID, err = readTypedLine(r); err != nil {
-			return fmt.Errorf("machine reclaim: reading the UUID (pass --confirm UUID when not interactive): %w", err)
+			return fmt.Errorf("reclaim node: reading the UUID (pass --confirm UUID when not interactive): %w", err)
 		}
 	}
 
@@ -223,13 +223,13 @@ func runMachineReclaim(ctx context.Context, d reclaimDeps, address string, f rec
 		say(d.Out, "--force overrides a safety check. Type the cluster name %q to continue: ", in.ClusterName)
 
 		if c.ClusterName, err = readTypedLine(r); err != nil {
-			return fmt.Errorf("machine reclaim: reading the cluster name (pass --confirm-cluster NAME when not interactive): %w", err)
+			return fmt.Errorf("reclaim node: reading the cluster name (pass --confirm-cluster NAME when not interactive): %w", err)
 		}
 	}
 	// Execute inspects once more, so a node swapped after the report is caught.
 	err = steps.Run("Reset", func(*step) (string, error) {
 		if _, err := reclaim.Execute(ctx, node, known, opt, c); err != nil {
-			return "", fmt.Errorf("machine reclaim: %w", err)
+			return "", fmt.Errorf("reclaim node: %w", err)
 		}
 
 		return "accepted, " + map[bool]string{true: "graceful", false: "not graceful"}[plan.Graceful], nil
@@ -260,7 +260,7 @@ func finishReclaim(ctx context.Context, d reclaimDeps, steps *progress, address,
 		defer cancel()
 
 		if err := reclaim.WaitMaintenance(wctx, host, uuid, d.Poll, d.Probe); err != nil {
-			return "", fmt.Errorf("machine reclaim: the reset was sent but the machine did not come back at %s: %w\n"+
+			return "", fmt.Errorf("reclaim node: the reset was sent but the machine did not come back at %s: %w\n"+
 				"The machine may have taken a new address from DHCP after the reboot. "+
 				"Find it (its UUID is %s) and add it to a cluster's spec.discovery.addresses or cidrs", host, err, uuid)
 		}
@@ -280,7 +280,7 @@ func finishReclaim(ctx context.Context, d reclaimDeps, steps *progress, address,
 
 	err = steps.Run("Register", func(*step) (string, error) {
 		if err := d.Register(ctx, host); err != nil {
-			return "", fmt.Errorf("machine reclaim: %w", err)
+			return "", fmt.Errorf("reclaim node: %w", err)
 		}
 
 		return "added to cluster " + f.Cluster + "'s discovery addresses; it will appear as a pending machine", nil

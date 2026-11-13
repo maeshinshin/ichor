@@ -76,10 +76,10 @@ func TestF3NoCNIHelmPath(t *testing.T) {
 		t.Errorf("Ichor CRDs exist after the refused helm install: %s", got)
 	}
 	start := time.Now()
-	out, err = local(t, 9*time.Minute, repoPath(t, "bin/img/ichor/ichor"), "cni", "bootstrap", "--kube-proxy", "enabled", "--tunnel", "geneve", "--yes", "--kubeconfig", c.LocalKube)
-	t.Logf("cni bootstrap took %s", time.Since(start))
+	out, err = local(t, 9*time.Minute, repoPath(t, "bin/img/ichor/ichor"), "bootstrap", "cni", "--kube-proxy", "enabled", "--tunnel", "geneve", "--yes", "--kubeconfig", c.LocalKube)
+	t.Logf("bootstrap cni took %s", time.Since(start))
 	if err != nil {
-		t.Fatalf("cni bootstrap failed: %v\n%s", err, out)
+		t.Fatalf("bootstrap cni failed: %v\n%s", err, out)
 	}
 	start = time.Now()
 	if out, err = helmInstall(t, c, true); err != nil {

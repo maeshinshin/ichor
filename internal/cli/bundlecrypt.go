@@ -68,7 +68,7 @@ var (
 var bundlePassphraseFile string
 
 // sealedThisRun remembers the passphrase of each file this process sealed, so reading it straight back
-// (bundle-export checks what it wrote) does not prompt for a passphrase the operator was just shown.
+// (export bundle checks what it wrote) does not prompt for a passphrase the operator was just shown.
 var sealedThisRun = map[string]string{}
 
 // openedThisRun remembers the passphrase that opened each encrypted bundle this process read: the retired

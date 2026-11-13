@@ -147,7 +147,7 @@ type apiClients struct {
 	// Cni serves Cilium's values and upgrade.
 	Cni ichorv1alpha1connect.CniServiceClient
 
-	// Settings serves `ichor settings`.
+	// Settings serves `ichor get settings` and `ichor set settings`.
 	Settings ichorv1alpha1connect.SettingsServiceClient
 
 	// Local is true when the clients are the in-process fallback.
@@ -164,7 +164,7 @@ type apiClients struct {
 	// Dial builds in-process clients against another kube-apiserver, same credentials and certificate
 	// name; set for the in-process fallback only. Server is the apiserver these clients use, actor the
 	// name the in-process handlers record. Failover, set by a command that knows the other control
-	// planes (restore --live --follow), moves them to the next apiserver on a transient error
+	// planes (restore etcd --follow), moves them to the next apiserver on a transient error
 	// (follow_retry.go).
 	Dial     func(ctx context.Context, server string) (*apiClients, error)
 	Server   string

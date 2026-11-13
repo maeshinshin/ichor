@@ -63,7 +63,7 @@ It shows what it will do and asks for confirmation unless --yes. Running it agai
 
 		user, err := readCiliumValuesFile(o.CiliumValues)
 		if err != nil {
-			return fmt.Errorf("cni bootstrap: %w", err)
+			return fmt.Errorf("bootstrap cni: %w", err)
 		}
 
 		rc, err := loadKubeconfig(kubeconfigPath)
@@ -73,7 +73,7 @@ It shows what it will do and asks for confirmation unless --yes. Running it agai
 
 		target, err := newKubeClientForConfig(rc)
 		if err != nil {
-			return fmt.Errorf("cni bootstrap: building the Kubernetes client: %w", err)
+			return fmt.Errorf("bootstrap cni: building the Kubernetes client: %w", err)
 		}
 
 		return runCNIBootstrap(cmd.Context(), cniBootstrapDeps{
@@ -116,26 +116,26 @@ func bootstrapCluster(kubeProxy, tunnel string, user map[string]any) (*ichorv1al
 
 func runCNIBootstrap(ctx context.Context, d cniBootstrapDeps) error {
 	if d.KubeProxy != kubeProxyEnabled && d.KubeProxy != kubeProxyReplaced {
-		return fmt.Errorf("cni bootstrap: --kube-proxy %q is invalid: must be %q or %q", d.KubeProxy, kubeProxyEnabled, kubeProxyReplaced)
+		return fmt.Errorf("bootstrap cni: --kube-proxy %q is invalid: must be %q or %q", d.KubeProxy, kubeProxyEnabled, kubeProxyReplaced)
 	}
 
 	if err := checkTunnel(d.Tunnel); err != nil {
-		return fmt.Errorf("cni bootstrap: %w", err)
+		return fmt.Errorf("bootstrap cni: %w", err)
 	}
 
 	cluster, err := bootstrapCluster(d.KubeProxy, d.Tunnel, d.Values)
 	if err != nil {
-		return fmt.Errorf("cni bootstrap: %w", err)
+		return fmt.Errorf("bootstrap cni: %w", err)
 	}
 
 	// Validate the values the release would get before anything is read or written.
 	if _, err := cilium.EffectiveValuesForMode(cluster, cni.KubeProxyMode(d.KubeProxy)); err != nil {
-		return fmt.Errorf("cni bootstrap: %w", err)
+		return fmt.Errorf("bootstrap cni: %w", err)
 	}
 
 	facts, err := gatherK8sFacts(ctx, d.Target)
 	if err != nil {
-		return fmt.Errorf("cni bootstrap: inspecting the CNI: %w", err)
+		return fmt.Errorf("bootstrap cni: inspecting the CNI: %w", err)
 	}
 
 	rep := detectCNI(facts, CNIFacts{Kind: CNINone})
@@ -146,29 +146,29 @@ func runCNIBootstrap(ctx context.Context, d cniBootstrapDeps) error {
 	switch {
 	case rerun:
 	case !rep.NoCNI:
-		return fmt.Errorf("cni bootstrap: this cluster is not a cluster with no CNI (found: %s); bootstrap installs Cilium only where no pod can run. "+
+		return fmt.Errorf("bootstrap cni: this cluster is not a cluster with no CNI (found: %s); bootstrap installs Cilium only where no pod can run. "+
 			"If the cluster has a CNI, run helm install ichor, then ichor adopt", rep)
 	default:
 		if err := checkNoCNIPreconditions(rep, nil, ""); err != nil {
-			return fmt.Errorf("cni bootstrap: %w", err)
+			return fmt.Errorf("bootstrap cni: %w", err)
 		}
 	}
 
-	_, _ = fmt.Fprintf(d.Stderr, "cni bootstrap: CNI: %s\n", rep)
+	_, _ = fmt.Fprintf(d.Stderr, "bootstrap cni: CNI: %s\n", rep)
 
 	plan := fmt.Sprintf("Install Cilium %s as Ichor's Helm release (release cilium in kube-system, record in %s), "+
 		"tunnel %s, kube-proxy %s, KubePrism on 7445 assumed, and wait for every node to be Ready.\n",
 		cilium.ChartVersion, cilium.RecordNamespace, cmp.Or(d.Tunnel, "the default"), d.KubeProxy)
 
-	if err := confirmPlan(d.Stdin, d.Stderr, "cni bootstrap", plan); err != nil {
+	if err := confirmPlan(d.Stdin, d.Stderr, "bootstrap cni", plan); err != nil {
 		return err
 	}
 
 	if err := d.Install(ctx, cluster, cni.KubeProxyMode(d.KubeProxy)); err != nil {
-		return fmt.Errorf("cni bootstrap: installing Cilium: %w; run it again to continue (the install is safe to repeat)", err)
+		return fmt.Errorf("bootstrap cni: installing Cilium: %w; run it again to continue (the install is safe to repeat)", err)
 	}
 
-	_, _ = fmt.Fprintln(d.Stderr, "cni bootstrap: Cilium is installed and the nodes are Ready. Next: helm install ichor, then ichor adopt.")
+	_, _ = fmt.Fprintln(d.Stderr, "bootstrap cni: Cilium is installed and the nodes are Ready. Next: helm install ichor, then ichor adopt.")
 
 	return nil
 }

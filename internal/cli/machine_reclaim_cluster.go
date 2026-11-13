@@ -52,13 +52,13 @@ type ownReclaimDeps struct {
 // controller does the work; the CLI writes the request, shows the inspection, writes the typed UUID and waits.
 func runMachineReclaimOwn(ctx context.Context, d ownReclaimDeps, address string, f reclaimFlags) error {
 	if f.Cluster == "" {
-		return errors.New("machine reclaim: without --talosconfig the machine is wiped with the credentials Ichor holds for its own cluster; " +
+		return errors.New("reclaim node: without --talosconfig the machine is wiped with the credentials Ichor holds for its own cluster; " +
 			"name that cluster with --cluster NAME, or pass --talosconfig FILE for a machine of another cluster")
 	}
 
 	user, err := d.Who(ctx)
 	if err != nil {
-		return fmt.Errorf("machine reclaim: asking Kubernetes who you are: %w", err)
+		return fmt.Errorf("reclaim node: asking Kubernetes who you are: %w", err)
 	}
 
 	mr := &ichorv1alpha1.MachineReclaim{
@@ -70,7 +70,7 @@ func runMachineReclaimOwn(ctx context.Context, d ownReclaimDeps, address string,
 		},
 	}
 	if err := d.K8s.Create(ctx, mr); err != nil {
-		return fmt.Errorf("machine reclaim: creating the request (needs the %q verb on machinereclaims): %w", ichorv1alpha1.ReclaimVerb, err)
+		return fmt.Errorf("reclaim node: creating the request (needs the %q verb on machinereclaims): %w", ichorv1alpha1.ReclaimVerb, err)
 	}
 
 	// A request that is never confirmed (declined prompt, refusal, interrupted wait, wrong UUID) is removed again so
@@ -98,7 +98,7 @@ func runMachineReclaimOwn(ctx context.Context, d ownReclaimDeps, address string,
 	renderInspection(newHuman(d.Out), in, plan)
 
 	if len(plan.Refusals) > 0 {
-		return fmt.Errorf("machine reclaim: refusing to reclaim: %s", strings.Join(plan.Refusals, "; "))
+		return fmt.Errorf("reclaim node: refusing to reclaim: %s", strings.Join(plan.Refusals, "; "))
 	}
 
 	r := bufio.NewReader(d.In)
@@ -108,7 +108,7 @@ func runMachineReclaimOwn(ctx context.Context, d ownReclaimDeps, address string,
 		say(d.Out, "\nThis wipes STATE and EPHEMERAL on %s and deletes its Kubernetes Node.\nType the machine's UUID to continue: ", in.Hostname)
 
 		if uuid, err = readTypedLine(r); err != nil {
-			return fmt.Errorf("machine reclaim: reading the UUID (pass --confirm UUID when not interactive): %w", err)
+			return fmt.Errorf("reclaim node: reading the UUID (pass --confirm UUID when not interactive): %w", err)
 		}
 	}
 
@@ -117,7 +117,7 @@ func runMachineReclaimOwn(ctx context.Context, d ownReclaimDeps, address string,
 		say(d.Out, "--force overrides a safety check. Type the cluster name %q to continue: ", in.ClusterName)
 
 		if clusterName, err = readTypedLine(r); err != nil {
-			return fmt.Errorf("machine reclaim: reading the cluster name (pass --confirm-cluster NAME when not interactive): %w", err)
+			return fmt.Errorf("reclaim node: reading the cluster name (pass --confirm-cluster NAME when not interactive): %w", err)
 		}
 	}
 
@@ -126,7 +126,7 @@ func runMachineReclaimOwn(ctx context.Context, d ownReclaimDeps, address string,
 	metav1.SetMetaDataAnnotation(&mr.ObjectMeta, ichorv1alpha1.ReclaimConfirmedByAnnotation, user)
 
 	if err := d.K8s.Patch(ctx, mr, client.MergeFrom(base)); err != nil {
-		return fmt.Errorf("machine reclaim: confirming (the typed UUID must be the machine's): %w", err)
+		return fmt.Errorf("reclaim node: confirming (the typed UUID must be the machine's): %w", err)
 	}
 
 	confirmed = true
@@ -157,7 +157,7 @@ func runMachineReclaimOwn(ctx context.Context, d ownReclaimDeps, address string,
 	if f.Cluster != "" && d.Register != nil {
 		err = steps.Run("Register", func(*step) (string, error) {
 			if err := d.Register(ctx, reclaim.HostOnly(address)); err != nil {
-				return "", fmt.Errorf("machine reclaim: %w", err)
+				return "", fmt.Errorf("reclaim node: %w", err)
 			}
 
 			return "added to cluster " + f.Cluster + "'s discovery addresses; it will appear as a pending machine", nil
@@ -177,19 +177,19 @@ func runMachineReclaimOwn(ctx context.Context, d ownReclaimDeps, address string,
 func (d ownReclaimDeps) await(ctx context.Context, mr *ichorv1alpha1.MachineReclaim, phase ichorv1alpha1.MachineReclaimPhase) error {
 	for {
 		if err := d.K8s.Get(ctx, client.ObjectKeyFromObject(mr), mr); err != nil {
-			return fmt.Errorf("machine reclaim: reading the request: %w", err)
+			return fmt.Errorf("reclaim node: reading the request: %w", err)
 		}
 
 		switch mr.Status.Phase {
 		case phase:
 			return nil
 		case ichorv1alpha1.MachineReclaimFailed, ichorv1alpha1.MachineReclaimExpired:
-			return fmt.Errorf("machine reclaim: %s: %s", strings.ToLower(string(mr.Status.Phase)), mr.Status.Result)
+			return fmt.Errorf("reclaim node: %s: %s", strings.ToLower(string(mr.Status.Phase)), mr.Status.Result)
 		}
 
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("machine reclaim: gave up waiting for the controller (request %s is in phase %q): %w", mr.Name, mr.Status.Phase, ctx.Err())
+			return fmt.Errorf("reclaim node: gave up waiting for the controller (request %s is in phase %q): %w", mr.Name, mr.Status.Phase, ctx.Err())
 		case <-time.After(d.Poll):
 		}
 	}

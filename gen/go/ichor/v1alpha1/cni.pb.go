@@ -4,7 +4,7 @@
 // 	protoc        (unknown)
 // source: ichor/v1alpha1/cni.proto
 
-// CniService backs the Cilium settings screen and `ichor cni values|upgrade`
+// CniService backs the Cilium settings screen and `ichor get|edit|apply|diff cni-values` and `ichor upgrade cni`
 // (4 and 11). Cilium's Helm values live on the
 // TalosCluster as spec.cni.cilium.values (the user layer). Ichor merges them
 // over its own defaults and applies its own keys last. The only write here is
@@ -554,8 +554,7 @@ func (x *SetCiliumValuesResponse) GetEffectiveYaml() string {
 type StartCniUpgradeRequest struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Cluster *ObjectRef             `protobuf:"bytes,1,opt,name=cluster,proto3" json:"cluster,omitempty"`
-	// version is deprecated and unused: it named a Cilium patch to run on the embedded chart. Cilium moves only to the
-	// chart this Ichor embeds (amendment 2026-11-04 (3)), so
+	// version is deprecated and unused: it named a Cilium patch to run on the embedded chart. Cilium moves only to the chart this Ichor embeds (amendment 2026-11-04 (3)), so
 	// the server refuses a request that sets it. Kept so the wire format does not break.
 	Version string `protobuf:"bytes,2,opt,name=version,proto3" json:"version,omitempty"`
 	// override is deprecated and unused: it lifted the compatibility refusal of a patch. The server ignores it.

@@ -25,7 +25,7 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// Human output of the node commands. `node logs` streams raw lines and stays as it
+// Human output of the node commands. `logs node` streams raw lines and stays as it
 // is; only its status line is in the new style.
 
 // gibPrecise is a size as MiB below a GiB and GiB or TiB above, one decimal for the larger ones.
@@ -102,7 +102,7 @@ func renderNodeLive(h *human, n *pb.NodeDetail) error {
 	return h.Err()
 }
 
-// renderMachineRemoved is the result of `node remove`: the removal started.
+// renderMachineRemoved is the result of `delete node`: the removal started.
 func renderMachineRemoved(name string) func(*human, *pb.RemoveMachineResponse) error {
 	return func(h *human, _ *pb.RemoveMachineResponse) error {
 		h.Note(h.Mark(markOK) + " removing node " + name + ": the controller drains it, removes its etcd member (control plane), wipes it and deletes its Kubernetes Node")

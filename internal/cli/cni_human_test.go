@@ -27,7 +27,7 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// Golden tests of the human output of `ichor cni`, `ichor config`, `ichor etcd backup` and
+// Golden tests of the human output of `ichor upgrade cni`, `ichor rollout config`, `ichor backup etcd` and
 // `ichor restore etcd`, on a pipe: no colour codes.
 
 const valuesDiffText = "  debug:\n+  enabled: true\n-  old: 1\n"
@@ -171,11 +171,11 @@ func assertWireOutput[T proto.Message](t *testing.T, name string, msg T, render 
 }
 
 func TestMachineFormatsOfTheseCommandsAreTheWireMessage(t *testing.T) {
-	assertWireOutput(t, "config effective", &pb.GetEffectiveConfigResponse{Config: &pb.EffectiveConfig{
+	assertWireOutput(t, "describe config", &pb.GetEffectiveConfigResponse{Config: &pb.EffectiveConfig{
 		Machine: patchRef(cpUUID), Values: []*pb.EffectiveConfigValue{{Path: "machine.type", Value: `"controlplane"`}},
 	}}, renderEffectiveConfig)
-	assertWireOutput(t, "cni upgrade", &pb.StartCniUpgradeResponse{Operation: patchRef("op"), FromVersion: "1", ToVersion: "2"}, renderCniUpgradeStarted)
-	assertWireOutput(t, "restore --live", &pb.CreateOperationResponse{Operation: &pb.Operation{Ref: patchRef("etcd-restore-x")}}, renderRestoreStarted)
+	assertWireOutput(t, "upgrade cni", &pb.StartCniUpgradeResponse{Operation: patchRef("op"), FromVersion: "1", ToVersion: "2"}, renderCniUpgradeStarted)
+	assertWireOutput(t, "restore etcd", &pb.CreateOperationResponse{Operation: &pb.Operation{Ref: patchRef("etcd-restore-x")}}, renderRestoreStarted)
 }
 
 func TestRestoreLiveStartedHumanOutput(t *testing.T) {

@@ -11,11 +11,18 @@ Upgrade Kubernetes on a cluster (no reboot)
 
 Upgrade Kubernetes on a cluster (no reboot).
 
-Without VERSION it uses the recommended version (see `--list`). It shows which machines restart
+Without VERSION it uses the recommended version (see `--list`). It shows which nodes restart
 and in which order, and asks for confirmation unless --yes.
 
 ```sh
 ichor upgrade kubernetes [VERSION] [flags]
+```
+
+### Examples
+
+```sh
+  ichor upgrade kubernetes --list
+  ichor upgrade kubernetes v1.36.3 --cluster prod --follow
 ```
 
 ### Options
@@ -46,5 +53,5 @@ ichor upgrade kubernetes [VERSION] [flags]
 
 ### SEE ALSO
 
-* [ichor upgrade](ichor_upgrade.md)	 - Upgrade the cluster's Talos or Kubernetes, or Ichor itself
+* [ichor upgrade](ichor_upgrade.md)	 - Upgrade the cluster's Talos, Kubernetes or Cilium, or Ichor itself
 

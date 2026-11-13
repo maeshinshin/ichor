@@ -143,10 +143,10 @@ func TestD4K8s(t *testing.T) {
 func TestD4RotateCA(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1})
 	start := time.Now()
-	out, err := ichorCLI(t, c, "cluster", "rotate-ca", c.Opts.Prefix, "--yes")
-	t.Logf("rotate-ca returned after %s", time.Since(start).Round(time.Second))
+	out, err := ichorCLI(t, c, "rotate", "ca", c.Opts.Prefix, "--yes")
+	t.Logf("rotate ca returned after %s", time.Since(start).Round(time.Second))
 	if err != nil {
-		t.Fatalf("rotate-ca: %v\n%s", err, out)
+		t.Fatalf("rotate ca: %v\n%s", err, out)
 	}
 }
 
@@ -192,13 +192,13 @@ func ichorBin(t *testing.T) string { return repoPath(t, os.Getenv("ICHOR_E2E_F_I
 func TestD6UnmanagedSurfaces(t *testing.T) {
 	c := build(t, foreign.Options{Workers: 1})
 	// CLI.
-	out, err := ichorCLI(t, c, "cluster", "status", c.Opts.Prefix)
+	out, err := ichorCLI(t, c, "get", "cluster", c.Opts.Prefix)
 	if err != nil || !strings.Contains(out, "cni: unmanaged (flannel, not managed by Ichor)") {
-		t.Errorf("cluster status lacks `cni: unmanaged (flannel, not managed by Ichor)` (err=%v)", err)
+		t.Errorf("get cluster lacks `cni: unmanaged (flannel, not managed by Ichor)` (err=%v)", err)
 	}
-	out, err = ichorCLI(t, c, "cni", "values", "get")
+	out, err = ichorCLI(t, c, "get", "cni-values")
 	if err == nil || !strings.Contains(out, unmanagedText) {
-		t.Errorf("cni values get was not refused with the unmanaged text (err=%v)", err)
+		t.Errorf("get cni-values was not refused with the unmanaged text (err=%v)", err)
 	}
 
 	// UI API through the `ichor ui` port-forward.

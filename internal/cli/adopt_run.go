@@ -1372,7 +1372,7 @@ func reportPlans(say adoptSay, plans []*adoptPlan) []*adoptPlan {
 var renderedFromSpec = []string{"HostnameConfig", "LinkAliasConfig", "DHCPv4Config"}
 
 // hintStartOver says, for a machine --add-machine could not take, how to start over instead of writing a
-// patch by hand: wipe it with machine reclaim, which accepts a machine of a managed cluster that has
+// patch by hand: wipe it with reclaim node, which accepts a machine of a managed cluster that has
 // no approved TalosMachine. It does not derive the TalosMachine's hostname and link choice from the node, so for
 // these documents the wipe is the way out, and the two refusals do not point at each other.
 func (st *adoptState) hintStartOver(say adoptSay, plans []*adoptPlan) {

@@ -27,7 +27,7 @@ import (
 )
 
 // credentialsStopWorking is what a CA rotation does to the operator's credentials, in the words the
-// plan and rotate-ca's help share (the UI's copy says the same in its own strings). The nodes start
+// plan and rotate ca's help share (the UI's copy says the same in its own strings). The nodes start
 // serving certificates from the new CA at Issuing, the second pass, so a kubeconfig or talosconfig
 // that trusts only the old CA fails from there on.
 const credentialsStopWorking = "kubeconfig and talosconfig STOP WORKING from the second pass (Issuing) on: " +
@@ -69,7 +69,7 @@ func caPlanNames(targets []string) string {
 	return strings.Join(names[:len(names)-1], ", ") + " and " + names[len(names)-1]
 }
 
-// keyRotationText is what a key rotation does, in the words the plan and rotate-keys' help share (the UI's
+// keyRotationText is what a key rotation does, in the words the plan and rotate keys' help share (the UI's
 // copy says the same in its own strings).
 func keyRotationText(stages []string) string {
 	return fmt.Sprintf("Every control plane is reconfigured once per applying stage (%s), one at a time, without a reboot: its "+

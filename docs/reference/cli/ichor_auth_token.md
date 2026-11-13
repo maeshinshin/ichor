@@ -18,6 +18,12 @@ interactive (KUBERNETES_EXEC_INFO).
 ichor auth token [flags]
 ```
 
+### Examples
+
+```sh
+  ichor auth token --issuer https://ichor.example.com
+```
+
 ### Options
 
 ```text

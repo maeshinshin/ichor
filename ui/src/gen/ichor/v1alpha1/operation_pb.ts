@@ -3,7 +3,8 @@
 /* eslint-disable */
 
 // OperationService backs the operations screens and the `ichor upgrade`,
-// `ichor cluster shutdown`, `ichor cni` and `ichor operation` commands:
+// `ichor shutdown cluster`, `ichor set kube-proxy` and the `get`, `describe`, `pause`, `resume` and `delete operation`
+// commands:
 // every disruptive, machine-by-machine action Ichor performs is a
 // TalosOperation CR, and this service is how the UI and CLI list,
 // plan, start, pause and delete one. Reads and writes are made
@@ -1178,7 +1179,7 @@ export type PlanOperationResponse = Message<"ichor.v1alpha1.PlanOperationRespons
   /**
    * replaces_secrets_bundle is true when the operation ends by replacing the
    * cluster's secrets bundle, so the copy on the user's machine is stale and
-   * `ichor cluster bundle-export` is needed.
+   * `ichor export bundle` is needed.
    *
    * @generated from field: bool replaces_secrets_bundle = 10;
    */

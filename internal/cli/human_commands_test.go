@@ -368,10 +368,10 @@ func TestMachineFormatsOfTheConvertedCommandsAreUnchanged(t *testing.T) {
 		print func(*bytes.Buffer) error
 		want  string
 	}{
-		"cluster list yaml": {func(b *bytes.Buffer) error {
+		"get clusters yaml": {func(b *bytes.Buffer) error {
 			return printAPI(b, &pb.ListClustersResponse{Clusters: []*pb.Cluster{cl}}, renderClusterList)
 		}, "clusters:\n- endpoint: 10.244.1.136\n  ref:\n    name: initshow\n    namespace: ichor-system\n  talosVersion: v1.14.5\n"},
-		"machine get yaml": {func(b *bytes.Buffer) error {
+		"describe node yaml": {func(b *bytes.Buffer) error {
 			return printAPI(b, &pb.GetMachineResponse{Machine: m}, func(h *human, r *pb.GetMachineResponse) error { return renderMachineGet(h, r.GetMachine()) })
 		}, "machine:\n  approvalState: MACHINE_APPROVAL_STATE_APPROVED\n  ref:\n    name: m\n    namespace: ichor-system\n  role: MACHINE_ROLE_CONTROL_PLANE\n"},
 		"version yaml": {func(b *bytes.Buffer) error {

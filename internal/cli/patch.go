@@ -156,7 +156,7 @@ func runPatchList(ctx context.Context, c *apiClients, out io.Writer, cluster str
 
 func runPatchDelete(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, name string) error {
 	if !assumeYes {
-		if err := confirmOrAbort(in, errw, "patch delete", fmt.Sprintf("Delete patch %s/%s? The controller will re-render the machines it applied to. [y/N] ", apiOpts.Namespace, name), "aborted"); err != nil {
+		if err := confirmOrAbort(in, errw, "delete patch", fmt.Sprintf("Delete patch %s/%s? The controller will re-render the machines it applied to. [y/N] ", apiOpts.Namespace, name), "aborted"); err != nil {
 			return err
 		}
 	}

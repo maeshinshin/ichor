@@ -60,6 +60,9 @@ cluster knows of a newer Ichor release, or when this binary is older than that
 release. The check is made by the cluster's controller, not by ichor. The line is
 shown on a terminal only, at most once a day per cluster, and never with -o or for
 help and completion. Set ICHOR_NO_UPDATE_NOTICE=1 to turn it off.`,
+	Example: `  ichor get clusters
+  ichor describe node cp-1
+  ichor upgrade talos --list`,
 	SilenceUsage:  true,
 	SilenceErrors: true, // executeRoot prints the error once
 }

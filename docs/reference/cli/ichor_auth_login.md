@@ -11,6 +11,13 @@ Log in through the browser (authorization code + PKCE, loopback redirect); the d
 ichor auth login [flags]
 ```
 
+### Examples
+
+```sh
+  ichor auth login --issuer https://ichor.example.com
+  ichor auth login --issuer https://ichor.example.com --no-browser
+```
+
 ### Options
 
 ```text

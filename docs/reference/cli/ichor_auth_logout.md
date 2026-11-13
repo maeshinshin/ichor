@@ -11,6 +11,13 @@ Revoke and delete every cached login for the issuer (all audiences), or only --a
 ichor auth logout [flags]
 ```
 
+### Examples
+
+```sh
+  ichor auth logout --issuer https://ichor.example.com
+  ichor auth logout --issuer https://ichor.example.com --audience ichor-ui
+```
+
 ### Options
 
 ```text

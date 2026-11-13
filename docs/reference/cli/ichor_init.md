@@ -42,6 +42,13 @@ line overrides the file; relative paths in the file are relative to it.
 ichor init [flags]
 ```
 
+### Examples
+
+```sh
+  ichor init --print-config-template > init.yaml
+  ichor init -f init.yaml
+```
+
 ### Options
 
 ```text

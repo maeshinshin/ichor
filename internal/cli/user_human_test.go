@@ -32,7 +32,7 @@ import (
 	"github.com/maeshinshin/ichor/pkg/ichorauth"
 )
 
-// Golden tests of the human output of `ichor user`, on a pipe: no colour codes.
+// Golden tests of the human output of the `ichor get users` family, on a pipe: no colour codes.
 
 const (
 	userBob          = "bob"

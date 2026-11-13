@@ -22,6 +22,13 @@ silently. Press Ctrl-C to stop.
 ichor ui [flags]
 ```
 
+### Examples
+
+```sh
+  ichor ui
+  ichor ui --local-port 8080 --open-browser=false
+```
+
 ### Options
 
 ```text

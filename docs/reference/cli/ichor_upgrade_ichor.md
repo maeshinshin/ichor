@@ -11,11 +11,17 @@ Upgrade Ichor itself (IchorInstallation.spec.version)
 
 Upgrade Ichor itself (IchorInstallation.spec.version).
 
-Without VERSION it uses the recommended version (see `--list`). It shows which machines restart
+Without VERSION it uses the recommended version (see `--list`). It shows which nodes restart
 and in which order, and asks for confirmation unless --yes.
 
 ```sh
 ichor upgrade ichor VERSION [flags]
+```
+
+### Examples
+
+```sh
+  ichor upgrade ichor v0.3.1 --follow
 ```
 
 ### Options
@@ -47,5 +53,5 @@ ichor upgrade ichor VERSION [flags]
 
 ### SEE ALSO
 
-* [ichor upgrade](ichor_upgrade.md)	 - Upgrade the cluster's Talos or Kubernetes, or Ichor itself
+* [ichor upgrade](ichor_upgrade.md)	 - Upgrade the cluster's Talos, Kubernetes or Cilium, or Ichor itself
 

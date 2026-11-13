@@ -83,14 +83,15 @@ func TestEveryWriteCommandIsGatedAndReadsAreNot(t *testing.T) {
 		gated bool
 		ann   map[string]string
 	}{
-		{"machine approve", true, approveNodeCmd.Annotations},
-		{"machine reject", true, rejectNodeCmd.Annotations},
-		{"patch create", true, patchCreateCmd.Annotations},
-		{"patch update", true, patchUpdateCmd.Annotations},
-		{"patch delete", true, deletePatchCmd.Annotations},
-		{"patch list", false, getPatchesCmd.Annotations},
-		{"patch preview", false, previewCmd.Annotations},
-		{"machine list", false, getNodesCmd.Annotations},
+		{"approve node", true, approveNodeCmd.Annotations},
+		{"reject node", true, rejectNodeCmd.Annotations},
+		{"apply", true, applyCmd.Annotations},
+		{"delete patch", true, deletePatchCmd.Annotations},
+		{"restore etcd", true, restoreEtcdCmd.Annotations},
+		{"get patches", false, getPatchesCmd.Annotations},
+		{"preview", false, previewCmd.Annotations},
+		{"get nodes", false, getNodesCmd.Annotations},
+		{"restore cluster", false, restoreClusterCmd.Annotations},
 	} {
 		if got := c.ann[writesAnnotation] == "true"; got != c.gated {
 			t.Errorf("%s: gated = %v, want %v", c.name, got, c.gated)

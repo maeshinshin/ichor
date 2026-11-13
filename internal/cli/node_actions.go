@@ -165,7 +165,7 @@ func runNodeAction(ctx context.Context, c *apiClients, in io.Reader, out, errw i
 	text := nodePlanText(s, plan.Msg)
 
 	// The typed name is the consent for remove: typed at the prompt or given as --confirm
-	// (as restore --live and machine reclaim do), it replaces the y/N question; --yes alone does not.
+	// (as restore etcd and reclaim node do), it replaces the y/N question; --yes alone does not.
 	switch {
 	case needsTypedName(s.Action) && s.Confirm != "":
 		_, _ = fmt.Fprint(errw, text)

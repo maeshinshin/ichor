@@ -47,7 +47,7 @@ func rotatedKeys(t *testing.T, old *secrets.Bundle) (rotated *secrets.Bundle, re
 	return kr.Apply(old), retired
 }
 
-// exportDeps are bundle-export's real savers over ~/.ichor of a temporary HOME: sealed as the command seals
+// exportDeps are export bundle's real savers over ~/.ichor of a temporary HOME: sealed as the command seals
 // (plaintext when the test says so).
 func exportDeps(k8s client.Client, out, errw *bytes.Buffer, plaintext bool) bundleExportDeps {
 	return bundleExportDeps{

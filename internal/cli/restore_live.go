@@ -32,7 +32,7 @@ import (
 
 // Restore into a live cluster: `ichor restore etcd` writes one TalosOperation of kind
 // etcd-restore; the controller wipes etcd on every control plane and recovers the snapshot. Unlike
-// --recover-cluster it needs the cluster, ichor-ui or the kubeconfig, and the controller.
+// restore cluster it needs the cluster, ichor-ui or the kubeconfig, and the controller.
 
 var restoreLiveOpts struct {
 	Backup  string
@@ -143,7 +143,7 @@ func runLiveRestore(ctx context.Context, c *apiClients, in io.Reader, out, errw 
 
 	bg := overrideOf(apiOpts)
 	if bg == nil {
-		return errors.New("restore --live: it needs --override (and the override RBAC verb on the cluster)")
+		return errors.New("restore etcd: it needs --override (and the override RBAC verb on the cluster)")
 	}
 
 	list, err := c.Operation.ListEtcdBackups(ctx, connect.NewRequest(&pb.ListEtcdBackupsRequest{Cluster: cluster}))
@@ -166,7 +166,7 @@ func runLiveRestore(ctx context.Context, c *apiClients, in io.Reader, out, errw 
 	}
 
 	if blocked := plan.Msg.GetBlocked(); blocked != "" {
-		return fmt.Errorf("restore --live: %s", blocked)
+		return fmt.Errorf("restore etcd: %s", blocked)
 	}
 
 	text := liveRestoreText(s, snap, plan.Msg)
@@ -175,20 +175,20 @@ func runLiveRestore(ctx context.Context, c *apiClients, in io.Reader, out, errw 
 	case s.Confirm != "":
 		_, _ = fmt.Fprint(errw, text)
 	case assumeYes:
-		return fmt.Errorf("restore --live: type the cluster name with --confirm %s to go on without asking", s.Cluster)
+		return fmt.Errorf("restore etcd: type the cluster name with --confirm %s to go on without asking", s.Cluster)
 	default:
 		_, _ = fmt.Fprint(errw, text)
 
 		typed, err := readLine(in, errw, fmt.Sprintf("Type the cluster name %q to confirm: ", s.Cluster))
 		if err != nil {
-			return fmt.Errorf("restore --live: reading confirmation: %w", err)
+			return fmt.Errorf("restore etcd: reading confirmation: %w", err)
 		}
 
 		s.Confirm = typed
 	}
 
 	if s.Confirm != s.Cluster {
-		return errors.New("restore --live: aborted (the cluster name did not match)")
+		return errors.New("restore etcd: aborted (the cluster name did not match)")
 	}
 
 	req.Confirm = s.Confirm

@@ -14,6 +14,13 @@ short-lived ID tokens for kubectl. The login cache lives in ~/.ichor/auth
 (directory 0700, files 0600) and holds a refresh token; the kubeconfig itself
 holds no secret.
 
+### Examples
+
+```sh
+  ichor auth login --issuer https://ichor.example.com
+  ichor auth whoami --issuer https://ichor.example.com
+```
+
 ### Options
 
 ```text
@@ -37,9 +44,8 @@ holds no secret.
 ### SEE ALSO
 
 * [ichor](ichor.md)	 - Manage a Talos Linux cluster through Ichor's CRDs
-* [ichor auth kubeconfig](ichor_auth_kubeconfig.md)	 - Download your own kubeconfig (it holds no secret: it runs `ichor auth token`)
 * [ichor auth login](ichor_auth_login.md)	 - Log in through the browser (authorization code + PKCE, loopback redirect); the default audience ichor-kube is the login kubectl needs when it has no terminal
 * [ichor auth logout](ichor_auth_logout.md)	 - Revoke and delete every cached login for the issuer (all audiences), or only --audience's
-* [ichor auth status](ichor_auth_status.md)	 - Show who you are signed in as and when the cached tokens expire (prints no token)
 * [ichor auth token](ichor_auth_token.md)	 - Print an ExecCredential for kubectl (client-go exec plugin)
+* [ichor auth whoami](ichor_auth_whoami.md)	 - Show who you are signed in as and when the cached tokens expire (prints no token)
 

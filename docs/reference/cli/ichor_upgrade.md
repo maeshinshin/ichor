@@ -1,11 +1,11 @@
 ---
 title: "ichor upgrade"
-description: "Upgrade the cluster's Talos or Kubernetes, or Ichor itself"
+description: "Upgrade the cluster's Talos, Kubernetes or Cilium, or Ichor itself"
 ---
 
 ## ichor upgrade
 
-Upgrade the cluster's Talos or Kubernetes, or Ichor itself
+Upgrade the cluster's Talos, Kubernetes or Cilium, or Ichor itself
 
 ### Synopsis
 
@@ -16,16 +16,23 @@ first install, and any valid target is allowed after that.
 `ichor upgrade talos` and `ichor upgrade kubernetes` offer the versions the cluster can
 move to (`--list`). Without a VERSION they use the recommended one, the release set's version
 when it is a valid upgrade, else the newest patch of the running minor. With a VERSION they move to it.
-`ichor upgrade ichor` moves Ichor itself. Before the installer Job runs, the controller pins the
+`ichor upgrade ichor` moves Ichor itself and `ichor upgrade cni` moves Cilium to the chart this Ichor ships. Before the installer Job runs, the controller pins the
 installer image to a digest and checks its signature; --skip-signature-check is the opt-out for
 images nobody signs.
 
 Each upgrade changes the version in the spec that names it and then starts the
-operation that rolls it out machine by machine: control planes one at a time,
+operation that rolls it out node by node: control planes one at a time,
 then workers. The spec is changed first, because the operation reads its target
 from it; if the operation cannot be created (no permission, another operation
 running) nothing was changed. Run the command again to retry: a spec that
 already names the version is not written twice.
+
+### Examples
+
+```sh
+  ichor upgrade talos --list
+  ichor upgrade kubernetes v1.36.3 --cluster prod --follow
+```
 
 ### Options
 
@@ -52,6 +59,7 @@ already names the version is not written twice.
 ### SEE ALSO
 
 * [ichor](ichor.md)	 - Manage a Talos Linux cluster through Ichor's CRDs
+* [ichor upgrade cni](ichor_upgrade_cni.md)	 - Upgrade Cilium to the chart this Ichor ships
 * [ichor upgrade ichor](ichor_upgrade_ichor.md)	 - Upgrade Ichor itself (IchorInstallation.spec.version)
 * [ichor upgrade kubernetes](ichor_upgrade_kubernetes.md)	 - Upgrade Kubernetes on a cluster (no reboot)
 * [ichor upgrade talos](ichor_upgrade_talos.md)	 - Upgrade Talos on every machine of a cluster (each machine reboots)

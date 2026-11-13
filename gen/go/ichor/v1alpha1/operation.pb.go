@@ -5,7 +5,8 @@
 // source: ichor/v1alpha1/operation.proto
 
 // OperationService backs the operations screens and the `ichor upgrade`,
-// `ichor cluster shutdown`, `ichor cni` and `ichor operation` commands:
+// `ichor shutdown cluster`, `ichor set kube-proxy` and the `get`, `describe`, `pause`, `resume` and `delete operation`
+// commands:
 // every disruptive, machine-by-machine action Ichor performs is a
 // TalosOperation CR, and this service is how the UI and CLI list,
 // plan, start, pause and delete one. Reads and writes are made
@@ -300,8 +301,7 @@ type GetIchorInstallationResponse struct {
 	// update_available is true when target_version is newer than installed_version and no upgrade
 	// is running: the cluster knows a newer version and has not moved to it yet.
 	UpdateAvailable bool `protobuf:"varint,5,opt,name=update_available,json=updateAvailable,proto3" json:"update_available,omitempty"`
-	// latest_version is the newest final Ichor release the controller found in the chart repository; empty until a
-	// check has succeeded. It may be older than installed_version.
+	// latest_version is the newest final Ichor release the controller found in the chart repository; empty until a check has succeeded. It may be older than installed_version.
 	LatestVersion string `protobuf:"bytes,6,opt,name=latest_version,json=latestVersion,proto3" json:"latest_version,omitempty"`
 	// release_available is true when latest_version is newer than installed_version.
 	ReleaseAvailable bool `protobuf:"varint,7,opt,name=release_available,json=releaseAvailable,proto3" json:"release_available,omitempty"`
@@ -2237,7 +2237,7 @@ type PlanOperationResponse struct {
 	Stages []string `protobuf:"bytes,9,rep,name=stages,proto3" json:"stages,omitempty"`
 	// replaces_secrets_bundle is true when the operation ends by replacing the
 	// cluster's secrets bundle, so the copy on the user's machine is stale and
-	// `ichor cluster bundle-export` is needed.
+	// `ichor export bundle` is needed.
 	ReplacesSecretsBundle bool `protobuf:"varint,10,opt,name=replaces_secrets_bundle,json=replacesSecretsBundle,proto3" json:"replaces_secrets_bundle,omitempty"`
 	// kubernetes_api_unavailable is true when a machine reboots while it is the
 	// cluster's only approved control plane, so the Kubernetes API is down for
@@ -2257,8 +2257,7 @@ type PlanOperationResponse struct {
 	// Deprecated: Marked as deprecated in ichor/v1alpha1/operation.proto.
 	OpensPullRequest bool `protobuf:"varint,17,opt,name=opens_pull_request,json=opensPullRequest,proto3" json:"opens_pull_request,omitempty"`
 	// current_schematic and target_schematic are set for a Talos upgrade whose Image Factory schematic
-	// differs between at least one approved machine's running system and spec.schematic. current_schematic is the first
-	// differing running schematic; target_schematic is
+	// differs between at least one approved machine's running system and spec.schematic. current_schematic is the first differing running schematic; target_schematic is
 	// spec.schematic.id (the Talos default schematic when unset). Both are empty otherwise.
 	CurrentSchematic string `protobuf:"bytes,18,opt,name=current_schematic,json=currentSchematic,proto3" json:"current_schematic,omitempty"`
 	TargetSchematic  string `protobuf:"bytes,19,opt,name=target_schematic,json=targetSchematic,proto3" json:"target_schematic,omitempty"`
@@ -2454,8 +2453,7 @@ type CreateOperationRequest struct {
 	Override *Override `protobuf:"bytes,7,opt,name=override,proto3" json:"override,omitempty"`
 	// ichor_installer is for kind ICHOR only.
 	IchorInstaller *IchorInstallerOptions `protobuf:"bytes,8,opt,name=ichor_installer,json=ichorInstaller,proto3" json:"ichor_installer,omitempty"`
-	// ca_targets chooses the CAs of a ca-rotation: talos, kubernetes, etcd, kubernetes-aggregator. Empty means talos
-	// and kubernetes. Must be empty for every other kind.
+	// ca_targets chooses the CAs of a ca-rotation: talos, kubernetes, etcd, kubernetes-aggregator. Empty means talos and kubernetes. Must be empty for every other kind.
 	CaTargets []string `protobuf:"bytes,9,rep,name=ca_targets,json=caTargets,proto3" json:"ca_targets,omitempty"`
 	// key_rotation: see PlanOperationRequest.
 	KeyRotation   *KeyRotationRequest `protobuf:"bytes,10,opt,name=key_rotation,json=keyRotation,proto3" json:"key_rotation,omitempty"`

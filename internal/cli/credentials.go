@@ -56,7 +56,7 @@ type credentialRequest struct {
 	Namespace      string
 	IchorNamespace string
 
-	// BundleFile, when set, takes the CAs from this file (bundle-export's output) and reads nothing
+	// BundleFile, when set, takes the CAs from this file (export bundle's output) and reads nothing
 	// from the cluster: the offline path.
 	BundleFile string
 
@@ -177,7 +177,7 @@ func loadCredentialSources(ctx context.Context, k8s client.Client, req credentia
 }
 
 // defaultCredentialsOut is where credentials are written when no output path is given. A file that
-// already carries the suffix (the one rotate-ca wrote, which Ichor owns and which holds only this
+// already carries the suffix (the one rotate ca wrote, which Ichor owns and which holds only this
 // cluster) is written back in place; any other file gets the suffix appended, so the user's own files
 // are never the default output.
 func defaultCredentialsOut(current string) string {

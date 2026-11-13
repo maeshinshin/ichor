@@ -170,7 +170,7 @@ func newRestoreHarness(t *testing.T) *restoreHarness {
 
 	env := map[string]string{"ICHOR_S3_ACCESS_KEY_ID": testS3AccessKey, "ICHOR_S3_SECRET_ACCESS_KEY": testS3SecretKey}
 	h.opts = restoreOptions{
-		RecoverCluster: true, Cluster: "lost", NodeEndpoint: "10.0.0.9:50000", S3Prefix: testS3Prefix,
+		Cluster: "lost", NodeEndpoint: "10.0.0.9:50000", S3Prefix: testS3Prefix,
 		S3: etcdbackup.S3Config{Endpoint: "https://s3.example", Bucket: "b"},
 	}
 	h.deps = restoreDeps{

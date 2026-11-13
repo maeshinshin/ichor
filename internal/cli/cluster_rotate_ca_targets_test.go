@@ -33,7 +33,7 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-// rotate-ca --ca and --all.
+// rotate ca --ca and --all.
 
 const (
 	caTalos      = ichorv1alpha1.CARotationTargetTalos

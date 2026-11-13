@@ -186,7 +186,8 @@ func ichorCLI(t *testing.T, c *foreign.Cluster, args ...string) (string, error) 
 	t.Helper()
 	pod := stage(t, c)
 	a := append([]string{"-n", ns, "exec", pod, "--", "env", "HOME=/tmp/home", "/tmp/ichor"}, args...)
-	if args[0] != "cluster" { // `ichor cluster ...` takes the name as an argument and has no --cluster flag
+	// `ichor get cluster NAME` and `ichor rotate ca NAME` take the name as an argument and have no --cluster flag
+	if !slices.Contains([]string{"get cluster", "rotate ca"}, strings.Join(args[:min(2, len(args))], " ")) {
 		a = append(a, "--cluster", c.Opts.Prefix)
 	}
 	a = append(a, "-n", crNS, "--kubeconfig", "/tmp/kubeconfig", "--local")
@@ -449,8 +450,8 @@ func TestD3CiliumAdoptedUnmanaged(t *testing.T) {
 		t.Errorf("Helm release records changed:\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 	sameHashes(t, hashes, cniPaths(t, c))
-	if out, err := ichorCLI(t, c, "cni", "values", "set", "-f", "/dev/null"); err == nil || !strings.Contains(out, unmanagedText) {
-		t.Errorf("cni values set was not refused with the unmanaged text (err=%v)", err)
+	if out, err := ichorCLI(t, c, "apply", "cni-values", "-f", "/dev/null"); err == nil || !strings.Contains(out, unmanagedText) {
+		t.Errorf("apply cni-values was not refused with the unmanaged text (err=%v)", err)
 	}
 	op := filepath.Join(t.TempDir(), "op.yaml")
 	manifest := "apiVersion: ichor.maesh.dev/v1alpha1\nkind: TalosOperation\nmetadata:\n  name: d3-cni\n  namespace: " + crNS +

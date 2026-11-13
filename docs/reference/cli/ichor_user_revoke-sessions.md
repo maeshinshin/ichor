@@ -11,6 +11,12 @@ Sign a user out everywhere (kubectl tokens last at most the token lifetime)
 ichor user revoke-sessions NAME [flags]
 ```
 
+### Examples
+
+```sh
+  ichor user revoke-sessions alice
+```
+
 ### Options
 
 ```text
@@ -31,5 +37,5 @@ ichor user revoke-sessions NAME [flags]
 
 ### SEE ALSO
 
-* [ichor user](ichor_user.md)	 - Manage Ichor's own users (list, create, update, delete, set-password, revoke-sessions)
+* [ichor user](ichor_user.md)	 - Set a user's password or sign a user out everywhere
 

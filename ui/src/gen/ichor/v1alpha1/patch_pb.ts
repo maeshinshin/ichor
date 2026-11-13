@@ -425,7 +425,7 @@ export const PatchTargetSchema: GenMessage<PatchTarget> = /*@__PURE__*/
  * document is deliberately opaque JSON, not one typed field per Talos
  * mirror type: modeling every typed-config field a third time (Go mirror
  * type, CRD schema, now protobuf) would be exactly the parallel catalogue
- *'s generator exists to avoid. The shape for a given kind is the
+ * the generator exists to avoid. The shape for a given kind is the
  * CRD's own generated OpenAPI schema (config/crd/bases/
  * ichor.maesh.dev_talosconfigpatches.yaml), which a schema-driven form
  * renders directly -- no second RPC needed to serve it.

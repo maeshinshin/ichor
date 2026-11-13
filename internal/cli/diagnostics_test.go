@@ -240,26 +240,27 @@ func TestSupportBundleRequestNeedsExactlyOneTarget(t *testing.T) {
 	}
 }
 
-func TestDownloadCommandsKeepTheirOwnOutputFlag(t *testing.T) {
+// The three downloads write a file, which --out names; -o stays the global yaml/json format, so
+// `-o web.pcap` is refused as an invalid format instead of silently naming a file.
+func TestDownloadCommandsTakeTheirFileAsOut(t *testing.T) {
 	t.Parallel()
 
-	for _, name := range []string{"support-bundle", "pcap"} {
-		c, _, err := rootCmd.Find([]string{nodeCmd.Name(), name})
-		if err != nil {
-			t.Fatal(err)
+	for _, path := range [][]string{{"support-bundle"}, {"pcap"}, {"snapshot", "etcd"}} {
+		c, _, err := rootCmd.Find(path)
+		if err != nil || c == rootCmd {
+			t.Fatalf("ichor %v is missing: %v", path, err)
 		}
 
-		if f := c.Flags().Lookup("output"); f == nil || f.Shorthand != "o" || f.DefValue != "" {
-			t.Errorf("%s: -o must be the output file, got %+v", name, f)
+		if f := c.Flags().Lookup("out"); f == nil || f.Shorthand != "" || f.DefValue != "" {
+			t.Errorf("%v: --out must be the output file, got %+v", path, f)
 		}
-	}
 
-	c, _, err := rootCmd.Find([]string{"etcd", "snapshot"})
-	if err != nil || c.Name() != "snapshot" {
-		t.Fatalf("ichor snapshot etcd is missing: %v", err)
-	}
+		if c.LocalNonPersistentFlags().Lookup("output") != nil {
+			t.Errorf("%v: -o must be the global output format, not redefined", path)
+		}
 
-	if f := c.Flags().Lookup("output"); f == nil || f.DefValue != "" {
-		t.Errorf("etcd snapshot: -o must be the output file, got %+v", f)
+		if f := c.InheritedFlags().Lookup("output"); f == nil || f.Shorthand != "o" || f.DefValue != outputHuman {
+			t.Errorf("%v: -o must be the inherited output format, got %+v", path, f)
+		}
 	}
 }

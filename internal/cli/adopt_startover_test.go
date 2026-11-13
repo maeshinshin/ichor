@@ -27,7 +27,7 @@ import (
 const renderedHostname = "HostnameConfig.hostname"
 
 // Adopt --add-machine's refusal of a machine whose only differences are documents Ichor rendered from
-// its deleted TalosMachine offers the wipe, and machine reclaim accepts that machine (pkg/reclaim
+// its deleted TalosMachine offers the wipe, and reclaim node accepts that machine (pkg/reclaim
 // TestAssess_OrphanOfManagedClusterWarnsAndDoesNotLoop): the two refusals do not point at each other.
 func TestAdoptRefusalOffersTheWipe(t *testing.T) {
 	st := &adoptState{

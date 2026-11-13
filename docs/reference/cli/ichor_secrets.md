@@ -7,6 +7,12 @@ description: "Manage the local secrets bundle file"
 
 Manage the local secrets bundle file
 
+### Examples
+
+```sh
+  ichor secrets encrypt prod
+```
+
 ### Options
 
 ```text

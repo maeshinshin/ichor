@@ -15,7 +15,7 @@ flows:
 - name: pause, resume and delete an operation
   role: operator
   needs: [talosoperations patch, talosoperations delete]
-- name: create, edit and delete a config patch (ichor patch)
+- name: create, edit and delete a config patch (ichor apply, ichor delete patch)
   role: operator
   needs: [talosconfigpatches create, talosconfigpatches update, talosconfigpatches delete]
 - name: approve a machine (ichor approve node)
@@ -48,7 +48,7 @@ flows:
 - name: upgrade ichor (ichor upgrade ichor)
   role: admin
   needs: [ichorinstallations/version update, talosoperations create]
-- name: manage users (ichor user)
+- name: manage users (ichor get users, ichor create user, ichor edit user)
   role: admin
   needs: [ichorusers create, ichorusers update, ichorusers delete, ichorusers/password update]
 - name: change the authentication configuration

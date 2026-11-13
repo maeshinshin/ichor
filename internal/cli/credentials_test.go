@@ -186,7 +186,7 @@ func certCount(pemData []byte) int {
 	}
 }
 
-// A current file gets the suffix appended; a file already carrying it (Ichor's, from rotate-ca) is
+// A current file gets the suffix appended; a file already carrying it (Ichor's, from rotate ca) is
 // written back in place, never with the suffix twice and never over the operator's own file.
 func TestDefaultCredentialsOutAppendsOrKeepsTheSuffix(t *testing.T) {
 	kube, talos := "/home/op/.kube/config", "/home/op/.talos/config"

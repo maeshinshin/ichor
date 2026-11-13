@@ -270,7 +270,7 @@ func runCniValuesGet(ctx context.Context, c *apiClients, out io.Writer, cluster,
 			}
 		}
 	default:
-		return fmt.Errorf("cni values get: --layer %q is not %s, %s, %s or %s", layer, cniLayerUser, cniLayerDefaults, cniLayerEffective, cniLayerOwned)
+		return fmt.Errorf("get cni-values: --layer %q is not %s, %s, %s or %s", layer, cniLayerUser, cniLayerDefaults, cniLayerEffective, cniLayerOwned)
 	}
 
 	return err

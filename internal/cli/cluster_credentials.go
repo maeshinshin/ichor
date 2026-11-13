@@ -344,7 +344,7 @@ func init() {
 
 	f := createCredentialsCmd.Flags()
 	f.StringVar(&clusterCredentialsOpts.Bundle, "bundle", "",
-		"read the CAs from this secrets bundle file (bundle-export's output) instead of the cluster; works offline")
+		"read the CAs from this secrets bundle file (export bundle's output) instead of the cluster; works offline")
 	f.StringVar(&clusterCredentialsOpts.KubeconfigOut, "kubeconfig-out", "",
 		"where to write the kubeconfig (default: your current kubeconfig's path plus "+credentialsSuffix+")")
 	f.StringVar(&clusterCredentialsOpts.TalosconfigOut, "talosconfig-out", "",

@@ -19,6 +19,13 @@ reached, the CLI version is printed with a note on stderr and the exit code is 0
 ichor version [flags]
 ```
 
+### Examples
+
+```sh
+  ichor version
+  ichor version --client
+```
+
 ### Options
 
 ```text

@@ -24,6 +24,13 @@ An encrypted file is a standard age file: 'age -d secrets.yaml' opens it.
 ichor secrets encrypt [CLUSTER] [flags]
 ```
 
+### Examples
+
+```sh
+  ichor secrets encrypt prod
+  ichor secrets encrypt --file ./secrets.yaml
+```
+
 ### Options
 
 ```text

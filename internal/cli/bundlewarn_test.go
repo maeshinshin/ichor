@@ -37,13 +37,13 @@ func TestSecretsEncryptRefusalDoesNotOfferBundlePlaintext(t *testing.T) {
 		t.Fatalf("unexpected refusal: %v", err)
 	}
 
-	// init, adopt and bundle-export do have the flag, and keep offering it.
+	// init, adopt and export bundle do have the flag, and keep offering it.
 	if !strings.Contains(errNoSealPassphrase.Error(), "--bundle-plaintext") {
 		t.Fatalf("the refusal of the commands that have --bundle-plaintext lost it: %v", errNoSealPassphrase)
 	}
 }
 
-// A command that reads the same plaintext bundle twice (cluster credentials --bundle checks it, then
+// A command that reads the same plaintext bundle twice (create credentials --bundle checks it, then
 // writes from it) warns once.
 func TestLoadBundleFilePlaintextWarnsOnce(t *testing.T) {
 	warn := useBundleCrypto(t)

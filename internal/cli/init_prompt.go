@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -28,7 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/render"
+	"github.com/maeshinshin/ichor/internal/uiapi"
 )
 
 // endpointTypes is the one definition of TalosCluster.spec.endpoint.type's values (the CRD enum), with
@@ -264,13 +265,26 @@ func diskFlagValue(d ichorv1alpha1.TalosMachineDiscoveredDisk) string {
 // chooseNIC returns the permanent MAC of the first node's primary link, the --nic value of a vip endpoint.
 // It follows chooseInstallDisk: a given --nic is checked against the links the node reports, a sole link is
 // taken and named, none is an error, and several are a list to pick from with nothing selected to begin with
-// (or, with no terminal, a refusal that lists them). Whichever way it is settled, it says which link was
-// taken, by kernel name and MAC, and that the configuration calls it net0.
+// (or, with no terminal, a refusal that lists them). The link may be given by name or by MAC; only its MAC is
+// returned. Whichever way it is settled, it says which link was taken, as name <MAC>.
 func chooseNIC(r io.Reader, w io.Writer, given string, links []ichorv1alpha1.TalosMachineDiscoveredLink, readErr error) (string, error) {
 	const flag = "--nic"
 
 	if readErr != nil && given == "" {
-		return "", fmt.Errorf("could not list the node's network links (%w); name the primary link's permanent MAC with %s", readErr, flag)
+		return "", fmt.Errorf("could not list the node's network links (%w); name the primary link (its name or permanent MAC) with %s", readErr, flag)
+	}
+
+	if _, err := net.ParseMAC(given); given != "" && err != nil { // a name: only its MAC is carried on
+		if readErr != nil {
+			return "", fmt.Errorf("could not list the node's network links (%w), so %s %q cannot be looked up; give its permanent MAC", readErr, flag, given)
+		}
+
+		mac, err := uiapi.ResolveLink(given, links)
+		if err != nil {
+			return "", fmt.Errorf("%s: %w", flag, err)
+		}
+
+		given = mac
 	}
 
 	if given != "" {
@@ -282,20 +296,19 @@ func chooseNIC(r io.Reader, w io.Writer, given string, links []ichorv1alpha1.Tal
 		}
 
 		if i < 0 { // the node's links could not be read, so the MAC is taken as given
-			_, _ = fmt.Fprintf(w, "Primary link: %s → the link with MAC %s (the node's links could not be read, so it is not checked)\n",
-				render.PrimaryLinkAlias, given)
+			_, _ = fmt.Fprintf(w, "Primary link: %s (the node's links could not be read, so it is not checked)\n", given)
 
 			return given, nil
 		}
 
-		return announceNIC(w, links[i], ""), nil
+		return announceNIC(w, links[i]), nil
 	}
 
 	switch len(links) {
 	case 0:
-		return "", fmt.Errorf("no physical network link was found on the node; name the primary link's permanent MAC with %s", flag)
+		return "", fmt.Errorf("no physical network link was found on the node; name the primary link (its name or permanent MAC) with %s", flag)
 	case 1:
-		return announceNIC(w, links[0], "the node's only physical link"), nil
+		return announceNIC(w, links[0]), nil
 	}
 
 	if !bundleTerminal() {
@@ -321,7 +334,7 @@ func chooseNIC(r io.Reader, w io.Writer, given string, links []ichorv1alpha1.Tal
 		return "", fmt.Errorf("no link was chosen; choose one with %s", flag)
 	}
 
-	return announceNIC(w, links[i], ""), nil
+	return announceNIC(w, links[i]), nil
 }
 
 const (
@@ -329,23 +342,18 @@ const (
 	linkStateDown = "down"
 )
 
-// announceNIC prints the link taken, as the alias the configuration uses and the kernel name and MAC it stands
-// for: the name can change between boots, the MAC cannot, and the alias is what the rendered documents say.
-func announceNIC(w io.Writer, l ichorv1alpha1.TalosMachineDiscoveredLink, why string) string {
-	if why != "" {
-		why = " (" + why + ")"
-	}
-
-	_, _ = fmt.Fprintf(w, "Primary link: %s → %s (%s)%s, as --nic %s\n", render.PrimaryLinkAlias, l.Name, l.PermanentMAC, why, l.PermanentMAC)
+// announceNIC prints the link taken, as the name and MAC it is shown by everywhere (uiapi.LinkLabel), and returns its MAC.
+func announceNIC(w io.Writer, l ichorv1alpha1.TalosMachineDiscoveredLink) string {
+	_, _ = fmt.Fprintf(w, "Primary link: %s\n", uiapi.LinkLabel(l))
 
 	return l.PermanentMAC
 }
 
-// nicChoices lists links as aligned rows of name, MAC, state, speed and driver, each choosing its MAC. A link
-// that is down is listed with its state, not left out.
+// nicChoices lists links as aligned rows that start with the link as uiapi.LinkLabel writes it, then its state, speed
+// and driver, each row choosing its MAC. A link that is down is listed with its state, not left out.
 func nicChoices(links []ichorv1alpha1.TalosMachineDiscoveredLink) []promptChoice {
 	rows := make([][]string, len(links))
-	widths := make([]int, 5) //nolint:mnd
+	widths := make([]int, 4) //nolint:mnd
 
 	for i, l := range links {
 		state, speed := linkStateDown, ""
@@ -357,7 +365,7 @@ func nicChoices(links []ichorv1alpha1.TalosMachineDiscoveredLink) []promptChoice
 			speed = fmt.Sprintf("%d Mbit/s", l.SpeedMbit)
 		}
 
-		rows[i] = []string{l.Name, l.PermanentMAC, state, speed, l.Driver}
+		rows[i] = []string{uiapi.LinkLabel(l), state, speed, l.Driver}
 		for c, v := range rows[i] {
 			widths[c] = max(widths[c], utf8.RuneCountInString(v))
 		}

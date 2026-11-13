@@ -32,6 +32,8 @@ import (
 )
 
 const (
+	testHWLink     = "enp1s0"
+	testTwinLink   = "twin"
 	testLinkName   = "enp0s2"
 	testLinkMAC    = "52:54:00:aa:bb:cc"
 	testSecondLink = "enp0s3"
@@ -113,8 +115,8 @@ func TestRunInit_VIPFirstNodeGetsTheVIPAndItsLink(t *testing.T) {
 				}
 			}
 
-			if !strings.Contains(stderr, "net0 → "+testLinkName+" ("+testLinkMAC+")") {
-				t.Errorf("the output does not connect the alias to the interface:\n%s", stderr)
+			if !strings.Contains(stderr, "Primary link: "+testLinkName+" <"+testLinkMAC+">\n") {
+				t.Errorf("the output does not name the link taken:\n%s", stderr)
 			}
 		})
 	}
@@ -149,7 +151,10 @@ func TestRunInit_VIPLinkChoice(t *testing.T) {
 			t.Fatal("expected a refusal")
 		}
 
-		for _, want := range []string{"--nic", testLinkName, testInitLink.PermanentMAC, testSecondLink, testSecondMAC, "down"} {
+		for _, want := range []string{
+			"--nic",
+			"\n  " + testLinkName + " <" + testLinkMAC + ">  up\n  " + testSecondLink + " <" + testSecondMAC + ">  down",
+		} {
 			if !strings.Contains(err.Error(), want) {
 				t.Errorf("%q missing from %q", want, err)
 			}
@@ -205,14 +210,18 @@ func TestNICChoices(t *testing.T) {
 		t.Fatalf("%d rows, want both links", len(rows))
 	}
 
-	for _, want := range []string{testLinkName, testLinkMAC, "up", "10000 Mbit/s", "ixgbe"} {
-		if !strings.Contains(rows[0].label, want) {
-			t.Errorf("%q missing from %q", want, rows[0].label)
+	// The format is pinned whole: the link as name <MAC> first, as --nic takes either, then state, speed and driver.
+	for i, want := range []string{
+		"enp0s2 <52:54:00:aa:bb:cc>  up    10000 Mbit/s  ixgbe",
+		"eno1 <52:54:00:dd:ee:ff>    down",
+	} {
+		if rows[i].label != want {
+			t.Errorf("row %d = %q, want %q", i, rows[i].label, want)
 		}
 	}
 
-	if !strings.Contains(rows[1].label, "down") || rows[1].value != testSecondMAC {
-		t.Errorf("the down link = %+v", rows[1])
+	if rows[1].value != testSecondMAC {
+		t.Errorf("the down link chooses %q", rows[1].value)
 	}
 }
 
@@ -221,9 +230,10 @@ func TestBuildInitPlan_VIPInput(t *testing.T) {
 		mutate func(*initPlanInput)
 		want   string
 	}{
-		"a vip must be an IP address": {func(in *initPlanInput) { in.EndpointAddress = "vip.example.com" }, testNotIP},
-		"--nic needs a vip":           {func(in *initPlanInput) { in.EndpointType, in.NIC = endpointNode, testSecondMAC }, testVIPOnly},
-		"--nic must be a MAC":         {func(in *initPlanInput) { in.NIC = "eno1" }, "not a MAC address"},
+		"a vip must be an IP address":         {func(in *initPlanInput) { in.EndpointAddress = "vip.example.com" }, testNotIP},
+		"--nic needs a vip":                   {func(in *initPlanInput) { in.EndpointType, in.NIC = endpointNode, testSecondMAC }, testVIPOnly},
+		"--nic written as a MAC needs colons": {func(in *initPlanInput) { in.NIC = "52-54-00-dd-ee-ff" }, "not a MAC address"},
+		"--nic may be a link name":            {func(in *initPlanInput) { in.NIC = testHWLink }, ""},
 		"--address needs a vip": {func(in *initPlanInput) {
 			in.EndpointType, in.Addresses = endpointNode, []string{testStaticCIDR}
 		}, testVIPOnly},
@@ -304,7 +314,7 @@ func TestAdoptCallsAnUnmatchedEndpointALoadBalancer(t *testing.T) {
 }
 
 // On a terminal, several links are a list like the disks: nothing is selected to begin with, so Enter alone
-// picks nothing, and the link moved onto is taken and named with its alias.
+// picks nothing, and the link moved onto is taken and named.
 func TestChooseNIC_ListOnATerminal(t *testing.T) {
 	two := []ichorv1alpha1.TalosMachineDiscoveredLink{
 		testInitLink, {Name: testSecondLink, PermanentMAC: testSecondMAC},
@@ -321,8 +331,14 @@ func TestChooseNIC_ListOnATerminal(t *testing.T) {
 			t.Fatalf("got %q, %v", got, err)
 		}
 
-		if !strings.Contains(out.String(), "net0 → "+testSecondLink+" ("+testSecondMAC+")") {
-			t.Errorf("the choice was not shown with its alias:\n%s", out.String())
+		// Both lines are pinned exactly: the picker's row and the confirmation of the link taken.
+		for _, want := range []string{
+			testSecondLink + " <" + testSecondMAC + ">",
+			"Primary link: " + testSecondLink + " <" + testSecondMAC + ">\n",
+		} {
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("%q missing from the output:\n%s", want, out.String())
+			}
 		}
 	})
 
@@ -428,4 +444,91 @@ func TestRunInit_VIPStaticAddressNeedsAnUnambiguousLink(t *testing.T) {
 	if _, machine, _, _, err := initWithLinks(t, static, two[:1], nil); err != nil || machine.Spec.Network.MAC != testLinkMAC {
 		t.Fatalf("sole link: err = %v", err)
 	}
+}
+
+// --nic may be a link name: it is looked up among the links the node reports, and only the MAC goes on, into
+// spec.network and into the selector of the rendered LinkAliasConfig, never the name.
+func TestRunInit_VIPLinkGivenByName(t *testing.T) {
+	two := []ichorv1alpha1.TalosMachineDiscoveredLink{
+		testInitLink, {Name: testSecondLink, PermanentMAC: testSecondMAC},
+	}
+
+	t.Run("a name resolves to its MAC and only the MAC is rendered", func(t *testing.T) {
+		applied, machine, _, stderr, err := initWithLinks(t, func(o *initOptions) { o.NIC = testSecondLink }, two, nil)
+		if err != nil {
+			t.Fatalf("runInit: %v", err)
+		}
+
+		if machine.Spec.Network == nil || machine.Spec.Network.MAC != testSecondMAC {
+			t.Errorf("spec.network = %+v, want the MAC of %s", machine.Spec.Network, testSecondLink)
+		}
+
+		if !strings.Contains(applied, `mac(link.permanent_addr) == "`+testSecondMAC+`"`) || strings.Contains(applied, testSecondLink) {
+			t.Errorf("the rendered configuration does not select by MAC alone:\n%s", applied)
+		}
+
+		if !strings.Contains(stderr, "Primary link: "+testSecondLink+" <"+testSecondMAC+">\n") {
+			t.Errorf("the output does not name the link taken:\n%s", stderr)
+		}
+	})
+
+	t.Run("an unknown name is refused, listing every link by name and MAC", func(t *testing.T) {
+		applied, _, _, _, err := initWithLinks(t, func(o *initOptions) { o.NIC = "eth9" }, two, nil)
+		if err == nil {
+			t.Fatal("expected a refusal")
+		}
+
+		for _, want := range []string{
+			"eth9", "\n  " + testLinkName + " <" + testLinkMAC + ">\n  " + testSecondLink + " <" + testSecondMAC + ">",
+		} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%q missing from %q", want, err)
+			}
+		}
+
+		if applied != "" {
+			t.Error("the node was configured despite the refusal")
+		}
+	})
+
+	t.Run("a name two links share is refused", func(t *testing.T) {
+		twins := []ichorv1alpha1.TalosMachineDiscoveredLink{
+			{Name: testTwinLink, PermanentMAC: testLinkMAC}, {Name: testTwinLink, PermanentMAC: testSecondMAC},
+		}
+
+		_, _, _, _, err := initWithLinks(t, func(o *initOptions) { o.NIC = testTwinLink }, twins, nil)
+		if err == nil || !strings.Contains(err.Error(), "names 2 links") || !strings.Contains(err.Error(), testSecondMAC) {
+			t.Fatalf("err = %v", err)
+		}
+	})
+
+	t.Run("a name cannot be looked up when the links could not be read", func(t *testing.T) {
+		_, _, _, _, err := initWithLinks(t, func(o *initOptions) { o.NIC = testSecondLink }, nil, errors.New("boom"))
+		if err == nil || !strings.Contains(err.Error(), "boom") || !strings.Contains(err.Error(), "MAC") {
+			t.Fatalf("err = %v", err)
+		}
+	})
+
+	t.Run("a MAC still works unchanged", func(t *testing.T) {
+		_, machine, _, _, err := initWithLinks(t, func(o *initOptions) { o.NIC = testSecondMAC }, two, nil)
+		if err != nil || machine.Spec.Network.MAC != testSecondMAC {
+			t.Fatalf("err = %v, network = %+v", err, machine.Spec.Network)
+		}
+	})
+}
+
+// -f takes a link name under firstNode.nic as well as a MAC.
+func TestInitFile_NICByName(t *testing.T) {
+	c, err := parseInitConfig([]byte("apiVersion: ichor.maesh.dev/v1alpha1\nkind: InitConfig\nfirstNode:\n  nic: enp1s0\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, v := range c.values("") {
+		if v.flag == flagNIC && v.values[0] == testHWLink {
+			return
+		}
+	}
+
+	t.Fatal("firstNode.nic: enp1s0 does not set --nic")
 }

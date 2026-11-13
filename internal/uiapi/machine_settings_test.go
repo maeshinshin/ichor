@@ -26,11 +26,20 @@ import (
 
 const (
 	nic1       = "aa:bb:cc:dd:ee:01"
+	linkEno1   = "eno1"
+	linkEno2   = "eno2"
+	linkTwin   = "twin"
+	nic2       = "aa:bb:cc:dd:ee:02"
 	staticAddr = "10.0.0.2/24"
 )
 
 func TestNetworkFromPB(t *testing.T) {
 	id := ichorv1alpha1.TalosMachineIdentity{MACAddresses: []string{nic1, "AA:BB:CC:DD:EE:02"}}
+
+	links := []ichorv1alpha1.TalosMachineDiscoveredLink{
+		{Name: linkEno1, PermanentMAC: nic1}, {Name: linkEno2, PermanentMAC: nic2},
+		{Name: linkTwin, PermanentMAC: nic1}, {Name: linkTwin, PermanentMAC: nic2},
+	}
 
 	cases := []struct {
 		name    string
@@ -39,13 +48,16 @@ func TestNetworkFromPB(t *testing.T) {
 	}{
 		{"none", nil, ""},
 		{"dhcp", &pb.MachineNetwork{Mac: nic1}, ""},
-		{"the MAC is matched case-insensitively", &pb.MachineNetwork{Mac: "aa:bb:cc:dd:ee:02"}, ""},
+		{"the MAC is matched case-insensitively", &pb.MachineNetwork{Mac: nic2}, ""},
 		{ichorv1alpha1.MachineAddressingStatic, &pb.MachineNetwork{
 			Mac: nic1, Addressing: ichorv1alpha1.MachineAddressingStatic, Addresses: []string{staticAddr},
 			Gateway: gatewayIP, DnsServers: []string{"1.1.1.1"}, VlanId: 20,
 		}, ""},
 		{"a MAC the machine does not have", &pb.MachineNetwork{Mac: "aa:bb:cc:dd:ee:99"}, "discovered MAC"},
-		{"a malformed MAC", &pb.MachineNetwork{Mac: "eth0"}, "not a MAC address"},
+		{"a MAC that is not written with colons", &pb.MachineNetwork{Mac: "aa-bb-cc-dd-ee-01"}, "not a MAC address"},
+		{"a link name resolves to its MAC", &pb.MachineNetwork{Mac: linkEno1}, ""},
+		{"a link name that no reported link has", &pb.MachineNetwork{Mac: "eth9"}, linkEno1 + " <" + nic1 + ">\n  " + linkEno2 + " <" + nic2 + ">"},
+		{"a link name two reported links share", &pb.MachineNetwork{Mac: linkTwin}, "names 2 links"},
 		{"static with no address", &pb.MachineNetwork{Mac: nic1, Addressing: ichorv1alpha1.MachineAddressingStatic}, "at least one address"},
 		{"dhcp with an address", &pb.MachineNetwork{Mac: nic1, Addresses: []string{staticAddr}}, "dhcp takes no"},
 		{"an address with no prefix", &pb.MachineNetwork{
@@ -61,7 +73,7 @@ func TestNetworkFromPB(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := NetworkFromPB(tc.in, id)
+			got, err := NetworkFromPB(tc.in, id, links)
 
 			switch {
 			case tc.wantErr == "" && err != nil:
@@ -81,7 +93,7 @@ func TestNetworkRoundTrip(t *testing.T) {
 		DnsServers: []string{"9.9.9.9"}, VlanId: 5,
 	}
 
-	spec, err := NetworkFromPB(in, ichorv1alpha1.TalosMachineIdentity{})
+	spec, err := NetworkFromPB(in, ichorv1alpha1.TalosMachineIdentity{}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,5 +145,27 @@ func TestDisksFromPB(t *testing.T) {
 				t.Fatalf("round trip changed the count: %d vs %d", len(disksToPB(got)), len(tc.in))
 			}
 		})
+	}
+}
+
+// A link given by name is resolved against the links the node reported, and what is stored is the MAC: a kernel
+// link name is not stable across boots and must never reach spec.network.
+func TestNetworkFromPB_LinkNameIsResolvedToItsMAC(t *testing.T) {
+	links := []ichorv1alpha1.TalosMachineDiscoveredLink{{Name: linkEno1, PermanentMAC: nic1}, {Name: linkEno2, PermanentMAC: "AA:BB:CC:DD:EE:02"}}
+
+	got, err := NetworkFromPB(&pb.MachineNetwork{Mac: linkEno2}, ichorv1alpha1.TalosMachineIdentity{}, links)
+	if err != nil || got.MAC != nic2 {
+		t.Fatalf("got %+v, %v, want the MAC of eno2", got, err)
+	}
+
+	// A MAC keeps its path untouched, even with links that could be searched.
+	if got, err = NetworkFromPB(&pb.MachineNetwork{Mac: "AA:BB:CC:DD:EE:01"}, ichorv1alpha1.TalosMachineIdentity{}, links); err != nil || got.MAC != nic1 {
+		t.Fatalf("a MAC: got %+v, %v", got, err)
+	}
+
+	// No reported links: a name cannot be resolved, and the refusal says so.
+	if _, err = NetworkFromPB(&pb.MachineNetwork{Mac: linkEno1}, ichorv1alpha1.TalosMachineIdentity{}, nil); err == nil ||
+		!strings.Contains(err.Error(), "reported no links") {
+		t.Fatalf("err = %v", err)
 	}
 }

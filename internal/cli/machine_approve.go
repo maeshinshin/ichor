@@ -149,7 +149,7 @@ func init() {
 	f.StringVar(&machineApproveOpts.Hostname, "hostname", "", "hostname to set")
 	f.StringVar(&machineApproveOpts.InstallDisk, "install-disk", "", "system disk Talos installs onto: "+installDiskUsage)
 	f.StringVar(&machineApproveOpts.InstallImage, "install-image", "", "installer image (default: the booted schematic's; the cluster's SecureBoot installer when spec.security.secureBoot.mode is Preferred or Required)")
-	f.StringVar(&machineApproveOpts.NIC, "nic", "", "primary network link, by its permanent MAC (aa:bb:cc:dd:ee:ff); alone it means DHCP; needed for a control plane of a cluster whose endpoint is a vip")
+	f.StringVar(&machineApproveOpts.NIC, "nic", "", "primary network link, by its name (enp1s0) or permanent MAC (aa:bb:cc:dd:ee:ff); a name is looked up among the links the node reported and only its MAC is kept; alone it means DHCP; needed for a control plane of a cluster whose endpoint is a vip")
 	f.StringSliceVar(&machineApproveOpts.Addresses, "address", nil, "static address with prefix length, 192.168.1.10/24 (repeatable; needs --nic)")
 	f.StringVar(&machineApproveOpts.Gateway, "gateway", "", "default gateway for the static address")
 	f.StringSliceVar(&machineApproveOpts.DNS, "dns", nil, "DNS server address (repeatable; needs --nic)")

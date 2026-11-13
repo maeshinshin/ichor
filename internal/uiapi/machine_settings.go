@@ -33,22 +33,74 @@ var (
 	maxSizeRe    = regexp.MustCompile(`^[1-9][0-9]*(MiB|GiB|TiB)$`)
 )
 
+// LinkLabel is how a link is shown to a person: its name and its MAC in angle brackets, enp1s0 <84:47:09:5c:ed:49>.
+// Both are values --nic takes; the MAC is kept as discovered, with its colons and lower case.
+func LinkLabel(l ichorv1alpha1.TalosMachineDiscoveredLink) string {
+	return l.Name + " <" + l.PermanentMAC + ">"
+}
+
+// ResolveLink turns a link given as a name into the permanent MAC of the link of that name among the links the node
+// reported in discovery (status.discoveredLinks); anything that parses as a MAC is returned unchanged. The name is
+// input convenience only: kernel link names are not stable across boots, so only the MAC is ever stored and rendered.
+// A name that matches no link, or more than one, is refused, and the refusal lists every link with its name and MAC.
+func ResolveLink(nic string, links []ichorv1alpha1.TalosMachineDiscoveredLink) (string, error) {
+	if _, err := net.ParseMAC(nic); err == nil {
+		return nic, nil
+	}
+
+	var matches []string
+
+	for _, l := range links {
+		if l.Name == nic {
+			matches = append(matches, l.PermanentMAC)
+		}
+	}
+
+	if len(matches) == 1 {
+		return matches[0], nil
+	}
+
+	have := "the node has reported no links"
+
+	if len(links) > 0 {
+		listed := make([]string, len(links))
+		for i, l := range links {
+			listed[i] = "  " + LinkLabel(l)
+		}
+
+		have = "its links:\n" + strings.Join(listed, "\n")
+	}
+
+	if len(matches) > 1 {
+		return "", fmt.Errorf("link %q names %d links of the node, so it cannot say which; give the MAC. %s", nic, len(matches), have)
+	}
+
+	return "", fmt.Errorf("link %q is neither a MAC address nor the name of a link the node reported; %s", nic, have)
+}
+
 // NetworkFromPB converts the wire network settings to spec.network and checks them
 // the way the CRD does, so the caller learns the reason instead of an admission error. The MAC
 // must be one the machine was discovered with: that is what "permanent MAC discovered earlier"
-// means, and it stops a typo from selecting a link that does not exist. nil means "none".
-func NetworkFromPB(in *pb.MachineNetwork, identity ichorv1alpha1.TalosMachineIdentity) (*ichorv1alpha1.TalosMachineNetwork, error) {
+// means, and it stops a typo from selecting a link that does not exist. nil means "none". The link may be given by name (see ResolveLink); the result always holds its MAC.
+func NetworkFromPB(
+	in *pb.MachineNetwork, identity ichorv1alpha1.TalosMachineIdentity, links []ichorv1alpha1.TalosMachineDiscoveredLink,
+) (*ichorv1alpha1.TalosMachineNetwork, error) {
 	if in == nil {
 		return nil, nil
 	}
 
-	if !macRe.MatchString(in.GetMac()) {
-		return nil, fmt.Errorf("network.mac %q is not a MAC address like aa:bb:cc:dd:ee:ff", in.GetMac())
+	mac, err := ResolveLink(in.GetMac(), links)
+	if err != nil {
+		return nil, err
 	}
 
-	if len(identity.MACAddresses) > 0 && !containsMAC(identity.MACAddresses, in.GetMac()) {
+	if !macRe.MatchString(mac) {
+		return nil, fmt.Errorf("network.mac %q is not a MAC address like aa:bb:cc:dd:ee:ff", mac)
+	}
+
+	if len(identity.MACAddresses) > 0 && !containsMAC(identity.MACAddresses, mac) {
 		return nil, fmt.Errorf("network.mac %s is not one of the node's discovered MAC addresses (%s)",
-			in.GetMac(), strings.Join(identity.MACAddresses, ", "))
+			mac, strings.Join(identity.MACAddresses, ", "))
 	}
 
 	addressing := in.GetAddressing()
@@ -92,7 +144,7 @@ func NetworkFromPB(in *pb.MachineNetwork, identity ichorv1alpha1.TalosMachineIde
 	}
 
 	return &ichorv1alpha1.TalosMachineNetwork{
-		MAC: strings.ToLower(in.GetMac()), Addressing: addressing, Addresses: in.GetAddresses(),
+		MAC: strings.ToLower(mac), Addressing: addressing, Addresses: in.GetAddresses(),
 		Gateway: in.GetGateway(), DNSServers: in.GetDnsServers(), VLANID: in.GetVlanId(),
 	}, nil
 }

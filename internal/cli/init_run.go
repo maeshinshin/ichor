@@ -619,7 +619,7 @@ func vipNetwork(opts initOptions, nic string, id controller.HardwareIdentity) (*
 		return nil, err
 	}
 
-	return uiapi.NetworkFromPB(n, ichorv1alpha1.TalosMachineIdentity{MACAddresses: id.MACAddresses})
+	return uiapi.NetworkFromPB(n, ichorv1alpha1.TalosMachineIdentity{MACAddresses: id.MACAddresses}, nil)
 }
 
 // initBootstrapAccess is step 4: apply the rendered configuration to the node and wait for it to

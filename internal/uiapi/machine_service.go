@@ -257,7 +257,7 @@ func (s *Server) ApproveMachine(
 
 	install = s.withSecureBootInstaller(ctx, m, install)
 
-	network, err := NetworkFromPB(req.Msg.GetNetwork(), m.Spec.Identity)
+	network, err := NetworkFromPB(req.Msg.GetNetwork(), m.Spec.Identity, m.Status.DiscoveredLinks)
 	if err != nil {
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}

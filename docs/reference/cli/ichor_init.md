@@ -33,7 +33,7 @@ new cluster:
 
 With --endpoint-type vip the endpoint address is a shared IP that Ichor puts on
 every control plane, on its primary link: init takes that link from the node
-(the only physical link, or one you pick; --nic names it by permanent MAC),
+(the only physical link, or one you pick; --nic names it by link name or permanent MAC),
 gives the node DHCP on that link only, and the configuration refers to it as
 net0. A control plane approved later needs its own `--nic` for the same reason.
 The address must be a free IP, not the node's own.
@@ -82,7 +82,7 @@ ichor init [flags]
       --kube-api-tls-server-name string    with --ui-url: tls-server-name in users' kubeconfigs (chart: ichorUI.users.kubeAPITLSServerName)
       --merge-kubeconfig                   also merge the cluster-admin kubeconfig into your kubeconfig (--kubeconfig, else the first file of $KUBECONFIG, else ~/.kube/config) as context admin@CLUSTER, and make it current; a taken name gets a suffix
   -n, --namespace string                   namespace the TalosCluster, its TalosMachine and the secrets bundle Secret live in; Ichor's own install manifest always deploys its controller to "ichor-system" (default "ichor-system")
-      --nic string                         with --endpoint-type vip: the first node's primary network link, by its permanent MAC (aa:bb:cc:dd:ee:ff), the link the VIP is announced on; like approve node --nic. Needed only when the node has more than one physical link
+      --nic string                         with --endpoint-type vip: the first node's primary network link, by its name (enp1s0) or permanent MAC (aa:bb:cc:dd:ee:ff), the link the VIP is announced on; like approve node --nic. A name is looked up among the links the node reports and only its MAC is kept. Needed only when the node has more than one physical link
       --node-endpoint string               Talos API address (host:port) of the first node, currently in maintenance mode (required)
       --pod-subnets strings                pod CIDRs (spec.network.podSubnets; at most one per IP family); unset keeps Talos's default 10.244.0.0/16. Fixed once the cluster exists
       --preset string                      topology preset: single (1 node, schedulable), compact-ha (3 control planes, schedulable), standard (3 control planes + workers added later, tainted; recommended), or large (5 control planes + workers added later, tainted) (default "standard")

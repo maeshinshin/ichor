@@ -129,3 +129,12 @@ func TestApproveWritesNetworkAndDisks(t *testing.T) {
 		t.Fatalf("spec.disks: %+v", got.Disks)
 	}
 }
+
+// --nic takes a link name as well as a MAC: the CLI passes it on as given and the API resolves it against the links
+// the node reported, so the same value works on every client.
+func TestNetworkFromFlags_NICMayBeALinkName(t *testing.T) {
+	n, err := networkFromFlags(machineApproveOptions{NIC: testHWLink})
+	if err != nil || n.GetMac() != testHWLink {
+		t.Fatalf("got %+v, %v", n, err)
+	}
+}

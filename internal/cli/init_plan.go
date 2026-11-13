@@ -377,7 +377,8 @@ func checkVIPInput(in initPlanInput) error {
 		return nil
 	}
 
-	if !macPattern.MatchString(in.NIC) {
+	// Anything that is not a MAC is a link name, looked up once the node's links are read.
+	if _, err := net.ParseMAC(in.NIC); err == nil && !macPattern.MatchString(in.NIC) {
 		return fmt.Errorf("init: --nic %q is not a MAC address like aa:bb:cc:dd:ee:ff", in.NIC)
 	}
 

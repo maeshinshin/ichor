@@ -111,7 +111,7 @@ new cluster:
 
 With --endpoint-type vip the endpoint address is a shared IP that Ichor puts on
 every control plane, on its primary link: init takes that link from the node
-(the only physical link, or one you pick; --nic names it by permanent MAC),
+(the only physical link, or one you pick; --nic names it by link name or permanent MAC),
 gives the node DHCP on that link only, and the configuration refers to it as
 net0. A control plane approved later needs its own ` + "`--nic`" + ` for the same reason.
 The address must be a free IP, not the node's own.
@@ -316,8 +316,9 @@ func bindInitFlags(flags *pflag.FlagSet, o *initOptions, wait *time.Duration) {
 	flags.BoolVar(&o.SkipSignatureCheck, "skip-signature-check", false,
 		"run the installer image WITHOUT checking its signature (for builds nobody signs: development and demo images)")
 	flags.StringVar(&o.NIC, flagNIC, "",
-		"with --endpoint-type vip: the first node's primary network link, by its permanent MAC (aa:bb:cc:dd:ee:ff), "+
-			"the link the VIP is announced on; like approve node --nic. Needed only when the node has more than one physical link")
+		"with --endpoint-type vip: the first node's primary network link, by its name (enp1s0) or permanent MAC (aa:bb:cc:dd:ee:ff), "+
+			"the link the VIP is announced on; like approve node --nic. A name is looked up among the links the node reports and only "+
+			"its MAC is kept. Needed only when the node has more than one physical link")
 	flags.StringSliceVar(&o.Addresses, "address", nil,
 		"with --endpoint-type vip: static address of the first node's primary link with prefix length, 192.168.1.10/24 (repeatable); "+
 			"without it the node uses DHCP on that link. Same as approve node --address")

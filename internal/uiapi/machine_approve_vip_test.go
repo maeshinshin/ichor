@@ -119,3 +119,29 @@ func TestApproveControlPlaneWithoutLinkIntoVIPClusterIsRefused(t *testing.T) {
 		})
 	}
 }
+
+// Approving with --nic given as a link name stores the link's MAC, never the name: kernel link names are not
+// stable across boots and the rendered selector is by MAC.
+func TestApproveWithALinkNameStoresTheMAC(t *testing.T) {
+	pending := testMachine()
+	pending.Status.DiscoveredLinks = []ichorv1alpha1.TalosMachineDiscoveredLink{{Name: vipTestLink, PermanentMAC: testMAC, LinkUp: true}}
+
+	c := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(pending).WithStatusSubresource(pending).Build()
+	s := &Server{Client: c}
+
+	_, err := s.ApproveMachine(context.Background(), connect.NewRequest(&pb.ApproveMachineRequest{
+		Machine: objectRef(testNS, "m1"), Role: pb.MachineRole_MACHINE_ROLE_WORKER, Network: &pb.MachineNetwork{Mac: vipTestLink},
+	}))
+	if err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+
+	var got ichorv1alpha1.TalosMachine
+	if err := c.Get(context.Background(), client.ObjectKeyFromObject(pending), &got); err != nil {
+		t.Fatal(err)
+	}
+
+	if got.Spec.Network == nil || got.Spec.Network.MAC != testMAC {
+		t.Fatalf("spec.network = %+v, want the MAC %s", got.Spec.Network, testMAC)
+	}
+}

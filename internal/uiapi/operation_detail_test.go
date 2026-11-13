@@ -74,7 +74,7 @@ func TestOperationSummaryPerKind(t *testing.T) {
 			"Shut down the cluster"},
 		{"config", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindConfig},
 			ichorv1alpha1.TalosOperationStatus{Machines: []ichorv1alpha1.TalosOperationMachineStatus{{Name: "a"}}},
-			"Apply configuration to 1 machine"},
+			"Apply configuration to 1 node"},
 		{"reboot", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindNode, Node: node(ichorv1alpha1.NodeActionReboot, "")},
 			ichorv1alpha1.TalosOperationStatus{}, "Reboot node talos-02"},
 		{"restart", ichorv1alpha1.TalosOperationSpec{Kind: ichorv1alpha1.TalosOperationKindNode, Node: node(ichorv1alpha1.NodeActionRestartService, "kubelet")},

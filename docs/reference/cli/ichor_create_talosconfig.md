@@ -19,7 +19,7 @@ verb "download" on talosclusters/talosconfig-reader (ichor-operator and ichor-ad
 does not), and no access to the secrets bundle. Each request is recorded as an Event on the cluster that
 names you.
 
-The Talos endpoints are the cluster's control-plane machines (or --talos-endpoints, or your current
+The Talos endpoints are the cluster's control-plane nodes (or --talos-endpoints, or your current
 talosconfig's). The file is written next to your current talosconfig with the suffix .ichor-reader (never over
 it), unless --out says otherwise. Use it with: TALOSCONFIG=<file> talosctl get members
 
@@ -44,7 +44,7 @@ ichor create talosconfig NAME [flags]
   -n, --namespace string          namespace of the Ichor resources the command names (default "ichor-system")
       --out string                where to write the talosconfig (default: your current talosconfig's path plus .ichor-reader)
       --override                  incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker, an upgrade the compatibility table refuses); needs the override RBAC verb on the resource; implies --local
-      --talos-endpoints strings   the Talos API endpoints for the talosconfig (default: the cluster's control-plane machines, else your current talosconfig's)
+      --talos-endpoints strings   the Talos API endpoints for the talosconfig (default: the cluster's control-plane nodes, else your current talosconfig's)
       --tls-server-name string    name on ichor-ui's serving certificate, when it is not the Service's DNS name (<service>.<namespace>.svc)
       --ttl duration              how long the talosconfig is valid; the default is 1h0m0s and the maximum 12h0m0s
 ```

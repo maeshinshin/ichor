@@ -19,6 +19,10 @@ To create the very first admin on an existing install, use
   ichor create user NAME --role admin --generate --bootstrap
 which needs no login: it writes the user with your kubeconfig's own rights.
 
+```sh
+ichor user [flags]
+```
+
 ### Examples
 
 ```sh

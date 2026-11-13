@@ -11,6 +11,10 @@ Show how a change would alter what is in force
 
 diff shows how the effective Cilium values would change if a file became your layer, without writing anything.
 
+```sh
+ichor diff [flags]
+```
+
 ### Examples
 
 ```sh

@@ -12,6 +12,10 @@ Create a user, or write credentials for talosctl and kubectl
 create makes an Ichor user, or writes the files a person needs to reach a cluster: the admin
 credentials (a kubeconfig and a talosconfig), a short-lived read-only talosconfig, or your own kubeconfig.
 
+```sh
+ichor create [flags]
+```
+
 ### Examples
 
 ```sh

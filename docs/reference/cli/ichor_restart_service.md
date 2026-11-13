@@ -13,7 +13,7 @@ Restart a Talos service on a node (kubelet, containerd or cri).
 
 It shows the plan and asks for confirmation unless --yes. For delete node the typed node name
 (the TalosMachine name, or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
-(or deletes the machine); the controller does the work. Follow it with --follow.
+(or deletes the node); the controller does the work. Follow it with --follow.
 
 ```sh
 ichor restart service NODE SERVICE [flags]

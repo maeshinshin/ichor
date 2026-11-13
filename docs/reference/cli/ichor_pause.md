@@ -7,6 +7,10 @@ description: "Pause a running operation"
 
 Pause a running operation
 
+```sh
+ichor pause [flags]
+```
+
 ### Examples
 
 ```sh

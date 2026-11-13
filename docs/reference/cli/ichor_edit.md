@@ -7,6 +7,10 @@ description: "Edit an object in $EDITOR, or change a user's fields"
 
 Edit an object in $EDITOR, or change a user's fields
 
+```sh
+ichor edit [flags]
+```
+
 ### Examples
 
 ```sh

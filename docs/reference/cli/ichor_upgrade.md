@@ -27,6 +27,10 @@ from it; if the operation cannot be created (no permission, another operation
 running) nothing was changed. Run the command again to retry: a spec that
 already names the version is not written twice.
 
+```sh
+ichor upgrade [flags]
+```
+
 ### Examples
 
 ```sh
@@ -62,5 +66,5 @@ already names the version is not written twice.
 * [ichor upgrade cni](ichor_upgrade_cni.md)	 - Upgrade Cilium to the chart this Ichor ships
 * [ichor upgrade ichor](ichor_upgrade_ichor.md)	 - Upgrade Ichor itself (IchorInstallation.spec.version)
 * [ichor upgrade kubernetes](ichor_upgrade_kubernetes.md)	 - Upgrade Kubernetes on a cluster (no reboot)
-* [ichor upgrade talos](ichor_upgrade_talos.md)	 - Upgrade Talos on every machine of a cluster (each machine reboots)
+* [ichor upgrade talos](ichor_upgrade_talos.md)	 - Upgrade Talos on every node of a cluster (each node reboots)
 

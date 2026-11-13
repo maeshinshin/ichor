@@ -12,6 +12,10 @@ List objects, or show a cluster in a few lines
 get lists clusters, nodes, TalosConfigPatches, operations, users, Ichor's settings and
 Cilium's Helm values. Add -o yaml or -o json for scripts. Use describe to see one object in full.
 
+```sh
+ichor get [flags]
+```
+
 ### Examples
 
 ```sh

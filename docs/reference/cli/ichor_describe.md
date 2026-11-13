@@ -12,6 +12,10 @@ Show one object in full
 describe shows one cluster, node, patch, operation, user or node configuration in full.
 It reads the same resources the UI shows.
 
+```sh
+ichor describe [flags]
+```
+
 ### Examples
 
 ```sh

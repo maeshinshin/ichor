@@ -1,15 +1,15 @@
 ---
 title: "ichor upgrade talos"
-description: "Upgrade Talos on every machine of a cluster (each machine reboots)"
+description: "Upgrade Talos on every node of a cluster (each node reboots)"
 ---
 
 ## ichor upgrade talos
 
-Upgrade Talos on every machine of a cluster (each machine reboots)
+Upgrade Talos on every node of a cluster (each node reboots)
 
 ### Synopsis
 
-Upgrade Talos on every machine of a cluster (each machine reboots).
+Upgrade Talos on every node of a cluster (each node reboots).
 
 Without VERSION it uses the recommended version (see `--list`). It shows which nodes restart
 and in which order, and asks for confirmation unless --yes.

@@ -7,6 +7,10 @@ description: "Restart a Talos service on a node"
 
 Restart a Talos service on a node
 
+```sh
+ichor restart [flags]
+```
+
 ### Examples
 
 ```sh

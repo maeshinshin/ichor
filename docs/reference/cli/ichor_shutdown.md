@@ -7,6 +7,10 @@ description: "Shut a node down, or every node of a cluster"
 
 Shut a node down, or every node of a cluster
 
+```sh
+ichor shutdown [flags]
+```
+
 ### Examples
 
 ```sh

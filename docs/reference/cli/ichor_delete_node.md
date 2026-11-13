@@ -13,7 +13,7 @@ Delete a node from the cluster: drain it, wipe it (STATE and EPHEMERAL, or more 
 
 It shows the plan and asks for confirmation unless --yes. For delete node the typed node name
 (the TalosMachine name, or --confirm NAME) is the confirmation and replaces the question; --yes alone does not. The CLI only writes the operation
-(or deletes the machine); the controller does the work. Follow it with --follow.
+(or deletes the node); the controller does the work. Follow it with --follow.
 
 delete node --wipe-mode chooses what the wipe erases: system-partitions (the default) wipes the STATE and
 EPHEMERAL partitions, so the node boots its installed system again from a fresh state; system-disk
@@ -36,7 +36,7 @@ ichor delete node NAME [flags]
 
 ```text
       --ca-file string           PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
-      --confirm string           the machine name (the TalosMachine name, not the hostname), to go on without being asked to type it
+      --confirm string           the node name (the TalosMachine name, not the hostname), to go on without being asked to type it
       --follow                   after creating the operation, follow its progress until it finishes
   -h, --help                     help for node
       --ichor-namespace string   namespace Ichor is installed in (where ichor-ui runs and the secrets bundle lives) (default "ichor-system")

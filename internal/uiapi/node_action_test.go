@@ -388,7 +388,7 @@ func TestNodeResetByHostnameNeedsTheMachineNameAsConfirm(t *testing.T) {
 		Machine: objectRef(opNS, "node-w1"), Action: pb.NodeAction_NODE_ACTION_RESET, Confirm: "node-w1",
 		Override: &pb.Override{},
 	})
-	if _, err := s.CreateOperation(user, req); err == nil || !strings.Contains(err.Error(), `type the machine name "w1"`) {
+	if _, err := s.CreateOperation(user, req); err == nil || !strings.Contains(err.Error(), `type the node name "w1"`) {
 		t.Fatalf("the hostname must not confirm: %v", err)
 	}
 

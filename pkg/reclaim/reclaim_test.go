@@ -160,7 +160,7 @@ func TestAssess(t *testing.T) {
 	}{
 		{name: "worker of a reachable cluster is graceful", in: worker(), graceful: true},
 		{
-			name: "already an Ichor machine", in: worker(), refused: "already an Ichor machine",
+			name: "already an Ichor node", in: worker(), refused: "already an Ichor node",
 			known: Known{MachineUUIDs: []string{testAaaaUUID}},
 		},
 		{
@@ -321,7 +321,7 @@ func TestWaitMaintenance(t *testing.T) {
 
 	other := func(context.Context, string) (string, error) { return "zzzz", nil }
 	if err := WaitMaintenance(context.Background(), "10.0.0.5", testUUID, time.Millisecond, other); err == nil ||
-		!strings.Contains(err.Error(), "another machine") {
+		!strings.Contains(err.Error(), "another node") {
 		t.Fatalf("want a different-machine error, got %v", err)
 	}
 

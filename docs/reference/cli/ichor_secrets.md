@@ -7,6 +7,10 @@ description: "Manage the local secrets bundle file"
 
 Manage the local secrets bundle file
 
+```sh
+ichor secrets [flags]
+```
+
 ### Examples
 
 ```sh

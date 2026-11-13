@@ -7,6 +7,10 @@ description: "Approve a pending node so the controller starts configuring it"
 
 Approve a pending node so the controller starts configuring it
 
+```sh
+ichor approve [flags]
+```
+
 ### Examples
 
 ```sh

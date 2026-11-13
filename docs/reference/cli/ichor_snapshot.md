@@ -7,6 +7,10 @@ description: "Download a snapshot from a node"
 
 Download a snapshot from a node
 
+```sh
+ichor snapshot [flags]
+```
+
 ### Examples
 
 ```sh

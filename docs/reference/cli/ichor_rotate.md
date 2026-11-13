@@ -7,6 +7,10 @@ description: "Rotate a cluster's certificate authorities or its signing and encr
 
 Rotate a cluster's certificate authorities or its signing and encryption keys
 
+```sh
+ichor rotate [flags]
+```
+
 ### Examples
 
 ```sh

@@ -7,6 +7,10 @@ description: "List, add or remove the addresses and ranges Ichor scans for new n
 
 List, add or remove the addresses and ranges Ichor scans for new nodes
 
+```sh
+ichor discovery [flags]
+```
+
 ### Examples
 
 ```sh

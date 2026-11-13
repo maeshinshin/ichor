@@ -11,7 +11,7 @@ Scan one more IPv4 address or range (/24 or smaller) for nodes in maintenance mo
 
 Add an IPv4 address (192.168.0.50) or a range (192.168.0.0/24) to the cluster's
 spec.discovery. A range is scanned address by address (at most 256 per range, at most
-4 ranges). The scan starts right away; machines found appear as pending (see
+4 ranges). The scan starts right away; nodes found appear as pending (see
 "ichor get nodes") and wait for approval.
 
 ```sh

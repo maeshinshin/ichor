@@ -7,6 +7,10 @@ description: "Take a backup now, outside the schedule"
 
 Take a backup now, outside the schedule
 
+```sh
+ichor backup [flags]
+```
+
 ### Examples
 
 ```sh

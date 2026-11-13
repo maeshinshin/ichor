@@ -21,7 +21,7 @@ hours and --read-only makes the talosconfig os:reader instead of os:admin, for a
 change a node.
 
 The server and context names are copied from your current kubeconfig, the Talos endpoints from the
-cluster's control-plane machines (or --talos-endpoints, or your current talosconfig). The files are
+cluster's control-plane nodes (or --talos-endpoints, or your current talosconfig). The files are
 written next to your current kubeconfig and talosconfig with the suffix .ichor-new
 (never over them), unless --kubeconfig-out and --talosconfig-out say otherwise.
 
@@ -64,7 +64,7 @@ ichor create credentials NAME [flags]
       --operation string          with --acknowledge: the CA rotation operation to acknowledge
       --override                  incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker, an upgrade the compatibility table refuses); needs the override RBAC verb on the resource; implies --local
       --read-only                 make the talosconfig an os:reader client (read-only Talos API access) instead of os:admin
-      --talos-endpoints strings   the Talos API endpoints for the talosconfig (default: the cluster's control-plane machines, else your current talosconfig's)
+      --talos-endpoints strings   the Talos API endpoints for the talosconfig (default: the cluster's control-plane nodes, else your current talosconfig's)
       --talosconfig-out string    where to write the talosconfig (default: your current talosconfig's path plus .ichor-new)
       --tls-server-name string    name on ichor-ui's serving certificate, when it is not the Service's DNS name (<service>.<namespace>.svc)
       --ttl duration              how long the client certificates in the files are valid; the default and the maximum is 8760h0m0s (a rotation hand-off must outlive the rotation)

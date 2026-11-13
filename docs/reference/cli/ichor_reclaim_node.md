@@ -54,8 +54,8 @@ ichor reclaim node ADDRESS (--talosconfig FILE | --cluster NAME) [flags]
 
 ```text
       --ca-file string           PEM file of the CA that signed ichor-ui's serving certificate, when ichor-ui serves TLS (env ICHOR_CA_FILE)
-      --cluster string           TalosCluster (in --namespace) whose discovery addresses get the machine's address afterwards
-      --confirm string           the machine's UUID, for non-interactive use (--yes does not replace it)
+      --cluster string           TalosCluster (in --namespace) whose discovery addresses get the node's address afterwards
+      --confirm string           the node's UUID, for non-interactive use (--yes does not replace it)
       --confirm-cluster string   the foreign cluster's name, the second confirmation --force needs
       --context string           talosconfig context to use (default: the file's own)
       --force                    allow a control plane whose removal breaks etcd quorum, or is the last one

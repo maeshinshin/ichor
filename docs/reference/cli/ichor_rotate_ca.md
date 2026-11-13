@@ -10,8 +10,8 @@ Replace the cluster's certificate authorities (Talos API, Kubernetes API, and op
 ### Synopsis
 
 rotate ca starts a CA rotation operation: the Talos API CA and the Kubernetes API CA are
-replaced in passes over every machine (accept the new CA, make it the issuer, drop the old one),
-each verified before the next. The kubelet restarts on each machine in the passes that change the
+replaced in passes over every node (accept the new CA, make it the issuer, drop the old one),
+each verified before the next. The kubelet restarts on each node in the passes that change the
 Kubernetes CA.
 
 --ca chooses the CAs (talos, kubernetes, etcd, kubernetes-aggregator; repeat the flag or separate
@@ -29,7 +29,7 @@ aggregator CA alone changes nothing your kubeconfig or talosconfig depends on, s
 credential hand-off. The service-account signing key and the secretbox key are not rotated.
 
 When the Talos API or Kubernetes API CA is replaced, your kubeconfig and talosconfig STOP WORKING from the second pass (Issuing) on: the nodes start serving certificates from the new CA, and a file that trusts only the old CA can no longer verify them. So after every
-machine accepts the new CAs, the operation WAITS, changing nothing, until you have new credentials.
+node accepts the new CAs, the operation WAITS, changing nothing, until you have new credentials.
 This command waits for that point while your current credentials still work, then writes
 
   a kubeconfig and a talosconfig that trust the old and the new CAs and are signed by the new one
@@ -43,16 +43,16 @@ runs in the controller. The files' contents are never printed. If this command i
 'ichor create credentials NAME --acknowledge' with your current kubeconfig. If you lost both,
 'ichor create credentials NAME --bundle FILE' makes credentials from a current bundle file.
 
-Before it starts, every machine must answer, run the configuration Ichor renders for it, and every
+Before it starts, every node must answer, run the configuration Ichor renders for it, and every
 Kubernetes Node must be Ready; otherwise the operation pauses without changing anything. While it
-runs, the machine controller does not reconcile the cluster's machines and other disruptive
+runs, the TalosMachine controller does not reconcile the cluster's nodes and other disruptive
 operations are refused. It resumes by itself after the controller restarts, and does not advance past
-a step it could not verify. Machines held with upgrade-hold are not skipped.
+a step it could not verify. Nodes held with upgrade-hold are not skipped.
 
 When it completes, the secrets bundle in the cluster has been replaced, and the copy saved on your
 machine is stale: run 'ichor export bundle NAME' and keep the file safe.
 
-It shows which machines are reconfigured and in which order, and asks for confirmation unless --yes.
+It shows which nodes are reconfigured and in which order, and asks for confirmation unless --yes.
 --follow keeps reporting progress until the rotation completes, through the Kubernetes API with the
 new kubeconfig (the ichor-ui tunnel does not survive the rotation).
 

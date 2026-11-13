@@ -7,6 +7,10 @@ description: "Delete a node, patch, operation or user"
 
 Delete a node, patch, operation or user
 
+```sh
+ichor delete [flags]
+```
+
 ### Examples
 
 ```sh

@@ -562,7 +562,7 @@ func checkUIBackendRBACIsSeparate(t *testing.T, release string, docs []map[strin
 }
 
 // TestReclaimerRoleName pins the installed name of the reclaimer ClusterRole: the webhook refusal
-// and docs/guides/adopt-and-reclaim.md tell users to bind ichor-machine-reclaimer. The chart renders
+// and docs/guides/reclaim-a-machine.md tell users to bind ichor-machine-reclaimer. The chart renders
 // it under the release's resource-name helper, so release "ichor" gives that name.
 func TestReclaimerRoleName(t *testing.T) {
 	on := renderChartWithValues(t, "ichor", "rbac.helpers.enabled=true")

@@ -79,8 +79,8 @@ Published at <https://ichor.maesh.dev/>; in the repository:
 
 - [Getting started](docs/guides/getting-started.md)
 - [Install Ichor with Helm](docs/guides/install-with-helm.md)
-- [Adopt an existing cluster](docs/guides/adopt-and-reclaim.md)
-- [Users and login](docs/guides/users-and-login.md)
+- [Adopt an existing cluster](docs/guides/adopt-and-reclaim.md) and [Reclaim a machine](docs/guides/reclaim-a-machine.md)
+- [Users and login](docs/guides/users-and-login.md) and [Sign-in and sessions](docs/concepts/sign-in-and-sessions.md)
 - [Security](docs/concepts/security.md) and [Hardening](docs/guides/hardening.md)
 - [Overview and components](docs/index.md), [Design](docs/design/architecture.md)
 - [Build from source](docs/development/build-from-source.md)

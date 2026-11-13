@@ -80,7 +80,7 @@ There is no switch for "Reset and add" (MachineReclaim) any more: `reclaim.enabl
 and `spec.reclaim` are deprecated and ignored, `ichor set settings
 reclaim.enabled=...` is refused, and the webhook warns when `spec.reclaim` is
 set. Who may reset and add a machine is decided by RBAC alone; see
-[Adopt and reclaim](adopt-and-reclaim.md). Each accepted change leaves an Event on the
+[Reclaim a machine](reclaim-a-machine.md). Each accepted change leaves an Event on the
 `IchorInstallation` with the changed fields, old and new values and the user.
 
 ## Who may change what

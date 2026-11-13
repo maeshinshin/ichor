@@ -49,7 +49,8 @@ to resolve, with the address, MACs and serial shown.
 A node that already runs a configured Talos cannot be discovered this way,
 because its API wants a client certificate. Discovery reports it as
 `AlreadyConfigured` and creates nothing; see
-[Adopt and reclaim](../guides/adopt-and-reclaim.md).
+[Adopt a running cluster](../guides/adopt-and-reclaim.md) and
+[Reclaim a machine](../guides/reclaim-a-machine.md).
 
 ## Approval
 

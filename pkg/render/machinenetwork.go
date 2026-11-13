@@ -32,9 +32,10 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-// primaryLinkAlias is the name the primary link gets from its LinkAliasConfig; every other
-// network document refers to it, so a kernel rename of the interface changes nothing.
-const primaryLinkAlias = "net0"
+// PrimaryLinkAlias is the name the primary link gets from its LinkAliasConfig; every other
+// network document refers to it, so a kernel rename of the interface changes nothing. It is exported
+// because ichor init's Layer2VIPConfig patch names the same link.
+const PrimaryLinkAlias = "net0"
 
 // ephemeralVolume is the name of the EPHEMERAL system volume.
 const ephemeralVolume = "EPHEMERAL"
@@ -44,13 +45,20 @@ const ephemeralVolume = "EPHEMERAL"
 // LinkConfig (or, with a VLAN, a VLANConfig on the alias) for the addressing and a
 // ResolverConfig for the DNS servers. Before it, one machine.network.interfaces entry selected by
 // permanent address.
+//
+// A control plane of a cluster whose endpoint type is vip also gets the endpoint address as a shared IP
+// on the primary link (vipAddress). That needs the link, so a machine without spec.network gets none: this
+// is also what leaves an adopted cluster, whose machines carry no spec.network, as it was.
 func injectNetwork(
-	cfg coreconfig.Provider, contract *coreconfig.VersionContract, m *ichorv1alpha1.TalosMachine,
+	cfg coreconfig.Provider, contract *coreconfig.VersionContract,
+	cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine,
 ) (coreconfig.Provider, error) {
 	n := m.Spec.Network
 	if n == nil {
 		return cfg, nil
 	}
+
+	vip := vipAddress(cluster, m)
 
 	routes, err := networkRoutes(n)
 	if err != nil {
@@ -58,7 +66,7 @@ func injectNetwork(
 	}
 
 	if !contract.MultidocNetworkConfigSupported() {
-		return injectLegacyNetwork(cfg, n, routes)
+		return injectLegacyNetwork(cfg, n, routes, vip)
 	}
 
 	match, err := cel.ParseBooleanExpression(
@@ -67,7 +75,7 @@ func injectNetwork(
 		return nil, fmt.Errorf("render: network.mac selector: %w", err)
 	}
 
-	alias := network.NewLinkAliasConfigV1Alpha1(primaryLinkAlias)
+	alias := network.NewLinkAliasConfigV1Alpha1(PrimaryLinkAlias)
 	alias.Selector.Match = match
 
 	if cfg, err = mergeDocument(cfg, "link alias", alias); err != nil {
@@ -86,21 +94,21 @@ func injectNetwork(
 	}
 
 	common := network.CommonLinkConfig{LinkUp: new(true)}
-	target := primaryLinkAlias
+	target := PrimaryLinkAlias
 
 	if n.VLANID != 0 {
 		// The parent carries nothing but being up; the addressing goes on the VLAN link.
-		parent := network.NewLinkConfigV1Alpha1(primaryLinkAlias)
+		parent := network.NewLinkConfigV1Alpha1(PrimaryLinkAlias)
 		parent.LinkUp = new(true)
 
 		if cfg, err = mergeDocument(cfg, "vlan parent link", parent); err != nil {
 			return nil, err
 		}
 
-		target = fmt.Sprintf("%s.%d", primaryLinkAlias, n.VLANID)
+		target = fmt.Sprintf("%s.%d", PrimaryLinkAlias, n.VLANID)
 		vlan := network.NewVLANConfigV1Alpha1(target)
 		vlan.VLANIDConfig = uint16(n.VLANID) //nolint:gosec // the CRD bounds it to 1..4094
-		vlan.ParentLinkConfig = primaryLinkAlias
+		vlan.ParentLinkConfig = PrimaryLinkAlias
 		vlan.CommonLinkConfig = common
 
 		if n.Addressing == ichorv1alpha1.MachineAddressingStatic {
@@ -111,7 +119,7 @@ func injectNetwork(
 			return nil, err
 		}
 	} else if n.Addressing == ichorv1alpha1.MachineAddressingStatic {
-		link := network.NewLinkConfigV1Alpha1(primaryLinkAlias)
+		link := network.NewLinkConfigV1Alpha1(PrimaryLinkAlias)
 		link.CommonLinkConfig = common
 		link.LinkAddresses, link.LinkRoutes = addrs, routes
 
@@ -122,6 +130,17 @@ func injectNetwork(
 
 	if n.Addressing != ichorv1alpha1.MachineAddressingStatic {
 		if cfg, err = mergeDocument(cfg, "dhcp", network.NewDHCPv4ConfigV1Alpha1(target)); err != nil {
+			return nil, err
+		}
+	}
+
+	if vip != "" {
+		addr, err := netip.ParseAddr(vip)
+		if err != nil {
+			return nil, fmt.Errorf("render: the vip endpoint address %q is not an IP address: %w", vip, err)
+		}
+
+		if cfg, err = mergeDocument(cfg, "vip", vipDocument(addr, target)); err != nil {
 			return nil, err
 		}
 	}
@@ -145,6 +164,23 @@ func injectNetwork(
 	return mergeDocument(cfg, "resolver", resolver)
 }
 
+// vipAddress is the endpoint address a control plane holds as a shared IP: the cluster endpoint when its
+// type is vip, and only on a control plane (Talos supports a VIP on nothing else). It is empty otherwise.
+func vipAddress(cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine) string {
+	if cluster.Spec.Endpoint.Type != "vip" || m.Spec.Role != "controlplane" {
+		return ""
+	}
+
+	return cluster.Spec.Endpoint.Address
+}
+
+func vipDocument(addr netip.Addr, link string) *network.Layer2VIPConfigV1Alpha1 {
+	doc := network.NewLayer2VIPConfigV1Alpha1(addr.String())
+	doc.LinkName = link
+
+	return doc
+}
+
 // networkRoutes is the default route through spec.network.gateway, or none.
 func networkRoutes(n *ichorv1alpha1.TalosMachineNetwork) ([]network.RouteConfig, error) {
 	if n.Gateway == "" {
@@ -164,7 +200,7 @@ func networkRoutes(n *ichorv1alpha1.TalosMachineNetwork) ([]network.RouteConfig,
 //
 //nolint:staticcheck // the legacy block is the only form a 1.11 or older contract accepts
 func injectLegacyNetwork(
-	cfg coreconfig.Provider, n *ichorv1alpha1.TalosMachineNetwork, gateway []network.RouteConfig,
+	cfg coreconfig.Provider, n *ichorv1alpha1.TalosMachineNetwork, gateway []network.RouteConfig, vip string,
 ) (coreconfig.Provider, error) {
 	dev := &mv1alpha1.Device{
 		DeviceSelector: &mv1alpha1.NetworkDeviceSelector{NetworkDevicePermanentAddress: strings.ToLower(n.MAC)},
@@ -197,6 +233,15 @@ func injectLegacyNetwork(
 		dev.DeviceAddresses, dev.DeviceRoutes = n.Addresses, routes
 	} else {
 		dev.DeviceDHCP = new(true)
+	}
+
+	if vip != "" {
+		shared := &mv1alpha1.DeviceVIPConfig{SharedIP: vip}
+		if n.VLANID != 0 {
+			dev.DeviceVlans[0].VlanVIP = shared
+		} else {
+			dev.DeviceVIPConfig = shared
+		}
 	}
 
 	return mergeDocument(cfg, "network", &mv1alpha1.Config{

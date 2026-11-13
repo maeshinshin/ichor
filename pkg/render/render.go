@@ -222,7 +222,7 @@ func BuildConfig(
 	}
 
 	// Approval-time network and disk roles.
-	cfg, err = injectNetwork(cfg, contract, m)
+	cfg, err = injectNetwork(cfg, contract, cluster, m)
 	if err != nil {
 		return nil, err
 	}

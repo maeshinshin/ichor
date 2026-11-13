@@ -17,6 +17,7 @@ limitations under the License.
 package render
 
 import (
+	"strings"
 	"testing"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -154,4 +155,107 @@ func TestRenderDisks(t *testing.T) {
 	t.Run("unset renders no volume documents", func(t *testing.T) {
 		requireNone(t, renderWith(t, "", func(*ichorv1alpha1.TalosMachine) {}), "kind: UserVolumeConfig", "diskSelector")
 	})
+}
+
+// TestRenderVIP: a control plane of a vip cluster that has a primary link gets the endpoint address as a
+// Layer2VIPConfig on that link, next to the net0 alias that names it (net0.<id> on a VLAN); a worker, a machine
+// without spec.network and a cluster of any other endpoint type get none.
+func TestRenderVIP(t *testing.T) {
+	dhcp := func(m *ichorv1alpha1.TalosMachine) {
+		m.Spec.Role = roleControlPlane
+		m.Spec.Network = &ichorv1alpha1.TalosMachineNetwork{MAC: testNICMAC, Addressing: ichorv1alpha1.MachineAddressingDHCP}
+	}
+	render := func(t *testing.T, contract, endpointType string, mutate func(*ichorv1alpha1.TalosMachine)) string {
+		t.Helper()
+
+		cluster := testCluster("true")
+		cluster.Spec.Endpoint.Type = endpointType
+
+		if contract != "" {
+			cluster.Spec.VersionContract = contract
+		}
+
+		m := testMachine("node-a", roleWorker, nil)
+		mutate(m)
+
+		return mustRender(t, cluster, m, testBundle(t), nil)
+	}
+
+	t.Run("control plane: the VIP and the alias it names come together", func(t *testing.T) {
+		out := render(t, "", "vip", dhcp)
+
+		// The two documents are pinned whole and side by side: the VIP's link is the alias's name, so neither
+		// can change without this failing.
+		if got, want := documentOfKind(t, out, "Layer2VIPConfig"),
+			"apiVersion: v1alpha1\nkind: Layer2VIPConfig\nname: 10.0.0.5\nlink: net0\n"; got != want {
+			t.Errorf("Layer2VIPConfig =\n%s\nwant\n%s", got, want)
+		}
+
+		if got, want := documentOfKind(t, out, "LinkAliasConfig"),
+			"apiVersion: v1alpha1\nkind: LinkAliasConfig\nname: net0\nselector:\n"+
+				"    match: mac(link.permanent_addr) == \"aa:bb:cc:dd:ee:01\"\n"; got != want {
+			t.Errorf("LinkAliasConfig =\n%s\nwant\n%s", got, want)
+		}
+
+		requireAll(t, out, "kind: DHCPv4Config")
+	})
+
+	t.Run("control plane on a vlan: the VIP is on the vlan link", func(t *testing.T) {
+		out := render(t, "", "vip", func(m *ichorv1alpha1.TalosMachine) {
+			dhcp(m)
+			m.Spec.Network.VLANID = 100
+		})
+		requireAll(t, out, "kind: Layer2VIPConfig", "name: 10.0.0.5", "link: net0.100", "kind: VLANConfig")
+	})
+
+	t.Run("worker: none", func(t *testing.T) {
+		out := render(t, "", "vip", func(m *ichorv1alpha1.TalosMachine) {
+			dhcp(m)
+			m.Spec.Role = roleWorker
+		})
+		requireNone(t, out, "Layer2VIPConfig")
+		requireAll(t, out, "kind: LinkAliasConfig")
+	})
+
+	t.Run("no spec.network: none", func(t *testing.T) {
+		requireNone(t, render(t, "", "vip", func(m *ichorv1alpha1.TalosMachine) { m.Spec.Role = roleControlPlane }),
+			"Layer2VIPConfig", "net0")
+	})
+
+	for _, typ := range []string{"node", "loadBalancer", "dns"} {
+		t.Run("endpoint type "+typ+": none", func(t *testing.T) {
+			requireNone(t, render(t, "", typ, dhcp), "Layer2VIPConfig", "vip:")
+		})
+	}
+
+	t.Run("v1.11 legacy: vip on the selected device", func(t *testing.T) {
+		out := render(t, contractV111, "vip", dhcp)
+		requireAll(t, out, "permanentAddr: aa:bb:cc:dd:ee:01", "vip:", "ip: 10.0.0.5")
+		requireNone(t, out, "Layer2VIPConfig")
+
+		out = render(t, contractV111, "vip", func(m *ichorv1alpha1.TalosMachine) {
+			dhcp(m)
+			m.Spec.Network.VLANID = 100
+		})
+		requireAll(t, out, "vlans:", "vip:", "ip: 10.0.0.5")
+	})
+}
+
+// documentOfKind is the one document of the rendered multi-document configuration with the given kind.
+func documentOfKind(t *testing.T, out, kind string) string {
+	t.Helper()
+
+	var found []string
+
+	for doc := range strings.SplitSeq(out, "\n---\n") {
+		if strings.Contains(doc, "\nkind: "+kind+"\n") {
+			found = append(found, strings.TrimSpace(doc)+"\n")
+		}
+	}
+
+	if len(found) != 1 {
+		t.Fatalf("%d documents of kind %s, want 1", len(found), kind)
+	}
+
+	return found[0]
 }

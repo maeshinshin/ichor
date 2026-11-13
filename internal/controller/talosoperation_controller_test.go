@@ -383,9 +383,9 @@ var _ = Describe("TalosOperationReconciler", func() {
 		Expect(got.Status.FinishedAt).NotTo(BeNil())
 
 		Expect(drainEvents(recorder)).To(Equal([]string{
-			"Normal " + reasonMachineStarted + " machine " + cp1.Name + " started",
-			"Normal " + reasonMachineFinished + " machine " + cp1.Name + " finished",
-			"Normal " + reasonOperationComplete + " every eligible machine finished",
+			"Normal " + reasonMachineStarted + " node " + cp1.Name + " started",
+			"Normal " + reasonMachineFinished + " node " + cp1.Name + " finished",
+			"Normal " + reasonOperationComplete + " every eligible node finished",
 		}))
 	})
 
@@ -400,8 +400,8 @@ var _ = Describe("TalosOperationReconciler", func() {
 
 		mustReconcileOperation(r, op)
 		Expect(drainEvents(recorder)).To(ContainElements(
-			"Normal "+reasonMachineStarted+" machine "+cp1.Name+" started",
-			"Warning "+reasonOperationStepFailed+" paused: machine \""+cp1.Name+"\": boom",
+			"Normal "+reasonMachineStarted+" node "+cp1.Name+" started",
+			"Warning "+reasonOperationStepFailed+" paused: node \""+cp1.Name+"\": boom",
 		))
 
 		// A second reconcile of the same failure raises nothing new.

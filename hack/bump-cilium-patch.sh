@@ -124,7 +124,7 @@ must_have pkg/cni/cilium/values.go "ChartVersion = \"$new\""
 # 3. Prose and hardware-test checks that name the embedded version. Not touched: CHANGELOG.md (a release
 #    section is written when the release is cut) and test fixtures that merely use a Cilium version.
 #    The pattern keeps 1.20.45 and 21.20.4 out; it runs twice because neighbours share a delimiter.
-for f in README.md docs/guides/getting-started.md docs/guides/adopt-and-reclaim.md \
+for f in README.md docs/guides/getting-started/check-the-cluster.md docs/guides/adopt-and-reclaim.md \
 	test/e2e/foreign/cilium_test.go test/internal/foreign/foreign.go; do
 	for _ in 1 2; do
 		subst "$f" "s/\([^0-9.]\|^\)$oldre\([^0-9]\|\$\)/\1$new\2/g"

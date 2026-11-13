@@ -14,7 +14,7 @@ or by writing the resources yourself.
 > Status: alpha.
 
 The commands in these docs use the `ichor` CLI, which each release publishes as
-an archive; [Getting started](guides/getting-started.md#1-install-the-cli)
+an archive; [Getting started](guides/getting-started/install-the-cli.md)
 installs it. Building from source is covered in
 [Build from source](development/build-from-source.md).
 

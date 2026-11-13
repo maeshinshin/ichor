@@ -128,7 +128,7 @@ run its Job with (`CNIHandover` `InstallerImageUnresolved`). See
 
 ## Create the cluster with your images
 
-Run the steps of [Getting started](../guides/getting-started.md#2-create-the-cluster)
+Run the steps of [Getting started](../guides/getting-started/create-the-cluster.md)
 with `bin/ichor` in place of `ichor`, and add `--registry-mirror` to `ichor init`
 so the node fetches `ghcr.io/maeshinshin/...` from your registry, where the
 images you pushed above are:

@@ -22,6 +22,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -72,7 +73,7 @@ func initQuestions(flags *pflag.FlagSet) []promptQuestion {
 	if !flags.Changed(flagCluster) {
 		qs = append(qs, promptQuestion{
 			flag:  flagCluster,
-			title: func(map[string]string) string { return "Cluster name" },
+			label: "Cluster name",
 			check: func(a string) error {
 				if errs := validation.IsDNS1123Subdomain(a); len(errs) > 0 {
 					return fmt.Errorf("%q is not a valid name: %s", a, strings.Join(errs, "; "))
@@ -93,15 +94,16 @@ func initQuestions(flags *pflag.FlagSet) []promptQuestion {
 
 			qs = append(qs, promptQuestion{
 				flag:    flagEndpointType,
-				title:   func(map[string]string) string { return "Cluster endpoint type" },
+				label:   "Endpoint type",
 				choices: choices,
 			})
 		}
 
 		qs = append(qs, promptQuestion{
-			flag: flagEndpointAddress,
-			title: func(got map[string]string) string {
-				return "Cluster endpoint address (" + endpointAddressKind(got[flagEndpointType]) + ")"
+			flag:  flagEndpointAddress,
+			label: "Endpoint address",
+			help: func(got map[string]string) string {
+				return endpointAddressKind(got[flagEndpointType]) + " is expected here"
 			},
 			check: answerRequired,
 		})
@@ -110,7 +112,8 @@ func initQuestions(flags *pflag.FlagSet) []promptQuestion {
 	if !flags.Changed(flagNodeEndpoint) {
 		qs = append(qs, promptQuestion{
 			flag:  flagNodeEndpoint,
-			title: func(map[string]string) string { return "First node's Talos API address (host:port)" },
+			label: "Node address",
+			help:  func(map[string]string) string { return "host:port of the first node's Talos API" },
 			check: answerRequired,
 		})
 	}
@@ -160,7 +163,8 @@ func chooseInstallDisk(r io.Reader, w io.Writer, disks []ichorv1alpha1.TalosMach
 
 		got, err := askPrompts([]promptQuestion{{
 			flag:  flag,
-			title: func(map[string]string) string { return "Install disk (" + installDiskUsage + ")" },
+			label: "Install disk",
+			help:  func(map[string]string) string { return installDiskUsage },
 			check: func(a string) error {
 				_, err := parseDiskSelector("--install-disk", a)
 
@@ -180,7 +184,8 @@ func chooseInstallDisk(r io.Reader, w io.Writer, disks []ichorv1alpha1.TalosMach
 	if len(disks) > 1 {
 		got, err := askPrompts([]promptQuestion{{
 			flag:      flag,
-			title:     func(map[string]string) string { return "Install disk (Talos is installed here and the disk is wiped)" },
+			label:     "Install disk",
+			help:      func(map[string]string) string { return "Talos is installed here and the disk is wiped" },
 			choices:   diskChoices(disks),
 			noDefault: true,
 		}}, nil, r, w)
@@ -202,15 +207,40 @@ func chooseInstallDisk(r io.Reader, w io.Writer, disks []ichorv1alpha1.TalosMach
 	return v, nil
 }
 
-// diskChoices lists disks as rows of device path, model, size and transport, each choosing its
-// --install-disk value.
+// diskChoices lists disks as aligned rows of device path, model, size and transport, each choosing
+// its --install-disk value. A column nobody has a value for is left out, and sizes share one unit.
 func diskChoices(disks []ichorv1alpha1.TalosMachineDiscoveredDisk) []promptChoice {
-	choices := make([]promptChoice, len(disks))
+	cells := make([][]string, len(disks))
+	widths := make([]int, 4) //nolint:mnd
+
 	for i, d := range disks {
-		choices[i] = promptChoice{
-			label: fmt.Sprintf("%s  %s  %s  %s", d.DevPath, d.Model, humanBytes(d.SizeBytes), d.Transport),
-			value: diskFlagValue(d),
+		size := ""
+		if d.SizeBytes > 0 {
+			size = fmt.Sprintf("%.1f GiB", float64(d.SizeBytes)/(1<<30)) //nolint:mnd
 		}
+
+		cells[i] = []string{d.DevPath, d.Model, size, d.Transport}
+		for c, v := range cells[i] {
+			widths[c] = max(widths[c], utf8.RuneCountInString(v))
+		}
+	}
+
+	choices := make([]promptChoice, len(disks))
+
+	for i, d := range disks {
+		var cols []string
+
+		for c, v := range cells[i] {
+			switch pad := strings.Repeat(" ", widths[c]-utf8.RuneCountInString(v)); {
+			case widths[c] == 0:
+			case c == 2: //nolint:mnd // the size, right-aligned
+				cols = append(cols, pad+v)
+			default:
+				cols = append(cols, v+pad)
+			}
+		}
+
+		choices[i] = promptChoice{label: strings.TrimRight(strings.Join(cols, "  "), " "), value: diskFlagValue(d)}
 	}
 
 	return choices

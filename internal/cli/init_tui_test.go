@@ -26,6 +26,7 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"k8s.io/apimachinery/pkg/util/validation"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -90,6 +91,7 @@ const (
 	tuiCluster   = "demo"
 	tuiLB        = "loadBalancer"
 	tuiSata      = "sata"
+	tuiNVMe      = "nvme"
 	tuiSdb       = "/dev/sdb"
 	tuiSerialSel = "serial:S-b"
 	tuiWWIDSel   = "wwid:naa.tui"
@@ -133,15 +135,6 @@ func TestPromptModel_TypingNarrowsTheEndpointTypes(t *testing.T) {
 	if v := shown(m); !strings.Contains(v, tuiLB) || strings.Contains(v, "dns") || strings.Contains(v, "vip") {
 		t.Errorf("typing did not narrow the list to loadBalancer:\n%s", v)
 	}
-
-	// The first Enter fixes the filter, the second takes the highlighted row.
-	if m, _ = send(t, m, keyOf(tea.KeyEnter)); m.state != promptRunning {
-		t.Fatal("the first Enter took an answer")
-	}
-
-	if m, _ = send(t, m, keyOf(tea.KeyEnter)); m.state != promptDone || m.got[flagEndpointType] != tuiLB {
-		t.Errorf("state %d, got %v", m.state, m.got)
-	}
 }
 
 func TestPromptModel_EndpointTypeDefaultsToVip(t *testing.T) {
@@ -157,28 +150,28 @@ func TestPromptModel_EndpointAddressSaysWhatKindFollowsTheType(t *testing.T) {
 	m := newPromptModel(initQuestions(flags), map[string]string{flagEndpointType: "vip"})
 	m, _ = send(t, m, typedKeys(tuiCluster), keyOf(tea.KeyEnter), keyOf(tea.KeyDown), keyOf(tea.KeyEnter)) // loadBalancer
 
-	if v := shown(m); !strings.Contains(v, "Cluster endpoint address (a hostname)") {
+	if v := shown(m); !strings.Contains(v, "a hostname is expected here") {
 		t.Errorf("a loadBalancer address is a hostname:\n%s", v)
 	}
 
 	m = newPromptModel(initQuestions(flags), map[string]string{flagEndpointType: "vip"})
 	m, _ = send(t, m, typedKeys(tuiCluster), keyOf(tea.KeyEnter), keyOf(tea.KeyEnter)) // vip
 
-	if v := shown(m); !strings.Contains(v, "Cluster endpoint address (an IP address)") {
+	if v := shown(m); !strings.Contains(v, "an IP address is expected here") {
 		t.Errorf("a vip address is an IP:\n%s", v)
 	}
 }
 
 func diskQuestion(disks ...ichorv1alpha1.TalosMachineDiscoveredDisk) promptModel {
 	return newPromptModel([]promptQuestion{{
-		flag: flagInstallDisk, title: func(map[string]string) string { return "Install disk" },
+		flag: flagInstallDisk, label: "Install disk",
 		choices: diskChoices(disks), noDefault: true,
 	}}, nil)
 }
 
 var testDisks = []ichorv1alpha1.TalosMachineDiscoveredDisk{
 	{WWID: "naa.tui", DevPath: testInstallDisk, Model: "FastDisk", SizeBytes: 1 << 30, Transport: tuiSata},
-	{Serial: "S-b", DevPath: tuiSdb, Model: "SlowDisk", SizeBytes: 1 << 31, Transport: "nvme"},
+	{Serial: "S-b", DevPath: tuiSdb, Model: "SlowDisk", SizeBytes: 1 << 31, Transport: tuiNVMe},
 }
 
 func TestPromptModel_DiskListRefusesEnterWithNothingSelected(t *testing.T) {
@@ -214,7 +207,7 @@ func TestPromptModel_DiskListRefusesEnterWithNothingSelected(t *testing.T) {
 
 func TestPromptModel_DiskRowsShowPathModelSizeAndTransport(t *testing.T) {
 	v := shown(diskQuestion(testDisks...))
-	for _, want := range []string{"/dev/sda  FastDisk  ", tuiSata, "/dev/sdb  SlowDisk  ", "nvme"} {
+	for _, want := range []string{"/dev/sda  FastDisk", "1.0 GiB", tuiSata, "/dev/sdb  SlowDisk", "2.0 GiB", tuiNVMe} {
 		if !strings.Contains(v, want) {
 			t.Errorf("%q is not shown:\n%s", want, v)
 		}
@@ -296,5 +289,152 @@ func TestAskPrompts_CtrlCOnTheTerminalCancels(t *testing.T) {
 	_, err := askPrompts(initQuestions(newInitFlags(t)), nil, typed(t, "\x03"), &bytes.Buffer{})
 	if !errors.Is(err, errPromptCancelled) {
 		t.Errorf("err = %v", err)
+	}
+}
+
+func TestPromptModel_EnterTakesTheOnlyRemainingCandidate(t *testing.T) {
+	m, _ := send(t, typeQuestion(t), typedKeys("load"), keyOf(tea.KeyEnter))
+	if m.state != promptDone || m.got[flagEndpointType] != tuiLB {
+		t.Errorf("state %d, got %v", m.state, m.got)
+	}
+
+	// The same for a disk, which is wiped: one match typed for is a choice made.
+	m, _ = send(t, diskQuestion(testDisks...), typedKeys("SlowDisk"), keyOf(tea.KeyEnter))
+	if m.state != promptDone || m.got[flagInstallDisk] != tuiSerialSel {
+		t.Errorf("state %d, got %v", m.state, m.got)
+	}
+}
+
+func TestPromptModel_EnterNeedsTwoPressesWhileSeveralRemain(t *testing.T) {
+	m, _ := send(t, typeQuestion(t), typedKeys("d")) // loadBalancer, dns and node have a d
+
+	if n := len(m.pick.VisibleItems()); n < 2 {
+		t.Fatalf("%d candidates match", n)
+	}
+
+	// The first Enter fixes the filter, the second takes the highlighted row.
+	if m, _ = send(t, m, keyOf(tea.KeyEnter)); m.state != promptRunning {
+		t.Fatal("the first Enter took an answer")
+	}
+
+	if m, _ = send(t, m, keyOf(tea.KeyEnter)); m.state != promptDone || m.got[flagEndpointType] == "" {
+		t.Errorf("state %d, got %v", m.state, m.got)
+	}
+}
+
+func TestPromptModel_ValidatesWhileTyping(t *testing.T) {
+	m := newPromptModel(initQuestions(newInitFlags(t)), nil)
+
+	if strings.Contains(shown(m), "is not a valid name") {
+		t.Fatalf("a message before anything was typed:\n%s", shown(m))
+	}
+
+	m, _ = send(t, m, typedKeys("N"))
+	if !strings.Contains(shown(m), `"N" is not a valid name`) || m.input.Value() != "N" {
+		t.Errorf("an invalid value was not flagged as typed, or was not kept:\n%s", shown(m))
+	}
+
+	m, _ = send(t, m, ctrl('u'), typedKeys(tuiCluster))
+	if strings.Contains(shown(m), "is not a valid name") || m.input.Value() != tuiCluster {
+		t.Errorf("the message outlived the fix, or the value was lost:\n%s", shown(m))
+	}
+
+	// Emptying the field is flagged too, and nothing is cleared for the operator.
+	m, _ = send(t, m, keyOf(tea.KeyBackspace), keyOf(tea.KeyBackspace), keyOf(tea.KeyBackspace), keyOf(tea.KeyBackspace))
+	if !strings.Contains(shown(m), "is not a valid name") {
+		t.Errorf("an emptied field was not flagged:\n%s", shown(m))
+	}
+}
+
+func TestPromptModel_ValidationReasonWrapsToTheWidth(t *testing.T) {
+	m := newPromptModel(initQuestions(newInitFlags(t)), nil)
+	m, _ = send(t, m, tea.WindowSizeMsg{Width: 40, Height: 24}, typedKeys("Not_Valid"))
+
+	want := `"Not_Valid" is not a valid name: ` + strings.Join(validation.IsDNS1123Subdomain("Not_Valid"), "; ")
+
+	lines := strings.Split(shown(m), "\n")
+	for _, l := range lines {
+		if w := ansi.StringWidth(l); w > 40 {
+			t.Errorf("a line is %d cells wide, past the 40 of the terminal: %q", w, l)
+		}
+	}
+
+	if got := strings.Join(strings.Fields(strings.Join(lines, " ")), ""); !strings.Contains(got, strings.Join(strings.Fields(want), "")) {
+		t.Errorf("the reason is cut:\n%s", shown(m))
+	}
+}
+
+func TestPromptModel_IsAFormWithAnsweredQuestionsAbove(t *testing.T) {
+	m := newPromptModel(initQuestions(newInitFlags(t)), map[string]string{flagEndpointType: endpointVIP})
+	m, _ = send(t, m, typedKeys(tuiCluster), keyOf(tea.KeyEnter), keyOf(tea.KeyEnter), typedKeys("10.0.0.1"))
+
+	lines := strings.Split(shown(m), "\n")
+	if len(lines) < 3 {
+		t.Fatalf("the form is too short:\n%s", shown(m))
+	}
+
+	// Answered questions are one line each, indented to the gutter; only the current one has the marker.
+	for i, want := range []string{"  Cluster name", "  Endpoint type", "› Endpoint address"} {
+		if !strings.HasPrefix(lines[i], want) {
+			t.Errorf("line %d = %q, want it to begin %q", i, lines[i], want)
+		}
+	}
+
+	if strings.Count(shown(m), "›") != 1 {
+		t.Errorf("more than one marker:\n%s", shown(m))
+	}
+
+	// The values start in one column, set by the longest label.
+	col := gutter + len("Endpoint address") + labelGap
+	for i, want := range []string{tuiCluster, endpointVIP, "10.0.0.1"} {
+		if r := []rune(lines[i]); len(r) < col || !strings.HasPrefix(string(r[col:]), want) {
+			t.Errorf("line %d = %q: the value is not at column %d", i, lines[i], col)
+		}
+	}
+
+	if strings.Contains(shown(m), "Cluster name:") || strings.Contains(shown(m), "Cluster name >") {
+		t.Errorf("a label carries a colon or a prompt:\n%s", shown(m))
+	}
+}
+
+func TestPromptModel_TheHintNamesTheKeysThatWork(t *testing.T) {
+	text := shown(newPromptModel(initQuestions(newInitFlags(t)), nil))
+	if !strings.Contains(text, "enter") || !strings.Contains(text, "esc") || strings.Contains(text, "filter") {
+		t.Errorf("a text field's hint:\n%s", text)
+	}
+
+	for _, want := range []string{"type to filter", "↑↓", "enter", "esc"} {
+		if !strings.Contains(shown(typeQuestion(t)), want) {
+			t.Errorf("a list's hint lacks %q:\n%s", want, shown(typeQuestion(t)))
+		}
+	}
+}
+
+func TestDiskChoices_ColumnsLineUpAndEmptyOnesAreLeftOut(t *testing.T) {
+	disks := []ichorv1alpha1.TalosMachineDiscoveredDisk{
+		{DevPath: classADisk, SizeBytes: 100 << 30, Transport: "virtio"},
+		{DevPath: "/dev/nvme0n1", SizeBytes: 2000 << 30, Transport: tuiNVMe},
+	}
+
+	c := diskChoices(disks)
+
+	// No model anywhere: no model column, so no gap where it would be.
+	if want := "/dev/vda       100.0 GiB  virtio"; c[0].label != want {
+		t.Errorf("row 0 = %q, want %q", c[0].label, want)
+	}
+
+	if want := "/dev/nvme0n1  2000.0 GiB  nvme"; c[1].label != want {
+		t.Errorf("row 1 = %q, want %q", c[1].label, want)
+	}
+
+	// Each column starts at the same offset in every row.
+	if strings.Index(c[0].label, "  virtio") != strings.Index(c[1].label, "  nvme") {
+		t.Errorf("the transport column does not line up:\n%s\n%s", c[0].label, c[1].label)
+	}
+
+	// A model on one disk brings the column back for all.
+	disks[0].Model = "QEMU"
+	if c = diskChoices(disks); !strings.Contains(c[0].label, "QEMU") || strings.Index(c[0].label, "GiB") != strings.Index(c[1].label, "GiB") {
+		t.Errorf("rows:\n%s\n%s", c[0].label, c[1].label)
 	}
 }

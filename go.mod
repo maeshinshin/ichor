@@ -5,6 +5,7 @@ go 1.27.4
 require (
 	charm.land/bubbles/v2 v2.2.1
 	charm.land/bubbletea/v2 v2.1.1
+	charm.land/lipgloss/v2 v2.0.6
 	connectrpc.com/connect v1.21.1
 	filippo.io/age v1.3.2
 	github.com/charmbracelet/x/ansi v0.11.9
@@ -55,7 +56,6 @@ require (
 
 require (
 	cel.dev/expr v0.25.3 // indirect
-	charm.land/lipgloss/v2 v2.0.6 // indirect
 	dario.cat/mergo v1.0.2 // indirect
 	filippo.io/hpke v0.4.0 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20261013165250-51075c6ea6bc // indirect

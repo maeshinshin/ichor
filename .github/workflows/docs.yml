@@ -10,12 +10,20 @@ name: Docs
 # Release run succeeds, so the chart exists, and adds itself to the version switcher
 # of every older build. A push to a release-X.Y branch republishes its docs without a tag: Pages takes
 # deployments from main only, so that push runs the republish job, which dispatches this workflow on main.
+# A pull request and a push to main also run the check job: the same build, then the site driven in headless
+# Chromium (make docs-check). It is a job of its own so that a failing browser check never holds back a publish.
 on:
   push:
     branches: [main, "release-*"]
     paths:
       - "docs/**"
       - "site/**"
+      - ".github/workflows/docs.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - "site/**"
+      - "hack/docs-shots.mjs"
       - ".github/workflows/docs.yml"
   workflow_run:
     workflows: [Release]
@@ -25,9 +33,11 @@ on:
 permissions: {}
 
 # One deployment at a time; a newer push replaces a queued one but never cancels a running deploy.
+# A pull request has a group of its own, so it neither waits for a deploy nor replaces another pull request's check,
+# and a new push to it cancels the check of the old one.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('docs-pr-{0}', github.event.pull_request.number) || 'pages' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -82,6 +92,44 @@ jobs:
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: site/dist-all
+
+  # What a reader meets, in a browser: search, the sidebar, links, Copy page, the version switcher, and at 375 px
+  # (phone) and 1280 px, light and dark, that no page scrolls sideways and every diagram has both themes, alt text
+  # and a caption. Chromium comes from the dev shell, which every job already restores, so nothing more is
+  # downloaded, and the site is served from the runner.
+  check:
+    name: Check the site in a browser
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      # All tags, which are the versions the site builds besides next.
+      - name: Clone the code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Set up Nix
+        uses: ./.github/actions/nix
+
+      - name: Cache npm downloads
+        uses: ./.github/actions/npm-cache
+
+      # Builds every version (the link check and the Pagefind index run in each), then drives them.
+      - name: Build the site and drive it in Chromium
+        run: nix develop --command make docs-check OUT="$RUNNER_TEMP/docs-shots"
+
+      - name: Keep the screenshots of a failed run
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: docs-shots
+          path: ${{ runner.temp }}/docs-shots/*.png
+          retention-days: 7
 
   deploy:
     name: Deploy to GitHub Pages

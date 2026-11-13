@@ -72,6 +72,16 @@ func (s *Server) DownloadReaderTalosconfig(
 		return mapGetError(fmt.Sprintf("cluster %q", ref.GetName()), err)
 	}
 
+	// Before any key is made: with nothing to point the talosconfig at there is nothing to hand out.
+	endpoints, err := s.talosEndpoints(ctx, &cluster)
+	if err != nil {
+		if connect.CodeOf(err) == connect.CodeFailedPrecondition {
+			return err
+		}
+
+		return connect.NewError(connect.CodeInternal, err)
+	}
+
 	id, err := s.issueAsCaller(ctx, &cluster, ichorv1alpha1.CredentialPurposeTalosconfigReader, "", ttl, "")
 	if err != nil {
 		if apierrors.IsForbidden(err) {
@@ -79,11 +89,6 @@ func (s *Server) DownloadReaderTalosconfig(
 		}
 
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("asking for the talosconfig: %s", truncateText(err.Error(), 300)))
-	}
-
-	endpoints, err := s.talosEndpoints(ctx, &cluster)
-	if err != nil {
-		return connect.NewError(connect.CodeInternal, err)
 	}
 
 	data, err := credentials.BuildTalosconfig(cluster.Name, endpoints, id.CA, id.Crt, id.Key)

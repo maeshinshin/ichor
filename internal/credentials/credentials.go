@@ -173,6 +173,31 @@ func Endpoints(machines []ichorv1alpha1.TalosMachine, cluster string) []string {
 	return endpoints
 }
 
+// AnyEndpoints are the Talos API addresses of every machine of the cluster, control planes first, each group sorted,
+// whether or not it is being deleted: for when Endpoints finds no control plane that is not. An address that might
+// answer is better than none.
+func AnyEndpoints(machines []ichorv1alpha1.TalosMachine, cluster string) []string {
+	var controlPlanes, others []string
+
+	for i := range machines {
+		m := &machines[i]
+		if m.Spec.ClusterRef.Name != cluster || m.DialEndpoint() == "" {
+			continue
+		}
+
+		if m.Spec.Role == roleControlPlane {
+			controlPlanes = append(controlPlanes, m.DialEndpoint())
+		} else {
+			others = append(others, m.DialEndpoint())
+		}
+	}
+
+	slices.Sort(controlPlanes)
+	slices.Sort(others)
+
+	return append(controlPlanes, others...)
+}
+
 func pemWithNewline(b []byte) []byte {
 	if len(b) > 0 && b[len(b)-1] != '\n' {
 		return append(slices.Clone(b), '\n')

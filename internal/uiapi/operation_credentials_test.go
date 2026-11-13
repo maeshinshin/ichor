@@ -239,6 +239,25 @@ var _ = Describe("CA rotation credentials", func() {
 			Expect(credentialEvents(cluster)).To(BeEmpty())
 		})
 
+		It("is refused, with the reason, when no machine has an address to put in the talosconfig", func() {
+			var machines ichorv1alpha1.TalosMachineList
+			Expect(k8sClient.List(ctx, &machines, client.InNamespace(cluster.Namespace))).To(Succeed())
+
+			for i := range machines.Items {
+				if machines.Items[i].Spec.ClusterRef.Name == cluster.Name {
+					Expect(k8sClient.Delete(ctx, &machines.Items[i])).To(Succeed())
+				}
+			}
+
+			c, closeFn := server(k8sClient, nil)
+			defer closeFn()
+
+			_, data, err := download(c, credAdminUser, op)
+			Expect(connect.CodeOf(err)).To(Equal(connect.CodeFailedPrecondition))
+			Expect(err.Error()).To(ContainSubstring("nothing to point a talosconfig at"))
+			Expect(data).To(BeEmpty())
+		})
+
 		It("streams a zip of a kubeconfig and a talosconfig that trust both CAs, and records an Event without content", func() {
 			c, closeFn := server(k8sClient, nil)
 			defer closeFn()

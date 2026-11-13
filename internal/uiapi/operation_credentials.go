@@ -100,8 +100,12 @@ func (s *Server) emitCredentialsEvent(ctx context.Context, cluster *ichorv1alpha
 	return s.emitWarningEvent(ctx, cluster, kindTalosCluster, credentialsReason, msg)
 }
 
-// talosEndpoints are the Talos API endpoints a handed-out talosconfig names: the cluster's control planes, else
-// its declared endpoint.
+// talosEndpoints are the Talos API endpoints a handed-out talosconfig names: the cluster's control planes, else any
+// machine of the cluster that has an address. The cluster's declared endpoint is never one, whatever its type: a VIP
+// is bound to etcd and kube-apiserver health (Talos says it should never be a Talos API endpoint, and it is the
+// first thing gone when no control plane is up), and a load balancer or DNS name fronts the Kubernetes API on
+// 6443, not the Talos API. With no machine address at all it refuses: a talosconfig that reaches nothing would
+// only cost the reader their outage debugging their client.
 func (s *Server) talosEndpoints(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) ([]string, error) {
 	var machines ichorv1alpha1.TalosMachineList
 	if err := s.Client.List(ctx, &machines, client.InNamespace(cluster.Namespace)); err != nil {
@@ -112,7 +116,14 @@ func (s *Server) talosEndpoints(ctx context.Context, cluster *ichorv1alpha1.Talo
 		return endpoints, nil
 	}
 
-	return []string{cluster.Spec.Endpoint.Address}, nil
+	if endpoints := credentials.AnyEndpoints(machines.Items, cluster.Name); len(endpoints) > 0 {
+		return endpoints, nil
+	}
+
+	return nil, connect.NewError(connect.CodeFailedPrecondition, fmt.Errorf(
+		"cluster %q has no machine with a Talos API address, so there is nothing to point a talosconfig at; "+
+			"its endpoint %s is not a Talos API address (a VIP follows etcd health, a load balancer or DNS name fronts the Kubernetes API)",
+		cluster.Name, cluster.Spec.Endpoint.Address))
 }
 
 // buildCredentials makes the kubeconfig and talosconfig of cluster. The keys are made here and the controller,
@@ -123,6 +134,12 @@ func (s *Server) talosEndpoints(ctx context.Context, cluster *ichorv1alpha1.Talo
 func (s *Server) buildCredentials(
 	ctx context.Context, cluster *ichorv1alpha1.TalosCluster, ttl time.Duration, readOnly bool,
 ) (kubeconfig, talosconfig []byte, err error) {
+	// Before any key is made: with nothing to point the talosconfig at there is nothing to hand out.
+	endpoints, err := s.talosEndpoints(ctx, cluster)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	kubeconfig, err = s.kubeconfig(ctx, cluster, ttl)
 	if err != nil {
 		return nil, nil, err
@@ -134,11 +151,6 @@ func (s *Server) buildCredentials(
 	}
 
 	talos, err := s.issueAsCaller(ctx, cluster, ichorv1alpha1.CredentialPurposeCredentialsTalos, "", ttl, talosRole)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	endpoints, err := s.talosEndpoints(ctx, cluster)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -184,6 +196,10 @@ func (s *Server) DownloadCARotationCredentials(
 
 	kube, talos, err := s.buildCredentials(ctx, &cluster, time.Duration(req.Msg.GetLifetimeSeconds())*time.Second, req.Msg.GetReadOnly())
 	if err != nil {
+		if connect.CodeOf(err) == connect.CodeFailedPrecondition {
+			return err
+		}
+
 		return connect.NewError(connect.CodeInternal, fmt.Errorf("building the credentials: %s", truncateText(err.Error(), 300)))
 	}
 

@@ -111,6 +111,57 @@ var _ = Describe("Reader talosconfig download", func() {
 		Expect(crt.NotAfter).To(BeTemporally("~", time.Now().Add(time.Hour), time.Minute))
 	})
 
+	// The cluster's endpoint is a VIP here, and Talos says a VIP is never a Talos API endpoint: with no control plane
+	// to name, the download names another machine's address, or is refused.
+	dropMachines := func() {
+		var machines ichorv1alpha1.TalosMachineList
+		Expect(k8sClient.List(ctx, &machines, client.InNamespace(cluster.Namespace))).To(Succeed())
+
+		for i := range machines.Items {
+			if machines.Items[i].Spec.ClusterRef.Name == cluster.Name {
+				Expect(k8sClient.Delete(ctx, &machines.Items[i])).To(Succeed())
+			}
+		}
+	}
+
+	It("names a worker's address, never the VIP, when no control plane is left", func() {
+		dropMachines()
+
+		worker := newTestMachine(cluster.Name, strongTestIdentity("uuid-rtc-w"), roleWorker, ichorv1alpha1.MachineApprovalStateApproved)
+
+		d, _, closeFn := newDiagnosticsServer(&fakeDownloadClient{}, k8sClient, nil)
+		defer closeFn()
+
+		stream, err := d.DownloadReaderTalosconfig(ctx, asDiagUser(readerTCUser, &pb.DownloadReaderTalosconfigRequest{
+			Cluster: objectRef(cluster.Namespace, cluster.Name),
+		}))
+		Expect(err).NotTo(HaveOccurred())
+
+		_, data, err := collect(stream)
+		Expect(err).NotTo(HaveOccurred())
+
+		cfg, err := clientconfig.FromBytes(data)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(cfg.Contexts[cfg.Context].Endpoints).To(ConsistOf(worker.Spec.Endpoint))
+	})
+
+	It("is refused, with the reason, when no machine has an address", func() {
+		dropMachines()
+
+		d, _, closeFn := newDiagnosticsServer(&fakeDownloadClient{}, k8sClient, nil)
+		defer closeFn()
+
+		stream, err := d.DownloadReaderTalosconfig(ctx, asDiagUser(readerTCUser, &pb.DownloadReaderTalosconfigRequest{
+			Cluster: objectRef(cluster.Namespace, cluster.Name),
+		}))
+		if err == nil {
+			_, _, err = collect(stream)
+		}
+
+		Expect(connect.CodeOf(err)).To(Equal(connect.CodeFailedPrecondition))
+		Expect(err.Error()).To(ContainSubstring("nothing to point a talosconfig at"))
+	})
+
 	It("honours a shorter lifetime and refuses more than twelve hours", func() {
 		d, _, closeFn := newDiagnosticsServer(&fakeDownloadClient{}, k8sClient, nil)
 		defer closeFn()

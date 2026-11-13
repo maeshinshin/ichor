@@ -19,6 +19,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -32,6 +33,8 @@ import (
 	"github.com/spf13/cobra"
 	yaml "go.yaml.in/yaml/v4"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -619,5 +622,37 @@ func TestPatchApplyCreatesThenUpdates(t *testing.T) {
 	var stored ichorv1alpha1.TalosConfigPatch
 	if err := k8s.Get(context.Background(), key, &stored); err != nil || stored.Spec.Priority != 7 {
 		t.Fatalf("stored = %+v, %v", stored.Spec, err)
+	}
+}
+
+// A caller who may create patches but not read them still gets the create; an existing patch is then
+// refused as already existing rather than the read being the error.
+func TestPatchApplyWithAForbiddenReadCreates(t *testing.T) {
+	setHumanTestFlags(t, outputHuman)
+
+	cluster := newTestCluster()
+	base := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(cluster).Build()
+	k8s := interceptor.NewClient(base, interceptor.Funcs{
+		Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+			if _, ok := obj.(*ichorv1alpha1.TalosConfigPatch); ok {
+				return apierrors.NewForbidden(schema.GroupResource{Group: "ichor.maesh.dev", Resource: "talosconfigpatches"}, key.Name, errors.New("no get"))
+			}
+
+			return c.Get(ctx, key, obj, opts...)
+		},
+	})
+	c := localClients(apiOpts, apiDeps{K8s: reviewAs(true, k8s)})
+
+	p := sysctlPatch(cluster.Name, map[string]string{testSysctlKey: "1"})
+	p.Name = testPatchName
+	p.Spec.Layer = cniPatchLayer
+
+	var out bytes.Buffer
+	if err := runPatchApply(context.Background(), c, strings.NewReader(""), &out, &bytes.Buffer{}, &p); err != nil || !strings.Contains(out.String(), "created patch") {
+		t.Fatalf("create without a read: %v\n%s", err, out.String())
+	}
+
+	if err := runPatchApply(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, &p); connect.CodeOf(err) != connect.CodeAlreadyExists {
+		t.Fatalf("an existing patch is refused as already existing: %v", err)
 	}
 }

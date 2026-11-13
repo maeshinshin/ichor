@@ -97,9 +97,11 @@ var applyCmd = patchFileCmd("apply -f FILE", "Create or update a TalosConfigPatc
 	})
 
 // runPatchApply updates the patch when one of that name exists and creates it when none does, the way kubectl apply does.
+// A caller who may create patches but not read them (a custom role) gets the create: if the patch exists, the create
+// is refused as already existing, which is a clear answer.
 func runPatchApply(ctx context.Context, c *apiClients, in io.Reader, out, errw io.Writer, p *ichorv1alpha1.TalosConfigPatch) error {
 	_, err := c.Patch.GetPatch(ctx, connect.NewRequest(&pb.GetPatchRequest{Patch: objectRef(p.Namespace, p.Name)}))
-	if err != nil && connect.CodeOf(err) != connect.CodeNotFound {
+	if err != nil && connect.CodeOf(err) != connect.CodeNotFound && connect.CodeOf(err) != connect.CodePermissionDenied {
 		return err
 	}
 

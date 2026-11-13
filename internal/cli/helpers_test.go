@@ -305,6 +305,9 @@ metadata:
   namespace: ichor-system
 `
 
+// testInitLink is the one physical link the fake first node reports.
+var testInitLink = ichorv1alpha1.TalosMachineDiscoveredLink{Name: testLinkName, PermanentMAC: testLinkMAC, LinkUp: true}
+
 // newFakeInitDeps builds an initDeps wired to fakes: identity always
 // succeeds with a fixed UUID, maintenance apply and bootstrap are
 // recorded on the returned fakes, and NewK8sClient always returns the
@@ -320,7 +323,10 @@ func newFakeInitDeps(t *testing.T, k8sClient client.Client) (
 
 	deps := initDeps{
 		ReadNode: func(context.Context, string, bool) (nodeReading, error) {
-			return nodeReading{Identity: controller.HardwareIdentity{UUID: testInitMachineUUID, Serial: "serial-1"}}, nil
+			return nodeReading{
+				Identity: controller.HardwareIdentity{UUID: testInitMachineUUID, Serial: "serial-1"},
+				Links:    []ichorv1alpha1.TalosMachineDiscoveredLink{testInitLink},
+			}, nil
 		},
 		DialMaintenance: func(context.Context, string) (maintenanceApplier, error) { return maint, nil },
 		DialAdmin: func(context.Context, *ichorv1alpha1.TalosCluster, string, *secrets.Bundle) (bootstrapClient, error) {

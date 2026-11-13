@@ -66,6 +66,7 @@ cluster:
 firstNode:
   endpoint: 192.168.1.50:50000     # --node-endpoint (required)
   installDisk: /dev/sda            # --install-disk (required)
+  # nic: 52:54:00:12:34:56         # --nic: with a vip endpoint, the primary link's permanent MAC (asked for when the node has several)
   disks:
     ephemeralSelector: 'disk.wwid == "naa.0000"'   # --ephemeral-disk-selector
     storage:
@@ -128,6 +129,7 @@ type initConfigVolume struct {
 type initConfigNode struct {
 	Endpoint    string `json:"endpoint"`
 	InstallDisk string `json:"installDisk"`
+	NIC         string `json:"nic"`
 	Disks       struct {
 		EphemeralSelector string           `json:"ephemeralSelector"`
 		Storage           initConfigVolume `json:"storage"`
@@ -223,6 +225,7 @@ func (c initConfigFile) values(dir string) []initFileValue {
 		{"registry-mirror", "cluster.registryMirrors", mirrors},
 		{flagNodeEndpoint, "firstNode.endpoint", one(c.FirstNode.Endpoint)},
 		{flagInstallDisk, "firstNode.installDisk", one(c.FirstNode.InstallDisk)},
+		{flagNIC, "firstNode.nic", one(c.FirstNode.NIC)},
 		{"ephemeral-disk-selector", "firstNode.disks.ephemeralSelector", one(c.FirstNode.Disks.EphemeralSelector)},
 		{"storage-disk-selector", "firstNode.disks.storage.selector", one(c.FirstNode.Disks.Storage.Selector)},
 		{"storage-volume-name", "firstNode.disks.storage.volumeName", one(c.FirstNode.Disks.Storage.VolumeName)},

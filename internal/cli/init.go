@@ -109,6 +109,13 @@ new cluster:
   6. Waits for the controller to hand Cilium over to Ichor's Helm release
      (TalosCluster CNIHandover).
 
+With --endpoint-type vip the endpoint address is a shared IP that Ichor puts on
+every control plane, on its primary link: init takes that link from the node
+(the only physical link, or one you pick; --nic names it by permanent MAC),
+gives the node DHCP on that link only, and the configuration refers to it as
+net0. A control plane approved later needs its own ` + "`--nic`" + ` for the same reason.
+The address must be a free IP, not the node's own.
+
 init never applies anything to a node again after step 3; every later
 change to this cluster goes through the controller, by writing CRs.
 
@@ -234,17 +241,18 @@ func initOutput(cmd *cobra.Command) string {
 // nodeReading is what init reads from the first node over one maintenance connection.
 type nodeReading struct {
 	Identity controller.HardwareIdentity
-	// Disks and DisksErr are the node's installable disks, read only when asked for; a failed read is
-	// reported in DisksErr and does not fail the call.
-	Disks    []ichorv1alpha1.TalosMachineDiscoveredDisk
-	DisksErr error
+	// Disks and Links are the node's installable disks and physical links, read only when asked for;
+	// a failed read is reported in InventoryErr and does not fail the call.
+	Disks        []ichorv1alpha1.TalosMachineDiscoveredDisk
+	Links        []ichorv1alpha1.TalosMachineDiscoveredLink
+	InventoryErr error
 }
 
 // readNodeOverMaintenance reads a node's hardware identity the same way
 // discovery does (internal/controller.NewMachineryMaintenanceClient,
-// dialed in maintenance mode), and its disks too when wantDisks, on the same client; it closes the
+// dialed in maintenance mode), and its disks and links too when wantInventory, on the same client; it closes the
 // connection afterward: init only ever needs one read per run, not a held connection.
-func readNodeOverMaintenance(ctx context.Context, endpoint string, wantDisks bool) (nodeReading, error) {
+func readNodeOverMaintenance(ctx context.Context, endpoint string, wantInventory bool) (nodeReading, error) {
 	c, err := controller.NewMachineryMaintenanceClient(ctx, endpoint)
 	if err != nil {
 		return nodeReading{}, fmt.Errorf("dialing maintenance Talos API at %q: %w", endpoint, err)
@@ -260,11 +268,11 @@ func readNodeOverMaintenance(ctx context.Context, endpoint string, wantDisks boo
 		return r, err
 	}
 
-	if wantDisks {
+	if wantInventory {
 		var inv controller.Inventory
 
-		inv, r.DisksErr = c.Inventory(ctx)
-		r.Disks = inv.Disks
+		inv, r.InventoryErr = c.Inventory(ctx)
+		r.Disks, r.Links = inv.Disks, inv.Links
 	}
 
 	return r, nil
@@ -290,7 +298,8 @@ func bindInitFlags(flags *pflag.FlagSet, o *initOptions, wait *time.Duration) {
 		"Cilium's tunnel protocol, vxlan or geneve (default: Cilium's vxlan); "+
 			"geneve for virtualised networks that pass geneve but not vxlan")
 	flags.StringVar(&o.EndpointType, flagEndpointType, endpointTypes[0].Name, "cluster endpoint type: "+endpointTypeNames(", ", " or "))
-	flags.StringVar(&o.EndpointAddress, "endpoint-address", "", "cluster endpoint address (required)")
+	flags.StringVar(&o.EndpointAddress, "endpoint-address", "",
+		"cluster endpoint address (required): an IP address that no node has yet for vip, which Ichor puts on the control planes")
 	flags.StringVar(&o.NodeEndpoint, "node-endpoint", "",
 		"Talos API address (host:port) of the first node, currently in maintenance mode (required)")
 	// The versions are the release set of this Ichor build: the flags stay so that scripts
@@ -306,6 +315,9 @@ func bindInitFlags(flags *pflag.FlagSet, o *initOptions, wait *time.Duration) {
 			"for a cluster whose controller cannot reach the registry (a demo behind a mirror)")
 	flags.BoolVar(&o.SkipSignatureCheck, "skip-signature-check", false,
 		"run the installer image WITHOUT checking its signature (for builds nobody signs: development and demo images)")
+	flags.StringVar(&o.NIC, flagNIC, "",
+		"with --endpoint-type vip: the first node's primary network link, by its permanent MAC (aa:bb:cc:dd:ee:ff), "+
+			"the link the VIP is announced on; like `approve node --nic`. Needed only when the node has more than one physical link")
 	flags.StringVar(&o.InstallDisk, "install-disk", "", "the first node's install disk: "+installDiskUsage+" (required)")
 	flags.StringSliceVar(&o.PodSubnets, "pod-subnets", nil,
 		"pod CIDRs (spec.network.podSubnets; at most one per IP family); unset keeps Talos's default 10.244.0.0/16. Fixed once the cluster exists")

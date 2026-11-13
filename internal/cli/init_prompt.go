@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/validation"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/render"
 )
 
 // endpointTypes is the one definition of TalosCluster.spec.endpoint.type's values (the CRD enum), with
@@ -258,4 +259,130 @@ func diskFlagValue(d ichorv1alpha1.TalosMachineDiscoveredDisk) string {
 	}
 
 	return d.DevPath
+}
+
+// chooseNIC returns the permanent MAC of the first node's primary link, the --nic value of a vip endpoint.
+// It follows chooseInstallDisk: a given --nic is checked against the links the node reports, a sole link is
+// taken and named, none is an error, and several are a list to pick from with nothing selected to begin with
+// (or, with no terminal, a refusal that lists them). Whichever way it is settled, it says which link was
+// taken, by kernel name and MAC, and that the configuration calls it net0.
+func chooseNIC(r io.Reader, w io.Writer, given string, links []ichorv1alpha1.TalosMachineDiscoveredLink, readErr error) (string, error) {
+	const flag = "--nic"
+
+	if readErr != nil && given == "" {
+		return "", fmt.Errorf("could not list the node's network links (%w); name the primary link's permanent MAC with %s", readErr, flag)
+	}
+
+	if given != "" {
+		i := slices.IndexFunc(links, func(l ichorv1alpha1.TalosMachineDiscoveredLink) bool {
+			return strings.EqualFold(l.PermanentMAC, given)
+		})
+		if i < 0 && readErr == nil {
+			return "", fmt.Errorf("%s %s is not a physical link of the node; it has:\n%s", flag, given, nicList(links))
+		}
+
+		if i < 0 { // the node's links could not be read, so the MAC is taken as given
+			_, _ = fmt.Fprintf(w, "Primary link: %s → the link with MAC %s (the node's links could not be read, so it is not checked)\n",
+				render.PrimaryLinkAlias, given)
+
+			return given, nil
+		}
+
+		return announceNIC(w, links[i], ""), nil
+	}
+
+	switch len(links) {
+	case 0:
+		return "", fmt.Errorf("no physical network link was found on the node; name the primary link's permanent MAC with %s", flag)
+	case 1:
+		return announceNIC(w, links[0], "the node's only physical link"), nil
+	}
+
+	if !bundleTerminal() {
+		return "", fmt.Errorf("the node has %d physical links and none can be taken for the VIP: choose one with %s\n%s",
+			len(links), flag, nicList(links))
+	}
+
+	got, err := askPrompts([]promptQuestion{{
+		flag:  flagNIC,
+		label: "Primary link",
+		help: func(map[string]string) string {
+			return "the VIP is announced on this link and the node gets its address by DHCP on it"
+		},
+		choices:   nicChoices(links),
+		noDefault: true,
+	}}, nil, r, w)
+	if err != nil {
+		return "", err
+	}
+
+	i := slices.IndexFunc(links, func(l ichorv1alpha1.TalosMachineDiscoveredLink) bool { return l.PermanentMAC == got[flagNIC] })
+	if i < 0 {
+		return "", fmt.Errorf("no link was chosen; choose one with %s", flag)
+	}
+
+	return announceNIC(w, links[i], ""), nil
+}
+
+const (
+	flagNIC       = "nic"
+	linkStateDown = "down"
+)
+
+// announceNIC prints the link taken, as the alias the configuration uses and the kernel name and MAC it stands
+// for: the name can change between boots, the MAC cannot, and the alias is what the rendered documents say.
+func announceNIC(w io.Writer, l ichorv1alpha1.TalosMachineDiscoveredLink, why string) string {
+	if why != "" {
+		why = " (" + why + ")"
+	}
+
+	_, _ = fmt.Fprintf(w, "Primary link: %s → %s (%s)%s, as --nic %s\n", render.PrimaryLinkAlias, l.Name, l.PermanentMAC, why, l.PermanentMAC)
+
+	return l.PermanentMAC
+}
+
+// nicChoices lists links as aligned rows of name, MAC, state, speed and driver, each choosing its MAC. A link
+// that is down is listed with its state, not left out.
+func nicChoices(links []ichorv1alpha1.TalosMachineDiscoveredLink) []promptChoice {
+	rows := make([][]string, len(links))
+	widths := make([]int, 5) //nolint:mnd
+
+	for i, l := range links {
+		state, speed := linkStateDown, ""
+		if l.LinkUp {
+			state = "up"
+		}
+
+		if l.SpeedMbit > 0 {
+			speed = fmt.Sprintf("%d Mbit/s", l.SpeedMbit)
+		}
+
+		rows[i] = []string{l.Name, l.PermanentMAC, state, speed, l.Driver}
+		for c, v := range rows[i] {
+			widths[c] = max(widths[c], utf8.RuneCountInString(v))
+		}
+	}
+
+	choices := make([]promptChoice, len(links))
+
+	for i, l := range links {
+		cols := make([]string, len(rows[i]))
+		for c, v := range rows[i] {
+			cols[c] = v + strings.Repeat(" ", widths[c]-utf8.RuneCountInString(v))
+		}
+
+		choices[i] = promptChoice{label: strings.TrimRight(strings.Join(cols, "  "), " "), value: l.PermanentMAC}
+	}
+
+	return choices
+}
+
+// nicList is nicChoices as lines for an error.
+func nicList(links []ichorv1alpha1.TalosMachineDiscoveredLink) string {
+	lines := make([]string, len(links))
+	for i, c := range nicChoices(links) {
+		lines[i] = "  " + c.label
+	}
+
+	return strings.Join(lines, "\n")
 }

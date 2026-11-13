@@ -86,8 +86,8 @@ func (o initOptions) installerPin() installerPin {
 // small interfaces/funcs, mirroring adoptDeps, so runInit is driven by a
 // test with no real node, cluster or network on either end.
 type initDeps struct {
-	// ReadNode reads the first node's identity and, when wantDisks, its disks, over one connection.
-	ReadNode        func(ctx context.Context, endpoint string, wantDisks bool) (nodeReading, error)
+	// ReadNode reads the first node's identity and, when wantInventory, its disks and links, over one connection.
+	ReadNode        func(ctx context.Context, endpoint string, wantInventory bool) (nodeReading, error)
 	DialMaintenance func(ctx context.Context, endpoint string) (maintenanceApplier, error)
 	DialAdmin       func(ctx context.Context, cluster *ichorv1alpha1.TalosCluster, endpoint string, bundle *secrets.Bundle) (bootstrapClient, error)
 	NewK8sClient    func(kubeconfig []byte) (client.Client, error)
@@ -179,7 +179,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	}
 
 	// Step 2: settle the cluster's shape.
-	cluster, err := buildInitPlan(opts.initPlanInput, steps.WarnWriter())
+	cluster, err := planInitCluster(opts, steps.WarnWriter())
 	if err != nil {
 		return err
 	}
@@ -202,7 +202,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
-	identity, installDisk, err := readFirstNode(ctx, opts, deps, pickDisk)
+	identity, installDisk, nic, err := readFirstNode(ctx, opts, deps, pickDisk)
 	if err != nil {
 		return err
 	}
@@ -217,6 +217,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 			Endpoint: opts.NodeEndpoint,
 			Role:     roleControlPlane,
 			Install:  &ichorv1alpha1.TalosMachineInstall{Disk: *installDisk},
+			Network:  vipNetwork(cluster, nic),
 			// init is the special case of approving the first control
 			// plane (architecture.md's "Bootstrap": "Adding later nodes
 			// goes through the normal approval flow").
@@ -557,32 +558,56 @@ func waitForCiliumHandover(
 }
 
 // readFirstNode reads the first node's identity and settles its install disk: the --install-disk
-// value, or, when pickDisk, one chosen from the node's own disk list on the same connection. It runs
+// value, or, when pickDisk, one chosen from the node's own disk list on the same connection. For a vip
+// endpoint it also settles the primary link's MAC (see chooseNIC); it is empty for any other type. It runs
 // before the first write; the apply to the node is initBootstrapAccess's, steps later.
-func readFirstNode(ctx context.Context, opts initOptions, deps initDeps, pickDisk bool) (controller.HardwareIdentity, *ichorv1alpha1.TalosMachineDisk, error) {
-	node, err := deps.ReadNode(ctx, opts.NodeEndpoint, pickDisk)
+func readFirstNode(
+	ctx context.Context, opts initOptions, deps initDeps, pickDisk bool,
+) (controller.HardwareIdentity, *ichorv1alpha1.TalosMachineDisk, string, error) {
+	vip := opts.EndpointType == endpointVIP
+
+	node, err := deps.ReadNode(ctx, opts.NodeEndpoint, pickDisk || vip)
 	if err != nil {
-		return node.Identity, nil, fmt.Errorf("init: reading the first node's hardware identity: %w", err)
+		return node.Identity, nil, "", fmt.Errorf("init: reading the first node's hardware identity: %w", err)
 	}
 
 	if node.Identity.UUID == "" {
-		return node.Identity, nil, fmt.Errorf(
+		return node.Identity, nil, "", fmt.Errorf(
 			"init: the node at %q reported no SMBIOS UUID; init needs a strong hardware identity for the first control plane",
 			opts.NodeEndpoint)
 	}
 
 	if pickDisk {
-		if opts.InstallDisk, err = chooseInstallDisk(deps.Stdin, deps.Stderr, node.Disks, node.DisksErr); err != nil {
-			return node.Identity, nil, fmt.Errorf("init: %w", err)
+		if opts.InstallDisk, err = chooseInstallDisk(deps.Stdin, deps.Stderr, node.Disks, node.InventoryErr); err != nil {
+			return node.Identity, nil, "", fmt.Errorf("init: %w", err)
 		}
 	}
 
 	installDisk, err := parseDiskSelector("--install-disk", opts.InstallDisk)
 	if err != nil {
-		return node.Identity, nil, fmt.Errorf("init: %w", err)
+		return node.Identity, nil, "", fmt.Errorf("init: %w", err)
 	}
 
-	return node.Identity, installDisk, nil
+	var nic string
+
+	if vip {
+		if nic, err = chooseNIC(deps.Stdin, deps.Stderr, opts.NIC, node.Links, node.InventoryErr); err != nil {
+			return node.Identity, nil, "", fmt.Errorf("init: %w", err)
+		}
+	}
+
+	return node.Identity, installDisk, nic, nil
+}
+
+// vipNetwork is the first node's spec.network for a vip cluster: DHCP on the primary link. pkg/render then emits
+// the net0 alias and, on a control plane, the VIP on it. It is nil for any other endpoint type, where the node
+// keeps Talos's default of DHCP on every physical link.
+func vipNetwork(cluster *ichorv1alpha1.TalosCluster, nic string) *ichorv1alpha1.TalosMachineNetwork {
+	if cluster.Spec.Endpoint.Type != endpointVIP {
+		return nil
+	}
+
+	return &ichorv1alpha1.TalosMachineNetwork{MAC: nic, Addressing: ichorv1alpha1.MachineAddressingDHCP}
 }
 
 // initBootstrapAccess is step 4: apply the rendered configuration to the node and wait for it to

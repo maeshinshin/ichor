@@ -108,7 +108,7 @@ func TestPresetTopology_NeverRejectsSchedulableWithNoWorkers(t *testing.T) {
 
 func TestBuildInitPlan_NonVIPWarnsButSucceeds(t *testing.T) {
 	in := validInitPlanInput()
-	in.EndpointType = "node"
+	in.EndpointType = endpointNode
 
 	var warn bytes.Buffer
 

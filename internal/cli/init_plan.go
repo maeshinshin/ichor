@@ -19,7 +19,9 @@ package cli
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/netip"
+	"regexp"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -32,6 +34,9 @@ import (
 // the CNI or the inline-manifests bootstrap carries: "cluster", the
 // broadest layer, since neither applies to just one machine.
 const cniPatchLayer = "cluster"
+
+// macPattern is the form TalosMachineNetwork.mac takes.
+var macPattern = regexp.MustCompile(`^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$`)
 
 // defaultPreset is the preset architecture.md's "Nodes" section marks
 // "recommended" and the one `--preset`'s flag default uses.
@@ -109,6 +114,10 @@ type initPlanInput struct {
 
 	EndpointType    string
 	EndpointAddress string
+
+	// NIC is the first node's primary link by permanent MAC (--nic); it only means something for a vip,
+	// whose Layer2VIPConfig is announced on that link.
+	NIC string
 
 	TalosVersion      string
 	KubernetesVersion string
@@ -273,7 +282,7 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 		return nil, fmt.Errorf("init: --endpoint-type %q is invalid: must be one of %s", in.EndpointType, endpointTypeNames(", ", ", "))
 	}
 
-	if in.EndpointType != "vip" {
+	if in.EndpointType != endpointVIP {
 		_, _ = fmt.Fprintf(warn,
 			"warning: endpoint type %q: a VIP is recommended — changing it later re-issues every certificate\n",
 			in.EndpointType)
@@ -281,6 +290,10 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 
 	if in.EndpointAddress == "" {
 		return nil, fmt.Errorf("init: --endpoint-address is required")
+	}
+
+	if err := checkVIPInput(in); err != nil {
+		return nil, err
 	}
 
 	if in.Namespace != ichorControllerNamespace {
@@ -332,4 +345,62 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: in.CNIPreset, KubeProxy: "enabled", Tunnel: in.CNITunnel},
 		},
 	}, nil
+}
+
+// checkVIPInput refuses what Talos would refuse after the irreversible apply: a VIP that is not an IP address,
+// and a --nic that is not a MAC or that no VIP would use.
+func checkVIPInput(in initPlanInput) error {
+	if in.EndpointType == endpointVIP {
+		if _, err := netip.ParseAddr(in.EndpointAddress); err != nil {
+			return fmt.Errorf("init: --endpoint-address %q is not an IP address, which a vip endpoint must be", in.EndpointAddress)
+		}
+	}
+
+	if in.NIC == "" {
+		return nil
+	}
+
+	if in.EndpointType != endpointVIP {
+		return fmt.Errorf("init: --nic is only used with --endpoint-type vip, not %q", in.EndpointType)
+	}
+
+	if !macPattern.MatchString(in.NIC) {
+		return fmt.Errorf("init: --nic %q is not a MAC address like aa:bb:cc:dd:ee:ff", in.NIC)
+	}
+
+	return nil
+}
+
+// planInitCluster is buildInitPlan plus the check that needs the node's address.
+func planInitCluster(opts initOptions, warn io.Writer) (*ichorv1alpha1.TalosCluster, error) {
+	cluster, err := buildInitPlan(opts.initPlanInput, warn)
+	if err != nil {
+		return nil, err
+	}
+
+	return cluster, checkVIPNotNode(cluster, opts.NodeEndpoint)
+}
+
+// checkVIPNotNode refuses a vip endpoint address equal to the first node's own address: the VIP would be a
+// second address on the link the node is reached by, and the address that must move between control planes
+// would be the one the node was given.
+func checkVIPNotNode(cluster *ichorv1alpha1.TalosCluster, nodeEndpoint string) error {
+	if cluster.Spec.Endpoint.Type != endpointVIP {
+		return nil
+	}
+
+	host := nodeEndpoint
+	if h, _, err := net.SplitHostPort(nodeEndpoint); err == nil {
+		host = h
+	}
+
+	vip, err1 := netip.ParseAddr(cluster.Spec.Endpoint.Address)
+	node, err2 := netip.ParseAddr(host)
+
+	if err1 == nil && err2 == nil && vip.Unmap() == node.Unmap() {
+		return fmt.Errorf("init: --endpoint-address %s is the first node's own address (--node-endpoint %s); "+
+			"a vip is an extra address that moves between control planes, so it needs one nobody has yet", vip, nodeEndpoint)
+	}
+
+	return nil
 }

@@ -31,6 +31,13 @@ new cluster:
   6. Waits for the controller to hand Cilium over to Ichor's Helm release
      (TalosCluster CNIHandover).
 
+With --endpoint-type vip the endpoint address is a shared IP that Ichor puts on
+every control plane, on its primary link: init takes that link from the node
+(the only physical link, or one you pick; --nic names it by permanent MAC),
+gives the node DHCP on that link only, and the configuration refers to it as
+net0. A control plane approved later needs its own `--nic` for the same reason.
+The address must be a free IP, not the node's own.
+
 init never applies anything to a node again after step 3; every later
 change to this cluster goes through the controller, by writing CRs.
 
@@ -61,7 +68,7 @@ ichor init [flags]
       --cni-tunnel string                  Cilium's tunnel protocol, vxlan or geneve (default: Cilium's vxlan); geneve for virtualised networks that pass geneve but not vxlan
       --discover-address stringArray       IPv4 address of a node booted into maintenance mode for the controller to probe (spec.discovery.addresses); repeatable
       --discover-cidr stringArray          IPv4 CIDR (/24 or smaller) of maintenance-mode nodes for the controller to probe (spec.discovery.cidrs); repeatable
-      --endpoint-address string            cluster endpoint address (required)
+      --endpoint-address string            cluster endpoint address (required): an IP address that no node has yet for vip, which Ichor puts on the control planes
       --endpoint-type string               cluster endpoint type: vip, loadBalancer, dns or node (default "vip")
       --ephemeral-disk-selector string     CEL disk selector (e.g. disk.wwid == "...") for a dedicated EPHEMERAL disk, separate from --install-disk
   -f, --file string                        read the init settings from this InitConfig file (see --print-config-template); a flag given on the command line overrides the file
@@ -72,6 +79,7 @@ ichor init [flags]
       --kube-api-tls-server-name string    with --ui-url: tls-server-name in users' kubeconfigs (chart: ichorUI.users.kubeAPITLSServerName)
       --merge-kubeconfig                   also merge the cluster-admin kubeconfig into your kubeconfig (--kubeconfig, else the first file of $KUBECONFIG, else ~/.kube/config) as context admin@CLUSTER, and make it current; a taken name gets a suffix
   -n, --namespace string                   namespace the TalosCluster, its TalosMachine and the secrets bundle Secret live in; Ichor's own install manifest always deploys its controller to "ichor-system" (default "ichor-system")
+      --nic approve node --nic             with --endpoint-type vip: the first node's primary network link, by its permanent MAC (aa:bb:cc:dd:ee:ff), the link the VIP is announced on; like approve node --nic. Needed only when the node has more than one physical link
       --node-endpoint string               Talos API address (host:port) of the first node, currently in maintenance mode (required)
       --pod-subnets strings                pod CIDRs (spec.network.podSubnets; at most one per IP family); unset keeps Talos's default 10.244.0.0/16. Fixed once the cluster exists
       --preset string                      topology preset: single (1 node, schedulable), compact-ha (3 control planes, schedulable), standard (3 control planes + workers added later, tainted; recommended), or large (5 control planes + workers added later, tainted) (default "standard")

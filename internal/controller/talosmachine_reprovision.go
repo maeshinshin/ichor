@@ -113,7 +113,7 @@ func (r *TalosMachineReconciler) removeStaleEtcdMember(
 
 	if err := sc.EtcdRemoveMemberByID(ctx, id); err != nil {
 		return reasonStaleEtcdMember, fmt.Sprintf("etcd still lists a member named %q for this control plane and removing it "+
-			"through %q failed (%s), so nothing was sent; remove the machine with `ichor delete node %s`, which removes its etcd "+
+			"through %q failed (%s), so nothing was sent; remove the node with `ichor delete node %s`, which removes its etcd "+
 			"member too, and approve it again", name, survivor.Name, shortError(err), m.Name)
 	}
 

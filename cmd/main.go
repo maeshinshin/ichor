@@ -189,9 +189,9 @@ func main() {
 	flag.BoolVar(&noCiliumPolicies, "no-cilium-policies", false,
 		"Tell the installer Job not to apply Ichor's CiliumNetworkPolicies even on Cilium (the chart sets it from networkPolicy.cilium.enabled=false).")
 	flag.StringVar(&talosEgressPolicy, "talos-egress-policy-name", controller.DefaultTalosEgressPolicyName,
-		"Name of the CiliumNetworkPolicy the controller keeps with the addresses of the machines, clusters and S3 stores it manages.")
+		"Name of the CiliumNetworkPolicy the controller keeps with the addresses of the nodes, clusters and S3 stores it manages.")
 	flag.BoolVar(&talosEgressManage, "talos-egress-policy", true,
-		"Keep the CiliumNetworkPolicy of egress to managed machines and S3 current. Off when the chart sets networkPolicy.cilium.dynamicTalosEgress=false.")
+		"Keep the CiliumNetworkPolicy of egress to managed nodes and S3 current. Off when the chart sets networkPolicy.cilium.dynamicTalosEgress=false.")
 	flag.BoolVar(&updateCheck, "update-check", true,
 		"Look for newer Ichor releases in the chart repository and record the newest one in the IchorInstallation status (the chart's updateCheck.enabled). spec.updateCheck.enabled overrides it.")
 	flag.BoolVar(&autoPatch.Enabled, "auto-patch", false,

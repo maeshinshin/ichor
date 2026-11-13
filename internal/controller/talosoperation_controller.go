@@ -250,7 +250,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if r.Advance == nil {
 		return ctrl.Result{}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused,
-			reasonOperationNoExecutor, "no machine executor is wired up for this controller")
+			reasonOperationNoExecutor, "no node executor is wired up for this controller")
 	}
 
 	// An Ichor self-upgrade touches no machine: its executor watches one installer Job, so the
@@ -292,7 +292,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 
 		return ctrl.Result{}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhaseCompleted,
-			reasonOperationComplete, "every eligible machine finished")
+			reasonOperationComplete, "every eligible node finished")
 	}
 
 	// The long-operation half of "the lock": renewed once per batch, the
@@ -313,7 +313,7 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			r.markMachine(&op, m.Name, ichorv1alpha1.TalosOperationMachinePhaseInProgress)
 
 			return ctrl.Result{}, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhasePaused,
-				reasonOperationStepFailed, fmt.Sprintf("machine %q: %v", m.Name, err))
+				reasonOperationStepFailed, fmt.Sprintf("node %q: %v", m.Name, err))
 		}
 
 		phase := ichorv1alpha1.TalosOperationMachinePhaseInProgress
@@ -458,10 +458,10 @@ func (r *TalosOperationReconciler) advanceOwnStateMachine(
 
 func advancingMessage(op *ichorv1alpha1.TalosOperation, n int) string {
 	if op.Status.Kubernetes != nil && op.Status.Kubernetes.Stage != "" {
-		return fmt.Sprintf("stage %s: %d machine(s) advancing", op.Status.Kubernetes.Stage, n)
+		return fmt.Sprintf("stage %s: %d node(s) advancing", op.Status.Kubernetes.Stage, n)
 	}
 
-	return fmt.Sprintf("%d machine(s) advancing", n)
+	return fmt.Sprintf("%d node(s) advancing", n)
 }
 
 // restingPhase handles the phases that hold no cluster lock. A shutdown that has asked every machine
@@ -531,9 +531,9 @@ func (r *TalosOperationReconciler) markMachine(op *ichorv1alpha1.TalosOperation,
 	}
 
 	if phase == ichorv1alpha1.TalosOperationMachinePhaseCompleted {
-		r.operationEvent(op, corev1.EventTypeNormal, reasonMachineFinished, "machine "+name+" finished")
+		r.operationEvent(op, corev1.EventTypeNormal, reasonMachineFinished, "node "+name+" finished")
 	} else {
-		r.operationEvent(op, corev1.EventTypeNormal, reasonMachineStarted, "machine "+name+" started")
+		r.operationEvent(op, corev1.EventTypeNormal, reasonMachineStarted, "node "+name+" started")
 	}
 }
 

@@ -481,7 +481,7 @@ func (e *TalosEgress) sync(ctx context.Context) (bool, error) {
 	}
 
 	spec := map[string]any{
-		keyDescription: "Egress of the controller and ichor-ui to the machines, cluster endpoints and S3 stores " +
+		keyDescription: "Egress of the controller and ichor-ui to the nodes, cluster endpoints and S3 stores " +
 			"Ichor's own objects name. Written by the controller; edits are overwritten.",
 		keySelector: map[string]any{
 			keyMatchLabels: map[string]any{"app.kubernetes.io/name": app},

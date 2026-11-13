@@ -105,11 +105,11 @@ func (r *TalosOperationReconciler) advanceNode(
 
 	m := &ichorv1alpha1.TalosMachine{}
 	if err := readerOrClient(r.APIReader, r.Client).Get(ctx, types.NamespacedName{Namespace: cluster.Namespace, Name: spec.MachineRef.Name}, m); err != nil {
-		return r.nodeFailed(ctx, op, fmt.Errorf("machine %q: %w", spec.MachineRef.Name, err))
+		return r.nodeFailed(ctx, op, fmt.Errorf("node %q: %w", spec.MachineRef.Name, err))
 	}
 
 	if m.Spec.ClusterRef.Name != cluster.Name || !m.Spec.IsApproved() {
-		return r.nodeFailed(ctx, op, fmt.Errorf("machine %q is not an approved machine of cluster %q", m.Name, cluster.Name))
+		return r.nodeFailed(ctx, op, fmt.Errorf("node %q is not an approved node of cluster %q", m.Name, cluster.Name))
 	}
 
 	if err := lock.Renew(ctx, operationLockIdentity(op)); err != nil {
@@ -579,7 +579,7 @@ func (n *nodeRun) awaitRestartService(ctx context.Context) (ctrl.Result, error) 
 // etcdMember returns the queried member's status and the member count of a control plane.
 func (n *nodeRun) etcdMember() (EtcdStatus, int, error) {
 	if n.m.Spec.Role != roleControlPlane {
-		return EtcdStatus{}, 0, fmt.Errorf("machine %q is a %s: only control planes run etcd", n.m.Name, n.m.Spec.Role)
+		return EtcdStatus{}, 0, fmt.Errorf("node %q is a %s: only control planes run etcd", n.m.Name, n.m.Spec.Role)
 	}
 
 	st, err := n.talos.EtcdStatus(n.dial)
@@ -688,7 +688,7 @@ func (n *nodeRun) awaitForfeit(ctx context.Context) (ctrl.Result, error) {
 // needs, so it releases it first and then only watches the machine go.
 func (n *nodeRun) beginReset(ctx context.Context) (ctrl.Result, error) {
 	if n.spec.Confirm != n.m.Name {
-		return ctrl.Result{}, fmt.Errorf("reset needs confirm equal to the machine name %q", n.m.Name)
+		return ctrl.Result{}, fmt.Errorf("reset needs confirm equal to the node name %q", n.m.Name)
 	}
 
 	if n.m.Spec.Role == roleControlPlane {
@@ -726,7 +726,7 @@ func (n *nodeRun) beginReset(ctx context.Context) (ctrl.Result, error) {
 	n.r.markMachine(n.op, n.m.Name, ichorv1alpha1.TalosOperationMachinePhaseInProgress)
 	n.op.Status.Phase = ichorv1alpha1.TalosOperationPhaseInProgress
 	n.op.Status.Node = &ichorv1alpha1.TalosOperationNodeStatus{
-		Step: ichorv1alpha1.NodeStepRemoving, Message: "the machine was handed to the removal flow with a reset",
+		Step: ichorv1alpha1.NodeStepRemoving, Message: "the node was handed to the removal flow with a reset",
 		// The wait follows this object, not the name: discovery may recreate a pending machine with
 		// the same name (the node's UUID) the moment the old one is gone.
 		MachineUID: n.m.UID,
@@ -756,7 +756,7 @@ func (r *TalosOperationReconciler) awaitRemoval(ctx context.Context, op *ichorv1
 	// shortcut: an operation recorded before machineUID existed has none and follows the name.
 	if uid := op.Status.Node.MachineUID; apierrors.IsNotFound(err) || (err == nil && uid != "" && m.UID != uid) {
 		r.markMachine(op, op.Spec.Node.MachineRef.Name, ichorv1alpha1.TalosOperationMachinePhaseCompleted)
-		op.Status.Node.Message = "the machine was removed and its node reset"
+		op.Status.Node.Message = "the node was removed and its node reset"
 
 		return ctrl.Result{}, r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhaseCompleted, reasonNodeActionDone, op.Status.Node.Message)
 	}
@@ -771,7 +771,7 @@ func (r *TalosOperationReconciler) awaitRemoval(ctx context.Context, op *ichorv1
 		}
 	}
 
-	msg := "waiting for the removal of the machine"
+	msg := "waiting for the removal of the node"
 	if c := apimeta.FindStatusCondition(m.Status.Conditions, conditionRemoval); c != nil && c.Message != "" {
 		msg = "removal: " + c.Message
 	}

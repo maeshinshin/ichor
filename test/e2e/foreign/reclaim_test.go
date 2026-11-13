@@ -374,7 +374,7 @@ func TestC3C4Refusals(t *testing.T) {
 	iuuid := r.ikJSON(t, "-n", crNS, "get", "talosmachines.ichor.maesh.dev", "-o", "jsonpath={.items[0].metadata.name}")
 	out, err = r.machine(t, "reclaim", r.ichorCP, "--talosconfig", "/tmp/ichor-talosconfig",
 		"--kubeconfig", podKC, "--confirm", iuuid, "--force", "--confirm-cluster", ichorName, "--force-ungraceful")
-	if err == nil || !strings.Contains(out, "is already an Ichor machine") {
+	if err == nil || !strings.Contains(out, "is already an Ichor node") {
 		t.Errorf("C4: an Ichor machine was not refused: %v", err)
 	}
 	if got := r.ikJSON(t, "get", "node", ichorName+"-cp", "-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}"); got != "True" {

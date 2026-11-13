@@ -206,13 +206,13 @@ func (v *TalosClusterCustomValidator) checkSecureBootConfirmed(
 	names := strings.Join(lacking, ", ")
 
 	if mode == ichorv1alpha1.SecureBootRequired && newC.GetAnnotations()[ichorv1alpha1.TalosClusterSecureBootConfirmAnnotation] != annotationTrue {
-		return nil, fmt.Errorf("spec.security.secureBoot.mode Required for a cluster whose machine(s) %s do not run SecureBoot: Talos cannot "+
+		return nil, fmt.Errorf("spec.security.secureBoot.mode Required for a cluster whose node(s) %s do not run SecureBoot: Talos cannot "+
 			"convert an installed node, so each must be reset and added again from the SecureBoot ISO, one at a time (see "+
 			"docs/guides/hardening.md; Ichor does not do it for you). Set the annotation %s=\"true\" to confirm you will do that, or use Preferred",
 			names, ichorv1alpha1.TalosClusterSecureBootConfirmAnnotation)
 	}
 
-	return admission.Warnings{fmt.Sprintf("spec.security.secureBoot.mode %s: machine(s) %s do not run SecureBoot and stay as they are until "+
+	return admission.Warnings{fmt.Sprintf("spec.security.secureBoot.mode %s: node(s) %s do not run SecureBoot and stay as they are until "+
 		"they are reset and added again; their SecureBoot condition says so", mode, names)}, nil
 }
 
@@ -274,7 +274,7 @@ func (v *TalosClusterCustomValidator) checkFirewallCoversMachines(ctx context.Co
 		}
 
 		if !prefixesContain(fw.NodeCIDRs, addr) {
-			warns = append(warns, fmt.Sprintf("spec.security.firewall.nodeCIDRs %v does not contain %s, the address of machine %s: "+
+			warns = append(warns, fmt.Sprintf("spec.security.firewall.nodeCIDRs %v does not contain %s, the address of node %s: "+
 				"the nodes' Cilium and trustd rules will not admit it", fw.NodeCIDRs, addr, m.Name))
 		}
 	}
@@ -348,7 +348,7 @@ func (v *TalosClusterCustomValidator) checkDiskEncryptionConfirmed(ctx context.C
 		return nil
 	}
 
-	return fmt.Errorf("spec.security.diskEncryption changes for a cluster with %d approved machine(s): Talos encrypts a volume "+
+	return fmt.Errorf("spec.security.diskEncryption changes for a cluster with %d approved node(s): Talos encrypts a volume "+
 		"only when it creates it, so each node must be wiped and rejoined (see docs/guides/hardening.md; Ichor does not wipe for you). "+
 		"Set the annotation %s=\"true\" to confirm you will do that",
 		len(machines), ichorv1alpha1.TalosClusterDiskEncryptionConfirmAnnotation)

@@ -323,7 +323,7 @@ func (p *AutoPatcher) passCluster(
 func (p *AutoPatcher) machinesReady(ctx context.Context, cluster *ichorv1alpha1.TalosCluster) (bool, error) {
 	machines, err := deleteguard.ApprovedMachines(ctx, p.Reader, cluster.Namespace, cluster.Name, deleteguard.MachineFilter{IncludeDeleting: true})
 	if err != nil {
-		return false, fmt.Errorf("listing the machines: %w", err)
+		return false, fmt.Errorf("listing the nodes: %w", err)
 	}
 
 	for i := range machines {

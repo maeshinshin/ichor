@@ -290,7 +290,7 @@ func (r *TalosEtcdBackupReconciler) runBackup(
 	for _, m := range candidates {
 		size, serr := r.snapshotAndUpload(ctx, &cluster, m, bundle, passphrase, store, key)
 		if serr != nil {
-			errs = append(errs, fmt.Errorf("machine %q: %w", m.Name, serr))
+			errs = append(errs, fmt.Errorf("node %q: %w", m.Name, serr))
 
 			continue
 		}
@@ -444,14 +444,14 @@ func (r *TalosEtcdBackupReconciler) snapshotCandidates(
 
 		st, err := r.etcdStatus(ctx, cluster, m, bundle)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("machine %q: etcd status: %w", m.Name, err))
+			errs = append(errs, fmt.Errorf("node %q: etcd status: %w", m.Name, err))
 
 			continue
 		}
 
 		switch {
 		case st.IsLearner || len(st.Errors) > 0:
-			errs = append(errs, fmt.Errorf("machine %q: etcd member is not healthy", m.Name))
+			errs = append(errs, fmt.Errorf("node %q: etcd member is not healthy", m.Name))
 		case st.MemberID == st.LeaderID:
 			leaders = append(leaders, m)
 		default:
@@ -462,7 +462,7 @@ func (r *TalosEtcdBackupReconciler) snapshotCandidates(
 	out := slices.Concat(followers, leaders)
 	if len(out) == 0 {
 		if len(errs) == 0 {
-			return nil, errors.New("no approved control-plane machine to snapshot")
+			return nil, errors.New("no approved control-plane node to snapshot")
 		}
 
 		return nil, errors.Join(errs...)

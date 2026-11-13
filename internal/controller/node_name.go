@@ -120,5 +120,5 @@ func resolveNodeName(ctx context.Context, c client.Reader, talos TalosClient, m 
 		}
 	}
 
-	return "", fmt.Errorf("machine %q has no spec.hostname and neither its node's report nor a Kubernetes node at %q names its node", m.Name, host)
+	return "", fmt.Errorf("node %q has no spec.hostname and neither its node's report nor a Kubernetes node at %q names its node", m.Name, host)
 }

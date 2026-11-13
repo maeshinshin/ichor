@@ -98,5 +98,5 @@ func (n *nodeRun) lastWorkerGuard(ctx context.Context, node, doing string) error
 	}
 
 	return fmt.Errorf("refusing to %s %q: it is the last schedulable Ready worker, and no workload could run without it; "+
-		"override with --override (needs the override verb on the machine)", doing, n.m.Name)
+		"override with --override (needs the override verb on the node)", doing, n.m.Name)
 }

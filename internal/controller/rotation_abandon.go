@@ -177,7 +177,7 @@ func (r *TalosOperationReconciler) abandonRotation(ctx context.Context, op *icho
 	}
 
 	r.operationEvent(&cluster, corev1.EventTypeNormal, reasonRotationAbandoned, fmt.Sprintf(
-		"the %s operation %s was deleted in stage %s and abandoned: the new material is removed and the machines are rendered from the old again",
+		"the %s operation %s was deleted in stage %s and abandoned: the new material is removed and the nodes are rendered from the old again",
 		op.Spec.Kind, op.Name, rotationStage(op)))
 
 	return nil

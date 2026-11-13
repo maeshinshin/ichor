@@ -744,7 +744,7 @@ func (a *kubernetesUpgradeAdvancer) waiting(
 	}
 
 	if time.Since(cond.LastTransitionTime.Time) > kubernetesVerifyTimeout {
-		return fmt.Errorf("machine %q did not converge on Kubernetes %s within %s: %s",
+		return fmt.Errorf("node %q did not converge on Kubernetes %s within %s: %s",
 			m.Name, cluster.Spec.KubernetesVersion, kubernetesVerifyTimeout, reason)
 	}
 

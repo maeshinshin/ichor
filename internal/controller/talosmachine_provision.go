@@ -180,12 +180,12 @@ func (r *TalosMachineReconciler) provision(
 
 	if !identityMatches(m.Spec.Identity, hw) {
 		return r.retryLater(ctx, m, reasonIdentityMismatch,
-			fmt.Sprintf("the node at %s reports UUID %q, serial %q and MAC addresses %v, which do not match this machine's "+
+			fmt.Sprintf("the node at %s reports UUID %q, serial %q and MAC addresses %v, which do not match this node's "+
 				"recorded identity; nothing was applied", m.Spec.Endpoint, hw.UUID, hw.Serial, hw.MACAddresses))
 	}
 
 	if converged && holdApplySet(m) {
-		return r.retryLater(ctx, m, reasonReprovisionBlocked, fmt.Sprintf("the node at %s is in maintenance mode with this machine's "+
+		return r.retryLater(ctx, m, reasonReprovisionBlocked, fmt.Sprintf("the node at %s is in maintenance mode with this node's "+
 			"recorded identity, but the annotation %s is set, so nothing was sent; remove it to have the node reinstalled",
 			m.DialEndpoint(), ichorv1alpha1.TalosMachineHoldApplyAnnotation))
 	}

@@ -280,7 +280,7 @@ func (a *talosUpgradeAdvancer) afterReboot(
 		}
 
 		return false, fmt.Errorf(
-			"machine %q rebooted after an upgrade to %s but is now running %s: it fell back to its previous A/B slot",
+			"node %q rebooted after an upgrade to %s but is now running %s: it fell back to its previous A/B slot",
 			m.Name, target, currentVersion)
 	}
 

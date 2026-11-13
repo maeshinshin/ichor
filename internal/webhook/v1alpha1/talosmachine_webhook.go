@@ -217,7 +217,7 @@ func (v *TalosMachineCustomValidator) checkApprover(ctx context.Context, oldObj,
 	}
 
 	if err := v.can(ctx, ichorv1alpha1.MachineApproveVerb, ichorv1alpha1.MachineApprovalSubresource, newObj); err != nil {
-		return fmt.Errorf("approving a machine hands it the cluster's configuration: %w", err)
+		return fmt.Errorf("approving a node hands it the cluster's configuration: %w", err)
 	}
 
 	return nil

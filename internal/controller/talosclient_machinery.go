@@ -136,7 +136,7 @@ func (t *machineryTalosClient) MachineStage(ctx context.Context) (string, error)
 
 	res, err := safe.StateGet[*runtimeres.MachineStatus](ctx, t.c.COSI, md)
 	if err != nil {
-		return "", fmt.Errorf("reading machine status: %w", err)
+		return "", fmt.Errorf("reading node status: %w", err)
 	}
 
 	return res.TypedSpec().Stage.String(), nil

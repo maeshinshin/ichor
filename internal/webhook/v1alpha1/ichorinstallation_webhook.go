@@ -113,5 +113,5 @@ func deprecatedReclaim(obj *ichorv1alpha1.IchorInstallation) admission.Warnings 
 		return nil
 	}
 
-	return admission.Warnings{"spec.reclaim.enabled is deprecated and ignored: who may reset and add a machine is decided by RBAC alone (the reclaim verb on machinereclaims)"}
+	return admission.Warnings{"spec.reclaim.enabled is deprecated and ignored: who may reset and add a node is decided by RBAC alone (the reclaim verb on machinereclaims)"}
 }

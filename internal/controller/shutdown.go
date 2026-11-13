@@ -483,7 +483,7 @@ func (r *TalosOperationReconciler) advanceShutdown(
 
 	return ctrl.Result{RequeueAfter: operationRequeueInterval}, r.shutdownStatus(ctx, op,
 		ichorv1alpha1.TalosOperationPhaseShutDown, reasonShutdownWaiting,
-		fmt.Sprintf("every machine was asked to shut down; power them on, and this completes when all %d answer again",
+		fmt.Sprintf("every node was asked to shut down; power them on, and this completes when all %d answer again",
 			len(op.Status.Machines)))
 }
 
@@ -547,11 +547,11 @@ func (r *TalosOperationReconciler) awaitPowerOn(
 	if pending > 0 {
 		return ctrl.Result{RequeueAfter: operationRequeueInterval}, r.shutdownStatus(ctx, op,
 			ichorv1alpha1.TalosOperationPhaseShutDown, reasonShutdownWaiting,
-			fmt.Sprintf("%d of %d machine(s) still to come back", pending, len(op.Status.Machines)))
+			fmt.Sprintf("%d of %d node(s) still to come back", pending, len(op.Status.Machines)))
 	}
 
 	return ctrl.Result{}, r.shutdownStatus(ctx, op, ichorv1alpha1.TalosOperationPhaseCompleted,
-		reasonShutdownReturned, "every machine is back; the cluster accepts disruptive operations again")
+		reasonShutdownReturned, "every node is back; the cluster accepts disruptive operations again")
 }
 
 // shutdownStatus writes the phase and the Shutdown condition in one status update.

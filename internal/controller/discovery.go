@@ -210,7 +210,7 @@ func (r *DiscoveryReconciler) discover(
 			"endpoint", endpoint, "uuid", hw.UUID)
 		r.reportWeak(cluster, endpoint, hw, reasonIdentityCollision,
 			fmt.Sprintf("UUID %q already belongs to a TalosMachine with a different serial number or MAC "+
-				"addresses; an operator has to decide whether this is the same machine returning or a different "+
+				"addresses; an operator has to decide whether this is the same node returning or a different "+
 				"one reusing the UUID", hw.UUID))
 
 		return nil, nil
@@ -252,7 +252,7 @@ func (r *DiscoveryReconciler) refreshUnapproved(ctx context.Context, mc Maintena
 	if r.Recorder != nil && old != "" && m.Status.MaintenanceFingerprint != old {
 		r.Recorder.Eventf(m, corev1.EventTypeNormal, reasonMaintenanceRefreshed,
 			"the node answers in maintenance mode with the same identity and a new certificate (%s, was %s), so the "+
-				"pinned fingerprint and the disk and NIC lists were refreshed; the machine was not approved, so no "+
+				"pinned fingerprint and the disk and NIC lists were refreshed; the node was not approved, so no "+
 				"configuration was ever sent against the old one", m.Status.MaintenanceFingerprint, old)
 	}
 }

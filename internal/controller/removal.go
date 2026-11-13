@@ -186,7 +186,7 @@ const workerStillHasClusterCredentialsMessage = "worker %q was removed, but its 
 	nodeObjectStaysNote
 
 // nodeObjectStaysNote: the Kubernetes Node is not deleted, because the running kubelet would register it again.
-const nodeObjectStaysNote = "The Kubernetes Node stays while the machine runs; power it off or reset it, then delete the Node with kubectl delete node %[1]s"
+const nodeObjectStaysNote = "The Kubernetes Node stays while the node runs; power it off or reset it, then delete the Node with kubectl delete node %[1]s"
 
 // conditionTransitioning and its two reasons implement docs/design/architecture.md's "Nodes" section: even
 // counts are allowed only transiently during a change (3->4->3, never 3->2), shown as "transitioning", while
@@ -715,7 +715,7 @@ func (r *TalosMachineReconciler) trySelfLeave(
 
 	// Another node answering at m's address would list its own member and be told to leave etcd.
 	if err := confirmMachine(selfCtx, self, m); err != nil {
-		logf.FromContext(ctx).Info("not asking the node at the machine's address to leave etcd", "reason", err.Error())
+		logf.FromContext(ctx).Info("not asking the node at the node's address to leave etcd", "reason", err.Error())
 
 		return false
 	}
@@ -961,10 +961,10 @@ func (r *TalosMachineReconciler) uncordonRejoinedNode(ctx context.Context, nodeN
 	delete(node.Annotations, cordonedByIchorAnnotation)
 
 	if err := r.Patch(ctx, &node, patch); err != nil {
-		return fmt.Errorf("uncordoning node %q after its machine joined again: %w", nodeName, err)
+		return fmt.Errorf("uncordoning node %q after its node joined again: %w", nodeName, err)
 	}
 
-	logf.FromContext(ctx).Info("uncordoned a node whose machine joined again", "node", nodeName)
+	logf.FromContext(ctx).Info("uncordoned a node whose node joined again", "node", nodeName)
 
 	return nil
 }

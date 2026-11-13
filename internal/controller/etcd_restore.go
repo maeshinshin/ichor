@@ -884,13 +884,13 @@ func (run *restoreRun) requestReconcile(ctx context.Context, warning string) err
 		m.Annotations[ichorv1alpha1.EtcdRestoreReconcileAnnotation] = token
 
 		if err := r.Patch(ctx, m, patch); err != nil {
-			return fmt.Errorf("asking machine %q to reconcile: %w", m.Name, err)
+			return fmt.Errorf("asking node %q to reconcile: %w", m.Name, err)
 		}
 	}
 
 	st := op.Status.EtcdRestore
 	st.Step, st.ReconcileRequest = ichorv1alpha1.EtcdRestoreStepReconciling, token
-	st.Message = strings.TrimSpace("the cluster is back; waiting for every machine to reconcile against the restored state. " + warning)
+	st.Message = strings.TrimSpace("the cluster is back; waiting for every node to reconcile against the restored state. " + warning)
 
 	return r.Status().Update(ctx, op)
 }
@@ -923,7 +923,7 @@ func (run *restoreRun) reconciled(ctx context.Context) (string, error) {
 
 	slices.Sort(waiting)
 
-	return "waiting for machines to be Ready after reconciling the restored state: " + strings.Join(waiting[:min(len(waiting), 3)], "; "), nil
+	return "waiting for nodes to be Ready after reconciling the restored state: " + strings.Join(waiting[:min(len(waiting), 3)], "; "), nil
 }
 
 func notReadyReason(m *ichorv1alpha1.TalosMachine) string {
@@ -950,9 +950,9 @@ func (run *restoreRun) finish(ctx context.Context, lock *clusterlock.Lock) (ctrl
 	key := types.NamespacedName{Namespace: run.op.Namespace, Name: run.op.Name}
 	defaultRestoreTails.forget(key)
 
-	run.op.Status.EtcdRestore.Message = strings.TrimSpace("etcd is restored and every machine reconciled. " + run.warn)
+	run.op.Status.EtcdRestore.Message = strings.TrimSpace("etcd is restored and every node reconciled. " + run.warn)
 
-	msg := "etcd is restored from the snapshot and every machine is Ready"
+	msg := "etcd is restored from the snapshot and every node is Ready"
 	if run.warn != "" {
 		msg += "; warning: " + run.warn
 	}

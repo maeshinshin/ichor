@@ -234,17 +234,17 @@ func ClusterCondition(typ string, machines map[string][]metav1.Condition) metav1
 
 	switch {
 	case len(machines) == 0:
-		c.Status, c.Reason, c.Message = metav1.ConditionUnknown, "NoMachines", "the cluster has no approved machines yet"
+		c.Status, c.Reason, c.Message = metav1.ConditionUnknown, "NoMachines", "the cluster has no approved nodes yet"
 	case len(bad) > 0:
 		c.Status, c.Reason = metav1.ConditionFalse, "NodesNotConformant"
-		c.Message = fmt.Sprintf("%d of %d machines do not match: %s; the machine's %s condition says what to do",
+		c.Message = fmt.Sprintf("%d of %d nodes do not match: %s; the node's %s condition says what to do",
 			len(bad), len(machines), strings.Join(bad, ", "), typ)
 	case unknown > 0:
 		c.Status, c.Reason = metav1.ConditionUnknown, reasonNotRead
-		c.Message = fmt.Sprintf("%d of %d machines have not been read yet", unknown, len(machines))
+		c.Message = fmt.Sprintf("%d of %d nodes have not been read yet", unknown, len(machines))
 	default:
 		c.Status, c.Reason = metav1.ConditionTrue, "AllNodesConformant"
-		c.Message = fmt.Sprintf("all %d machines match", len(machines))
+		c.Message = fmt.Sprintf("all %d nodes match", len(machines))
 	}
 
 	return c

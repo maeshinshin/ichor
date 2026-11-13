@@ -390,7 +390,7 @@ func (c *caRun) preflight(ctx context.Context) (ctrl.Result, error) {
 	}
 
 	if len(machines) == 0 {
-		return c.retry(ctx, "the cluster has no approved machine to rotate")
+		return c.retry(ctx, "the cluster has no approved node to rotate")
 	}
 
 	// The targets are what rotation.yaml holds when an earlier attempt saved one, else what was asked for.
@@ -478,7 +478,7 @@ func (c *caRun) preflight(ctx context.Context) (ctrl.Result, error) {
 	setStageCertificates(c.op.Status.CARotation)
 
 	return ctrl.Result{RequeueAfter: caRotationNextStage}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue,
-		reasonCARotationSaved, "the new CAs are saved; adding them to every machine's accepted CAs")
+		reasonCARotationSaved, "the new CAs are saved; adding them to every node's accepted CAs")
 }
 
 // bundleKey is the only Secret a rotation ever writes: the one the cluster's spec.secretsRef names, in the
@@ -575,7 +575,7 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 	}
 
 	if len(machines) == 0 {
-		return c.retry(ctx, "the cluster has no approved machine to rotate")
+		return c.retry(ctx, "the cluster has no approved node to rotate")
 	}
 
 	var patches ichorv1alpha1.TalosConfigPatchList
@@ -669,7 +669,7 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 
 		return ctrl.Result{RequeueAfter: operationRequeueInterval}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress,
 			metav1.ConditionTrue, reasonCARotationStage,
-			fmt.Sprintf("stage %s: applied to %d of %d machine(s); verifying on the next pass", stage, applied, len(machines)))
+			fmt.Sprintf("stage %s: applied to %d of %d node(s); verifying on the next pass", stage, applied, len(machines)))
 	}
 
 	// Every machine runs the stage's configuration. etcd loads its CA field only at start and Talos cannot restart
@@ -726,7 +726,7 @@ func (c *caRun) pass(ctx context.Context, stage string) (ctrl.Result, error) {
 	setStageCertificates(c.op.Status.CARotation)
 
 	return ctrl.Result{RequeueAfter: caRotationNextStage}, c.status(ctx, ichorv1alpha1.TalosOperationPhaseInProgress, metav1.ConditionTrue,
-		reasonCARotationVerifying, fmt.Sprintf("stage %s verified on %d machine(s)", stage, len(machines)))
+		reasonCARotationVerifying, fmt.Sprintf("stage %s verified on %d node(s)", stage, len(machines)))
 }
 
 // dropEarlyHandoff removes the credentials hand-off annotation when the verified stage is the one that
@@ -813,7 +813,7 @@ func (c *caRun) awaitCredentials(ctx context.Context) (ctrl.Result, error) {
 
 	return ctrl.Result{RequeueAfter: operationRequeueInterval}, c.status(ctx, ichorv1alpha1.TalosOperationPhasePaused,
 		metav1.ConditionFalse, reasonCARotationAwaitingCredentials, fmt.Sprintf(
-			"every machine accepts the new CAs and the old ones still work. Nothing else happens until you have credentials that "+
+			"every node accepts the new CAs and the old ones still work. Nothing else happens until you have credentials that "+
 				"work after the next stage: run `ichor create credentials %s --acknowledge` "+
 				"with your current kubeconfig, or download them and continue on the operation page of the UI", c.cluster.Name))
 }

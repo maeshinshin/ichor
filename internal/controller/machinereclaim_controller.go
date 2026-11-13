@@ -182,7 +182,7 @@ func (r *MachineReclaimReconciler) attend(ctx context.Context, mr *ichorv1alpha1
 
 	known, err := reclaim.LoadKnown(ctx, r.Client, r.ControllerNamespace)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("cannot tell which machines Ichor manages: %w", err)
+		return ctrl.Result{}, fmt.Errorf("cannot tell which nodes Ichor manages: %w", err)
 	}
 
 	opt := reclaim.Options{Force: mr.Spec.Force, ForceUngraceful: mr.Spec.ForceUngraceful}
@@ -262,7 +262,7 @@ func (r *MachineReclaimReconciler) reset(
 	if err != nil {
 		msg := safeError(mr.Spec.Address, "the reset", err)
 		if rec.sent {
-			msg += "; the reset may or may not have been applied, check the machine"
+			msg += "; the reset may or may not have been applied, check the node"
 		}
 
 		return r.fail(ctx, mr, msg)
@@ -307,7 +307,7 @@ func (r *MachineReclaimReconciler) waitForMaintenance(ctx context.Context, mr *i
 
 	failed := func() (ctrl.Result, error) {
 		return r.fail(ctx, mr, fmt.Sprintf("%s did not return to maintenance mode with UUID %s. It may have taken a new "+
-			"address from DHCP: scan for the machine and add its address to a cluster's spec.discovery.addresses", host, uuid))
+			"address from DHCP: scan for the node and add its address to a cluster's spec.discovery.addresses", host, uuid))
 	}
 
 	remaining := deadline.Sub(now)
@@ -325,7 +325,7 @@ func (r *MachineReclaimReconciler) waitForMaintenance(ctx context.Context, mr *i
 	case err == nil:
 		return r.done(ctx, mr, host)
 	case errors.Is(err, reclaim.ErrOtherMachine):
-		return r.fail(ctx, mr, fmt.Sprintf("%s now answers in maintenance mode as a different machine; "+
+		return r.fail(ctx, mr, fmt.Sprintf("%s now answers in maintenance mode as a different node; "+
 			"find the reclaimed one (UUID %s) by scanning", host, uuid))
 	}
 
@@ -349,7 +349,7 @@ func (r *MachineReclaimReconciler) done(ctx context.Context, mr *ichorv1alpha1.M
 		err := r.Get(ctx, client.ObjectKey{Namespace: mr.Namespace, Name: ref.Name}, &cluster)
 
 		if err == nil && cluster.Spec.Discovery != nil && slices.Contains(cluster.Spec.Discovery.Addresses, host) {
-			result += fmt.Sprintf("; cluster %s discovers it and will show it as a pending machine", ref.Name)
+			result += fmt.Sprintf("; cluster %s discovers it and will show it as a pending node", ref.Name)
 		} else {
 			result += fmt.Sprintf("; add %s to cluster %s's spec.discovery.addresses to register it", host, ref.Name)
 		}
@@ -399,8 +399,8 @@ func (r *MachineReclaimReconciler) deleteOrphanNode(ctx context.Context, mr *ich
 	}
 
 	if !strings.EqualFold(node.Status.NodeInfo.SystemUUID, in.UUID) {
-		return fmt.Sprintf("; the Kubernetes Node %[1]s was not deleted because its system UUID is not the machine's, "+
-			"run kubectl delete node %[1]s if it is the machine's", name)
+		return fmt.Sprintf("; the Kubernetes Node %[1]s was not deleted because its system UUID is not the node's, "+
+			"run kubectl delete node %[1]s if it is the node's", name)
 	}
 
 	if err := r.Delete(ctx, &node, client.Preconditions{UID: &node.UID}); client.IgnoreNotFound(err) != nil {
@@ -416,7 +416,7 @@ func (r *MachineReclaimReconciler) fail(ctx context.Context, mr *ichorv1alpha1.M
 
 func (r *MachineReclaimReconciler) expire(ctx context.Context, mr *ichorv1alpha1.MachineReclaim) (ctrl.Result, error) {
 	return r.end(ctx, mr, ichorv1alpha1.MachineReclaimExpired, "ReclaimExpired",
-		"the request expired before it was confirmed; nothing was sent to the machine")
+		"the request expired before it was confirmed; nothing was sent to the node")
 }
 
 // end deletes the credential and records a terminal phase that did not succeed.

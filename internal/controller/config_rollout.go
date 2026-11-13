@@ -575,7 +575,7 @@ func (a *configRolloutAdvancer) afterReboot(
 
 	if render.Hash(current) != hash {
 		return false, a.fail(ctx, cluster, m, fmt.Errorf(
-			"machine %q rebooted but is not running the rendered configuration: the staged configuration was not activated", m.Name))
+			"node %q rebooted but is not running the rendered configuration: the staged configuration was not activated", m.Name))
 	}
 
 	return a.finish(ctx, dialCtx, talos, cluster, m)

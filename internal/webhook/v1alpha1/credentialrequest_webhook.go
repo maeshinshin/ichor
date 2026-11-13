@@ -115,11 +115,11 @@ func (h *CredentialRequestHandler) Handle(ctx context.Context, req admission.Req
 
 		key := types.NamespacedName{Namespace: req.Namespace, Name: cr.Spec.MachineRef.Name}
 		if err := h.Client.Get(ctx, key, &m); err != nil {
-			return admission.Denied(fmt.Sprintf("machine %q cannot be read", key.Name))
+			return admission.Denied(fmt.Sprintf("node %q cannot be read", key.Name))
 		}
 
 		if m.Spec.ClusterRef.Name != cr.Spec.ClusterRef.Name {
-			return admission.Denied(fmt.Sprintf("machine %q is not a machine of cluster %q", key.Name, cr.Spec.ClusterRef.Name))
+			return admission.Denied(fmt.Sprintf("node %q is not a node of cluster %q", key.Name, cr.Spec.ClusterRef.Name))
 		}
 	}
 

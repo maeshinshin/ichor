@@ -121,7 +121,7 @@ func (r *KubeletServingReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	// A cached read is enough: nothing disruptive hangs on it, and a machine that joins re-wakes this.
 	items, err := deleteguard.ApprovedMachines(ctx, r.Client, cluster.Namespace, cluster.Name, deleteguard.MachineFilter{})
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("listing machines: %w", err)
+		return ctrl.Result{}, fmt.Errorf("listing nodes: %w", err)
 	}
 
 	owned := ptrs(items)
@@ -187,7 +187,7 @@ func (r *KubeletServingReconciler) decideOpen(
 
 		m := machineForNode(owned, parsed.nodeName)
 		if m == nil {
-			log.V(1).Info("Leaving a kubelet serving request pending: no machine of this cluster has that node name",
+			log.V(1).Info("Leaving a kubelet serving request pending: no node of this cluster has that node name",
 				"csr", csr.Name, "node", parsed.nodeName)
 
 			continue
@@ -501,7 +501,7 @@ func (r *KubeletServingReconciler) patchConditions(
 func setServingConditions(cluster *ichorv1alpha1.TalosCluster, report *coverageReport, verify bool) {
 	cond := metav1.Condition{
 		Type: ichorv1alpha1.ConditionKubeletServingCertificates, Status: metav1.ConditionTrue, Reason: "AllNodesIssued",
-		Message: "every machine's kubelet serves a certificate signed by the Kubernetes CA", ObservedGeneration: cluster.Generation,
+		Message: "every node's kubelet serves a certificate signed by the Kubernetes CA", ObservedGeneration: cluster.Generation,
 	}
 
 	if !report.covered {
@@ -509,7 +509,7 @@ func setServingConditions(cluster *ichorv1alpha1.TalosCluster, report *coverageR
 		cond.Message = "waiting for a serving certificate for: " + strings.Join(report.missing, ", ")
 
 		if len(report.missing) == 0 {
-			cond.Message = "no machine of the cluster is approved yet"
+			cond.Message = "no node of the cluster is approved yet"
 		}
 	}
 
@@ -527,7 +527,7 @@ func setServingConditions(cluster *ichorv1alpha1.TalosCluster, report *coverageR
 
 	latch := metav1.Condition{
 		Type: ichorv1alpha1.ConditionKubeletServingVerified, Status: metav1.ConditionFalse, Reason: "Waiting",
-		Message: "the kube-apiserver is told to verify the kubelets once every machine has a serving certificate", ObservedGeneration: cluster.Generation,
+		Message: "the kube-apiserver is told to verify the kubelets once every node has a serving certificate", ObservedGeneration: cluster.Generation,
 	}
 
 	if report.covered {

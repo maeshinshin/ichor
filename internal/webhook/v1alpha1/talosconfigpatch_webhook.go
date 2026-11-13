@@ -169,7 +169,7 @@ func (v *TalosConfigPatchCustomValidator) dryRender(ctx context.Context, p *icho
 		} else if _, _, baseErr := render.Render(&cluster, m, bundle, base, sys); baseErr != nil {
 			continue // already failing without this patch
 		} else {
-			return fmt.Errorf("the patch would make the configuration of machine %q fail to render: %w", m.Name, err)
+			return fmt.Errorf("the patch would make the configuration of node %q fail to render: %w", m.Name, err)
 		}
 	}
 

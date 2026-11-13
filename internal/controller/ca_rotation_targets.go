@@ -629,7 +629,7 @@ func (c *caRun) awaitEtcdReboot(
 	if i < 0 {
 		rs.EtcdRebooting, rs.EtcdRebootBootID = "", ""
 
-		return c.retry(ctx, fmt.Sprintf("stage %s: the control plane being rebooted is no longer a machine of the cluster", stage))
+		return c.retry(ctx, fmt.Sprintf("stage %s: the control plane being rebooted is no longer a node of the cluster", stage))
 	}
 
 	m := cps[i]

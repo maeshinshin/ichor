@@ -55,7 +55,7 @@ func (r *BootSecurityReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	approved, err := deleteguard.ApprovedMachines(ctx, r.Client, cluster.Namespace, cluster.Name, deleteguard.MachineFilter{})
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("listing machines: %w", err)
+		return ctrl.Result{}, fmt.Errorf("listing nodes: %w", err)
 	}
 
 	machines := map[string][]metav1.Condition{}

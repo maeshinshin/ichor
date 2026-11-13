@@ -226,15 +226,15 @@ func (r *TalosStorageReconciler) readyCondition(
 	switch {
 	case len(governed) == 0:
 		cond.Status, cond.Reason = metav1.ConditionFalse, reasonStorageNoNodes
-		cond.Message = "no approved machine is governed by this TalosStorage " +
-			"(spec.nodes matches each machine's spec.nodeLabels; a machine matched by several TalosStorages belongs to the first by name)"
+		cond.Message = "no approved node is governed by this TalosStorage " +
+			"(spec.nodes matches each node's spec.nodeLabels; a node matched by several TalosStorages belongs to the first by name)"
 	case len(pending) > 0:
 		cond.Status, cond.Reason = metav1.ConditionFalse, reasonStorageNodesNotReady
-		cond.Message = fmt.Sprintf("%d of %d machines have not converged on a configuration that includes this TalosStorage: %s",
+		cond.Message = fmt.Sprintf("%d of %d nodes have not converged on a configuration that includes this TalosStorage: %s",
 			len(pending), len(governed), strings.Join(pending, ", "))
 	default:
 		cond.Status, cond.Reason = metav1.ConditionTrue, reasonStoragePrepared
-		cond.Message = fmt.Sprintf("%d machines carry the %s preparation", len(governed), ts.Spec.DiskPreset)
+		cond.Message = fmt.Sprintf("%d nodes carry the %s preparation", len(governed), ts.Spec.DiskPreset)
 	}
 
 	return cond, governed, nil
@@ -309,7 +309,7 @@ func (r *TalosStorageReconciler) extensionsCondition(
 			ts.Spec.DiskPreset, strings.Join(problems, "; "))
 	case observed == 0:
 		cond.Status, cond.Reason = metav1.ConditionUnknown, reasonStorageExtensionsUnknown
-		cond.Message = "no Kubernetes Node of a governed machine was found, so its extensions are not known yet"
+		cond.Message = "no Kubernetes Node of a governed node was found, so its extensions are not known yet"
 	default:
 		cond.Status, cond.Reason = metav1.ConditionTrue, reasonStorageExtensionsPresent
 		cond.Message = fmt.Sprintf("%d nodes carry the system extensions %s needs", observed, ts.Spec.DiskPreset)

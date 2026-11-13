@@ -130,7 +130,7 @@ func (r *TalosMachineReconciler) finishReset(
 
 		step.left = true
 		step.note = fmt.Sprintf("the Kubernetes Node %[1]s was still Ready after %[2]s, so it was not deleted; "+
-			"once the machine is off or rebooted, run kubectl delete node %[1]s", nodeName, nodeDownWait)
+			"once the node is off or rebooted, run kubectl delete node %[1]s", nodeName, nodeDownWait)
 	}
 
 	return r.completeRemoval(ctx, m, true, step)

@@ -279,7 +279,7 @@ func networkPolicies(ctx context.Context, c client.Client, opts Options) ([]*uns
 	}
 
 	logf(opts.Log, "NOTICE: Ichor's CiliumNetworkPolicies are on by default: default deny in both directions for this "+
-		"namespace, one allow per flow. The controller adds ichor-controller-talos-egress for the machines "+
+		"namespace, one allow per flow. The controller adds ichor-controller-talos-egress for the nodes "+
 		"and S3 stores its CRs name. To opt out, run the controller with --no-cilium-policies (chart: networkPolicy.cilium.enabled=false)")
 
 	return objs, nil

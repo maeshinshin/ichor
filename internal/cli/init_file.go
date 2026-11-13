@@ -64,6 +64,8 @@ cluster:
       tunnel: geneve               # --cni-tunnel: vxlan or geneve
   registryMirrors:                 # --registry-mirror HOST=URL
     ghcr.io: http://192.168.1.10:5000
+  certSANs:                        # --cert-san: extra names both certificates carry
+    - ichor.lan
 firstNode:
   endpoint: 192.168.1.50:50000     # --node-endpoint (required)
   installDisk: /dev/sda            # --install-disk (required)
@@ -126,6 +128,7 @@ type initConfigCluster struct {
 		} `json:"cni"`
 	} `json:"network"`
 	RegistryMirrors map[string]string `json:"registryMirrors"`
+	CertSANs        []string          `json:"certSANs"`
 }
 
 type initConfigVolume struct {
@@ -251,6 +254,7 @@ func (c initConfigFile) values(dir string) []initFileValue {
 		{"storage-volume-name", "firstNode.disks.storage.volumeName", one(c.FirstNode.Disks.Storage.VolumeName)},
 		{"user-volume-disk-selector", "firstNode.disks.userVolume.selector", one(c.FirstNode.Disks.UserVolume.Selector)},
 		{"user-volume-name", "firstNode.disks.userVolume.volumeName", one(c.FirstNode.Disks.UserVolume.VolumeName)},
+		{"cert-san", "cluster.certSANs", c.Cluster.CertSANs},
 		{"discover-address", "discovery.addresses", c.Discovery.Addresses},
 		{"discover-cidr", "discovery.cidrs", c.Discovery.CIDRs},
 		{"ui-url", "ui.url", one(c.UI.URL)},

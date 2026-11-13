@@ -334,6 +334,10 @@ func bindInitFlags(flags *pflag.FlagSet, o *initOptions, wait *time.Duration) {
 		"service CIDRs (spec.network.serviceSubnets); unset keeps Talos's default 10.96.0.0/12. Fixed once the cluster exists")
 	flags.StringArrayVar(&o.RegistryMirrors, "registry-mirror", nil,
 		"anonymous registry mirror as HOST=URL (spec.registries), e.g. ghcr.io=http://10.0.0.5:5000; repeatable")
+	flags.StringArrayVar(&o.CertSANs, "cert-san", nil,
+		"extra name or IP address that the Talos API and kube-apiserver certificates both carry (spec.certSANs); repeatable. "+
+			"Each node's own addresses are already in its certificates, and the endpoint is in the kube-apiserver one. "+
+			"Changing the list after init reissues the certificates and reboots every node, so set it now")
 	flags.StringArrayVar(&o.DiscoverAddresses, "discover-address", nil,
 		"IPv4 address of a node booted into maintenance mode for the controller to probe (spec.discovery.addresses); repeatable")
 	flags.StringArrayVar(&o.DiscoverCIDRs, "discover-cidr", nil,

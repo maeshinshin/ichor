@@ -154,6 +154,11 @@ func TestBuildInitPlan_Errors(t *testing.T) {
 		{"invalid cni tunnel", func(in *initPlanInput) { in.CNITunnel = "gre" }},
 		{"invalid endpoint type", func(in *initPlanInput) { in.EndpointType = "carrier-pigeon" }},
 		{"empty endpoint address", func(in *initPlanInput) { in.EndpointAddress = "" }},
+		{"too many cert SANs", func(in *initPlanInput) { in.CertSANs = make([]string, maxCertSANs+1) }},
+		{"empty cert SAN", func(in *initPlanInput) { in.CertSANs = []string{""} }},
+		{"cert SAN longer than a DNS name", func(in *initPlanInput) {
+			in.CertSANs = []string{strings.Repeat("a", maxCertSANLength+1)}
+		}},
 		{"pod subnet is not a CIDR", func(in *initPlanInput) { in.PodSubnets = []string{"10.248.0.0"} }},
 		{"too many service subnets", func(in *initPlanInput) {
 			in.ServiceSubnets = []string{"10.1.0.0/16", "fd00::/64", "10.2.0.0/16"}

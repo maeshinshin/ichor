@@ -52,6 +52,8 @@ cluster:
       tunnel: geneve
   registryMirrors:
     ghcr.io: http://10.107.28.190:5000
+  certSANs:
+    - ichor.lan
 firstNode:
   endpoint: 10.244.1.56:50000
   installDisk: /dev/vda
@@ -147,6 +149,7 @@ func TestInitFile_FullExampleEqualsTheFlagLine(t *testing.T) {
 		"--ephemeral-disk-selector", `disk.wwid == "e"`,
 		"--storage-disk-selector", `disk.wwid == "s"`, "--storage-volume-name", "storage",
 		"--user-volume-disk-selector", `disk.wwid == "u"`, "--user-volume-name", "data",
+		"--cert-san", "ichor.lan",
 		"--discover-address", "10.244.1.225", "--discover-cidr", "10.244.1.224/29",
 		"--ui-url", "https://192.168.0.69", "--admin-user", "admin",
 		"--ui-tls-cert", filepath.Join(dir, "ui.crt"), "--ui-tls-key", filepath.Join(dir, "ui.key"),

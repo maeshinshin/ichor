@@ -149,6 +149,31 @@ type initPlanInput struct {
 	// booted into maintenance mode after init are found; empty leaves discovery off.
 	DiscoverAddresses []string
 	DiscoverCIDRs     []string
+
+	// CertSANs set TalosCluster.spec.certSANs: extra names and addresses that both the Talos API
+	// and the kube-apiserver certificates carry. Changing the list after init reboots the control
+	// planes, so it is set here; empty adds none.
+	CertSANs []string
+}
+
+// CRD limits of spec.certSANs (api/v1alpha1), checked here before anything is written to a node.
+const (
+	maxCertSANs      = 64
+	maxCertSANLength = 253
+)
+
+func validateCertSANs(sans []string) error {
+	if len(sans) > maxCertSANs {
+		return fmt.Errorf("init: --cert-san takes at most %d names", maxCertSANs)
+	}
+
+	for _, s := range sans {
+		if s == "" || len(s) > maxCertSANLength {
+			return fmt.Errorf("init: --cert-san %q must be 1 to %d characters", s, maxCertSANLength)
+		}
+	}
+
+	return nil
 }
 
 // CRD limits of spec.discovery, checked here the way its CEL rules do.
@@ -332,6 +357,10 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 		return nil, err
 	}
 
+	if err := validateCertSANs(in.CertSANs); err != nil {
+		return nil, err
+	}
+
 	var discovery *ichorv1alpha1.TalosClusterDiscovery
 	if len(in.DiscoverAddresses) > 0 || len(in.DiscoverCIDRs) > 0 {
 		discovery = &ichorv1alpha1.TalosClusterDiscovery{Addresses: in.DiscoverAddresses, CIDRs: in.DiscoverCIDRs}
@@ -348,6 +377,7 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 			Network:           network,
 			Registries:        registries,
 			Discovery:         discovery,
+			CertSANs:          in.CertSANs,
 			Endpoint:          ichorv1alpha1.TalosClusterEndpoint{Type: in.EndpointType, Address: in.EndpointAddress},
 			TalosVersion:      in.TalosVersion,
 			KubernetesVersion: in.KubernetesVersion,

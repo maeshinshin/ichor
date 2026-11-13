@@ -1,0 +1,110 @@
+---
+sidebar_order: 5
+---
+
+# Settings every pattern shares
+
+Every pattern runs the same `ichor init`, so the settings on this page work with
+each of them. The pattern page gives the endpoint and the first node's settings.
+
+## The shape of the cluster
+
+`--preset` is `standard` by default: three control planes, with workers added
+later and tainted. `single` is one schedulable node, `compact-ha` is three
+schedulable control planes, and `large` is five control planes with workers
+added later.
+
+On virtual networks that pass geneve but not vxlan, add `--cni-tunnel geneve`
+for Cilium. Cilium uses vxlan by default.
+
+The pod and service subnets (`--pod-subnets` and `--service-subnets`, by
+default `10.244.0.0/16` and `10.96.0.0/12`) must not overlap the network the
+nodes sit on, and they cannot change once the cluster exists.
+
+`--registry-mirror HOST=URL` writes an anonymous mirror into the machine config
+(`spec.registries`), for nodes that cannot reach a registry directly. It is
+repeatable and not needed in most networks.
+
+The install disk can be given as `wwid:ID`, `serial:SERIAL`, a
+`/dev/disk/by-id/` path or a device such as `/dev/sda`.
+
+`ichor init --help` lists the rest, including the disk selectors and the
+discovery addresses.
+
+## The init.yaml file
+
+`ichor init -f init.yaml` reads the same settings from a file. `ichor init
+--print-config-template` prints a commented example. A flag on the command line
+overrides the file. Paths in the file (the TLS certificate and key on the sign-in
+step below) are relative to the file, and the file never holds the key itself,
+only its path.
+
+## The secrets bundle
+
+Init first writes the secrets bundle to `~/.ichor/clusters/demo/secrets.yaml`
+(mode 0600), encrypted. It is the cluster's root of trust. On a terminal, init
+generates a passphrase, prints it once and waits for Enter: save it in a
+password manager, together with a copy of the file kept somewhere off this
+machine. Without the passphrase the file cannot be opened (it is an age file;
+`age -d` opens it too). To choose the passphrase instead, or to run init
+without a terminal, give it a file (`--bundle-passphrase-file ./pass`, which
+may be `/dev/fd/3`) or set `ICHOR_BUNDLE_PASSPHRASE` (at least 12 characters);
+with neither and no terminal, init refuses before it does anything.
+`--bundle-plaintext` stores the file unencrypted, with a warning; do it only
+for a throwaway cluster. [Users and login](../../users-and-login.md) and
+[Hardening](../../hardening.md) say how the file and the passphrase are used later.
+
+Then init applies the configuration to the node (which installs Talos and
+reboots), bootstraps etcd, saves the kubeconfig next to the bundle, stores the
+bundle in the cluster, installs Ichor and waits for Ichor to take over Cilium.
+Expect several minutes.
+
+## Your kubeconfig
+
+`--merge-kubeconfig` also merges the cluster-admin kubeconfig into your own
+(the first existing file of `$KUBECONFIG`, else `~/.kube/config`) as the
+context `admin@demo`, and makes it current, so `kubectl` and `ichor` work at
+once. Entries already there stay; a name that is taken gets a suffix
+(`admin@demo-1`) and init prints the final name.
+
+Without the flag, init leaves your kubeconfig alone and prints the `export
+KUBECONFIG=` line to use. The later steps use that line; skip it if you
+merged.
+
+## Turn on sign-in (optional, recommended)
+
+Without `--ui-url`, ichor-ui has no sign-in: `ichor init` starts it with
+`--allow-unauthenticated` and prints a warning (see
+[Users and login](../../users-and-login.md)). To use Ichor's own users instead, add
+the https URL at which your browser will reach ichor-ui, and a certificate for
+it:
+
+```sh
+  --ui-url https://192.168.1.60 --admin-user admin \
+  --ui-tls-cert ui.crt --ui-tls-key ui.key
+```
+
+In the file this is a `ui` block, next to `cluster` and `firstNode`:
+
+```yaml
+ui:
+  url: https://192.168.1.60
+  adminUser: admin
+  tls:
+    certFile: ./ui.crt
+    keyFile: ./ui.key
+```
+
+The URL is the issuer of every login. Making it reachable (a LoadBalancer, an
+Ingress or a Gateway on ichor-ui's port 8443) is your job; init installs none
+of them. At the end init prints the generated password of the first admin to
+stderr, once. Save it. Because the kube-apiserver then needs new login
+settings, apply them:
+
+```sh
+export KUBECONFIG=~/.ichor/clusters/demo/kubeconfig
+ichor rollout config --cluster demo --follow
+```
+
+With one control plane the Kubernetes API is down for about a minute while it
+restarts.

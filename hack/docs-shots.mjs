@@ -28,7 +28,7 @@ const at = {
   home: '',
   rotateKeys: 'guides/rotate-keys/',
   gettingStarted: 'guides/getting-started/',
-  createCluster: 'guides/getting-started/create-the-cluster/', // has the YAML blocks the code checks use
+  createCluster: 'guides/getting-started/create-the-cluster/vip/', // has the YAML blocks the code checks use
   architecture: 'design/architecture/',
   contributing: 'development/contributing-docs/',
   concept: 'concepts/cni/',

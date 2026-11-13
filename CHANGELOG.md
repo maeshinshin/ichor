@@ -7,7 +7,9 @@ The command line is verb first, which breaks every script that calls it, and a
 up from 7. The Talos, Kubernetes and Cilium versions a first install gets are
 the same as in v0.2.4. The CRDs gain fields, one endpoint type leaves the
 `TalosCluster` enum, and two credential fields leave them (see Cluster and
-Typed configuration).
+Typed configuration). With `--endpoint-type vip`, each control plane now holds
+the endpoint address on its primary link, and `ichor init` takes the first
+node's network for it.
 
 ### CLI
 
@@ -86,9 +88,43 @@ Typed configuration).
   command has an example. The reference pages list the commands in the same
   groups, and a group's usage line reads `ichor get [command]`, since the group
   does nothing without one.
+- `ichor init` takes the first node's network: `--nic`, `--address`, `--gateway`,
+  `--dns` and `--vlan`, with the matching keys `firstNode.nic`,
+  `firstNode.addresses`, `firstNode.gateway`, `firstNode.dns` and
+  `firstNode.vlan` in the `-f` file. `--address` takes a prefix length, such as
+  `192.168.1.10/24`, and may repeat. These apply only with
+  `--endpoint-type vip`: init refuses them with any other type, and outside the
+  VIP pattern the first node takes its address from DHCP.
+- `--nic` takes a link name as well as a MAC, on `ichor init` and on
+  `ichor approve node`. A name such as `enp1s0` is looked up among the links the
+  node reports, and only its permanent MAC is stored and rendered. A name that
+  matches no link, or more than one, is refused, and the refusal lists every
+  link with its name and MAC.
+- `ichor init --cert-san` and the `cluster.certSANs` key of the `-f` file set
+  `spec.certSANs`, the extra names that the Talos API and Kubernetes API
+  certificates both carry. The flag may repeat. Changing the list after init
+  reissues the certificates and reboots every node, workers included, so set it
+  at init.
 
 ### Cluster
 
+- **`--endpoint-type vip` puts the endpoint address on the control planes.**
+  Ichor renders a `Layer2VIPConfig` for the address on each control plane's
+  primary link. A `LinkAliasConfig` selects that link by its permanent MAC
+  rather than by the kernel's name for it, so the setting survives the
+  interface being renamed or renumbered across a reboot. Once a control plane of
+  a `vip` cluster has a primary link, a control plane approved without one is
+  refused, and the refusal names `--nic`.
+- The endpoint address must fit its type: an IP address for `vip` and `node`,
+  either for `loadBalancer`. `ichor init` refuses a mismatch before it creates
+  anything. The webhook refuses one on create, and on an update that changes the
+  type or the address, so an object stored with a mismatched pair stays
+  editable until one of them changes.
+- A talosconfig that Ichor hands out names the control planes' addresses as its
+  Talos API endpoints, or, when no control plane is left, every machine's. It
+  never names the cluster endpoint, whatever its type, because that endpoint
+  fronts the Kubernetes API. It is refused, with the reason, when no machine has
+  an address.
 - **Breaking: `dns` is no longer an endpoint type.** `spec.endpoint.type`
   takes `vip`, `loadBalancer` or `node`. A hostname in front of the control
   planes is a `loadBalancer` endpoint, which takes an IP address or a hostname.
@@ -217,6 +253,16 @@ Typed configuration).
 
 - The guides, concepts, getting started, the design document, the diagrams and
   the README name the verb-first commands.
+- `create-the-cluster` is one page per endpoint pattern, the virtual IP first,
+  then the load balancer and the node address. Each page shows the interactive,
+  `init.yaml` and flag forms. Getting started is one page per step, and the
+  architecture reference is one page per section.
+- A new page, Certificate names, states what each serving certificate holds by
+  default and what changing the names costs.
+- The version banner is in the page's HTML from the start, so the page does not
+  move when the version list loads.
+- The CNI concept page and `ichor bootstrap cni --help` say that Cilium reaches
+  the API through KubePrism only when kube-proxy is replaced.
 
 ## v0.2.4 (2026-11-13)
 

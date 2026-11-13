@@ -26,6 +26,9 @@ copy, with the `admin` client certificate and the Talos `os:admin` identity in
 it, works without any login: a broken issuer, a stopped ichor-ui or a deleted
 user cannot lock you out. Keep it offline once users exist.
 
+Which names and addresses each serving certificate carries, and what changing
+them costs, is in [Certificate names](certificate-names.md).
+
 ## Roles
 
 Roles are plain Kubernetes RBAC. Three ClusterRoles, `ichor-viewer`,

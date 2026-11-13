@@ -99,6 +99,7 @@ The complete list is in the [changelog](https://github.com/maeshinshin/ichor/blo
   [Operations](concepts/operations.md), [CNI and Cilium](concepts/cni.md),
   [Security model](concepts/security.md),
   [CA and key rotation](concepts/ca-and-key-rotation.md),
+  [Certificate names](concepts/certificate-names.md),
   [Sign-in and sessions](concepts/sign-in-and-sessions.md).
 - [Reference](reference/index.md): every `ichor` command and every field of
   every custom resource.

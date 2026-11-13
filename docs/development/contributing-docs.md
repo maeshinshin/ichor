@@ -52,6 +52,12 @@ all that is needed:
   `reference/` is Reference. Any other directory becomes a section of its own, listed
   after those; a directory inside a section becomes a collapsible group.
   `adr/` holds the decision records, kept in the repository and not published on the site.
+- **A long page** is split into a short page and a directory of the same name:
+  `design/architecture.md` is the index and `design/architecture/` holds one page
+  per section. The index keeps the old path, so links to it still work, and is
+  listed first in its group. Each child's title is the heading it had, and the
+  children carry `sidebar_order` 1, 2, 3, ... because the previous and next
+  links follow the sidebar and title order is rarely reading order.
 - **The title** is the front matter `title`, else the first `# ` heading. The
   site prints it as the page heading, so the Markdown's own `#` line is not
   shown twice.
@@ -75,7 +81,7 @@ sparingly.
 ## Links and images
 
 Link to other pages the way you would on GitHub, with relative paths:
-`[Adopt and reclaim](adopt-and-reclaim.md)`, `[the design](../design/architecture.md#trust)`.
+`[Adopt and reclaim](adopt-and-reclaim.md)`, `[the design](../design/architecture/overview.md#data-flow)`.
 They become site links. A relative link that leaves `docs/`
 (`../../internal/foo.go`, `../../test/harness/`) becomes a link to that file or
 directory on GitHub. A link to something that does not exist fails the build.

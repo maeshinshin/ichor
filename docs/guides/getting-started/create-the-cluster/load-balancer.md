@@ -85,8 +85,5 @@ ichor init --cluster demo \
 - `--endpoint-address` is the IP address or hostname that answers on port 6443.
   Use the forwarder's or the record's name, not a machine's address.
 - `--node-endpoint` is still the first node's own Talos API (`host:port`).
-- The first node's network flags (`--nic`, `--address`, `--gateway`, `--dns`,
-  `--vlan`) are described with the [Virtual IP](vip.md#flags) page. The reference
-  scopes them to the `vip` endpoint type, so check `ichor init --help` before you
-  use them here.
+- The first node's network flags (`--nic`, `--address`, `--gateway`, `--dns`, `--vlan`) are available only with `--endpoint-type vip` today, so with this pattern the first node takes its address from DHCP.
 - Approve the other control planes as on that page, with `--role controlplane`.

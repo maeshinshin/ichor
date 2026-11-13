@@ -23,16 +23,18 @@ export const gitRef = process.env.DOCS_GITREF ?? (isNext ? 'main' : version)
  * the line), else the newest `vX.Y.Z` tag, so `next` shows the newest release, never the unreleased one.
  * Pages write it as `{{version}}`.
  */
-export const release = (
-  process.env.DOCS_RELEASE ??
-  execFileSync('git', ['tag', '-l', 'v*'], { encoding: 'utf8' })
-    .split('\n')
-    .filter((t) => /^v\d+\.\d+\.\d+$/.test(t))
-    .map((t) => t.slice(1))
-    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
-    .pop() ??
-  'X.Y.Z'
-).replace(/^v/, '')
+const releaseTags = execFileSync('git', ['tag', '-l', 'v*'], { encoding: 'utf8' })
+  .split('\n')
+  .filter((t) => /^v\d+\.\d+\.\d+$/.test(t))
+  .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+export const release = (process.env.DOCS_RELEASE ?? releaseTags.at(-1)?.slice(1) ?? 'X.Y.Z').replace(/^v/, '')
+/**
+ * The newest release tag and its minor line, as versions.json will list them (build-all lists the same tags). The version
+ * banner is rendered with them at build time, so it is complete in the HTML and the page does not move when the browser
+ * has fetched versions.json.
+ */
+export const latestPatch = releaseTags.at(-1)
+export const latestLine = latestPatch?.replace(/\.\d+$/, '')
 export const withVersion = (s) => s.replaceAll('{{version}}', release)
 
 /** `{{version}}` in text, inline code and code blocks becomes the release being documented. */

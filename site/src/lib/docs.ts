@@ -1,8 +1,8 @@
 import { getCollection } from 'astro:content'
 import { relative, resolve, sep } from 'node:path'
-import { absoluteMarkdown, docsRoot, gitRef, isNext, repoUrl, rootBase, version, withVersion } from '../../plugins/docs.mjs'
+import { absoluteMarkdown, docsRoot, gitRef, isNext, latestLine, latestPatch, repoUrl, rootBase, version, withVersion } from '../../plugins/docs.mjs'
 
-export { isNext, repoUrl, version }
+export { isNext, latestLine, latestPatch, repoUrl, version }
 
 /** Where all versions of the docs sit, ending in `/`. */
 export const root = `${rootBase}/`

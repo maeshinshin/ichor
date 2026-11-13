@@ -20,10 +20,22 @@ if (!sources.length) {
   process.exit(1)
 }
 
+// `xvfb-run -a` picks a free display number and loses the race when another xvfb-run starts at the same moment (two of
+// three simultaneous runs fail), and a draw.io that never answers would wait for ever. So each export is bounded (a
+// normal one takes a few seconds) and tried again, after a pause that differs from run to run, when it fails or stalls.
+const attempts = 5
 const exportSvg = (src, theme, out) => {
   const args = ['-x', '-f', 'svg', '-e', '-u', '--theme', theme, '-o', out, src] // -e embeds the model, -u keeps it readable (diffs)
   const [cmd, ...pre] = process.env.DISPLAY ? ['drawio'] : ['xvfb-run', '-a', 'drawio']
-  execFileSync(cmd, [...pre, ...args], { stdio: ['ignore', 'ignore', 'ignore'] }) // Electron's GPU warnings are noise
+  for (let attempt = 1; ; attempt++) {
+    try {
+      // Electron's GPU warnings are noise. SIGTERM lets xvfb-run stop its Xvfb.
+      return execFileSync(cmd, [...pre, ...args], { stdio: ['ignore', 'ignore', 'ignore'], timeout: 120000, killSignal: 'SIGTERM' })
+    } catch (e) {
+      if (attempt === attempts) throw new Error(`draw.io did not export ${src} (${theme}) in ${attempts} tries: ${e.message}`)
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500 + Math.random() * 2500)
+    }
+  }
 }
 
 // draw.io adds a PNG of every label for viewers without foreignObject (700 KB per diagram). Browsers, GitHub

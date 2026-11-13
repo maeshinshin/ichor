@@ -62,7 +62,13 @@
               gnumake
               openssl # self-signed ichor-ui cert for the UI demo (test/harness/ui-demo/README.md)
               git
+              asciinema # records a terminal session
+              asciinema-agg # turns an asciinema recording into a GIF
             ];
+
+            # agg finds no monospace font on NixOS, so point it at one:
+            # agg --font-dir $ICHOR_FONT_DIR --font-family "DejaVu Sans Mono"
+            ICHOR_FONT_DIR = "${pkgs.dejavu_fonts}/share/fonts/truetype";
 
             # shortcut: controller-gen, kustomize, setup-envtest and
             # golangci-lint come from the Makefile, which fetches

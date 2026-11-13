@@ -14,14 +14,13 @@ section "Cilium".
 
 ## How Cilium gets there
 
-A new cluster boots with Cilium rendered from the chart that is embedded in the
-`ichor` binary (`ichor version` prints the Cilium chart version it embeds) and passed to Talos as an inline
-manifest.
-Once the Cilium DaemonSet is ready, a Job (`ichor-cni`) adopts those objects
-as the Helm release `cilium`, and the controller removes the inline manifest
-entry. This hand-over matters: Talos re-applies bootstrap manifests on a
-Kubernetes upgrade, so a stale entry would roll Cilium back. `ichor init` waits
-for it.
+A new cluster boots with Cilium rendered from the chart embedded in the `ichor`
+binary (`ichor version` prints the Cilium chart version it embeds) and ends with
+it as a Helm release. `ichor init` waits for the hand-over.
+
+![The hand-over of Cilium on a new cluster, in three steps. First Cilium is an inline manifest in the Talos machine config. When the Cilium DaemonSet is ready, the ichor-cni Job adopts its objects as the Helm release cilium. Then the controller removes the inline entry, because Talos re-applies bootstrap manifests on a Kubernetes upgrade and a stale entry would roll Cilium back.](../images/cni-handover.light.drawio.svg)
+
+*Cilium starts as an inline manifest and is handed over to a Helm release.*
 
 The Job runs Helm because the controller does not: the Job needs rights close
 to cluster-admin, and the controller is not given them. The tunnel protocol is
@@ -33,14 +32,13 @@ Ichor does not migrate a cluster from another CNI to Cilium.
 
 ## Values
 
-The values that Cilium runs with are built in three layers:
+The values that Cilium runs with are built in three layers, and a later layer
+wins. Your layer is `spec.cni.cilium.values` on the
+[`TalosCluster`](../reference/crds/taloscluster.md).
 
-1. Ichor's defaults.
-2. Your layer, `spec.cni.cilium.values` on the
-   [`TalosCluster`](../reference/crds/taloscluster.md).
-3. Keys Ichor owns, applied last: the settings Talos requires, the KubePrism
-   address, `kubeProxyReplacement`, `tunnelProtocol`, and the five
-   `*.secretsNamespace.name` keys.
+![The three layers of Cilium values. Ichor's defaults come first. Your layer, spec.cni.cilium.values, which only ichor-admin can write, replaces the defaults. The keys Ichor owns are applied last and always win: the settings Talos requires, the KubePrism address, kubeProxyReplacement, tunnelProtocol and the five secretsNamespace name keys. Setting one of them is refused. The result is the values of the Helm release cilium.](../images/cni-values.light.drawio.svg)
+
+*Ichor's defaults, then your layer, then the keys Ichor owns.*
 
 You edit your layer on the Cilium page of the UI or with
 `ichor get cni-values|set|edit|diff`. One function validates it, and it runs in

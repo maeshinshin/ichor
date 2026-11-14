@@ -40,7 +40,9 @@ required setting you did not give:
 
 - **Endpoint type:** pick `vip` from the list.
 - **Endpoint address:** the free address, an IP address.
-- **Node address:** the first node's Talos API, as `host:port`.
+- **First node:** a network such as `192.168.1.0/24` (your own network is the
+  default) to scan on port 50000 for nodes in maintenance mode, which are listed
+  to pick from; or the node's address, which skips the scan.
 - **Link:** the first node's network link. The picker
   lists each link as `enp1s0 <84:47:09:5c:ed:49>`, the name followed by the
   MAC address.

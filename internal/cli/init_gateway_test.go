@@ -71,7 +71,7 @@ func TestApplyGatewayAPICRDsOnlyApplies(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var names []string
+	names := make([]string, 0, len(objs))
 	for _, o := range objs {
 		names = append(names, o.GetName())
 	}

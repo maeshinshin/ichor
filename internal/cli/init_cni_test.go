@@ -17,13 +17,13 @@ limitations under the License.
 package cli
 
 import (
-	"github.com/maeshinshin/ichor/pkg/cni"
 	"regexp"
 	"strings"
 	"testing"
 
 	sigsyaml "sigs.k8s.io/yaml"
 
+	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 )
 

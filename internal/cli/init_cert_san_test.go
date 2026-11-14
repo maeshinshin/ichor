@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"github.com/maeshinshin/ichor/pkg/cni"
 	"io"
 	"slices"
 	"testing"
@@ -9,6 +8,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/cni"
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/render"
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"

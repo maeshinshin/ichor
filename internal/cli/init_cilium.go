@@ -144,15 +144,18 @@ func checkL2Pool(in initPlanInput, nodeEndpoint string) error {
 	return nil
 }
 
+// helmEnabledKey is the chart's enabled key under each feature block.
+const helmEnabledKey = "enabled"
+
 // ciliumUserValues is the spec.cni.cilium.values layer for the features the flags turn on, nil when none is.
 func ciliumUserValues(in initPlanInput) (*ichorv1alpha1.TalosClusterCNICilium, error) {
 	values := map[string]any{}
 	if in.GatewayAPI {
-		values["gatewayAPI"] = map[string]any{"enabled": true}
+		values["gatewayAPI"] = map[string]any{helmEnabledKey: true}
 	}
 
 	if in.L2Announcements {
-		values["l2announcements"] = map[string]any{"enabled": true}
+		values["l2announcements"] = map[string]any{helmEnabledKey: true}
 	}
 
 	if len(values) == 0 {

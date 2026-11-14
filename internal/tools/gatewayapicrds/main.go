@@ -34,7 +34,7 @@ func extract(in, out, names, version string) error {
 	}
 
 	want := map[string]bool{}
-	for _, n := range strings.Fields(names) {
+	for n := range strings.FieldsSeq(names) {
 		want[n+".gateway.networking.k8s.io"] = true
 	}
 
@@ -44,7 +44,7 @@ func extract(in, out, names, version string) error {
 
 	var kept []string
 
-	for _, doc := range strings.Split(string(data), "\n---\n") {
+	for doc := range strings.SplitSeq(string(data), "\n---\n") {
 		var obj struct {
 			Kind     string `json:"kind"`
 			Metadata struct {
@@ -73,7 +73,7 @@ func extract(in, out, names, version string) error {
 }
 
 func mapKeys(m map[string]bool) []string {
-	var ks []string
+	ks := make([]string, 0, len(m))
 	for k := range m {
 		ks = append(ks, k)
 	}

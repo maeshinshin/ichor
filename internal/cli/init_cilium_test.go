@@ -40,6 +40,12 @@ func lanInput() initPlanInput {
 
 const lanNodeEndpoint = "192.168.1.250:50000"
 
+// The refusal names the address it hit, checked as a substring.
+const (
+	wantEndpointAddress = "--endpoint-address"
+	wantNodeEndpoint    = "--node-endpoint"
+)
+
 func TestCheckCiliumFeatures(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -65,9 +71,9 @@ func TestCheckCiliumFeatures(t *testing.T) {
 		{name: "pool with host bits set refused", mode: cni.KubeProxyReplaced,
 			in: func(in *initPlanInput) { in.L2Pool = "192.168.1.241/29" }, wantSubs: "in CIDR form"},
 		{name: "pool covering the endpoint address refused", mode: cni.KubeProxyReplaced,
-			in: func(in *initPlanInput) { in.L2Pool = "192.168.1.208/28" }, wantSubs: "--endpoint-address"},
+			in: func(in *initPlanInput) { in.L2Pool = "192.168.1.208/28" }, wantSubs: wantEndpointAddress},
 		{name: "pool covering a node endpoint refused", mode: cni.KubeProxyReplaced,
-			node: "192.168.1.244:50000", wantSubs: "--node-endpoint"},
+			node: "192.168.1.244:50000", wantSubs: wantNodeEndpoint},
 		{name: "pool covering a node address (--address) refused", mode: cni.KubeProxyReplaced,
 			in: func(in *initPlanInput) { in.L2Pool = "192.168.1.200/29" }, node: "192.168.1.250:50000", wantSubs: "--address 192.168.1.201/24"},
 		{name: "pool covering a discovery address refused", mode: cni.KubeProxyReplaced,
@@ -79,10 +85,10 @@ func TestCheckCiliumFeatures(t *testing.T) {
 		{name: "pool covering a discovery CIDR refused", mode: cni.KubeProxyReplaced,
 			in: func(in *initPlanInput) { in.L2Pool = "192.168.1.64/28" }, wantSubs: "--discover-cidr 192.168.1.64/29"},
 		{name: "a /16 pool is refused and names what it covers", mode: cni.KubeProxyReplaced,
-			in: func(in *initPlanInput) { in.L2Pool = "192.168.0.0/16" }, wantSubs: "--endpoint-address"},
+			in: func(in *initPlanInput) { in.L2Pool = "192.168.0.0/16" }, wantSubs: wantEndpointAddress},
 		{name: "pool outside the first node's prefix refused", mode: cni.KubeProxyReplaced,
 			in: func(in *initPlanInput) {
-				in.EndpointAddress, in.Addresses, in.DiscoverAddresses, in.DiscoverCIDRs = "10.0.0.10", []string{"10.0.0.5/24"}, nil, nil
+				in.EndpointAddress, in.Addresses, in.DiscoverAddresses, in.DiscoverCIDRs = flowCPAddr, []string{"10.0.0.5/24"}, nil, nil
 				in.L2Pool = "192.168.1.240/29"
 			}, node: "10.0.0.11:50000", wantSubs: "outside the first node's prefix 10.0.0.0/24"},
 		{name: "pool with no --address refused (prefix unknown under DHCP)", mode: cni.KubeProxyReplaced,

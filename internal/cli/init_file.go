@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/pflag"
@@ -292,11 +293,11 @@ func (c initConfigFile) values(dir string) []initFileValue {
 
 // boolFlag is the file value of a boolean setting: "true" when set, and no value (the flag keeps its default) when not.
 func boolFlag(on bool) []string {
-	if on {
-		return []string{"true"}
+	if !on {
+		return nil
 	}
 
-	return nil
+	return []string{strconv.FormatBool(on)}
 }
 
 // applyInitFile sets the flags from the file at path, skipping any flag the command line set.

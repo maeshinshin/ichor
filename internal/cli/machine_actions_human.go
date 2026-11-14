@@ -120,7 +120,7 @@ func renderInspection(h *human, in reclaim.Inspection, p reclaim.Plan) {
 	for _, v := range in.Volumes {
 		val := fmt.Sprintf("%s on %s (%d bytes), not wiped", v.Name, v.Location, v.Size)
 		if v.Encrypted {
-			val += "  " + h.Mark(markWarning) + " ENCRYPTED: if its key is locked to STATE (lockToState), the reset wipes the salt that key needs, so the data is unreadable afterwards"
+			val += "  " + h.Mark(markWarning) + " " + encryptedVolumeWarning
 		}
 
 		rows = append(rows, kv{"Volume", val})
@@ -136,6 +136,10 @@ func renderInspection(h *human, in reclaim.Inspection, p reclaim.Plan) {
 		h.Note(h.Mark(markFailed) + " refused: " + s)
 	}
 }
+
+// encryptedVolumeWarning is shown for an encrypted volume the reset leaves in place. It is also the
+// sentence docs/guides/reclaim-a-machine.md prints, which a test checks it still contains.
+const encryptedVolumeWarning = "ENCRYPTED: if its key is locked to STATE (lockToState), the reset wipes STATE, which holds the salt that key needs, so the data is unreadable afterwards"
 
 // inspectionTitle titles the inspection: "w1 · 10.0.0.5".
 func inspectionTitle(in reclaim.Inspection) string {

@@ -9,10 +9,13 @@ A node that already runs a configured Talos never reaches maintenance mode, so
 Ichor's join flow cannot take it. Discovery reports it as `AlreadyConfigured`
 and registers nothing. To join it, reset it. The reset wipes only the `STATE`
 and `EPHEMERAL` partitions and reboots. User disks are not touched, but they
-are listed, and encrypted ones are called out. A key locked to `STATE` (`lockToState`)
-needs a salt that the reset deletes, so its data is unreadable afterwards; the keys
-themselves are not gone. The `STATE` and `EPHEMERAL` partitions are unreadable after
-the reset because the reset wipes them, not because of any key. The machine then comes back in maintenance mode with
+are listed, and encrypted ones are called out. The reset erases the first MiB of
+each of those two partitions. For an encrypted `EPHEMERAL` that erases the LUKS2
+metadata at the start of the partition, so it cannot be opened again whatever its
+key is. An encrypted user disk keeps its LUKS2 metadata, so it can be opened again
+only if its key can still be derived. A key locked to `STATE` (`lockToState`) needs
+a salt that is kept on `STATE`, and the reset wipes `STATE`, so that disk's data is
+unreadable afterwards. The machine then comes back in maintenance mode with
 the same UUID and registers as a pending machine, which you approve as usual.
 
 Both paths refuse:
@@ -86,7 +89,7 @@ w1 · 10.0.0.21
   UUID         5b2c0d1e-7f44-4c35-9a0e-2f6f1c4b8e11
   Cluster      old (id 3f9a), reachable from the node
   Reset        STATE and EPHEMERAL, then reboot · graceful
-  Volume       data on /dev/sdb1 (10737418240 bytes), not wiped  ! ENCRYPTED: its key may depend on STATE, so the data may be unreadable afterwards
+  Volume       data on /dev/sdb1 (10737418240 bytes), not wiped  ! ENCRYPTED: if its key is locked to STATE (lockToState), the reset wipes STATE, which holds the salt that key needs, so the data is unreadable afterwards
 
 This wipes STATE and EPHEMERAL on w1 and removes it from cluster "old".
 Type the machine's UUID to continue: 5b2c0d1e-7f44-4c35-9a0e-2f6f1c4b8e11

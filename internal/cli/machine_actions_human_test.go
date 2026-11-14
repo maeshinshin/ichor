@@ -19,6 +19,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -173,7 +174,7 @@ func TestMachineReclaimHumanOutputOnAPlainWriter(t *testing.T) {
 		"  UUID         AAAA-1\n",
 		"  Cluster      old (id cid), reachable from the node\n",
 		"  Reset        STATE and EPHEMERAL, then reboot · graceful\n",
-		"/dev/sdb1 (10 bytes), not wiped  ! ENCRYPTED: if its key is locked to STATE (lockToState), the reset wipes the salt that key needs, so the data is unreadable afterwards",
+		"/dev/sdb1 (10 bytes), not wiped  ! ENCRYPTED: if its key is locked to STATE (lockToState), the reset wipes STATE, which holds the salt that key needs, so the data is unreadable afterwards",
 		"This wipes STATE and EPHEMERAL on w1 and removes it from cluster \"old\".\nType the node's UUID to continue: ",
 		"✓ Reset — accepted, graceful\n",
 		"✓ Maintenance mode — 10.0.0.5 answers with UUID AAAA-1\n",
@@ -350,7 +351,7 @@ func TestRotateCAHumanOutput(t *testing.T) {
 	}
 }
 
-// Only a key locked to STATE needs the salt the reset deletes, so the warning names lockToState and not every encrypted disk.
+// Only a key locked to STATE needs the salt that lives on STATE, so the warning names lockToState and not every encrypted disk.
 func TestRenderInspectionEncryptedWarningNamesLockToState(t *testing.T) {
 	var out bytes.Buffer
 
@@ -359,7 +360,19 @@ func TestRenderInspectionEncryptedWarningNamesLockToState(t *testing.T) {
 	}, reclaim.Plan{})
 
 	got := out.String()
-	if !strings.Contains(got, "lockToState") || strings.Contains(got, "may depend on STATE") {
+	if !strings.Contains(got, encryptedVolumeWarning) || strings.Contains(got, "may depend on STATE") {
 		t.Fatalf("the encrypted-volume warning must name lockToState only:\n%s", got)
+	}
+}
+
+// The reclaim guide prints the same warning, so a change to one has to reach the other.
+func TestReclaimGuideQuotesEncryptedVolumeWarning(t *testing.T) {
+	guide, err := os.ReadFile("../../docs/guides/reclaim-a-machine.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !strings.Contains(string(guide), encryptedVolumeWarning) {
+		t.Fatalf("docs/guides/reclaim-a-machine.md does not quote the encrypted-volume warning:\n%s", encryptedVolumeWarning)
 	}
 }

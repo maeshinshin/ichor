@@ -681,7 +681,7 @@ func (r *TalosMachineReconciler) resetNode(
 	}
 
 	return r.removalCondition(ctx, m, metav1.ConditionTrue, reasonResetRequested,
-		"reset requested: the node's STATE and EPHEMERAL partitions are being wiped")
+		"reset accepted by the node; the wipe of STATE and EPHEMERAL is not confirmed until the node answers in maintenance mode")
 }
 
 // removeEtcdMember removes m from etcd, preferring m's own graceful EtcdLeaveCluster (talosctl says to

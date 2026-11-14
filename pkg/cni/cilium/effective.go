@@ -37,8 +37,8 @@ var OwnedKeys = map[string]string{
 	"securityContext.capabilities.cleanCiliumState": "the Talos guide fixes the capability set Cilium runs with",
 	"cgroup.autoMount.enabled":                      "Talos mounts cgroup2 itself, so Cilium must not",
 	"cgroup.hostRoot":                               "Talos mounts cgroup2 at /sys/fs/cgroup",
-	"k8sServiceHost":                                "derived from spec.cni.kubeProxy (KubePrism)",
-	"k8sServicePort":                                "derived from spec.cni.kubeProxy (KubePrism)",
+	"k8sServiceHost":                                "KubePrism address, set only when spec.cni.kubeProxy is replaced",
+	"k8sServicePort":                                "KubePrism port, set only when spec.cni.kubeProxy is replaced",
 	"kubeProxyReplacement":                          "owned by the kube-proxy switch, spec.cni.kubeProxy",
 	"tunnelProtocol":                                "owned by spec.cni.tunnel, which is immutable",
 

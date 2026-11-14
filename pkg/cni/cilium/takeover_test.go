@@ -279,6 +279,59 @@ func TestOwnedKeyConflicts_MatchingAndSpellings(t *testing.T) {
 	}
 }
 
+// With kube-proxy enabled Ichor sets no KubePrism address (ADR 0159), so a live one has no Ichor value to
+// conflict with. The takeover still removes it, which TestDiffLive_EnabledTakeoverRemovesKubePrismEnv pins.
+func TestOwnedKeyConflicts_EnabledModeKubePrismHasNoIchorValue(t *testing.T) {
+	live, err := LiveValuesFromUser(map[string]any{keyServiceHost: "10.0.0.1", keyServicePort: "6443"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cs, err := OwnedKeyConflicts(live, cni.KubeProxyEnabled, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, key := range []string{keyServiceHost, keyServicePort} {
+		if c := findConflict(cs, key); c != nil {
+			t.Errorf("enabled mode: %v, want no conflict (Ichor sets no value)", c)
+		}
+	}
+
+	// Replaced mode sets localhost:7445, so the same live values still conflict.
+	cs, err = OwnedKeyConflicts(live, cni.KubeProxyReplaced, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if c := findConflict(cs, keyServiceHost); c == nil || c.Level != NeedsAccept {
+		t.Errorf("replaced mode k8sServiceHost = %+v, want a NeedsAccept conflict", c)
+	}
+}
+
+// A live KubePrism address that enabled-mode Ichor does not set is removed by the takeover, so the diff
+// gate must report it even though the owned-key report does not.
+func TestDiffLive_EnabledTakeoverRemovesKubePrismEnv(t *testing.T) {
+	replaced, err := EffectiveValues(nil, cni.KubeProxyReplaced, "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	diffs, err := DiffLive(t.Context(), effective(t, nil), newLiveCluster(t, replaced).get)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, d := range diffs {
+		if d.Object.Kind == "DaemonSet" && d.Object.Name == ReleaseName &&
+			strings.Contains(d.Path, "env["+envKubernetesHost+"]") {
+			return
+		}
+	}
+
+	t.Errorf("no diff for the agent's KUBERNETES_SERVICE_HOST env in %d differences", len(diffs))
+}
+
 func TestOwnedKeyConflicts_NeedsAcceptAndTunnel(t *testing.T) {
 	live, err := LiveValuesFromUser(map[string]any{"ipam": map[string]any{keyMode: modeKubernetes}})
 	if err != nil {

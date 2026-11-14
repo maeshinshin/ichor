@@ -397,8 +397,14 @@ func OwnedKeyConflicts(live map[string]any, kubeProxy cni.KubeProxyMode, tunnel 
 	var out []Conflict
 
 	for path, why := range OwnedKeys {
-		want, _ := values.Get(owned, path)
+		want, set := values.Get(owned, path)
 		have, _ := values.Get(live, path)
+
+		// Enabled mode sets no KubePrism address (ADR 0159), so a live one has no Ichor value to conflict with.
+		// The takeover still removes it; DiffLive reports that.
+		if !set && kubeProxy == cni.KubeProxyEnabled && (path == keyServiceHost || path == keyServicePort) {
+			continue
+		}
 
 		if sameOwned(path, have, want) || secretsNamespaceOfFeatureOff(live, path) {
 			continue

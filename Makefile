@@ -127,7 +127,10 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: manifests generate fmt vet setup-envtest build-installer ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
+	# -timeout: internal/controller alone takes about 470s on a GitHub runner and 530s on a
+	# 4-core workstation, close to Go's default 10m. The ceiling sits well above both; see
+	# the timing note in internal/controller/suite_test.go.
+	KUBEBUILDER_ASSETS="$(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)" go test -timeout 30m $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 .PHONY: remote-gate
 remote-gate: ## Run the full gate (go test, lint, ui-ci) for HEAD as parallel Jobs in the cluster set in hack/remote-gate.sh; logs in remote-gate-out/.

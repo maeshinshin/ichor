@@ -447,15 +447,18 @@ func TestDiskChoices_ColumnsLineUpAndEmptyOnesAreLeftOut(t *testing.T) {
 }
 
 // A text field can start with a default that Enter takes as it is, and Ctrl-U clears.
+// tuiDefaultNet is the network the default-text test starts from.
+const tuiDefaultNet = "172.16.7.0/24"
+
 func TestPromptModel_TextFieldStartsWithItsDefault(t *testing.T) {
-	q := promptQuestion{flag: "net", label: "Network", def: "192.168.7.0/24", check: func(string) error { return nil }}
+	q := promptQuestion{flag: "net", label: "Network", def: tuiDefaultNet, check: func(string) error { return nil }}
 
 	m := newPromptModel([]promptQuestion{q}, nil)
-	if !strings.Contains(shown(m), "192.168.7.0/24") {
+	if !strings.Contains(shown(m), tuiDefaultNet) {
 		t.Fatalf("the default is not shown:\n%s", shown(m))
 	}
 
-	if done, _ := send(t, m, keyOf(tea.KeyEnter)); done.state != promptDone || done.got["net"] != "192.168.7.0/24" {
+	if done, _ := send(t, m, keyOf(tea.KeyEnter)); done.state != promptDone || done.got["net"] != tuiDefaultNet {
 		t.Errorf("Enter did not take the default: state %d, got %v", done.state, done.got)
 	}
 

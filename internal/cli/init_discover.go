@@ -189,9 +189,9 @@ func eachBounded(n, limit int, fn func(i int)) {
 	_ = g.Wait()
 }
 
-// scanPort returns the addresses of p that accept a connection on port, in address order. Each attempt
+// scanPort returns the addresses of p that accept a connection on the Talos API port, in address order. Each attempt
 // gets timeout, and at most scanConcurrency run at once.
-func scanPort(ctx context.Context, p netip.Prefix, port uint16, timeout time.Duration, dial dialFunc) []netip.Addr {
+func scanPort(ctx context.Context, p netip.Prefix, timeout time.Duration, dial dialFunc) []netip.Addr {
 	addrs := hostAddrs(p)
 	open := make([]bool, len(addrs))
 
@@ -199,7 +199,7 @@ func scanPort(ctx context.Context, p netip.Prefix, port uint16, timeout time.Dur
 		actx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 
-		open[i] = dial(actx, net.JoinHostPort(addrs[i].String(), strconv.Itoa(int(port)))) == nil
+		open[i] = dial(actx, net.JoinHostPort(addrs[i].String(), strconv.Itoa(apidPort))) == nil
 	})
 
 	var found []netip.Addr
@@ -383,7 +383,7 @@ func askFirstNode(ctx context.Context, flags *pflag.FlagSet, r io.Reader, w io.W
 		start := time.Now()
 		_, _ = fmt.Fprintf(w, "Scanning %s for port %d (%d addresses)...\n", p, apidPort, n)
 
-		open := scanPort(ctx, p, apidPort, scanDialTimeout, s.Dial)
+		open := scanPort(ctx, p, scanDialTimeout, s.Dial)
 		endpoints := make([]string, len(open))
 
 		for i, a := range open {

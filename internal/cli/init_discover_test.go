@@ -30,11 +30,24 @@ import (
 	"testing"
 	"time"
 
-	"github.com/siderolabs/talos/pkg/machinery/constants"
-
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/pkg/release"
+)
+
+// Literals the tests repeat, as constants (goconst). testHWLink is the link name the package's other tests use.
+const (
+	testMAC       = "aa:bb:cc:00:00:01"
+	testScanRange = "192.168.0.0/24"
+	testAddr7     = "192.168.5.7"
+	testAddr8     = "192.168.5.8"
+	testEndpoint7 = "192.168.5.7:50000"
+	testEndpoint8 = "192.168.5.8:50000"
+	testFirstNode = "192.168.0.201"
+	testWideNet   = "10.0.0.0/22"
+	testHostTop   = "10.0.0.8"
+
+	testConfiguredRow = "192.168.5.8  already configured"
 )
 
 // The network every test scans is a documentation range: nothing here dials a real address. The fakes stand for
@@ -58,14 +71,14 @@ func fakeNode(host string, configured bool) (nodeReading, error) {
 	}
 
 	return nodeReading{
-		Identity:     controller.HardwareIdentity{UUID: "uuid-" + host, Serial: "S-" + host, MACAddresses: []string{"aa:bb:cc:00:00:01"}},
+		Identity:     controller.HardwareIdentity{UUID: "uuid-" + host, Serial: "S-" + host, MACAddresses: []string{testMAC}},
 		TalosVersion: release.Pinned.Talos,
 		Hostname:     "talos-" + host,
 		Disks: []ichorv1alpha1.TalosMachineDiscoveredDisk{
 			{DevPath: "/dev/nvme0n1", Serial: "S4X1NX0", SizeBytes: 1 << 30},
 			{DevPath: "/dev/sdb", SizeBytes: 1 << 30},
 		},
-		Links: []ichorv1alpha1.TalosMachineDiscoveredLink{{Name: "enp1s0", PermanentMAC: "aa:bb:cc:00:00:01"}},
+		Links: []ichorv1alpha1.TalosMachineDiscoveredLink{{Name: testHWLink, PermanentMAC: testMAC}},
 	}, nil
 }
 
@@ -83,7 +96,6 @@ func readerOf(configured ...string) func(context.Context, string, bool) (nodeRea
 type scripted struct {
 	answers []string
 	asked   [][]promptQuestion
-	picks   []map[string]string
 }
 
 func (s *scripted) ask(qs []promptQuestion, _ map[string]string, _ io.Reader, _ io.Writer) (map[string]string, error) {
@@ -105,10 +117,10 @@ func TestHostAddrs(t *testing.T) {
 		first, last string
 		n           int
 	}{
-		{"192.168.0.0/24", "192.168.0.1", "192.168.0.254", 254},
+		{testScanRange, "192.168.0.1", "192.168.0.254", 254},
 		{"10.0.0.0/22", "10.0.0.1", "10.0.3.254", 1022},
-		{"10.0.0.8/31", "10.0.0.8", "10.0.0.9", 2},
-		{"10.0.0.8/32", "10.0.0.8", "10.0.0.8", 1},
+		{"10.0.0.8/31", testHostTop, "10.0.0.9", 2},
+		{"10.0.0.8/32", testHostTop, testHostTop, 1},
 	} {
 		got := hostAddrs(netip.MustParsePrefix(tc.prefix))
 		if len(got) != tc.n || got[0].String() != tc.first || got[len(got)-1].String() != tc.last {
@@ -119,11 +131,11 @@ func TestHostAddrs(t *testing.T) {
 }
 
 func TestParseScanRange(t *testing.T) {
-	if p, err := parseScanRange("192.168.0.7/24"); err != nil || p.String() != "192.168.0.0/24" {
+	if p, err := parseScanRange("192.168.0.7/24"); err != nil || p.String() != testScanRange {
 		t.Errorf("a host inside a network is the network: %v, %v", p, err)
 	}
 
-	for _, bad := range []string{"10.0.0.0/16", "fd00::/64", "192.168.0.201", "junk/24"} {
+	for _, bad := range []string{"10.0.0.0/16", "fd00::/64", testFirstNode, "junk/24"} {
 		if _, err := parseScanRange(bad); err == nil {
 			t.Errorf("%q was accepted", bad)
 		}
@@ -139,7 +151,7 @@ func TestParseScanRange_WiderThanTheLimitSaysSo(t *testing.T) {
 
 func TestWithApidPort(t *testing.T) {
 	for in, want := range map[string]string{
-		"192.168.0.201":       "192.168.0.201:50000",
+		testFirstNode:         "192.168.0.201:50000",
 		"192.168.0.201:50001": "192.168.0.201:50001",
 		"fd00::1":             "[fd00::1]:50000",
 	} {
@@ -174,8 +186,8 @@ func TestIPNetworkOf(t *testing.T) {
 func TestScanPort_FindsTheAddressesThatAccept(t *testing.T) {
 	p := netip.MustParsePrefix(testNet)
 
-	got := scanPort(context.Background(), p, constants.ApidPort, time.Second, acceptOnly("192.168.5.7:50000", "192.168.5.9:50000"))
-	if want := []netip.Addr{netip.MustParseAddr("192.168.5.7"), netip.MustParseAddr("192.168.5.9")}; !slices.Equal(got, want) {
+	got := scanPort(context.Background(), p, time.Second, acceptOnly(testEndpoint7, "192.168.5.9:50000"))
+	if want := []netip.Addr{netip.MustParseAddr(testAddr7), netip.MustParseAddr("192.168.5.9")}; !slices.Equal(got, want) {
 		t.Errorf("scanPort = %v, want %v", got, want)
 	}
 }
@@ -189,7 +201,7 @@ func TestScanPort_ASilentNetworkTakesAboutOneTimeout(t *testing.T) {
 
 	start := time.Now()
 
-	if got := scanPort(context.Background(), netip.MustParsePrefix(testNet), constants.ApidPort, timeout, silent); len(got) != 0 {
+	if got := scanPort(context.Background(), netip.MustParsePrefix(testNet), timeout, silent); len(got) != 0 {
 		t.Fatalf("a silent network answered: %v", got)
 	}
 
@@ -216,7 +228,7 @@ func TestScanPort_BoundsTheConnectionsInFlight(t *testing.T) {
 		return errors.New("refused")
 	}
 
-	scanPort(context.Background(), netip.MustParsePrefix("10.0.0.0/22"), constants.ApidPort, time.Second, dial)
+	scanPort(context.Background(), netip.MustParsePrefix("10.0.0.0/22"), time.Second, dial)
 
 	if peak.Load() > scanConcurrency || peak.Load() < 2 {
 		t.Errorf("at most %d connections were in flight at once, want between 2 and %d", peak.Load(), scanConcurrency)
@@ -225,8 +237,8 @@ func TestScanPort_BoundsTheConnectionsInFlight(t *testing.T) {
 
 func TestNodeChoices_ShowsEveryNodeAndWhyOneCannotBeChosen(t *testing.T) {
 	found := []foundNode{
-		{endpoint: "192.168.5.7:50000", reading: mustNode(t, "192.168.5.7")},
-		{endpoint: "192.168.5.8:50000", configured: true, refusal: "has a Talos configuration already; init needs a node in maintenance mode"},
+		{endpoint: testEndpoint7, reading: mustNode(t, testAddr7)},
+		{endpoint: testEndpoint8, configured: true, refusal: "has a Talos configuration already; init needs a node in maintenance mode"},
 		{endpoint: "192.168.5.9:50000", refusal: "runs Talos v1.0.0, but init needs " + release.Pinned.Talos + ": upgrade it first"},
 	}
 
@@ -240,11 +252,11 @@ func TestNodeChoices_ShowsEveryNodeAndWhyOneCannotBeChosen(t *testing.T) {
 		t.Errorf("row detail %q, want %q", c[0].desc, want)
 	}
 
-	if c[0].value != "192.168.5.7:50000" {
+	if c[0].value != testEndpoint7 {
 		t.Errorf("a node's value is its endpoint, got %q", c[0].value)
 	}
 
-	if c[1].value != "" || c[1].label != "192.168.5.8  already configured" || !strings.Contains(c[1].desc, "Talos configuration already") {
+	if c[1].value != "" || c[1].label != testConfiguredRow || !strings.Contains(c[1].desc, "Talos configuration already") {
 		t.Errorf("a configured node is listed as a row that is not a choice: %+v", c[1])
 	}
 
@@ -265,8 +277,8 @@ func mustNode(t *testing.T, host string) nodeReading {
 }
 
 func TestReadFound_ClassifiesEachAnswer(t *testing.T) {
-	s := nodeSearch{ReadNode: readerOf("192.168.5.8")}
-	found := readFound(context.Background(), s, []string{"192.168.5.7:50000", "192.168.5.8:50000"})
+	s := nodeSearch{ReadNode: readerOf(testAddr8)}
+	found := readFound(context.Background(), s, []string{testEndpoint7, testEndpoint8})
 
 	if found[0].refusal != "" || found[0].reading.Hostname != "talos-192.168.5.7" {
 		t.Errorf("a maintenance-mode node: %+v", found[0])
@@ -288,11 +300,11 @@ func TestAskFirstNode_AnAddressSkipsTheScan(t *testing.T) {
 		Ask:      s.ask,
 	}
 
-	if err := askFirstNode(context.Background(), flags, strings.NewReader(""), io.Discard, search, "192.168.5.7"); err != nil {
+	if err := askFirstNode(context.Background(), flags, strings.NewReader(""), io.Discard, search, testAddr7); err != nil {
 		t.Fatal(err)
 	}
 
-	if got, _ := flags.GetString(flagNodeEndpoint); got != "192.168.5.7:50000" || dialed || len(s.asked) != 0 {
+	if got, _ := flags.GetString(flagNodeEndpoint); got != testEndpoint7 || dialed || len(s.asked) != 0 {
 		t.Errorf("--node-endpoint %q, dialed %v, %d questions asked", got, dialed, len(s.asked))
 	}
 }
@@ -303,10 +315,10 @@ func TestAskFirstNode_ScansTheNetworkAndSetsThePickedNode(t *testing.T) {
 	var out bytes.Buffer
 
 	// The list's answer is the endpoint of the row picked.
-	s := &scripted{answers: []string{"192.168.5.7:50000"}}
+	s := &scripted{answers: []string{testEndpoint7}}
 	search := nodeSearch{
-		Dial:     acceptOnly("192.168.5.7:50000", "192.168.5.8:50000"),
-		ReadNode: readerOf("192.168.5.8"),
+		Dial:     acceptOnly(testEndpoint7, testEndpoint8),
+		ReadNode: readerOf(testAddr8),
 		Ask:      s.ask,
 	}
 
@@ -314,7 +326,7 @@ func TestAskFirstNode_ScansTheNetworkAndSetsThePickedNode(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got, _ := flags.GetString(flagNodeEndpoint); got != "192.168.5.7:50000" {
+	if got, _ := flags.GetString(flagNodeEndpoint); got != testEndpoint7 {
 		t.Errorf("--node-endpoint %q", got)
 	}
 
@@ -323,7 +335,7 @@ func TestAskFirstNode_ScansTheNetworkAndSetsThePickedNode(t *testing.T) {
 	}
 
 	choices := s.asked[0][0].choices
-	if len(choices) != 2 || choices[1].label != "192.168.5.8  already configured" {
+	if len(choices) != 2 || choices[1].label != testConfiguredRow {
 		t.Errorf("the list is %+v", choices)
 	}
 
@@ -337,7 +349,7 @@ func TestAskFirstNode_NothingFoundSaysSoAndAsksAgain(t *testing.T) {
 
 	var out bytes.Buffer
 
-	s := &scripted{answers: []string{"192.168.5.7"}}
+	s := &scripted{answers: []string{testAddr7}}
 	search := nodeSearch{Dial: acceptOnly(), ReadNode: readerOf(), Ask: s.ask}
 
 	if err := askFirstNode(context.Background(), flags, strings.NewReader(""), &out, search, testNet); err != nil {
@@ -353,7 +365,7 @@ func TestAskFirstNode_NothingFoundSaysSoAndAsksAgain(t *testing.T) {
 		t.Fatalf("the question was not asked again, starting from the network: %+v", s.asked)
 	}
 
-	if got, _ := flags.GetString(flagNodeEndpoint); got != "192.168.5.7:50000" {
+	if got, _ := flags.GetString(flagNodeEndpoint); got != testEndpoint7 {
 		t.Errorf("--node-endpoint %q", got)
 	}
 }
@@ -363,10 +375,10 @@ func TestAskFirstNode_OnlyConfiguredNodesSaysSoAndAsksAgain(t *testing.T) {
 
 	var out bytes.Buffer
 
-	s := &scripted{answers: []string{"192.168.5.7"}}
+	s := &scripted{answers: []string{testAddr7}}
 	search := nodeSearch{
-		Dial:     acceptOnly("192.168.5.8:50000"),
-		ReadNode: readerOf("192.168.5.8"),
+		Dial:     acceptOnly(testEndpoint8),
+		ReadNode: readerOf(testAddr8),
 		Ask:      s.ask,
 	}
 
@@ -374,7 +386,7 @@ func TestAskFirstNode_OnlyConfiguredNodesSaysSoAndAsksAgain(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(out.String(), "192.168.5.8  already configured") || !strings.Contains(out.String(), "None of these nodes can be the first one") {
+	if !strings.Contains(out.String(), testConfiguredRow) || !strings.Contains(out.String(), "None of these nodes can be the first one") {
 		t.Errorf("the configured node is not shown and explained:\n%s", out.String())
 	}
 
@@ -392,10 +404,10 @@ func TestReadFound_RetriesAResetRead(t *testing.T) {
 			return nodeReading{}, errors.New("connection reset by peer")
 		}
 
-		return fakeNode("192.168.5.7", false)
+		return fakeNode(testAddr7, false)
 	}}
 
-	found := readFound(context.Background(), s, []string{"192.168.5.7:50000"})
+	found := readFound(context.Background(), s, []string{testEndpoint7})
 
 	if calls != 2 || found[0].refusal != "" {
 		t.Errorf("%d reads, refusal %q; want two reads and no refusal", calls, found[0].refusal)

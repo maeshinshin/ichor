@@ -21,4 +21,4 @@ Every command dumped YAML by default, including the protobuf enum names (`MACHIN
 
 - A script that read the default output must now say `-o yaml`. The CLI's own docs and guides do.
 - `-o yaml|json` of `cluster list|get` and `machine list|get` carry the new fields (`createdAt`, `endpointType`, `podSubnets`, `serviceSubnets`, `cniTunnel`); fields are only added, and a CLI that talks to an older ichor-ui shows `-` for an age it does not have.
-- A command with a human view is a render function passed to `showAPIHuman` or `printAPI`; a start command (`upgrade`, `cni kube-proxy`, `config apply`, the node actions, `restore --live`) goes through `runStartOperation`, `runNodeAction` and `watchOperation`, which print the result and the live view.
+- A command with a human view is a render function passed to `showAPIHuman` or `printAPI`; a start command (`upgrade`, `set kube-proxy`, `config apply`, the node actions, `restore --live`) goes through `runStartOperation`, `runNodeAction` and `watchOperation`, which print the result and the live view.

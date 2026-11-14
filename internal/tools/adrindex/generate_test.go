@@ -88,22 +88,21 @@ func TestParseADRsIsDeterministic(t *testing.T) {
 	}
 }
 
-// TestADR0066NamesTheCommandThatExists pins the command the kube-proxy switch
-// is run with: the CLI registers `ichor set kube-proxy` (internal/cli/cni.go),
-// and ADR 0066 once named `ichor cni kube-proxy`, which does not exist.
-func TestADR0066NamesTheCommandThatExists(t *testing.T) {
-	paths, err := filepath.Glob(filepath.Join(adrDir, "0066-*.md"))
-	if err != nil || len(paths) != 1 {
-		t.Fatalf("want exactly one ADR 0066 file, got %v (err %v)", paths, err)
+// TestNoADRNamesTheRemovedKubeProxyCommand pins the kube-proxy switch command
+// across every ADR: no ADR may name `cni kube-proxy`. The CLI registers
+// `ichor set kube-proxy` (internal/cli/cni.go).
+func TestNoADRNamesTheRemovedKubeProxyCommand(t *testing.T) {
+	paths, err := filepath.Glob(filepath.Join(adrDir, "*.md"))
+	if err != nil || len(paths) == 0 {
+		t.Fatalf("want ADRs under %s, got %v (err %v)", adrDir, paths, err)
 	}
-	body, err := os.ReadFile(paths[0])
-	if err != nil {
-		t.Fatalf("reading %s: %v", paths[0], err)
-	}
-	if strings.Contains(string(body), "ichor cni kube-proxy") {
-		t.Errorf("%s names `ichor cni kube-proxy`, which is not a command; use `ichor set kube-proxy`", paths[0])
-	}
-	if !strings.Contains(string(body), "ichor set kube-proxy") {
-		t.Errorf("%s does not name `ichor set kube-proxy`, the command that exists", paths[0])
+	for _, path := range paths {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("reading %s: %v", path, err)
+		}
+		if strings.Contains(string(body), "cni kube-proxy") {
+			t.Errorf("%s names `cni kube-proxy`, which is not a command; use `set kube-proxy`", path)
+		}
 	}
 }

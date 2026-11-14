@@ -89,7 +89,7 @@ in the executor.
 
 ## Decision 6: commands
 
-`ichor upgrade talos|kubernetes|ichor VERSION`, `ichor cni kube-proxy replaced|enabled`, `ichor cluster shutdown
+`ichor upgrade talos|kubernetes|ichor VERSION`, `ichor set kube-proxy replaced|enabled`, `ichor cluster shutdown
 NAME`, `ichor operation list|get|pause|resume|delete` (alias `op`). The version may be given without the leading
 `v`. `--cluster` (default: the only cluster in the namespace), `--max-unavailable`, `--follow` (poll until it ends;
 a pause caused by a failed machine is an error exit), `get --watch`. The start, pause, resume and delete commands

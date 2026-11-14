@@ -245,7 +245,7 @@ func runMachineReclaim(ctx context.Context, d reclaimDeps, address string, f rec
 // same UUID, then registers it. A changed DHCP address is reported, not guessed.
 func finishReclaim(ctx context.Context, d reclaimDeps, steps *progress, address, uuid string, f reclaimFlags) error {
 	if f.Wait <= 0 {
-		steps.Info("not waiting (--wait 0)")
+		steps.Info("not verified: --wait 0 did not look at the node, so the reset is accepted but not confirmed")
 		steps.Done()
 
 		return nil

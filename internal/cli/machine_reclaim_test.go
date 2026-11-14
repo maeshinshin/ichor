@@ -103,6 +103,31 @@ func TestMachineReclaimTypedUUIDResets(t *testing.T) {
 }
 
 // TestMachineReclaimYesDoesNotSatisfyConfirmation: the global --yes must not stand in for the UUID.
+// The reset is sent without a probe: with --wait 0 the output must say it is not confirmed, never that
+// the machine is back in maintenance mode.
+func TestMachineReclaimNoWaitDoesNotClaimTheWipe(t *testing.T) {
+	h := newReclaimHarness("AAAA-1\n", reclaim.Known{})
+
+	probed := false
+	h.deps.Probe = func(context.Context, string) (string, error) {
+		probed = true
+
+		return strings.ToLower(testUUID), nil
+	}
+
+	if err := runMachineReclaim(context.Background(), h.deps, "10.0.0.5", reclaimFlags{Wait: 0}); err != nil {
+		t.Fatal(err)
+	}
+
+	if probed {
+		t.Error("--wait 0 probed the node")
+	}
+
+	if out := h.out.String(); !strings.Contains(out, "not verified") {
+		t.Errorf("output does not say the reset is unverified:\n%s", out)
+	}
+}
+
 func TestMachineReclaimYesDoesNotSatisfyConfirmation(t *testing.T) {
 	old := assumeYes
 	assumeYes = true

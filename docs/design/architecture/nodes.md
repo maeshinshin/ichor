@@ -27,9 +27,13 @@ that already maps to a live `TalosMachine`, produces a pending entry that an
 operator has to resolve — the same machine returning, or a different one — with
 the address, MACs, serial and manufacturer shown to decide on. Writing a
 disambiguating token to the node is not a fix: it needs an authenticated
-connection Ichor only has after approval, and a reset wipes META anyway. The
-durable record is Ichor's own `TalosMachine.spec.identity`, which is consistent
-with the controller owning durable state rather than the node.
+connection Ichor only has after approval. Which resets remove META depends on
+what they name. A reset of `STATE` and `EPHEMERAL` (reclaim, and a remove
+without a wipe mode) keeps it, and a node that keeps META is not installed
+again. A reset that erases the whole system disk (`--wipe-mode system-disk` or
+`all`) removes it, and the node installs afresh. The durable record is Ichor's
+own `TalosMachine.spec.identity`, which is consistent with the controller owning
+durable state rather than the node.
 
 A machine that already runs a configured Talos cannot be discovered this way:
 its API demands a client certificate. Discovery reports it as

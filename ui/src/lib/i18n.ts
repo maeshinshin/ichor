@@ -1206,7 +1206,7 @@ export const en = {
   'overview.nodesNone': 'No nodes yet.',
   'overview.viewAllNodes': 'View all nodes ({n})',
   'overview.colStarted': 'Started',
-  'overview.nodeNotReady': 'Not ready',
+  'overview.nodesNotReady': '{n} not ready',
   'versions.state.up-to-date': 'Up to date',
   'versions.state.behind': 'Behind',
   'versions.state.ahead': 'Ahead',

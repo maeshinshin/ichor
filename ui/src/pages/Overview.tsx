@@ -343,7 +343,7 @@ function Home({
             label={t('overview.tile.nodes')}
             icon={ServerIcon}
             target={targets.nodes}
-            badge={machines !== null && ready !== approved.length ? t('overview.nodeNotReady') : undefined}
+            badge={machines !== null && ready !== approved.length ? t('overview.nodesNotReady', { n: approved.length - ready }) : undefined}
             value={machines ? `${ready} / ${approved.length} ready` : '-'}
             sub={pending.length > 0 ? t('overview.waitingApproval', { n: pending.length }) : undefined}
           />

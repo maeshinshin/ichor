@@ -80,6 +80,10 @@ title. Give a page a number to put it first (lower numbers come first; pages
 without one come after). GitHub shows front matter as a small table, so use it
 sparingly.
 
+Pages that share a `sidebar_group` fold behind one row, in `sidebar_order`.
+The row sits where its first page would. Pages without a group are listed as
+before, among the rows of their section.
+
 ## Links and images
 
 Link to other pages the way you would on GitHub, with relative paths:

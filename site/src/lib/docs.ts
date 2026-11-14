@@ -92,20 +92,32 @@ function tree(docs: Doc[]): Tree {
   return root
 }
 
+type Entry = [string, Tree]
+
+/** Pages named by a `sidebar_group` are listed under one row per group, in the order of their pages; the rest stay where they are. */
 function nodes(t: Tree): NavNode[] {
-  // A command with subcommands sorts with the other commands, alphabetically, not ahead of them as a directory would.
-  const rank = ([seg, k]: [string, Tree]) =>
+  const rank = ([seg, k]: Entry) =>
+    // A command with subcommands sorts with the other commands, alphabetically, not ahead of them as a directory would.
     k.page?.order ?? (k.kids.size && !k.page?.route.startsWith('reference/cli/') ? (dirs[seg]?.order ?? 50) : 1000)
-  const items = [...t.kids.entries()].sort(
-    (a, b) =>
-      rank(a) - rank(b) || (a[1].page?.label ?? a[0]).localeCompare(b[1].page?.label ?? b[0], 'en', { numeric: true }),
-  )
-  return items.map(([seg, k]) => {
+  const byRank = (a: Entry, b: Entry) => rank(a) - rank(b) || (a[1].page?.label ?? a[0]).localeCompare(b[1].page?.label ?? b[0], 'en', { numeric: true })
+  const node = ([seg, k]: Entry): NavNode => {
     if (!k.kids.size) return { label: k.page!.label, href: k.page!.url }
     const children = nodes(k)
     if (k.page) children.unshift({ label: k.page.label, href: k.page.url })
     return { label: k.page?.entry.data.sidebar_label ?? dirs[seg]?.label ?? titleCase(seg), page: k.page?.url, children }
-  })
+  }
+  const groups = new Map<string, Entry[]>()
+  const items: { rank: number; label: string; node: NavNode }[] = []
+  for (const e of t.kids.entries()) {
+    const group = e[1].page?.entry.data.sidebar_group
+    if (group) groups.set(group, [...(groups.get(group) ?? []), e])
+    else items.push({ rank: rank(e), label: e[1].page?.label ?? e[0], node: node(e) })
+  }
+  for (const [label, members] of groups) {
+    const sorted = members.sort(byRank)
+    items.push({ rank: rank(sorted[0]), label, node: { label, children: sorted.map(node) } })
+  }
+  return items.sort((a, b) => a.rank - b.rank || a.label.localeCompare(b.label, 'en', { numeric: true })).map((i) => i.node)
 }
 
 /** Sidebar: the root page and loose root pages first, then one group per directory. */

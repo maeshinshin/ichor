@@ -1,6 +1,7 @@
 ---
 title: "CNI and Cilium"
 description: "Ichor owns Cilium as the only CNI, as a Helm release: how it boots, who may change its values, which keys Ichor pins, and how it upgrades."
+sidebar_group: "What Ichor manages"
 sidebar_order: 30
 ---
 

@@ -1,6 +1,7 @@
 ---
 title: "Security model"
 description: "Who holds which credential in Ichor: the viewer, operator and admin roles and their subresource verbs, how credentials are issued through TalosCredentialRequest, and what the UI backend never holds."
+sidebar_group: "Trust and access"
 sidebar_order: 40
 ---
 

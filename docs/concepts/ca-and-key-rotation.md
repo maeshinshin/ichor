@@ -1,6 +1,7 @@
 ---
 title: "CA and key rotation"
 description: "How Ichor replaces the cluster CAs and the service-account and secretbox keys without locking you out: verified passes, the credential hand-off and the dual-key period."
+sidebar_group: "Changes over time"
 sidebar_order: 50
 ---
 

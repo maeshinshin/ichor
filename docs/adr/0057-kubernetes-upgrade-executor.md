@@ -44,7 +44,7 @@ cluster-wide step.
 **The per-node switch is "apply the rendered configuration".** `pkg/render` already derives every component image
 from `spec.kubernetesVersion`; for a control plane the diff against the node is exactly
 `KubeAPIServerConfig.image`, `KubeControllerManagerConfig.image`, `KubeSchedulerConfig.image`,
-`KubeProxyConfig.image` and `KubeletConfig.image` (a worker: `KubeletConfig.image`), measured with
+`KubeProxyConfig.image` and `KubeletConfig.image` (a worker: `KubeletConfig.image`), found by
 `ChangedPaths` on a render at two versions. Nothing hand-writes a component switch.
 
 The existing apply path cannot do it by itself, and that is useful. `pkg/fieldmeta` has no rule for these

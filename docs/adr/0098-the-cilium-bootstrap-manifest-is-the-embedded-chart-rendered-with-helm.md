@@ -21,7 +21,7 @@ Embedding means no network at init time and the same bytes every run, which `hel
 
 ## Consequences
 
-Moving to a newer Cilium means bumping `ChartVersion`, the Makefile digest and the archive together. The binary grows by about 230 KB plus Helm's dependencies. `ichor init --cni-tunnel` picks the tunnel protocol and stores it in `spec.cni.tunnel` on the TalosCluster, so `ichor gitops export` reproduces it in the Argo CD Application instead of reverting to Cilium's default.
+Moving to a newer Cilium means bumping `ChartVersion`, the Makefile digest and the archive together. The binary grows by the chart archive plus Helm's dependencies. `ichor init --cni-tunnel` picks the tunnel protocol and stores it in `spec.cni.tunnel` on the TalosCluster, so `ichor gitops export` reproduces it in the Argo CD Application instead of reverting to Cilium's default.
 
 ## Amendment 2026-11-03: the bootstrap renders for the release set's Kubernetes and pins one operator replica per control plane
 

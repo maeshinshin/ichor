@@ -58,7 +58,7 @@ The Talos 1.14 docs say that from Talos 1.14 the `ghcr.io/siderolabs/installer` 
 
 Compatibility is enforced by one typed table: `pkg/release/compat.go`, maintained with each Ichor release. Each entry has its source URL in a comment.
 
-- **Cilium** (`ciliumKubernetes`): the Kubernetes minors each Cilium minor is e2e tested with. 1.18: 1.30 to 1.33 (docs.cilium.io/en/v1.18/network/kubernetes/requirements/). 1.19: 1.31 to 1.34 (docs.cilium.io/en/v1.19/network/kubernetes/requirements/). 1.20: 1.33 to 1.36 (docs.cilium.io/en/v1.20/network/kubernetes/requirements/). A Cilium minor not in the table is unknown, and nothing is compatible with it.
+- **Cilium** (`ciliumKubernetes`): the Kubernetes minors each Cilium minor supports. 1.18: 1.30 to 1.33 (docs.cilium.io/en/v1.18/network/kubernetes/requirements/). 1.19: 1.31 to 1.34 (docs.cilium.io/en/v1.19/network/kubernetes/requirements/). 1.20: 1.33 to 1.36 (docs.cilium.io/en/v1.20/network/kubernetes/requirements/). A Cilium minor not in the table is unknown, and nothing is compatible with it.
 - **Talos** (`talosKubernetes`): Kubernetes ranges for Talos minors, from the Talos support matrix. Talos 1.14: 1.33 to 1.37 (docs.siderolabs.com/talos/v1.14/getting-started/support-matrix). Where the table has a Talos minor, it decides the pair, and machinery must still accept the pair (it bounds the table). Machinery decides the Talos minors the table lacks (amendment 2026-11-03, below).
 
 Two functions read the table:
@@ -128,7 +128,7 @@ Adopt judges the versions it takes over (`checkAdoptCompat`, after the cluster i
 
 ## Why this shape
 
-- The first install is the one place the build's tested matrix is the right answer, so the set stays there. Later versions are the user's choice, so the set does not bind them.
+- The first install is the one place the build's matrix is the right answer, so the set stays there. Later versions are the user's choice, so the set does not bind them.
 - Compatibility is a table in Go, not a per-cluster setting: the webhook, the plan, the CLI, adopt and the picker read one table, so they cannot disagree.
 - Refusals are overridable only by the override verb, as every other safety guard is (ADR 0110), so an admin can act in an incident without a new mechanism, and the Event keeps the record.
 - Upgrades are per component, as ADR 0043 and ADR 0057 intended. A rollout that moves three components in sequence is a choice the user can make by running three operations, not a built-in step.
@@ -223,7 +223,7 @@ The release check offered no Talos, Kubernetes or Cilium patch because `releasec
 
 The user decided on 2026-11-04 that Ichor pins the Cilium version: the only Cilium a cluster moves to is the chart embedded in the running Ichor. A newer upstream patch reaches a cluster with an Ichor release (ADR 0119 opens the pull request that bumps the chart), after which the chart upgrade of ADR 0099 is offered as `CiliumUpgradeAvailable`. This supersedes section 2 of the amendment 2026-11-03 (the verified patches, option A) and the override of the amendment 2026-11-04 for a Cilium patch. Talos and Kubernetes keep their per-component upgrades.
 
-**Why.** Cilium ships its chart and its images as one set. A patch run as the embedded chart with other images is a combination nobody tested, and it made the detected version lie (the agent image said one version, the chart another). With one chart per Ichor release there is one tested combination per release. The cost the 2026-11-03 amendment accepted, the Envoy and certgen digests that a patch could not move, also disappears.
+**Why.** Cilium ships its chart and its images as one set. A patch run as the embedded chart with other images is a combination no release ships, and it made the detected version lie (the agent image said one version, the chart another). With one chart per Ichor release there is one pinned combination per release. The cost the 2026-11-03 amendment accepted, the Envoy and certgen digests that a patch could not move, also disappears.
 
 **Removed.**
 

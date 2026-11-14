@@ -35,7 +35,7 @@ Nothing was removed from the proto API, so no field numbers are reserved.
 
 ## Consequences
 
-- Nothing is built or tested for an installation with no route to public registries; a user who mirrors images does
+- Ichor builds nothing for an installation with no route to public registries; a user who mirrors images does
   so by hand.
 - ADR 0036 is superseded; ADR 0048 (`ichor images list --kokumi` only) and ADR 0059 (its air-gap rationale and the
   `ichor images list` pointer) are superseded in part. Older ADRs that mention air gap as a motive are left as

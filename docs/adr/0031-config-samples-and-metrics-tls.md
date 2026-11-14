@@ -219,8 +219,8 @@ deletion guard that opens when the controller is down is not a guard");
 a metrics endpoint's TLS verifiability has no equivalent claim on being
 worth crash-looping the whole controller for, by default, on every
 install. One Secret and one volume mount being "always present" was
-considered and is not the blocker — both are cheap and already proven
-safe by the webhook certificate's own identical shape.
+considered and is not the blocker — both are cheap, and the webhook certificate
+already has the same shape.
 
 **Decision: stays opt-in.** Revisit if cert-controller ever gains the
 ability to signal "not ready yet" to the metrics server's own listener
@@ -240,8 +240,8 @@ and metrics listeners always find *something* on disk, real or not.
   container with backoff, and each fresh container mount reads the
   Secret's then-current content from scratch (no stale-volume wait the
   way an *already-mounted* Secret picking up a *later* change would need)
-  -- in practice this converges within the first one or two restarts,
-  comfortably under a minute, every time cert-controller's own write
+  -- this is expected to converge within the first one or two restarts,
+  well under a minute, once cert-controller's own write
   succeeds before the listener's next attempt.
 - A bootstrap certificate trades a loud, short-lived failure for a silent
   one that can last forever. If cert-controller's rotator ever can't

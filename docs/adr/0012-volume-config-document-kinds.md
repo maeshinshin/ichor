@@ -105,7 +105,7 @@ can't do are a different kind of gap, not a mirroring one:
 ## Served CRD size
 
 `talosconfigpatches` serves **96,792 bytes, 6.2% of etcd's 1,572,864-byte
-`--max-request-bytes` ceiling** (210,130 bytes on disk), measured as the
+`--max-request-bytes` ceiling** (210,130 bytes on disk), the size of the
 `CustomResourceDefinition` object the API server serves. The three volume kinds
 add about 15 KB served between them (from 81,965 bytes, 5.2%). Headroom remains
 in no way the constraint, and there is room for the rest of Talos's modern

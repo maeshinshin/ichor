@@ -73,7 +73,7 @@ The Decision above is unchanged in form; these values replace the numbers it nam
 **Why these versions.** No released Cilium tests Kubernetes 1.37 yet, so a 1.37 set would be untested with the CNI. The compatibility sources are:
 
 - Cilium 1.20 compatibility page (`docs.cilium.io/en/v1.20/network/kubernetes/compatibility/`, read 2026-11-03): "All Kubernetes versions listed are e2e tested and guaranteed to be compatible with Cilium", and the table lists 1.33, 1.34, 1.35, 1.36. It does not list 1.37. Kubernetes 1.36.6 is inside this range.
-- For Cilium 1.18 (tested with 1.30 to 1.33) and 1.19 (1.31 to 1.34), the figures are not needed for the set, because the set pins 1.20.
+- For Cilium 1.18 (lists 1.30 to 1.33) and 1.19 (1.31 to 1.34), the figures are not needed for the set, because the set pins 1.20.
 - Talos v1.14 support matrix (`docs.siderolabs.com/talos/v1.14/getting-started/support-matrix`, read 2026-11-03): Kubernetes "1.37, 1.36, 1.35, 1.34, 1.33". Machinery v1.14.5's compatibility table is wider (`compatibility/talos114`: minimum 1.32.0, maximum 1.37.99); the set uses the documented range. Kubernetes 1.36.6 is inside both.
 - Machinery's `constants.DefaultKubernetesVersion` for v1.14.5 is 1.37.1. The set is deliberately older than that default, so the set must not be newer than the default, and `upgrade.KubernetesPairing` must accept the set's Kubernetes with its Talos. The set need not equal the default.
 

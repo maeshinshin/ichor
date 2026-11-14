@@ -53,8 +53,7 @@ govulncheck, QEMU, cni-plugins, Node, make, git.
   kubebuilder shipped them, and `kubebuilder alpha update` keeps working
   because the Makefile stays unedited apart from the `GOLANGCI_LINT ?=`
   one-character fix (now unnecessary, but harmless and left in place).
-- The versions of these four tools are the ones kubebuilder 4.15.0 was tested
-  against, rather than nixpkgs' newer ones. For build tooling that is the safer
+- The versions of these four tools are the ones kubebuilder 4.15.0 targets, rather than nixpkgs' newer ones. For build tooling that is the safer
   side to be on.
 - This weakens the letter of the rule that every tool comes from `flake.nix`:
   these four come from the Go module proxy instead. It keeps the rule's intent

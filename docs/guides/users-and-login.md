@@ -101,7 +101,7 @@ trust that leaf; see "Expose ichor-ui over https". Making ichor-ui reachable at
 the `--ui-url` (a LoadBalancer, an Ingress or a Gateway) is your job: init
 installs none of them.
 
-To publish ichor-ui at another address after init, set the new https URL in `spec.authentication.ichor.url` of the TalosCluster (a patch that needs the `update` verb on `talosclusters/authentication`), then run the installer's upgrade so ichor-ui and the controller take it. Then `ichor rollout config` applies the kube-apiserver side. The URL and the token issuer must match, so sign-in breaks until both are done.
+To publish ichor-ui at another address after init, set the new https URL in `spec.authentication.ichor.url` of the TalosCluster (a patch that needs the `update` verb on `talosclusters/authentication`), then run an Ichor upgrade (`ichor upgrade ichor`) so the installer applies it to ichor-ui and the controller. Whether an upgrade at the same version re-runs the installer is not covered here. Then `ichor rollout config` applies the kube-apiserver side. The URL and the token issuer must match, so sign-in breaks until both are done.
 
 On an existing install, set `ichorUI.users.enabled` to `true` and
 `ichorUI.users.externalURL` to the https URL in the chart values, and create

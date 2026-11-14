@@ -29,7 +29,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
-	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
 	"github.com/maeshinshin/ichor/pkg/release"
 )
@@ -309,12 +308,12 @@ func TestRunInit_RefusesAnOlderTalos(t *testing.T) {
 
 	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
 	deps, maint, _ := newFakeInitDeps(t, k8sClient)
-	deps.ReadNode = func(context.Context, string, bool) (nodeReading, error) {
-		return nodeReading{
-			Identity:     controller.HardwareIdentity{UUID: testInitMachineUUID, Serial: "serial-1"},
-			Links:        []ichorv1alpha1.TalosMachineDiscoveredLink{testInitLink},
-			TalosVersion: "v1.13.1",
-		}, nil
+	read := deps.ReadNode
+	deps.ReadNode = func(ctx context.Context, endpoint string, wantInventory bool) (nodeReading, error) {
+		n, err := read(ctx, endpoint, wantInventory)
+		n.TalosVersion = "v1.13.1"
+
+		return n, err
 	}
 
 	err := runInit(context.Background(), validInitOptions(), deps)

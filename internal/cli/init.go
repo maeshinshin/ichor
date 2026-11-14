@@ -389,7 +389,7 @@ func bindInitFlags(flags *pflag.FlagSet, o *initOptions, wait *time.Duration) {
 
 	flags.StringVar(&o.UIURL, "ui-url", "",
 		"the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; "+
-			"left out, the issuer is "+defaultUIURL+", where `ichor ui` reaches it; needs --version-contract v1.14 or later")
+			"left out, the issuer is "+defaultUIURL+", where ichor ui reaches it; needs --version-contract v1.14 or later")
 	flags.BoolVar(&o.AllowUnauthenticated, "allow-unauthenticated", false,
 		"run ichor-ui with no sign-in: anyone who can reach it can change the cluster with ichor-ui's permissions, including resetting nodes; "+
 			"without it init turns Ichor's own sign-in on")

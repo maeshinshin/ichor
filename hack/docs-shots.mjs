@@ -246,28 +246,29 @@ try {
   const clipboardBecomes = (want) => eventually(clipboard, want)
   // The chevron turns by the transform or, for Tailwind v4 rotate-* classes, by the rotate property: read both.
   const turnOf = (el) => `(() => { const s = getComputedStyle(${el}); return s.transform + " " + s.rotate })()`
+  // The value of a read expression once it has been the same for 300 ms (or after 5 s).
+  const settle = async (read) => {
+    let v = await ev(read)
+    for (let i = 0, same = 0; i < 50 && same < 3; i++) {
+      await sleep(100)
+      const w = await ev(read)
+      same = JSON.stringify(w) === JSON.stringify(v) ? same + 1 : 0
+      v = w
+    }
+    return v
+  }
   // A disclosure: toggling it changes aria-expanded and turns its chevron. Each is checked on its own, since the chevron
   // is what sighted readers see and aria-expanded is what assistive technology reads, and either can be right while the
-  // other is not. `read` gives [aria-expanded, the chevron's computed transform] of the trigger.
+  // other is not. `settle` waits until the trigger's state has stopped changing, so a transition is read at its end.
   const disclosure = async (tag, name, trigger) => {
     const read = `(() => { const b = ${trigger}; return b ? [b.getAttribute('aria-expanded'), ${turnOf("b.querySelector('svg')")}] : ['missing', 'missing'] })()`
-    const settle = async (done) => {
-      let v = await ev(read)
-      for (let i = 0; i < 30 && !done(v); i++) {
-        await sleep(100)
-        v = await ev(read)
-      }
-      return v
-    }
-    const [e0, t0] = await ev(read)
+    const [e0, t0] = await settle(read)
     await ev(`${trigger}.click()`)
-    const [e1] = await settle(([e]) => e !== e0)
-    const [, t1] = await settle(([, t]) => t !== t0)
+    const [e1, t1] = await settle(read)
     check(e1 !== e0, `${tag}: ${name} sets aria-expanded from ${e0} to ${e1} when opened`)
     check(t1 !== t0, `${tag}: ${name}'s chevron turns when opened (transform ${t0} to ${t1})`)
     await ev(`${trigger}.click()`)
-    const [e2] = await settle(([e]) => e === e0)
-    const [, t2] = await settle(([, t]) => t === t0)
+    const [e2, t2] = await settle(read)
     check(e2 === e0, `${tag}: ${name} sets aria-expanded back to ${e0} when closed`)
     check(t2 === t0, `${tag}: ${name}'s chevron turns back when closed (transform ${t2})`)
   }
@@ -321,8 +322,7 @@ try {
       await mouse(more)
       check(await menuOpen(), `${tag}: the Copy page menu opens`)
       // The menu is a disclosure too: its chevron turns and aria-expanded is set while it is open (the menu stays open below).
-      await until(`${turnOf(`${more}.querySelector('svg')`)} !== ${JSON.stringify(closedTurn)}`, 'the More page actions chevron to turn', 3000)
-      const [openedExpanded, openedTurn] = await ev(moreState)
+      const [openedExpanded, openedTurn] = await settle(moreState)
       check(openedExpanded === 'true' && openedExpanded !== closedExpanded, `${tag}: More page actions sets aria-expanded to true when open (was ${closedExpanded}, now ${openedExpanded})`)
       check(openedTurn !== closedTurn, `${tag}: More page actions' chevron turns when open (transform ${closedTurn} to ${openedTurn})`)
       check(await ev(`['Copy as Markdown', 'View as Markdown', 'Copy link'].every((t) => [...document.querySelectorAll('[data-slot=dropdown-menu-item]')].some((e) => e.textContent.includes(t)))`), `${tag}: the menu lists Copy as Markdown, View as Markdown and Copy link`)

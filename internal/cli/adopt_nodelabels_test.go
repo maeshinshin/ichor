@@ -29,12 +29,6 @@ import (
 // Control planes without Talos's default exclude-from-external-load-balancers label are adopted as
 // they are: adding it would take them out of Service type=LoadBalancer membership. adopt records
 // spec.controlPlane.omitDefaultNodeLabels instead of blocking (ADR 0144).
-const (
-	fixtureV113 = "v113"
-	fixtureV114 = "v114"
-	talosV113   = "v1.13.0"
-)
-
 func TestAdoptKeepsMissingControlPlaneLabels(t *testing.T) {
 	const (
 		legacyLabels = "    nodeLabels:\n        node.kubernetes.io/exclude-from-external-load-balancers: \"\"\n"
@@ -42,23 +36,39 @@ func TestAdoptKeepsMissingControlPlaneLabels(t *testing.T) {
 	)
 
 	for _, tc := range []struct {
-		name, fixture, version, labels, without string
-		wantOmit                                bool
+		name, labels, without string
+		// legacy is a machine.nodeLabels block (the v1alpha1 form) added beside the v1.14 documents.
+		legacy   string
+		blocked  bool
+		wantOmit bool
 	}{
-		{"v1.14 without the labels", fixtureV114, ver1143, docLabels, "labels: {}\n", true},
-		{"v1.13 without machine.nodeLabels", fixtureV113, talosV113, legacyLabels, "", true},
-		{"v1.14 with the labels", fixtureV114, ver1143, docLabels, docLabels, false},
-		{"v1.13 with the labels", fixtureV113, talosV113, legacyLabels, legacyLabels, false},
+		{"v1.14 without the labels", docLabels, "labels: {}\n", "", false, true},
+		{"v1.14 with the labels", docLabels, docLabels, "", false, false},
+		// machine.nodeLabels has no v1.14 patch form, so a node that carries it is blocked (class C), not adopted.
+		{"v1.14 with machine.nodeLabels carrying the label", docLabels, "labels: {}\n", legacyLabels, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			cp, wk := classAFixture(t, tc.fixture)
+			cp, wk := classAFixture(t, "v114")
 			if !strings.Contains(string(cp), tc.labels) {
 				t.Fatalf("the fixture lacks the label block %q", tc.labels)
 			}
 
 			cp = []byte(strings.Replace(string(cp), tc.labels, tc.without, 1))
+			if tc.legacy != "" {
+				cp = []byte(strings.Replace(string(cp), "    features:\n", tc.legacy+"    features:\n", 1))
+			}
 
-			env, deps := classAFlow(t, tc.version, cp, wk)
+			env, deps := classAFlow(t, ver1143, cp, wk)
+
+			if tc.blocked {
+				// The control plane is left out of the adopt, and the plan names the label that blocks it.
+				out := planOutput(t, env, deps, false)
+				if !strings.Contains(out, "blocked, it differs from a fresh render") || !strings.Contains(out, "machine.nodeLabels.node.kubernetes.io/exclude-from-external-load-balancers") {
+					t.Fatalf("the plan does not block the control plane on the label:\n%s", out)
+				}
+
+				return
+			}
 
 			out := planOutput(t, env, deps, false)
 			if strings.Contains(out, "cannot patch automatically") || strings.Contains(out, "exclude-from-external-load-balancers") {

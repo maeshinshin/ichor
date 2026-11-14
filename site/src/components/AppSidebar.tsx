@@ -1,4 +1,5 @@
 import { ChevronRight, ExternalLink } from 'lucide-preact'
+import { useState } from 'preact/hooks'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
   Sidebar,
@@ -19,68 +20,81 @@ import {
 
 import { VersionSwitcher } from '@/components/VersionSwitcher'
 import type { NavNode } from '@/lib/docs'
-
-// Every page below a node, in tree order.
-const pages = (nodes: NavNode[]): NavNode[] => nodes.flatMap((n) => (n.children ? pages(n.children) : [n]))
+import { cn } from '@/lib/utils'
 
 const contains = (n: NavNode, current: string): boolean => n.href === current || !!n.children?.some((c) => contains(c, current))
 
-function PageLink({ node, current }: { node: NavNode; current: string }) {
-  return (
-    <SidebarMenuButton asChild isActive={node.href === current}>
+// A page is a link; `sub` indents it under the branch that holds it.
+function Leaf({ node, current, sub }: { node: NavNode; current: string; sub?: boolean }) {
+  const Button = sub ? SidebarMenuSubButton : SidebarMenuButton
+  const item = (
+    <Button asChild isActive={node.href === current}>
       <a href={node.href} title={node.label} aria-current={node.href === current ? 'page' : undefined}>
         <span>{node.label}</span>
       </a>
-    </SidebarMenuButton>
+    </Button>
   )
+  return sub ? <SidebarMenuSubItem>{item}</SidebarMenuSubItem> : <SidebarMenuItem>{item}</SidebarMenuItem>
 }
 
-// A page with pages under it: the page stays listed, and the pages under it fold behind a chevron beside it. Open when the
-// current page is one of them.
-function Folded({ node, current }: { node: NavNode; current: string }) {
-  const self = node.children!.find((c) => c.href === node.page) ?? node
+// A node with children is one row, folding its contents: the page's own link beside a chevron, or for a directory with no
+// page, the chevron row labelled with the directory. The contents are open when the page on screen is among them.
+function Branch({ node, current, sub }: { node: NavNode; current: string; sub?: boolean }) {
+  const self = node.children!.find((c) => c.href === node.page)
+  const rest = node.children!.filter((c) => c !== self)
+  const Button = sub ? SidebarMenuSubButton : SidebarMenuButton
+  const Wrap = sub ? SidebarMenuSubItem : SidebarMenuItem
+  // Controlled, as the On this page disclosure is: the chevron turns from the state, not from a group that nested rows share.
+  const [open, setOpen] = useState(() => contains(node, current))
+  const chevron = (extra: string) => <ChevronRight className={cn('transition-transform', open && 'rotate-90', extra)} />
   return (
-    <SidebarMenuItem>
-      <PageLink node={self} current={current} />
-      <Collapsible defaultOpen={contains(node, current)} className="group/collapsible">
+    <Wrap>
+      {self && (
+        <Button asChild isActive={self.href === current}>
+          <a href={self.href} title={self.label} aria-current={self.href === current ? 'page' : undefined}>
+            <span>{self.label}</span>
+          </a>
+        </Button>
+      )}
+      <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger asChild>
-          <SidebarMenuAction aria-label={`Show the pages under ${node.label}`}>
-            <ChevronRight className="transition-transform group-data-[state=open]/collapsible:rotate-90" />
-          </SidebarMenuAction>
+          {self ? (
+            <SidebarMenuAction aria-label={`Show the pages under ${node.label}`}>{chevron('')}</SidebarMenuAction>
+          ) : (
+            <Button>
+              <span>{node.label}</span>
+              {chevron('ml-auto')}
+            </Button>
+          )}
         </CollapsibleTrigger>
         <CollapsibleContent>
           <SidebarMenuSub>
-            {pages(node.children!.filter((c) => c !== self)).map((c) => (
-              <SidebarMenuSubItem key={c.href}>
-                <SidebarMenuSubButton asChild isActive={c.href === current}>
-                  <a href={c.href} title={c.label} aria-current={c.href === current ? 'page' : undefined}>
-                    <span>{c.label}</span>
-                  </a>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
-            ))}
+            {rest.map((c) =>
+              c.children ? (
+                <Branch key={c.href ?? c.label} node={c} current={current} sub />
+              ) : (
+                <Leaf key={c.href} node={c} current={current} sub />
+              ),
+            )}
           </SidebarMenuSub>
         </CollapsibleContent>
       </Collapsible>
-    </SidebarMenuItem>
+    </Wrap>
   )
 }
 
-// The pages directly under a category are always listed, a directory's own pages included; the pages under one of them fold.
+// The category heading stays as it is; each page or directory under it is a row.
 function Section({ node, current }: { node: NavNode; current: string }) {
-  const items = node.children!.flatMap((c) => (c.children ? c.children : [c]))
   return (
     <SidebarGroup>
       {node.label && <SidebarGroupLabel>{node.label}</SidebarGroupLabel>}
       <SidebarGroupContent>
         <SidebarMenu>
-          {items.map((c) =>
+          {node.children!.map((c) =>
             c.children ? (
-              <Folded key={c.href} node={c} current={current} />
+              <Branch key={c.href ?? c.label} node={c} current={current} />
             ) : (
-              <SidebarMenuItem key={c.href}>
-                <PageLink node={c} current={current} />
-              </SidebarMenuItem>
+              <Leaf key={c.href} node={c} current={current} />
             ),
           )}
         </SidebarMenu>

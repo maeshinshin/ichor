@@ -45,11 +45,11 @@ func TestAdoptTakesTheNodesHostnameIntoTheSpec(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			cp, wk := classAFixture(t, "v113")
+			cp, wk := classAFixture(t, "v114")
 			cp = []byte(strings.Replace(string(cp), generatedAuto, tc.hostnameDoc, 1))
 			wk = []byte(strings.Replace(string(wk), generatedAuto, tc.hostnameDoc, 1))
 
-			env, deps := classAFlow(t, "v1.13.0", cp, wk)
+			env, deps := classAFlow(t, "v1.14.3", cp, wk)
 
 			out := planOutput(t, env, deps, tc.blocked)
 			if tc.blocked != strings.Contains(out, "HostnameConfig.hostname") {

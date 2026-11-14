@@ -43,10 +43,10 @@ const staticInterface = `    network:
 // captures the interfaces subtree, and only it, into the machine's TalosConfigPatch, which renders the
 // node byte for byte and so changes nothing on it.
 func TestAdoptCapturesTheLegacyNetworkInterfacesIntoAPatch(t *testing.T) {
-	cp, wk := classAFixture(t, "v113")
-	cp = []byte(strings.Replace(string(cp), "    kubelet:\n", staticInterface+"    kubelet:\n", 1))
+	cp, wk := classAFixture(t, "v114")
+	cp = []byte(strings.Replace(string(cp), "    features:\n", staticInterface+"    features:\n", 1))
 
-	env, deps := classAFlow(t, "v1.13.0", cp, wk)
+	env, deps := classAFlow(t, "v1.14.3", cp, wk)
 	planOutput(t, env, deps, false)
 
 	deps.PlanOnly, deps.AssumeYes = false, true
@@ -89,11 +89,11 @@ func TestAdoptCapturesTheLegacyNetworkInterfacesIntoAPatch(t *testing.T) {
 // The mirror drops a WireGuard private key, so the captured block would not even validate: the
 // adopt fails before writing anything instead of adopting the node with the key gone.
 func TestAdoptRefusesInterfacesItCannotReproduce(t *testing.T) {
-	cp, wk := classAFixture(t, "v113")
+	cp, wk := classAFixture(t, "v114")
 	wg := staticInterface + "              wireguard:\n                  privateKey: " + strings.Repeat("A", 43) + "=\n                  listenPort: 51820\n"
-	cp = []byte(strings.Replace(string(cp), "    kubelet:\n", wg+"    kubelet:\n", 1))
+	cp = []byte(strings.Replace(string(cp), "    features:\n", wg+"    features:\n", 1))
 
-	env, deps := classAFlow(t, "v1.13.0", cp, wk)
+	env, deps := classAFlow(t, "v1.14.3", cp, wk)
 	deps.PlanOnly = true
 
 	if err := runAdopt(context.Background(), "d1", testNamespace, deps); err == nil || !strings.Contains(err.Error(), "zero-drift patch") {

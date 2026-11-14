@@ -37,7 +37,11 @@ func run(out string) error {
 	if err != nil {
 		return err
 	}
-	comps = append(comps, std, chart, trustedRoot())
+	gw, err := gatewayAPI()
+	if err != nil {
+		return err
+	}
+	comps = append(comps, std, chart, trustedRoot(), gw)
 	comps = append(comps, npm...)
 	comps = append(comps, upstreamComponents()...)
 	text, err := render(comps)

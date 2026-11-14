@@ -64,6 +64,9 @@ func (c component) id() string {
 // The shipped binaries and the platforms they are built for (.goreleaser.yaml, .ko.yaml).
 const linux = "linux"
 
+// apache is the licence label of the Apache-2.0 texts the Go module pool resolves.
+const apache = "Apache-2.0"
+
 var builds = []struct {
 	pkg, tags string
 	goos      []string
@@ -275,10 +278,10 @@ func npmComponent(dir, name, version string, k kind) (component, error) {
 	}
 	// No licence file in the package: use the licence its package.json names, with the copyright
 	// lines its sources carry, and for the Google-derived code of @bufbuild/protobuf the BSD text of its header.
-	if !strings.Contains(pkg.License, "Apache-2.0") {
+	if !strings.Contains(pkg.License, apache) {
 		return c, fmt.Errorf("%s ships no licence file and declares %q", name, pkg.License)
 	}
-	c.RefLabel = "Apache-2.0"
+	c.RefLabel = apache
 	c.Note = "declared as " + pkg.License + " in its package.json; the package ships no licence file"
 	if c.Copyright, err = headerCopyrights(dir); err != nil {
 		return c, err
@@ -380,5 +383,32 @@ func chartComponent() (component, error) {
 // Apache-2.0 of the sigstore/root-signing repository, which carries no copyright line.
 func trustedRoot() component {
 	return component{Kind: kindData, Name: "Sigstore public-good trusted root", URL: "https://github.com/sigstore/root-signing",
-		Note: "internal/imagesig/trusted_root.json", RefLabel: "Apache-2.0"}
+		Note: "internal/imagesig/trusted_root.json", RefLabel: apache}
+}
+
+// gatewayAPI is the Gateway API CRDs pkg/cni/gatewayapi embeds. The copyright lines are the ones the
+// extractor carries at the top of the file from the upstream notice.
+func gatewayAPI() (component, error) {
+	src, err := os.ReadFile("pkg/cni/gatewayapi/crds.yaml")
+	if err != nil {
+		return component{}, err
+	}
+	m := regexp.MustCompile(`Gateway API (v[0-9.]+) standard-channel`).FindSubmatch(src)
+	if m == nil {
+		return component{}, fmt.Errorf("pkg/cni/gatewayapi/crds.yaml names no Gateway API version")
+	}
+	var copyrights []string
+	for l := range strings.SplitSeq(string(src), "\n") {
+		if !strings.HasPrefix(l, "#") {
+			break
+		}
+		if l = strings.TrimSpace(strings.TrimPrefix(l, "#")); copyrightLine.MatchString(l) {
+			copyrights = append(copyrights, l)
+		}
+	}
+	if len(copyrights) == 0 {
+		return component{}, fmt.Errorf("pkg/cni/gatewayapi/crds.yaml carries no copyright line")
+	}
+	return component{Kind: kindData, Name: "Gateway API CRDs", Version: string(m[1]), URL: "https://github.com/kubernetes-sigs/gateway-api",
+		Note: "pkg/cni/gatewayapi/crds.yaml", RefLabel: apache, Copyright: copyrights}, nil
 }

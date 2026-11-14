@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { conditionTone } from './conditions.ts'
+import { conditionTone, readyLabel } from './conditions.ts'
 
 test('health-like conditions are good when True and bad when False', () => {
   assert.equal(conditionTone('Ready', 'True'), 'good')
@@ -22,4 +22,12 @@ test('kubelet serving certificate conditions are neutral: pending issuance is pr
 test("ExtensionsPresent False reads as a failure", () => {
   assert.equal(conditionTone("ExtensionsPresent", "False"), "bad")
   assert.equal(conditionTone("ExtensionsPresent", "True"), "good")
+})
+
+// A TalosMachine Ready is the controller's convergence state, not the kubelet's: a node that kubectl
+// reports Ready and whose configuration waits for an API server restart is Ready=False here.
+test('a Ready condition shows its reason, else its status', () => {
+  assert.equal(readyLabel({ status: 'False', reason: 'APIServerRestartRequired' }), 'APIServerRestartRequired')
+  assert.equal(readyLabel({ status: 'True', reason: 'Converged' }), 'Converged')
+  assert.equal(readyLabel({ status: 'True', reason: '' }), 'True')
 })

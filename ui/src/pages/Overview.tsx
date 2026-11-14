@@ -24,6 +24,7 @@ import {
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { ToneBadge } from '@/components/ToneBadge'
+import { ReadyCell } from '@/components/ReadyCell'
 import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -55,10 +56,9 @@ import { formatTimestamp } from '@/lib/format'
 import { kubernetesStageProgress, operationState, progressCounts, type OpKind } from '@/lib/operations'
 import { attentionItems, backupsValue, tileTargets, versionLabel, type TileTarget } from '@/lib/overview'
 import { installerUnverified, releaseNotice } from '@/lib/ichorVersion'
-import { opStateTone, type Tone } from '@/lib/status'
+import { opStateTone } from '@/lib/status'
 import { componentOf, stateKey, stateTone, versionPair } from '@/lib/versions'
 import { hasPatch, patchComponents, unavailableNotes, type TargetList } from '@/lib/upgradeTargets'
-import { conditionTone } from '@/lib/conditions'
 import { useCluster } from '@/lib/useCluster'
 import { useMyPermissions } from '@/lib/useMyPermissions'
 import { clusterMenu, mayStart } from '@/lib/actions'
@@ -628,9 +628,6 @@ function Tile({ label, icon: Icon, value, sub, badge, target }: { label: string;
 }
 
 function NodeRow({ m, first }: { m: Machine; first: boolean }) {
-  const ready = readyOf(m)
-  const tone: Tone = ready ? conditionTone(ready.type, ready.status) : 'neutral'
-  const word = !ready ? t('overview.nodeUnknown') : ready.status === 'True' ? t('overview.nodeReady') : t('overview.nodeNotReady')
   // The hostname, else the node name; the machine's UUID name is only the link target.
   const name = machineDisplayName(m)
   const body = (
@@ -643,7 +640,7 @@ function NodeRow({ m, first }: { m: Machine; first: boolean }) {
         <ItemDescription>{enumLabel(MachineRole, m.role)}</ItemDescription>
       </ItemContent>
       <ItemActions>
-        <ToneBadge tone={tone}>{word}</ToneBadge>
+        <ReadyCell machine={m} />
       </ItemActions>
     </>
   )

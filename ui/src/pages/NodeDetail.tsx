@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { ConditionBadge, ConditionList } from '@/components/ConditionList'
+import { ConditionList } from '@/components/ConditionList'
+import { ReadyCell } from '@/components/ReadyCell'
 import { ErrorAlert } from '@/components/ErrorAlert'
 import { Field, Fields } from '@/components/PageHeader'
 import { EmptyNote, PageSkeleton } from '@/components/PageStates'
@@ -119,7 +120,7 @@ function NodePage({ namespace, name }: { namespace: string; name: string }) {
           machine && (
             <>
               <ToneBadge tone={approved ? 'good' : 'warn'}>{enumLabel(MachineApprovalState, machine.approvalState)}</ToneBadge>
-              {ready && <ConditionBadge type={ready.type} status={ready.status} />}
+              {ready && <ReadyCell machine={machine} />}
               {machine.stage && <Badge variant="outline">{machine.stage}</Badge>}
             </>
           )

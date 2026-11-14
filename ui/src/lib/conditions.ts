@@ -14,3 +14,10 @@ export function conditionTone(type: string, status: string): ConditionTone {
   if (status === 'False') return 'bad'
   return 'neutral'
 }
+
+// readyLabel is what a TalosMachine Ready condition shows: its reason, else its status. That Ready is
+// the controller's convergence state, not the kubelet's (kubectl's Ready), so the reason is the part
+// that says what is not ready; a node waiting for an API server restart is Ready in kubectl.
+export function readyLabel(c: { status: string; reason?: string }): string {
+  return c.reason || c.status
+}

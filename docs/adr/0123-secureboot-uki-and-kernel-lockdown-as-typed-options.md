@@ -65,3 +65,10 @@ Decided: `ApproveMachine` and `SetMachineInstall` name the installer image of an
 
 - **Unchanged.** The SecureBoot variant of the mode `Preferred` and `Required`, the `Off` check of a node that runs SecureBoot, and the webhook warning for an explicit image that is not a SecureBoot installer.
 - **Accepted trade-off.** A node Ichor installs from an approval or set-install, or re-provisions after a wipe, is reinstalled with the cluster's installer (the installer of the cluster's schematic, which is stock unless `spec.schematic.id` is set) and loses any system extensions of the schematic it booted. The maintainer accepted this on 2026-11-14. It is the intended behaviour, not a defect.
+
+## Amendment 2026-11-14: a wipe mode that erases user disks, and what all erases
+
+Decided: `spec.node.wipeMode` gains `system-disk-and-user-disks` (`ichor delete node --wipe-mode system-disk-and-user-disks`, the UI's "What to wipe"). It erases the whole system disk and every user disk, except CD-ROM and read-only disks. Talos wipes only the user disks a reset names in `UserDisksToWipe`, so the controller names the block devices that are not the system disk, CD-ROM or read-only (`reclaim.UserDiskPaths`) and sends them with mode ALL. The value is appended to the CRD enum, as every enum value is.
+
+- **`all` erases the same whole system disk as `system-disk`.** The 2026-11-05 amendment above says `all` also erases the user disks. That was wrong: an `all` request names no user disk, so Talos leaves them alone. The API, the CLI help, the plan and the UI now say so. `all` stays in the API, since enum values are never removed, and the UI no longer offers it as a second choice for the same wipe.
+- **Why not `user-disks` alone.** Talos's own `USER_DISKS` mode erases the user disks and keeps the system disk. A node that keeps its system disk still boots its installed system, which the 2026-11-05 amendment already gives as the reason `user-disks` is not offered. A decommission needs both erased in one operation, so the new mode erases the system disk too.

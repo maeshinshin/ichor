@@ -301,7 +301,9 @@ so a machine whose system disk comes first in the boot order boots its installed
 UKI again, into maintenance mode, and the SecureBoot ISO is never started: nothing
 is reinstalled, the node only takes the configuration again. `--wipe-mode system-disk` (`wipeMode: system-disk` on a reset operation)
 erases the whole system disk, boot and EFI included, so the firmware falls through
-to the ISO; `--wipe-mode all` erases the same system disk and leaves user disks alone. Keep the ISO attached or first in the boot order before you
+to the ISO; `--wipe-mode all` erases the same system disk and leaves user disks alone.
+`--wipe-mode system-disk-and-user-disks` erases the system disk and every user disk (use it only when their
+data is expendable). Keep the ISO attached or first in the boot order before you
 remove the node. Without Ichor's wipe, the same effect comes from
 `talosctl reset --wipe-mode all` through the admin path, or from putting the ISO
 first in the boot order. After the wipe the machine is looked for again every 15

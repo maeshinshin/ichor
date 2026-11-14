@@ -97,5 +97,5 @@ test('a service restart needs a service from the allowlist', () => {
 })
 
 test('a remove wipes STATE and EPHEMERAL by default and sends the spec.node.wipeMode names for the bigger wipes', () => {
-  assert.deepEqual(wipeChoices.map(wipeModeOf), ['', 'system-disk', 'all'])
+  assert.deepEqual(wipeChoices.map(wipeModeOf), ['', 'system-disk', 'system-disk-and-user-disks'])
 })

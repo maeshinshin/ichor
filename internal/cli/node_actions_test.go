@@ -273,14 +273,33 @@ func TestNodeRemoveWipeMode(t *testing.T) {
 	}
 }
 
+// system-disk-and-user-disks is the one mode that erases user disks: the flag takes it and the plan says so.
+func TestNodeRemoveSystemDiskAndUserDisks(t *testing.T) {
+	if got, err := wipeModeWire(ichorv1alpha1.WipeModeSystemDiskAndUserDisks); err != nil || got != ichorv1alpha1.WipeModeSystemDiskAndUserDisks {
+		t.Fatalf("wipeModeWire(system-disk-and-user-disks) = %q, %v", got, err)
+	}
+
+	c, _ := nodeActionClients(t, false)
+
+	var errw bytes.Buffer
+	if err := runNodeAction(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &errw,
+		nodeActionSpec{Machine: testMachineName, Action: pb.NodeAction_NODE_ACTION_REMOVE, Confirm: testMachineName, WipeMode: ichorv1alpha1.WipeModeSystemDiskAndUserDisks}); err != nil {
+		t.Fatalf("system-disk-and-user-disks remove: %v", err)
+	}
+
+	if !strings.Contains(errw.String(), "every user disk") {
+		t.Fatalf("the next-steps text must say every user disk is wiped:\n%s", errw.String())
+	}
+}
+
 // all erases the same system disk as system-disk, so neither the help nor the flag may say it also wipes user disks.
 func TestNodeRemoveAllDoesNotClaimUserDisks(t *testing.T) {
 	usage := deleteNodeCmd.Flags().Lookup("wipe-mode").Usage
-	if !strings.Contains(nodeRemoveLong, "never a user disk") || strings.Contains(nodeRemoveLong, "every user disk") {
+	if !strings.Contains(nodeRemoveLong, "never a user disk") || strings.Contains(nodeRemoveLong, "all also wipes") {
 		t.Fatalf("the help for all must say it never wipes a user disk:\n%s", nodeRemoveLong)
 	}
 
-	if !strings.Contains(usage, "user disks are not wiped") || strings.Contains(usage, "every user disk") {
+	if !strings.Contains(usage, "all (the whole system disk, as system-disk; user disks are not wiped)") {
 		t.Fatalf("the --wipe-mode usage for all must say user disks are not wiped: %q", usage)
 	}
 }

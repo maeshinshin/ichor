@@ -19,7 +19,9 @@ delete node --wipe-mode chooses what the wipe erases: system-partitions (the def
 EPHEMERAL partitions, so the node boots its installed system again from a fresh state; system-disk
 wipes the whole system disk, boot and EFI included, so the node starts from its boot image (ISO or PXE)
 and installs afresh, which is how a node is moved onto SecureBoot images (docs/guides/hardening.md);
-all erases the same whole system disk as system-disk and never a user disk. system-disk and all are irreversible.
+all erases the same whole system disk as system-disk and never a user disk. system-disk-and-user-disks
+erases that system disk and every user disk, except CD-ROM and read-only disks.
+system-disk, all and system-disk-and-user-disks are irreversible.
 
 ```sh
 ichor delete node NAME [flags]
@@ -45,7 +47,7 @@ ichor delete node NAME [flags]
       --override                 incident only: override a safety check (reset a node, restore etcd, reboot or shut down the last worker, an upgrade the compatibility table refuses); needs the override RBAC verb on the resource; implies --local
       --reboot                   after the wipe reboot the node into maintenance mode, so it can be added again, instead of powering it off
       --tls-server-name string   name on ichor-ui's serving certificate, when it is not the Service's DNS name (<service>.<namespace>.svc)
-      --wipe-mode string         what to wipe: system-partitions (STATE and EPHEMERAL), system-disk (the whole system disk) or all (the whole system disk, as system-disk; user disks are not wiped) (default "system-partitions")
+      --wipe-mode string         what to wipe: system-partitions (STATE and EPHEMERAL), system-disk (the whole system disk) all (the whole system disk, as system-disk; user disks are not wiped) or system-disk-and-user-disks (the whole system disk and every user disk) (default "system-partitions")
 ```
 
 ### Options inherited from parent commands

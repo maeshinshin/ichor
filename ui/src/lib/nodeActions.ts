@@ -34,8 +34,8 @@ export const nodeActions: readonly NodeActionDef[] = [
 
 // What a remove wipes: the Select's choices and the wipe mode each sends. The default sends
 // nothing (STATE and EPHEMERAL only); the names match TalosOperation.spec.node.wipeMode.
-export type WipeChoice = 'system-partitions' | 'system-disk' | 'all'
-export const wipeChoices: readonly WipeChoice[] = ['system-partitions', 'system-disk', 'all']
+export type WipeChoice = 'system-partitions' | 'system-disk' | 'system-disk-and-user-disks'
+export const wipeChoices: readonly WipeChoice[] = ['system-partitions', 'system-disk', 'system-disk-and-user-disks']
 
 export function wipeModeOf(c: WipeChoice): string {
   return c === 'system-partitions' ? '' : c

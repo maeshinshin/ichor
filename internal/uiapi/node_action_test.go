@@ -419,6 +419,10 @@ func TestNodeResetWipeMode(t *testing.T) {
 		t.Fatalf("a system-disk reset must say it wipes the whole disk: %q", steps)
 	}
 
+	if steps := strings.Join(planNodeOK(t, s, plan(pb.NodeAction_NODE_ACTION_RESET, ichorv1alpha1.WipeModeSystemDiskAndUserDisks)).GetSteps(), "\n"); !strings.Contains(steps, "every user disk") {
+		t.Fatalf("a system-disk-and-user-disks reset must say it wipes every user disk: %q", steps)
+	}
+
 	if steps := strings.Join(planNodeOK(t, s, plan(pb.NodeAction_NODE_ACTION_RESET, "")).GetSteps(), "\n"); !strings.Contains(steps, "STATE and EPHEMERAL") {
 		t.Fatalf("the default reset keeps its text: %q", steps)
 	}
@@ -486,6 +490,7 @@ func TestRemoveMachineWipeMode(t *testing.T) {
 		{"", "STATE and EPHEMERAL", ""},
 		{ichorv1alpha1.WipeModeSystemDisk, "whole system disk", ""},
 		{ichorv1alpha1.WipeModeAll, "whole system disk", "every user disk"},
+		{ichorv1alpha1.WipeModeSystemDiskAndUserDisks, "every user disk", ""},
 	} {
 		t.Run("mode="+tc.mode, func(t *testing.T) {
 			s, k8s := opServer(t, opObjects()...)

@@ -66,11 +66,11 @@ func wipeModeWire(flag string) (string, error) {
 	switch flag {
 	case "", wipeModeSystemPartitions:
 		return "", nil
-	case ichorv1alpha1.WipeModeSystemDisk, ichorv1alpha1.WipeModeAll:
+	case ichorv1alpha1.WipeModeSystemDisk, ichorv1alpha1.WipeModeAll, ichorv1alpha1.WipeModeSystemDiskAndUserDisks:
 		return flag, nil
 	}
 
-	return "", fmt.Errorf("--wipe-mode %q is not one of %s, %s, %s", flag, wipeModeSystemPartitions, ichorv1alpha1.WipeModeSystemDisk, ichorv1alpha1.WipeModeAll)
+	return "", fmt.Errorf("--wipe-mode %q is not one of %s, %s, %s, %s", flag, wipeModeSystemPartitions, ichorv1alpha1.WipeModeSystemDisk, ichorv1alpha1.WipeModeAll, ichorv1alpha1.WipeModeSystemDiskAndUserDisks)
 }
 
 func (s nodeActionSpec) request(bg *pb.Override) *pb.NodeActionRequest {
@@ -276,7 +276,9 @@ const nodeRemoveLong = `delete node --wipe-mode chooses what the wipe erases: sy
 EPHEMERAL partitions, so the node boots its installed system again from a fresh state; system-disk
 wipes the whole system disk, boot and EFI included, so the node starts from its boot image (ISO or PXE)
 and installs afresh, which is how a node is moved onto SecureBoot images (docs/guides/hardening.md);
-all erases the same whole system disk as system-disk and never a user disk. system-disk and all are irreversible.`
+all erases the same whole system disk as system-disk and never a user disk. system-disk-and-user-disks
+erases that system disk and every user disk, except CD-ROM and read-only disks.
+system-disk, all and system-disk-and-user-disks are irreversible.`
 
 func newNodeActionCmd(use, short string, action pb.NodeAction, args cobra.PositionalArgs, spec func(args []string) nodeActionSpec) *cobra.Command {
 	cmd := &cobra.Command{
@@ -362,6 +364,6 @@ func init() {
 		"after the wipe reboot the node into maintenance mode, so it can be added again, instead of powering it off")
 	deleteNodeCmd.Long += "\n\n" + nodeRemoveLong
 	deleteNodeCmd.Flags().StringVar(&nodeActionOpts.WipeMode, "wipe-mode", wipeModeSystemPartitions,
-		"what to wipe: system-partitions (STATE and EPHEMERAL), system-disk (the whole system disk) or all (the whole system disk, as system-disk; user disks are not wiped)")
+		"what to wipe: system-partitions (STATE and EPHEMERAL), system-disk (the whole system disk) all (the whole system disk, as system-disk; user disks are not wiped) or system-disk-and-user-disks (the whole system disk and every user disk)")
 	deleteNodeCmd.Flags().StringVar(&nodeActionOpts.Confirm, "confirm", "", "the node name (the TalosMachine name, not the hostname), to go on without being asked to type it")
 }

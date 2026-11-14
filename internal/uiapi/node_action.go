@@ -137,8 +137,8 @@ func (s *Server) planNode(ctx context.Context, req *pb.NodeActionRequest) (*opPl
 			return nil, invalid("a wipe mode only goes with reset and remove")
 		}
 
-		if wm != ichorv1alpha1.WipeModeSystemDisk && wm != ichorv1alpha1.WipeModeAll {
-			return nil, invalid("wipe mode %q is not one of %s, %s", wm, ichorv1alpha1.WipeModeSystemDisk, ichorv1alpha1.WipeModeAll)
+		if wm != ichorv1alpha1.WipeModeSystemDisk && wm != ichorv1alpha1.WipeModeAll && wm != ichorv1alpha1.WipeModeSystemDiskAndUserDisks {
+			return nil, invalid("wipe mode %q is not one of %s, %s, %s", wm, ichorv1alpha1.WipeModeSystemDisk, ichorv1alpha1.WipeModeAll, ichorv1alpha1.WipeModeSystemDiskAndUserDisks)
 		}
 	}
 
@@ -292,6 +292,8 @@ func describeNode(resp *pb.PlanOperationResponse, m *ichorv1alpha1.TalosMachine,
 			wipe = "Wipe the node's whole system disk (boot and EFI included) and " + after + "; it starts from its boot image again, so the disk is installed afresh."
 		case ichorv1alpha1.WipeModeAll:
 			wipe = "Wipe the node's whole system disk (boot and EFI included), and " + after + "; it starts from its boot image again. User disks are not wiped."
+		case ichorv1alpha1.WipeModeSystemDiskAndUserDisks:
+			wipe = "Wipe the node's whole system disk (boot and EFI included) and every user disk, and " + after + "; it starts from its boot image again."
 		}
 
 		resp.Steps = removalSteps(isCP, wipe)
@@ -309,6 +311,8 @@ func removeWarning(powerOff bool, wipeMode string) string {
 		wiped = "The node's whole system disk is wiped; user disks are not touched."
 	case ichorv1alpha1.WipeModeAll:
 		wiped = "The node's whole system disk is wiped; user disks are not touched."
+	case ichorv1alpha1.WipeModeSystemDiskAndUserDisks:
+		wiped = "The node's whole system disk and every user disk are wiped, except CD-ROM and read-only disks."
 	}
 
 	after := "It reboots into maintenance mode and shows up as a new pending node, so you can add it again."

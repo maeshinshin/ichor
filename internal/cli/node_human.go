@@ -120,6 +120,8 @@ func nodeRemoveNext(errw io.Writer, reboot bool, wipeMode string) {
 		wiped = "its whole system disk"
 	case ichorv1alpha1.WipeModeAll:
 		wiped = "its whole system disk"
+	case ichorv1alpha1.WipeModeSystemDiskAndUserDisks:
+		wiped = "its whole system disk and every user disk"
 	}
 
 	did := "The controller drains the node, removes its etcd member (control plane), wipes " + wiped + ", powers it off and deletes its Kubernetes Node."

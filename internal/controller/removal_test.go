@@ -299,7 +299,7 @@ var _ = Describe("renewWhile", func() {
 		cluster := newTestClusterWithCount(1, "does-not-exist")
 
 		// A duration shorter than the test itself: without renewal, this
-		// lock would expire well within the window below on its own.
+		// lock would expire on its own.
 		const shortDuration = 150 * time.Millisecond
 
 		lock := clusterlock.New(k8sClient, client.ObjectKeyFromObject(cluster), shortDuration)
@@ -307,11 +307,9 @@ var _ = Describe("renewWhile", func() {
 
 		stop := renewWhile(ctx, lock, controllerIdentity, 40*time.Millisecond)
 
-		// Outlives shortDuration several times over -- only possible if
-		// renewWhile's ticker actually called Renew repeatedly.
-		Consistently(func() error {
-			return lock.Acquire(ctx, "someone-else")
-		}, 400*time.Millisecond, 20*time.Millisecond).Should(HaveOccurred())
+		// Outlives its lease -- only possible if renewWhile's ticker actually called Renew repeatedly.
+		expectRenewedPastLease(client.ObjectKeyFromObject(cluster), "renewWhile must renew the lock past its lease")
+		Expect(lock.Acquire(ctx, "someone-else")).To(HaveOccurred())
 
 		stop()
 

@@ -50,10 +50,9 @@ all that is needed:
   is the home page.
 - **The section** is the directory. `guides/` is Guides, `concepts/` is Concepts,
   `design/` is Design, `reference/` is Reference. Any other directory becomes a section of its own, listed
-  after those. Every section is a flat list of its pages: a directory inside a section
-  adds its pages to that list in place, with no group to open. The one exception is a
-  page one level in with pages under it, such as `guides/getting-started/create-the-cluster/`:
-  those pages fold behind a chevron beside their page.
+  after those. Each page or directory directly under a section is a row of the sidebar.
+  A directory, or a page with pages under it (such as `guides/getting-started/create-the-cluster/`),
+  is one row whose pages fold beneath it; the row is open when the page on screen is among them.
   `adr/` holds the decision records, kept in the repository and not published on the site.
 - **A long page** is split into a short page and a directory of the same name:
   `design/architecture.md` is the index and `design/architecture/` holds one page

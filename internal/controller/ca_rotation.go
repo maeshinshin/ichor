@@ -257,9 +257,37 @@ func (c *caRun) status(ctx context.Context, phase string, cond metav1.ConditionS
 	return c.r.Status().Update(ctx, c.op)
 }
 
-// blocked pauses the operation without advancing anything; it is retried by the caller's requeue.
+// blocked pauses the operation without advancing anything; it is retried by the caller's requeue, until the
+// rotation has been blocked for rotationGiveUpAfter in a row.
 func (c *caRun) blocked(ctx context.Context, message string) error {
+	if blockedFor(apimeta.FindStatusCondition(c.op.Status.Conditions, conditionCARotation), reasonCARotationBlocked) >=
+		rotationGiveUpAfter {
+		return c.r.giveUpBlocked(ctx, c.op, conditionCARotation, c.scrub.clean(message))
+	}
+
 	return c.status(ctx, ichorv1alpha1.TalosOperationPhasePaused, metav1.ConditionFalse, reasonCARotationBlocked, message)
+}
+
+// giveUpBlocked pauses a rotation that has been blocked for rotationGiveUpAfter, on a failed step: the state a
+// failed machine step leaves. releaseIfHolderStopped then frees the cluster lock, and an explicit retry resumes
+// the rotation. The rotation's condition goes, so the next blocked streak is timed from its own start.
+func (r *TalosOperationReconciler) giveUpBlocked(ctx context.Context, op *ichorv1alpha1.TalosOperation, condType, message string) error {
+	apimeta.RemoveStatusCondition(&op.Status.Conditions, condType)
+
+	return r.setPhase(ctx, op, ichorv1alpha1.TalosOperationPhasePaused, reasonOperationStepFailed,
+		fmt.Sprintf("gave up after being blocked for %s: %s", rotationGiveUpAfter, message))
+}
+
+// blockedFor is how long cond has read Blocked with reason. Its transition time moves when a pass makes
+// progress, so it dates the current streak of blocked passes; zero when cond is not blocked.
+// shortcut: a pause (spec.paused, a lock held elsewhere) does not restart the streak, so a rotation resumed after
+// a long pause can give up on its first blocked pass; drop when the streak is kept in status.
+func blockedFor(cond *metav1.Condition, reason string) time.Duration {
+	if cond == nil || cond.Status != metav1.ConditionFalse || cond.Reason != reason {
+		return 0
+	}
+
+	return time.Since(cond.LastTransitionTime.Time)
 }
 
 func (c *caRun) retry(ctx context.Context, message string) (ctrl.Result, error) {

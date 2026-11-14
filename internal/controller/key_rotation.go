@@ -237,8 +237,14 @@ func (c *keyRun) status(ctx context.Context, phase string, cond metav1.Condition
 	return c.r.Status().Update(ctx, c.op)
 }
 
-// blocked pauses the operation without advancing anything; it is retried by the caller's requeue.
+// blocked pauses the operation without advancing anything; it is retried by the caller's requeue, until the
+// rotation has been blocked for rotationGiveUpAfter in a row (caRun.blocked).
 func (c *keyRun) blocked(ctx context.Context, message string) error {
+	if blockedFor(apimeta.FindStatusCondition(c.op.Status.Conditions, conditionKeyRotation), reasonKeyRotationBlocked) >=
+		rotationGiveUpAfter {
+		return c.r.giveUpBlocked(ctx, c.op, conditionKeyRotation, c.scrub.clean(message))
+	}
+
 	return c.status(ctx, ichorv1alpha1.TalosOperationPhasePaused, metav1.ConditionFalse, reasonKeyRotationBlocked, message)
 }
 

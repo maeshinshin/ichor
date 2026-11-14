@@ -78,5 +78,7 @@ ichor init \
 - With this pattern Ichor configures no network for the first node unless you give its network flags (`--nic`, `--address`, `--gateway`, `--dns`, `--vlan`); then Talos's default applies: a DHCP client on every physical network interface.
 - `--preset single` makes the node one schedulable control plane. There is
   nothing to approve afterwards, so skip the approve step of the guide.
+- Sign-in is on by default: init creates the first admin and prints its
+  password once. See [Sign-in](settings-every-pattern.md#sign-in).
 - On virtual networks that pass geneve but not vxlan, add `--cni-tunnel geneve`
   (see [Settings every pattern shares](settings-every-pattern.md#the-shape-of-the-cluster)).

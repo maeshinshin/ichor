@@ -4,15 +4,16 @@ sidebar_order: 5
 
 # 5. Open the UI and sign in
 
-If you turned sign-in on, open the `--ui-url` in a browser. The certificate is
-yours, so a self-signed one makes the browser warn. Sign in as `admin` with the
+Sign-in is on by default. Open ichor-ui in a browser at its issuer: the
+`--ui-url` you gave init, or `https://localhost:8443` when you gave none. The
+certificate is Ichor's own, so the browser warns. Sign in as `admin` with the
 password init printed. The first login forces you to choose a new password
 (12 to 128 bytes); after that, users, roles and kubeconfigs are as described
 in [Users and login](../users-and-login.md).
 
-If you did not use `--ui-url`, there is no login: `ichor init` started
-ichor-ui with `--allow-unauthenticated`, so anyone who can reach it can make
-changes. Open it through a port-forward:
+If you ran init with `--allow-unauthenticated` there is no login: anyone who can
+reach ichor-ui can change the cluster, including resetting nodes. Open it through
+the port-forward that `ichor ui` sets up, at `https://localhost:8443`:
 
 ```sh
 ichor ui

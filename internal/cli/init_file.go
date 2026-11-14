@@ -94,8 +94,9 @@ discovery:
     - 192.168.1.51
   cidrs:                           # --discover-cidr
     - 192.168.1.64/29
-ui:                                # leave the whole block out for no sign-in (no --ui-url)
+ui:                                # sign-in is on by default; the URL defaults to https://localhost:8443
   url: https://192.168.1.60        # --ui-url
+  allowUnauthenticated: false      # --allow-unauthenticated: ichor-ui with no sign-in (anyone who can reach it can change the cluster)
   adminUser: admin                 # --admin-user
   tls:                             # optional; leave out for Ichor's own CA
     certFile: ./ui.crt             # --ui-tls-cert (relative to this file)
@@ -166,9 +167,10 @@ type initConfigDisco struct {
 }
 
 type initConfigUI struct {
-	URL       string `json:"url"`
-	AdminUser string `json:"adminUser"`
-	TLS       struct {
+	URL                  string `json:"url"`
+	AllowUnauthenticated bool   `json:"allowUnauthenticated"`
+	AdminUser            string `json:"adminUser"`
+	TLS                  struct {
 		CertFile   string `json:"certFile"`
 		KeyFile    string `json:"keyFile"`
 		SecretName string `json:"secretName"`
@@ -271,6 +273,7 @@ func (c initConfigFile) values(dir string) []initFileValue {
 		{"discover-address", "discovery.addresses", c.Discovery.Addresses},
 		{"discover-cidr", "discovery.cidrs", c.Discovery.CIDRs},
 		{"ui-url", "ui.url", one(c.UI.URL)},
+		{"allow-unauthenticated", "ui.allowUnauthenticated", boolFlag(c.UI.AllowUnauthenticated)},
 		{"admin-user", "ui.adminUser", one(c.UI.AdminUser)},
 		{"ui-tls-cert", "ui.tls.certFile", one(rel(c.UI.TLS.CertFile))},
 		{"ui-tls-key", "ui.tls.keyFile", one(rel(c.UI.TLS.KeyFile))},

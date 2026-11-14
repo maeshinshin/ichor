@@ -26,7 +26,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/spf13/pflag"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -119,6 +121,7 @@ func TestRunInit_UIURLTurnsUsersOnAndCreatesTheFirstAdmin(t *testing.T) {
 
 	opts := validInitOptions()
 	opts.UIURL, opts.AdminUser = testUIURL, testAdminName
+	opts.AllowUnauthenticated = false
 
 	if err := runInit(context.Background(), opts, deps); err != nil {
 		t.Fatalf("runInit: %v", err)
@@ -196,6 +199,29 @@ func TestRunInit_UIURLTurnsUsersOnAndCreatesTheFirstAdmin(t *testing.T) {
 	}
 }
 
+// initOptsWithFlags is validInitOptions with the given init flags applied, as cobra applies them. It
+// binds the flags to the fixture itself, so the flags' defaults are overwritten by the fixture
+// afterwards, and the parse changes only the flags named in args.
+func initOptsWithFlags(t *testing.T, args ...string) initOptions {
+	t.Helper()
+
+	var opts initOptions
+
+	var wait time.Duration
+
+	flags := pflag.NewFlagSet("init", pflag.ContinueOnError)
+	bindInitFlags(flags, &opts, &wait)
+
+	opts = validInitOptions()
+	opts.AllowUnauthenticated = false // the flag's default: sign-in on
+
+	if err := flags.Parse(args); err != nil {
+		t.Fatalf("parsing %v: %v", args, err)
+	}
+
+	return opts
+}
+
 // A Create of the credentials Secret that times out in etcd but went through is retried, and the
 // AlreadyExists the retry meets counts as success.
 func TestRunInit_UIURLRetriesAnEtcdTimeoutOnTheCredentialsSecret(t *testing.T) {
@@ -229,6 +255,7 @@ func TestRunInit_UIURLRetriesAnEtcdTimeoutOnTheCredentialsSecret(t *testing.T) {
 
 	opts := validInitOptions()
 	opts.UIURL, opts.AdminUser = testUIURL, testAdminName
+	opts.AllowUnauthenticated = false
 
 	if err := runInit(context.Background(), opts, deps); err != nil {
 		t.Fatalf("runInit: %v", err)
@@ -267,6 +294,7 @@ func TestRunInit_UIURLRetriesAnUpdateThatLandedBeforeTheTimeout(t *testing.T) {
 
 	opts := validInitOptions()
 	opts.UIURL, opts.AdminUser = testUIURL, testAdminName
+	opts.AllowUnauthenticated = false
 
 	if err := runInit(context.Background(), opts, deps); err != nil {
 		t.Fatalf("runInit: %v", err)
@@ -288,13 +316,105 @@ func TestRunInit_UIURLRetriesAnUpdateThatLandedBeforeTheTimeout(t *testing.T) {
 	}
 }
 
+// TestRunInit_NoFlagsTurnsSignInOnAtTheDefaultIssuer: an init with no sign-in flags leaves ichor-ui
+// requiring sign-in, with the first admin created and the issuer at defaultUIURL.
+func TestRunInit_NoFlagsTurnsSignInOnAtTheDefaultIssuer(t *testing.T) {
+	withTempHome(t)
+
+	k := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(uiObjects()...).Build()
+	deps, _, _ := newFakeInitDeps(t, k)
+
+	var stdout, stderr bytes.Buffer
+
+	deps.Stdout, deps.Stderr = &stdout, &stderr
+
+	if err := runInit(context.Background(), initOptsWithFlags(t), deps); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	ctx := context.Background()
+
+	var u ichorv1alpha1.IchorUser
+	if err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: defaultAdminUser}, &u); err != nil {
+		t.Fatalf("the default admin was not created: %v", err)
+	}
+
+	var dep appsv1.Deployment
+	if err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: testPrefixedUIDeployment}, &dep); err != nil {
+		t.Fatal(err)
+	}
+
+	args := dep.Spec.Template.Spec.Containers[0].Args
+	if !slices.Contains(args, "--users-enabled=true") || !slices.Contains(args, "--external-url="+defaultUIURL) || slices.Contains(args, "--allow-unauthenticated=true") {
+		t.Errorf("ichor-ui args = %v, want sign-in on at %s", args, defaultUIURL)
+	}
+
+	var cluster ichorv1alpha1.TalosCluster
+	if err := k.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: testInitClusterName}, &cluster); err != nil {
+		t.Fatal(err)
+	}
+
+	if a := cluster.Spec.Authentication; a == nil || a.Ichor == nil || !a.Ichor.Enabled || a.Ichor.URL != defaultUIURL {
+		t.Errorf("spec.authentication = %+v, want the issuer %s", a, defaultUIURL)
+	}
+}
+
+// TestRunInit_AllowUnauthenticatedKeepsIchorUIOpenWithoutSignIn: the explicit flag is the only way to
+// an ichor-ui with no sign-in; it creates no admin and leaves spec.authentication unset. The open
+// flag reaches the Deployment through the install manifest (TestInitStartsIchorUIWithAnExplicitAllowUnauthenticated).
+func TestRunInit_AllowUnauthenticatedKeepsIchorUIOpenWithoutSignIn(t *testing.T) {
+	withTempHome(t)
+
+	k := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(uiObjects()...).Build()
+	deps, _, _ := newFakeInitDeps(t, k)
+
+	var stdout, stderr bytes.Buffer
+
+	deps.Stdout, deps.Stderr = &stdout, &stderr
+
+	if err := runInit(context.Background(), initOptsWithFlags(t, "--allow-unauthenticated"), deps); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	ctx := context.Background()
+
+	var u ichorv1alpha1.IchorUser
+	if err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: defaultAdminUser}, &u); err == nil {
+		t.Error("an admin was created although sign-in is off")
+	}
+
+	var dep appsv1.Deployment
+	if err := k.Get(ctx, types.NamespacedName{Namespace: ichorControllerNamespace, Name: testPrefixedUIDeployment}, &dep); err != nil {
+		t.Fatal(err)
+	}
+
+	if args := dep.Spec.Template.Spec.Containers[0].Args; slices.Contains(args, "--users-enabled=true") {
+		t.Errorf("ichor-ui args = %v, want no users", args)
+	}
+
+	var cluster ichorv1alpha1.TalosCluster
+	if err := k.Get(ctx, types.NamespacedName{Namespace: testNamespace, Name: testInitClusterName}, &cluster); err != nil {
+		t.Fatal(err)
+	}
+
+	if a := cluster.Spec.Authentication; a != nil && a.Ichor != nil && a.Ichor.Enabled {
+		t.Errorf("spec.authentication = %+v, want none", a)
+	}
+
+	if !strings.Contains(stderr.String(), "no sign-in (--allow-unauthenticated)") {
+		t.Errorf("no warning about the open ichor-ui:\n%s", stderr.String())
+	}
+}
+
 func TestRunInit_UsersFlagsAreCheckedBeforeAnythingHappens(t *testing.T) {
 	for name, mutate := range map[string]func(*initOptions){
-		"http url":                  func(o *initOptions) { o.UIURL = "http://ichor.example.com" },
-		"url with a path query":     func(o *initOptions) { o.UIURL = "https://ichor.example.com/?a=b" },
-		"old contract":              func(o *initOptions) { o.UIURL, o.VersionContract = testUIURL, ver113 },
-		"admin user without ui-url": func(o *initOptions) { o.AdminUser = testAdminName },
-		"bad admin user name":       func(o *initOptions) { o.UIURL, o.AdminUser = testUIURL, "Root User" },
+		"http url":                 func(o *initOptions) { o.UIURL = "http://ichor.example.com" },
+		"url with a path query":    func(o *initOptions) { o.UIURL = "https://ichor.example.com/?a=b" },
+		"old contract":             func(o *initOptions) { o.UIURL, o.VersionContract = testUIURL, ver113 },
+		"old contract, default":    func(o *initOptions) { o.VersionContract = ver113 },
+		"bad admin user name":      func(o *initOptions) { o.UIURL, o.AdminUser = testUIURL, "Root User" },
+		"ui-url with no sign-in":   func(o *initOptions) { o.UIURL, o.AllowUnauthenticated = testUIURL, true },
+		"tls flag with no sign-in": func(o *initOptions) { o.UITLSSecret, o.AllowUnauthenticated = "ichor-ui-cert", true },
 	} {
 		t.Run(name, func(t *testing.T) {
 			withTempHome(t)
@@ -303,6 +423,7 @@ func TestRunInit_UsersFlagsAreCheckedBeforeAnythingHappens(t *testing.T) {
 			deps, maint, _ := newFakeInitDeps(t, k)
 
 			opts := validInitOptions()
+			opts.AllowUnauthenticated = false
 			mutate(&opts)
 
 			if err := runInit(context.Background(), opts, deps); err == nil {
@@ -343,7 +464,7 @@ func TestRunInit_MissingUIObjectsLeaveNothingHalfDone(t *testing.T) {
 			deps.Stdout, deps.Stderr = &stdout, &stderr
 
 			opts := validInitOptions()
-			opts.UIURL = testUIURL
+			opts.UIURL, opts.AllowUnauthenticated = testUIURL, false
 
 			if err := runInit(context.Background(), opts, deps); err == nil {
 				t.Fatal("expected an error")

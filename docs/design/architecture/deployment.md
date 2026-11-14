@@ -9,9 +9,11 @@ controller and UI run with two replicas, a PodDisruptionBudget and anti-affinity
 except on clusters with a single schedulable node, where the installer drops to
 one replica and no PDB (otherwise a drain never finishes).
 
-Ichor's own users and login are off by default. Turning them on
+Ichor's own users and login are on by default for `ichor init`, with the
+issuer `https://localhost:8443` unless `--ui-url` gives another (`--allow-unauthenticated`
+turns them off). The Helm chart keeps them off. Turning them on in the chart
 needs three things a default install lacks: an https URL that browsers and the
-CLI can reach (`ichorUI.users.externalURL`, set by `ichor init --ui-url`), a
+CLI can reach (`ichorUI.users.externalURL`, the value `ichor init --ui-url` sets), a
 Talos v1.14 contract or later (earlier contracts can carry only one issuer),
 and an `ichor rollout config` rollout of the control planes. ichor-ui is the
 issuer. The kube-apiserver reads discovery and keys from a ClusterIP listener

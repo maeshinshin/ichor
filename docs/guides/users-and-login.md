@@ -10,7 +10,10 @@ Status: accepted. The steps below are
 what it decides, plus the CLI flags the implementation added (`--ca-file`,
 `--out`, `--bootstrap`).
 
-Users are off by default. Nothing here applies until you turn them on.
+`ichor init` turns users on by default, with the issuer `https://localhost:8443`
+(where `ichor ui` serves ichor-ui) unless you pass `--ui-url`. The Helm chart
+still defaults to off (`ichorUI.users.enabled`); nothing there applies until you
+turn it on.
 
 ## Without any sign-in
 
@@ -24,9 +27,10 @@ ServiceAccount's permissions and is audited as `ichor-ui`, still exists but you
 have to ask for it: `--allow-unauthenticated` on ichor-ui, `ichorUI.allowUnauthenticated=true`
 in the chart. The flag does nothing once users or OIDC are on.
 
-- `ichor init` without `--ui-url` keeps its behaviour: it starts ichor-ui with
-  the flag and prints a warning at the end. `--ui-url` turns users on and
-  drops the flag.
+- `ichor init` turns users on unless you pass `--allow-unauthenticated`. With
+  that flag it starts ichor-ui with the open mode and prints a warning at the
+  end. Without it, ichor-ui starts read-only and the users are on before any
+  write can reach it.
 - `ichor-installer` upgrading an install that ran with no sign-in sets the
   flag for you and prints a `NOTICE`, so nothing stops working. Turn users or
   OIDC on, and the flag goes away at the next upgrade.
@@ -38,8 +42,9 @@ in the chart. The flag does nothing once users or OIDC are on.
 
 Turning users on needs three things:
 
-- An https URL that browsers and the `ichor` CLI can reach. Ichor does not
-  provide one.
+- An https URL that browsers and the `ichor` CLI can reach. The default
+  `https://localhost:8443` is reached through `ichor ui`'s port-forward; any
+  other address needs one, and Ichor does not provide it.
 - A Talos v1.14 contract or later. Older contracts cannot carry the issuer
   configuration.
 - A rollout of the control planes with `ichor rollout config`. The kube-apiserver
@@ -47,7 +52,7 @@ Turning users on needs three things:
 
 ## Turn users on
 
-On a new cluster, pass the URL to `ichor init`:
+On a new cluster, sign-in is on by default. To reach ichor-ui at an address of your own, pass that URL to `ichor init`:
 
 ```sh
 ichor init --ui-url https://ichor.example.com --admin-user admin ...
@@ -71,8 +76,9 @@ in turn (see the end of this guide). Init retries transient API errors (such as
 an etcd timeout right after the API server comes up) for a few minutes before
 it gives up.
 
-`ichor init` takes four more flags, all of which need `--ui-url`. They are
-checked before anything is written, and each has a chart value:
+`ichor init` takes four more flags, all of which need sign-in (so they are
+refused with `--allow-unauthenticated`). They are checked before anything is
+written, and each has a chart value:
 
 | `ichor init` flag | Chart value | Effect on ichor-ui |
 |---|---|---|
@@ -94,6 +100,8 @@ ichor-ui serves HTTPS only, on port 8443. Without
 trust that leaf; see "Expose ichor-ui over https". Making ichor-ui reachable at
 the `--ui-url` (a LoadBalancer, an Ingress or a Gateway) is your job: init
 installs none of them.
+
+To publish ichor-ui at another address after init, set the new https URL in `spec.authentication.ichor.url` of the TalosCluster (a patch that needs the `update` verb on `talosclusters/authentication`), then run an Ichor upgrade (`ichor upgrade ichor`) so the installer applies it to ichor-ui and the controller. Whether an upgrade at the same version re-runs the installer is not covered here. Then `ichor rollout config` applies the kube-apiserver side. The URL and the token issuer must match, so sign-in breaks until both are done.
 
 On an existing install, set `ichorUI.users.enabled` to `true` and
 `ichorUI.users.externalURL` to the https URL in the chart values, and create

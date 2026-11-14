@@ -5,7 +5,7 @@ sidebar_order: 10
 # Bootstrap
 
 ```sh
-ichor init --preset standard [--cni-tunnel vxlan|geneve] [--ui-url URL]
+ichor init --preset standard [--cni-tunnel vxlan|geneve] [--ui-url URL | --allow-unauthenticated]
 ```
 
 1. Generate the secrets bundle locally; nag the user to back it up.

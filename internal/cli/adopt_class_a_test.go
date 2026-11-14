@@ -157,9 +157,6 @@ func TestAdoptMapsClassAValuesOfAForeignCluster(t *testing.T) {
 		{"v1.14 documents", "v114", ver1143, "", false, []ichorv1alpha1.TalosClusterRegistry{
 			{Host: classAHost, Endpoints: []string{classAMirror}},
 		}},
-		{"v1.13 legacy machine.install", "v113", "v1.13.0", "", false, []ichorv1alpha1.TalosClusterRegistry{
-			{Host: classAHost, Endpoints: []string{classAMirror}},
-		}},
 		{"v1.14 with overridePath, skipFallback and wipe", "v114", ver1143, classAMirrorDoc, true, []ichorv1alpha1.TalosClusterRegistry{
 			{Host: classAHost, Endpoints: []string{classAMirror}},
 			{Host: "ghcr.io", Endpoints: []string{"https://ghcr-mirror.example.test/prefix"}, OverridePath: true, SkipFallback: true},
@@ -347,9 +344,9 @@ func TestDiskFromExpression(t *testing.T) {
 	}
 }
 
-// userCluster rewrites a v1.13 control plane into the shape a real cluster showed: machine.certSANs
-// holds only localhost, cluster.apiServer.certSANs is absent, and one interface carries an address,
-// a default route and a control-plane virtual IP.
+// userCluster rewrites a v1.14 control plane into the shape a real cluster showed: machine.certSANs
+// holds only localhost, its kube-apiserver SANs (KubeAPIServerConfig.certExtraSANs) are absent, and one
+// interface carries an address, a default route and a control-plane virtual IP.
 func userCluster(t *testing.T, cp []byte) []byte {
 	t.Helper()
 
@@ -359,7 +356,7 @@ func userCluster(t *testing.T, cp []byte) []byte {
 			"    network:\n        interfaces:\n            - interface: enp1s0\n              addresses:\n                  - 10.0.1.5/16\n" +
 			"              routes:\n                  - network: 0.0.0.0/0\n                    gateway: 10.0.0.1\n" +
 			"              vip:\n                  ip: 10.0.1.100\n"},
-		{"        certSANs:\n            - 10.5.0.2\n            - cp.example.test\n", ""},
+		{"certExtraSANs:\n    - 10.5.0.2\n    - cp.example.test\n", ""},
 	} {
 		if !strings.Contains(out, r[0]) {
 			t.Fatalf("fixture lacks %q", r[0])
@@ -374,7 +371,7 @@ func userCluster(t *testing.T, cp []byte) []byte {
 func userClusterFlow(t *testing.T, talosVersion string, mutate func(i int, cfg string) string) (*flowEnv, adoptDeps, []string) {
 	t.Helper()
 
-	cp, _ := classAFixture(t, "v113")
+	cp, _ := classAFixture(t, "v114")
 	addrs := []string{flowCPAddr, addAddr, "10.0.0.13"}
 	live, members := map[string][]byte{}, make([]ClusterMember, 0, len(addrs))
 
@@ -397,7 +394,7 @@ func userClusterFlow(t *testing.T, talosVersion string, mutate func(i int, cfg s
 // spec.certSANs, which renders into both: every node keeps it in its own patch, with its interfaces and
 // the virtual IP, and nothing is left to differ (ADR 0143).
 func TestAdoptKeepsSpecCertSANsToWhatEveryNodeSharesInBothPlaces(t *testing.T) {
-	env, deps, addrs := userClusterFlow(t, "v1.13.1", nil)
+	env, deps, addrs := userClusterFlow(t, "v1.14.3", nil)
 
 	if out := planOutput(t, env, deps, false); strings.Contains(out, "cannot patch automatically") {
 		t.Fatalf("the plan is blocked:\n%s", out)

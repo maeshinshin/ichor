@@ -91,10 +91,13 @@ func liveWithResolver(t *testing.T, cluster *ichorv1alpha1.TalosCluster, m *icho
 // A foreign cluster with DNS nameservers is no longer blocked: the ResolverConfig is captured into a
 // patch, and rendering with it reproduces the live configuration.
 func TestAdoptCapturesResolverConfig(t *testing.T) {
-	cp, wk := classAFixture(t, "v113")
-	cp, wk = append(cp, classAResolverDoc...), append(wk, classAResolverDoc...)
+	cp, wk := classAFixture(t, "v114")
+	// The v1.14 fixture's ResolverConfig (hostDNS only) takes the nameservers, so there is still one document.
+	withNS := strings.Replace(classAResolverDoc, "---\napiVersion: v1alpha1\nkind: ResolverConfig\n", "", 1)
+	cp = []byte(strings.Replace(string(cp), "kind: ResolverConfig\n", "kind: ResolverConfig\n"+withNS, 1))
+	wk = []byte(strings.Replace(string(wk), "kind: ResolverConfig\n", "kind: ResolverConfig\n"+withNS, 1))
 
-	env, deps := classAFlow(t, "v1.13.0", cp, wk)
+	env, deps := classAFlow(t, "v1.14.3", cp, wk)
 
 	out := planOutput(t, env, deps, false)
 	if strings.Contains(out, "cannot patch automatically") || !strings.Contains(out, "drift found, patch ready (zero drift verified)") {

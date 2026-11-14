@@ -44,8 +44,6 @@ var cniCmd = &cobra.Command{
 	Use:    cniName,
 	Short:  "Commands the Cilium Job runs",
 	Hidden: true,
-
-	PersistentPreRunE: cniPreRun,
 }
 
 // refuseUnmanagedCNI fails when the cluster's CNI is not managed by Ichor. It is the one check every command that

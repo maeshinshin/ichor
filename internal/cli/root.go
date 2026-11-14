@@ -84,6 +84,8 @@ func Execute() {
 // it already. Cobra's own "Error: ..." line is off (SilenceErrors), or every error would appear twice.
 func executeRoot(errw io.Writer) (*cobra.Command, error) {
 	rootCmd.SetErr(errw)
+	rootCmd.InitDefaultCompletionCmd() // cobra adds it inside ExecuteC, so it must exist before the walk
+	rejectUnknownSubcommands(rootCmd)
 
 	cmd, err := rootCmd.ExecuteC()
 	if err != nil && !errorShown(err) {
@@ -91,6 +93,24 @@ func executeRoot(errw io.Writer) (*cobra.Command, error) {
 	}
 
 	return cmd, err
+}
+
+// rejectUnknownSubcommands gives every command with no Run of its own the grouping behaviour, so an unknown
+// subcommand under it fails. Cobra rejects an unknown subcommand only under the root; under any other command with no
+// Run it prints that command's help and exits 0. A command that has a Run is left alone.
+func rejectUnknownSubcommands(c *cobra.Command) {
+	for _, sub := range c.Commands() {
+		if !sub.Runnable() {
+			sub.Args = groupArgs
+			sub.RunE = groupRunE
+
+			if sub.Annotations == nil {
+				sub.Annotations = groupingAnnotations() // the usage line reads "[command]", not "[flags]"
+			}
+		}
+
+		rejectUnknownSubcommands(sub)
+	}
 }
 
 func init() {

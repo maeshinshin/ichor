@@ -81,6 +81,16 @@ func groupRunE(cmd *cobra.Command, args []string) error {
 		return cmd.Help()
 	}
 
+	return groupArgs(cmd, args)
+}
+
+// groupArgs is the Args of a grouping command: any argument is unknown, since the command has no action of its own.
+// Cobra runs Args before PersistentPreRunE, which for cni reaches the cluster, so a typo fails before that.
+func groupArgs(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		return nil
+	}
+
 	if cmd.SuggestionsMinimumDistance <= 0 { // cobra sets its default of 2 only when it finds the command itself
 		cmd.SuggestionsMinimumDistance = 2
 	}

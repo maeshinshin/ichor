@@ -244,6 +244,31 @@ try {
     return got
   }
   const clipboardBecomes = (want) => eventually(clipboard, want)
+  // A disclosure: toggling it changes aria-expanded and turns its chevron. Each is checked on its own, since the chevron
+  // is what sighted readers see and aria-expanded is what assistive technology reads, and either can be right while the
+  // other is not. `read` gives [aria-expanded, the chevron's computed transform] of the trigger.
+  const disclosure = async (tag, name, trigger) => {
+    const read = `(() => { const b = ${trigger}; return b ? [b.getAttribute('aria-expanded'), getComputedStyle(b.querySelector('svg')).transform] : ['missing', 'missing'] })()`
+    const settle = async (done) => {
+      let v = await ev(read)
+      for (let i = 0; i < 30 && !done(v); i++) {
+        await sleep(100)
+        v = await ev(read)
+      }
+      return v
+    }
+    const [e0, t0] = await ev(read)
+    await ev(`${trigger}.click()`)
+    const [e1] = await settle(([e]) => e !== e0)
+    const [, t1] = await settle(([, t]) => t !== t0)
+    check(e1 !== e0, `${tag}: ${name} sets aria-expanded from ${e0} to ${e1} when opened`)
+    check(t1 !== t0, `${tag}: ${name}'s chevron turns when opened (transform ${t0} to ${t1})`)
+    await ev(`${trigger}.click()`)
+    const [e2] = await settle(([e]) => e === e0)
+    const [, t2] = await settle(([, t]) => t === t0)
+    check(e2 === e0, `${tag}: ${name} sets aria-expanded back to ${e0} when closed`)
+    check(t2 === t0, `${tag}: ${name}'s chevron turns back when closed (transform ${t2})`)
+  }
   const key = async (k, modifiers = 0) => {
     await idle()
     for (const type of ['keyDown', 'keyUp']) await s('Input.dispatchKeyEvent', { type, key: k, code: `Key${k.toUpperCase()}`, modifiers })
@@ -289,8 +314,15 @@ try {
       const menuOpen = () => until(`${menuContent}?.dataset.state === 'open' && document.querySelectorAll('[data-slot=dropdown-menu-item]').length >= 3`, 'the Copy page menu')
       const menuClosed = () => until(`!${menuContent}`, 'the Copy page menu to close')
       check(await ev(`!![...document.querySelectorAll('article button')].find((b) => b.textContent.trim() === 'Copy page')`), `${tag}: the Copy page button exists`)
+      const moreState = `(() => { const b = ${more}; return [b.getAttribute('aria-expanded'), getComputedStyle(b.querySelector('svg')).transform] })()`
+      const [closedExpanded, closedTurn] = await ev(moreState)
       await mouse(more)
       check(await menuOpen(), `${tag}: the Copy page menu opens`)
+      // The menu is a disclosure too: its chevron turns and aria-expanded is set while it is open (the menu stays open below).
+      await until(`getComputedStyle(${more}.querySelector('svg')).transform !== ${JSON.stringify(closedTurn)}`, 'the More page actions chevron to turn', 3000)
+      const [openedExpanded, openedTurn] = await ev(moreState)
+      check(openedExpanded === 'true' && openedExpanded !== closedExpanded, `${tag}: More page actions sets aria-expanded to true when open (was ${closedExpanded}, now ${openedExpanded})`)
+      check(openedTurn !== closedTurn, `${tag}: More page actions' chevron turns when open (transform ${closedTurn} to ${openedTurn})`)
       check(await ev(`['Copy as Markdown', 'View as Markdown', 'Copy link'].every((t) => [...document.querySelectorAll('[data-slot=dropdown-menu-item]')].some((e) => e.textContent.includes(t)))`), `${tag}: the menu lists Copy as Markdown, View as Markdown and Copy link`)
       await shot(`${tag}-page-menu`)
       await mouse(item('Copy as Markdown'))
@@ -456,6 +488,7 @@ try {
         await shot(`${tag}-drawer`)
         await key('Escape')
         await until(`!document.querySelector('[data-mobile=true]')`, 'the drawer to close')
+        await disclosure(tag, 'On this page', `[...document.querySelectorAll('button')].find((b) => b.textContent.includes('On this page'))`)
         await ev(`[...document.querySelectorAll('button')].find((b) => b.textContent.includes('On this page'))?.click()`)
         await shot(`${tag}-toc`)
         check(await ev(`document.documentElement.scrollWidth <= window.innerWidth`), `${tag}: architecture page has no sideways scroll`)

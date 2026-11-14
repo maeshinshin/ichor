@@ -209,6 +209,8 @@ var fieldOverrides = map[string]fieldOverride{
 	"KubeletConfigV1Alpha1.KubeletConfig":   {pkgPath: pkgKubeletV1Beta1, typeName: "KubeletConfiguration", omits: kubeletOmits},
 	"KubeProxyConfigV1Alpha1.ProxyConfig":   {pkgPath: pkgKubeProxyV1Alpha1, typeName: "KubeProxyConfiguration", omits: kubeProxyOmits},
 	"KubeSchedulerConfigV1Alpha1.PodConfig": {pkgPath: pkgKubeSchedulerV1, typeName: "KubeSchedulerConfiguration", omits: kubeSchedulerOmits},
+	// The pod of a static pod, which Talos types as an untyped object: the core v1 PodSpec is its schema.
+	"KubeStaticPodConfigV1Alpha1.PodSpec": {pkgPath: pkgCoreV1, typeName: "PodSpec"},
 }
 
 // refusedFields are typed fields of a shipped document that the mirror does not carry because Ichor owns what

@@ -28,8 +28,8 @@ type Volume struct {
 	Location string
 	// Size is in bytes.
 	Size uint64
-	// Encrypted is true for a LUKS volume. Its key may be derived from STATE or
-	// META, which the reset wipes, so its data is unreadable afterwards.
+	// Encrypted is true for a LUKS volume. Only a key locked to STATE (lockToState) needs the
+	// encryption salt the reset deletes, so only its data is unreadable afterwards.
 	Encrypted bool
 }
 

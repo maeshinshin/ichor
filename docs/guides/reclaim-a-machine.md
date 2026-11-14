@@ -9,8 +9,10 @@ A node that already runs a configured Talos never reaches maintenance mode, so
 Ichor's join flow cannot take it. Discovery reports it as `AlreadyConfigured`
 and registers nothing. To join it, reset it. The reset wipes only the `STATE`
 and `EPHEMERAL` partitions and reboots. User disks are not touched, but they
-are listed, and encrypted ones are called out, because their keys are gone and
-the data is unreadable. The machine then comes back in maintenance mode with
+are listed, and encrypted ones are called out. A key locked to `STATE` (`lockToState`)
+needs a salt that the reset deletes, so its data is unreadable afterwards; the keys
+themselves are not gone. The `STATE` and `EPHEMERAL` partitions are unreadable after
+the reset because the reset wipes them, not because of any key. The machine then comes back in maintenance mode with
 the same UUID and registers as a pending machine, which you approve as usual.
 
 Both paths refuse:

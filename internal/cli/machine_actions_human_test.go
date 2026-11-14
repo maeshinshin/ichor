@@ -173,7 +173,7 @@ func TestMachineReclaimHumanOutputOnAPlainWriter(t *testing.T) {
 		"  UUID         AAAA-1\n",
 		"  Cluster      old (id cid), reachable from the node\n",
 		"  Reset        STATE and EPHEMERAL, then reboot · graceful\n",
-		"/dev/sdb1 (10 bytes), not wiped  ! ENCRYPTED: its key may depend on STATE",
+		"/dev/sdb1 (10 bytes), not wiped  ! ENCRYPTED: if its key is locked to STATE (lockToState), the reset wipes the salt that key needs, so the data is unreadable afterwards",
 		"This wipes STATE and EPHEMERAL on w1 and removes it from cluster \"old\".\nType the node's UUID to continue: ",
 		"✓ Reset — accepted, graceful\n",
 		"✓ Maintenance mode — 10.0.0.5 answers with UUID AAAA-1\n",
@@ -347,5 +347,19 @@ func TestRotateCAHumanOutput(t *testing.T) {
 
 	if want := "✓ ca-rotation operation ca-rotation-x7k2p completed\n\nNext\n"; !strings.HasPrefix(out.String(), want) {
 		t.Errorf("got:\n%s", out.String())
+	}
+}
+
+// Only a key locked to STATE needs the salt the reset deletes, so the warning names lockToState and not every encrypted disk.
+func TestRenderInspectionEncryptedWarningNamesLockToState(t *testing.T) {
+	var out bytes.Buffer
+
+	renderInspection(newHuman(&out), reclaim.Inspection{
+		Volumes: []reclaim.Volume{{Name: "u1", Location: "/dev/sdb", Size: 1, Encrypted: true}},
+	}, reclaim.Plan{})
+
+	got := out.String()
+	if !strings.Contains(got, "lockToState") || strings.Contains(got, "may depend on STATE") {
+		t.Fatalf("the encrypted-volume warning must name lockToState only:\n%s", got)
 	}
 }

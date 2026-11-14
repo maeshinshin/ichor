@@ -299,3 +299,14 @@ A cluster with no CNI is no longer adopted as unmanaged `talosCNI: none`: ADR 01
 ## Amendment 2026-11-14: the encrypted-disk warning after a reset
 
 Decided: the reclaim request bullet no longer names what an encrypted disk's key depends on. It says only that after the reset (STATE and EPHEMERAL) the data on an encrypted disk may be unreadable. The request itself is unchanged.
+
+## Amendment 2026-11-14: the mechanism of the encrypted-disk warning
+
+Decided: the warning now names the mechanism. It is read from Talos v1.14.5 (`internal/app/machined/pkg/controllers/block/volume_manager.go`, `internal/pkg/encryption/keys`, `internal/pkg/partition/helpers.go`) and go-blockdevice v2.0.32 (`encryption/luks/header.go`, `block/wipe_linux.go`).
+
+- **Where a LUKS2 key lives.** The volume's header, its two binary headers and the JSON metadata that names its keyslots and tokens, sits at the start of the encrypted partition, and the header is read from offset 0. The reset's wipe of a partition zeroes its first and last 1 MiB and discards it (the discard may or may not zero). A partition wiped that way has lost its header, so it cannot be opened whatever the key. Whether any keyslot material beyond the first MiB survives is not established, and the warning says nothing about it.
+- **`nodeid` keys.** The key is the system UUID from SMBIOS (or a `MetaKey` UUID override) with the volume's ID, its `VolumeConfig` ID, not a filesystem label. It does not depend on `STATE`. The default reset names only `STATE` and `EPHEMERAL`, so it changes neither input.
+- **`lockToState` keys.** The wrapper applies to any key type. It appends the `EncryptionSalt` that Talos keeps in a file on `STATE`. The reset deletes that file and the node writes a new salt, so a `lockToState` key cannot be rebuilt. Only those keys become unreproducible after a `STATE` wipe.
+- **Left open.** The TPM and KMS handlers across a reset, and whether a keyslot survives beyond the first MiB. The warning does not claim either way.
+
+The CLI row, the reclaim guide and `reclaim.Volume.Encrypted` say the same thing.

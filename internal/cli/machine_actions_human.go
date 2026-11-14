@@ -120,7 +120,7 @@ func renderInspection(h *human, in reclaim.Inspection, p reclaim.Plan) {
 	for _, v := range in.Volumes {
 		val := fmt.Sprintf("%s on %s (%d bytes), not wiped", v.Name, v.Location, v.Size)
 		if v.Encrypted {
-			val += "  " + h.Mark(markWarning) + " ENCRYPTED: its key may depend on STATE, so the data may be unreadable afterwards"
+			val += "  " + h.Mark(markWarning) + " ENCRYPTED: if its key is locked to STATE (lockToState), the reset wipes the salt that key needs, so the data is unreadable afterwards"
 		}
 
 		rows = append(rows, kv{"Volume", val})

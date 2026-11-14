@@ -62,7 +62,7 @@ export function PageActions({ title, url, mdUrl }: Props) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="icon-sm" aria-label="More page actions">
-              <ChevronDown />
+              <ChevronDown className="transition-transform group-data-[state=open]/button:rotate-180" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">

@@ -290,28 +290,56 @@ try {
       check(await ev(`document.documentElement.scrollWidth <= window.innerWidth`), `${tag}: no sideways scroll`)
       await shot(`${tag}-page`)
       if (!mobile) {
-        // The pages up to the second level under a category (routes of up to three segments) are listed with no click: a section
-        // that folds them away fails here. A deeper page folds behind its disclosure, so the next check opens them all.
+        // A page of up to two segments (a category's own page or one of its top-level pages) is listed with no click. Deeper pages
+        // sit under a branch, which is one row until it is opened.
         const listed = await ev(`[...document.querySelectorAll('[data-slot=sidebar] a[href]')].filter((a) => a.getClientRects().length).map((a) => a.pathname)`)
-        const unlisted = docRoutes.filter((route) => route.split('/').filter(Boolean).length <= 3 && !listed.includes(base + route))
-        check(unlisted.length === 0, `${tag}: every page up to the second level is in the sidebar without a click (not listed: ${unlisted.join(' ') || 'none'})`)
-        // The third level: Virtual IP sits under 2. Create the cluster, and that page's disclosure folds it. The disclosure's
-        // chevron must turn and its aria-expanded flip, and opening it must show the page (hidden until then).
-        const parent = base + at.createCluster.replace(/[^/]+\/$/, '')
-        const folder = `[...document.querySelectorAll('[data-slot=sidebar-menu-item]')].find((li) => [...li.querySelectorAll('a[href]')].some((a) => a.pathname === '${parent}'))?.querySelector('button[aria-expanded]')`
-        await disclosure(tag, 'the disclosure of 2. Create the cluster', folder)
-        const shownVip = `[...document.querySelectorAll('[data-slot=sidebar] a[href]')].some((a) => a.pathname === '${base + at.createCluster}' && a.getClientRects().length > 0)`
-        const visibleBefore = await ev(shownVip)
-        await ev(`(() => { const b = ${folder}; if (b && b.getAttribute('aria-expanded') === 'false') b.click() })()`)
+        const unlisted = docRoutes.filter((route) => route.split('/').filter(Boolean).length <= 2 && !listed.includes(base + route))
+        check(unlisted.length === 0, `${tag}: every page of up to two segments is in the sidebar without a click (not listed: ${unlisted.join(' ') || 'none'})`)
+
+        // The trigger of a branch: the button in its own row, which is the page's link beside it, or the row's label when the
+        // directory has no page. A branch's contents are in the page only while it is open.
+        const trigger = (route, label) => `(() => {
+          const own = (r) => [...r.querySelectorAll('button[aria-expanded]')].find((b) => !b.closest('[data-slot=collapsible-content]'))
+          const r = [...document.querySelectorAll('[data-slot=sidebar] [data-slot=collapsible]')].find((x) => ${route
+            ? `[...x.parentElement.children].some((c) => c.matches('a[href]') && c.pathname === ${JSON.stringify(base + route)})`
+            : `own(x)?.textContent.trim() === ${JSON.stringify(label)}`})
+          return r ? own(r) : undefined
+        })()`
+        const branchCheck = async (name, route, label, child) => {
+          const t = trigger(route, label)
+          // A closed branch renders its contents empty and hidden, so their links must have no box on screen.
+          const closed = await ev(`(() => { const b = ${t}; if (!b || b.getAttribute('aria-expanded') !== 'false') return false; return [...b.closest('[data-slot=collapsible]').querySelectorAll('[data-slot=collapsible-content] a[href]')].every((a) => !a.getClientRects().length) })()`)
+          check(closed, `${tag}: ${name} is one row until it is opened (aria-expanded false, its links not shown)`)
+          await disclosure(tag, name, t)
+          await ev(`(() => { const b = ${t}; if (b && b.getAttribute('aria-expanded') === 'false') b.click() })()`)
+          await idle()
+          const shown = await ev(`[...document.querySelectorAll('[data-slot=sidebar] a[href]')].some((a) => a.pathname === ${JSON.stringify(base + child)} && a.getClientRects().length > 0)`)
+          check(shown, `${tag}: ${name} shows ${child} once opened`)
+          await ev(`(() => { const b = ${t}; if (b && b.getAttribute('aria-expanded') === 'true') b.click() })()`)
+          await idle()
+        }
+        await branchCheck('Getting started', 'guides/getting-started/', 'Getting started', 'guides/getting-started/install-the-cli/')
+        await branchCheck('Ichor architecture', 'design/architecture/', 'Ichor architecture', 'design/architecture/overview/')
+        await branchCheck('CLI', null, 'CLI', 'reference/cli/ichor_adopt/')
+        await branchCheck('Custom resources', null, 'Custom resources', 'reference/crds/taloscluster/')
+        // The third level: Virtual IP sits under 2. Create the cluster, so Getting started opens first. Hidden until both are open.
+        await ev(`(() => { const b = ${trigger('guides/getting-started/', 'Getting started')}; if (b && b.getAttribute('aria-expanded') === 'false') b.click() })()`)
         await idle()
-        const visibleAfter = await ev(shownVip)
-        check(!visibleBefore && visibleAfter, `${tag}: Virtual IP, a third-level page, is reachable through the disclosure of 2. Create the cluster (visible before it opens: ${visibleBefore}, after: ${visibleAfter})`)
-        // Every doc page is in the sidebar once every disclosure in it is opened.
-        await ev(`[...document.querySelectorAll('[data-slot=sidebar-menu-action][aria-expanded="false"]')].forEach((b) => b.click())`)
+        await branchCheck('2. Create the cluster', 'guides/getting-started/create-the-cluster/', '2. Create the cluster', 'guides/getting-started/create-the-cluster/vip/')
+        await ev(`(() => { const b = ${trigger('guides/getting-started/', 'Getting started')}; if (b && b.getAttribute('aria-expanded') === 'true') b.click() })()`)
+        await idle()
+        // The branches holding the page on screen are open when it loads: a full load renders them from the page's own route.
+        await open(at.createCluster)
+        const ancestors = await ev(`[${trigger('guides/getting-started/', 'Getting started')}, ${trigger('guides/getting-started/create-the-cluster/', '2. Create the cluster')}, ${trigger('design/architecture/', 'Ichor architecture')}].map((b) => b?.getAttribute('aria-expanded'))`)
+        check(JSON.stringify(ancestors) === '["true","true",null]' || JSON.stringify(ancestors) === '["true","true","false"]', `${tag}: the branches holding the page on screen open on load (Getting started, 2. Create the cluster, Ichor architecture: ${JSON.stringify(ancestors)})`)
+        check(await ev(`[...document.querySelectorAll('[data-slot=sidebar] a[href]')].some((a) => a.pathname === ${JSON.stringify(base + at.createCluster)} && a.getClientRects().length > 0)`), `${tag}: the page on screen is visible in the sidebar on load`)
+        await open(at.rotateKeys)
+        // Every doc page is in the sidebar once every branch in it is opened (a branch can hold branches, so the pass repeats).
+        for (let i = 0; i < 4; i++) await ev(`[...document.querySelectorAll('[data-slot=sidebar-content] button[aria-expanded="false"]')].forEach((b) => b.click())`)
         await idle()
         const all = await ev(`[...document.querySelectorAll('[data-slot=sidebar] a[href]')].map((a) => a.pathname)`)
         const folded = docRoutes.filter((route) => !all.includes(base + route))
-        check(folded.length === 0, `${tag}: every page is in the sidebar once its disclosures are opened (not listed: ${folded.join(' ') || 'none'})`)
+        check(folded.length === 0, `${tag}: every page is in the sidebar once its branches are opened (not listed: ${folded.join(' ') || 'none'})`)
       }
 
       // The theme icon is chosen by CSS from the `dark` class, so the first paint already shows the right one.

@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -158,6 +159,23 @@ func (m *machineryMaintenanceClient) Inventory(ctx context.Context) (Inventory, 
 // SecurityState reads the node's boot security over the unauthenticated maintenance API; see ReadSecurityState.
 func (m *machineryMaintenanceClient) SecurityState(ctx context.Context) (SecurityState, error) {
 	return ReadSecurityState(ctx, m.c.COSI)
+}
+
+// TalosVersion reads the node's Talos release tag over the unauthenticated maintenance API (Version is served
+// to a node with no configuration, which is what `talosctl version --insecure` relies on).
+func (m *machineryMaintenanceClient) TalosVersion(ctx context.Context) (string, error) {
+	resp, err := m.c.Version(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	for _, msg := range resp.GetMessages() {
+		if tag := msg.GetVersion().GetTag(); tag != "" {
+			return tag, nil
+		}
+	}
+
+	return "", errors.New("the node reported no Talos version")
 }
 
 // ReadInventory lists the disks an install or a disk role can take (block.Disk, minus the CD-ROM drives

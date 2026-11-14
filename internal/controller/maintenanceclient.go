@@ -48,6 +48,10 @@ type MaintenanceClient interface {
 	// securitystate --insecure`), so a cluster that requires SecureBoot can refuse a machine that
 	// booted without it before giving it a configuration.
 	SecurityState(ctx context.Context) (SecurityState, error)
+
+	// TalosVersion reads the node's running Talos release tag ("vX.Y.Z") over the maintenance API
+	// (`talosctl version --insecure`), so init can refuse a node older than the release it renders for.
+	TalosVersion(ctx context.Context) (string, error)
 }
 
 // Inventory is what MaintenanceClient.Inventory reads from a node's maintenance API.

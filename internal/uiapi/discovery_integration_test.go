@@ -50,6 +50,8 @@ func (f *fakeMaintenanceClient) SecurityState(context.Context) (controller.Secur
 	return controller.SecurityState{}, nil
 }
 
+func (f *fakeMaintenanceClient) TalosVersion(context.Context) (string, error) { return "", nil }
+
 // This file exercises the interaction RejectMachine's own doc comment
 // relies on but cannot test from inside this package: that a rejected
 // TalosMachine is never recreated as fresh and pending by

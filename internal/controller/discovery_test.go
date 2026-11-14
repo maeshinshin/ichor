@@ -68,6 +68,8 @@ func (f *fakeMaintenanceClient) SecurityState(context.Context) (SecurityState, e
 	return f.securityState, f.securityErr
 }
 
+func (f *fakeMaintenanceClient) TalosVersion(context.Context) (string, error) { return "", nil }
+
 func (f *fakeMaintenanceClient) PeerFingerprint() string { return f.fingerprint }
 
 func (f *fakeMaintenanceClient) Identity(context.Context) (HardwareIdentity, error) {

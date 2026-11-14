@@ -293,8 +293,7 @@ cluster exists, so an unmanaged adoption stays unmanaged. The options:
    `cluster.network.cni.name: none` in the machine configuration, remove the old CNI
    workload, and reboot the nodes, so that every node is NotReady with no CNI
    running. Pods have no network from the first of those steps until Cilium is up.
-   Then run `ichor adopt`. Ichor does not run the removal, and this route has not
-   been run on hardware yet; try it on a copy first.
+   Then run `ichor adopt`. Ichor does not run the removal, so this route is yours to carry out: try it on a copy first.
 
 Cilium's own documented live migration from flannel installs Cilium next to the old
 CNI with a new pod CIDR and `ipam.mode: cluster-pool`. It cannot be used here: it ends

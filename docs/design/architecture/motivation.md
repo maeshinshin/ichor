@@ -35,7 +35,7 @@ inventing a new control plane.
   state belong to Longhorn (or whatever you run).
 - Multi-cluster management. One Ichor manages one cluster, and the UI is built
   for that.
-- Air-gapped environments. Nothing is built or tested for an
+- Air-gapped environments. Ichor builds nothing for an
   installation with no route to public registries; registry mirrors exist for
   pull-through caches and private registries.
 - IPv6, PXE provisioning. Later, maybe.

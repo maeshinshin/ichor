@@ -27,8 +27,7 @@ recovery is CLI-only: `ichor restore cluster` rebuilds control
 planes from the local bundle and the snapshot, after which the controller
 re-reconciles every node the way `adopt` does and waits for confirmation
 before applying anything, since the restored CRs may not match the hardware.
-The goal is that bundle + snapshot is sufficient, and the e2e suite proves it
-regularly.
+The goal is that bundle + snapshot is sufficient.
 
 Ichor's own Talos client certificates are short-lived and renewed
 automatically; an expired one would lock Ichor out with no way back. CA

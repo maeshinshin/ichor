@@ -71,8 +71,7 @@ webhook refuses a firewall whose `controllerCIDRs` does not contain the address
 the controller connects to the cluster endpoint from (it asks the routing table
 of the webhook's own pod). If the controller runs in a pod, list the pod network
 and its node's address: with Cilium the controller reaches apid on its own node
-from its pod IP, but on any other node from its node's address (masqueraded),
-measured on hardware. The webhook also refuses a firewall whose `controlPlaneCIDRs`
+from its pod IP, but on any other node from its node's address (masqueraded). The webhook also refuses a firewall whose `controlPlaneCIDRs`
 miss the address of an approved control plane (the controller reaches the other
 nodes from a control plane's address, so Ichor itself would be cut off; a
 machine whose endpoint is a hostname is not checked). It only warns when
@@ -100,8 +99,8 @@ talosctl -e NODE -n NODE patch machineconfig --patch @rule.yaml
 #   ingress: [{subnet: CONTROL_PLANE_IP/32}]
 ```
 
-The machine was Ready again 26 seconds after the patch (measured) and the
-controller removed the temporary rule once the corrected spec applied. With no
+The machine is Ready again within a few tens of seconds of the patch, and the
+controller removes the temporary rule once the corrected spec applies. With no
 `talosAPICIDRs` entry the way back is the node's console or a reset. A pod's traffic to
 another node's host ports is also seen as its own node's address, so rules keyed
 to node CIDRs cannot tell pods on the same node apart. Ichor does not yet apply the firewall in Talos's `try` mode with an
@@ -150,7 +149,7 @@ applied on its own: the control plane shows
 `ichor rollout config --cluster NAME --follow` (or start the rollout on the
 cluster page), which goes one control plane at a time. The condition message
 names that command. With one control plane the API is down for about a
-minute (measured: 109 to 171 seconds for the whole operation).
+minute, and the whole operation takes a few minutes.
 
 `podSecurity` changes only the levels you set (`enforce`, `audit`, `warn`; Talos
 defaults are baseline, restricted, restricted) and adds `exemptNamespaces` to
@@ -294,7 +293,7 @@ images: losing them stops the next UKI booting and the encrypted disks unlocking
 only STATE and EPHEMERAL. The installed boot partition stays,
 so a machine whose system disk comes first in the boot order boots its installed
 UKI again, into maintenance mode, and the SecureBoot ISO is never started: nothing
-is reinstalled, the node only takes the configuration again (seen on hardware). `--wipe-mode system-disk` (`wipeMode: system-disk` on a reset operation)
+is reinstalled, the node only takes the configuration again. `--wipe-mode system-disk` (`wipeMode: system-disk` on a reset operation)
 erases the whole system disk, boot and EFI included, so the firmware falls through
 to the ISO; `--wipe-mode all` also erases every user disk (use it only when their
 data is expendable). Keep the ISO attached or first in the boot order before you

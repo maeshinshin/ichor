@@ -70,7 +70,7 @@ a Role that lets Cilium's service accounts read Ichor's Secrets.
 
 Cilium moves only to the chart embedded in the running Ichor, and only when
 you start a `cni` [operation](operations.md) (`ichor upgrade cni`, or the UI).
-There is one tested combination per release, and a recorded patch newer than the
+There is one pinned combination per release, and a recorded patch newer than the
 embedded chart is never stepped back. A
 daily CI run opens a pull request when Cilium publishes a new patch of the
 pinned minor.

@@ -191,8 +191,8 @@ spec:
 - `proxy-ssl-secret` takes `namespace/secretName`. The reference docs describe a
   Secret with `tls.crt` and `tls.key` (a client certificate, which ichor-ui does
   not ask for) that "should also contain" `ca.crt`. A Secret with only `ca.crt`,
-  which is what `ichor-ui-ca` is, is accepted: tested with Ingress-NGINX chart
-  4.15.1 (controller 1.15.1), the request reached ichor-ui and nginx used the CA
+  which is what `ichor-ui-ca` is, is accepted by Ingress-NGINX (chart
+  4.15.1, controller 1.15.1): the request reaches ichor-ui and nginx uses the CA
   as `proxy_ssl_trusted_certificate`. Pointing the annotation at a Secret that
   holds another CA gives 502 (`upstream SSL certificate verify error`).
 - `proxy-ssl-name` overrides the name NGINX verifies; `proxy-ssl-server-name`
@@ -240,12 +240,12 @@ spec:
 - The HTTPRoute that sends traffic to the Service references port 8443 (named
   `https`). A route in another namespace needs a `ReferenceGrant`.
 - Check the policy's `Accepted` and `ResolvedRefs` conditions.
-- Tested with Envoy Gateway v1.9.2 (its chart installs the Gateway API v1.6.1
-  CRDs, `BackendTLSPolicy` served as `v1`): the policy was `Accepted` and
-  `ResolvedRefs`, requests reached ichor-ui, a ConfigMap with another CA or a
-  `hostname` that is not in the certificate gave 503 from Envoy, and without the
-  policy Envoy spoke plain HTTP to port 8443 (ichor-ui answered 400). Envoy took
-  from 15 s to a minute to apply a change, so wait and repeat the request. A
+- Implementation: Envoy Gateway v1.9.2 (its chart installs the Gateway API v1.6.1
+  CRDs, `BackendTLSPolicy` served as `v1`). With the policy, `Accepted` and
+  `ResolvedRefs` are set and requests reach ichor-ui; a ConfigMap with another CA or a
+  `hostname` that is not in the certificate gives 503 from Envoy, and without the
+  policy Envoy speaks plain HTTP to port 8443 (ichor-ui answers 400). Envoy can take
+  up to a minute to apply a change, so wait and repeat the request. A
   Gateway needs a `listeners[].hostname` (singular), not `hostnames`.
 
 ### Load balancer passthrough (operator certificate)
@@ -454,8 +454,8 @@ whenever something between the client and the pod replaces the source address:
 
 - a LoadBalancer or NodePort Service with the default `externalTrafficPolicy:
   Cluster` (the node SNATs the connection, so every client looks like the
-  node; measured on a NodePort behind an L4 load balancer: a workstation and a
-  pod of the outer cluster were indistinguishable),
+  node; behind an L4 load balancer on a NodePort, a workstation and a
+  pod of the outer cluster are indistinguishable),
 - an L4 load balancer that does not keep the client address (no PROXY protocol
   support in ichor-ui, and none is planned).
 
@@ -514,7 +514,7 @@ Do not confuse it with the override write, which is an RBAC verb that guards des
 ## Control plane rollout
 
 Talos applies the login settings without a reboot, but restarts the
-kube-apiserver on each change (15 to 45 seconds of `/readyz` down per control
+kube-apiserver on each change (some tens of seconds of `/readyz` down per control
 plane). The machine controller does not apply the change by itself: the
 machines report `APIServerRestartRequired`, and `ichor rollout config` (or Apply in the attention list of the UI's Overview) rolls it out one control plane at a time with
 no drain, waiting for that node's `/readyz` before the next. On a cluster with

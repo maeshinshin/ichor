@@ -62,7 +62,7 @@ ichor init [flags]
 ### Options
 
 ```text
-      --address strings                    with --endpoint-type vip: static address of the first node's primary link with prefix length, 192.168.1.10/24 (repeatable); without it the node uses DHCP on that link. Same as approve node --address
+      --address strings                    static address of the first node's primary link with prefix length, 192.168.1.10/24 (repeatable); without it the node uses DHCP on that link. Same as approve node --address
       --admin-user string                  with --ui-url: name of the first admin (default admin); its generated password is printed once to stderr and must be changed at the first sign-in
       --bundle-plaintext                   store the secrets bundle unencrypted (default: encrypted with --bundle-passphrase-file, $ICHOR_BUNDLE_PASSPHRASE, or a passphrase generated on a terminal)
       --cert-san stringArray               extra name or IP address that the Talos API and kube-apiserver certificates both carry (spec.certSANs); repeatable. Each node's own addresses are already in its certificates, and the endpoint is in the kube-apiserver one. Changing the list after init reissues the certificates and reboots every node, so set it now
@@ -70,7 +70,7 @@ ichor init [flags]
       --cni-tunnel string                  Cilium's tunnel protocol, vxlan or geneve (default: Cilium's vxlan); geneve for virtualised networks that pass geneve but not vxlan
       --discover-address stringArray       IPv4 address of a node booted into maintenance mode for the controller to probe (spec.discovery.addresses); repeatable
       --discover-cidr stringArray          IPv4 CIDR (/24 or smaller) of maintenance-mode nodes for the controller to probe (spec.discovery.cidrs); repeatable
-      --dns strings                        with --endpoint-type vip: DNS server address (repeatable)
+      --dns strings                        DNS server address for the first node (repeatable)
       --endpoint-address string            cluster endpoint address (required): an IP address that no node has yet for vip, which Ichor puts on the control planes
       --endpoint-type string               cluster endpoint type: vip, loadBalancer or node (default "vip")
       --ephemeral-disk-selector string     CEL disk selector (e.g. disk.wwid == "...") for a dedicated EPHEMERAL disk, separate from --install-disk
@@ -87,7 +87,7 @@ ichor init [flags]
       --l2-pool string                     with --l2-announcements: the IPv4 CIDR that LoadBalancer addresses come from; init checks it against the node and the endpoint and does not write the CiliumLoadBalancerIPPool, which you create yourself
       --merge-kubeconfig                   also merge the cluster-admin kubeconfig into your kubeconfig (--kubeconfig, else the first file of $KUBECONFIG, else ~/.kube/config) as context admin@CLUSTER, and make it current; a taken name gets a suffix
   -n, --namespace string                   namespace the TalosCluster, its TalosMachine and the secrets bundle Secret live in; Ichor's own install manifest always deploys its controller to "ichor-system" (default "ichor-system")
-      --nic string                         with --endpoint-type vip: the first node's primary network link, by its name (enp1s0) or permanent MAC (aa:bb:cc:dd:ee:ff), the link the VIP is announced on; like approve node --nic. A name is looked up among the links the node reports and only its MAC is kept. Needed only when the node has more than one physical link
+      --nic string                         the first node's primary network link, by its name (enp1s0) or permanent MAC (aa:bb:cc:dd:ee:ff), the link its addressing goes on (a vip is announced on it too); like approve node --nic. A name is looked up among the links the node reports and only its MAC is kept. Needed only when the node has more than one physical link
       --node-endpoint string               Talos API address (host:port) of the first node, currently in maintenance mode (required)
       --pod-subnets strings                pod CIDRs (spec.network.podSubnets; at most one per IP family); unset keeps Talos's default 10.244.0.0/16. Fixed once the cluster exists
       --preset string                      topology preset: single (1 node, schedulable), compact-ha (3 control planes, schedulable), standard (3 control planes + workers added later, tainted; recommended), or large (5 control planes + workers added later, tainted) (default "standard")
@@ -103,7 +103,7 @@ ichor init [flags]
       --ui-url string                      turn Ichor's own users on: the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; needs --version-contract v1.14 or later
       --user-volume-disk-selector string   CEL disk selector for a UserVolumeConfig disk
       --user-volume-name string            name for --user-volume-disk-selector's volume (default "data")
-      --vlan int32                         with --endpoint-type vip: VLAN ID (1-4094) to put the addressing on
+      --vlan int32                         VLAN ID (1-4094) to put the first node's addressing on
       --wait-timeout duration              how long to wait for Ichor's controller to serve its admission webhooks before writing the first resources (default 30m0s)
 ```
 

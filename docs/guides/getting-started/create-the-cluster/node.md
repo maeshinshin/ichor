@@ -75,7 +75,7 @@ ichor init \
   required. `--node-endpoint` is the node's Talos API (`host:port`); the install
   disk can also be `wwid:ID`, `serial:SERIAL` or a `/dev/disk/by-id/` path.
 - `--endpoint-type node` takes the node's own IP address as `--endpoint-address`.
-- The first node's network flags (`--nic`, `--address`, `--gateway`, `--dns`, `--vlan`) are available only with `--endpoint-type vip` today; with this pattern Ichor configures no network for the first node, so Talos's default applies: a DHCP client on every physical network interface.
+- With this pattern Ichor configures no network for the first node unless you give its network flags (`--nic`, `--address`, `--gateway`, `--dns`, `--vlan`); then Talos's default applies: a DHCP client on every physical network interface.
 - `--preset single` makes the node one schedulable control plane. There is
   nothing to approve afterwards, so skip the approve step of the guide.
 - On virtual networks that pass geneve but not vxlan, add `--cni-tunnel geneve`

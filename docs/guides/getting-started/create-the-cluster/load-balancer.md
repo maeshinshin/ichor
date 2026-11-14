@@ -85,5 +85,5 @@ ichor init --cluster demo \
 - `--endpoint-address` is the IP address or hostname that answers on port 6443.
   Use the forwarder's or the record's name, not a machine's address.
 - `--node-endpoint` is still the first node's own Talos API (`host:port`).
-- The first node's network flags (`--nic`, `--address`, `--gateway`, `--dns`, `--vlan`) are available only with `--endpoint-type vip` today; with this pattern Ichor configures no network for the first node, so Talos's default applies: a DHCP client on every physical network interface.
+- With this pattern Ichor configures no network for the first node unless you give its network flags (`--nic`, `--address`, `--gateway`, `--dns`, `--vlan`); then Talos's default applies: a DHCP client on every physical network interface.
 - Approve the other control planes as on that page, with `--role controlplane`.

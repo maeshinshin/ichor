@@ -2,7 +2,7 @@
 
 Status: Accepted · Date: 2026-10-26 · Design section: Bootstrap
 
-Decided: The demo cluster's control plane is created by `ichor init` and its worker approved through `ichor machine approve --install-disk`, so every node's configuration is rendered by Ichor; images are pushed with `crane` to a `registry:2` Deployment in `ichor-e2e` and reached through an anonymous `spec.registries` mirror of `ghcr.io` that `ichor init --registry-mirror` writes; `init` also gains `--pod-subnets` / `--service-subnets`, waits for the node, the API server and the webhooks, and applies the install manifest before the bundle Secret; the controller's shipped RBAC and cache are made consistent.
+Decided: The demo cluster's control plane is created by `ichor init` and its worker approved through `ichor approve node --install-disk`, so every node's configuration is rendered by Ichor; images are pushed with `crane` to a `registry:2` Deployment in `ichor-e2e` and reached through an anonymous `spec.registries` mirror of `ghcr.io` that `ichor init --registry-mirror` writes; `init` also gains `--pod-subnets` / `--service-subnets`, waits for the node, the API server and the webhooks, and applies the install manifest before the bundle Secret; the controller's shipped RBAC and cache are made consistent.
 
 ## Context
 

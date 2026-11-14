@@ -2,7 +2,7 @@
 
 Status: Accepted · Date: 2026-10-26 · Design section: Upgrades, CLI and UI
 
-Decided: an `OperationService` (list, get, plan, create, pause/resume, delete) is the one entry point for `TalosOperation`s, used by `ichor upgrade|cni|cluster shutdown|operation` and the UI; every call is made as the signed-in user, `CreateOperation` changes the spec first and creates the operation second after refusing everything it can beforehand (including a dry-run create as the caller), the kube-proxy confirmation annotation is set for that one write and removed again, destructive starts show the server's plan and ask for confirmation (a shutdown also needs the cluster name typed in the UI)
+Decided: an `OperationService` (list, get, plan, create, pause/resume, delete) is the one entry point for `TalosOperation`s, used by `ichor upgrade`, `ichor upgrade cni`, `ichor shutdown cluster`, `ichor get operations` and the UI; every call is made as the signed-in user, `CreateOperation` changes the spec first and creates the operation second after refusing everything it can beforehand (including a dry-run create as the caller), the kube-proxy confirmation annotation is set for that one write and removed again, destructive starts show the server's plan and ask for confirmation (a shutdown also needs the cluster name typed in the UI)
 
 ## Context
 
@@ -77,7 +77,7 @@ groups of `maxUnavailable`, label order as the controller sorts them; for a shut
 control planes), the machines skipped by the hold annotation, the current and target values and a `blocked` reason.
 The CLI (`planText`) and the UI build their confirmation from it, so both say how many machines, in which order and
 whether they reboot, stop or only restart components. Destructive commands confirm unless `--yes` (`confirm`, as
-`machine approve`); with `--yes` the plan is not asked for (the create does the same refusals). The UI's dialog is
+`approve node`); with `--yes` the plan is not asked for (the create does the same refusals). The UI's dialog is
 two steps, "Review" (which calls the plan and writes nothing) and a separate "Start"; a shutdown also asks for the
 cluster name to be typed.
 
@@ -89,8 +89,8 @@ in the executor.
 
 ## Decision 6: commands
 
-`ichor upgrade talos|kubernetes|ichor VERSION`, `ichor set kube-proxy replaced|enabled`, `ichor cluster shutdown
-NAME`, `ichor operation list|get|pause|resume|delete` (alias `op`). The version may be given without the leading
+`ichor upgrade talos|kubernetes|ichor VERSION`, `ichor set kube-proxy replaced|enabled`, `ichor shutdown cluster
+NAME`, `ichor get operations|describe operation|pause operation|resume operation|delete operation` (alias `op`). The version may be given without the leading
 `v`. `--cluster` (default: the only cluster in the namespace), `--max-unavailable`, `--follow` (poll until it ends;
 a pause caused by a failed machine is an error exit), `get --watch`. The start, pause, resume and delete commands
 are marked as writes for the version-skew check (ADR 0059, point 6).  `ichor upgrade ichor` also names a cluster: the operation backbone needs one for its
@@ -110,11 +110,11 @@ The plan lists every approved machine, control planes first and then workers, on
 (`upgrade.SortByOrder`). A machine with `upgrade-hold` is not skipped and `held` is empty: a machine left out would be locked out
 when the old CA is dropped (ADR 0063). The confirmation says that each machine is reconfigured once per pass without a reboot, that
 the kubelet restarts on each machine in the passes that change the Kubernetes CA, and that when the rotation completes the secrets
-bundle in the cluster is replaced and the copy on the user's machine is stale: run `ichor cluster bundle-export NAME`. The CLI and
+bundle in the cluster is replaced and the copy on the user's machine is stale: run `ichor export bundle NAME`. The CLI and
 the UI build this from the same plan fields; the CLI also prints the bundle-export reminder after the start, and `--follow` and
-`operation get --watch` print the stage.
+`describe operation --watch` print the stage.
 
-`ichor cluster rotate-ca` now calls `runStartOperation` like `ichor cluster shutdown`; the earlier direct write
+`ichor rotate ca` now calls `runStartOperation` like `ichor shutdown cluster`; the earlier direct write
 through the kubeconfig (and its own already-running check) is removed, so the same refusals run on the CLI, the UI and the
 in-process fallback. The UI dialog is the two-step Review/Start of the other kinds and, like a shutdown, asks for the cluster name to
 be typed before Start. The progress page shows "Pass n of 5: <stage>" from `caStageProgress`.
@@ -136,7 +136,7 @@ start buttons are on the cluster page. All wording is in `en`/`ja` (the type for
 - Override for these writes (ADR 0064).
 - A stream instead of polling; a per-machine log of what the executor is doing (the status has phase only).
 - Clearing a failed machine so the operation resumes (ADR 0026 left that open); the screens say to delete and
-  start again. `operation resume` on an operation paused after a failed machine is accepted but has no effect.
+  start again. `resume operation` on an operation paused after a failed machine is accepted but has no effect.
 
 ## Later changes
 

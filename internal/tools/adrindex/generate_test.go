@@ -19,7 +19,7 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"strings"
+	"regexp"
 	"testing"
 )
 
@@ -88,21 +88,92 @@ func TestParseADRsIsDeterministic(t *testing.T) {
 	}
 }
 
-// TestNoADRNamesTheRemovedKubeProxyCommand pins the kube-proxy switch command
-// across every ADR: no ADR may name `cni kube-proxy`. The CLI registers
-// `ichor set kube-proxy` (internal/cli/cni.go).
-func TestNoADRNamesTheRemovedKubeProxyCommand(t *testing.T) {
+// removedCommandPaths are the CLI command paths that the verb-first surface
+// (b0a9823cc) retired. An ADR names the current command, so none of these may
+// appear in one, as `ichor <path>` or as a `<path>` code span. A later rename adds
+// its old path here.
+var removedCommandPaths = []string{
+	"auth kubeconfig",
+	"auth status",
+	"cluster bundle-export",
+	"cluster credentials",
+	"cluster discovery",
+	"cluster discovery add",
+	"cluster discovery list",
+	"cluster discovery remove",
+	"cluster get",
+	"cluster list",
+	"cluster rotate-ca",
+	"cluster rotate-keys",
+	"cluster shutdown",
+	"cluster status",
+	"cluster talosconfig",
+	"cni bootstrap",
+	"cni kube-proxy",
+	"cni upgrade",
+	"cni values",
+	"cni values diff",
+	"cni values edit",
+	"cni values get",
+	"cni values set",
+	"config apply",
+	"config effective",
+	"etcd backup",
+	"etcd backup now",
+	"etcd defrag",
+	"etcd forfeit-leadership",
+	"etcd snapshot",
+	"machine approve",
+	"machine get",
+	"machine list",
+	"machine reclaim",
+	"machine reject",
+	"node get",
+	"node logs",
+	"node pcap",
+	"node reboot",
+	"node remove",
+	"node restart-service",
+	"node shutdown",
+	"node support-bundle",
+	"operation delete",
+	"operation get",
+	"operation list",
+	"operation pause",
+	"operation resume",
+	"patch create",
+	"patch delete",
+	"patch get",
+	"patch list",
+	"patch preview",
+	"patch update",
+	"settings get",
+	"settings set",
+	"user create",
+	"user delete",
+	"user get",
+	"user list",
+	"user update",
+}
+
+// TestNoADRNamesARemovedCommand is the rule behind the kube-proxy fix: an ADR
+// that names a command the CLI no longer has is a defect, whichever command it
+// is. The decisions an ADR records are not checked, only the command spellings.
+func TestNoADRNamesARemovedCommand(t *testing.T) {
 	paths, err := filepath.Glob(filepath.Join(adrDir, "*.md"))
 	if err != nil || len(paths) == 0 {
 		t.Fatalf("want ADRs under %s, got %v (err %v)", adrDir, paths, err)
 	}
-	for _, path := range paths {
-		body, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("reading %s: %v", path, err)
-		}
-		if strings.Contains(string(body), "cni kube-proxy") {
-			t.Errorf("%s names `cni kube-proxy`, which is not a command; use `set kube-proxy`", path)
+	for _, cmd := range removedCommandPaths {
+		re := regexp.MustCompile("(ichor |`)" + regexp.QuoteMeta(cmd) + "([^a-z-]|$)")
+		for _, path := range paths {
+			body, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("reading %s: %v", path, err)
+			}
+			if n := len(re.FindAll(body, -1)); n > 0 {
+				t.Errorf("%s names the removed command %q (%d time(s))", path, cmd, n)
+			}
 		}
 	}
 }

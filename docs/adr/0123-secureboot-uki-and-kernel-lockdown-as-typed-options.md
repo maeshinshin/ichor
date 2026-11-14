@@ -29,7 +29,7 @@ ADR 0108 left "SecureBoot and UKI, kernel lockdown" as Not modelled and tied `di
 
 **Reinstall, honestly.** Changing the SecureBoot mode never touches an installed node: the installer image of a running node cannot be changed by configuration (`machine.install` and `UnattendedInstallConfig` are install-time-only in `pkg/fieldmeta`), the firmware keys are not Talos's, and the TPM key is bound to the SecureBoot state. The guide describes the path per node: set the mode and the annotation, `ichor node reset NODE --override --confirm NODE`, boot the machine from the SecureBoot ISO of the same schematic and Talos version (firmware in setup mode, SecureBoot enabled), approve it again (the default image is now the SecureBoot installer), wait for `SecureBoot=True`, next node; control planes one at a time with etcd quorum intact and a fresh etcd backup.
 
-**Surfaces.** The UI's Talos details (System section) gains the SecureBoot, UKI, module-signature and lockdown fields from the same two resources (live read); the machine and cluster detail pages and `ichor machine get` / `ichor cluster get` show the conditions as they do every condition. No new CLI command.
+**Surfaces.** The UI's Talos details (System section) gains the SecureBoot, UKI, module-signature and lockdown fields from the same two resources (live read); the machine and cluster detail pages and `ichor describe node` / `ichor describe cluster` show the conditions as they do every condition. No new CLI command.
 
 ## Rejected
 
@@ -49,7 +49,7 @@ ADR 0108 left "SecureBoot and UKI, kernel lockdown" as Not modelled and tied `di
 ## As built
 
 - `pkg/secureboot` (the shared rules: installer reference, lockdown level and comparison, machine and cluster conditions), `api/v1alpha1` (`TalosClusterSecurity.SecureBoot`, `KernelLockdown`, `TalosMachineStatus.Security`, the condition types and the confirm annotation), `pkg/render/security.go` (the TPM default), `internal/controller/security_state.go` (`ReadSecurityState`, `recordSecurity`, the first-configuration gate), `internal/controller/cluster_security.go` (`BootSecurityReconciler`, its own controller so a machine's status change does not start a discovery sweep), `internal/controller/talos_upgrade.go` (the variant), `internal/webhook/v1alpha1/security_options.go` and `talosmachine_webhook.go`, `internal/uiapi` (`ApproveMachine`'s default and the details fields, `talosdetails.proto` fields 13 to 17), `ui/src/components/TalosDetails.tsx`, `docs/guides/hardening.md`.
-- Deviations from the text above: the first-configuration hold sets `Ready=False` with reason `SecureBootRequired` (there is no separate `Provisioned` write for a refusal); the CLI has no new command, `ichor machine get` and `ichor cluster get` print the conditions and `ichor machine approve --install-image` documents the default.
+- Deviations from the text above: the first-configuration hold sets `Ready=False` with reason `SecureBootRequired` (there is no separate `Provisioned` write for a refusal); the CLI has no new command, `ichor describe node` and `ichor describe cluster` print the conditions and `ichor approve node --install-image` documents the default.
 - `status.security` is recorded on every reconcile that reaches the node, for every cluster, so enabling `Required` later can be checked against it; the conditions exist only while the option is set (and a `SecureBoot` condition also appears under mode `Off` when a node runs SecureBoot).
 
 ## Amendment 2026-11-05: the PCR signing key fingerprint and a wipe mode for reset

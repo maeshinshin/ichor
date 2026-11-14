@@ -1,7 +1,7 @@
 # 0063. CA expiry is read from the secrets bundle and published; CA rotation is decided here and built as the `ca-rotation` operation
 
 Status: Accepted (the stage sequence and the operator's credentials are amended by ADR 0091) · Date: 2026-10-26 · Design section: Backup, recovery, certificates
-Decided: `CertExpiryReconciler` reads the CAs in the secrets bundle (talos, kubernetes, kubernetes-aggregator, etcd) and publishes each `notAfter` in `TalosCluster.status.certificates` and as `ichor_certificate_expiry_timestamp_seconds`; `talosctl rotate-ca` is not reused whole; rotating the CAs does not change the etcd backup key; the `TalosOperation` kind `CARotation` is decided below but is deliberately not implemented in this change; the `ca-rotation` TalosOperation kind is built as its own state machine on the ADR 0026 backbone: three verified passes, the new CAs saved to the Secret's `rotation.yaml` before any node is told, `secrets.yaml` replaced last, `BundleBackupStale` until `ichor cluster bundle-export` (see "Implementation")
+Decided: `CertExpiryReconciler` reads the CAs in the secrets bundle (talos, kubernetes, kubernetes-aggregator, etcd) and publishes each `notAfter` in `TalosCluster.status.certificates` and as `ichor_certificate_expiry_timestamp_seconds`; `talosctl rotate-ca` is not reused whole; rotating the CAs does not change the etcd backup key; the `TalosOperation` kind `CARotation` is decided below but is deliberately not implemented in this change; the `ca-rotation` TalosOperation kind is built as its own state machine on the ADR 0026 backbone: three verified passes, the new CAs saved to the Secret's `rotation.yaml` before any node is told, `secrets.yaml` replaced last, `BundleBackupStale` until `ichor export bundle` (see "Implementation")
 
 ## Context
 
@@ -116,7 +116,7 @@ Decisions 2 to 5 stand. Decision 5 said what the executor needed; this is how ea
 differs from what was sketched.
 
 **Entry.** `TalosOperation.spec.kind: ca-rotation`, started through `OperationService` like every other kind (ADR 0068, Decision 7):
-`ichor cluster rotate-ca NAME` (plan, confirmation, `CreateOperation`; backend or in-process fallback) and the UI's "Rotate CAs"
+`ichor rotate ca NAME` (plan, confirmation, `CreateOperation`; backend or in-process fallback) and the UI's "Rotate CAs"
 button on the cluster page. The command no longer writes the custom resource through the kubeconfig; there is one path. The UI's
 progress page shows `status.caRotation.stage` and, once complete, that the secrets bundle on the user's machine is stale.
 
@@ -184,7 +184,7 @@ chosen by the user. Reads of the bundle, `rotation.yaml` and the machine gate go
 was added too. Amendment (write scope): the broad `update` is kept. A required label (`ichor.maesh.dev/secrets-bundle=true`) was rejected: RBAC cannot filter by label, so it adds no API-side protection, and it would break every existing bundle. Since ADR 0096 only `talosclusters/secret-references` holders can change `secretsRef`,  and the executor enforces in code (`caRun.updateBundle`) that it writes only the Secret `secretsRef` names in the controller namespace.
 
 **`BundleBackupStale`.** Raised on the `TalosCluster` (condition, `reason: CARotated`) and as a Warning Event by the executor at
-Finalizing. The message names the command and carries no secret. `ichor cluster bundle-export NAME` reads the live bundle from the
+Finalizing. The message names the command and carries no secret. `ichor export bundle NAME` reads the live bundle from the
 Secret (refusing while `rotation.yaml` exists), saves it to `~/.ichor/clusters/<name>/secrets.yaml`, reads the file back, and only if
 it holds the live bundle sets the annotation `ichor.maesh.dev/bundle-exported` on the cluster to the bundle's fingerprint (a hash of
 the two CA fingerprints). `CertExpiryReconciler` lowers the condition when the annotation equals the live bundle's fingerprint; an

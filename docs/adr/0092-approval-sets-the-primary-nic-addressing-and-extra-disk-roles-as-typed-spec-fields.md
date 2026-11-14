@@ -2,7 +2,7 @@
 
 Status: Accepted · Date: 2026-10-27 · Design section: Nodes (approval, disk roles)
 
-Decided: `TalosMachine.spec.network` (one primary link chosen by permanent MAC, DHCP or static addressing, optional VLAN, DNS servers) and `TalosMachine.spec.disks` (roles `ephemeral` and `userVolume` on disks identified like `spec.install.disk`) are written at approval by the UI form and `ichor machine approve` flags; `pkg/render` emits a `LinkAliasConfig` alias `net0` with a CEL selector on the permanent MAC and refers to the alias from `DHCPv4Config`, `LinkConfig`, `VLANConfig` and `ResolverConfig`, a `VolumeConfig` for EPHEMERAL and a `UserVolumeConfig` per volume, and the legacy `machine.network.interfaces` before the multi-document contract; link addressing documents are classified live in `pkg/fieldmeta`, aliases and everything else keep the reboot-required default; bonds, the `storage` role and `unused` are not done
+Decided: `TalosMachine.spec.network` (one primary link chosen by permanent MAC, DHCP or static addressing, optional VLAN, DNS servers) and `TalosMachine.spec.disks` (roles `ephemeral` and `userVolume` on disks identified like `spec.install.disk`) are written at approval by the UI form and `ichor approve node` flags; `pkg/render` emits a `LinkAliasConfig` alias `net0` with a CEL selector on the permanent MAC and refers to the alias from `DHCPv4Config`, `LinkConfig`, `VLANConfig` and `ResolverConfig`, a `VolumeConfig` for EPHEMERAL and a `UserVolumeConfig` per volume, and the legacy `machine.network.interfaces` before the multi-document contract; link addressing documents are classified live in `pkg/fieldmeta`, aliases and everything else keep the reboot-required default; bonds, the `storage` role and `unused` are not done
 
 ## Context
 

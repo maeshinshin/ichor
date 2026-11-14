@@ -107,7 +107,7 @@ dialog. The dialog (`OverrideDialog`) says what the call does (writes now, also 
 Argo CD may revert it while selfHeal is on, requires a non-blank reason (the submit button stays disabled, and
 the server refuses it as well), repeats the same call with `override{reason}`, and on success shows the response
 `notice` (the selfHeal warning, or a failed PR) and the pull request link with wording that says the cluster already
-changed. It is wired into approve, reject, patch update and patch delete. The helper logic is in
+changed. It is wired into `approve node`, `reject node`, `apply` and `delete patch`. The helper logic is in
 `ui/src/lib/override.ts` (reason check, request shape, when to offer).
 
 **8. Who is exempt, and how.** Exact usernames, never groups or namespaces: `system:serviceaccount:<ns>:<name>` for

@@ -18,7 +18,7 @@ for approval, patches, effective config, node detail or logs.
 local port, one `GET /` probe, then the generated Connect clients
 (`connect.NewXServiceClient`, plain `http.DefaultClient`; unary and server
 streaming work over HTTP/1.1). No new connection method. Each command opens
-its own short-lived tunnel; only `node logs --follow` reconnects.
+its own short-lived tunnel; only `logs node --follow` reconnects.
 
 ## Decision 2: the fallback is the same handler, not a copy
 
@@ -42,23 +42,23 @@ fallback.
 
 | Command | Backend reachable | Backend unreachable |
 |---|---|---|
-| `machine list/get`, `cluster list/get`, `patch list/get` | Connect | in-process, reads the CRs |
-| `machine approve/reject` | Connect | in-process, same handler, writes the same CR |
-| `patch create/update/delete` | Connect | in-process, same handler, writes the same CR |
-| `patch preview` | Connect | in-process (`pkg/fieldmeta`, pure) |
-| `config effective` | Connect | in-process: renders from the CRs and the bundle with the caller's RBAC, masked by the same code |
-| `node get`, `node logs` | Connect | **no fallback**: error. The read-only Talos identity lives in ichor-ui and the CLI never talks to a node |
+| `get nodes/describe node`, `get clusters/describe cluster`, `get patches/describe patch` | Connect | in-process, reads the CRs |
+| `approve node/reject node` | Connect | in-process, same handler, writes the same CR |
+| `apply/delete patch` | Connect | in-process, same handler, writes the same CR |
+| `preview` | Connect | in-process (`pkg/fieldmeta`, pure) |
+| `describe config` | Connect | in-process: renders from the CRs and the bundle with the caller's RBAC, masked by the same code |
+| `describe node`, `logs node` | Connect | **no fallback**: error. The read-only Talos identity lives in ichor-ui and the CLI never talks to a node |
 
 `init`, `adopt` and full-loss recovery are unchanged: they exist before the
 cluster.
 
 ## Decision 3: command shape
 
-architecture.md fixes only `ichor machine approve`. The rest follows it:
-`ichor machine list|get|approve|reject`, `cluster list|get`,
-`patch list|get|create|update|delete|preview`, `node get|logs`,
-`config effective`. Output is the wire message as `-o yaml|json`. `approve`,
-`reject` and `patch delete` confirm unless `--yes`. `patch create|update`
+architecture.md fixes only `ichor approve node`. The rest follows it:
+`ichor get nodes|describe node|approve node|reject node`, `get clusters|describe cluster`,
+`get patches|describe patch|apply|delete patch|preview`, `describe node|logs node`,
+`describe config`. Output is the wire message as `-o yaml|json`. `approve node`,
+`reject node` and `delete patch` confirm unless `--yes`. `apply`
 preview first and confirm only when the patch needs a reboot, touches an
 install-time-only field or one too new for the cluster's Talos. Patches are
 read from a typed `TalosConfigPatch` manifest (`-f`, `-` for stdin) decoded
@@ -66,7 +66,7 @@ with unknown fields rejected; `uiapi.PatchToWire` is the one conversion.
 
 ## Decision 4: `--follow`
 
-`StreamNodeLogs` already takes and returns an opaque resume token. `node logs
+`StreamNodeLogs` already takes and returns an opaque resume token. `logs node
 --follow` reconnects (new tunnel) on `CodeUnavailable` or a clean end, passing
 the latest token, the Go twin of `ui/src/lib/resumableStream.ts`; the same
 caveat about a few repeated or missed lines applies (ADR 0018). The API has
@@ -87,4 +87,4 @@ change; add the field when the API next changes.
 
 The CLI finds the ichor-ui Service by `app.kubernetes.io/component=ui` in the Ichor namespace, not by name. Kustomize `namePrefix` makes the init-installed Service `ichor-ichor-ui-service`, the chart names it `ichor-ui-service`, and both now set the label. Names are left as they are because `internal/installer` classifies UI objects by the `ichor-ichor-ui` prefix.
 
-- `patch create|update` always print the impact (reboot, install-time-only, unsupported, or "no reboot needed") on stderr before writing, as the help says; the written object stays alone on stdout.
+- `apply` always print the impact (reboot, install-time-only, unsupported, or "no reboot needed") on stderr before writing, as the help says; the written object stays alone on stdout.

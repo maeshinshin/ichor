@@ -21,7 +21,7 @@ spec:
     acknowledgedHalt: ""                  # see 5
 ```
 
-All fields are optional and append-only. A set `spec.autoPatch` wins field by field over the flags (`--auto-patch`, `--auto-patch-components`, `--auto-patch-window`, from the chart's `autoPatch.enabled`, `components`, `window`); `--settings-read-only` ignores the whole spec group exactly as for the other settings (ADR 0105, 0114). `status.effective` gains `autoPatch`, `autoPatchComponents` and `autoPatchWindow`. Changing the first three needs `update` on `ichorinstallations/settings`, as the other settings do, and leaves the usual `SettingsChanged` Event; `ichor settings set autoPatch.enabled=true autoPatch.components=talos,cilium autoPatch.window=02:00-05:00` and the Settings page (a Switch, one Checkbox per component, an Input for the window) write it through SettingsService. The webhook and the CRD both reject a malformed window or an unknown component.
+All fields are optional and append-only. A set `spec.autoPatch` wins field by field over the flags (`--auto-patch`, `--auto-patch-components`, `--auto-patch-window`, from the chart's `autoPatch.enabled`, `components`, `window`); `--settings-read-only` ignores the whole spec group exactly as for the other settings (ADR 0105, 0114). `status.effective` gains `autoPatch`, `autoPatchComponents` and `autoPatchWindow`. Changing the first three needs `update` on `ichorinstallations/settings`, as the other settings do, and leaves the usual `SettingsChanged` Event; `ichor set settings autoPatch.enabled=true autoPatch.components=talos,cilium autoPatch.window=02:00-05:00` and the Settings page (a Switch, one Checkbox per component, an Input for the window) write it through SettingsService. The webhook and the CRD both reject a malformed window or an unknown component.
 
 ### 2. What it may start
 
@@ -49,11 +49,11 @@ A start, for Talos or Kubernetes: the operation's creation is dry-run first, the
 
 ### 5. Halt and resume
 
-An automatic operation (by the annotation) in phase Paused, which is how a failed step and a person's pause both show (ADR 0095), halts the patcher: `status.conditions[AutoPatchHalted]=True` with the operation and its failure reason, `status.autoPatch.haltedOperation: <namespace>/<name>`, a Warning Event `AutoPatchHalted`, and an item in the Overview's attention list. While halted nothing starts on any cluster, and nothing is ever retried by the patcher: running a failed step again stays `ichor operation resume` (ADR 0095).
+An automatic operation (by the annotation) in phase Paused, which is how a failed step and a person's pause both show (ADR 0095), halts the patcher: `status.conditions[AutoPatchHalted]=True` with the operation and its failure reason, `status.autoPatch.haltedOperation: <namespace>/<name>`, a Warning Event `AutoPatchHalted`, and an item in the Overview's attention list. While halted nothing starts on any cluster, and nothing is ever retried by the patcher: running a failed step again stays `ichor resume operation` (ADR 0095).
 
 The halt ends when:
 
-- a person writes `spec.autoPatch.acknowledgedHalt` equal to `haltedOperation` (the Settings page's "Clear the halt" button, `ichor settings set autoPatch.acknowledgeHalt=<namespace>/<name>`). The controller never edits spec, so it only compares; the value is not removed, and a later halt names another operation, so an old acknowledgement does not clear it. This is allowed under `--settings-read-only` too (still needing `update` on `ichorinstallations/settings`): it clears a state Ichor wrote, it is not one of the deployment's settings;
+- a person writes `spec.autoPatch.acknowledgedHalt` equal to `haltedOperation` (the Settings page's "Clear the halt" button, `ichor set settings autoPatch.acknowledgeHalt=<namespace>/<name>`). The controller never edits spec, so it only compares; the value is not removed, and a later halt names another operation, so an old acknowledgement does not clear it. This is allowed under `--settings-read-only` too (still needing `update` on `ichorinstallations/settings`): it clears a state Ichor wrote, it is not one of the deployment's settings;
 - the halting operation completed (a person resumed it) or no longer exists (deleted);
 - a later operation of the same cluster that the patcher did not start, of kind talos, kubernetes or cni, completed.
 
@@ -79,7 +79,7 @@ The target of a Talos or Kubernetes upgrade is `TalosCluster.spec.talosVersion` 
 - Off by default; nothing changes for an installation that does not turn it on. The CRD gains optional fields only (append-only), the chart a value group and three flags, the proto optional fields.
 - A new ServiceAccount, ClusterRole and binding `ichor-auto-patch`, and a namespaced Role that lets the controller impersonate that account only; the controller's own ClusterRole is unchanged (`manager-role` equals `config/rbac/role.yaml` as before). The installer's escalation lists name the new Role and ClusterRole.
 - The release check must be on for there to be anything to apply; with it off `status.upgradeTargets` is cleared and the patcher starts nothing.
-- `ichor settings get` and the Settings page show the effective switch, components and window, and the halted operation.
+- `ichor get settings` and the Settings page show the effective switch, components and window, and the halted operation.
 
 ## Amendment 2026-11-04: Cilium has no automatic patch
 

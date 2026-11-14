@@ -60,7 +60,7 @@ CLI therefore uses its in-process fallback (the same `uiapi.Server` on the user'
 the probe answers, the CLI reads `GET /auth/config`. `enabled:true` makes it drop the tunnel and use the
 in-process `uiapi.Server` on the user's own kubeconfig and RBAC, printing one line to stderr saying so. Any other
 answer (non-200, unparseable body, an older backend) counts as not enabled, so the call goes to the backend, which
-rejects it itself if it does require a token: detection never opens anything up. `node get` / `node logs` need the
+rejects it itself if it does require a token: detection never opens anything up. `describe node` / `logs node` need the
 backend's read-only Talos identity, so with OIDC on they fail with a reason (the backend requires OIDC, the CLI
 cannot present a token and never forwards kubeconfig credentials) instead of `Unauthenticated`; the flag that
 would carry an ID token is still later. The in-process actor (`AuditRecord.actor`, `Requested by:`, the approval

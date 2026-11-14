@@ -2,7 +2,7 @@
 
 Status: Accepted · Date: 2026-10-27 · Design section: Backup, recovery, certificates; Trust · Supersedes in part: 0063 (stage sequence, "How Ichor stays connected" covers Ichor only), 0068 Decision 7 (the CLI start) · Amended by: 0093 (the UI download)
 
-Decided: the `ca-rotation` stages are `Accepting`, `AwaitingCredentials`, `Issuing`, `Dropping`, `Finalizing`, `Done`; `AwaitingCredentials` changes nothing on any node and the controller leaves it only when the operation carries the annotation `ichor.maesh.dev/credentials-handoff` with the value `talos=<new talos CA fingerprint>,kubernetes=<new kubernetes CA fingerprint>` (`ichorv1alpha1.CARotationHandoffToken`); the CLI sets it, the controller only reads it and never writes `spec`; `ichor cluster rotate-ca` waits for the gate through the Kubernetes API, then writes a kubeconfig and a talosconfig that trust both the old and the new CAs and are signed by the new ones, checks that the new kubeconfig authenticates to the cluster, and only then sets the annotation; `ichor cluster credentials NAME` writes the same files from the cluster (`--acknowledge` also sets the annotation) or, with `--bundle FILE`, offline from a `bundle-export` file; `rotate-ca --follow` follows through the Kubernetes API with the new kubeconfig, not through the ichor-ui tunnel; the UI offers no download here, which ADR 0093 reverses: it adds an admin-gated download and a continue button
+Decided: the `ca-rotation` stages are `Accepting`, `AwaitingCredentials`, `Issuing`, `Dropping`, `Finalizing`, `Done`; `AwaitingCredentials` changes nothing on any node and the controller leaves it only when the operation carries the annotation `ichor.maesh.dev/credentials-handoff` with the value `talos=<new talos CA fingerprint>,kubernetes=<new kubernetes CA fingerprint>` (`ichorv1alpha1.CARotationHandoffToken`); the CLI sets it, the controller only reads it and never writes `spec`; `ichor rotate ca` waits for the gate through the Kubernetes API, then writes a kubeconfig and a talosconfig that trust both the old and the new CAs and are signed by the new ones, checks that the new kubeconfig authenticates to the cluster, and only then sets the annotation; `ichor create credentials NAME` writes the same files from the cluster (`--acknowledge` also sets the annotation) or, with `--bundle FILE`, offline from a `bundle-export` file; `rotate-ca --follow` follows through the Kubernetes API with the new kubeconfig, not through the ichor-ui tunnel; the UI offers no download here, which ADR 0093 reverses: it adds an admin-gated download and a continue button
 
 ## Context
 
@@ -25,7 +25,7 @@ After `Accepting` is verified on every machine, every node accepts both CAs for 
 old CAs still issue, so every credential the operator holds still works and a credential signed by the new CAs works too.
 That is the only moment in the rotation where both are true, so it is where the operator gets the new ones. The stage
 `AwaitingCredentials` follows `Accepting`; the operation is `Paused` with the `CARotation` condition `False`/`AwaitingCredentials`
-(its message names `ichor cluster credentials NAME --acknowledge`), requeued every `operationRequeueInterval` like every other
+(its message names `ichor create credentials NAME --acknowledge`), requeued every `operationRequeueInterval` like every other
 unverifiable step, and it applies nothing. There is no way to skip it: no flag, no annotation value that matches by accident
 (the token is the new CAs' fingerprints, so an acknowledgement left from another rotation does not release this one). A
 `--skip-credential-handoff` was considered and not built: an operator who does not want credentials still has to say so by running
@@ -37,7 +37,7 @@ stands aside, and nothing is half-done, because a cluster in `AwaitingCredential
 
 ## Decision 2: the dual-CA files
 
-`ichor cluster credentials` and `rotate-ca` write two files, mode 0600 (directory 0700 if created), through the atomic writer of
+`ichor create credentials` and `rotate-ca` write two files, mode 0600 (directory 0700 if created), through the atomic writer of
 `bundlefile.go`, never printing their contents:
 
 - **kubeconfig.** The server, cluster, context, user and namespace names are copied from the current kubeconfig (so
@@ -79,7 +79,7 @@ which needs `patch` on `talosoperations` that the operator already has to start 
 It waits for the gate by reading the operation through the Kubernetes API with the old kubeconfig (retrying the transient errors of an
 API server restarting for the accepted-CA change), writes and checks the files, acknowledges, prints where the files are and how to
 use them (`KUBECONFIG=… TALOSCONFIG=…`), and returns; with `--follow` it then watches the operation to its end with a client built from the
-**new** kubeconfig. If it is interrupted while the operation waits, `ichor cluster credentials NAME --acknowledge` does the rest.
+**new** kubeconfig. If it is interrupted while the operation waits, `ichor create credentials NAME --acknowledge` does the rest.
 
 ## Decision 4: `--follow` and the tunnel
 
@@ -89,11 +89,11 @@ and dropped its error, so the failure repeated silently. Two changes: the error 
 (`ichor: could not re-open the tunnel to ichor-ui (...)`) for every `--follow`/`--watch`, and `rotate-ca --follow` does not use the
 tunnel after the hand-off: it polls the `TalosOperation` through the Kubernetes API with the new kubeconfig (`watchCARotation`),
 which is independent of ichor-ui's pod and of its endpoint, and retries transient errors with the shared helper. The plain
-`operation get --watch` keeps the tunnel and the generic reconnect, now with its reason shown.
+`describe operation --watch` keeps the tunnel and the generic reconnect, now with its reason shown.
 
 ## Decision 5: offline credentials
 
-`ichor cluster credentials NAME --bundle FILE` reads a `bundle-export` file and needs no cluster: it writes the files for the single CA in
+`ichor create credentials NAME --bundle FILE` reads a `bundle-export` file and needs no cluster: it writes the files for the single CA in
 the file. It exists for the operator who holds a current bundle (exported after the last rotation) and has lost every kubeconfig and
 talosconfig; the Kubernetes server comes from `--kubeconfig` (any kubeconfig naming the server) and the Talos endpoints from
 `--talos-endpoints`. A bundle saved before a rotation names CAs no node accepts any more: that is the reason `BundleBackupStale`
@@ -114,4 +114,4 @@ exists, and the command does not pretend otherwise.
 - ADR 0063's statement that "Ichor's dial" is the only client it keeps connected stands: the controller's bundle-based dial is
   unaffected; this ADR is about every other client the operator owns.
 
-Amendment 2026-11-06: `ichor cluster rotate-ca` without `--follow` still stays until the hand-off is done (Decision 3 stands: the files and the acknowledgement need the operator's own kubeconfig, and the CLI is the one party that has it); it returns once the operation has gone on, in seconds when the nodes already trust the new CAs. Its help text and the `--follow` usage now say so. To start a rotation without the CLI, create the operation with `kubectl` or the UI and hand it off later with `ichor cluster credentials NAME --acknowledge`.
+Amendment 2026-11-06: `ichor rotate ca` without `--follow` still stays until the hand-off is done (Decision 3 stands: the files and the acknowledgement need the operator's own kubeconfig, and the CLI is the one party that has it); it returns once the operation has gone on, in seconds when the nodes already trust the new CAs. Its help text and the `--follow` usage now say so. To start a rotation without the CLI, create the operation with `kubectl` or the UI and hand it off later with `ichor create credentials NAME --acknowledge`.

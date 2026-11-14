@@ -170,7 +170,7 @@ the doc comment does.
 
 - `IchorInstallation` and the `kind: ichor` executor landed in ADR 0059; the installer Job is a separate process, so the backbone is unchanged (the executor is idempotent per operation).
 
-- The entry points landed in ADR 0068: `OperationService`, `ichor upgrade|cni|cluster shutdown|operation`, and the operations screens.
+- The entry points landed in ADR 0068: `OperationService`, `ichor upgrade`, `ichor upgrade cni`, `ichor shutdown cluster`, `ichor get operations`, and the operations screens.
 
 - Every pause now says why: `setPhase` writes a `Paused` condition (reason and message) for a transitioning cluster, a held lock, `spec.paused` and a failed step; `failureReason` stays reserved for failed steps because the controller, the CLI and the UI read it as "hold, never retry".
 

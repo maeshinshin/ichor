@@ -6,7 +6,7 @@ Decided: the e2e harness keeps one cached Talos ISO per Talos version and schema
 
 ## Context
 
-Importing the ISO again for every node dominates the time to bring a cluster up. The nodes boot the ISO in maintenance mode on a blank system disk, and Ichor installs Talos there (`ichor init` for the first node, `ichor machine approve --install-disk` for the others).
+Importing the ISO again for every node dominates the time to bring a cluster up. The nodes boot the ISO in maintenance mode on a blank system disk, and Ichor installs Talos there (`ichor init` for the first node, `ichor approve node --install-disk` for the others).
 
 ## Decision
 

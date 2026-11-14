@@ -334,4 +334,4 @@ its own optional, non-blocking `Reason` textarea for the same symmetry.
 `IsApproved()`'s meaning does not change, and `internal/controller` is
 untouched.
 
-Amendment 2026-11-05 (ADR 0130): the "symmetric reason" is gone. `ApproveMachineRequest.reason`, `RejectMachineRequest.reason` and `MachineApprovalDecision.reason` are deprecated and unused, `TalosMachine.spec.approvalDecision.reason` is kept in the schema but no longer written or shown, the Approve and Reject dialogs have no reason box, and the Rejected list has no Reason column. `ichor machine approve|reject` lost `--reason`. The decision still records the actor and the time.
+Amendment 2026-11-05 (ADR 0130): the "symmetric reason" is gone. `ApproveMachineRequest.reason`, `RejectMachineRequest.reason` and `MachineApprovalDecision.reason` are deprecated and unused, `TalosMachine.spec.approvalDecision.reason` is kept in the schema but no longer written or shown, the Approve and Reject dialogs have no reason box, and the Rejected list has no Reason column. `ichor approve node|reject` lost `--reason`. The decision still records the actor and the time.

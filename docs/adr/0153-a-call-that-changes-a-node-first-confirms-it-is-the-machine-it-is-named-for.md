@@ -6,7 +6,7 @@ Decided: before Ichor wipes a node, makes it leave etcd, applies a configuration
 
 ## Context
 
-A machine's endpoint is an address. After a DHCP change it can answer as another control plane that trusts the same CA, and every credential Ichor holds opens both. The read path already compared UUIDs (`checkEndpointIdentity`), but it only reads, so it lets an unreadable or empty UUID pass. The calls that change something did not check at all: `ichor node remove A` could wipe B, or ask B to leave etcd while Ichor believed A's member was gone. A removal also took the Node name to drain and the etcd member to remove from whatever answered at A's address, so B could be drained and removed from etcd through a survivor even when B itself was never asked to do anything.
+A machine's endpoint is an address. After a DHCP change it can answer as another control plane that trusts the same CA, and every credential Ichor holds opens both. The read path already compared UUIDs (`checkEndpointIdentity`), but it only reads, so it lets an unreadable or empty UUID pass. The calls that change something did not check at all: `ichor delete node A` could wipe B, or ask B to leave etcd while Ichor believed A's member was gone. A removal also took the Node name to drain and the etcd member to remove from whatever answered at A's address, so B could be drained and removed from etcd through a survivor even when B itself was never asked to do anything.
 
 ## Decisions
 
@@ -22,4 +22,4 @@ A machine's endpoint is an address. After a DHCP change it can answer as another
 
 ## Risks
 
-The other calls that dial a machine and change it (cluster shutdown, the etcd restore, the Kubernetes upgrade, the CA and key rotations, the CNI switch) do not run the check yet. The Kubernetes Node found by address is still the last resort for the name of a control plane that cannot be dialed and has no recorded name.
+The other calls that dial a machine and change it (shutdown cluster, the etcd restore, the Kubernetes upgrade, the CA and key rotations, the CNI switch) do not run the check yet. The Kubernetes Node found by address is still the last resort for the name of a control plane that cannot be dialed and has no recorded name.

@@ -151,7 +151,7 @@ install-time-only, API-server-restarting or version-unsupported paths are still 
 On a Git-tracked cluster the user commits `spec.cni.kubeProxy: replaced` (and the consent annotation) before
 running `ichor set kube-proxy replaced`. Until the switch sets `status.cni.kubeProxy` the render follows spec, so the
 control plane differed from its node at `KubeProxyConfig.enabled` and showed `Ready=False/RebootRequired` with
-"start a config rollout". That points at the wrong action: `ichor config apply` would reboot the node onto the new
+"start a config rollout". That points at the wrong action: `ichor rollout config` would reboot the node onto the new
 mode and skip the switch's checks. The reverse direction never showed it because status already overrides the render.
 
 Chosen: report it differently, keep the render. The alternative, holding the render at the current mode, needs a
@@ -166,7 +166,7 @@ Guessing from the machine's applied hash would make the render depend on node hi
 - While that holds, a TalosMachine whose only reboot-class paths are
   `KubeProxyConfig*` / `cluster.proxy*` (and no API server restart on a control plane) reports
   `Ready=False/KubeProxySwitchPending`: "run `ichor set kube-proxy replaced` (or the UI's kube-proxy switch) to apply
-  it without a reboot". It does not set `status.rebootPaths`, so `ichor config apply` and the rollout planner (which
+  it without a reboot". It does not set `status.rebootPaths`, so `ichor rollout config` and the rollout planner (which
   select on those paths) do not pick the machine up.
 - A machine that also has other reboot-class paths keeps `RebootRequired` and is selectable, so the rollout step
   (`configRolloutAdvancer.begin`) refuses any machine with a kube-proxy path pending in this state ("run

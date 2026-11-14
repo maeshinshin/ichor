@@ -78,8 +78,8 @@ hand". The chart's installer RBAC is also off in that mode (below).
 
 **6. CLI refuses writes beyond one minor.** The CLI compares its own `internal/version` with
 `IchorInstallation.status.installedVersion` (the controller's report, so it works with or without ichor-ui,
-including the `--local` fallback) before a command marked as a write: `machine approve`, `machine reject`,
-`patch create/update/delete`. Reads are never refused. It refuses only on a positive finding: no
+including the `--local` fallback) before a command marked as a write: `approve node`, `reject node`,
+`apply/delete patch`. Reads are never refused. It refuses only on a positive finding: no
 `IchorInstallation`, no reported version, an unreadable cluster, a `dev` build or different majors mean "cannot
 judge" and the command proceeds. Not marked yet: `init`, `adopt`, `restore`, `gitops` (they run before the
 server exists or against its absence; revisit when `ichor self-upgrade` lands). `ichor init` now creates the
@@ -190,7 +190,7 @@ An upgrade must keep what `ichor init` customized (for example `--ui-url` and `-
 - The customizations are one set of pure functions in `internal/installer` (`CustomizeUI`, `CustomizeController`, `CustomizeService`, over `UISettings`). `ichor init` calls them on the live objects; the installer calls them on the new manifest's objects before it classifies, snapshots or applies anything. They replace whole probes and are idempotent, so there is nothing to drift between the two.
 - The settings are not stored anywhere new: the installer re-derives them on every run from the live Deployments (`ReadUISettings`): `--external-url`, `--kube-api-server-url`, `--kube-api-tls-server-name` and the `tls` volume's Secret on ichor-ui, `--oidc-refresh-lifetime` on the controller. Those are what init wrote and what an operator would see. A first install by the installer reads as a plain install.
 - Deployments are written by a full `Update` (with the live resourceVersion and annotations carried over, field manager `ichor-installer`) instead of server-side apply, so a field another manager owns can no longer merge into the new spec. The Service and everything else keep server-side apply. The rollback snapshot is untouched: it records the live object before the run and writes it back whole.
-- A rolled-back Ichor upgrade leaves a Paused `TalosOperation` with a failure reason and `spec.version` at the failed target. A new `ichor upgrade ichor` is refused while it exists (one unfinished operation per cluster); resuming it only meets the failed installer Job again, which is kept for a day. The refusal now says to run `ichor operation delete NAME` and then `ichor upgrade ichor <version>`; after that, any version at or above the running one is accepted, the failed one included.
+- A rolled-back Ichor upgrade leaves a Paused `TalosOperation` with a failure reason and `spec.version` at the failed target. A new `ichor upgrade ichor` is refused while it exists (one unfinished operation per cluster); resuming it only meets the failed installer Job again, which is kept for a day. The refusal now says to run `ichor delete operation NAME` and then `ichor upgrade ichor <version>`; after that, any version at or above the running one is accepted, the failed one included.
 
 ## Amendment (the installer snapshots its own RBAC first, then everything else)
 
@@ -217,4 +217,4 @@ An upgrade must keep what `ichor init` customized (for example `--ui-url` and `-
 
 - Gap: the executor's waiting text ("the installer Job is running", "waiting for the ichor-ui Deployment to finish rolling out (n of m updated replicas are available)") was built on every reconcile and thrown away, so nobody could see what a running operation waited for.
 - Rule: `TalosOperation.status.message` (optional, appended) holds the message the controller last passed to `setPhase` while the phase is InProgress. It is replaced when it changes (an unchanged value is a no-op status update) and cleared in every other phase: a pause says why in `failureReason` or the Paused condition, a finished operation in its Events. It applies to every kind that goes through `setPhase`, not only `ichor`.
-- Shown by `Operation.message` (proto field 21, `GetOperation` and the list), by `ichor ... --follow` and `operation get --watch` (the progress line ends in `: <message>`, printed whenever the line changes), and by the "Currently" field on the operation detail page. The operations list is a table and does not show it.
+- Shown by `Operation.message` (proto field 21, `GetOperation` and the list), by `ichor ... --follow` and `describe operation --watch` (the progress line ends in `: <message>`, printed whenever the line changes), and by the "Currently" field on the operation detail page. The operations list is a table and does not show it.

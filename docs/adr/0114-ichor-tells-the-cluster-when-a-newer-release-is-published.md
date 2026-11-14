@@ -64,7 +64,7 @@ and an installation that does not want the network call must be able to turn it 
    Overview; the Settings page shows a muted line with the error and the time of the last check.
    The Upgrade flow is unchanged: it still moves to `spec.version`, and nothing installs a release by itself.
 
-9. **CLI.** `ichor version` prints the newer release when the cluster knows one. `ichor settings set
+9. **CLI.** `ichor version` prints the newer release when the cluster knows one. `ichor set settings
    updateCheck.enabled=false` writes the switch.
 
 ## Consequences

@@ -22,7 +22,7 @@ A reason a person typed, before this change:
 | `TalosMachine.spec.approvalDecision.reason` (ADR 0021) | approve and reject reason | deprecated, no longer written, no longer sent to clients |
 | Connect `Override.reason`, `ApproveMachineRequest.reason`, `RejectMachineRequest.reason`, `SetMachineInstallRequest.reason`, the four discovery requests' `reason`, `MachineApprovalDecision.reason`, `IchorInstallation` response's `installer_skip_reason` | the wire side of the above | `[deprecated = true]`, never read, never set |
 | Connect `IchorInstallerOptions.skip_signature_reason` | skip with a reason | deprecated; new `bool skip_signature = 3`; a non-empty old value still means skip, its text is dropped |
-| CLI `--override-reason`, `machine approve --reason`, `machine reject --reason`, `--skip-signature-check REASON` | flags | removed; `--skip-signature-check` is a boolean |
+| CLI `--override-reason`, `approve node --reason`, `reject node --reason`, `--skip-signature-check REASON` | flags | removed; `--skip-signature-check` is a boolean |
 | UI approve, reject, node action, etcd restore and override dialogs, the skip-signature field | textareas and an input | removed, with the i18n keys only they used; the Rejected list drops its Reason column |
 | Override and restore Events (`... under override: <reason>`), the audit record's reason, the etcd restore marker's `reason`, the `InstallerSignatureSkipped` Event | text that came from the field | the Events stay and say who did what; the marker has no reason |
 | `internal/webhook` settings gate: `spec.installerSignature.reason` | a gated setting | removed from the gate; `mode` is still gated by the `version` subresource |

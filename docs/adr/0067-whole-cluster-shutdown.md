@@ -44,7 +44,7 @@ tier order and a different "done". It still takes the cluster lock, honours `spe
 in `status`.
 
 A CLI command was not added. No operation kind has one (upgrades are written as CRs by hand or by the installer); a
-`cluster shutdown` verb needs an ichor-ui RPC and its proto, which is a separate piece of work. The CR is
+`shutdown cluster` verb needs an ichor-ui RPC and its proto, which is a separate piece of work. The CR is
 ```yaml
 apiVersion: ichor.maesh.dev/v1alpha1
 kind: TalosOperation
@@ -120,7 +120,7 @@ cluster is off; the next successful snapshot after power-on clears it, so it was
   power-on need node addresses that survive a stop and start.
 
 
-- `ichor cluster shutdown` and the UI button landed in ADR 0068.
+- `ichor shutdown cluster` and the UI button landed in ADR 0068.
 
 ## Amendment (the drain, Talos v1.14.3)
 

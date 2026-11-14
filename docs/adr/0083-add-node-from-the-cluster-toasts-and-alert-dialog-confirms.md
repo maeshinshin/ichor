@@ -1,7 +1,7 @@
 # 0083. Add a node from the cluster page; toasts; alert-dialog confirms; logs in a code block
 
 Status: Accepted · Date: 2026-10-27 · Design section: UI
-Decided: The cluster page lists its nodes and links to an Add node page that explains how a node joins, shows `spec.discovery` and adds one address through a new `ClusterService.AddDiscoveryAddress` write that passes the same gate as every other write; every successful change shows a sonner toast; every dangerous action confirms in a preactcn `alert-dialog`; the node log lines render in a preactcn `code-block`; amended 2026-11-02: AddDiscoveryCidr, RemoveDiscoveryAddress and RemoveDiscoveryCidr, one Add node input for an address or a range, `ichor cluster discovery`, and the spec write itself starts the scan
+Decided: The cluster page lists its nodes and links to an Add node page that explains how a node joins, shows `spec.discovery` and adds one address through a new `ClusterService.AddDiscoveryAddress` write that passes the same gate as every other write; every successful change shows a sonner toast; every dangerous action confirms in a preactcn `alert-dialog`; the node log lines render in a preactcn `code-block`; amended 2026-11-02: AddDiscoveryCidr, RemoveDiscoveryAddress and RemoveDiscoveryCidr, one Add node input for an address or a range, `ichor discovery`, and the spec write itself starts the scan
 Amends: 0078
 
 ## Context
@@ -32,7 +32,7 @@ Adding a node must also work for a whole range, not only one address. The decisi
 1. **New RPCs** (append-only): `ClusterService.AddDiscoveryCidr`, `RemoveDiscoveryAddress` and `RemoveDiscoveryCidr`. Each reads the cluster, changes only `spec.discovery` and writes it as the caller (impersonated, so RBAC is the API server's), and returns the stored cluster plus an `AuditRecord` (`add-discovery-cidr`, `remove-discovery-address`, `remove-discovery-cidr`). A range must be IPv4 and /24 or smaller (the CRD rule, ADR 0011), is stored masked (`192.168.0.5/24` becomes `192.168.0.0/24`), and is refused as `InvalidArgument` with the reason when it is larger, not IPv4, already listed, or would be the fifth. Removing something not listed is `InvalidArgument` too. Removing a scan target never touches machines already found.
 2. **Immediate scan.** Nothing new is needed in the controller: `TalosClusterReconciler` watches `TalosCluster` without a predicate, so the spec write itself enqueues the cluster and `DiscoverAll` runs at once instead of at the 5 minute requeue. The controller still never writes `spec`. Machines found in the range show up as pending in the existing view, which the page polls every 5 seconds.
 3. **UI.** One input takes an address or a CIDR; a slash means a range. It is checked client-side with the same rules (`lib/discovery.ts`) and calls the matching RPC. Every listed address and range has a remove button (ghost icon button with an aria-label); removing a range asks first in a `ConfirmDialog`, an address does not.
-4. **CLI.** `ichor cluster discovery list|add|remove [--cluster NAME]`, through ichor-ui like the other writes; `add` and `remove` pick the RPC by the slash, and `remove` of a range asks unless `--yes`.
+4. **CLI.** `ichor discovery list|add|remove [--cluster NAME]`, through ichor-ui like the other writes; `add` and `remove` pick the RPC by the slash, and `remove` of a range asks unless `--yes`.
 
 ## Amendment (2026-11-03): the first scan can miss, so it is repeated soon
 

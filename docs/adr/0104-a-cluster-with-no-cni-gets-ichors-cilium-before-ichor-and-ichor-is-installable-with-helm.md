@@ -2,7 +2,7 @@
 
 Status: Accepted; built · Date: 2026-10-29 · Design section: Bootstrap (`ichor adopt`), Cilium · Builds on: 0098, 0099, 0101, 0103 · Amends: 0103 (the "no CNI" row of 1.1, 1.1a's gate wiring, open question 3)
 
-Decided: `ichor adopt` on a Talos cluster with no CNI installs Ichor's pinned Cilium itself, in the adopt process with the Helm SDK as Ichor's own release record in `ichor-system`, before Ichor's own pods are installed, and adopts the cluster as the managed `cilium` preset (so ADR 0103's "no CNI becomes unmanaged `talosCNI: none`" row is replaced, and `--cni-unmanaged` is refused there); a cluster that already has a CNI keeps ADR 0103's rules and its network-policy gate follows live detection; every wait for Ichor in `adopt` and `init` is bounded and names why the pods are Pending; and Ichor can be installed with `helm install` of `dist/chart` (published as an OCI chart), after which `ichor adopt` detects the existing install, skips its own install step and registers the cluster, with a new `ichor cni bootstrap` for the one case Helm cannot cover, a cluster with no pod network.
+Decided: `ichor adopt` on a Talos cluster with no CNI installs Ichor's pinned Cilium itself, in the adopt process with the Helm SDK as Ichor's own release record in `ichor-system`, before Ichor's own pods are installed, and adopts the cluster as the managed `cilium` preset (so ADR 0103's "no CNI becomes unmanaged `talosCNI: none`" row is replaced, and `--cni-unmanaged` is refused there); a cluster that already has a CNI keeps ADR 0103's rules and its network-policy gate follows live detection; every wait for Ichor in `adopt` and `init` is bounded and names why the pods are Pending; and Ichor can be installed with `helm install` of `dist/chart` (published as an OCI chart), after which `ichor adopt` detects the existing install, skips its own install step and registers the cluster, with a new `ichor bootstrap cni` for the one case Helm cannot cover, a cluster with no pod network.
 
 In this ADR, **adopt** means: bring an existing, running Talos cluster under Ichor's management without rebuilding it.
 
@@ -126,8 +126,8 @@ A controller or UI that needs the `IchorInstallation` object to exist must toler
 
 **4.4 The CNI rule on the Helm path is the same, and a no-CNI cluster cannot use the chart alone.** The chart's pods need a pod network, so on a cluster with no CNI `helm install --wait` would hang the same way adopt did. Decided:
 
-- A chart **preflight** (a named template using `lookup` on Nodes, `fail`s the install with a message; skipped by `helm template`/`--dry-run`, where `lookup` returns nothing, and by `preflight.cni: false`) refuses to install when every node is NotReady with the network-plugin message: "this cluster has no pod network, so Ichor's pods cannot start. Run `ichor cni bootstrap` first (it installs Ichor's Cilium), then `helm install` again."
-- A new command **`ichor cni bootstrap --kubeconfig FILE --kube-proxy enabled|replaced [--tunnel vxlan|geneve]`** runs exactly the step 2 of 1.5 (the same function as adopt's): creates `ichor-system` if needed, installs the pinned Cilium as Ichor's release record there, waits bounded for the nodes to be Ready. The kube-proxy mode is explicit because the command has no Talos credential to read it, and KubePrism on 7445 is stated in its help as a requirement (adopt's check 1.3.2 still runs later and catches a mistake). The values are the same function of (tunnel, kube-proxy) as in 1.4.
+- A chart **preflight** (a named template using `lookup` on Nodes, `fail`s the install with a message; skipped by `helm template`/`--dry-run`, where `lookup` returns nothing, and by `preflight.cni: false`) refuses to install when every node is NotReady with the network-plugin message: "this cluster has no pod network, so Ichor's pods cannot start. Run `ichor bootstrap cni` first (it installs Ichor's Cilium), then `helm install` again."
+- A new command **`ichor bootstrap cni --kubeconfig FILE --kube-proxy enabled|replaced [--tunnel vxlan|geneve]`** runs exactly the step 2 of 1.5 (the same function as adopt's): creates `ichor-system` if needed, installs the pinned Cilium as Ichor's release record there, waits bounded for the nodes to be Ready. The kube-proxy mode is explicit because the command has no Talos credential to read it, and KubePrism on 7445 is stated in its help as a requirement (adopt's check 1.3.2 still runs later and catches a mistake). The values are the same function of (tunnel, kube-proxy) as in 1.4.
 - `ichor adopt`, run after that, finds a Cilium with an Ichor record in `ichor-system` (row 1 of ADR 0103 1.1), reads tunnel and kube-proxy from the record and the Talos side, and agrees or refuses on a mismatch (the 1.5 refusals now apply, as for any existing Cilium).
 - The chart **does not ship Cilium** (no subchart, no pre-install hook that runs Helm): a Cilium inside the `ichor` release would have two owners and Ichor's `Upgrade` would fight `helm upgrade ichor`. This keeps "Ichor owns Cilium as a Helm release" (CLAUDE.md): the release is `cilium` in `kube-system` with its record in `ichor-system`, whichever path made it.
 - For a cluster that has a CNI, the chart path is unchanged: `helm install`, then `ichor adopt` with takeover or `--cni-unmanaged`. The chart never decides.
@@ -144,7 +144,7 @@ A controller or UI that needs the `IchorInstallation` object to exist must toler
 - `ichor init` and adopt can no longer hang silently on a missing pod network.
 - A hands-off Cilium cluster gets Ichor's policies at adopt, as ADR 0103 said it should.
 - Ichor becomes installable by Helm, with the chart published to GHCR; the install manifest and `IchorInstallation` stay the `init` path. Two ways to install means two upgrade stories (Helm vs the installer Job), kept apart by `ichorPresent`; the CLI refuses to mix them.
-- No CRD change. New CLI surface: `ichor cni bootstrap`, `ichor adopt --wait-timeout --tunnel --require-ichor`.
+- No CRD change. New CLI surface: `ichor bootstrap cni`, `ichor adopt --wait-timeout --tunnel --require-ichor`.
 
 ## Risks
 
@@ -160,13 +160,13 @@ A controller or UI that needs the `IchorInstallation` object to exist must toler
 Where the build differs from the text above, the build is right:
 
 - **The Cilium Helm Job uses `ApplyForCluster`, not `Bootstrap`.** `cilium.Bootstrap` is the CLI's entry (namespace, `Apply`, Ready wait); the `ichor-cni` Job and the CLI share `ApplyForCluster` underneath. The Job also runs without an `IchorInstallation`, which a Helm install does not have.
-- **`ichor cni bootstrap` cannot check KubePrism.** It has no Talos credential, so it states the requirement in its help and relies on adopt's later check (1.3.2). `--kube-proxy enabled|replaced` is required for the same reason.
+- **`ichor bootstrap cni` cannot check KubePrism.** It has no Talos credential, so it states the requirement in its help and relies on adopt's later check (1.3.2). `--kube-proxy enabled|replaced` is required for the same reason.
 - **Strict version equality for Helm installs.** Adopt on a Helm-installed Ichor refuses any version different from the CLI's, not only a skew beyond the usual rule, and prints the `helm upgrade` command.
 - **Chart version has no leading `v`; `appVersion` and image tags have it** (for example chart `0.1.0`, appVersion and tag `v0.1.0`).
 - **Images are linux/amd64 only.** They are built by the existing crane target (`make demo-images`) on a `v*` tag, as `ghcr.io/maeshinshin/{ichor-controller,ichor-ui,ichor-installer}`.
 - **The UI server's Helm detection is limited.** The Ichor upgrade path in the UI points to `helm upgrade` when it can tell the install is Helm-managed, but it cannot detect every Helm install, so some prompts may still describe the installer Job.
 - **No release exists yet.** `oci://ghcr.io/maeshinshin/charts/ichor` and the image repositories are empty until the first `v*` tag is pushed.
-- **Added flags beyond the text:** `ichor adopt --cilium-values FILE` (open question 1) and `ichor cni bootstrap --cilium-values FILE`, `--tunnel`.
+- **Added flags beyond the text:** `ichor adopt --cilium-values FILE` (open question 1) and `ichor bootstrap cni --cilium-values FILE`, `--tunnel`.
 
 Guides: `docs/guides/install-with-helm.md`, and the no-CNI and Helm sections of `docs/guides/adopt-and-reclaim.md`.
 
@@ -174,8 +174,8 @@ Guides: `docs/guides/install-with-helm.md`, and the no-CNI and Helm sections of 
 
 All three are resolved.
 
-1. `--cilium-values FILE` for the no-CNI path: **accepted and built**, on `ichor adopt` and `ichor cni bootstrap`. Ichor-owned keys are refused.
-2. `ichor cni bootstrap` for `ichor init`: **no.** `init` keeps the inline-manifest bootstrap; `ichor cni bootstrap` is for an existing cluster with no pod network.
+1. `--cilium-values FILE` for the no-CNI path: **accepted and built**, on `ichor adopt` and `ichor bootstrap cni`. Ichor-owned keys are refused.
+2. `ichor bootstrap cni` for `ichor init`: **no.** `init` keeps the inline-manifest bootstrap; `ichor bootstrap cni` is for an existing cluster with no pod network.
 3. Default timeouts: **kept as built** (15 minutes for the webhooks in adopt, 30 in `init`, 10 for Cilium Ready, 10 for hand-over).
 
 Amendment 2026-10-29 (ADR 0105): a Helm install does get an `IchorInstallation`: the controller creates it once when absent (`--deployed-by helm`, set by the chart), with `spec.deployment.manager: helm`; the chart still never renders it. `ichorPresent` keeps its three signals, but `spec.deployment.manager` is authoritative once the object exists. Adopt skips the install step on `manager: helm` and does not wait for the object; installer-Job commands and a `TalosOperation` of kind `ichor` are refused on Helm. The chart adds `ichorUI.port` (8443), `ichorUI.plaintextPort` (opt-in, deprecated), `ichorUI.tls.caConfigMap/caSecret/caKey` and `settings.readOnly`.

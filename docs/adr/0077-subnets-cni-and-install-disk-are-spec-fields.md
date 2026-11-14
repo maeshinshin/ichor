@@ -2,7 +2,7 @@
 
 Status: Accepted · Date: 2026-10-26 · Design section: Nodes (approval, disk roles), CNI, Bootstrap
 
-Decided: `TalosCluster.spec.network {podSubnets, serviceSubnets}` (optional, fixed once set) and `TalosMachine.spec.install {disk, image}` carry the values ADR 0075 could not express; the system layer renders them as the v1.14 documents (`KubeNetworkConfig`, `UnattendedInstallConfig`) from that contract and as the legacy fields before it, and drops Talos's own CNI (the `KubeFlannelCNIConfig` document, or `cluster.network.cni.name: none`) for every preset but flannel; approval (`ichor machine approve --install-disk`, the UI form) sets the install disk, `ichor init` stops writing `machine.install`, hostnames are RFC 1123 checked, and `adopt` names the spec field for each such drift path. This is option C of ADR 0075 with the per-node half also as a spec field, not a patch kind.
+Decided: `TalosCluster.spec.network {podSubnets, serviceSubnets}` (optional, fixed once set) and `TalosMachine.spec.install {disk, image}` carry the values ADR 0075 could not express; the system layer renders them as the v1.14 documents (`KubeNetworkConfig`, `UnattendedInstallConfig`) from that contract and as the legacy fields before it, and drops Talos's own CNI (the `KubeFlannelCNIConfig` document, or `cluster.network.cni.name: none`) for every preset but flannel; approval (`ichor approve node --install-disk`, the UI form) sets the install disk, `ichor init` stops writing `machine.install`, hostnames are RFC 1123 checked, and `adopt` names the spec field for each such drift path. This is option C of ADR 0075 with the per-node half also as a spec field, not a patch kind.
 
 ## Context
 
@@ -31,7 +31,7 @@ v1.14 documents, so a correct cluster could not be built, adopted, or have a mai
    `disk.bus_path == "..."`, `disk.dev_path == "..."`) and `wipe: false` (what the generator writes). Before v1.14 it
    renders `machine.install` (`diskSelector.wwid|serial|busPath`; `installDisk` for a by-id or device path, because the
    legacy selector has no symlink match). A machine with no `install` renders none, as before.
-4. Approval. `ApproveMachineRequest.install` and `Machine.install` (proto), `ichor machine approve --install-disk
+4. Approval. `ApproveMachineRequest.install` and `Machine.install` (proto), `ichor approve node --install-disk
    <wwid:ID | serial:S | /dev/disk/by-id/... | /pci... | /dev/sdX> [--install-image]`. The UI form lists the disks that
    `GetNode` already reads from a maintenance-mode machine (`Disk.dev_path` is new on the wire) and picks the most
    stable identifier each reports; if the machine reports no disks (Talos API unreachable) it falls back to a typed

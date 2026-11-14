@@ -29,7 +29,7 @@ rollout with. So:
 
 - `OperationKind` / `spec.kind` gains `config` (`OPERATION_KIND_CONFIG`). It takes no target and writes no spec
   (the spec was already changed, by the patch or the cluster edit, which is the reason the machines are waiting).
-- `ichor config apply [--cluster NAME] [--max-unavailable N] [--follow] [--yes]` and a "Apply config (reboots)"
+- `ichor rollout config [--cluster NAME] [--max-unavailable N] [--follow] [--yes]` and a "Apply config (reboots)"
   button on the cluster page start it through `OperationService`, with ADR 0068's Plan/Create pattern: the plan lists
   the machines that wait for a reboot, the field paths that need it per machine, the order, and says they reboot. The
   UI also asks for the cluster name to be typed, as for a shutdown and a CA rotation. `CreateOperation` is refused
@@ -40,7 +40,7 @@ rollout with. So:
 
 `TalosMachine.status.rebootPaths` lists the field paths that need the reboot (`fieldmeta.Impact.RebootPaths`, the
 paths that are neither safe nor install-time-only), set with `Ready=RebootRequired` and cleared on convergence. The
-Ready message names the first five ("fields: a, b, and 3 more") and says to run `ichor config apply` or use the
+Ready message names the first five ("fields: a, b, and 3 more") and says to run `ichor rollout config` or use the
 cluster page. The plan reads `rebootPaths`; only machines that have it are listed.
 
 `refuseReboot` takes no cluster lock: it only records `rebootPaths` and sets RebootRequired. Its earlier probe (under
@@ -128,7 +128,7 @@ verify step) and every other member has to be there before the next one goes.
 
 ## Not done
 
-- The `ichor config apply` command and the button do not open a pull request for a GitOps-tracked spec: they write no
+- The `ichor rollout config` command and the button do not open a pull request for a GitOps-tracked spec: they write no
   spec at all.
 - The same-identity lock hazard exists in other machine-reconciler paths (`removal.go` takes the lock as
   `ichor-controller` too); only `refuseReboot` was changed here.

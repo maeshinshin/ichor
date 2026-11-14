@@ -192,7 +192,7 @@ the snapshot and its time.
    last transient problem, whenever it changes, and `failure` for a final error. A panic in the job is turned into
    a final error instead of a crash. A kill or an out-of-memory death cannot write anything, but the last note
    is already there for the next start; the reconcile shows `lastNote` as the status message while the job runs,
-   and a failure becomes the operation's `failureReason` (`ichor operation get`). Every failure after the marker
+   and a failure becomes the operation's `failureReason` (`ichor describe operation`). Every failure after the marker
    was written ends with the way out: `ichor restore --recover-cluster`, which needs only the secrets bundle
    and the bucket (the plan says the same for a controller on a single control plane). The memory use of the
    snapshot handling itself is `internal/etcdbackup`'s concern.

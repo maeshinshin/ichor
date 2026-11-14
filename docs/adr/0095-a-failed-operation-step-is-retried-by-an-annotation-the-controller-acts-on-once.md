@@ -6,7 +6,7 @@ Decided: `ichor operation retry NAME` (and a Retry button and the `OperationServ
 
 ## Context
 
-ADR 0026 pauses an operation when a step fails and never retries it by itself, and `failureReason` is what tells the controller, the CLI and the UI that. `ichor operation resume` writes `spec.paused=false`, which is not what is wrong, so it did nothing and the phase stayed Paused. The only way out was to delete the operation and create it again, and neither the help text nor the UI said so. This follows every transient failure (a drain blocked by a bare pod, a refused webhook, a timeout).
+ADR 0026 pauses an operation when a step fails and never retries it by itself, and `failureReason` is what tells the controller, the CLI and the UI that. `ichor resume operation` writes `spec.paused=false`, which is not what is wrong, so it did nothing and the phase stayed Paused. The only way out was to delete the operation and create it again, and neither the help text nor the UI said so. This follows every transient failure (a drain blocked by a bare pod, a refused webhook, a timeout).
 
 ## Decision
 
@@ -18,7 +18,7 @@ ADR 0026 pauses an operation when a step fails and never retries it by itself, a
 
 **`resume` says what it did not do.** When the operation it resumed is still Paused with a `failureReason`, the CLI prints "the step failed: REASON; run `ichor operation retry NAME` after fixing the cause". `--watch` and `follow` errors for a failed operation carry the same hint. The UI shows Retry for a failed operation (before, it showed no button for one) and Resume only for an operator pause.
 
-**Node actions take a hostname.** `ichor node reboot NAME` took only the TalosMachine name, a UUID. The server resolves the name it is given: the TalosMachine name first; otherwise the machine whose `spec.hostname` is that name; otherwise the machine whose Kubernetes Node has that name (or the address match `findKubernetesNode` already does). More than one match is `InvalidArgument` listing the candidates; none keeps the original `NotFound`. This is in the server so the UI and CLI agree; the reset and remove confirmations accept the machine's own name or the name the caller used.
+**Node actions take a hostname.** `ichor reboot node NAME` took only the TalosMachine name, a UUID. The server resolves the name it is given: the TalosMachine name first; otherwise the machine whose `spec.hostname` is that name; otherwise the machine whose Kubernetes Node has that name (or the address match `findKubernetesNode` already does). More than one match is `InvalidArgument` listing the candidates; none keeps the original `NotFound`. This is in the server so the UI and CLI agree; the reset and remove confirmations accept the machine's own name or the name the caller used.
 
 ## Consequences
 
@@ -30,6 +30,6 @@ One new status field (`lastRetry`) and one annotation; the CRD is regenerated. A
 
 ## Amendment 2026-11-05: the request is `true`
 
-The annotation takes the value `true`, not an RFC 3339 time, as of v0.1.0: `kubectl annotate talosoperation NAME ichor.maesh.dev/retry=true` is a retry. `ichor operation resume` and the UI write `true` too. The time form is gone with no compatibility path, so a time is an ignored value like any other.
+The annotation takes the value `true`, not an RFC 3339 time, as of v0.1.0: `kubectl annotate talosoperation NAME ichor.maesh.dev/retry=true` is a retry. `ichor resume operation` and the UI write `true` too. The time form is gone with no compatibility path, so a time is an ignored value like any other.
 
 The controller acts only on an operation that is Paused with a `failureReason` and is not paused by `spec.paused`. It sets `status.lastRetry` to the time it acted, clears `failureReason`, runs the failed step again, and then removes the annotation with a metadata patch that carries the resource version, so a concurrent edit is not overwritten (the patch fails and the reconcile retries). Removing it is what makes the next `true` a new request, which replaces the "newer than `lastRetry`" comparison. If the removal fails, the operation is already InProgress, and a `true` on an operation that is not waiting on a failure is removed on the next reconcile without running anything, so the step is never run twice for one request. Any value other than `true` is ignored and left in place. `status.lastRetry` stays (CRD fields are append-only) and is still written: it is the time of the last retry for display and audit, and the Cilium upgrade uses it to name the Job of a retried attempt.

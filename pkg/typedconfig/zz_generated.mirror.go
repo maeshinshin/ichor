@@ -1338,6 +1338,14 @@ type KubeSpanFiltersConfig struct {
 	ConfigExcludeAdvertisedNetworks []string `json:"excludeAdvertisedNetworks,omitempty"`
 }
 
+// Talos: KubeStaticPodConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/k8s/kubestaticpodconfig
+type KubeStaticPodConfigV1Alpha1 struct {
+	// +required
+	MetaName string `json:"name"`
+	// +required
+	PodSpec *corev1.PodSpec `json:"pod"`
+}
+
 // Talos: KubeTalosAPIAccessConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/k8s/kubetalosapiaccessconfig
 type KubeTalosAPIAccessConfigV1Alpha1 struct {
 	// +optional

@@ -100,6 +100,7 @@ var shipped = []shippedKind{
 	{"KubeletConfig", ""},
 	{"KubeProxyConfig", ""},
 	{"KubeSchedulerConfig", ""},
+	{"KubeStaticPodConfig", ""},
 }
 
 // legacyKind is how Talos registers the legacy machine and cluster document; Ichor calls it legacyName.

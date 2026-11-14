@@ -445,3 +445,50 @@ func TestDiskChoices_ColumnsLineUpAndEmptyOnesAreLeftOut(t *testing.T) {
 		t.Errorf("rows:\n%s\n%s", c[0].label, c[1].label)
 	}
 }
+
+// A text field can start with a default that Enter takes as it is, and Ctrl-U clears.
+func TestPromptModel_TextFieldStartsWithItsDefault(t *testing.T) {
+	q := promptQuestion{flag: "net", label: "Network", def: "192.168.7.0/24", check: func(string) error { return nil }}
+
+	m := newPromptModel([]promptQuestion{q}, nil)
+	if !strings.Contains(shown(m), "192.168.7.0/24") {
+		t.Fatalf("the default is not shown:\n%s", shown(m))
+	}
+
+	if done, _ := send(t, m, keyOf(tea.KeyEnter)); done.state != promptDone || done.got["net"] != "192.168.7.0/24" {
+		t.Errorf("Enter did not take the default: state %d, got %v", done.state, done.got)
+	}
+
+	cleared, _ := send(t, m, ctrl('u'), typedKeys("10.0.0.0/8"), keyOf(tea.KeyEnter))
+	if cleared.got["net"] != "10.0.0.0/8" {
+		t.Errorf("a cleared default is not replaced: got %v", cleared.got)
+	}
+}
+
+// A row with details shows them under its title, and a row that is not a choice says why when it is chosen.
+func TestPromptModel_RowDetailIsShownAndSaysWhyARowIsRefused(t *testing.T) {
+	m := newPromptModel([]promptQuestion{{
+		flag: "node", label: "First node", noDefault: true,
+		choices: []promptChoice{
+			{label: "192.168.7.9  already configured", desc: "has a Talos configuration already"},
+			{label: "192.168.7.8  talos-8  v1.14.5", value: "192.168.7.8:50000", desc: "/dev/sda serial S1, enp1s0 <aa:bb:cc:00:00:01>"},
+		},
+	}}, nil)
+
+	v := shown(m)
+	for _, want := range []string{"has a Talos configuration already", "/dev/sda serial S1, enp1s0 <aa:bb:cc:00:00:01>"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("%q is not shown:\n%s", want, v)
+		}
+	}
+
+	refused, _ := send(t, m, keyOf(tea.KeyDown), keyOf(tea.KeyEnter))
+	if refused.state != promptRunning || !strings.Contains(shown(refused), "has a Talos configuration already") {
+		t.Errorf("the configured row was not refused with its reason (state %d):\n%s", refused.state, shown(refused))
+	}
+
+	picked, _ := send(t, m, keyOf(tea.KeyDown), keyOf(tea.KeyDown), keyOf(tea.KeyEnter))
+	if picked.state != promptDone || picked.got["node"] != "192.168.7.8:50000" {
+		t.Errorf("state %d, got %v", picked.state, picked.got)
+	}
+}

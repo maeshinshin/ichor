@@ -17,11 +17,13 @@ limitations under the License.
 package cli
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
 	"maps"
 	"os"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -43,17 +45,20 @@ type promptQuestion struct {
 	label string                             // a plain noun
 	help  func(got map[string]string) string // shown under the field; may depend on the answers so far
 	check func(answer string) error
+	// def, when set, is what a text field starts with: Enter takes it as it is.
+	def string
 	// choices, when set, are the rows to pick from.
 	choices []promptChoice
 	// noDefault starts the list on a row that cannot be confirmed, so Enter alone never picks a choice.
 	noDefault bool
 }
 
-// promptChoice is one row of a list; an empty value marks the row that is not a choice.
-type promptChoice struct{ label, value string }
+// promptChoice is one row of a list; an empty value marks the row that is not a choice. desc, when set,
+// is a second line under the row: the row's details, or for a row that is not a choice, why it is not.
+type promptChoice struct{ label, value, desc string }
 
 func (c promptChoice) Title() string       { return c.label }
-func (c promptChoice) Description() string { return "" }
+func (c promptChoice) Description() string { return c.desc }
 func (c promptChoice) FilterValue() string {
 	if c.value == "" {
 		return "" // never matches, so a filter drops it
@@ -125,6 +130,8 @@ func (m *promptModel) open() {
 		m.input = textinput.New()
 		m.input.Prompt = ""
 		m.input.Focus()
+		m.input.SetValue(q.def)
+		m.input.CursorEnd()
 
 		return
 	}
@@ -139,7 +146,7 @@ func (m *promptModel) open() {
 	}
 
 	d := list.NewDefaultDelegate()
-	d.ShowDescription = false
+	d.ShowDescription = slices.ContainsFunc(q.choices, func(c promptChoice) bool { return c.desc != "" })
 	d.SetSpacing(0)
 	// Rows sit under the value column's start; the selected one takes the marker, since a colour is not
 	// seen everywhere and this is the row Enter takes.
@@ -150,8 +157,8 @@ func (m *promptModel) open() {
 		BorderForeground(lipgloss.Cyan).
 		PaddingLeft(1)
 
-	// A page is eight rows; the two lines more are for the page dots when there are more.
-	m.pick = list.New(items, d, m.width-gutter, min(len(items), 8)+2)
+	// A page is eight rows (of two lines when the rows have details); the two lines more are for the page dots when there are more.
+	m.pick = list.New(items, d, m.width-gutter, min(len(items), 8)*d.Height()+2)
 	m.pick.SetShowTitle(false)
 	m.pick.SetShowFilter(false) // the filter text is shown as the question's value
 	m.pick.SetShowStatusBar(false)
@@ -271,7 +278,7 @@ func (m promptModel) confirm() (tea.Model, tea.Cmd) {
 
 			return m, nil
 		case c.value == "":
-			m.why = "choose one first"
+			m.why = cmp.Or(c.desc, "choose one first")
 
 			return m, nil
 		}

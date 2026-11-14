@@ -15,7 +15,7 @@ cluster configured so it can join an Ichor cluster, see
 | One more machine that already runs a configuration signed by a cluster Ichor manages (it joined with your own `talosctl apply-config`) and that you want to keep as it is | `ichor adopt --cluster NAME --add-machine ADDRESS` | No |
 | A machine removed from a cluster Ichor manages (its `TalosMachine` was deleted, the node was not wiped, and it still carries the cluster's configuration) | `ichor reclaim node ADDRESS --cluster NAME` (no talosconfig) or the UI "Reset and add" with "It was removed from this cluster" | Yes: `STATE` and `EPHEMERAL` |
 | A machine another Talos cluster (or a config of its own) configured, and you hold its talosconfig | `ichor reclaim node` or the UI "Reset and add" | Yes: `STATE` and `EPHEMERAL` |
-| A machine that was never configured, or whose `STATE` was wiped (booted from the ISO, in maintenance mode), including one removed with `ichor delete node` (the removal sends the wipe; power it on if it was powered off) | The normal Add node flow | No |
+| A machine that was never configured, or whose `STATE` was wiped (booted from the ISO, in maintenance mode), including one removed with `ichor delete node` (the removal sends the wipe; with the default power off, power it on first; with `--reboot` it returns by itself, and the removal waits up to five minutes for it to answer in maintenance mode) | The normal Add node flow | No |
 | A configured machine and no credential for it | None through the API: reinstall from the ISO, or wipe it with a kernel argument | Yes |
 
 How to tell them apart: `ichor adopt --add-machine` reads the machine's own configuration and
@@ -306,7 +306,7 @@ A machine that already runs a configuration signed by your cluster's own certifi
 authorities, but that Ichor has no `TalosMachine` for, cannot be found by discovery (it
 is not in maintenance mode) and must not be reset (a reset would wipe an etcd member or a
 joined kubelet for no reason). This is the usual state of a node you added with your own
-`talosctl apply-config` after the adoption, or of one whose `TalosMachine` you deleted by hand or removed without a wipe. A machine removed with `ichor delete node` (or the UI "Remove node") is sent the wipe and, once it answers in maintenance mode, shows up as a new pending machine instead.
+`talosctl apply-config` after the adoption, or of one whose `TalosMachine` you deleted by hand or removed without a wipe. A machine removed with `ichor delete node` (or the UI "Remove node") is sent the wipe and, once it answers in maintenance mode, shows up as a new pending machine instead. With `--reboot` the machine answers by itself, and the removal waits up to five minutes for that answer before it completes; if none comes, a Warning Event says the wipe is not confirmed. After the default power off the removal does not wait: power the machine on, and it shows up as a pending machine once it answers.
 `ichor adopt --add-machine` registers it with the same safety as an adoption.
 
 ```sh

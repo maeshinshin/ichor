@@ -213,7 +213,13 @@ controller manages (bare pods) block the drain: the machine's `Removal`
 condition says `DrainFailed` and names the pod, a Warning Event repeats it,
 and the drain is retried with growing backoff, so delete the pod (there is no
 force option; Ichor never deletes a pod nobody owns) and it carries on. The
-remove deletes the Kubernetes Node object once the node is not Ready. If the Node is still Ready after five minutes, Ichor keeps it, marks
+remove deletes the Kubernetes Node object once the node is not Ready. With `--reboot` the
+removal also waits, up to five minutes, for the machine to answer in maintenance mode with its
+UUID, which is how it confirms the wipe; if the machine does not answer, the removal completes
+and a Warning Event `NodeStillHasClusterCredentials` says the wipe is not confirmed. Without
+`--reboot` the machine is powered off after the wipe and cannot answer, so the wipe is not
+confirmed, so the removal completes once the Node is NotReady, and a Normal Event
+`WipeNotConfirmedPoweredOff` says why. If the Node is still Ready after five minutes, Ichor keeps it, marks
 it so that discovery no longer counts its address as a member and finds the wiped
 machine again, and a Warning Event names `kubectl delete node`. The reset takes some tens of seconds, and
 the node is Ready again a few minutes after approval; the volumes show `encryptionProvider: luks2`

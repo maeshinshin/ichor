@@ -91,7 +91,7 @@ var kindClasses = map[string]kindRow{
 	"KubeServiceAccountConfig":     {secret, "carries the service account signing key; implements SecretDocument"},
 	"KubeSpanConfig":               {accept, "KubeSpan settings and filters; no credentials"},
 	"KubeSpanEndpointsConfig":      {accept, "extra KubeSpan endpoints; no credentials"},
-	"KubeStaticPodConfig":          {accept, "a static pod; the author's own pod spec. Not shipped: a full Pod schema is 358,567 bytes of compact JSON per CRD and a useful subset about 200 KB, against the 262,144 byte client-side apply limit"},
+	"KubeStaticPodConfig":          {accept, "a static pod; the author's own pod spec, carried whole as the core v1 PodSpec. Its CRD is larger than the client-side apply limit, so it is installed with server-side apply"},
 	"KubeTalosAPIAccessConfig":     {accept, "Talos API access from Kubernetes workloads; no credentials"},
 	"KubeletConfig":                {accept, "kubelet settings; Ichor renders a baseline that a patch is merged over"},
 	"LVMLogicalVolumeConfig":       {accept, "an LVM logical volume; no credentials"},

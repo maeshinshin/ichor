@@ -18,8 +18,9 @@ node's network for it.
   `ichor approve node NAME`. The noun-first groups `cluster`, `machine`,
   `node`, `patch`, `operation`, `config`, `etcd`, `cni` and `settings` are
   gone, and no alias keeps the old names: a script that calls one fails with
-  `unknown command`. `auth`, `user` and `secrets` stay as groups, and
-  `discovery` becomes one of its own; `user set-password`,
+  `unknown command`, except a bare `ichor cni`, which prints the help of the
+  hidden group the Cilium Job runs and exits 0. `auth`, `user` and `secrets`
+  stay as groups, and `discovery` becomes one of its own; `user set-password`,
   `user revoke-sessions`, `auth login`, `auth logout`, `auth token` and
   `secrets encrypt` are unchanged, and the other commands under them are
   listed here. `adopt`, `init`, `ui`, `upgrade talos`, `upgrade kubernetes`,

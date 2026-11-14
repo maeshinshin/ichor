@@ -294,6 +294,17 @@ try {
         const listed = await ev(`[...document.querySelectorAll('[data-slot=sidebar] a[href]')].filter((a) => a.getClientRects().length).map((a) => a.pathname)`)
         const unlisted = docRoutes.filter((route) => !listed.includes(base + route))
         check(unlisted.length === 0, `${tag}: every page is in the sidebar without a click (not listed: ${unlisted.join(' ') || 'none'})`)
+        // The third level: Virtual IP sits under 2. Create the cluster, and that page's disclosure folds it. The disclosure's
+        // chevron must turn and its aria-expanded flip, and opening it must show the page (hidden until then).
+        const parent = base + at.createCluster.replace(/[^/]+\/$/, '')
+        const folder = `[...document.querySelectorAll('[data-slot=sidebar-menu-item]')].find((li) => [...li.querySelectorAll('a[href]')].some((a) => a.pathname === '${parent}'))?.querySelector('button[aria-expanded]')`
+        await disclosure(tag, 'the disclosure of 2. Create the cluster', folder)
+        const shownVip = `[...document.querySelectorAll('[data-slot=sidebar] a[href]')].some((a) => a.pathname === '${base + at.createCluster}' && a.getClientRects().length > 0)`
+        const visibleBefore = await ev(shownVip)
+        await ev(`(() => { const b = ${folder}; if (b && b.getAttribute('aria-expanded') === 'false') b.click() })()`)
+        await idle()
+        const visibleAfter = await ev(shownVip)
+        check(!visibleBefore && visibleAfter, `${tag}: Virtual IP, a third-level page, is reachable through the disclosure of 2. Create the cluster (visible before it opens: ${visibleBefore}, after: ${visibleAfter})`)
       }
 
       // The theme icon is chosen by CSS from the `dark` class, so the first paint already shows the right one.

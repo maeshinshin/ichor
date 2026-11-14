@@ -580,7 +580,18 @@ func readFirstNode(
 
 	node, err := deps.ReadNode(ctx, opts.NodeEndpoint, pickDisk || wantNetwork)
 	if err != nil {
-		return node.Identity, nil, nil, fmt.Errorf("init: reading the first node's hardware identity: %w", err)
+		return node.Identity, nil, nil, fmt.Errorf("init: reading the first node: %w", err)
+	}
+
+	// A node on an older Talos cannot take the configuration (it rejects fields of the release it renders
+	// for), and the apply does not reinstall a node that already has Talos, so refuse before anything is written.
+	if release.Compare(node.TalosVersion, release.Pinned.Talos) == release.Behind {
+		return node.Identity, nil, nil, fmt.Errorf(
+			"init: the node at %q runs Talos %s, but this Ichor renders its configuration for Talos %s. "+
+				"Applying a configuration does not reinstall a node that already has Talos, so the node must be "+
+				"upgraded first: run talosctl upgrade on it to %s (it needs a configured node), or wipe its system "+
+				"disk (which erases it) so that it installs again, then run init",
+			opts.NodeEndpoint, node.TalosVersion, release.Pinned.Talos, release.Pinned.Talos)
 	}
 
 	if node.Identity.UUID == "" {

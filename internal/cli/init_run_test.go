@@ -29,7 +29,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/controller"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
+	"github.com/maeshinshin/ichor/pkg/release"
 )
 
 func withTempHome(t *testing.T) string {
@@ -295,6 +297,43 @@ func TestRunInit_WeakIdentityRejected(t *testing.T) {
 
 	if maint.callCount != 0 {
 		t.Fatalf("expected ApplyInsecure to never be called, got callCount=%d", maint.callCount)
+	}
+}
+
+// TestRunInit_RefusesAnOlderTalos proves init refuses a node whose Talos is older than the release the
+// configuration is rendered for, before the secrets bundle is written or anything is sent to the node:
+// a node that already has Talos installed is not reinstalled by a new configuration, so the apply would
+// fail later on a field the old release does not know.
+func TestRunInit_RefusesAnOlderTalos(t *testing.T) {
+	home := withTempHome(t)
+
+	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
+	deps, maint, _ := newFakeInitDeps(t, k8sClient)
+	deps.ReadNode = func(context.Context, string, bool) (nodeReading, error) {
+		return nodeReading{
+			Identity:     controller.HardwareIdentity{UUID: testInitMachineUUID, Serial: "serial-1"},
+			Links:        []ichorv1alpha1.TalosMachineDiscoveredLink{testInitLink},
+			TalosVersion: "v1.13.1",
+		}, nil
+	}
+
+	err := runInit(context.Background(), validInitOptions(), deps)
+	if err == nil {
+		t.Fatal("expected an error, got nil")
+	}
+
+	for _, want := range []string{"v1.13.1", release.Pinned.Talos, "upgrade"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q does not contain %q", err, want)
+		}
+	}
+
+	if maint.callCount != 0 {
+		t.Fatalf("expected ApplyInsecure to never be called, got callCount=%d", maint.callCount)
+	}
+
+	if _, statErr := os.Stat(home + "/.ichor/clusters/" + testInitClusterName + "/secrets.yaml"); !os.IsNotExist(statErr) {
+		t.Fatalf("expected no secrets bundle to be written, stat err = %v", statErr)
 	}
 }
 

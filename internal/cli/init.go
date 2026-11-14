@@ -245,6 +245,8 @@ func initOutput(cmd *cobra.Command) string {
 // nodeReading is what init reads from the first node over one maintenance connection.
 type nodeReading struct {
 	Identity controller.HardwareIdentity
+	// TalosVersion is the node's running Talos release tag ("vX.Y.Z").
+	TalosVersion string
 	// Disks and Links are the node's installable disks and physical links, read only when asked for;
 	// a failed read is reported in InventoryErr and does not fail the call.
 	Disks        []ichorv1alpha1.TalosMachineDiscoveredDisk
@@ -252,7 +254,7 @@ type nodeReading struct {
 	InventoryErr error
 }
 
-// readNodeOverMaintenance reads a node's hardware identity the same way
+// readNodeOverMaintenance reads a node's hardware identity and Talos version the same way
 // discovery does (internal/controller.NewMachineryMaintenanceClient,
 // dialed in maintenance mode), and its disks and links too when wantInventory, on the same client; it closes the
 // connection afterward: init only ever needs one read per run, not a held connection.
@@ -270,6 +272,10 @@ func readNodeOverMaintenance(ctx context.Context, endpoint string, wantInventory
 
 	if r.Identity, err = c.Identity(ctx); err != nil {
 		return r, err
+	}
+
+	if r.TalosVersion, err = c.TalosVersion(ctx); err != nil {
+		return r, fmt.Errorf("reading the node's Talos version: %w", err)
 	}
 
 	if wantInventory {

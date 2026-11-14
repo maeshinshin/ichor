@@ -18,8 +18,12 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 // A failing command prints its error once (cobra's own line and Execute's used to both print it).
@@ -41,11 +45,13 @@ func TestExecuteRootPrintsAnErrorOnce(t *testing.T) {
 	}
 }
 
-// A grouping command given an argument it does not know fails and names that argument. Without that, cobra
-// prints the group's help and exits 0, which a script reads as success. cni with no argument still prints its help.
+// Every group in the command tree is held to one rule: an argument it does not know fails and names that argument,
+// and no argument prints its help and succeeds. The groups are read from the tree, not listed, so a group added
+// later is held to the same rule. A command with its own Run is not a group and is not run here.
 func TestGroupRejectsUnknownSubcommand(t *testing.T) {
 	var buf bytes.Buffer
 
+	rootCmd.InitDefaultCompletionCmd() // cobra adds it inside ExecuteC, which the test does not reach
 	rootCmd.SetOut(&buf)
 	t.Cleanup(func() {
 		rootCmd.SetArgs(nil)
@@ -53,15 +59,39 @@ func TestGroupRejectsUnknownSubcommand(t *testing.T) {
 		rootCmd.SetErr(nil)
 	})
 
-	rootCmd.SetArgs([]string{"cni", "kube-proxy", "replaced"})
+	for _, path := range groupPaths(rootCmd, nil) {
+		t.Run(strings.Join(path, " "), func(t *testing.T) {
+			rootCmd.SetArgs(append(append([]string{}, path...), unknownArg))
 
-	if _, err := executeRoot(&buf); err == nil || !strings.Contains(err.Error(), `unknown command "kube-proxy"`) {
-		t.Fatalf("want an error naming kube-proxy, got %v", err)
+			if _, err := executeRoot(&buf); err == nil || !strings.Contains(err.Error(), fmt.Sprintf("unknown command %q", unknownArg)) {
+				t.Fatalf("want an error naming %s, got %v", unknownArg, err)
+			}
+
+			rootCmd.SetArgs(path)
+
+			if _, err := executeRoot(&buf); err != nil {
+				t.Fatalf("a group with no argument prints its help and succeeds, got %v", err)
+			}
+		})
+	}
+}
+
+const unknownArg = "nosuch"
+
+// groupPaths lists the path of every group under c, depth first. A group has subcommands and no Run of its own:
+// either no RunE yet (cobra's default, before rejectUnknownSubcommands runs) or groupRunE.
+func groupPaths(c *cobra.Command, prefix []string) [][]string {
+	var out [][]string
+
+	for _, sub := range c.Commands() {
+		p := append(append([]string{}, prefix...), sub.Name())
+
+		if sub.HasSubCommands() && (sub.RunE == nil || reflect.ValueOf(sub.RunE).Pointer() == reflect.ValueOf(groupRunE).Pointer()) {
+			out = append(out, p)
+		}
+
+		out = append(out, groupPaths(sub, p)...)
 	}
 
-	rootCmd.SetArgs([]string{"cni"})
-
-	if _, err := executeRoot(&buf); err != nil {
-		t.Fatalf("ichor cni with no argument prints its help and succeeds, got %v", err)
-	}
+	return out
 }

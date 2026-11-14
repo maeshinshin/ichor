@@ -283,6 +283,10 @@ func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.W
 // password, once, verbatim), then the commands to run next. A failed run prints no total and no
 // next steps, but still the password: by then the user exists and nothing else could show it.
 func initEpilogue(p *progress, opts initOptions, password string, ok bool) {
+	if opts.DryRun {
+		return // a dry run has nothing to hand over
+	}
+
 	if ok {
 		p.Done()
 	}

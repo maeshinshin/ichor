@@ -41,6 +41,9 @@ The address must be a free IP, not the node's own.
 init never applies anything to a node again after step 3; every later
 change to this cluster goes through the controller, by writing CRs.
 
+--dry-run reads the first node and prints what init would do, with the disk and link it would use,
+and writes nothing and sends nothing to a node.
+
 The settings can come from a file instead of flags: -f init.yaml (an
 InitConfig; --print-config-template prints an example). A flag on the command
 line overrides the file; relative paths in the file are relative to it.
@@ -71,6 +74,7 @@ ichor init [flags]
       --discover-address stringArray       IPv4 address of a node booted into maintenance mode for the controller to probe (spec.discovery.addresses); repeatable
       --discover-cidr stringArray          IPv4 CIDR (/24 or smaller) of maintenance-mode nodes for the controller to probe (spec.discovery.cidrs); repeatable
       --dns strings                        DNS server address for the first node (repeatable)
+      --dry-run                            read the first node and print what init would do, without writing anything or sending anything to a node
       --endpoint-address string            cluster endpoint address (required): an IP address that no node has yet for vip, which Ichor puts on the control planes
       --endpoint-type string               cluster endpoint type: vip, loadBalancer or node (default "vip")
       --ephemeral-disk-selector string     CEL disk selector (e.g. disk.wwid == "...") for a dedicated EPHEMERAL disk, separate from --install-disk

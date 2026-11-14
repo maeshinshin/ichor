@@ -66,6 +66,10 @@ type initOptions struct {
 	BundlePassphrase string
 	BundlePlaintext  bool
 
+	// DryRun (--dry-run) stops runInit before its first write: the first node is read and the configuration
+	// is rendered in memory, and the plan is printed instead of applied (init_dryrun.go).
+	DryRun bool
+
 	// MergeKubeconfig (--merge-kubeconfig) merges the cluster-admin kubeconfig into the user's
 	// own kubeconfig; mergedContext is the context it ended up as, set by runInit for the epilogue.
 	MergeKubeconfig bool
@@ -204,6 +208,10 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return err
 	}
 
+	// The plan names the node's disks and links as well, so a dry run's read keeps them.
+	var reading nodeReading
+	deps.ReadNode = keepReading(deps.ReadNode, &reading, opts.DryRun)
+
 	identity, installDisk, network, err := readFirstNode(ctx, opts, deps, pickDisk)
 	if err != nil {
 		return err
@@ -226,6 +234,10 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 			// goes through the normal approval flow").
 			ApprovalState: ichorv1alpha1.MachineApprovalStateApproved,
 		},
+	}
+
+	if opts.DryRun {
+		return dryRunInit(deps, opts, cluster, machine, cniBoot, reading)
 	}
 
 	// Step 1: generate the secrets bundle and back it up locally before
@@ -288,19 +300,8 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 		return fmt.Errorf("init: rendering the first node's configuration: %w", err)
 	}
 
-	if !deps.AssumeYes {
-		ok, err := confirm(deps.Stdin, deps.Stderr, fmt.Sprintf(
-			"Apply this configuration to %s now? This is IRREVERSIBLE: Talos's insecure apply does not "+
-				"authenticate the node (a separate provisioning network is assumed), and the node will install "+
-				"and reboot. [y/N]: ",
-			opts.NodeEndpoint))
-		if err != nil {
-			return fmt.Errorf("init: reading confirmation: %w", err)
-		}
-
-		if !ok {
-			return fmt.Errorf("init: aborted before applying to the node; nothing was changed")
-		}
+	if err := confirmApply(deps, opts.NodeEndpoint); err != nil {
+		return err
 	}
 
 	// Step 4: bootstrap etcd, fetch the kubeconfig, store the bundle as a
@@ -339,6 +340,28 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 	}
 
 	return waitForUIReady(ctx, k8sClient, deps)
+}
+
+// confirmApply asks before the irreversible apply to endpoint, unless --yes was given.
+func confirmApply(deps initDeps, endpoint string) error {
+	if deps.AssumeYes {
+		return nil
+	}
+
+	ok, err := confirm(deps.Stdin, deps.Stderr, fmt.Sprintf(
+		"Apply this configuration to %s now? This is IRREVERSIBLE: Talos's insecure apply does not "+
+			"authenticate the node (a separate provisioning network is assumed), and the node will install "+
+			"and reboot. [y/N]: ",
+		endpoint))
+	if err != nil {
+		return fmt.Errorf("init: reading confirmation: %w", err)
+	}
+
+	if !ok {
+		return fmt.Errorf("init: aborted before applying to the node; nothing was changed")
+	}
+
+	return nil
 }
 
 // discardBundleBeforeApply makes deps note whether ApplyInsecure is called, and returns the function to

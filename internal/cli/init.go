@@ -119,6 +119,9 @@ The address must be a free IP, not the node's own.
 init never applies anything to a node again after step 3; every later
 change to this cluster goes through the controller, by writing CRs.
 
+--dry-run reads the first node and prints what init would do, with the disk and link it would use,
+and writes nothing and sends nothing to a node.
+
 The settings can come from a file instead of flags: -f init.yaml (an
 InitConfig; --print-config-template prints an example). A flag on the command
 line overrides the file; relative paths in the file are relative to it.
@@ -204,7 +207,8 @@ func chooseInitBundleProtection(cmd *cobra.Command, opts *initOptions) error {
 
 	opts.BundlePassphrase = pass
 
-	if !generated {
+	// A dry run writes no bundle, so it neither shows a generated passphrase nor waits for it to be saved.
+	if !generated || opts.DryRun {
 		return nil
 	}
 
@@ -396,6 +400,8 @@ func init() {
 	flags.StringVarP(&initFile, "file", "f", "", "read the init settings from this "+initConfigKind+" file (see --print-config-template); a flag given on the command line overrides the file")
 	flags.BoolVar(&initOpts.MergeKubeconfig, "merge-kubeconfig", false,
 		"also merge the cluster-admin kubeconfig into your kubeconfig (--kubeconfig, else the first file of $KUBECONFIG, else ~/.kube/config) as context admin@CLUSTER, and make it current; a taken name gets a suffix")
+	flags.BoolVar(&initOpts.DryRun, "dry-run", false,
+		"read the first node and print what init would do, without writing anything or sending anything to a node")
 	flags.BoolVar(&initOpts.BundlePlaintext, bundlePlaintextFlag, false,
 		"store the secrets bundle unencrypted (default: encrypted with --bundle-passphrase-file, $"+bundlePassphraseEnv+", or a passphrase generated on a terminal)")
 	flags.BoolVar(&initPrintTemplate, "print-config-template", false, "print an example "+initConfigKind+" file and exit")

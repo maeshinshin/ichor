@@ -24,7 +24,7 @@ export type Doc = {
   entry: Awaited<ReturnType<typeof getCollection<'docs'>>>[number]
 }
 
-export type NavNode = { label: string; href?: string; children?: NavNode[]; collapsed?: boolean }
+export type NavNode = { label: string; href?: string; children?: NavNode[] }
 
 const plain = (s: string) =>
   s
@@ -80,8 +80,6 @@ function tree(docs: Doc[]): Tree {
   return root
 }
 
-const count = (t: Tree): number => (t.page ? 1 : 0) + [...t.kids.values()].reduce((a, k) => a + count(k), 0)
-
 function nodes(t: Tree): NavNode[] {
   const rank = ([seg, k]: [string, Tree]) =>
     k.page?.order ?? (k.kids.size ? (dirs[seg]?.order ?? 50) : 1000)
@@ -93,11 +91,7 @@ function nodes(t: Tree): NavNode[] {
     if (!k.kids.size) return { label: k.page!.label, href: k.page!.url }
     const children = nodes(k)
     if (k.page) children.unshift({ label: k.page.label, href: k.page.url })
-    return {
-      label: k.page?.entry.data.sidebar_label ?? dirs[seg]?.label ?? titleCase(seg),
-      children,
-      collapsed: count(k) > 15,
-    }
+    return { label: k.page?.entry.data.sidebar_label ?? dirs[seg]?.label ?? titleCase(seg), children }
   })
 }
 

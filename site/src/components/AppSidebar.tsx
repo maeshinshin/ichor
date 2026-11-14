@@ -1,5 +1,4 @@
-import { ChevronRight, ExternalLink } from 'lucide-preact'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { ExternalLink } from 'lucide-preact'
 import {
   Sidebar,
   SidebarContent,
@@ -11,66 +10,21 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
 } from '@/components/ui/sidebar'
 
 import { VersionSwitcher } from '@/components/VersionSwitcher'
 import type { NavNode } from '@/lib/docs'
 
-const contains = (n: NavNode, current: string): boolean => n.href === current || !!n.children?.some((c) => contains(c, current))
-
-function Sub({ node, current }: { node: NavNode; current: string }) {
-  if (!node.children) {
-    return (
-      <SidebarMenuSubItem>
-        <SidebarMenuSubButton asChild isActive={node.href === current}>
-          <a href={node.href} title={node.label} aria-current={node.href === current ? 'page' : undefined}>
-            <span>{node.label}</span>
-          </a>
-        </SidebarMenuSubButton>
-      </SidebarMenuSubItem>
-    )
-  }
-  return (
-    <SidebarMenuSubItem>
-      <Branch node={node} current={current} />
-    </SidebarMenuSubItem>
-  )
-}
-
-// A directory inside a section: a collapsible list, open when it holds the current page.
-function Branch({ node, current }: { node: NavNode; current: string }) {
-  return (
-    <Collapsible defaultOpen={!node.collapsed || contains(node, current)} className="group/collapsible">
-      <CollapsibleTrigger asChild>
-        <SidebarMenuButton>
-          <span>{node.label}</span>
-          <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
-        </SidebarMenuButton>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <SidebarMenuSub>
-          {node.children!.map((c) => (
-            <Sub key={c.href ?? c.label} node={c} current={current} />
-          ))}
-        </SidebarMenuSub>
-      </CollapsibleContent>
-    </Collapsible>
-  )
-}
+// Every page of a section is listed in it, in tree order: a directory's pages sit in the list, not behind a group.
+const pages = (nodes: NavNode[]): NavNode[] => nodes.flatMap((n) => (n.children ? pages(n.children) : [n]))
 
 function Section({ node, current }: { node: NavNode; current: string }) {
-  const items = (
-    <SidebarGroupContent>
-      <SidebarMenu>
-        {node.children!.map((c) =>
-          c.children ? (
-            <SidebarMenuItem key={c.label}>
-              <Branch node={c} current={current} />
-            </SidebarMenuItem>
-          ) : (
+  return (
+    <SidebarGroup>
+      {node.label && <SidebarGroupLabel>{node.label}</SidebarGroupLabel>}
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {pages(node.children!).map((c) => (
             <SidebarMenuItem key={c.href}>
               <SidebarMenuButton asChild isActive={c.href === current}>
                 <a href={c.href} title={c.label} aria-current={c.href === current ? 'page' : undefined}>
@@ -78,32 +32,10 @@ function Section({ node, current }: { node: NavNode; current: string }) {
                 </a>
               </SidebarMenuButton>
             </SidebarMenuItem>
-          ),
-        )}
-      </SidebarMenu>
-    </SidebarGroupContent>
-  )
-  if (!node.collapsed) {
-    return (
-      <SidebarGroup>
-        {node.label && <SidebarGroupLabel>{node.label}</SidebarGroupLabel>}
-        {items}
-      </SidebarGroup>
-    )
-  }
-  // A group starts closed unless the current page is in it.
-  return (
-    <Collapsible defaultOpen={contains(node, current)} className="group/collapsible">
-      <SidebarGroup>
-        <SidebarGroupLabel asChild>
-          <CollapsibleTrigger>
-            {node.label}
-            <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
-          </CollapsibleTrigger>
-        </SidebarGroupLabel>
-        <CollapsibleContent>{items}</CollapsibleContent>
-      </SidebarGroup>
-    </Collapsible>
+          ))}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
   )
 }
 

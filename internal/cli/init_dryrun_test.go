@@ -114,7 +114,7 @@ func TestRunInit_DryRunRefusesAnOlderTalos(t *testing.T) {
 	read := deps.ReadNode
 	deps.ReadNode = func(ctx context.Context, endpoint string, wantInventory bool) (nodeReading, error) {
 		n, err := read(ctx, endpoint, wantInventory)
-		n.TalosVersion = "v1.13.1"
+		n.TalosVersion = "v1.13.0"
 
 		return n, err
 	}
@@ -123,8 +123,8 @@ func TestRunInit_DryRunRefusesAnOlderTalos(t *testing.T) {
 	opts.DryRun = true
 
 	err := runInit(context.Background(), opts, deps)
-	if err == nil || !strings.Contains(err.Error(), "runs Talos v1.13.1") {
-		t.Fatalf("runInit = %v, want the refusal of a node on Talos v1.13.1", err)
+	if err == nil || !strings.Contains(err.Error(), "runs Talos v1.13.0") {
+		t.Fatalf("runInit = %v, want the refusal of a node on Talos v1.13.0", err)
 	}
 
 	if maint.callCount != 0 {

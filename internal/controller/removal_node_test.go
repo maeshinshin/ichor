@@ -17,6 +17,7 @@ limitations under the License.
 package controller
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -191,5 +192,40 @@ var _ = Describe("removal: reset, then delete the Kubernetes Node", func() {
 		Expect(fake.resetCalls).To(Equal(0))
 		Expect(nodeGone("rmnode-plain")).To(BeFalse())
 		Expect(machineGone(cps[0])).To(BeTrue())
+	})
+
+	It("does not finish a reset the machine does not confirm in maintenance mode, though its Node went NotReady", func() {
+		fake := &fakeTalosClient{nodeName: "rmnode-unconfirmed"}
+		newNode("rmnode-unconfirmed", true)
+		r, cps, recorder := setup(fake)
+		annotate(cps[0], false)
+
+		old := resetMaintenanceProbe
+		resetMaintenanceProbe = func(context.Context, string, string) bool { return false }
+		DeferCleanup(func() { resetMaintenanceProbe = old })
+
+		_, err := reconcileMachine(r, cps[0]) // the reset is sent; the Node is still Ready
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.resetCalls).To(Equal(1))
+
+		// A machine that rebooted with its disk intact also goes NotReady: that is not a wipe.
+		var n corev1.Node
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "rmnode-unconfirmed"}, &n)).To(Succeed())
+		n.Status.Conditions = []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse}}
+		Expect(k8sClient.Status().Update(ctx, &n)).To(Succeed())
+
+		_, err = reconcileMachine(r, cps[0])
+		Expect(err).NotTo(HaveOccurred())
+		Expect(machineGone(cps[0])).To(BeFalse(), "the removal waits for the machine to confirm the wipe")
+		Expect(nodeGone("rmnode-unconfirmed")).To(BeFalse())
+
+		old2 := nodeDownWait
+		nodeDownWait = time.Nanosecond
+		DeferCleanup(func() { nodeDownWait = old2 })
+
+		reconcileOK(r, cps[0]) // the wait is over: the removal finishes and says the wipe is not confirmed
+
+		Expect(machineGone(cps[0])).To(BeTrue())
+		Eventually(recorder.Events).Should(Receive(ContainSubstring("not confirmed")))
 	})
 })

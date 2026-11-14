@@ -24,6 +24,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -35,6 +36,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/pkg/deleteguard"
+	"github.com/maeshinshin/ichor/pkg/reclaim"
 )
 
 const (
@@ -52,6 +54,18 @@ const (
 // nodeDownWait bounds the wait for the Node to go NotReady after the reset was accepted. Kubernetes
 // marks a silent kubelet NotReady after 40 s, so this is generous. A var so tests can shrink it.
 var nodeDownWait = 5 * time.Minute
+
+// resetMaintenanceProbe reports whether the machine at address answers in maintenance mode with uuid:
+// the only evidence that a reset wiped it. A var so tests can answer for the machine.
+var resetMaintenanceProbe = func(ctx context.Context, address, uuid string) bool {
+	// Bounded like reclaim's WaitMaintenance: a node still rebooting is asked again on the next requeue.
+	pctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	got, err := reclaim.MaintenanceUUID(pctx, reclaim.HostOnly(address))
+
+	return err == nil && strings.EqualFold(got, uuid)
+}
 
 // powerOffRequested reports whether m's reset powers the node off after the wipe.
 func powerOffRequested(m *ichorv1alpha1.TalosMachine) bool {

@@ -66,6 +66,10 @@ func TestControllers(t *testing.T) {
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
+	// No envtest node exists to answer in maintenance mode: specs that reach a reset confirm it here, and
+	// the spec that needs a machine that does not answer overrides it.
+	resetMaintenanceProbe = func(context.Context, string, string) bool { return true }
+
 	ctx, cancel = context.WithCancel(context.TODO())
 
 	var err error

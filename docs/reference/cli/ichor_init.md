@@ -49,7 +49,10 @@ InitConfig; --print-config-template prints an example). A flag on the command
 line overrides the file; relative paths in the file are relative to it.
 
 On a terminal, a required setting given by neither is asked for; with no
-terminal init fails as before, naming the missing flag.
+terminal init fails as before, naming the missing flag. The first node's
+address can be asked for as a network instead: init scans it for nodes in
+maintenance mode on port 50000 and lists them to pick from, and a single
+address skips the scan.
 
 ```sh
 ichor init [flags]

@@ -102,7 +102,6 @@ func TestMachineReclaimTypedUUIDResets(t *testing.T) {
 	}
 }
 
-// TestMachineReclaimYesDoesNotSatisfyConfirmation: the global --yes must not stand in for the UUID.
 // The reset is sent without a probe: with --wait 0 the output must say it is not confirmed, never that
 // the machine is back in maintenance mode.
 func TestMachineReclaimNoWaitDoesNotClaimTheWipe(t *testing.T) {
@@ -128,6 +127,7 @@ func TestMachineReclaimNoWaitDoesNotClaimTheWipe(t *testing.T) {
 	}
 }
 
+// TestMachineReclaimYesDoesNotSatisfyConfirmation: the global --yes must not stand in for the UUID.
 func TestMachineReclaimYesDoesNotSatisfyConfirmation(t *testing.T) {
 	old := assumeYes
 	assumeYes = true

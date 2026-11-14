@@ -98,6 +98,10 @@ foreign-cilium-chart: ## Fetch the pinned Cilium 1.19 chart the foreign-cluster 
 adr-index: ## Regenerate docs/adr/README.md's index table from each ADR's own Decided:/Status: line.
 	go run ./internal/tools/adrindex
 
+.PHONY: check-claims
+check-claims: ## Fail when a Markdown file or Go comment states that something was tested, measured, verified or confirmed (internal/tools/claimcheck). make test runs it too.
+	go test -count=1 ./internal/tools/claimcheck/
+
 .PHONY: docs-reference
 docs-reference: ## Regenerate docs/reference/cli (from the ichor command tree) and docs/reference/crds (from config/crd/bases); run after manifests.
 	go run ./internal/tools/gendocs

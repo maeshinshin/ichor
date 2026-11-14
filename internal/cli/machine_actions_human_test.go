@@ -81,7 +81,11 @@ func TestMachineApproveHumanOutputShowsTheWarningsAsBangLines(t *testing.T) {
 	m := pendingActionsMachine()
 	m.Status.DiscoveredDisks = []ichorv1alpha1.TalosMachineDiscoveredDisk{{WWID: "naa.2"}}
 
-	c, _ := freshClients(t, []client.Object{m})
+	// An approval with an install disk names the installer of the machine's cluster, so the cluster must exist.
+	cluster := newTestCluster()
+	cluster.Name = humanCluster
+
+	c, _ := freshClients(t, []client.Object{m, cluster})
 
 	var out, errw bytes.Buffer
 	if err := runMachineApprove(context.Background(), c, strings.NewReader(""), &out, &errw, actionsMachineUUID,

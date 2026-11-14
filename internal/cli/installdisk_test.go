@@ -97,7 +97,11 @@ func TestApproveWarnsAboutAnUndiscoveredDisk(t *testing.T) {
 	m := strongMachine()
 	m.Status.DiscoveredDisks = []ichorv1alpha1.TalosMachineDiscoveredDisk{{WWID: "naa.2"}}
 
-	c, k8s := freshClients(t, []client.Object{m})
+	// An approval with an install disk names the installer of the machine's cluster, so the cluster must exist.
+	cluster := newTestCluster()
+	cluster.Name = m.Spec.ClusterRef.Name
+
+	c, k8s := freshClients(t, []client.Object{m, cluster})
 
 	var errw bytes.Buffer
 	if err := runMachineApprove(context.Background(), c, strings.NewReader(""), &bytes.Buffer{}, &errw, "strong",

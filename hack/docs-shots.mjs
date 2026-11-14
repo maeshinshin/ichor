@@ -290,10 +290,11 @@ try {
       check(await ev(`document.documentElement.scrollWidth <= window.innerWidth`), `${tag}: no sideways scroll`)
       await shot(`${tag}-page`)
       if (!mobile) {
-        // Every doc page is listed in the sidebar and visible there with no click: a section that folds its pages away fails here.
+        // The pages up to the second level under a category (routes of up to three segments) are listed with no click: a section
+        // that folds them away fails here. A deeper page folds behind its disclosure, so the next check opens them all.
         const listed = await ev(`[...document.querySelectorAll('[data-slot=sidebar] a[href]')].filter((a) => a.getClientRects().length).map((a) => a.pathname)`)
-        const unlisted = docRoutes.filter((route) => !listed.includes(base + route))
-        check(unlisted.length === 0, `${tag}: every page is in the sidebar without a click (not listed: ${unlisted.join(' ') || 'none'})`)
+        const unlisted = docRoutes.filter((route) => route.split('/').filter(Boolean).length <= 3 && !listed.includes(base + route))
+        check(unlisted.length === 0, `${tag}: every page up to the second level is in the sidebar without a click (not listed: ${unlisted.join(' ') || 'none'})`)
         // The third level: Virtual IP sits under 2. Create the cluster, and that page's disclosure folds it. The disclosure's
         // chevron must turn and its aria-expanded flip, and opening it must show the page (hidden until then).
         const parent = base + at.createCluster.replace(/[^/]+\/$/, '')
@@ -305,6 +306,12 @@ try {
         await idle()
         const visibleAfter = await ev(shownVip)
         check(!visibleBefore && visibleAfter, `${tag}: Virtual IP, a third-level page, is reachable through the disclosure of 2. Create the cluster (visible before it opens: ${visibleBefore}, after: ${visibleAfter})`)
+        // Every doc page is in the sidebar once every disclosure in it is opened.
+        await ev(`[...document.querySelectorAll('[data-slot=sidebar-menu-action][aria-expanded="false"]')].forEach((b) => b.click())`)
+        await idle()
+        const all = await ev(`[...document.querySelectorAll('[data-slot=sidebar] a[href]')].map((a) => a.pathname)`)
+        const folded = docRoutes.filter((route) => !all.includes(base + route))
+        check(folded.length === 0, `${tag}: every page is in the sidebar once its disclosures are opened (not listed: ${folded.join(' ') || 'none'})`)
       }
 
       // The theme icon is chosen by CSS from the `dark` class, so the first paint already shows the right one.

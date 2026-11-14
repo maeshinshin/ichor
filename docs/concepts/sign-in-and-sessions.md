@@ -1,6 +1,7 @@
 ---
 title: "Sign-in and sessions"
 description: "What a sign-in gives you in Ichor (a 5-minute ID token and a single-use refresh chain), how long a session lasts, and what ends one early."
+sidebar_group: "Trust and access"
 sidebar_order: 60
 ---
 

@@ -1,4 +1,5 @@
 ---
+sidebar_group: "Integrations"
 sidebar_order: 19
 ---
 

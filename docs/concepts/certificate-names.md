@@ -1,6 +1,7 @@
 ---
 title: "Certificate names"
 description: "Which names and addresses the Talos API and Kubernetes API certificates carry by default, which client can use which address, and why changing the extra names later reboots every node."
+sidebar_group: "Trust and access"
 sidebar_order: 45
 ---
 

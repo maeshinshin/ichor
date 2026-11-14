@@ -1,4 +1,5 @@
 ---
+sidebar_group: "Configuration"
 sidebar_order: 16
 ---
 

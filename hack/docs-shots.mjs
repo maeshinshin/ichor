@@ -293,13 +293,15 @@ try {
         // A page of up to two segments (a category's own page or one of its top-level pages) is listed with no click. Deeper pages
         // sit under a branch, which is one row until it is opened.
         const listed = await ev(`[...document.querySelectorAll('[data-slot=sidebar] a[href]')].filter((a) => a.getClientRects().length).map((a) => a.pathname)`)
-        const unlisted = docRoutes.filter((route) => route.split('/').filter(Boolean).length <= 2 && !listed.includes(base + route))
+        // The pages of a sidebar_group sit under its row, as the pages of a branch do, so they are not listed without a click.
+        const inGroup = (route) => /^concepts\/[^/]+\/$/.test(route) || /^design\/architecture\/[^/]+\/$/.test(route)
+        const unlisted = docRoutes.filter((route) => route.split('/').filter(Boolean).length <= 2 && !inGroup(route) && !listed.includes(base + route))
         check(unlisted.length === 0, `${tag}: every page of up to two segments is in the sidebar without a click (not listed: ${unlisted.join(' ') || 'none'})`)
 
         // The trigger of a branch: the button in its own row, which is the page's link beside it, or the row's label when the
         // directory has no page. A branch's contents are in the page only while it is open.
         const trigger = (route, label) => `(() => {
-          const own = (r) => [...r.querySelectorAll('button[aria-expanded]')].find((b) => { const c = b.closest('[data-slot=collapsible-content]'); return !c || !r.contains(c) })
+          const own = (r) => [...r.querySelectorAll('[aria-expanded]')].find((b) => { const c = b.closest('[data-slot=collapsible-content]'); return !c || !r.contains(c) })
           const r = [...document.querySelectorAll('[data-slot=sidebar] [data-slot=collapsible]')].find((x) => ${route
             ? `[...x.parentElement.children].some((c) => c.matches('a[href]') && c.pathname === ${JSON.stringify(base + route)})`
             : `own(x)?.textContent.trim() === ${JSON.stringify(label)}`})
@@ -319,9 +321,33 @@ try {
           await idle()
         }
         await branchCheck('Getting started', 'guides/getting-started/', 'Getting started', 'guides/getting-started/install-the-cli/')
-        await branchCheck('Ichor architecture', 'design/architecture/', 'Ichor architecture', 'design/architecture/overview/')
-        await branchCheck('CLI', null, 'CLI', 'reference/cli/ichor_adopt/')
+        await branchCheck('Ichor architecture', 'design/architecture/', 'Ichor architecture', 'design/architecture/testing/')
+        // The CLI branch is the root command's page beside its chevron; its subcommands are one row each under it.
+        await branchCheck('CLI', 'reference/cli/ichor/', 'ichor', 'reference/cli/ichor_adopt/')
+        // Every command with subcommands is a branch of its own: one row until it opens, and its subcommand shown once it does.
+        const cliBranches = docRoutes.filter((r) => /^reference\/cli\/ichor_[^_/]+\/$/.test(r)).map((r) => ({ r, child: docRoutes.find((c) => c.startsWith(r.slice(0, -1) + '_')) })).filter((b) => b.child)
+        // Their rows are rendered only inside the CLI branch, so it is open for the pass and closed again after it.
+        const cliRoot = trigger('reference/cli/ichor/', '')
+        await ev(`(() => { const b = ${cliRoot}; if (b && b.getAttribute('aria-expanded') === 'false') b.click() })()`)
+        await idle()
+        for (const { r, child } of cliBranches) await branchCheck(`ichor ${r.split('/').filter(Boolean).pop().replace(/^ichor_/, '')}`, r, '', child)
+        await ev(`(() => { const b = ${cliRoot}; if (b && b.getAttribute('aria-expanded') === 'true') b.click() })()`)
+        await idle()
         await branchCheck('Custom resources', null, 'Custom resources', 'reference/crds/taloscluster/')
+        // Each sidebar_group of Concepts and Design is one row until it opens, and its pages show once it does. Design's groups are
+        // inside its architecture branch, which is open for their pass and closed again after it.
+        const conceptGroups = [['What Ichor manages', 'concepts/clusters-and-machines/'], ['Changes over time', 'concepts/operations/'], ['Trust and access', 'concepts/security/']]
+        for (const [label, child] of conceptGroups) await branchCheck(`the group ${label}`, null, label, child)
+        const archRow = trigger('design/architecture/', 'Ichor architecture')
+        await ev(`(() => { const b = ${archRow}; if (b && b.getAttribute('aria-expanded') === 'false') b.click() })()`)
+        await idle()
+        const designGroups = [['Purpose', 'design/architecture/motivation/'], ['Configuration', 'design/architecture/api/'], ['Cluster lifecycle', 'design/architecture/nodes/'], ['Trust and recovery', 'design/architecture/trust/'], ['Running and interfaces', 'design/architecture/deployment/'], ['Integrations', 'design/architecture/storage/']]
+        for (const [label, child] of designGroups) await branchCheck(`the group ${label}`, null, label, child)
+        // The ungrouped pages of Design come after its groups: directly under Ichor architecture, Testing then Roadmap.
+        const direct = await ev(`(() => { const sub = ${archRow}?.closest('[data-slot=collapsible]').querySelector('[data-slot=collapsible-content]'); return sub ? [...sub.querySelectorAll('a[href]')].filter((a) => a.closest('[data-slot=collapsible-content]') === sub).map((a) => a.pathname) : [] })()`)
+        check(JSON.stringify(direct) === JSON.stringify([base + 'design/architecture/testing/', base + 'design/architecture/roadmap/']), `${tag}: the ungrouped pages of Design, Testing and Roadmap, follow its groups (listed directly under Ichor architecture: ${JSON.stringify(direct)})`)
+        await ev(`(() => { const b = ${archRow}; if (b && b.getAttribute('aria-expanded') === 'true') b.click() })()`)
+        await idle()
         // The third level: Virtual IP sits under 2. Create the cluster, so Getting started opens first. Hidden until both are open.
         await ev(`(() => { const b = ${trigger('guides/getting-started/', 'Getting started')}; if (b && b.getAttribute('aria-expanded') === 'false') b.click() })()`)
         await idle()
@@ -335,7 +361,7 @@ try {
         check(await ev(`[...document.querySelectorAll('[data-slot=sidebar] a[href]')].some((a) => a.pathname === ${JSON.stringify(base + at.createCluster)} && a.getClientRects().length > 0)`), `${tag}: the page on screen is visible in the sidebar on load`)
         await open(at.rotateKeys)
         // Every doc page is in the sidebar once every branch in it is opened (a branch can hold branches, so the pass repeats).
-        for (let i = 0; i < 4; i++) await ev(`[...document.querySelectorAll('[data-slot=sidebar-content] button[aria-expanded="false"]')].forEach((b) => b.click())`)
+        for (let i = 0; i < 4; i++) await ev(`[...document.querySelectorAll('[data-slot=sidebar-content] [aria-expanded="false"]')].forEach((b) => b.click())`)
         await idle()
         const all = await ev(`[...document.querySelectorAll('[data-slot=sidebar] a[href]')].map((a) => a.pathname)`)
         const folded = docRoutes.filter((route) => !all.includes(base + route))

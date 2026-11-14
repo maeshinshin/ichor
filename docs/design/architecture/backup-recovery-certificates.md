@@ -1,4 +1,5 @@
 ---
+sidebar_group: "Trust and recovery"
 sidebar_order: 18
 ---
 

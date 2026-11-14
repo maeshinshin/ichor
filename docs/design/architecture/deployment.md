@@ -1,4 +1,5 @@
 ---
+sidebar_group: "Running and interfaces"
 sidebar_order: 4
 ---
 

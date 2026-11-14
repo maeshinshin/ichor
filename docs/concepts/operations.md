@@ -1,6 +1,7 @@
 ---
 title: "Operations"
 description: "TalosOperation: the record of an upgrade, rotation or node action, how it takes the cluster lock, and how to pause, resume and retry it."
+sidebar_group: "Changes over time"
 sidebar_order: 20
 ---
 

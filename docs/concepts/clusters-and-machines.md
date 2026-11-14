@@ -1,6 +1,7 @@
 ---
 title: "Clusters and machines"
 description: "How a node in Talos maintenance mode becomes a member of a TalosCluster: discovery, approval and provisioning, and how existing machines are adopted or reclaimed."
+sidebar_group: "What Ichor manages"
 sidebar_order: 10
 ---
 

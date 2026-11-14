@@ -321,7 +321,7 @@ func TestRunInit_RefusesAnOlderTalos(t *testing.T) {
 		t.Fatal("expected an error, got nil")
 	}
 
-	for _, want := range []string{"v1.13.1", release.Pinned.Talos, "upgrade"} {
+	for _, want := range []string{"v1.13.1", release.Pinned.Talos, "upgrade", "META"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error %q does not contain %q", err, want)
 		}

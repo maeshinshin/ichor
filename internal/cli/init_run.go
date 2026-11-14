@@ -588,9 +588,9 @@ func readFirstNode(
 	if release.Compare(node.TalosVersion, release.Pinned.Talos) == release.Behind {
 		return node.Identity, nil, nil, fmt.Errorf(
 			"init: the node at %q runs Talos %s, but this Ichor renders its configuration for Talos %s. "+
-				"Applying a configuration does not reinstall a node that already has Talos, so the node must be "+
-				"upgraded first: run talosctl upgrade on it to %s (it needs a configured node), or wipe its system "+
-				"disk (which erases it) so that it installs again, then run init",
+				"Applying a configuration does not reinstall a node that already has Talos: Talos installs a node "+
+				"only when its disk has no META partition. Upgrade the node to %s first (talosctl upgrade, which "+
+				"needs a configured node), or give its disk no META partition so that it installs again, then run init",
 			opts.NodeEndpoint, node.TalosVersion, release.Pinned.Talos, release.Pinned.Talos)
 	}
 

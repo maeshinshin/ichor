@@ -1,4 +1,4 @@
-# 0158. The kubelet, kube-proxy and kube-scheduler kinds ship as subsets, and three kinds do not ship
+# 0158. The kubelet, kube-proxy and kube-scheduler kinds ship as subsets, and the kinds that do not ship are named in the decision
 
 Status: Accepted · Date: 2026-11-13 · Design section: Typed configuration · Amends: 0155, 0157
 

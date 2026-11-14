@@ -271,20 +271,23 @@ func (f *fakeBootstrapClient) Kubeconfig(context.Context) ([]byte, error) {
 // validInitOptions returns an initOptions that passes buildInitPlan and
 // drives runInit end to end against a cilium CNI, so tests get a
 // TalosConfigPatch to assert on alongside the TalosCluster/TalosMachine.
+// validInitOptions has no sign-in: most init tests are about the node. The default, sign-in on, is
+// the one tests set explicitly (AllowUnauthenticated = false) or get from initOptsWithFlags.
 func validInitOptions() initOptions {
 	return initOptions{
-		BundlePlaintext:   true,
-		Cluster:           testInitClusterName,
-		Namespace:         testNamespace,
-		Preset:            defaultPreset,
-		CNIPreset:         testCNICilium,
-		EndpointType:      testEndpointTypeVIP,
-		EndpointAddress:   testEndpointAddr,
-		TalosVersion:      testTalosVersion,
-		KubernetesVersion: "v1.33.0",
-		VersionContract:   testVersionContract,
-		InstallDisk:       testInstallDisk,
-		NodeEndpoint:      "10.0.0.10:50000",
+		AllowUnauthenticated: true,
+		BundlePlaintext:      true,
+		Cluster:              testInitClusterName,
+		Namespace:            testNamespace,
+		Preset:               defaultPreset,
+		CNIPreset:            testCNICilium,
+		EndpointType:         testEndpointTypeVIP,
+		EndpointAddress:      testEndpointAddr,
+		TalosVersion:         testTalosVersion,
+		KubernetesVersion:    "v1.33.0",
+		VersionContract:      testVersionContract,
+		InstallDisk:          testInstallDisk,
+		NodeEndpoint:         "10.0.0.10:50000",
 	}
 }
 

@@ -388,19 +388,22 @@ func bindInitFlags(flags *pflag.FlagSet, o *initOptions, wait *time.Duration) {
 	flags.StringVar(&o.DiskRoles.UserVolumeName, "user-volume-name", "", "name for --user-volume-disk-selector's volume (default \"data\")")
 
 	flags.StringVar(&o.UIURL, "ui-url", "",
-		"turn Ichor's own users on: the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; "+
-			"needs --version-contract v1.14 or later")
+		"the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; "+
+			"left out, the issuer is "+defaultUIURL+", where `ichor ui` reaches it; needs --version-contract v1.14 or later")
+	flags.BoolVar(&o.AllowUnauthenticated, "allow-unauthenticated", false,
+		"run ichor-ui with no sign-in: anyone who can reach it can change the cluster with ichor-ui's permissions, including resetting nodes; "+
+			"without it init turns Ichor's own sign-in on")
 	flags.StringVar(&o.AdminUser, "admin-user", "",
-		"with --ui-url: name of the first admin (default "+defaultAdminUser+"); its generated password is printed once to stderr "+
+		"with sign-in: name of the first admin (default "+defaultAdminUser+"); its generated password is printed once to stderr "+
 			"and must be changed at the first sign-in")
 	flags.StringVar(&o.UITLSSecret, "ui-tls-secret", "",
-		"with --ui-url: serve ichor-ui over TLS with this existing kubernetes.io/tls Secret in "+ichorControllerNamespace+" (chart: ichorUI.tls.secretName)")
-	flags.StringVar(&o.UITLSCert, "ui-tls-cert", "", "with --ui-url: PEM certificate file for ichor-ui's TLS; init stores it with --ui-tls-key as a Secret")
+		"with sign-in: serve ichor-ui over TLS with this existing kubernetes.io/tls Secret in "+ichorControllerNamespace+" (chart: ichorUI.tls.secretName)")
+	flags.StringVar(&o.UITLSCert, "ui-tls-cert", "", "with sign-in: PEM certificate file for ichor-ui's TLS; init stores it with --ui-tls-key as a Secret")
 	flags.StringVar(&o.UITLSKey, "ui-tls-key", "", "with --ui-tls-cert: PEM private key file (never printed)")
 	flags.StringVar(&o.KubeAPIServerURL, "kube-api-server-url", "",
-		"with --ui-url: https URL of the Kubernetes API put in users' kubeconfigs (chart: ichorUI.users.kubeAPIServerURL)")
+		"with sign-in: https URL of the Kubernetes API put in users' kubeconfigs (chart: ichorUI.users.kubeAPIServerURL)")
 	flags.StringVar(&o.KubeAPITLSServerName, "kube-api-tls-server-name", "",
-		"with --ui-url: tls-server-name in users' kubeconfigs (chart: ichorUI.users.kubeAPITLSServerName)")
+		"with sign-in: tls-server-name in users' kubeconfigs (chart: ichorUI.users.kubeAPITLSServerName)")
 }
 
 func init() {

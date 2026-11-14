@@ -44,7 +44,8 @@ import (
 // api/v1alpha1, internal/controller, internal/webhook/v1alpha1,
 // internal/uiapi, pkg/clusterlock), run concurrently by go test's own
 // package-level parallelism. Observed wall-clock time for this package
-// alone has ranged 64s-130s depending on host load. If you see a
+// alone is about 470s on a GitHub runner and 530s on a 4-core workstation,
+// which is why the Makefile's go test carries -timeout 30m. If you see a
 // timing-sensitive failure, suspect this first before the code under
 // test.
 

@@ -1,6 +1,6 @@
 # 0076. Approved machines in maintenance mode are provisioned over the insecure API and followed to running
 
-Status: Accepted · Date: 2026-10-26 · Design section: Nodes (Approval), Configuration reconcile
+Status: Accepted, amended · Date: 2026-10-26 · Design section: Nodes (Approval), Configuration reconcile
 
 Decided: an approved, never-converged machine that the bundle's identity cannot read is probed on the maintenance API; if it answers there and is the recorded machine and the render names an install disk, the render is applied once insecurely, and the node is then followed by requeue until MachineStatus says running.
 
@@ -23,7 +23,7 @@ os:admin identity, which a node in maintenance mode does not trust, so an approv
   it has). Otherwise `Ready=False/IdentityMismatch` and nothing is applied: someone else's machine is on that address.
 - **Install disk.** The rendered bytes must name where to install: `UnattendedInstallConfig` (v1.14), or
   `machine.install.disk`/`diskSelector`. Otherwise `InstallDiskUnknown`, nothing applied. The installer image is not
-  checked: Talos falls back to the running version's.
+  checked here; an approval names one when the caller gives none (the amendment of 2026-11-14).
 - **Apply.** `MaintenanceClient.ApplyConfiguration` (mode AUTO, what `talosctl apply-config --insecure` sends) with its
   own 60 s timeout. A control plane first takes the cluster lock through `acquireDisruptiveLock` with
   `completesTransition=true`: a join is what turns an even count (a replacement in progress) back into an odd one, so
@@ -51,8 +51,9 @@ os:admin identity, which a node in maintenance mode does not trust, so an approv
   fails, reconnects over the maintenance API; `GetNodeTalosDetails.maintenance_mode` is true then.
   A machine that has converged never falls back.
 - **Setting the install disk later.** A machine approved without `spec.install` sits at `InstallDiskUnknown`.
-  `MachineService.SetMachineInstall` writes only `spec.install` (as the user, with the usual GitOps-tracked refusal,
-  pull request and override handling) and is refused for a pending machine or one that already has an applied
+  `MachineService.SetMachineInstall` writes only `spec.install`, and names its installer image when the caller gives
+  none (the amendment of 2026-11-14). It does so as the user, with the usual GitOps-tracked refusal, pull request
+  and override handling, and is refused for a pending machine or one that already has an applied
   configuration. The machine page offers it, with the approval form's disk picker, while that reason is set.
 - **Log level.** The failed authenticated read that hands a never-converged machine to the provisioning path is logged
   at V(1) without a stack; `ERROR` is kept for the case where nothing takes over.
@@ -96,3 +97,12 @@ Decided:
 - **Unchanged and still accepted.** A wiped machine at its own known address trusts its first handshake, as above. The pre-existing exposure also stays: a pending machine's address is whatever discovery saw before approval.
 - **Cost.** An approved, converged machine that is wiped and then comes back at a different address (a new lease) is no longer found by discovery. With `spec.hostname` set it is followed through its Node (which survives a wipe); otherwise the operator edits `spec.endpoint`, which `NodeUnreachable` already suggests.
 - **L1, the cluster lock.** `machineHolderStopped` (`lockholder.go`) treated a machine with `status.configStoredAt` set, or Ready, as a holder that would never renew the lock. `configStoredAt` is never cleared, so a control plane holding the lock to re-provision (member removal, then the new configuration) looked finished and another actor could take the lock mid-step. A machine is now stopped when it is gone, or when its `configStoredAt` is no older than the lease's acquire time (`HeldError.Acquired`, new in `pkg/clusterlock`; renewals do not move it). Ready no longer counts.
+
+## Amendment 2026-11-14: every install target names its installer image
+
+Decided: an install target that Ichor writes names the Talos installer image. It never leaves `install.image` empty, so the fallback to the running version's installer that the Install disk bullet above relied on is no longer used.
+
+- **Why.** The fallback does not hold in general. Talos v1.14.5 (`pkg/machinery/config/types/runtime/unattended_install.go`, lines 178-179) warns that `installer.image is not set, if Talos is not booted from asset built by Image Factory, installation will fail`. An empty image installs only on a node that booted an Image Factory asset.
+- **What names it.** `secureboot.ClusterInstallerImage`: the installer of the cluster's schematic (`spec.schematic`, else the stock one) and `spec.talosVersion`. It is the SecureBoot variant when the cluster's SecureBoot mode is not Off (ADR 0123), the plain installer otherwise. `ApproveMachine` and `SetMachineInstall` fill it when the caller names no image, and keep an image the caller names. A cluster that cannot be read is an error, not an empty image.
+- **Accepted trade-off.** An empty `install.image` means the installer of the schematic the node booted (ADR 0077). Naming an installer removes that. A node that booted from a custom Image Factory schematic carrying system extensions, and that Ichor then installs (a first provisioning, or a re-provisioning after a wipe), is reinstalled with the cluster's installer and loses those extensions. The stock installer is that installer unless `spec.schematic.id` is set. The maintainer weighed this and chose to name the image anyway, so it is not a defect to report. Keeping the extensions means setting `spec.schematic.id` to a schematic that carries them, which applies to the whole cluster.
+- **Not changed.** The adopt paths copy the image the node reports (ADR 0103), so an adopted machine whose node reports none keeps an empty image. The `ichor init` fresh-install path follows the same rule through its own change.

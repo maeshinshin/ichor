@@ -82,6 +82,8 @@ ichor init --cluster demo \
 
 - `--cluster`, `--node-endpoint`, `--endpoint-address` and `--install-disk` are
   required.
+- Sign-in is on by default: init creates the first admin and prints its
+  password once. See [Sign-in](settings-every-pattern.md#sign-in).
 - `--endpoint-address` is the IP address or hostname that answers on port 6443.
   Use the forwarder's or the record's name, not a machine's address.
 - `--node-endpoint` is still the first node's own Talos API (`host:port`).

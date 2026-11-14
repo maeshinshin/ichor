@@ -47,7 +47,8 @@ It means the CLI could not reach ichor-ui through a login, so it runs the
 command itself with your kubeconfig and your Kubernetes permissions. The
 command still works, and the later steps run the same way. To go through
 ichor-ui and its users instead, sign in once. The `--issuer` is the
-`--ui-url` you chose:
+`--ui-url` you chose, or `https://localhost:8443` when you gave none (`ichor ui`
+must be running while you sign in):
 
 ```sh
 ichor auth login --issuer https://192.168.1.60 --audience ichor-ui

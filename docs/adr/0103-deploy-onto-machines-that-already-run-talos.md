@@ -310,3 +310,6 @@ Decided: the warning now names the mechanism. It is read from Talos v1.14.5 (`in
 - **Left open.** The TPM and KMS handlers across a reset, and whether a keyslot survives beyond the first MiB. The warning does not claim either way.
 
 The CLI row, the reclaim guide and `reclaim.Volume.Encrypted` say the same thing.
+## Amendment 2026-11-15: adopt takes Talos v1.14 and later
+
+The floor in the decision above (Talos v1.12 or later) is superseded for `ichor adopt`: adopt takes a cluster whose version contract is v1.14 or later, and refuses an older one before anything is written. The reason is that Ichor turns sign-in on by default and only v1.14 carries its issuer (ADR 0094's amendment of the same date). The refusal names the upgrade (`ichor upgrade talos`) and then adopt again. The probe floor in the code (`adoptMinTalos`) stays v1.12, since it only chooses among contracts; the refusal is applied to the contract the probe chooses.

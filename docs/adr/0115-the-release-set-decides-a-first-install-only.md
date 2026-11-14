@@ -247,3 +247,7 @@ The user decided on 2026-11-04 that Ichor pins the Cilium version: the only Cili
 **Note (v0.1.0 cleanup).** `release.CheckTalosStep` (Decision and Files lists above) was also removed: it only forwarded to `release.TalosKubernetesError`, which its callers now use.
 
 Amendment 2026-11-05 (ADR 0130): the operation start's override carries no reason. `ichor upgrade talos|kubernetes` and `ichor upgrade cni` take `--override` alone (no `--override-reason`), and the override checkbox of the plan view and of the Cilium dialog has no reason box.
+
+## Amendment 2026-11-15: adopt refuses a contract below v1.14
+
+Item 3 above ("adopt takes the cluster as it runs, older or newer than the set") is narrowed: an older contract below v1.14 is refused before anything is written, with the upgrade named in the refusal (see ADR 0103's amendment of the same date). A newer cluster is still taken as it runs.

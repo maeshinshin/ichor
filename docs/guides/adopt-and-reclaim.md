@@ -31,9 +31,11 @@ blocks the machine and offers the wipe: `ichor reclaim node ADDRESS --cluster NA
 
 ### What you need
 
-- Every node you adopt runs Talos v1.12 or later. A cluster with any node
-  below that is refused with "upgrade Talos first", and nothing is written.
-  A mixed cluster is refused the same way.
+- Every node you adopt runs Talos v1.14 or later, and the cluster's version
+  contract is v1.14 or later. A cluster below that is refused before anything
+  is written, and the refusal names the way out: upgrade Talos with
+  `ichor upgrade talos`, then adopt again. Ichor turns sign-in on by default,
+  and only v1.14 can carry its issuer. A mixed cluster is refused the same way.
 - Your own `talosconfig` for the cluster (`--talosconfig`, `$TALOSCONFIG` or
   `~/.talos/config`) and a kubeconfig for its Kubernetes API (`--kubeconfig`,
   `$KUBECONFIG` or `~/.kube/config`). Adopt reads nodes with the talosconfig
@@ -72,9 +74,9 @@ live config and what Ichor would render:
   out. If every machine is blocked nothing is written.
 
 It also prints the Talos version contract it chose (probed from the running
-version down to v1.12), the CNI it found and the kube-proxy setting. The cluster
-may run an older or a newer Talos or Kubernetes than this Ichor's release set;
-adopt takes it as it runs. A version the compatibility table does not know at
+version down to v1.12; a contract below v1.14 is refused, as above), the CNI it
+found and the kube-proxy setting. The cluster may run a newer Talos or
+Kubernetes than this Ichor's release set; adopt takes it as it runs. A version the compatibility table does not know at
 all is refused, since Ichor could not operate the cluster. An incompatible pair
 (a Kubernetes its Talos does not support, or one the installed Cilium does not
 run) is reported as a warning and adopted; the upgrade that would make it
@@ -135,7 +137,7 @@ A cluster with no CNI:
   `cilium` in `kube-system`, records in `ichor-system`) before it installs
   Ichor, and waits up to 10 minutes for the nodes to be Ready.
 - Preconditions, checked read-only before the plan asks for consent: Talos
-  v1.12 or later, KubePrism enabled on port 7445 on every node (Talos's
+  v1.14 or later, KubePrism enabled on port 7445 on every node (Talos's
   default), and a pod CIDR on every node.
 - Nothing is detected from an existing Cilium. `--tunnel vxlan|geneve` picks
   the tunnel (immutable afterwards). Kube-proxy is read from Talos: enabled
@@ -278,7 +280,7 @@ can still move your pods:
 
 The cluster may run another Talos or Kubernetes version than your `ichor`
 binary's release set. Adopt takes the running versions as they are (the floor is
-Talos v1.12); an unknown version is refused, an incompatible pair is a warning.
+Talos v1.14 for the version contract); an unknown version is refused, an incompatible pair is a warning.
 
 ### Moving from flannel (or Calico) to a Cilium Ichor manages
 

@@ -62,6 +62,10 @@ cluster:
       - 10.249.0.0/16
     cni:
       tunnel: geneve               # --cni-tunnel: vxlan or geneve
+      # kubeProxy: replaced        # --kube-proxy: enabled (default) or replaced; the Cilium features below need replaced
+      # gatewayAPI: true           # --gateway-api (needs kubeProxy replaced)
+      # l2Announcements: true      # --l2-announcements (needs l2Pool and kube-proxy replacement)
+      # l2Pool: 192.168.1.200/29   # --l2-pool: the CIDR LoadBalancer addresses come from
   registryMirrors:                 # --registry-mirror HOST=URL
     ghcr.io: http://192.168.1.10:5000
   certSANs:                        # --cert-san: extra names both certificates carry
@@ -124,7 +128,11 @@ type initConfigCluster struct {
 		PodSubnets     []string `json:"podSubnets"`
 		ServiceSubnets []string `json:"serviceSubnets"`
 		CNI            struct {
-			Tunnel string `json:"tunnel"`
+			Tunnel          string `json:"tunnel"`
+			KubeProxy       string `json:"kubeProxy"`
+			GatewayAPI      bool   `json:"gatewayAPI"`
+			L2Announcements bool   `json:"l2Announcements"`
+			L2Pool          string `json:"l2Pool"`
 		} `json:"cni"`
 	} `json:"network"`
 	RegistryMirrors map[string]string `json:"registryMirrors"`
@@ -241,6 +249,10 @@ func (c initConfigFile) values(dir string) []initFileValue {
 		{"pod-subnets", "cluster.network.podSubnets", c.Cluster.Network.PodSubnets},
 		{"service-subnets", "cluster.network.serviceSubnets", c.Cluster.Network.ServiceSubnets},
 		{"cni-tunnel", "cluster.network.cni.tunnel", one(c.Cluster.Network.CNI.Tunnel)},
+		{"kube-proxy", "cluster.network.cni.kubeProxy", one(c.Cluster.Network.CNI.KubeProxy)},
+		{"gateway-api", "cluster.network.cni.gatewayAPI", boolFlag(c.Cluster.Network.CNI.GatewayAPI)},
+		{"l2-announcements", "cluster.network.cni.l2Announcements", boolFlag(c.Cluster.Network.CNI.L2Announcements)},
+		{"l2-pool", "cluster.network.cni.l2Pool", one(c.Cluster.Network.CNI.L2Pool)},
 		{"registry-mirror", "cluster.registryMirrors", mirrors},
 		{flagNodeEndpoint, "firstNode.endpoint", one(c.FirstNode.Endpoint)},
 		{flagInstallDisk, "firstNode.installDisk", one(c.FirstNode.InstallDisk)},
@@ -276,6 +288,15 @@ func (c initConfigFile) values(dir string) []initFileValue {
 	}
 
 	return out
+}
+
+// boolFlag is the file value of a boolean setting: "true" when set, and no value (the flag keeps its default) when not.
+func boolFlag(on bool) []string {
+	if on {
+		return []string{"true"}
+	}
+
+	return nil
 }
 
 // applyInitFile sets the flags from the file at path, skipping any flag the command line set.

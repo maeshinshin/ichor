@@ -111,6 +111,8 @@ type initPlanInput struct {
 	Preset    string
 	CNIPreset string // ichorv1alpha1.TalosClusterCNI.Preset: only "cilium"
 	CNITunnel string // --cni-tunnel: "vxlan" or "geneve"; only valid with cilium; "" keeps Cilium's default
+	// KubeProxy (--kube-proxy) is "enabled" (Talos's own kube-proxy, the default) or "replaced" (Cilium replaces it).
+	KubeProxy string
 
 	EndpointType    string
 	EndpointAddress string
@@ -154,6 +156,12 @@ type initPlanInput struct {
 	// and the kube-apiserver certificates carry. Changing the list after init reboots the control
 	// planes, so it is set here; empty adds none.
 	CertSANs []string
+
+	// GatewayAPI (--gateway-api) turns on Cilium's Gateway API and puts its CRDs in the bootstrap. L2Announcements
+	// (--l2-announcements) turns on L2 announcements, announced from L2Pool (--l2-pool, an IPv4 CIDR). Init only.
+	GatewayAPI      bool
+	L2Announcements bool
+	L2Pool          string
 }
 
 // CRD limits of spec.certSANs (api/v1alpha1), checked here before anything is written to a node.
@@ -371,6 +379,11 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 		network = &ichorv1alpha1.TalosClusterNetwork{PodSubnets: in.PodSubnets, ServiceSubnets: in.ServiceSubnets}
 	}
 
+	cilium, err := ciliumUserValues(in)
+	if err != nil {
+		return nil, err
+	}
+
 	return &ichorv1alpha1.TalosCluster{
 		Name: in.Cluster, Namespace: in.Namespace,
 		Spec: ichorv1alpha1.TalosClusterSpec{
@@ -384,7 +397,7 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 			VersionContract:   in.VersionContract,
 			SecretsRef:        corev1.LocalObjectReference{Name: secretsRefName(in.Cluster)},
 			ControlPlane:      ichorv1alpha1.TalosClusterControlPlane{Count: top.ControlPlaneCount, Schedulable: top.Schedulable},
-			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: in.CNIPreset, KubeProxy: "enabled", Tunnel: in.CNITunnel},
+			CNI:               ichorv1alpha1.TalosClusterCNI{Preset: in.CNIPreset, KubeProxy: string(in.kubeProxyMode()), Tunnel: in.CNITunnel, Cilium: cilium},
 		},
 	}, nil
 }

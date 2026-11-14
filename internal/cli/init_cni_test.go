@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"github.com/maeshinshin/ichor/pkg/cni"
 	"regexp"
 	"strings"
 	"testing"
@@ -40,7 +41,7 @@ func TestCNIPreset_CiliumTunnel(t *testing.T) {
 		t.Fatalf("WithTunnel(geneve): %v", err)
 	}
 
-	out, err := buildCNIBootstrap(preset, "my-cluster", testNamespace)
+	out, err := buildCNIBootstrap(preset, "my-cluster", testNamespace, cni.KubeProxyEnabled)
 	if err != nil {
 		t.Fatalf("buildCNIBootstrap: %v", err)
 	}
@@ -58,7 +59,7 @@ func TestCNIPreset_CiliumTunnel(t *testing.T) {
 		t.Fatalf("WithTunnel(\"\"): %v", err)
 	}
 
-	defOut, err := buildCNIBootstrap(def, "my-cluster", testNamespace)
+	defOut, err := buildCNIBootstrap(def, "my-cluster", testNamespace, cni.KubeProxyEnabled)
 	if err != nil {
 		t.Fatalf("buildCNIBootstrap: %v", err)
 	}
@@ -75,7 +76,7 @@ func TestBuildCNIBootstrap_Cilium(t *testing.T) {
 		t.Fatalf("cniPreset: %v", err)
 	}
 
-	out, err := buildCNIBootstrap(preset, "my-cluster", testNamespace)
+	out, err := buildCNIBootstrap(preset, "my-cluster", testNamespace, cni.KubeProxyEnabled)
 	if err != nil {
 		t.Fatalf("buildCNIBootstrap: %v", err)
 	}
@@ -119,7 +120,7 @@ func ciliumOperatorReplicas(t *testing.T, manifest string) int {
 func TestBuildCNIBootstrap_HAOperatorStartsWithOneReplica(t *testing.T) {
 	preset := cilium.New().WithControlPlanes(3)
 
-	out, err := buildCNIBootstrap(preset, "my-cluster", testNamespace)
+	out, err := buildCNIBootstrap(preset, "my-cluster", testNamespace, cni.KubeProxyEnabled)
 	if err != nil {
 		t.Fatalf("buildCNIBootstrap: %v", err)
 	}

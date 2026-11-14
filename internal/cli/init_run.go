@@ -198,7 +198,7 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 
 	preset = preset.WithControlPlanes(int(cluster.Spec.ControlPlane.Count))
 
-	cniBoot, err := buildCNIBootstrap(preset, cluster.Name, cluster.Namespace)
+	cniBoot, err := buildCNIBootstrap(preset, cluster.Name, cluster.Namespace, opts.kubeProxyMode())
 	if err != nil {
 		return err
 	}
@@ -394,6 +394,12 @@ func initInstall(
 
 		if err := applyIchorManifest(ctx, k8sClient, deps.IchorManifest, s.Rewrite(initDetail), opts.CNIPreset == cniCilium); err != nil {
 			return "", err
+		}
+
+		if opts.GatewayAPI {
+			if err := applyGatewayAPICRDs(ctx, k8sClient, s.Rewrite(initDetail)); err != nil {
+				return "", err
+			}
 		}
 
 		objects := s.Detail()

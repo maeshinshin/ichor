@@ -160,6 +160,10 @@ terminal init fails as before, naming the missing flag.`,
 			return err
 		}
 
+		if err := checkCiliumFeatures(initOpts.initPlanInput, initOpts.NodeEndpoint); err != nil {
+			return err
+		}
+
 		// Before the passphrase is generated and shown for a file init would not write.
 		if err := refuseExistingBundle(initOpts.Cluster); err != nil {
 			return err
@@ -294,9 +298,21 @@ func bindInitFlags(flags *pflag.FlagSet, o *initOptions, wait *time.Duration) {
 			"large (5 control planes + workers added later, tainted)")
 	flags.StringVar(&o.CNIPreset, "cni", cniCilium, "CNI preset; cilium is the only one")
 	_ = flags.MarkHidden("cni")
+	flags.StringVar(&o.KubeProxy, "kube-proxy", "enabled",
+		"kube-proxy mode: enabled (Talos's own, the default) or replaced (Cilium replaces it and reaches the API through KubePrism on port 7445, "+
+			"which Talos enables by default); --gateway-api and --l2-announcements need replaced; init only, an existing cluster is not changed by it")
 	flags.StringVar(&o.CNITunnel, "cni-tunnel", "",
 		"Cilium's tunnel protocol, vxlan or geneve (default: Cilium's vxlan); "+
 			"geneve for virtualised networks that pass geneve but not vxlan")
+	flags.BoolVar(&o.GatewayAPI, "gateway-api", false,
+		"turn on Cilium's Gateway API and put its CRDs in the bootstrap; init only, an existing cluster is not changed by it; "+
+			"needs kube-proxy replacement, which init does not build yet, so it is refused for now")
+	flags.BoolVar(&o.L2Announcements, "l2-announcements", false,
+		"turn on Cilium's L2 announcements, which answer ARP for LoadBalancer addresses on the LAN; init only, an existing cluster is not changed by it; "+
+			"needs --l2-pool and kube-proxy replacement, which init does not build yet, so it is refused for now")
+	flags.StringVar(&o.L2Pool, "l2-pool", "",
+		"with --l2-announcements: the IPv4 CIDR that LoadBalancer addresses come from; init checks it against the node and the endpoint "+
+			"and does not write the CiliumLoadBalancerIPPool, which you create yourself")
 	flags.StringVar(&o.EndpointType, flagEndpointType, endpointTypes[0].Name, "cluster endpoint type: "+endpointTypeNames(", ", " or "))
 	flags.StringVar(&o.EndpointAddress, "endpoint-address", "",
 		"cluster endpoint address (required): an IP address that no node has yet for vip, which Ichor puts on the control planes")

@@ -27,12 +27,6 @@ import (
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
-// cniKubeProxy is the only kubeProxy mode `ichor init` offers today:
-// Talos's own default. Replacing it is a separate, later decision (a
-// --kube-proxy flag the design's example invocation does not show), not
-// something this command guesses at.
-const cniKubeProxy = cni.KubeProxyEnabled
-
 // cniCilium is the cilium --cni preset name (goconst: it is compared in
 // several places).
 const cniCilium = "cilium"
@@ -53,12 +47,12 @@ type cniBootstrap struct {
 // buildCNIBootstrap calls preset's three bootstrap-relevant methods and
 // assembles their output into the shapes init's rendering and CR-creation
 // steps need. It never duplicates what pkg/cni already knows -- every byte here is exactly what the preset returned.
-func buildCNIBootstrap(preset cilium.Preset, clusterName, namespace string) (*cniBootstrap, error) {
+func buildCNIBootstrap(preset cilium.Preset, clusterName, namespace string, kubeProxy cni.KubeProxyMode) (*cniBootstrap, error) {
 	out := &cniBootstrap{}
 
 	// The manifest goes into the first control plane's config: when it applies, that node is the only
 	// Node, whatever control-plane count the cluster is meant to reach.
-	manifest, err := preset.WithNodes(1).BootstrapManifest(cniKubeProxy)
+	manifest, err := preset.WithNodes(1).BootstrapManifest(kubeProxy)
 	if err != nil {
 		return nil, fmt.Errorf("init: rendering cni bootstrap manifest: %w", err)
 	}
@@ -70,7 +64,7 @@ func buildCNIBootstrap(preset cilium.Preset, clusterName, namespace string) (*cn
 		}
 	}
 
-	docs, err := preset.TalosPatches(cniKubeProxy)
+	docs, err := preset.TalosPatches(kubeProxy)
 	if err != nil {
 		return nil, fmt.Errorf("init: computing cni Talos patches: %w", err)
 	}

@@ -21,6 +21,12 @@ added later.
 On virtual networks that pass geneve but not vxlan, add `--cni-tunnel geneve`
 for Cilium. Cilium uses vxlan by default.
 
+`--gateway-api` and `--l2-announcements` (with `--l2-pool`) turn on Cilium's
+Gateway API and a LoadBalancer address on the LAN. Both need `--kube-proxy replaced`
+(Cilium replaces kube-proxy), which is refused otherwise. The
+[LAN load balancers](../../lan-load-balancers.md) guide has the file keys and what
+you write yourself.
+
 The pod and service subnets (`--pod-subnets` and `--service-subnets`, by
 default `10.244.0.0/16` and `10.96.0.0/12`) must not overlap the network the
 nodes sit on, and they cannot change once the cluster exists.

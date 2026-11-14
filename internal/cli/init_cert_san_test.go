@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/maeshinshin/ichor/pkg/cni"
 	"io"
 	"slices"
 	"testing"
@@ -28,7 +29,7 @@ func renderFirstControlPlane(t *testing.T, in initPlanInput, nodeAddress string)
 		t.Fatalf("buildInitPlan: %v", err)
 	}
 
-	cniBoot, err := buildCNIBootstrap(cilium.New().WithControlPlanes(3), cluster.Name, cluster.Namespace)
+	cniBoot, err := buildCNIBootstrap(cilium.New().WithControlPlanes(3), cluster.Name, cluster.Namespace, cni.KubeProxyEnabled)
 	if err != nil {
 		t.Fatalf("buildCNIBootstrap: %v", err)
 	}

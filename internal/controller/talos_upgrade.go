@@ -270,6 +270,18 @@ func (a *talosUpgradeAdvancer) afterReboot(
 ) (bool, error) {
 	cond := apimeta.FindStatusCondition(m.Status.Conditions, conditionTalosUpgrade)
 
+	// The clock starts when the Upgrade call was acknowledged. A node that has not come back on the target
+	// by talosUpgradeVerifyTimeout failed the step; it is not still rebooting. The lock renewal for this step
+	// stops at the same moment (stepRenewUntil), so the failure below is what releases the cluster.
+	if cond != nil && time.Since(cond.LastTransitionTime.Time) > talosUpgradeVerifyTimeout {
+		if endErr := endEvacuationOf(ctx, a.Client, a.Evacuator, talos, cluster, m); endErr != nil {
+			return false, endErr
+		}
+
+		return false, fmt.Errorf("node %q did not come back on Talos %s within %s of its upgrade request",
+			m.Name, target, talosUpgradeVerifyTimeout)
+	}
+
 	bootID, err := talos.BootID(dialCtx)
 	if err != nil {
 		return false, nil // transient: treat like any other hiccup while rebooting

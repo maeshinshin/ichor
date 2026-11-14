@@ -298,6 +298,23 @@ var _ = Describe("talosUpgradeAdvancer", func() {
 		Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)).To(BeFalse())
 	})
 
+	It("fails a node that has not come back within talosUpgradeVerifyTimeout of its Upgrade call", func() {
+		cluster, cp := newUpgradeNode("late1", true)
+
+		fake := &fakeTalosClient{version: testOldTalosVersion, bootID: testBootIDBefore}
+		adv := newUpgradeAdvancer(fake, nil)
+
+		Expect(advanceOK(adv.Advance, cluster, fetchMachine(cp), nil)).To(BeFalse())
+
+		// The Upgrade call was acknowledged long ago and the node has not rebooted since: the clock has run out.
+		setAckedClock(fetchMachine(cp), conditionTalosUpgrade, time.Now().Add(-talosUpgradeVerifyTimeout-time.Minute))
+
+		done, err := adv.Advance(ctx, cluster, fetchMachine(cp), nil)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("did not come back"))
+		Expect(done).To(BeFalse())
+	})
+
 	It("refuses to start an upgrade on a node that is not Ready", func() {
 		cluster, cp := newUpgradeNode("nr1", false)
 

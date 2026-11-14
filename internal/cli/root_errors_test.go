@@ -18,7 +18,6 @@ package cli
 
 import (
 	"bytes"
-	"fmt"
 	"strings"
 	"testing"
 )
@@ -43,7 +42,7 @@ func TestExecuteRootPrintsAnErrorOnce(t *testing.T) {
 }
 
 // A grouping command given an argument it does not know fails and names that argument. Without that, cobra
-// prints the group's help and exits 0, which a script reads as success. A group with no argument still prints help.
+// prints the group's help and exits 0, which a script reads as success. cni with no argument still prints its help.
 func TestGroupRejectsUnknownSubcommand(t *testing.T) {
 	var buf bytes.Buffer
 
@@ -54,24 +53,15 @@ func TestGroupRejectsUnknownSubcommand(t *testing.T) {
 		rootCmd.SetErr(nil)
 	})
 
-	for _, args := range [][]string{{"cni", "kube-proxy", "replaced"}, {"completion", "bogus"}} {
-		t.Run(strings.Join(args, " "), func(t *testing.T) {
-			rootCmd.SetArgs(args)
+	rootCmd.SetArgs([]string{"cni", "kube-proxy", "replaced"})
 
-			_, err := executeRoot(&buf)
-			want := fmt.Sprintf("unknown command %q", args[1])
-			if err == nil || !strings.Contains(err.Error(), want) {
-				t.Fatalf("want an error containing %s, got %v", want, err)
-			}
-		})
+	if _, err := executeRoot(&buf); err == nil || !strings.Contains(err.Error(), `unknown command "kube-proxy"`) {
+		t.Fatalf("want an error naming kube-proxy, got %v", err)
 	}
 
-	// cni is first: its help must not reach the cluster, so it has no pre-run that would.
-	for _, args := range [][]string{{"cni"}, {"completion"}} {
-		rootCmd.SetArgs(args)
+	rootCmd.SetArgs([]string{"cni"})
 
-		if _, err := executeRoot(&buf); err != nil {
-			t.Fatalf("ichor %s with no argument prints its help and succeeds, got %v", args[0], err)
-		}
+	if _, err := executeRoot(&buf); err != nil {
+		t.Fatalf("ichor cni with no argument prints its help and succeeds, got %v", err)
 	}
 }

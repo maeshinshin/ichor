@@ -165,6 +165,9 @@ setup-test-e2e: ## Provision the throwaway qemu Talos cluster CI's e2e job runs 
 	$(eval TEST_E2E_WORKER := $(shell grep -i worker $(LOCALBIN)/test-e2e-create.log | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | head -1))
 	@test -n "$(TEST_E2E_WORKER)" || { echo "setup-test-e2e: no worker address found in $(LOCALBIN)/test-e2e-create.log; refusing to run talosctl reset without an explicit node"; exit 1; }
 	talosctl --context ichor-test-e2e reset --nodes $(TEST_E2E_WORKER) --graceful=false --reboot --wait
+	# talosctl --wait also passes when the worker only rebooted. The worker is wiped only once its insecure
+	# API answers (maintenance mode), so wait for that before the e2e nodes are published.
+	@n=0; until talosctl --nodes $(TEST_E2E_WORKER) version --insecure >/dev/null 2>&1; do n=$$((n+1)); [ $$n -lt 60 ] || { echo "setup-test-e2e: worker $(TEST_E2E_WORKER) did not answer in maintenance mode after the reset"; exit 1; }; sleep 5; done
 	@if [ -n "$$GITHUB_ENV" ]; then echo "ICHOR_E2E_TALOS_NODES=$(TEST_E2E_WORKER)" >> "$$GITHUB_ENV"; fi
 
 .PHONY: cleanup-test-e2e

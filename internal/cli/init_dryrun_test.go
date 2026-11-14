@@ -50,6 +50,7 @@ func TestRunInit_DryRunWritesNothing(t *testing.T) {
 
 	opts := validInitOptions()
 	opts.DryRun = true
+	opts.GatewayAPI = true // the Gateway API CRDs are the one apply that goes through the Kubernetes client
 
 	if err := runInit(context.Background(), opts, deps); err != nil {
 		t.Fatalf("runInit: %v", err)

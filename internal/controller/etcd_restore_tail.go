@@ -243,8 +243,16 @@ func (j *restoreJob) recoverTarget(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	err = c.EtcdRecover(ctx, rd)
+	src := &readFailure{r: rd}
+	err = c.EtcdRecover(ctx, src)
 	_ = rd.Close()
+
+	if src.err != nil {
+		// The download failed, so the upload is not the node's verdict: ask again.
+		j.note = j.scrub.clean(fmt.Sprintf("reading the pinned snapshot: %v", src.err))
+
+		return false, nil
+	}
 
 	if err != nil {
 		return j.recoveryCallFailed("uploading the snapshot", err)
@@ -372,6 +380,22 @@ func (j *restoreJob) recoveryCallFailed(what string, err error) (bool, error) {
 	}
 
 	return false, fmt.Errorf("%s on %s: %s", what, j.target.name, j.scrub.clean(err.Error()))
+}
+
+// readFailure keeps the first error its reader returned, so that a failed download can be told from the
+// node refusing the upload (the node sees only the stream's error).
+type readFailure struct {
+	r   io.Reader
+	err error
+}
+
+func (f *readFailure) Read(p []byte) (int, error) {
+	n, err := f.r.Read(p)
+	if err != nil && !errors.Is(err, io.EOF) && f.err == nil {
+		f.err = err
+	}
+
+	return n, err
 }
 
 // fail records a final error in the marker so that the controller (this process or the next) shows it.

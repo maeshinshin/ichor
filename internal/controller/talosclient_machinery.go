@@ -493,13 +493,13 @@ func (t *machineryTalosClient) BootstrapRecover(ctx context.Context) error {
 }
 
 // recoveryError maps the answers Talos's recovery calls give to the sentinels callers decide on:
-// FailedPrecondition and DeadlineExceeded (not ready, time not in sync) mean wait, AlreadyExists means
-// the etcd data directory is not empty.
+// Unavailable (the node is rebooting or not listening yet), FailedPrecondition and DeadlineExceeded (not
+// ready, time not in sync) mean wait, AlreadyExists means the etcd data directory is not empty.
 func recoveryError(err error) error {
 	switch client.StatusCode(err) {
 	case codes.OK:
 		return err
-	case codes.FailedPrecondition, codes.DeadlineExceeded:
+	case codes.Unavailable, codes.FailedPrecondition, codes.DeadlineExceeded:
 		return fmt.Errorf("%w: %w", ErrRecoveryNotReady, err)
 	case codes.AlreadyExists:
 		return fmt.Errorf("%w: %w", ErrEtcdDataExists, err)

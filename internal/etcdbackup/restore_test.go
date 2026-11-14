@@ -26,6 +26,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
 )
 
 const wipingStep = "Wiping"
@@ -245,20 +247,63 @@ func TestMarkerSignature(t *testing.T) {
 
 const wrongPass = "other"
 
-// A marker signed with the v1 key by an earlier release is still accepted after the upgrade.
-func TestMarkerSignedWithTheV1KeyIsAccepted(t *testing.T) {
-	st := memStore{}
+// A marker signed with the current key is accepted. Guard: the Current arm of GetMarker.
+func TestMarkerSignedWithCurrentKeyIsAccepted(t *testing.T) {
 	ctx := context.Background()
+	st := memStore{}
+
+	if err := PutMarker(ctx, st, "p", Key{Current: "v2"}, &RestoreMarker{Namespace: "ns"}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := GetMarker(ctx, st, "p", Key{Current: "v2"})
+	if err != nil || got == nil || got.Namespace != "ns" {
+		t.Fatalf("marker signed with the current key refused: %+v, %v", got, err)
+	}
+}
+
+// A marker written before a secretbox rotation survives it: its key is then one of the retired keys, and
+// the rotation must not make the marker unresumable. Guard: the Retired arm of GetMarker.
+func TestMarkerSignedWithARetiredKeyIsAccepted(t *testing.T) {
+	ctx := context.Background()
+	st := memStore{}
+
+	old := testBundle(t, "cluster-secret")
+
+	oldKey, err := DeriveKey(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rotated := testBundle(t, "cluster-secret")
+	rotated.Secrets = &secrets.Secrets{SecretboxEncryptionSecret: "box-rotated"}
+
+	newKey, err := DeriveKey(rotated, old.Secrets.SecretboxEncryptionSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := PutMarker(ctx, st, "p", oldKey, &RestoreMarker{Namespace: "ns"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := GetMarker(ctx, st, "p", newKey); err != nil {
+		t.Fatalf("marker signed before a rotation refused after it: %v", err)
+	}
+}
+
+// A marker signed with the v1 key (derived from Cluster.Secret) is refused, even though the key is the
+// one a release once signed with: nothing here may be forged from a worker's configuration. Guard: the
+// Legacy key is not among the keys GetMarker verifies with.
+func TestMarkerSignedWithTheV1KeyIsRefused(t *testing.T) {
+	ctx := context.Background()
+	st := memStore{}
 
 	if err := PutMarker(ctx, st, "p", Key{Current: "v1"}, &RestoreMarker{}); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := GetMarker(ctx, st, "p", Key{Current: "v2", Legacy: "v1"}); err != nil {
-		t.Fatalf("v1-signed marker refused: %v", err)
-	}
-
-	if _, err := GetMarker(ctx, st, "p", Key{Current: "v2", Legacy: "unknown"}); err == nil {
-		t.Fatal("a marker signed with an unknown key was accepted")
+	if _, err := GetMarker(ctx, st, "p", Key{Current: "v2", Legacy: "v1", Retired: []string{"r1"}}); !errors.Is(err, ErrMarkerSignature) {
+		t.Fatalf("a marker signed with the v1 key must be refused as a signature failure, got %v", err)
 	}
 }

@@ -217,10 +217,12 @@ func GetMarker(ctx context.Context, store Store, prefix string, passphrase Key) 
 		return nil, fmt.Errorf("%w: the marker is unsigned (written by a build that never shipped); take a new backup with this version", ErrMarkerSignature)
 	}
 
-	// Signed with the current key, or with the v1 key by a release.
+	// Signed with the current key, or with a key a secretbox rotation retired (a marker outlives the
+	// rotations that happen under it). Never the v1 key: no release signed with it, and it is derived from
+	// Cluster.Secret, which every worker's machine configuration holds.
 	ok := false
 
-	for _, pass := range passphrase.Secrets() {
+	for _, pass := range append([]string{passphrase.Current}, passphrase.Retired...) {
 		if pass == "" {
 			continue
 		}

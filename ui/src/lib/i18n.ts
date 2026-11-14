@@ -801,7 +801,7 @@ export const en = {
   'node.action.wipe': 'What to wipe',
   'node.action.wipe.system-partitions': 'STATE and EPHEMERAL (default)',
   'node.action.wipe.system-disk': 'The whole system disk',
-  'node.action.wipe.all': 'System disk and user disks',
+  'node.action.wipe.all': 'The whole system disk (user disks are not wiped)',
   'node.action.wipe.note.system-disk': 'The boot partition and EFI are erased too, so the node starts from its boot image (ISO or PXE) and installs afresh. This is how a node is moved onto SecureBoot.',
   'node.action.wipe.note.all': 'Everything on the system disk and on every other disk of the node is erased, user data included. This cannot be undone.',
   'node.action.allowLeader': 'Run it even if this node leads etcd (writes pause for the whole cluster)',

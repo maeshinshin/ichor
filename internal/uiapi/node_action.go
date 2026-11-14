@@ -291,7 +291,7 @@ func describeNode(resp *pb.PlanOperationResponse, m *ichorv1alpha1.TalosMachine,
 		case ichorv1alpha1.WipeModeSystemDisk:
 			wipe = "Wipe the node's whole system disk (boot and EFI included) and " + after + "; it starts from its boot image again, so the disk is installed afresh."
 		case ichorv1alpha1.WipeModeAll:
-			wipe = "Wipe the node's whole system disk (boot and EFI included) and every user disk, and " + after + "; it starts from its boot image again."
+			wipe = "Wipe the node's whole system disk (boot and EFI included), and " + after + "; it starts from its boot image again. User disks are not wiped."
 		}
 
 		resp.Steps = removalSteps(isCP, wipe)
@@ -308,7 +308,7 @@ func removeWarning(powerOff bool, wipeMode string) string {
 	case ichorv1alpha1.WipeModeSystemDisk:
 		wiped = "The node's whole system disk is wiped; user disks are not touched."
 	case ichorv1alpha1.WipeModeAll:
-		wiped = "The node's system disk and every user disk are wiped."
+		wiped = "The node's whole system disk is wiped; user disks are not touched."
 	}
 
 	after := "It reboots into maintenance mode and shows up as a new pending node, so you can add it again."

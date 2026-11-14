@@ -861,7 +861,7 @@ export type RemoveMachineRequest = Message<"ichor.v1alpha1.RemoveMachineRequest"
   /**
    * wipe_mode is what the remove wipes: empty is the STATE and EPHEMERAL partitions only, system-disk is
    * the whole system disk (boot and EFI included, so the node boots a boot image again; what a SecureBoot
-   * reinstall needs), all also wipes every user disk. Same values as TalosOperation.spec.node.wipeMode.
+   * reinstall needs), all wipes that same system disk and never a user disk. Same values as TalosOperation.spec.node.wipeMode.
    *
    * @generated from field: string wipe_mode = 5;
    */

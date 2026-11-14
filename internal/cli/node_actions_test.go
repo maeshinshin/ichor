@@ -272,3 +272,15 @@ func TestNodeRemoveWipeMode(t *testing.T) {
 		t.Fatalf("the plan and the next-steps text must say the whole disk is wiped:\n%s", errw.String())
 	}
 }
+
+// all erases the same system disk as system-disk, so neither the help nor the flag may say it also wipes user disks.
+func TestNodeRemoveAllDoesNotClaimUserDisks(t *testing.T) {
+	usage := deleteNodeCmd.Flags().Lookup("wipe-mode").Usage
+	if !strings.Contains(nodeRemoveLong, "never a user disk") || strings.Contains(nodeRemoveLong, "every user disk") {
+		t.Fatalf("the help for all must say it never wipes a user disk:\n%s", nodeRemoveLong)
+	}
+
+	if !strings.Contains(usage, "user disks are not wiped") || strings.Contains(usage, "every user disk") {
+		t.Fatalf("the --wipe-mode usage for all must say user disks are not wiped: %q", usage)
+	}
+}

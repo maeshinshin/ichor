@@ -276,7 +276,7 @@ const nodeRemoveLong = `delete node --wipe-mode chooses what the wipe erases: sy
 EPHEMERAL partitions, so the node boots its installed system again from a fresh state; system-disk
 wipes the whole system disk, boot and EFI included, so the node starts from its boot image (ISO or PXE)
 and installs afresh, which is how a node is moved onto SecureBoot images (docs/guides/hardening.md);
-all also wipes every user disk, destroying any data on them. system-disk and all are irreversible.`
+all erases the same whole system disk as system-disk and never a user disk. system-disk and all are irreversible.`
 
 func newNodeActionCmd(use, short string, action pb.NodeAction, args cobra.PositionalArgs, spec func(args []string) nodeActionSpec) *cobra.Command {
 	cmd := &cobra.Command{
@@ -362,6 +362,6 @@ func init() {
 		"after the wipe reboot the node into maintenance mode, so it can be added again, instead of powering it off")
 	deleteNodeCmd.Long += "\n\n" + nodeRemoveLong
 	deleteNodeCmd.Flags().StringVar(&nodeActionOpts.WipeMode, "wipe-mode", wipeModeSystemPartitions,
-		"what to wipe: system-partitions (STATE and EPHEMERAL), system-disk (the whole system disk) or all (system disk and every user disk)")
+		"what to wipe: system-partitions (STATE and EPHEMERAL), system-disk (the whole system disk) or all (the whole system disk, as system-disk; user disks are not wiped)")
 	deleteNodeCmd.Flags().StringVar(&nodeActionOpts.Confirm, "confirm", "", "the node name (the TalosMachine name, not the hostname), to go on without being asked to type it")
 }

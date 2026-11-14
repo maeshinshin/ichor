@@ -553,7 +553,7 @@ export type NodeActionRequest = Message<"ichor.v1alpha1.NodeActionRequest"> & {
 
   /**
    * wipe_mode is for reset and remove only: system-disk wipes the whole system disk (boot and EFI included, so the
-   * node boots a boot image again instead of its installed UKI), all also wipes every user disk. Empty
+   * node boots a boot image again instead of its installed UKI), all wipes that same system disk and no user disk. Empty
    * wipes STATE and EPHEMERAL only.
    *
    * @generated from field: string wipe_mode = 7;

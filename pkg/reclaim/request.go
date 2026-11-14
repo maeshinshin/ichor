@@ -45,8 +45,8 @@ func ResetRequest(graceful bool) *machineapi.ResetRequest {
 
 // ResetRequestWipe is ResetRequest with an optional wipe mode (TalosOperation.spec.node.wipeMode).
 // "system-disk" and "all" name no partitions, which is what makes Talos erase the whole system disk
-// (boot and EFI included, so the node boots a boot image again instead of its installed UKI); "all"
-// also wipes the user disks. Empty is ResetRequest.
+// (boot and EFI included, so the node boots a boot image again instead of its installed UKI). Neither
+// wipes user disks: Talos wipes only the user disks a request enumerates, and these send none. Empty is ResetRequest.
 func ResetRequestWipe(graceful bool, mode string) *machineapi.ResetRequest {
 	switch mode {
 	case ichorv1alpha1.WipeModeSystemDisk:

@@ -1651,7 +1651,7 @@ type RemoveMachineRequest struct {
 	Override *Override `protobuf:"bytes,4,opt,name=override,proto3" json:"override,omitempty"`
 	// wipe_mode is what the remove wipes: empty is the STATE and EPHEMERAL partitions only, system-disk is
 	// the whole system disk (boot and EFI included, so the node boots a boot image again; what a SecureBoot
-	// reinstall needs), all also wipes every user disk. Same values as TalosOperation.spec.node.wipeMode.
+	// reinstall needs), all wipes that same system disk and never a user disk. Same values as TalosOperation.spec.node.wipeMode.
 	WipeMode      string `protobuf:"bytes,5,opt,name=wipe_mode,json=wipeMode,proto3" json:"wipe_mode,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

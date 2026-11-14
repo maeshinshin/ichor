@@ -1140,7 +1140,7 @@ type NodeActionRequest struct {
 	// is asked for.
 	Override *Override `protobuf:"bytes,6,opt,name=override,proto3" json:"override,omitempty"`
 	// wipe_mode is for reset and remove only: system-disk wipes the whole system disk (boot and EFI included, so the
-	// node boots a boot image again instead of its installed UKI), all also wipes every user disk. Empty
+	// node boots a boot image again instead of its installed UKI), all wipes that same system disk and no user disk. Empty
 	// wipes STATE and EPHEMERAL only.
 	WipeMode string `protobuf:"bytes,7,opt,name=wipe_mode,json=wipeMode,proto3" json:"wipe_mode,omitempty"`
 	// reboot is for remove only: after the wipe the node reboots into maintenance mode instead of

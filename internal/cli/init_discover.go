@@ -307,8 +307,8 @@ func nodeDetail(r nodeReading) string {
 
 	// Device order is not an identity: the first disk reported is not necessarily the one Talos would install on,
 	// so the row names the count and the first one reported, never a system disk.
-	switch n := len(r.Disks); {
-	case n == 0:
+	switch n := len(r.Disks); n {
+	case 0:
 		parts = append(parts, "no disk reported")
 	default:
 		d := r.Disks[0].DevPath

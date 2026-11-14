@@ -88,12 +88,13 @@ Without the flag, init leaves your kubeconfig alone and prints the `export
 KUBECONFIG=` line to use. The later steps use that line; skip it if you
 merged.
 
-## Turn on sign-in (optional, recommended)
+## Sign-in
 
-Without `--ui-url`, ichor-ui has no sign-in: `ichor init` starts it with
-`--allow-unauthenticated` and prints a warning (see
-[Users and login](../../users-and-login.md)). To use Ichor's own users instead, add
-the https URL at which your browser will reach ichor-ui, and a certificate for
+Ichor's own sign-in is on by default: init creates the first admin (`admin`, or
+`--admin-user`), prints its generated password to stderr once, and the first
+login forces a new one. Without `--ui-url` the issuer is `https://localhost:8443`,
+where `ichor ui` serves ichor-ui. To publish ichor-ui at an address of your own,
+give the https URL at which your browser will reach it, and a certificate for
 it:
 
 ```sh
@@ -125,3 +126,8 @@ ichor rollout config --cluster demo --follow
 
 With one control plane the Kubernetes API is down for about a minute while it
 restarts.
+
+To run ichor-ui with no sign-in, pass `--allow-unauthenticated`. Then anyone who
+can reach ichor-ui can change the cluster with ichor-ui's permissions, including
+resetting nodes, and init prints a warning saying so. There is no sign-in
+step, admin or rollout in that case.

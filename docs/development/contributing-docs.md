@@ -48,9 +48,10 @@ all that is needed:
   `/guides/rotate-keys/`. `README.md` or `index.md` in a directory is that
   directory's own page, and `docs/index.md`
   is the home page.
-- **The section** is the directory. `guides/` is Guides, `design/` is Concepts,
-  `reference/` is Reference. Any other directory becomes a section of its own, listed
-  after those; a directory inside a section becomes a collapsible group.
+- **The section** is the directory. `guides/` is Guides, `concepts/` is Concepts,
+  `design/` is Design, `reference/` is Reference. Any other directory becomes a section of its own, listed
+  after those. Every section is a flat list of its pages: a directory inside a section
+  adds its pages to that list in place, with no group to open.
   `adr/` holds the decision records, kept in the repository and not published on the site.
 - **A long page** is split into a short page and a directory of the same name:
   `design/architecture.md` is the index and `design/architecture/` holds one page

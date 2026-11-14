@@ -117,8 +117,8 @@ type initPlanInput struct {
 	EndpointType    string
 	EndpointAddress string
 
-	// NIC is the first node's primary link by permanent MAC (--nic); it only means something for a vip,
-	// whose Layer2VIPConfig is announced on that link.
+	// NIC is the first node's primary link by permanent MAC (--nic). Its addressing is set on it for any endpoint
+	// type; a vip endpoint also has its Layer2VIPConfig announced on that link.
 	NIC string
 
 	// Addresses, Gateway, DNS and VLAN address that link (--address, --gateway, --dns, --vlan), as on
@@ -337,7 +337,7 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 		return nil, fmt.Errorf("init: %w", err)
 	}
 
-	if err := checkVIPInput(in); err != nil {
+	if err := checkNetworkInput(in); err != nil {
 		return nil, err
 	}
 
@@ -402,19 +402,10 @@ func buildInitPlan(in initPlanInput, warn io.Writer) (*ichorv1alpha1.TalosCluste
 	}, nil
 }
 
-// checkVIPInput refuses a --nic or static-address flag that no VIP would use, and a --nic that is neither a link name
-// nor a MAC written with colons.
-func checkVIPInput(in initPlanInput) error {
-	if in.EndpointType != endpointVIP {
-		if in.NIC != "" {
-			return fmt.Errorf("init: --nic is only used with --endpoint-type vip, not %q", in.EndpointType)
-		}
-
-		if len(in.Addresses) > 0 || in.Gateway != "" || len(in.DNS) > 0 || in.VLAN != 0 {
-			return fmt.Errorf("init: --address, --gateway, --dns and --vlan are only used with --endpoint-type vip, not %q", in.EndpointType)
-		}
-	}
-
+// checkNetworkInput refuses a --nic that is neither a link name nor a MAC written with colons. The network flags are
+// taken for every endpoint type: a machine on a network with no DHCP server needs a static address whatever sits in
+// front of the cluster.
+func checkNetworkInput(in initPlanInput) error {
 	if in.NIC == "" {
 		return nil
 	}

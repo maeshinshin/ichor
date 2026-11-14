@@ -261,7 +261,7 @@ func diskFlagValue(d ichorv1alpha1.TalosMachineDiscoveredDisk) string {
 	return d.DevPath
 }
 
-// chooseNIC returns the permanent MAC of the first node's primary link, the --nic value of a vip endpoint.
+// chooseNIC returns the permanent MAC of the first node's primary link, the --nic value.
 // It follows chooseInstallDisk: a given --nic is checked against the links the node reports, a sole link is
 // taken and named, none is an error, and several are a list to pick from with nothing selected to begin with
 // (or, with no terminal, a refusal that lists them). The link may be given by name or by MAC; only its MAC is
@@ -311,7 +311,7 @@ func chooseNIC(r io.Reader, w io.Writer, given string, links []ichorv1alpha1.Tal
 	}
 
 	if !bundleTerminal() {
-		return "", fmt.Errorf("the node has %d physical links and none can be taken for the VIP: choose one with %s\n%s",
+		return "", fmt.Errorf("the node has %d physical links and none can be taken as its primary link: choose one with %s\n%s",
 			len(links), flag, nicList(links))
 	}
 
@@ -319,7 +319,7 @@ func chooseNIC(r io.Reader, w io.Writer, given string, links []ichorv1alpha1.Tal
 		flag:  flagNIC,
 		label: "Primary link",
 		help: func(map[string]string) string {
-			return "the VIP is announced on this link, and the node is addressed on it (DHCP unless --address is given)"
+			return "the node is addressed on this link (DHCP unless --address is given), and a vip is announced on it"
 		},
 		choices:   nicChoices(links),
 		noDefault: true,

@@ -33,18 +33,18 @@ import (
 )
 
 const (
-	testHWLink     = "enp1s0"
-	testTwinLink   = "twin"
-	testLinkName   = "enp0s2"
-	testLinkMAC    = "52:54:00:aa:bb:cc"
-	testSecondLink = "enp0s3"
-	testSecondMAC  = "52:54:00:dd:ee:ff"
-	testAdoptAddr  = "10.0.0.11"
-	testNodeAddr   = "10.0.0.10"
-	testStaticCIDR = "192.168.0.201/16"
-	testNotIP      = "not an IP address"
-	testVIPOnly    = "only used with --endpoint-type vip"
-	testHWGateway  = "192.168.0.254"
+	testHWLink        = "enp1s0"
+	testTwinLink      = "twin"
+	testLinkName      = "enp0s2"
+	testLinkMAC       = "52:54:00:aa:bb:cc"
+	testSecondLink    = "enp0s3"
+	testSecondMAC     = "52:54:00:dd:ee:ff"
+	testAdoptAddr     = "10.0.0.11"
+	testNodeAddr      = "10.0.0.10"
+	testStaticCIDR    = "192.168.0.201/16"
+	testNotIP         = "not an IP address"
+	testHWGateway     = "192.168.0.254"
+	testLinkAliasKind = "kind: LinkAliasConfig"
 )
 
 // initWithLinks runs init for a first node that reports links (and a read error) and returns what init applied
@@ -96,7 +96,7 @@ func TestRunInit_VIPFirstNodeGetsTheVIPAndItsLink(t *testing.T) {
 
 			for _, want := range []string{
 				"kind: Layer2VIPConfig", "name: " + testEndpointAddr, "link: net0",
-				"kind: LinkAliasConfig", `mac(link.permanent_addr) == "` + testLinkMAC + `"`, "kind: DHCPv4Config",
+				testLinkAliasKind, `mac(link.permanent_addr) == "` + testLinkMAC + `"`, "kind: DHCPv4Config",
 			} {
 				if !strings.Contains(applied, want) {
 					t.Errorf("%q missing from the applied configuration", want)
@@ -118,6 +118,37 @@ func TestRunInit_VIPFirstNodeGetsTheVIPAndItsLink(t *testing.T) {
 
 			if !strings.Contains(stderr, "Primary link: "+testLinkName+" <"+testLinkMAC+">\n") {
 				t.Errorf("the output does not name the link taken:\n%s", stderr)
+			}
+		})
+	}
+}
+
+// A static address for the first node is taken for any endpoint type. A node or loadBalancer gets no VIP, only the
+// addressing on its link.
+func TestRunInit_StaticAddressForAnyEndpointType(t *testing.T) {
+	one := []ichorv1alpha1.TalosMachineDiscoveredLink{testInitLink}
+
+	for _, typ := range []string{endpointNode, endpointLoadBalancer} {
+		t.Run(typ, func(t *testing.T) {
+			applied, machine, _, _, err := initWithLinks(t, func(o *initOptions) {
+				o.EndpointType, o.Addresses, o.Gateway = typ, []string{testStaticCIDR}, testHWGateway
+			}, one, nil)
+			if err != nil {
+				t.Fatalf("runInit: %v", err)
+			}
+
+			for _, want := range []string{"kind: LinkConfig", "address: " + testStaticCIDR, "gateway: " + testHWGateway, testLinkAliasKind} {
+				if !strings.Contains(applied, want) {
+					t.Errorf("%q missing from the applied configuration", want)
+				}
+			}
+
+			if strings.Contains(applied, "Layer2VIPConfig") || strings.Contains(applied, "kind: DHCPv4Config") {
+				t.Error("a non-vip node got a VIP or DHCP on its link")
+			}
+
+			if n := machine.Spec.Network; n == nil || n.Addressing != ichorv1alpha1.MachineAddressingStatic || n.MAC != testLinkMAC {
+				t.Errorf("machine spec.network = %+v, want static on %s", n, testLinkMAC)
 			}
 		})
 	}
@@ -237,15 +268,15 @@ func TestBuildInitPlan_VIPInput(t *testing.T) {
 			`"vip.example.com" is a hostname, but endpoint type vip needs an IP address; type loadBalancer would take a hostname`},
 		"loadBalancer takes a hostname":       {func(in *initPlanInput) { in.EndpointType, in.EndpointAddress = endpointLoadBalancer, "lb.example.com" }, ""},
 		"loadBalancer takes an IP":            {func(in *initPlanInput) { in.EndpointType = endpointLoadBalancer }, ""},
-		"--nic needs a vip":                   {func(in *initPlanInput) { in.EndpointType, in.NIC = endpointNode, testSecondMAC }, testVIPOnly},
+		"--nic is taken for a node endpoint":  {func(in *initPlanInput) { in.EndpointType, in.NIC = endpointNode, testSecondMAC }, ""},
 		"--nic written as a MAC needs colons": {func(in *initPlanInput) { in.NIC = "52-54-00-dd-ee-ff" }, "not a MAC address"},
 		"--nic may be a link name":            {func(in *initPlanInput) { in.NIC = testHWLink }, ""},
-		"--address needs a vip": {func(in *initPlanInput) {
+		"--address is taken for a node endpoint": {func(in *initPlanInput) {
 			in.EndpointType, in.Addresses = endpointNode, []string{testStaticCIDR}
-		}, testVIPOnly},
-		"--gateway needs a vip": {func(in *initPlanInput) {
-			in.EndpointType, in.Gateway = endpointNode, testHWGateway
-		}, testVIPOnly},
+		}, ""},
+		"--gateway is taken for a loadBalancer endpoint": {func(in *initPlanInput) {
+			in.EndpointType, in.Gateway = endpointLoadBalancer, testHWGateway
+		}, ""},
 		"a valid vip and --nic are allowed": {func(in *initPlanInput) { in.NIC = testSecondMAC }, ""},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -369,7 +400,7 @@ func TestRunInit_VIPStaticAddress(t *testing.T) {
 
 	for _, want := range []string{
 		"kind: LinkConfig", "address: " + testStaticCIDR, "gateway: " + testHWGateway, "address: 1.1.1.1",
-		"kind: Layer2VIPConfig", "link: net0", "kind: LinkAliasConfig",
+		"kind: Layer2VIPConfig", "link: net0", testLinkAliasKind,
 	} {
 		if !strings.Contains(applied, want) {
 			t.Errorf("%q missing from the applied configuration", want)

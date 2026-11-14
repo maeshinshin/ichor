@@ -74,8 +74,8 @@ cluster:
 firstNode:
   endpoint: 192.168.1.50:50000     # --node-endpoint (required)
   installDisk: /dev/sda            # --install-disk (required)
-  # nic: 52:54:00:12:34:56         # --nic: with a vip endpoint, the primary link by name (enp1s0) or permanent MAC (asked for when the node has several)
-  # addresses:                     # --address: with a vip endpoint, a static address with prefix length instead of DHCP
+  # nic: 52:54:00:12:34:56         # --nic: the primary link by name (enp1s0) or permanent MAC (asked for when the node has several)
+  # addresses:                     # --address: a static address with prefix length instead of DHCP
   #   - 192.168.1.50/24
   # gateway: 192.168.1.1           # --gateway
   # dns:                           # --dns

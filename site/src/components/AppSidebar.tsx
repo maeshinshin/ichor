@@ -45,6 +45,7 @@ function Branch({ node, current, sub }: { node: NavNode; current: string; sub?: 
   const Button = sub ? SidebarMenuSubButton : SidebarMenuButton
   const Wrap = sub ? SidebarMenuSubItem : SidebarMenuItem
   // Controlled, as the On this page disclosure is: the chevron turns from the state, not from a group that nested rows share.
+  // shortcut: the open state is set once, from the page on screen, because every navigation is a full load; add an effect on `current` if a client router is introduced, or the sidebar stops following the page.
   const [open, setOpen] = useState(() => contains(node, current))
   const chevron = (extra: string) => <ChevronRight className={cn('transition-transform', open && 'rotate-90', extra)} />
   return (

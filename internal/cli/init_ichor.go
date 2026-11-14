@@ -57,10 +57,8 @@ import (
 // built with plain `go build`, not `make build-ichor-embed`, and has
 // nothing real to apply.
 func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest []byte, warn io.Writer, cilium bool) error {
-	if bytes.Contains(manifest, []byte(installmanifest.PlaceholderSentinel)) {
-		return fmt.Errorf(
-			"init: this ichor binary has no install manifest embedded (built without -tags installembed); " +
-				"rebuild with `make build-ichor-embed` before running init")
+	if err := checkInstallManifest(manifest); err != nil {
+		return err
 	}
 
 	objs, err := installer.Decode(manifest)
@@ -234,6 +232,18 @@ type installerPin struct {
 }
 
 // validateInitInstaller refuses an --installer-digest the IchorInstallation would refuse, before anything is changed.
+// checkInstallManifest refuses a binary with no install manifest embedded. A dry run asks too, since a
+// real run would only learn it after the node is configured.
+func checkInstallManifest(manifest []byte) error {
+	if bytes.Contains(manifest, []byte(installmanifest.PlaceholderSentinel)) {
+		return fmt.Errorf(
+			"init: this ichor binary has no install manifest embedded (built without -tags installembed); " +
+				"rebuild with `make build-ichor-embed` before running init")
+	}
+
+	return nil
+}
+
 func validateInitInstaller(opts initOptions) error {
 	if opts.InstallerDigest != "" && !installerDigestPattern.MatchString(opts.InstallerDigest) {
 		return fmt.Errorf("init: --installer-digest %q is not sha256: followed by 64 lowercase hex characters", opts.InstallerDigest)

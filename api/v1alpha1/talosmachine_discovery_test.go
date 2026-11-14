@@ -134,11 +134,11 @@ func TestDiscoveryWarnings(t *testing.T) {
 func TestDiskSelectorMatches(t *testing.T) {
 	d := TalosMachineDiscoveredDisk{Serial: "S1", DevPath: "/dev/sda"}
 
-	if !diskSelectorMatches(TalosMachineDisk{Serial: "S1"}, d) {
+	if !DiskSelectorMatches(TalosMachineDisk{Serial: "S1"}, d) {
 		t.Fatal("the serial must match")
 	}
 
-	if diskSelectorMatches(TalosMachineDisk{WWID: "w"}, d) {
+	if DiskSelectorMatches(TalosMachineDisk{WWID: "w"}, d) {
 		t.Fatal("a WWID the disk did not report must not match an empty field")
 	}
 

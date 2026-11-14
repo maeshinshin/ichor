@@ -94,9 +94,9 @@ type TalosMachineDiscoveredLink struct {
 	Driver string `json:"driver,omitempty"`
 }
 
-// diskSelectorMatches reports whether the selector names the discovered disk: the selector sets one of
+// DiskSelectorMatches reports whether the selector names the discovered disk: the selector sets one of
 // the identifiers, and it has to equal the same identifier the disk reported.
-func diskSelectorMatches(sel TalosMachineDisk, d TalosMachineDiscoveredDisk) bool {
+func DiskSelectorMatches(sel TalosMachineDisk, d TalosMachineDiscoveredDisk) bool {
 	return (sel.WWID != "" && sel.WWID == d.WWID) ||
 		(sel.Serial != "" && sel.Serial == d.Serial) ||
 		(sel.ByIDPath != "" && sel.ByIDPath == d.ByIDPath) ||
@@ -130,7 +130,7 @@ func (m *TalosMachine) DiscoveryWarnings() []string {
 
 	if len(m.Status.DiscoveredDisks) > 0 {
 		check := func(what string, sel TalosMachineDisk) {
-			if slices.ContainsFunc(m.Status.DiscoveredDisks, func(d TalosMachineDiscoveredDisk) bool { return diskSelectorMatches(sel, d) }) {
+			if slices.ContainsFunc(m.Status.DiscoveredDisks, func(d TalosMachineDiscoveredDisk) bool { return DiskSelectorMatches(sel, d) }) {
 				return
 			}
 

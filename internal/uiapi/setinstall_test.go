@@ -18,6 +18,7 @@ package uiapi
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -143,8 +144,15 @@ func TestSetMachineInstallNamesTheInstallerImage(t *testing.T) {
 	m.Spec.Role = roleWorker
 	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(m).WithStatusSubresource(m).Build()
 
-	if _, err := (&Server{Client: k8s}).SetMachineInstall(context.Background(),
-		installReq(&pb.MachineInstall{Disk: &pb.MachineDisk{Wwid: "w"}})); connect.CodeOf(err) != connect.CodeInternal {
-		t.Fatalf("want Internal for a cluster that cannot be read, got %v", err)
+	// The cluster "c" is absent: NotFound (the uiapi convention for a missing object), and the message names the
+	// cluster and the way out.
+	_, err := (&Server{Client: k8s}).SetMachineInstall(context.Background(),
+		installReq(&pb.MachineInstall{Disk: &pb.MachineDisk{Wwid: "w"}}))
+	if connect.CodeOf(err) != connect.CodeNotFound {
+		t.Fatalf("want NotFound for an absent cluster, got %v", err)
+	}
+
+	if msg := err.Error(); !strings.Contains(msg, `cluster "default/c"`) || !strings.Contains(msg, "--install-image") {
+		t.Fatalf("message does not name the cluster and the way out: %q", msg)
 	}
 }

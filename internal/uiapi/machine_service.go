@@ -398,13 +398,17 @@ func (s *Server) withInstallerImage(
 		return install, nil
 	}
 
-	var c ichorv1alpha1.TalosCluster
-	if err := s.Get(ctx, types.NamespacedName{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name}, &c); err != nil {
-		return nil, connect.NewError(connect.CodeInternal,
-			fmt.Errorf("reading cluster %q for the installer image of node %q: %w", m.Spec.ClusterRef.Name, m.Name, err))
+	key := types.NamespacedName{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name}
+
+	c, err := s.loadCluster(ctx, key)
+	if err != nil {
+		// loadCluster has already chosen the code (NotFound, PermissionDenied, or Internal for a failed read).
+		return nil, connect.NewError(connect.CodeOf(err), fmt.Errorf(
+			"node %q names no install image, so Ichor takes the installer from its cluster %q, which could not be read (%v); "+
+				"make that cluster readable, or name the install image with --install-image", m.Name, key, err))
 	}
 
-	install.Image = secureboot.ClusterInstallerImage(&c, secureboot.Mode(c.Spec.Security) != ichorv1alpha1.SecureBootOff)
+	install.Image = secureboot.ClusterInstallerImage(c, secureboot.Mode(c.Spec.Security) != ichorv1alpha1.SecureBootOff)
 
 	return install, nil
 }

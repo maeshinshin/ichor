@@ -73,23 +73,47 @@ func newRenewingReconciler(advance AdvanceMachineFunc) *TalosOperationReconciler
 	}
 }
 
+// lockWaitBound bounds every wait on the Lease in these specs. It only fails a spec whose renewal never arrives;
+// a loaded machine takes longer to get there but still passes.
+const lockWaitBound = 30 * time.Second
+
+// expectRenewedPastLease waits until the lock's renewTime is later than the renewTime it had on entry plus the
+// lease it records. Only renewals made during the wait can move it that far, so this shows the lock outlived its
+// lease without assuming how fast renewals arrive under load.
+func expectRenewedPastLease(key client.ObjectKey, msg string) {
+	GinkgoHelper()
+
+	var first coordinationv1.Lease
+	Expect(k8sClient.Get(ctx, key, &first)).To(Succeed())
+	Expect(first.Spec.RenewTime).NotTo(BeNil())
+	from := first.Spec.RenewTime.Time
+	lease := time.Duration(ptr.Deref(first.Spec.LeaseDurationSeconds, 0)) * time.Second
+
+	Eventually(func(g Gomega) {
+		var cur coordinationv1.Lease
+		g.Expect(k8sClient.Get(ctx, key, &cur)).To(Succeed())
+		g.Expect(cur.Spec.RenewTime).NotTo(BeNil())
+		g.Expect(cur.Spec.RenewTime.Time).To(BeTemporally(">", from.Add(lease)))
+	}, lockWaitBound, testRenewEvery).Should(Succeed(), msg)
+}
+
 var _ = Describe("the cluster lock across the Advance loop", func() {
 	It("holds the lock through an Advance call that outlasts the lease", func() {
 		cluster := newOpTestCluster()
 		newOpTestMachine(cluster.Name, "controlplane", "renew-cp1")
 		op := newOpTestOperation(cluster.Name)
 
-		stolen := false
 		r := newRenewingReconciler(func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine,
 			*ichorv1alpha1.TalosOperation,
 		) (bool, error) {
-			stolen = tryStealLock(cluster, stealWindow)
+			// Returns only once the lease would have lapsed without renewal, so the lock is held because renewal ran.
+			expectRenewedPastLease(client.ObjectKeyFromObject(cluster),
+				"the lease must be renewed while the Advance call runs, not only at the start of the loop")
 
 			return true, nil
 		})
 
 		mustReconcileOperation(r, op)
-		Expect(stolen).To(BeFalse(), "the lease must be renewed while the Advance call runs, not only at the start of the loop")
 	})
 
 	It("stops renewing a step past its verify clock, so a stuck step lets the lease lapse", func() {
@@ -134,7 +158,7 @@ var _ = Describe("the cluster lock across the Advance loop", func() {
 				sawCancel = true
 
 				return false, ctx.Err()
-			case <-time.After(stealWindow):
+			case <-time.After(lockWaitBound):
 				return true, nil
 			}
 		})

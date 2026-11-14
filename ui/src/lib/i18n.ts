@@ -1081,6 +1081,7 @@ export const en = {
   'home.attnClientsNotRestarted': 'After the CA rotation, some in-cluster clients are not back.',
   'home.attnPending': 'Nodes waiting for approval: {n}.',
   'home.attnConfig': 'Nodes with configuration waiting for a reboot: {n}.',
+  'home.attnApiRestart': 'Nodes with configuration waiting for an API server restart: {n}.',
   'home.attnInstallerUnverified': 'The installer image was not verified',
   'home.attnInstallerUnverifiedHint': 'Its signature was not checked. The installer holds nearly cluster-admin rights. Run the next Ichor upgrade without skipping the check.',
   'home.attnRelease': 'Ichor {version} is available.',

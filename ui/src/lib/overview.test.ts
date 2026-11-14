@@ -72,3 +72,7 @@ test('attentionItems lists an installer image whose signature was not checked', 
   ])
   assert.deepEqual(attentionItems({ conditions: [], pending: 0, configWaiting: 0, opState: null, installerUnverified: false }), [])
 })
+
+test('nodes waiting for an API server restart are their own attention item, not a reboot', () => {
+  assert.deepEqual(attentionItems({ conditions: [], pending: 0, configWaiting: 0, apiRestartWaiting: 1, opState: null }), [{ kind: 'apiRestart', count: 1 }])
+})

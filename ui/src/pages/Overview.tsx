@@ -46,7 +46,7 @@ import { StartOperationDialog } from '@/components/StartOperationDialog'
 import { HandoverPhase, RolloutKind, type Cluster } from '@/gen/ichor/v1alpha1/cluster_pb'
 import { MachineApprovalState, MachineRole, type Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { OperationKind, type EtcdBackup, type Operation } from '@/gen/ichor/v1alpha1/operation_pb'
-import { blockingOperation, recentOperations, rebootPendingCount, type OpRow } from '@/lib/clusterOps'
+import { apiRestartPendingCount, blockingOperation, recentOperations, rebootPendingCount, type OpRow } from '@/lib/clusterOps'
 import { machineClient, operationClient } from '@/lib/connect'
 import { enumLabel } from '@/lib/enum'
 import type { ErrorShape } from '@/lib/errors'
@@ -194,13 +194,14 @@ function Home({
   const pending = (machines ?? []).filter((m) => m.approvalState !== MachineApprovalState.APPROVED && m.approvalState !== MachineApprovalState.REJECTED)
   const ready = approved.filter((m) => readyOf(m)?.status === 'True').length
   const waiting = approved.filter((m) => rebootPendingCount([{ rebootPaths: m.rebootPaths, readyReason: readyOf(m)?.reason ?? '' }]) > 0)
+  const apiRestart = approved.filter((m) => apiRestartPendingCount([{ readyReason: readyOf(m)?.reason ?? '' }]) > 0)
   const currentState = current ? operationState(current.op.phase, current.op.failureReason) : null
   const kubeProxy = cluster.kubeProxyMode || 'enabled'
   const versionOf = (name: string) => componentOf(cluster.versions, name)
   const cilium = versionOf('cilium')
   const notes = unavailableNotes(candidates)
   const patches = patchComponents(candidates)
-  const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, opState: currentState, patches, release, autoPatchHalted: autoPatch.halted, installerUnverified: unverified })
+  const items = attentionItems({ conditions: cluster.conditions, pending: pending.length, configWaiting: waiting.length, apiRestartWaiting: apiRestart.length, opState: currentState, patches, release, autoPatchHalted: autoPatch.halted, installerUnverified: unverified })
   const recent = recentOperations(ops, 5)
   const targets = tileTargets(current?.op.ref?.name ?? null)
 
@@ -281,9 +282,9 @@ function Home({
                           </AlertAction>
                         </>
                       )}
-                      {a.kind === 'config' && (
+                      {(a.kind === 'config' || a.kind === 'apiRestart') && (
                         <>
-                          <AlertTitle>{t('home.attnConfig', { n: a.count })}</AlertTitle>
+                          <AlertTitle>{t(a.kind === 'config' ? 'home.attnConfig' : 'home.attnApiRestart', { n: a.count })}</AlertTitle>
                           {may('config') && (
                             <AlertAction>
                               <StartOperationDialog kind="config" cluster={ref} label={t('ops.action.apply')} size="xs" />

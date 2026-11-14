@@ -66,6 +66,12 @@ export function versionProblem(current: string, target: string): 'required' | 'i
 
 // rebootPendingCount is how many nodes wait for a reboot to take a config change:
 // status.rebootPaths is set, or Ready says RebootRequired (an older backend sends only that).
+// An API server restart is not a reboot; apiRestartPendingCount counts it.
 export function rebootPendingCount(machines: readonly { rebootPaths: readonly string[]; readyReason: string }[]): number {
-  return machines.filter((m) => m.rebootPaths.length > 0 || m.readyReason === 'RebootRequired' || m.readyReason === 'APIServerRestartRequired').length
+  return machines.filter((m) => m.rebootPaths.length > 0 || m.readyReason === 'RebootRequired').length
+}
+
+// apiRestartPendingCount is how many nodes wait for their kube-apiserver to restart to take a config change.
+export function apiRestartPendingCount(machines: readonly { readyReason: string }[]): number {
+  return machines.filter((m) => m.readyReason === 'APIServerRestartRequired').length
 }

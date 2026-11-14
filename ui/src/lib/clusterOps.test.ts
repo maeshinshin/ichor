@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import {
   blockingOperation,
   recentOperations,
+  apiRestartPendingCount,
   rebootPendingCount,
   versionProblem,
   type OpRow,
@@ -69,5 +70,8 @@ test('nodes that wait for a reboot are counted', () => {
   assert.equal(rebootPendingCount([m([]), m(['machine.install']), m(['a', 'b'])]), 2)
   assert.equal(rebootPendingCount([m([], 'RebootRequired'), m([], 'Ready')]), 1)
   assert.equal(rebootPendingCount([]), 0)
+  // An API server restart needs no reboot, so it is not counted as one.
+  assert.equal(rebootPendingCount([m([], 'APIServerRestartRequired')]), 0)
+  assert.equal(apiRestartPendingCount([m([], 'APIServerRestartRequired'), m([], 'RebootRequired'), m([])]), 1)
 })
 

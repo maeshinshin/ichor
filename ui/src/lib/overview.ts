@@ -12,6 +12,7 @@ export type Attention =
   | { kind: 'clientsNotRestarted'; message: string }
   | { kind: 'pending'; count: number }
   | { kind: 'config'; count: number }
+  | { kind: 'apiRestart'; count: number }
   | { kind: 'opFailed' }
   | { kind: 'opPaused' }
   | { kind: 'patch'; components: string[] }
@@ -24,6 +25,8 @@ export function attentionItems(i: {
   conditions: readonly { type: string; status: string; message?: string }[]
   pending: number
   configWaiting: number
+  // apiRestartWaiting is how many nodes wait for their API server to restart, which is not a reboot.
+  apiRestartWaiting?: number
   opState: string | null
   // patches names the components with a newer patch of their minor; one item lists them.
   patches?: string[]
@@ -47,6 +50,7 @@ export function attentionItems(i: {
   if (clients !== null) out.push({ kind: 'clientsNotRestarted', message: clients })
   if (i.pending > 0) out.push({ kind: 'pending', count: i.pending })
   if (i.configWaiting > 0) out.push({ kind: 'config', count: i.configWaiting })
+  if (i.apiRestartWaiting && i.apiRestartWaiting > 0) out.push({ kind: 'apiRestart', count: i.apiRestartWaiting })
   if (i.patches && i.patches.length > 0) out.push({ kind: 'patch', components: i.patches })
   if (i.release) out.push({ kind: 'release', version: i.release })
   return out

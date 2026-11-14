@@ -29,8 +29,10 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
@@ -464,6 +466,49 @@ func toUnstructured(obj any, kind, apiVersion string) (*unstructured.Unstructure
 	return u, nil
 }
 
+func namespaceOf(deps ...*appsv1.Deployment) string {
+	for _, d := range deps {
+		if d != nil {
+			return d.Namespace
+		}
+	}
+
+	return ""
+}
+
+// clusterIssuerURL returns spec.authentication.ichor.url of the one TalosCluster in ns that enables
+// Ichor's issuer, or "" when there is none or more than one, or none has a URL. It reads unstructured
+// so the installer needs no typed scheme, and a cluster without the CRD yet reads as none.
+func clusterIssuerURL(ctx context.Context, c client.Client, ns string) (string, error) {
+	list := &unstructured.UnstructuredList{}
+	list.SetGroupVersionKind(schema.GroupVersionKind{Group: "ichor.maesh.dev", Version: "v1alpha1", Kind: "TalosClusterList"})
+
+	if err := c.List(ctx, list, client.InNamespace(ns)); err != nil {
+		if meta.IsNoMatchError(err) {
+			return "", nil
+		}
+
+		return "", fmt.Errorf("listing the TalosClusters in %s: %w", ns, err)
+	}
+
+	var urls []string
+
+	for _, tc := range list.Items {
+		enabled, _, _ := unstructured.NestedBool(tc.Object, "spec", "authentication", "ichor", "enabled")
+		url, _, _ := unstructured.NestedString(tc.Object, "spec", "authentication", "ichor", "url")
+
+		if enabled && url != "" {
+			urls = append(urls, url)
+		}
+	}
+
+	if len(urls) != 1 {
+		return "", nil
+	}
+
+	return urls[0], nil
+}
+
 // customizeFromLive reads the live ichor-ui and controller Deployments the manifest names and
 // customizes the manifest's objects with the settings they carry. A Deployment that does not
 // exist yet (a first install by the installer) reads as a plain install.
@@ -514,6 +559,20 @@ func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructure
 	}
 
 	s := ReadUISettings(uiDep, ctrlDep)
+
+	// The issuer is the TalosCluster's spec.authentication.ichor.url, set at init and changeable later,
+	// so a URL changed on the cluster reaches the Deployments on the next install or upgrade.
+	if ns := namespaceOf(uiDep, ctrlDep); ns != "" {
+		url, err := clusterIssuerURL(ctx, c, ns)
+		if err != nil {
+			return nil, UISettings{}, err
+		}
+
+		if url != "" {
+			s.ExternalURL = url
+		}
+	}
+
 	if s.WasPlaintext != "" {
 		log.Printf("NOTICE: ichor-ui no longer serves plain HTTP (it did on %s); point your edge at https://<ichor-ui>:8443 (trust ichor-ui-ca)", s.WasPlaintext)
 	}

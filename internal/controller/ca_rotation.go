@@ -125,6 +125,13 @@ const (
 // A variable so tests need not wait.
 var caKubeletSettleDelay = 90 * time.Second
 
+// rotationGiveUpAfter is how long a CA or key rotation may stay blocked on one step, pass after pass,
+// before it gives up: the operation pauses with a FailureReason and a Warning Event, which lets the cluster
+// lock go to other work. Thirty minutes outlasts a node reboot and the waits after one, and a timed-out
+// apply (10 minutes) on its own, so one timeout does not end a rotation that would have finished on the next
+// pass. A variable so tests need not wait.
+var rotationGiveUpAfter = 30 * time.Minute
+
 // NodesReadyFunc reports the names of the Kubernetes Nodes that are not Ready, through the
 // Kubernetes API reached with talos's admin kubeconfig. A seam so tests never reach a cluster;
 // cmd/main.go wires NewNodesReady.

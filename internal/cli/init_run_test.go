@@ -336,3 +336,33 @@ func TestRunInit_MergeKubeconfig(t *testing.T) {
 		}
 	}
 }
+
+// The first machine names its installer. An empty image installs only from a boot asset Image
+// Factory built, which a node reset from an existing Talos install is not.
+func TestRunInit_FirstMachineNamesTheStockInstaller(t *testing.T) {
+	withTempHome(t)
+
+	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
+	deps, _, _ := newFakeInitDeps(t, k8sClient)
+
+	opts := validInitOptions()
+	opts.Namespace = ichorControllerNamespace
+
+	if err := runInit(context.Background(), opts, deps); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	var machines ichorv1alpha1.TalosMachineList
+	if err := k8sClient.List(context.Background(), &machines); err != nil {
+		t.Fatalf("listing TalosMachines: %v", err)
+	}
+
+	if len(machines.Items) != 1 || machines.Items[0].Spec.Install == nil {
+		t.Fatalf("want one TalosMachine with spec.install, got %d machines", len(machines.Items))
+	}
+
+	const want = "factory.talos.dev/metal-installer/376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba:" + testTalosVersion
+	if got := machines.Items[0].Spec.Install.Image; got != want {
+		t.Errorf("spec.install.image = %q, want %q", got, want)
+	}
+}

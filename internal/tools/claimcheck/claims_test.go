@@ -42,8 +42,8 @@ var shapes = []shape{
 		regexp.MustCompile(`(?i)\b(apply|hardware|hand|lab|e2e)-(tested|verified|measured|confirmed)\b`), nil},
 	{"confirmed or verified working, or worked on hardware",
 		regexp.MustCompile(`(?i)\b((tested|verified|confirmed)\s+working|worked\s+on\s+(real\s+|bare[- ]metal\s+)?hardware)\b`), nil},
-	{"a label such as Measured: or Confirmed:",
-		regexp.MustCompile(`(?i)\b(measured|tested|confirmed)\s*:`), nil},
+	{"a label such as Confirmed: or Tested:",
+		regexp.MustCompile(`(?i)\b(tested|confirmed)\s*:`), nil},
 	{"a bare status word in parentheses, such as (verified)",
 		regexp.MustCompile(`(?i)\((measured|tested|verified|confirmed|reproduced)\)`), nil},
 	{"a duration in seconds or minutes after took",
@@ -53,6 +53,15 @@ var shapes = []shape{
 // negation is looked for in the text just before a match: "has not been tested with" reports a gap,
 // not a result, and a gap is allowed to stay in the repository.
 var negation = regexp.MustCompile(`(?i)\b(not|never|no|nor|without|untested|unverified)\b`)
+
+// clause is the part of the text before a match that belongs to its sentence, so a "not" in the
+// previous sentence cannot excuse a claim in this one.
+func clause(b []byte) []byte {
+	if i := bytes.LastIndexAny(b, ".;:!?|\n"); i >= 0 {
+		return b[i+1:]
+	}
+	return b
+}
 
 type hit struct {
 	line int
@@ -86,7 +95,7 @@ func findClaims(text []byte) []hit {
 	var out []hit
 	for _, s := range shapes {
 		for _, loc := range s.re.FindAllIndex(text, -1) {
-			before := text[max(0, loc[0]-24):loc[0]]
+			before := clause(text[max(0, loc[0]-24):loc[0]])
 			if negation.Match(before) || (s.skip != nil && s.skip.Match(before)) {
 				continue
 			}
@@ -110,7 +119,7 @@ func TestEachShapeFires(t *testing.T) {
 		"a past or perfect passive of tested, measured or reproduced": "was tested",
 		"a hyphenated apply-, hardware- or hand-tested form":          "apply-tested",
 		"confirmed or verified working, or worked on hardware":        "confirmed working",
-		"a label such as Measured: or Confirmed:":                     "Confirmed:",
+		"a label such as Confirmed: or Tested:":                       "Confirmed:",
 		"a bare status word in parentheses, such as (verified)":       "(verified)",
 		"a duration in seconds or minutes after took":                 "took about 45 seconds",
 	}
@@ -122,6 +131,13 @@ func TestEachShapeFires(t *testing.T) {
 		if len(findClaims([]byte(p))) == 0 {
 			t.Errorf("shape %q does not match its probe %q", s.name, p)
 		}
+	}
+}
+
+// A negation in the previous sentence must not hide a claim in this one.
+func TestNegationStaysInItsSentence(t *testing.T) {
+	if got := findClaims([]byte("The gap was not checked.\nMeasured: about 45 seconds.")); len(got) == 0 {
+		t.Error("a claim after a negated sentence was not reported")
 	}
 }
 

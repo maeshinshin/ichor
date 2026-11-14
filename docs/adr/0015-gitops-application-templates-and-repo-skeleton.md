@@ -148,7 +148,7 @@ every file byte-for-byte.
 2. **The URL guard, twice.** `New` checks every source's `RepoURL` before
    building an `Application`; `Write` checks again (`checkApplication`,
    reusing the same logic) on `RootApp` and every entry of `Apps`, in case
-   one reached `Skeleton` some other way. Both paths are tested
+   one reached `Skeleton` some other way. Both paths are pinned by
    (`TestNew_RejectsCredentialsInRepoURL`,
    `TestSkeleton_Write_RefusesCredentialedRepoURL`).
 3. **A `Secret`, whatever its source, is refused.** `WriteObject` — the

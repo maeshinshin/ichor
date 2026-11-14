@@ -2,7 +2,7 @@
 
 Status: Accepted, amended twice · Date: 2026-10-26 · Design section: 4.4 (Typed configuration), Monitoring
 
-Decided: made `config/samples/*.yaml` minimal, valid and apply-tested instead of deleting them; gave the metrics endpoint a real, opt-in certificate named `metricsCert.enabled` (not `certManager`, and not the default) via a second cert-controller rotator instead of leaving `insecureSkipVerify`'s documented escape hatch wired to nothing; confirmed the webhook certificate has the same cold-start race the metrics one does; and logged that race instead of papering over it with a bootstrap certificate, which would trade a loud failure for a silent one.
+Decided: made `config/samples/*.yaml` minimal, valid and apply-tested instead of deleting them; gave the metrics endpoint a real, opt-in certificate named `metricsCert.enabled` (not `certManager`, and not the default) via a second cert-controller rotator instead of leaving `insecureSkipVerify`'s documented escape hatch wired to nothing; noted that the webhook certificate has the same cold-start race the metrics one does; and logged that race instead of papering over it with a bootstrap certificate, which would trade a loud failure for a silent one.
 
 ## Context
 
@@ -257,7 +257,7 @@ and metrics listeners always find *something* on disk, real or not.
 
 **Decision: log it instead.** `cmd/main.go`'s `logCertStatusBeforeStart`
 checks, once, right before `mgr.Start()`, whether each enabled server's
-cert file already exists, and if not, logs the exact, confirmed mechanism
+cert file already exists, and if not, logs the exact mechanism
 (not a guess) in one line: that this is expected on a brand-new install,
 and that it resolves on its own once the rotator's write reaches the
 Secret and the mounted volume. The chart's `values.yaml` carries the same

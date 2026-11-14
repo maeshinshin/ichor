@@ -3,6 +3,11 @@
 // a report that something was run and what it showed. A decision about testing is not testimony, so
 // "pinned by TestFoo" or "the suite uses envtest" never match. Markdown is read as written; Go is read
 // through its comments only, so string literals and identifiers are not scanned.
+//
+// The line between the two sides: a support statement in the present tense ("Cilium 1.19 is tested
+// with 1.32 to 1.35") says what the project commits to, and is allowed. A report of something that
+// happened (a past tense, a result, a run on hardware) is not. Do not widen the shapes to bare passives
+// such as "is tested": that is where the false positives are.
 package claimcheck
 
 import (

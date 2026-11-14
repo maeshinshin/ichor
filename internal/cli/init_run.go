@@ -40,6 +40,7 @@ import (
 	"github.com/maeshinshin/ichor/pkg/cni/cilium"
 	"github.com/maeshinshin/ichor/pkg/release"
 	"github.com/maeshinshin/ichor/pkg/render"
+	"github.com/maeshinshin/ichor/pkg/secureboot"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
@@ -217,8 +218,9 @@ func runInit(ctx context.Context, opts initOptions, deps initDeps) (err error) {
 			},
 			Endpoint: opts.NodeEndpoint,
 			Role:     roleControlPlane,
-			Install:  &ichorv1alpha1.TalosMachineInstall{Disk: *installDisk},
-			Network:  network,
+			// An empty image installs only from a boot asset Image Factory built; the stock one is named explicitly.
+			Install: &ichorv1alpha1.TalosMachineInstall{Disk: *installDisk, Image: secureboot.ClusterInstallerImage(cluster, false)},
+			Network: network,
 			// init is the special case of approving the first control
 			// plane (architecture.md's "Bootstrap": "Adding later nodes
 			// goes through the normal approval flow").

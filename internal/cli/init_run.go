@@ -566,14 +566,15 @@ func waitForCiliumHandover(
 
 // readFirstNode reads the first node's identity and settles its install disk: the --install-disk
 // value, or, when pickDisk, one chosen from the node's own disk list on the same connection. A vip endpoint, or any
-// endpoint with a network flag, also settles the primary link and its addressing (see chooseNIC and vipNetwork) as the
-// machine's spec.network; it is nil otherwise, where the node keeps Talos's default of DHCP on every physical link. It
-// runs before the first write; the apply to the node is initBootstrapAccess's, steps later.
+// endpoint given a network flag, also settles the primary link and its addressing (see chooseNIC and
+// firstNodeNetwork) as the machine's spec.network; it is nil otherwise, where the node keeps Talos's default of
+// DHCP on every physical link. It runs before the first write; the apply to the node is initBootstrapAccess's,
+// steps later.
 func readFirstNode(
 	ctx context.Context, opts initOptions, deps initDeps, pickDisk bool,
 ) (controller.HardwareIdentity, *ichorv1alpha1.TalosMachineDisk, *ichorv1alpha1.TalosMachineNetwork, error) {
-	vip := opts.EndpointType == endpointVIP
-	wantNetwork := vip || opts.NIC != "" || len(opts.Addresses) > 0 || opts.Gateway != "" || len(opts.DNS) > 0 || opts.VLAN != 0
+	wantNetwork := opts.EndpointType == endpointVIP || opts.NIC != "" || len(opts.Addresses) > 0 ||
+		opts.Gateway != "" || len(opts.DNS) > 0 || opts.VLAN != 0
 
 	node, err := deps.ReadNode(ctx, opts.NodeEndpoint, pickDisk || wantNetwork)
 	if err != nil {
@@ -606,7 +607,7 @@ func readFirstNode(
 		return node.Identity, nil, nil, fmt.Errorf("init: %w", err)
 	}
 
-	network, err := vipNetwork(opts, nic, node.Identity)
+	network, err := firstNodeNetwork(opts, nic, node.Identity)
 	if err != nil {
 		return node.Identity, nil, nil, fmt.Errorf("init: %w", err)
 	}
@@ -614,11 +615,11 @@ func readFirstNode(
 	return node.Identity, installDisk, network, nil
 }
 
-// vipNetwork is the first node's spec.network, from the primary link and --address, --gateway,
+// firstNodeNetwork is the first node's spec.network, from the primary link and --address, --gateway,
 // --dns and --vlan, checked as `approve node` checks them (networkFromFlags, then the API's own NetworkFromPB):
 // DHCP on the link with none of them, static with --address. pkg/render then emits the net0 alias and, on a
 // control plane, the VIP on it.
-func vipNetwork(opts initOptions, nic string, id controller.HardwareIdentity) (*ichorv1alpha1.TalosMachineNetwork, error) {
+func firstNodeNetwork(opts initOptions, nic string, id controller.HardwareIdentity) (*ichorv1alpha1.TalosMachineNetwork, error) {
 	n, err := networkFromFlags(machineApproveOptions{
 		NIC: nic, Addresses: opts.Addresses, Gateway: opts.Gateway, DNS: opts.DNS, VLAN: opts.VLAN,
 	})

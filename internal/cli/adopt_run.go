@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
+	"golang.org/x/mod/semver"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
@@ -907,14 +908,41 @@ func (st *adoptState) announceInstallCilium(say adoptSay) {
 		"then Ichor is installed, then the cluster is adopted with the managed cilium preset", cilium.ChartVersion, tunnel, st.kubeProxy)
 }
 
+// adoptMinContract is the lowest version contract adopt takes. Ichor turns sign-in on by default
+// (spec.authentication.ichor), and only v1.14 carries Ichor's issuer through KubeAuthenticationConfig.
+const adoptMinContract = "v1.14"
+
+// refuseOldContract says why adopt does not take contract, and what the operator does next. Nothing
+// is written before the contract is chosen, so the refusal changes nothing on the cluster.
+func refuseOldContract(name, contract, running string) error {
+	reason := "Ichor turns sign-in on by default, and only " + adoptMinContract + " can carry its issuer (spec.authentication.ichor)"
+
+	if semver.Compare(semver.MajorMinor(running), adoptMinContract) < 0 {
+		return fmt.Errorf("adopt: %s runs Talos %s, which takes version contract %s, and adopt takes %s or later: %s. "+
+			"Nothing was written. Upgrade Talos to %s or later first (ichor upgrade talos), then adopt the cluster again",
+			name, running, contract, adoptMinContract, reason, adoptMinContract)
+	}
+
+	return fmt.Errorf("adopt: the version contract %s of %s is below %s, and adopt takes %s or later: %s. "+
+		"Nothing was written. Adopt it at --version-contract %s",
+		contract, name, adoptMinContract, adoptMinContract, reason, adoptMinContract)
+}
+
 // chooseContract settles spec.versionContract of a cluster adopt creates: the --version-contract
-// override, or the probed contract with the fewest unrepresentable paths.
+// override, or the probed contract with the fewest unrepresentable paths. Either one below
+// adoptMinContract is refused.
 func (st *adoptState) chooseContract(deps adoptDeps) error {
 	if !st.fresh {
 		return nil
 	}
 
+	running := st.cluster.Spec.TalosVersion
+
 	if deps.ContractOverride != "" {
+		if semver.Compare(deps.ContractOverride, adoptMinContract) < 0 {
+			return refuseOldContract(st.cluster.Name, deps.ContractOverride, running)
+		}
+
 		st.cluster.Spec.VersionContract = deps.ContractOverride
 
 		return nil
@@ -942,6 +970,10 @@ func (st *adoptState) chooseContract(deps adoptDeps) error {
 	}
 
 	deps.say(adoptInfo, "version contract %s chosen (%s); override with --version-contract", chosen, strings.Join(parts, "; "))
+
+	if semver.Compare(chosen, adoptMinContract) < 0 {
+		return refuseOldContract(st.cluster.Name, chosen, running)
+	}
 
 	st.cluster.Spec.VersionContract = chosen
 

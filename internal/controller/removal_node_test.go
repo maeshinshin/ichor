@@ -262,4 +262,35 @@ var _ = Describe("removal: reset, then delete the Kubernetes Node", func() {
 			ContainSubstring("Normal "+reasonWipeNotConfirmedPoweredOff), ContainSubstring("powered off"))))
 		Expect(events).NotTo(ContainElement(ContainSubstring("Warning")))
 	})
+
+	It("sends Reset once when another operation takes the cluster lock while the removal waits for its Node", func() {
+		fake := &fakeTalosClient{nodeName: "rmnode-lock"}
+		newNode("rmnode-lock", true)
+		r, cps, _ := setup(fake)
+		annotate(cps[0], true)
+
+		_, err := reconcileMachine(r, cps[0]) // the reset is sent; the Node is still Ready
+		Expect(err).NotTo(HaveOccurred())
+		Expect(fake.resetCalls).To(Equal(1))
+
+		var cluster ichorv1alpha1.TalosCluster
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: cps[0].Namespace, Name: cps[0].Spec.ClusterRef.Name}, &cluster)).To(Succeed())
+		lock := opTestLock(&cluster)
+		Expect(lock.Acquire(ctx, "someone-else")).To(Succeed())
+
+		res, err := reconcileMachine(r, cps[0]) // the lock is held: the removal is deferred
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.RequeueAfter).To(Equal(nodeWaitInterval))
+		Expect(lock.Release(ctx, "someone-else")).To(Succeed())
+
+		var n corev1.Node
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "rmnode-lock"}, &n)).To(Succeed())
+		n.Status.Conditions = []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse}}
+		Expect(k8sClient.Status().Update(ctx, &n)).To(Succeed())
+
+		reconcileOK(r, cps[0]) // the lock is free: the removal resumes and finishes
+
+		Expect(fake.resetCalls).To(Equal(1), "Reset was accepted before the deferral; a resumed removal must not send it again")
+		Expect(machineGone(cps[0])).To(BeTrue())
+	})
 })

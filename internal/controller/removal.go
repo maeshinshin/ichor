@@ -836,6 +836,14 @@ func closeTalosClient(talos TalosClient) {
 func (r *TalosMachineReconciler) removalCondition(
 	ctx context.Context, m *ichorv1alpha1.TalosMachine, status metav1.ConditionStatus, reason, message string,
 ) error {
+	// The accepted Reset is recorded on this condition (ADR 0042, ADR 0135): a wait written over it would make
+	// the next pass see no reset and send Reset again. Only a wait can follow it, so the wait is logged, not stored.
+	if status == metav1.ConditionFalse && resetAccepted(m) {
+		logf.FromContext(ctx).Info("reset already accepted; keeping its record on the Removal condition", "waiting", message)
+
+		return nil
+	}
+
 	return setMachineCondition(ctx, readerOrClient(r.APIReader, r.Client), r.Client, m, metav1.Condition{
 		Type: conditionRemoval, Status: status, Reason: reason, Message: message,
 	})

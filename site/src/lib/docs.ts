@@ -24,7 +24,8 @@ export type Doc = {
   entry: Awaited<ReturnType<typeof getCollection<'docs'>>>[number]
 }
 
-export type NavNode = { label: string; href?: string; children?: NavNode[] }
+/** `page` is the URL of a directory's own page, which is also its first child: the sidebar links it from the directory's row. */
+export type NavNode = { label: string; href?: string; page?: string; children?: NavNode[] }
 
 const plain = (s: string) =>
   s
@@ -91,7 +92,7 @@ function nodes(t: Tree): NavNode[] {
     if (!k.kids.size) return { label: k.page!.label, href: k.page!.url }
     const children = nodes(k)
     if (k.page) children.unshift({ label: k.page.label, href: k.page.url })
-    return { label: k.page?.entry.data.sidebar_label ?? dirs[seg]?.label ?? titleCase(seg), children }
+    return { label: k.page?.entry.data.sidebar_label ?? dirs[seg]?.label ?? titleCase(seg), page: k.page?.url, children }
   })
 }
 

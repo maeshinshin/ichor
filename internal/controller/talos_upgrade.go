@@ -57,6 +57,11 @@ const (
 	// upgradeCallTimeout bounds the Upgrade RPC itself, which blocks while the node pulls and
 	// installs the installer image.
 	upgradeCallTimeout = 10 * time.Minute
+
+	// talosUpgradeVerifyTimeout bounds how long a node may take to reboot onto the target after its
+	// Upgrade call was acknowledged. It is the clock of conditionTalosUpgrade, the same window
+	// kubernetesVerifyTimeout gives a Kubernetes upgrade, and it bounds the lock renewal for that step.
+	talosUpgradeVerifyTimeout = 20 * time.Minute
 )
 
 // talosUpgradeAdvancer is the Talos-kind AdvanceMachineFunc. cmd/main.go

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"sync/atomic"
 	"time"
 
 	"github.com/siderolabs/talos/pkg/machinery/config/generate/secrets"
@@ -109,6 +110,11 @@ type TalosOperationReconciler struct {
 	// panicking, since each upgrade kind's own executor is later,
 	// separate work.
 	Advance AdvanceMachineFunc
+
+	// lockDuration and renewInterval are the cluster lock's lease length and how often the Advance loop
+	// renews it. Zero means clusterlock.DefaultDuration and operationRenewInterval; tests shorten them.
+	lockDuration  time.Duration
+	renewInterval time.Duration
 
 	// TalosClient, ControllerNamespace and NodeName serve the shutdown kind
 	// alone (shutdown.go). TalosClient opens the Talos API of one
@@ -295,17 +301,32 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			reasonOperationComplete, "every eligible node finished")
 	}
 
-	// The long-operation half of "the lock": renewed once per batch, the
-	// same way removal.go's renewWhile already renews repeatedly for a
-	// drain, well inside clusterlock.DefaultDuration's five minutes.
-	if err := lock.Renew(ctx, operationLockIdentity(&op)); err != nil {
+	// The lock is renewed for as long as this loop runs: one Upgrade call can outlast the lease.
+	// stepRenewUntil bounds the renewal per machine, so a stuck step lets the lease lapse instead of
+	// holding the cluster for ever.
+	identity := operationLockIdentity(&op)
+	if err := lock.Renew(ctx, identity); err != nil {
 		return renewRefusal(ctx, err)
 	}
+
+	loopCtx, cancelLoop := context.WithCancelCause(ctx)
+	defer cancelLoop(nil)
+
+	var renewUntil atomic.Int64
+
+	stopRenew := renewLockWhile(loopCtx, cancelLoop, lock, identity, r.renewEvery(), &renewUntil)
+	defer stopRenew()
 
 	requeue := false
 
 	for _, m := range toAdvance {
-		done, err := r.Advance(ctx, &cluster, m, &op)
+		renewUntil.Store(stepRenewUntil(&op, m).UnixNano())
+
+		done, err := r.Advance(loopCtx, &cluster, m, &op)
+		if held := lockLost(loopCtx); held != nil {
+			return renewRefusal(ctx, held)
+		}
+
 		if err != nil {
 			// Pause on failure, without undoing anything already
 			// Completed in op.Status.Machines above -- there is no
@@ -333,6 +354,96 @@ func (r *TalosOperationReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	return result, r.setPhase(ctx, &op, ichorv1alpha1.TalosOperationPhaseInProgress,
 		reasonOperationAdvancing, advancingMessage(&op, len(toAdvance)))
+}
+
+// renewEvery is the renewal cadence of the Advance loop's lock renewal.
+func (r *TalosOperationReconciler) renewEvery() time.Duration {
+	if r.renewInterval != 0 {
+		return r.renewInterval
+	}
+
+	return operationRenewInterval
+}
+
+// operationRenewInterval is how often the Advance loop renews the cluster lock. One minute is well inside
+// clusterlock.DefaultDuration, so a renewal may be late once and the lock still holds.
+const operationRenewInterval = time.Minute
+
+// operationRenewCeiling bounds the renewal of a step that has no step clock yet: the evacuation, drain and
+// Upgrade call before the node is acknowledged. Each has its own timeout (10 minutes by default), and the
+// ceiling is their sum.
+// shortcut: a TalosStorage evacuationTimeout above its 10m default outlasts this ceiling, so the lease lapses
+// mid-evacuation on such a cluster; drop when the ceiling follows the evacuation's own clock.
+const operationRenewCeiling = 30 * time.Minute
+
+// stepRenewUntil is the last moment the lock is renewed for m's step. A step the node has acknowledged
+// (its clock condition is True) is renewed only until that clock passes its verify timeout, the same
+// bound that fails the step; a step with no clock yet gets operationRenewCeiling from now.
+func stepRenewUntil(op *ichorv1alpha1.TalosOperation, m *ichorv1alpha1.TalosMachine) time.Time {
+	clock, verify := "", time.Duration(0)
+
+	switch op.Spec.Kind {
+	case ichorv1alpha1.TalosOperationKindTalos:
+		clock, verify = conditionTalosUpgrade, talosUpgradeVerifyTimeout
+	case ichorv1alpha1.TalosOperationKindKubernetes:
+		clock, verify = conditionKubernetesUpgrade, kubernetesVerifyTimeout
+	}
+
+	if clock != "" && apimeta.IsStatusConditionTrue(m.Status.Conditions, clock) {
+		return apimeta.FindStatusCondition(m.Status.Conditions, clock).LastTransitionTime.Add(verify)
+	}
+
+	return time.Now().Add(operationRenewCeiling)
+}
+
+// lockLost returns the *clusterlock.HeldError that cancelled the Advance loop's context, or nil.
+func lockLost(loopCtx context.Context) error {
+	if held, ok := errors.AsType[*clusterlock.HeldError](context.Cause(loopCtx)); ok {
+		return held
+	}
+
+	return nil
+}
+
+// renewLockWhile renews lock every interval until stop is called, but only while the clock is before
+// *until: past that bound the renewal is skipped, so a stuck step lets the lease lapse. A renewal refused
+// with a *clusterlock.HeldError means another holder has the lock, so cancel is called with it and the loop
+// stops before it touches another node. Any other renewal error is logged and retried on the next tick,
+// while the lease still has time.
+func renewLockWhile(
+	ctx context.Context, cancel context.CancelCauseFunc, lock *clusterlock.Lock, identity string,
+	interval time.Duration, until *atomic.Int64,
+) (stop func()) {
+	done := make(chan struct{})
+
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+				if time.Now().UnixNano() >= until.Load() {
+					continue
+				}
+
+				err := lock.Renew(ctx, identity)
+				if held, ok := errors.AsType[*clusterlock.HeldError](err); ok {
+					cancel(held)
+
+					return
+				}
+
+				if err != nil {
+					logf.FromContext(ctx).Error(err, "renewing cluster lock")
+				}
+			}
+		}
+	}()
+
+	return func() { close(done) }
 }
 
 // consumeRetry acts on a retry request (OperationRetryAnnotation set to "true") for a failed
@@ -791,7 +902,7 @@ func (r *TalosOperationReconciler) acquireDisruptiveLock(
 		return nil, &transitioningError{controlPlanes: controlPlanes}
 	}
 
-	lock := clusterlock.New(r.Client, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, 0).WithReader(r.APIReader)
+	lock := clusterlock.New(r.Client, types.NamespacedName{Namespace: cluster.Namespace, Name: cluster.Name}, r.lockDuration).WithReader(r.APIReader)
 	err = lock.Acquire(ctx, operationLockIdentity(op))
 	// A holder that will never renew is not waited for five minutes.
 	if retry, rerr := releaseIfHolderStopped(ctx, readerOrClient(r.APIReader, r.Client), lock, err); rerr != nil {

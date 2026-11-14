@@ -7,13 +7,14 @@ package claimcheck
 
 import (
 	"bytes"
+	"cmp"
 	"go/parser"
 	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -106,7 +107,7 @@ func findClaims(text []byte) []hit {
 			})
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].line < out[j].line })
+	slices.SortStableFunc(out, func(a, b hit) int { return cmp.Compare(a.line, b.line) })
 	return out
 }
 
@@ -178,7 +179,7 @@ func TestRepositoryStatesNoClaims(t *testing.T) {
 	}
 	self := filepath.ToSlash(filepath.Join("internal", "tools", "claimcheck")) + "/"
 	for name := range strings.SplitSeq(string(out), "\x00") {
-		if strings.HasPrefix(name, self) || !(strings.HasSuffix(name, ".md") || strings.HasSuffix(name, ".go")) {
+		if strings.HasPrefix(name, self) || !strings.HasSuffix(name, ".md") && !strings.HasSuffix(name, ".go") {
 			continue
 		}
 		src, err := os.ReadFile(filepath.Join(root, name))

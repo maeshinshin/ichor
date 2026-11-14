@@ -127,7 +127,10 @@ InitConfig; --print-config-template prints an example). A flag on the command
 line overrides the file; relative paths in the file are relative to it.
 
 On a terminal, a required setting given by neither is asked for; with no
-terminal init fails as before, naming the missing flag.`,
+terminal init fails as before, naming the missing flag. The first node's
+address can be asked for as a network instead: init scans it for nodes in
+maintenance mode on port 50000 and lists them to pick from, and a single
+address skips the scan.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		if initPrintTemplate {
 			_, err := fmt.Fprint(cmd.OutOrStdout(), initConfigTemplate)
@@ -142,7 +145,7 @@ terminal init fails as before, naming the missing flag.`,
 		}
 
 		if bundleTerminal() {
-			if err := promptInitMissing(cmd.Flags(), cmd.InOrStdin(), cmd.ErrOrStderr()); err != nil {
+			if err := promptInitMissing(cmd.Context(), cmd.Flags(), cmd.InOrStdin(), cmd.ErrOrStderr()); err != nil {
 				return fmt.Errorf("init: %w", err)
 			}
 		}
@@ -249,8 +252,10 @@ func initOutput(cmd *cobra.Command) string {
 // nodeReading is what init reads from the first node over one maintenance connection.
 type nodeReading struct {
 	Identity controller.HardwareIdentity
-	// TalosVersion is the node's running Talos release tag ("vX.Y.Z").
+	// TalosVersion is the node's running Talos release tag ("vX.Y.Z"); Hostname is what the node reports as its
+	// name, empty when it reports none or the read is refused.
 	TalosVersion string
+	Hostname     string
 	// Disks and Links are the node's installable disks and physical links, read only when asked for;
 	// a failed read is reported in InventoryErr and does not fail the call.
 	Disks        []ichorv1alpha1.TalosMachineDiscoveredDisk
@@ -280,6 +285,12 @@ func readNodeOverMaintenance(ctx context.Context, endpoint string, wantInventory
 
 	if r.TalosVersion, err = c.TalosVersion(ctx); err != nil {
 		return r, fmt.Errorf("reading the node's Talos version: %w", err)
+	}
+
+	if h, ok := c.(interface {
+		Hostname(context.Context) (string, error)
+	}); ok {
+		r.Hostname, _ = h.Hostname(ctx) // a name is only shown in the list of nodes, so a refused read costs nothing else
 	}
 
 	if wantInventory {

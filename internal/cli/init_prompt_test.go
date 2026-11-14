@@ -136,9 +136,10 @@ func TestPromptInitMissing_AsksForEverythingAndSetsTheFlags(t *testing.T) {
 
 	var out bytes.Buffer
 
-	// An invalid cluster name is kept for editing (Ctrl-U clears it); a bare Enter takes the default type.
-	in := typed(t, "Not_Valid\r\x15demo\r\r192.168.1.9\r192.168.1.50:50000\r")
-	if err := promptInitMissing(flags, in, &out); err != nil {
+	// An invalid cluster name is kept for editing (Ctrl-U clears it); a bare Enter takes the default type. The
+	// first node's field starts with the workstation's network, so Ctrl-U clears it before the address.
+	in := typed(t, "Not_Valid\r\x15demo\r\r192.168.1.9\r\x15192.168.1.50:50000\r")
+	if err := promptInitMissing(context.Background(), flags, in, &out); err != nil {
 		t.Fatal(err)
 	}
 
@@ -169,7 +170,7 @@ func TestPromptInitMissing_HostnameTypeAsksForAHostname(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := promptInitMissing(flags, typed(t, "\x1b[B\rlb.example.com\r"), &out); err != nil {
+	if err := promptInitMissing(context.Background(), flags, typed(t, "\x1b[B\rlb.example.com\r"), &out); err != nil {
 		t.Fatal(err)
 	}
 
@@ -189,7 +190,7 @@ func TestPromptInitMissing_AsksOnlyForWhatIsMissing(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := promptInitMissing(flags, strings.NewReader(""), &out); err != nil || out.Len() != 0 {
+	if err := promptInitMissing(context.Background(), flags, strings.NewReader(""), &out); err != nil || out.Len() != 0 {
 		t.Errorf("err = %v, output %q", err, out.String())
 	}
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -66,7 +67,8 @@ func endpointAddressKind(typ string) string {
 	return "an address" // a type from -f or --endpoint-type that the plan check will refuse
 }
 
-// initQuestions lists what init must ask for: the settings that neither a flag nor the file gave.
+// initQuestions lists what init must ask for: the settings that neither a flag nor the file gave. The first node
+// is asked for by promptInitMissing as well, but is not listed here: its answer may need a scan.
 // --install-disk is not among them: only the node can list its disks (see chooseInstallDisk).
 func initQuestions(flags *pflag.FlagSet) []promptQuestion {
 	var qs []promptQuestion
@@ -110,39 +112,46 @@ func initQuestions(flags *pflag.FlagSet) []promptQuestion {
 		})
 	}
 
-	if !flags.Changed(flagNodeEndpoint) {
-		qs = append(qs, promptQuestion{
-			flag:  flagNodeEndpoint,
-			label: "Node address",
-			help:  func(map[string]string) string { return "host:port of the first node's Talos API" },
-			check: answerRequired,
-		})
-	}
-
 	return qs
 }
 
-// promptInitMissing asks the initQuestions and sets the answers on flags as if they had been typed there.
-func promptInitMissing(flags *pflag.FlagSet, r io.Reader, w io.Writer) error {
+// promptInitMissing asks the initQuestions, and the first node's question when --node-endpoint is not given, and
+// sets the answers on flags as if they had been typed there. The first node's answer may then lead to a scan,
+// which askFirstNode settles: one terminal program holds all the questions that need no scan.
+func promptInitMissing(ctx context.Context, flags *pflag.FlagSet, r io.Reader, w io.Writer) error {
 	qs := initQuestions(flags)
+
+	askNode := !flags.Changed(flagNodeEndpoint)
+	if askNode {
+		qs = append(qs, firstNodeQuestion(defaultScanRange()))
+	}
+
 	if len(qs) == 0 {
 		return nil
 	}
 
 	typ, _ := flags.GetString(flagEndpointType)
 
-	got, err := askPrompts(qs, map[string]string{flagEndpointType: typ}, r, w)
+	got, err := firstNodeSearch.Ask(qs, map[string]string{flagEndpointType: typ}, r, w)
 	if err != nil {
 		return err
 	}
 
 	for _, q := range qs {
+		if q.flag == flagNodeEndpoint {
+			continue
+		}
+
 		if err := flags.Set(q.flag, got[q.flag]); err != nil {
 			return err
 		}
 	}
 
-	return nil
+	if !askNode {
+		return nil
+	}
+
+	return askFirstNode(ctx, flags, r, w, firstNodeSearch, got[flagNodeEndpoint])
 }
 
 func answerRequired(a string) error {

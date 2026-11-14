@@ -26,8 +26,24 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/internal/secretsbundle"
 	"github.com/maeshinshin/ichor/pkg/clusterlock"
 )
+
+// stepUntilGivesUp steps op until the rotation gives up: paused with a FailureReason.
+func stepUntilGivesUp(
+	step func(*ichorv1alpha1.TalosOperation) *ichorv1alpha1.TalosOperation, op *ichorv1alpha1.TalosOperation,
+) *ichorv1alpha1.TalosOperation {
+	var cur *ichorv1alpha1.TalosOperation
+
+	Eventually(func() string {
+		cur = step(op)
+
+		return cur.Status.FailureReason
+	}).WithTimeout(30 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeEmpty())
+
+	return cur
+}
 
 var _ = Describe("a CA rotation whose step keeps failing", func() {
 	BeforeEach(func() {
@@ -36,25 +52,13 @@ var _ = Describe("a CA rotation whose step keeps failing", func() {
 		DeferCleanup(func() { rotationGiveUpAfter = saved })
 	})
 
-	// stepUntilFailed steps op until it gives up: paused with a FailureReason.
-	stepUntilFailed := func(f *caRotFixture, op *ichorv1alpha1.TalosOperation) *ichorv1alpha1.TalosOperation {
-		var cur *ichorv1alpha1.TalosOperation
-
-		Eventually(func() string {
-			cur = f.step(op)
-			return cur.Status.FailureReason
-		}).WithTimeout(30 * time.Second).WithPolling(50 * time.Millisecond).ShouldNot(BeEmpty())
-
-		return cur
-	}
-
 	It("pauses on a failed step, releases the cluster lock to the next holder, and resumes on the retry annotation", func() {
 		f := newCARotFixture()
 		firstCP := f.machines[0].Name
 		f.world.nodes[firstCP].down = true
 		op := f.newOp()
 
-		op = stepUntilFailed(f, op)
+		op = stepUntilGivesUp(f.step, op)
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		Expect(op.Status.FailureReason).To(ContainSubstring("gave up after being blocked"))
 		Expect(op.Status.FailureReason).To(ContainSubstring("connection refused"))
@@ -94,7 +98,7 @@ var _ = Describe("a CA rotation whose step keeps failing", func() {
 		op, _ := f.runUntil(f.newOp(), atStage(ichorv1alpha1.CARotationStageAccepting))
 		f.world.failApply = func(string, int) error { return errors.New("the apply timed out") }
 
-		op = stepUntilFailed(f, op)
+		op = stepUntilGivesUp(f.step, op)
 		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 		Expect(op.Status.CARotation.Stage).To(Equal(ichorv1alpha1.CARotationStageAccepting))
 
@@ -105,5 +109,34 @@ var _ = Describe("a CA rotation whose step keeps failing", func() {
 		err := shutdownBlocker(ctx, k8sClient, f.cluster.Namespace, f.cluster.Name, nil)
 		_, refused := errors.AsType[*shuttingDownError](err)
 		Expect(refused).To(BeTrue())
+	})
+})
+
+var _ = Describe("a key rotation whose preflight keeps failing", func() {
+	BeforeEach(func() {
+		saved := rotationGiveUpAfter
+		rotationGiveUpAfter = 2 * time.Second
+		DeferCleanup(func() { rotationGiveUpAfter = saved })
+	})
+
+	It("gives up with a FailureReason, and the cluster lock goes to the next holder", func() {
+		f := newKeyRotFixture(fastBundle())
+		f.world.nodes[f.controlPlanes()[2].Name].down = true
+		op := f.newOp(bothTargets)
+
+		op = stepUntilGivesUp(f.step, op)
+		Expect(op.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+		Expect(op.Status.FailureReason).To(ContainSubstring("gave up after being blocked"))
+		Expect(f.secretData()).NotTo(HaveKey(secretsbundle.KeyRotationKey))
+
+		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: f.cluster.Namespace, Name: f.cluster.Name},
+			clusterlock.DefaultDuration)
+		retry, err := releaseIfHolderStopped(ctx, k8sClient, lock, lock.Acquire(ctx, "ichor-controller/test/next-holder"))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(retry).To(BeTrue())
+		Expect(lock.Acquire(ctx, "ichor-controller/test/next-holder")).To(Succeed())
+		Expect(lock.Release(ctx, "ichor-controller/test/next-holder")).To(Succeed())
+
+		f.world.nodes[f.controlPlanes()[2].Name].down = false
 	})
 })

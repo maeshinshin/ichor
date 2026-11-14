@@ -55,6 +55,8 @@ if (!diagrams.length) {
   process.exit(1)
 }
 
+// The doc pages: the built routes that render an article (not the version or search pages), each of which the sidebar must list.
+const docRoutes = built.filter((route) => readFileSync(join(dist, 'next', route, 'index.html'), 'utf8').includes('<article'))
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.wasm': 'application/wasm', '.md': 'text/markdown', '.txt': 'text/plain' }
 const server = createServer((req, res) => {
   const path = decodeURIComponent(new URL(req.url, 'http://x').pathname)
@@ -259,6 +261,12 @@ try {
       check((await ev(`document.documentElement.classList.contains('dark')`)) === (theme === 'dark'), `${tag}: follows the system theme`)
       check(await ev(`document.documentElement.scrollWidth <= window.innerWidth`), `${tag}: no sideways scroll`)
       await shot(`${tag}-page`)
+      if (!mobile) {
+        // Every doc page is listed in the sidebar and visible there with no click: a section that folds its pages away fails here.
+        const listed = await ev(`[...document.querySelectorAll('[data-slot=sidebar] a[href]')].filter((a) => a.getClientRects().length).map((a) => a.pathname)`)
+        const unlisted = docRoutes.filter((route) => !listed.includes(base + route))
+        check(unlisted.length === 0, `${tag}: every page is in the sidebar without a click (not listed: ${unlisted.join(' ') || 'none'})`)
+      }
 
       // The theme icon is chosen by CSS from the `dark` class, so the first paint already shows the right one.
       const shownIcon = await ev(`(() => { const v = (n) => getComputedStyle(document.querySelector('header .lucide-' + n)).display !== 'none'; return v('sun') ? 'sun' : v('moon') ? 'moon' : '' })()`)

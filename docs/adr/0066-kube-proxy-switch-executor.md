@@ -99,13 +99,13 @@ Amended: after the removal the executor connects to the `kubernetes` Service's c
   (as ADR 0057 does for images). The DaemonSet does not reappear by itself when enabling: see the 2026-10-28
   amendment.
 - The operation is created by hand (or by the UI/CLI); the admission guard (ADR 0013) still needs the
-  annotation on the spec change. `ichor cni kube-proxy <mode>` confirms before starting: it states that the
+  annotation on the spec change. `ichor set kube-proxy <mode>` confirms before starting: it states that the
   configuration is applied without a reboot while the kubelet and control plane components restart on each machine,
   and the number of machines.
 
 ## Amendment: one-shot, Git-friendly confirmation
 
-On an Argo CD-tracked cluster the Git change that switches `spec.cni.kubeProxy` was rejected by the admission policy (ADR 0013) because the confirmation annotation was missing, so the annotation had to be committed into Git, where it stayed as a standing consent. The annotation value now names the target mode (`replaced` or `enabled`) and the policy admits a switch only when the value equals the new `spec.cni.kubeProxy`. A leftover annotation therefore cannot admit a different later switch, and it is safe to commit for the one switch. The server sets it to the target for the one write it makes and removes it again (it used to write an actor name). For a tracked cluster `ichor cni kube-proxy <mode>` prints the exact YAML to commit (spec field plus annotation) and says to run the same command again, which finds the spec already changed and starts the operation; the old text said "start the operation without a target", which was wrong.
+On an Argo CD-tracked cluster the Git change that switches `spec.cni.kubeProxy` was rejected by the admission policy (ADR 0013) because the confirmation annotation was missing, so the annotation had to be committed into Git, where it stayed as a standing consent. The annotation value now names the target mode (`replaced` or `enabled`) and the policy admits a switch only when the value equals the new `spec.cni.kubeProxy`. A leftover annotation therefore cannot admit a different later switch, and it is safe to commit for the one switch. The server sets it to the target for the one write it makes and removes it again (it used to write an actor name). For a tracked cluster `ichor set kube-proxy <mode>` prints the exact YAML to commit (spec field plus annotation) and says to run the same command again, which finds the spec already changed and starts the operation; the old text said "start the operation without a target", which was wrong.
 
 ## Amendment (2026-10-28): Talos never recreates kube-proxy after Ichor removed it; Ichor restores it when enabling
 
@@ -149,7 +149,7 @@ install-time-only, API-server-restarting or version-unsupported paths are still 
 ## Amendment (2026-10-28): a spec-first change reports KubeProxySwitchPending, not RebootRequired
 
 On a Git-tracked cluster the user commits `spec.cni.kubeProxy: replaced` (and the consent annotation) before
-running `ichor cni kube-proxy replaced`. Until the switch sets `status.cni.kubeProxy` the render follows spec, so the
+running `ichor set kube-proxy replaced`. Until the switch sets `status.cni.kubeProxy` the render follows spec, so the
 control plane differed from its node at `KubeProxyConfig.enabled` and showed `Ready=False/RebootRequired` with
 "start a config rollout". That points at the wrong action: `ichor config apply` would reboot the node onto the new
 mode and skip the switch's checks. The reverse direction never showed it because status already overrides the render.
@@ -165,12 +165,12 @@ Guessing from the machine's applied hash would make the render depend on node hi
   replaced, no status" would miss the reverse (a cluster created `replaced`, edited spec-first to `enabled`). The admission rule already requires the annotation for any switch, so Git-first commits carry it.
 - While that holds, a TalosMachine whose only reboot-class paths are
   `KubeProxyConfig*` / `cluster.proxy*` (and no API server restart on a control plane) reports
-  `Ready=False/KubeProxySwitchPending`: "run `ichor cni kube-proxy replaced` (or the UI's kube-proxy switch) to apply
+  `Ready=False/KubeProxySwitchPending`: "run `ichor set kube-proxy replaced` (or the UI's kube-proxy switch) to apply
   it without a reboot". It does not set `status.rebootPaths`, so `ichor config apply` and the rollout planner (which
   select on those paths) do not pick the machine up.
 - A machine that also has other reboot-class paths keeps `RebootRequired` and is selectable, so the rollout step
   (`configRolloutAdvancer.begin`) refuses any machine with a kube-proxy path pending in this state ("run
-  `ichor cni kube-proxy <mode>` first"). A rollout therefore never reboots a node onto a kube-proxy mode, bypassing the
+  `ichor set kube-proxy <mode>` first"). A rollout therefore never reboots a node onto a kube-proxy mode, bypassing the
   switch's Cilium check and ordering. Once the switch sets the status the guard no longer applies.
 - Without the annotation (a patch edit of `cluster.proxy.disabled`, an annotation for the other mode, or a finished
   switch whose status equals the spec) nothing changes: the change stays `RebootRequired` as before.

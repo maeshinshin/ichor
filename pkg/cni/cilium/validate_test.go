@@ -216,6 +216,12 @@ func TestEffectiveValues_MergePrecedence(t *testing.T) {
 		!strings.Contains(err.Error(), "tunnelProtocol") {
 		t.Errorf("owned key error = %v, want one naming tunnelProtocol", err)
 	}
+
+	// ADR 0159: refused in both modes, so kube-proxy-enabled clusters cannot set the KubePrism address.
+	if _, err := EffectiveValues(map[string]any{keyServiceHost: "10.0.0.1"}, cni.KubeProxyEnabled, "", 0); err == nil ||
+		!strings.Contains(err.Error(), keyServiceHost) {
+		t.Errorf("enabled mode k8sServiceHost error = %v, want one naming k8sServiceHost", err)
+	}
 }
 
 // TestBootstrapManifest_EmptyUserValuesAreByteIdentical pins the output of

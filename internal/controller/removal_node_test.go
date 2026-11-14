@@ -226,6 +226,40 @@ var _ = Describe("removal: reset, then delete the Kubernetes Node", func() {
 		reconcileOK(r, cps[0]) // the wait is over: the removal finishes and says the wipe is not confirmed
 
 		Expect(machineGone(cps[0])).To(BeTrue())
-		Eventually(recorder.Events).Should(Receive(ContainSubstring("not confirmed")))
+		Eventually(recorder.Events).Should(Receive(And(
+			ContainSubstring("Warning "+reasonNodeStillHasClusterCredentials), ContainSubstring("not confirmed"))))
+	})
+
+	It("completes a power-off removal on the Node going NotReady, without waiting for a confirmation a powered-off machine cannot give", func() {
+		fake := &fakeTalosClient{nodeName: "rmnode-off-quick"}
+		newNode("rmnode-off-quick", true)
+		r, cps, recorder := setup(fake)
+		annotate(cps[0], true)
+
+		old := resetMaintenanceProbe
+		resetMaintenanceProbe = func(context.Context, string, string) bool { return false }
+		DeferCleanup(func() { resetMaintenanceProbe = old })
+
+		_, err := reconcileMachine(r, cps[0]) // the reset is sent; the Node is still Ready
+		Expect(err).NotTo(HaveOccurred())
+
+		var n corev1.Node
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: "rmnode-off-quick"}, &n)).To(Succeed())
+		n.Status.Conditions = []corev1.NodeCondition{{Type: corev1.NodeReady, Status: corev1.ConditionFalse}}
+		Expect(k8sClient.Status().Update(ctx, &n)).To(Succeed())
+
+		reconcileOK(r, cps[0]) // no probe wait: the removal completes on the Node going NotReady
+
+		Expect(fake.resetCalls).To(Equal(1))
+		Expect(nodeGone("rmnode-off-quick")).To(BeTrue())
+		Expect(machineGone(cps[0])).To(BeTrue())
+
+		var events []string
+		for len(recorder.Events) > 0 {
+			events = append(events, <-recorder.Events)
+		}
+		Expect(events).To(ContainElement(And(
+			ContainSubstring("Normal "+reasonWipeNotConfirmedPoweredOff), ContainSubstring("powered off"))))
+		Expect(events).NotTo(ContainElement(ContainSubstring("Warning")))
 	})
 })

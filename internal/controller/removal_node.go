@@ -47,12 +47,17 @@ const (
 	// reasonNodeNotDeleted is the Event reason when the Node was still Ready after nodeDownWait.
 	reasonNodeNotDeleted = "KubernetesNodeNotDeleted"
 
+	// reasonWipeNotConfirmedPoweredOff is the Normal Event of a power-off removal: the machine cannot answer in
+	// maintenance mode once it is off, so the wipe cannot be confirmed. A limit of the path, not a fault.
+	reasonWipeNotConfirmedPoweredOff = "WipeNotConfirmedPoweredOff"
+
 	// nodeWaitInterval is how often the removal looks again at a Node that is still Ready.
 	nodeWaitInterval = 10 * time.Second
 )
 
-// nodeDownWait bounds the wait for the Node to go NotReady after the reset was accepted. Kubernetes
-// marks a silent kubelet NotReady after 40 s, so this is generous. A var so tests can shrink it.
+// nodeDownWait bounds the wait for the Node to go NotReady after the reset was accepted, and for a rebooting
+// machine to answer in maintenance mode. Kubernetes marks a silent kubelet NotReady after 40 s, so this is
+// generous. A var so tests can shrink it.
 var nodeDownWait = 5 * time.Minute
 
 // resetMaintenanceProbe reports whether the machine at address answers in maintenance mode with uuid:
@@ -88,6 +93,9 @@ type nodeStep struct {
 	left bool
 	// unconfirmed is set when the machine did not answer in maintenance mode within nodeDownWait of the reset.
 	unconfirmed bool
+	// poweredOff is set when the Reset powers the machine off: it cannot answer in maintenance mode, so the
+	// wipe is not confirmed and the removal does not wait for it.
+	poweredOff bool
 }
 
 // nodeDown reports whether the Kubernetes Node nodeName is missing or not Ready.
@@ -111,21 +119,27 @@ func resetAccepted(m *ichorv1alpha1.TalosMachine) bool {
 	return c != nil && c.Status == metav1.ConditionTrue && c.Reason == reasonResetRequested
 }
 
-// finishReset completes the removal of a machine that was told to wipe. The wipe is confirmed by the machine
-// answering in maintenance mode with its UUID, not by its Node: a machine that rebooted with its disk intact
-// goes NotReady too. Until it answers, the removal waits, and after nodeDownWait it completes unconfirmed. Then
-// the Kubernetes Node is deleted once it is NotReady. While it is Ready the removal asks for a requeue; after
-// nodeDownWait it leaves the Node, marked as reset, and the Event names the manual step.
+// finishReset completes the removal of a machine that was told to wipe. A machine that reboots is confirmed
+// wiped by answering in maintenance mode with its UUID, not by its Node: a machine that rebooted with its disk
+// intact goes NotReady too. Until it answers, the removal waits, and after nodeDownWait it completes unconfirmed.
+// A machine that powers off cannot answer, so the removal does not wait for that: it completes on the Node going
+// NotReady, and says the wipe is not confirmed because the machine was powered off. Then the Kubernetes Node is
+// deleted once it is NotReady. While it is Ready the removal asks for a requeue; after nodeDownWait it leaves the
+// Node, marked as reset, and the Event names the manual step.
 func (r *TalosMachineReconciler) finishReset(
 	ctx context.Context, m *ichorv1alpha1.TalosMachine, nodeName string, step nodeStep,
 ) error {
 	// A machine that was never sent a reset (unwiped) has no wipe to confirm.
-	if step.unwiped == "" && !resetMaintenanceProbe(ctx, m.DialEndpoint(), m.Spec.Identity.UUID) {
-		if !step.expired(m) {
-			return &removalWaitError{msg: fmt.Sprintf("waiting for %s to answer in maintenance mode with UUID %s", m.Name, m.Spec.Identity.UUID)}
-		}
+	if step.unwiped == "" {
+		if powerOffRequested(m) {
+			step.poweredOff = true
+		} else if !resetMaintenanceProbe(ctx, m.DialEndpoint(), m.Spec.Identity.UUID) {
+			if !step.expired(m) {
+				return &removalWaitError{msg: fmt.Sprintf("waiting for %s to answer in maintenance mode with UUID %s", m.Name, m.Spec.Identity.UUID)}
+			}
 
-		step.unconfirmed = true
+			step.unconfirmed = true
+		}
 	}
 
 	var node corev1.Node

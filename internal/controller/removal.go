@@ -604,17 +604,18 @@ func resetOutcome(m *ichorv1alpha1.TalosMachine, step nodeStep) string {
 		return fmt.Sprintf("the node did not answer (%s), so it was not wiped; %s", step.unwiped, step.note)
 	}
 
+	if step.poweredOff {
+		return fmt.Sprintf("the reset was accepted with power off, and the wipe is not confirmed because a powered-off node "+
+			"cannot answer in maintenance mode; %s", step.note)
+	}
+
 	if step.unconfirmed {
 		return fmt.Sprintf("the reset was sent, but the node did not answer in maintenance mode with UUID %s within %s, "+
 			"so the wipe is not confirmed; %s", m.Spec.Identity.UUID, nodeDownWait, step.note)
 	}
 
-	after := "is rebooting back to maintenance mode"
-	if powerOffRequested(m) {
-		after = "was powered off"
-	}
-
-	return fmt.Sprintf("the node's STATE and EPHEMERAL partitions were wiped and it %s; %s", after, step.note)
+	return fmt.Sprintf("the node's STATE and EPHEMERAL partitions were wiped and it answered in maintenance mode "+
+		"with UUID %s; %s", m.Spec.Identity.UUID, step.note)
 }
 
 // warnAfterReset emits the Warning Events of a reset removal that did not go cleanly: a node that was not
@@ -639,6 +640,12 @@ func (r *TalosMachineReconciler) warnAfterReset(m *ichorv1alpha1.TalosMachine, s
 
 	if step.left {
 		r.Recorder.Eventf(m, corev1.EventTypeWarning, reasonNodeNotDeleted, "%s %q: %s", m.Spec.Role, m.Name, step.note)
+	}
+
+	if step.poweredOff {
+		r.Recorder.Eventf(m, corev1.EventTypeNormal, reasonWipeNotConfirmedPoweredOff,
+			"%s %q: the wipe is not confirmed, because the reset powers the machine off, and a machine that is powered off cannot answer in maintenance mode",
+			m.Spec.Role, m.Name)
 	}
 }
 

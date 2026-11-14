@@ -3,7 +3,7 @@
 ## v0.3.0 (2026-11-13)
 
 The command line is verb first, which breaks every script that calls it, and a
-`TalosConfigPatch` can carry 64 of the 65 Talos document kinds Ichor accepts,
+`TalosConfigPatch` can carry all 65 Talos document kinds Ichor accepts,
 up from 7. The Talos, Kubernetes and Cilium versions a first install gets are
 the same as in v0.2.4. The CRDs gain fields, one endpoint type leaves the
 `TalosCluster` enum, and two credential fields leave them (see Cluster and
@@ -170,10 +170,10 @@ node's network for it.
 
 ### Typed configuration
 
-- A `TalosConfigPatch` document can now be 64 of the 65 Talos document kinds
+- A `TalosConfigPatch` document can now be all 65 Talos document kinds
   Ichor accepts, up from 7 (`SysctlConfig`, `KernelModuleConfig`, the
   `v1alpha1` document, `VolumeConfig`, `UserVolumeConfig`, `RawVolumeConfig`
-  and `ResolverConfig`). The 57 added cover network links and routing (bond,
+  and `ResolverConfig`). The 58 added cover network links and routing (bond,
   bridge, VRF, veth, dummy, Ethernet, BGP, blackhole routes, routing rules,
   Layer 2 VIP, DHCPv6, static hosts, KubeSpan, probes, time sync), storage
   (existing, external and swap volumes, LVM, RAID, filesystem scrub and trim,
@@ -182,8 +182,8 @@ node's network for it.
   watchdog, PCI driver rebind, trusted roots, registry mirrors, image
   verification) and Kubernetes (the API server, controller manager, CoreDNS,
   network, node, KubePrism, Talos API access, inline and external manifests,
-  audit policy, authorizer, credential provider, kubelet, kube-proxy and
-  kube-scheduler). A document is `kind` plus one field named after it
+  audit policy, authorizer, credential provider, kubelet, kube-proxy,
+  kube-scheduler and static pods). A document is `kind` plus one field named after it
   (`SysctlConfig` has `sysctlConfig`). `docs/reference/crds/talosconfigpatch.md`
   lists every kind.
 - The other 25 kinds Talos registers are not available, on purpose. 10 carry a
@@ -198,13 +198,13 @@ node's network for it.
   per plugin (`CRIBaseRuntimeSpecConfig`, `CRICustomizationConfig` and
   `KubeAdmissionControlConfig`); Pod Security exemptions and versions go in
   `spec.security.podSecurity`.
-- `KubeStaticPodConfig` is the one accepted kind that is not in the CRD. The
-  Pod schema is 358,567 bytes of compact JSON in each of the two CRDs that
-  embed the union, against the 262,144 bytes that `kubectl apply` keeps in
-  its last-applied annotation, and a trimmed Pod without a security context,
-  host networking, host paths and capabilities would not do what the kind is
-  for. It stays accepted, and a later change in how the CRDs are installed can
-  ship it.
+- `KubeStaticPodConfig` carries its pod whole, as the Kubernetes `PodSpec`: a
+  static pod needs a security context, host networking, host paths and
+  capabilities, so a subset would not do what the kind is for. The schema is
+  large (about 300 KB of compact JSON in each of the two CRDs that embed the
+  union), so `make install` and `make deploy` apply the CRDs server-side.
+  Client-side apply keeps the whole object in its last-applied annotation,
+  which is limited to 262,144 bytes.
 - `KubeletConfig`, `KubeProxyConfig` and `KubeSchedulerConfig` carry a subset
   of the upstream configuration: the fields an operator is documented to set on
   a Talos node. The upstream types contain floating point numbers, a quantity

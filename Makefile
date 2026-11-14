@@ -320,15 +320,18 @@ build-installer: manifests generate kustomize ## Generate a consolidated YAML wi
 # undeploy is pinned to that kubeconfig context; when empty, kubectl uses the current-context.
 KUBE_CONTEXT ?=
 KUBE_CONTEXT_FLAG = $(if $(KUBE_CONTEXT),--context $(KUBE_CONTEXT))
+# Server-side apply, as the installer applies (internal/installer FieldOwner): client-side apply keeps the whole
+# object in last-applied-configuration, which the 262,144-byte annotation limit refuses for a large CRD.
+KUBECTL_SSA = --server-side --force-conflicts --field-manager=ichor-installer
 
 .PHONY: install
 install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config. Set KUBE_CONTEXT to pick a context other than the current one.
 	@crds="$$( "$(KUSTOMIZE)" build config/crd 2>/dev/null || true )"; \
-	if [ -n "$$crds" ]; then echo "$$crds" | "$(KUBECTL)" $(KUBE_CONTEXT_FLAG) apply -f -; else echo "No CRDs to install; skipping."; fi
+	if [ -n "$$crds" ]; then echo "$$crds" | "$(KUBECTL)" $(KUBE_CONTEXT_FLAG) apply $(KUBECTL_SSA) -f -; else echo "No CRDs to install; skipping."; fi
 
 .PHONY: deploy
 deploy: build-installer ## Deploy controller to the K8s cluster specified in ~/.kube/config. Set KUBE_CONTEXT to pick a context other than the current one.
-	"$(KUBECTL)" $(KUBE_CONTEXT_FLAG) apply -f dist/install.yaml
+	"$(KUBECTL)" $(KUBE_CONTEXT_FLAG) apply $(KUBECTL_SSA) -f dist/install.yaml
 
 ##@ Dependencies
 

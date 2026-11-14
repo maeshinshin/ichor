@@ -320,7 +320,17 @@ try {
         }
         await branchCheck('Getting started', 'guides/getting-started/', 'Getting started', 'guides/getting-started/install-the-cli/')
         await branchCheck('Ichor architecture', 'design/architecture/', 'Ichor architecture', 'design/architecture/overview/')
-        await branchCheck('CLI', null, 'CLI', 'reference/cli/ichor_adopt/')
+        // The CLI branch is the root command's page beside its chevron; its subcommands are one row each under it.
+        await branchCheck('CLI', 'reference/cli/ichor/', 'ichor', 'reference/cli/ichor_adopt/')
+        // Every command with subcommands is a branch of its own: one row until it opens, and its subcommand shown once it does.
+        const cliBranches = docRoutes.filter((r) => /^reference\/cli\/ichor_[^_/]+\/$/.test(r)).map((r) => ({ r, child: docRoutes.find((c) => c.startsWith(r.slice(0, -1) + '_')) })).filter((b) => b.child)
+        // Their rows are rendered only inside the CLI branch, so it is open for the pass and closed again after it.
+        const cliRoot = trigger('reference/cli/ichor/', '')
+        await ev(`(() => { const b = ${cliRoot}; if (b && b.getAttribute('aria-expanded') === 'false') b.click() })()`)
+        await idle()
+        for (const { r, child } of cliBranches) await branchCheck(`ichor ${r.split('/').filter(Boolean).pop().replace(/^ichor_/, '')}`, r, '', child)
+        await ev(`(() => { const b = ${cliRoot}; if (b && b.getAttribute('aria-expanded') === 'true') b.click() })()`)
+        await idle()
         await branchCheck('Custom resources', null, 'Custom resources', 'reference/crds/taloscluster/')
         // The third level: Virtual IP sits under 2. Create the cluster, so Getting started opens first. Hidden until both are open.
         await ev(`(() => { const b = ${trigger('guides/getting-started/', 'Getting started')}; if (b && b.getAttribute('aria-expanded') === 'false') b.click() })()`)

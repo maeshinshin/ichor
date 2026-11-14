@@ -68,11 +68,22 @@ export async function getDocs(): Promise<Doc[]> {
 
 type Tree = { page?: Doc; kids: Map<string, Tree> }
 
+/**
+ * A command page's file name is its command path: `ichor_get_nodes` is `ichor get nodes`, so the sidebar nests it under
+ * `ichor get` without a directory per command. No command name contains `_`, so the split is exact. The root command's
+ * page is the CLI section's own page, so the commands sit directly under the section.
+ */
+const segments = (route: string) => {
+  if (!route.startsWith('reference/cli/')) return route.split('/').filter(Boolean)
+  const command = route.slice('reference/cli/'.length).replace(/^ichor(_|$)/, '')
+  return ['reference', 'cli', ...command.split('_').filter(Boolean)]
+}
+
 function tree(docs: Doc[]): Tree {
   const root: Tree = { kids: new Map() }
   for (const d of docs) {
     let n = root
-    for (const seg of d.route.split('/').filter(Boolean)) {
+    for (const seg of segments(d.route)) {
       if (!n.kids.has(seg)) n.kids.set(seg, { kids: new Map() })
       n = n.kids.get(seg)!
     }
@@ -82,8 +93,9 @@ function tree(docs: Doc[]): Tree {
 }
 
 function nodes(t: Tree): NavNode[] {
+  // A command with subcommands sorts with the other commands, alphabetically, not ahead of them as a directory would.
   const rank = ([seg, k]: [string, Tree]) =>
-    k.page?.order ?? (k.kids.size ? (dirs[seg]?.order ?? 50) : 1000)
+    k.page?.order ?? (k.kids.size && !k.page?.route.startsWith('reference/cli/') ? (dirs[seg]?.order ?? 50) : 1000)
   const items = [...t.kids.entries()].sort(
     (a, b) =>
       rank(a) - rank(b) || (a[1].page?.label ?? a[0]).localeCompare(b[1].page?.label ?? b[0], 'en', { numeric: true }),

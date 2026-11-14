@@ -69,7 +69,8 @@ ichor init [flags]
 
 ```text
       --address strings                    static address of the first node's primary link with prefix length, 192.168.1.10/24 (repeatable); without it the node uses DHCP on that link. Same as approve node --address
-      --admin-user string                  with --ui-url: name of the first admin (default admin); its generated password is printed once to stderr and must be changed at the first sign-in
+      --admin-user string                  with sign-in: name of the first admin (default admin); its generated password is printed once to stderr and must be changed at the first sign-in
+      --allow-unauthenticated              run ichor-ui with no sign-in: anyone who can reach it can change the cluster with ichor-ui's permissions, including resetting nodes; without it init turns Ichor's own sign-in on
       --bundle-plaintext                   store the secrets bundle unencrypted (default: encrypted with --bundle-passphrase-file, $ICHOR_BUNDLE_PASSPHRASE, or a passphrase generated on a terminal)
       --cert-san stringArray               extra name or IP address that the Talos API and kube-apiserver certificates both carry (spec.certSANs); repeatable. Each node's own addresses are already in its certificates, and the endpoint is in the kube-apiserver one. Changing the list after init reissues the certificates and reboots every node, so set it now
       --cluster string                     name of the TalosCluster to create (required)
@@ -87,8 +88,8 @@ ichor init [flags]
   -h, --help                               help for init
       --install-disk string                the first node's install disk: "wwid:ID", "serial:SERIAL", a /dev/disk/by-id/ path, a bus path such as /pci0000:00/..., or a device path such as /dev/sda (required)
       --installer-digest string            pin Ichor's installer image to this digest (sha256:...) in the IchorInstallation instead of letting the controller resolve the version's tag; for a cluster whose controller cannot reach the registry (a demo behind a mirror)
-      --kube-api-server-url string         with --ui-url: https URL of the Kubernetes API put in users' kubeconfigs (chart: ichorUI.users.kubeAPIServerURL)
-      --kube-api-tls-server-name string    with --ui-url: tls-server-name in users' kubeconfigs (chart: ichorUI.users.kubeAPITLSServerName)
+      --kube-api-server-url string         with sign-in: https URL of the Kubernetes API put in users' kubeconfigs (chart: ichorUI.users.kubeAPIServerURL)
+      --kube-api-tls-server-name string    with sign-in: tls-server-name in users' kubeconfigs (chart: ichorUI.users.kubeAPITLSServerName)
       --kube-proxy string                  kube-proxy mode: enabled (Talos's own, the default) or replaced (Cilium replaces it and reaches the API through KubePrism on port 7445, which Talos enables by default); --gateway-api and --l2-announcements need replaced; init only, an existing cluster is not changed by it (default "enabled")
       --l2-announcements                   turn on Cilium's L2 announcements, which answer ARP for LoadBalancer addresses on the LAN; init only, an existing cluster is not changed by it; needs --l2-pool and kube-proxy replacement, which init does not build yet, so it is refused for now
       --l2-pool string                     with --l2-announcements: the IPv4 CIDR that LoadBalancer addresses come from; init checks it against the node and the endpoint and does not write the CiliumLoadBalancerIPPool, which you create yourself
@@ -104,10 +105,10 @@ ichor init [flags]
       --skip-signature-check               run the installer image WITHOUT checking its signature (for builds nobody signs: development and demo images)
       --storage-disk-selector string       CEL disk selector for a disk prepared for a storage system (RawVolumeConfig)
       --storage-volume-name string         name for --storage-disk-selector's volume (default "storage")
-      --ui-tls-cert string                 with --ui-url: PEM certificate file for ichor-ui's TLS; init stores it with --ui-tls-key as a Secret
+      --ui-tls-cert string                 with sign-in: PEM certificate file for ichor-ui's TLS; init stores it with --ui-tls-key as a Secret
       --ui-tls-key string                  with --ui-tls-cert: PEM private key file (never printed)
-      --ui-tls-secret string               with --ui-url: serve ichor-ui over TLS with this existing kubernetes.io/tls Secret in ichor-system (chart: ichorUI.tls.secretName)
-      --ui-url string                      turn Ichor's own users on: the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; needs --version-contract v1.14 or later
+      --ui-tls-secret string               with sign-in: serve ichor-ui over TLS with this existing kubernetes.io/tls Secret in ichor-system (chart: ichorUI.tls.secretName)
+      --ui-url string                      the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; left out, the issuer is https://localhost:8443, where ichor ui reaches it; needs --version-contract v1.14 or later
       --user-volume-disk-selector string   CEL disk selector for a UserVolumeConfig disk
       --user-volume-name string            name for --user-volume-disk-selector's volume (default "data")
       --vlan int32                         VLAN ID (1-4094) to put the first node's addressing on

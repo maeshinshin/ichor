@@ -51,12 +51,14 @@ import (
 //
 // cilium says Cilium is (or is about to be) this cluster's CNI: init then creates the cilium-secrets
 // namespace the manifest's Role and RoleBinding live in; otherwise those two are skipped.
+// allowUnauthenticated keeps ichor-ui open from its first start (init's --allow-unauthenticated);
+// otherwise it starts read-only and initUsers turns the sign-in on before any write can reach it.
 //
 // It refuses outright if manifest is the placeholder
 // (internal/installmanifest's doc comment): that means this binary was
 // built with plain `go build`, not `make build-ichor-embed`, and has
 // nothing real to apply.
-func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest []byte, warn io.Writer, cilium bool) error {
+func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest []byte, warn io.Writer, cilium, allowUnauthenticated bool) error {
 	if err := checkInstallManifest(manifest); err != nil {
 		return err
 	}
@@ -66,10 +68,9 @@ func applyIchorManifest(ctx context.Context, k8sClient client.Client, manifest [
 		return fmt.Errorf("init: decoding Ichor's own install manifest: %w", err)
 	}
 
-	// ichor-ui starts with no sign-in here, which serves read-only calls only; init and
-	// adopt keep their old behaviour by saying so explicitly. initUsers (--ui-url) turns users on
-	// afterwards and CustomizeUI then drops the flag.
-	if objs, err = installer.CustomizeObjects(objs, installer.UISettings{AllowUnauthenticated: true}); err != nil {
+	// Without the flag ichor-ui serves read-only calls until initUsers turns its sign-in on.
+	// CustomizeUI drops the flag once users are on.
+	if objs, err = installer.CustomizeObjects(objs, installer.UISettings{AllowUnauthenticated: allowUnauthenticated}); err != nil {
 		return fmt.Errorf("init: preparing Ichor's own install manifest: %w", err)
 	}
 

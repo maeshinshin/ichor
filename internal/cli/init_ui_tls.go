@@ -61,8 +61,8 @@ func validateInitUIExtras(opts initOptions) error {
 		return nil
 	}
 
-	if opts.UIURL == "" {
-		return errors.New("init: --ui-tls-secret, --ui-tls-cert, --ui-tls-key, --kube-api-server-url and --kube-api-tls-server-name need --ui-url")
+	if !opts.signInOn() {
+		return errors.New("init: --ui-tls-secret, --ui-tls-cert, --ui-tls-key, --kube-api-server-url and --kube-api-tls-server-name configure sign-in, and --allow-unauthenticated turns it off")
 	}
 
 	var errs []error

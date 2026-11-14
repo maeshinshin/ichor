@@ -32,7 +32,7 @@ spec:
 func TestInitStartsIchorUIWithAnExplicitAllowUnauthenticated(t *testing.T) {
 	k8sClient := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
 
-	if err := applyIchorManifest(context.Background(), k8sClient, []byte(uiManifest), &bytes.Buffer{}, false); err != nil {
+	if err := applyIchorManifest(context.Background(), k8sClient, []byte(uiManifest), &bytes.Buffer{}, false, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -47,9 +47,9 @@ func TestInitStartsIchorUIWithAnExplicitAllowUnauthenticated(t *testing.T) {
 
 	var out bytes.Buffer
 
-	initEpilogue(newProgress(&out), initOptions{}, "", true)
+	initEpilogue(newProgress(&out), initOptions{AllowUnauthenticated: true}, "", true)
 
 	if !bytes.Contains(out.Bytes(), []byte("--allow-unauthenticated")) {
-		t.Fatalf("init prints no warning without --ui-url: %q", out.String())
+		t.Fatalf("init prints no warning with --allow-unauthenticated: %q", out.String())
 	}
 }

@@ -146,6 +146,7 @@ func TestRunInit_UITLSSecretAndKubeAPIFlagsEditTheDeployment(t *testing.T) {
 
 	opts := validInitOptions()
 	opts.UIURL, opts.UITLSSecret = testUIURL, "my-cert"
+	opts.AllowUnauthenticated = false
 	opts.KubeAPIServerURL, opts.KubeAPITLSServerName = "https://k8s.example.com:443", testTLSServerName
 
 	if err := runInit(context.Background(), opts, deps); err != nil {
@@ -181,6 +182,7 @@ func TestRunInit_UITLSCertAndKeyAreStoredAsASecretAndNeverPrinted(t *testing.T) 
 
 	opts := validInitOptions()
 	opts.UIURL, opts.UITLSCert, opts.UITLSKey = testUIURL, certFile, keyFile
+	opts.AllowUnauthenticated = false
 
 	if err := runInit(context.Background(), opts, deps); err != nil {
 		t.Fatalf("runInit: %v", err)
@@ -213,8 +215,8 @@ func TestRunInit_UIExtrasAreCheckedBeforeAnythingHappens(t *testing.T) {
 	}
 
 	for name, mutate := range map[string]func(*initOptions){
-		"tls secret without ui-url":   func(o *initOptions) { o.UITLSSecret = "x" },
-		"kube api url without ui-url": func(o *initOptions) { o.KubeAPIServerURL = "https://k8s.example.com" },
+		"tls secret with no sign-in":   func(o *initOptions) { o.UITLSSecret, o.AllowUnauthenticated = "x", true },
+		"kube api url with no sign-in": func(o *initOptions) { o.KubeAPIServerURL, o.AllowUnauthenticated = "https://k8s.example.com", true },
 		"secret and files": func(o *initOptions) {
 			o.UIURL, o.UITLSSecret, o.UITLSCert, o.UITLSKey = testUIURL, "x", certFile, keyFile
 		},
@@ -234,6 +236,7 @@ func TestRunInit_UIExtrasAreCheckedBeforeAnythingHappens(t *testing.T) {
 			deps, maint, _ := newFakeInitDeps(t, k)
 
 			opts := validInitOptions()
+			opts.AllowUnauthenticated = false
 			mutate(&opts)
 
 			if err := runInit(context.Background(), opts, deps); err == nil {
@@ -262,6 +265,7 @@ func TestRunInit_UITLSSecretMustExistAndBeOfTypeTLS(t *testing.T) {
 
 			opts := validInitOptions()
 			opts.UIURL, opts.UITLSSecret = testUIURL, "my-cert"
+			opts.AllowUnauthenticated = false
 
 			if err := runInit(context.Background(), opts, deps); err == nil {
 				t.Fatal("expected an error")

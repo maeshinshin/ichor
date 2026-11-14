@@ -17,6 +17,7 @@ limitations under the License.
 package cli
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -49,6 +50,9 @@ const (
 	// initUsersMinContract is the first Talos contract with KubeAuthenticationConfig.
 	initUsersMinContract = "v1.14"
 	defaultAdminUser     = "admin"
+	// defaultUIURL is the issuer when --ui-url is left out: the address `ichor ui` serves ichor-ui on
+	// (its port-forward uses the Service's port, uiHTTPSPort).
+	defaultUIURL = "https://localhost:8443"
 	// Container names are the same on every install path; object names are not (kustomize
 	// prefixes them), so objects are found by label.
 	uiContainer          = installer.UIContainer
@@ -72,11 +76,15 @@ func (o initOptions) uiSettings() installer.UISettings {
 	return s
 }
 
-// validateInitUsers runs before anything irreversible, so a bad URL or an old
-// contract costs nothing.
+// signInOn reports whether init turns Ichor's own sign-in on: the default, unless --allow-unauthenticated.
+func (o initOptions) signInOn() bool { return !o.AllowUnauthenticated }
+
+// prepareInitUsers fills in the sign-in defaults and then validates them. It runs before anything
+// irreversible, so a bad URL or an old contract costs nothing.
 func prepareInitUsers(opts initOptions) (initOptions, error) {
-	if opts.UIURL != "" && opts.AdminUser == "" {
-		opts.AdminUser = defaultAdminUser
+	if opts.signInOn() {
+		opts.UIURL = cmp.Or(opts.UIURL, defaultUIURL)
+		opts.AdminUser = cmp.Or(opts.AdminUser, defaultAdminUser)
 	}
 
 	return opts, validateInitUsers(opts)
@@ -87,9 +95,13 @@ func validateInitUsers(opts initOptions) error {
 		return err
 	}
 
-	if opts.UIURL == "" {
+	if !opts.signInOn() {
+		if opts.UIURL != "" {
+			return errors.New("init: --ui-url turns sign-in on and --allow-unauthenticated turns it off; give one of them")
+		}
+
 		if opts.AdminUser != "" {
-			return errors.New("init: --admin-user needs --ui-url (without it init turns users off and creates none)")
+			return errors.New("init: --admin-user needs sign-in, and --allow-unauthenticated turns it off (it creates no admin)")
 		}
 
 		return nil
@@ -101,8 +113,8 @@ func validateInitUsers(opts initOptions) error {
 	}
 
 	if semver.Compare(opts.VersionContract, initUsersMinContract) < 0 {
-		return fmt.Errorf("init: --ui-url needs --version-contract %s or later (the kube-apiserver can trust Ichor's issuer only through "+
-			"Talos's KubeAuthenticationConfig); %s is older", initUsersMinContract, opts.VersionContract)
+		return fmt.Errorf("init: sign-in is on by default and needs --version-contract %s or later (the kube-apiserver can trust Ichor's issuer "+
+			"only through Talos's KubeAuthenticationConfig); %s is older. Pass --allow-unauthenticated to init without sign-in", initUsersMinContract, opts.VersionContract)
 	}
 
 	return errors.Join(ichorauth.ValidateUserName(opts.AdminUser))
@@ -237,7 +249,7 @@ func setClusterAuthentication(
 // the TalosCluster exists: credentials Secret, first admin (before the switch,
 // so nobody is locked out), then the switch. It returns the generated password.
 func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.Writer) (password string, err error) {
-	if opts.UIURL == "" {
+	if !opts.signInOn() {
 		return "", nil
 	}
 
@@ -291,12 +303,15 @@ func initEpilogue(p *progress, opts initOptions, password string, ok bool) {
 		p.Done()
 	}
 
-	if opts.UIURL == "" {
-		p.Warn("ichor-ui has no sign-in (--allow-unauthenticated). Turn on users with --ui-url.")
+	if !opts.signInOn() {
+		p.Warn("ichor-ui has no sign-in (--allow-unauthenticated): anyone who can reach ichor-ui can change the cluster " +
+			"with ichor-ui's permissions, including resetting nodes. Sign-in is the default; leave the flag out.")
 	} else {
 		p.Info(fmt.Sprintf("Helm equivalent: ichorUI.users.enabled=true, ichorUI.users.externalURL=%s", opts.UIURL))
-		p.Warn(fmt.Sprintf("make ichor-ui reachable at %s over https (an Ingress, Gateway or LoadBalancer in front of "+
-			"the ichor-ui Service (label %s=%s), or ichorUI.tls.secretName); Ichor installs none", opts.UIURL, uiComponentLabel, uiComponentValue))
+		if opts.UIURL != defaultUIURL {
+			p.Warn(fmt.Sprintf("make ichor-ui reachable at %s over https (an Ingress, Gateway or LoadBalancer in front of "+
+				"the ichor-ui Service (label %s=%s), or ichorUI.tls.secretName); Ichor installs none", opts.UIURL, uiComponentLabel, uiComponentValue))
+		}
 		p.Warn("spec.authentication.ichor is set; the controller renders the kube-apiserver authentication " +
 			"config next. Applying it restarts kube-apiserver on each control plane, so nodes report APIServerRestartRequired " +
 			"until you run `ichor rollout config` (or Apply in the Overview page's attention list), which rolls one control plane at a time")

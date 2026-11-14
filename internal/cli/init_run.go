@@ -51,11 +51,13 @@ type initOptions struct {
 
 	DiskRoles diskRoleOptions
 
-	// UIURL turns Ichor's own users on; AdminUser names the first admin.
-	UIURL     string
-	AdminUser string
+	// UIURL is the issuer of Ichor's own sign-in (empty: defaultUIURL); AdminUser names the first admin.
+	// AllowUnauthenticated turns the sign-in off and leaves ichor-ui open to anyone who can reach it.
+	UIURL                string
+	AdminUser            string
+	AllowUnauthenticated bool
 
-	// With UIURL: TLS inside ichor-ui (an existing Secret, or a cert/key init stores) and the
+	// With sign-in: TLS inside ichor-ui (an existing Secret, or a cert/key init stores) and the
 	// kubeconfig's server, passed to ichor-ui.
 	UITLSSecret, UITLSCert, UITLSKey       string
 	KubeAPIServerURL, KubeAPITLSServerName string
@@ -417,7 +419,7 @@ func initInstall(
 	err = steps.Run("Install Ichor", func(s *step) (string, error) {
 		s.Update("applying Ichor's install manifest")
 
-		if err := applyIchorManifest(ctx, k8sClient, deps.IchorManifest, s.Rewrite(initDetail), opts.CNIPreset == cniCilium); err != nil {
+		if err := applyIchorManifest(ctx, k8sClient, deps.IchorManifest, s.Rewrite(initDetail), opts.CNIPreset == cniCilium, opts.AllowUnauthenticated); err != nil {
 			return "", err
 		}
 
@@ -461,7 +463,7 @@ func initInstall(
 	}
 
 	// The first admin exists before the switch that makes every request need a token.
-	if opts.UIURL != "" {
+	if opts.signInOn() {
 		err = steps.Run("Ichor users", func(s *step) (string, error) {
 			var err error
 
@@ -503,7 +505,7 @@ func initInstall(
 		}
 	}
 
-	if opts.UIURL != "" {
+	if opts.signInOn() {
 		err = steps.Run("Authentication", func(s *step) (string, error) {
 			return "spec.authentication.ichor is set", setClusterAuthentication(ctx, k8sClient, cluster, opts.UIURL, s)
 		})

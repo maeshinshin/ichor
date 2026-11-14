@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/cosi-project/runtime/pkg/safe"
+	"github.com/cosi-project/runtime/pkg/state"
 	"github.com/siderolabs/talos/pkg/machinery/api/machine"
 	"github.com/siderolabs/talos/pkg/machinery/client"
 	clientconfig "github.com/siderolabs/talos/pkg/machinery/client/config"
@@ -313,6 +314,39 @@ func (n *machineryNode) volumes(ctx context.Context) ([]Volume, error) {
 	}
 
 	return out, nil
+}
+
+// UserDiskPaths lists the devices a system-disk-and-user-disks wipe names in UserDisksToWipe: every
+// block.Disk except the system disk with the devices it is built on, CD-ROM drives and read-only
+// disks (Talos refuses a reset that names a read-only disk). It fails when no system disk is known,
+// since the user disks then cannot be told apart from it.
+func UserDiskPaths(ctx context.Context, st state.State) ([]string, error) {
+	system, err := blockres.GetSystemDiskDevicePaths(ctx, st)
+	if err != nil {
+		return nil, fmt.Errorf("finding the system disk: %w", err)
+	}
+
+	if len(system) == 0 {
+		return nil, errors.New("no system disk is known, so the user disks cannot be told apart from it")
+	}
+
+	disks, err := safe.StateListAll[*blockres.Disk](ctx, st)
+	if err != nil {
+		return nil, fmt.Errorf("listing disks: %w", err)
+	}
+
+	var paths []string
+
+	for i := range disks.Len() {
+		spec := disks.Get(i).TypedSpec()
+		if spec.CDROM || spec.Readonly || slices.Contains(system, spec.DevPath) {
+			continue
+		}
+
+		paths = append(paths, spec.DevPath)
+	}
+
+	return paths, nil
 }
 
 // orphanCandidate reports whether a probed device is data on a disk the reset

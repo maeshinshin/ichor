@@ -261,9 +261,20 @@ func (t *machineryTalosClient) EtcdRemoveMemberByID(ctx context.Context, memberI
 // Reset wipes this node's STATE and EPHEMERAL partitions by label (never Mode: USER_DISKS, which the server
 // rejects with a non-empty SystemPartitionsToWipe, nor the implicit wipe-everything of an empty one) and
 // reboots it to maintenance mode. Graceful is false: the caller has drained and left etcd already. A wipeMode
-// (reclaim.ResetRequestWipe) wipes the whole system disk instead.
+// (reclaim.ResetRequestWipe) wipes the whole system disk instead, and system-disk-and-user-disks also the user
+// disks, which Talos wipes only when the request names them (reclaim.UserDiskPaths).
 func (t *machineryTalosClient) Reset(ctx context.Context, wipeMode string, powerOff bool) error {
-	req := reclaim.ResetRequestWipe(false, wipeMode)
+	var userDisks []string
+
+	if wipeMode == ichorv1alpha1.WipeModeSystemDiskAndUserDisks {
+		var err error
+
+		if userDisks, err = reclaim.UserDiskPaths(ctx, t.c.COSI); err != nil {
+			return err
+		}
+	}
+
+	req := reclaim.ResetRequestWipe(false, wipeMode, userDisks)
 	req.Reboot = !powerOff // Talos powers the node off after the wipe when it is not told to reboot
 
 	return t.c.ResetGeneric(ctx, req)

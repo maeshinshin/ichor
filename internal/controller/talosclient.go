@@ -81,7 +81,8 @@ type TalosClient interface {
 	// (Talos's own ResetRequest wipes boot and EFI too unless told which partitions), and not
 	// gracefully (removal.go has drained and left etcd already). Fire-and-forget: it returns once the
 	// request is accepted. wipeMode "system-disk" or "all" (TalosOperation.spec.node.wipeMode) wipes the
-	// whole system disk so the node boots a boot image again; empty keeps the STATE and EPHEMERAL wipe.
+	// whole system disk so the node boots a boot image again, and "system-disk-and-user-disks" also every
+	// user disk; empty keeps the STATE and EPHEMERAL wipe.
 	// powerOff makes Talos power the node off after the wipe instead of rebooting it into maintenance mode.
 	Reset(ctx context.Context, wipeMode string, powerOff bool) error
 

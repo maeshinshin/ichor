@@ -28,13 +28,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cosi-project/runtime/pkg/state"
+	"github.com/cosi-project/runtime/pkg/state/impl/inmem"
 	"github.com/siderolabs/talos/pkg/machinery/api/machine"
+	blockres "github.com/siderolabs/talos/pkg/machinery/resources/block"
 	"google.golang.org/protobuf/proto"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
 const testUUID = "AAAA-1"
+
+// userDiskSDB is a second disk the user-disk wipe tests name.
+const userDiskSDB = "/dev/sdb"
 
 const testOldClusterID = "cid-old"
 
@@ -339,7 +345,7 @@ func TestWaitMaintenance(t *testing.T) {
 // be installed again from a boot image; without one the request stays the STATE and EPHEMERAL
 // wipe.
 func TestResetRequestWipeMode(t *testing.T) {
-	if got, want := ResetRequestWipe(false, ""), ResetRequest(false); !proto.Equal(got, want) {
+	if got, want := ResetRequestWipe(false, "", nil), ResetRequest(false); !proto.Equal(got, want) {
 		t.Fatalf("no mode must be the request: %+v", got)
 	}
 
@@ -347,7 +353,7 @@ func TestResetRequestWipeMode(t *testing.T) {
 		ichorv1alpha1.WipeModeSystemDisk: machine.ResetRequest_SYSTEM_DISK,
 		ichorv1alpha1.WipeModeAll:        machine.ResetRequest_ALL,
 	} {
-		r := ResetRequestWipe(false, mode)
+		r := ResetRequestWipe(false, mode, nil)
 		if r.Mode != want || r.Graceful || !r.Reboot {
 			t.Fatalf("%s: mode/graceful/reboot wrong: %+v", mode, r)
 		}
@@ -356,6 +362,71 @@ func TestResetRequestWipeMode(t *testing.T) {
 		if len(r.SystemPartitionsToWipe) != 0 || len(r.UserDisksToWipe) != 0 {
 			t.Fatalf("%s: partitions or user disks named: %+v", mode, r)
 		}
+	}
+}
+
+// system-disk-and-user-disks is all plus the devices it names: Talos erases a user disk only when it is listed,
+// and all lists none, so all never erases one.
+func TestResetRequestWipeUserDisks(t *testing.T) {
+	disks := []string{userDiskSDB, "/dev/sdc"}
+
+	r := ResetRequestWipe(false, ichorv1alpha1.WipeModeSystemDiskAndUserDisks, disks)
+	if r.Mode != machine.ResetRequest_ALL || r.Graceful || !r.Reboot ||
+		len(r.SystemPartitionsToWipe) != 0 || !slices.Equal(r.UserDisksToWipe, disks) {
+		t.Fatalf("system-disk-and-user-disks must be all with the disks named: %+v", r)
+	}
+
+	if r := ResetRequestWipe(false, ichorv1alpha1.WipeModeAll, disks); len(r.UserDisksToWipe) != 0 {
+		t.Fatalf("all must not name user disks: %+v", r)
+	}
+}
+
+// UserDiskPaths names every disk but the system disk, CD-ROM drives and read-only disks, and refuses to
+// answer when no system disk is known, since then nothing can be kept apart from the system disk.
+func TestUserDiskPaths(t *testing.T) {
+	ctx := context.Background()
+	st := state.WrapCore(inmem.NewState())
+
+	if _, err := UserDiskPaths(ctx, st); err == nil {
+		t.Fatal("no system disk must be an error, not every disk")
+	}
+
+	sys := blockres.NewSystemDisk(blockres.NamespaceName, blockres.SystemDiskID)
+	sys.TypedSpec().DiskID, sys.TypedSpec().DevPath = "sda", "/dev/sda"
+
+	if err := st.Create(ctx, sys); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := st.Create(ctx, blockres.NewDevice(blockres.NamespaceName, "sda")); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, d := range []struct {
+		id, path  string
+		cdrom, ro bool
+	}{
+		{"sda", "/dev/sda", false, false},
+		{"sdb", userDiskSDB, false, false},
+		{"sdc", "/dev/sdc", true, false},
+		{"sdd", "/dev/sdd", false, true},
+		{"sde", "/dev/sde", false, false},
+	} {
+		disk := blockres.NewDisk(blockres.NamespaceName, d.id)
+		disk.TypedSpec().DevPath, disk.TypedSpec().CDROM, disk.TypedSpec().Readonly = d.path, d.cdrom, d.ro
+
+		if err := st.Create(ctx, disk); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := UserDiskPaths(ctx, st)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want := []string{userDiskSDB, "/dev/sde"}; !slices.Equal(got, want) {
+		t.Fatalf("user disks = %q, want %q", got, want)
 	}
 }
 

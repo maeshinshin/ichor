@@ -124,6 +124,9 @@ const (
 	WipeModeSystemDisk = "system-disk"
 	// WipeModeAll wipes the whole system disk, boot and EFI included, the same as WipeModeSystemDisk. It does not wipe user disks.
 	WipeModeAll = "all"
+	// WipeModeSystemDiskAndUserDisks wipes the whole system disk and every user disk: each block device
+	// except the system disk, CD-ROM drives and read-only disks, which are left out.
+	WipeModeSystemDiskAndUserDisks = "system-disk-and-user-disks"
 )
 
 // Values for TalosOperationNodeStatus.Step.
@@ -476,8 +479,9 @@ type TalosOperationNodeSpec struct {
 	// wipeMode makes a reset wipe more than the STATE and EPHEMERAL partitions: system-disk erases
 	// the whole system disk (boot and EFI included, so the node boots a boot image again instead of
 	// its installed UKI, which is what installing it afresh from a SecureBoot ISO needs), all erases the
-	// same system disk and never a user disk. Only with the reset action; unset keeps the STATE and EPHEMERAL wipe.
-	// +kubebuilder:validation:Enum=system-disk;all
+	// same system disk and never a user disk; system-disk-and-user-disks erases that system disk and every user
+	// disk too. Only with the reset action; unset keeps the STATE and EPHEMERAL wipe.
+	// +kubebuilder:validation:Enum=system-disk;all;system-disk-and-user-disks
 	// +optional
 	WipeMode string `json:"wipeMode,omitempty"`
 

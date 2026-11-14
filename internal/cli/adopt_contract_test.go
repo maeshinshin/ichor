@@ -17,8 +17,12 @@ limitations under the License.
 package cli
 
 import (
+	"context"
 	"strings"
 	"testing"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
@@ -43,5 +47,23 @@ func TestAdoptRefusesAContractBelowV114(t *testing.T) {
 
 	if st.cluster.Spec.VersionContract != "" {
 		t.Errorf("the refused contract was set on the cluster: %q", st.cluster.Spec.VersionContract)
+	}
+}
+
+// A v1.13 cluster with a legacy machine.install is refused end to end: the probe picks v1.13 for it,
+// and the refusal comes before anything is written.
+func TestAdoptRefusesALegacyInstallBeforeWriting(t *testing.T) {
+	cp, wk := classAFixture(t, "v113")
+	env, deps := classAFlow(t, "v1.13.0", cp, wk)
+	deps.AssumeYes = true
+
+	err := runAdopt(context.Background(), "d1", testNamespace, deps)
+	if err == nil || !strings.Contains(err.Error(), "takes version contract v1.13") || !strings.Contains(err.Error(), "Nothing was written") {
+		t.Fatalf("runAdopt = %v, want the refusal of contract v1.13\n%s", err, env.stderr.String())
+	}
+
+	var cluster ichorv1alpha1.TalosCluster
+	if err := env.k8s.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: "d1"}, &cluster); !apierrors.IsNotFound(err) {
+		t.Errorf("the refused adopt wrote the TalosCluster: %v", err)
 	}
 }

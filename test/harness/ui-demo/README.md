@@ -47,14 +47,6 @@ and `CP3_IP`; every launcher pod carries the label `ichor.maesh.dev/e2e-group: <
 select all of one demo's VMs. `ICHOR_UI_DEMO_HA=extra` creates only a fourth control plane, `<prefix>-cp4`
 (prints `CP4_IP`), next to a running HA demo, to replace one of its control planes. `down-demo` with either
 value also deletes `-cp2`, `-cp3` and `-cp4` and their DataVolumes.
-Measured (single control plane + one worker, `ceph-block`, no ichor-ui):
-
-| phase | before | cache cold (first run) | cache warm |
-|---|---|---|---|
-| ISO import / cache ready | 2-5 min per VM | 87 s once | 1 s |
-| `up-demo`, total, both VMs at maintenance | 5-8 min (estimate from the import time) | 151 s | 52 s |
-| `ichor init` (install, reboot, Cilium hand-over) | about 4 min | 309 s | 299 s |
-| approve to worker Ready (install, reboot, join) | about 2 min | 46 s | 48 s |
 
 ```sh
 export ICHOR_E2E_KUBE_CONTEXT=$C ICHOR_UI_DEMO_PREFIX=$P

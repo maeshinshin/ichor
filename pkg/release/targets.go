@@ -116,8 +116,8 @@ func TalosChoices(running, kubernetesRunning, pinned string, tags []string) Choi
 }
 
 // KubernetesChoices groups the Kubernetes releases an upgrade from running can move to: at most one
-// minor up (upgrade.KubernetesSkew), supported by the Talos the cluster runs, and e2e tested with the
-// Cilium the cluster runs (ciliumRunning, the version without its v). An unknown Cilium gives no
+// minor up (upgrade.KubernetesSkew), supported by the Talos the cluster runs, and listed as compatible with
+// the Cilium the cluster runs (ciliumRunning, the version without its v). An unknown Cilium gives no
 // Kubernetes release, as nothing is known to be compatible with it. ciliumConstrains is false when
 // the observed CNI is not Cilium: then there is no Cilium to match and the
 // Talos pairing alone decides.

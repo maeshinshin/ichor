@@ -344,7 +344,7 @@ func installAndBootstrap(ip string) ([]byte, error) {
 	fmt.Println(versionOut)
 
 	// The authenticated API answering machinestatus doesn't mean etcd's bootstrap RPC is
-	// registered yet: observed on real hardware returning "FailedPrecondition: bootstrap
+	// registered yet: it can return "FailedPrecondition: bootstrap
 	// is not available yet" right after the version check above succeeded. Retry rather
 	// than treat it as fatal.
 	var bootstrapOut string

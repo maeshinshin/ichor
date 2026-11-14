@@ -2,7 +2,7 @@
 
 Status: Accepted · Date: 2026-10-26 · Design section: Configuration reconcile, Trust, Bootstrap, GitOps and Argo CD
 
-Decided: redact bundle material from dry-run warnings unconditionally rather than relying on Talos v1.14.3's current (verified) behavior of never echoing one; renamed a registry-auth leak test to match what it actually exercises and documented its two genuinely unreachable paths; validate `ichor init --cluster` as a Kubernetes object name before any file write; added CEL format checks to `TalosClusterRegistry.host`/`.endpoints` since machinery validates neither.
+Decided: redact bundle material from dry-run warnings unconditionally rather than relying on Talos v1.14.3's current behavior of never echoing one; renamed a registry-auth leak test to match what it actually exercises and documented its two genuinely unreachable paths; validate `ichor init --cluster` as a Kubernetes object name before any file write; added CEL format checks to `TalosClusterRegistry.host`/`.endpoints` since machinery validates neither.
 
 ## Context
 

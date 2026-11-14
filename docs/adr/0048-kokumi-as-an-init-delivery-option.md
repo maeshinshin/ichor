@@ -66,7 +66,7 @@ Argo CD"):
 
 Accepted and built, in the narrow form the Decision above describes.
 
-- Source confirmed: github.com/kokumi-dev/kokumi, release 0.17.0 (2026-10-11,
+- Source: github.com/kokumi-dev/kokumi, release 0.17.0 (2026-10-11,
   latest at the time), one asset `install.yaml` (sha256
   `345223726800ca3f08f633c76c91a38265bc0c131551b24dc49c69ee0cd7b840`). Its CRDs
   are in `delivery.kokumi.dev` (Approval, Kitchen, Menu, Order, Pantry,

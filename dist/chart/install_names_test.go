@@ -67,7 +67,7 @@ func stringMap(v any) map[string]string {
 // TestInstallerCanApplyEveryObjectOfTheInstallManifest checks, for the installer ClusterRole and Role in
 // config/rbac and in the chart, that each object of dist/install.yaml can be got and created, and that
 // the kind a ValidatingAdmissionPolicy names as paramKind can be got on every object (the apiserver
-// refuses the policy otherwise; seen on hardware as "must have get permission on all objects of the
+// refuses the policy otherwise, with "must have get permission on all objects of the
 // referenced paramKind"). It needs `make build-installer`.
 func TestInstallerCanApplyEveryObjectOfTheInstallManifest(t *testing.T) {
 	install := loadYAMLDocs(t, "../install.yaml")

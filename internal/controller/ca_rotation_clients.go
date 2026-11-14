@@ -37,7 +37,7 @@ import (
 )
 
 // After the old CAs are dropped, CoreDNS, Cilium and kube-proxy keep verifying the API server against
-// the CA they loaded at start (measured on hardware: they never recovered by themselves), and ichor-ui
+// the CA they loaded at start (they do not recover by themselves), and ichor-ui
 // re-reads it slowly. A rotation therefore restarts them once. It is a write to
 // those workloads, in scope the way the restore's one-time pod restart is: Ichor does not operate the
 // CNI, it recovers from its own action.

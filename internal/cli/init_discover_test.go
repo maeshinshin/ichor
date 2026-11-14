@@ -382,3 +382,22 @@ func TestAskFirstNode_OnlyConfiguredNodesSaysSoAndAsksAgain(t *testing.T) {
 		t.Errorf("the question was asked %d times again, want once", len(s.asked))
 	}
 }
+
+// A read the node resets is tried again: the first connection after a scan is sometimes the one reset.
+func TestReadFound_RetriesAResetRead(t *testing.T) {
+	calls := 0
+	s := nodeSearch{ReadNode: func(_ context.Context, endpoint string, wantInventory bool) (nodeReading, error) {
+		calls++
+		if calls == 1 {
+			return nodeReading{}, errors.New("connection reset by peer")
+		}
+
+		return fakeNode("192.168.5.7", false)
+	}}
+
+	found := readFound(context.Background(), s, []string{"192.168.5.7:50000"})
+
+	if calls != 2 || found[0].refusal != "" {
+		t.Errorf("%d reads, refusal %q; want two reads and no refusal", calls, found[0].refusal)
+	}
+}

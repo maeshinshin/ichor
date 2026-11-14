@@ -46,6 +46,7 @@ const (
 	scanDialTimeout = time.Second
 	readConcurrency = 8
 	readTimeout     = 10 * time.Second
+	readRetryPause  = 250 * time.Millisecond
 	apidPort        = constants.ApidPort
 )
 
@@ -232,8 +233,21 @@ func readFound(ctx context.Context, s nodeSearch, endpoints []string) []foundNod
 		f := foundNode{endpoint: endpoints[i]}
 
 		var err error
+		// shortcut: one retry, after a pause, for a read the node resets: a node that answered the scan has reset
+		// its first connection after it in some runs. Drop it once the cause is known.
+		for attempt := range 2 {
+			if attempt > 0 {
+				select {
+				case <-rctx.Done():
+				case <-time.After(readRetryPause):
+				}
+			}
 
-		f.reading, err = s.ReadNode(rctx, endpoints[i], true)
+			f.reading, err = s.ReadNode(rctx, endpoints[i], true)
+			if err == nil || errors.Is(err, controller.ErrAlreadyConfigured) {
+				break
+			}
+		}
 
 		switch {
 		case errors.Is(err, controller.ErrAlreadyConfigured):

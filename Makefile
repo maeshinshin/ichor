@@ -1,7 +1,10 @@
+# Placeholders build-ichor-embed refuses: they name no registry, so no cluster can pull them.
+PLACEHOLDER_IMG := controller:latest
+PLACEHOLDER_IMG_UI := ichor-ui:latest
 # Image URL to use all building/pushing image targets
-IMG ?= controller:latest
+IMG ?= $(PLACEHOLDER_IMG)
 # Image URL for the ichor-ui image target
-IMG_UI ?= ichor-ui:latest
+IMG_UI ?= $(PLACEHOLDER_IMG_UI)
 # Image URL for the installer image target
 IMG_INSTALLER ?= ichor-installer:latest
 # VERSION is linked into every Ichor binary (internal/version); "dev" means unversioned.
@@ -171,8 +174,20 @@ build: manifests generate fmt vet ## Build manager binary.
 build-ichor: fmt vet ## Build the ichor CLI binary (placeholder install manifest; see build-ichor-embed).
 	go build -ldflags "$(LDFLAGS)" -o bin/ichor ./cmd/ichor
 
+# Runs before build-installer, which keeps the placeholders: make test, make deploy and hack/remote-gate.sh apply
+# that manifest to clusters that load images locally, so only the embed path refuses them.
+.PHONY: check-embed-images
+check-embed-images:
+	@if [ "$(IMG)" = "$(PLACEHOLDER_IMG)" ] || [ "$(IMG_UI)" = "$(PLACEHOLDER_IMG_UI)" ]; then \
+	  [ "$(IMG)" != "$(PLACEHOLDER_IMG)" ] || echo "build-ichor-embed: IMG is still the placeholder $(PLACEHOLDER_IMG); set IMG to the pushed controller image." >&2; \
+	  [ "$(IMG_UI)" != "$(PLACEHOLDER_IMG_UI)" ] || echo "build-ichor-embed: IMG_UI is still the placeholder $(PLACEHOLDER_IMG_UI); set IMG_UI to the pushed ichor-ui image." >&2; \
+	  echo "The embedded manifest would name images no cluster can pull. Working form:" >&2; \
+	  echo "  make build-ichor-embed VERSION=v0.0.8-abc1234 IMG=ghcr.io/maeshinshin/ichor-controller:v0.0.8-abc1234 IMG_UI=ghcr.io/maeshinshin/ichor-ui:v0.0.8-abc1234 IMAGE_DIGESTS=bin/digests.txt" >&2; \
+	  exit 1; \
+	fi
+
 .PHONY: build-ichor-embed
-build-ichor-embed: build-installer ## Build the ichor CLI with Ichor's own install manifest embedded (what `ichor init` applies).
+build-ichor-embed: check-embed-images build-installer ## Build the ichor CLI with Ichor's own install manifest embedded (what `ichor init` applies).
 	cp dist/install.yaml internal/installmanifest/install.yaml
 	cp dist/network-policies.yaml internal/installmanifest/network-policies.yaml
 	go build -tags installembed -ldflags "$(LDFLAGS)" -o bin/ichor ./cmd/ichor

@@ -126,14 +126,29 @@ repeating the wipe. Neither of these is why this ADR's own check exists
 (the architecture doc's instruction is unconditional, and this project
 does not rely on a dependency's internal locking as its own safety net).
 
-### The Warning Event is wrong once Reset actually succeeded, so it is skipped
+### The Warning Event is skipped once Talos has accepted the Reset
 
-`completeRemoval` takes a `reset bool`. When true, the success message
-says the node was reset and is rebooting to maintenance, and
-`NodeStillHasClusterCredentials` is not emitted -- it would be false:
-Reset just wiped the `STATE` partition those credentials lived on. The
-Event fires exactly when it did before this ADR, in exactly the case
-this ADR did not change.
+`completeRemoval` takes a `reset bool`. When true, the success message says
+that Talos accepted the Reset, and `NodeStillHasClusterCredentials` is not
+emitted, because the Reset Talos accepted is the one that wipes the `STATE`
+partition those credentials lived on. The Event fires exactly when it did
+before this ADR, in exactly the case this ADR did not change.
+
+"The command succeeded" and "the disk was wiped" are different claims, and the
+success message makes only the first. The Reset RPC returns once the server has
+accepted the request and started the sequence in a goroutine (Talos v1.14.5,
+`internal/app/machined/internal/server/v1alpha1/v1alpha1_server.go`, around line
+633). A wipe that fails afterwards appears only in the node's log, as
+`reset failed:`. A request the server refuses up front, such as an invalid
+partition list, fails the RPC itself. `talosctl reset --reboot`'s post-check
+(`cmd/talosctl/cmd/talos/reset.go`, lines 131-155) passes when the node answers
+in maintenance mode or its boot ID has changed, so a reboot alone satisfies it,
+which is no evidence of a wipe either. The check that is: ask the node for its
+volumes and confirm `STATE` and `EPHEMERAL` are gone, with only `META` left.
+`META` matters for a second claim: `Installed()` is true only when `META` is
+Ready (`internal/app/machined/pkg/runtime/v1alpha1/v1alpha1_state.go`, lines
+226-263), and the install sequence runs when it is false, so "the reset
+succeeded" and "the node will install again" are different claims too.
 
 ## Consequences
 

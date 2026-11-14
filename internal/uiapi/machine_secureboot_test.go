@@ -27,8 +27,8 @@ import (
 	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
-// An approval that names a disk and no installer image gets the SecureBoot installer of
-// the cluster's schematic and Talos version when the cluster's mode is not Off.
+// An approval that names a disk and no installer image gets the installer of the cluster's
+// schematic and Talos version: the SecureBoot one when the cluster's mode is not Off.
 var _ = Describe("ApproveMachine installer default", func() {
 	approve := func(mode, image string) *ichorv1alpha1.TalosMachine {
 		cluster := newTestCluster("does-not-exist")
@@ -60,9 +60,10 @@ var _ = Describe("ApproveMachine installer default", func() {
 		}
 	})
 
-	It("leaves the image alone when the mode is Off or unset, or when the user named one", func() {
-		Expect(approve("", "").Spec.Install.Image).To(BeEmpty())
-		Expect(approve(ichorv1alpha1.SecureBootOff, "").Spec.Install.Image).To(BeEmpty())
+	It("names the plain installer when the mode is Off or unset, and keeps an image the user named", func() {
+		const plain = "factory.talos.dev/metal-installer/" + upgrade.DefaultSchematic + ":" + fixtureTalos
+		Expect(approve("", "").Spec.Install.Image).To(Equal(plain))
+		Expect(approve(ichorv1alpha1.SecureBootOff, "").Spec.Install.Image).To(Equal(plain))
 		Expect(approve(ichorv1alpha1.SecureBootRequired, "registry.example/installer:v1").Spec.Install.Image).To(Equal("registry.example/installer:v1"))
 	})
 })

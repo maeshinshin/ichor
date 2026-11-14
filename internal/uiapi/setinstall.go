@@ -59,6 +59,11 @@ func (s *Server) SetMachineInstall(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
+	install, err = s.withInstallerImage(ctx, m, install)
+	if err != nil {
+		return nil, err
+	}
+
 	m.Spec.Install = install
 
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {

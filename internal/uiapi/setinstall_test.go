@@ -26,17 +26,30 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/upgrade"
 )
 
 func installReq(in *pb.MachineInstall) *connect.Request[pb.SetMachineInstallRequest] {
 	return connect.NewRequest(&pb.SetMachineInstallRequest{Machine: objectRef(testNS, "m1"), Install: in})
 }
 
+// testInstallCluster is the cluster "c" a fixture machine belongs to; its installer image is built from its
+// schematic (the stock one here) and its Talos version, and its SecureBoot mode picks the variant.
+func testInstallCluster(mode string) *ichorv1alpha1.TalosCluster {
+	c := &ichorv1alpha1.TalosCluster{Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: fixtureTalos}}
+	c.Name, c.Namespace = "c", testNS
+	if mode != "" {
+		c.Spec.Security = &ichorv1alpha1.TalosClusterSecurity{SecureBoot: &ichorv1alpha1.TalosClusterSecureBoot{Mode: mode}}
+	}
+
+	return c
+}
+
 func TestSetMachineInstallWritesOnlyInstall(t *testing.T) {
 	m := testMachine()
 	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
 	m.Spec.Role = roleWorker
-	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(m).WithStatusSubresource(m).Build()
+	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(m, testInstallCluster("")).WithStatusSubresource(m).Build()
 	s := &Server{Client: k8s}
 	key := types.NamespacedName{Namespace: testNS, Name: "m1"}
 
@@ -84,5 +97,54 @@ func TestSetMachineInstallRefusesAPendingMachine(t *testing.T) {
 	_, err := (&Server{Client: k8s}).SetMachineInstall(context.Background(), installReq(&pb.MachineInstall{Disk: &pb.MachineDisk{Wwid: "w"}}))
 	if connect.CodeOf(err) != connect.CodeFailedPrecondition {
 		t.Fatalf("want FailedPrecondition, got %v", err)
+	}
+}
+
+// An install target that names no image gets the cluster's installer: the SecureBoot variant when the mode is not Off,
+// the plain one otherwise. An image the caller named is kept, and a cluster that cannot be read writes nothing.
+func TestSetMachineInstallNamesTheInstallerImage(t *testing.T) {
+	const (
+		stock  = "factory.talos.dev/metal-installer/" + upgrade.DefaultSchematic + ":" + fixtureTalos
+		secure = "factory.talos.dev/metal-installer-secureboot/" + upgrade.DefaultSchematic + ":" + fixtureTalos
+	)
+
+	for _, tc := range []struct {
+		name, mode, image, want string
+	}{
+		{"mode off", ichorv1alpha1.SecureBootOff, "", stock},
+		{"mode unset", "", "", stock},
+		{"mode required", ichorv1alpha1.SecureBootRequired, "", secure},
+		{"named image kept", ichorv1alpha1.SecureBootRequired, "registry.example/installer:v1", "registry.example/installer:v1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := testMachine()
+			m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
+			m.Spec.Role = roleWorker
+			k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(m, testInstallCluster(tc.mode)).WithStatusSubresource(m).Build()
+
+			if _, err := (&Server{Client: k8s}).SetMachineInstall(context.Background(),
+				installReq(&pb.MachineInstall{Disk: &pb.MachineDisk{Wwid: "w"}, Image: tc.image})); err != nil {
+				t.Fatal(err)
+			}
+
+			var got ichorv1alpha1.TalosMachine
+			if err := k8s.Get(context.Background(), types.NamespacedName{Namespace: testNS, Name: "m1"}, &got); err != nil {
+				t.Fatal(err)
+			}
+
+			if got.Spec.Install == nil || got.Spec.Install.Image != tc.want {
+				t.Fatalf("install image = %+v, want %q", got.Spec.Install, tc.want)
+			}
+		})
+	}
+
+	m := testMachine()
+	m.Spec.ApprovalState = ichorv1alpha1.MachineApprovalStateApproved
+	m.Spec.Role = roleWorker
+	k8s := fake.NewClientBuilder().WithScheme(testScheme(t)).WithObjects(m).WithStatusSubresource(m).Build()
+
+	if _, err := (&Server{Client: k8s}).SetMachineInstall(context.Background(),
+		installReq(&pb.MachineInstall{Disk: &pb.MachineDisk{Wwid: "w"}})); connect.CodeOf(err) != connect.CodeInternal {
+		t.Fatalf("want Internal for a cluster that cannot be read, got %v", err)
 	}
 }

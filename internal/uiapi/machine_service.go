@@ -255,7 +255,10 @@ func (s *Server) ApproveMachine(
 		return nil, connect.NewError(connect.CodeInvalidArgument, err)
 	}
 
-	install = s.withSecureBootInstaller(ctx, m, install)
+	install, err = s.withInstallerImage(ctx, m, install)
+	if err != nil {
+		return nil, err
+	}
 
 	network, err := NetworkFromPB(req.Msg.GetNetwork(), m.Spec.Identity, m.Status.DiscoveredLinks)
 	if err != nil {
@@ -384,26 +387,26 @@ func approveRightHint(ctx context.Context, err error) string {
 		"or turn on Ichor users or OIDC and sign in"
 }
 
-// withSecureBootInstaller names the SecureBoot installer of the cluster's schematic and Talos
-// version as the install image when the cluster asks for SecureBoot (mode Preferred or Required), a disk is given
-// and the caller named no image. An explicit image is never replaced; a
-// cluster that cannot be read leaves the image unset, as before.
-func (s *Server) withSecureBootInstaller(
+// withInstallerImage names the installer image of install when the caller left it empty: the installer of the
+// cluster's schematic and Talos version, its SecureBoot variant when the cluster's mode is not Off. Talos refuses
+// an empty image unless the node booted an Image Factory asset, so every install target this server writes names
+// one. An image the caller named is kept. A cluster that cannot be read is an error, not a silent empty image.
+func (s *Server) withInstallerImage(
 	ctx context.Context, m *ichorv1alpha1.TalosMachine, install *ichorv1alpha1.TalosMachineInstall,
-) *ichorv1alpha1.TalosMachineInstall {
+) (*ichorv1alpha1.TalosMachineInstall, error) {
 	if install == nil || install.Image != "" {
-		return install
+		return install, nil
 	}
 
 	var c ichorv1alpha1.TalosCluster
-	if err := s.Get(ctx, types.NamespacedName{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name}, &c); err != nil ||
-		secureboot.Mode(c.Spec.Security) == ichorv1alpha1.SecureBootOff {
-		return install
+	if err := s.Get(ctx, types.NamespacedName{Namespace: m.Namespace, Name: m.Spec.ClusterRef.Name}, &c); err != nil {
+		return nil, connect.NewError(connect.CodeInternal,
+			fmt.Errorf("reading cluster %q for the installer image of node %q: %w", m.Spec.ClusterRef.Name, m.Name, err))
 	}
 
-	install.Image = secureboot.ClusterInstallerImage(&c, true)
+	install.Image = secureboot.ClusterInstallerImage(&c, secureboot.Mode(c.Spec.Security) != ichorv1alpha1.SecureBootOff)
 
-	return install
+	return install, nil
 }
 
 // installFromPB converts the wire install target to the spec field; nil means "none". Exactly

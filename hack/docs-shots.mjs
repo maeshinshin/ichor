@@ -244,11 +244,13 @@ try {
     return got
   }
   const clipboardBecomes = (want) => eventually(clipboard, want)
+  // The chevron turns by the transform or, for Tailwind v4 rotate-* classes, by the rotate property: read both.
+  const turnOf = (el) => `(() => { const s = getComputedStyle(${el}); return s.transform + " " + s.rotate })()`
   // A disclosure: toggling it changes aria-expanded and turns its chevron. Each is checked on its own, since the chevron
   // is what sighted readers see and aria-expanded is what assistive technology reads, and either can be right while the
   // other is not. `read` gives [aria-expanded, the chevron's computed transform] of the trigger.
   const disclosure = async (tag, name, trigger) => {
-    const read = `(() => { const b = ${trigger}; return b ? [b.getAttribute('aria-expanded'), getComputedStyle(b.querySelector('svg')).transform] : ['missing', 'missing'] })()`
+    const read = `(() => { const b = ${trigger}; return b ? [b.getAttribute('aria-expanded'), ${turnOf("b.querySelector('svg')")}] : ['missing', 'missing'] })()`
     const settle = async (done) => {
       let v = await ev(read)
       for (let i = 0; i < 30 && !done(v); i++) {
@@ -314,12 +316,12 @@ try {
       const menuOpen = () => until(`${menuContent}?.dataset.state === 'open' && document.querySelectorAll('[data-slot=dropdown-menu-item]').length >= 3`, 'the Copy page menu')
       const menuClosed = () => until(`!${menuContent}`, 'the Copy page menu to close')
       check(await ev(`!![...document.querySelectorAll('article button')].find((b) => b.textContent.trim() === 'Copy page')`), `${tag}: the Copy page button exists`)
-      const moreState = `(() => { const b = ${more}; return [b.getAttribute('aria-expanded'), getComputedStyle(b.querySelector('svg')).transform] })()`
+      const moreState = `(() => { const b = ${more}; return [b.getAttribute('aria-expanded'), ${turnOf("b.querySelector('svg')")}] })()`
       const [closedExpanded, closedTurn] = await ev(moreState)
       await mouse(more)
       check(await menuOpen(), `${tag}: the Copy page menu opens`)
       // The menu is a disclosure too: its chevron turns and aria-expanded is set while it is open (the menu stays open below).
-      await until(`getComputedStyle(${more}.querySelector('svg')).transform !== ${JSON.stringify(closedTurn)}`, 'the More page actions chevron to turn', 3000)
+      await until(`${turnOf(`${more}.querySelector('svg')`)} !== ${JSON.stringify(closedTurn)}`, 'the More page actions chevron to turn', 3000)
       const [openedExpanded, openedTurn] = await ev(moreState)
       check(openedExpanded === 'true' && openedExpanded !== closedExpanded, `${tag}: More page actions sets aria-expanded to true when open (was ${closedExpanded}, now ${openedExpanded})`)
       check(openedTurn !== closedTurn, `${tag}: More page actions' chevron turns when open (transform ${closedTurn} to ${openedTurn})`)

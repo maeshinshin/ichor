@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -115,9 +116,43 @@ func initQuestions(flags *pflag.FlagSet) []promptQuestion {
 	return qs
 }
 
+// flagAddress is --address: the first node's static address, with its prefix length.
+const flagAddress = "address"
+
+// nodeAddressQuestion asks for the first node's address as one value, with its prefix length, such as
+// 192.168.0.201/16. It starts with the address the node was found at, so the operator completes the prefix;
+// an empty answer keeps the node on DHCP. The prefix is never taken from a scanned range.
+func nodeAddressQuestion(node string) promptQuestion {
+	host, _, err := net.SplitHostPort(node)
+	if err != nil {
+		host = node
+	}
+
+	return promptQuestion{
+		flag:  flagAddress,
+		label: "Node address",
+		def:   host,
+		help: func(map[string]string) string {
+			return "the node's own address with its prefix length, such as 192.168.0.201/16; empty keeps DHCP on the link"
+		},
+		check: func(a string) error {
+			if a == "" {
+				return nil
+			}
+
+			if p, err := netip.ParsePrefix(a); err != nil || !p.Addr().Is4() {
+				return fmt.Errorf("%q is not an IPv4 address with its prefix length, like 192.168.0.201/16", a)
+			}
+
+			return nil
+		},
+	}
+}
+
 // promptInitMissing asks the initQuestions, and the first node's question when --node-endpoint is not given, and
 // sets the answers on flags as if they had been typed there. The first node's answer may then lead to a scan,
-// which askFirstNode settles: one terminal program holds all the questions that need no scan.
+// which askFirstNode settles: one terminal program holds all the questions that need no scan. Then the node's
+// address, unless --address was given.
 func promptInitMissing(ctx context.Context, flags *pflag.FlagSet, r io.Reader, w io.Writer) error {
 	qs := initQuestions(flags)
 
@@ -126,32 +161,47 @@ func promptInitMissing(ctx context.Context, flags *pflag.FlagSet, r io.Reader, w
 		qs = append(qs, firstNodeQuestion(defaultScanRange()))
 	}
 
-	if len(qs) == 0 {
+	if len(qs) > 0 {
+		typ, _ := flags.GetString(flagEndpointType)
+
+		got, err := firstNodeSearch.Ask(qs, map[string]string{flagEndpointType: typ}, r, w)
+		if err != nil {
+			return err
+		}
+
+		for _, q := range qs {
+			if q.flag == flagNodeEndpoint {
+				continue
+			}
+
+			if err := flags.Set(q.flag, got[q.flag]); err != nil {
+				return err
+			}
+		}
+
+		if askNode {
+			if err := askFirstNode(ctx, flags, r, w, firstNodeSearch, got[flagNodeEndpoint]); err != nil {
+				return err
+			}
+		}
+	}
+
+	if flags.Changed(flagAddress) {
 		return nil
 	}
 
-	typ, _ := flags.GetString(flagEndpointType)
+	node, _ := flags.GetString(flagNodeEndpoint)
 
-	got, err := firstNodeSearch.Ask(qs, map[string]string{flagEndpointType: typ}, r, w)
+	got, err := firstNodeSearch.Ask([]promptQuestion{nodeAddressQuestion(node)}, nil, r, w)
 	if err != nil {
 		return err
 	}
 
-	for _, q := range qs {
-		if q.flag == flagNodeEndpoint {
-			continue
-		}
-
-		if err := flags.Set(q.flag, got[q.flag]); err != nil {
-			return err
-		}
+	if a := got[flagAddress]; a != "" {
+		return flags.Set(flagAddress, a)
 	}
 
-	if !askNode {
-		return nil
-	}
-
-	return askFirstNode(ctx, flags, r, w, firstNodeSearch, got[flagNodeEndpoint])
+	return nil
 }
 
 func answerRequired(a string) error {

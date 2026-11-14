@@ -133,6 +133,10 @@ func TestPromptInitMissing_AsksForEverythingAndSetsTheFlags(t *testing.T) {
 	setTerminal(t, true)
 
 	flags := newInitFlags(t)
+	// The node's own address is asked for after the node: given here, so that the program ends with the node.
+	if err := flags.Set(flagAddress, "192.168.1.9/24"); err != nil {
+		t.Fatal(err)
+	}
 
 	var out bytes.Buffer
 
@@ -166,7 +170,7 @@ func TestPromptInitMissing_HostnameTypeAsksForAHostname(t *testing.T) {
 	var out bytes.Buffer
 
 	// One row down from vip is loadBalancer; the cluster and node endpoint are given.
-	if err := flags.Parse([]string{"--cluster", "c", "--node-endpoint", "n:1"}); err != nil {
+	if err := flags.Parse([]string{"--cluster", "c", "--node-endpoint", "n:1", "--address", "192.168.1.9/24"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -185,7 +189,7 @@ func TestPromptInitMissing_HostnameTypeAsksForAHostname(t *testing.T) {
 
 func TestPromptInitMissing_AsksOnlyForWhatIsMissing(t *testing.T) {
 	flags := newInitFlags(t)
-	if err := flags.Parse(allButTheDisk); err != nil {
+	if err := flags.Parse(append([]string{"--address", "192.168.1.9/24"}, allButTheDisk...)); err != nil {
 		t.Fatal(err)
 	}
 

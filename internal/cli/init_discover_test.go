@@ -32,22 +32,27 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
+	"github.com/spf13/pflag"
+
 	"github.com/maeshinshin/ichor/pkg/release"
 )
 
 // Literals the tests repeat, as constants (goconst). testHWLink is the link name the package's other tests use.
 const (
-	testMAC       = "aa:bb:cc:00:00:01"
-	testScanRange = "192.168.0.0/24"
-	testAddr7     = "192.168.5.7"
-	testAddr8     = "192.168.5.8"
-	testEndpoint7 = "192.168.5.7:50000"
-	testEndpoint8 = "192.168.5.8:50000"
-	testFirstNode = "192.168.0.201"
-	testWideNet   = "10.0.0.0/22"
-	testHostTop   = "10.0.0.8"
+	testMAC         = "aa:bb:cc:00:00:01"
+	testScanRange   = "192.168.0.0/24"
+	testAddr7       = "192.168.5.7"
+	testAddr8       = "192.168.5.8"
+	testEndpoint7   = "192.168.5.7:50000"
+	testEndpoint8   = "192.168.5.8:50000"
+	testFirstNode   = "192.168.0.201"
+	testWideNet     = "10.0.0.0/22"
+	testHostTop     = "10.0.0.8"
+	testEndpoint201 = "192.168.0.201:50000"
 
 	testConfiguredRow = "192.168.5.8  already configured"
+	testStatic        = "static"
+	testDHCP          = "dhcp"
 )
 
 // The network every test scans is a documentation range: nothing here dials a real address. The fakes stand for
@@ -108,7 +113,84 @@ func (s *scripted) ask(qs []promptQuestion, _ map[string]string, _ io.Reader, _ 
 	a := s.answers[0]
 	s.answers = s.answers[1:]
 
-	return map[string]string{flagNodeEndpoint: a}, nil
+	return map[string]string{qs[0].flag: a}, nil
+}
+
+// bound is a flag set bound to the options it sets, as `init` binds them, so that a test reads what a prompt set.
+func bound(t *testing.T) (*pflag.FlagSet, *initOptions) {
+	t.Helper()
+
+	var (
+		o initOptions
+		d = initWaitTimeout
+	)
+
+	flags := pflag.NewFlagSet("init", pflag.ContinueOnError)
+	bindInitFlags(flags, &o, &d)
+
+	return flags, &o
+}
+
+// The first-node flow ending in the node's address: a /24 scan finds the node, the operator picks it and types its
+// address with the real prefix length. The scan's prefix must not reach the address.
+func firstNodeAndAddress(t *testing.T, address string) (*initOptions, [][]promptQuestion) {
+	t.Helper()
+
+	flags, o := bound(t)
+	if err := flags.Parse([]string{"--" + flagCluster, "c", "--endpoint-address", "192.168.0.210"}); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &scripted{answers: []string{testScanRange, testEndpoint201, address}}
+	old := firstNodeSearch
+
+	firstNodeSearch = nodeSearch{
+		Dial:     acceptOnly(testEndpoint201),
+		ReadNode: readerOf(),
+		Ask:      s.ask,
+	}
+	t.Cleanup(func() { firstNodeSearch = old })
+
+	if err := promptInitMissing(context.Background(), flags, strings.NewReader(""), io.Discard); err != nil {
+		t.Fatal(err)
+	}
+
+	return o, s.asked
+}
+
+// An address typed with a /16 after a /24 scan is the address of the configuration, with the /16.
+func TestPromptInitMissing_AnAddressWithItsPrefixReachesTheNetwork(t *testing.T) {
+	o, asked := firstNodeAndAddress(t, "192.168.0.201/16")
+
+	if len(asked) != 3 || asked[2][0].def != "192.168.0.201" {
+		t.Fatalf("the address question did not start from the node's address: %d questions, %+v", len(asked), asked)
+	}
+
+	n, err := firstNodeNetwork(*o, testMAC, controller.HardwareIdentity{MACAddresses: []string{testMAC}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if n == nil || n.Addressing != testStatic || !slices.Equal(n.Addresses, []string{"192.168.0.201/16"}) {
+		t.Errorf("the node's network is %+v, want the static address 192.168.0.201/16", n)
+	}
+}
+
+// An empty answer leaves the node on DHCP: no static address is set, and no network is configured for it.
+func TestPromptInitMissing_AnEmptyAddressKeepsDHCP(t *testing.T) {
+	o, asked := firstNodeAndAddress(t, "")
+
+	if len(asked) != 3 {
+		t.Fatalf("the address was not asked after the node: %d questions", len(asked))
+	}
+
+	if len(o.Addresses) != 0 {
+		t.Errorf("--address %v was set from an empty answer", o.Addresses)
+	}
+
+	if n, err := firstNodeNetwork(*o, testMAC, controller.HardwareIdentity{}); err != nil || (n != nil && n.Addressing != testDHCP) {
+		t.Errorf("the node's network is %+v, %v, want DHCP or none", n, err)
+	}
 }
 
 func TestHostAddrs(t *testing.T) {

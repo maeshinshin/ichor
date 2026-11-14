@@ -214,7 +214,7 @@ controller manages (bare pods) block the drain: the machine's `Removal`
 condition says `DrainFailed` and names the pod, a Warning Event repeats it,
 and the drain is retried with growing backoff, so delete the pod (there is no
 force option; Ichor never deletes a pod nobody owns) and it carries on. The
-remove deletes the Kubernetes Node object once the wiped node is not Ready. If the Node is still Ready after five minutes, Ichor keeps it, marks
+remove deletes the Kubernetes Node object once the node is not Ready. If the Node is still Ready after five minutes, Ichor keeps it, marks
 it so that discovery no longer counts its address as a member and finds the wiped
 machine again, and a Warning Event names `kubectl delete node`. Measured: about 45 seconds to reset and
 2 minutes from approval to Ready; the volumes show `encryptionProvider: luks2`

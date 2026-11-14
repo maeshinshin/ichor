@@ -64,6 +64,18 @@ cilium-chart: ## Fetch the pinned Cilium chart into pkg/cni/cilium/chart/ and ve
 	curl -fsSL -o pkg/cni/cilium/chart/cilium-$(CILIUM_CHART_VERSION).tgz https://helm.cilium.io/cilium-$(CILIUM_CHART_VERSION).tgz
 	echo "$(CILIUM_CHART_SHA256)  pkg/cni/cilium/chart/cilium-$(CILIUM_CHART_VERSION).tgz" | sha256sum -c -
 
+GATEWAY_API_VERSION ?= v1.6.1
+GATEWAY_API_SHA256 ?= 24d931f22abd8e40c973264319ead7cfa09d0fb7716b7ab1ee2ff174cb063a73
+# The seven CRDs Cilium's gatewayAPI reads; the standard channel's ListenerSet, TCPRoute and UDPRoute are left out.
+GATEWAY_API_CRDS ?= backendtlspolicies gatewayclasses gateways grpcroutes httproutes referencegrants tlsroutes
+
+.PHONY: gateway-api-crds
+gateway-api-crds: ## Fetch the pinned Gateway API standard-channel install, verify its SHA-256 and extract the CRDs that ichor init --gateway-api applies.
+	mkdir -p bin/gateway-api
+	curl -fsSL -o bin/gateway-api/standard-install.yaml https://github.com/kubernetes-sigs/gateway-api/releases/download/$(GATEWAY_API_VERSION)/standard-install.yaml
+	echo "$(GATEWAY_API_SHA256)  bin/gateway-api/standard-install.yaml" | sha256sum -c -
+	go run ./internal/tools/gatewayapicrds -in bin/gateway-api/standard-install.yaml -out pkg/cni/gatewayapi/crds.yaml -names "$(GATEWAY_API_CRDS)" -version $(GATEWAY_API_VERSION)
+
 .PHONY: cilium-goldens
 cilium-goldens: ## Regenerate pkg/cni/cilium/testdata/bootstrap-*.golden.yaml from the embedded Cilium chart.
 	go run ./internal/tools/ciliumgolden

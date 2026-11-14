@@ -248,7 +248,7 @@ func TestNodeChoices_ShowsEveryNodeAndWhyOneCannotBeChosen(t *testing.T) {
 		t.Errorf("row label %q, want %q", c[0].label, want)
 	}
 
-	if want := "/dev/nvme0n1 serial S4X1NX0 (+1 more), enp1s0 <aa:bb:cc:00:00:01>"; c[0].desc != want {
+	if want := "2 disks, the first reported /dev/nvme0n1 serial S4X1NX0, enp1s0 <aa:bb:cc:00:00:01>"; c[0].desc != want {
 		t.Errorf("row detail %q, want %q", c[0].desc, want)
 	}
 

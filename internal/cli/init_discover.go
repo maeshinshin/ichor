@@ -305,15 +305,24 @@ func nodeDetail(r nodeReading) string {
 
 	var parts []string
 
-	if len(r.Disks) == 0 {
+	// Device order is not an identity: the first disk reported is not necessarily the one Talos would install on,
+	// so the row names the count and the first one reported, never a system disk.
+	switch n := len(r.Disks); {
+	case n == 0:
 		parts = append(parts, "no disk reported")
-	} else {
+	default:
 		d := r.Disks[0].DevPath
 		if r.Disks[0].Serial != "" {
 			d += " serial " + r.Disks[0].Serial
+		} else {
+			d += " (no serial)"
 		}
 
-		parts = append(parts, d+moreSuffix(len(r.Disks)))
+		if n == 1 {
+			parts = append(parts, "disk "+d)
+		} else {
+			parts = append(parts, fmt.Sprintf("%d disks, the first reported %s", n, d))
+		}
 	}
 
 	if len(r.Links) == 0 {

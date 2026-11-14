@@ -604,6 +604,11 @@ func resetOutcome(m *ichorv1alpha1.TalosMachine, step nodeStep) string {
 		return fmt.Sprintf("the node did not answer (%s), so it was not wiped; %s", step.unwiped, step.note)
 	}
 
+	if step.unconfirmed {
+		return fmt.Sprintf("the reset was sent, but the node did not answer in maintenance mode with UUID %s within %s, "+
+			"so the wipe is not confirmed; %s", m.Spec.Identity.UUID, nodeDownWait, step.note)
+	}
+
 	after := "is rebooting back to maintenance mode"
 	if powerOffRequested(m) {
 		after = "was powered off"
@@ -623,6 +628,13 @@ func (r *TalosMachineReconciler) warnAfterReset(m *ichorv1alpha1.TalosMachine, s
 		r.Recorder.Eventf(m, corev1.EventTypeWarning, reasonNodeStillHasClusterCredentials,
 			"%s %q was removed but did not answer (%s), so its disk was not wiped and still holds this cluster's PKI; "+
 				"reset it before you repurpose or discard the hardware. %s", m.Spec.Role, m.Name, step.unwiped, step.note)
+	}
+
+	if step.unconfirmed {
+		r.Recorder.Eventf(m, corev1.EventTypeWarning, reasonNodeStillHasClusterCredentials,
+			"%s %q was removed, but it did not answer in maintenance mode within %s, so its wipe is not confirmed "+
+				"and its disk may still hold this cluster's PKI; check it before you repurpose the hardware.",
+			m.Spec.Role, m.Name, nodeDownWait)
 	}
 
 	if step.left {

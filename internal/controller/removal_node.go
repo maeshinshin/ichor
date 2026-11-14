@@ -64,7 +64,7 @@ var resetMaintenanceProbe = func(ctx context.Context, address, uuid string) bool
 
 	got, err := reclaim.MaintenanceUUID(pctx, reclaim.HostOnly(address))
 
-	return err == nil && strings.EqualFold(got, uuid)
+	return err == nil && uuid != "" && strings.EqualFold(got, uuid)
 }
 
 // powerOffRequested reports whether m's reset powers the node off after the wipe.
@@ -86,6 +86,8 @@ type nodeStep struct {
 	note string
 	// left is true when the Node was not deleted because it was still Ready after nodeDownWait.
 	left bool
+	// unconfirmed is set when the machine did not answer in maintenance mode within nodeDownWait of the reset.
+	unconfirmed bool
 }
 
 // nodeDown reports whether the Kubernetes Node nodeName is missing or not Ready.
@@ -109,12 +111,23 @@ func resetAccepted(m *ichorv1alpha1.TalosMachine) bool {
 	return c != nil && c.Status == metav1.ConditionTrue && c.Reason == reasonResetRequested
 }
 
-// finishReset deletes the Kubernetes Node of a machine that was told to wipe, once the Node is NotReady, and
-// completes the removal. While it is Ready it asks for a requeue; after nodeDownWait it leaves the Node, marked
-// as reset, and the Event names the manual step.
+// finishReset completes the removal of a machine that was told to wipe. The wipe is confirmed by the machine
+// answering in maintenance mode with its UUID, not by its Node: a machine that rebooted with its disk intact
+// goes NotReady too. Until it answers, the removal waits, and after nodeDownWait it completes unconfirmed. Then
+// the Kubernetes Node is deleted once it is NotReady. While it is Ready the removal asks for a requeue; after
+// nodeDownWait it leaves the Node, marked as reset, and the Event names the manual step.
 func (r *TalosMachineReconciler) finishReset(
 	ctx context.Context, m *ichorv1alpha1.TalosMachine, nodeName string, step nodeStep,
 ) error {
+	// A machine that was never sent a reset (unwiped) has no wipe to confirm.
+	if step.unwiped == "" && !resetMaintenanceProbe(ctx, m.DialEndpoint(), m.Spec.Identity.UUID) {
+		if !step.expired(m) {
+			return &removalWaitError{msg: fmt.Sprintf("waiting for %s to answer in maintenance mode with UUID %s", m.Name, m.Spec.Identity.UUID)}
+		}
+
+		step.unconfirmed = true
+	}
+
 	var node corev1.Node
 
 	found := nodeName != ""

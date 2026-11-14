@@ -293,11 +293,31 @@ func validateEndpoint(oldObj, newObj *ichorv1alpha1.TalosCluster) error {
 	return nil
 }
 
+// validateNotRemoved refuses to drop spec.network or spec.cni once it is set. Their CEL transition rules
+// compare oldSelf with self, and CEL does not run when the field is absent, so a JSON patch that removes
+// the field would pass them. Setting a field that was unset stays allowed.
+func validateNotRemoved(oldObj, newObj *ichorv1alpha1.TalosCluster) error {
+	if oldObj.Spec.Network != nil && newObj.Spec.Network == nil {
+		return errors.New("spec.network is fixed once the cluster exists and cannot be removed")
+	}
+
+	if !apiequality.Semantic.DeepEqual(oldObj.Spec.CNI, ichorv1alpha1.TalosClusterCNI{}) &&
+		apiequality.Semantic.DeepEqual(newObj.Spec.CNI, ichorv1alpha1.TalosClusterCNI{}) {
+		return errors.New("spec.cni is fixed once the cluster exists and cannot be removed")
+	}
+
+	return nil
+}
+
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type TalosCluster.
 func (v *TalosClusterCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *ichorv1alpha1.TalosCluster) (admission.Warnings, error) {
 	talosclusterlog.Info("Validation for TalosCluster upon update", "name", newObj.GetName())
 
 	if err := v.limitController(ctx, oldObj, newObj); err != nil {
+		return nil, err
+	}
+
+	if err := validateNotRemoved(oldObj, newObj); err != nil {
 		return nil, err
 	}
 

@@ -299,7 +299,7 @@ try {
         // The trigger of a branch: the button in its own row, which is the page's link beside it, or the row's label when the
         // directory has no page. A branch's contents are in the page only while it is open.
         const trigger = (route, label) => `(() => {
-          const own = (r) => [...r.querySelectorAll('button[aria-expanded]')].find((b) => !b.closest('[data-slot=collapsible-content]'))
+          const own = (r) => [...r.querySelectorAll('button[aria-expanded]')].find((b) => { const c = b.closest('[data-slot=collapsible-content]'); return !c || !r.contains(c) })
           const r = [...document.querySelectorAll('[data-slot=sidebar] [data-slot=collapsible]')].find((x) => ${route
             ? `[...x.parentElement.children].some((c) => c.matches('a[href]') && c.pathname === ${JSON.stringify(base + route)})`
             : `own(x)?.textContent.trim() === ${JSON.stringify(label)}`})

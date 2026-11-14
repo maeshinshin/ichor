@@ -140,3 +140,34 @@ func TestReadInventory(t *testing.T) {
 		t.Fatalf("Links = %+v, want %+v", inv.Links, wantLinks)
 	}
 }
+
+// TestReadHostname reads the hostname a node reports, and an empty one from a node that reports none.
+func TestReadHostname(t *testing.T) {
+	st := state.WrapCore(inmem.NewState())
+
+	d, err := meta.NewResourceDefinition(network.HostnameStatusExtension{}.ResourceDefinition())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	if err := st.Create(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := ReadHostname(ctx, st)
+	if err != nil || got != "" {
+		t.Fatalf("no hostname resource: ReadHostname = %q, %v; want \"\", nil", got, err)
+	}
+
+	h := network.NewHostnameStatus(network.NamespaceName, network.HostnameID)
+	h.TypedSpec().Hostname = "talos-201"
+
+	if err := st.Create(ctx, h); err != nil {
+		t.Fatal(err)
+	}
+
+	if got, err = ReadHostname(ctx, st); err != nil || got != "talos-201" {
+		t.Fatalf("ReadHostname = %q, %v; want talos-201, nil", got, err)
+	}
+}

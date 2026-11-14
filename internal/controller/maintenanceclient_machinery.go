@@ -156,6 +156,27 @@ func (m *machineryMaintenanceClient) Inventory(ctx context.Context) (Inventory, 
 	return ReadInventory(ctx, m.c.COSI)
 }
 
+// Hostname reads the node's hostname over the unauthenticated maintenance API; see ReadHostname.
+func (m *machineryMaintenanceClient) Hostname(ctx context.Context) (string, error) {
+	return ReadHostname(ctx, m.c.COSI)
+}
+
+// ReadHostname reads the node's hostname (network.HostnameStatus). A node that reports none gives "", not an error.
+func ReadHostname(ctx context.Context, cosi state.State) (string, error) {
+	h, err := safe.StateGet[*network.HostnameStatus](ctx, cosi, resource.NewMetadata(
+		network.NamespaceName, network.HostnameStatusType, network.HostnameID, resource.VersionUndefined,
+	))
+	if state.IsNotFoundError(err) {
+		return "", nil
+	}
+
+	if err != nil {
+		return "", fmt.Errorf("reading the hostname: %w", err)
+	}
+
+	return h.TypedSpec().Hostname, nil
+}
+
 // SecurityState reads the node's boot security over the unauthenticated maintenance API; see ReadSecurityState.
 func (m *machineryMaintenanceClient) SecurityState(ctx context.Context) (SecurityState, error) {
 	return ReadSecurityState(ctx, m.c.COSI)

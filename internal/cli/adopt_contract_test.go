@@ -39,7 +39,7 @@ func TestAdoptRefusesAContractBelowV114(t *testing.T) {
 		t.Fatal("adopt accepted version contract v1.13; it must refuse a contract below v1.14")
 	}
 
-	for _, want := range []string{"v1.14", "Upgrade Talos", "Nothing was written"} {
+	for _, want := range []string{adoptMinContract, "Upgrade Talos", "Nothing was written"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("refusal %q does not contain %q", err, want)
 		}

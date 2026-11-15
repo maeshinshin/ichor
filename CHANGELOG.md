@@ -31,6 +31,12 @@ command does. Each item is described where it is listed below.
   `machine.registries.config.<host>.tls.clientIdentity` or
   `cluster.extraManifestHeaders`** loses the field when the API server prunes it
   (Typed configuration).
+- **A `TalosCluster` that sets `spec.cni.custom.documents`** loses the field:
+  the API server no longer serves it from the CRD this release installs, and
+  drops it from storage at the object's next write. The field was part of the
+  `custom` CNI, which every release has refused, so no cluster a release
+  accepted holds it. `kubectl apply` of a manifest that still sets it is
+  refused as an unknown field (Typed configuration).
 - **`ichor adopt` refuses a cluster below Talos v1.14**, and refuses a
   `--namespace` that is not the namespace the controller runs in, before it
   writes anything (Adopt).
@@ -490,6 +496,16 @@ command does. Each item is described where it is listed below.
   at the next apply. `kubectl apply` of a manifest that still sets one is
   refused. Nothing replaces them yet; set them on the node outside Ichor until
   a reference to a Secret exists.
+- **Breaking for a manifest that sets it:** `TalosCluster` loses
+  `spec.cni.custom.documents`, a second copy of the whole `TalosConfigPatch`
+  document union that sat under the deprecated, refused `custom` CNI and that
+  nothing rendered. It is retired as an exception to the append-only rule
+  (ADR 0152), and it frees 392,672 bytes, about 40%, of the Helm release
+  record: the record for the chart goes from 991,560 to 598,888 bytes of the
+  1,048,576 allowed. `spec.cni.custom` and `spec.cni.custom.source` stay, still
+  refused with the same message. A stored object that has `documents` stops
+  serving it as soon as the CRD is upgraded; nothing used it, so no node
+  changes.
 - Admission of a document changed. The CRD now requires `kind` plus one field
   (at least and at most two properties), and the webhook checks that the field
   is the one `kind` names; it runs on create and on an update that changes

@@ -15,6 +15,7 @@ import (
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/secretsbundle"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
@@ -267,5 +268,36 @@ func TestTalosConfigPatchDocumentKindNamesItsField(t *testing.T) {
 
 	if _, err := v.ValidateCreate(ctx, p); err != nil {
 		t.Errorf("a document whose kind names its field was refused: %v", err)
+	}
+}
+
+// A patch that sets spec.documents and spec.config writes one setting two ways: the webhook refuses it, and
+// the message names both fields.
+func TestTalosConfigPatchRefusesDocumentsAndConfigTogether(t *testing.T) {
+	ctx := context.Background()
+	v := dryRenderValidator(t)
+
+	p := configPatch("p", nil)
+	p.Spec.Documents = []ichorv1alpha1.TalosConfigPatchDocument{{
+		Kind: "SysctlConfig", SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.ipv4.ip_forward": "1"}},
+	}}
+	p.Spec.Config = &ichorconfig.Config{Machine: &ichorconfig.Machine{Sysctls: map[string]string{"net.ipv4.ip_forward": "1"}}}
+
+	for name, call := range map[string]func() error{
+		"create": func() error { _, err := v.ValidateCreate(ctx, p); return err },
+		"update": func() error { _, err := v.ValidateUpdate(ctx, configPatch("p", nil), p); return err },
+	} {
+		err := call()
+		if err == nil || !strings.Contains(err.Error(), "spec.documents") || !strings.Contains(err.Error(), "spec.config") {
+			t.Errorf("%s: want a refusal naming spec.documents and spec.config, got %v", name, err)
+		}
+	}
+
+	only := configPatch("p", nil)
+	only.Spec.Documents = nil
+	only.Spec.Config = p.Spec.Config
+
+	if _, err := v.ValidateCreate(ctx, only); err != nil {
+		t.Errorf("a patch with spec.config alone was refused: %v", err)
 	}
 }

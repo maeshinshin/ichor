@@ -38,7 +38,7 @@ func (s *Server) ListPatches(
 ) (*connect.Response[pb.ListPatchesResponse], error) {
 	var list ichorv1alpha1.TalosConfigPatchList
 	if err := s.List(ctx, &list); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return nil, mapListError("patches", err)
 	}
 
 	filter := req.Msg.GetCluster()

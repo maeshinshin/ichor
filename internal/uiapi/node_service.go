@@ -117,7 +117,7 @@ func (s *Server) GetEffectiveConfig(
 
 	var patches ichorv1alpha1.TalosConfigPatchList
 	if err := s.List(ctx, &patches, client.InNamespace(m.Namespace)); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return nil, mapListError("patches", err)
 	}
 
 	// Server.ControllerNamespace, not the TalosCluster's: same fixed namespace as loadBundle

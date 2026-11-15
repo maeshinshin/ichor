@@ -67,7 +67,7 @@ func (s *Server) SetMachineInstall(
 	m.Spec.Install = install
 
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("setting install of node %q: %w", namespacedName(ref), err))
+		return nil, mapOperationWriteError("setting install of node", namespacedName(ref), err)
 	}
 
 	audit := s.opAudit(ctx, "set-install", objectRef(m.Namespace, m.Name))

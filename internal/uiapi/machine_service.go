@@ -55,7 +55,7 @@ func (s *Server) ListMachines(
 ) (*connect.Response[pb.ListMachinesResponse], error) {
 	var list ichorv1alpha1.TalosMachineList
 	if err := s.List(ctx, &list); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, err)
+		return nil, mapListError("machines", err)
 	}
 
 	filter := req.Msg.GetCluster()
@@ -295,7 +295,7 @@ func (s *Server) ApproveMachine(
 			return nil, connect.NewError(connect.CodePermissionDenied, fmt.Errorf("approving node %q: %w; %s", namespacedName(ref), err, hint))
 		}
 
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("approving node %q: %w", namespacedName(ref), err))
+		return nil, mapOperationWriteError("approving node", namespacedName(ref), err)
 	}
 
 	audit := &pb.AuditRecord{
@@ -330,7 +330,7 @@ func (s *Server) requireVIPLink(
 
 	var machines ichorv1alpha1.TalosMachineList
 	if err := s.List(ctx, &machines, client.InNamespace(m.Namespace)); err != nil {
-		return connect.NewError(connect.CodeInternal, err)
+		return mapListError("machines", err)
 	}
 
 	holds := false
@@ -470,7 +470,7 @@ func (s *Server) RejectMachine(
 	}
 
 	if err := s.Update(ctx, m, strictFieldValidation); err != nil {
-		return nil, connect.NewError(connect.CodeInternal, fmt.Errorf("rejecting node %q: %w", namespacedName(ref), err))
+		return nil, mapOperationWriteError("rejecting node", namespacedName(ref), err)
 	}
 
 	audit := &pb.AuditRecord{

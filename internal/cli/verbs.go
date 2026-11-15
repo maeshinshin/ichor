@@ -163,9 +163,10 @@ var createCmd = &cobra.Command{
 	GroupID:     groupChange,
 	RunE:        groupRunE,
 	Annotations: groupingAnnotations(),
-	Short:       "Create a user, or write credentials for talosctl and kubectl",
+	Short:       "Create a user or an etcd backup, or write credentials for talosctl and kubectl",
 	Long: `create makes an Ichor user, or writes the files a person needs to reach a cluster: the admin
-credentials (a kubeconfig and a talosconfig), a short-lived read-only talosconfig, or your own kubeconfig.`,
+credentials (a kubeconfig and a talosconfig), a short-lived read-only talosconfig, or your own kubeconfig. It
+also creates a scheduled etcd backup to an S3 bucket.`,
 	Example: `  ichor create user alice --role operator --generate
   ichor create talosconfig prod`,
 }

@@ -54,10 +54,10 @@ const (
 	backupTimeout = time.Hour
 
 	// Keys of the S3 credentials Secret (TalosEtcdBackupS3.CredentialsSecretRef).
-	s3KeyAccessKeyID     = "accessKeyID"
-	s3KeySecretAccessKey = "secretAccessKey"
-	s3KeySessionToken    = "sessionToken"
-	s3KeyCA              = "ca.crt"
+	s3KeyAccessKeyID     = etcdbackup.S3KeyAccessKeyID
+	s3KeySecretAccessKey = etcdbackup.S3KeySecretAccessKey
+	s3KeySessionToken    = etcdbackup.S3KeySessionToken
+	s3KeyCA              = etcdbackup.S3KeyCA
 )
 
 // Prometheus series for "failures and staleness surface as metrics and

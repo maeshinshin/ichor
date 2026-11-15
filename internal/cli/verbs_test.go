@@ -157,6 +157,7 @@ restore cluster
 rotate ca
 rotate keys
 create credentials
+create etcd-backup
 create talosconfig
 create kubeconfig
 export bundle

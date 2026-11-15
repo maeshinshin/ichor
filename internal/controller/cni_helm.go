@@ -34,6 +34,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
@@ -240,9 +241,11 @@ func cniHelmJobName(cluster *ichorv1alpha1.TalosCluster, valuesHash string) stri
 // check (nil: none) runs before a Job is created, never for one that exists; its error is returned as a
 // *CNIInvalidValuesError and no Job is started. The installer image is then pinned to
 // a verified digest by images (cniJobImage); a refusal is an *installerImageError and no Job is started.
+// recorder (nil: no Event) is where a Job run without a signature check is announced.
 func AdvanceCNIHelmJob(
 	ctx context.Context, c client.Client, ns string, cluster *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode, nodes int,
-	inst *ichorv1alpha1.IchorInstallation, images InstallerImages, check func(context.Context) error, salt string, since time.Time,
+	inst *ichorv1alpha1.IchorInstallation, images InstallerImages, recorder record.EventRecorder,
+	check func(context.Context) error, salt string, since time.Time,
 ) (bool, error) {
 	mode = cmp.Or(mode, cni.KubeProxyEnabled)
 
@@ -267,7 +270,7 @@ func AdvanceCNIHelmJob(
 
 		// The image is resolved and verified before anything is created: a refusal is an *installerImageError
 		// and no Job starts.
-		image, err := cniJobImage(ctx, images, inst)
+		image, err := cniJobImage(ctx, c, images, inst, recorder)
 		if err != nil {
 			return false, err
 		}
@@ -395,21 +398,31 @@ func newCNIHelmJob(
 // verified, or recorded as skipped) when that record is for the installed version and repository (and is the
 // pin, when one is set), so this Job runs the very image the installer did. Without such a record (a fresh
 // install, a Helm-only install, a hand-edited version) the tag is resolved and verified here exactly as an
-// upgrade does (pinInstallerImage: the installation's signature mode, skip included). The Job's
+// upgrade does (pinInstallerImage: the installation's signature mode, skip included, which is then recorded). The Job's
 // ServiceAccount is near cluster-admin, so a tag, which can move, is never run; the apiserver's Job-image
 // policy refuses one as well.
-func cniJobImage(ctx context.Context, images InstallerImages, inst *ichorv1alpha1.IchorInstallation) (string, error) {
+func cniJobImage(
+	ctx context.Context, c client.Client, images InstallerImages, inst *ichorv1alpha1.IchorInstallation, recorder record.EventRecorder,
+) (string, error) {
 	if rec := inst.Status.InstallerImage; rec != nil && rec.Digest != "" &&
 		rec.Version == inst.Spec.Version && rec.Repository == inst.Spec.InstallerRepository &&
 		(inst.Spec.InstallerDigest == "" || inst.Spec.InstallerDigest == rec.Digest) {
 		return inst.Spec.InstallerRepository + "@" + rec.Digest, nil
 	}
 
-	// shortcut: not recorded in status.installerImage (a Helm-only install has no IchorInstallation to
-	// record in); each new Job verifies again.
+	// shortcut: a verified run is not recorded in status.installerImage (a Helm-only install has no
+	// IchorInstallation to record in); each new Job verifies again. Drop it if a verified run needs a trace.
 	img, err := pinInstallerImage(ctx, images, inst)
 	if err != nil {
 		return "", err
+	}
+
+	// A skipped check leaves the same trace an upgrade's does: status.installerImage and the Warning Event.
+	// Only an installation that sets spec.installerSignature can skip, so it is a real object to write to.
+	if img.Verification == ichorv1alpha1.InstallerImageSkipped {
+		if err := recordInstallerImage(ctx, c, inst, img, recorder); err != nil {
+			return "", err
+		}
 	}
 
 	return inst.Spec.InstallerRepository + "@" + img.Digest, nil

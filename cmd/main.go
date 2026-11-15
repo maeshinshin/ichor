@@ -501,6 +501,7 @@ func main() {
 	must((&controller.CNIHandoverReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(), Kube: kubeClient,
 		Namespace: ns, Images: installerImages,
+		Recorder: mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
 	}).SetupWithManager(mgr), "Failed to create controller", "controller", "cnihandover")
 	must((&controller.CNIDetectReconciler{
 		Client: mgr.GetClient(), APIReader: mgr.GetAPIReader(),
@@ -532,6 +533,7 @@ func main() {
 	cniKubeProxyAdvance := controller.NewCNIKubeProxyAdvancer(
 		mgr.GetClient(), mgr.GetAPIReader(), ns, controller.NewMachineryTalosClient,
 		controller.NewKubeProxyAdmin(), installerImages,
+		mgr.GetEventRecorderFor("ichor-controller"), //nolint:staticcheck // typed against record.EventRecorder, as above
 	)
 
 	// The shutdown kind is not a rollout and has no Advance entry: the backbone

@@ -41,6 +41,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	coreconfig "github.com/siderolabs/talos/pkg/machinery/config"
@@ -113,6 +114,9 @@ type cniKubeProxyAdvancer struct {
 	// Images pins the Cilium Job's installer image to a verified digest; nil refuses to start any Job.
 	Images InstallerImages
 
+	// Recorder announces a Cilium Job run without a signature check; nil records no Event.
+	Recorder record.EventRecorder
+
 	// ServiceProbe checks, after kube-proxy was removed, that the kubernetes Service still answers;
 	// nil means probeKubernetesService.
 	ServiceProbe func(ctx context.Context) error
@@ -122,9 +126,9 @@ type cniKubeProxyAdvancer struct {
 func NewCNIKubeProxyAdvancer(
 	c client.Client, reader client.Reader, controllerNamespace string,
 	talosClient func(context.Context, *ichorv1alpha1.TalosCluster, *ichorv1alpha1.TalosMachine, *secrets.Bundle) (TalosClient, error),
-	admin KubeProxyAdmin, images InstallerImages,
+	admin KubeProxyAdmin, images InstallerImages, recorder record.EventRecorder,
 ) AdvanceMachineFunc {
-	a := &cniKubeProxyAdvancer{Client: c, Reader: reader, ControllerNamespace: controllerNamespace, TalosClient: talosClient, Admin: admin, Images: images}
+	a := &cniKubeProxyAdvancer{Client: c, Reader: reader, ControllerNamespace: controllerNamespace, TalosClient: talosClient, Admin: admin, Images: images, Recorder: recorder}
 
 	return a.Advance
 }
@@ -545,7 +549,7 @@ func (a *cniKubeProxyAdvancer) runCiliumJob(
 		return false, err
 	}
 
-	done, err := AdvanceCNIHelmJob(ctx, a.Client, a.ControllerNamespace, cluster, mode, nodes, inst, a.Images,
+	done, err := AdvanceCNIHelmJob(ctx, a.Client, a.ControllerNamespace, cluster, mode, nodes, inst, a.Images, a.Recorder,
 		cniValuesCheck(a.Client, a.Reader, a.ControllerNamespace, cluster, mode), salt, op.CreationTimestamp.Time)
 	if err != nil {
 		return false, fmt.Errorf("%s: %w", doing, err)

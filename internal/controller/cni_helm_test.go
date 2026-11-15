@@ -266,7 +266,7 @@ func cniFakeClient(t *testing.T, objs ...client.Object) client.Client {
 		}
 	}
 
-	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).WithStatusSubresource(&batchv1.Job{}).Build()
+	return fake.NewClientBuilder().WithScheme(scheme).WithObjects(objs...).WithStatusSubresource(&batchv1.Job{}, &ichorv1alpha1.IchorInstallation{}).Build()
 }
 
 func setCNIJobCondition(t *testing.T, c client.Client, ns, name string, ct batchv1.JobConditionType) {
@@ -285,7 +285,7 @@ func setCNIJobCondition(t *testing.T, c client.Client, ns, name string, ct batch
 
 // advanceTestJob is one AdvanceCNIHelmJob call for cluster's spec mode, with no node count, salt or since.
 func advanceTestJob(c client.Client, cluster *ichorv1alpha1.TalosCluster) (bool, error) {
-	return AdvanceCNIHelmJob(context.Background(), c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), &fakeInstallerImages{digest: testInstallerDigest}, nil, "", time.Time{})
+	return AdvanceCNIHelmJob(context.Background(), c, "ichor-system", cluster, specMode(cluster), 0, cniTestInstallation(), &fakeInstallerImages{digest: testInstallerDigest}, nil, nil, "", time.Time{})
 }
 
 // First call creates the Job, later calls report it, and a values change is a new Job.
@@ -405,7 +405,7 @@ func TestInstallerSourceWithoutAnIchorInstallation(t *testing.T) {
 	// The stand-in's tag is resolved and verified before the Job: the image is that digest.
 	images := &fakeInstallerImages{digest: testInstallerDigest}
 
-	img, err := cniJobImage(ctx, images, got)
+	img, err := cniJobImage(ctx, cniFakeClient(t), images, got, nil)
 	if err != nil || img != defaultInstallerRepository+"@"+testInstallerDigest ||
 		len(images.resolved) != 1 || images.resolved[0] != defaultInstallerRepository+":"+version.Version {
 		t.Fatalf("Job image = %q, %v (resolved %v)", img, err, images.resolved)

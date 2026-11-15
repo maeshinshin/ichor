@@ -123,11 +123,9 @@ var _ = Describe("a key rotation whose preflight keeps failing", func() {
 		Expect(op.Status.FailureReason).To(ContainSubstring("gave up after being blocked"))
 		Expect(f.secretData()).NotTo(HaveKey(secretsbundle.KeyRotationKey))
 
+		// The give-up paused the rotation, which releases the lock: the next holder takes it at once.
 		lock := clusterlock.New(k8sClient, types.NamespacedName{Namespace: f.cluster.Namespace, Name: f.cluster.Name},
 			clusterlock.DefaultDuration)
-		retry, err := releaseIfHolderStopped(ctx, k8sClient, lock, lock.Acquire(ctx, "ichor-controller/test/next-holder"))
-		Expect(err).NotTo(HaveOccurred())
-		Expect(retry).To(BeTrue())
 		Expect(lock.Acquire(ctx, "ichor-controller/test/next-holder")).To(Succeed())
 		Expect(lock.Release(ctx, "ichor-controller/test/next-holder")).To(Succeed())
 

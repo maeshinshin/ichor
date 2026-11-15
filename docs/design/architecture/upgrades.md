@@ -81,8 +81,8 @@ through machine config; update kube-proxy and sync the bootstrap manifests
 (the rollout check is skipped when kube-proxy is replaced); roll the
 kubelets, control planes first. The intermediate configurations are renders
 with the kubelet and kube-proxy pinned to the version the node runs, never
-a write to `spec`. A minor upgrade of several control planes behind an
-endpoint of type `node` warns that the endpoint is one apiserver. This is
+a write to `spec`. A minor upgrade of several control planes whose endpoint is one
+control plane's own address warns that the endpoint is one apiserver. This is
 `upgrade-k8s`'s order, run on Ichor's own machinery.
 
 Ichor: the controller only launches the installer Job for the target version

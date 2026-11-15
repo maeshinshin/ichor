@@ -37,6 +37,11 @@ const (
 	kName       = "name"
 	kKeep       = "keep"
 	kProperties = "properties"
+	kAddress    = "address"
+	kEndpoint   = "endpoint"
+	kDefault    = "default"
+	kCNI        = "cni"
+	kCustom     = "custom"
 )
 
 // crdWith builds a one-version CRD named name whose spec has the given string properties and

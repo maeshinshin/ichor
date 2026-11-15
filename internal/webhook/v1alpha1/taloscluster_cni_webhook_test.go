@@ -42,6 +42,18 @@ var _ = Describe("TalosCluster Webhook: removed CNI presets", func() {
 		}
 	})
 
+	// spec.cni.custom stays in the schema after its documents field was retired (ADR 0152), so the
+	// refusal still reads a populated custom and says the same thing.
+	It("refuses spec.cni.custom on a cilium cluster with its message", func() {
+		c := withPreset("cilium")
+		c.Spec.CNI.Custom = &ichorv1alpha1.TalosClusterCNICustom{
+			Source: ichorv1alpha1.TalosClusterCNICustomSource{RepoURL: "https://example.com/charts", Chart: "my-cni", TargetRevision: "1.0.0"},
+		}
+
+		_, err := v.ValidateCreate(ctx, c)
+		Expect(err).To(MatchError("spec.cni.custom is deprecated and unused: Cilium is the only CNI"))
+	})
+
 	It("creates a cilium cluster, with the preset set or defaulted", func() {
 		for _, p := range []string{"cilium", ""} {
 			_, err := v.ValidateCreate(ctx, withPreset(p))

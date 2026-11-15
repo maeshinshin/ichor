@@ -35,6 +35,16 @@ export default tseslint.config(
     },
   },
   {
+    // The cmdk shim behind @preactcn/command is written by `npx shadcn add` as well: untyped props and unused
+    // destructured props that it strips before spreading, and regular expressions copied from cmdk.
+    files: ['src/lib/shims/cmdk.tsx'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+      'no-useless-escape': 'off',
+    },
+  },
+  {
     // preactcn components merge `className` with their own classes; `class`
     // would replace the whole list (Preact spreads it last) and break layout.
     files: ['src/**/*.tsx'],

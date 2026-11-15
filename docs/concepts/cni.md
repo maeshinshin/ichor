@@ -42,7 +42,7 @@ wins. Your layer is `spec.cni.cilium.values` on the
 *Ichor's defaults, then your layer, then the keys Ichor owns.*
 
 You edit your layer on the Cilium page of the UI or with
-`ichor get cni-values|set|edit|diff`. One function validates it, and it runs in
+`ichor get|apply|edit|diff cni-values`. One function validates it, and it runs in
 the TalosCluster webhook, the UI backend, the CLI and the controller (before
 every Cilium Job). A refusal starts no Job and shows as
 `CNIValuesApplied=False`. It checks the chart's schema, unknown keys, Ichor-owned

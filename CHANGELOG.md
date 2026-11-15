@@ -653,7 +653,7 @@ command does. Each item is described where it is listed below.
   what the schema holds, and it took the chart's Helm release record to 950,492
   of the 1,048,576 bytes allowed while both were there. It is retired as a third
   exception to the append-only rule (ADR 0152), and the record with `spec.config`
-  alone is 578,416 bytes, 470,160 free. `kubectl apply` of a manifest that still
+  alone is 580,420 bytes, 468,156 free. `kubectl apply` of a manifest that still
   sets `documents` is refused as an unknown field; a client that does not ask for
   strict validation has it pruned. `ichor patch apply` names `spec.config` in its
   refusal.

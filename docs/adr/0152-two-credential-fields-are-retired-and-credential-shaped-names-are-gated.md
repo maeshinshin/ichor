@@ -49,7 +49,7 @@ Decided by the maintainer: `TalosCluster.spec.cni.custom.documents` is retired a
 
 Decided by the maintainer: `TalosConfigPatch.spec.documents` is retired as a third exception to the append-only rule. The mechanism is the one above, an entry in `retiredFields`, and so is the consequence for stored objects; the reason is the one of ADR 0165, that `spec.config` is the only place a patch carries Talos configuration.
 
-**Why.** The field is the `TalosConfigPatchDocument` union as a list, which `spec.config` carries a second time in Ichor's own shape. Both together took the chart's Helm release record to 950,492 of the 1,048,576 bytes allowed (ADR 0158's method); `spec.config` alone is 578,416, with 470,160 free.
+**Why.** The field is the `TalosConfigPatchDocument` union as a list, which `spec.config` carries a second time in Ichor's own shape. Both together took the chart's Helm release record to 950,492 of the 1,048,576 bytes allowed (ADR 0158's method); `spec.config` alone is 580,420, with 468,156 free.
 
 **Stored objects.** A `TalosConfigPatch` that sets `documents` loses it as soon as the new CRD is established, and the nodes it reached lose its settings at their next apply. The maintainer was told this, and accepted it, for every cluster that has such a patch. The upgrade notes say so and say what to write instead. A client that asks for strict field validation is refused with an unknown-field error; one that does not has the field pruned. The installer's additive check lists `spec.documents` of `talosconfigpatches.ichor.maesh.dev`, and a test shows the check refuses the upgrade without that entry.
 

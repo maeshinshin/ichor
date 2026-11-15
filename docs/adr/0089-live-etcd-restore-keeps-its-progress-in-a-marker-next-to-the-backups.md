@@ -114,6 +114,9 @@ start to the time of the retry so that both limits count from there, and runs th
 the marker records as done (the step, `ownWipeAt`, `ownDone`) is not repeated. The marker is written before the request is
 consumed, so a write that fails leaves the request for the next pass. The resumed step is gated by the nodes' state, not
 only by the marker, so a snapshot upload can happen again on a target that has no etcd data.
+A retry on an operation that cannot be resumed (its marker is gone, or is another operation's) is consumed all the
+same, and the failure names why and says to create a new etcd-restore: a request left on the object unread would look
+as if it were still waiting.
 
 **Resume design.** Where each piece of state lives, and who reads it after each kind of interruption:
 

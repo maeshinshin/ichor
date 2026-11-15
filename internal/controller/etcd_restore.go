@@ -560,17 +560,40 @@ func (r *TalosOperationReconciler) advanceEtcdRestore(
 
 	st := op.Status.EtcdRestore
 
+	// A retry the operation cannot act on is still consumed, and the failure says so: a request that
+	// stayed on the object unread would look like one still waiting.
+	consumeUnresumable := func() error {
+		if !retry {
+			return nil
+		}
+
+		_, err := r.consumeRetry(ctx, op)
+
+		return err
+	}
+
 	if marker == nil {
+		if err := consumeUnresumable(); err != nil {
+			return ctrl.Result{}, err
+		}
+
 		if st.Step == ichorv1alpha1.EtcdRestoreStepReconciling {
 			return run.finish(ctx, nil) // the marker was cleared; only the status write was missing
 		}
 
 		return run.failed(ctx, nil, errors.New("the restore marker is gone from the backup storage, so how far the restore got is unknown; "+
-			"check each control plane's etcd before doing anything else"))
+			"check each control plane's etcd before doing anything else. The retry was received but this operation cannot be resumed "+
+			"without its marker: if etcd still needs restoring, create a new etcd-restore operation"))
 	}
 
 	if !run.ours(marker) {
-		return run.failed(ctx, marker, fmt.Errorf("the backup storage records a restore by operation %s/%s, not this one", marker.Namespace, marker.Operation))
+		if err := consumeUnresumable(); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		return run.failed(ctx, marker, fmt.Errorf("the backup storage records a restore by operation %s/%s, not this one. The retry was "+
+			"received but this operation cannot be resumed: let that restore finish or be cleared, then create a new etcd-restore operation if one is still needed",
+			marker.Namespace, marker.Operation))
 	}
 
 	// The status can be ahead of the marker (an operation recreated after the rollback starts at

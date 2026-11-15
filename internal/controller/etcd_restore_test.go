@@ -861,6 +861,46 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			Expect(got.Status.FailureReason).To(ContainSubstring("did not finish"))
 		})
 
+		It("a retry of a restore whose marker is gone is consumed and says it cannot be resumed", func() {
+			f := newRestoreFixture("")
+			op := f.newOp(nil)
+			f.reconcile(op)
+			Expect(etcdbackup.DeleteMarker(ctx, f.backup.store, testBackupBase)).To(Succeed())
+
+			got := f.reconcile(op)
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+
+			got.Annotations = map[string]string{ichorv1alpha1.OperationRetryAnnotation: ichorv1alpha1.OperationRetryRequested}
+			Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+			got = f.reconcile(op)
+			Expect(got.Annotations).NotTo(HaveKey(ichorv1alpha1.OperationRetryAnnotation), "the request was read")
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+			Expect(got.Status.FailureReason).To(ContainSubstring("cannot be resumed"))
+			Expect(got.Status.FailureReason).To(ContainSubstring("marker is gone"))
+		})
+
+		It("a retry of a restore whose marker is another operation's is consumed and says it cannot be resumed", func() {
+			f := newRestoreFixture("")
+			op := f.newOp(nil)
+			f.reconcile(op)
+			Expect(etcdbackup.PutMarker(ctx, f.backup.store, testBackupBase, mustPass(f.backup.bundle), &etcdbackup.RestoreMarker{
+				Namespace: tmNamespace, Operation: "someone-else", Step: ichorv1alpha1.EtcdRestoreStepWiping,
+			})).To(Succeed())
+
+			got := f.reconcile(op)
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+
+			got.Annotations = map[string]string{ichorv1alpha1.OperationRetryAnnotation: ichorv1alpha1.OperationRetryRequested}
+			Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+			got = f.reconcile(op)
+			Expect(got.Annotations).NotTo(HaveKey(ichorv1alpha1.OperationRetryAnnotation), "the request was read")
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+			Expect(got.Status.FailureReason).To(ContainSubstring("cannot be resumed"))
+			Expect(got.Status.FailureReason).To(ContainSubstring("someone-else"))
+		})
+
 		It("a missing marker after the start is reported, not guessed at", func() {
 			f := newRestoreFixture("")
 			op := f.newOp(nil)

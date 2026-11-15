@@ -34,6 +34,10 @@ const repoRoot = "../../.."
 var names = regexp.MustCompile(
 	"ichor-" + `[\s#/>*]*e2e` + "|" + "talos-cluster" + "01" + "|" + `\b` + "home" + "lab" + `\b`)
 
+// codeConstant is why the harness paths may keep the names: renaming them reaches the whole harness.
+const codeConstant = "the e2e namespace is a code constant there; " +
+	"renaming it reaches the whole harness, so it is a separate change"
+
 // allowed says where a match may stay. Everywhere else a match fails the test.
 var allowed = []struct {
 	path string
@@ -41,11 +45,11 @@ var allowed = []struct {
 	why  string
 }{
 	{"test/e2e/", true,
-		"the e2e namespace is a code constant there; renaming it reaches the whole harness, so it is a separate change"},
+		codeConstant},
 	{"test/harness/", true,
-		"the e2e namespace is a code constant there; renaming it reaches the whole harness, so it is a separate change"},
+		codeConstant},
 	{"test/internal/", true,
-		"the e2e namespace is a code constant there; renaming it reaches the whole harness, so it is a separate change"},
+		codeConstant},
 	{"hack/remote-gate.sh", false,
 		"owned by another backlog item, which removes the names from this file"},
 	// TEMPORARY, not a decision: another agent holds these two files right now. Remove these entries when that
@@ -118,12 +122,15 @@ func TestNoMaintainerNamesInTheRepository(t *testing.T) {
 
 	for i, a := range allowed {
 		if left[i] == 0 {
-			report = append(report, fmt.Sprintf("%s: no forbidden name is left under this allowance, so the entry can be deleted (it was: %s)", a.path, a.why))
+			report = append(report, fmt.Sprintf(
+				"%s: no forbidden name is left under this allowance, so the entry can be deleted (it was: %s)",
+				a.path, a.why))
 		}
 	}
 
 	if len(report) > 0 {
-		t.Errorf("the name check failed; rename a name to <e2e-namespace> or a generic example, or delete a stale allowance:\n%s",
+		t.Errorf("the name check failed; rename a name to <e2e-namespace> or a generic example, "+
+			"or delete a stale allowance:\n%s",
 			strings.Join(report, "\n"))
 	}
 }

@@ -315,8 +315,10 @@ try {
           await disclosure(tag, name, t)
           await ev(`(() => { const b = ${t}; if (b && b.getAttribute('aria-expanded') === 'false') b.click() })()`)
           await idle()
-          const shown = await ev(`[...document.querySelectorAll('[data-slot=sidebar] a[href]')].some((a) => a.pathname === ${JSON.stringify(base + child)} && a.getClientRects().length > 0)`)
-          check(shown, `${tag}: ${name} shows ${child} once opened`)
+          // `child` is one page or a list of them: each must be shown once the branch is open.
+          const kids = [child].flat()
+          const shown = await ev(`(() => { const shown = [...document.querySelectorAll('[data-slot=sidebar] a[href]')].filter((a) => a.getClientRects().length > 0).map((a) => a.pathname); return ${JSON.stringify(kids.map((k) => base + k))}.every((p) => shown.includes(p)) })()`)
+          check(shown, `${tag}: ${name} shows ${kids.join(' and ')} once opened`)
           await ev(`(() => { const b = ${t}; if (b && b.getAttribute('aria-expanded') === 'true') b.click() })()`)
           await idle()
         }
@@ -348,10 +350,10 @@ try {
         check(JSON.stringify(direct) === JSON.stringify([base + 'design/architecture/testing/', base + 'design/architecture/roadmap/']), `${tag}: the ungrouped pages of Design, Testing and Roadmap, follow its groups (listed directly under Ichor architecture: ${JSON.stringify(direct)})`)
         await ev(`(() => { const b = ${archRow}; if (b && b.getAttribute('aria-expanded') === 'true') b.click() })()`)
         await idle()
-        // The third level: Virtual IP sits under 2. Create the cluster, so Getting started opens first. Hidden until both are open.
+        // The third level: the endpoint pages sit under 2. Create the cluster, so Getting started opens first. Hidden until both are open.
         await ev(`(() => { const b = ${trigger('guides/getting-started/', 'Getting started')}; if (b && b.getAttribute('aria-expanded') === 'false') b.click() })()`)
         await idle()
-        await branchCheck('2. Create the cluster', 'guides/getting-started/create-the-cluster/', '2. Create the cluster', 'guides/getting-started/create-the-cluster/vip/')
+        await branchCheck('2. Create the cluster', 'guides/getting-started/create-the-cluster/', '2. Create the cluster', ['guides/getting-started/create-the-cluster/vip/', 'guides/getting-started/create-the-cluster/node/'])
         await ev(`(() => { const b = ${trigger('guides/getting-started/', 'Getting started')}; if (b && b.getAttribute('aria-expanded') === 'true') b.click() })()`)
         await idle()
         // The branches holding the page on screen are open when it loads: a full load renders them from the page's own route.

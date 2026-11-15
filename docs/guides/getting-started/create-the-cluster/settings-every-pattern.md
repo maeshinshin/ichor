@@ -1,11 +1,11 @@
 ---
-sidebar_order: 4
+sidebar_order: 3
 ---
 
 # Settings every pattern shares
 
 Every pattern runs the same `ichor init`, so the settings on this page work with
-each of them. The pattern page gives the endpoint and the first node's settings.
+each of them. The page for each endpoint gives the endpoint and the first node's settings.
 
 ## The shape of the cluster
 

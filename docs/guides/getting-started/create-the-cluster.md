@@ -13,12 +13,18 @@ is hard to change later. Each pattern below is one endpoint type.
 | Pattern | Endpoint type | Use it when |
 | --- | --- | --- |
 | [Virtual IP](create-the-cluster/vip.md) | `vip` | the default. The control planes share one layer-2 segment with no router between them. |
-| [Load balancer or DNS name](create-the-cluster/load-balancer.md) | `loadBalancer` | there is no shared layer-2 segment, or you are in a cloud, or you have a DNS name and no load balancer. You run what answers on that address. |
-| [Node address](create-the-cluster/node.md) | `node` | a lab or a single control plane. The node's own address is the endpoint. |
+| [Single node endpoint](create-the-cluster/node.md) | `node` | a lab or a single control plane. The node's own address is the endpoint. |
+| [Load balancer endpoint](create-the-cluster/node.md#load-balancer-endpoint) | `loadBalancer` | there is no shared layer-2 segment, or you are in a cloud, or you have a DNS name and no load balancer. You run what answers on that address. |
 
-Use the virtual IP unless your network rules it out. Only the VIP changes what Ichor renders. For a load balancer or a DNS name, Ichor records the address you give it and creates nothing behind it: running what answers on that address is yours. Each
-pattern page shows the same three ways to create the cluster: at a prompt, from
-an `init.yaml` file, and with flags. The settings that every pattern shares
+Use the virtual IP unless your network rules it out. Only the VIP changes what
+Ichor renders. For a load balancer or a DNS name, Ichor records the address you
+give it and creates nothing behind it: running what answers on that address is
+yours.
+
+Each page gives the same three ways to create the cluster, as sections of that
+page: at a prompt, from an `init.yaml` file, and with flags. The load balancer
+endpoint is a section of the single node endpoint page, because the procedure is
+the same and only the address differs. The settings that every pattern shares
 (the topology preset, the subnets, the secrets bundle's passphrase, the
 kubeconfig and sign-in) are on [Settings every pattern shares](create-the-cluster/settings-every-pattern.md).
 

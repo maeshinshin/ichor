@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"os"
 	"reflect"
 	"slices"
@@ -32,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	"github.com/maeshinshin/ichor/internal/controller"
@@ -478,5 +480,39 @@ func TestAdoptNoCNI_IchorAlreadyPresentStillInstallsCiliumFirst(t *testing.T) {
 
 	if indexOfPrefix(ev, "create "+f.env.cluster.Name) < 0 {
 		t.Errorf("the TalosCluster was not created: %v", ev)
+	}
+}
+
+// A first run that dies after the first TalosMachine leaves the cluster with one machine. The rerun
+// discovers the members again, writes the machine that is missing, and releases both holds.
+func TestAdoptRerunWritesTheMachineAFailedRunNeverCreated(t *testing.T) {
+	f := newNoCNIFlow(t)
+	missing := "uuid-" + flowWKAddr
+	fail := true
+
+	f.deps.K8s = interceptor.NewClient(f.env.k8s.(client.WithWatch), interceptor.Funcs{
+		Create: func(ctx context.Context, c client.WithWatch, obj client.Object, o ...client.CreateOption) error {
+			if _, ok := obj.(*ichorv1alpha1.TalosMachine); ok && obj.GetName() == missing && fail {
+				return errors.New("injected: the API server went away")
+			}
+
+			return c.Create(ctx, obj, o...)
+		},
+	})
+
+	if err := f.run(t); err == nil {
+		t.Fatal("first run succeeded although the second TalosMachine could not be created")
+	}
+
+	fail = false
+
+	if err := f.run(t); err != nil {
+		t.Fatalf("rerun: %v\n%s", err, f.env.stderr.String())
+	}
+
+	for _, name := range []string{"uuid-" + flowCPAddr, missing} {
+		if f.env.held(t, name) {
+			t.Errorf("machine %s is still held after the rerun", name)
+		}
 	}
 }

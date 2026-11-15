@@ -459,6 +459,10 @@ func loadAdoption(ctx context.Context, clusterName, namespace string, deps adopt
 
 	var machines []*ichorv1alpha1.TalosMachine
 
+	// rediscovered are members of an existing cluster that have no TalosMachine yet: a first run
+	// that stopped part-way never created them, and they are written like a fresh adoption's.
+	rediscovered := map[*ichorv1alpha1.TalosMachine]bool{}
+
 	switch {
 	case err == nil:
 		st.cluster = &cluster
@@ -471,6 +475,14 @@ func loadAdoption(ctx context.Context, clusterName, namespace string, deps adopt
 		for i := range list.Items {
 			if list.Items[i].Spec.ClusterRef.Name == clusterName {
 				machines = append(machines, &list.Items[i])
+			}
+		}
+
+		// shortcut: discovery needs --node; without it a rerun keeps the machines already
+		// written, as before. Drop when --node becomes required on every adopt.
+		if deps.Seed != "" && len(deps.AddMachines) == 0 {
+			if err := rediscover(ctx, deps, clusterName, namespace, &machines, rediscovered); err != nil {
+				return nil, err
 			}
 		}
 	case apierrors.IsNotFound(err) || apimeta.IsNoMatchError(err):
@@ -512,7 +524,7 @@ func loadAdoption(ctx context.Context, clusterName, namespace string, deps adopt
 	}
 
 	for _, m := range machines {
-		n := &adoptNode{M: m}
+		n := &adoptNode{M: m, added: rediscovered[m]}
 
 		// A pending or rejected machine has no credentials in the cluster's bundle yet (it is in
 		// maintenance mode, where the Talos API accepts no client certificate), so dialing it
@@ -524,7 +536,7 @@ func loadAdoption(ctx context.Context, clusterName, namespace string, deps adopt
 			continue
 		}
 
-		if err := readNode(ctx, deps, n, st.fresh); err != nil {
+		if err := readNode(ctx, deps, n, st.fresh || n.added); err != nil {
 			return nil, err
 		}
 
@@ -551,6 +563,28 @@ func loadAdoption(ctx context.Context, clusterName, namespace string, deps adopt
 	}
 
 	return st, nil
+}
+
+// rediscover adds to machines every discovered member of the existing cluster that has no
+// TalosMachine, and records it in added. The membership check is the fresh path's.
+func rediscover(ctx context.Context, deps adoptDeps, clusterName, namespace string, machines *[]*ichorv1alpha1.TalosMachine, added map[*ichorv1alpha1.TalosMachine]bool) error {
+	found, members, err := discoverMachines(ctx, deps, clusterName, namespace)
+	if err != nil {
+		return err
+	}
+
+	if err := checkMembership(ctx, deps.Target, found, members); err != nil {
+		return err
+	}
+
+	for _, m := range found {
+		if !slices.ContainsFunc(*machines, func(h *ichorv1alpha1.TalosMachine) bool { return h.Spec.Identity.UUID == m.Spec.Identity.UUID }) {
+			*machines = append(*machines, m)
+			added[m] = true
+		}
+	}
+
+	return nil
 }
 
 func readNode(ctx context.Context, deps adoptDeps, n *adoptNode, fresh bool) error {
@@ -1276,6 +1310,14 @@ func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace 
 	}
 
 	if !st.fresh {
+		in.ClusterName, in.ReadIdentity = st.cluster.Name, deps.ReadIdentity
+
+		for _, n := range writable {
+			if n.added {
+				in.Machines = append(in.Machines, writeMachineOf(n))
+			}
+		}
+
 		return in
 	}
 

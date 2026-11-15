@@ -56,14 +56,15 @@ var allowed = []struct {
 		"TEMPORARY: held by another agent for the e2e namespace rename; not a decision"},
 }
 
-func isAllowed(name string) bool {
-	for _, a := range allowed {
+// allowedIndex returns the allowance that covers name, or -1.
+func allowedIndex(name string) int {
+	for i, a := range allowed {
 		if a.dir && strings.HasPrefix(name, a.path) || !a.dir && name == a.path {
-			return true
+			return i
 		}
 	}
 
-	return false
+	return -1
 }
 
 // TestNoMaintainerNamesInTheRepository fails when a tracked file outside the allowed paths names the maintainer's own
@@ -84,8 +85,11 @@ func TestNoMaintainerNamesInTheRepository(t *testing.T) {
 
 	var report []string
 
+	// left counts the forbidden names still found under each allowance. An allowance with none left is stale.
+	left := make([]int, len(allowed))
+
 	for name := range strings.SplitSeq(string(out), "\x00") {
-		if name == "" || isAllowed(name) {
+		if name == "" {
 			continue
 		}
 
@@ -98,14 +102,28 @@ func TestNoMaintainerNamesInTheRepository(t *testing.T) {
 			continue // a binary file
 		}
 
-		for _, loc := range names.FindAllIndex(src, -1) {
+		hits := names.FindAllIndex(src, -1)
+
+		if i := allowedIndex(name); i >= 0 {
+			left[i] += len(hits)
+
+			continue
+		}
+
+		for _, loc := range hits {
 			line := bytes.Count(src[:loc[0]], []byte("\n")) + 1
 			report = append(report, fmt.Sprintf("%s:%d: %q names the maintainer's environment", name, line, src[loc[0]:loc[1]]))
 		}
 	}
 
+	for i, a := range allowed {
+		if left[i] == 0 {
+			report = append(report, fmt.Sprintf("%s: no forbidden name is left under this allowance, so the entry can be deleted (it was: %s)", a.path, a.why))
+		}
+	}
+
 	if len(report) > 0 {
-		t.Errorf("the repository names the maintainer's cluster again; rename it to <e2e-namespace> or a generic example:\n%s",
+		t.Errorf("the name check failed; rename a name to <e2e-namespace> or a generic example, or delete a stale allowance:\n%s",
 			strings.Join(report, "\n"))
 	}
 }

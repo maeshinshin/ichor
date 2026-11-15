@@ -135,6 +135,8 @@ type adoptWriteMachine struct {
 
 // adoptWriteIchor is Ichor's install step, the one `ichor init` runs.
 type adoptWriteIchor struct {
+	// Namespace is where Manifest deploys the controller; empty is ichorControllerNamespace.
+	Namespace       string
 	Manifest        []byte
 	NetworkPolicies []byte
 

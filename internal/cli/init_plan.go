@@ -42,14 +42,16 @@ var macPattern = regexp.MustCompile(`^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$`)
 // "recommended" and the one `--preset`'s flag default uses.
 const defaultPreset = "standard"
 
-// ichorControllerNamespace is the fixed namespace Ichor's own install
-// manifest (internal/installmanifest) always deploys the controller
-// into -- config/manager's kustomize base names it literally, matching
-// the RBAC markers' own "ichor-system" literal. init's
-// --namespace flag defaults to this and warns if overridden, since a
-// Secret or CR created anywhere else is one the deployed controller
-// cannot see (it resolves the bundle Secret in its own namespace, not
-// the TalosCluster's).
+// ichorControllerNamespace is the namespace Ichor's own install
+// manifest (internal/installmanifest) deploys the controller into --
+// config/manager's kustomize base names it literally, matching the RBAC
+// markers' own "ichor-system" literal -- and so the default of every
+// --namespace flag. It is not fixed: the controller reads its namespace
+// from POD_NAMESPACE (the downward API), and the Helm chart deploys it
+// into the release's namespace, so a Helm install may use another.
+// The controller resolves the bundle Secret in that namespace, not the
+// TalosCluster's; adopt asks the cluster (ichorPresence.Namespace)
+// before it writes one. init still warns on any other value.
 const ichorControllerNamespace = "ichor-system"
 
 // schedulableTrue and schedulableFalse are TalosClusterControlPlane.

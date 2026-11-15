@@ -196,6 +196,11 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		if err := checkIchorPresence(ctx, deps.K8s, deps.findings(adoptInfo), ichorversion.Version, deps.RequireIchor); err != nil {
 			return err
 		}
+
+		// Before anything is read or written: the bundle Secret goes where the controller reads it.
+		if err := checkControllerNamespace(ctx, deps.K8s, deps.Ichor, namespace); err != nil {
+			return err
+		}
 	}
 
 	var st *adoptState
@@ -556,8 +561,10 @@ func loadAdoption(ctx context.Context, clusterName, namespace string, deps adopt
 		return nil, err
 	}
 
-	// The controller's fixed namespace, not --namespace: that is where the controller reads
+	// The controller's namespace, not --namespace: that is where the controller reads
 	// authSecretRef Secrets from, so the CLI resolves the same ones.
+	// shortcut: this is the default namespace, right for every install but a Helm install into
+	// another one; drop when the namespace runAdopt checks is carried here.
 	if st.sys, err = render.ResolveSystemInputs(ctx, deps.K8s, ichorControllerNamespace, st.cluster); err != nil {
 		return nil, fmt.Errorf("adopt: %w", err)
 	}

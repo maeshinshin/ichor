@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -140,7 +141,7 @@ func newNoCNIFlow(t *testing.T) *noCNIFlow {
 	d.ReadIdentity = func(_ context.Context, address string) (controller.HardwareIdentity, error) {
 		return controller.HardwareIdentity{UUID: "uuid-" + address, Serial: "s"}, nil
 	}
-	d.Ichor = &adoptWriteIchor{Manifest: []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ichor-install-marker\n  namespace: default\n")}
+	d.Ichor = &adoptWriteIchor{Namespace: testNamespace, Manifest: []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ichor-install-marker\n  namespace: default\n")}
 	d.BootstrapCilium = func(_ context.Context, c *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode) error {
 		f.mu.Lock()
 		f.bootstrap = append(f.bootstrap, bootstrapCall{cluster: c.DeepCopy(), mode: mode})
@@ -349,7 +350,7 @@ func TestAdoptNoCNI_InstalledValuesEqualTheControllersValues(t *testing.T) {
 func TestAdoptNoCNI_RerunAfterAFailureFinishes(t *testing.T) {
 	f := newNoCNIFlow(t)
 	good := f.deps.Ichor
-	f.deps.Ichor = &adoptWriteIchor{Manifest: []byte("kind: [not a manifest")}
+	f.deps.Ichor = &adoptWriteIchor{Namespace: testNamespace, Manifest: []byte("kind: [not a manifest")}
 
 	if err := f.run(t); err == nil {
 		t.Fatal("first run succeeded with an unusable install manifest")
@@ -461,6 +462,14 @@ func TestAdoptNoCNI_IchorAlreadyPresentStillInstallsCiliumFirst(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// The controller's Deployment says which namespace it reads the bundle from.
+	deploy := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{
+		Name: "ichor-controller-manager", Namespace: testNamespace, Labels: map[string]string{"control-plane": "controller-manager"},
+	}}
+	if err := f.env.k8s.Create(context.Background(), deploy); err != nil {
+		t.Fatal(err)
+	}
+
 	f.env.mu.Lock()
 	*f.env.writes = nil
 	f.env.mu.Unlock()
@@ -514,5 +523,61 @@ func TestAdoptRerunWritesTheMachineAFailedRunNeverCreated(t *testing.T) {
 		if f.env.held(t, name) {
 			t.Errorf("machine %s is still held after the rerun", name)
 		}
+	}
+}
+
+// The controller reads the bundle Secret from its own namespace: a --namespace that differs is
+// refused before the bundle is saved or anything is created, and says both namespaces.
+func TestAdoptRefusesANamespaceThatIsNotTheControllersBeforeWritingAnything(t *testing.T) {
+	f := newNoCNIFlow(t)
+	saved := false
+	f.deps.SaveBundle = func() error { saved = true; return nil }
+
+	err := runAdopt(context.Background(), f.env.cluster.Name, "elsewhere", f.deps)
+	if err == nil {
+		t.Fatal("adopt accepted a --namespace the controller does not run in")
+	}
+
+	for _, want := range []string{`"elsewhere"`, `"` + testNamespace + `"`, "nothing was written"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal %q does not contain %s", err, want)
+		}
+	}
+
+	if ev := f.events(); len(ev) != 0 || saved || len(f.calls()) != 0 {
+		t.Errorf("something was written before the refusal: events %v, bundle saved %v, Cilium installs %d", ev, saved, len(f.calls()))
+	}
+
+	var secrets corev1.SecretList
+	if err := f.env.k8s.List(context.Background(), &secrets, client.InNamespace("elsewhere")); err != nil || len(secrets.Items) != 0 {
+		t.Errorf("Secrets in the wrong namespace: %d (%v)", len(secrets.Items), err)
+	}
+}
+
+// The expected namespace is the installed controller's, wherever Helm put it, and ichor-system when
+// Ichor is not there and adopt installs it.
+func TestCheckControllerNamespace(t *testing.T) {
+	ctx := context.Background()
+	empty := fake.NewClientBuilder().WithScheme(newTestScheme(t)).Build()
+
+	if err := checkControllerNamespace(ctx, empty, &adoptWriteIchor{}, ichorControllerNamespace); err != nil {
+		t.Errorf("no Ichor, default namespace: %v", err)
+	}
+
+	if err := checkControllerNamespace(ctx, empty, &adoptWriteIchor{}, "other"); err == nil {
+		t.Error("no Ichor, --namespace other: accepted")
+	}
+
+	controller := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{
+		Name: "ichor-controller-manager", Namespace: "tenant", Labels: map[string]string{"control-plane": "controller-manager"},
+	}}
+	helm := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(controller).Build()
+
+	if err := checkControllerNamespace(ctx, helm, &adoptWriteIchor{}, "tenant"); err != nil {
+		t.Errorf("controller in tenant, --namespace tenant: %v", err)
+	}
+
+	if err := checkControllerNamespace(ctx, helm, &adoptWriteIchor{}, ichorControllerNamespace); err == nil {
+		t.Error("controller in tenant, default --namespace: accepted")
 	}
 }

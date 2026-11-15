@@ -221,6 +221,34 @@ func checkIchorPresence(ctx context.Context, c client.Reader, w io.Writer, cliVe
 		p.Version(), p.ReleaseName(), cliVersion, p.helmUpgradeCommand(cliVersion))
 }
 
+// checkControllerNamespace refuses a --namespace other than the one the controller runs in: it
+// reads the cluster's secrets bundle Secret from its own namespace, so a bundle written anywhere
+// else is never found and the adoption would still report success. That namespace is the
+// installed Ichor's, or the one adopt's own install deploys it to. Nothing is written yet.
+func checkControllerNamespace(ctx context.Context, c client.Reader, install *adoptWriteIchor, namespace string) error {
+	p, err := ichorPresent(ctx, c)
+	if err != nil {
+		return err
+	}
+
+	want := ichorControllerNamespace
+
+	switch {
+	case p.Present():
+		want = p.Namespace()
+	case install != nil && install.Namespace != "":
+		want = install.Namespace
+	}
+
+	if namespace == want {
+		return nil
+	}
+
+	return fmt.Errorf("adopt: --namespace %q is not %q, the namespace Ichor's controller runs in; the controller reads the secrets bundle "+
+		"Secret from its own namespace, so a bundle written to %q would never be found. Run adopt again with --namespace %s; nothing was written",
+		namespace, want, namespace, want)
+}
+
 // semverOf is v with its leading "v" made certain, or "" when it is not a release version (a
 // "dev" CLI cannot be compared).
 func semverOf(v string) string {

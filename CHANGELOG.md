@@ -271,10 +271,11 @@ node's network for it.
 
 - The guides, concepts, getting started, the design document, the diagrams and
   the README name the verb-first commands.
-- `create-the-cluster` is one page per endpoint pattern, the virtual IP first,
-  then the load balancer and the node address. Each page shows the interactive,
-  `init.yaml` and flag forms. Getting started is one page per step, and the
-  architecture reference is one page per section.
+- `create-the-cluster` is one page per endpoint, the virtual IP first, then the
+  single node endpoint, which also covers a load balancer in its own section.
+  Each page shows the interactive, `init.yaml` and flag forms as its sections.
+  Getting started is one page per step, and the architecture reference is one
+  page per section.
 - A new page, Certificate names, states what each serving certificate holds by
   default and what changing the names costs.
 - The version banner is in the page's HTML from the start, so the page does not

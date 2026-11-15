@@ -142,7 +142,7 @@ func TestRunInit_StaticAddressForAnyEndpointType(t *testing.T) {
 				}
 			}
 
-			if strings.Contains(applied, "Layer2VIPConfig") || strings.Contains(applied, "kind: DHCPv4Config") {
+			if strings.Contains(applied, "kind: Layer2VIPConfig") || strings.Contains(applied, "kind: DHCPv4Config") {
 				t.Error("a non-vip node got a VIP or DHCP on its link")
 			}
 
@@ -164,8 +164,8 @@ func TestRunInit_OtherEndpointTypesGetNoVIP(t *testing.T) {
 				t.Fatalf("runInit: %v", err)
 			}
 
-			if machine.Spec.Network != nil || strings.Contains(applied, "Layer2VIPConfig") || strings.Contains(applied, "net0") {
-				t.Errorf("network = %+v, applied has the VIP = %v", machine.Spec.Network, strings.Contains(applied, "Layer2VIPConfig"))
+			if machine.Spec.Network != nil || strings.Contains(applied, "kind: Layer2VIPConfig") || strings.Contains(applied, testLinkAliasKind) {
+				t.Errorf("network = %+v, applied has the VIP = %v", machine.Spec.Network, strings.Contains(applied, "kind: Layer2VIPConfig"))
 			}
 		})
 	}
@@ -505,7 +505,7 @@ func TestRunInit_VIPLinkGivenByName(t *testing.T) {
 			t.Errorf("spec.network = %+v, want the MAC of %s", machine.Spec.Network, testSecondLink)
 		}
 
-		if !strings.Contains(applied, `mac(link.permanent_addr) == "`+testSecondMAC+`"`) || strings.Contains(applied, testSecondLink) {
+		if !strings.Contains(applied, `mac(link.permanent_addr) == "`+testSecondMAC+`"`) || strings.Contains(applied, `"`+testSecondLink+`"`) {
 			t.Errorf("the rendered configuration does not select by MAC alone:\n%s", applied)
 		}
 

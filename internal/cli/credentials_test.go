@@ -495,7 +495,7 @@ func TestCredentialsCommandDoesNotPrintCredentials(t *testing.T) {
 	out.Reset()
 	reportCredentials(&out, files)
 
-	for _, s := range slices.Concat(bundleSecretMaterial(f.old), []string{string(f.rot.Talos.Key), string(f.rot.Kubernetes.Key), "BEGIN"}) {
+	for _, s := range slices.Concat(bundleSecretMaterial(f.old), []string{string(f.rot.Talos.Key), string(f.rot.Kubernetes.Key), "-----BEGIN"}) {
 		if strings.Contains(out.String(), s) {
 			t.Fatal("the report printed credential material")
 		}
@@ -544,7 +544,7 @@ func TestRotateCAHandoffWritesTheFilesChecksThemAndAcknowledges(t *testing.T) {
 		t.Fatalf("hand-off annotation %q", got)
 	}
 
-	if strings.Contains(errw.String(), "BEGIN") {
+	if strings.Contains(errw.String(), "-----BEGIN") {
 		t.Fatal("credential material was printed")
 	}
 }

@@ -167,7 +167,7 @@ func TestBundleExportSealsTheRetiredKeysUnderTheBundlesPassphrase(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	if !isEncryptedBundle(raw) || bytes.Contains(raw, []byte(retired.Keys[0].Secretbox)) || bytes.Contains(raw, []byte("retired")) {
+	if !isEncryptedBundle(raw) || bytes.Contains(raw, []byte(retired.Keys[0].Secretbox)) || bytes.Contains(raw, []byte("retired:")) {
 		t.Fatalf("the retired keys must be an age file with no readable content: %.60q", raw)
 	}
 

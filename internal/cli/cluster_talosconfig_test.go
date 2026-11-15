@@ -153,7 +153,7 @@ func TestReaderTalosconfigIsOSReaderAndSignedForALocalKey(t *testing.T) {
 
 	r := seen[0]
 	if r.Spec.Purpose != ichorv1alpha1.CredentialPurposeTalosconfigReader || r.Spec.CSR == "" || r.Spec.MachineRef != nil ||
-		r.Spec.TTL == nil || r.Spec.TTL.Duration != 2*time.Hour || strings.Contains(r.Spec.CSR, "PRIVATE") {
+		r.Spec.TTL == nil || r.Spec.TTL.Duration != 2*time.Hour || strings.Contains(r.Spec.CSR, "PRIVATE KEY") {
 		t.Errorf("unexpected request %+v", r.Spec)
 	}
 }

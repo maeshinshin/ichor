@@ -123,7 +123,7 @@ func runSetPaused(ctx context.Context, c *apiClients, out, errw io.Writer, name 
 	return printAPI(out, resp.Msg, renderOperationPaused)
 }
 
-var pauseOperationCmd = newPauseCmd("Stop the operation from advancing any further node (the cluster lock stays held, nothing is undone)",
+var pauseOperationCmd = newPauseCmd("Stop the operation from advancing any further node (nothing is undone; the cluster lock is released while it waits, and a resume takes it again, or waits if another operation holds it)",
 	"  ichor pause operation upgrade-talos-x7k2p", true)
 var resumeOperationCmd = newPauseCmd("Let a paused operation continue; one paused by a failed step runs that step again, so fix the cause first",
 	"  ichor resume operation upgrade-talos-x7k2p", false)

@@ -32,7 +32,7 @@ import (
 func TestAdoptRefusesAContractBelowV114(t *testing.T) {
 	st := &adoptState{fresh: true, cluster: &ichorv1alpha1.TalosCluster{}}
 	st.cluster.Name = "demo"
-	st.cluster.Spec.TalosVersion = "v1.13.2"
+	st.cluster.Spec.TalosVersion = opOldVersion
 
 	err := st.chooseContract(adoptDeps{ContractOverride: "v1.13"})
 	if err == nil {

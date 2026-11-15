@@ -214,7 +214,7 @@ func TestChartCiliumPolicyPortsAndSelectorsComeFromTheDeployments(t *testing.T) 
 
 func TestChartCiliumPoliciesDropWhatIsOff(t *testing.T) {
 	docs := renderChartWithValues(t, "ichor", "networkPolicy.cilium.enabled=true", "webhook.enabled=false",
-		"metrics.enabled=false", "ichorUI.enabled=false")
+		"metrics.enabled=false", uiOffSet)
 	specs := cnpSpecs(t, docs, "ichor-")
 
 	if specs["ui"] != nil || specs["installer"] != nil {

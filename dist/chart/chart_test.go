@@ -295,8 +295,10 @@ func helmTemplate(release string, flags, sets []string) ([]byte, error) {
 // ichorUI.enabled, ichorUI.users.enabled or ichorUI.oidc.enabled gets exactly what it set.
 func withSignIn(sets []string) []string {
 	for _, s := range sets {
-		if strings.HasPrefix(s, "ichorUI.users.enabled") || strings.HasPrefix(s, "ichorUI.oidc.enabled") || strings.HasPrefix(s, "ichorUI.enabled") {
-			return sets
+		for _, key := range []string{"ichorUI.users.enabled", "ichorUI.oidc.enabled", "ichorUI.enabled"} {
+			if strings.HasPrefix(s, key) {
+				return sets
+			}
 		}
 	}
 
@@ -682,7 +684,7 @@ func impersonationRules(role map[string]any) map[string][]string {
 // internal port, the volumes, the credentials Secret, the narrowed impersonate groups and the
 // Role rules, and refuses to render without an external URL.
 func TestUIUsers(t *testing.T) {
-	off := renderChartWithValues(t, "ichor", "ichorUI.enabled=false")
+	off := renderChartWithValues(t, "ichor", uiOffSet)
 	if find(off, "Secret", "ichor-user-credentials") != nil {
 		t.Error("the credentials Secret renders by default")
 	}
@@ -756,7 +758,7 @@ func TestUIUsers(t *testing.T) {
 		t.Error("users.enabled rendered without an external URL")
 	}
 
-	both := renderChartWithValues(t, "ichor", "ichorUI.users.enabled=true", "ichorUI.users.externalURL=https://x",
+	both := renderChartWithValues(t, "ichor", "ichorUI.users.enabled=true", usersURLShort,
 		"ichorUI.oidc.enabled=true", "ichorUI.oidc.issuer=https://idp", "ichorUI.oidc.clientId=c",
 		"ichorUI.oidc.impersonate.groups={oidc:platform}", "ichorUI.oidc.impersonate.users={oidc:alice}")
 	got := impersonationRules(find(both, kindClusterRole, ichorUIRoleName))["groups"]

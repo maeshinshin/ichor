@@ -30,7 +30,7 @@ func TestAdoptSignIn_TLSAndKubeconfigFlagsReachIchorUI(t *testing.T) {
 
 	args := f.uiArgs(t)
 	for _, want := range []string{
-		"--users-enabled=true", "--external-url=" + testUIURL, "--tls-cert-file=/etc/ichor/tls/tls.crt",
+		argUsersEnabled, "--external-url=" + testUIURL, "--tls-cert-file=/etc/ichor/tls/tls.crt",
 		"--kube-api-server-url=" + testKubeAPIURL, "--kube-api-tls-server-name=k8s.example.com",
 	} {
 		if !slices.Contains(args, want) {
@@ -85,7 +85,7 @@ func TestAdoptSignIn_TLSFlagsAreCheckedBeforeAnythingIsWritten(t *testing.T) {
 // nothing. It is refused instead, with what to do.
 func TestAdoptSignIn_FlagsThatWouldChangeNothingAreRefused(t *testing.T) {
 	usersOn := uiObjects()
-	usersOn[0].(*appsv1.Deployment).Spec.Template.Spec.Containers[0].Args = []string{"--users-enabled=true", "--external-url=" + testUIURL}
+	usersOn[0].(*appsv1.Deployment).Spec.Template.Spec.Containers[0].Args = []string{argUsersEnabled, "--external-url=" + testUIURL}
 
 	for name, tc := range map[string]struct {
 		objs []client.Object

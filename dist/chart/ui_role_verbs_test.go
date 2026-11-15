@@ -18,6 +18,9 @@ const (
 	oidcClientID   = "ichorUI.oidc.clientId=ichor"
 	oidcIssuerSet  = "ichorUI.oidc.issuer=https://idp.example.test"
 	installerOn    = "installer.enabled=true"
+	uiOffSet       = "ichorUI.enabled=false"
+	usersURLShort  = "ichorUI.users.externalURL=https://x"
+	impGroupsSet   = "ichorUI.oidc.impersonate.groups={dev}"
 	allowOpenSet   = "ichorUI.allowUnauthenticated=true"
 )
 
@@ -92,7 +95,7 @@ func TestUIServiceAccountHoldsNoStartVerb(t *testing.T) {
 		{usersOn, usersURL},
 		{
 			oidcEnabledSet, oidcIssuerSet, oidcClientID,
-			"ichorUI.oidc.impersonate.groups={dev}", "ichorUI.oidc.impersonate.users={alice}",
+			impGroupsSet, "ichorUI.oidc.impersonate.users={alice}",
 		},
 		{"ichorUI.credentials.serviceAccount=true"},
 		{"ichorUI.diagnostics.serviceAccount=true"},

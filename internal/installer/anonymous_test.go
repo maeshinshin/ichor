@@ -13,7 +13,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-const uiAddr = "--addr=:8443"
+const (
+	uiAddr       = "--addr=:8443"
+	argIssuerURL = "--external-url=https://i.example.com"
+)
 
 func uiWith(args []string, env ...corev1.EnvVar) *appsv1.Deployment {
 	return &appsv1.Deployment{Spec: appsv1.DeploymentSpec{Template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
@@ -25,7 +28,7 @@ func uiWith(args []string, env ...corev1.EnvVar) *appsv1.Deployment {
 // path of every upgrade. However it was left open (the flag, the variable, or both, with or without a
 // sign-in), what comes out starts without the open mode, and the notice is for the installs that had it.
 func TestUpgradeDropsTheOpenMode(t *testing.T) {
-	open := corev1.EnvVar{Name: envAllowUnauthenticated, Value: "true"}
+	open := corev1.EnvVar{Name: envAllowUnauthenticated, Value: "yes"}
 
 	cases := []struct {
 		name    string
@@ -36,9 +39,9 @@ func TestUpgradeDropsTheOpenMode(t *testing.T) {
 		{"flag", uiWith([]string{uiAddr, argAllowAnonymous}), true},
 		{"variable", uiWith([]string{uiAddr}, open), true},
 		{"flag and variable", uiWith([]string{uiAddr, argAllowAnonymous}, open), true},
-		{"flag beside Ichor users", uiWith([]string{uiAddr, argAllowAnonymous, "--users-enabled=true", "--external-url=https://i.example.com"}), true},
+		{"flag beside Ichor users", uiWith([]string{uiAddr, argAllowAnonymous, "--users-enabled=true", argIssuerURL}), true},
 		{"flag beside external OIDC", uiWith([]string{uiAddr, argAllowAnonymous}, corev1.EnvVar{Name: "ICHOR_OIDC_ISSUER", Value: "https://idp"}), true},
-		{"ichor users", uiWith([]string{uiAddr, "--users-enabled=true", "--external-url=https://i.example.com"}), false},
+		{"ichor users", uiWith([]string{uiAddr, "--users-enabled=true", argIssuerURL}), false},
 	}
 
 	for _, tc := range cases {
@@ -78,9 +81,9 @@ func TestUpgradeRefusesALiveUIWithNoSignIn(t *testing.T) {
 	}{
 		"nothing":                                {uiWith([]string{uiAddr}), true},
 		"the removed flag":                       {uiWith([]string{uiAddr, argAllowAnonymous}), true},
-		"the removed variable":                   {uiWith([]string{uiAddr}, corev1.EnvVar{Name: envAllowUnauthenticated, Value: "true"}), true},
-		"an issuer URL (users are what it sets)": {uiWith([]string{uiAddr, "--external-url=https://i.example.com"}), false},
-		"Ichor users":                            {uiWith([]string{uiAddr, "--users-enabled=true", "--external-url=https://i.example.com"}), false},
+		"the removed variable":                   {uiWith([]string{uiAddr}, corev1.EnvVar{Name: envAllowUnauthenticated, Value: "yes"}), true},
+		"an issuer URL (users are what it sets)": {uiWith([]string{uiAddr, argIssuerURL}), false},
+		"Ichor users":                            {uiWith([]string{uiAddr, "--users-enabled=true", argIssuerURL}), false},
 		"OIDC by variable":                       {uiWith([]string{uiAddr}, oidc), false},
 		"OIDC by flag":                           {uiWith([]string{uiAddr, "--oidc-issuer=https://idp"}), false},
 	} {

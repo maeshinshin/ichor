@@ -11,6 +11,8 @@ import (
 
 // TestOpenModeIsRefusedAtStartup runs main with the removed flag, with the removed environment
 // variable and with no sign-in configured at all. Each must stop the process with the instruction rather than start it read-only.
+const wasRemoved = "was removed"
+
 func TestOpenModeIsRefusedAtStartup(t *testing.T) {
 	if args := os.Getenv("ICHOR_UI_TEST_MAIN_ARGS"); args != "" {
 		os.Args = append([]string{"ichor-ui"}, strings.Fields(args)...)
@@ -24,9 +26,9 @@ func TestOpenModeIsRefusedAtStartup(t *testing.T) {
 		env  []string
 		want string
 	}{
-		"flag":         {args: "--allow-unauthenticated=true", want: "was removed"},
-		"bare":         {args: "--allow-unauthenticated", want: "was removed"},
-		"variable":     {args: "--addr=:0", env: []string{"ICHOR_ALLOW_UNAUTHENTICATED=true"}, want: "was removed"},
+		"flag":         {args: "--allow-unauthenticated=true", want: wasRemoved},
+		"bare":         {args: "--allow-unauthenticated", want: wasRemoved},
+		"variable":     {args: "--addr=:0", env: []string{"ICHOR_ALLOW_UNAUTHENTICATED=true"}, want: wasRemoved},
 		"unconfigured": {args: "--addr=:0", want: "does not start without one"},
 	} {
 		cmd := exec.Command(os.Args[0], "-test.run=^TestOpenModeIsRefusedAtStartup$")

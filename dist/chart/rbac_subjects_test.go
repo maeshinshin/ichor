@@ -42,7 +42,7 @@ func TestRoleBindingSubjectsExist(t *testing.T) {
 		{installerOn},
 		{"cniHelm.enabled=false"},
 		{"rbac.helpers.enabled=true"},
-		{usersOn, "ichorUI.users.externalURL=https://x"},
+		{usersOn, usersURLShort},
 		{"ichorUI.credentials.serviceAccount=true"},
 		{"ichorUI.diagnostics.serviceAccount=true"},
 	}

@@ -21,7 +21,7 @@ func TestChartRefusesAnUnconfiguredUI(t *testing.T) {
 			return
 		}
 
-		for _, want := range []string{"ichorUI.enabled needs a sign-in", usersOn, "ichorUI.oidc.enabled=true", "--bootstrap", "ichorUI.enabled=false"} {
+		for _, want := range []string{"ichorUI.enabled needs a sign-in", usersOn, "ichorUI.oidc.enabled=true", "--bootstrap", uiOffSet} {
 			if !strings.Contains(string(out), want) {
 				t.Errorf("%s: the refusal does not say %q: %s", name, want, out)
 			}
@@ -35,7 +35,7 @@ func TestChartRefusesAnUnconfiguredUI(t *testing.T) {
 		"users off":             {noUsers},
 		"both off":              {noUsers, "ichorUI.oidc.enabled=false"},
 		"enabled, nothing else": {"ichorUI.enabled=true", noUsers},
-		"an URL but no switch":  {noUsers, "ichorUI.users.externalURL=https://x"},
+		"an URL but no switch":  {noUsers, usersURLShort},
 		"with TLS and replicas": {noUsers, "ichorUI.tls.secretName=x", "ichorUI.replicas=1"},
 		"with the installer":    {noUsers, installerOn},
 	} {
@@ -47,9 +47,9 @@ func TestChartRefusesAnUnconfiguredUI(t *testing.T) {
 	for name, sets := range map[string][]string{
 		"users": {usersOn, usersURL},
 		"oidc": {
-			oidcEnabledSet, oidcIssuerSet, oidcClientID, "ichorUI.oidc.impersonate.groups={dev}", "ichorUI.oidc.impersonate.users={alice}",
+			oidcEnabledSet, oidcIssuerSet, oidcClientID, impGroupsSet, "ichorUI.oidc.impersonate.users={alice}",
 		},
-		"no ichor-ui": {"ichorUI.enabled=false"},
+		"no ichor-ui": {uiOffSet},
 	} {
 		if out, err := renderChartWithValuesErr("ichor", sets...); err != nil {
 			t.Errorf("%s: %v\n%s", name, err, out)

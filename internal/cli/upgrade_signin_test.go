@@ -16,6 +16,8 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
+const argUsersEnabled = "--users-enabled=true"
+
 // upgradeCluster is a fake cluster with ichor-ui and the controller, as an install from before sign-in became
 // the default has them, and a TalosCluster at the given version contract.
 func upgradeCluster(t *testing.T, contract string, extra ...client.Object) client.Client {
@@ -54,7 +56,7 @@ func TestUpgradeSignIn_AnInstallWithNoSignInEndsWithSignInOn(t *testing.T) {
 			err := upgradeWithSignIn(context.Background(), k, strings.NewReader(""), &errw, initOptions{}, true, func() error {
 				started++
 
-				if args := uiDeploymentArgs(t, k); !slices.Contains(args, "--users-enabled=true") {
+				if args := uiDeploymentArgs(t, k); !slices.Contains(args, argUsersEnabled) {
 					t.Errorf("the upgrade started before sign-in was on: %v", args)
 				}
 
@@ -102,7 +104,7 @@ func TestUpgradeSignIn_AnInstallWithNoSignInEndsWithSignInOn(t *testing.T) {
 // TestUpgradeSignIn_AsksBeforeAnythingIsWritten: without --yes the answer decides, and anything but yes leaves
 // the cluster as it was and does not start the upgrade.
 func TestUpgradeSignIn_AsksBeforeAnythingIsWritten(t *testing.T) {
-	for name, answer := range map[string]string{"no": "n\n", "nothing": ""} {
+	for name, answer := range map[string]string{"no": "n\n", "empty input": ""} {
 		t.Run(name, func(t *testing.T) {
 			k := upgradeCluster(t, testVersionContract)
 
@@ -117,7 +119,7 @@ func TestUpgradeSignIn_AsksBeforeAnythingIsWritten(t *testing.T) {
 				t.Fatalf("err = %v, want an abort", err)
 			}
 
-			if args := uiDeploymentArgs(t, k); slices.Contains(args, "--users-enabled=true") {
+			if args := uiDeploymentArgs(t, k); slices.Contains(args, argUsersEnabled) {
 				t.Errorf("ichor-ui was switched without consent: %v", args)
 			}
 
@@ -138,7 +140,7 @@ func TestUpgradeSignIn_AsksBeforeAnythingIsWritten(t *testing.T) {
 // authenticator step; the users step does not depend on it.
 func TestUpgradeSignIn_LeavesWhatHasSignInAlone(t *testing.T) {
 	usersOn := uiObjects()
-	usersOn[0].(*appsv1.Deployment).Spec.Template.Spec.Containers[0].Args = []string{"--users-enabled=true", "--external-url=" + testUIURL}
+	usersOn[0].(*appsv1.Deployment).Spec.Template.Spec.Containers[0].Args = []string{argUsersEnabled, "--external-url=" + testUIURL}
 
 	cluster := newTestCluster()
 	cluster.Namespace = ichorControllerNamespace
@@ -162,7 +164,7 @@ func TestUpgradeSignIn_LeavesWhatHasSignInAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if args := uiDeploymentArgs(t, old); !slices.Contains(args, "--users-enabled=true") {
+	if args := uiDeploymentArgs(t, old); !slices.Contains(args, argUsersEnabled) {
 		t.Errorf("a cluster below v1.14 kept ichor-ui from sign-in: %v", args)
 	}
 

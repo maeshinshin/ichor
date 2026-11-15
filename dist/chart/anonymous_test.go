@@ -21,16 +21,16 @@ func TestAllowUnauthenticatedIsRefused(t *testing.T) {
 		t.Error("the removed flag renders by default")
 	}
 
-	users := []string{usersOn, "ichorUI.users.externalURL=https://x"}
+	users := []string{usersOn, usersURLShort}
 
 	for name, sets := range map[string][]string{
 		"alone":              {allowOpenSet},
 		"beside Ichor users": slices.Concat([]string{allowOpenSet}, users),
 		"beside OIDC": {
 			allowOpenSet, oidcEnabledSet, oidcIssuerSet, oidcClientID,
-			"ichorUI.oidc.impersonate.groups={dev}", "ichorUI.oidc.impersonate.users={alice}",
+			impGroupsSet, "ichorUI.oidc.impersonate.users={alice}",
 		},
-		"with ichor-ui off": {"ichorUI.enabled=false", allowOpenSet},
+		"with ichor-ui off": {uiOffSet, allowOpenSet},
 		"as a string":       {"ichorUI.allowUnauthenticated=\"true\""},
 	} {
 		out, err := renderChartWithValuesErr("ichor", sets...)

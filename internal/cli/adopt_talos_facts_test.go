@@ -227,10 +227,10 @@ func TestCheckTalosVersions(t *testing.T) {
 
 func TestContractCandidates(t *testing.T) {
 	cases := map[string][]string{
-		ver1143:   {"v1.14", ver113, adoptProbeFloor},
-		"v1.13.2": nil,
-		"v1.12.0": nil,
-		"junk":    nil,
+		ver1143:      {"v1.14", ver113, adoptProbeFloor},
+		opOldVersion: nil,
+		"v1.12.0":    nil,
+		"junk":       nil,
 	}
 
 	for in, want := range cases {

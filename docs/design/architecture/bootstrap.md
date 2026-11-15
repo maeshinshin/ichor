@@ -41,7 +41,8 @@ probed on the first control plane alone, from its running version down to v1.12 
 one with the fewest unrepresentable paths wins; the probe goes below the floor so that a
 configuration generated for an older contract is refused by name), and `--version-contract v1.14`
 is the way out when an older contract wins on a control plane that runs v1.14. The v1.14 floor is the
-check every node passes, including a node added with `--add-machine`. Above that floor, a cluster is adopted as it runs, whatever its version against this Ichor's set: a version
+check every node of an adoption passes; a node added with `--add-machine` to a cluster that was adopted
+before passes a v1.12 floor, since that cluster's sign-in and issuer exist already. Above that floor, a cluster is adopted as it runs, whatever its version against this Ichor's set: a version
 the compatibility table does not know at all is refused, and an incompatible pair is reported and adopted. It works in four phases, and nothing is applied to a node until the
 last one:
 

@@ -21,6 +21,20 @@ network for it.
 What in this release can refuse something that used to work, or change what a
 command does. Each item is described where it is listed below.
 
+- **A Helm values file with no sign-in stops rendering: add `--set
+  ichorUI.users.enabled=true --set ichorUI.users.externalURL=https://localhost:8443`
+  (or `ichorUI.oidc`, or `ichorUI.enabled=false`).** The chart refuses to render an
+  ichor-ui with neither `ichorUI.users.enabled` nor `ichorUI.oidc.enabled`, so the
+  default values, and any values file of yours that sets neither, fail `helm install`,
+  `helm upgrade`, `helm template` and `helm lint` with a message that names what to
+  set. `externalURL` is the https address browsers and the CLI reach ichor-ui at;
+  `https://localhost:8443` is the default issuer of `ichor init` and is reached with
+  `ichor ui`. Before you upgrade a release that ran without a sign-in, add it to the
+  values, then create the first administrator with `ichor create user admin --role
+  admin --generate --bootstrap`, set `spec.authentication.ichor` on the
+  `TalosCluster` and run `ichor rollout config` (Users and login); users need a Talos
+  v1.14 contract, and OIDC is the alternative without it. `ichor upgrade ichor` does not
+  touch a Helm install. Your own CI that renders the chart needs the same addition.
 - **Scripts.** Every command moved to a verb-first name, `restore` lost its mode
   flags, and `-o FILE` became `--out FILE` (CLI).
 - **A `TalosCluster` whose endpoint type is `dns` or `loadBalancer`** still
@@ -57,17 +71,8 @@ command does. Each item is described where it is listed below.
     `TalosOperation`, the controller's own patch upgrades) changes nothing and
     says to use the command. It takes `--ui-url`, `--admin-user`, `--ui-tls-*` and
     `--kube-api-*`.
-  - Helm: **the chart refuses to render an ichor-ui with no sign-in.** `helm
-    install` and `helm upgrade` fail unless `ichorUI.users.enabled=true` with
-    `ichorUI.users.externalURL`, or `ichorUI.oidc.enabled=true`, is set (or
-    `ichorUI.enabled=false`). The default values no longer render, so `helm lint`
-    and `helm template` of your own wrapper need them too. Before you upgrade a
-    release that ran without a sign-in, set one of them in the values, then create the
-    first administrator with `ichor create user admin --role admin --generate
-    --bootstrap`, set `spec.authentication.ichor` on the `TalosCluster` and run
-    `ichor rollout config` (Users and login). `ichor upgrade ichor` does not touch a
-    Helm install. A render with `ichorUI.allowUnauthenticated` true fails too:
-    remove it; `helm upgrade --reuse-values` keeps the old value, so add
+  - Helm: see the first item of these notes. A render with `ichorUI.allowUnauthenticated`
+    true fails too: remove it; `helm upgrade --reuse-values` keeps the old value, so add
     `--set ichorUI.allowUnauthenticated=null` to it or drop `--reuse-values`. An
     explicit `false` is still accepted.
   - An install with the flag that also has a sign-in has the flag dropped at the
@@ -78,11 +83,13 @@ command does. Each item is described where it is listed below.
     binding that relied on it to start a shutdown or a rotation without a user no
     longer works (UI).
 - **`ichor adopt` takes Talos v1.14 and later only, with no way around it.** Every
-  node it reads, a node added with `--add-machine` included, must run Talos v1.14 or
-  later: the floor was v1.12, and `--allow-unauthenticated` was the only way to adopt
+  node it reads when it adopts a cluster must run Talos v1.14 or later: the floor was
+  v1.12, and `--allow-unauthenticated` was the only way to adopt
   without Ichor's sign-in, which needs the issuer that v1.14 carries. A cluster below
   v1.14 has to be upgraded first, with `talosctl upgrade` or your usual tool. The
-  refusal names the reason and writes nothing. `ichor init`'s floor is the release
+  refusal names the reason and writes nothing. A node added with `--add-machine` to a
+  cluster adopted before keeps the v1.12 floor, since that cluster's sign-in already
+  exists. `ichor init`'s floor is the release
   set's Talos and is not affected, and `ichor upgrade talos` still lists from v1.12
   for a cluster Ichor already manages (Adopt).
 - **`ichor adopt` now turns sign-in on**, as `ichor init` does: it creates the
@@ -306,7 +313,8 @@ command does. Each item is described where it is listed below.
   named with `--version-contract` or chosen by the probe, is refused in the plan
   phase, before anything is written, with the instruction to upgrade Talos.
   Sign-in is always on and only v1.14 carries its issuer. The floor for each node
-  moved from v1.12 to v1.14 with it, and the refusal says why.
+  of an adoption moved from v1.12 to v1.14 with it, and the refusal says why; a node
+  added with `--add-machine` keeps v1.12.
 - A rerun after a partial write finishes the job. When the `TalosCluster`
   already exists, adopt now discovers the members again, as a first run does,
   and writes every member that has no `TalosMachine`, which a first run that

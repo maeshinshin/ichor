@@ -131,6 +131,43 @@ func TestAdoptAddMachineRegistersAndReleases(t *testing.T) {
 	}
 }
 
+// A node on Talos v1.13 is added to a cluster that was adopted before: the floor of --add-machine is v1.12,
+// since the cluster's sign-in and issuer exist already. (adopt refuses the same node: TestTheTwoNodeFloors.)
+func TestAdoptAddMachineTakesATalosBelowTheAdoptFloor(t *testing.T) {
+	env := newUnmanagedAddEnv(t)
+	env.newcomer(t, addAddr, testRoleWorker, newTestBundle(t))
+
+	deps := env.addDeps(t)
+	deps.DialTalos = func(_ context.Context, endpoint string) (talosConfigReader, error) {
+		return &versionedReader{fakeTalosReader: fakeTalosReader{current: env.live[endpoint]}, version: opOldVersion}, nil
+	}
+
+	if err := runAdopt(context.Background(), env.cluster.Name, testNamespace, deps); err != nil {
+		t.Fatalf("runAdopt: %v\n%s", err, env.stderr.String())
+	}
+
+	if _, ok := env.machine(t, "uuid-"+addAddr); !ok {
+		t.Fatalf("the TalosMachine was not created\n%s", env.stderr.String())
+	}
+
+	// Below v1.12 it is refused, with nothing written.
+	old := newUnmanagedAddEnv(t)
+	old.newcomer(t, addAddr, testRoleWorker, newTestBundle(t))
+
+	deps = old.addDeps(t)
+	deps.DialTalos = func(_ context.Context, endpoint string) (talosConfigReader, error) {
+		return &versionedReader{fakeTalosReader: fakeTalosReader{current: old.live[endpoint]}, version: "v1.11.5"}, nil
+	}
+
+	if err := runAdopt(context.Background(), old.cluster.Name, testNamespace, deps); !errors.Is(err, ErrTalosTooOld) {
+		t.Fatalf("runAdopt = %v, want ErrTalosTooOld", err)
+	}
+
+	if _, ok := old.machine(t, "uuid-"+addAddr); ok {
+		t.Error("the refused node was registered")
+	}
+}
+
 // --plan writes nothing, not even the machine.
 func TestAdoptAddMachinePlanWritesNothing(t *testing.T) {
 	env := newUnmanagedAddEnv(t)

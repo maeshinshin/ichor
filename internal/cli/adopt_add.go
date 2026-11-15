@@ -141,8 +141,8 @@ func (st *adoptState) loadAdded(
 		return nil // runAdopt says so and ends
 	}
 
-	// The Talos v1.14 gate runs before anything is read in full.
-	if err := gateTalosVersions(ctx, added, deps.DialTalos); err != nil {
+	// The Talos v1.12 gate runs before anything is read in full: the cluster already has its sign-in.
+	if err := gateTalosVersions(ctx, added, deps.DialTalos, addMachineMinTalos); err != nil {
 		return err
 	}
 

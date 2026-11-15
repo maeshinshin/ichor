@@ -31,10 +31,13 @@ blocks the machine and offers the wipe: `ichor reclaim node ADDRESS --cluster NA
 
 ### What you need
 
-- Every node you adopt runs Talos v1.14 or later, a node added with
-  `--add-machine` included, and the version contract of the `TalosCluster` adopt
-  creates is v1.14 or later. Sign-in cannot be turned off, and only v1.14 can carry
-  Ichor's issuer. The contract is probed on the first control plane only (a node
+- Every node you adopt runs Talos v1.14 or later, and the version contract of the
+  `TalosCluster` adopt creates is v1.14 or later. Sign-in cannot be turned off, and
+  only v1.14 can carry Ichor's issuer. A node you add with `--add-machine` to a
+  cluster that was adopted before needs only Talos v1.12 or later: the cluster's
+  sign-in and issuer exist already, `--add-machine` sets up neither (it takes none
+  of the sign-in flags), so the reason for v1.14 does not apply to it. The two
+  floors differ on purpose. The contract is probed on the first control plane only (a node
   that differs shows up in its own plan), from its running version down to v1.12 so
   that a configuration generated for an older contract is refused by name, and
   `--version-contract` names one instead. Either refusal is made before anything is

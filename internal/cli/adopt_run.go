@@ -559,7 +559,7 @@ func loadAdoption(ctx context.Context, clusterName, namespace string, deps adopt
 	}
 
 	// The Talos v1.14 gate runs before anything is read or written.
-	if err := gateTalosVersions(ctx, approved, deps.DialTalos); err != nil {
+	if err := gateTalosVersions(ctx, approved, deps.DialTalos, adoptMinTalos); err != nil {
 		return nil, err
 	}
 

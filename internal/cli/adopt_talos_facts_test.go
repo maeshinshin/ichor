@@ -198,19 +198,19 @@ func testReadTalosFactsMultidoc(t *testing.T) {
 
 func TestCheckTalosVersions(t *testing.T) {
 	ok := []nodeVersion{{"a", "v1.14.0"}, {"b", ver1143}, {"c", "v1.14.0-beta.1"}}
-	if err := checkTalosVersions(ok); err != nil {
+	if err := checkTalosVersions(ok, adoptMinTalos); err != nil {
 		t.Fatalf("v1.14 and later must pass: %v", err)
 	}
 
 	// The reason is in the refusal: sign-in cannot be turned off, and v1.14 carries its issuer.
-	err := checkTalosVersions([]nodeVersion{{opCP, ver113 + ".5"}})
+	err := checkTalosVersions([]nodeVersion{{opCP, ver113 + ".5"}}, adoptMinTalos)
 	if !errors.Is(err, ErrTalosTooOld) || !strings.Contains(err.Error(), "Talos 1.13.5 is older than the oldest version Ichor adopts (v1.14)") ||
 		!strings.Contains(err.Error(), "sign-in is always on") || !strings.Contains(err.Error(), "issuer") ||
 		!strings.Contains(err.Error(), "Upgrade Talos first") {
 		t.Fatalf("single old node: %v", err)
 	}
 
-	err = checkTalosVersions([]nodeVersion{{opCP, "v1.14.1"}, {"w2", "v1.10.0"}, {"w1", "v1.13.9"}})
+	err = checkTalosVersions([]nodeVersion{{opCP, "v1.14.1"}, {"w2", "v1.10.0"}, {"w1", "v1.13.9"}}, adoptMinTalos)
 	if !errors.Is(err, ErrTalosTooOld) {
 		t.Fatalf("mixed: %v", err)
 	}
@@ -220,8 +220,31 @@ func TestCheckTalosVersions(t *testing.T) {
 		t.Fatalf("mixed message must name exactly the old nodes: %v", msg)
 	}
 
-	if err := checkTalosVersions([]nodeVersion{{"x", "bogus"}}); err == nil || errors.Is(err, ErrTalosTooOld) {
+	if err := checkTalosVersions([]nodeVersion{{"x", "bogus"}}, adoptMinTalos); err == nil || errors.Is(err, ErrTalosTooOld) {
 		t.Fatalf("an unreadable version is an error, not a pass: %v", err)
+	}
+}
+
+// TestTheTwoNodeFloors: adopting a cluster takes Talos v1.14 and later, because sign-in is always on and only
+// v1.14 carries its issuer; a node added to a cluster that was adopted before (--add-machine) takes v1.12 and
+// later, since that cluster's sign-in and issuer exist already. The same v1.13 node is refused by one and
+// accepted by the other.
+func TestTheTwoNodeFloors(t *testing.T) {
+	v113 := []nodeVersion{{"n", ver113 + ".2"}}
+	v111 := []nodeVersion{{"n", "v1.11.5"}}
+
+	if err := checkTalosVersions(v113, adoptMinTalos); !errors.Is(err, ErrTalosTooOld) || !strings.Contains(err.Error(), "sign-in is always on") {
+		t.Errorf("adopt, a v1.13 node: %v, want ErrTalosTooOld with the sign-in reason", err)
+	}
+
+	if err := checkTalosVersions(v113, addMachineMinTalos); err != nil {
+		t.Errorf("--add-machine, a v1.13 node: %v, want accepted", err)
+	}
+
+	// The lower floor is still a floor, and says nothing about sign-in, which has no part in it.
+	err := checkTalosVersions(v111, addMachineMinTalos)
+	if !errors.Is(err, ErrTalosTooOld) || !strings.Contains(err.Error(), "(v1.12)") || strings.Contains(err.Error(), "sign-in") {
+		t.Errorf("--add-machine, a v1.11 node: %v, want ErrTalosTooOld naming v1.12 and no sign-in reason", err)
 	}
 }
 
@@ -266,18 +289,18 @@ func TestGateTalosVersionsReadsEveryApprovedNode(t *testing.T) {
 	a.Spec.Endpoint = "a"
 	b.Spec.Endpoint = "b"
 
-	err := gateTalosVersions(context.Background(), []*ichorv1alpha1.TalosMachine{a, b}, dial)
+	err := gateTalosVersions(context.Background(), []*ichorv1alpha1.TalosMachine{a, b}, dial, adoptMinTalos)
 	if !errors.Is(err, ErrTalosTooOld) || !strings.Contains(err.Error(), "b runs Talos 1.11.2") {
 		t.Fatalf("mixed cluster must be refused naming b: %v", err)
 	}
 
-	if err := gateTalosVersions(context.Background(), []*ichorv1alpha1.TalosMachine{a}, dial); err != nil {
+	if err := gateTalosVersions(context.Background(), []*ichorv1alpha1.TalosMachine{a}, dial, adoptMinTalos); err != nil {
 		t.Fatalf("v1.14 passes: %v", err)
 	}
 
 	// A reader that cannot report a version is not gated.
 	plain := func(context.Context, string) (talosConfigReader, error) { return &fakeTalosReader{}, nil }
-	if err := gateTalosVersions(context.Background(), []*ichorv1alpha1.TalosMachine{a, b}, plain); err != nil {
+	if err := gateTalosVersions(context.Background(), []*ichorv1alpha1.TalosMachine{a, b}, plain, adoptMinTalos); err != nil {
 		t.Fatalf("unversioned reader: %v", err)
 	}
 }

@@ -48,6 +48,11 @@ const adoptMinTalos = initUsersMinContract
 // that adopt can refuse it by name (adoptMinContract), where rendering at v1.14 alone would show it as drift.
 const adoptProbeFloor = "v1.12"
 
+// addMachineMinTalos is the oldest Talos minor a node added with --add-machine may run. The cluster was
+// adopted before, so its sign-in and issuer exist already (--add-machine sets up no sign-in and takes none of
+// its flags); the v1.14 floor is there for the issuer, and it does not apply to a node added to such a cluster.
+const addMachineMinTalos = "v1.12"
+
 // CNIKind says what a machine configuration selects as the cluster's CNI. It is what the
 // configuration states, not what runs: the Kubernetes side decides that.
 type CNIKind string
@@ -344,11 +349,11 @@ type nodeVersion struct {
 	Version string
 }
 
-// checkTalosVersions applies the v1.14 gate to the versions read from every node
-// adopt will adopt. It returns nil if all are at or above v1.14 (pre-releases of v1.14 count as
-// v1.14). Otherwise the error wraps ErrTalosTooOld, names every node below the floor, and says to
+// checkTalosVersions applies the floor (adoptMinTalos when adopt adopts a cluster, addMachineMinTalos for
+// --add-machine) to the versions read from every node adopt will adopt. It returns nil if all are at or above
+// it (pre-releases of the floor's minor count as the floor). Otherwise the error wraps ErrTalosTooOld, names every node below the floor, and says to
 // upgrade Talos first. A version string that is not semver is an error too, never a pass.
-func checkTalosVersions(nodes []nodeVersion) error {
+func checkTalosVersions(nodes []nodeVersion, floor string) error {
 	var older []nodeVersion
 
 	for _, n := range nodes {
@@ -357,7 +362,7 @@ func checkTalosVersions(nodes []nodeVersion) error {
 			return fmt.Errorf("adopt: node %q reported the unreadable Talos version %q", n.Node, n.Version)
 		}
 
-		if semver.Compare(mm, adoptMinTalos) < 0 {
+		if semver.Compare(mm, floor) < 0 {
 			older = append(older, n)
 		}
 	}
@@ -368,13 +373,16 @@ func checkTalosVersions(nodes []nodeVersion) error {
 
 	slices.SortFunc(older, func(a, b nodeVersion) int { return strings.Compare(a.Node, b.Node) })
 
-	const advice = "Ichor's sign-in is always on and needs the issuer that Talos " + adoptMinTalos + " carries. Upgrade Talos first, with talosctl or your usual tool, and run adopt again."
+	advice := "Upgrade Talos first, with talosctl or your usual tool, and run adopt again."
+	if floor == adoptMinTalos {
+		advice = "Ichor's sign-in is always on and needs the issuer that Talos " + adoptMinTalos + " carries. " + advice
+	}
 
 	if len(nodes) == 1 {
 		n := older[0]
 
 		return fmt.Errorf("%w: Talos %s is older than the oldest version Ichor adopts (%s). %s (node %q)",
-			ErrTalosTooOld, strings.TrimPrefix(n.Version, "v"), adoptMinTalos, advice, n.Node)
+			ErrTalosTooOld, strings.TrimPrefix(n.Version, "v"), floor, advice, n.Node)
 	}
 
 	parts := make([]string, 0, len(older))
@@ -383,13 +391,12 @@ func checkTalosVersions(nodes []nodeVersion) error {
 	}
 
 	return fmt.Errorf("%w: %d of %d nodes are older than the oldest version Ichor adopts (%s): %s. %s",
-		ErrTalosTooOld, len(older), len(nodes), adoptMinTalos, strings.Join(parts, "; "), advice)
+		ErrTalosTooOld, len(older), len(nodes), floor, strings.Join(parts, "; "), advice)
 }
 
 // contractCandidates lists the version contracts to probe for a cluster whose nodes run running
 // (any semver tag), highest first, never below adoptProbeFloor (v1.12 and 1.13 are there to be refused by
-// name). A running version below the node floor yields none. A running version
-// below the floor yields none.
+// name). A running version below the node floor yields none.
 func contractCandidates(running string) []string {
 	mm := semver.MajorMinor(running)
 	if mm == "" || semver.Compare(mm, adoptMinTalos) < 0 {
@@ -416,12 +423,13 @@ func previousMinor(mm string) string {
 }
 
 // gateTalosVersions reads the Talos version of every machine adopt will adopt and applies the
-// v1.14 gate before anything else happens. A node whose reader cannot report a
+// floor before anything else happens. A node whose reader cannot report a
 // version (a test double that does not implement talosVersionReader) is not gated.
 func gateTalosVersions(
 	ctx context.Context,
 	machines []*ichorv1alpha1.TalosMachine,
 	dial func(ctx context.Context, endpoint string) (talosConfigReader, error),
+	floor string,
 ) error {
 	var nodes []nodeVersion
 
@@ -444,7 +452,7 @@ func gateTalosVersions(
 		nodes = append(nodes, nodeVersion{Node: m.Name, Version: v})
 	}
 
-	return checkTalosVersions(nodes)
+	return checkTalosVersions(nodes, floor)
 }
 
 // ReadClusterMembers lists the discovery membership through talos, or returns nil, false if the

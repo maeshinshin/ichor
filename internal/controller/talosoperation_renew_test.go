@@ -38,7 +38,8 @@ const (
 	testLeaseDuration = time.Second
 	testRenewEvery    = 100 * time.Millisecond
 	stealWindow       = 2500 * time.Millisecond
-	otherHolder       = "someone-else"
+	// someoneElse is a party other than the one under test: a lock holder, an operation named in a marker.
+	someoneElse = "someone-else"
 )
 
 // tryStealLock tries to take the cluster lock as someone else every 50ms for window, and reports whether it got it.
@@ -46,7 +47,7 @@ func tryStealLock(cluster *ichorv1alpha1.TalosCluster, window time.Duration) boo
 	lock := clusterlock.New(k8sClient, client.ObjectKeyFromObject(cluster), testLeaseDuration)
 
 	for deadline := time.Now().Add(window); time.Now().Before(deadline); time.Sleep(50 * time.Millisecond) {
-		if lock.Acquire(ctx, otherHolder) == nil {
+		if lock.Acquire(ctx, someoneElse) == nil {
 			return true
 		}
 	}
@@ -150,7 +151,7 @@ var _ = Describe("the cluster lock across the Advance loop", func() {
 			// Another holder takes the lease under the operation, so the next renewal is refused.
 			var lease coordinationv1.Lease
 			Expect(k8sClient.Get(ctx, lockKey, &lease)).To(Succeed())
-			lease.Spec.HolderIdentity = ptr.To(otherHolder)
+			lease.Spec.HolderIdentity = ptr.To(someoneElse)
 			Expect(k8sClient.Update(ctx, &lease)).To(Succeed())
 
 			select {

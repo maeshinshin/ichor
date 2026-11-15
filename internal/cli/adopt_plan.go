@@ -364,6 +364,7 @@ func captureDocuments(currentCfg []byte, wantSysctl, wantKernelModule bool, capt
 	if len(captured) > 0 && raw != nil && raw.MachineConfig != nil {
 		sub := &mv1alpha1.Config{ConfigVersion: mv1alpha1.Version, MachineConfig: &mv1alpha1.MachineConfig{}}
 
+		//nolint:staticcheck // the legacy block is what the node runs
 		if slices.Contains(captured, pathNetworkInterfaces) && raw.MachineConfig.MachineNetwork != nil {
 			sub.MachineConfig.MachineNetwork = &mv1alpha1.NetworkConfig{NetworkInterfaces: raw.MachineConfig.MachineNetwork.NetworkInterfaces}
 		}
@@ -381,6 +382,7 @@ func captureDocuments(currentCfg []byte, wantSysctl, wantKernelModule bool, capt
 	}
 
 	// The API server's own SANs are the KubeAPIServerConfig document's setting in Ichor's schema.
+	//nolint:staticcheck // the legacy block is what the node runs
 	if slices.Contains(captured, pathAPIServerCertSANs) && raw != nil && raw.ClusterConfig != nil && raw.ClusterConfig.APIServerConfig != nil {
 		docs = append(docs, ichorv1alpha1.TalosConfigPatchDocument{Kind: "KubeAPIServerConfig", KubeAPIServerConfig: &typedconfig.KubeAPIServerConfigV1Alpha1{
 			PodCertExtraSANs: sansBeyond(raw.ClusterConfig.APIServerConfig.ExtraCertSANs, specSANs),

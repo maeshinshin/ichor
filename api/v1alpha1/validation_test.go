@@ -43,6 +43,9 @@ const (
 	literalGenerateName = "patch-"
 	literalNodeIP       = "10.0.0.10"
 	literalKindKey      = "kind"
+	testSysctlKey       = "net.ipv4.ip_forward"
+	kindSysctl          = "SysctlConfig"
+	kindKernelModule    = "KernelModuleConfig"
 
 	cniPresetFlannel   = "flannel"
 	cniPresetCilium    = "cilium"
@@ -107,7 +110,7 @@ var _ = Describe("TalosConfigPatch", func() {
 })
 
 func minimalSysctlConfig() *typedconfig.SysctlConfigV1Alpha1 {
-	return &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.ipv4.ip_forward": "1"}}
+	return &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{testSysctlKey: "1"}}
 }
 
 func minimalKernelModuleConfig() *typedconfig.KernelModuleConfigV1Alpha1 {
@@ -128,19 +131,25 @@ func newConfigPatchWithConfig(c *ichorconfig.Config) *TalosConfigPatch {
 
 // patchWithDocuments is a TalosConfigPatch as it was written before spec.documents was removed.
 func patchWithDocuments() *unstructured.Unstructured {
-	return &unstructured.Unstructured{Object: map[string]any{
-		"apiVersion":   GroupVersion.String(),
-		literalKindKey: "TalosConfigPatch",
-		"metadata":     map[string]any{"generateName": literalGenerateName, "namespace": testNamespace},
-		"spec": map[string]any{
-			"clusterRef": map[string]any{"name": literalCluster},
-			"layer":      literalCluster,
-			"documents": []any{map[string]any{
-				literalKindKey: "SysctlConfig",
-				"sysctlConfig": map[string]any{"params": map[string]any{"net.ipv4.ip_forward": "1"}},
-			}},
-		},
-	}}
+	u := &unstructured.Unstructured{Object: map[string]any{}}
+	u.SetGroupVersionKind(GroupVersion.WithKind("TalosConfigPatch"))
+	u.SetGenerateName(literalGenerateName)
+	u.SetNamespace(testNamespace)
+
+	for path, value := range map[string]any{
+		"clusterRef": corev1.LocalObjectReference{Name: literalCluster},
+		"layer":      literalCluster,
+		"documents": []any{map[string]any{
+			literalKindKey: kindSysctl,
+			"sysctlConfig": map[string]any{"params": map[string]any{testSysctlKey: "1"}},
+		}},
+	} {
+		if err := unstructured.SetNestedField(u.Object, value, "spec", path); err != nil {
+			panic(err)
+		}
+	}
+
+	return u
 }
 
 var _ = Describe("TalosConfigPatch spec.config", func() {
@@ -201,7 +210,7 @@ var _ = Describe("TalosConfigPatch spec.config", func() {
 					InstallWipe:         ptr.To(true),
 				},
 				Kubelet: &ichorconfig.MachineKubelet{ExtraArgs: map[string][]string{"node-labels": {"foo=bar", "baz=qux"}}},
-				Sysctls: map[string]string{"net.ipv4.ip_forward": "1"},
+				Sysctls: map[string]string{testSysctlKey: "1"},
 			},
 			Cluster: &ichorconfig.Cluster{ClusterName: "test-cluster"},
 		}
@@ -290,17 +299,17 @@ var _ = Describe("TalosConfigPatchDocument", func() {
 			Expect(doc.Validate()).To(MatchError(And(ContainSubstring(kind), ContainSubstring(populated))))
 		},
 		Entry("kind SysctlConfig with kernelModuleConfig populated instead", TalosConfigPatchDocument{
-			Kind:               "SysctlConfig",
+			Kind:               kindSysctl,
 			KernelModuleConfig: minimalKernelModuleConfig(),
-		}, "SysctlConfig", "kernelModuleConfig"),
+		}, kindSysctl, "kernelModuleConfig"),
 		Entry("kind KernelModuleConfig with sysctlConfig populated instead", TalosConfigPatchDocument{
-			Kind:         "KernelModuleConfig",
+			Kind:         kindKernelModule,
 			SysctlConfig: minimalSysctlConfig(),
-		}, "KernelModuleConfig", "sysctlConfig"),
+		}, kindKernelModule, "sysctlConfig"),
 		Entry("kind Config with kernelModuleConfig populated instead", TalosConfigPatchDocument{
-			Kind:               "Config",
+			Kind:               configKind,
 			KernelModuleConfig: minimalKernelModuleConfig(),
-		}, "Config", "kernelModuleConfig"),
+		}, configKind, "kernelModuleConfig"),
 	)
 })
 
@@ -309,7 +318,7 @@ func newCluster(secretsRef corev1.LocalObjectReference, count int32, schedulable
 		GenerateName: "cluster-",
 		Namespace:    testNamespace,
 		Spec: TalosClusterSpec{
-			Endpoint:          TalosClusterEndpoint{Type: "vip", Address: "10.0.0.1"},
+			Endpoint:          TalosClusterEndpoint{Type: "vip", Address: epIP},
 			TalosVersion:      "v1.14.3",
 			KubernetesVersion: "v1.36.0",
 			VersionContract:   "v1.14",

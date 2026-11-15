@@ -23,7 +23,7 @@ func TestPatchWireRoundTripsThroughSpecConfig(t *testing.T) {
 			Layer:      "cluster",
 			Config: &ichorconfig.Config{
 				Machine: &ichorconfig.Machine{
-					Type: "controlplane", CertSANs: []string{"10.0.0.1"},
+					Type: "controlplane", CertSANs: []string{gatewayIP},
 					Sysctls: map[string]string{"net.ipv4.ip_forward": "1"},
 					Kernel: &ichorconfig.MachineKernel{Modules: map[string]*ichorconfig.MachineKernelModulesEntry{
 						"nbd": {}, "br_netfilter": {Parameters: []string{"nf_conntrack_helper=1"}},

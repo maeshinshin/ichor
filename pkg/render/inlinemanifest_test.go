@@ -44,7 +44,8 @@ func TestInlineManifestForm(t *testing.T) {
 	)
 
 	patch := inlineManifestPatch("manifests", cni.InlineManifestName)
-	patch.Spec.Config.Cluster.InlineManifests["other"] = &ichorconfig.ClusterInlineManifestsEntry{Manifest: "kind: Nothing\n"}
+	other := &ichorconfig.ClusterInlineManifestsEntry{Manifest: nothingManifest}
+	patch.Spec.Config.Cluster.InlineManifests["other"] = other
 
 	for _, tc := range []struct {
 		name, contract       string

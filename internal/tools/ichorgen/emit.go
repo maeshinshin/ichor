@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
+	"maps"
 	"slices"
 	"strings"
 )
@@ -26,7 +27,7 @@ func typeName(n *node) string {
 
 	var b strings.Builder
 
-	for _, seg := range strings.Split(n.path, ".") {
+	for seg := range strings.SplitSeq(n.path, ".") {
 		if seg == "*" {
 			b.WriteString("Entry")
 
@@ -189,14 +190,7 @@ func (g *gen) render() ([]byte, error) {
 	if w.typed || len(w.imports) > 0 {
 		out.WriteString("import (\n")
 
-		var names []string
-		for n := range w.imports {
-			names = append(names, n)
-		}
-
-		slices.Sort(names)
-
-		for _, n := range names {
+		for _, n := range slices.Sorted(maps.Keys(w.imports)) {
 			fmt.Fprintf(&out, "\t%s %q\n", n, g.src.imports[n])
 		}
 

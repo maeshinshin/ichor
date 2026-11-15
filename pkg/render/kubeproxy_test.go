@@ -31,7 +31,9 @@ import (
 func proxyDisabledPatch() ichorv1alpha1.TalosConfigPatch {
 	disabled := true
 
-	return configPatch("cni-proxy", &ichorconfig.Config{Cluster: &ichorconfig.Cluster{Proxy: &ichorconfig.ClusterProxy{Disabled: &disabled}}})
+	proxy := &ichorconfig.ClusterProxy{Disabled: &disabled}
+
+	return configPatch("cni-proxy", &ichorconfig.Config{Cluster: &ichorconfig.Cluster{Proxy: proxy}})
 }
 
 // TestKubeProxyModeIsRenderedByIchor checks: the Talos side follows status.cni.kubeProxy

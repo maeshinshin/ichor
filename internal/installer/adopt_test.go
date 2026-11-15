@@ -55,7 +55,7 @@ func TestApplyOneRemovesAPortOwnedByAnOlderInit(t *testing.T) {
 
 	want := &unstructured.Unstructured{Object: map[string]any{
 		"apiVersion": "v1", "kind": "Service",
-		"metadata": map[string]any{kName: svc.Name, "namespace": f.ns},
+		"metadata": map[string]any{kName: svc.Name, kNamespace: f.ns},
 		kSpec: map[string]any{
 			"selector": map[string]any{"a": "b"},
 			"ports":    []any{map[string]any{"name": "https", "port": int64(8443), "targetPort": int64(8443), "protocol": "TCP"}},

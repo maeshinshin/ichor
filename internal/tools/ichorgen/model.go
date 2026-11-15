@@ -56,9 +56,6 @@ type field struct {
 	docs string
 	// list is set on a collection written as a list with a name in each entry rather than as a map.
 	list bool
-
-	// conflict records the sources that disagree on this field's type, for the report.
-	spelledBy string
 }
 
 func (n *node) field(name string) *field {
@@ -81,21 +78,6 @@ func (n *node) child(t *typ) *node {
 	}
 
 	return nil
-}
-
-// cloneTyp copies a mirror type, giving each struct in it a reference node whose sink is base.
-func cloneTyp(t *typ, path string, base sink) *typ {
-	c := &typ{kind: t.kind, name: t.name}
-
-	if t.elem != nil {
-		c.elem = cloneTyp(t.elem, path, base)
-	}
-
-	if t.kind == tStruct {
-		c.child = &node{path: path, refSinks: []sink{base}}
-	}
-
-	return c
 }
 
 func (g *gen) newRef(name string, sinks []sink, path string) *node {
@@ -170,8 +152,8 @@ func shape(t *typ) string {
 			return "integer"
 		case strings.HasPrefix(t.name, "float"):
 			return "number"
-		case t.name == "byte":
-			return "byte"
+		case t.name == goByte:
+			return goByte
 		}
 
 		return t.name
@@ -182,7 +164,7 @@ func shape(t *typ) string {
 	case tPtr:
 		return shape(t.elem)
 	case tSlice:
-		if e := t.elem; e.kind == tBasic && (e.name == "uint8" || e.name == "byte") {
+		if e := t.elem; e.kind == tBasic && (e.name == goUint8 || e.name == goByte) {
 			return "bytes"
 		}
 
@@ -209,7 +191,7 @@ func (g *gen) merge(ex *field, t *typ, required bool, sinks []sink, where string
 }
 
 func sinkList(ss []sink) string {
-	var out []string
+	out := make([]string, 0, len(ss))
 	for _, s := range ss {
 		out = append(out, s.String())
 	}
@@ -260,7 +242,14 @@ func sameSinks(a, b []sink) bool {
 	return slices.Equal(a, b)
 }
 
-var intRank = map[string]int{"int8": 1, "uint8": 1, "int16": 2, "uint16": 2, "int32": 3, "uint32": 3, "int": 4, "uint": 4, "int64": 5, "uint64": 5}
+// The Go type names the generator compares against.
+const (
+	goString = "string"
+	goUint8  = "uint8"
+	goByte   = "byte"
+)
+
+var intRank = map[string]int{"int8": 1, goUint8: 1, "int16": 2, "uint16": 2, "int32": 3, "uint32": 3, "int": 4, "uint": 4, "int64": 5, "uint64": 5}
 
 // wider reports whether integer type a holds every value b does, or more.
 func wider(a, b string) bool {
@@ -274,7 +263,7 @@ func (g *gen) addStruct(n *node, s *srcStruct, base []sink, skip map[string]bool
 			continue
 		}
 
-		var fs []sink
+		fs := make([]sink, 0, len(base))
 		for _, b := range base {
 			fs = append(fs, b.join(f.json))
 		}

@@ -333,7 +333,7 @@ var _ = Describe("TalosMachineReconciler requeue after a failure", func() {
 		reconcileOK(r, m)
 
 		drifted := extraArgsConfig()
-		drifted.Machine.Sysctls["foo"] = "c"
+		drifted.Machine.Sysctls[driftKey] = "c"
 		fake.current = renderWithConfig(cluster, m, bundle, layerCluster, nil, drifted)
 
 		res, err := reconcileMachine(r, m)

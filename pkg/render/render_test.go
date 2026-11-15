@@ -56,9 +56,6 @@ const (
 
 	sysctlKey = "ichor.test.render"
 
-	kindConfig            = "Config"
-	configVersionV1Alpha1 = "v1alpha1"
-
 	// handoverCompleteReason mirrors internal/controller's
 	// reasonHandoverComplete -- duplicated here, not imported, since this
 	// package cannot depend on internal/controller.
@@ -472,16 +469,21 @@ func TestRenderBundleLeak(t *testing.T) {
 	}
 }
 
+// nothingManifest is a manifest of no resources.
+const nothingManifest = "kind: Nothing\n"
+
 // inlineManifestPatch builds a TalosConfigPatch carrying a single Config
 // document whose ClusterConfig.ClusterInlineManifests holds one entry named
 // name, alongside an unrelated EtcdConfig document -- so a test can check
 // that dropping the inline manifest entry never disturbs a sibling document
 // in the same patch.
 func inlineManifestPatch(patchName, manifestName string) ichorv1alpha1.TalosConfigPatch {
+	unrelated := &ichorconfig.ClusterExtraManifestsEntry{Url: "https://example.invalid/unrelated.yaml"}
+
 	return configPatch(patchName, &ichorconfig.Config{
 		Cluster: &ichorconfig.Cluster{
-			InlineManifests: map[string]*ichorconfig.ClusterInlineManifestsEntry{manifestName: {Manifest: "kind: Nothing\n"}},
-			ExtraManifests:  map[string]*ichorconfig.ClusterExtraManifestsEntry{"unrelated": {Url: "https://example.invalid/unrelated.yaml"}},
+			InlineManifests: map[string]*ichorconfig.ClusterInlineManifestsEntry{manifestName: {Manifest: nothingManifest}},
+			ExtraManifests:  map[string]*ichorconfig.ClusterExtraManifestsEntry{"unrelated": unrelated},
 		},
 	})
 }

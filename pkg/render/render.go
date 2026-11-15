@@ -481,7 +481,7 @@ func dropHandedOverInlineManifest(
 func dropTalosAPIAccess(
 	ordered []*ichorv1alpha1.TalosConfigPatch, m *ichorv1alpha1.TalosMachine,
 ) []*ichorv1alpha1.TalosConfigPatch {
-	if m.Spec.Role == "controlplane" {
+	if m.Spec.Role == controlPlaneRole {
 		return ordered
 	}
 
@@ -516,6 +516,9 @@ func rewriteIchorConfigs(
 }
 
 const kindResolverConfig = "ResolverConfig"
+
+// controlPlaneRole is the role of a control plane machine.
+const controlPlaneRole = "controlplane"
 
 // patchDocuments returns the Talos documents a patch carries, spec.config converted for a machine that takes
 // the Kubernetes documents. A patch that cannot be converted carries none here; applyPatches reports why.
@@ -578,7 +581,8 @@ func applyPatches(
 
 			// A cluster-layer patch reaches workers too, and Talos refuses a control plane's document there: what a
 			// patch says about the control plane does not apply to a worker.
-			if _, onlyControlPlane := doc.(container.ControlplaneOnlyConfig); onlyControlPlane && m.Spec.Role != "controlplane" {
+			_, onlyControlPlane := doc.(container.ControlplaneOnlyConfig)
+			if onlyControlPlane && m.Spec.Role != controlPlaneRole {
 				continue
 			}
 

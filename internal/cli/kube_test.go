@@ -111,7 +111,7 @@ func TestNewKubeClientForConfig_RejectsUnknownField(t *testing.T) {
 			"config": map[string]any{
 				"machine": map[string]any{
 					"type":     testRoleWorker,
-					"certSANs": []any{"10.0.0.10"},
+					"certSANs": []any{"10.0.0.99"},
 					// "token" is not a setting of spec.config; a strict client must reject
 					// it by name, not drop it silently.
 					"token": "stale-value-that-must-not-silently-vanish",

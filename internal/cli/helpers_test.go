@@ -188,7 +188,7 @@ func sysctlPatch(clusterName string, params map[string]string) ichorv1alpha1.Tal
 // capture is possible is the to revisit.
 func legacyConfigPatch(clusterName string) ichorv1alpha1.TalosConfigPatch {
 	cfg := &ichorconfig.Config{
-		Machine: &ichorconfig.Machine{Type: testRoleWorker, CertSANs: []string{"10.0.0.10"}},
+		Machine: &ichorconfig.Machine{Type: testRoleWorker, CertSANs: []string{"10.0.0.12"}},
 		Cluster: &ichorconfig.Cluster{ApiServer: &ichorconfig.ClusterApiServer{DisablePodSecurityPolicy: ptr.To(true)}},
 	}
 

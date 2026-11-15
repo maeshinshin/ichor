@@ -329,11 +329,12 @@ func TestTalosAPIAccessRendersOnControlPlanesOnly(t *testing.T) {
 	bundle := testBundle(t)
 	on := true
 
-	patch := configPatch("api-access", &ichorconfig.Config{Machine: &ichorconfig.Machine{Features: &ichorconfig.MachineFeatures{
-		KubernetesTalosAPIAccess: &ichorconfig.MachineFeaturesKubernetesTalosAPIAccess{
-			Enabled: &on, AllowedRoles: []string{"os:reader"}, AllowedKubernetesNamespaces: []string{"ops"},
-		},
-	}}})
+	access := &ichorconfig.MachineFeaturesKubernetesTalosAPIAccess{
+		Enabled: &on, AllowedRoles: []string{"os:reader"}, AllowedKubernetesNamespaces: []string{"ops"},
+	}
+	patch := configPatch("api-access", &ichorconfig.Config{Machine: &ichorconfig.Machine{
+		Features: &ichorconfig.MachineFeatures{KubernetesTalosAPIAccess: access},
+	}})
 	patches := []ichorv1alpha1.TalosConfigPatch{patch}
 
 	cp := mustRender(t, testCluster("true"), testMachine("cp", roleControlPlane, nil), bundle, patches)
@@ -351,6 +352,7 @@ func TestTalosAPIAccessRendersOnControlPlanesOnly(t *testing.T) {
 	legacy := testCluster("true")
 	legacy.Spec.VersionContract = contractV112
 
-	requireAll(t, mustRender(t, legacy, testMachine("cp", roleControlPlane, nil), bundle, patches), "kubernetesTalosAPIAccess")
+	legacyCP := mustRender(t, legacy, testMachine("cp", roleControlPlane, nil), bundle, patches)
+	requireAll(t, legacyCP, "kubernetesTalosAPIAccess")
 	requireNone(t, mustRender(t, legacy, testMachine("w", roleWorker, nil), bundle, patches), "kubernetesTalosAPIAccess")
 }

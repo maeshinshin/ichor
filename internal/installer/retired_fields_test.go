@@ -142,9 +142,9 @@ func storedTalosCluster(name string, extra map[string]any) *unstructured.Unstruc
 	maps.Copy(spec, extra)
 
 	return &unstructured.Unstructured{Object: map[string]any{
-		kAPIVersion: "ichor.maesh.dev/v1alpha1",
+		kAPIVersion: ichorAPIVersion,
 		kKind:       "TalosCluster",
-		kMetadata:   map[string]any{kName: name, "namespace": kDefault},
+		kMetadata:   map[string]any{kName: name, kNamespace: kDefault},
 		kSpec:       spec,
 	}}
 }
@@ -242,7 +242,7 @@ func TestStoredIchorInstallationWithRetiredFieldsSurvivesTheCRDUpgrade(t *testin
 	installOldCRD(t, old)
 
 	obj := &unstructured.Unstructured{Object: map[string]any{
-		kAPIVersion: "ichor.maesh.dev/v1alpha1",
+		kAPIVersion: ichorAPIVersion,
 		kKind:       "IchorInstallation",
 		kMetadata:   map[string]any{kName: "ichor"},
 		kSpec: map[string]any{
@@ -283,7 +283,7 @@ func TestStoredTalosClusterWithCNICustomDocumentsSurvivesTheCRDUpgrade(t *testin
 			"preset": kCustom,
 			kCustom: map[string]any{
 				"source": source,
-				"documents": []any{map[string]any{
+				kDocuments: []any{map[string]any{
 					kKind:          "SysctlConfig",
 					"sysctlConfig": map[string]any{"params": map[string]any{"net.ipv4.ip_forward": "1"}},
 				}},
@@ -293,14 +293,14 @@ func TestStoredTalosClusterWithCNICustomDocumentsSurvivesTheCRDUpgrade(t *testin
 
 	createWhenEstablished(t, obj)
 
-	if _, found, _ := unstructured.NestedSlice(obj.Object, kSpec, kCNI, kCustom, "documents"); !found {
+	if _, found, _ := unstructured.NestedSlice(obj.Object, kSpec, kCNI, kCustom, kDocuments); !found {
 		t.Fatal("the old schema did not keep spec.cni.custom.documents")
 	}
 
 	upgradeCRD(t, old, "../../config/crd/bases/ichor.maesh.dev_talosclusters.yaml")
 
 	key := types.NamespacedName{Namespace: kDefault, Name: "old-custom"}
-	documents := []string{kSpec, kCNI, kCustom, "documents"}
+	documents := []string{kSpec, kCNI, kCustom, kDocuments}
 
 	// A read prunes too, before anything is written: the API server decodes what etcd holds through
 	// the current schema. The swap to the new schema is asynchronous, so poll for it.
@@ -338,13 +338,13 @@ func TestStoredTalosConfigPatchWithDocumentsSurvivesTheCRDUpgrade(t *testing.T) 
 	installOldCRD(t, old)
 
 	obj := &unstructured.Unstructured{Object: map[string]any{
-		kAPIVersion: "ichor.maesh.dev/v1alpha1",
+		kAPIVersion: ichorAPIVersion,
 		kKind:       "TalosConfigPatch",
-		kMetadata:   map[string]any{kName: "old-patch", "namespace": kDefault},
+		kMetadata:   map[string]any{kName: "old-patch", kNamespace: kDefault},
 		kSpec: map[string]any{
 			"clusterRef": map[string]any{kName: "c"},
 			"layer":      "cluster",
-			"documents": []any{map[string]any{
+			kDocuments: []any{map[string]any{
 				kKind:          "SysctlConfig",
 				"sysctlConfig": map[string]any{"params": map[string]any{"net.ipv4.ip_forward": "1"}},
 			}},
@@ -353,14 +353,14 @@ func TestStoredTalosConfigPatchWithDocumentsSurvivesTheCRDUpgrade(t *testing.T) 
 
 	createWhenEstablished(t, obj)
 
-	if _, found, _ := unstructured.NestedSlice(obj.Object, kSpec, "documents"); !found {
+	if _, found, _ := unstructured.NestedSlice(obj.Object, kSpec, kDocuments); !found {
 		t.Fatal("the old schema did not keep spec.documents")
 	}
 
 	upgradeCRD(t, old, "../../config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml")
 
 	updateUntilPruned(t, types.NamespacedName{Namespace: kDefault, Name: "old-patch"}, obj,
-		[]string{kSpec, "clusterRef", kName}, "c", [][]string{{kSpec, "documents"}})
+		[]string{kSpec, "clusterRef", kName}, "c", [][]string{{kSpec, kDocuments}})
 }
 
 // Without the entry on the list the installer refuses the upgrade, which is what keeps every other removal a
@@ -378,7 +378,7 @@ func TestInstallerRefusesToDropTalosConfigPatchDocumentsUnlessRetired(t *testing
 
 	defer func() { retiredFields = saved }()
 
-	if err := checkAdditive(old, current); err == nil || !strings.Contains(err.Error(), "documents") {
+	if err := checkAdditive(old, current); err == nil || !strings.Contains(err.Error(), kDocuments) {
 		t.Fatalf("want a refusal naming documents once it is not retired, got %v", err)
 	}
 }
@@ -403,7 +403,7 @@ func TestTalosClusterCRDHasNoCNICustomDocuments(t *testing.T) {
 		t.Error("spec.cni.custom.source is gone from the CRD")
 	}
 
-	if _, ok := custom["documents"]; ok {
+	if _, ok := custom[kDocuments]; ok {
 		t.Error("spec.cni.custom.documents is back in the CRD: it was retired, see ADR 0152")
 	}
 }

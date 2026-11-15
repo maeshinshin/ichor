@@ -39,6 +39,12 @@ const ichorTag = "ichor"
 // configKind is the kind of the v1alpha1 document in a TalosConfigPatchDocument.
 const configKind = "Config"
 
+// The two Kubernetes documents the v1alpha1 document has a list for.
+const (
+	kindInlineManifest   = "KubeInlineManifestConfig"
+	kindExternalManifest = "KubeExternalManifestConfig"
+)
+
 // EffectiveDocuments returns the Talos documents this patch carries: spec.config converted. multidoc says
 // whether the machines the patch applies to take the documents Talos 1.14 added for the Kubernetes
 // components; when they do not, those settings are written into the v1alpha1 document instead.
@@ -140,9 +146,9 @@ type sinkOf struct {
 }
 
 func parseSinks(tag string) []sinkOf {
-	var out []sinkOf
+	out := make([]sinkOf, 0, strings.Count(tag, ";")+1)
 
-	for _, part := range strings.Split(tag, ";") {
+	for part := range strings.SplitSeq(tag, ";") {
 		kind, path, _ := strings.Cut(part, ":")
 
 		s := sinkOf{kind: kind, path: path}
@@ -369,9 +375,9 @@ func (cv *converter) intoConfig(inst instance, where string) error {
 	var item any
 
 	switch inst.kind {
-	case "KubeInlineManifestConfig":
+	case kindInlineManifest:
 		path, item = "cluster.inlineManifests", map[string]any{"name": inst.name, "contents": tree["manifest"]}
-	case "KubeExternalManifestConfig":
+	case kindExternalManifest:
 		path, item = "cluster.extraManifests", tree["url"]
 	default:
 		return fmt.Errorf("spec.config.%s needs a machine on a Talos version that takes the %s document (Talos 1.14 and later)", where, inst.kind)
@@ -387,7 +393,7 @@ func (cv *converter) intoConfig(inst instance, where string) error {
 func getPath(tree map[string]any, path string) any {
 	var cur any = tree
 
-	for _, p := range strings.Split(path, ".") {
+	for p := range strings.SplitSeq(path, ".") {
 		m, ok := cur.(map[string]any)
 		if !ok {
 			return nil

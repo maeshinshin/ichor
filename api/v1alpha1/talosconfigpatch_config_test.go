@@ -84,7 +84,7 @@ func only[T config.Document](t *testing.T, docs []config.Document) T {
 func TestConfigSettingReachesTheNodesAsTheTalosDocument(t *testing.T) {
 	docs := convert(t, `{
 		"machine": {
-			"install": {"disk": "/dev/sda"},
+			"install": {"disk": "/dev/vda"},
 			"sysctls": {"net.ipv4.ip_forward": "1"},
 			"kubelet": {"extraArgs": {"v": ["4"]}},
 			"time": {"enabled": false, "ntp": {"servers": ["time.example.org"]}}
@@ -92,11 +92,11 @@ func TestConfigSettingReachesTheNodesAsTheTalosDocument(t *testing.T) {
 		"cluster": {"network": {"dnsDomain": "cluster.local", "podSubnets": ["10.244.0.0/16"], "serviceSubnets": ["10.96.0.0/12"]}}
 	}`, true)
 
-	if got := only[*mv1alpha1.Config](t, docs).MachineConfig.MachineInstall.InstallDisk; got != "/dev/sda" { //nolint:staticcheck // the field is what is being checked
+	if got := only[*mv1alpha1.Config](t, docs).MachineConfig.MachineInstall.InstallDisk; got != "/dev/vda" { //nolint:staticcheck // the field is what is being checked
 		t.Errorf("machine.install.disk reached the v1alpha1 document as %q", got)
 	}
 
-	if got := only[*runtime.SysctlConfigV1Alpha1](t, docs).Params["net.ipv4.ip_forward"]; got != "1" {
+	if got := only[*runtime.SysctlConfigV1Alpha1](t, docs).Params[testSysctlKey]; got != "1" {
 		t.Errorf("machine.sysctls reached SysctlConfig as %q", got)
 	}
 
@@ -196,7 +196,9 @@ func TestKubernetesCollectionsOnAMachineThatTakesNoKubernetesDocuments(t *testin
 	docs := convert(t, `{"cluster": {"inlineManifests": {"b": {"manifest": "kind: B"}, "a": {"manifest": "kind: A"}},
 		"extraManifests": {"x": {"url": "https://example.invalid/x.yaml"}}}}`, false)
 
-	cfg := only[*mv1alpha1.Config](t, docs).ClusterConfig //nolint:staticcheck // the fields are what is being checked
+	//nolint:staticcheck // the fields are what is being checked
+	cfg := only[*mv1alpha1.Config](t, docs).ClusterConfig
+	//nolint:staticcheck // the fields are what is being checked
 	if len(docs) != 1 || len(cfg.ClusterInlineManifests) != 2 || cfg.ClusterInlineManifests[0].InlineManifestName != "a" ||
 		len(cfg.ExtraManifests) != 1 {
 		t.Errorf("want one v1alpha1 document holding both manifests, got %d documents, %+v", len(docs), cfg)
@@ -223,15 +225,15 @@ func TestSpecWithoutConfigCarriesNoDocuments(t *testing.T) {
 // The documents the CLI and the UI build are written in spec.config, and read back they give the same documents.
 func TestConfigFromDocumentsConvertsBackToTheDocuments(t *testing.T) {
 	want := []TalosConfigPatchDocument{
-		{Kind: "SysctlConfig", SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{"net.ipv4.ip_forward": "1"}}},
-		{Kind: "KernelModuleConfig", KernelModuleConfig: &typedconfig.KernelModuleConfigV1Alpha1{MetaName: "nbd"}},
-		{Kind: "KernelModuleConfig", KernelModuleConfig: &typedconfig.KernelModuleConfigV1Alpha1{MetaName: "br_netfilter", ModuleParameters: []string{"nf_conntrack_helper=1"}}},
+		{Kind: kindSysctl, SysctlConfig: &typedconfig.SysctlConfigV1Alpha1{Params: map[string]string{testSysctlKey: "1"}}},
+		{Kind: kindKernelModule, KernelModuleConfig: &typedconfig.KernelModuleConfigV1Alpha1{MetaName: "nbd"}},
+		{Kind: kindKernelModule, KernelModuleConfig: &typedconfig.KernelModuleConfigV1Alpha1{MetaName: "br_netfilter", ModuleParameters: []string{"nf_conntrack_helper=1"}}},
 		{Kind: "UserVolumeConfig", UserVolumeConfig: &typedconfig.UserVolumeConfigV1Alpha1{
-			MetaName:         "data",
+			MetaName:         "scratch",
 			ProvisioningSpec: &typedconfig.ProvisioningSpec{DiskSelectorSpec: &typedconfig.DiskSelector{Match: `disk.wwid == "x"`}, ProvisioningMinSize: "0"},
 		}},
-		{Kind: "Config", Config: &typedconfig.Config{
-			MachineConfig: &typedconfig.MachineConfig{MachineType: "controlplane", MachineCertSANs: []string{"10.0.0.1"}},
+		{Kind: configKind, Config: &typedconfig.Config{
+			MachineConfig: &typedconfig.MachineConfig{MachineType: "controlplane", MachineCertSANs: []string{epIP}},
 		}},
 	}
 
@@ -249,7 +251,7 @@ func TestConfigFromDocumentsConvertsBackToTheDocuments(t *testing.T) {
 		t.Fatalf("want %d documents, got %d", len(want), len(got))
 	}
 
-	if c.Machine.Kernel.Modules["br_netfilter"].Parameters[0] != "nf_conntrack_helper=1" || c.Machine.Sysctls["net.ipv4.ip_forward"] != "1" {
+	if c.Machine.Kernel.Modules["br_netfilter"].Parameters[0] != "nf_conntrack_helper=1" || c.Machine.Sysctls[testSysctlKey] != "1" {
 		t.Errorf("settings are not where the schema has them: %+v", c.Machine)
 	}
 }
@@ -257,7 +259,7 @@ func TestConfigFromDocumentsConvertsBackToTheDocuments(t *testing.T) {
 // A setting the schema does not carry is refused by name, never dropped: a document that spells in the v1alpha1
 // document a setting another document spells is one case.
 func TestConfigFromDocumentsRefusesWhatTheSchemaDoesNotCarry(t *testing.T) {
-	_, err := ConfigFromDocuments([]TalosConfigPatchDocument{{Kind: "Config", Config: &typedconfig.Config{
+	_, err := ConfigFromDocuments([]TalosConfigPatchDocument{{Kind: configKind, Config: &typedconfig.Config{
 		ClusterConfig: &typedconfig.ClusterConfig{ExtraManifests: []string{"https://example.invalid/x.yaml"}},
 	}}})
 

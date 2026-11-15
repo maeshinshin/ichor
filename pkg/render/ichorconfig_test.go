@@ -12,12 +12,16 @@ import (
 	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 )
 
+func patchesOf(p ichorv1alpha1.TalosConfigPatch) []ichorv1alpha1.TalosConfigPatch {
+	return []ichorv1alpha1.TalosConfigPatch{p}
+}
+
 func ichorPatch(name string, c *ichorconfig.Config) ichorv1alpha1.TalosConfigPatch {
 	return configPatch(name, c)
 }
 
 // Removing spec.documents from the CRD changed nothing about what reaches a node: a setting written in
-// spec.config is rendered as the Talos document that carries it, the same one spec.documents carried before it was removed.
+// spec.config is rendered as the Talos document that carries it, the one spec.documents carried.
 func TestSpecConfigRendersAsTheTalosDocumentThatCarriesIt(t *testing.T) {
 	m := testMachine("node-a", roleWorker, nil)
 	bundle := testBundle(t)
@@ -45,7 +49,7 @@ func TestSpecConfigPassesTheGuards(t *testing.T) {
 	enabled := true
 	c := &ichorconfig.Config{
 		Cluster: &ichorconfig.Cluster{InlineManifests: map[string]*ichorconfig.ClusterInlineManifestsEntry{
-			cni.InlineManifestName: {Manifest: "kind: Nothing\n"},
+			cni.InlineManifestName: {Manifest: nothingManifest},
 			"unrelated.yaml":       {Manifest: "kind: Other\n"},
 		}},
 		Machine: &ichorconfig.Machine{Features: &ichorconfig.MachineFeatures{
@@ -58,11 +62,11 @@ func TestSpecConfigPassesTheGuards(t *testing.T) {
 	patch := ichorPatch("guards", c)
 	before := patch.DeepCopy()
 
-	worker := mustRender(t, cluster, testMachine("node-w", roleWorker, nil), bundle, []ichorv1alpha1.TalosConfigPatch{patch})
+	worker := mustRender(t, cluster, testMachine("node-w", roleWorker, nil), bundle, patchesOf(patch))
 	requireNone(t, worker, "name: "+cni.InlineManifestName, "KubeTalosAPIAccessConfig")
 	requireAll(t, worker, "unrelated.yaml")
 
-	control := mustRender(t, cluster, testMachine("node-c", roleControlPlane, nil), bundle, []ichorv1alpha1.TalosConfigPatch{patch})
+	control := mustRender(t, cluster, testMachine("node-c", roleControlPlane, nil), bundle, patchesOf(patch))
 	requireNone(t, control, "name: "+cni.InlineManifestName)
 	requireAll(t, control, "unrelated.yaml", "KubeTalosAPIAccessConfig")
 
@@ -75,12 +79,11 @@ func TestSpecConfigPassesTheGuards(t *testing.T) {
 // control planes and is left out of workers, which Talos would otherwise refuse.
 func TestControlPlaneSettingsOfAClusterPatchAreLeftOutOfWorkers(t *testing.T) {
 	bundle := testBundle(t)
-	patch := ichorPatch("apiserver", &ichorconfig.Config{Cluster: &ichorconfig.Cluster{ApiServer: &ichorconfig.ClusterApiServer{
-		ExtraArgs: map[string][]string{"audit-log-maxage": {"3"}},
-	}}})
+	apiServer := &ichorconfig.ClusterApiServer{ExtraArgs: map[string][]string{"audit-log-maxage": {"3"}}}
+	patch := ichorPatch("apiserver", &ichorconfig.Config{Cluster: &ichorconfig.Cluster{ApiServer: apiServer}})
 
-	requireAll(t, mustRender(t, testCluster("true"), testMachine("cp", roleControlPlane, nil), bundle, []ichorv1alpha1.TalosConfigPatch{patch}),
+	requireAll(t, mustRender(t, testCluster("true"), testMachine("cp", roleControlPlane, nil), bundle, patchesOf(patch)),
 		"audit-log-maxage")
-	requireNone(t, mustRender(t, testCluster("true"), testMachine("w", roleWorker, nil), bundle, []ichorv1alpha1.TalosConfigPatch{patch}),
+	requireNone(t, mustRender(t, testCluster("true"), testMachine("w", roleWorker, nil), bundle, patchesOf(patch)),
 		"audit-log-maxage")
 }

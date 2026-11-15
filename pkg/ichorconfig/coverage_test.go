@@ -29,14 +29,15 @@ func mirrorLeaves(t reflect.Type, path string, chain []reflect.Type, out *[]stri
 		t = t.Elem()
 	}
 
-	if t.Kind() != reflect.Struct || t.PkgPath() != reflect.TypeFor[typedconfig.Config]().PkgPath() || slices.Contains(chain, t) {
+	mirror := reflect.TypeFor[typedconfig.Config]().PkgPath()
+	if t.Kind() != reflect.Struct || t.PkgPath() != mirror || slices.Contains(chain, t) {
 		*out = append(*out, path)
 
 		return
 	}
 
-	for i := range t.NumField() {
-		name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
+	for f := range t.Fields() {
+		name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
 		if name == "" || name == "-" {
 			continue
 		}
@@ -46,7 +47,7 @@ func mirrorLeaves(t reflect.Type, path string, chain []reflect.Type, out *[]stri
 			p = path + "." + name
 		}
 
-		mirrorLeaves(t.Field(i).Type, p, append(chain, t), out)
+		mirrorLeaves(f.Type, p, append(chain, t), out)
 	}
 }
 
@@ -60,8 +61,7 @@ func schemaSinks(t reflect.Type, sinks *[]sink, mapKinds map[string]bool) {
 		return
 	}
 
-	for i := range t.NumField() {
-		f := t.Field(i)
+	for f := range t.Fields() {
 		tag := f.Tag.Get("ichor")
 
 		if kind, ok := strings.CutPrefix(tag, "docs="); ok {
@@ -69,7 +69,7 @@ func schemaSinks(t reflect.Type, sinks *[]sink, mapKinds map[string]bool) {
 				mapKinds[kind] = true
 			}
 		} else if tag != "" && !isSchema(f.Type) {
-			for _, part := range strings.Split(tag, ";") {
+			for part := range strings.SplitSeq(tag, ";") {
 				kind, path, _ := strings.Cut(part, ":")
 				if !strings.HasPrefix(kind, "+") {
 					*sinks = append(*sinks, sink{kind, path})
@@ -96,9 +96,9 @@ func rootTypes(t *testing.T) map[string]reflect.Type {
 	d := reflect.TypeFor[ichorv1alpha1.TalosConfigPatchDocument]()
 	byKey := map[string]reflect.Type{}
 
-	for i := range d.NumField() {
-		name, _, _ := strings.Cut(d.Field(i).Tag.Get("json"), ",")
-		byKey[name] = d.Field(i).Type
+	for f := range d.Fields() {
+		name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+		byKey[name] = f.Type
 	}
 
 	out := map[string]reflect.Type{}
@@ -125,7 +125,7 @@ func notCarried(t *testing.T) []string {
 		t.Fatal(err)
 	}
 
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var out []string
 
@@ -203,7 +203,8 @@ func TestEverySinkOfTheSchemaIsASettingOfATalosDocument(t *testing.T) {
 	}
 
 	for _, s := range sinks {
-		if !slices.ContainsFunc(leaves[s.kind], func(l string) bool { return l == s.path || strings.HasPrefix(l, s.path+".") }) {
+		inSink := func(l string) bool { return l == s.path || strings.HasPrefix(l, s.path+".") }
+		if !slices.ContainsFunc(leaves[s.kind], inSink) {
 			t.Errorf("the schema writes to %s:%s, which is not a setting of that document", s.kind, s.path)
 		}
 	}

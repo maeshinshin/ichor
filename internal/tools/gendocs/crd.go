@@ -170,9 +170,9 @@ func rawType(s apiextv1.JSONSchemaProps) string {
 		t = "integer or string"
 	case t == "array" && s.Items != nil && s.Items.Schema != nil:
 		t = "[]" + rawType(*s.Items.Schema)
-	case t == "object" && s.AdditionalProperties != nil && s.AdditionalProperties.Schema != nil:
+	case t == objectType && s.AdditionalProperties != nil && s.AdditionalProperties.Schema != nil:
 		t = "map[string]" + rawType(*s.AdditionalProperties.Schema)
-	case t == "object" && len(s.Properties) == 0 && s.XPreserveUnknownFields != nil && *s.XPreserveUnknownFields:
+	case t == objectType && len(s.Properties) == 0 && s.XPreserveUnknownFields != nil && *s.XPreserveUnknownFields:
 		t = "object (free-form)"
 	case t == "":
 		t = "any"

@@ -55,12 +55,15 @@ var droppedFromConfig = []dropped{
 }
 
 // sections describes the objects Ichor adds around the documents.
+// kubespanPath is the section KubeSpan's two documents share.
+const kubespanPath = "machine.network.kubespan"
+
 var sections = map[string]string{
 	"machine.network":           "",
 	"machine.volumes":           "Volumes: the system volumes, user volumes and the storage layers built on disks.",
 	"machine.logging":           "",
 	"machine.features.hostDNS":  "",
-	"machine.network.kubespan":  "",
+	kubespanPath:                "",
 	"machine.registries":        "",
 	"machine.udev":              "",
 	"cluster.apiServer":         "",
@@ -102,8 +105,8 @@ var rows = []row{
 	coll("StaticHostConfig", "machine.network.extraHostEntries", "Entries of the hosts file, by IP address."),
 	coll("KmsgLogConfig", "machine.logging.kmsg", "Kernel log destinations, by name."),
 	{kind: "EventSinkConfig", at: "machine.logging.eventSink"},
-	{kind: "KubeSpanConfig", at: "machine.network.kubespan"},
-	{kind: "KubeSpanEndpointsConfig", at: "machine.network.kubespan"},
+	{kind: "KubeSpanConfig", at: kubespanPath},
+	{kind: "KubeSpanEndpointsConfig", at: kubespanPath},
 
 	// Links and routing: each kind is a collection of its own, because each names a different thing.
 	coll("BondConfig", "machine.network.bonds", "Bond links, by link name."),

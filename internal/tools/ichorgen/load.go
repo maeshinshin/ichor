@@ -138,7 +138,7 @@ func (s *source) readStruct(out *srcStruct, st *ast.StructType) error {
 		if len(f.Names) == 0 && isTypeMeta(f.Type) {
 			// The one embedded field of the mirror: apiVersion and kind, written out.
 			for _, n := range []string{"apiVersion", "kind"} {
-				out.fields = append(out.fields, &srcField{goName: strings.ToUpper(n[:1]) + n[1:], json: n, t: &typ{kind: tBasic, name: "string"}})
+				out.fields = append(out.fields, &srcField{goName: strings.ToUpper(n[:1]) + n[1:], json: n, t: &typ{kind: tBasic, name: goString}})
 			}
 
 			continue
@@ -186,25 +186,25 @@ func isTypeMeta(e ast.Expr) bool {
 func jsonName(tag string) string {
 	const key = `json:"`
 
-	i := strings.Index(tag, key)
-	if i < 0 {
+	_, rest, found := strings.Cut(tag, key)
+	if !found {
 		return ""
 	}
 
-	rest := tag[i+len(key):]
-
-	j := strings.IndexByte(rest, '"')
-	if j < 0 {
+	name, _, found := strings.Cut(rest, `"`)
+	if !found {
 		return ""
 	}
 
-	return strings.Split(rest[:j], ",")[0]
+	name, _, _ = strings.Cut(name, ",")
+
+	return name
 }
 
 var basics = map[string]bool{
-	"string": true, "bool": true, "int": true, "int8": true, "int16": true, "int32": true, "int64": true,
-	"uint": true, "uint8": true, "uint16": true, "uint32": true, "uint64": true, "float32": true, "float64": true,
-	"byte": true,
+	goString: true, "bool": true, "int": true, "int8": true, "int16": true, "int32": true, "int64": true,
+	"uint": true, goUint8: true, "uint16": true, "uint32": true, "uint64": true, "float32": true, "float64": true,
+	goByte: true,
 }
 
 func (s *source) parseType(e ast.Expr) (*typ, error) {
@@ -240,7 +240,7 @@ func (s *source) parseType(e ast.Expr) (*typ, error) {
 
 		return &typ{kind: tSlice, elem: el}, nil
 	case *ast.MapType:
-		if k, ok := t.Key.(*ast.Ident); !ok || k.Name != "string" {
+		if k, ok := t.Key.(*ast.Ident); !ok || k.Name != goString {
 			return nil, fmt.Errorf("a map that is not keyed by string")
 		}
 

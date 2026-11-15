@@ -53,10 +53,10 @@ func TestBuildInlineManifestsPatch_CarriesTheManifestInSpecConfig(t *testing.T) 
 	machine := &ichorv1alpha1.TalosMachine{Spec: ichorv1alpha1.TalosMachineSpec{Role: roleControlPlane}}
 	manifest := &typedconfig.ClusterInlineManifest{InlineManifestName: "cni", InlineManifestContents: "kind: List\n"}
 
-	p := buildInlineManifestsPatch(cluster, machine, "10.0.0.10:50000", []*typedconfig.ClusterInlineManifest{manifest})
+	p := buildInlineManifestsPatch(cluster, machine, "10.0.0.77:50000", []*typedconfig.ClusterInlineManifest{manifest})
 
 	c := p.Spec.Config
-	if c.Machine.Type != roleControlPlane || len(c.Machine.CertSANs) != 1 || c.Machine.CertSANs[0] != "10.0.0.10" ||
+	if c.Machine.Type != roleControlPlane || len(c.Machine.CertSANs) != 1 || c.Machine.CertSANs[0] != "10.0.0.77" ||
 		c.Cluster.InlineManifests["cni"].Manifest != "kind: List\n" {
 		t.Fatalf("spec.config = %+v", c)
 	}
@@ -66,7 +66,7 @@ func TestBuildInlineManifestsPatch_CarriesTheManifestInSpecConfig(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	var kinds []string
+	kinds := make([]string, 0, len(docs))
 	for _, d := range docs {
 		kinds = append(kinds, d.Kind)
 	}

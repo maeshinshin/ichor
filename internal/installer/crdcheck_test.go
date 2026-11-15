@@ -42,6 +42,8 @@ const (
 	kDefault    = "default"
 	kCNI        = "cni"
 	kCustom     = "custom"
+	kNamespace  = "namespace"
+	kDocuments  = "documents"
 )
 
 // crdWith builds a one-version CRD named name whose spec has the given string properties and

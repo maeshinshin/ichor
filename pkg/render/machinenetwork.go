@@ -167,7 +167,7 @@ func injectNetwork(
 // vipAddress is the endpoint address a control plane holds as a shared IP: the cluster endpoint when its
 // type is vip, and only on a control plane (Talos supports a VIP on nothing else). It is empty otherwise.
 func vipAddress(cluster *ichorv1alpha1.TalosCluster, m *ichorv1alpha1.TalosMachine) string {
-	if cluster.Spec.Endpoint.Type != "vip" || m.Spec.Role != "controlplane" {
+	if cluster.Spec.Endpoint.Type != "vip" || m.Spec.Role != controlPlaneRole {
 		return ""
 	}
 

@@ -58,7 +58,7 @@ func TestBuildDiskRoleVolumes_AllThreeRoles(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var kinds []string
+	kinds := make([]string, 0, len(docs))
 	for _, d := range docs {
 		kinds = append(kinds, d.Kind)
 	}

@@ -491,12 +491,15 @@ func minimalConfigSkeleton() *ichorconfig.Config {
 	}
 }
 
+// driftKey is the sysctl the "applies without a reboot" tests set and drift.
+const driftKey = "ichor.test.drift"
+
 // extraArgsConfig is minimalConfigSkeleton with one extra, safe (pkg/fieldmeta:
 // a sysctl needs no reboot) setting, one a worker takes -- the non-reboot
 // change every "applies without a reboot" test reuses.
 func extraArgsConfig() *ichorconfig.Config {
 	cfg := minimalConfigSkeleton()
-	cfg.Machine.Sysctls = map[string]string{"foo": "b"}
+	cfg.Machine.Sysctls = map[string]string{driftKey: "b"}
 
 	return cfg
 }
@@ -922,7 +925,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		// Ichor's side touched -- cluster, the patch and the machine all
 		// keep the same generation.
 		drifted := extraArgsConfig()
-		drifted.Machine.Sysctls["foo"] = "c"
+		drifted.Machine.Sysctls[driftKey] = "c"
 		driftedCurrent := renderWithConfig(cluster, m, bundle, layerCluster, nil, drifted)
 		fake.current = driftedCurrent
 
@@ -950,7 +953,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 
 		// The node differs from the render (a first-time mismatch, which would otherwise be applied).
 		other := extraArgsConfig()
-		other.Machine.Sysctls["foo"] = "c"
+		other.Machine.Sysctls[driftKey] = "c"
 
 		fake := &fakeTalosClient{current: renderWithConfig(cluster, m, bundle, layerCluster, nil, other)}
 		r := newTestReconciler(fake)
@@ -1029,7 +1032,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		// The node holds what the previous Ichor rendered, which differs from what this one does,
 		// while no CR generation moved.
 		old := extraArgsConfig()
-		old.Machine.Sysctls["foo"] = "c"
+		old.Machine.Sysctls[driftKey] = "c"
 		fake.current = renderWithConfig(cluster, m, bundle, layerCluster, nil, old)
 
 		prev := renderVersion
@@ -1113,7 +1116,7 @@ var _ = Describe("TalosMachineReconciler", func() {
 		Expect(fetchMachine(m).Status.AppliedConfigHash).To(Equal(wantHash))
 
 		drifted := extraArgsConfig()
-		drifted.Machine.Sysctls["foo"] = "c"
+		drifted.Machine.Sysctls[driftKey] = "c"
 		fake.current = renderWithConfig(cluster, m, bundle, layerCluster, nil, drifted)
 
 		reconcileOK(r, m)

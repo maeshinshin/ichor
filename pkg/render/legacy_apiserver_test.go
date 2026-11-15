@@ -13,9 +13,8 @@ import (
 func TestAPIServerSettingMergesIntoTheKubeAPIServerDocument(t *testing.T) {
 	cluster := testCluster("false")
 	m := testMachine("cp1", "controlplane", nil)
-	patch := configPatch("apiserver", &ichorconfig.Config{Cluster: &ichorconfig.Cluster{ApiServer: &ichorconfig.ClusterApiServer{
-		ExtraArgs: map[string][]string{"audit-log-maxage": {"3"}},
-	}}})
+	apiServer := &ichorconfig.ClusterApiServer{ExtraArgs: map[string][]string{"audit-log-maxage": {"3"}}}
+	patch := configPatch("apiserver", &ichorconfig.Config{Cluster: &ichorconfig.Cluster{ApiServer: apiServer}})
 
 	out := mustRender(t, cluster, m, testBundle(t), []ichorv1alpha1.TalosConfigPatch{patch})
 

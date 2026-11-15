@@ -133,7 +133,7 @@ func (r *reverser) fill(v reflect.Value, entries map[string]instance) (bool, err
 
 			set = set || ok
 		default:
-			ok, err := r.fillLeaf(fv, tag, entries, f.Name)
+			ok, err := r.fillLeaf(fv, tag, entries)
 			if err != nil {
 				return false, err
 			}
@@ -172,7 +172,7 @@ func (r *reverser) fillEntries(coll reflect.Value, kind string) (bool, error) {
 	return true, nil
 }
 
-func (r *reverser) fillLeaf(fv reflect.Value, tag string, entries map[string]instance, name string) (bool, error) {
+func (r *reverser) fillLeaf(fv reflect.Value, tag string, entries map[string]instance) (bool, error) {
 	for _, s := range parseSinks(tag) {
 		inst, ok := entries[s.kind]
 		if !ok {

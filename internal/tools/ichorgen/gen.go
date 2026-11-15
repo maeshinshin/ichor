@@ -12,7 +12,6 @@ type gen struct {
 
 	conflicts    []string // settings two documents spell with different shapes and no row resolves
 	structMerges []string // places where two documents' structs were folded into one
-	listMerges   []string // merges that happened under a list or a map, which a row has to handle
 	relaxed      []string // required fields made optional where documents meet
 	carried      map[string]bool
 }
@@ -138,11 +137,9 @@ func (g *gen) at(path string) (*node, error) {
 
 // drop removes the Config setting at path: a document spells it, and a setting is written once.
 func (g *gen) drop(path string) error {
-	i := strings.LastIndexByte(path, '.')
-
-	parent, name := "", path
-	if i >= 0 {
-		parent, name = path[:i], path[i+1:]
+	parent, name, found := strings.CutLast(path, ".")
+	if !found {
+		parent, name = "", path
 	}
 
 	n, err := g.at(parent)
@@ -213,11 +210,9 @@ func (g *gen) place(r row) error {
 			return fmt.Errorf("move: %s has no field %s", r.kind, from)
 		}
 
-		i := strings.LastIndexByte(to, '.')
-
-		parent, name := "", to
-		if i >= 0 {
-			parent, name = to[:i], to[i+1:]
+		parent, name, found := strings.CutLast(to, ".")
+		if !found {
+			parent, name = "", to
 		}
 
 		n, err := g.at(parent)

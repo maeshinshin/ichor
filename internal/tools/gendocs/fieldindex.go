@@ -199,6 +199,9 @@ func documentSinks(tag string) [][2]string {
 	return config
 }
 
+// objectType is the type of a schema that holds properties.
+const objectType = "object"
+
 // setting is a place in the schema of a document: a setting, or an object holding settings.
 type setting struct {
 	leaf     *apiextv1.JSONSchemaProps
@@ -237,7 +240,7 @@ func (s *setting) schema() apiextv1.JSONSchemaProps {
 		return *s.leaf
 	}
 
-	out := apiextv1.JSONSchemaProps{Type: "object", Properties: map[string]apiextv1.JSONSchemaProps{}}
+	out := apiextv1.JSONSchemaProps{Type: objectType, Properties: map[string]apiextv1.JSONSchemaProps{}}
 
 	for name, k := range s.kids {
 		out.Properties[name] = k.schema()

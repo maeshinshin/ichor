@@ -114,6 +114,7 @@ func TestSetMachineInstallNamesTheInstallerImage(t *testing.T) {
 	}{
 		{"mode off", ichorv1alpha1.SecureBootOff, "", stock},
 		{"mode unset", "", "", stock},
+		{"mode preferred", ichorv1alpha1.SecureBootPreferred, "", secure},
 		{"mode required", ichorv1alpha1.SecureBootRequired, "", secure},
 		{"named image kept", ichorv1alpha1.SecureBootRequired, "registry.example/installer:v1", "registry.example/installer:v1"},
 	} {

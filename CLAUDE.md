@@ -20,7 +20,7 @@ Rules that are easy to get wrong:
   code against it. Don't code from memory.
 - Don't read or reference Sidero Omni — code, docs, release notes or UI. This
   is a clean-room implementation.
-- Machine config is typed only (`TalosConfigPatch.spec.documents[]` with the
+- Machine config is typed only (`TalosConfigPatch.spec.config` with the
   Talos machinery types). No raw-YAML escape hatch.
 - UI: preactcn only. No React, no `preact/compat`.
 - The controller is the only writer to Talos nodes and never mutates `spec`.

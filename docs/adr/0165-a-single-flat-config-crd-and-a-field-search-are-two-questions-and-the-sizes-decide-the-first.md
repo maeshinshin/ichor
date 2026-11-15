@@ -1,18 +1,18 @@
 # 0165. A single flat config CRD and a field search are two questions, and the sizes decide the first
 
-Status: Accepted · Date: 2026-11-15 · Design section: Typed configuration · Relates to: 0003, 0009, 0039, 0072, 0099, 0101, 0104, 0152, 0158
+Status: Accepted · Date: 2026-11-15 · Amended · Design section: Typed configuration · Relates to: 0003, 0009, 0039, 0072, 0099, 0101, 0104, 0152, 0158
 
-Decided: Ichor's patch schema is Ichor's own, not a copy of Talos's. `TalosConfigPatch.spec.config` is one nested object, a `machine` and a `cluster` section in the shape of the `v1alpha1` `Config` document, with every document kind placed beside the setting of the same meaning, each setting written once, and the controller converts it to Talos documents when it renders. It is a new field of the existing CRD, not a new CRD, and `spec.documents[]` stays and is deprecated. A patch that sets both is refused. The schema is generated from the mirror types, so a field Talos adds appears with no list edited. The field search stays a separate question and is built from a generated index.
+Decided: Ichor's patch schema is Ichor's own, not a copy of Talos's. `TalosConfigPatch.spec.config` is one nested object, a `machine` and a `cluster` section in the shape of the `v1alpha1` `Config` document, with every document kind placed beside the setting of the same meaning, each setting written once, and the controller converts it to Talos documents when it renders. It is a new field of the existing CRD, not a new CRD. `spec.documents[]` is removed from the CRD in `v1alpha1`, so `spec.config` is the only way to write Talos configuration (see the amendment). The schema is generated from the mirror types, so a field Talos adds appears with no list edited. The field search stays a separate question and is built from a generated index.
 
 ## The decision
 
 The first version of this ADR proposed keeping the per-kind union and recorded why a single shape was not worth it. That proposal assumed Ichor's shape had to mirror Talos's document types, so that a unified shape needed a classifier, a splitter and a rule for every setting Talos spells two ways. The maintainer's decision removes the assumption: what Ichor builds is Ichor, not Talos, and the controller converts back to Talos when it applies. The objections below assume the mirroring, and most of them go with it.
 
 - **A new field on the existing CRD**, `spec.config`, not a second CRD: a second CRD would repeat the metadata, controller, webhook and RBAC for nothing, and CRD fields are append-only, which permits adding one.
-- **A patch that sets `spec.documents[]` and `spec.config` is refused** by the webhook, and by the renderer, with a message naming both. There is no merge: two spellings of one setting in one object is the ambiguity this change removes.
+- **A patch that sets `spec.documents[]` and `spec.config` was refused** while both existed, with a message naming both; the amendment removes `spec.documents[]`, and with it the case.
 - **Typed only.** There is no raw-YAML field.
 - **The conversion is the controller's**, at render time. The controller still never mutates `spec`.
-- **`spec.documents[]` stays for ever in this API version** and is deprecated in the documentation. Nothing is removed.
+- **`spec.documents[]` stayed, deprecated, in this decision as first accepted.** The amendment below removes it.
 
 ### Why the recorded objections no longer hold
 
@@ -23,7 +23,7 @@ The first version of this ADR proposed keeping the per-kind union and recorded w
 - *The 540 `required` and `minProperties`/`maxProperties` rules.* A field a document requires stays required where that document is the only one whose fields the object holds, which is every entry of a collection and every section a single kind owns. Where two documents meet in one object (the kubelet, the API server, the time and network sections) the field is optional, because a patch is a sparse overlay and one document cannot require a field of the other; Talos validates the finished configuration when the machine is rendered. The generator reports each field it relaxes.
 - *The table from union path to document path, and `pkg/fieldmeta`'s paths.* The table is the `ichor` struct tag of each field, written by the generator. `pkg/fieldmeta` is keyed by the path in the Talos document and is used on documents after conversion, so it needs no new paths for the effective-configuration view; a view of the paths of `spec.config` itself would key them by Ichor's path and is not built.
 
-Two objections hold. The record is the one that decides, and the append-only rule is why `spec.documents[]` stays.
+Two objections held: the record, and the append-only rule, which is why `spec.documents[]` stayed until the amendment retired it as an exception.
 
 ### The sizes of this design
 
@@ -35,7 +35,8 @@ The Helm release record is the encoding of `encodeRelease` (JSON, gzip at best c
 | 0dfa6e550^, before the retirement | 991,560 | 57,016 |
 | A throwaway union of every kind merged by path, in the patches CRD | 937,660 | 110,916 |
 | The same without `KubeStaticPodConfig` | 687,780 | 360,796 |
-| **`spec.config` as built, beside `documents[]`, one version** | **951,392** | **97,184** |
+| `spec.config` as built, beside `documents[]`, one version (`017be3a79`, no longer on the branch) | 950,492 | 98,084 |
+| **`spec.config` alone, `documents[]` removed** | **575,308** | **473,268** |
 
 598,916, the figure the first version of this ADR gave for the tree after the retirement, was a projection of a tree that still held a doc comment the retirement removed; the tree itself is 598,888. The patches CRD as compact JSON is 902,068 bytes (472,817 before). The static pod is 249,880 of the throwaway union's 338,772 added bytes, 74%: the core v1 `Pod` is in the schema once in `documents[]` and once in `spec.config.machine.staticPods`, and no merge can shrink it.
 
@@ -45,7 +46,7 @@ Serving a second API version of the CRD costs a whole second schema, because eac
 
 The links are not joined. `machine.network.interfaces[]` is the `v1alpha1` list and the link documents (bond, bridge, dummy, veth, VRF, Ethernet, DHCPv6, Layer 2 VIP, routing, BGP and the probes) are collections beside it, so a bond can still be written in two places, and the settings the two spell differently (the bond mode, hash policy, LACP rate, ARP validation and targets, fail-over MAC, primary reselect and AD select are words in one and numbers in the other; routes are `network` in one and `destination` in the other; addresses are strings in one and objects in the other; the hardware address is a string in one and bytes in the other) are not resolved. The same holds for `machine.disks` and `machine.systemDiskEncryption` against the volume documents. Joining them needs a row for each pair and a conversion for each setting spelled differently, and the entries of the interface list need an activation rule, since one entry would feed a document of the v1alpha1 list or one of the link kinds. The bond-mode words need the machinery enum tables, which the mirror types do not keep.
 
-The web UI's field search is built from the paths of `documents[]`. It keeps working for `documents[]` and has no paths of `spec.config`; building them is the same generator step over the new schema.
+The web UI edits documents and the API server's patch messages carry documents. The backend converts between them and `spec.config` (see the amendment), so the editor works as before; the proto message and the "choose a kind first" flow are unchanged, and replacing them with `spec.config` paths is a separate change.
 
 ## The original sizing
 
@@ -168,3 +169,24 @@ If the maintainer still wants B, it supersedes ADR 0003's union shape (its mirro
 - The record cost of the 86 unused omits on top of a unified CRD; only the per-kind figure (about 5.7 KB) was reported.
 - Whether a semantic dedup rule exists that is better than name, name and type, or path; the description text is too sparse to decide it.
 - Whether the numbers move when the throwaway union is serialised by controller-gen itself rather than by `sigs.k8s.io/yaml`.
+
+## Amendment (2026-11-16): spec.documents is removed
+
+Decided by the maintainer: `TalosConfigPatch.spec.documents` is removed from the CRD in `v1alpha1`, with no second API version and no conversion webhook. `spec.config` is the only way to write Talos configuration, so there is one place to write every setting, in Ichor's own shape. This is the third exception to the append-only rule, recorded in ADR 0152.
+
+**Why.** Two spellings of one setting in one CRD is the ambiguity `spec.config` was built to remove, and `documents[]` was kept only because CRD fields are append-only. Keeping it also kept the schema twice: the patches CRD held the union and `spec.config`, 950,492 bytes of the record with 98,084 free. With `documents[]` gone the record is 575,308 bytes, 473,268 free of 1,048,576, by the method above. Removing it costs the stored objects that set it (below); the maintainer accepted that.
+
+**What stays.** The Go type `TalosConfigPatchDocument` and its generated conversion to and from the machinery types stay: the conversion of `spec.config` decodes into it, validates with it and calls `.Document()`, so a setting still reaches a node through the same mirror and machinery types. Only the CRD field goes. The `ichorgen` schema and the `ichor` struct tag are unchanged, and `ConfigFromDocuments`, the inverse of the conversion, writes the settings of documents in `spec.config` for what builds documents (`ichor init` and `ichor adopt` for their patches, the web UI's editor). It refuses a setting the schema does not carry, by name, and gives back the same documents or an error.
+
+**Stored objects.** A patch that sets `documents` loses it: the API server prunes a field that is no longer in the schema when it decodes an object from storage as well as when it writes one, and the bytes in etcd lose it at the next write. The nodes the patch reached lose its settings at their next apply. This holds for any cluster, the maintainer's own included, and is in the release's upgrade notes. A client that asks for strict field validation (`kubectl`, and every Ichor client) is refused with `unknown field "spec.documents"`; `ichor patch apply` says to write `spec.config`.
+
+**What changed in the conversion.**
+
+- A cluster-layer patch reaches workers, and Talos refuses the control plane's documents on a worker; the render leaves a document only a control plane takes out of a worker's configuration. Until now the `v1alpha1` spelling was tolerated there.
+- Where the machine takes no Kubernetes documents (before Talos 1.14), the inline manifests and extra manifests are written to the lists of the `v1alpha1` document, and any other Kubernetes document is refused with the Talos version named.
+- A switch for a document (`machine.features.kubePrism.enabled`, `kubernetesTalosAPIAccess.enabled`) that is false is written to the `v1alpha1` document with every other setting of its object, because Talos refuses a setting in both the `v1alpha1` document and a document of its own.
+- The renderer's guards on a patch (Ichor's CNI inline manifest, Talos API access on workers, `cluster.proxy.disabled`) apply to `spec.config` alone, and the code that rewrote `documents[]` for them is gone.
+
+**What is still open.** The links are not joined, as above: `machine.network.interfaces[]` against the bond, bridge, dummy link, veth, VRF, Ethernet, DHCPv6 and VIP documents, and `machine.disks` and `machine.systemDiskEncryption` against the volume documents. A bond can be written in two places, so one place to write every setting is not yet true of the links. It needs a row for each pair, a conversion for each setting spelled differently, a rule for which document an interface entry writes, and the enumerations of the `nethelpers` package, because the mirror lowers them to `uint8`; Talos's own tolerance for both forms of one link is not established. It is a separate change.
+
+**The field search.** The index is built from the `spec.config` schema: each setting is a row of the document that spells it, in the path it has in that document. The editor and the wire messages still carry documents.

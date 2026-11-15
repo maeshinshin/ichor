@@ -5,11 +5,12 @@ sidebar_order: 7
 
 # Typed configuration
 
-`TalosConfigPatch.spec.config` holds a patch in Ichor's own schema, and
-`spec.documents[]` holds the same settings as Talos config documents. Both are
-typed, and neither has a raw-YAML field. `spec.documents[]` is deprecated: new
-configuration is written in `spec.config`, and a patch sets one of the two,
-never both (the webhook refuses it, naming both fields).
+`TalosConfigPatch.spec.config` is the only place a patch carries Talos
+configuration. It is typed, with no raw-YAML field, and each setting is written
+once. `spec.documents[]`, which held the same settings as Talos config documents,
+is gone from the CRD: an object that still sets it is refused by a client that asks
+for strict field validation, as `kubectl` and every Ichor client do, and pruned of
+it by one that does not.
 
 ## Ichor's schema: `spec.config`
 
@@ -70,8 +71,8 @@ How the schema is built:
 - **Descriptions are Ichor's own.** The schema carries no text of Talos's.
 
 The controller converts `spec.config` to Talos documents when it renders a
-machine, through the mirror types, so a setting reaches the node as the document
-`spec.documents[]` would have written it. The conversion reads the `ichor` struct
+machine, through the mirror types, so a setting reaches the node as the Talos
+document that carries it. The conversion reads the `ichor` struct
 tag of each field, which names the documents and paths the setting is written to:
 
 - A setting that a document spells goes to the document, and one that only the
@@ -79,17 +80,23 @@ tag of each field, which names the documents and paths the setting is written to
   documents (`KubeletConfig`, `KubeAPIServerConfig`, and the others of Talos 1.14)
   beside the `v1alpha1` block of the same component, so a patch that sets a
   document-only field and a `v1alpha1`-only field of one object is refused at
-  render with Talos's own message.
+  render with Talos's own message. A switch set to false is written to the
+  `v1alpha1` document with every other setting of its object, for the same reason.
 - The Kubernetes documents need a machine on Talos 1.14 or later. For an earlier
-  machine a setting that both spell is written to the `v1alpha1` document, and one
+  machine a setting that both spell is written to the `v1alpha1` document, the
+  inline manifests and extra manifests become the lists of that document, and one
   only the document spells is refused with the setting named.
+- A document only a control plane takes (the API server, the controller manager,
+  the scheduler and the rest) is left out of a worker, so a cluster-layer patch can
+  set the API server for the control planes it reaches.
 - `machine.features.kubePrism.enabled` and `kubernetesTalosAPIAccess.enabled` are
   switches for their documents: true brings the document into being.
 - The guards Ichor applies to patches apply to `spec.config` first: Ichor's own
   CNI inline manifest is dropped once the cluster has handed over, Talos API access
   is left out of workers, and `cluster.proxy.disabled` is Ichor's.
 
-What is not joined yet: the links. `machine.network.interfaces[]` is the
+What is not joined yet, and is therefore still a place where one setting can be
+written twice: the links. `machine.network.interfaces[]` is the
 `v1alpha1` list, and the link documents (bonds, bridges, dummy links, veths, VRFs,
 Ethernet tuning, DHCPv6, Layer 2 VIPs) are collections beside it. A bond can be
 written in both, and the two spell its settings differently (the bond mode, the
@@ -98,12 +105,14 @@ routes are `network` in one and `destination` in the other). Joining them is a
 row for each pair with a conversion for each setting spelled differently.
 `machine.disks` and `machine.systemDiskEncryption` have the same relation to the
 volume documents. These are the only places where a setting can still be written
-in two places.
+in two places, so "one place to write every setting" is not yet true of bonds,
+bridges and the other link documents, nor of disks and disk encryption.
 
-## `spec.documents[]`
+## The typed mirror
 
-`spec.documents[]` is deprecated and stays: a CRD field is never removed, and
-stored objects hold it. Its documents are the typed mirror of the Talos documents.
+The settings of `spec.config` are the typed mirror of the Talos documents; the
+`TalosConfigPatchDocument` Go type, one field for each document kind, is what the
+conversion decodes into and validates with. It is no longer a field of any CRD.
 The rest of this page is about those types. The reasons for typed fields:
 
 - Machinery's types are Talos's own definition; we don't maintain a parallel

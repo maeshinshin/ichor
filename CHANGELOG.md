@@ -35,11 +35,16 @@ command does. Each item is described where it is listed below.
   `TalosCluster` and run `ichor rollout config` (Users and login); users need a Talos
   v1.14 contract, and OIDC is the alternative without it. `ichor upgrade ichor` does not
   touch a Helm install. Your own CI that renders the chart needs the same addition.
-- **`TalosConfigPatch.spec.documents[]` is deprecated** in favour of the new
-  `spec.config`, Ichor's own schema for a patch. Nothing is removed: a patch that
-  has `documents[]` keeps working. A patch that sets both fields is refused, naming
-  both. A new patch should use `spec.config`; the Kubernetes component settings in
-  it need machines on Talos 1.14 or later (Typed configuration).
+- **A `TalosConfigPatch` that sets `spec.documents` loses it.** The field is gone
+  from the CRD: `spec.config`, Ichor's own schema for a patch, is the only place
+  to write Talos configuration. The API server prunes `documents` from a stored
+  patch when this release's CRD is installed, so the nodes a patch reached lose
+  its settings at their next apply, and `kubectl apply` of a manifest that still
+  sets it is refused as an unknown field. Write each setting in `spec.config`
+  before you upgrade, once each, in the place its meaning gives it; the Kubernetes
+  component settings in it need machines on Talos 1.14 or later. A patch you
+  wrote for a bond, bridge or other link is the exception to "once each": see
+  Typed configuration.
 - **Scripts.** Every command moved to a verb-first name, `restore` lost its mode
   flags, and `-o FILE` became `--out FILE` (CLI).
 - **A `TalosCluster` whose endpoint type is `dns` or `loadBalancer`** still
@@ -568,11 +573,12 @@ command does. Each item is described where it is listed below.
   `machine.time.enabled` replaces `disabled`, and `cluster.coreDNS.enabled`
   replaces `disabled`. A kind that is a named thing is a map from its name. The
   controller converts it to Talos documents when it renders a machine.
-  `spec.documents[]` is deprecated and stays. The schema is generated from the
+  It is the only place a patch carries Talos configuration: `spec.documents[]`
+  is removed (see Upgrade notes and ADR 0152). The schema is generated from the
   Talos mirror types (`internal/tools/ichorgen`), so a field Talos adds appears in
   it when `make generate` runs. The links are the exception: the `v1alpha1`
   interfaces and the link documents are not joined yet (see Typed configuration).
-- A `TalosConfigPatch` document can now be all 65 Talos document kinds
+- A `TalosConfigPatch` can now carry the settings of all 65 Talos document kinds
   Ichor accepts, up from 7 (`SysctlConfig`, `KernelModuleConfig`, the
   `v1alpha1` document, `VolumeConfig`, `UserVolumeConfig`, `RawVolumeConfig`
   and `ResolverConfig`). The 58 added cover network links and routing (bond,
@@ -585,9 +591,7 @@ command does. Each item is described where it is listed below.
   verification) and Kubernetes (the API server, controller manager, CoreDNS,
   network, node, KubePrism, Talos API access, inline and external manifests,
   audit policy, authorizer, credential provider, kubelet, kube-proxy,
-  kube-scheduler and static pods). A document is `kind` plus one field named after it
-  (`SysctlConfig` has `sysctlConfig`). `docs/reference/crds/talosconfigpatch.md`
-  lists every kind.
+  kube-scheduler and static pods). `docs/reference/crds/talosconfigpatch.md` lists every setting.
 - The other 25 kinds Talos registers are not available, on purpose. 10 carry a
   credential (registry authentication and TLS, the CA and signing keys,
   the encryption key, WireGuard, SideroLink, Hetzner Cloud and the discovery
@@ -604,8 +608,7 @@ command does. Each item is described where it is listed below.
   `apiVersion`, `kind`, `metadata` and `spec` of the document, without the
   `status` the kubelet reports. A static pod needs a security context, host
   networking, host paths and capabilities, so its spec is carried whole. The
-  schema is large: the two CRDs that embed the union, `TalosCluster` and
-  `TalosConfigPatch`, are about 500 KB and 470 KB as compact JSON. `make
+  schema is large, and `TalosConfigPatch` is one of the largest CRDs: `make
   install` and `make deploy` therefore apply the CRDs server-side, and so must
   anyone who applies them with `kubectl apply`: client-side apply keeps the
   whole object in its last-applied annotation, which is limited to 262,144
@@ -644,6 +647,16 @@ command does. Each item is described where it is listed below.
   at the next apply. `kubectl apply` of a manifest that still sets one is
   refused. Nothing replaces them yet; set them on the node outside Ichor until
   a reference to a Secret exists.
+- **Breaking for a manifest that sets it:** `TalosConfigPatch` loses
+  `spec.documents`: the union of document kinds as a list. Ichor's own schema,
+  `spec.config`, writes every setting once, so the union is a second copy of
+  what the schema holds, and it took the chart's Helm release record to 950,492
+  of the 1,048,576 bytes allowed while both were there. It is retired as a third
+  exception to the append-only rule (ADR 0152), and the record with `spec.config`
+  alone is 575,308 bytes, 473,268 free. `kubectl apply` of a manifest that still
+  sets `documents` is refused as an unknown field; a client that does not ask for
+  strict validation has it pruned. `ichor patch apply` names `spec.config` in its
+  refusal.
 - **Breaking for a manifest that sets it:** `TalosCluster` loses
   `spec.cni.custom.documents`, a second copy of the whole `TalosConfigPatch`
   document union that sat under the deprecated, refused `custom` CNI and that
@@ -654,17 +667,6 @@ command does. Each item is described where it is listed below.
   refused with the same message. A stored object that has `documents` stops
   serving it as soon as the CRD is upgraded; nothing used it, so no node
   changes.
-- Admission of a document changed. The CRD now requires `kind` plus one field
-  (at least and at most two properties), and the webhook checks that the field
-  is the one `kind` names; it runs on create and on an update that changes
-  `spec.documents`, and the renderer repeats it. The CEL rules that did this
-  overran the API server's cost limit at 12 kinds. The messages are different:
-  a document with a second field is refused as
-  `Too many: 3: must have at most 2 items`, and one whose field does not match
-  its kind as `spec.documents[1]: kind "SysctlConfig" needs the field
-  sysctlConfig alone, but the document sets kernelModuleConfig`. With
-  `webhook.enabled=false` a mismatched document is stored, and each node it
-  reaches fails to render with the same message.
 
 ### Go module
 

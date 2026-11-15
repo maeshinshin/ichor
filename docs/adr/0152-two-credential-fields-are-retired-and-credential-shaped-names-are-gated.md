@@ -44,3 +44,14 @@ Decided by the maintainer: `TalosCluster.spec.cni.custom.documents` is retired a
 **Stored objects.** The API server prunes a field that is no longer in the schema when it decodes an object from storage as well as when it writes one (`schemaCoercingDecoder` wraps the storage codec in `k8s.io/apiextensions-apiserver` v0.36.6), so a stored object stops serving `documents` as soon as the new CRD is established, and the bytes in etcd lose it at the object's next write. Nothing used it, so no node changes. `kubectl apply` of a manifest that still carries `documents` is refused by its default strict field validation. The installer's additive check (`retiredFields`) now lists `spec.cni.custom.documents` once, which also covers the two credential paths this ADR first listed under it.
 
 **Consequences.** There is no replacement and none is needed: a custom CNI is not an Ichor feature. A manifest or script that sets `spec.cni.custom.documents` must stop; the cluster it describes was already refused.
+
+## Amendment (2026-11-16): TalosConfigPatch.spec.documents is retired
+
+Decided by the maintainer: `TalosConfigPatch.spec.documents` is retired as a third exception to the append-only rule. The mechanism is the one above, an entry in `retiredFields`, and so is the consequence for stored objects; the reason is the one of ADR 0165, that `spec.config` is the only place a patch carries Talos configuration.
+
+**Why.** The field is the `TalosConfigPatchDocument` union as a list, which `spec.config` carries a second time in Ichor's own shape. Both together took the chart's Helm release record to 950,492 of the 1,048,576 bytes allowed (ADR 0158's method); `spec.config` alone is 575,308, with 473,268 free.
+
+**Stored objects.** A `TalosConfigPatch` that sets `documents` loses it as soon as the new CRD is established, and the nodes it reached lose its settings at their next apply. The maintainer was told this, and accepted it, for every cluster that has such a patch. The upgrade notes say so and say what to write instead. A client that asks for strict field validation is refused with an unknown-field error; one that does not has the field pruned. The installer's additive check lists `spec.documents` of `talosconfigpatches.ichor.maesh.dev`, and a test shows the check refuses the upgrade without that entry.
+
+**What stays.** The `TalosConfigPatchDocument` Go type, which the conversion of `spec.config` decodes into.
+

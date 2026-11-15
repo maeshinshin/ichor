@@ -23,7 +23,7 @@ func TestPatchWireCarriesSpecConfigAsItself(t *testing.T) {
 		Name: "p", Namespace: "ns",
 		Spec: ichorv1alpha1.TalosConfigPatchSpec{
 			ClusterRef: corev1.LocalObjectReference{Name: "c"},
-			Layer:      "cluster",
+			Layer:      layerCluster,
 			Config: &ichorconfig.Config{
 				Machine: &ichorconfig.Machine{
 					Type: "controlplane", CertSANs: []string{gatewayIP},
@@ -67,7 +67,7 @@ func TestPatchWireCarriesSpecConfigAsItself(t *testing.T) {
 	}
 
 	// A patch that sets nothing is "{}" out and nothing back.
-	empty, err := patchToPB(&ichorv1alpha1.TalosConfigPatch{Spec: ichorv1alpha1.TalosConfigPatchSpec{Layer: "cluster"}})
+	empty, err := patchToPB(&ichorv1alpha1.TalosConfigPatch{Spec: ichorv1alpha1.TalosConfigPatchSpec{Layer: layerCluster}})
 	if err != nil || empty.GetConfig() != "{}" {
 		t.Fatalf("an empty patch is %q, %v", empty.GetConfig(), err)
 	}
@@ -91,7 +91,7 @@ func notCarried(t *testing.T) (settings map[string]refusal, spelledElsewhere []s
 		t.Fatal(err)
 	}
 
-	defer f.Close()
+	t.Cleanup(func() { _ = f.Close() })
 
 	settings = map[string]refusal{}
 

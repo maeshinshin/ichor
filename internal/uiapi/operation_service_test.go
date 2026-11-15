@@ -65,7 +65,7 @@ func opObjects() []client.Object {
 	return []client.Object{
 		&ichorv1alpha1.TalosCluster{
 			Name: opCluster, Namespace: opNS,
-			Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: opOldTalos, KubernetesVersion: opOldK8s},
+			Spec: ichorv1alpha1.TalosClusterSpec{TalosVersion: opOldTalos, KubernetesVersion: opOldK8s, VersionContract: testVersionContract},
 		},
 		opMachine("w2", "worker", nil, nil),
 		opMachine("w1", "worker", map[string]string{ichorv1alpha1.TalosMachineUpgradeOrderLabel: "1"}, nil),

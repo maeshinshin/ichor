@@ -841,7 +841,11 @@ func (s *Server) blockedReason(
 
 	if p.kind == ichorv1alpha1.TalosOperationKindCARotation && slices.Contains(p.caTargets, ichorv1alpha1.CARotationTargetAggregator) {
 		contract, err := coreconfig.ParseContractFromVersion(cluster.Spec.VersionContract)
-		if err == nil && !contract.MultidocKubernetesConfigSupported() {
+		if err != nil {
+			return "", connect.NewError(connect.CodeInternal, fmt.Errorf("checking the aggregator CA against version contract %q: %w", cluster.Spec.VersionContract, err))
+		}
+
+		if !contract.MultidocKubernetesConfigSupported() {
 			return fmt.Sprintf("the aggregator CA has an accepted list only from version contract v1.14, and the cluster has %s: "+
 				"there is no moment with both CAs trusted, so it is not rotated", cluster.Spec.VersionContract), nil
 		}

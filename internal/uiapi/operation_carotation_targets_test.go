@@ -217,3 +217,21 @@ func TestOperationDetailNamesTheCAsAndTheEtcdMembersRestarted(t *testing.T) {
 		t.Fatalf("the default targets = %v", got)
 	}
 }
+
+// The aggregator guard reads the version contract. A contract it cannot parse fails the plan; it does not
+// skip the guard and let the aggregator CA through.
+func TestPlanCARotationFailsOnAnUnparseableVersionContractInsteadOfSkippingTheAggregatorGuard(t *testing.T) {
+	objs := opObjects()
+	objs[0].(*ichorv1alpha1.TalosCluster).Spec.VersionContract = "not-a-contract"
+
+	srv, _ := opServer(t, objs...)
+
+	plan, err := planCA(srv, caAggregator)
+	if err == nil {
+		t.Fatalf("an unparseable contract must fail the plan, got blocked = %q", plan.GetBlocked())
+	}
+
+	if connect.CodeOf(err) != connect.CodeInternal {
+		t.Fatalf("want Internal (a check that could not complete), got %v", err)
+	}
+}

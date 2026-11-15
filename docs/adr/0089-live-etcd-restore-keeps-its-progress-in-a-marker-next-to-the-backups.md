@@ -86,8 +86,11 @@ nothing and a failure pauses the operation with "nothing was changed".
    pass (a node wiped alone would rejoin the old etcd). A node with no etcd data is wiped; one that cannot be reached
    is rebooting. The next piece is not started until none has data.
 3. *Recovering*: the marker is moved to `Recovering` **before** the target is touched, then the pinned copy is
-   checked once more, uploaded with `EtcdRecover` and bootstrapped with `Bootstrap{RecoverEtcd}`; "not ready" answers
-   wait, anything else is final. A target that already has etcd data was bootstrapped; when its etcd answers, the
+   checked once more, uploaded with `EtcdRecover` and bootstrapped with `Bootstrap{RecoverEtcd}`. A transport failure
+   waits: a node's "not ready" answer, a download that cannot start, and a read that breaks during the check or the
+   upload. That wait ends at the tail timeout, 60 minutes from the marker's start. Anything else is final: a checksum
+   mismatch, damaged ciphertext, a missing object, a wrong passphrase, a stream that ends cleanly before its checksum
+   trailer, and a node's refusal. A target that already has etcd data was bootstrapped; when its etcd answers, the
    marker moves to `Rejoining`. The data directory is the only thing that tells a recovered node from a wiped one,
    and it is read from the node, not remembered.
 4. *Rejoining* (the API is expected back; this is the first step that takes the lock again): the operation is looked

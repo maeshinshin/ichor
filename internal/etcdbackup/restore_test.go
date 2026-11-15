@@ -83,7 +83,7 @@ func TestRestoreObjectsAgainstFakeS3(t *testing.T) {
 		t.Fatalf("List must show the snapshot only, got %v, %v", objs, err)
 	}
 
-	if err := Prune(ctx, st, "p/c", 1); err != nil {
+	if err := Prune(ctx, st, "p/c", key, 1); err != nil {
 		t.Fatalf("prune: %v", err)
 	}
 

@@ -180,10 +180,13 @@ func (s *s3Store) List(ctx context.Context, prefix string) ([]Object, error) {
 	return out, nil
 }
 
-// Prune deletes all but the newest keep snapshots under prefix. It is only
-// ever called after a successful upload, so the newest snapshot always
-// survives; a failed delete is returned after trying the rest.
-func Prune(ctx context.Context, s Store, prefix string, keep int) error {
+// Prune deletes snapshots under prefix until keep remain, counting justWritten
+// (the key the caller has just uploaded) as one of them. justWritten is never
+// deleted, whatever its name says: a clock that stepped backwards names it
+// older than snapshots that were taken before it. The rest of the keep are the
+// newest by the time in the name. A failed delete is returned after trying the
+// rest.
+func Prune(ctx context.Context, s Store, prefix, justWritten string, keep int) error {
 	objs, err := s.List(ctx, prefix)
 	if err != nil {
 		return err
@@ -191,7 +194,19 @@ func Prune(ctx context.Context, s Store, prefix string, keep int) error {
 
 	var errs []error
 
-	for _, o := range objs[min(keep, len(objs)):] {
+	kept := 1 // justWritten
+
+	for _, o := range objs {
+		if o.Key == justWritten {
+			continue
+		}
+
+		if kept < keep {
+			kept++
+
+			continue
+		}
+
 		errs = append(errs, s.Delete(ctx, o.Key))
 	}
 

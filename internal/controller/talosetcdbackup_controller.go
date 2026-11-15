@@ -296,7 +296,7 @@ func (r *TalosEtcdBackupReconciler) runBackup(
 		}
 
 		// max(…, 1): a zero value (CRD default not applied) must never mean "keep nothing".
-		pruneErr = etcdbackup.Prune(ctx, store, prefix, int(max(bk.Spec.Retention.KeepLast, 1)))
+		pruneErr = etcdbackup.Prune(ctx, store, prefix, key, int(max(bk.Spec.Retention.KeepLast, 1)))
 
 		return &ichorv1alpha1.TalosEtcdBackupSnapshot{
 			Key: key, Time: metav1.NewTime(start), Size: size, SourceMachine: m.Name,

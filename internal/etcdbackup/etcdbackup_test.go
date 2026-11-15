@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -161,7 +162,7 @@ func TestS3StoreAgainstFake(t *testing.T) {
 		t.Fatal("list is not newest first")
 	}
 
-	if err := Prune(ctx, st, "a/b", 2); err != nil {
+	if err := Prune(ctx, st, "a/b", "a/b/"+ObjectName(base.Add(3*time.Hour)), 2); err != nil {
 		t.Fatalf("prune: %v", err)
 	}
 
@@ -263,5 +264,52 @@ func TestBackupKeyV2NeedsAControlPlaneSecret(t *testing.T) {
 
 	if _, err := DeriveKey(noBox); err == nil {
 		t.Fatal("derived a backup key without a control-plane-only secret")
+	}
+}
+
+// listStore is a Store whose List returns objs as given, newest name first,
+// and whose Delete drops from it.
+type listStore struct{ objs []Object }
+
+func (*listStore) Put(context.Context, string, io.Reader, int64) error { return nil }
+func (*listStore) Get(context.Context, string) (io.ReadCloser, error)  { return nil, ErrNotFound }
+
+func (l *listStore) List(context.Context, string) ([]Object, error) {
+	return slices.Clone(l.objs), nil
+}
+
+func (l *listStore) Delete(_ context.Context, key string) error {
+	l.objs = slices.DeleteFunc(l.objs, func(o Object) bool { return o.Key == key })
+
+	return nil
+}
+
+func (l *listStore) keys() []string {
+	return slices.Collect(func(yield func(string) bool) {
+		for _, o := range l.objs {
+			if !yield(o.Key) {
+				return
+			}
+		}
+	})
+}
+
+func obj(at time.Time) Object {
+	return Object{Key: "p/" + ObjectName(at), Name: ObjectName(at), Time: at}
+}
+
+func TestPruneNeverDeletesTheKeyJustWritten(t *testing.T) {
+	base := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	// The clock stepped back: the new snapshot is named older than all three.
+	fresh := obj(base.Add(-time.Hour))
+	st := &listStore{objs: []Object{obj(base.Add(2 * time.Hour)), obj(base.Add(time.Hour)), obj(base), fresh}}
+
+	if err := Prune(context.Background(), st, "p", fresh.Key, 3); err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{obj(base.Add(2 * time.Hour)).Key, obj(base.Add(time.Hour)).Key, fresh.Key}
+	if got := st.keys(); !slices.Equal(got, want) {
+		t.Fatalf("retained %v, want the new key and the 2 newest others %v", got, want)
 	}
 }

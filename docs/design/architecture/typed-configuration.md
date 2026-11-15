@@ -5,9 +5,106 @@ sidebar_order: 7
 
 # Typed configuration
 
-`TalosConfigPatch.spec.documents[]` holds the Talos config documents as typed
-fields, restricted to an allow-list of kinds. There is no raw-YAML field. The
-reasons:
+`TalosConfigPatch.spec.config` holds a patch in Ichor's own schema, and
+`spec.documents[]` holds the same settings as Talos config documents. Both are
+typed, and neither has a raw-YAML field. `spec.documents[]` is deprecated: new
+configuration is written in `spec.config`, and a patch sets one of the two,
+never both (the webhook refuses it, naming both fields).
+
+## Ichor's schema: `spec.config`
+
+`spec.config` is one nested object in the spirit of the `v1alpha1` document: a
+`machine` section and a `cluster` section, with `debug` and `persist` beside them
+as in `Config`. Every setting Talos accepts through a document Ichor allows is in
+it, each written once, in the place its meaning gives it:
+
+```yaml
+spec:
+  config:
+    machine:
+      sysctls: {net.ipv4.ip_forward: "1"}      # was SysctlConfig
+      time: {enabled: true, ntp: {servers: [time.example.org]}}  # was TimeSyncConfig
+      kernel:
+        modules:                               # was one KernelModuleConfig each
+          nbd: {}
+          br_netfilter: {parameters: [nf_conntrack_helper=1]}
+      volumes:
+        user:                                  # was one UserVolumeConfig each
+          data: {provisioning: {...}}
+    cluster:
+      network: {podSubnets: [10.244.0.0/16]}   # was KubeNetworkConfig
+      coreDNS: {enabled: false}                # was KubeCoreDNSConfig
+```
+
+The schema is not written by hand. `internal/tools/ichorgen` reads the mirror
+types `mirrorgen` makes from machinery and the rows of `place.go`, one for each
+document kind, and writes `pkg/ichorconfig`. A row says where a kind goes; the
+fields of the kind, and their types, come from the mirror. A field Talos adds to
+a kind therefore appears in the schema the next time `make generate` runs, in
+the place its kind has, with no row edited. The settings of a kind whose row puts
+it beside a setting of the same meaning are joined with it by name, and a setting
+two documents spell is one field.
+
+How the schema is built:
+
+- **A kind that is a named thing is a map from its name.** `machine.kernel.modules`,
+  `machine.volumes.user`, `machine.network.bonds`, `cluster.inlineManifests` and the
+  rest hold one entry for each document of that kind, and the key is the document's
+  `name`. The authorizers of the API server are the one list, because their order
+  matters.
+- **A kind that is one thing joins the object of the same meaning.** KubeletConfig
+  and the v1alpha1 `machine.kubelet` are one `machine.kubelet`.
+- **Where Talos spells a setting two ways, Ichor has the spelling of the document**,
+  because the document is where Talos adds new fields. `machine.time.disabled`
+  is `machine.time.enabled`, `cluster.coreDNS.disabled` is `cluster.coreDNS.enabled`,
+  `cluster.apiServer.certSANs` is `certExtraSANs`, the nameservers are the objects
+  of `ResolverConfig`, and the registry mirrors, hosts, extra manifests and inline
+  manifests are the keyed forms of their documents. The v1alpha1 settings that
+  are not in the schema for this reason are listed in
+  `pkg/ichorconfig/testdata/not_carried.txt`, apart from the generator, and a test
+  fails when a setting of a document is in neither the schema nor that file.
+- **A field that is optional anywhere its object is shared.** A patch is a sparse
+  overlay. A field a document requires is required in Ichor's schema only where
+  that document is the only one whose fields the object holds; Talos validates the
+  whole configuration when it is rendered.
+- **Descriptions are Ichor's own.** The schema carries no text of Talos's.
+
+The controller converts `spec.config` to Talos documents when it renders a
+machine, through the mirror types, so a setting reaches the node as the document
+`spec.documents[]` would have written it. The conversion reads the `ichor` struct
+tag of each field, which names the documents and paths the setting is written to:
+
+- A setting that a document spells goes to the document, and one that only the
+  `v1alpha1` document has goes there. Talos refuses the Kubernetes component
+  documents (`KubeletConfig`, `KubeAPIServerConfig`, and the others of Talos 1.14)
+  beside the `v1alpha1` block of the same component, so a patch that sets a
+  document-only field and a `v1alpha1`-only field of one object is refused at
+  render with Talos's own message.
+- The Kubernetes documents need a machine on Talos 1.14 or later. For an earlier
+  machine a setting that both spell is written to the `v1alpha1` document, and one
+  only the document spells is refused with the setting named.
+- `machine.features.kubePrism.enabled` and `kubernetesTalosAPIAccess.enabled` are
+  switches for their documents: true brings the document into being.
+- The guards Ichor applies to patches apply to `spec.config` first: Ichor's own
+  CNI inline manifest is dropped once the cluster has handed over, Talos API access
+  is left out of workers, and `cluster.proxy.disabled` is Ichor's.
+
+What is not joined yet: the links. `machine.network.interfaces[]` is the
+`v1alpha1` list, and the link documents (bonds, bridges, dummy links, veths, VRFs,
+Ethernet tuning, DHCPv6, Layer 2 VIPs) are collections beside it. A bond can be
+written in both, and the two spell its settings differently (the bond mode, the
+hash policy and the LACP rate are words in one and numbers in the other; the
+routes are `network` in one and `destination` in the other). Joining them is a
+row for each pair with a conversion for each setting spelled differently.
+`machine.disks` and `machine.systemDiskEncryption` have the same relation to the
+volume documents. These are the only places where a setting can still be written
+in two places.
+
+## `spec.documents[]`
+
+`spec.documents[]` is deprecated and stays: a CRD field is never removed, and
+stored objects hold it. Its documents are the typed mirror of the Talos documents.
+The rest of this page is about those types. The reasons for typed fields:
 
 - Machinery's types are Talos's own definition; we don't maintain a parallel
   catalogue that drifts.

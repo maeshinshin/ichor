@@ -35,6 +35,11 @@ command does. Each item is described where it is listed below.
   `TalosCluster` and run `ichor rollout config` (Users and login); users need a Talos
   v1.14 contract, and OIDC is the alternative without it. `ichor upgrade ichor` does not
   touch a Helm install. Your own CI that renders the chart needs the same addition.
+- **`TalosConfigPatch.spec.documents[]` is deprecated** in favour of the new
+  `spec.config`, Ichor's own schema for a patch. Nothing is removed: a patch that
+  has `documents[]` keeps working. A patch that sets both fields is refused, naming
+  both. A new patch should use `spec.config`; the Kubernetes component settings in
+  it need machines on Talos 1.14 or later (Typed configuration).
 - **Scripts.** Every command moved to a verb-first name, `restore` lost its mode
   flags, and `-o FILE` became `--out FILE` (CLI).
 - **A `TalosCluster` whose endpoint type is `dns` or `loadBalancer`** still
@@ -553,6 +558,20 @@ command does. Each item is described where it is listed below.
 
 ### Typed configuration
 
+- `TalosConfigPatch` has a new field, `spec.config`: a patch written in Ichor's
+  own schema. It is one object with a `machine` and a `cluster` section, as the
+  `v1alpha1` document has, and the settings Talos moved into documents of their
+  own are nested where they belong by meaning: the kernel modules are
+  `machine.kernel.modules`, the user volumes `machine.volumes.user`, the cluster
+  network `cluster.network`. A setting that Talos spells in a document and in
+  the `v1alpha1` document is one field, with the spelling of the document, so
+  `machine.time.enabled` replaces `disabled`, and `cluster.coreDNS.enabled`
+  replaces `disabled`. A kind that is a named thing is a map from its name. The
+  controller converts it to Talos documents when it renders a machine.
+  `spec.documents[]` is deprecated and stays. The schema is generated from the
+  Talos mirror types (`internal/tools/ichorgen`), so a field Talos adds appears in
+  it when `make generate` runs. The links are the exception: the `v1alpha1`
+  interfaces and the link documents are not joined yet (see Typed configuration).
 - A `TalosConfigPatch` document can now be all 65 Talos document kinds
   Ichor accepts, up from 7 (`SysctlConfig`, `KernelModuleConfig`, the
   `v1alpha1` document, `VolumeConfig`, `UserVolumeConfig`, `RawVolumeConfig`

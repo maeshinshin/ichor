@@ -1,8 +1,55 @@
 # 0165. A single flat config CRD and a field search are two questions, and the sizes decide the first
 
-Status: Proposed · Date: 2026-11-15 · Design section: Typed configuration · Relates to: 0003, 0009, 0039, 0072, 0099, 0101, 0104, 0152, 0158
+Status: Accepted · Date: 2026-11-15 · Design section: Typed configuration · Relates to: 0003, 0009, 0039, 0072, 0099, 0101, 0104, 0152, 0158
 
-Decided: nothing yet; this records the question and the options with their sizes. The proposal is to keep `spec.documents[]` as the one typed shape, to build the field search from an index generated out of the CRD schema (it does not need a new CRD), and to decide separately whether to retire the unused second copy of the union in `TalosCluster`, which is the one change that frees real room in the Helm release record.
+Decided: Ichor's patch schema is Ichor's own, not a copy of Talos's. `TalosConfigPatch.spec.config` is one nested object, a `machine` and a `cluster` section in the shape of the `v1alpha1` `Config` document, with every document kind placed beside the setting of the same meaning, each setting written once, and the controller converts it to Talos documents when it renders. It is a new field of the existing CRD, not a new CRD, and `spec.documents[]` stays and is deprecated. A patch that sets both is refused. The schema is generated from the mirror types, so a field Talos adds appears with no list edited. The field search stays a separate question and is built from a generated index.
+
+## The decision
+
+The first version of this ADR proposed keeping the per-kind union and recorded why a single shape was not worth it. That proposal assumed Ichor's shape had to mirror Talos's document types, so that a unified shape needed a classifier, a splitter and a rule for every setting Talos spells two ways. The maintainer's decision removes the assumption: what Ichor builds is Ichor, not Talos, and the controller converts back to Talos when it applies. The objections below assume the mirroring, and most of them go with it.
+
+- **A new field on the existing CRD**, `spec.config`, not a second CRD: a second CRD would repeat the metadata, controller, webhook and RBAC for nothing, and CRD fields are append-only, which permits adding one.
+- **A patch that sets `spec.documents[]` and `spec.config` is refused** by the webhook, and by the renderer, with a message naming both. There is no merge: two spellings of one setting in one object is the ambiguity this change removes.
+- **Typed only.** There is no raw-YAML field.
+- **The conversion is the controller's**, at render time. The controller still never mutates `spec`.
+- **`spec.documents[]` stays for ever in this API version** and is deprecated in the documentation. Nothing is removed.
+
+### Why the recorded objections no longer hold
+
+- *The conflicting types (finding 3: 21 names, a leaf in two kinds with different types).* They were conflicts because the unified field had to be both. In Ichor's schema a setting has one type, and the conversion writes the spelling Talos validates. The cases that are one setting spelled two ways by Talos itself (`disabled` against `enabled` for time sync, CoreDNS and the controller manager, `certSANs` against `certExtraSANs`, a list of addresses against a list of objects for nameservers, mirror endpoints as strings against objects) are listed in the typed configuration page, with the spelling Ichor took: the one of the document, because Talos adds new fields to documents and not to the `v1alpha1` block. The settings of the `v1alpha1` document that Ichor does not carry for this reason are recorded in `pkg/ichorconfig/testdata/not_carried.txt`, outside the generator. The bond fields the finding names (`adSelect`, `lacpRate`, `xmitHashPolicy`) are not resolved yet, see the open part below.
+- *The classifier for the 18 kinds with no unique field path.* It existed to infer the target kind from the filled fields. The schema defines the placement, so the target is known by construction, and no classifier exists.
+- *The splitter for the 35 repeatable named documents.* They are maps from the name in Ichor's shape, and the conversion makes one document for each key. A kind whose order matters (the API server's authorizers) is a list with the name in each entry. No guessing splitter exists.
+- *"No duplication is impossible."* That held only under mirroring. A setting that two documents spell, `mtu`, `enabled` or the nameservers, is one field wherever the rows join the objects.
+- *The 540 `required` and `minProperties`/`maxProperties` rules.* A field a document requires stays required where that document is the only one whose fields the object holds, which is every entry of a collection and every section a single kind owns. Where two documents meet in one object (the kubelet, the API server, the time and network sections) the field is optional, because a patch is a sparse overlay and one document cannot require a field of the other; Talos validates the finished configuration when the machine is rendered. The generator reports each field it relaxes.
+- *The table from union path to document path, and `pkg/fieldmeta`'s paths.* The table is the `ichor` struct tag of each field, written by the generator. `pkg/fieldmeta` is keyed by the path in the Talos document and is used on documents after conversion, so it needs no new paths for the effective-configuration view; a view of the paths of `spec.config` itself would key them by Ichor's path and is not built.
+
+Two objections hold. The record is the one that decides, and the append-only rule is why `spec.documents[]` stays.
+
+### The sizes of this design
+
+The Helm release record is the encoding of `encodeRelease` (JSON, gzip at best compression, base64) of a client-only dry-run install of `dist/chart` with Helm v3.21.4 against Kubernetes v1.36.0, status `deployed` and a fixed timestamp.
+
+| Chart | Record | Free of 1,048,576 |
+|---|---|---|
+| `origin/main` 6720301b2 (also 0dfa6e550, the retirement of `spec.cni.custom.documents`) | 598,888 | 449,688 |
+| 0dfa6e550^, before the retirement | 991,560 | 57,016 |
+| A throwaway union of every kind merged by path, in the patches CRD | 937,660 | 110,916 |
+| The same without `KubeStaticPodConfig` | 687,780 | 360,796 |
+| **`spec.config` as built, beside `documents[]`, one version** | **951,392** | **97,184** |
+
+598,916, the figure the first version of this ADR gave for the tree after the retirement, was a projection of a tree that still held a doc comment the retirement removed; the tree itself is 598,888. The patches CRD as compact JSON is 902,068 bytes (472,817 before). The static pod is 249,880 of the throwaway union's 338,772 added bytes, 74%: the core v1 `Pod` is in the schema once in `documents[]` and once in `spec.config.machine.staticPods`, and no merge can shrink it.
+
+Serving a second API version of the CRD costs a whole second schema, because each version carries its own. With `spec.config` in `v1alpha1`, a `v1alpha2` that carries `spec.config` alone gives a record of 1,312,924 bytes, 264,348 over the cap; a `v1alpha2` that carries both fields gives 1,336,324. A `v1alpha1` that has `documents[]` alone beside a `v1alpha2` that has `spec.config` alone gives 958,940, 89,636 free. So the intermediate state of a migration through a second API version fits only if `spec.config` never ships in `v1alpha1`.
+
+### What is open
+
+The links are not joined. `machine.network.interfaces[]` is the `v1alpha1` list and the link documents (bond, bridge, dummy, veth, VRF, Ethernet, DHCPv6, Layer 2 VIP, routing, BGP and the probes) are collections beside it, so a bond can still be written in two places, and the settings the two spell differently (the bond mode, hash policy, LACP rate, ARP validation and targets, fail-over MAC, primary reselect and AD select are words in one and numbers in the other; routes are `network` in one and `destination` in the other; addresses are strings in one and objects in the other; the hardware address is a string in one and bytes in the other) are not resolved. The same holds for `machine.disks` and `machine.systemDiskEncryption` against the volume documents. Joining them needs a row for each pair and a conversion for each setting spelled differently, and the entries of the interface list need an activation rule, since one entry would feed a document of the v1alpha1 list or one of the link kinds. The bond-mode words need the machinery enum tables, which the mirror types do not keep.
+
+The web UI's field search is built from the paths of `documents[]`. It keeps working for `documents[]` and has no paths of `spec.config`; building them is the same generator step over the new schema.
+
+## The original sizing
+
+What follows is the sizing of the first version, kept as the record of the question. Its decision is superseded by the one above.
 
 ## Context
 
@@ -108,7 +155,7 @@ None of this depends on the CRD shape. With the unified CRD the same index would
 - **C. Retire the unused union in `TalosCluster.spec.cni.custom.documents`.** Frees 392,672 bytes (the record goes to 598,888). ADR 0152 is the precedent for retiring a field as an exception to append-only; the webhook and controller already refuse `custom`. It decides nothing about the shape, and it makes both B and the 5.7 KB widening fit. It needs the maintainer's decision and a look at whether any installed object holds the field.
 - **D. Move the CRDs to their own chart and release.** Helm's own guidance names this as the way to template CRDs outside the main chart. The CRDs are 92% of the record, so a CRD-only release is 965,140 bytes (83,436 free): 26 KB more room, and a second install step. Putting the CRDs in `crds/` instead frees about 341,000 bytes (650,500 total) and stays off the table: Helm installs `crds/` content only on install, never on upgrade or rollback, and ADR 0104 section 4.6 chose `templates/` so that CRDs upgrade with the chart.
 
-## Proposed decision
+## Proposed decision (superseded by the decision above)
 
 Keep the per-kind union (A), build the search from a generated index, and decide C on its own merits because every other lever, including widening the subsets, waits on it. B is not recommended: it saves 5.1% of the schema at best, does not fit without C, needs a discriminator and an instance key on a large share of the kinds, and leaves the old shape in place.
 

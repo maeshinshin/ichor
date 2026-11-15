@@ -35,9 +35,7 @@ import (
 const (
 	hpSysctlName  = "sysctl-tuning"
 	hpModulesName = "cp-modules"
-	hpSysctlKind  = "SysctlConfig"
-	hpModulesKind = "KernelModuleConfig"
-	hpSysctlDoc   = `{"params":{"net.core.somaxconn":"1024"}}`
+	hpSysctls     = `{"machine":{"sysctls":{"net.core.somaxconn":"1024"}}}`
 	hpRole        = "control-plane"
 )
 
@@ -51,20 +49,17 @@ func patchesFixture() []*pb.Patch {
 	return []*pb.Patch{
 		{
 			Ref: patchRef(hpSysctlName), Cluster: cluster, Layer: pb.ConfigLayer_CONFIG_LAYER_CLUSTER, CreatedAt: ago(2 * 24 * time.Hour),
-			Documents: []*pb.PatchDocument{{Kind: hpSysctlKind, Document: hpSysctlDoc}},
+			Config: hpSysctls,
 		},
 		{
 			Ref: patchRef(hpModulesName), Cluster: cluster, Layer: pb.ConfigLayer_CONFIG_LAYER_ROLE, Priority: 10, CreatedAt: ago(3 * time.Hour),
 			Target: &pb.PatchTarget{Role: hpRole},
-			Documents: []*pb.PatchDocument{
-				{Kind: hpModulesKind, Document: `{"modules":[{"name":"br_netfilter"}]}`},
-				{Kind: hpSysctlKind, Document: hpSysctlDoc},
-			},
+			Config: `{"cluster":{"network":{}},"machine":{"kernel":{"modules":{"br_netfilter":{}}},"sysctls":{"net.core.somaxconn":"1024"}}}`,
 		},
 		{
 			Ref: patchRef("one-node"), Cluster: cluster, Layer: pb.ConfigLayer_CONFIG_LAYER_MACHINE, CreatedAt: ago(5 * time.Minute),
-			Target:    &pb.PatchTarget{MachineRef: cpUUID},
-			Documents: []*pb.PatchDocument{{Kind: hpSysctlKind, Document: hpSysctlDoc}},
+			Target: &pb.PatchTarget{MachineRef: cpUUID},
+			Config: hpSysctls,
 		},
 		{
 			Ref: patchRef("db-tier"), Cluster: cluster, Layer: pb.ConfigLayer_CONFIG_LAYER_SELECTOR, CreatedAt: ago(40 * time.Second),
@@ -72,7 +67,7 @@ func patchesFixture() []*pb.Patch {
 				MatchLabels:      map[string]string{"tier": "db"},
 				MatchExpressions: []*pb.LabelSelectorRequirement{{Key: "zone", Operator: "In", Values: []string{"a", "b"}}},
 			}},
-			Documents: []*pb.PatchDocument{{Kind: hpSysctlKind, Document: hpSysctlDoc}},
+			Config: hpSysctls,
 		},
 	}
 }
@@ -85,11 +80,11 @@ func TestPatchListHumanOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := "NAME           TARGET                                        PRIORITY  DOCUMENTS                         AGE\n" +
-		"sysctl-tuning  cluster                                       0         SysctlConfig                      2d\n" +
-		"cp-modules     role control-plane                            10        KernelModuleConfig, SysctlConfig  3h\n" +
-		"one-node       machine " + cpUUID + "  0         SysctlConfig                      5m\n" +
-		"db-tier        selector tier=db, zone in (a,b)               0         SysctlConfig                      40s\n"
+	want := "NAME           TARGET                                        PRIORITY  CONFIG            AGE\n" +
+		"sysctl-tuning  cluster                                       0         machine           2d\n" +
+		"cp-modules     role control-plane                            10        cluster, machine  3h\n" +
+		"one-node       machine " + cpUUID + "  0         machine           5m\n" +
+		"db-tier        selector tier=db, zone in (a,b)               0         machine           40s\n"
 	wantText(t, out.String(), want)
 
 	out.Reset()
@@ -129,12 +124,14 @@ func TestPatchGetHumanOutput(t *testing.T) {
 		"  Priority     10\n" +
 		"  Created      3h ago\n" +
 		"\n" +
-		"Documents\n" +
-		"  KernelModuleConfig\n" +
-		"    modules:\n" +
-		"    - name: br_netfilter\n" +
-		"  SysctlConfig\n" +
-		"    params:\n" +
+		"Config\n" +
+		"  cluster:\n" +
+		"    network: {}\n" +
+		"  machine:\n" +
+		"    kernel:\n" +
+		"      modules:\n" +
+		"        br_netfilter: {}\n" +
+		"    sysctls:\n" +
 		"      net.core.somaxconn: \"1024\"\n"
 	wantText(t, out.String(), want)
 }
@@ -241,7 +238,7 @@ func TestPatchCommandsPrintOneResultLine(t *testing.T) {
 		t.Errorf("preview: %q, %v", out.String(), err)
 	}
 
-	if got := e.list(t); !strings.HasPrefix(got, "NAME") || !strings.Contains(strings.Join(strings.Fields(got), " "), testPatchName+" cluster 5 SysctlConfig") {
+	if got := e.list(t); !strings.HasPrefix(got, "NAME") || !strings.Contains(strings.Join(strings.Fields(got), " "), testPatchName+" cluster 5 machine") {
 		t.Errorf("list: %q", got)
 	}
 

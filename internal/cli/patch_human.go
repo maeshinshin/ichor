@@ -18,6 +18,7 @@ package cli
 
 import (
 	"cmp"
+	"encoding/json"
 	"fmt"
 	"maps"
 	"slices"
@@ -75,14 +76,14 @@ func selectorText(s *pb.LabelSelector) string {
 	return strings.Join(parts, ", ")
 }
 
-// documentKinds are the kinds of a patch's documents, in order.
-func documentKinds(p *pb.Patch) string {
-	kinds := make([]string, len(p.GetDocuments()))
-	for i, d := range p.GetDocuments() {
-		kinds[i] = d.GetKind()
+// configSections are the top-level sections of a patch's spec.config (machine, cluster), sorted.
+func configSections(p *pb.Patch) string {
+	var config map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(p.GetConfig()), &config); err != nil {
+		return ""
 	}
 
-	return strings.Join(kinds, ", ")
+	return strings.Join(slices.Sorted(maps.Keys(config)), ", ")
 }
 
 func renderPatchList(h *human, resp *pb.ListPatchesResponse) error {
@@ -99,7 +100,7 @@ func renderPatchList(h *human, resp *pb.ListPatchesResponse) error {
 	}
 
 	withCluster := len(clusters) > 1
-	header := []string{colName, "target", "priority", "documents", colAge}
+	header := []string{colName, "target", "priority", "config", colAge}
 
 	if withCluster {
 		header = slices.Insert(header, 1, "cluster")
@@ -108,7 +109,7 @@ func renderPatchList(h *human, resp *pb.ListPatchesResponse) error {
 	rows := make([][]string, len(ps))
 
 	for i, p := range ps {
-		row := []string{p.GetRef().GetName(), patchTarget(p), fmt.Sprint(p.GetPriority()), documentKinds(p), humanAge(p.GetCreatedAt())}
+		row := []string{p.GetRef().GetName(), patchTarget(p), fmt.Sprint(p.GetPriority()), configSections(p), humanAge(p.GetCreatedAt())}
 		if withCluster {
 			row = slices.Insert(row, 1, p.GetCluster().GetName())
 		}
@@ -126,23 +127,19 @@ func renderPatchGet(h *human, resp *pb.GetPatchResponse) error {
 	h.Block(nsName(p.GetRef()), kv{labelCluster, p.GetCluster().GetName()}, kv{"Target", patchTarget(p)},
 		kv{"Priority", fmt.Sprint(p.GetPriority())}, kv{labelCreated, agoOrEmpty(p.GetCreatedAt())})
 
-	if len(p.GetDocuments()) == 0 {
+	if configSections(p) == "" {
 		return h.Err()
 	}
 
-	h.Title("Documents")
+	h.Title("Config")
 
-	for _, d := range p.GetDocuments() {
-		h.Line(h.Paint(sgrBold, d.GetKind()))
+	body, err := sigsyaml.JSONToYAML([]byte(p.GetConfig()))
+	if err != nil {
+		body = []byte(p.GetConfig())
+	}
 
-		body, err := sigsyaml.JSONToYAML([]byte(d.GetDocument()))
-		if err != nil {
-			body = []byte(d.GetDocument())
-		}
-
-		for line := range strings.SplitSeq(strings.TrimRight(string(body), "\n"), "\n") {
-			h.Line("  " + line)
-		}
+	for line := range strings.SplitSeq(strings.TrimRight(string(body), "\n"), "\n") {
+		h.Line(line)
 	}
 
 	return h.Err()

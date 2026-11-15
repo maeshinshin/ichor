@@ -1,15 +1,15 @@
 [
   {
-    "sets": [["machine.kernel.modules.<key>", "br_netfilter"]],
+    "sets": [{ "path": "machine.kernel.modules.<key>", "keys": ["br_netfilter"] }],
     "documents": [{ "kind": "KernelModuleConfig", "document": { "name": "br_netfilter" } }],
     "config": { "machine": { "kernel": { "modules": { "br_netfilter": {} } } } }
   },
   {
     "sets": [
-      ["machine.volumes.user.<key>", "data"],
-      ["machine.volumes.user.<key>.volumeType", "partition"],
-      ["machine.volumes.user.<key>.provisioning.grow", true],
-      ["machine.volumes.user.<key>.provisioning.maxSize", "100GiB"]
+      { "path": "machine.volumes.user.<key>", "keys": ["data"] },
+      { "path": "machine.volumes.user.<key>.volumeType", "keys": ["data"], "value": "partition" },
+      { "path": "machine.volumes.user.<key>.provisioning.grow", "keys": ["data"], "value": true },
+      { "path": "machine.volumes.user.<key>.provisioning.maxSize", "keys": ["data"], "value": "100GiB" }
     ],
     "documents": [
       { "kind": "UserVolumeConfig", "document": { "name": "data", "volumeType": "partition", "provisioning": { "grow": true, "maxSize": "100GiB" } } }
@@ -18,9 +18,9 @@
   },
   {
     "sets": [
-      ["machine.network.nameservers[].address", "1.1.1.1"],
-      ["machine.network.nameservers[].protocol", "DoT"],
-      ["machine.features.hostDNS.enabled", true]
+      { "path": "machine.network.nameservers[].address", "keys": [], "value": "1.1.1.1" },
+      { "path": "machine.network.nameservers[].protocol", "keys": [], "value": "DoT" },
+      { "path": "machine.features.hostDNS.enabled", "keys": [], "value": true }
     ],
     "documents": [
       { "kind": "ResolverConfig", "document": { "nameservers": [{ "address": "1.1.1.1", "protocol": "DoT" }], "hostDNS": { "enabled": true } } }
@@ -28,8 +28,29 @@
     "config": { "machine": { "network": { "nameservers": [{ "address": "1.1.1.1", "protocol": "DoT" }] }, "features": { "hostDNS": { "enabled": true } } } }
   },
   {
-    "sets": [["machine.sysctls", { "net.core.somaxconn": "1024" }]],
+    "sets": [{ "path": "machine.sysctls", "keys": [], "value": { "net.core.somaxconn": "1024" } }],
     "documents": [{ "kind": "SysctlConfig", "document": { "params": { "net.core.somaxconn": "1024" } } }],
     "config": { "machine": { "sysctls": { "net.core.somaxconn": "1024" } } }
+  },
+  {
+    "sets": [
+      { "path": "machine.kernel.modules.<key>", "keys": ["br_netfilter"] },
+      { "path": "machine.kernel.modules.<key>", "keys": ["nbd"] },
+      { "path": "machine.volumes.user.<key>", "keys": ["data"] },
+      { "path": "machine.volumes.user.<key>", "keys": ["logs"] },
+      { "path": "machine.volumes.user.<key>.volumeType", "keys": ["logs"], "value": "directory" }
+    ],
+    "documents": [
+      { "kind": "KernelModuleConfig", "document": { "name": "br_netfilter" } },
+      { "kind": "KernelModuleConfig", "document": { "name": "nbd" } },
+      { "kind": "UserVolumeConfig", "document": { "name": "data" } },
+      { "kind": "UserVolumeConfig", "document": { "name": "logs", "volumeType": "directory" } }
+    ],
+    "config": {
+      "machine": {
+        "kernel": { "modules": { "br_netfilter": {}, "nbd": {} } },
+        "volumes": { "user": { "data": {}, "logs": { "volumeType": "directory" } } }
+      }
+    }
   }
 ]

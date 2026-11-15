@@ -1,6 +1,6 @@
 # 0135. Remove and reset are one action that wipes the node and deletes its Kubernetes Node
 
-Status: Accepted · Date: 2026-11-07 · Design section: Nodes · Supersedes: the remove/reset split of 0085 and its amendment "the Kubernetes Node stays after a remove" · Builds on: 0032, 0042, 0065, 0130
+Status: Accepted, amended · Date: 2026-11-07 · Design section: Nodes · Supersedes: the remove/reset split of 0085 and its amendment "the Kubernetes Node stays after a remove" · Builds on: 0032, 0042, 0065, 0130
 
 Decided: "Remove node" is the only way to take a node out of a cluster in the UI, and `ichor delete node NODE [--reboot]` in the CLI. It runs the existing removal flow (lock, quorum and count checks, storage evacuation, drain, etcd member removal for a control plane), then a graceful-as-today Talos Reset of STATE and EPHEMERAL, which ends with a power off (default) or a reboot into maintenance mode (`--reboot`, "After wiping" in the UI), then deletes the Kubernetes Node, then clears the finalizer. The wipe is no longer optional. It needs the typed machine name and the override permission, with no reason. The `reset` action, `RemoveMachine` and every proto and CRD field stay (`ichor node reset` was removed on 2026-11-07, see the amendments below); `RemoveMachine` and a `reset` operation both run this flow.
 
@@ -48,3 +48,7 @@ The risk "machines removed before this change were not wiped; the adopt guide sa
 Decision 3 is still how a power-off removal completes: the wait is for the Node to go NotReady, 10 s requeues, at most five minutes from `ResetRequested`. A powered-off machine cannot answer in maintenance mode, so the removal does not wait for that answer, and it completes on the Node going NotReady with a Normal Event `WipeNotConfirmedPoweredOff` that says the wipe is not confirmed because the machine was powered off.
 
 With `--reboot` (`reset-power-off` unset) the removal also waits, for at most the same five minutes counted from `ResetRequested`, for the machine to answer in maintenance mode with its UUID (`resetMaintenanceProbe`). The Node is deleted and the finalizer cleared only after that answer, or after the bound with a Warning Event `NodeStillHasClusterCredentials` that says the wipe is not confirmed. Decisions 1, 2, 4 and 5 are unchanged.
+
+## Amendment (2026-11-16): an unconfirmed wipe is a Warning however the machine stopped
+
+The 2026-11-15 amendment gave the power-off path a Normal Event and did not say why. The reason is the one it gives for the `--reboot` path, which records a Warning: the machine did not answer, so the wipe is not confirmed and its disk may still hold the cluster's PKI. That disk is as unverified after a power-off, so the power-off Event is a Warning too, and every unconfirmed-wipe Event now has that type. The machine's inability to answer explains why the removal does not wait (decision 3 and the amendment above); it does not make the unverified disk less consequential. The reason `WipeNotConfirmedPoweredOff` is unchanged. Because the power-off is the default, every default removal now records this Warning.

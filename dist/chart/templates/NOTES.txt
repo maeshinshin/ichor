@@ -34,13 +34,8 @@ To learn more about the release, try:
 
 {{- if and .Values.ichorUI.enabled (not .Values.ichorUI.oidc.enabled) (not .Values.ichorUI.users.enabled) }}
 
-{{- if .Values.ichorUI.allowUnauthenticated }}
-WARNING: ichor-ui has no sign-in and ichorUI.allowUnauthenticated is true: anyone who can reach it
-can make changes with its ServiceAccount's permissions. Enable ichorUI.users or ichorUI.oidc.
-{{- else }}
-NOTE: ichor-ui has no sign-in, so it serves read-only calls only. Enable ichorUI.users or ichorUI.oidc;
-ichorUI.allowUnauthenticated=true restores open writes.
-{{- end }}
+NOTE: ichor-ui has no sign-in, so it serves read-only calls only. Enable ichorUI.users or ichorUI.oidc
+to make changes in it.
 {{- end }}
 
 On a cluster with no CNI the chart refuses to install (preflight.cni): run

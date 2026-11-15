@@ -111,10 +111,13 @@ type adoptDeps struct {
 	// RequireIchor is --require-ichor: a cluster without Ichor is an error, not an install.
 	RequireIchor bool
 
-	// UIURL and AdminUser are --ui-url and --admin-user (init's defaults when empty);
-	// AllowUnauthenticated is --allow-unauthenticated: ichor-ui is left with no sign-in.
-	UIURL, AdminUser     string
-	AllowUnauthenticated bool
+	// UIURL and AdminUser are --ui-url and --admin-user (init's defaults when empty).
+	UIURL, AdminUser string
+
+	// The TLS and kubeconfig flags of init, for the sign-in adopt sets up (--ui-tls-secret, --ui-tls-cert,
+	// --ui-tls-key, --kube-api-server-url, --kube-api-tls-server-name).
+	UITLSSecret, UITLSCert, UITLSKey       string
+	KubeAPIServerURL, KubeAPITLSServerName string
 
 	// Steps renders adopt's steps for a person (Output unset); nil on -o yaml|json, where the
 	// "adopt: ..." lines on Stderr stay as they were. runAdopt makes one on Stderr when it is nil.
@@ -143,10 +146,9 @@ type adoptState struct {
 	// readBack is what Ichor's own Cilium release was installed with.
 	readBack *cilium.ReadBack
 
-	// signIn is what adopt does to turn sign-in on, nil when it does nothing. openUI: adopt leaves ichor-ui
-	// with no sign-in (--allow-unauthenticated). adminPassword is the generated one, shown once.
+	// signIn is what adopt does to turn sign-in on, nil when it does nothing. adminPassword is the
+	// generated one, shown once.
 	signIn        *signInPlan
-	openUI        bool
 	adminPassword string
 }
 
@@ -1407,7 +1409,6 @@ func (st *adoptState) writeInput(ctx context.Context, deps adoptDeps, namespace 
 			detected = cniCilium // installed by adopt before this point
 		}
 
-		ichor.AllowUnauthenticated = deps.AllowUnauthenticated
 		ichor.DetectedCNI = detected
 		ichor.PolicyCRDPresent = ciliumPolicyCRDPresent(ctx, deps.Target)
 		in.Ichor = &ichor

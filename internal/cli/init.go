@@ -144,6 +144,10 @@ address skips the scan.`,
 			}
 		}
 
+		if err := refuseRemovedOpenMode(cmd); err != nil {
+			return err
+		}
+
 		if bundleTerminal() {
 			if err := promptInitMissing(cmd.Context(), cmd.Flags(), cmd.InOrStdin(), cmd.ErrOrStderr()); err != nil {
 				return fmt.Errorf("init: %w", err)
@@ -390,8 +394,7 @@ func bindInitFlags(flags *pflag.FlagSet, o *initOptions, wait *time.Duration) {
 	flags.StringVar(&o.UIURL, "ui-url", "",
 		"the https URL at which browsers and the CLI reach ichor-ui, the issuer of every token; "+
 			"left out, the issuer is "+defaultUIURL+", where ichor ui reaches it; needs --version-contract v1.14 or later")
-	flags.BoolVar(&o.AllowUnauthenticated, "allow-unauthenticated", false,
-		"run ichor-ui with no sign-in: "+openUIReach+"; without it init turns Ichor's own sign-in on")
+	bindRemovedOpenMode(flags)
 	flags.StringVar(&o.AdminUser, "admin-user", "",
 		"with sign-in: name of the first admin (default "+defaultAdminUser+"); its generated password is printed once to stderr "+
 			"and must be changed at the first sign-in")
@@ -419,9 +422,3 @@ func init() {
 		"store the secrets bundle unencrypted (default: encrypted with --bundle-passphrase-file, $"+bundlePassphraseEnv+", or a passphrase generated on a terminal)")
 	flags.BoolVar(&initPrintTemplate, "print-config-template", false, "print an example "+initConfigKind+" file and exit")
 }
-
-// openUIReach says what a client of an ichor-ui that has no sign-in (--allow-unauthenticated) can do. The
-// ServiceAccount holds the start verb on the shutdown and rotation subresources; a node reset and an etcd
-// restore also need the override verb, which it does not hold. The CLI reference and two guides carry the
-// same sentence (TestOpenUIReachIsTheSameInTheDocs).
-const openUIReach = "anyone who can reach ichor-ui can change the cluster with ichor-ui's permissions, which include starting a CA or key rotation and shutting down the cluster or a node, but not resetting a node or restoring etcd"

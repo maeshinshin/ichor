@@ -120,10 +120,13 @@ func TestRunInit_StepsOnAPlainWriter(t *testing.T) {
 		"✓ Bootstrap etcd — kubeconfig saved to ",
 		"✓ Kubernetes API — reachable",
 		"✓ Install Ichor — ",
+		"✓ Ichor users — sign-in: users are on in ichor-ui",
 		"✓ Cluster resources — TalosCluster, TalosMachine, TalosConfigPatch",
+		"✓ Authentication — spec.authentication.ichor is set",
 		"✓ ichor-ui — ready",
 		"Done in ",
-		"! ichor-ui has no sign-in (--allow-unauthenticated)",
+		"Helm equivalent: ichorUI.users.enabled=true",
+		"Password for admin (shown once",
 		"ichor get cluster " + testInitClusterName,
 	}
 

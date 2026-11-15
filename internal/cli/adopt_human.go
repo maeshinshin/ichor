@@ -119,10 +119,6 @@ func (d adoptDeps) epilogue(cluster, namespace string, e adoptEnd) {
 		d.Steps.Done()
 	}
 
-	if e.st != nil && e.st.openUI {
-		d.say(adoptWarn, "%s", openUIWarning)
-	}
-
 	if !e.complete {
 		return
 	}

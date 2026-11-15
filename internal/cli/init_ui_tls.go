@@ -43,6 +43,11 @@ const (
 	uiTLSStoredSecretName = "ichor-ui-tls"
 )
 
+// hasUIExtras reports whether any of the TLS or kubeconfig flags is set.
+func (o initOptions) hasUIExtras() bool {
+	return o.uiTLSOn() || o.UITLSKey != "" || o.KubeAPIServerURL != "" || o.KubeAPITLSServerName != ""
+}
+
 func (o initOptions) uiTLSOn() bool { return o.UITLSSecret != "" || o.UITLSCert != "" }
 
 // uiTLSSecretName is the Secret ichor-ui mounts.
@@ -56,28 +61,23 @@ func (o initOptions) uiTLSSecretName() string {
 
 // validateInitUIExtras checks the TLS and kubeconfig flags without touching the cluster.
 func validateInitUIExtras(opts initOptions) error {
-	set := opts.uiTLSOn() || opts.UITLSKey != "" || opts.KubeAPIServerURL != "" || opts.KubeAPITLSServerName != ""
-	if !set {
+	if !opts.hasUIExtras() {
 		return nil
-	}
-
-	if !opts.signInOn() {
-		return errors.New("init: --ui-tls-secret, --ui-tls-cert, --ui-tls-key, --kube-api-server-url and --kube-api-tls-server-name configure sign-in, and --allow-unauthenticated turns it off")
 	}
 
 	var errs []error
 
 	if opts.UITLSSecret != "" && (opts.UITLSCert != "" || opts.UITLSKey != "") {
-		errs = append(errs, errors.New("init: --ui-tls-secret and --ui-tls-cert/--ui-tls-key are alternatives, not both"))
+		errs = append(errs, fmt.Errorf("%s: --ui-tls-secret and --ui-tls-cert/--ui-tls-key are alternatives, not both", opts.who()))
 	}
 
 	if (opts.UITLSCert == "") != (opts.UITLSKey == "") {
-		errs = append(errs, errors.New("init: --ui-tls-cert and --ui-tls-key go together"))
+		errs = append(errs, fmt.Errorf("%s: --ui-tls-cert and --ui-tls-key go together", opts.who()))
 	}
 
 	if opts.UITLSSecret != "" {
 		if msgs := validation.IsDNS1123Subdomain(opts.UITLSSecret); len(msgs) > 0 {
-			errs = append(errs, fmt.Errorf("init: --ui-tls-secret %q is not a Secret name: %s", opts.UITLSSecret, strings.Join(msgs, "; ")))
+			errs = append(errs, fmt.Errorf("%s: --ui-tls-secret %q is not a Secret name: %s", opts.who(), opts.UITLSSecret, strings.Join(msgs, "; ")))
 		}
 	}
 
@@ -89,12 +89,12 @@ func validateInitUIExtras(opts initOptions) error {
 
 	if opts.KubeAPIServerURL != "" {
 		if u, err := url.Parse(opts.KubeAPIServerURL); err != nil || u.Scheme != schemeHTTPS || u.Host == "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
-			errs = append(errs, fmt.Errorf("init: --kube-api-server-url %q must be an https URL without query, fragment or credentials", opts.KubeAPIServerURL))
+			errs = append(errs, fmt.Errorf("%s: --kube-api-server-url %q must be an https URL without query, fragment or credentials", opts.who(), opts.KubeAPIServerURL))
 		}
 	}
 
 	if n := opts.KubeAPITLSServerName; n != "" && len(validation.IsDNS1123Subdomain(n)) > 0 && net.ParseIP(n) == nil {
-		errs = append(errs, fmt.Errorf("init: --kube-api-tls-server-name %q is not a host name", n))
+		errs = append(errs, fmt.Errorf("%s: --kube-api-tls-server-name %q is not a host name", opts.who(), n))
 	}
 
 	return errors.Join(errs...)
@@ -104,16 +104,16 @@ func validateInitUIExtras(opts initOptions) error {
 func readUITLSFiles(opts initOptions) (crt, key []byte, err error) {
 	crt, err = os.ReadFile(opts.UITLSCert)
 	if err != nil {
-		return nil, nil, fmt.Errorf("init: reading --ui-tls-cert: %w", err)
+		return nil, nil, fmt.Errorf("%s: reading --ui-tls-cert: %w", opts.who(), err)
 	}
 
 	key, err = os.ReadFile(opts.UITLSKey)
 	if err != nil {
-		return nil, nil, fmt.Errorf("init: reading --ui-tls-key: %w", err)
+		return nil, nil, fmt.Errorf("%s: reading --ui-tls-key: %w", opts.who(), err)
 	}
 
 	if _, err := tls.X509KeyPair(crt, key); err != nil {
-		return nil, nil, fmt.Errorf("init: --ui-tls-cert and --ui-tls-key are not a matching PEM certificate and key: %w", err)
+		return nil, nil, fmt.Errorf("%s: --ui-tls-cert and --ui-tls-key are not a matching PEM certificate and key: %w", opts.who(), err)
 	}
 
 	return crt, key, nil
@@ -128,14 +128,14 @@ func checkUITLSSecret(ctx context.Context, k client.Client, ns string, opts init
 	var sec corev1.Secret
 	if err := k.Get(ctx, types.NamespacedName{Namespace: ns, Name: opts.UITLSSecret}, &sec); err != nil {
 		if apierrors.IsNotFound(err) {
-			return fmt.Errorf("init: --ui-tls-secret: no Secret %s in namespace %s (create a kubernetes.io/tls Secret first, or use --ui-tls-cert and --ui-tls-key)", opts.UITLSSecret, ns)
+			return fmt.Errorf("%s: --ui-tls-secret: no Secret %s in namespace %s (create a kubernetes.io/tls Secret first, or use --ui-tls-cert and --ui-tls-key)", opts.who(), opts.UITLSSecret, ns)
 		}
 
-		return fmt.Errorf("init: reading --ui-tls-secret %s: %w", opts.UITLSSecret, err)
+		return fmt.Errorf("%s: reading --ui-tls-secret %s: %w", opts.who(), opts.UITLSSecret, err)
 	}
 
 	if sec.Type != corev1.SecretTypeTLS {
-		return fmt.Errorf("init: Secret %s/%s is of type %q, not %s", ns, sec.Name, sec.Type, corev1.SecretTypeTLS)
+		return fmt.Errorf("%s: Secret %s/%s is of type %q, not %s", opts.who(), ns, sec.Name, sec.Type, corev1.SecretTypeTLS)
 	}
 
 	return nil
@@ -164,7 +164,7 @@ func storeUITLSSecret(ctx context.Context, k client.Client, ns string, opts init
 		err = createRetrying(ctx, k, sec, progress)
 	case err == nil:
 		if sec.Type != corev1.SecretTypeTLS {
-			return fmt.Errorf("init: Secret %s/%s exists with type %q, not %s; remove it or use --ui-tls-secret", ns, sec.Name, sec.Type, corev1.SecretTypeTLS)
+			return fmt.Errorf("%s: Secret %s/%s exists with type %q, not %s; remove it or use --ui-tls-secret", opts.who(), ns, sec.Name, sec.Type, corev1.SecretTypeTLS)
 		}
 
 		sec.Data = data
@@ -172,7 +172,7 @@ func storeUITLSSecret(ctx context.Context, k client.Client, ns string, opts init
 	}
 
 	if err != nil {
-		return fmt.Errorf("init: storing the ichor-ui TLS Secret: %w", err)
+		return fmt.Errorf("%s: storing the ichor-ui TLS Secret: %w", opts.who(), err)
 	}
 
 	return nil

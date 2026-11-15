@@ -66,7 +66,7 @@ func TestRunAdopt_StepsOnAPlainWriter(t *testing.T) {
 
 	want := []string{
 		"Ichor adopt · " + f.env.cluster.Name,
-		"namespace " + testNamespace + " · discovering from " + flowCPAddr,
+		"namespace " + ichorControllerNamespace + " · discovering from " + flowCPAddr,
 		"✓ Read cluster — Talos ",
 		"2 read",
 		"no TalosCluster yet",
@@ -83,8 +83,8 @@ func TestRunAdopt_StepsOnAPlainWriter(t *testing.T) {
 		"! " + caRotationAdvice,
 		"the nodes are now managed by Ichor",
 		"Next",
-		"ichor get cluster " + f.env.cluster.Name + " -n " + testNamespace,
-		"ichor get nodes -n " + testNamespace,
+		"ichor get cluster " + f.env.cluster.Name,
+		"ichor get nodes",
 		"ichor ui",
 	}
 

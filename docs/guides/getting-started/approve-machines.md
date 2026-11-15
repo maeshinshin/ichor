@@ -38,7 +38,7 @@ to approve, so skip this step. With the default `standard` preset, approve the
 two further control planes first, with `--role controlplane` (see
 [Virtual IP](create-the-cluster/vip.md#flags)); workers follow, as above.
 
-Unless you ran init with `--allow-unauthenticated`, sign-in is on, so the first
+Sign-in is always on, so the first
 of these commands prints this line on stderr, and so do the commands in
 [step 4](check-the-cluster.md). The address after `--issuer` is your
 cluster's issuer, which is `https://localhost:8443` when you gave no `--ui-url`:

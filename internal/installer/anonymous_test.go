@@ -2,6 +2,7 @@ package installer
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -16,35 +17,44 @@ func uiWith(args []string, env ...corev1.EnvVar) *appsv1.Deployment {
 	}}}}
 }
 
-func TestUpgradeKeepsAnInstallWithoutSignInOpenAndSaysSo(t *testing.T) {
+// TestUpgradeDropsTheOpenMode runs a live ichor-ui through the installer's read-and-customize round, the
+// path of every upgrade. However it was left open (the flag, the variable, or both, with or without a
+// sign-in), what comes out starts without the open mode, and the notice is for the installs that had it.
+func TestUpgradeDropsTheOpenMode(t *testing.T) {
+	open := corev1.EnvVar{Name: "ICHOR_ALLOW_UNAUTHENTICATED", Value: "true"}
+
 	cases := []struct {
-		name          string
-		dep           *appsv1.Deployment
-		wantAllow     bool
-		wantInferred  bool
-		wantFlagInArg bool
+		name    string
+		dep     *appsv1.Deployment
+		wasOpen bool
 	}{
-		{"no sign-in, no flag (pre-0108)", uiWith([]string{uiAddr}), true, true, true},
-		{"flag already set", uiWith([]string{uiAddr, "--allow-unauthenticated=true"}), true, false, true},
-		{"ichor users", uiWith([]string{uiAddr, "--users-enabled=true", "--external-url=https://i.example.com"}), false, false, false},
-		{"external OIDC by env", uiWith([]string{uiAddr}, corev1.EnvVar{Name: "ICHOR_OIDC_ISSUER", Value: "https://idp"}), false, false, false},
-		{"no live Deployment (first install)", nil, false, false, false},
+		{"no sign-in, no flag (pre-0108)", uiWith([]string{uiAddr}), false},
+		{"flag", uiWith([]string{uiAddr, "--allow-unauthenticated=true"}), true},
+		{"variable", uiWith([]string{uiAddr}, open), true},
+		{"flag and variable", uiWith([]string{uiAddr, "--allow-unauthenticated=true"}, open), true},
+		{"flag beside Ichor users", uiWith([]string{uiAddr, "--allow-unauthenticated=true", "--users-enabled=true", "--external-url=https://i.example.com"}), true},
+		{"flag beside external OIDC", uiWith([]string{uiAddr, "--allow-unauthenticated=true"}, corev1.EnvVar{Name: "ICHOR_OIDC_ISSUER", Value: "https://idp"}), true},
+		{"ichor users", uiWith([]string{uiAddr, "--users-enabled=true", "--external-url=https://i.example.com"}), false},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			s := ReadUISettings(tc.dep, nil)
-			if s.AllowUnauthenticated != tc.wantAllow || s.InferredAnonymous != tc.wantInferred {
-				t.Fatalf("allow=%v inferred=%v, want %v %v", s.AllowUnauthenticated, s.InferredAnonymous, tc.wantAllow, tc.wantInferred)
+			if s.WasOpen != tc.wasOpen {
+				t.Fatalf("WasOpen = %v, want %v", s.WasOpen, tc.wasOpen)
 			}
 
-			dep := uiWith([]string{uiAddr})
-			if err := CustomizeUI(dep, s); err != nil {
+			if err := CustomizeUI(tc.dep, s); err != nil {
 				t.Fatal(err)
 			}
 
-			if got := slices.Contains(dep.Spec.Template.Spec.Containers[0].Args, "--allow-unauthenticated=true"); got != tc.wantFlagInArg {
-				t.Errorf("flag in args = %v, want %v: %v", got, tc.wantFlagInArg, dep.Spec.Template.Spec.Containers[0].Args)
+			c := tc.dep.Spec.Template.Spec.Containers[0]
+			if slices.ContainsFunc(c.Args, func(a string) bool { return strings.HasPrefix(a, "--allow-unauthenticated") }) {
+				t.Errorf("the open flag survived the upgrade: %v", c.Args)
+			}
+
+			if slices.ContainsFunc(c.Env, func(e corev1.EnvVar) bool { return e.Name == "ICHOR_ALLOW_UNAUTHENTICATED" }) {
+				t.Errorf("the open variable survived the upgrade: %v", c.Env)
 			}
 		})
 	}

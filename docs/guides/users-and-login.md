@@ -22,21 +22,25 @@ has no way to tell callers apart. It then serves read-only calls only and
 refuses every change with "ichor-ui has no sign-in configured"; the UI shows a
 "Read-only" banner saying so. Downloads need an identity and are refused too.
 
-The old open mode, where anyone who can reach ichor-ui writes with its
-ServiceAccount's permissions and is audited as `ichor-ui`, still exists but you
-have to ask for it: `--allow-unauthenticated` on ichor-ui, `ichorUI.allowUnauthenticated=true`
-in the chart. The flag does nothing once users or OIDC are on.
+There is no way to let ichor-ui make changes without a sign-in. The open mode, where
+anyone who can reach ichor-ui writes with its ServiceAccount's permissions, was
+removed; so were `--allow-unauthenticated` and `ichorUI.allowUnauthenticated`, and
+ichor-ui's ServiceAccount holds none of the `start` verbs, so no request
+without a user can start a shutdown, a rotation or a restore. Each of them is refused
+and says what to do instead:
 
-- `ichor init` turns users on unless you pass `--allow-unauthenticated`. With
-  that flag it starts ichor-ui with the open mode and prints a warning at the
-  end. Without it, ichor-ui starts read-only and the users are on before any
-  write can reach it.
-- `ichor-installer` upgrading an install that ran with no sign-in sets the
-  flag for you and prints a `NOTICE`, so nothing stops working. Turn users or
-  OIDC on, and the flag goes away at the next upgrade.
-- A Helm upgrade does not guess: set `ichorUI.allowUnauthenticated=true` to
-  keep writing, or enable `ichorUI.users` or `ichorUI.oidc`. `helm` prints a
-  note when no sign-in is configured.
+- `ichor init` and `ichor adopt` refuse `--allow-unauthenticated` (also as
+  `ui.allowUnauthenticated: true` in an init file). Sign-in is on in every cluster
+  they set up.
+- `ichor-ui` stops at startup when it is given `--allow-unauthenticated` or
+  `ICHOR_ALLOW_UNAUTHENTICATED=true`.
+- `helm install` and `helm upgrade` fail when `ichorUI.allowUnauthenticated` is true.
+  `helm upgrade --reuse-values` carries the old value forward; pass
+  `--set ichorUI.allowUnauthenticated=null` with it, or drop `--reuse-values`.
+  Then enable `ichorUI.users` or `ichorUI.oidc`.
+- `ichor-installer` upgrading an install that had the flag drops it and prints a
+  `NOTICE`. That ichor-ui serves read-only calls until users or OIDC are on.
+  Everything the UI did can still be done with `ichor` and your own kubeconfig.
 
 ## Before you start
 
@@ -76,11 +80,10 @@ in turn (see the end of this guide). Init retries transient API errors (such as
 an etcd timeout right after the API server comes up) for a few minutes before
 it gives up.
 
-`ichor init` takes four more flags, all of which need sign-in (so they are
-refused with `--allow-unauthenticated`). They are checked before anything is
+`ichor init` and `ichor adopt` take four more flags. They are checked before anything is
 written, and each has a chart value:
 
-| `ichor init` flag | Chart value | Effect on ichor-ui |
+| `ichor init` and `ichor adopt` flag | Chart value | Effect on ichor-ui |
 |---|---|---|
 | `--ui-tls-secret NAME` | `ichorUI.tls.secretName` | Mounts the existing `kubernetes.io/tls` Secret `NAME` (in `ichor-system`), sets `--tls-cert-file` and `--tls-key-file`, and probes over HTTPS. |
 | `--ui-tls-cert FILE` with `--ui-tls-key FILE` | `ichorUI.tls.secretName` | Alternative to `--ui-tls-secret`: init stores the PEM pair as the Secret `ichor-ui-tls` and uses it the same way. The key is never printed. |

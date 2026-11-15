@@ -110,7 +110,7 @@ func TestAdoptTakeoverCarriesCiliumValues(t *testing.T) {
 	}
 
 	var written ichorv1alpha1.TalosCluster
-	if err := f.env.k8s.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: f.env.cluster.Name}, &written); err != nil {
+	if err := f.env.k8s.Get(context.Background(), client.ObjectKey{Namespace: ichorControllerNamespace, Name: f.env.cluster.Name}, &written); err != nil {
 		t.Fatal(err)
 	}
 
@@ -169,7 +169,7 @@ func TestAdoptTakeoverWithoutCiliumValuesWritesNone(t *testing.T) {
 	}
 
 	var written ichorv1alpha1.TalosCluster
-	if err := f.env.k8s.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: f.env.cluster.Name}, &written); err != nil {
+	if err := f.env.k8s.Get(context.Background(), client.ObjectKey{Namespace: ichorControllerNamespace, Name: f.env.cluster.Name}, &written); err != nil {
 		t.Fatal(err)
 	}
 

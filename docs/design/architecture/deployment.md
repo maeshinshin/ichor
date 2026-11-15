@@ -11,8 +11,10 @@ except on clusters with a single schedulable node, where the installer drops to
 one replica and no PDB (otherwise a drain never finishes).
 
 Ichor's own users and login are on by default for `ichor init`, with the
-issuer `https://localhost:8443` unless `--ui-url` gives another (`--allow-unauthenticated`
-turns them off). The Helm chart keeps them off. Turning them on in the chart
+issuer `https://localhost:8443` unless `--ui-url` gives another, and in `ichor adopt` for
+the Ichor it installs. They cannot be turned off: ichor-ui makes no change without a
+sign-in. The Helm chart keeps them off, and an ichor-ui installed that way serves read-only
+calls until they are on. Turning them on in the chart
 needs three things a default install lacks: an https URL that browsers and the
 CLI can reach (`ichorUI.users.externalURL`, the value `ichor init --ui-url` sets), a
 Talos v1.14 contract or later (earlier contracts can carry only one issuer),

@@ -96,7 +96,6 @@ discovery:
     - 192.168.1.64/29
 ui:                                # sign-in is on by default; the URL defaults to https://localhost:8443
   url: https://192.168.1.60        # --ui-url
-  allowUnauthenticated: false      # --allow-unauthenticated: ichor-ui with no sign-in (anyone who can reach it can change the cluster)
   adminUser: admin                 # --admin-user
   tls:                             # optional; leave out for Ichor's own CA
     certFile: ./ui.crt             # --ui-tls-cert (relative to this file)
@@ -167,7 +166,9 @@ type initConfigDisco struct {
 }
 
 type initConfigUI struct {
-	URL                  string `json:"url"`
+	URL string `json:"url"`
+	// AllowUnauthenticated is the removed open mode. It is still read so that a file that sets it is refused
+	// with the instruction (init sets the flag from it), where an unknown field would only say "unknown".
 	AllowUnauthenticated bool   `json:"allowUnauthenticated"`
 	AdminUser            string `json:"adminUser"`
 	TLS                  struct {

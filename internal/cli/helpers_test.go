@@ -271,23 +271,20 @@ func (f *fakeBootstrapClient) Kubeconfig(context.Context) ([]byte, error) {
 // validInitOptions returns an initOptions that passes buildInitPlan and
 // drives runInit end to end against a cilium CNI, so tests get a
 // TalosConfigPatch to assert on alongside the TalosCluster/TalosMachine.
-// validInitOptions has no sign-in: most init tests are about the node. The default, sign-in on, is
-// the one tests set explicitly (AllowUnauthenticated = false) or get from initOptsWithFlags.
 func validInitOptions() initOptions {
 	return initOptions{
-		AllowUnauthenticated: true,
-		BundlePlaintext:      true,
-		Cluster:              testInitClusterName,
-		Namespace:            testNamespace,
-		Preset:               defaultPreset,
-		CNIPreset:            testCNICilium,
-		EndpointType:         testEndpointTypeVIP,
-		EndpointAddress:      testEndpointAddr,
-		TalosVersion:         testTalosVersion,
-		KubernetesVersion:    "v1.33.0",
-		VersionContract:      testVersionContract,
-		InstallDisk:          testInstallDisk,
-		NodeEndpoint:         "10.0.0.10:50000",
+		BundlePlaintext:   true,
+		Cluster:           testInitClusterName,
+		Namespace:         testNamespace,
+		Preset:            defaultPreset,
+		CNIPreset:         testCNICilium,
+		EndpointType:      testEndpointTypeVIP,
+		EndpointAddress:   testEndpointAddr,
+		TalosVersion:      testTalosVersion,
+		KubernetesVersion: "v1.33.0",
+		VersionContract:   testVersionContract,
+		InstallDisk:       testInstallDisk,
+		NodeEndpoint:      "10.0.0.10:50000",
 	}
 }
 
@@ -324,6 +321,8 @@ func newFakeInitDeps(t *testing.T, k8sClient client.Client) (
 	maint := &fakeMaintenanceApplier{}
 	boot := &fakeBootstrapClient{kubeconfig: []byte("apiVersion: v1\nkind: Config\n")}
 
+	seedIchorUI(t, k8sClient)
+
 	deps := initDeps{
 		ReadNode: func(context.Context, string, bool) (nodeReading, error) {
 			return nodeReading{
@@ -345,4 +344,23 @@ func newFakeInitDeps(t *testing.T, k8sClient client.Client) (
 	}
 
 	return deps, maint, boot
+}
+
+// seedIchorUI puts the objects sign-in edits into k8sClient unless they are there. Sign-in is always on, so
+// every init that reaches Ichor's users step needs them; the install manifest of these tests is too small to
+// carry them. A client that already has ichor-ui is left alone, and so are its interceptors' counts.
+func seedIchorUI(t *testing.T, k8sClient client.Client) {
+	t.Helper()
+
+	ctx := context.Background()
+
+	for _, o := range uiObjects() {
+		if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(o), o.DeepCopyObject().(client.Object)); err == nil {
+			continue
+		}
+
+		if err := k8sClient.Create(ctx, o); err != nil {
+			t.Fatal(err)
+		}
+	}
 }

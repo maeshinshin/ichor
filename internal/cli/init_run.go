@@ -52,10 +52,12 @@ type initOptions struct {
 	DiskRoles diskRoleOptions
 
 	// UIURL is the issuer of Ichor's own sign-in (empty: defaultUIURL); AdminUser names the first admin.
-	// AllowUnauthenticated turns the sign-in off and leaves ichor-ui open to anyone who can reach it.
-	UIURL                string
-	AdminUser            string
-	AllowUnauthenticated bool
+	UIURL     string
+	AdminUser string
+
+	// cmd names the command in its refusals; empty is init. adopt sets sign-in up through the same
+	// functions, so its refusals say adopt.
+	cmd string
 
 	// With sign-in: TLS inside ichor-ui (an existing Secret, or a cert/key init stores) and the
 	// kubeconfig's server, passed to ichor-ui.
@@ -419,7 +421,7 @@ func initInstall(
 	err = steps.Run("Install Ichor", func(s *step) (string, error) {
 		s.Update("applying Ichor's install manifest")
 
-		if err := applyIchorManifest(ctx, k8sClient, deps.IchorManifest, s.Rewrite(initDetail), opts.CNIPreset == cniCilium, opts.AllowUnauthenticated); err != nil {
+		if err := applyIchorManifest(ctx, k8sClient, deps.IchorManifest, s.Rewrite(initDetail), opts.CNIPreset == cniCilium); err != nil {
 			return "", err
 		}
 
@@ -463,17 +465,15 @@ func initInstall(
 	}
 
 	// The first admin exists before the switch that makes every request need a token.
-	if opts.signInOn() {
-		err = steps.Run("Ichor users", func(s *step) (string, error) {
-			var err error
+	err = steps.Run("Ichor users", func(s *step) (string, error) {
+		var err error
 
-			adminPassword, err = initUsers(ctx, opts, k8sClient, s)
+		adminPassword, err = initUsers(ctx, opts, k8sClient, s)
 
-			return s.Detail(), err
-		})
-		if err != nil {
-			return created, adminPassword, err
-		}
+		return s.Detail(), err
+	})
+	if err != nil {
+		return created, adminPassword, err
 	}
 
 	// Step 5: create the CRs.
@@ -505,13 +505,11 @@ func initInstall(
 		}
 	}
 
-	if opts.signInOn() {
-		err = steps.Run("Authentication", func(s *step) (string, error) {
-			return "spec.authentication.ichor is set", setClusterAuthentication(ctx, k8sClient, cluster, opts.UIURL, s)
-		})
-		if err != nil {
-			return created, adminPassword, err
-		}
+	err = steps.Run("Authentication", func(s *step) (string, error) {
+		return "spec.authentication.ichor is set", setClusterAuthentication(ctx, k8sClient, cluster, opts.UIURL, s)
+	})
+	if err != nil {
+		return created, adminPassword, err
 	}
 
 	return created, adminPassword, nil

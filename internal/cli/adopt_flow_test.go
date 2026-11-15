@@ -18,6 +18,7 @@ package cli
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -63,7 +64,12 @@ type flowEnv struct {
 	afterGet func(client.Object)
 	stdout   bytes.Buffer
 	stderr   bytes.Buffer
+	// ns is the namespace the run adopts into; empty is testNamespace. A run that installs Ichor must adopt into
+	// the controller's namespace, where sign-in finds ichor-ui.
+	ns string
 }
+
+func (e *flowEnv) namespace() string { return cmp.Or(e.ns, testNamespace) }
 
 func newFlowEnv(t *testing.T, adoptPreset string, liveMutate func(*ichorv1alpha1.TalosCluster)) *flowEnv {
 	t.Helper()
@@ -178,7 +184,7 @@ func (e *flowEnv) held(t *testing.T, name string) bool {
 	t.Helper()
 
 	var m ichorv1alpha1.TalosMachine
-	if err := e.k8s.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: name}, &m); err != nil {
+	if err := e.k8s.Get(context.Background(), client.ObjectKey{Namespace: e.namespace(), Name: name}, &m); err != nil {
 		t.Fatal(err)
 	}
 

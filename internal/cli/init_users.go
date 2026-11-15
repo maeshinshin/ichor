@@ -26,6 +26,8 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"golang.org/x/mod/semver"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -76,17 +78,14 @@ func (o initOptions) uiSettings() installer.UISettings {
 	return s
 }
 
-// signInOn reports whether init turns Ichor's own sign-in on: the default, unless --allow-unauthenticated.
-func (o initOptions) signInOn() bool { return !o.AllowUnauthenticated }
-
 // prepareInitUsers fills in the sign-in defaults and then validates them. It runs before anything
 // irreversible, so a bad URL or an old contract costs nothing. cmd ("init" or "adopt") prefixes the
-// refusals: both commands set sign-in up through these functions, so the two cannot drift.
+// refusals: both commands set sign-in up through these functions, so the two cannot drift. Sign-in is
+// always on; there is nothing to turn it off.
 func prepareInitUsers(cmd string, opts initOptions) (initOptions, error) {
-	if opts.signInOn() {
-		opts.UIURL = cmp.Or(opts.UIURL, defaultUIURL)
-		opts.AdminUser = cmp.Or(opts.AdminUser, defaultAdminUser)
-	}
+	opts.cmd = cmd
+	opts.UIURL = cmp.Or(opts.UIURL, defaultUIURL)
+	opts.AdminUser = cmp.Or(opts.AdminUser, defaultAdminUser)
 
 	return opts, validateInitUsers(cmd, opts)
 }
@@ -96,27 +95,15 @@ func validateInitUsers(cmd string, opts initOptions) error {
 		return err
 	}
 
-	if !opts.signInOn() {
-		if opts.UIURL != "" {
-			return fmt.Errorf("%s: --ui-url turns sign-in on and --allow-unauthenticated turns it off; give one of them", cmd)
-		}
-
-		if opts.AdminUser != "" {
-			return fmt.Errorf("%s: --admin-user needs sign-in, and --allow-unauthenticated turns it off (it creates no admin)", cmd)
-		}
-
-		return nil
-	}
-
 	u, err := url.Parse(opts.UIURL)
 	if err != nil || u.Scheme != schemeHTTPS || u.Host == "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
 		return fmt.Errorf("%s: --ui-url %q must be the https URL of ichor-ui, without query, fragment or credentials", cmd, opts.UIURL)
 	}
 
 	if semver.Compare(opts.VersionContract, initUsersMinContract) < 0 {
-		return fmt.Errorf("%s: sign-in is on by default and needs version contract %s or later (the kube-apiserver can trust Ichor's issuer "+
-			"only through Talos's KubeAuthenticationConfig); %s is older. Pass --allow-unauthenticated to %s without sign-in",
-			cmd, initUsersMinContract, opts.VersionContract, cmd)
+		return fmt.Errorf("%s: sign-in is always on and needs version contract %s or later (the kube-apiserver can trust Ichor's issuer "+
+			"only through Talos's KubeAuthenticationConfig); %s is older. Use Talos %s or later (with adopt, upgrade Talos first)",
+			cmd, initUsersMinContract, opts.VersionContract, initUsersMinContract)
 	}
 
 	return errors.Join(ichorauth.ValidateUserName(opts.AdminUser))
@@ -251,10 +238,6 @@ func setClusterAuthentication(
 // the TalosCluster exists: credentials Secret, first admin (before the switch,
 // so nobody is locked out), then the switch. It returns the generated password.
 func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.Writer) (password string, err error) {
-	if !opts.signInOn() {
-		return "", nil
-	}
-
 	// Everything that can fail on the cluster's shape is checked before the first write.
 	targets, err := prepareUITargets(ctx, k, ichorControllerNamespace, opts.uiSettings())
 	if err != nil {
@@ -292,9 +275,6 @@ func initUsers(ctx context.Context, opts initOptions, k client.Client, errw io.W
 	return password, nil
 }
 
-// openUIWarning is what init and adopt say when ichor-ui is left with no sign-in.
-const openUIWarning = "ichor-ui has no sign-in (--allow-unauthenticated): " + openUIReach + ". Sign-in is the default; leave the flag out."
-
 // authRolloutNotice is what init and adopt say once spec.authentication.ichor is set: the restart
 // is not automatic, it waits for the operator's rollout.
 const authRolloutNotice = "spec.authentication.ichor is set; the controller renders the kube-apiserver authentication " +
@@ -320,19 +300,16 @@ func initEpilogue(p *progress, opts initOptions, password string, ok bool) {
 		p.Done()
 	}
 
-	if !opts.signInOn() {
-		p.Warn(openUIWarning)
-	} else {
-		p.Info(fmt.Sprintf("Helm equivalent: ichorUI.users.enabled=true, ichorUI.users.externalURL=%s", opts.UIURL))
-		if opts.UIURL != defaultUIURL {
-			p.Warn(uiReachNotice(opts.UIURL))
-		}
+	p.Info(fmt.Sprintf("Helm equivalent: ichorUI.users.enabled=true, ichorUI.users.externalURL=%s", opts.UIURL))
 
-		p.Warn(authRolloutNotice)
+	if opts.UIURL != defaultUIURL {
+		p.Warn(uiReachNotice(opts.UIURL))
+	}
 
-		if password != "" {
-			printGeneratedPassword(p, opts.AdminUser, password)
-		}
+	p.Warn(authRolloutNotice)
+
+	if password != "" {
+		printGeneratedPassword(p, opts.AdminUser, password)
 	}
 
 	if ok {
@@ -349,3 +326,26 @@ func initEpilogue(p *progress, opts initOptions, password string, ok bool) {
 		p.Next(cmds...)
 	}
 }
+
+// flagAllowUnauthenticated is the removed open mode. init and adopt still register it, hidden, so that
+// using it is refused with what to do instead; an unknown flag would say nothing of the kind.
+const flagAllowUnauthenticated = "allow-unauthenticated"
+
+func bindRemovedOpenMode(flags *pflag.FlagSet) {
+	flags.Bool(flagAllowUnauthenticated, false, "REMOVED: ichor-ui always has sign-in")
+	_ = flags.MarkHidden(flagAllowUnauthenticated)
+}
+
+// refuseRemovedOpenMode refuses the flag whether it came from the command line or from an init file.
+func refuseRemovedOpenMode(cmd *cobra.Command) error {
+	if !cmd.Flags().Changed(flagAllowUnauthenticated) {
+		return nil
+	}
+
+	return fmt.Errorf("%s: --allow-unauthenticated was removed: ichor-ui no longer runs without sign-in, so there is no way to leave it open. "+
+		"Leave the flag out; sign-in is on by default (--ui-url sets the https URL of the issuer, %s if left out, and --admin-user names the first administrator)",
+		cmd.Name(), defaultUIURL)
+}
+
+// who is the command the refusals name: init, unless adopt set the sign-in up.
+func (o initOptions) who() string { return cmp.Or(o.cmd, "init") }

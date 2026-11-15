@@ -35,8 +35,7 @@ first login forces you to choose a new password (12 characters or more, at most
 128 bytes); after that, users, roles and kubeconfigs are as described in
 [Users and login](../users-and-login.md).
 
-If you ran init with `--allow-unauthenticated` there is no login: anyone who can reach ichor-ui can change the cluster with ichor-ui's permissions, which include starting a CA or key rotation and shutting down the cluster or a node, but not resetting a node or restoring etcd. Open it through
-the same port-forward, with `ichor ui`, at `https://localhost:8443`.
+There is no way to run ichor-ui without a login: `--allow-unauthenticated` was removed from `ichor init` and `ichor adopt`, and both refuse it.
 
 # Where to go next
 

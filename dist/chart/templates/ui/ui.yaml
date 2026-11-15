@@ -1,3 +1,6 @@
+{{- if .Values.ichorUI.allowUnauthenticated }}
+{{- fail "ichorUI.allowUnauthenticated was removed and is refused: ichor-ui no longer runs without a sign-in. Remove it from your values (helm upgrade --reuse-values keeps the old value: add --set ichorUI.allowUnauthenticated=null) and turn sign-in on with ichorUI.users.enabled=true and ichorUI.users.externalURL=https://..., or with ichorUI.oidc (docs/guides/users-and-login.md)" }}
+{{- end }}
 {{- if .Values.ichorUI.enabled }}
 apiVersion: apps/v1
 kind: Deployment
@@ -75,11 +78,6 @@ spec:
         {{- if .Values.ichorUI.tls.secretName }}
         - --tls-cert-file=/etc/ichor/tls/tls.crt
         - --tls-key-file=/etc/ichor/tls/tls.key
-        {{- end }}
-        {{- if and .Values.ichorUI.allowUnauthenticated (not .Values.ichorUI.users.enabled) (not .Values.ichorUI.oidc.enabled) }}
-        # No sign-in is configured and the operator said so: every call is served with
-        # ichor-ui's ServiceAccount. Without this flag ichor-ui serves read-only calls in that case.
-        - --allow-unauthenticated=true
         {{- end }}
         {{- if .Values.ichorUI.users.enabled }}
         # Ichor's own users and issuer.

@@ -86,7 +86,7 @@ func (e *flowEnv) machine(t *testing.T, name string) (*ichorv1alpha1.TalosMachin
 
 	var m ichorv1alpha1.TalosMachine
 
-	if err := e.k8s.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: name}, &m); err != nil {
+	if err := e.k8s.Get(context.Background(), client.ObjectKey{Namespace: e.namespace(), Name: name}, &m); err != nil {
 		return nil, false
 	}
 

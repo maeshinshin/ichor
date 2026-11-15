@@ -117,6 +117,7 @@ func newNoCNIFlow(t *testing.T) *noCNIFlow {
 
 	f := &noCNIFlow{env: env, deps: env.deps(t)}
 	d := &f.deps
+	env.ns = ichorControllerNamespace
 
 	node := func(name, addr, cidr string) *corev1.Node {
 		n := cniNode(name, cidr, false, netNotReady)
@@ -143,8 +144,8 @@ func newNoCNIFlow(t *testing.T) *noCNIFlow {
 	d.ReadIdentity = func(_ context.Context, address string) (controller.HardwareIdentity, error) {
 		return controller.HardwareIdentity{UUID: "uuid-" + address, Serial: "s"}, nil
 	}
-	d.AllowUnauthenticated = true // these tests are about the order of Cilium, Ichor and the CRs, not sign-in
-	d.Ichor = &adoptWriteIchor{Namespace: testNamespace, Manifest: []byte("apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ichor-install-marker\n  namespace: default\n")}
+	// Sign-in is always on, so the install carries the objects it edits; the marker is what these tests order against.
+	d.Ichor = &adoptWriteIchor{Namespace: ichorControllerNamespace, Manifest: []byte(signInManifest + "---\napiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: ichor-install-marker\n  namespace: default\n")}
 	d.BootstrapCilium = func(_ context.Context, c *ichorv1alpha1.TalosCluster, mode cni.KubeProxyMode) error {
 		f.mu.Lock()
 		f.bootstrap = append(f.bootstrap, bootstrapCall{cluster: c.DeepCopy(), mode: mode})
@@ -217,7 +218,7 @@ func (f *noCNIFlow) reconcileOnce(ctx context.Context) {
 func (f *noCNIFlow) run(t *testing.T) error {
 	t.Helper()
 
-	return runAdopt(context.Background(), f.env.cluster.Name, testNamespace, f.deps)
+	return runAdopt(context.Background(), f.env.cluster.Name, ichorControllerNamespace, f.deps)
 }
 
 // events is the recorded writes, without the stand-in controller's updates.
@@ -283,7 +284,7 @@ func TestAdoptNoCNI_CiliumFirstThenIchorThenTheCRs(t *testing.T) {
 	}
 
 	var got ichorv1alpha1.TalosCluster
-	if err := f.env.k8s.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: f.env.cluster.Name}, &got); err != nil {
+	if err := f.env.k8s.Get(context.Background(), client.ObjectKey{Namespace: ichorControllerNamespace, Name: f.env.cluster.Name}, &got); err != nil {
 		t.Fatal(err)
 	}
 
@@ -309,7 +310,7 @@ func TestAdoptNoCNI_InstalledValuesEqualTheControllersValues(t *testing.T) {
 	}
 
 	var written ichorv1alpha1.TalosCluster
-	if err := f.env.k8s.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: f.env.cluster.Name}, &written); err != nil {
+	if err := f.env.k8s.Get(context.Background(), client.ObjectKey{Namespace: ichorControllerNamespace, Name: f.env.cluster.Name}, &written); err != nil {
 		t.Fatal(err)
 	}
 
@@ -353,7 +354,7 @@ func TestAdoptNoCNI_InstalledValuesEqualTheControllersValues(t *testing.T) {
 func TestAdoptNoCNI_RerunAfterAFailureFinishes(t *testing.T) {
 	f := newNoCNIFlow(t)
 	good := f.deps.Ichor
-	f.deps.Ichor = &adoptWriteIchor{Namespace: testNamespace, Manifest: []byte("kind: [not a manifest")}
+	f.deps.Ichor = &adoptWriteIchor{Namespace: ichorControllerNamespace, Manifest: []byte("kind: [not a manifest")}
 
 	if err := f.run(t); err == nil {
 		t.Fatal("first run succeeded with an unusable install manifest")
@@ -390,6 +391,8 @@ func TestAdoptNoCNI_RerunAfterAFailureFinishes(t *testing.T) {
 			t.Errorf("machine %s is still held after the rerun", name)
 		}
 	}
+
+	seedOIDCTrust(t, f.env.k8s)
 
 	before := len(f.events())
 
@@ -465,12 +468,9 @@ func TestAdoptNoCNI_IchorAlreadyPresentStillInstallsCiliumFirst(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// The controller's Deployment says which namespace it reads the bundle from.
-	deploy := &appsv1.Deployment{
-		Name: controllerDeploymentName, Namespace: testNamespace, Labels: map[string]string{controllerLabel: controllerLabelValue}}
-	if err := f.env.k8s.Create(context.Background(), deploy); err != nil {
-		t.Fatal(err)
-	}
+	// The controller's Deployment says which namespace it reads the bundle from, and ichor-ui is there for the
+	// sign-in step to edit, as in any install.
+	seedIchorUI(t, f.env.k8s)
 
 	f.env.mu.Lock()
 	*f.env.writes = nil
@@ -540,7 +540,7 @@ func TestAdoptRefusesANamespaceThatIsNotTheControllersBeforeWritingAnything(t *t
 		t.Fatal("adopt accepted a --namespace the controller does not run in")
 	}
 
-	for _, want := range []string{`"elsewhere"`, `"` + testNamespace + `"`, "nothing was written"} {
+	for _, want := range []string{`"elsewhere"`, `"` + ichorControllerNamespace + `"`, "nothing was written"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the refusal %q does not contain %s", err, want)
 		}
@@ -607,6 +607,7 @@ func TestAdoptRerunLeavesARejectedMachineRejected(t *testing.T) {
 	fail = false
 
 	m := newTestMachine(f.env.cluster.Name)
+	m.Namespace = ichorControllerNamespace
 	m.Name, m.Spec.Role, m.Spec.Endpoint = rejected, testRoleWorker, flowWKAddr
 	m.Spec.Identity.UUID, m.Spec.ApprovalState = rejected, ichorv1alpha1.MachineApprovalStateRejected
 
@@ -619,7 +620,7 @@ func TestAdoptRerunLeavesARejectedMachineRejected(t *testing.T) {
 	}
 
 	var got ichorv1alpha1.TalosMachine
-	if err := f.env.k8s.Get(context.Background(), client.ObjectKey{Namespace: testNamespace, Name: rejected}, &got); err != nil {
+	if err := f.env.k8s.Get(context.Background(), client.ObjectKey{Namespace: ichorControllerNamespace, Name: rejected}, &got); err != nil {
 		t.Fatal(err)
 	}
 

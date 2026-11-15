@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -83,7 +84,6 @@ func signInFlow(t *testing.T) *noCNIFlow {
 	t.Helper()
 
 	f := newNoCNIFlow(t)
-	f.deps.AllowUnauthenticated = false
 	f.deps.Ichor = &adoptWriteIchor{Namespace: ichorControllerNamespace, Manifest: []byte(signInManifest)}
 
 	return f
@@ -211,42 +211,12 @@ func TestAdoptSignIn_TheGeneratedPasswordIsShownOnce(t *testing.T) {
 	}
 }
 
-// TestAdoptSignIn_AllowUnauthenticatedStillSaysWhatOpenMeans: the flag is the way to an ichor-ui
-// with no sign-in; it creates no administrator, and adopt warns in init's own words.
-func TestAdoptSignIn_AllowUnauthenticatedStillSaysWhatOpenMeans(t *testing.T) {
-	f := signInFlow(t)
-	f.deps.AllowUnauthenticated = true
-
-	if err := f.runSignIn(); err != nil {
-		t.Fatalf("runAdopt: %v\n%s", err, f.env.stderr.String())
-	}
-
-	if !strings.Contains(f.env.stderr.String(), openUIWarning) {
-		t.Errorf("no open-mode warning:\n%s", f.env.stderr.String())
-	}
-
-	var u ichorv1alpha1.IchorUser
-	if err := f.env.k8s.Get(context.Background(), client.ObjectKey{Namespace: ichorControllerNamespace, Name: defaultAdminUser}, &u); err == nil {
-		t.Error("an administrator was created although sign-in is off")
-	}
-
-	if args := f.uiArgs(t); slices.Contains(args, "--users-enabled=true") || !slices.Contains(args, "--allow-unauthenticated=true") {
-		t.Errorf("ichor-ui args = %v, want it open and no users", args)
-	}
-
-	if a := f.cluster(t).Spec.Authentication; a != nil && a.Ichor != nil && a.Ichor.Enabled {
-		t.Errorf("spec.authentication = %+v, want none", a)
-	}
-}
-
 // TestAdoptSignIn_FlagsAreCheckedBeforeAnythingIsWritten: a bad issuer URL, or --ui-url with the
 // open flag, stops the plan with nothing written.
 func TestAdoptSignIn_FlagsAreCheckedBeforeAnythingIsWritten(t *testing.T) {
 	for name, mutate := range map[string]func(*adoptDeps){
-		"http url":              func(d *adoptDeps) { d.UIURL = strings.Replace(testUIURL, "https", "http", 1) },
-		"ui-url with open flag": func(d *adoptDeps) { d.UIURL, d.AllowUnauthenticated = testUIURL, true },
-		"admin with open flag":  func(d *adoptDeps) { d.AdminUser, d.AllowUnauthenticated = "root", true },
-		"bad admin user name":   func(d *adoptDeps) { d.AdminUser = "Root User" },
+		"http url":            func(d *adoptDeps) { d.UIURL = strings.Replace(testUIURL, "https", "http", 1) },
+		"bad admin user name": func(d *adoptDeps) { d.AdminUser = "Root User" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := signInFlow(t)
@@ -341,5 +311,26 @@ func TestBuildAdoptPlan_AcceptsTheIssuerTheClusterItselfRenders(t *testing.T) {
 
 	if _, err := buildAdoptPlan(cluster, machine, bundle, nil, currentCfg, sys, ownership{}); err != nil {
 		t.Fatalf("buildAdoptPlan refused the issuer the cluster itself renders: %v", err)
+	}
+}
+
+// seedOIDCTrust publishes the ConfigMap the controller makes once Ichor's issuer is set up, which a render with
+// spec.authentication.ichor needs. The stand-in controller of these tests does not make it.
+func seedOIDCTrust(t *testing.T, k client.Client) {
+	t.Helper()
+
+	cert, _, _ := writeTestKeyPair(t)
+
+	ca, err := os.ReadFile(cert)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cm := &corev1.ConfigMap{
+		Name: render.OIDCTrustConfigMap, Namespace: ichorControllerNamespace,
+		Data: map[string]string{render.OIDCTrustKeyDiscoveryURL: "https://ichor-ui.ichor-system.svc:8444/.well-known/openid-configuration", render.OIDCTrustKeyCA: string(ca)},
+	}
+	if err := k.Create(context.Background(), cm); err != nil {
+		t.Fatal(err)
 	}
 }

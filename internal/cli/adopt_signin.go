@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -60,8 +61,9 @@ func (p *signInPlan) describe() string {
 // sign-in flags either way. A Helm-managed Ichor is left alone: its values say whether users are on.
 func (st *adoptState) planSignIn(ctx context.Context, deps adoptDeps) error {
 	opts, err := prepareInitUsers("adopt", initOptions{
-		UIURL: deps.UIURL, AdminUser: deps.AdminUser, AllowUnauthenticated: deps.AllowUnauthenticated,
-		VersionContract: st.cluster.Spec.VersionContract,
+		UIURL: deps.UIURL, AdminUser: deps.AdminUser, VersionContract: st.cluster.Spec.VersionContract,
+		UITLSSecret: deps.UITLSSecret, UITLSCert: deps.UITLSCert, UITLSKey: deps.UITLSKey,
+		KubeAPIServerURL: deps.KubeAPIServerURL, KubeAPITLSServerName: deps.KubeAPITLSServerName,
 	})
 	if err != nil || st.adding || deps.Ichor == nil {
 		return err
@@ -75,17 +77,14 @@ func (st *adoptState) planSignIn(ctx context.Context, deps adoptDeps) error {
 	// shortcut: a Helm-managed Ichor is not touched, so adopt neither switches its ichor-ui nor
 	// sets spec.authentication.ichor on its cluster; drop when adopt can read the chart's values.
 	if present.HelmManaged() {
-		if opts.signInOn() {
-			deps.say(adoptInfo, "Ichor is Helm-managed, so adopt leaves ichor-ui as the chart has it; turn sign-in on with "+
-				"ichorUI.users.enabled=true and ichorUI.users.externalURL=%s", opts.UIURL)
+		if opts.hasUIExtras() {
+			return errors.New("adopt: Ichor is Helm-managed, so adopt leaves ichor-ui as the chart has it and cannot apply --ui-tls-* or --kube-api-*: " +
+				"set ichorUI.tls.secretName, ichorUI.users.kubeAPIServerURL and ichorUI.users.kubeAPITLSServerName in the chart values instead")
 		}
 
-		return nil
-	}
+		deps.say(adoptInfo, "Ichor is Helm-managed, so adopt leaves ichor-ui as the chart has it; turn sign-in on with "+
+			"ichorUI.users.enabled=true and ichorUI.users.externalURL=%s", opts.UIURL)
 
-	st.openUI = deps.AllowUnauthenticated
-
-	if !opts.signInOn() {
 		return nil
 	}
 
@@ -98,6 +97,13 @@ func (st *adoptState) planSignIn(ctx context.Context, deps adoptDeps) error {
 		}
 
 		plan.users = !installer.ReadUISettings(ui, nil).UsersOn()
+	}
+
+	// The TLS and kubeconfig flags are applied by the users step; with users already on there is no such step,
+	// and a flag that changed nothing would read as done.
+	if !plan.users && opts.hasUIExtras() {
+		return errors.New("adopt: this Ichor's ichor-ui already has sign-in on, so adopt does not change it and cannot apply " +
+			"--ui-tls-* or --kube-api-*: leave them out")
 	}
 
 	a := st.cluster.Spec.Authentication

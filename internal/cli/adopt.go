@@ -57,7 +57,9 @@ var (
 	adoptAddMachines     []string
 	adoptUIURL           string
 	adoptAdminUser       string
-	adoptAllowUnauth     bool
+
+	adoptUITLSSecret, adoptUITLSCert, adoptUITLSKey  string
+	adoptKubeAPIServerURL, adoptKubeAPITLSServerName string
 )
 
 // adoptCmd implements `ichor adopt` (docs/design/architecture.md,
@@ -108,8 +110,11 @@ does: it creates the first administrator (its generated password is printed once
 at the end), switches ichor-ui to sign-in, and sets spec.authentication.ichor on
 the TalosCluster. That last step marks every control plane APIServerRestartRequired:
 kube-apiserver restarts on each control plane, one at a time, only when you run
-"ichor rollout config". The consent prompt names it. --allow-unauthenticated leaves
-ichor-ui with no sign-in instead (a Helm-managed Ichor is not touched either way).
+"ichor rollout config". The consent prompt names it. Sign-in cannot be turned off.
+--ui-tls-secret, --ui-tls-cert and --ui-tls-key serve ichor-ui over your own certificate,
+and --kube-api-server-url and --kube-api-tls-server-name set the Kubernetes API address in
+users' kubeconfigs, as in ichor init (a Helm-managed Ichor is not touched, and takes these
+as chart values).
 
 A cluster Ichor does not manage yet needs Talos v1.14 or later on its first
 control plane. adopt probes the version contract from that node (each minor from
@@ -142,6 +147,10 @@ adopt only reads the Talos nodes (using --talosconfig); it never applies
 configuration to them. Afterwards it advises a CA rotation, since adopted
 clusters keep the old CAs, but never starts one.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
+		if err := refuseRemovedOpenMode(cmd); err != nil {
+			return err
+		}
+
 		if err := validateOutputFormat(outputFormat); err != nil {
 			return err
 		}
@@ -237,7 +246,11 @@ clusters keep the old CAs, but never starts one.`,
 			UIURL:        adoptUIURL,
 			AdminUser:    adoptAdminUser,
 
-			AllowUnauthenticated: adoptAllowUnauth,
+			UITLSSecret:          adoptUITLSSecret,
+			UITLSCert:            adoptUITLSCert,
+			UITLSKey:             adoptUITLSKey,
+			KubeAPIServerURL:     adoptKubeAPIServerURL,
+			KubeAPITLSServerName: adoptKubeAPITLSServerName,
 			Seed:                 cmp.Or(adoptSeed, adoptRecoverFrom),
 			ContractOverride:     adoptContract,
 			AddMachines:          adoptAddMachines,
@@ -298,8 +311,15 @@ func init() {
 			"left out, the issuer is "+defaultUIURL+", where ichor ui reaches it")
 	adoptCmd.Flags().StringVar(&adoptAdminUser, "admin-user", "",
 		"name of the first administrator (default "+defaultAdminUser+"); its generated password is printed once to stderr and must be changed at the first sign-in")
-	adoptCmd.Flags().BoolVar(&adoptAllowUnauth, "allow-unauthenticated", false,
-		"leave ichor-ui with no sign-in: "+openUIReach+"; without it adopt turns Ichor's own sign-in on")
+	adoptCmd.Flags().StringVar(&adoptUITLSSecret, "ui-tls-secret", "",
+		"serve ichor-ui over TLS with this existing kubernetes.io/tls Secret in "+ichorControllerNamespace+" (chart: ichorUI.tls.secretName)")
+	adoptCmd.Flags().StringVar(&adoptUITLSCert, "ui-tls-cert", "", "PEM certificate file for ichor-ui's TLS; adopt stores it with --ui-tls-key as a Secret")
+	adoptCmd.Flags().StringVar(&adoptUITLSKey, "ui-tls-key", "", "with --ui-tls-cert: PEM private key file (never printed)")
+	adoptCmd.Flags().StringVar(&adoptKubeAPIServerURL, "kube-api-server-url", "",
+		"https URL of the Kubernetes API put in users' kubeconfigs (chart: ichorUI.users.kubeAPIServerURL)")
+	adoptCmd.Flags().StringVar(&adoptKubeAPITLSServerName, "kube-api-tls-server-name", "",
+		"tls-server-name in users' kubeconfigs (chart: ichorUI.users.kubeAPITLSServerName)")
+	bindRemovedOpenMode(adoptCmd.Flags())
 	adoptCmd.Flags().BoolVar(&adoptPlanOnly, "plan", false, "print the plan and write nothing")
 	adoptCmd.Flags().StringVar(&adoptSeed, adoptFlagNode, "",
 		"address of one control plane; adopt discovers the cluster's nodes from its membership when the TalosCluster does not exist yet")
@@ -330,7 +350,7 @@ const (
 
 var addMachineExcluded = []string{
 	adoptFlagNode, "cni-unmanaged", "tunnel", "cilium-values", "accept-cilium-changes", "accept-cilium-diff", "require-ichor", adoptFlagVersionContract,
-	"ui-url", "admin-user", "allow-unauthenticated",
+	"ui-url", "admin-user", "ui-tls-secret", "ui-tls-cert", "ui-tls-key", "kube-api-server-url", "kube-api-tls-server-name",
 }
 
 // checkAddMachineFlags refuses a flag that does not apply to --add-machine, instead of ignoring it.

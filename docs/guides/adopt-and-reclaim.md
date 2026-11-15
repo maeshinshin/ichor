@@ -291,11 +291,17 @@ attention list). Until then it keeps running as it is; with a single control
 plane the Kubernetes API is unavailable while it restarts. Choose the moment, and
 run it then.
 
-`--allow-unauthenticated` leaves ichor-ui with no sign-in instead, and adopt
-ends with a warning that says what that means: anyone who can reach ichor-ui can
-change the cluster with ichor-ui's permissions. It is the only way to adopt
-without creating an administrator and setting the authenticator, and it is
-refused together with `--ui-url` or `--admin-user`.
+Sign-in cannot be turned off: `--allow-unauthenticated` was removed and adopt refuses
+it, so every adoption of a cluster Ichor does not manage yet creates the administrator and
+sets the authenticator. That needs Talos v1.14 or later on the cluster; a cluster below it is
+refused, writing nothing, until Talos is upgraded.
+
+To reach ichor-ui at an https address of your own, adopt takes the flags `ichor init` has:
+`--ui-url`, `--ui-tls-secret` or `--ui-tls-cert` with `--ui-tls-key`, `--kube-api-server-url`
+and `--kube-api-tls-server-name` (see [Users and login](users-and-login.md)). They are checked
+before anything is written, and refused where adopt would not apply them: a Helm-managed Ichor
+(set the chart values `ichorUI.tls.secretName`, `ichorUI.users.kubeAPIServerURL` and
+`ichorUI.users.kubeAPITLSServerName`) and an ichor-ui that already has sign-in on.
 
 If adopt stops after creating the administrator, run it again: it sets what is
 still missing and creates no second administrator. A cluster adopted on a node

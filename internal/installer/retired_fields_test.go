@@ -19,6 +19,7 @@ package installer
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"testing"
 	"time"
@@ -126,6 +127,26 @@ func upgradeCRD(t *testing.T, old *unstructured.Unstructured, targetPath string)
 	}
 }
 
+// storedTalosCluster is a TalosCluster as the pre-retirement schema stores it: the required spec plus extra.
+func storedTalosCluster(name string, extra map[string]any) *unstructured.Unstructured {
+	spec := map[string]any{
+		kEndpoint:           map[string]any{kType: "vip", kAddress: "10.0.0.1"},
+		"talosVersion":      "v1.14.3",
+		"kubernetesVersion": "v1.36.0",
+		"versionContract":   "v1.14",
+		"secretsRef":        map[string]any{kName: "secrets"},
+		"controlPlane":      map[string]any{"count": int64(3), "schedulable": "true"},
+	}
+	maps.Copy(spec, extra)
+
+	return &unstructured.Unstructured{Object: map[string]any{
+		kAPIVersion: "ichor.maesh.dev/v1alpha1",
+		kKind:       "TalosCluster",
+		kMetadata:   map[string]any{kName: name, "namespace": kDefault},
+		kSpec:       spec,
+	}}
+}
+
 // A TalosCluster stored under the schema that still had spec.gitops (and spec.cni.handover) must
 // stay writable once the current CRD, which no longer has them, is installed: the
 // installer's CRD check allows the removal, the API server prunes the retired fields and no
@@ -135,29 +156,18 @@ func TestStoredTalosClusterWithRetiredFieldsSurvivesTheCRDUpgrade(t *testing.T) 
 	old := loadCRD(t, "testdata/talosclusters-before-retirement.yaml")
 	installOldCRD(t, old)
 
-	obj := &unstructured.Unstructured{Object: map[string]any{
-		kAPIVersion: "ichor.maesh.dev/v1alpha1",
-		kKind:       "TalosCluster",
-		kMetadata:   map[string]any{kName: "old", "namespace": "default"},
-		kSpec: map[string]any{
-			"endpoint":          map[string]any{kType: "vip", "address": "10.0.0.1"},
-			"talosVersion":      "v1.14.3",
-			"kubernetesVersion": "v1.36.0",
-			"versionContract":   "v1.14",
-			"secretsRef":        map[string]any{kName: "secrets"},
-			"controlPlane":      map[string]any{"count": int64(3), "schedulable": "true"},
-			"cni":               map[string]any{kHandover: "manual"},
-			kGitops: map[string]any{
-				"mode": "strict",
-				"repository": map[string]any{
-					"host": "github", "apiURL": "https://api.github.com", "owner": "acme", "repo": "infra",
-					"cloneURL":       "https://github.com/acme/infra.git",
-					"tokenSecretRef": map[string]any{kName: "git-token", "key": "pat"},
-					"machinesPath":   "machines",
-				},
+	obj := storedTalosCluster("old", map[string]any{
+		kCNI: map[string]any{kHandover: "manual"},
+		kGitops: map[string]any{
+			"mode": "strict",
+			"repository": map[string]any{
+				"host": "github", "apiURL": "https://api.github.com", "owner": "acme", "repo": "infra",
+				"cloneURL":       "https://github.com/acme/infra.git",
+				"tokenSecretRef": map[string]any{kName: "git-token", "key": "pat"},
+				"machinesPath":   "machines",
 			},
 		},
-	}}
+	})
 
 	createWhenEstablished(t, obj)
 
@@ -167,9 +177,9 @@ func TestStoredTalosClusterWithRetiredFieldsSurvivesTheCRDUpgrade(t *testing.T) 
 
 	upgradeCRD(t, old, "../../config/crd/bases/ichor.maesh.dev_talosclusters.yaml")
 
-	updateUntilPruned(t, types.NamespacedName{Namespace: "default", Name: "old"}, obj,
-		[]string{kSpec, "endpoint", "address"}, "10.0.0.2",
-		[][]string{{kSpec, kGitops}, {kSpec, "cni", kHandover}})
+	updateUntilPruned(t, types.NamespacedName{Namespace: kDefault, Name: "old"}, obj,
+		[]string{kSpec, kEndpoint, kAddress}, "10.0.0.2",
+		[][]string{{kSpec, kGitops}, {kSpec, kCNI, kHandover}})
 }
 
 // updateUntilPruned updates the stored object (setting path to a value that differs on every try)
@@ -255,4 +265,90 @@ func TestStoredIchorInstallationWithRetiredFieldsSurvivesTheCRDUpgrade(t *testin
 	updateUntilPruned(t, types.NamespacedName{Name: "ichor"}, obj,
 		[]string{kSpec, "version"}, "v0.2.0",
 		[][]string{{kSpec, "managementMode"}, {kSpec, kStack}, {"status", kStack}})
+}
+
+// ADR 0152, amended: spec.cni.custom.documents, the second copy of the document union, is retired. A
+// TalosCluster stored under the schema that still had it (preset custom is the only way to set
+// spec.cni.custom) is read without it as soon as the current CRD is installed, stays writable, and
+// keeps spec.cni.custom.source.
+func TestStoredTalosClusterWithCNICustomDocumentsSurvivesTheCRDUpgrade(t *testing.T) {
+	old := loadCRD(t, "testdata/talosclusters-before-retirement.yaml")
+	installOldCRD(t, old)
+
+	source := map[string]any{"repoURL": "https://example.com/charts", "chart": "my-cni", "targetRevision": "1.0.0"}
+	obj := storedTalosCluster("old-custom", map[string]any{
+		kCNI: map[string]any{
+			"preset": kCustom,
+			kCustom: map[string]any{
+				"source": source,
+				"documents": []any{map[string]any{
+					kKind:          "SysctlConfig",
+					"sysctlConfig": map[string]any{"params": map[string]any{"net.ipv4.ip_forward": "1"}},
+				}},
+			},
+		},
+	})
+
+	createWhenEstablished(t, obj)
+
+	if _, found, _ := unstructured.NestedSlice(obj.Object, kSpec, kCNI, kCustom, "documents"); !found {
+		t.Fatal("the old schema did not keep spec.cni.custom.documents")
+	}
+
+	upgradeCRD(t, old, "../../config/crd/bases/ichor.maesh.dev_talosclusters.yaml")
+
+	key := types.NamespacedName{Namespace: kDefault, Name: "old-custom"}
+	documents := []string{kSpec, kCNI, kCustom, "documents"}
+
+	// A read prunes too, before anything is written: the API server decodes what etcd holds through
+	// the current schema. The swap to the new schema is asynchronous, so poll for it.
+	deadline := time.Now().Add(30 * time.Second)
+
+	for {
+		if err := k8sClient.Get(context.Background(), key, obj); err != nil {
+			t.Fatal(err)
+		}
+
+		if _, found, _ := unstructured.NestedFieldNoCopy(obj.Object, documents...); !found {
+			break
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatal("spec.cni.custom.documents is still served: the retired field was not pruned on read")
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	updateUntilPruned(t, key, obj, []string{kSpec, kEndpoint, kAddress}, "10.0.0.2", [][]string{documents})
+
+	got, _, _ := unstructured.NestedMap(obj.Object, kSpec, kCNI, kCustom, "source")
+	if got["repoURL"] != source["repoURL"] {
+		t.Errorf("spec.cni.custom.source did not survive: %v", got)
+	}
+}
+
+// The current TalosCluster CRD keeps spec.cni.custom.source, which keeps the webhook's refusal readable, and has no
+// documents under custom: the field must not come back (ADR 0152, amended).
+func TestTalosClusterCRDHasNoCNICustomDocuments(t *testing.T) {
+	crd := loadCRD(t, "../../config/crd/bases/ichor.maesh.dev_talosclusters.yaml")
+
+	versions, _, _ := unstructured.NestedSlice(crd.Object, kSpec, "versions")
+	if len(versions) == 0 {
+		t.Fatal("the CRD has no versions")
+	}
+
+	custom, found, _ := unstructured.NestedMap(versions[0].(map[string]any), "schema", "openAPIV3Schema", kProperties,
+		kSpec, kProperties, kCNI, kProperties, kCustom, kProperties)
+	if !found {
+		t.Fatal("spec.cni.custom is gone from the CRD: the webhook's refusal message would be replaced by an unknown-field error")
+	}
+
+	if _, ok := custom["source"]; !ok {
+		t.Error("spec.cni.custom.source is gone from the CRD")
+	}
+
+	if _, ok := custom["documents"]; ok {
+		t.Error("spec.cni.custom.documents is back in the CRD: it was retired, see ADR 0152")
+	}
 }

@@ -234,8 +234,12 @@ namespace ichor-system · discovering from 10.0.0.11
 ✓ Create resources — 5 created, 0 unchanged
 ✓ Cilium hand-over — Helm release owned by Ichor
 ✓ Release holds — 2 released
+✓ Ichor users — users are on in ichor-ui (issuer https://localhost:8443); first admin "admin" created
+✓ Authentication — spec.authentication.ichor is set
 Done in 4m12s
 ! the Talos and Kubernetes client certificates of the previous administrators, and the CA keys held by whoever created this cluster, remain valid; consider `ichor rotate ca`
+! spec.authentication.ichor is set; the controller renders the kube-apiserver authentication config next. Applying it restarts kube-apiserver on each control plane, so nodes report APIServerRestartRequired until you run `ichor rollout config` (or Apply in the Overview page's attention list), which rolls one control plane at a time
+Password for admin (shown once, stored nowhere; they must change it at the first sign-in): ...
 
 Next
   ichor get cluster prod
@@ -256,12 +260,48 @@ as they were (the reminder is a `!` line). Then it works in phases:
    `--cni-unmanaged`.
 3. Releases the hold machine by machine, control planes first, each only after
    a live zero-drift check. The controller applies the first render.
+4. Turns sign-in on (see "Sign-in" below), once every hold is released: the
+   first administrator, the switch of ichor-ui, then `spec.authentication.ichor`
+   on the `TalosCluster`.
 
 Only approved machines are read. A pending one is skipped with a message;
 approve it and run adopt again.
 
 If adopt stops half-way, run it again. The writes are idempotent. A run where
 every machine already matches a fresh render says so and exits.
+
+### Sign-in
+
+Sign-in is on by default in adopt, as it is in `ichor init`. In the Ichor that
+adopt installs, it creates the first administrator (`--admin-user`, default
+`admin`), switches ichor-ui to sign-in with the issuer `--ui-url` (default
+`https://localhost:8443`, where `ichor ui` serves ichor-ui), and sets
+`spec.authentication.ichor` on the `TalosCluster`. It does this after the plan
+and the releases, so the zero-drift first render goes out first and the
+authenticator comes after it. The generated password is printed once, as the
+last thing adopt prints before `Next`, and must be changed at the first sign-in.
+If adopt stops before it can print it, adopt prints it then.
+
+The consent prompt names the cost. Setting `spec.authentication.ichor` adds an
+authenticator to every control plane's `KubeAuthenticationConfig`, so each
+control plane reports `Ready=False APIServerRestartRequired`. That is a change
+to your cluster's kube-apiserver: it restarts on each control plane, one at a
+time, only when you run `ichor rollout config` (or Apply in the Overview page's
+attention list). Until then it keeps running as it is; with a single control
+plane the Kubernetes API is unavailable while it restarts. Choose the moment, and
+run it then.
+
+`--allow-unauthenticated` leaves ichor-ui with no sign-in instead, and adopt
+ends with a warning that says what that means: anyone who can reach ichor-ui can
+change the cluster with ichor-ui's permissions. It is the only way to adopt
+without creating an administrator and setting the authenticator, and it is
+refused together with `--ui-url` or `--admin-user`.
+
+If adopt stops after creating the administrator, run it again: it sets what is
+still missing and creates no second administrator. A cluster adopted on a node
+that has its own jwt authenticator is refused (move the identity provider into
+`spec.authentication.external` first); the issuer Ichor itself set is not
+counted as foreign when you adopt again or add a machine.
 
 ### When Ichor was installed with Helm
 
@@ -275,6 +315,9 @@ touching it".
 - Adopt does not apply Ichor's Cilium network policies on a Helm install. If
   they apply to your cluster it tells you to set
   `networkPolicy.cilium.enabled=true` and run `helm upgrade`.
+- Adopt leaves ichor-ui as the chart has it and does not turn sign-in on; set
+  `ichorUI.users.enabled=true` and `ichorUI.users.externalURL` in the chart's
+  values (adopt says so in the plan).
 - `--require-ichor` makes adopt fail when Ichor is not installed, instead of
   installing it.
 
@@ -291,13 +334,15 @@ valid. Consider `ichor rotate ca`. Nothing starts a rotation for you.
 
 Adopt reads Kubernetes and the nodes, and writes only Ichor's own objects (the
 `TalosCluster`, `TalosMachine`s, patches, the bundle Secret, and Ichor itself in
-`ichor-system`). It does not touch your namespaces, Deployments, Services or
+`ichor-system`, with its first administrator). It does not touch your namespaces, Deployments, Services or
 storage, and it installs no GitOps tool, storage or monitoring. What
 can still move your pods:
 
 - The Cilium takeover (managed mode only): the Cilium pods are restarted on every
   node when the rendered chart differs from what runs. The plan announces it and
   the diff gate shows what changes. `--cni-unmanaged` skips it.
+- Sign-in marks every control plane `APIServerRestartRequired`; kube-apiserver
+  restarts only when you run `ichor rollout config` (see "Sign-in" above).
 - The first apply on each machine, after the hold is released, only happens when
   the live configuration already equals what Ichor renders (zero drift), so it
   changes nothing. Any later change is yours, through a patch or an operation.

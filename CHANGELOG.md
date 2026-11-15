@@ -4,7 +4,7 @@
 
 The command line is verb first, which breaks every script that calls it, and a
 `TalosConfigPatch` can carry all 65 Talos document kinds Ichor accepts, up from
-7. `ichor init` now turns sign-in on unless told not to, `ichor adopt` takes
+7. `ichor init` and `ichor adopt` now turn sign-in on unless told not to, `ichor adopt` takes
 Talos v1.14 or later only, and an endpoint is `vip` or `node`: a load
 balancer's name or address goes in `node`. The Talos, Kubernetes and Cilium
 versions a first install gets are the same as in v0.2.4. The CRDs gain the 58
@@ -31,6 +31,11 @@ command does. Each item is described where it is listed below.
   `machine.registries.config.<host>.tls.clientIdentity` or
   `cluster.extraManifestHeaders`** loses the field when the API server prunes it
   (Typed configuration).
+- **`ichor adopt` now turns sign-in on**, as `ichor init` does: it creates the
+  first admin, prints its password once, and sets `spec.authentication.ichor`,
+  which marks every control plane `APIServerRestartRequired`. kube-apiserver
+  restarts on each control plane only when you run `ichor rollout config`; the
+  consent prompt says so. `--allow-unauthenticated` adopts without it (Adopt).
 - **`ichor adopt` refuses a cluster below Talos v1.14**, and refuses a
   `--namespace` that is not the namespace the controller runs in, before it
   writes anything (Adopt).
@@ -218,6 +223,22 @@ command does. Each item is described where it is listed below.
 
 ### Adopt
 
+- **`ichor adopt` turns Ichor's sign-in on by default.** After the plan is
+  written and every hold is released, in the Ichor it installs, adopt creates the
+  first admin (`--admin-user`, default `admin`), switches ichor-ui to sign-in at
+  `--ui-url` (default `https://localhost:8443`) and sets
+  `spec.authentication.ichor` on the `TalosCluster`, with the same code as
+  `ichor init`. The authenticator marks each control plane
+  `APIServerRestartRequired`; kube-apiserver restarts on each control plane, one
+  at a time, when you run `ichor rollout config`, and not before. The consent
+  prompt names this before anything is written. The generated password is
+  printed once, last before the next steps. `--allow-unauthenticated` leaves
+  ichor-ui with no sign-in, and adopt then prints the same warning as init. Before
+  this, adopt installed ichor-ui open and printed no warning. A Helm-managed Ichor
+  is not touched.
+- **A second `ichor adopt` or `--add-machine` is no longer refused for Ichor's
+  own issuer.** The refusal of a node's jwt authenticators now counts only the
+  issuers the cluster's own render does not have.
 - **`ichor adopt` takes Talos v1.14 and later.** A version contract below v1.14,
   named with `--version-contract` or chosen by the probe, is refused in the plan
   phase, before anything is written, with the instruction to upgrade Talos.

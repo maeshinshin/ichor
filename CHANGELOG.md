@@ -198,13 +198,14 @@ node's network for it.
   per plugin (`CRIBaseRuntimeSpecConfig`, `CRICustomizationConfig` and
   `KubeAdmissionControlConfig`); Pod Security exemptions and versions go in
   `spec.security.podSecurity`.
-- `KubeStaticPodConfig` carries its pod whole, as the Kubernetes `PodSpec`: a
-  static pod needs a security context, host networking, host paths and
-  capabilities, so a subset would not do what the kind is for. The schema is
-  large (about 300 KB of compact JSON in each of the two CRDs that embed the
-  union), so `make install` and `make deploy` apply the CRDs server-side.
-  Client-side apply keeps the whole object in its last-applied annotation,
-  which is limited to 262,144 bytes.
+- `KubeStaticPodConfig` carries its pod as a Kubernetes `Pod` object: the
+  `apiVersion`, `kind`, `metadata` and `spec` of the document, without the
+  `status` the kubelet reports. A static pod needs a security context, host
+  networking, host paths and capabilities, so its spec is carried whole. The
+  schema is large (about 300 KB of compact JSON in each of the two CRDs that
+  embed the union), so `make install` and `make deploy` apply the CRDs
+  server-side. Client-side apply keeps the whole object in its last-applied
+  annotation, which is limited to 262,144 bytes.
 - `KubeletConfig`, `KubeProxyConfig` and `KubeSchedulerConfig` carry a subset
   of the upstream configuration: the fields an operator is documented to set on
   a Talos node. The upstream types contain floating point numbers, a quantity

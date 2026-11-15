@@ -127,7 +127,7 @@ computes from the Kubernetes API directly.
 ```sh
 kubectl --context $C -n ichor-e2e port-forward svc/$P-registry 5000:5000 &   # only ever this service
 PF=$!   # the port-forward's PID, to stop it below
-V=v0.0.$(date +%s)-$(git rev-parse --short HEAD)   # always newer than the installed one
+V=v0.0.$(date +%s)-g$(git rev-parse --short HEAD)   # always newer than the installed one
 make demo-images VERSION=$V REGISTRY=localhost:5000 DIGEST_FILE=bin/demo-digests.txt
 kill $PF   # stop the port-forward once the images are pushed
 D=$(sed -n 's/.*ichor-installer@//p' bin/demo-digests.txt)   # the installer image's digest

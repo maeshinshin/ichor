@@ -6,6 +6,7 @@ const (
 	resClusters = "talosclusters"
 	verbList    = "list"
 	verbWatch   = "watch"
+	verbDelete  = "delete"
 )
 
 const autoPatchConfigDir = "../../config/rbac/ichor-auto-patch/"

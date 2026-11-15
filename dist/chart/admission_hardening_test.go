@@ -47,7 +47,7 @@ func TestLeaderElectionRoleIsLeasesOnly(t *testing.T) {
 
 	for label, role := range map[string]map[string]any{labelChart: chartRole, labelConfig: cfgRole} {
 		got := rbacTriples(allRules(role))
-		if !got[rbacTriple{"coordination.k8s.io", "leases", "create", ""}] {
+		if !got[rbacTriple{"coordination.k8s.io", "leases", verbCreateController, ""}] {
 			t.Errorf("%s: the leader-election Role cannot create leases", label)
 		}
 
@@ -625,7 +625,7 @@ func TestControllerJobsPolicyMirrorsConfig(t *testing.T) {
 // grant no delete on pods (it evicts to drain); the one direct delete, the stale agent pod of an etcd
 // restore, is a Role in kube-system, in config/rbac and in the chart.
 func TestControllerDeletesPodsOnlyInKubeSystem(t *testing.T) {
-	deletePods := rbacTriple{"", "pods", "delete", ""}
+	deletePods := rbacTriple{"", "pods", verbDelete, ""}
 
 	chartDocs := renderChart(t, "ichor")
 	cfgDocs := loadYAMLDocs(t, "../../config/rbac/pod_restart_role.yaml")

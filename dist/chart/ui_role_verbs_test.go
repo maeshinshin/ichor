@@ -43,13 +43,13 @@ func TestUIRoleOpenModeVerbs(t *testing.T) {
 
 	// RemoveMachine is the only delete of a TalosMachine and asks for the override verb, which the
 	// ServiceAccount does not hold, so no mode reaches it as the ServiceAccount.
-	if slices.Contains(got["talosmachines"], "delete") {
+	if slices.Contains(got["talosmachines"], verbDelete) {
 		t.Errorf("ichor-ui-role holds delete on talosmachines: %v", got["talosmachines"])
 	}
 
 	for res, verbs := range map[string][]string{
-		"talosoperations": {"create", "delete"},
-		"talosmachines":   {"update"},
+		"talosoperations": {verbCreateController, verbDelete},
+		"talosmachines":   {verbUpdate},
 	} {
 		for _, v := range verbs {
 			if !slices.Contains(got[res], v) {

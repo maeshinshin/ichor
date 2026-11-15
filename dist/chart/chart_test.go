@@ -1491,7 +1491,7 @@ func TestInstallerRBAC(t *testing.T) {
 		checkInstallerCoversEveryCRD(t, find(configDocs, kindClusterRole, "installer-role"))
 
 		// Snapshot garbage collection (non-fatal in the installer, but it should work).
-		if !rbacTriples(allRules(role))[rbacTriple{"", "configmaps", "delete", ""}] {
+		if !rbacTriples(allRules(role))[rbacTriple{"", "configmaps", verbDelete, ""}] {
 			t.Errorf("the installer Role cannot delete configmaps, so snapshot GC fails")
 		}
 
@@ -1526,7 +1526,7 @@ func TestControllerRBACHoldsNoEscalation(t *testing.T) {
 			// impersonate right it does not hold. Only the exact name qualifies.
 			managed := triple.group == "rbac.authorization.k8s.io" && triple.resource == resClusterRoles &&
 				triple.names == "ichor-ui-impersonate"
-			if managed && (triple.verb == "escalate" || triple.verb == verbGetController || triple.verb == "update") {
+			if managed && (triple.verb == "escalate" || triple.verb == verbGetController || triple.verb == verbUpdate) {
 				continue
 			}
 

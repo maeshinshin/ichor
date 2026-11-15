@@ -145,22 +145,13 @@ message PatchTarget {
   string machine_ref = 3;
 }
 
-// PatchDocument mirrors TalosConfigPatchDocument.
-// document is deliberately opaque JSON, not one typed field per Talos
-// mirror type: modeling every typed-config field a third time (Go mirror
-// type, CRD schema, now protobuf) would be exactly the parallel catalogue
-// the generator exists to avoid. The shape for a given kind is the
-// CRD's own generated OpenAPI schema (config/crd/bases/
-// ichor.maesh.dev_talosconfigpatches.yaml), which a schema-driven form
-// renders directly -- no second RPC needed to serve it.
+// PatchDocument mirrors the TalosConfigPatchDocument that TalosConfigPatch no
+// longer has. Deprecated: the wire carries spec.config (Patch.config). Never set;
+// kept so the wire format is unchanged.
 message PatchDocument {
-  // kind selects which allow-listed Talos document this is: SysctlConfig,
-  // KernelModuleConfig, Config, VolumeConfig, UserVolumeConfig or
-  // RawVolumeConfig.
+  // kind selects which allow-listed Talos document this is.
   string kind = 1;
-  // document is kind's own fields, JSON-encoded exactly as
-  // TalosConfigPatchDocument's matching Go field would unmarshal it (e.g.
-  // {"params":{"net.core.somaxconn":"1024"}} for a SysctlConfig).
+  // document is kind's own fields, JSON-encoded.
   string document = 2;
 }
 
@@ -175,7 +166,16 @@ message Patch {
   // target is required for every layer but "cluster" (TalosConfigPatchSpec's
   // own CEL rule).
   PatchTarget target = 5;
-  repeated PatchDocument documents = 6;
+  // Deprecated: the wire carries spec.config (config). Never set; kept so the wire format is unchanged.
+  // A request that sets it is refused, naming config.
+  repeated PatchDocument documents = 6 [deprecated = true];
   // created_at is the object's creation time; unset when talking to an older backend.
   google.protobuf.Timestamp created_at = 7;
+  // config is the patch's spec.config, JSON-encoded as the CRD stores it: one object, a setting once, at its
+  // path there ({"machine":{"sysctls":{"net.core.somaxconn":"1024"}}}). The schema is the CRD's own
+  // (config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml), which the UI's field search indexes by path.
+  // A patch that sets nothing is "{}"; a write that leaves it out is refused rather than read as that, so a
+  // client that does not know config cannot clear a patch by saving it. A setting spec.config does not carry is
+  // refused by name, never dropped.
+  string config = 8;
 }

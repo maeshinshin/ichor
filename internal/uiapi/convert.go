@@ -18,15 +18,19 @@ package uiapi
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"reflect"
 
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	sigsjson "sigs.k8s.io/json"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/ichorconfig"
 )
 
 // objectRef builds the wire ObjectRef every message that names a
@@ -262,80 +266,44 @@ func targetToPB(t *ichorv1alpha1.TalosConfigPatchTarget) *pb.PatchTarget {
 	return out
 }
 
-// documentFromPB decodes a wire PatchDocument's opaque JSON into the typed
-// TalosConfigPatchDocument the CRD actually stores, by wrapping it under
-// its own kind's JSON key and letting encoding/json -- not a hand-written
-// field table -- fill the matching struct field.
-func documentFromPB(d *pb.PatchDocument) (ichorv1alpha1.TalosConfigPatchDocument, error) {
-	key, ok := ichorv1alpha1.TalosConfigPatchDocumentFieldKey(d.GetKind())
-	if !ok {
-		return ichorv1alpha1.TalosConfigPatchDocument{}, fmt.Errorf("unknown document kind %q", d.GetKind())
+// configToPB is spec.config as the wire carries it: its JSON, "{}" when the patch sets nothing.
+func configToPB(c *ichorconfig.Config) (string, error) {
+	if c == nil {
+		return "{}", nil
 	}
 
-	raw := json.RawMessage(d.GetDocument())
-	if len(raw) == 0 {
-		raw = json.RawMessage("{}")
-	}
+	raw, err := json.Marshal(c)
 
-	wrapped, err := json.Marshal(map[string]any{"kind": d.GetKind(), key: raw})
-	if err != nil {
-		return ichorv1alpha1.TalosConfigPatchDocument{}, err
-	}
-
-	var doc ichorv1alpha1.TalosConfigPatchDocument
-	if err := json.Unmarshal(wrapped, &doc); err != nil {
-		return ichorv1alpha1.TalosConfigPatchDocument{}, fmt.Errorf("decoding %s document: %w", d.GetKind(), err)
-	}
-
-	return doc, nil
+	return string(raw), err
 }
 
-// documentToPB is documentFromPB's inverse: it re-encodes the one typed
-// field kind populates back to plain JSON, so the wire document carries
-// only that field's own shape, not the whole TalosConfigPatchDocument
-// envelope (the other five fields, always nil here, would otherwise
-// round-trip as explicit nulls).
-func documentToPB(d ichorv1alpha1.TalosConfigPatchDocument) (*pb.PatchDocument, error) {
-	key, ok := ichorv1alpha1.TalosConfigPatchDocumentFieldKey(d.Kind)
-	if !ok {
-		return nil, fmt.Errorf("unknown document kind %q", d.Kind)
-	}
+// configFromPB decodes the wire's spec.config strictly: a setting the schema does not carry is refused,
+// naming its path, never dropped (the API server would prune it without a word). An empty object is no config.
+func configFromPB(raw string) (*ichorconfig.Config, error) {
+	var c ichorconfig.Config
 
-	full, err := json.Marshal(d)
+	unknown, err := sigsjson.UnmarshalStrict([]byte(raw), &c)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("config is not a spec.config object: %w", err)
 	}
 
-	var generic map[string]json.RawMessage
-	if err := json.Unmarshal(full, &generic); err != nil {
-		return nil, err
+	if len(unknown) > 0 {
+		return nil, fmt.Errorf("spec.config does not carry %w: Ichor's schema writes each setting once, at the path the field search shows", errors.Join(unknown...))
 	}
 
-	fieldRaw, ok := generic[key]
-	if !ok {
-		fieldRaw = json.RawMessage("{}")
+	if reflect.DeepEqual(c, ichorconfig.Config{}) {
+		return nil, nil
 	}
 
-	return &pb.PatchDocument{Kind: d.Kind, Document: string(fieldRaw)}, nil
+	return &c, nil
 }
 
 // patchToPB converts a TalosConfigPatch to the wire Patch message
 // PatchService's read methods return.
 func patchToPB(p *ichorv1alpha1.TalosConfigPatch) (*pb.Patch, error) {
-	// The wire carries the Talos documents spec.config converts to: the editor works in documents.
-	effective, err := p.Spec.EffectiveDocuments(true)
+	config, err := configToPB(p.Spec.Config)
 	if err != nil {
 		return nil, fmt.Errorf("patch %q: %w", p.Name, err)
-	}
-
-	docs := make([]*pb.PatchDocument, 0, len(effective))
-	for _, d := range effective {
-		pd, err := documentToPB(d)
-		if err != nil {
-			return nil, fmt.Errorf("patch %q: %w", p.Name, err)
-		}
-
-		docs = append(docs, pd)
 	}
 
 	return &pb.Patch{
@@ -344,7 +312,7 @@ func patchToPB(p *ichorv1alpha1.TalosConfigPatch) (*pb.Patch, error) {
 		Layer:     configLayerToPB(p.Spec.Layer),
 		Priority:  p.Spec.Priority,
 		Target:    targetToPB(p.Spec.Target),
-		Documents: docs,
+		Config:    config,
 		CreatedAt: createdAtToPB(p.CreationTimestamp),
 	}, nil
 }
@@ -361,30 +329,22 @@ func applyPatchSpec(spec *ichorv1alpha1.TalosConfigPatchSpec, p *pb.Patch) error
 		return fmt.Errorf("layer is required and must be cluster, role, selector or machine")
 	}
 
-	docs := make([]ichorv1alpha1.TalosConfigPatchDocument, 0, len(p.GetDocuments()))
-	for _, d := range p.GetDocuments() {
-		doc, err := documentFromPB(d)
-		if err != nil {
-			return err
-		}
+	// An older client writes documents, or no config at all: refuse it rather than read its save as an empty patch.
+	if len(p.GetDocuments()) > 0 || p.GetConfig() == "" { //nolint:staticcheck // the deprecated field is read to refuse it
+		return fmt.Errorf("config is required, the patch's spec.config as JSON ({} for none): this client sends documents, " +
+			"which the API no longer takes; reload the page or update the CLI")
+	}
 
-		docs = append(docs, doc)
+	config, err := configFromPB(p.GetConfig())
+	if err != nil {
+		return err
 	}
 
 	spec.ClusterRef = corev1.LocalObjectReference{Name: p.GetCluster().GetName()}
 	spec.Layer = layer
 	spec.Priority = p.GetPriority()
 	spec.Target = targetFromPB(p.GetTarget())
-	spec.Config = nil
-
-	if len(docs) > 0 {
-		cfg, err := ichorv1alpha1.ConfigFromDocuments(docs)
-		if err != nil {
-			return err
-		}
-
-		spec.Config = cfg
-	}
+	spec.Config = config
 
 	return nil
 }

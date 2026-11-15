@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 
 	"connectrpc.com/connect"
 	. "github.com/onsi/ginkgo/v2"
@@ -31,11 +32,11 @@ import (
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
 )
 
-var _ = Describe("PatchService with the documents the UI's field search builds", func() {
-	// The UI's tests (ui/src/lib/fieldSearch.test.ts) build the documents from the settings chosen in the search
-	// and show each setting at its path in the expected spec.config; this reads the same file and sends the
-	// documents to the API server, whose conversion has to store that spec.config. The wire carries documents.
-	It("stores the spec.config of each fixture and returns its documents unchanged", func() {
+var _ = Describe("PatchService with the config the UI's field search builds", func() {
+	// The UI's tests (ui/src/lib/fieldSearch.test.ts) build a spec.config from the settings chosen in the search,
+	// two documents of one kind among them; this reads the same file and sends each config over the wire to the API
+	// server, then has the controller's conversion turn what is stored into the Talos documents.
+	It("stores the spec.config of each fixture, returns it unchanged, and converts it to the documents the fixture lists", func() {
 		raw, err := os.ReadFile("../../ui/src/lib/fieldSearch.fixtures.json")
 		Expect(err).NotTo(HaveOccurred())
 
@@ -47,7 +48,7 @@ var _ = Describe("PatchService with the documents the UI's field search builds",
 			Config json.RawMessage `json:"config"`
 		}
 		Expect(json.Unmarshal(raw, &cases)).To(Succeed())
-		Expect(len(cases)).To(BeNumerically(">=", 3))
+		Expect(len(cases)).To(BeNumerically(">=", 5))
 
 		cluster := newTestCluster("does-not-exist")
 		s := &Server{Client: k8sClient}
@@ -55,16 +56,11 @@ var _ = Describe("PatchService with the documents the UI's field search builds",
 		for i, c := range cases {
 			name := fmt.Sprintf("fieldsearch-%d", i)
 
-			var docs []*pb.PatchDocument
-			for _, d := range c.Documents {
-				docs = append(docs, &pb.PatchDocument{Kind: d.Kind, Document: string(d.Document)})
-			}
-
 			_, err := s.CreatePatch(ctx, connect.NewRequest(&pb.CreatePatchRequest{Patch: &pb.Patch{
-				Ref:       objectRef(testNamespace, name),
-				Cluster:   objectRef(testNamespace, cluster.Name),
-				Layer:     pb.ConfigLayer_CONFIG_LAYER_CLUSTER,
-				Documents: docs,
+				Ref:     objectRef(testNamespace, name),
+				Cluster: objectRef(testNamespace, cluster.Name),
+				Layer:   pb.ConfigLayer_CONFIG_LAYER_CLUSTER,
+				Config:  string(c.Config),
 			}}))
 			Expect(err).NotTo(HaveOccurred(), name)
 
@@ -79,18 +75,41 @@ var _ = Describe("PatchService with the documents the UI's field search builds",
 
 			got, err := s.GetPatch(ctx, connect.NewRequest(&pb.GetPatchRequest{Patch: objectRef(testNamespace, name)}))
 			Expect(err).NotTo(HaveOccurred())
-			Expect(got.Msg.GetPatch().GetDocuments()).To(HaveLen(len(c.Documents)), name)
+			Expect(got.Msg.GetPatch().GetConfig()).To(MatchJSON(c.Config), name)
 
-			// The documents come back as the editor sent them, whatever the order spec.config converts them in.
-			back := map[string]string{}
-			for _, d := range got.Msg.GetPatch().GetDocuments() {
-				back[d.GetKind()] = d.GetDocument()
-			}
+			// The controller applies what spec.config converts to: a document for each entry of a collection.
+			docs, err := stored.Spec.EffectiveDocuments(true)
+			Expect(err).NotTo(HaveOccurred(), name)
+			Expect(docs).To(HaveLen(len(c.Documents)), name)
 
-			for _, d := range c.Documents {
-				Expect(back).To(HaveKey(d.Kind), name)
-				Expect(back[d.Kind]).To(MatchJSON(d.Document), d.Kind)
+			for _, want := range c.Documents {
+				var found bool
+
+				for _, d := range docs {
+					key, _ := ichorv1alpha1.TalosConfigPatchDocumentFieldKey(d.Kind)
+					full, err := json.Marshal(d)
+					Expect(err).NotTo(HaveOccurred())
+
+					var generic map[string]json.RawMessage
+					Expect(json.Unmarshal(full, &generic)).To(Succeed())
+
+					if d.Kind == want.Kind && jsonEqual(generic[key], want.Document) {
+						found = true
+					}
+				}
+
+				Expect(found).To(BeTrue(), "%s: no %s document %s", name, want.Kind, want.Document)
 			}
 		}
 	})
 })
+
+// jsonEqual compares two JSON texts by value.
+func jsonEqual(a, b []byte) bool {
+	var x, y any
+	if json.Unmarshal(a, &x) != nil || json.Unmarshal(b, &y) != nil {
+		return false
+	}
+
+	return reflect.DeepEqual(x, y)
+}

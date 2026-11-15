@@ -17,35 +17,28 @@ limitations under the License.
 package uiapi
 
 import (
-	"encoding/json"
-
 	"connectrpc.com/connect"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	pb "github.com/maeshinshin/ichor/gen/go/ichor/v1alpha1"
-	"github.com/maeshinshin/ichor/pkg/typedconfig"
 )
 
-// sysctlPatchWire builds a CreatePatchRequest.patch for a single SysctlConfig
-// document -- the simplest of the six allowed kinds (patch.proto's own doc
-// comment on PatchDocument), opaque JSON on the wire, matching exactly what
-// TalosConfigPatchDocument.SysctlConfig would unmarshal.
+// sysctlPatchWire builds a CreatePatchRequest.patch that sets one sysctl: its config is spec.config as JSON,
+// the setting at its path there.
 func sysctlPatchWire(name, clusterName string) *pb.Patch {
 	return &pb.Patch{
 		Ref:      objectRef(testNamespace, name),
 		Cluster:  objectRef(testNamespace, clusterName),
 		Layer:    pb.ConfigLayer_CONFIG_LAYER_CLUSTER,
 		Priority: 0,
-		Documents: []*pb.PatchDocument{
-			{Kind: "SysctlConfig", Document: `{"params":{"net.core.somaxconn":"1024"}}`},
-		},
+		Config:   `{"machine":{"sysctls":{"net.core.somaxconn":"1024"}}}`,
 	}
 }
 
 var _ = Describe("PatchService", func() {
 	Describe("CreatePatch, GetPatch, ListPatches, DeletePatch", func() {
-		It("round-trips layer, cluster, documents and the generated name through the wire", func() {
+		It("round-trips layer, cluster, config and the generated name through the wire", func() {
 			cluster := newTestCluster("does-not-exist")
 
 			s := &Server{Client: k8sClient}
@@ -63,9 +56,7 @@ var _ = Describe("PatchService", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(got.Msg.GetPatch().GetLayer()).To(Equal(pb.ConfigLayer_CONFIG_LAYER_CLUSTER))
 			Expect(got.Msg.GetPatch().GetCluster().GetName()).To(Equal(cluster.Name))
-			Expect(got.Msg.GetPatch().GetDocuments()).To(HaveLen(1))
-			Expect(got.Msg.GetPatch().GetDocuments()[0].GetKind()).To(Equal("SysctlConfig"))
-			Expect(got.Msg.GetPatch().GetDocuments()[0].GetDocument()).To(ContainSubstring("net.core.somaxconn"))
+			Expect(got.Msg.GetPatch().GetConfig()).To(MatchJSON(`{"machine":{"sysctls":{"net.core.somaxconn":"1024"}}}`))
 
 			list, err := s.ListPatches(ctx, connect.NewRequest(&pb.ListPatchesRequest{
 				Cluster: objectRef(cluster.Namespace, cluster.Name),
@@ -103,7 +94,7 @@ var _ = Describe("PatchService", func() {
 
 			updated := sysctlPatchWire("patch-update-1", cluster.Name)
 			updated.Priority = 5
-			updated.Documents[0].Document = `{"params":{"net.core.somaxconn":"2048"}}`
+			updated.Config = `{"machine":{"sysctls":{"net.core.somaxconn":"2048"}}}`
 
 			resp, err := s.UpdatePatch(ctx, connect.NewRequest(&pb.UpdatePatchRequest{Patch: updated}))
 			Expect(err).NotTo(HaveOccurred())
@@ -114,7 +105,7 @@ var _ = Describe("PatchService", func() {
 				Patch: objectRef(testNamespace, "patch-update-1"),
 			}))
 			Expect(err).NotTo(HaveOccurred())
-			Expect(got.Msg.GetPatch().GetDocuments()[0].GetDocument()).To(ContainSubstring("2048"))
+			Expect(got.Msg.GetPatch().GetConfig()).To(ContainSubstring("2048"))
 		})
 	})
 
@@ -215,25 +206,11 @@ var _ = Describe("PatchService", func() {
 		It("reports install-time-only fields separately from reboot-required", func() {
 			cluster := newTestCluster("does-not-exist")
 
-			cfg := &typedconfig.Config{
-				ConfigVersion: "v1alpha1",
-				MachineConfig: &typedconfig.MachineConfig{
-					MachineType: roleWorker, MachineCertSANs: []string{"10.0.0.10"},
-					MachineInstall: &typedconfig.InstallConfig{InstallDisk: "/dev/sda"},
-				},
-				ClusterConfig: &typedconfig.ClusterConfig{},
-			}
-
-			raw, err := json.Marshal(cfg)
-			Expect(err).NotTo(HaveOccurred())
-
 			wire := &pb.Patch{
 				Ref:     objectRef(testNamespace, "unused"),
 				Cluster: objectRef(testNamespace, cluster.Name),
 				Layer:   pb.ConfigLayer_CONFIG_LAYER_CLUSTER,
-				Documents: []*pb.PatchDocument{
-					{Kind: kindConfig, Document: string(raw)},
-				},
+				Config:  `{"machine":{"type":"worker","certSANs":["10.0.0.10"],"install":{"disk":"/dev/sda"}}}`,
 			}
 
 			s := &Server{Client: k8sClient}

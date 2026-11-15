@@ -867,23 +867,14 @@ func (x *PatchTarget) GetMachineRef() string {
 	return ""
 }
 
-// PatchDocument mirrors TalosConfigPatchDocument.
-// document is deliberately opaque JSON, not one typed field per Talos
-// mirror type: modeling every typed-config field a third time (Go mirror
-// type, CRD schema, now protobuf) would be exactly the parallel catalogue
-// the generator exists to avoid. The shape for a given kind is the
-// CRD's own generated OpenAPI schema (config/crd/bases/
-// ichor.maesh.dev_talosconfigpatches.yaml), which a schema-driven form
-// renders directly -- no second RPC needed to serve it.
+// PatchDocument mirrors the TalosConfigPatchDocument that TalosConfigPatch no
+// longer has. Deprecated: the wire carries spec.config (Patch.config). Never set;
+// kept so the wire format is unchanged.
 type PatchDocument struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// kind selects which allow-listed Talos document this is: SysctlConfig,
-	// KernelModuleConfig, Config, VolumeConfig, UserVolumeConfig or
-	// RawVolumeConfig.
+	// kind selects which allow-listed Talos document this is.
 	Kind string `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
-	// document is kind's own fields, JSON-encoded exactly as
-	// TalosConfigPatchDocument's matching Go field would unmarshal it (e.g.
-	// {"params":{"net.core.somaxconn":"1024"}} for a SysctlConfig).
+	// document is kind's own fields, JSON-encoded.
 	Document      string `protobuf:"bytes,2,opt,name=document,proto3" json:"document,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -944,10 +935,21 @@ type Patch struct {
 	Priority int32       `protobuf:"varint,4,opt,name=priority,proto3" json:"priority,omitempty"`
 	// target is required for every layer but "cluster" (TalosConfigPatchSpec's
 	// own CEL rule).
-	Target    *PatchTarget     `protobuf:"bytes,5,opt,name=target,proto3" json:"target,omitempty"`
+	Target *PatchTarget `protobuf:"bytes,5,opt,name=target,proto3" json:"target,omitempty"`
+	// Deprecated: the wire carries spec.config (config). Never set; kept so the wire format is unchanged.
+	// A request that sets it is refused, naming config.
+	//
+	// Deprecated: Marked as deprecated in ichor/v1alpha1/patch.proto.
 	Documents []*PatchDocument `protobuf:"bytes,6,rep,name=documents,proto3" json:"documents,omitempty"`
 	// created_at is the object's creation time; unset when talking to an older backend.
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	CreatedAt *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// config is the patch's spec.config, JSON-encoded as the CRD stores it: one object, a setting once, at its
+	// path there ({"machine":{"sysctls":{"net.core.somaxconn":"1024"}}}). The schema is the CRD's own
+	// (config/crd/bases/ichor.maesh.dev_talosconfigpatches.yaml), which the UI's field search indexes by path.
+	// A patch that sets nothing is "{}"; a write that leaves it out is refused rather than read as that, so a
+	// client that does not know config cannot clear a patch by saving it. A setting spec.config does not carry is
+	// refused by name, never dropped.
+	Config        string `protobuf:"bytes,8,opt,name=config,proto3" json:"config,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1017,6 +1019,7 @@ func (x *Patch) GetTarget() *PatchTarget {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in ichor/v1alpha1/patch.proto.
 func (x *Patch) GetDocuments() []*PatchDocument {
 	if x != nil {
 		return x.Documents
@@ -1029,6 +1032,13 @@ func (x *Patch) GetCreatedAt() *timestamppb.Timestamp {
 		return x.CreatedAt
 	}
 	return nil
+}
+
+func (x *Patch) GetConfig() string {
+	if x != nil {
+		return x.Config
+	}
+	return ""
 }
 
 var File_ichor_v1alpha1_patch_proto protoreflect.FileDescriptor
@@ -1087,16 +1097,17 @@ const file_ichor_v1alpha1_patch_proto_rawDesc = "" +
 	"machineRef\"?\n" +
 	"\rPatchDocument\x12\x12\n" +
 	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x1a\n" +
-	"\bdocument\x18\x02 \x01(\tR\bdocument\"\xe5\x02\n" +
+	"\bdocument\x18\x02 \x01(\tR\bdocument\"\x81\x03\n" +
 	"\x05Patch\x12+\n" +
 	"\x03ref\x18\x01 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\x03ref\x123\n" +
 	"\acluster\x18\x02 \x01(\v2\x19.ichor.v1alpha1.ObjectRefR\acluster\x121\n" +
 	"\x05layer\x18\x03 \x01(\x0e2\x1b.ichor.v1alpha1.ConfigLayerR\x05layer\x12\x1a\n" +
 	"\bpriority\x18\x04 \x01(\x05R\bpriority\x123\n" +
-	"\x06target\x18\x05 \x01(\v2\x1b.ichor.v1alpha1.PatchTargetR\x06target\x12;\n" +
-	"\tdocuments\x18\x06 \x03(\v2\x1d.ichor.v1alpha1.PatchDocumentR\tdocuments\x129\n" +
+	"\x06target\x18\x05 \x01(\v2\x1b.ichor.v1alpha1.PatchTargetR\x06target\x12?\n" +
+	"\tdocuments\x18\x06 \x03(\v2\x1d.ichor.v1alpha1.PatchDocumentB\x02\x18\x01R\tdocuments\x129\n" +
 	"\n" +
-	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt2\x9b\x04\n" +
+	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x16\n" +
+	"\x06config\x18\b \x01(\tR\x06config2\x9b\x04\n" +
 	"\fPatchService\x12V\n" +
 	"\vListPatches\x12\".ichor.v1alpha1.ListPatchesRequest\x1a#.ichor.v1alpha1.ListPatchesResponse\x12M\n" +
 	"\bGetPatch\x12\x1f.ichor.v1alpha1.GetPatchRequest\x1a .ichor.v1alpha1.GetPatchResponse\x12V\n" +

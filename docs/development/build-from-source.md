@@ -92,8 +92,9 @@ bin/ichor version --client
 ```
 
 `make build-ichor-embed` also embeds a manifest, but it takes the image names
-from `IMG` and `IMG_UI`, which default to `controller:latest` and
-`ichor-ui:latest`; pass them as in the `demo-images-build` recipe if you use it.
+from `IMG` and `IMG_UI`. Their defaults, `controller:latest` and `ichor-ui:latest`,
+name no registry, so the build refuses them; set both to the pushed images, as in
+the `demo-images-build` recipe if you use it.
 `make help` lists the other targets.
 
 Before pushing a release tag `vX.Y.Z`, write its `## vX.Y.Z (date)` section in

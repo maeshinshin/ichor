@@ -35,10 +35,15 @@ blocks the machine and offers the wipe: `ichor reclaim node ADDRESS --cluster NA
   the `TalosCluster` adopt creates is v1.14 or later. The contract is probed on
   the first control plane only (a node that differs shows up in its own plan), from
   its running version down to v1.12, and `--version-contract` names one instead.
-  A node below v1.12, or a contract below v1.14, is refused before anything
-  is written, and the refusal names the way out: upgrade Talos with
-  `ichor upgrade talos`, then adopt again. Ichor turns sign-in on by default,
-  and only v1.14 can carry its issuer.
+  The v1.14 floor applies only when adopt creates the `TalosCluster`; adding a
+  machine to a cluster Ichor already manages (`--add-machine`) needs only the
+  v1.12 floor. Either refusal is made before anything is written. When the
+  cluster runs a Talos below v1.14, upgrade it first, outside Ichor, with
+  `talosctl upgrade` or your usual tool (`ichor upgrade talos` works only on a
+  cluster Ichor already manages, and there is no `TalosCluster` yet), then adopt
+  again. When the cluster runs v1.14 but an older contract was probed, adopt it
+  with `--version-contract v1.14`. Ichor turns sign-in on by default, and only
+  v1.14 can carry its issuer.
 - Your own `talosconfig` for the cluster (`--talosconfig`, `$TALOSCONFIG` or
   `~/.talos/config`) and a kubeconfig for its Kubernetes API (`--kubeconfig`,
   `$KUBECONFIG` or `~/.kube/config`). Adopt reads nodes with the talosconfig

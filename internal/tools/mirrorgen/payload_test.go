@@ -96,7 +96,7 @@ func TestSubsetOverrideKeepsWhatIsNotOmitted(t *testing.T) {
 	omits := map[string]string{
 		"Upstream.drop": testReason, "Inner.b": testReason, "Upstream.gone": testReason,
 	}
-	s := g.subsetFor(g.lookupType(pkg, "Upstream"), omits)
+	s := g.subsetFor(g.lookupType(pkg, "Upstream"), omits, false)
 
 	kept := make([]string, 0, len(s.fields))
 	for _, f := range s.fields {

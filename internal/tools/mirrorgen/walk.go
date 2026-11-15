@@ -82,10 +82,11 @@ type structDef struct {
 }
 
 type fieldDef struct {
-	name     string // Go field name, shared between mirror and machinery sides
-	jsonName string
-	optional bool
-	mapping  *typeMapping
+	name       string // Go field name on the machinery side
+	mirrorName string // Go field name in the mirror: name, unless a fieldOverrides row renames it
+	jsonName   string
+	optional   bool
+	mapping    *typeMapping
 }
 
 type refusedField struct {
@@ -430,7 +431,7 @@ func (g *generator) overrideMapping(fieldKey string, ov fieldOverride) *typeMapp
 
 	switch {
 	case len(ov.omits) > 0:
-		mirrorExpr, strict = g.subsetFor(named, ov.omits).name, true
+		mirrorExpr, strict = g.subsetFor(named, ov.omits, ov.keepTypeMeta).name, true
 	case ov.localWrapper != "":
 		mirrorExpr = ov.localWrapper
 	default:
@@ -568,11 +569,17 @@ func (g *generator) addFields(def *structDef, named *types.Named, st *types.Stru
 			}
 		}
 
+		mirrorName := fld.Name()
+		if ov, ok := fieldOverrides[fieldKey]; ok && ov.mirrorName != "" {
+			mirrorName = ov.mirrorName
+		}
+
 		def.fields = append(def.fields, &fieldDef{
-			name:     fld.Name(),
-			jsonName: yamlName,
-			optional: omitempty || sparseFields[fieldKey],
-			mapping:  mapping,
+			name:       fld.Name(),
+			mirrorName: mirrorName,
+			jsonName:   yamlName,
+			optional:   omitempty || sparseFields[fieldKey],
+			mapping:    mapping,
 		})
 	}
 }

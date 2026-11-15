@@ -177,6 +177,14 @@ type fieldOverride struct {
 	// inexpressible in Ichor, so it needs a reason a maintainer can read: the generator fails on a row that
 	// names no field, and every field not named here is kept.
 	omits map[string]string
+
+	// keepTypeMeta, with omits, carries the embedded apiVersion and kind of the upstream type. A subset drops
+	// them by default, because Talos sets them on its own documents; a document whose author writes them keeps them.
+	keepTypeMeta bool
+
+	// mirrorName, if set, is the Go name of the field in the mirror. The field keeps its YAML name and its
+	// machinery name; only the mirror's Go identifier differs, for a field whose upstream name says the wrong thing.
+	mirrorName string
 }
 
 // fieldOverrides is the field-level table's follow-up calls for.
@@ -209,8 +217,9 @@ var fieldOverrides = map[string]fieldOverride{
 	"KubeletConfigV1Alpha1.KubeletConfig":   {pkgPath: pkgKubeletV1Beta1, typeName: "KubeletConfiguration", omits: kubeletOmits},
 	"KubeProxyConfigV1Alpha1.ProxyConfig":   {pkgPath: pkgKubeProxyV1Alpha1, typeName: "KubeProxyConfiguration", omits: kubeProxyOmits},
 	"KubeSchedulerConfigV1Alpha1.PodConfig": {pkgPath: pkgKubeSchedulerV1, typeName: "KubeSchedulerConfiguration", omits: kubeSchedulerOmits},
-	// The pod of a static pod, which Talos types as an untyped object: the core v1 PodSpec is its schema.
-	"KubeStaticPodConfigV1Alpha1.PodSpec": {pkgPath: pkgCoreV1, typeName: "PodSpec"},
+	// The pod of a static pod is the whole Pod object without its status (apiVersion, kind, metadata, spec), which
+	// Talos types as an untyped object: the core v1 Pod, less the status the kubelet reports, is its schema.
+	"KubeStaticPodConfigV1Alpha1.PodSpec": {pkgPath: pkgCoreV1, typeName: "Pod", omits: podOmits, keepTypeMeta: true, mirrorName: "Pod"},
 }
 
 // refusedFields are typed fields of a shipped document that the mirror does not carry because Ichor owns what

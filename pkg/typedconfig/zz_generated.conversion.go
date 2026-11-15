@@ -4726,8 +4726,8 @@ func (m *KubeStaticPodConfigV1Alpha1) ToMachinery() (*mk8s.KubeStaticPodConfigV1
 	out := &mk8s.KubeStaticPodConfigV1Alpha1{}
 	out.Meta = mmeta.Meta{MetaKind: mk8s.KubeStaticPodConfig, MetaAPIVersion: "v1alpha1"}
 	out.MetaName = m.MetaName
-	if m.PodSpec != nil {
-		v2, err := mirrorToMachineryUnstructured(*m.PodSpec)
+	if m.Pod != nil {
+		v2, err := mirrorToMachineryUnstructured(*m.Pod)
 		if err != nil {
 			return nil, fmt.Errorf("KubeStaticPodConfigV1Alpha1.pod"+": %w", err)
 		}
@@ -4744,11 +4744,11 @@ func KubeStaticPodConfigV1Alpha1FromMachinery(src *mk8s.KubeStaticPodConfigV1Alp
 	out := &KubeStaticPodConfigV1Alpha1{}
 	out.MetaName = src.MetaName
 	if len(src.PodSpec.Object) > 0 {
-		v2, err := machineryToMirrorUnstructured[corev1.PodSpec](src.PodSpec)
+		v2, err := machineryToMirrorSubset[PodSubset](src.PodSpec)
 		if err != nil {
 			return nil, fmt.Errorf("KubeStaticPodConfigV1Alpha1.pod"+": %w", err)
 		}
-		out.PodSpec = &v2
+		out.Pod = &v2
 	}
 	return out, nil
 }

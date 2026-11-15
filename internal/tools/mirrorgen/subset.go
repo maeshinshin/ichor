@@ -45,6 +45,7 @@ type subsetStruct struct {
 type subsetField struct {
 	goName, typeExpr, jsonName string
 	markers                    []string
+	embedded                   bool // an embedded struct flattened into the subset: written as its type alone
 }
 
 // subsetState is what the generator accumulates while building subsets.
@@ -97,7 +98,7 @@ func (g *generator) subsetQualifier(p *types.Package) string {
 
 // subsetFor returns the local struct for upstream, building it (and the local structs of nested types that have
 // omits rows) on first use. Rows are keyed "UpstreamStruct.jsonName".
-func (g *generator) subsetFor(upstream *types.Named, omits map[string]string) *subsetStruct {
+func (g *generator) subsetFor(upstream *types.Named, omits map[string]string, keepTypeMeta bool) *subsetStruct {
 	st := g.subsetState()
 	if s, ok := st.byType[upstream]; ok {
 		return s
@@ -123,9 +124,16 @@ func (g *generator) subsetFor(upstream *types.Named, omits map[string]string) *s
 
 		switch {
 		case fld.Anonymous() && isTypeMeta(fld.Type()):
-			continue // apiVersion and kind: Talos sets them
-		case fld.Anonymous():
-			// An embedded struct is named by its type, and a subset only omits it.
+			// apiVersion and kind: Talos sets them on its own documents, so a subset drops them, unless the
+			// document is one whose author writes them (a Pod), in which case they are carried inline.
+			if keepTypeMeta {
+				s.fields = append(s.fields, subsetField{embedded: true, typeExpr: g.subsetTypeExpr(fld.Type(), omits)})
+			}
+
+			continue
+		case fld.Anonymous() && jsonName == "":
+			// An embedded struct flattened into the upstream JSON is named by its type, and a subset only omits it.
+			// One with a JSON name (Pod's metadata) is an ordinary field below.
 			key := upstream.Obj().Name() + "." + fld.Name()
 			if _, ok := omits[key]; !ok {
 				st.problems = append(st.problems, fmt.Sprintf("%s embeds %s, which a subset does not flatten: add the omits row %q", s.name, fld.Type(), key))
@@ -177,7 +185,7 @@ func (g *generator) subsetTypeExpr(t types.Type, omits map[string]string) string
 		return "map[" + g.subsetTypeExpr(tt.Key(), omits) + "]" + g.subsetTypeExpr(tt.Elem(), omits)
 	case *types.Named:
 		if _, isStruct := tt.Underlying().(*types.Struct); isStruct && hasOmitRows(omits, tt.Obj().Name()) {
-			return g.subsetFor(tt, omits).name
+			return g.subsetFor(tt, omits, false).name
 		}
 	}
 
@@ -300,6 +308,12 @@ func (g *generator) writeSubsets(b *strings.Builder) {
 		fmt.Fprintf(b, "type %s struct {\n", s.name)
 
 		for _, f := range s.fields {
+			if f.embedded {
+				fmt.Fprintf(b, "\t%s `json:\",inline\"`\n", f.typeExpr)
+
+				continue
+			}
+
 			b.WriteString("\t// +optional\n")
 
 			for _, m := range f.markers {

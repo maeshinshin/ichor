@@ -437,7 +437,7 @@ func writeMirrorStruct(b *strings.Builder, def *structDef) {
 			jsonTag += ",omitempty"
 		}
 
-		fmt.Fprintf(b, "\t%s %s `json:\"%s\"`\n", f.name, mirrorTypeExprOf(f.mapping), jsonTag)
+		fmt.Fprintf(b, "\t%s %s `json:\"%s\"`\n", f.mirrorName, mirrorTypeExprOf(f.mapping), jsonTag)
 	}
 
 	b.WriteString("}\n")
@@ -517,7 +517,7 @@ func writeStructConversion(b *strings.Builder, def *structDef) {
 	}
 
 	for i, f := range def.fields {
-		emitConvert(b, f.mapping, "m."+f.name, "out."+f.name, true, i+1, def.name+"."+f.jsonName)
+		emitConvert(b, f.mapping, "m."+f.mirrorName, "out."+f.name, true, i+1, def.name+"."+f.jsonName)
 	}
 
 	b.WriteString("\treturn out, nil\n}\n")
@@ -533,7 +533,7 @@ func writeStructConversion(b *strings.Builder, def *structDef) {
 	}
 
 	for i, f := range def.fields {
-		emitConvert(b, f.mapping, "src."+f.name, "out."+f.name, false, i+1, def.name+"."+f.jsonName)
+		emitConvert(b, f.mapping, "src."+f.name, "out."+f.mirrorName, false, i+1, def.name+"."+f.jsonName)
 	}
 
 	b.WriteString("\treturn out, nil\n}\n")

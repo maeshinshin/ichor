@@ -53,6 +53,14 @@ func TestSubsetRefusesWhatItOmits(t *testing.T) {
 		return d
 	}
 
+	staticPod := func(pod map[string]any) config.Document {
+		d := k8s.NewKubeStaticPodConfigV1Alpha1()
+		d.MetaName = "nginx"
+		d.PodSpec = mmeta.Unstructured{Object: pod}
+
+		return d
+	}
+
 	enabled := true
 
 	proxyEnabled := k8s.NewKubeProxyConfigV1Alpha1()
@@ -89,6 +97,15 @@ func TestSubsetRefusesWhatItOmits(t *testing.T) {
 		},
 		"a scheduler field with no schema": {
 			scheduler(object{"leaderElection": object{}}), `"leaderElection"`,
+		},
+		"a static pod's own object": {
+			staticPod(object{
+				"apiVersion": "v1", "kind": "Pod", "metadata": object{"name": "web"},
+				"spec": object{"containers": []any{object{"name": "web", "image": "example.com/web"}}},
+			}), "",
+		},
+		"a static pod's status, which the kubelet reports": {
+			staticPod(object{"status": object{"phase": "Running"}}), `"status"`,
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

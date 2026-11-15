@@ -435,11 +435,32 @@ func (f *filler) fillStruct(v reflect.Value, r reflect.Type, depth int) {
 		case sf.Anonymous:
 			f.fillStruct(v.Field(i), r, depth+1)
 		default:
-			if mf, ok := r.FieldByName(sf.Name); ok { // not in the mirror: dropped on purpose
+			if mf, ok := mirrorField(r, sf); ok { // not in the mirror: dropped on purpose
 				f.fill(v.Field(i), mf.Type, depth+1)
 			}
 		}
 	}
+}
+
+// mirrorField finds the mirror field of machinery field sf: by Go name, or else by YAML and JSON name, since
+// fieldOverrides may rename a mirror field (KubeStaticPodConfig's pod is the mirror's Pod) and keep its YAML name.
+func mirrorField(r reflect.Type, sf reflect.StructField) (reflect.StructField, bool) {
+	if mf, ok := r.FieldByName(sf.Name); ok {
+		return mf, true
+	}
+
+	yamlName, _, _ := strings.Cut(sf.Tag.Get("yaml"), ",")
+	if yamlName == "" {
+		return reflect.StructField{}, false
+	}
+
+	for mf := range r.Fields() {
+		if jsonName, _, _ := strings.Cut(mf.Tag.Get("json"), ","); jsonName == yamlName {
+			return mf, true
+		}
+	}
+
+	return reflect.StructField{}, false
 }
 
 // leaf sets a value with no mirrored structure: a number, a string, or a type that parses its own text.

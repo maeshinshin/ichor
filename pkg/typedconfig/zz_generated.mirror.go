@@ -1343,7 +1343,7 @@ type KubeStaticPodConfigV1Alpha1 struct {
 	// +required
 	MetaName string `json:"name"`
 	// +required
-	PodSpec *corev1.PodSpec `json:"pod"`
+	Pod *PodSubset `json:"pod"`
 }
 
 // Talos: KubeTalosAPIAccessConfigV1Alpha1 — https://docs.siderolabs.com/talos/v1.14/reference/configuration/k8s/kubetalosapiaccessconfig
@@ -2434,4 +2434,13 @@ type KubeletConfigurationSubset struct {
 	Tracing *tracingv1.TracingConfiguration `json:"tracing,omitempty"`
 	// +optional
 	UserNamespaces *kubeletv1beta1.UserNamespaces `json:"userNamespaces,omitempty"`
+}
+
+// PodSubset mirrors k8s.io/api/core/v1.Pod. Ichor does not carry status.
+type PodSubset struct {
+	metav1.TypeMeta `json:",inline"`
+	// +optional
+	ObjectMeta *metav1.ObjectMeta `json:"metadata,omitempty"`
+	// +optional
+	Spec *corev1.PodSpec `json:"spec,omitempty"`
 }

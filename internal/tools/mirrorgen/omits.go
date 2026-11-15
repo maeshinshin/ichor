@@ -31,7 +31,15 @@ const (
 	reasonUnused = "not among the fields a Talos operator is documented to set"
 	// reasonRawExtension: the value is an arbitrary object, which a typed document must not carry.
 	reasonRawExtension = "its value is free-form (a runtime.RawExtension), and a typed document does not carry free-form YAML"
+	// reasonStatus: the kubelet reports the status of a running pod. An operator never writes it into a static pod
+	// definition, so the mirror does not carry it, and a document that sets it is refused.
+	reasonStatus = "the kubelet reports the status of a running pod; a static pod definition does not carry one"
 )
+
+// podOmits are the fields of the core v1 Pod that a static pod's pod does not carry.
+var podOmits = map[string]string{
+	"Pod.status": reasonStatus,
+}
 
 // kubeletOmits are the fields of kubelet's KubeletConfiguration that KubeletConfig's config does not carry.
 var kubeletOmits = map[string]string{

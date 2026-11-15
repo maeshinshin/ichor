@@ -14,7 +14,7 @@ import { t } from '@/lib/i18n'
 // the JSON box beside it always shows the same document.
 export function FieldInput({ row, document, onChange, onRemove }: { row: FieldRow; document: string; onChange: (document: string) => void; onRemove: () => void }) {
   const path = editablePath(row)
-  const id = `field-${row.kind}-${path}`
+  const id = `field-${row.path}`
   const current = getField(document, path)
   const write = (value: unknown) => {
     const next = setField(document, path, value)
@@ -66,7 +66,7 @@ export function FieldInput({ row, document, onChange, onRemove }: { row: FieldRo
     <Field>
       <div className="flex items-center justify-between gap-2">
         <FieldLabel htmlFor={id}>
-          {path}
+          {row.path}
           {row.required && <span className="text-xs font-normal text-muted-foreground">{t('patch.fieldRequired')}</span>}
         </FieldLabel>
         <Button size="sm" variant="ghost" onClick={() => (write(undefined), onRemove())} aria-label={t('patch.fieldRemove')}>

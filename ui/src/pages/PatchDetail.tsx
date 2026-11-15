@@ -28,7 +28,7 @@ import { PatchDocumentCard, type DocItem } from '@/components/PatchDocumentCard'
 import { defaultDocument, previewKey } from '@/lib/patchDocs'
 import { FieldSearchDialog } from '@/components/FieldSearchDialog'
 import { loadFieldIndex } from '@/lib/fieldIndex'
-import { pickField, requiredFields, type FieldRow } from '@/lib/fieldSearch'
+import { pickField, requiredFields, rowKind, type FieldRow } from '@/lib/fieldSearch'
 import type { Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { buildPatchTarget, canSavePatch, stringifyLabelSelector, targetFieldsFor, type LayerKey } from '@/lib/patchTarget'
 import { navigate } from '@/router'
@@ -232,7 +232,7 @@ export function PatchDetail({ name }: { name?: string }) {
   // Choosing a search row puts its field in the patch, in a new document of its kind if there is none.
   async function addFromSearch(row: FieldRow) {
     const rows = await loadFieldIndex()
-    setDocuments((prev) => pickField(prev, row, requiredFields(rows, row.kind), () => nextDocId++))
+    setDocuments((prev) => pickField(prev, row, requiredFields(rows, rowKind(row)), () => nextDocId++))
   }
   function removeDocument(id: number) {
     setDocuments((prev) => prev.filter((d) => d.id !== id))

@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Command, CommandDialog, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { loadFieldIndex } from '@/lib/fieldIndex'
-import { searchFields, type FieldRow } from '@/lib/fieldSearch'
+import { rowDocPath, searchFields, type FieldRow } from '@/lib/fieldSearch'
 import { t } from '@/lib/i18n'
 
-// A search over every field of every Talos config document kind. The query is
+// A search over every setting of a patch's config, by its path there. The query is
 // matched here, over the generated index, with no round trip: shouldFilter is
 // off because searchFields has already chosen and ordered the rows.
 export function FieldSearchDialog({ open, onOpenChange, onSelect }: { open: boolean; onOpenChange: (open: boolean) => void; onSelect: (row: FieldRow) => void }) {
@@ -26,7 +26,7 @@ export function FieldSearchDialog({ open, onOpenChange, onSelect }: { open: bool
         <CommandList>
           {query.trim() && <CommandEmpty>{failed ? t('patch.searchLoadFailed') : t('patch.searchEmpty')}</CommandEmpty>}
           {hits.map((h) => {
-            const key = `${h.kind} ${h.path ?? ''}`
+            const key = h.path
             return (
               <CommandItem
                 key={key}
@@ -38,8 +38,8 @@ export function FieldSearchDialog({ open, onOpenChange, onSelect }: { open: bool
               >
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <span className="flex items-center gap-2">
-                    <span className="truncate font-medium">{h.path || h.kind}</span>
-                    {h.path ? <Badge variant="secondary">{h.kind}</Badge> : <Badge variant="outline">{t('patch.searchKindRow')}</Badge>}
+                    <span className="truncate font-medium">{h.path}</span>
+                    {!rowDocPath(h) && <Badge variant="outline">{t('patch.searchKindRow')}</Badge>}
                     {h.type && <span className="text-xs text-muted-foreground">{h.type}</span>}
                   </span>
                   {h.description && <span className="line-clamp-2 text-xs text-muted-foreground">{h.description}</span>}

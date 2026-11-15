@@ -1,32 +1,40 @@
 // Pure helpers for the config field search. No DOM, no preact and no
 // ui/src/gen import, so it runs under node --test. The rows are the generated
-// index (ui/src/gen/fieldindex.json, written by `make docs-reference`).
+// index (ui/src/gen/fieldindex.json, written by `make ui-fieldindex`).
 
 export interface FieldRow {
-  kind: string
-  // Relative to the document, as in the CRD reference: [] for an array
-  // element, <key> for a map value. Empty on a kind's own row.
-  path?: string
+  // The setting's path in spec.config: [] for an array element, <key> for a map
+  // value. The search shows it, and it is the same wherever Talos spells it.
+  path: string
   type?: string
   required?: boolean
   format?: string
   values?: string[]
   description?: string
+  // "Kind:path": where the Talos document that spells the setting has it. The
+  // editor still writes documents, so this is where a chosen setting goes; the
+  // path is empty on a collection's own row and name on an entry's key.
+  doc?: string
 }
 
 const lower = (s: string | undefined) => (s ?? '').toLowerCase()
 
+// The document kind a row is written in, and the row's path in that document.
+export const rowKind = (row: FieldRow) => (row.doc ?? '').split(':')[0]
+export const rowDocPath = (row: FieldRow) => (row.doc ?? '').split(':').slice(1).join(':')
+
 // searchFields is a substring scan: every word of the query has to occur in the
-// row, and a row scores higher where it occurs in the field's own name than in
-// its path, its kind or its description.
+// row, and a row scores higher where it occurs in the setting's own name than in
+// its path, its Talos document kind or its description.
 export function searchFields(rows: FieldRow[], query: string, limit = 50): FieldRow[] {
   const words = lower(query).split(/\s+/).filter(Boolean)
   if (words.length === 0) return []
   const scored: { row: FieldRow; score: number }[] = []
   for (const row of rows) {
     const path = lower(row.path)
-    const name = path.split('.').pop()!.replace(/\[\]$/, '')
-    const kind = lower(row.kind)
+    // An entry's key is named by the collection it is in.
+    const name = path.split('.').filter((s) => s !== '<key>').pop()!.replace(/\[\]$/, '')
+    const kind = lower(rowKind(row))
     const description = lower(row.description)
     let score = 0
     for (const w of words) {
@@ -48,7 +56,7 @@ export type InputKind = 'text' | 'number' | 'switch' | 'select' | 'json'
 // The part of a row's path an input can edit. A map value has no fixed key,
 // so the map itself is what is edited, as JSON.
 export function editablePath(row: FieldRow): string {
-  const path = row.path ?? ''
+  const path = rowDocPath(row)
   const i = path.indexOf('.<key>')
   return i < 0 ? path : path.slice(0, i)
 }
@@ -57,7 +65,7 @@ export function editablePath(row: FieldRow): string {
 // the allowed values, an Input for a string or a number, a Switch for a
 // boolean, and the JSON Textarea for an object, an array or a map.
 export function inputKind(row: FieldRow): InputKind {
-  if (editablePath(row) !== (row.path ?? '')) return 'json'
+  if (editablePath(row) !== rowDocPath(row)) return 'json'
   if (row.values && row.values.length > 0 && row.type === 'string') return 'select'
   switch (row.type) {
     case 'string':
@@ -128,7 +136,7 @@ export function setField(text: string, path: string, value: unknown): string | n
 // requiredFields are the top-level fields a kind's document must have; a
 // document added from the search shows an input for each.
 export function requiredFields(rows: FieldRow[], kind: string): FieldRow[] {
-  return rows.filter((r) => r.kind === kind && r.required && r.path && !r.path.includes('.'))
+  return rows.filter((r) => rowKind(r) === kind && r.required && rowDocPath(r) && !rowDocPath(r).includes('.'))
 }
 
 // One document of a patch under edit. fields are the rows chosen in the search:
@@ -148,9 +156,10 @@ export interface DocItem {
 // hold several of one kind (two bonds). A new document starts with an input
 // for each field its kind requires.
 export function pickField(docs: DocItem[], row: FieldRow, required: FieldRow[], newId: () => number): DocItem[] {
-  const existing = row.path ? docs.find((d) => d.kind === row.kind) : undefined
+  const kind = rowKind(row)
+  const existing = rowDocPath(row) ? docs.find((d) => d.kind === kind) : undefined
   const have = existing?.fields ?? []
-  const wanted = [...(existing ? [] : required), ...(row.path ? [row] : [])].filter((r) => !have.some((h) => h.path === r.path))
+  const wanted = [...(existing ? [] : required), ...(rowDocPath(row) ? [row] : [])].filter((r) => !have.some((h) => h.path === r.path))
   if (existing) return docs.map((d) => (d === existing ? { ...d, fields: [...have, ...wanted] } : d))
-  return [...docs, { id: newId(), kind: row.kind, document: '{}', fresh: true, fields: wanted }]
+  return [...docs, { id: newId(), kind, document: '{}', fresh: true, fields: wanted }]
 }

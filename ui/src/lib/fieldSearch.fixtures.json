@@ -1,26 +1,35 @@
 [
   {
-    "kind": "KernelModuleConfig",
-    "sets": [["name", "br_netfilter"]],
-    "document": { "name": "br_netfilter" }
+    "sets": [["machine.kernel.modules.<key>", "br_netfilter"]],
+    "documents": [{ "kind": "KernelModuleConfig", "document": { "name": "br_netfilter" } }],
+    "config": { "machine": { "kernel": { "modules": { "br_netfilter": {} } } } }
   },
   {
-    "kind": "UserVolumeConfig",
     "sets": [
-      ["name", "data"],
-      ["volumeType", "partition"],
-      ["provisioning.grow", true],
-      ["provisioning.maxSize", "100GiB"]
+      ["machine.volumes.user.<key>", "data"],
+      ["machine.volumes.user.<key>.volumeType", "partition"],
+      ["machine.volumes.user.<key>.provisioning.grow", true],
+      ["machine.volumes.user.<key>.provisioning.maxSize", "100GiB"]
     ],
-    "document": { "name": "data", "volumeType": "partition", "provisioning": { "grow": true, "maxSize": "100GiB" } }
+    "documents": [
+      { "kind": "UserVolumeConfig", "document": { "name": "data", "volumeType": "partition", "provisioning": { "grow": true, "maxSize": "100GiB" } } }
+    ],
+    "config": { "machine": { "volumes": { "user": { "data": { "volumeType": "partition", "provisioning": { "grow": true, "maxSize": "100GiB" } } } } } }
   },
   {
-    "kind": "ResolverConfig",
     "sets": [
-      ["nameservers[].address", "1.1.1.1"],
-      ["nameservers[].protocol", "DoT"],
-      ["hostDNS.enabled", true]
+      ["machine.network.nameservers[].address", "1.1.1.1"],
+      ["machine.network.nameservers[].protocol", "DoT"],
+      ["machine.features.hostDNS.enabled", true]
     ],
-    "document": { "nameservers": [{ "address": "1.1.1.1", "protocol": "DoT" }], "hostDNS": { "enabled": true } }
+    "documents": [
+      { "kind": "ResolverConfig", "document": { "nameservers": [{ "address": "1.1.1.1", "protocol": "DoT" }], "hostDNS": { "enabled": true } } }
+    ],
+    "config": { "machine": { "network": { "nameservers": [{ "address": "1.1.1.1", "protocol": "DoT" }] }, "features": { "hostDNS": { "enabled": true } } } }
+  },
+  {
+    "sets": [["machine.sysctls", { "net.core.somaxconn": "1024" }]],
+    "documents": [{ "kind": "SysctlConfig", "document": { "params": { "net.core.somaxconn": "1024" } } }],
+    "config": { "machine": { "sysctls": { "net.core.somaxconn": "1024" } } }
   }
 ]

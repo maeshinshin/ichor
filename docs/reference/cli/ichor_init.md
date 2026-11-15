@@ -54,6 +54,13 @@ address can be asked for as a network instead: init scans it for nodes in
 maintenance mode on port 50000 and lists them to pick from, and a single
 address skips the scan.
 
+--skip-signature-check does not apply to one run only. It writes spec.installerSignature.mode: skip into the
+IchorInstallation "ichor" and leaves it there. The Job still runs by digest: unless --installer-digest names one, the
+controller resolves the version's tag to it, and the flag clears an earlier pin (spec.installerDigest).
+Every `ichor upgrade ichor` writes both settings from its own flags, so the next one without the flag checks the signature again.
+To undo the skip without upgrading, run `kubectl edit ichorinstallation ichor` and delete spec.installerSignature
+(or set mode: required).
+
 ```sh
 ichor init [flags]
 ```
@@ -101,7 +108,7 @@ ichor init [flags]
       --print-config-template              print an example InitConfig file and exit
       --registry-mirror stringArray        anonymous registry mirror as HOST=URL (spec.registries), e.g. ghcr.io=http://10.0.0.5:5000; repeatable
       --service-subnets strings            service CIDRs (spec.network.serviceSubnets); unset keeps Talos's default 10.96.0.0/12. Fixed once the cluster exists
-      --skip-signature-check               run the installer image WITHOUT checking its signature (for builds nobody signs: development and demo images)
+      --skip-signature-check               run the installer image WITHOUT checking its signature (for builds nobody signs: development and demo images); not one-shot: recorded as IchorInstallation spec.installerSignature.mode skip, it stays until an upgrade without the flag
       --storage-disk-selector string       CEL disk selector for a disk prepared for a storage system (RawVolumeConfig)
       --storage-volume-name string         name for --storage-disk-selector's volume (default "storage")
       --ui-tls-cert string                 with sign-in: PEM certificate file for ichor-ui's TLS; init stores it with --ui-tls-key as a Secret

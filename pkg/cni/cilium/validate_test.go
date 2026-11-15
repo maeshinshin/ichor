@@ -29,6 +29,7 @@ import (
 )
 
 const (
+	apiHost       = "10.0.0.1"
 	keyBPF        = "bpf"
 	keyGatewayAPI = "gatewayAPI"
 	keyEnabled    = "enabled"
@@ -78,10 +79,10 @@ func TestValidateValues(t *testing.T) {
 
 		{name: "owned key", ctx: enabled, user: map[string]any{keyIPAM: map[string]any{keyMode: "cluster-pool"}},
 			wantErr: []string{"ipam.mode is set by Ichor"}},
-		{name: "owned top-level key", ctx: replaced, user: map[string]any{"k8sServicePort": 6443},
+		{name: "owned top-level key", ctx: replaced, user: map[string]any{keyServicePort: 6443},
 			wantErr: []string{"k8sServicePort is set by Ichor", "because spec.cni.kubeProxy is replaced"}},
 		{name: "KubePrism address is the operator's when kube-proxy is enabled", ctx: enabled,
-			user: map[string]any{"k8sServiceHost": "10.0.0.1", "k8sServicePort": 6443}},
+			user: map[string]any{keyServiceHost: apiHost, keyServicePort: 6443}},
 		{name: "owned nested capability", ctx: enabled,
 			user: map[string]any{"securityContext": map[string]any{
 				"capabilities": map[string]any{"ciliumAgent": []any{"ALL"}}}},
@@ -221,7 +222,7 @@ func TestEffectiveValues_MergePrecedence(t *testing.T) {
 	}
 
 	// ADR 0159: with kube-proxy enabled Ichor sets no KubePrism address, so the operator's reaches the values.
-	api := map[string]any{keyServiceHost: "10.0.0.1", keyServicePort: 6443}
+	api := map[string]any{keyServiceHost: apiHost, keyServicePort: 6443}
 
 	enabledVals, err := EffectiveValues(api, cni.KubeProxyEnabled, "", 0)
 	if err != nil {
@@ -229,7 +230,7 @@ func TestEffectiveValues_MergePrecedence(t *testing.T) {
 	}
 
 	for path, want := range api {
-		if v, _ := values.Get(enabledVals, path); fmt.Sprint(v) != fmt.Sprint(want) { // JSON round trip: 6443 may be a float64
+		if v, _ := values.Get(enabledVals, path); fmt.Sprint(v) != fmt.Sprint(want) { // JSON makes 6443 a float64
 			t.Errorf("enabled mode %s = %v, want %v", path, v, want)
 		}
 	}

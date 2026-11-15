@@ -31,8 +31,6 @@ set -e
 while [ ! -f /work/ready ]; do sleep 1; done
 start=$(date +%s)
 cd /work/src
-mkdir -p /cache/bin /cache/gomod /cache/gocache /cache/tools
-ln -s /cache/bin bin
 export PATH=/cache/tools:$PATH GOMODCACHE=/cache/gomod GOCACHE=/cache/gocache
 # shortcut: the tools are pinned here, not read from flake.nix, so a bump needs an edit in two places; drop when the pins come from the image.
 [ -x /cache/tools/helm ] || { curl -fsSL https://get.helm.sh/helm-v4.3.1-linux-amd64.tar.gz | tar -xz -C /tmp && install -m0755 /tmp/linux-amd64/helm /cache/tools/helm; }
@@ -42,10 +40,12 @@ export PATH=/cache/tools:$PATH GOMODCACHE=/cache/gomod GOCACHE=/cache/gocache
 git init -q && echo /bin >> .git/info/exclude && git add -A && git -c user.name=ichor-gate -c user.email=gate@example.invalid commit -q -m "gate snapshot @SHA@"
 go version; helm version --short; kubectl version --client; buf --version
 set +e
+s=$(date +%s)
 make test; t=$?
-echo "GATE_STEP test exit=$t"
+echo "GATE_STEP test exit=$t secs=$(( $(date +%s) - s ))"
+s=$(date +%s)
 GOTOOLCHAIN=go1.27.4 make lint; l=$?
-echo "GATE_STEP lint exit=$l"
+echo "GATE_STEP lint exit=$l secs=$(( $(date +%s) - s ))"
 echo "GATE_SECONDS=$(( $(date +%s) - start ))"
 [ "$t" = 0 ] && [ "$l" = 0 ]
 EOF
@@ -92,7 +92,11 @@ $(pod_script | sed 's/^/          /')
           limits: {cpu: "$CPU_MAX", memory: $MEM_MAX, ephemeral-storage: 20Gi}
         volumeMounts:
         - {name: work, mountPath: /work}
-        - {name: cache, mountPath: /cache}
+        # bin/ is mounted at its own path, not symlinked: go-install-tool compares readlink with realpath, and a symlinked bin/ makes it reinstall (and clobber) the custom golangci-lint every run.
+        - {name: cache, mountPath: /work/src/bin, subPath: bin}
+        - {name: cache, mountPath: /cache/gomod, subPath: gomod}
+        - {name: cache, mountPath: /cache/gocache, subPath: gocache}
+        - {name: cache, mountPath: /cache/tools, subPath: tools}
       volumes:
       - name: work
         emptyDir: {sizeLimit: 8Gi}

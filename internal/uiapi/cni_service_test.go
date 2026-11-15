@@ -139,7 +139,9 @@ var _ = Describe("CniService", func() {
 			Expect(o.GetReason()).NotTo(BeEmpty())
 		}
 
-		Expect(paths).To(ContainElements("ipam.mode", "k8sServicePort", "tunnelProtocol"))
+		Expect(paths).To(ContainElements("ipam.mode", "kubeProxyReplacement", "tunnelProtocol"))
+		// The cluster runs kube-proxy: Ichor sets no KubePrism address, so the operator may (ADR 0159).
+		Expect(paths).NotTo(ContainElements("k8sServiceHost", "k8sServicePort"))
 		Expect(resp.Msg.GetDefaultsYaml()).NotTo(ContainSubstring("k8sServicePort"))
 
 		err = set(cniViewerUser, cniDebugOn)
@@ -150,7 +152,7 @@ var _ = Describe("CniService", func() {
 	It("returns every validation error, not the first", func() {
 		resp, err := s.ValidateCiliumValues(asCniUser(cniViewerUser), connect.NewRequest(&pb.ValidateCiliumValuesRequest{
 			Cluster:  ref,
-			UserYaml: "ipam:\n  mode: cluster-pool\nk8sServicePort: 1\ngatewayAPI:\n  enabled: true\ndebugg:\n  enabled: true\n",
+			UserYaml: "ipam:\n  mode: cluster-pool\ntunnelProtocol: vxlan\ngatewayAPI:\n  enabled: true\ndebugg:\n  enabled: true\n",
 		}))
 		Expect(err).NotTo(HaveOccurred())
 		Expect(resp.Msg.GetValid()).To(BeFalse())
@@ -162,7 +164,7 @@ var _ = Describe("CniService", func() {
 		}
 
 		Expect(all).To(ContainSubstring("ipam.mode"))
-		Expect(all).To(ContainSubstring("k8sServicePort"))
+		Expect(all).To(ContainSubstring("tunnelProtocol"))
 		Expect(all).To(ContainSubstring("Gateway API"))
 		Expect(all).To(ContainSubstring("debugg"))
 	})

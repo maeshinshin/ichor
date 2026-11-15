@@ -227,9 +227,9 @@ func (s *Server) GetCiliumValues(
 		return nil, err
 	}
 
-	for _, path := range slices.Sorted(maps.Keys(cilium.OwnedKeys)) {
-		// A key Ichor does not set in this mode (the KubePrism address with kube-proxy enabled) shows no value,
-		// not "null": it is refused like the rest, but there is nothing for Ichor to set.
+	ownedKeys := cilium.OwnedKeysFor(v.kubeProxy)
+
+	for _, path := range slices.Sorted(maps.Keys(ownedKeys)) {
 		val, set := values.Get(owned, path)
 
 		var value string
@@ -242,7 +242,7 @@ func (s *Server) GetCiliumValues(
 			value = strings.TrimSpace(string(y))
 		}
 
-		resp.Owned = append(resp.Owned, &pb.OwnedKey{Path: path, Reason: cilium.OwnedKeys[path], ValueYaml: value})
+		resp.Owned = append(resp.Owned, &pb.OwnedKey{Path: path, Reason: ownedKeys[path], ValueYaml: value})
 	}
 
 	if v.cluster.Status.CNI != nil {

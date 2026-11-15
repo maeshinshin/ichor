@@ -645,12 +645,12 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 		It("refuses while another restore is recorded in the storage", func() {
 			f := newRestoreFixture("")
 			Expect(etcdbackup.PutMarker(ctx, f.backup.store, testBackupBase, mustPass(f.backup.bundle), &etcdbackup.RestoreMarker{
-				Namespace: tmNamespace, Operation: "someone-else", Step: ichorv1alpha1.EtcdRestoreStepWiping,
+				Namespace: tmNamespace, Operation: otherHolder, Step: ichorv1alpha1.EtcdRestoreStepWiping,
 			})).To(Succeed())
 
 			got := f.reconcile(f.newOp(nil))
 			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
-			Expect(got.Status.FailureReason).To(ContainSubstring("someone-else"))
+			Expect(got.Status.FailureReason).To(ContainSubstring(otherHolder))
 			Expect(f.pinned()).To(BeFalse())
 			Expect(f.jobs).To(BeEmpty())
 		})
@@ -885,7 +885,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			op := f.newOp(nil)
 			f.reconcile(op)
 			Expect(etcdbackup.PutMarker(ctx, f.backup.store, testBackupBase, mustPass(f.backup.bundle), &etcdbackup.RestoreMarker{
-				Namespace: tmNamespace, Operation: "someone-else", Step: ichorv1alpha1.EtcdRestoreStepWiping,
+				Namespace: tmNamespace, Operation: otherHolder, Step: ichorv1alpha1.EtcdRestoreStepWiping,
 			})).To(Succeed())
 
 			got := f.reconcile(op)
@@ -898,7 +898,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 			Expect(got.Annotations).NotTo(HaveKey(ichorv1alpha1.OperationRetryAnnotation), "the request was read")
 			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
 			Expect(got.Status.FailureReason).To(ContainSubstring("cannot be resumed"))
-			Expect(got.Status.FailureReason).To(ContainSubstring("someone-else"))
+			Expect(got.Status.FailureReason).To(ContainSubstring(otherHolder))
 		})
 
 		It("a missing marker after the start is reported, not guessed at", func() {
@@ -1073,7 +1073,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 		It("clears a refused restore's finalizer without touching a marker that is not its own", func() {
 			f := newRestoreFixture("")
 			Expect(etcdbackup.PutMarker(ctx, f.backup.store, testBackupBase, mustPass(f.backup.bundle), &etcdbackup.RestoreMarker{
-				Namespace: tmNamespace, Operation: "someone-else", Step: ichorv1alpha1.EtcdRestoreStepWiping,
+				Namespace: tmNamespace, Operation: otherHolder, Step: ichorv1alpha1.EtcdRestoreStepWiping,
 			})).To(Succeed())
 
 			op := f.newOp(nil)
@@ -1085,7 +1085,7 @@ var _ = Describe("TalosOperation etcd-restore", func() {
 				return apierrors.IsNotFound(k8sClient.Get(ctx, client.ObjectKeyFromObject(op), &ichorv1alpha1.TalosOperation{}))
 			}).Should(BeTrue())
 			Expect(f.marker()).NotTo(BeNil())
-			Expect(f.marker().Operation).To(Equal("someone-else"))
+			Expect(f.marker().Operation).To(Equal(otherHolder))
 		})
 	})
 

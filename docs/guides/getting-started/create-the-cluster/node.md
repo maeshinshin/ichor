@@ -87,47 +87,23 @@ ichor init \
 
 ## Load balancer endpoint
 
-Use `loadBalancer` when the control planes have no shared layer-2 segment, for
-example in a cloud or across routers, or when you have a DNS name and no load
-balancer. The endpoint is an IP address or a hostname that answers on port 6443.
-The procedure is the same as above: run `ichor init` with `--endpoint-type
-loadBalancer` and the address of the thing you run in front of the control
-planes, and give the first node's own address as `--node-endpoint`.
+Use the `node` endpoint with a load balancer's name or address when the control
+planes have no shared layer-2 segment, for example in a cloud or across routers,
+or when you have a DNS name and no load balancer. The endpoint is the IP address
+or the DNS name that answers on port 6443, and it goes in `--endpoint-address`.
+The procedure is the same as above, with that address in place of the node's own,
+and the first node's own address as `--node-endpoint`.
 
 > [!NOTE]
-> **Why not `node` with the load balancer's address in `certSANs`?** That is
-> half the answer, and it is the half that is easy to see. Ichor's
-> `spec.certSANs` is written into the Talos API certificate of every node and
-> into the kube-apiserver serving certificate, so listing the load balancer's
-> address or name there makes the API server's certificate valid for it. On
-> Talos v1.14 the endpoint's own hostname goes onto the kube-apiserver
-> certificate by Talos itself, so under `loadBalancer` you do not need
-> `certSANs` for the endpoint at all. Under `node` nothing adds the load
-> balancer's address for you. What listing it in `certSANs` does not give you is
-> the rest:
+> A load balancer's name or address goes in `node`, which takes a DNS name as
+> well as an IP address. The kubeconfig names the endpoint, so it names the load
+> balancer. Failover is yours: Ichor creates no load balancer, no DNS record and
+> no health check, and does not tell you when what is in front of the control
+> planes is down.
 >
-> - **The kubeconfig still names the node.** The kubeconfig's server is the
->   cluster endpoint, `https://ADDRESS:6443`, and under `node` that is the
->   node's own address. You would have to edit the server line by hand, and that
->   kubeconfig then stops working when the node is down. Under `loadBalancer` the
->   kubeconfig names the load balancer, and the failover is whatever you run in
->   front of the control planes.
-> - **Failover is yours either way.** Ichor creates no load balancer, no DNS
->   record and no health check, and does not tell you when what is in front of
->   the control planes is down.
-> - **A hostname is refused for `node`, and `loadBalancer` is not checked.**
->   `CheckAddress` refuses a name for `vip` and `node`, when `init` plans the
->   cluster and when the webhook admits a TalosCluster whose endpoint changes.
->   For `loadBalancer` it checks nothing: any string is accepted, and the CRD
->   only requires a non-empty value. A mistyped address is not caught by Ichor,
->   so check it against the name or address your load balancer answers on.
-> - **The controller's egress allowance follows the endpoint.** The controller's
->   egress policy is built from `spec.endpoint.address`, and the API server port
->   it allows (the endpoint's `/readyz` check) names that address. Under `node`
->   that is the node, not the load balancer. A hostname goes in by name.
-> - **`adopt` defaults to it.** `ichor adopt` types the endpoint `loadBalancer`
->   by default, and `node` only when the address matches a node's own endpoint.
->   It never chooses `vip`.
+> A cluster that still has the `loadBalancer` type cannot change its endpoint
+> while it keeps that type. Set its `spec.endpoint.type` to `node`: that one edit
+> moves it, and the address and the kubeconfig stay as they are.
 
 Init prints a warning for this type that a VIP is recommended. The reason is on
 the [Virtual IP](vip.md) page: changing the endpoint later re-issues every
@@ -154,8 +130,8 @@ manager and kube-proxy), do not depend on that endpoint, so a dead endpoint does
 not take them down with it. Ichor's controller dials each machine's own address,
 so Talos API traffic does not pass through the endpoint.
 
-Interactively, pick `loadBalancer` from the endpoint type list. At the endpoint
-address prompt, type the IP address or the hostname that answers on port 6443.
+Interactively, pick `node` from the endpoint type list. At the endpoint address
+prompt, type the IP address or the DNS name that answers on port 6443.
 
 Save this as `init.yaml` and run `ichor init -f init.yaml`:
 
@@ -166,7 +142,7 @@ cluster:
   name: demo
   preset: standard
   endpoint:
-    type: loadBalancer
+    type: node
     address: kube.example.lan
 firstNode:
   endpoint: 192.168.1.50:50000
@@ -178,11 +154,11 @@ With flags:
 ```sh
 ichor init --cluster demo \
   --node-endpoint 192.168.1.50:50000 \
-  --endpoint-type loadBalancer --endpoint-address kube.example.lan \
+  --endpoint-type node --endpoint-address kube.example.lan \
   --install-disk /dev/sda
 ```
 
-- `--endpoint-address` is the IP address or hostname that answers on port 6443.
+- `--endpoint-address` is the IP address or DNS name that answers on port 6443.
   Use the forwarder's or the record's name, not a machine's address.
 - `--node-endpoint` is still the first node's own Talos API (`host:port`).
 - Approve the other control planes as on the [Virtual IP](vip.md#flags) page, with `--role controlplane`.

@@ -375,7 +375,8 @@ var _ = Describe("TalosCluster", func() {
 		Entry("4 is rejected", int32(4), false),
 	)
 
-	// The endpoint type has no dns: a hostname is a loadBalancer address, so the enum is the three values.
+	// The enum keeps loadBalancer so that stored objects still read; the webhook refuses it (ADR 0160), which
+	// this suite does not run. The enum has no dns: a host name is a node address.
 	DescribeTable("endpoint.type",
 		func(typ string, accepted bool) {
 			c := newCluster(corev1.LocalObjectReference{Name: literalSecrets}, 3, "true")
@@ -383,7 +384,7 @@ var _ = Describe("TalosCluster", func() {
 			expectAdmitted(k8sClient.Create(context.Background(), c), accepted)
 		},
 		Entry("vip is accepted", "vip", true),
-		Entry("loadBalancer is accepted", "loadBalancer", true),
+		Entry("loadBalancer is still in the schema", "loadBalancer", true),
 		Entry("node is accepted", "node", true),
 		Entry("dns is refused", "dns", false),
 	)

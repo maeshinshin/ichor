@@ -27,19 +27,40 @@ const (
 )
 
 func TestEndpointCheckAddress(t *testing.T) {
+	long := strings.Repeat("a", 64) + ".example.com"
+
 	for _, tc := range []struct {
 		typ, addr, want string
 	}{
 		{EndpointTypeVIP, "192.168.0.210", ""},
 		{EndpointTypeVIP, "fd00::210", ""},
-		{EndpointTypeVIP, epHost, "needs an IP address; type loadBalancer would take a hostname"},
+		{EndpointTypeVIP, epHost, "needs an IP address; type node would take a hostname"},
+		{EndpointTypeVIP, "192.168.1.300", "is not an IP address"},
 		{EndpointTypeNode, epIP, ""},
-		{EndpointTypeNode, "node1.example.com", "endpoint type node needs an IP address"},
-		{EndpointTypeLoadBalancer, epHost, ""},
-		{EndpointTypeLoadBalancer, epIP, ""},
+		{EndpointTypeNode, "fd00::50", ""},
+		{EndpointTypeNode, "kube.example.lan", ""},
+		{EndpointTypeNode, "k8s-api1.example.com", ""},
+		{EndpointTypeNode, "kube", ""},
+		{EndpointTypeNode, "192.168.1.300", "neither an IP address nor a host name"},
+		{EndpointTypeNode, "10.0.0", "neither an IP address nor a host name"},
+		{EndpointTypeNode, "Kube.example.lan", "neither an IP address nor a host name"},
+		{EndpointTypeNode, "kube.example.lan.", "neither an IP address nor a host name"},
+		{EndpointTypeNode, "kube..example.lan", "neither an IP address nor a host name"},
+		{EndpointTypeNode, "-kube.example.lan", "neither an IP address nor a host name"},
+		{EndpointTypeNode, "kube_api.example.lan", "neither an IP address nor a host name"},
+		{EndpointTypeNode, "https://kube.example.lan", "neither an IP address nor a host name"},
+		{EndpointTypeNode, long, "neither an IP address nor a host name"},
+		{EndpointTypeLoadBalancer, epHost, "endpoint type loadBalancer is removed: use type node"},
+		{EndpointTypeLoadBalancer, epIP, "endpoint type loadBalancer is removed: use type node"},
 	} {
 		err := TalosClusterEndpoint{Type: tc.typ, Address: tc.addr}.CheckAddress()
-		if (tc.want == "") != (err == nil) || (err != nil && (!strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), tc.addr))) {
+		if (tc.want == "") != (err == nil) {
+			t.Errorf("%s %q: err = %v, want refused %v", tc.typ, tc.addr, err, tc.want != "")
+
+			continue
+		}
+
+		if err != nil && !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("%s %q: err = %v, want one containing %q", tc.typ, tc.addr, err, tc.want)
 		}
 	}

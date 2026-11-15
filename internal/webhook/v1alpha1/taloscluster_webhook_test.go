@@ -77,7 +77,22 @@ var _ = Describe("TalosCluster Webhook", func() {
 		bad.Spec.Endpoint.Address = "cluster.example.com"
 		err := k8sClient.Create(ctx, bad)
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("type loadBalancer would take a hostname"))
+		Expect(err.Error()).To(ContainSubstring("type node would take a hostname"))
+	})
+
+	It("refuses to create a loadBalancer cluster and says to use node", func() {
+		bad := newTestCluster()
+		bad.Spec.Endpoint = ichorv1alpha1.TalosClusterEndpoint{Type: "loadBalancer", Address: "kube.example.lan"}
+		err := k8sClient.Create(ctx, bad)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("endpoint type loadBalancer is removed: use type node"))
+	})
+
+	It("admits a node endpoint that is a load balancer's name", func() {
+		good := newTestCluster()
+		good.Spec.Endpoint = ichorv1alpha1.TalosClusterEndpoint{Type: "node", Address: "kube.example.lan"}
+		Expect(k8sClient.Create(ctx, good)).To(Succeed())
+		forceDelete(good)
 	})
 
 	It("admits update", func() {

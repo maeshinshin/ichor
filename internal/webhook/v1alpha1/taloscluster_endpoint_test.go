@@ -23,7 +23,10 @@ import (
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
 )
 
-const wantNeedsIP = "needs an IP address"
+const (
+	wantNeedsIP = "needs an IP address"
+	wantRemoved = "endpoint type loadBalancer is removed"
+)
 
 func endpointCluster(typ, addr string) *ichorv1alpha1.TalosCluster {
 	return &ichorv1alpha1.TalosCluster{Spec: ichorv1alpha1.TalosClusterSpec{
@@ -40,15 +43,20 @@ func TestValidateEndpoint(t *testing.T) {
 		old, new *ichorv1alpha1.TalosCluster
 		want     string
 	}{
-		"create: a hostname with vip is refused":       {nil, endpointCluster("vip", host), wantNeedsIP},
-		"create: loadBalancer takes a hostname":        {nil, endpointCluster("loadBalancer", host), ""},
-		"create: loadBalancer takes an IP":             {nil, endpointCluster("loadBalancer", ip), ""},
-		"create: a vip with an IP":                     {nil, endpointCluster("vip", ip), ""},
-		"update: another field of a mismatched pair":   {endpointCluster("vip", host), endpointCluster("vip", host), ""},
-		"update: the address changes to a mismatch":    {endpointCluster("vip", ip), endpointCluster("vip", host), wantNeedsIP},
-		"update: the type changes to a mismatch":       {endpointCluster("loadBalancer", ip), endpointCluster("vip", host), wantNeedsIP},
-		"update: a mismatched pair changes to a fit":   {endpointCluster("vip", host), endpointCluster("loadBalancer", host), ""},
-		"update: a mismatched pair changes to another": {endpointCluster("vip", host), endpointCluster("vip", "other.example.com"), wantNeedsIP},
+		"create: a hostname with vip is refused":          {nil, endpointCluster("vip", host), wantNeedsIP},
+		"create: node takes a hostname":                   {nil, endpointCluster("node", host), ""},
+		"create: node takes an IP":                        {nil, endpointCluster("node", ip), ""},
+		"create: loadBalancer is refused for a name":      {nil, endpointCluster("loadBalancer", host), wantRemoved},
+		"create: loadBalancer is refused for an IP":       {nil, endpointCluster("loadBalancer", ip), wantRemoved},
+		"create: a vip with an IP":                        {nil, endpointCluster("vip", ip), ""},
+		"update: another field of a mismatched pair":      {endpointCluster("vip", host), endpointCluster("vip", host), ""},
+		"update: the address changes to a mismatch":       {endpointCluster("vip", ip), endpointCluster("vip", host), wantNeedsIP},
+		"update: the type changes to a mismatch":          {endpointCluster("node", ip), endpointCluster("vip", host), wantNeedsIP},
+		"update: a mismatched pair changes to a fit":      {endpointCluster("vip", host), endpointCluster("node", host), ""},
+		"update: a mismatched pair changes to another":    {endpointCluster("vip", host), endpointCluster("vip", "other.example.com"), wantNeedsIP},
+		"update: a stored loadBalancer is left alone":     {endpointCluster("loadBalancer", host), endpointCluster("loadBalancer", host), ""},
+		"update: a stored loadBalancer moves to node":     {endpointCluster("loadBalancer", host), endpointCluster("node", host), ""},
+		"update: a node endpoint changes to loadBalancer": {endpointCluster("node", ip), endpointCluster("loadBalancer", host), wantRemoved},
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := validateEndpoint(tc.old, tc.new)

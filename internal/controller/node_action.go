@@ -713,7 +713,6 @@ func (n *nodeRun) beginReset(ctx context.Context) (ctrl.Result, error) {
 	if n.spec.PowerOff {
 		n.m.Annotations[resetPowerOffAnnotation] = resetOnDeleteValue
 	}
-	n.m.Annotations[deleteguard.AllowDeleteAnnotation] = deleteguard.AllowDeleteValue
 
 	// The finalizer is added here, not left to the machine reconciler, so the delete below cannot
 	// win a race and skip the removal flow.
@@ -766,8 +765,21 @@ func (r *TalosOperationReconciler) awaitRemoval(ctx context.Context, op *ichorv1
 	}
 
 	if m.DeletionTimestamp.IsZero() {
+		// The guard is armed for this attempt only. A failed attempt disarms it before the pause, so a
+		// paused reset does not leave a plain kubectl delete allowed; a retry arms it again here.
+		if err := r.setDeleteGuard(ctx, m, true); err != nil {
+			return ctrl.Result{}, err
+		}
+
 		if err := r.Delete(ctx, m, client.Preconditions{UID: &m.UID}); err != nil && !apierrors.IsNotFound(err) {
-			return r.nodeFailed(ctx, op, fmt.Errorf("removing %q: %w", m.Name, err))
+			// If the disarm fails the operation is not paused: the error retries the reconcile, which
+			// arms and deletes again, so the guard is never left armed on a paused operation.
+			failure := fmt.Errorf("removing %q: %w", m.Name, err)
+			if derr := r.setDeleteGuard(ctx, m, false); derr != nil {
+				return ctrl.Result{}, errors.Join(failure, derr)
+			}
+
+			return r.nodeFailed(ctx, op, failure)
 		}
 	}
 
@@ -785,4 +797,20 @@ func (r *TalosOperationReconciler) awaitRemoval(ctx context.Context, op *ichorv1
 	}
 
 	return ctrl.Result{RequeueAfter: operationRequeueInterval}, nil
+}
+
+// setDeleteGuard arms (armed) or disarms the webhook's allow-delete annotation on m. Only
+// awaitRemoval calls it, around its Delete.
+func (r *TalosOperationReconciler) setDeleteGuard(ctx context.Context, m *ichorv1alpha1.TalosMachine, armed bool) error {
+	if armed {
+		metav1.SetMetaDataAnnotation(&m.ObjectMeta, deleteguard.AllowDeleteAnnotation, deleteguard.AllowDeleteValue)
+	} else {
+		delete(m.Annotations, deleteguard.AllowDeleteAnnotation)
+	}
+
+	if err := r.Update(ctx, m); err != nil {
+		return fmt.Errorf("setting the delete guard on %q to %t: %w", m.Name, armed, err)
+	}
+
+	return nil
 }

@@ -29,9 +29,12 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	ichorv1alpha1 "github.com/maeshinshin/ichor/api/v1alpha1"
+	"github.com/maeshinshin/ichor/pkg/deleteguard"
 	"github.com/maeshinshin/ichor/pkg/storage"
 )
 
@@ -144,6 +147,32 @@ func (f *nodeFixture) barePodOn(host string) {
 
 func (f *nodeFixture) reconcile(op *ichorv1alpha1.TalosOperation) *ichorv1alpha1.TalosOperation {
 	return reconcileFetch(f.r, op)
+}
+
+// webhookGuard makes the reconciler's Delete behave as the TalosMachine webhook does: refused
+// unless the stored machine carries allow-delete. envtest runs no webhook. The first failFirst
+// attempts fail for another reason, which pauses a reset.
+func (f *nodeFixture) webhookGuard(failFirst int) {
+	attempts := 0
+	f.r.Client = interceptor.NewClient(watchClient(), interceptor.Funcs{
+		Delete: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.DeleteOption) error {
+			attempts++
+			if attempts <= failFirst {
+				return errors.New("the API server timed out")
+			}
+
+			var stored ichorv1alpha1.TalosMachine
+			if err := c.Get(ctx, client.ObjectKeyFromObject(obj), &stored); err != nil {
+				return err
+			}
+
+			if err := deleteguard.CheckDelete(stored.Annotations); err != nil {
+				return err
+			}
+
+			return c.Delete(ctx, obj, opts...)
+		},
+	})
 }
 
 func (f *nodeFixture) fake(host string) *fakeTalosClient { return f.fakes[f.machines[host].Name] }
@@ -666,6 +695,42 @@ var _ = Describe("TalosOperation node actions", func() {
 			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.machines[hostCP1].Name}, &m)).To(Succeed())
 			Expect(m.DeletionTimestamp.IsZero()).To(BeTrue())
 			Expect(resetRequested(&m)).To(BeFalse())
+		})
+
+		It("leaves the delete guard disarmed when the failed delete pauses the operation", func() {
+			f := newNodeFixture(map[string]string{hostW1: roleWorker})
+			f.webhookGuard(1)
+			spec := nodeSpec(ichorv1alpha1.NodeActionReset)
+			spec.Confirm = f.machines[hostW1].Name
+
+			got := f.reconcile(f.newOp(hostW1, spec))
+			Expect(got.Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+
+			var m ichorv1alpha1.TalosMachine
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.machines[hostW1].Name}, &m)).To(Succeed())
+			Expect(deleteguard.CheckDelete(m.Annotations)).NotTo(Succeed(),
+				"a paused reset must not leave a plain kubectl delete allowed")
+			Expect(resetRequested(&m)).To(BeTrue(), "the reset opt-in stays for a retry")
+			Expect(m.DeletionTimestamp.IsZero()).To(BeTrue())
+		})
+
+		It("arms the delete guard again for a retry, so the retry's delete is allowed", func() {
+			f := newNodeFixture(map[string]string{hostW1: roleWorker})
+			f.webhookGuard(1)
+			spec := nodeSpec(ichorv1alpha1.NodeActionReset)
+			spec.Confirm = f.machines[hostW1].Name
+			op := f.newOp(hostW1, spec)
+			Expect(f.reconcile(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhasePaused))
+
+			got := fetchOperation(op)
+			got.Annotations = map[string]string{ichorv1alpha1.OperationRetryAnnotation: ichorv1alpha1.OperationRetryRequested}
+			Expect(k8sClient.Update(ctx, got)).To(Succeed())
+
+			Expect(f.reconcile(op).Status.Phase).To(Equal(ichorv1alpha1.TalosOperationPhaseInProgress))
+
+			var m ichorv1alpha1.TalosMachine
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Namespace: tmNamespace, Name: f.machines[hostW1].Name}, &m)).To(Succeed())
+			Expect(m.DeletionTimestamp.IsZero()).To(BeFalse(), "the retry deletes the machine, which the guard must allow")
 		})
 	})
 })

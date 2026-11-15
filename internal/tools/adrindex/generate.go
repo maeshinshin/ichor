@@ -18,6 +18,14 @@ var filenamePattern = regexp.MustCompile(`^(\d{4})-.*\.md$`)
 var (
 	statusLine  = regexp.MustCompile(`(?m)^Status:\s*(.+?)\s*·\s*Date:`)
 	decidedLine = regexp.MustCompile(`(?m)^Decided:\s*(.+)$`)
+
+	// The whole Status line, whose "amended" and "Amended:" phrases carry the header's amendment dates.
+	fullStatusLine = regexp.MustCompile(`(?m)^Status:[^\n]*`)
+	amendedPhrase  = regexp.MustCompile(`(?i)\bamended\b:?([^·\n]*)`)
+	isoDate        = regexp.MustCompile(`\d{4}-\d{2}-\d{2}`)
+
+	// shortcut: a heading whose date is missing cannot be compared, so an ADR whose only amendment headings are undated passes whatever its header says. Date those headings, or relax this rule, when the maintainer decides which: some ADRs omit header dates by convention too.
+	amendmentHeading = regexp.MustCompile(`(?m)^(?:#+|-)[ \t]*\**[ \t]*(?:Amendment|Addendum)\b([^\n]*)`)
 )
 
 // entry is one ADR's index row.
@@ -60,7 +68,45 @@ func parseEntry(path string, number int, content string) (entry, error) {
 		return entry{}, fmt.Errorf("%s: no \"Decided: ...\" line", path)
 	}
 
+	if err := checkAmendmentDates(path, content); err != nil {
+		return entry{}, err
+	}
+
 	return entry{Number: number, File: filepath.Base(path), Decided: dm[1], Status: sm[1]}, nil
+}
+
+// checkAmendmentDates fails when the latest date the header gives for an amendment is not the latest
+// dated amendment heading in the body. A header that gives no date is not compared: the date is optional.
+func checkAmendmentDates(path, content string) error {
+	var header []string
+
+	for _, m := range amendedPhrase.FindAllStringSubmatch(fullStatusLine.FindString(content), -1) {
+		header = append(header, isoDate.FindAllString(m[1], -1)...)
+	}
+
+	if len(header) == 0 {
+		return nil
+	}
+
+	want := slices.Max(header)
+
+	var body []string
+
+	for _, m := range amendmentHeading.FindAllStringSubmatch(content, -1) {
+		if d := isoDate.FindString(m[1]); d != "" {
+			body = append(body, d)
+		}
+	}
+
+	if len(body) == 0 {
+		return fmt.Errorf("%s: the header says amended %s, but the body has no dated amendment heading", path, want)
+	}
+
+	if got := slices.Max(body); got != want {
+		return fmt.Errorf("%s: the header says amended %s, but the latest dated amendment in the body is %s", path, want, got)
+	}
+
+	return nil
 }
 
 // parseADRs reads every real ADR file in dir (0000-template.md excepted,

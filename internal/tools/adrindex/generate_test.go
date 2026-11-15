@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 )
 
@@ -84,6 +85,28 @@ func TestParseADRsIsDeterministic(t *testing.T) {
 
 		if i > 0 && first[i-1].Number >= first[i].Number {
 			t.Fatalf("entries not sorted ascending: %d then %d", first[i-1].Number, first[i].Number)
+		}
+	}
+}
+
+// TestAmendmentHeaderDisagreesWithBody is the gate on amendment dates: a header whose latest amended
+// date is not the body's latest dated amendment heading fails, and the error names the file and both dates.
+func TestAmendmentHeaderDisagreesWithBody(t *testing.T) {
+	dir := t.TempDir()
+	fixture := "# 0001. Fixture\n\nStatus: Accepted (amended 2026-10-26) · Date: 2026-10-25 · Design section: —\n\n" +
+		"Decided: nothing.\n\n## Amendment (2026-10-28): later\n"
+	if err := os.WriteFile(filepath.Join(dir, "0001-fixture.md"), []byte(fixture), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := parseADRs(dir)
+	if err == nil {
+		t.Fatal("a header that disagrees with its body parsed without error")
+	}
+
+	for _, want := range []string{"0001-fixture.md", "2026-10-26", "2026-10-28"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error lacks %q: %v", want, err)
 		}
 	}
 }

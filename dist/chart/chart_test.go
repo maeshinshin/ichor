@@ -779,7 +779,7 @@ func containerEnvValue(deployment map[string]any, name string) (string, bool) {
 	containers, _ := podSpec["containers"].([]any)
 	for _, c := range containers {
 		cm, _ := c.(map[string]any)
-		if cm["name"] != ichorUIDeploymentName {
+		if cm["name"] != "ichor-ui" {
 			continue
 		}
 		envs, _ := cm["env"].([]any)

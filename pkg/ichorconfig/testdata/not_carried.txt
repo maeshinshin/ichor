@@ -1,0 +1,31 @@
+# Settings of a Talos document that Ichor's schema does not carry, one "Kind path" a line. Each is a
+# setting of the v1alpha1 document that a document of its own spells; Ichor has the document's spelling, and
+# the setting is written once. This file is read by TestEverySettingOfATalosDocumentHasAPlaceInTheSchema and
+# is kept apart from the generator on purpose: a row that drops a setting there must also be written here.
+
+# The version of the document is the one Ichor converts to.
+Config version
+
+# The document's own spelling (the settings of the document of the same meaning are in the schema).
+Config cluster.apiServer.authorizationConfig.name
+Config cluster.apiServer.authorizationConfig.type
+Config cluster.apiServer.authorizationConfig.webhook
+Config cluster.apiServer.certSANs
+Config cluster.coreDNS.disabled
+Config cluster.extraManifests
+Config cluster.inlineManifests.contents
+Config cluster.inlineManifests.name
+Config machine.controlPlane.controllerManager.disabled
+Config machine.features.imageCache.localEnabled
+Config machine.kernel.modules.name
+Config machine.kernel.modules.parameters
+Config machine.network.disableSearchDomain
+Config machine.network.extraHostEntries.aliases
+Config machine.network.extraHostEntries.ip
+Config machine.network.nameservers
+Config machine.network.searchDomains
+Config machine.registries.mirrors.endpoints
+Config machine.registries.mirrors.overridePath
+Config machine.registries.mirrors.skipFallback
+Config machine.time.disabled
+Config machine.time.servers

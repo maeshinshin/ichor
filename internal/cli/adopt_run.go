@@ -192,6 +192,9 @@ func runAdopt(ctx context.Context, clusterName, namespace string, deps adoptDeps
 		deps.Steps.Header("Ichor adopt · "+clusterName, adoptSummary(deps, namespace))
 	}
 
+	// shortcut: --add-machine sets no Ichor, so it skips the namespace check below; it writes no bundle
+	// Secret (it reads the controller's), but a --namespace that is not the controller's still
+	// misplaces its TalosMachines. Drop when --add-machine reads the namespace from ichorPresence too.
 	if deps.Ichor != nil || deps.RequireIchor {
 		if err := checkIchorPresence(ctx, deps.K8s, deps.findings(adoptInfo), ichorversion.Version, deps.RequireIchor); err != nil {
 			return err

@@ -30,8 +30,10 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
@@ -624,5 +626,39 @@ func TestAdoptRerunLeavesARejectedMachineRejected(t *testing.T) {
 
 	if got.Spec.ApprovalState != ichorv1alpha1.MachineApprovalStateRejected {
 		t.Errorf("approval state = %q after the rerun, want rejected", got.Spec.ApprovalState)
+	}
+}
+
+// When the controller's namespace cannot be told (the Deployments cannot be listed, or only the
+// IchorInstallation is visible), the default --namespace goes ahead and any other is refused as
+// unconfirmed, not as a mismatch.
+func TestCheckControllerNamespaceWhenItCannotBeTold(t *testing.T) {
+	ctx := context.Background()
+	forbidden := interceptor.Funcs{
+		List: func(ctx context.Context, c client.WithWatch, list client.ObjectList, o ...client.ListOption) error {
+			if _, ok := list.(*appsv1.DeploymentList); ok {
+				return apierrors.NewForbidden(schema.GroupResource{Group: "apps", Resource: "deployments"}, "", errors.New("no list"))
+			}
+
+			return c.List(ctx, list, o...)
+		},
+	}
+	build := func(objs ...client.Object) client.Reader {
+		return fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(objs...).WithInterceptorFuncs(forbidden).Build()
+	}
+	installation := &ichorv1alpha1.IchorInstallation{Name: ichorv1alpha1.IchorInstallationName}
+
+	for name, c := range map[string]client.Reader{
+		"Deployments not listable":        build(),
+		"only the IchorInstallation seen": fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(installation).Build(),
+	} {
+		if err := checkControllerNamespace(ctx, c, &adoptWriteIchor{}, ichorControllerNamespace); err != nil {
+			t.Errorf("%s, default --namespace: %v", name, err)
+		}
+
+		err := checkControllerNamespace(ctx, c, &adoptWriteIchor{}, "tenant")
+		if err == nil || !strings.Contains(err.Error(), "could not confirm") || strings.Contains(err.Error(), "the namespace Ichor's controller runs in;") {
+			t.Errorf("%s, --namespace tenant: %v, want a refusal that says it could not confirm", name, err)
+		}
 	}
 }

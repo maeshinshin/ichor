@@ -54,6 +54,9 @@ type ichorPresence struct {
 	Release *release.Release
 	// Deployment is a controller Deployment carrying the chart's selector label.
 	Deployment *appsv1.Deployment
+	// Unlisted: the operator may not list Helm release Secrets or Deployments cluster-wide, so a
+	// missing Release or Deployment is no evidence that there is none.
+	Unlisted bool
 }
 
 func (p ichorPresence) Present() bool {
@@ -158,7 +161,9 @@ func ichorPresent(ctx context.Context, c client.Reader) (ichorPresence, error) {
 				break
 			}
 		}
-	case !absent(err) && !apierrors.IsForbidden(err):
+	case apierrors.IsForbidden(err):
+		p.Unlisted = true
+	case !absent(err):
 		return p, fmt.Errorf("adopt: looking for a Helm release of Ichor: %w", err)
 	}
 
@@ -169,7 +174,9 @@ func ichorPresent(ctx context.Context, c client.Reader) (ichorPresence, error) {
 		if len(deploys.Items) > 0 {
 			p.Deployment = &deploys.Items[0]
 		}
-	case !absent(err) && !apierrors.IsForbidden(err):
+	case apierrors.IsForbidden(err):
+		p.Unlisted = true
+	case !absent(err):
 		return p, fmt.Errorf("adopt: looking for Ichor's controller Deployment: %w", err)
 	}
 
@@ -224,24 +231,36 @@ func checkIchorPresence(ctx context.Context, c client.Reader, w io.Writer, cliVe
 // checkControllerNamespace refuses a --namespace other than the one the controller runs in: it
 // reads the cluster's secrets bundle Secret from its own namespace, so a bundle written anywhere
 // else is never found and the adoption would still report success. That namespace is the
-// installed Ichor's, or the one adopt's own install deploys it to. Nothing is written yet.
+// installed controller's (its Deployment or Helm release), or the one adopt's own install deploys
+// it to when Ichor is certainly not there. When it cannot be told, the default namespace goes
+// ahead (the documented install) and any other is refused as unconfirmed. Nothing is written yet.
 func checkControllerNamespace(ctx context.Context, c client.Reader, install *adoptWriteIchor, namespace string) error {
 	p, err := ichorPresent(ctx, c)
 	if err != nil {
 		return err
 	}
 
-	want := ichorControllerNamespace
+	var want string
 
 	switch {
-	case p.Present():
+	case p.Release != nil || p.Deployment != nil:
 		want = p.Namespace()
-	case install != nil && install.Namespace != "":
-		want = install.Namespace
+	case !p.Present() && !p.Unlisted && install != nil:
+		want = cmp.Or(install.Namespace, ichorControllerNamespace)
 	}
 
-	if namespace == want {
+	switch {
+	case want == namespace:
 		return nil
+	case want == "" && namespace == ichorControllerNamespace:
+		return nil
+	case want == "":
+		return fmt.Errorf("adopt: --namespace %q is not the default %q, and adopt could not confirm which namespace Ichor's controller runs in: "+
+			"it found no controller Deployment or Helm release of Ichor when it listed them cluster-wide (the operator may not be allowed to). "+
+			"The controller reads the secrets bundle Secret from its own namespace, so a bundle written to %q may never be found. "+
+			"Run adopt again as an operator who can list Deployments and Secrets in every namespace (`kubectl get deploy -A -l control-plane=controller-manager` shows the controller), "+
+			"or use the default --namespace if the controller runs in %q; nothing was written",
+			namespace, ichorControllerNamespace, namespace, ichorControllerNamespace)
 	}
 
 	return fmt.Errorf("adopt: --namespace %q is not %q, the namespace Ichor's controller runs in; the controller reads the secrets bundle "+

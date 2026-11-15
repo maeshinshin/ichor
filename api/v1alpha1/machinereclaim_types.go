@@ -124,7 +124,8 @@ type MachineReclaimVolume struct {
 	Name      string `json:"name"`
 	Location  string `json:"location,omitempty"`
 	SizeBytes uint64 `json:"sizeBytes,omitempty"`
-	// encrypted volumes lose their key with the reset; their data becomes unreadable.
+	// an encrypted volume whose key is locked to STATE (lockToState) is unreadable afterwards: the reset
+	// wipes STATE, which holds the salt that key needs.
 	Encrypted bool `json:"encrypted,omitempty"`
 }
 

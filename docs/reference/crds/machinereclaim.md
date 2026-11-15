@@ -72,7 +72,7 @@ Version v1alpha1: has a `status` subresource.
 | `status.inspection.talosVersion` | `string` | no |  |
 | `status.inspection.uuid` | `string` | no |  |
 | `status.inspection.volumes` | `[]object` | no |  |
-| `status.inspection.volumes[].encrypted` | `boolean` | no | encrypted volumes lose their key with the reset; their data becomes unreadable. |
+| `status.inspection.volumes[].encrypted` | `boolean` | no | an encrypted volume whose key is locked to STATE (lockToState) is unreadable afterwards: the reset wipes STATE, which holds the salt that key needs. |
 | `status.inspection.volumes[].location` | `string` | no |  |
 | `status.inspection.volumes[].name` | `string` | yes |  |
 | `status.inspection.volumes[].sizeBytes` | `integer` | no |  |

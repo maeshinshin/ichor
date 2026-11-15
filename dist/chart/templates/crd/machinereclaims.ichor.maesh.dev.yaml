@@ -278,8 +278,9 @@ spec:
                         reset does not wipe.
                       properties:
                         encrypted:
-                          description: encrypted volumes lose their key with the reset;
-                            their data becomes unreadable.
+                          description: |-
+                            an encrypted volume whose key is locked to STATE (lockToState) is unreadable afterwards: the reset
+                            wipes STATE, which holds the salt that key needs.
                           type: boolean
                         location:
                           type: string

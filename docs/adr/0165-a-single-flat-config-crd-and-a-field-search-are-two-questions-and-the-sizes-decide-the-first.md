@@ -33,6 +33,8 @@ The two CRDs that carry the union are `TalosConfigPatch` (`spec.documents[]`) an
 | `KubeStaticPodConfig` removed from both CRDs | 452,972 | 595,604 |
 | The unused union in `TalosCluster.spec.cni.custom.documents` removed | 598,916 | 449,660 |
 
+ADR 0152 records 598,888 bytes for this same removal (a 392,672-byte reduction from 991,560), which differs from the 598,916 above by 28 bytes. This record does not say which figure is right.
+
 So `KubeStaticPodConfig` (the core v1 `Pod`) is 538,588 bytes of the record, 54%. Its schema is 302,765 of the 461,397 bytes of per-kind schema in JSON, against 53,254 for the whole v1alpha1 `Config`. The unused copy in `TalosCluster` is 392,644 bytes, 40%. Any design that touches the other 64 kinds works on the remaining part, which is about 158,632 bytes of JSON per copy.
 
 ### 2. How large the union is

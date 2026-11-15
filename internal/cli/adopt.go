@@ -105,7 +105,9 @@ control plane. adopt probes the version contract from that node (each minor from
 v1.12 up to the one it runs, keeping the one that differs least from the live
 configuration) and refuses a contract below v1.14, probed or named with
 --version-contract. Every node adopt reads, in a new cluster or an existing one,
-must also run Talos v1.12 or later. Either refusal writes nothing. The cluster's secrets are required: pass --secrets-bundle FILE, or
+must also run Talos v1.12 or later. Either refusal writes nothing.
+
+The cluster's secrets are required: pass --secrets-bundle FILE, or
 --recover-secrets with --recover-from ADDRESS to read them from a control
 plane's machine config (not both).
 

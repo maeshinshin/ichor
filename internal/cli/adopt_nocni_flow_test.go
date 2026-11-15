@@ -466,7 +466,7 @@ func TestAdoptNoCNI_IchorAlreadyPresentStillInstallsCiliumFirst(t *testing.T) {
 
 	// The controller's Deployment says which namespace it reads the bundle from.
 	deploy := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{
-		Name: "ichor-controller-manager", Namespace: testNamespace, Labels: map[string]string{"control-plane": "controller-manager"},
+		Name: controllerDeploymentName, Namespace: testNamespace, Labels: map[string]string{controllerLabel: controllerLabelValue},
 	}}
 	if err := f.env.k8s.Create(context.Background(), deploy); err != nil {
 		t.Fatal(err)
@@ -571,7 +571,7 @@ func TestCheckControllerNamespace(t *testing.T) {
 	}
 
 	controller := &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{
-		Name: "ichor-controller-manager", Namespace: "tenant", Labels: map[string]string{"control-plane": "controller-manager"},
+		Name: controllerDeploymentName, Namespace: "tenant", Labels: map[string]string{controllerLabel: controllerLabelValue},
 	}}
 	helm := fake.NewClientBuilder().WithScheme(newTestScheme(t)).WithObjects(controller).Build()
 

@@ -310,7 +310,7 @@ func TestRestoreLivePlanNamesTheControllersNodeInLocalMode(t *testing.T) {
 
 	pod := &corev1.Pod{
 		Name: "ichor-controller", Namespace: ichorControllerNamespace,
-		Labels: map[string]string{"control-plane": "controller-manager"},
+		Labels: map[string]string{controllerLabel: controllerLabelValue},
 		Spec:   corev1.PodSpec{NodeName: ownNode},
 	}
 

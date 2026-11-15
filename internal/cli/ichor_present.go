@@ -169,7 +169,7 @@ func ichorPresent(ctx context.Context, c client.Reader) (ichorPresence, error) {
 
 	var deploys appsv1.DeploymentList
 
-	switch err := c.List(ctx, &deploys, client.MatchingLabels{"control-plane": "controller-manager"}); {
+	switch err := c.List(ctx, &deploys, client.MatchingLabels{controllerLabel: controllerLabelValue}); {
 	case err == nil:
 		if len(deploys.Items) > 0 {
 			p.Deployment = &deploys.Items[0]

@@ -312,7 +312,7 @@ func TestCreateIchorInstallation_HonoursTheCallersWait(t *testing.T) {
 	start := time.Now()
 	_, err := createIchorInstallation(context.Background(), c, io.Discard, 100*time.Millisecond, installerPin{})
 
-	if err == nil || !strings.Contains(err.Error(), "ichor-controller-manager") {
+	if err == nil || !strings.Contains(err.Error(), controllerDeploymentName) {
 		t.Fatalf("createIchorInstallation = %v, want the not-Ready message", err)
 	}
 

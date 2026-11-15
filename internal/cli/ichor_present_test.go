@@ -67,8 +67,8 @@ func ichorHelmRecord(t *testing.T, chartName, appVersion string, config map[stri
 
 func controllerDeployment(helm bool) *appsv1.Deployment {
 	d := &appsv1.Deployment{
-		Name: "ichor-controller-manager", Namespace: ichorControllerNamespace,
-		Labels: map[string]string{"control-plane": "controller-manager"},
+		Name: controllerDeploymentName, Namespace: ichorControllerNamespace,
+		Labels: map[string]string{controllerLabel: controllerLabelValue},
 	}
 	if helm {
 		d.Labels["app.kubernetes.io/managed-by"] = "Helm"

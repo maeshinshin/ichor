@@ -73,14 +73,14 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: $JOB
-  labels: {app.kubernetes.io/name: ichor-gate, ichor.gate/sha: $SHORT}
+  labels: {app.kubernetes.io/name: ichor-gate, ichor.gate/sha: "$SHORT"}
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: $DEADLINE
   ttlSecondsAfterFinished: 3600
   template:
     metadata:
-      labels: {app.kubernetes.io/name: ichor-gate, ichor.gate/sha: $SHORT}
+      labels: {app.kubernetes.io/name: ichor-gate, ichor.gate/sha: "$SHORT"}
     spec:
       restartPolicy: Never
       automountServiceAccountToken: false

@@ -155,3 +155,7 @@ While the endpoint control plane's kube-apiserver comes back it does not yet ser
 ### Amendment (2026-11-15): a rotation blocked for thirty minutes gives up
 
 The retry every 30 s above goes on for `rotationGiveUpAfter` (thirty minutes) in a row. A rotation blocked that long on one step is paused the way a failed machine step is: `status.failureReason` is set, a Warning Event `StepFailed` is recorded, and the cluster lock is released to other work. Automatic resumption ends there. The operation resumes only when a person sets the retry annotation (`ichor.maesh.dev/retry: "true"`) once the cause has cleared. A pass that makes progress restarts the thirty minutes, so a rotation that keeps moving is never given up. The stage guards are unchanged: a rotation that has recorded a stage still refuses every other disruptive operation and holds every machine's reconcile, whatever holds the lock. Key rotations follow the same rule.
+
+### Amendment (2026-11-16): the etcd snapshot advice names the create step
+
+The section "A fresh snapshot first" above describes the plan warning as it stood when this ADR was written. The warning for an etcd rotation now also names `ichor create etcd-backup`, for an operator with no `TalosEtcdBackup` yet, ahead of `ichor backup etcd NAME`, which needs an existing one to name. The route is decided in ADR 0164.

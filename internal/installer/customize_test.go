@@ -149,7 +149,6 @@ func TestUpgradeKeepsInitsCustomizationsOverALiveUIDeployment(t *testing.T) {
 			KubeAPIServerURL: "https://k8s.example.com:443", KubeAPITLSServerName: "k8s.example.com", RefreshLifetime: "24h",
 		}, false},
 		{"users on without TLS", UISettings{ExternalURL: testExternalURL}, false},
-		{"users off", UISettings{}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t)

@@ -104,6 +104,9 @@ type UISettings struct {
 	// WasOpen marks a live install that ran ichor-ui with the removed --allow-unauthenticated. The
 	// flag is dropped on the way through; WasOpen only drives the upgrade notice.
 	WasOpen bool
+
+	// SignedIn marks a live ichor-ui that has a sign-in: Ichor users or an external OIDC provider.
+	SignedIn bool
 }
 
 // UsersOn reports whether users are enabled.
@@ -145,6 +148,7 @@ func ReadUISettings(ui, controller *appsv1.Deployment) UISettings {
 			s.KubeAPITLSServerName = argValue(c.Args, argKubeAPIName)
 
 			s.WasOpen = slices.Contains(c.Args, argAllowAnonymous) || slices.ContainsFunc(c.Env, openModeEnv)
+			s.SignedIn = s.UsersOn() || hasOIDC(c)
 
 			// Migration table. An address other than the new default is an install that
 			// predates it: with the operator's pair it is pinned, without it the install served
@@ -227,6 +231,15 @@ func CustomizeUI(dep *appsv1.Deployment, s UISettings) error {
 	}
 
 	return tlsOnUI(dep, c, s.TLSSecretName)
+}
+
+// hasOIDC reports whether the container is set up for an external OIDC provider.
+func hasOIDC(c *corev1.Container) bool {
+	if argValue(c.Args, "--oidc-issuer=") != "" {
+		return true
+	}
+
+	return slices.ContainsFunc(c.Env, func(e corev1.EnvVar) bool { return e.Name == envOIDCIssuer && e.Value != "" })
 }
 
 // openModeEnv matches the removed ICHOR_ALLOW_UNAUTHENTICATED variable.
@@ -494,6 +507,11 @@ func clusterIssuerURL(ctx context.Context, c client.Client, ns string) (string, 
 	return urls[0], nil
 }
 
+// errNoSignInToUpgrade is what the installer says to an ichor-ui that has no sign-in.
+var errNoSignInToUpgrade = errors.New("this ichor-ui has no sign-in (no Ichor users, no OIDC) and the release being installed " +
+	"does not start without one. Run `ichor upgrade ichor` from the command line: it turns Ichor's sign-in on (creates the first " +
+	"administrator and prints its password, switches ichor-ui) and then starts the upgrade; the installer changes nothing until then")
+
 // customizeFromLive reads the live ichor-ui and controller Deployments the manifest names and
 // customizes the manifest's objects with the settings they carry. A Deployment that does not
 // exist yet (a first install by the installer) reads as a plain install.
@@ -545,6 +563,13 @@ func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructure
 
 	s := ReadUISettings(uiDep, ctrlDep)
 
+	// ichor-ui of this release does not start without a sign-in, so rolling it out over one that has none
+	// would take the UI down. The CLI sets sign-in up first (`ichor upgrade ichor`); an upgrade started any other
+	// way (a hand-written TalosOperation, the controller's own patch upgrades) stops here, with the instruction.
+	if uiDep != nil && !s.SignedIn {
+		return nil, UISettings{}, errNoSignInToUpgrade
+	}
+
 	// The issuer is the TalosCluster's spec.authentication.ichor.url, set at init and changeable later,
 	// so a URL changed on the cluster reaches the Deployments on the next install or upgrade.
 	if ns := namespaceOf(uiDep, ctrlDep); ns != "" {
@@ -563,9 +588,8 @@ func customizeFromLive(ctx context.Context, c client.Client, objs []*unstructure
 	}
 
 	if s.WasOpen {
-		log.Print("NOTICE: this ichor-ui ran with --allow-unauthenticated, which was removed. The flag is dropped, and " +
-			"without a sign-in ichor-ui serves read-only calls only. Turn on Ichor users or OIDC to make changes in the UI " +
-			"(docs/guides/users-and-login.md)")
+		log.Print("NOTICE: this ichor-ui ran with --allow-unauthenticated, which was removed. The flag is dropped; " +
+			"the sign-in it ran beside stays")
 	}
 
 	out, err := CustomizeObjects(objs, s)

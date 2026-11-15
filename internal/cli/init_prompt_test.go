@@ -162,6 +162,9 @@ func TestPromptInitMissing_AsksForEverythingAndSetsTheFlags(t *testing.T) {
 	}
 }
 
+// promptLBName is an example load balancer name, typed as the endpoint address at the prompt.
+const promptLBName = "lb.example.com"
+
 func TestPromptInitMissing_HostnameTypeAsksForAHostname(t *testing.T) {
 	setTerminal(t, true)
 
@@ -182,7 +185,7 @@ func TestPromptInitMissing_HostnameTypeAsksForAHostname(t *testing.T) {
 		t.Errorf("type = %q", got)
 	}
 
-	if got, _ := flags.GetString(flagEndpointAddress); got != "lb.example.com" {
+	if got, _ := flags.GetString(flagEndpointAddress); got != promptLBName {
 		t.Errorf("address = %q", got)
 	}
 }

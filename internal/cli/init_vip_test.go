@@ -258,6 +258,9 @@ func TestNICChoices(t *testing.T) {
 	}
 }
 
+// vipLBName is an example load balancer name, given as the endpoint address of a node endpoint.
+const vipLBName = "lb.example.com"
+
 func TestBuildInitPlan_VIPInput(t *testing.T) {
 	for name, tc := range map[string]struct {
 		mutate func(*initPlanInput)
@@ -265,9 +268,9 @@ func TestBuildInitPlan_VIPInput(t *testing.T) {
 	}{
 		"a vip must be an IP address": {func(in *initPlanInput) { in.EndpointAddress = "vip.example.com" },
 			`"vip.example.com" is a hostname, but endpoint type vip needs an IP address; type node would take a hostname`},
-		"node takes a hostname": {func(in *initPlanInput) { in.EndpointType, in.EndpointAddress = endpointNode, "lb.example.com" }, ""},
+		"node takes a hostname": {func(in *initPlanInput) { in.EndpointType, in.EndpointAddress = endpointNode, vipLBName }, ""},
 		"loadBalancer is refused": {func(in *initPlanInput) {
-			in.EndpointType, in.EndpointAddress = ichorv1alpha1.EndpointTypeLoadBalancer, "lb.example.com"
+			in.EndpointType, in.EndpointAddress = ichorv1alpha1.EndpointTypeLoadBalancer, vipLBName
 		}, "endpoint type loadBalancer is removed: use type node"},
 		"--nic is taken for a node endpoint":  {func(in *initPlanInput) { in.EndpointType, in.NIC = endpointNode, testSecondMAC }, ""},
 		"--nic written as a MAC needs colons": {func(in *initPlanInput) { in.NIC = "52-54-00-dd-ee-ff" }, "not a MAC address"},

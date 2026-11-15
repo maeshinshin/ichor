@@ -26,6 +26,9 @@ const (
 	epIP   = "10.0.0.1"
 )
 
+// nodeAddressRefusal is the refusal for a node address that is neither an IP address nor a host name.
+const nodeAddressRefusal = "neither an IP address nor a host name"
+
 func TestEndpointCheckAddress(t *testing.T) {
 	long := strings.Repeat("a", 64) + ".example.com"
 
@@ -41,15 +44,15 @@ func TestEndpointCheckAddress(t *testing.T) {
 		{EndpointTypeNode, "kube.example.lan", ""},
 		{EndpointTypeNode, "k8s-api1.example.com", ""},
 		{EndpointTypeNode, "kube", ""},
-		{EndpointTypeNode, "192.168.1.300", "neither an IP address nor a host name"},
-		{EndpointTypeNode, "10.0.0", "neither an IP address nor a host name"},
-		{EndpointTypeNode, "Kube.example.lan", "neither an IP address nor a host name"},
-		{EndpointTypeNode, "kube.example.lan.", "neither an IP address nor a host name"},
-		{EndpointTypeNode, "kube..example.lan", "neither an IP address nor a host name"},
-		{EndpointTypeNode, "-kube.example.lan", "neither an IP address nor a host name"},
-		{EndpointTypeNode, "kube_api.example.lan", "neither an IP address nor a host name"},
-		{EndpointTypeNode, "https://kube.example.lan", "neither an IP address nor a host name"},
-		{EndpointTypeNode, long, "neither an IP address nor a host name"},
+		{EndpointTypeNode, "192.168.1.300", nodeAddressRefusal},
+		{EndpointTypeNode, "10.0.0", nodeAddressRefusal},
+		{EndpointTypeNode, "Kube.example.lan", nodeAddressRefusal},
+		{EndpointTypeNode, "kube.example.lan.", nodeAddressRefusal},
+		{EndpointTypeNode, "kube..example.lan", nodeAddressRefusal},
+		{EndpointTypeNode, "-kube.example.lan", nodeAddressRefusal},
+		{EndpointTypeNode, "kube_api.example.lan", nodeAddressRefusal},
+		{EndpointTypeNode, "https://kube.example.lan", nodeAddressRefusal},
+		{EndpointTypeNode, long, nodeAddressRefusal},
 		{EndpointTypeLoadBalancer, epHost, "endpoint type loadBalancer is removed: use type node"},
 		{EndpointTypeLoadBalancer, epIP, "endpoint type loadBalancer is removed: use type node"},
 	} {

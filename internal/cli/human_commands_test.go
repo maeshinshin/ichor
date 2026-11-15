@@ -196,7 +196,7 @@ func machinesFixture() []*pb.Machine {
 		{
 			Ref: &pb.ObjectRef{Namespace: ichorControllerNamespace, Name: cpUUID}, Cluster: &pb.ObjectRef{Namespace: ichorControllerNamespace, Name: humanCluster},
 			Role: pb.MachineRole_MACHINE_ROLE_CONTROL_PLANE, ApprovalState: pb.MachineApprovalState_MACHINE_APPROVAL_STATE_APPROVED,
-			Endpoint: "10.244.1.136:50000", NodeName: "ichor-e2e-initshow-cp", CreatedAt: ago(5 * time.Minute),
+			Endpoint: "10.244.1.136:50000", NodeName: "example-cp", CreatedAt: ago(5 * time.Minute),
 			Identity:         &pb.MachineIdentity{Uuid: cpUUID, Serial: "c427f61b", MacAddresses: []string{"a6:c8:83:c3:79:d9"}},
 			Install:          &pb.MachineInstall{Disk: &pb.MachineDisk{DevPath: classADisk}},
 			ApprovalDecision: &pb.MachineApprovalDecision{Actor: actorCLI, At: ago(4 * time.Minute)},
@@ -223,7 +223,7 @@ func TestMachineListHumanOutput(t *testing.T) {
 	}
 
 	want := "NAME      ROLE           APPROVAL  READY  ENDPOINT            KUBERNETES NODE        AGE\n" +
-		"fa70962a  control-plane  approved  ✓      10.244.1.136:50000  ichor-e2e-initshow-cp  5m\n" +
+		"fa70962a  control-plane  approved  ✓      10.244.1.136:50000  example-cp  5m\n" +
 		"0b1c2d3e  -              pending   -      10.244.1.150:50000  -                      30s\n"
 	wantText(t, out.String(), want)
 }
@@ -264,7 +264,7 @@ func TestMachineGetHumanOutput(t *testing.T) {
   Role         control-plane
   Approval     approved by ichor-cli (4m ago)
   Health       ✓ ready
-  K8s node     ichor-e2e-initshow-cp
+  K8s node     example-cp
   Endpoint     10.244.1.136:50000
   Created      5m ago
 

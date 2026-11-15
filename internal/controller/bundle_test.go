@@ -39,7 +39,7 @@ var _ = Describe("loadBundle", func() {
 		cluster := &ichorv1alpha1.TalosCluster{
 			Spec: ichorv1alpha1.TalosClusterSpec{SecretsRef: corev1.LocalObjectReference{Name: secret.Name}},
 		}
-		cluster.Namespace = "ichor-e2e" // never created; deliberately not tmNamespace.
+		cluster.Namespace = "example-namespace" // never created; deliberately not tmNamespace.
 
 		got, err := loadBundle(ctx, k8sClient, tmNamespace, cluster)
 		Expect(err).NotTo(HaveOccurred())

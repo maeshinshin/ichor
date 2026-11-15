@@ -111,18 +111,12 @@ type TalosClusterCNICustomSource struct {
 }
 
 // TalosClusterCNICustom is deprecated and unused (Cilium is the only CNI); it is
-// kept so the CRD never drops a field. It declares a user-supplied CNI's chart/manifest source and the Talos-side
-// settings it needs -- the two things a "custom" preset cannot infer on its own, since Ichor
-// does not know what the CNI is (docs/design/architecture.md, "CNI").
+// kept so the CRD never drops a field. It declares a user-supplied CNI's chart/manifest source.
+// Its documents field, a second copy of the Talos document union, was retired in ADR 0152.
 type TalosClusterCNICustom struct {
 	// source points Argo CD at the chart or manifests for this CNI.
 	// +required
 	Source TalosClusterCNICustomSource `json:"source"`
-
-	// documents are the Talos-side config documents this CNI needs,
-	// applied as a cluster-layer patch -- e.g. disabling kube-proxy when kubeProxy is "replaced".
-	// +optional
-	Documents []TalosConfigPatchDocument `json:"documents,omitempty"`
 }
 
 // TalosClusterCNI configures which CNI preset this cluster bootstraps and how kube-proxy is
@@ -164,7 +158,7 @@ type TalosClusterCNI struct {
 	Tunnel string `json:"tunnel,omitempty"`
 
 	// custom is deprecated, unused; kept so the CRD never drops a field. It declared
-	// the chart/manifest source and Talos-side settings for a user-supplied CNI.
+	// the chart/manifest source for a user-supplied CNI.
 	// +optional
 	Custom *TalosClusterCNICustom `json:"custom,omitempty"`
 

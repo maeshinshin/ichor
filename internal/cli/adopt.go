@@ -100,8 +100,12 @@ adopt runs in four phases, and nothing is applied to a node in any of them:
   4. Release: lifts the hold one node at a time, control planes first, each
      waiting for Ready, so the first render is applied with zero drift.
 
-Every node must run Talos v1.12 or later; older ones are refused and nothing is
-written. The cluster's secrets are required: pass --secrets-bundle FILE, or
+A cluster Ichor does not manage yet needs Talos v1.14 or later on its first
+control plane. adopt probes the version contract from that node (each minor from
+v1.12 up to the one it runs, keeping the one that differs least from the live
+configuration) and refuses a contract below v1.14, probed or named with
+--version-contract. Every node adopt reads, in a new cluster or an existing one,
+must also run Talos v1.12 or later. Either refusal writes nothing. The cluster's secrets are required: pass --secrets-bundle FILE, or
 --recover-secrets with --recover-from ADDRESS to read them from a control
 plane's machine config (not both).
 
@@ -276,7 +280,7 @@ func init() {
 	adoptCmd.Flags().StringVar(&adoptSeed, adoptFlagNode, "",
 		"address of one control plane; adopt discovers the cluster's nodes from its membership when the TalosCluster does not exist yet")
 	adoptCmd.Flags().StringVar(&adoptContract, adoptFlagVersionContract, "",
-		"use this Talos version contract (v1.12 to the running minor) instead of the probed one")
+		"use this Talos version contract (v1.14 or later) for the TalosCluster adopt creates, instead of the probed one")
 
 	adoptCmd.Flags().BoolVar(&adoptAcceptChanges, "accept-cilium-changes", false,
 		"accept the Ichor-owned Cilium settings the takeover will change on the running data plane (never IPAM or the tunnel protocol)")

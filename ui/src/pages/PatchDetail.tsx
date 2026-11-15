@@ -2,7 +2,7 @@ import { Fragment } from 'preact'
 import { useEffect, useState } from 'preact/hooks'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { EyeIcon, FileCogIcon, InfoIcon, LoaderCircleIcon, PlusIcon } from 'lucide-preact'
+import { EyeIcon, FileCogIcon, InfoIcon, LoaderCircleIcon, PlusIcon, SearchIcon } from 'lucide-preact'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -26,6 +26,9 @@ import { useMyPermissions } from '@/lib/useMyPermissions'
 import { t, type Key } from '@/lib/i18n'
 import { PatchDocumentCard, type DocItem } from '@/components/PatchDocumentCard'
 import { defaultDocument, previewKey } from '@/lib/patchDocs'
+import { FieldSearchDialog } from '@/components/FieldSearchDialog'
+import { loadFieldIndex } from '@/lib/fieldIndex'
+import { pickField, requiredFields, type FieldRow } from '@/lib/fieldSearch'
 import type { Machine } from '@/gen/ichor/v1alpha1/machine_pb'
 import { buildPatchTarget, canSavePatch, stringifyLabelSelector, targetFieldsFor, type LayerKey } from '@/lib/patchTarget'
 import { navigate } from '@/router'
@@ -89,6 +92,7 @@ export function PatchDetail({ name }: { name?: string }) {
   const [labelSelectorText, setLabelSelectorText] = useState(stringifyLabelSelector(undefined))
   const [machineRef, setMachineRef] = useState('')
   const [documents, setDocuments] = useState<DocItem[]>([])
+  const [searching, setSearching] = useState(false)
 
   const [saveError, setSaveError] = useState<ErrorShape | null>(null)
   const [saving, setSaving] = useState(false)
@@ -224,6 +228,11 @@ export function PatchDetail({ name }: { name?: string }) {
 
   function addDocument() {
     setDocuments((prev) => [...prev, { id: nextDocId++, kind: 'SysctlConfig', document: defaultDocument('SysctlConfig'), fresh: true }])
+  }
+  // Choosing a search row puts its field in the patch, in a new document of its kind if there is none.
+  async function addFromSearch(row: FieldRow) {
+    const rows = await loadFieldIndex()
+    setDocuments((prev) => pickField(prev, row, requiredFields(rows, row.kind), () => nextDocId++))
   }
   function removeDocument(id: number) {
     setDocuments((prev) => prev.filter((d) => d.id !== id))
@@ -373,7 +382,11 @@ export function PatchDetail({ name }: { name?: string }) {
           <CardHeader>
             <CardTitle>{t('patch.documents')}</CardTitle>
             <CardDescription>{t('patch.documentsHelp')}</CardDescription>
-            <CardAction>
+            <CardAction className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setSearching(true)}>
+                <SearchIcon data-icon="inline-start" aria-hidden="true" />
+                {t('patch.searchFields')}
+              </Button>
               <Button size="sm" variant="outline" onClick={addDocument}>
                 <PlusIcon data-icon="inline-start" aria-hidden="true" />
                 {t('patch.addDocument')}
@@ -393,6 +406,8 @@ export function PatchDetail({ name }: { name?: string }) {
             ))}
           </CardContent>
         </Card>
+
+        <FieldSearchDialog open={searching} onOpenChange={setSearching} onSelect={addFromSearch} />
 
         <Card id="impact" className="scroll-mt-section">
           <CardHeader>

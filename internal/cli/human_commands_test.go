@@ -222,9 +222,9 @@ func TestMachineListHumanOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := "NAME      ROLE           APPROVAL  READY  ENDPOINT            KUBERNETES NODE        AGE\n" +
-		"fa70962a  control-plane  approved  ✓      10.244.1.136:50000  example-cp  5m\n" +
-		"0b1c2d3e  -              pending   -      10.244.1.150:50000  -                      30s\n"
+	want := "NAME      ROLE           APPROVAL  READY  ENDPOINT            KUBERNETES NODE  AGE\n" +
+		"fa70962a  control-plane  approved  ✓      10.244.1.136:50000  example-cp       5m\n" +
+		"0b1c2d3e  -              pending   -      10.244.1.150:50000  -                30s\n"
 	wantText(t, out.String(), want)
 }
 
